@@ -400,7 +400,9 @@ func (s *Service) credited(ctx context.Context, v view, person record) ([]record
 // first those the people-search catalogs of the user's addons find for the
 // person's name, at least count of them when the catalogs have that many,
 // then the other titles of the user's addons Polyfin knows the person in,
-// those TMDB credits them in included (see tmdbCredited).
+// those TMDB credits them in included (see tmdbCredited), then the titles
+// TMDB knows them best for that the page does not list yet, beyond the
+// libraries (see knownFor).
 // A people search can miss a title, or find someone else of the same name:
 // the known titles keep the credits the user saw. A people search may also
 // find a known title under another addon's identifier, such as "tmdb:…"
@@ -424,12 +426,22 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return Page{}, err
 	}
-	for _, title := range s.tmdbCredited(ctx, v, r) {
+	tmdbCredits := s.personTMDBCredits(ctx, r)
+	for _, title := range s.tmdbCredited(ctx, v, tmdbCredits) {
 		if !slices.ContainsFunc(credited, func(known record) bool { return known.ID == title.ID }) {
 			credited = append(credited, title)
 		}
 	}
-	if len(credited) == 0 {
+	// The titles no catalog listed, as those of the titles a person is known
+	// for (see knownFor), are no titles of the libraries: they are listed
+	// with those.
+	unlisted := slices.DeleteFunc(slices.Clone(credited), func(title record) bool { return title.Addon != nil })
+	credited = slices.DeleteFunc(credited, func(title record) bool { return title.Addon == nil })
+	best := s.knownFor(ctx, v, tmdbCredits, credited, unlisted)
+	if err := s.saveNew(ctx, best); err != nil {
+		return Page{}, err
+	}
+	if len(credited) == 0 && len(best) == 0 {
 		return Page{}, ErrNotFound
 	}
 	// A title's people are its facts: an addon given a language tells
@@ -439,10 +451,15 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 		return source{addon: entry, catalog: catalog, search: r.Person.Name}, searchesPeople(catalog)
 	})
 	known := s.creditedTitles(ctx, v, credited, kinds)
-	knownIMDb := map[string]accounts.ID{}
-	for _, item := range known {
-		if imdb := item.ProviderIDs["Imdb"]; imdb != "" {
-			knownIMDb[imdb] = item.ID
+	bestItems := s.titleItems(ctx, v, best, kinds)
+	// The titles listed by their identifiers: by IMDb identifier, and by
+	// kind and TMDB identifier.
+	listed := map[string]accounts.ID{}
+	for _, item := range slices.Concat(known, bestItems) {
+		for _, key := range listedKeys(item) {
+			if _, ok := listed[key]; !ok {
+				listed[key] = item.ID
+			}
 		}
 	}
 	var items []Item
@@ -463,7 +480,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 			if err != nil || seen[item.ID] {
 				continue
 			}
-			if id, ok := knownIMDb[item.ProviderIDs["Imdb"]]; ok && id != item.ID {
+			if slices.ContainsFunc(listedKeys(item), func(key string) bool { id, ok := listed[key]; return ok && id != item.ID }) {
 				continue
 			}
 			seen[item.ID] = true
@@ -475,6 +492,13 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	}
 	for _, item := range known {
 		if !seen[item.ID] {
+			seen[item.ID] = true
+			items = append(items, item)
+		}
+	}
+	for _, item := range bestItems {
+		if !seen[item.ID] && !slices.ContainsFunc(listedKeys(item), func(key string) bool { return listed[key] != item.ID }) {
+			seen[item.ID] = true
 			items = append(items, item)
 		}
 	}
@@ -486,15 +510,37 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	return Page{Items: s.overridden(items), Total: total, More: more}, s.save(ctx, records)
 }
 
+// listedKeys are the keys a title is listed by in PersonTitles: its IMDb
+// identifier, and its kind with its TMDB identifier, as the identifiers
+// of one title may differ among addons.
+func listedKeys(item Item) []string {
+	var keys []string
+	if imdb := item.ProviderIDs["Imdb"]; imdb != "" {
+		keys = append(keys, "imdb|"+imdb)
+	}
+	if tmdb := item.ProviderIDs["Tmdb"]; tmdb != "" {
+		keys = append(keys, string(item.Kind)+"|tmdb|"+tmdb)
+	}
+	return keys
+}
+
 // creditedTitles describes, by name, the titles of the given kinds among a
-// person's credited ones (see person), from what was stored when they were
-// listed, with the complete description when it is still cached (see
-// describedMeta): describing each title anew would cost a request per
-// title. A title keeps its folder only when it came from one of the user's
-// addons. The titles the user hid are left out.
+// person's credited ones (see person), as titleItems does.
 func (s *Service) creditedTitles(ctx context.Context, v view, credited []record, kinds []Kind) []Item {
+	items := s.titleItems(ctx, v, credited, kinds)
+	slices.SortFunc(items, func(a, b Item) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	return items
+}
+
+// titleItems describes the titles of the given kinds among records, in
+// order, from what was stored when they were listed, with the complete
+// description when it is still cached (see describedMeta): describing each
+// title anew would cost a request per title. A title keeps its folder
+// only when it came from one of the user's addons. The titles the user hid
+// are left out.
+func (s *Service) titleItems(ctx context.Context, v view, records []record, kinds []Kind) []Item {
 	var items []Item
-	for _, r := range credited {
+	for _, r := range records {
 		if !slices.Contains(kinds, r.Kind) || v.hidden[r.ID] {
 			continue
 		}
@@ -509,7 +555,6 @@ func (s *Service) creditedTitles(ctx context.Context, v view, credited []record,
 		fromMeta(&item, meta)
 		items = append(items, item)
 	}
-	slices.SortFunc(items, func(a, b Item) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	return items
 }
 

@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,7 +56,8 @@ import (
 // credits them in (see tmdbCredited), from TMDB's combined credits of the
 // person, kept personCreditsFresh, matched to the titles Polyfin knows by
 // their TMDB identifier, or by the TMDB identifier credits and box sets
-// learnt for their IMDb one.
+// learnt for their IMDb one, and the titles they are best known for,
+// beyond the libraries (see knownfor.go).
 
 const (
 	// titleCreditsFresh is how long a title's credits, or TMDB not knowing
@@ -518,15 +520,10 @@ func (s *Service) creditsPass(ctx context.Context) error {
 
 // Filmographies from TMDB.
 
-// tmdbCredited lists the movies and series TMDB credits a person in that
-// Polyfin knows, described or not, the user's view reaches and their
-// parental control lets them see, but the movies waiting for their
-// digital release, as credited does: while a key is saved, for a person
-// of a known TMDB identifier. A title matches a credit by its TMDB
-// identifier, or by the one credits or box sets learnt for its IMDb one.
-// Titles of no library are not listed, as Jellyfin lists only the items
-// of its libraries crediting a person (Person.cs lines 67-70).
-func (s *Service) tmdbCredited(ctx context.Context, v view, person record) []record {
+// personTMDBCredits returns the movies and series TMDB credits a person
+// in (see personTMDBTitles): while a key is saved, for a person of a
+// known TMDB identifier; none otherwise, or when TMDB could not tell.
+func (s *Service) personTMDBCredits(ctx context.Context, person record) []personCredit {
 	if !s.tmdb.Enabled() {
 		return nil
 	}
@@ -541,11 +538,25 @@ func (s *Service) tmdbCredited(ctx context.Context, v view, person record) []rec
 		}
 		return nil
 	}
+	return credits
+}
+
+// tmdbCredited lists the movies and series of a person's TMDB credits
+// (see personTMDBCredits) that a catalog of the user's addons listed,
+// described or not, the user's view reaches and their parental control
+// lets them see, but the movies waiting for their digital release, as
+// credited does. A title matches a credit by its TMDB identifier, or by
+// the one credits or box sets learnt for its IMDb one. Titles of no
+// library are not listed here, as Jellyfin lists only the items of its
+// libraries crediting a person (Person.cs lines 67-70), nor those no
+// catalog listed, such as those the person is best known for (see
+// knownFor), which are listed as such.
+func (s *Service) tmdbCredited(ctx context.Context, v view, credits []personCredit) []record {
 	var ids []accounts.ID
 	var movies, series []int
 	for _, c := range credits {
 		kind := KindMovie
-		if c.MediaType == "tv" {
+		if c.Kind == "tv" {
 			kind = KindSeries
 			series = append(series, c.ID)
 		} else {
@@ -583,7 +594,7 @@ func (s *Service) tmdbCredited(ctx context.Context, v view, person record) []rec
 		return nil
 	}
 	titles = slices.DeleteFunc(titles, func(title record) bool {
-		return title.Meta == nil || title.Kind != KindMovie && title.Kind != KindSeries || !v.reaches(title)
+		return title.Meta == nil || title.Kind != KindMovie && title.Kind != KindSeries || title.Addon == nil || !v.reaches(title)
 	})
 	titles, _ = s.visible(ctx, v, titles)
 	titles, _ = s.released(ctx, v, titles)
@@ -593,7 +604,7 @@ func (s *Service) tmdbCredited(ctx context.Context, v view, person record) []rec
 // personTMDBTitles returns the movies and series TMDB credits the person
 // it identifies as id in: those kept, else TMDB's, waiting
 // personCreditsWait at most, then kept.
-func (s *Service) personTMDBTitles(ctx context.Context, id int) ([]tmdb.Credit, error) {
+func (s *Service) personTMDBTitles(ctx context.Context, id int) ([]personCredit, error) {
 	var found bool
 	var data []byte
 	var asked time.Time
@@ -601,14 +612,8 @@ func (s *Service) personTMDBTitles(ctx context.Context, id int) ([]tmdb.Credit, 
 	switch {
 	case err == nil && s.now().Sub(asked) < personCreditsFresh:
 		var titles []personCredit
-		if err := json.Unmarshal(data, &titles); err != nil {
-			return nil, err
-		}
-		credits := make([]tmdb.Credit, 0, len(titles))
-		for _, t := range titles {
-			credits = append(credits, tmdb.Credit{ID: t.ID, MediaType: t.Kind})
-		}
-		return credits, nil
+		err := json.Unmarshal(data, &titles)
+		return titles, err
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		return nil, err
 	}
@@ -621,7 +626,9 @@ func (s *Service) personTMDBTitles(ctx context.Context, id int) ([]tmdb.Credit, 
 	}
 	titles := make([]personCredit, 0, len(credits))
 	for _, c := range credits {
-		titles = append(titles, personCredit{Kind: c.MediaType, ID: c.ID})
+		titles = append(titles, personCredit{Kind: c.MediaType, ID: c.ID, Name: cmp.Or(c.Title, c.Name),
+			Date: cmp.Or(c.ReleaseDate, c.FirstAirDate), Poster: c.PosterPath, Votes: c.VoteCount, Popularity: c.Popularity,
+			Aside: c.Appearance() || c.Adult})
 	}
 	encoded, err := json.Marshal(titles)
 	if err != nil {
@@ -630,12 +637,23 @@ func (s *Service) personTMDBTitles(ctx context.Context, id int) ([]tmdb.Credit, 
 	_, err = s.db.Exec(ctx, `INSERT INTO person_credits (tmdb_id, found, titles, asked_at) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (tmdb_id) DO UPDATE SET found = excluded.found, titles = excluded.titles, asked_at = excluded.asked_at`,
 		id, found, encoded, s.now())
-	return credits, err
+	return titles, err
 }
 
 // personCredit is a title a person's combined credits name, as kept: a
-// movie or a series ("tv"), by its TMDB identifier.
+// movie or a series ("tv"), by its TMDB identifier, with what ranks the
+// titles a person is known for (see knownFor): its name, release date
+// ("2006-01-02"), the path of its poster on TMDB's image server, its vote
+// count and popularity, and whether TMDB marks the credit as an
+// appearance rather than a role (see tmdb.Credit.Appearance), or the
+// title as for adults (Aside).
 type personCredit struct {
-	Kind string `json:"kind"`
-	ID   int    `json:"id"`
+	Kind       string  `json:"kind"`
+	ID         int     `json:"id"`
+	Name       string  `json:"name,omitempty"`
+	Date       string  `json:"date,omitempty"`
+	Poster     string  `json:"poster,omitempty"`
+	Votes      int     `json:"votes,omitempty"`
+	Popularity float64 `json:"popularity,omitempty"`
+	Aside      bool    `json:"aside,omitempty"`
 }
