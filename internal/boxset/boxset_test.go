@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
@@ -92,22 +96,23 @@ func newStore(t *testing.T, fake *fakeTMDB, key string, now *time.Time, interval
 	return s
 }
 
-// fakeCatalog lists the identifiers of movies, telling each listing on
-// listed.
+// fakeCatalog lists the identifiers of movies, of as many libraries of
+// movies read out of libraries, telling each listing on listed.
 type fakeCatalog struct {
-	ids    []map[string]string
-	listed chan struct{}
+	ids             []map[string]string
+	libraries, read int
+	listed          chan struct{}
 }
 
-func (c fakeCatalog) MovieIDs(_ context.Context, most int) ([]map[string]string, error) {
+func (c fakeCatalog) MovieIDs(_ context.Context, most int) ([]map[string]string, int, int, error) {
 	if most != PassMost {
-		return nil, errors.New("not the bound of box sets")
+		return nil, 0, 0, errors.New("not the bound of box sets")
 	}
 	select {
 	case c.listed <- struct{}{}:
 	default:
 	}
-	return c.ids, nil
+	return c.ids, c.libraries, c.read, nil
 }
 
 func settle(t *testing.T, s *Store) {
@@ -230,10 +235,58 @@ func TestKnowsNothingWithoutAKey(t *testing.T) {
 // passes list catalog, checking every few milliseconds.
 func passStore(t *testing.T, fake *fakeTMDB, key *atomic.Value, catalog Catalog) *Store {
 	t.Helper()
+	return passStoreOf(t, migrated.New(t), fake, key, catalog, nil)
+}
+
+// passStoreOf is passStore keeping its answers in db, logging to logger.
+func passStoreOf(t *testing.T, db *pgxpool.Pool, fake *fakeTMDB, key *atomic.Value, catalog Catalog, logger *slog.Logger) *Store {
+	t.Helper()
 	client := tmdb.New(fake.URL, fake.URL+"/img/", "test", func() accounts.Settings { return accounts.Settings{TMDBKey: key.Load().(string)} })
-	s := New(migrated.New(t), client, Options{Catalog: catalog, Interval: time.Millisecond, PassCheck: 5 * time.Millisecond})
+	s := New(db, client, Options{Catalog: catalog, Interval: time.Millisecond, PassCheck: 5 * time.Millisecond, Logger: logger})
 	t.Cleanup(s.Close)
 	return s
+}
+
+// infoLog is a slog handler that sends the records at Info and above on
+// records, dropping those its buffer has no room for, so that logging
+// never waits for a test.
+type infoLog struct{ records chan slog.Record }
+
+func newInfoLog() infoLog { return infoLog{records: make(chan slog.Record, 64)} }
+
+func (l infoLog) Enabled(_ context.Context, level slog.Level) bool { return level >= slog.LevelInfo }
+
+func (l infoLog) Handle(_ context.Context, r slog.Record) error {
+	select {
+	case l.records <- r.Clone():
+	default:
+	}
+	return nil
+}
+
+func (l infoLog) WithAttrs([]slog.Attr) slog.Handler { return l }
+func (l infoLog) WithGroup(string) slog.Handler      { return l }
+
+// next waits for the next record logged.
+func (l infoLog) next(t *testing.T) slog.Record {
+	t.Helper()
+	select {
+	case r := <-l.records:
+		return r
+	case <-time.After(30 * time.Second):
+		t.Fatal("nothing was logged")
+		return slog.Record{}
+	}
+}
+
+// attrs are a record's attributes, as text.
+func attrs(r slog.Record) map[string]string {
+	result := map[string]string{}
+	r.Attrs(func(a slog.Attr) bool {
+		result[a.Key] = a.Value.String()
+		return true
+	})
+	return result
 }
 
 // holding makes fake hold each request until release is called.
@@ -261,7 +314,7 @@ func TestAPassLearnsTheLibrariesMoviesAhead(t *testing.T) {
 	var key atomic.Value
 	key.Store("k3y")
 	catalog := fakeCatalog{ids: []map[string]string{{"Tmdb": "101"}, {"Imdb": "tt0000104"}, {"Tmdb": "102", "Imdb": "tt0000102"}, {}},
-		listed: make(chan struct{}, 1)}
+		libraries: 1, read: 1, listed: make(chan struct{}, 1)}
 	started := time.Now()
 	s := passStore(t, fake, &key, catalog)
 	<-catalog.listed
@@ -301,7 +354,7 @@ func TestARequestGoesAheadOfThePass(t *testing.T) {
 	arrived, release := holding(fake)
 	var key atomic.Value
 	key.Store("k3y")
-	catalog := fakeCatalog{ids: []map[string]string{{"Tmdb": "101"}, {"Tmdb": "102"}, {"Tmdb": "103"}}, listed: make(chan struct{}, 1)}
+	catalog := fakeCatalog{ids: []map[string]string{{"Tmdb": "101"}, {"Tmdb": "102"}, {"Tmdb": "103"}}, libraries: 1, read: 1, listed: make(chan struct{}, 1)}
 	s := passStore(t, fake, &key, catalog)
 	if first := <-arrived; first != "/movie/101" {
 		t.Fatalf("first asked %s", first)
@@ -324,7 +377,7 @@ func TestThePassStopsWithoutTheKey(t *testing.T) {
 	arrived, release := holding(fake)
 	var key atomic.Value
 	key.Store("k3y")
-	catalog := fakeCatalog{ids: []map[string]string{{"Tmdb": "101"}, {"Tmdb": "102"}, {"Tmdb": "103"}}, listed: make(chan struct{}, 1)}
+	catalog := fakeCatalog{ids: []map[string]string{{"Tmdb": "101"}, {"Tmdb": "102"}, {"Tmdb": "103"}}, libraries: 1, read: 1, listed: make(chan struct{}, 1)}
 	s := passStore(t, fake, &key, catalog)
 	<-arrived
 	key.Store("")
@@ -335,5 +388,46 @@ func TestThePassStopsWithoutTheKey(t *testing.T) {
 	}
 	if got, err := s.Of(t.Context(), [][]Key{{{"tmdb", "101"}}}); err != nil || got[0] != nil {
 		t.Errorf("without the key: %+v %v", got, err)
+	}
+}
+
+// A pass on a server without a library of movies says so at Info, and
+// looks nothing up: its libraries may all be of collections or series.
+func TestAPassSaysThereIsNoLibraryOfMovies(t *testing.T) {
+	t.Parallel()
+	fake := newFakeTMDB(t, map[string]*tmdb.CollectionRef{}, nil)
+	var key atomic.Value
+	key.Store("k3y")
+	log := newInfoLog()
+	s := passStoreOf(t, migrated.New(t), fake, &key, fakeCatalog{}, slog.New(log))
+	r := log.next(t)
+	if !strings.HasPrefix(r.Message, "No library of movies") || r.Level != slog.LevelInfo {
+		t.Errorf("logged %s %q", r.Level, r.Message)
+	}
+	settle(t, s)
+	if paths, _ := fake.asked(); len(paths) != 0 {
+		t.Errorf("TMDB was asked %v", paths)
+	}
+}
+
+// A pass tells at Info how many libraries of movies it read, and how
+// many movies it listed, each once, queued, and already knew.
+func TestAPassTellsWhatItListed(t *testing.T) {
+	t.Parallel()
+	fake := newFakeTMDB(t, map[string]*tmdb.CollectionRef{"102": nil}, map[string]int{"tt0000104": 104})
+	var key atomic.Value
+	key.Store("k3y")
+	db := migrated.New(t)
+	if _, err := db.Exec(t.Context(), `INSERT INTO movie_collections (provider, id, found, asked_at) VALUES ('tmdb', '101', true, now())`); err != nil {
+		t.Fatal(err)
+	}
+	catalog := fakeCatalog{ids: []map[string]string{{"Tmdb": "101"}, {"Tmdb": "102"}, {"Tmdb": "102", "Imdb": "tt0000102"}, {"Imdb": "tt0000104"}, {}},
+		libraries: 2, read: 1}
+	log := newInfoLog()
+	passStoreOf(t, db, fake, &key, catalog, slog.New(log))
+	r := log.next(t)
+	want := map[string]string{"libraries": "2", "read": "1", "movies": "3", "queued": "2", "known": "1"}
+	if got := attrs(r); r.Level != slog.LevelInfo || !maps.Equal(got, want) {
+		t.Errorf("logged %s %q %v, want %v", r.Level, r.Message, got, want)
 	}
 }

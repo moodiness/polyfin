@@ -80,9 +80,10 @@ type Collection struct {
 
 // Catalog lists the movies a pass learns: the identifiers, under
 // Jellyfin's names, of the first most movies of each of the server's
-// libraries of movies.
+// libraries of movies, with how many libraries of movies the server has
+// and how many of them were read.
 type Catalog interface {
-	MovieIDs(ctx context.Context, most int) ([]map[string]string, error)
+	MovieIDs(ctx context.Context, most int) (ids []map[string]string, libraries, read int, err error)
 }
 
 // Options configure a Store; their zero values are the defaults.
@@ -166,19 +167,20 @@ func (k kept) due(now time.Time) bool {
 // nil for one in none or not known yet. The movies not known, or known
 // for too long, are queued for their lookup, ahead of passes.
 func (s *Store) Of(ctx context.Context, movies [][]Key) ([]*Collection, error) {
-	return s.of(ctx, movies, true)
+	collections, _, err := s.of(ctx, movies, true)
+	return collections, err
 }
 
 // of is Of, queueing the movies due for a request when asked, else for a
-// pass.
-func (s *Store) of(ctx context.Context, movies [][]Key, asked bool) ([]*Collection, error) {
+// pass. It also tells how many movies were due.
+func (s *Store) of(ctx context.Context, movies [][]Key, asked bool) ([]*Collection, int, error) {
 	collections := make([]*Collection, len(movies))
 	if !s.Enabled() {
-		return collections, nil
+		return collections, 0, nil
 	}
 	known, err := s.kept(ctx, movies)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	now := s.now()
 	var due []Key
@@ -201,7 +203,7 @@ func (s *Store) of(ctx context.Context, movies [][]Key, asked bool) ([]*Collecti
 		}
 	}
 	s.enqueue(due, asked)
-	return collections, nil
+	return collections, len(due), nil
 }
 
 // kept reads what is kept of movies, by key.
@@ -267,26 +269,40 @@ func (s *Store) enqueue(keys []Key, asked bool) {
 func (s *Store) Settled(ctx context.Context) error { return s.queue.Settled(ctx) }
 
 // pass queues the movies of the server's libraries of movies whose
-// collection is not known, or known for too long.
+// collection is not known, or known for too long, and logs what it did:
+// a server whose libraries are all of collections or series has no box
+// sets, and its passes learn nothing.
 func (s *Store) pass(ctx context.Context) error {
 	listing, cancel := context.WithTimeout(ctx, passTime)
 	defer cancel()
-	ids, err := s.catalog.MovieIDs(listing, PassMost)
+	ids, libraries, read, err := s.catalog.MovieIDs(listing, PassMost)
 	if err != nil {
 		return err
 	}
+	if libraries == 0 {
+		s.logger.Info("No library of movies: box sets have none until one is added")
+		return nil
+	}
+	// A movie listed by several libraries is counted, and asked for, once.
+	seen := make(map[Key]bool, len(ids))
 	movies := make([][]Key, 0, len(ids))
 	for _, movie := range ids {
-		if keys := Keys(movie); len(keys) > 0 {
+		if keys := Keys(movie); len(keys) > 0 && !seen[keys[0]] {
+			seen[keys[0]] = true
 			movies = append(movies, keys)
 		}
 	}
+	queued := 0
 	// Kept answers are read a thousand movies at a time.
 	for start := 0; start < len(movies); start += 1000 {
-		if _, err := s.of(ctx, movies[start:min(start+1000, len(movies))], false); err != nil {
+		_, due, err := s.of(ctx, movies[start:min(start+1000, len(movies))], false)
+		if err != nil {
 			return err
 		}
+		queued += due
 	}
+	s.logger.Info("Box sets: the movies of the libraries of movies were listed", "libraries", libraries, "read", read,
+		"movies", len(movies), "queued", queued, "known", len(movies)-queued)
 	return nil
 }
 
