@@ -11,13 +11,14 @@ import (
 // Background lookups.
 //
 // What Polyfin learns from TMDB ahead of requests, such as the collections
-// of movies (see the boxset package) and the credits of titles (see the
-// library package's titlecredits.go), waits its turn in one Queue, so that
-// together they respect TMDB's rate. Two kinds of lookups wait. Passes
-// (see Queue.Pass) queue those of the first titles of the server's
+// of movies (see the boxset package), the credits of titles (see the
+// library package's titlecredits.go) and the artwork of titles whose
+// addon gives none (see its tmdbartwork.go), waits its turn in one Queue,
+// so that together they respect TMDB's rate. Two kinds of lookups wait.
+// Passes (see Queue.Pass) queue those of the first titles of the server's
 // libraries, once a key is saved, then each passEvery, which finds the
-// answers grown old. A lookup a request asks for, a title's page or a
-// search, goes first, ahead of the passes'.
+// answers grown old. A lookup a request asks for, a title's page, a search
+// or an image, goes first, ahead of the passes'.
 //
 // The lookups are made one at a time, at most one every interval, each one
 // or two requests to TMDB, which the client bounds with the server's other

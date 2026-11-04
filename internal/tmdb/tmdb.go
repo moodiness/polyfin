@@ -7,9 +7,10 @@
 // package's studios.go), for the release dates of movies, which the
 // wait for their digital release and smart lists judge (see the library
 // package's releases.go), for the episode groups series may show in
-// (see the library package's episodeorder.go), and for the collections
+// (see the library package's episodeorder.go), for the collections
 // movies belong to, which Silo's apps show as box sets (see the boxset
-// package).
+// package), and for the posters and backdrops of titles whose addon gives
+// none (see the library package's tmdbartwork.go).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
