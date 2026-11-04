@@ -410,10 +410,9 @@ func (s *Service) TorrentPlayMost() time.Duration {
 	return 2 * s.TorrentPlayWait()
 }
 
-// torrentPatience returns ctx, canceled with errTorrentSlow once the
-// torrent of version, past its start, 15 seconds and a piece's wait,
-// receives nothing for a piece's wait, or at TorrentPlayMost: a read of it
-// waits as the play does (see TorrentReceiving). stop ends the watch.
+// torrentPatience returns ctx, canceled with errTorrentSlow once a wait
+// for the torrent of version begun now is over (see torrentWaited): a read
+// of it waits as the play does. stop ends the watch.
 func (s *Service) torrentPatience(ctx context.Context, version library.Version) (patient context.Context, stop func()) {
 	patient, cancel := context.WithCancelCause(ctx)
 	if s.torrents == nil {
@@ -421,7 +420,7 @@ func (s *Service) torrentPatience(ctx context.Context, version library.Version) 
 	}
 	started, most := time.Now(), s.TorrentPlayMost()
 	go func() {
-		timer := time.NewTimer(min(s.torrents.StartTimeout()+15*time.Second+torrent.PieceTimeout, most))
+		timer := time.NewTimer(min(s.torrentGrace(), most))
 		defer timer.Stop()
 		for {
 			select {
@@ -429,7 +428,7 @@ func (s *Service) torrentPatience(ctx context.Context, version library.Version) 
 				return
 			case <-timer.C:
 			}
-			if time.Since(started) >= most || !s.TorrentReceiving(version) {
+			if s.torrentWaited(version, started) {
 				cancel(errTorrentSlow)
 				return
 			}
@@ -437,6 +436,25 @@ func (s *Service) torrentPatience(ctx context.Context, version library.Version) 
 		}
 	}()
 	return patient, func() { cancel(nil) }
+}
+
+// torrentGrace is how long a wait for a torrent goes on before it looks
+// whether the torrent receives its pieces: its start, 15 seconds and a
+// piece's wait, 105 seconds by default.
+func (s *Service) torrentGrace() time.Duration {
+	return s.torrents.StartTimeout() + 15*time.Second + torrent.PieceTimeout
+}
+
+// torrentWaited reports whether a wait for the torrent of version begun at
+// since is over, as a play's is: at TorrentPlayMost, or past torrentGrace
+// once the torrent receives nothing (see TorrentReceiving). Always without
+// torrents.
+func (s *Service) torrentWaited(version library.Version, since time.Time) bool {
+	if s.torrents == nil {
+		return true
+	}
+	waited := time.Since(since)
+	return waited >= s.TorrentPlayMost() || waited >= s.torrentGrace() && !s.TorrentReceiving(version)
 }
 
 // TorrentReceiving reports whether the torrent of a torrent version
@@ -673,7 +691,7 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		defer src.Release()
 		defer src.Urge()()
 	}
-	result, err := s.shared(ctx, "analyze "+version.ID.String(), func() (any, error) {
+	result, err := s.sharedRead(ctx, "analyze "+version.ID.String(), version, func() (any, error) {
 		// Requests for the version share this analysis, and it is kept: it
 		// runs to the end, and is saved, even once the request that started
 		// it is canceled, as when an app stops waiting. Started for a
@@ -912,6 +930,23 @@ func (s *Service) shared(ctx context.Context, key string, fn func() (any, error)
 		return result.Val, result.Err
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+}
+
+// sharedRead is shared for a read of version's file that waits for its
+// torrent as a play does (see torrentPatience). That wait begins with the
+// read, which later requests join: when it gives up on the torrent, a
+// request whose own wait, begun as it asked, is not over (see
+// torrentWaited) is not handed a verdict on an earlier request's wait, as
+// a play asked just as the previous one gave up, and the file is read
+// again for it.
+func (s *Service) sharedRead(ctx context.Context, key string, version library.Version, fn func() (any, error)) (any, error) {
+	asked := time.Now()
+	for {
+		result, err := s.shared(ctx, key, fn)
+		if !errors.Is(err, errTorrentSlow) || s.torrentWaited(version, asked) {
+			return result, err
+		}
 	}
 }
 

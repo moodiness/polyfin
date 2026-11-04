@@ -252,7 +252,7 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		defer src.Release()
 		defer src.Urge()()
 	}
-	result, err := s.shared(ctx, "keyframes "+version.ID.String(), func() (any, error) {
+	result, err := s.sharedRead(ctx, "keyframes "+version.ID.String(), version, func() (any, error) {
 		// Shared and kept like an analysis: read to the end, and saved, even
 		// once the request that started it is canceled, within
 		// keyframesTime. Started for a playback, it reads its source as a
