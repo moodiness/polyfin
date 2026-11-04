@@ -107,6 +107,8 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Disk space** for the cache, recordings and backups folders, and for the conversion folder and the folder for files being read when they are other folders than the cache's (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache));
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
   - **Thumbnails (trickplay)**: the queue and paused sources;
+  - **Artwork**: the artwork downloads that failed in the last hour, by kind and by server, and the servers waited for (see [Artwork and people](#artwork-and-people));
+  - **People**: whether a TMDB API key is saved, and how people's lookups on TMDB stand (see [Artwork and people](#artwork-and-people));
   - **Polyfin**: memory, goroutines, uptime and version, and **Download the goroutines**: a text file of what every goroutine of the server is doing, with its stack and how long it has waited, as Go prints it when a program crashes. When a request never answers, download it while the request still waits, and send it with the report. It holds the paths of Polyfin's source files, but no address, token or password. Only administrators may download it (`GET /admin/api/health/goroutines`);
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error;
   - **Known proxies**: while some are listed by host name, the addresses each name resolves to (see [Proxies by name](reverse-proxy.md#proxies-by-name)).
@@ -141,6 +143,19 @@ Torrent streams that cannot play are an error, naming why: the network interface
 
 Health sends no request outside the server, but for the SOCKS5 proxy and the WireGuard server of torrents, checked as their kill switch checks them. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
 
+### Artwork and people
+
+**Artwork**, under **Server** in **System › Health**, tells why images stay blank in apps, without **Detailed log**:
+
+- the artwork downloads that failed in the last hour, by kind: **Not found** (`404` or `410`), **Asked to slow down** (`429`, or a `503` with `Retry-After`), **Timed out**, **Server errors** (other `5xx`) and **Other failures**;
+- the servers that failed, by host name, the 10 that failed most, first. No address is shown;
+- the **Servers waited for**: those that asked to wait, asked nothing until then, and those that showed they were overloaded, asked less at once until then (see [Artwork](addons-and-libraries.md#artwork)).
+
+An hour with failures also logs one INFO line, `Artwork downloads failed in the last hour`, with the same counts, the 5 servers that failed most and those waited for.
+
+**People** tells how the photos and biographies of people from TMDB stand (see [Photos and biographies from TMDB](addons-and-libraries.md#photos-and-biographies-from-tmdb)): whether a **TMDB API key** is saved under **Settings › Content**, the people TMDB found and did not find, those whose last lookup failed, the lookups waiting or under way, and TMDB's last rate limit (`429`) since the server started, with the wait it asked.
+
+**For app developers:** `GET /admin/api/health` gives them as `artwork`, with `failed`, `kinds` (`not_found`, `rate_limited`, `timeout`, `server_error`, `other`), `hosts` (`host`, `failed`), `waiting` and `spared` (`host`, `until`); and `people`, with `keySaved`, `found`, `notFound`, `failing`, `waiting`, `limitedAt` (`null` for none) and `limitWait` (seconds, `0` for none).
 
 ### Clearing the image cache
 
@@ -151,7 +166,7 @@ It empties:
 - the artwork relayed from the addons' artwork servers, IPTV channel logos and people's photos included, in memory and in the `images` folder of Polyfin's cache folder;
 - the copies resized for the apps, and the posters warmed ahead with their sizes, those of local folders included;
 - the images Polyfin draws for collections, smart lists and libraries;
-- the downloads remembered as failed, which are asked for again at once rather than after 2 minutes.
+- the downloads remembered as failed, which are asked for again at once rather than once their wait ends, and the images found dead, which titles and people show again.
 
 Each image is downloaded, resized or drawn again at its next request, and the posters of the libraries' first pages are warmed again by the next run of "Read the libraries' first pages", within the hour. An image being downloaded or resized as the cache is cleared is kept once it ends.
 
