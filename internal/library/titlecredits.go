@@ -79,9 +79,10 @@ const (
 // the credits of, as many as box sets learn (see boxset.PassMost).
 const CreditsPassMost = 2000
 
-// UseTitleCredits sets the queue titles' credits are read in, and starts
-// their passes; it is called before the service is used, after UseTMDB.
-// Without it, titles show the addons' people.
+// UseTitleCredits sets the queue titles' credits are read in, and titles'
+// artwork (see tmdbartwork.go), and starts the credits' passes; it is
+// called before the service is used, after UseTMDB. Without it, titles
+// show the addons' people and artwork.
 func (s *Service) UseTitleCredits(q *tmdb.Queue) {
 	s.lookups = q
 	q.Pass("title credits", s.creditsPass)

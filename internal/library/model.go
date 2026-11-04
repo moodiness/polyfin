@@ -135,6 +135,11 @@ type Item struct {
 	// poster, stremio.ShapeLandscape or stremio.ShapeSquare, empty for the
 	// usual 2:3. An image in place of the addon's poster has none.
 	PosterShape string
+	// TMDBPoster stands for the poster TMDB may give a movie or series
+	// whose addon gives none, or a dead one, before TMDB was asked (see
+	// tmdbartwork.go): its tag (see ImageTag) is the Primary image's
+	// while Images.Primary is empty, the image looked up when asked for.
+	TMDBPoster string
 	// FolderID is the folder a video of a title's description belongs to
 	// (see othervideos.go), zero for other items.
 	FolderID accounts.ID

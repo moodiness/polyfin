@@ -23,6 +23,9 @@ func (f *fakeArtworkFailures) ArtworkFailing(url string) bool {
 	return f.failing[url]
 }
 
+// ArtworkDead reports the failing images as dead.
+func (f *fakeArtworkFailures) ArtworkDead(url string) bool { return f.ArtworkFailing(url) }
+
 func (f *fakeArtworkFailures) ForgetArtwork(urls []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

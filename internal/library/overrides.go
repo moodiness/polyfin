@@ -620,21 +620,23 @@ func (set *overrideSet) rename(c *Credit) {
 
 // overridden returns items with the poster of the poster address template
 // (see templatePoster), their local artwork (see applyLocal), the ratings
-// MDBList gives them (see keptScores), and what administrators changed of
-// them (see overrideSet.apply). Items may come from caches: they are
-// copied, never changed in place.
+// MDBList gives them (see keptScores), what administrators changed of
+// them (see overrideSet.apply), and TMDB's poster and backdrop in place of
+// those they lack (see withTMDBArtwork). Items may come from caches: they
+// are copied, never changed in place.
 func (s *Service) overridden(items []Item) []Item {
 	set := s.overridesNow()
 	local := s.localArtwork()
 	scores := s.keptScores(items)
 	template := s.settings().PosterTemplate
-	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 && scores == nil && template == "" {
+	tmdbArtwork := s.titleArtworkShown()
+	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 && scores == nil && template == "" && !tmdbArtwork {
 		return items
 	}
 	audience := scores != nil && s.audienceShown()
 	result := slices.Clone(items)
 	for i := range result {
-		templatePoster(&result[i], template)
+		_, templated := templatePoster(&result[i], template)
 		if len(local) > 0 {
 			applyLocal(&result[i], local)
 		}
@@ -642,20 +644,25 @@ func (s *Service) overridden(items []Item) []Item {
 			rate(&result[i], scores[i], audience)
 		}
 		set.apply(&result[i])
+		if tmdbArtwork {
+			s.withTMDBArtwork(context.Background(), &result[i], templated)
+		}
 	}
 	return result
 }
 
 // overriddenItem returns an item with the poster of the poster address
-// template, its local artwork, its ratings from MDBList and what
-// administrators changed of it.
+// template, its local artwork, its ratings from MDBList, what
+// administrators changed of it and TMDB's artwork in place of what it
+// lacks.
 func (s *Service) overriddenItem(item Item) Item {
-	templatePoster(&item, s.settings().PosterTemplate)
+	_, templated := templatePoster(&item, s.settings().PosterTemplate)
 	if local := s.localArtwork(); len(local) > 0 {
 		applyLocal(&item, local)
 	}
 	item = s.rated(item)
 	s.overridesNow().apply(&item)
+	s.withTMDBArtwork(context.Background(), &item, templated)
 	return item
 }
 

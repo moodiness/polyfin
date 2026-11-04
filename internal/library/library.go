@@ -228,9 +228,12 @@ type Service struct {
 	// artwork remembers the artwork downloads that failed, which Refresh
 	// forgets (see refreshArtwork).
 	artwork ArtworkFailures
-	// lookups queues the lookups of titles' credits on TMDB (see
-	// titlecredits.go); nil makes none.
+	// lookups queues the lookups of titles' credits and artwork on TMDB
+	// (see titlecredits.go and tmdbartwork.go); nil makes none.
 	lookups *tmdb.Queue
+	// titleArtwork keeps the posters and backdrops TMDB gives titles
+	// lacking their addon's (see tmdbartwork.go).
+	titleArtwork titleArtworks
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -3173,10 +3176,25 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 				}
 			}
 		}
-		if strings.EqualFold(imageType, "Primary") {
+		primary := strings.EqualFold(imageType, "Primary")
+		if primary {
 			item.Kind, item.Images = r.Kind, images
 			fallback, templated = templatePoster(&item, template)
 			images.Primary = item.Images.Primary
+		}
+		// A movie or series lacking the image, or whose own is dead, shows
+		// TMDB's as kept (see withTMDBArtwork), unless the poster address
+		// template gives its poster. It is kept by the identifiers of the
+		// title's listing, as TMDBArtwork looks it up.
+		if !(primary && templated) && s.titleArtworkShown() && s.lacking(images.URL(imageType)) {
+			if url := s.keptTMDBImage(ctx, r.Kind, providerIDs(*r.Meta), imageType); url != "" {
+				confined = false
+				if primary {
+					images.Primary = url
+				} else {
+					images.Backdrop = url
+				}
+			}
 		}
 	case r.Kind == KindEpisode && r.Video != nil:
 		images.Primary = r.Video.Thumbnail

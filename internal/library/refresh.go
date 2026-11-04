@@ -172,10 +172,11 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 
 // ArtworkFailures remembers the artwork downloads that failed (the image
 // relay, jellyfin.Handler): ArtworkFailing reports one that failed last,
-// or was found dead, and ForgetArtwork forgets those of urls, each then
-// downloaded at its next request.
+// or was found dead, ArtworkDead one found dead, and ForgetArtwork forgets
+// those of urls, each then downloaded at its next request.
 type ArtworkFailures interface {
 	ArtworkFailing(url string) bool
+	ArtworkDead(url string) bool
 	ForgetArtwork(urls []string)
 }
 
@@ -185,8 +186,10 @@ type ArtworkFailures interface {
 func (s *Service) UseArtworkFailures(f ArtworkFailures) { s.artwork = f }
 
 // refreshArtwork forgets the failed downloads of a title's artwork, as its
-// listing and its description give it, and refreshes its people (see
-// refreshPeople): Jellyfin's refresh downloads an item's images again.
+// listing and its description give it, and TMDB's in place of the one it
+// lacks, which is looked up again (see refreshTitleArtwork), and
+// refreshes its people (see refreshPeople): Jellyfin's refresh downloads
+// an item's images again.
 func (s *Service) refreshArtwork(ctx context.Context, user accounts.User, v view, title record) error {
 	urls := metaArtwork(*title.Meta)
 	if full, _, ok := s.describedMeta(ctx, v, title, false, inDatabase); ok {
@@ -197,6 +200,11 @@ func (s *Service) refreshArtwork(ctx context.Context, user accounts.User, v view
 	if poster, ok := PosterAddress(s.settings().PosterTemplate, title.Kind, item.ProviderIDs); ok {
 		urls = append(urls, poster)
 	}
+	tmdbArtwork, err := s.refreshTitleArtwork(ctx, title.Kind, item.ProviderIDs)
+	if err != nil {
+		return err
+	}
+	urls = append(urls, tmdbArtwork...)
 	people, err := s.loadWhere(ctx, "kind = 'person' AND data->'credits' ? $1", title.ID.String())
 	if err != nil {
 		return err
