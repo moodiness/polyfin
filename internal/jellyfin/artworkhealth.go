@@ -234,6 +234,13 @@ func (h *Handler) ArtworkFailing(url string) bool {
 	return failed || h.images.isDead(url)
 }
 
+// ArtworkDead reports whether the artwork at url was found dead (see
+// library.ArtworkFailures).
+func (h *Handler) ArtworkDead(url string) bool {
+	h.images.open(h.imageDir(), h.Logger)
+	return h.images.isDead(url)
+}
+
 // ForgetArtwork forgets the failures of the artwork at urls, which are
 // downloaded again at their next request, their hosts waited for no more
 // (see library.ArtworkFailures).
