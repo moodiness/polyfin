@@ -233,7 +233,7 @@ func (s *Service) open(version library.Version) *source.Source {
 		src := s.sources.Open(version.ID, s.torrentLocation(version), nil)
 		// A torrent that failed for its route is tried again as soon as the
 		// route is back, not after the source's cooldown.
-		if failure := src.Failure(); failure != nil && torrent.RouteFailure(failure) && s.torrentReady() == nil {
+		if failure := src.Failure(); failure != nil && torrent.RouteFailure(failure) && s.torrentReady(version) == nil {
 			src.Retry()
 		}
 		return src
@@ -506,16 +506,22 @@ func (s *Service) Unstarted(version accounts.ID) bool {
 // routeCheck bounds the check of the torrents' route before a read.
 const routeCheck = 10 * time.Second
 
-// torrentReady reports why torrents cannot play now, nil when they can:
-// a torrent version is skipped meanwhile, as one that cannot be read,
-// without that counting as its failure.
-func (s *Service) torrentReady() error {
+// torrentReady reports why the torrent of version cannot play now, nil
+// when it can: a torrent version is skipped meanwhile, as one that cannot
+// be read, without that counting as its failure. A torrent that runs can
+// at once: it watches its route itself, and plays on through an outage
+// (see torrent.Engine.ReadyFor).
+func (s *Service) torrentReady(version library.Version) error {
 	if s.torrents == nil {
 		return errNoTorrents
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), routeCheck)
 	defer cancel()
-	return s.torrents.Ready(ctx)
+	hash, err := torrent.ParseHash(version.Torrent.InfoHash)
+	if err != nil {
+		return s.torrents.Ready(ctx)
+	}
+	return s.torrents.ReadyFor(ctx, hash)
 }
 
 // TorrentAdmitted reports why a torrent version cannot start now:
@@ -614,8 +620,9 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 	if version.Torrent != nil {
 		// Over a route that cannot carry it, a torrent's file is not read:
 		// it plays again once the route is back. Nor while as many torrents
-		// run as the settings allow: it plays once one stops.
-		if err := s.torrentReady(); err != nil {
+		// run as the settings allow: it plays once one stops. A torrent
+		// that runs plays on through an outage of its route.
+		if err := s.torrentReady(version); err != nil {
 			return media.Analysis{}, err
 		}
 		if err := s.TorrentAdmitted(version); err != nil {

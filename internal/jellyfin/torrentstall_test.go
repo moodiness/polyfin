@@ -185,3 +185,86 @@ func TestATorrentWhosePiecesKeepComingPlaysAtItsFirstPlay(t *testing.T) {
 		t.Fatalf("over a slow swarm whose pieces keep coming, PlaybackInfo answered %q", code)
 	}
 }
+
+// hlsURL asks PlaybackInfo for the version picked as playHLS does, and
+// returns the address of the HLS stream it answers.
+func (p torrentPlay) hlsURL(t *testing.T, picked string) string {
+	t.Helper()
+	query := url.Values{"UserId": {p.user.ID.String()}, "IsPlayback": {"true"}, "MediaSourceId": {picked}}
+	status, body := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo?"+query.Encode(), app("web", p.token),
+		map[string]any{"DeviceProfile": json.RawMessage(hlsOnlyProfile)})
+	var answer playbackAnswer
+	if status != http.StatusOK || json.Unmarshal(body, &answer) != nil || answer.ErrorCode != "" || len(answer.MediaSources) == 0 ||
+		answer.MediaSources[0].TranscodingUrl == "" {
+		t.Fatalf("PlaybackInfo: %d %s", status, body)
+	}
+	return answer.MediaSources[0].TranscodingUrl
+}
+
+// allSegments reads the HLS stream at transcoding as a player does, its
+// playlists then each of its segments, failing the test on any answer
+// that is not a success.
+func allSegments(t *testing.T, s testServer, transcoding string) {
+	t.Helper()
+	status, master := s.call(http.MethodGet, transcoding, "", nil)
+	if status != http.StatusOK {
+		t.Fatalf("master playlist: %d %s", status, master)
+	}
+	base := transcoding[:strings.Index(transcoding, "master.m3u8")]
+	uris := func(playlist []byte) []string {
+		var listed []string
+		for line := range strings.Lines(string(playlist)) {
+			if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+				if !strings.HasPrefix(line, "/") && !strings.HasPrefix(line, "http") {
+					line = base + line
+				}
+				listed = append(listed, line)
+			}
+		}
+		return listed
+	}
+	media := uris(master)
+	if len(media) == 0 {
+		t.Fatalf("master playlist: %s", master)
+	}
+	status, playlist := s.call(http.MethodGet, media[0], "", nil)
+	segments := uris(playlist)
+	if status != http.StatusOK || len(segments) < 3 {
+		t.Fatalf("media playlist: %d %s", status, playlist)
+	}
+	for n, segment := range segments {
+		if status, data := s.call(http.MethodGet, segment, "", nil); status != http.StatusOK || len(data) == 0 {
+			t.Fatalf("segment %d: %d, %d bytes", n, status, len(data))
+		}
+	}
+}
+
+// A torrent version played over HLS plays on while its proxy answers no
+// new connection, for longer than a handshake's timeout: the torrent keeps
+// its peer, and PlaybackInfo, as the app asks again after a seek or a
+// change of track, its playlists and every segment answer meanwhile.
+func TestATorrentPlaysOverHLSThroughAProxyStall(t *testing.T) {
+	t.Parallel()
+	ffmpeg, tor := slowTorrent(t)
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 0, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	picked := p.details(t)
+	fetchSegments(t, p.testServer, p.hlsURL(t, picked), 0)
+
+	p.proxy.Stall()
+	defer p.proxy.Answer()
+	// A check of the route, once the last one's answer is stale, waits
+	// out the proxy's handshake and fails.
+	deadline := time.Now().Add(time.Minute)
+	for !torrent.RouteFailure(p.engine.Ready(t.Context())) {
+		if time.Now().After(deadline) {
+			t.Fatal("the route's check passes during the stall")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	allSegments(t, p.testServer, p.hlsURL(t, picked))
+	if hash, _ := torrent.ParseHash(tor.HashHex()); !p.engine.Running(hash) {
+		t.Fatal("the torrent stopped during the stall")
+	}
+}
