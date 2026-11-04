@@ -617,9 +617,16 @@ func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail
 
 // setImages sets the tags of an item's images on its DTO: its Primary
 // image's is the badged one (see badgedTag) when badges holds what its
-// badges show. Artwork found dead is left out (see withoutDead).
+// badges show. Artwork found dead is left out (see withoutDead). A movie
+// or series lacking a poster TMDB was not asked about yet advertises the
+// tag of its lookup (see library.Item.TMDBPoster), the poster looked up
+// when asked for (see taggedArtwork).
 func (h *Handler) setImages(dto *BaseItemDto, item library.Item, badges map[accounts.ID]string) {
 	item.Images = h.withoutDead(item.Images)
+	if item.Images.Primary == "" && item.TMDBPoster != "" {
+		dto.ImageTags["Primary"] = library.ImageTag(item.TMDBPoster)
+		dto.PrimaryImageAspectRatio = new(2.0 / 3.0)
+	}
 	if item.Images.Primary != "" {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
 		if shown, ok := badges[item.ID]; ok {

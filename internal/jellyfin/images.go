@@ -1030,6 +1030,13 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 			found, err = tagged, nil
 		}
 	}
+	// A movie or series without the image shows TMDB's, looked up now if
+	// need be (see library.Service.TMDBArtwork).
+	if errors.Is(err, library.ErrNotFound) && !uploaded {
+		if replaced, ok := h.Library.TMDBArtwork(r.Context(), id, imageType); ok {
+			found, err = replaced, nil
+		}
+	}
 	if errors.Is(err, library.ErrNotFound) {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -1072,18 +1079,14 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	h.images.open(h.imageDir(), h.Logger)
 	var image artwork
 	// source is the address of the image downloaded: url, else its
-	// fallback.
+	// fallback, or TMDB's in place of a dead one.
 	source := url
-	// relayed tells artwork downloaded from its server, which may be
-	// found dead.
-	relayed := false
 	// Only an image Polyfin chose is drawn, whatever an artwork URL says.
 	if found.Generated != nil {
 		image, err = h.generatedArtwork(r.Context(), url, *found.Generated, found.Confined)
 	} else if key, ok := library.LocalArtworkKey(url); ok {
 		image, err = h.localArtwork(r.Context(), url, key)
 	} else {
-		relayed = true
 		// The poster address template is an administrator's: its posters
 		// are not confined as the addons' may be (see URLConfined).
 		image, err = h.fetchArtwork(r.Context(), url, found.URLConfined(), h.iptvHost(r.Context(), url))
@@ -1097,6 +1100,23 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 				header.Set("Cache-Control", taggedImage)
 			}
 		}
+		// Artwork relayed that is found dead, the poster address
+		// template's with its fallback, stops being advertised. A movie's
+		// or series' gives way to TMDB's at once, which apps keep for a
+		// while only.
+		if failed, ok := errors.AsType[failedDownload](err); ok && failed.dead() {
+			h.artworkDead(r.Context(), id, found, url)
+			if replaced, ok := h.Library.TMDBArtwork(r.Context(), id, imageType); ok && replaced.URL != url && r.Context().Err() == nil {
+				source = replaced.URL
+				image, err = h.fetchArtwork(r.Context(), source, replaced.Confined, false)
+				if !preview {
+					header.Set("Cache-Control", taggedImage)
+				}
+				if failed, ok := errors.AsType[failedDownload](err); ok && failed.dead() {
+					h.artworkDead(r.Context(), id, replaced, source)
+				}
+			}
+		}
 	}
 	if err != nil {
 		header.Del("ETag")
@@ -1108,11 +1128,6 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		// A host that asked to wait tells apps how long.
 		if wait, ok := stremio.RetryAfter(err); ok && status == http.StatusServiceUnavailable {
 			header.Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-		}
-		// Artwork relayed that is found dead, the poster address
-		// template's with its fallback, stops being advertised.
-		if failed, ok := errors.AsType[failedDownload](err); ok && relayed && failed.dead() {
-			h.artworkDead(r.Context(), id, found, url)
 		}
 		if r.Context().Err() == nil {
 			h.Logger.Debug("Artwork could not be downloaded", "item", id.String(), "error", err)
