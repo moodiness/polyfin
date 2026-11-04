@@ -351,7 +351,9 @@ func (c *Client) Manifest(ctx context.Context, manifestURL string, confined bool
 const maxImageBytes = 15 << 20
 
 // Image downloads artwork referenced by an addon. Only image responses are
-// accepted, so an addon cannot make the server relay arbitrary content.
+// accepted, so an addon cannot make the server relay arbitrary content. An
+// artwork server that answers 429, or 503, with a Retry-After asks to wait
+// that long, which RetryAfter reads from the error.
 func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byte, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -368,6 +370,10 @@ func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byt
 	defer response.Body.Close()
 	contentType := response.Header.Get("Content-Type")
 	if response.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "image/") {
+		wait, waits := parseRetryAfter(response.Header.Get("Retry-After"), time.Now())
+		if waits && (response.StatusCode == http.StatusTooManyRequests || response.StatusCode == http.StatusServiceUnavailable) {
+			return nil, "", fmt.Errorf("%w: %w %s, %w", ErrUnreachable, httpStatus(response.StatusCode), contentType, wait)
+		}
 		return nil, "", fmt.Errorf("%w: %w %s", ErrUnreachable, httpStatus(response.StatusCode), contentType)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes+1))
