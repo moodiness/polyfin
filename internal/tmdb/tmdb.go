@@ -410,16 +410,27 @@ type FoundPerson struct {
 }
 
 // Credit is a title a person is credited in: a movie or a series ("tv"),
-// by its identifier, its names and its release date ("2006-01-02").
+// by its identifier, its names and its release date ("2006-01-02"). A
+// person's combined credits also give its poster's path, genres (by
+// TMDB's genre identifiers), popularity, vote count and whether it is
+// for adults, and the character the person plays, or their job in the
+// crew.
 type Credit struct {
-	ID            int    `json:"id"`
-	MediaType     string `json:"media_type"`
-	Title         string `json:"title"`
-	OriginalTitle string `json:"original_title"`
-	Name          string `json:"name"`
-	OriginalName  string `json:"original_name"`
-	ReleaseDate   string `json:"release_date"`
-	FirstAirDate  string `json:"first_air_date"`
+	ID            int     `json:"id"`
+	MediaType     string  `json:"media_type"`
+	Title         string  `json:"title"`
+	OriginalTitle string  `json:"original_title"`
+	Name          string  `json:"name"`
+	OriginalName  string  `json:"original_name"`
+	ReleaseDate   string  `json:"release_date"`
+	FirstAirDate  string  `json:"first_air_date"`
+	PosterPath    string  `json:"poster_path"`
+	GenreIDs      []int   `json:"genre_ids"`
+	Popularity    float64 `json:"popularity"`
+	VoteCount     int     `json:"vote_count"`
+	Adult         bool    `json:"adult"`
+	Character     string  `json:"character"`
+	Job           string  `json:"job"`
 }
 
 // Names are the credit's title and original title, those of a series

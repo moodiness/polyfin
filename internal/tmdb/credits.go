@@ -167,22 +167,56 @@ func crewKind(m crewMember) string {
 }
 
 // PersonTitles returns the movies and series TMDB credits the person it
-// identifies as id in, as an actor or in the crew, each once.
+// identifies as id in, as an actor or in the crew, each once: as a role
+// rather than an appearance (see Credit.Appearance) when it is both.
 func (c *Client) PersonTitles(ctx context.Context, id int) ([]Credit, error) {
 	credits, err := c.PersonCredits(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	var titles []Credit
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	for _, credit := range credits {
+		if credit.ID <= 0 || credit.MediaType != "movie" && credit.MediaType != "tv" {
+			continue
+		}
 		key := credit.MediaType + "/" + strconv.Itoa(credit.ID)
-		if credit.ID > 0 && (credit.MediaType == "movie" || credit.MediaType == "tv") && !seen[key] {
-			seen[key] = true
+		i, ok := seen[key]
+		switch {
+		case !ok:
+			seen[key] = len(titles)
 			titles = append(titles, credit)
+		case titles[i].Appearance() && !credit.Appearance():
+			titles[i] = credit
 		}
 	}
 	return titles, nil
+}
+
+// TMDB's genres of talk shows and of the news.
+const (
+	genreNews = 10763
+	genreTalk = 10767
+)
+
+// Appearance reports whether TMDB marks a credit as the person appearing
+// as themselves rather than in a role: a talk show or the news, or a
+// character TMDB names after the person's self ("Self", "Himself",
+// "Herself", "Themselves", such as "Self - Host" or "Himself (archive
+// footage)").
+func (c Credit) Appearance() bool {
+	if slices.ContainsFunc(c.GenreIDs, func(genre int) bool { return genre == genreNews || genre == genreTalk }) {
+		return true
+	}
+	word := strings.ToLower(strings.TrimSpace(c.Character))
+	if end := strings.IndexFunc(word, func(r rune) bool { return r < 'a' || r > 'z' }); end >= 0 {
+		word = word[:end]
+	}
+	switch word {
+	case "self", "himself", "herself", "themselves", "themself":
+		return true
+	}
+	return false
 }
 
 // ForgetTitleCredits forgets the answer kept of the credits of the movie
