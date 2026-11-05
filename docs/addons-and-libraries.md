@@ -20,15 +20,36 @@ To share an addon with every user, open **Add a source** under **Content › Sou
 - This is only a starting point: you can enable any number of catalogs.
 - When none of the addon's catalogs is enabled, as for an addon whose catalogs are all of other types, the message that confirms the addon was added says so, and that its catalogs can be enabled under **Content › Libraries**, rather than leaving nothing new to see in the apps. A user's own addon says the same of **My sources**.
 
-**For app developers:** the answer to `POST /admin/api/scopes/{scope}/addons` tells `enabledLibraries`, how many of the addon's catalogs became libraries, and `libraryLimit`, 20 when none did because the scope had that many libraries already, absent otherwise. An Eclipse addon's `music.rows` counts its catalog rows: with none, "My music" is its library (see [My music](#my-music)).
-
 Only administrators can install addons hosted on a local network address.
+
+<details>
+<summary>For app developers</summary>
+
+- The answer to `POST /admin/api/scopes/{scope}/addons` tells `enabledLibraries`, how many of the addon's catalogs became libraries, and `libraryLimit`, 20 when none did because the scope had that many libraries already, absent otherwise. An Eclipse addon's `music.rows` counts its catalog rows: with none, "My music" is its library (see [My music](#my-music)).
+
+</details>
 
 ### Personal addons
 
 Each user can add their own addons and libraries under **My sources**. Users can also turn the server's sources off for themselves with **Use the server's sources**.
 
-A user plays only the versions their own sources list: their addons under **My sources**, and the server's while they use them. A version another user's own addon listed, or a server addon's for a user who turned **Use the server's sources** off, is refused to them on every path (PlaybackInfo, the stream, HLS, downloads, subtitles and attachments), as a version that does not exist, even by its identifier or from a URL kept from before. A file several sources list is, for each user, the link of the first of their own sources that lists it, with only the mirrors their sources list (see [Which streams become versions](playback.md#which-streams-become-versions)). Share-link guests play as the user who shared the title, and DLNA devices as the user they show the libraries of. Jellyfin likewise answers an item outside a user's access as one it cannot find ([`MediaInfoController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/MediaInfoController.cs#L171-L175), Jellyfin 12.4).
+Each user plays only versions from their own sources:
+
+- their addons under **My sources**;
+- the server's addons, while **Use the server's sources** is on.
+
+Polyfin refuses any other version, even by its identifier or from a saved link. When several sources list the same file, the user gets the link of the first of their own sources that lists it, with only the mirrors their sources list (see [Which streams become versions](playback.md#which-streams-become-versions)). Share-link guests play as the user who shared the title. DLNA devices play as the user whose libraries they show.
+
+**Compared with Jellyfin**
+
+- Jellyfin likewise answers an item outside a user's access as one it cannot find ([`MediaInfoController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/MediaInfoController.cs#L171-L175), Jellyfin 12.4).
+
+<details>
+<summary>For app developers</summary>
+
+- A refused version answers as a missing one on every path: PlaybackInfo, the stream, HLS, downloads, subtitles and attachments.
+
+</details>
 
 ### Who uses a server addon
 
@@ -50,9 +71,16 @@ A new user, in no group, gets none of the sources limited to others. Deleting a 
 
 The activity log records each change, as "alex limited the addon Stream Two to Family, sam" or "alex made the addon Stream Two used by everyone".
 
-**Compared with Jellyfin:** Jellyfin has no addons. Its closest settings are a user's "Library access" (`EnabledFolders`, which Polyfin maps to **Visible libraries**) and "Channel access" for channel plugins (`EnableAllChannels`, `EnabledChannels`, checked by [Channel.cs, lines 26 to 45](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Channels/Channel.cs#L26-L45), fields of [UserPolicy.cs, lines 164 to 182](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Users/UserPolicy.cs#L164-L182)). Polyfin does not map addons to Jellyfin channels: **Used by** lives on the source, so a policy jellyfin-web posts cannot change it. jellyfin-web's "Library access" still lists the libraries of a source a user does not use, as the server's libraries; ticking them grants nothing.
+**Compared with Jellyfin**
 
-**For app developers:** an addon's JSON, from `GET /admin/api/scopes/{scope}/addons` and every answer about an addon, has `usedBy`: `mode`, `everyone` or `listed`, with `groups` and `users`, the identifiers listed, empty for everyone and for a user's own addon. `PATCH /admin/api/scopes/shared/addons/{id}` takes `usedBy`; `POST /admin/api/scopes/shared/addons`, `POST /admin/api/scopes/shared/iptv` and `POST /admin/api/scopes/shared/folders` take it too, everyone when left out. Lists given with `everyone` are not kept. 400 `invalid_used_by` answers an unknown mode or identifier, a group or a user that does not exist, and any `usedBy` for a user's own addon (`scopes/me`). Only administrators reach the server's scope.
+- Jellyfin has no addons. Its closest settings are a user's "Library access" (`EnabledFolders`, which Polyfin maps to **Visible libraries**) and "Channel access" for channel plugins (`EnableAllChannels`, `EnabledChannels`, checked by [Channel.cs, lines 26 to 45](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Channels/Channel.cs#L26-L45), fields of [UserPolicy.cs, lines 164 to 182](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Users/UserPolicy.cs#L164-L182)). Polyfin does not map addons to Jellyfin channels: **Used by** lives on the source, so a policy jellyfin-web posts cannot change it. jellyfin-web's "Library access" still lists the libraries of a source a user does not use, as the server's libraries; ticking them grants nothing.
+
+<details>
+<summary>For app developers</summary>
+
+- An addon's JSON, from `GET /admin/api/scopes/{scope}/addons` and every answer about an addon, has `usedBy`: `mode`, `everyone` or `listed`, with `groups` and `users`, the identifiers listed, empty for everyone and for a user's own addon. `PATCH /admin/api/scopes/shared/addons/{id}` takes `usedBy`; `POST /admin/api/scopes/shared/addons`, `POST /admin/api/scopes/shared/iptv` and `POST /admin/api/scopes/shared/folders` take it too, everyone when left out. Lists given with `everyone` are not kept. 400 `invalid_used_by` answers an unknown mode or identifier, a group or a user that does not exist, and any `usedBy` for a user's own addon (`scopes/me`). Only administrators reach the server's scope.
+
+</details>
 
 ### Which streams play
 
@@ -136,9 +164,7 @@ The order of **Content › Sources**, then each user's own order under **My sour
 - which addon describes a title, the first that knows it;
 - the order of the addons' subtitles;
 - the order of search results;
-- the order of a title's versions, addon after addon, while **Settings › Playback › Order versions by** has no criterion, and among the versions its criteria tie on.
-
-To order versions by their source without moving an addon for the rest, choose **Source, in the order below** and order the sources under **Order of sources**, in **Settings › Playback** (see [Version order](playback.md#version-order)). That list changes the order of versions only.
+- the order of a title's versions, addon after addon, unless **Order versions by**, in **Settings › Playback › Version order**, says otherwise (see [Version order](playback.md#version-order)).
 
 ### Languages
 
@@ -168,9 +194,12 @@ Each language costs one more request per title: the addon in that language is as
 
 Stremio catalogs become Jellyfin libraries. Stremio streams become versions of the same item, and addon subtitles become external subtitle tracks. An app's subtitle search lists the subtitles from the user's subtitle addons. See [Playback](playback.md) and [Subtitles](subtitles.md).
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Versions are Jellyfin media sources.
+
+</details>
 
 ### The order of libraries
 
@@ -186,12 +215,12 @@ Each user can also order all of their libraries in the web player's **Settings �
 
 **Apply this order to every user**, under the list of **Content › Libraries**, forgets the orders users saved, so that every user's apps list the libraries in the order of **Content › Libraries**, as saved: save the list first. It asks first, saying how many users ordered their libraries themselves, and keeps the rest of their settings. Administrators only; the activity log records who did it, as "alex applied the order of the libraries to every user (2 with an order of their own)". Users can order their libraries again afterwards.
 
-jellyfin-web keeps the list of libraries for up to a minute, also across a reload (see [Dashboard links and single sign-on](web-client.md#dashboard-links-and-single-sign-on)): a new order shows there within a minute. A user's own change in **Settings › Home** shows at once.
+jellyfin-web keeps the list of libraries for up to a minute, also across a reload (see [Dashboard links and single sign-on](web-client.md#dashboard-links-and-single-sign-on)): a new order shows there within a minute. A user's own change in the web player's **Settings › Home** shows at once.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
-- Jellyfin lists a user's libraries in their order from **Settings › Home**, then by name ([`UserViewManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/UserViewManager.cs#L140-L158), Jellyfin 12.4). It has no order an administrator sets for every user: in Polyfin, the order of **Content › Libraries** takes the place of the order by name.
-- jellyfin-web 12.4 saves every library's place in `OrderedViews` whenever **Settings › Home** is saved ([`homeScreenSettings.js`](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/homeScreenSettings/homeScreenSettings.js#L498-L506)). Jellyfin keeps it as posted, and answers it back in the user's `Configuration`; Polyfin stores an order identical to the server's own as empty, `"OrderedViews": []`, so that the user keeps following the administrator's order.
+- Jellyfin lists a user's libraries in their order from the web player's **Settings › Home**, then by name ([`UserViewManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/UserViewManager.cs#L140-L158), Jellyfin 12.4). It has no order an administrator sets for every user: in Polyfin, the order of **Content › Libraries** takes the place of the order by name.
+- jellyfin-web 12.4 saves every library's place in `OrderedViews` whenever the web player's **Settings › Home** is saved ([`homeScreenSettings.js`](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/homeScreenSettings/homeScreenSettings.js#L498-L506)). Jellyfin keeps it as posted, and answers it back in the user's `Configuration`; Polyfin stores an order identical to the server's own as empty, `"OrderedViews": []`, so that the user keeps following the administrator's order.
 - Jellyfin has no action that applies one order to every user.
 
 ### What catalogs list
@@ -215,7 +244,7 @@ A library whose titles are of several kinds, such as an `anime` library or one s
 
 #### Show as
 
-Under **Content › Libraries**, **Show as** in the row of a library of an addon's catalog chooses how the library shows its titles. It is saved with the list's **Save**, like the library's name, and the row says what it shows, such as **Shown as movies and shows**. Users choose the same for their own libraries under **My sources**. The choices depend on the catalog's type:
+Under **Content › Libraries**, **Show as** in the row of a library of an addon's catalog chooses how the library shows its titles. It is saved with the list's **Save**, and the row says what it shows, such as **Shown as movies and shows**. Users choose the same for their own libraries under **My sources**. The choices depend on the catalog's type:
 
 | Catalog | Choices | Unless chosen |
 | --- | --- | --- |
@@ -240,15 +269,18 @@ Polyfin decides once rather than at each listing so that a library keeps its typ
 - Music, books, photos or music videos for a video catalog: such libraries list audio, books, images, or artists and albums, which a video catalog does not have, so their views would stay empty.
 - `anime` libraries are already mixed; local folders choose what they hold under **It holds** (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)); collection, live TV, music and IPTV catalogs have their own settings.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin never changes a library's type once the library is made. The type is an empty `<type>.collection` file written in the library's folder when it is added ([LibraryManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L3807-L3849)) and read back from there ([L1674-L1687](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L1674-L1687)). Of the library endpoints ([LibraryStructureController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/LibraryStructureController.cs#L89-L107)), only the one that adds a library takes a type: renaming, the media paths and the library options do not, and jellyfin-web's library editor has no field for it. A type changes by removing the library and adding it again. Polyfin's **Show as** goes further, as **It holds** does for local folders.
 - A library of mixed movies and shows that jellyfin-web makes is one made without a type ([mediaLibraryCreator.js](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/mediaLibraryCreator/mediaLibraryCreator.js#L61-L63)), as a library shown as movies and shows.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - A library shown as movies and shows is a `CollectionFolder` without `CollectionType`. A movie or series catalog's library shown so lists `Movie` and `Series` items, and a title of another type as a folder or a video; `IncludeItemTypes` lists and counts the kinds asked for. Item `Id`s are those of the same titles as listed.
 - The admin API's libraries carry `showAs`, one of `showAsChoices` (`home_videos`, `listed`, `movies_and_shows`), or null while no one chose, saved with `PUT /admin/api/scopes/{scope}/libraries`. A library saved with `showAs` null keeps the one it has. `showAsChoices` is empty for the catalogs that offer none, and a `showAs` the catalog does not offer is refused with `invalid_library`.
+
+</details>
 
 #### Folders of videos
 
@@ -259,7 +291,7 @@ Polyfin decides once rather than at each listing so that a library keeps its typ
 - Catalogs do not tell which titles have videos: their details do. Listing a library asks the addon for the details of the titles it does not know yet, a few at a time, for up to 5 seconds; a title still unknown then is listed as a folder, which lists itself as its one video when it turns out to have none, and is listed as it is from then on.
 - The library is a home videos library, as Jellyfin's for videos that are not movies nor shows: jellyfin-web shows it with its **Folders** view, the titles, and its **Videos** view, every video of the library, through its folders, for its first 500 titles, or its **Maximum titles** when lower (see [Genre and maximum](#genre-and-maximum)). It can show them as movies and shows instead (see [Other videos as movies and shows](#other-videos-as-movies-and-shows)).
 - A folder shows how many of its videos are left to watch, and is played once all are. Marking it played, or unplayed, marks its videos; removing it from Continue Watching removes their resume points.
-- Videos play as movies do: directly, remuxed or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them. A video whose stream has no end, such as a match on now, plays live (see [Live videos](playback.md#live-videos)).
+- Videos play as movies do: directly, repackaged or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them. A video whose stream has no end, such as a match on now, plays live (see [Live videos](playback.md#live-videos)).
 - Search finds them in the catalogs that offer it, as folders or videos. Parental control judges them as **Other**, unrated unless their details give a rating, and a video by its folder; blocked genres hide them by their details' genres. Hiding a folder, or one of its videos, hides the folder with its videos. A folder can be added to a collection.
 
 <a id="shown-as-movies-and-shows"></a>
@@ -272,27 +304,37 @@ Some Jellyfin apps list only movies and shows: they leave out every library that
 - A title whose details list two videos or more, or a single video numbered as an episode (`S35E01`, a show of one episode), is a show. Its videos are its episodes, in the seasons and with the numbers the addon gives them: a video with neither is in season 1, and a video without a number comes after its season's numbered episodes, in the order the addon gives them. A video of season 0 with a number is a special. Addons of a store's downloads number the videos from their file names, when they tell one.
 - A title without videos is a movie, which plays the streams the addon lists for the title. So is a title of one video its details number as no episode, a movie's file: it plays that video's streams, as Stremio apps play a title's only video. A store's download of one movie is a movie, a download of one episode a show, and a season pack a show of its episodes.
 - As for folders, listing the library asks the addon for the details of the titles it does not know yet, for up to 5 seconds; a title still unknown then is listed as a show, which is a movie from then on when its details make it one.
-- Episodes and movies play as other episodes and movies do: the streams the title's details give the video (see [Streams in a title's details](#streams-in-a-title-s-details)), then those addons list for it, directly, repackaged or converted, with seeking. Watched state, resume points, Continue Watching, Next Up, favorites, played marks of a whole show or season, search and the filters by type and watched state work as for other movies and shows. A video whose stream has no end plays live, as a video does.
+- Episodes and movies play as other episodes and movies do: the streams the title's details give the video (see [Streams in a title's details](#streams-in-title-details)), then those addons list for it, directly, repackaged or converted, with seeking. Watch state, resume points, Continue Watching, Next Up, favorites, played marks of a whole show or season, search and the filters by type and watch state work as for other movies and shows. A video whose stream has no end plays live, as a video does.
 - Parental control judges them as the movies and shows they are shown as, unrated unless their details give a rating: a user who blocks unrated movies or shows does not see them. Blocked genres and hidden titles apply as for folders.
 - They have no IMDb, TMDB or TVDB identifier: the tracking services hear nothing of them, no scrobble, played mark, resume point or rating, as for every title no service can identify. Imports from tracking services and other servers do not match them, and their details are the addon's only: TMDB is never asked about them.
 - A title is one item whether it is a show or a movie, so it stays the same when its details gain or lose videos. Its items are not those of home videos: when you switch between **Home videos** and **Movies and shows**, or turn the library off or on again, each user's played marks and favorites go to the items the titles and videos become, a movie's file's to the movie and back, and resume points move to them, as when a local folder changes what it holds (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)). The items they were are not found any more: apps that kept them, in a list open since, open nothing. Ratings, administrators' edits and uploaded images, playlists and collections stay with the former items.
 - A title the catalog types `movie` or `series` is not one of these: it stays the movie or series it is, of the same item either way.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin has no such choice: its home videos stay folders and videos. A library made without a content type, jellyfin-web's mixed movies and shows, has no `CollectionType` ([LibraryManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L3844-L3849)), as this one.
 - A folder of a home videos library answers `/Shows/{id}/Episodes` and `/Shows/{id}/Seasons` with 404 in Jellyfin ([TvShowsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L261-L264)) as in Polyfin; shown as a show, the title answers them.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - The library is a `CollectionFolder` without `CollectionType`. Its titles are `Series` and `Movie` items: `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Movie,Series` lists them, `IncludeItemTypes=Movie` or `Series` alone lists and counts that kind only (see [What catalogs list](#what-catalogs-list)), and `/Shows/{id}/Seasons`, `/Shows/{id}/Episodes` and `/Shows/NextUp` answer a show as any other.
 - The `Id` of a title and of its videos changes when the choice is switched; a title's `Id` stays when its details gain or lose videos.
 
-#### Streams in a title's details
+</details>
+
+<a id="streams-in-a-title-s-details"></a><a id="streams-in-a-titles-details"></a>
+
+#### Streams in title details
 
 A video, or an episode of a series, may carry its own streams in the title's details (`videos[].streams`), which Stremio apps play without asking any addon for streams. Polyfin lists them as the video's first versions, with their names, file names and sizes as other versions get theirs, then the streams of the other addons. The addon that gave them is not asked for the video's streams: such an addon often answers that request with a notice alone, nothing to play. A stream whose link expires is renewed by asking the addon for the title's details again.
 
-**For app developers:**
+**Compared with Jellyfin**
+
+- A folder lists its videos in the order its addon gives them, whatever `SortBy` asks, unless the listing is `Recursive` and names item types, as jellyfin-web's **Videos** view does: Jellyfin sorts a folder's children as asked, and jellyfin-web asks a folder's page for them by name. The addon's order is that of the files or uploads it lists, which their names do not always keep.
+
+<details>
+<summary>For app developers</summary>
 
 - A folder is a `Folder` item (`IsFolder` true) with `ChildCount`, `RecursiveItemCount` and `UserData.UnplayedItemCount`; its videos are `Video` items whose `ParentId` is the folder, and `/Items?ParentId=` lists them. A title without videos is a `Video` item of the library. The library's `CollectionType` is `homevideos`.
 - `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Video` lists the videos through the folders, and tells more may follow while a folder's details are not known yet. `IncludeItemTypes=Folder` with `searchTerm` searches folders.
@@ -300,15 +342,15 @@ A video, or an episode of a series, may carry its own streams in the title's det
 - A folder's videos listed with `IncludeItemTypes`, `ExcludeItemTypes`, `MediaTypes` or `Filters=IsFolder` count only those kept in `TotalRecordCount`, as Jellyfin counts a folder's children.
 - A folder plays nothing itself: its `PlaybackInfo`, `/Videos/{id}/stream` and `/Items/{id}/Download` answer 400, as Jellyfin's do for an item without media sources (see [Opening streams and downloading files](jellyfin-compatibility.md#opening-streams-and-downloading-files)). It is no series: `/Shows/{id}/Seasons` and `/Shows/{id}/Episodes` answer 404, as Jellyfin's do ([TvShowsController.cs, lines 261 to 263 and 351 to 355](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L261-L355)). Apps open it with `/Items?ParentId=`, and play it as jellyfin-web does, through its videos.
 
-**Compared with Jellyfin:** a folder lists its videos in the order its addon gives them, whatever `SortBy` asks, unless the listing is `Recursive` and names item types, as jellyfin-web's **Videos** view does: Jellyfin sorts a folder's children as asked, and jellyfin-web asks a folder's page for them by name. The addon's order is that of the files or uploads it lists, which their names do not always keep.
+</details>
 
 ### Library images
 
 Under **Content › Libraries**, each library shows a small image at the start of its row. Select it to choose, under **Image in apps**, the image Jellyfin apps show on the library's tile:
 
-- **None**: no image. Libraries made before Polyfin 0.45 keep it until changed here.
+- **None**: no image.
 - **Automatic**: Polyfin takes it from the catalog's first page: the first backdrop, as library tiles are wide, else the first wide poster, else the first poster. A music library takes the first artwork of its row. A catalog without any shows no image. Users under parental control or blocking genres are not shown it, since it may come from a title hidden from them.
-- **Generated**: the default of the movie and series libraries made since Polyfin 0.45, as Jellyfin draws an image for each of its libraries; other libraries start with **None**. Polyfin draws a wide 16:9 image from the posters of the catalog's first titles, up to six, under a gradient, with the library's name written across them (see [Generated images](#generated-images)). A collection library takes the posters of its first collections, and for a collection without one, the first poster of its own generated image. A music library has no posters to draw from: it does not offer this choice. The image comes once Polyfin has read the catalog's first page, as apps do when they open the library. Users under parental control or blocking genres are not shown it, as for **Automatic**.
+- **Generated**: the default of new movie and series libraries, as Jellyfin draws an image for each of its libraries; other libraries start with **None**. Polyfin draws a wide 16:9 image from the posters of the catalog's first titles, up to six, under a gradient, with the library's name written across them (see [Generated images](#generated-images)). A collection library takes the posters of its first collections, and for a collection without one, the first poster of its own generated image. A music library has no posters to draw from: it does not offer this choice. The image comes once Polyfin has read the catalog's first page, as apps do when they open the library. Users under parental control or blocking genres are not shown it, as for **Automatic**.
 - **Custom**: **Upload an image**, or paste an address under **Or an image address**, which Polyfin downloads once. The picture follows the rules of [Edit images](#edit-images): a JPEG, PNG or WebP picture of up to 10 MB, kept in the database. Only administrators can use local network addresses. **Remove the image** deletes it, and the library shows none.
 
 Apps are told the shape of the image: 16:9 for a generated image and for an automatic backdrop or wide poster, so that apps sizing tiles by it show it whole.
@@ -319,15 +361,18 @@ A library image uploaded with jellyfin-web's **Edit images** is its custom image
 
 A library taken out of the list keeps its custom image, for when it is added back. Removing the addon deletes the custom images of all its libraries.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - The library's image is its Primary image: `/UserViews` and `/Items` give its tag in `ImageTags`, `/Items/{id}/Images/Primary` serves it, and `/Library/VirtualFolders` names the library as its `PrimaryImageItemId`.
 - The automatic image is looked up again with the catalog's pages, after **Refresh catalogs after (minutes)**. Its tag changes with the title it comes from. `/UserViews` never waits for it: until it is found, the library shows the image found last, or none.
 - A generated image's tag changes with the library's name and with the titles it shows (see [Generated images](#generated-images)). `/UserViews` never waits for it: it comes from the pages Polyfin keeps.
 
+</details>
+
 ### Genre and maximum
 
-Under **Content › Libraries**, the funnel button at the end of a library's row opens its **Genre and maximum**. Both are saved with the list's **Save**, like the library's name. They apply to catalogs of titles and of collections, not to Live TV catalogs or music libraries. Users set the same for their own libraries under **My sources**. The row shows a library's genre and maximum at a glance.
+Under **Content › Libraries**, the funnel button at the end of a library's row opens its **Genre and maximum**. Both are saved with the list's **Save**. They apply to catalogs of titles and of collections, not to Live TV catalogs or music libraries. Users set the same for their own libraries under **My sources**. The row shows a library's genre and maximum at a glance.
 
 - **Genre**: one of the genres the catalog offers in its genre filter. The library then lists only that genre's titles, as the addon narrows them. Without a name of its own, apps name it after its catalog and its genre, such as "Popular · Comedy". The choice shows only for a catalog that offers genres to choose from: not for one that requires a single genre, as many collection catalogs do.
 - **Maximum titles**: the most titles the library lists, from 1 to 20,000, and as many in each of its collections. It replaces **Titles read per movie and series catalog** for this library, lower or higher (see [Catalog limits and refresh](#catalog-limits-and-refresh)). Polyfin reads no page of the catalog past it, but for a library that leaves out the titles local folders hold, which reads as many more as it leaves out (see [Titles local folders hold](#titles-local-folders-hold)). Empty, that setting applies.
@@ -340,14 +385,17 @@ A library narrowed to a genre:
 
 A genre the addon stops offering lists the whole catalog again, until another is chosen.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin libraries hold the files of their folders; a library's genre and maximum have no Jellyfin counterpart.
 - Jellyfin lists every item of a folder when an app sets no `limit`. Polyfin lists up to 500: catalogs can be nearly endless.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. For a library or an addon's collection, the titles kept from earlier listings answer at once when they make the whole listing. Otherwise the listing waits for the addons 3 seconds at most, or 1 second when the titles kept fill a page of 100, then lists those read by then, and at least the first page of each catalog. It reads the rest in the background, for the next listing. A listing with a `limit` lists as many as it asks, within the library's maximum.
+
+</details>
 
 ### Movies waiting for their digital release
 
@@ -369,7 +417,7 @@ Until then, the movie is left out of libraries, home rows, searches, similar tit
 |---|---|---|---|
 | **Wait for the digital release** | **Settings › Content** | Off | Hides the movies of the addons' catalogs until they are out at home, as above. It needs the **TMDB API key**. Off, every movie is listed and plays as its versions allow. |
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin lists the files of its folders, which are there to play; it has no such wait. A movie waiting is not listed, as Jellyfin does not list what a user cannot access.
 - A movie listed by a smart list of upcoming titles carries its future day as `PremiereDate`, as Jellyfin's episodes not aired yet do.
@@ -430,12 +478,15 @@ Limits:
 - A list keeps its own sort: apps cannot sort it otherwise.
 - A library made of a list offers no genre to filter by.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none, as the Watchlist. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
 - A list shown as a collection is a `BoxSet` in the **Collections** view, by name with the collections made by users. The view shows once such a list exists.
 - The collections listing across the server lists it, except for jellyfin-web's **Add to collection** dialog. `POST` and `DELETE /Collections/{id}/Items` answer an empty `403`.
 - The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. A list's `rules` and `exclude` are each a group of rules (`{"field": "group", "match": "all" | "any", "rules": [...]}`); a list sent without `exclude` has none. A rule's `field` is `genre`, `year`, `released`, `homeRelease`, `rating`, `votes`, `language`, `runtime`, `contentRating`, `person`, `studio`, `type`, `rank` or `state`; `released` takes `min` and `max` in days from today, negative in the past; `homeRelease` takes `value` `released`, `upcoming` or `both`, and `max` days, from 1 to 36,500. `sort` is `catalog`, `premiere`, `latestEpisode`, `seasonPremiere`, `rating`, `name` or `random`. `.../catalogs` gives the catalogs a list may draw from, the languages its rules may name and the `contentRatings` a rule may set as the highest. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description, votes, studios or home release) and `complete` (whether every catalog answered in time).
+
+</details>
 
 ### Searches in plain words
 
@@ -466,35 +517,43 @@ The collection:
 - It is not in the **Collections** view, and has no generated image. Polyfin keeps your last 20 searches in plain words for 24 hours after you last made them, until the server restarts: searching the same words again finds the same collection.
 - In jellyfin-web, its "Add to favorites" heart saves it as your own smart list, shown as a collection and named after the search, which you then find in the **Collections** view and under **My sources**. Removing the heart deletes that list, unless you changed its name or its rules since. A user who cannot have their own smart lists, under parental control, blocking genres, or whose own addons are turned off, is refused.
 
-**Compared with Jellyfin:** Jellyfin's search matches names only. jellyfin-web lists the collections a search finds under "Collections" ([search.ts, lines 103 to 104 and 138](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/legacy/features/search/utils/search.ts#L103-L138)), where the collection of a search in plain words shows. "Add to favorites" on a Jellyfin collection marks it favorite; on this one it saves a smart list.
+**Compared with Jellyfin**
 
-**For app developers:**
+- Jellyfin's search matches names only. jellyfin-web lists the collections a search finds under "Collections" ([search.ts, lines 103 to 104 and 138](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/legacy/features/search/utils/search.ts#L103-L138)), where the collection of a search in plain words shows. "Add to favorites" on a Jellyfin collection marks it favorite; on this one it saves a smart list.
+
+<details>
+<summary>For app developers</summary>
 
 - `/Items?searchTerm=` lists the collection first, a `BoxSet`, when the request keeps `BoxSet` items, as jellyfin-web's search asks for its Collections row with `IncludeItemTypes=BoxSet` and as a search without type filters does, and has no `ParentId`. `/Search/Hints` does not list it.
 - `/Items?ParentId=` lists its titles, in their order. Another user cannot reach it.
 - `POST /UserFavoriteItems/{id}` (or `/Users/{userId}/FavoriteItems/{id}`) saves it as the user's own smart list and answers its `UserData` with `IsFavorite` set; `DELETE` deletes the list. The refusal is an empty `403`, as is the save of a user who has 100 smart lists already. `UserData.IsFavorite` tells whether a list saved from it exists.
 
+</details>
+
 ### Libraries hidden from the top bar
 
-Under **Content › Libraries**, **Hide from the web player's top bar** in a library's row leaves the library out of the web player's menus: the buttons of its top bar, the bar's **More** menu, and its side menu, in both of its layouts. It is saved with the list's **Save**, like the library's name, and the row then says **Hidden from the top bar**. Users set the same for their own libraries under **My sources**. Live TV catalogs have no such choice: their channels go to Live TV, never to a menu.
+Under **Content › Libraries**, **Hide from the web player's top bar** in a library's row leaves the library out of the web player's menus: the buttons of its top bar, the bar's **More** menu, and its side menu, in both of its layouts. It is saved with the list's **Save**, and the row then says **Hidden from the top bar**. Users set the same for their own libraries under **My sources**. Live TV catalogs have no such choice: their channels go to Live TV, never to a menu.
 
 - Only the web player (jellyfin-web, at `/web/`) hides it. There, the library keeps its row on the home screen, and its pages still open from it. Other Jellyfin apps keep listing it.
 - When every library the **More** menu would list is hidden, at the window's width, the **More** button goes too.
 - It applies the next time the web player is loaded, or a user signs in to it. After a user's first load in a browser, a reload doesn't show the hidden links, even briefly: the browser keeps the last choice.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin has no counterpart that keeps the home row: a library in a user's `MyMediaExcludes` leaves the web player's menus and its home screen rows together, in Polyfin as in Jellyfin.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - The web player's Polyfin script reads the choice from `GET /Polyfin/UserViews` (see [Libraries left out of the web player menus](jellyfin-compatibility.md#libraries-left-out-of-the-web-player-menus)) and hides the library's links with a style. `/UserViews` and every other answer list the library as before.
 
+</details>
+
 ### Titles local folders hold
 
-A movie or a show of a local folder, linked to the identifier a catalog lists it under, is the catalog's title, so both libraries list it (see [Titles your catalogs list too](local-folders.md#titles-your-catalogs-list-too)). Under **Content › Libraries**, **Leave out the titles local folders hold** in the row of a movie or series library takes such titles out of that library: the folder's library alone lists them. It is saved with the list's **Save**, like the library's name, and the row then says **Without local folders' titles**. Users set the same for their own libraries under **My sources**.
+A movie or a show of a local folder, linked to the identifier a catalog lists it under, is the catalog's title, so both libraries list it (see [Titles your catalogs list too](local-folders.md#titles-your-catalogs-list-too)). Under **Content › Libraries**, **Leave out the titles local folders hold** in the row of a movie or series library takes such titles out of that library: the folder's library alone lists them. It is saved with the list's **Save**, and the row then says **Without local folders' titles**. Users set the same for their own libraries under **My sources**.
 
-- The title stays what it was: the same item, with its versions, the folder's files among them, its watched state, resume point and favorite. Search, Next Up, Continue Watching and the series page list it once, as before.
+- The title stays what it was: the same item, with its versions, the folder's files among them, its watch state, resume point and favorite. Search, Next Up, Continue Watching and the series page list it once, as before.
 - Only the library's own listings leave it out: its pages in apps, its row of latest titles on the home screen, and the home rows made of its catalog. Smart lists, collections, genre pages and the **New in your libraries** row read the catalog as it is.
 - A title is matched by its identifier: the movies and shows folders' titles, matched by a scan or linked by hand, against the identifiers the catalog lists. A title the catalog lists under another identifier, such as a TMDB one, is another title, which the folder's files do not play: it stays.
 - Only the folders whose library a user sees count for that user. A user whose visible libraries leave out the folder's library still finds the title in the catalog's library (see [Visible libraries](users.md#visible-libraries)). So does everyone once the folder or its library is turned off, or the folder no longer holds a file of the title.
@@ -502,14 +561,17 @@ A movie or a show of a local folder, linked to the identifier a catalog lists it
 - The library's home screen row shows the catalog's first page, as Stremio apps do, without the titles left out: it shows fewer titles when the first page holds some.
 - It applies to catalogs of movies and series of addons, `anime` types included. A local folder's own library, an IPTV source's, a music library, a collection library, a Live TV catalog and a catalog of other videos have no such choice.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin makes a separate item of a series for each library that holds it, the libraries being part of the series' key ([Series.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/TV/Series.cs#L79-L121)), and lists it in each. It has no option that leaves out of a library what another holds.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - `/Items?ParentId=<library>` and `/Items/Latest?ParentId=<library>` leave the titles out; the title's own requests, search, `/Shows/NextUp` and `/UserItems/Resume` answer it as before, under the same `Id`.
 - The admin API's libraries carry `skipLocal`, saved with `PUT /admin/api/scopes/{scope}/libraries`, and `skippable`, which tells the catalogs that take it. `skipLocal` on another catalog is refused with `invalid_library`.
+
+</details>
 
 ## Music addons
 
@@ -605,14 +667,15 @@ An administrator can also upload a lyrics file of their own, whether **Song lyri
 - Searches and choices are asked of LRCLIB as look-ups are: they name Polyfin in the same way and count among its 4 requests at a time. While LRCLIB is left alone after a failure, or when it fails, the search finds nothing. Uploads never ask LRCLIB.
 - Only administrators see **Edit lyrics**. Polyfin refuses others' searches, choices, uploads and removals.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin reads lyrics from the `.lrc` and `.txt` files next to the songs, or downloads them with a lyrics plugin. Polyfin reads the `.lrc` files and lyrics tags of local music folders, and asks LRCLIB itself, without a plugin.
 - Jellyfin saves the lyrics chosen or uploaded in the lyrics editor as a file next to the song, and its delete button deletes the song's lyrics files. Polyfin keeps them in its database and removes only those: the song's files are left as they are.
 - Jellyfin reads an uploaded `.txt` file as plain text. Polyfin reads it as an `.lrc` file, synced when its lines start with a time.
 - Lines are synced, not words: the word timing of enhanced LRC is left out.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - `GET /Audio/{itemId}/Lyrics` answers Jellyfin's `LyricDto`. Synced lines have `Text`, `Start` in ticks and an empty `Cues`; plain lines have only `Text`, which apps tell plain lyrics by. `Metadata` gives the song's `Artist`, `Album`, `Title`, `Length` and `IsSynced`.
 - A song without lyrics answers `404`, as in Jellyfin.
@@ -621,6 +684,8 @@ An administrator can also upload a lyrics file of their own, whether **Song lyri
 - `DELETE /Audio/{itemId}/Lyrics` removes the lyrics Polyfin keeps for the song and answers `204`, whether it had lyrics or not, as Jellyfin answers whether it deleted a lyrics file or found none.
 - `POST /Audio/{itemId}/Lyrics?fileName={name}` uploads a lyrics file, as jellyfin-web sends it: its text as the body, `text/plain`. Files named `.lrc`, `.elrc` or `.txt` are taken, and the answer is the song's new `LyricDto`. Like Jellyfin, it answers `400` without `fileName`, without a body, for a name without an extension, and for a file it cannot read: another extension, text that is not UTF-8 or holds control characters other than tabs and line breaks, or no line of text. A body over 1 MiB answers `413`.
 - These four answer `403` to users other than administrators and API keys, as Jellyfin answers users without the permission to manage lyrics, and `404` for an item that is no song the user sees. Users' `Policy.EnableLyricManagement` is `true` for administrators.
+
+</details>
 
 ### Music playback
 
@@ -654,7 +719,7 @@ Songs from different albums and addons are mastered at very different volumes. P
 - An album's gain is its album tag, when all its songs agree on one, else the loudness of all its songs together, each weighed by its length, once each one's is known.
 - Songs of a [local music folder](local-folders.md#music-folders) are measured in the background after a scan. Addon songs are measured after their first play, by reading their stream once more through the same relay and link renewal as playback; never a whole album or catalog ahead.
 - A song is measured once, its audio alone decoded. Its loudness is kept in the database with the song, as an analysis is, and measured again only when a local file changes.
-- Two songs are measured at a time, over local and addon songs, with FFmpeg at the lowest priority, as for the audio of local episodes (see [Skip segments](skip-segments.md)).
+- Two songs are measured at a time, over local and addon songs, with FFmpeg at the lowest priority, as for the audio of local episodes (see [Skip buttons](skip-segments.md)).
 - Songs longer than 15 minutes, podcasts' long episodes among them, songs whose length the addon does not give, and audiobooks are never measured.
 - A song whose stream fails is tried again after a day, three times at most. A silent song has no gain.
 
@@ -666,16 +731,19 @@ Music addon requests count in **System › Health** like a Stremio addon's: last
 - Music has no rating, so all music (books, for audiobooks) is hidden from users who block unrated music.
 - Visible libraries and allowed hours apply as elsewhere.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin's instant mixes pick songs that share genres, which addons rarely give. Polyfin's mixes are built from album and artist instead.
 - Songs have no resume points, as in Jellyfin.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Music libraries have CollectionType `music`. Audiobook tracks are `AudioBook` items; podcast episodes are `Audio` items.
 - Jellyfin music apps browse `/Artists`, `/Artists/AlbumArtists`, and `/Items` by `parentId`, `artistIds` or `albumIds`, with Jellyfin's sorting and paging.
 - The latest albums, search and search hints go through the addons' `/search`. Artwork comes from the addons.
+
+</details>
 
 ## Catalog limits and refresh
 
@@ -683,15 +751,15 @@ Some catalogs are nearly endless, so Polyfin stops reading a catalog after a set
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Titles read per movie and series catalog** | **Settings › Catalogs** | 2,000 (100 to 20,000) | Item limit for every catalog except Live TV ones. |
+| **Titles read per movie and series catalog** | **Settings › Catalogs** | 2,000 (100 to 20,000) | Item limit for every addon catalog except Live TV ones. IPTV sources' movies and series are stored whole, not bounded (see [Movies and series libraries](iptv.md#movies-and-series-libraries)). |
 | **Channels read per Live TV catalog** | **Settings › Catalogs** | 10,000 (100 to 50,000) | Item limit for Live TV catalogs (see [Live TV](live-tv.md)). |
 | **Keep version lists for (minutes)** | **Settings › Catalogs** | 10 (1 to 360) | How long a title's versions and subtitles from the addons are used before Polyfin asks the addons again. |
-| **Refresh catalogs after (minutes)** | **Settings › Catalogs** | 60 (1 to 1,440) | How old a catalog page, the Live TV guide's included, may get before Polyfin reads it again. Apps never wait for it. |
+| **Refresh catalogs after (minutes)** | **Settings › Catalogs** | 60 (1 to 1,440) | How old a catalog page, the programme guide's included, may get before Polyfin reads it again. Apps never wait for it. |
 | **Read every collection each day** | **Settings › Catalogs** | Never (or an hour, 0 to 23) | Reads every collection of the server's collection libraries at this hour of the server's time zone, one after the other, then the catalogs of the server's [smart lists](#smart-lists), so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others. |
 | **Apps that show collection libraries by collection** | **Settings › Catalogs** | None | The apps, among those that have signed in to the server, told that collection libraries hold collections, as Jellyfin's Collections view does, so that they list a collection library's collections, then a collection's titles (see [Collections from addons](#collections-from-addons)). Do not tick jellyfin-web or Streamyfin: they leave such libraries out of their home rows. |
 | **Scan local folders every (hours, 0 = never)** | **Settings › Catalogs** | 6 (0 to 168) | How long after its last scan a local folder or network share is scanned again (see [Local folders](local-folders.md#scanning)). 0 turns the schedule off. |
 | **Look for versions of watchlist titles every (hours, 0 = never)** | **Settings › Catalogs** | 6 (0 to 168) | How long after its last check a title of a user's Watchlist they have not started is checked again for versions, for the **Now available** and **Still waiting** home rows (see [Tracking](tracking.md#now-available-and-still-waiting)). Each hour, up to 20 titles of each user are checked. 0 turns the checks off. |
-| **Watch folders and shares for changes** | **Settings › Catalogs** | On | Scans a folder mounted in the container a few seconds after its files stop changing, an SMB share a few seconds after its server tells of a change, and a WebDAV share a few seconds after a listing of its folders, made every 2 minutes, differs from its last scan's (see [Watching for changes](local-folders.md#watching-for-changes)). |
+| **Watch folders and shares for changes** | **Settings › Catalogs** | On | Scans a folder mounted in the container a few seconds after its files stop changing, an SMB share a few seconds after its server tells of a change, and a WebDAV share a few seconds after a listing of its folders, made every 2 minutes, differs from its last scan's. S3 buckets, SFTP folders and rclone remotes are listed as often as each folder's **Look for changes every (minutes, 0 = only at scans)** asks (see [Watching for changes](local-folders.md#watching-for-changes)). |
 
 A library can have its own maximum instead, lower or higher, and list only one genre of its catalog: see [Genre and maximum](#genre-and-maximum).
 
@@ -713,7 +781,7 @@ To answer quickly:
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
 - jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. Reading them all can take long the first time: the page waits for the addons 3 seconds at most and shows the titles read by then, at least the first page of each catalog, while Polyfin reads the rest in the background. The next time, the page shows them all at once; if Polyfin is still reading, it shows those read so far after 1 second at most.
 - With **Read every collection each day** set to an hour, Polyfin reads every collection of the server's collection libraries whole at that hour: the scheduled task "Read every collection", which an administrator can also run by hand. It reads one collection after the other, then every catalog of the server's smart lists up to its maximum, asks the addons again for the pages past **Refresh catalogs after (minutes)** and waits for their answers, so that every collection page and smart list then opens at once with all its titles. The server log tells how many collections and smart lists it read and how long it took.
-- A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows. A whole library's are read again on request (see [Refreshing a library's descriptions](#refreshing-a-library-s-descriptions)).
+- A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows. A whole library's are read again on request (see [Refreshing a library's descriptions](#library-description-refresh)).
 - A description of another identifier and another type than the title asked is not kept: some addons answer a request they refuse, as when they limit requests, with HTTP 200 and an error written as a title of its own. It counts as a failed description, and the title is described again at the next request. A description by another identifier of the same type, or without a type, is the title's, unless its name or description says the addon refused the request for its rate ("rate limit", "too many requests"): such a notice is never a description, and pauses Polyfin's background requests to the addon (see [How Polyfin paces addons](#how-polyfin-paces-addons)).
 - A search reads the first page of the search catalogs, those that take the `search` property and require no other, as Stremio apps do, and lists up to 100 titles. It answers once the title searches have answered, or 3 seconds after the first of them found its page, 10 seconds at most when none did, then waits 0.3 seconds more for people-search catalogs. A later answer is kept for the next search of the same term: searches are kept 10 minutes, an empty answer 1 minute, as an addon may answer nothing while what it reads from fails.
 - A search catalog that did not answer a search in time is left out of the searches for 5 minutes, unless one of its pages comes in meanwhile: an addon that never answers delays one search, not each of them. **System › Health** tells it meanwhile, and the log names the addon. Matching a local folder's files and **Identify** still wait for every addon (see [Failed searches](local-folders.md#failed-searches)).
@@ -730,11 +798,13 @@ Public addons limit how often one server may ask them. Polyfin keeps to what the
 - **Meanwhile:** the pages kept still show, and none is read again. A page never read, such as another genre or a page further down, cannot be listed: a listing shows the titles before it as the whole listing, and its total counts them only. A listing that would start past them, or a library whose first page was never read, fails as before, and apps show their error. Once the wait ends, the next visit reads the rest. Searches are still asked, one request a term: [local folders](local-folders.md#failed-searches) wait as the addon asks.
 - **Failed refreshes:** a page whose refresh failed, whatever the reason, is not read again for a minute: the page kept shows meanwhile.
 - **Watchlist checks:** the checks of the users' Watchlists for versions ask no stream of an addon whose server waits, and a check the addon answers "too many requests" starts its server's wait too (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)). Title pages and playback ask for streams as before.
-- **Log and Health:** the log says once, at Info, that the addon asked to wait, with the catalog, the page (`skip`, `genre`) and the wait: `An addon asked to wait: no catalog page is asked of its server until the wait ends`. With **Detailed log**, each refresh that failed otherwise says which page. **System › Health › Addons** shows the addon as "asked to slow down (too many requests)" until the wait ends, even when it answers other requests meanwhile.
+- **Log and Health:** the log says once, at Info, that the addon asked to wait, with the catalog, the page (`skip`, `genre`) and the wait: `An addon asked to wait: no catalog page is asked of its server until the wait ends`. With **Detailed log (to diagnose a problem)**, each refresh that failed otherwise says which page. **System › Health › Addons** shows the addon as "asked to slow down (too many requests)" until the wait ends, even when it answers other requests meanwhile.
 
 The same is true of a page that cannot be read for another reason, such as a server error: a listing shows the titles before it. A longer **Refresh catalogs after (minutes)** has an addon asked less often.
 
-**Compared with Jellyfin:** Jellyfin lists its own database, so a listing never lacks titles because a remote source refused it. Polyfin's `TotalRecordCount` then counts only the titles it could read, so that apps page through what is there rather than ask for titles it cannot give.
+**Compared with Jellyfin**
+
+- Jellyfin lists its own database, so a listing never lacks titles because a remote source refused it. Polyfin's `TotalRecordCount` then counts only the titles it could read, so that apps page through what is there rather than ask for titles it cannot give.
 
 #### How Polyfin paces addons
 
@@ -749,7 +819,9 @@ Besides what users open, Polyfin asks addons for streams and descriptions on its
 There is nothing to set: an addon without limits only has Polyfin's background work spread over a few more seconds. A home page with 20 titles of Continue Watching and Next Up has them listed within about half a minute from one such addon, their follow-ups after.
 
 
-### Refreshing a library's descriptions
+<a id="refreshing-a-library-s-descriptions"></a><a id="refreshing-a-librarys-descriptions"></a>
+
+### Library description refresh
 
 Under **Content › Libraries**, the menu at the end of the row of a movie or series library of the server's has **Refresh descriptions**: Polyfin reads again, in the background, the descriptions of the library's titles, as **Refresh metadata** does for one title. A title's overview, people, genres, rating and artwork then follow its metadata addon's new answer. An addon that fails leaves the description as it was. Libraries of collections, Live TV, music and IPTV sources, and users' own libraries, do not offer it.
 
@@ -765,9 +837,16 @@ Jellyfin apps start the same refresh: jellyfin-web's **Refresh metadata** on a s
 - **One at a time:** libraries asked to be refreshed while one is refreshing wait their turn, so the pace bounds them all. The refresh asks only for descriptions, never for catalog pages: "Read the libraries' first pages", every hour, and the apps' requests go on beside it, its one request at a time added to theirs.
 - **Progress:** the library's row shows **Waiting to refresh its descriptions**, then the titles described against those to describe, with a bar, then the result: the titles described and those no addon described. **Stop refreshing**, in the same menu, stops it, or takes it out of the queue: the titles described stay so. A restart stops it too.
 
-**Compared with Jellyfin:** jellyfin-web's **Refresh metadata** on a library offers three modes ([refreshdialog.js, lines 25 to 28 and 76 to 79](https://github.com/jellyfin/jellyfin-web/blob/b29095510e80/src/components/refreshdialog/refreshdialog.js#L25-L79)): "Scan for new and updated files" (`MetadataRefreshMode=Default`), "Search for missing metadata" (`FullRefresh`) and "Replace all metadata" (`FullRefresh` with `ReplaceAllMetadata`), with "Replace existing images". The server queues the library ([ProviderManager.cs, lines 1136 to 1162](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Providers/Manager/ProviderManager.cs#L1136-L1162)), then refreshes each item of its folders, several at once: as many as "Library metadata refresh concurrency" allows, the processor's count by default ([Folder.cs, lines 903 to 912](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Controller/Entities/Folder.cs#L903-L912), [ServerConfiguration.cs, line 251](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Model/Configuration/ServerConfiguration.cs#L251)), without a pace. Polyfin's refresh is always a full one, as "Replace all metadata" (a description is the addon's whole answer), takes the titles Polyfin keeps rather than every item, and goes one title at a time at a fixed pace, as its libraries are remote catalogs and their metadata addons public services. Images follow the new description; there is no separate image mode. Jellyfin queues any item an administrator refreshes, a second time too when asked again; Polyfin starts no second refresh of a library being refreshed or waiting to be, and has nothing to refresh in a library that does not offer it.
+**Compared with Jellyfin**
 
-**For app developers:** `GET /admin/api/scopes/shared/libraries` tells, for each library, `refreshable` and `refresh`, the last refresh since the server started, null for none: `state` (`queued`, `running`, `done`, `stopped` or `failed`), `titles`, `done`, `failed`, `startedAt` and `endedAt`. `POST /admin/api/scopes/shared/libraries/refresh` with `addonId`, `catalogType` and `catalogId` starts it (`202`, with the refresh; `400` `library_not_refreshable` for a library that does not offer it), and `POST /admin/api/scopes/shared/libraries/refresh/stop` with the same body stops it (`204`; `404` when none is waiting or running). Both are for administrators.
+- jellyfin-web's **Refresh metadata** on a library offers three modes ([refreshdialog.js, lines 25 to 28 and 76 to 79](https://github.com/jellyfin/jellyfin-web/blob/b29095510e80/src/components/refreshdialog/refreshdialog.js#L25-L79)): "Scan for new and updated files" (`MetadataRefreshMode=Default`), "Search for missing metadata" (`FullRefresh`) and "Replace all metadata" (`FullRefresh` with `ReplaceAllMetadata`), with "Replace existing images". The server queues the library ([ProviderManager.cs, lines 1136 to 1162](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Providers/Manager/ProviderManager.cs#L1136-L1162)), then refreshes each item of its folders, several at once: as many as "Library metadata refresh concurrency" allows, the processor's count by default ([Folder.cs, lines 903 to 912](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Controller/Entities/Folder.cs#L903-L912), [ServerConfiguration.cs, line 251](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Model/Configuration/ServerConfiguration.cs#L251)), without a pace. Polyfin's refresh is always a full one, as "Replace all metadata" (a description is the addon's whole answer), takes the titles Polyfin keeps rather than every item, and goes one title at a time at a fixed pace, as its libraries are remote catalogs and their metadata addons public services. Images follow the new description; there is no separate image mode. Jellyfin queues any item an administrator refreshes, a second time too when asked again; Polyfin starts no second refresh of a library being refreshed or waiting to be, and has nothing to refresh in a library that does not offer it.
+
+<details>
+<summary>For app developers</summary>
+
+- `GET /admin/api/scopes/shared/libraries` tells, for each library, `refreshable` and `refresh`, the last refresh since the server started, null for none: `state` (`queued`, `running`, `done`, `stopped` or `failed`), `titles`, `done`, `failed`, `startedAt` and `endedAt`. `POST /admin/api/scopes/shared/libraries/refresh` with `addonId`, `catalogType` and `catalogId` starts it (`202`, with the refresh; `400` `library_not_refreshable` for a library that does not offer it), and `POST /admin/api/scopes/shared/libraries/refresh/stop` with the same body stops it (`204`; `404` when none is waiting or running). Both are for administrators.
+
+</details>
 
 ## Collections
 
@@ -777,7 +856,7 @@ An addon's collection catalogs become collection libraries. Each collection gath
 
 A collection may also group other collections: a genre's movies and series, or a franchise's movies in several sagas. Opening it shows the titles of every collection within it together, up to three levels deep, as a collection of catalogs does, never those collections as folders. When the app reads them all at once, as jellyfin-web's collection page does, they come by release date once Polyfin has read them all, as Jellyfin orders a collection. Until then, and in pages, they come one of each catalog in turn. A collection that groups only catalogs keeps their order, such as their titles' popularity.
 
-On the home page of Jellyfin apps, each collection library has a row of its collections, as a movie or series library has a row of its titles: "Recently Added in" the library's name. In jellyfin-web, a user can leave a library out of these rows under **Settings › Home**. The row's title, like the library's links in the header and the menu, opens the library on the screen chosen for it there under "Default screen": "Folders" by default, which lists its collections. jellyfin-web reads that choice for these libraries in the browser where it was saved: another browser opens "Folders" until the choice is saved there too.
+On the home page of Jellyfin apps, each collection library has a row of its collections, as a movie or series library has a row of its titles: "Recently Added in" the library's name. In jellyfin-web, a user can leave a library out of these rows in the web player's **Settings › Home**. The row's title, like the library's links in the header and the menu, opens the library on the screen chosen for it there under "Default screen": "Folders" by default, which lists its collections. jellyfin-web reads that choice for these libraries in the browser where it was saved: another browser opens "Folders" until the choice is saved there too.
 
 Some apps list a library by its type: told a collection library holds mixed content, they show the titles of all its collections together, on their home and on the library's page. Tick such apps under **Settings › Catalogs**, in **Apps that show collection libraries by collection**: the list shows the apps that have signed in to the server, by the name they give, and the change applies to their next request. On the home of the apps chosen there, a collection library lists its collections by its own type, and a collection opens on its titles. jellyfin-web and Streamyfin leave libraries of collections out of their home rows: leave them unticked.
 
@@ -789,13 +868,14 @@ A collection whose catalog gives no poster shows one Polyfin draws: the posters 
 
 The change applies at once.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - A Jellyfin library of collections gets no home row. Polyfin's collection libraries are told to apps as libraries of mixed content, so that they get one, except to the apps chosen under **Apps that show collection libraries by collection**, which are told they hold collections, as Jellyfin's Collections view. Opening one shows its collections. Without an image, its tile shows the icon of a mixed library: set its image to **Generated** to show its first collections' posters (see [Library images](#library-images)).
 - Jellyfin draws no image for a collection without one: apps show their placeholder.
-- jellyfin-web opens a library's Suggestions from the title of its row, whatever its default screen. Polyfin's [web client script](web-client.md#dashboard-links-and-single-sign-on) opens a collection library on its default screen instead: such a library has no suggestions of its own.
+- jellyfin-web opens a library's Suggestions from the title of its row, whatever its default screen. Polyfin's [web player script](web-client.md#dashboard-links-and-single-sign-on) opens a collection library on its default screen instead: such a library has no suggestions of its own.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - A collection library has no `CollectionType`, unlike Jellyfin's Collections view of collections made by users, which keeps `boxsets`. jellyfin-web and Streamyfin leave `boxsets` libraries out of their rows of latest items. For the apps chosen under **Apps that show collection libraries by collection**, whose `Client` in their authorization matches one of the names in any letter case, its `CollectionType` is `boxsets` wherever it is described: `/UserViews`, `/Users/{userId}/Views`, its own description, `/Items?Ids=`, `/Library/MediaFolders`, `/Library/VirtualFolders` and the listing of the root folder. Requests made with an API key never are. Its listings are the same for every app: `IncludeItemTypes=BoxSet&Recursive=true` lists its collections, and a collection with `IncludeItemTypes=Movie,Series&Recursive=true` its titles.
 - `/admin/api/settings` holds the setting as `collectionLibraryApps`, a list of app names, and `GET /admin/api/settings/apps` answers the apps to choose among, `{"apps": [...]}`: the names the signed-in devices of every user give, each once whatever its letter case, by name.
@@ -806,6 +886,8 @@ The change applies at once.
 - An addon's collection lists the titles of the catalogs it and the collections within it group, merged one of each in turn, never those collections. A collection that groups other collections, listed whole on its first page, is ordered by premiere date. A `Recursive` listing that asks only for titles (no `BoxSet` or `Folder`) and fits on its first page, as Streamyfin's collection pages ask, is sorted by its `sortBy`.
 - A listing narrowed by `IncludeItemTypes` reads only the catalogs whose titles it keeps, by the catalog's type, movie or series: `IncludeItemTypes=Movie` lists a collection's movies, page after page, with a total that counts them alone, and `IncludeItemTypes=BoxSet` lists none, with a total of 0, as an addon's collection holds no collection. A collection library listed by its collections lists none for `Movie` or `Series` without `Recursive`, out of 0, and a movie or series library none for the other type.
 - A listing of collections across the server (`IncludeItemTypes=BoxSet` without `ParentId`), as Strand asks for its shelves, lists every collection of the user's collection libraries, each once, with the collections made by users, sorted by name. jellyfin-web asks the same for its **Add to collection** dialog, where only collections made by users take a title: it gets those alone.
+
+</details>
 
 ### Collections made by users
 
@@ -839,7 +921,7 @@ Rules:
 
 On a user's page under **Users**, the **Access** section's **Can manage collections** permission is on for administrators, existing ones included, and off for other users. Without it, nobody can create a collection or add and remove its titles, administrators included. Administrators and users who may manage collections can delete a collection. See [Users](users.md).
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - User collections are Jellyfin's BoxSets.
 - A collection lists its titles, takes genres, rating and premiere date, and plays a series' released episodes as in Jellyfin.
@@ -848,13 +930,16 @@ On a user's page under **Users**, the **Access** section's **Can manage collecti
 - Jellyfin creates the collection and then fails (with a 500 for a missing name or an identifier that is not one); Polyfin answers 400 and changes nothing.
 - **Can manage collections** is Jellyfin's `EnableCollectionManagement`, which administrators' apps also set from the user's policy.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - The **Collections** view has CollectionType `boxsets`. A listing of BoxSets across the server includes user collections, and for apps other than jellyfin-web the addons' collections too (see [Collections from addons](#collections-from-addons)).
 - Hidden titles do not count in `ChildCount`, `RecursiveItemCount` or the played count.
 - Without the permission, `POST /Collections` and `POST` or `DELETE /Collections/{id}/Items` answer an empty 403, as in Jellyfin, administrators included.
 - Delete a collection with `DELETE /Items/{id}`, as in Jellyfin. Users without permission get 401.
 - A missing name, or a title the user may not see, answers 400.
+
+</details>
 
 ## Genre, studio and year pages
 
@@ -898,7 +983,9 @@ Metadata addons credit what they credit: some only a title's first actors, by na
 
 A person's page lists the titles of your libraries TMDB credits them in, from TMDB's list of their titles, read once a person of a known TMDB identifier's page opens, waiting up to 3 seconds, and kept 30 days. A title matches by its TMDB identifier, or by the one TMDB's credits or box sets learnt for its IMDb identifier; one neither learnt yet is missed until they do. Parental control, blocked genres, the titles you hid and the addons you use apply, as to the titles you know them in. Of the titles of TMDB's list your libraries do not hold, those the person is best known for follow (see [Titles a person is known for](#titles-a-person-is-known-for)).
 
-**Compared with Jellyfin:** Jellyfin takes a title's people from TMDB the same way, 15 actors in billing order and 15 directors, writers and producers by default, a series' actors from its aggregate credits, one credit per role ([TmdbMovieProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L276-L360), [TmdbSeriesProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L365-L420), [TmdbUtils.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L262-L329), [PluginConfiguration.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Configuration/PluginConfiguration.cs#L86-L91)); the bounds are not settings in Polyfin. Jellyfin reads them as its scans and refreshes reach each item; Polyfin reads them in a daily pass bounded to each library's first 2,000 titles, and for any title whose page opens. Jellyfin keeps people by name ([LibraryManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L1221-L1253)), so namesakes share one person and its TMDB identifier; Polyfin keeps them by TMDB identifier. A person's page in Jellyfin lists the items of its libraries crediting them ([Person.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Person.cs#L67-L70)), which its scans read; Polyfin lists those whose credits it read, plus the titles of your libraries TMDB credits them in, which comes to the same without reading every title. The titles beyond the libraries a person's page lists are Polyfin's own (see [Titles a person is known for](#titles-a-person-is-known-for)).
+**Compared with Jellyfin**
+
+- Jellyfin takes a title's people from TMDB the same way, 15 actors in billing order and 15 directors, writers and producers by default, a series' actors from its aggregate credits, one credit per role ([TmdbMovieProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L276-L360), [TmdbSeriesProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L365-L420), [TmdbUtils.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L262-L329), [PluginConfiguration.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Configuration/PluginConfiguration.cs#L86-L91)); the bounds are not settings in Polyfin. Jellyfin reads them as its scans and refreshes reach each item; Polyfin reads them in a daily pass bounded to each library's first 2,000 titles, and for any title whose page opens. Jellyfin keeps people by name ([LibraryManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L1221-L1253)), so namesakes share one person and its TMDB identifier; Polyfin keeps them by TMDB identifier. A person's page in Jellyfin lists the items of its libraries crediting them ([Person.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Person.cs#L67-L70)), which its scans read; Polyfin lists those whose credits it read, plus the titles of your libraries TMDB credits them in, which comes to the same without reading every title. The titles beyond the libraries a person's page lists are Polyfin's own (see [Titles a person is known for](#titles-a-person-is-known-for)).
 
 ### Titles a person is known for
 
@@ -913,7 +1000,9 @@ A person credited in few titles of your libraries would show few titles. While t
 
 Without a key, or for a person of no known TMDB identifier, the page lists the other titles only. Upgrading forgets the lists of titles kept before, which lacked votes and popularity: each person's is asked of TMDB again, once, when their page next opens.
 
-**Compared with Jellyfin:** Jellyfin lists only the items of its libraries crediting a person (`Person.GetTaggedItems`, [Person.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Person.cs#L67-L70)), and never TMDB's list of their titles. Polyfin goes beyond it with the titles they are known for, which your addons describe outside your libraries.
+**Compared with Jellyfin**
+
+- Jellyfin lists only the items of its libraries crediting a person (`Person.GetTaggedItems`, [Person.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Person.cs#L67-L70)), and never TMDB's list of their titles. Polyfin goes beyond it with the titles they are known for, which your addons describe outside your libraries.
 
 ### Photos and biographies from TMDB
 
@@ -929,7 +1018,9 @@ Metadata addons give people's names, and some their photos; none gives a biograp
 - **Refresh metadata** on a title forgets the failed downloads of its people's photos and the dead ones, and looks the people without a working photo up on TMDB again. On a person, it forgets their photo's failures and looks them up again, whatever they had. Either asks TMDB anew rather than reusing its answers of the last day.
 - **System › Health** shows how the lookups stand (see [Health](administration.md#health)).
 
-**Compared with Jellyfin:** Jellyfin fills a person from TMDB the same way, by the TMDB identifier it has, else the first person TMDB's search finds by name, with their biography, birth and death dates, place of birth and photo in the server's metadata language ([TmdbPersonProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/People/TmdbPersonProvider.cs#L89-L144)), and runs it again when the person is refreshed. Polyfin asks TMDB only for people a page shows, rather than when a library scans; of several people of the same name it takes the one credited in the person's titles, or no one, rather than the first; and it shows each user the biography in their own language, else TMDB's English one, where Jellyfin keeps one per person. Jellyfin removes a remote image that answers `404` or `403` from its item, so that it is not tried over and over and a later refresh may fill another ([LibraryManager.cs, lines 3778 to 3795](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L3778-L3795)); Polyfin sets a dead photo aside for a day, as the addon's server may serve it again, and **Refresh metadata** tries it at once.
+**Compared with Jellyfin**
+
+- Jellyfin fills a person from TMDB the same way, by the TMDB identifier it has, else the first person TMDB's search finds by name, with their biography, birth and death dates, place of birth and photo in the server's metadata language ([TmdbPersonProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/People/TmdbPersonProvider.cs#L89-L144)), and runs it again when the person is refreshed. Polyfin asks TMDB only for people a page shows, rather than when a library scans; of several people of the same name it takes the one credited in the person's titles, or no one, rather than the first; and it shows each user the biography in their own language, else TMDB's English one, where Jellyfin keeps one per person. Jellyfin removes a remote image that answers `404` or `403` from its item, so that it is not tried over and over and a later refresh may fill another ([LibraryManager.cs, lines 3778 to 3795](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L3778-L3795)); Polyfin sets a dead photo aside for a day, as the addon's server may serve it again, and **Refresh metadata** tries it at once.
 
 ## Similar titles
 
@@ -946,9 +1037,12 @@ Trailers reach apps as remote trailers. Addons give no other extras; local folde
 
 The change applies at once.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - With **Similar titles** off, every Similar route answers an empty list. An unknown title is still not found.
+
+</details>
 
 ## Ratings
 
@@ -959,7 +1053,7 @@ With a server key from MDBList, movies and series show three ratings from MDBLis
 | **MDBList API key for ratings** | **Settings › Content** | Empty | The server's own MDBList key, checked with MDBList when saved. Empty, nothing changes and MDBList is never asked. Users' own MDBList keys for tracking are never used for this. |
 | **Critic rating shows** | **Settings › Content** | Critics' score | Which score `CriticRating` carries: the critics' score or the audience score. |
 
-- `CommunityRating` is the IMDb rating from MDBList, else the addon's, from 0 to 10. `CriticRating` is the score chosen above, from 0 to 100. The web client shows all three on a title's page (see [the web client](web-client.md)), and on posters while **Show ratings on posters** is on (see [Ratings on posters](web-client.md#ratings-on-posters)).
+- `CommunityRating` is the IMDb rating from MDBList, else the addon's, from 0 to 10. `CriticRating` is the score chosen above, from 0 to 100. The web player shows all three on a title's page (see [Web player](web-client.md)), and on posters while **Show ratings on posters** is on (see [Ratings on posters](web-client.md#ratings-on-posters)).
 - An administrator's edit still wins (see [Edit metadata](#edit-metadata)). An edit that leaves the ratings as shown keeps following MDBList.
 - Polyfin asks MDBList when a title's page opens, or when a movie or series whose ratings it does not keep is listed, in the background, up to 100 titles a request. Listings and title pages never wait: they show what is kept, and the next listing shows the rest. Titles without an IMDb or TMDB identifier, episodes, Live TV and music are not asked about.
 - Ratings are kept in the database by identifier, for every user, and asked again after 7 days, or 30 days for a title released over a year before. A title MDBList does not know is asked about again after 30 days. **Refresh metadata** forgets a title's ratings.
@@ -973,7 +1067,7 @@ Polyfin relays images from the addons' artwork servers, IPTV channel logos inclu
 - Polyfin downloads an image once, however many apps ask for it at once, and asks one artwork server for at most 16 images at a time. It asks for at most 4 at a time from the servers of IPTV sources and of their logos, often the provider's panel, and for 10 minutes from a server that reset a connection or answered 429, 502, 503 or 504.
 - An artwork server that answers `429`, or `503`, with a `Retry-After` is asked nothing for that long, 15 minutes at most: its images answer `503` at once, with a `Retry-After` of the time left.
 - It keeps the images it relayed in memory (128 MB) and in the `images` folder of Polyfin's cache folder (1 GB), the least recently used going first. They are not downloaded again after a restart. **Clear the image cache**, in **System › Health**, empties both and forgets the failed downloads (see [Clearing the image cache](administration.md#clearing-the-image-cache)).
-- An image that could not be downloaded is not asked for again for 2 minutes, then 4, 8, 16 and so on each time it fails again, an hour at most; one its artwork server does not have, for an hour; one whose server asked to wait, as long as it asked. Meanwhile, its requests answer the same. With **Detailed log** on under **Settings › Diagnostics**, each of them logs `Artwork could not be downloaded` with the first download's cause: `the last download failed: ` followed by its error, such as `addon unreachable: HTTP 500`. Every hour with failures logs one INFO line, `Artwork downloads failed in the last hour`, with the failures by kind, the 5 servers that failed most and those waited for; **System › Health** shows the same (see [Health](administration.md#health)).
+- An image that could not be downloaded is not asked for again for 2 minutes, then 4, 8, 16 and so on each time it fails again, an hour at most; one its artwork server does not have, for an hour; one whose server asked to wait, as long as it asked. Meanwhile, its requests answer the same. With **Detailed log (to diagnose a problem)** on under **Settings › Diagnostics**, each of them logs `Artwork could not be downloaded` with the first download's cause: `the last download failed: ` followed by its error, such as `addon unreachable: HTTP 500`. Every hour with failures logs one INFO line, `Artwork downloads failed in the last hour`, with the failures by kind, the 5 servers that failed most and those waited for; **System › Health** shows the same (see [Health](administration.md#health)).
 - An image its artwork server does not have (`404` or `410`) answers `404`, and an artwork server that fails otherwise (no answer, a `5xx`) makes it answer `502`. An image its server does not have, or that failed 3 times running, is dead for a day: titles and people stop giving its tag, so that apps draw their placeholder, as Jellyfin drops such an image from its item. jellyfin-web otherwise shows an empty card for an image whose tag it was given and that does not load. A person's dead photo gives way to TMDB's (see [Photos and biographies from TMDB](#photos-and-biographies-from-tmdb)), and so does a movie's or series' dead poster or backdrop, at once (see [Posters from TMDB](#posters-from-tmdb)).
 - **Refresh metadata** on a title forgets the failures of its artwork, its episodes' and its people's photos, the dead ones included, and the waits of their servers: each is downloaded at its next request.
 - An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too. Polyfin resizes as many images at once as half its processors, 2 at least.
@@ -993,7 +1087,9 @@ An addon may declare the shape of a title's or collection's poster, in its catal
 
 jellyfin-web shows a title's or collection's page with a poster of its shape ([cardImage.ts, lines 15 to 31](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/cardbuilder/cardImage.ts#L15-L31)). A row or grid takes one shape for all its cards, from the median ratio of its items ([imageLoader.js, lines 178 to 234](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/images/imageLoader.js#L178-L234), [cardBuilder.js, lines 81 to 105](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/cardbuilder/cardBuilder.js#L81-L105)): a catalog of wide posters shows wide cards, while one that mixes shapes shows all its cards in the shape nearest that median.
 
-**Compared with Jellyfin:** Jellyfin measures a Primary image kept on its disk, and gives a remote one the shape of the item's type ([DtoService.cs, lines 1849 to 1879](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Dto/DtoService.cs#L1849-L1879)): 2:3 for movies, series and collections ([Movie.cs, lines 48 to 57](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Movies/Movie.cs#L48-L57), [Series.cs, lines 71 to 77](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/TV/Series.cs#L71-L77), [BoxSet.cs, lines 78 to 79](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Movies/BoxSet.cs#L78-L79)). Polyfin measures no image: it lists the addons' artwork without downloading it, so it takes the shape the addon declares, else that of the type, as Jellyfin does for a remote image. An uploaded poster shows as 2:3 whatever its size, where Jellyfin would measure it.
+**Compared with Jellyfin**
+
+- Jellyfin measures a Primary image kept on its disk, and gives a remote one the shape of the item's type ([DtoService.cs, lines 1849 to 1879](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Dto/DtoService.cs#L1849-L1879)): 2:3 for movies, series and collections ([Movie.cs, lines 48 to 57](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Movies/Movie.cs#L48-L57), [Series.cs, lines 71 to 77](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/TV/Series.cs#L71-L77), [BoxSet.cs, lines 78 to 79](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Movies/BoxSet.cs#L78-L79)). Polyfin measures no image: it lists the addons' artwork without downloading it, so it takes the shape the addon declares, else that of the type, as Jellyfin does for a remote image. An uploaded poster shows as 2:3 whatever its size, where Jellyfin would measure it.
 
 ### Posters warmed ahead
 
@@ -1022,9 +1118,9 @@ While **Badges on posters**, under **Settings › Content › Posters**, is on, 
 - The image as the addon gives it stays in the image cache, and each one with badges is kept beside it, at each width asked for, under the same bound.
 - Turned off, every title gets its image and its tag back. An app that asks with a badged tag still gets the image without badges, which it keeps for a week at most.
 - The badges follow the listings: a title a user may not see, through parental control, blocked genres, a hidden library or a hidden title, is not listed to them, badges or not.
-- While it is on, the web client shows no ratings on hover (see [Ratings on posters](web-client.md#ratings-on-posters)).
+- While it is on, the web player shows no ratings on hover (see [Ratings on posters](web-client.md#ratings-on-posters)).
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin draws nothing over images; its apps show the ratings their own way, or not at all. Polyfin's badges are a choice of its own, off by default.
 
@@ -1038,7 +1134,7 @@ While **Badges on posters**, under **Settings › Content › Posters**, is on, 
 - The address is the administrator's: it may point to a server of the local network.
 - Empty, the default, the addons' posters show, with their tags.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin takes posters from its metadata providers and plugins. Polyfin takes them from the addons, from this one address when it is set, and from TMDB for titles whose addon gives none (see [Posters from TMDB](#posters-from-tmdb)).
 
@@ -1056,7 +1152,7 @@ Some addons give a movie or series no poster, or one its artwork server no longe
 - **Refresh metadata** on a title asks TMDB for them again at the image's next request, and forgets the failures of TMDB's images.
 - Without a key, nothing changes and TMDB is never asked.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin downloads a Primary or Backdrop image an item lacks from its image providers, TMDB's among them, when it scans or refreshes the item ([ItemImageProvider.cs, lines 292 to 333](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Manager/ItemImageProvider.cs#L292-L333)), from the posters and backdrops TMDB lists for it ([TmdbMovieImageProvider.cs, lines 57 to 114](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieImageProvider.cs#L57-L114)), those in the metadata language first, then in English, then without text ([EnumerableExtensions.cs, lines 19 to 54](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Extensions/EnumerableExtensions.cs#L19-L54)). Polyfin chooses them the same way, but in English takes the main poster and backdrop of the title's details, which box sets read too. It has no scan of the addons' catalogs: it asks TMDB only about the titles whose image an app asks for, and gives a poster tag before it knows whether TMDB has one.
 
@@ -1108,7 +1204,9 @@ In an order:
 - **Specials hidden:** season 0 and its episodes leave the series' listings, so Next Up and playing on never reach them; an episode of it still opens and plays from Continue Watching or a link.
 - **While TMDB cannot tell:** without a TMDB key, for a series TMDB does not know by its TMDB or IMDb identifier, or one without a group of the type, the series shows as aired. A listing waits for TMDB at most 5 seconds, then shows the series as aired until TMDB answered, whose answers are kept 24 hours.
 
-**Compared with Jellyfin:** Jellyfin keeps a series' `DisplayOrder` as the metadata editor sends it ([ItemUpdateController.cs, lines 412 to 415](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemUpdateController.cs#L412-L415)), and its TMDB provider reads the first group of that type ([TmdbClientManager.cs, lines 182 to 226](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L182-L226)). Jellyfin's seasons and episodes come from the files, already numbered in that order: it only reads each episode's metadata at its place in the group, part N being season N and place N episode N+1 ([lines 286 to 297](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L286-L297)). An addon numbers its episodes as aired, so Polyfin moves them to the group's places instead, with the same numbering, and keeps their identity. The choice of a group among several of a type and the place of the specials are Polyfin's own.
+**Compared with Jellyfin**
+
+- Jellyfin keeps a series' `DisplayOrder` as the metadata editor sends it ([ItemUpdateController.cs, lines 412 to 415](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemUpdateController.cs#L412-L415)), and its TMDB provider reads the first group of that type ([TmdbClientManager.cs, lines 182 to 226](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L182-L226)). Jellyfin's seasons and episodes come from the files, already numbered in that order: it only reads each episode's metadata at its place in the group, part N being season N and place N episode N+1 ([lines 286 to 297](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L286-L297)). An addon numbers its episodes as aired, so Polyfin moves them to the group's places instead, with the same numbering, and keeps their identity. The choice of a group among several of a type and the place of the specials are Polyfin's own.
 
 ### Edit images
 
@@ -1139,17 +1237,20 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ### Identify
 
-**Identify** looks movies and series up by the IMDb, TMDB or TVDB identifier typed, then by name, in the server's addons that describe titles, TMDB turning TMDB and TVDB identifiers into IMDb ones with the server's **TMDB API key**. It finds nothing for other types. Applying a result to a title only addons list fails, because an item is its addon's title and cannot be bound to another. Applying it to a title of a local folder, a plain video or a title its files were matched to, links the file, or its whole show folder, to the title chosen, as **Find the title** does on the folder's page; an IMDb identifier typed in **Edit metadata** for such a movie or show does the same (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
+**Identify** looks movies and series up by the IMDb, TMDB or TVDB identifier typed, then by name, in the server's addons that describe titles. TMDB turns TMDB and TVDB identifiers into IMDb ones with the server's **TMDB API key**. It finds nothing for other types. Applying a result to a title only addons list fails, because an item is its addon's title and cannot be bound to another. On a title of a local folder, it links the file to the title chosen: see [Identify in the web player](local-folders.md#identify-in-the-web-player).
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin's TMDB plugin ships its own key, used when the administrator saves none ([TmdbUtils.cs, line 35](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L35), [TmdbClientManager.cs, lines 50 to 51](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L50-L51)), so its people, casts and images come from TMDB out of the box. Polyfin bundles none and asks the administrator for one: without it, people's photos and biographies, casts from TMDB, person pages' library titles, Silo's box sets and TMDB's images in **Edit images** are missing.
 - Jellyfin keeps any uploaded image file as sent; Polyfin refuses other types with 400.
 - Applying an **Identify** result to a title only addons list fails as a failed identification does in Jellyfin (500). Applied to a title of a local folder, it answers 204 as Jellyfin does.
 - Jellyfin picks suggestions among everything; Polyfin picks among the first page of each library.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - `/Items/Root` is the user's root folder; its children are the user's views.
 - `/Items/Counts` counts each library's first page of titles, plus one when more follow, as genre and studio pages count, as far as Polyfin keeps them: it asks the addons nothing. The user's favorites are counted exactly with `isFavorite=true`.
 - `/Items/Suggestions` returns titles picked at random among the first page of each library, those the user's taste profile ranks first coming first once it is confident (see [Top picks for you](web-client.md#top-picks-for-you)).
+
+</details>

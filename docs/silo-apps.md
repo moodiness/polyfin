@@ -4,7 +4,7 @@ Silo's native apps, for iPhone, iPad, Apple TV and Mac, and for Android phones a
 
 ## Turning it on
 
-**Settings › General › Allow Silo's apps**, off by default. While it is off, Polyfin answers nothing under `/api/v2`: the apps report that they cannot reach a Silo server there.
+**Allow Silo's apps**, under **Settings › General**, is off by default. While it is off, Polyfin answers nothing under `/api/v2`: the apps report that they cannot reach a Silo server there.
 
 In the app, add the server by the address Jellyfin apps use, such as `http://192.168.1.10:8096`, and sign in with a Polyfin user's name and password, or on a TV with a code (see [Signing a TV in with a code](#signing-a-tv-in-with-a-code)). Behind a reverse proxy, `/api/v2` must reach Polyfin like the rest; a base path such as `/jellyfin` is for Jellyfin apps only.
 
@@ -68,7 +68,7 @@ When a source of the server fails to answer, the app is told to try again later 
 - Signing in with a code on a phone, a tablet or a Mac: there, Silo's apps take a password only, which an account with two-step sign-in cannot use. Such an account signs in to Silo's TV apps only, with a code.
 - Filtering by dynamic range, resolution, audio or subtitle language, studio, network, country or original language: Polyfin knows a title's files only once they are asked to play it, and its catalogs tell none of the others. These are not offered, but the apps always show HDR and Dolby Vision: a page filtered by one is refused as not supported, and the app says it could not load it until the filter is taken off. Home's sections offer no filters.
 - Editing profiles, PINs, several profiles per user, avatars.
-- Downloads, watch-together, remote control, notifications and push, requests, subtitle searches and AI subtitles or translations, books, diagnostics uploads, external sign-in, settings synced from the app and the app's welcome tour: the app is told each is not supported, and hides it. The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
+- Downloads, Watch together, remote control, notifications and push, requests, subtitle searches and AI subtitles or translations, books, diagnostics uploads, external sign-in, settings synced from the app and the app's welcome tour: the app is told each is not supported, and hides it. The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
 - The apps' own collections: the app lists none, and making or changing one is refused as not supported. Collections are made in Jellyfin apps or the web player.
 - Taking a series off Next Up (refused as not supported: playing it moves it on), hiding watches from the history (mark a title unplayed instead), refreshing a person's details, trending or popular titles, and trickplay.
 - Playback features the apps can use but Polyfin does not offer, and so does not announce: the app's own player showing the file's subtitles when it plays the file as it is, quality adapting itself to buffering and to the measured speed during a playback, a playback moving to another screen or output without a new plan, and the apps' device fixes chosen by the server. Their plans still play: the app keeps to what Polyfin announces.
@@ -77,7 +77,7 @@ When a source of the server fails to answer, the app is told to try again later 
 
 ## Skip markers
 
-The watch details of a movie or an episode give each version's skip markers: the segments Jellyfin apps get for that version (see [Skip segments](skip-segments.md)), with **Skip intro and credits buttons** under **Settings › Content** on, none with it off.
+The watch details of a movie or an episode give each version's skip markers: the segments Jellyfin apps get for that version (see [Skip buttons](skip-segments.md)), with **Skip intro and credits buttons** under **Settings › Content** on, none with it off.
 
 - `marker_segments` lists every intro, credits, recap and preview of the version, in the order they start: credits split around a scene during them are two. The apps take this list in place of the single markers, even when it is empty. Commercial breaks are left out: the apps know no such marker.
 - `intro`, `credits`, `recap` and `preview` are the first of each kind, and tell where it comes from:
@@ -116,7 +116,7 @@ A box set is a TMDB collection, the movies of a series of movies such as a trilo
 
 - **A movie's page:** its box set, named after the collection, its "Collection" read "Box Set", with the collection's poster and backdrop from TMDB, else its first movie's, the years of its movies, how many it holds and how many the user played. It opens on its movies in the order they came out. Polyfin downloads the artwork from TMDB once and relays it, as it relays titles' artwork: the apps never reach TMDB.
 - **A search:** beside the titles, the box sets whose name holds every word searched, "box set" or "collection" among them, then those two of whose movies' titles do.
-- **A library's grid:** each movie, as Silo's lists them. Silo's apps of before late 2026 ask for a grid of box set cards; Polyfin answers them the grid it gives without them.
+- **A library's grid:** each movie, as Silo's lists them. Older Silo apps that ask for a grid of box set cards get the grid without them.
 
 Addons do not tell which collection a movie is in, so Polyfin asks TMDB, in the background, while the key is saved:
 
@@ -131,11 +131,20 @@ Each movie is looked up by its TMDB identifier, else its IMDb one, at most four 
 - Each pass says at Info, in the server's log, how many libraries of movies it read, and how many movies it listed, queued for a lookup and already knew, and names each library of movies it could not read, with the reason. On a server without a library of movies, it logs "No library of movies: box sets have none until one is added".
 - Without the key, no library has box sets, and TMDB is never asked.
 
-**For app developers:** `UserLibrary.box_sets_enabled` is true on the libraries of movies, and `box_sets` true in `GET /api/v2/catalog/search/capabilities`, while the key is saved. `GET /api/v2/catalog/box-sets/{id}` needs `library_id` (422 without), and answers 404 for a box set the library does not show the user; `GET /api/v2/catalog/items/{id}/box-set` answers `{}` for a movie in none, and 404 for a season or an episode. `group=box_set` is answered as without it, in `GET /api/v2/catalog` and `POST /api/v2/catalog/query`, as Silo's contract has had since it dropped it. Without the key, the three operations answer 404, as on a server without box sets. A box set's artwork is at `/api/v2/artwork/box-sets/{id}/Primary` and `Backdrop`, at the width the app asks, as titles' artwork is at `/api/v2/artwork/{id}/{kind}`.
+**Compared with Silo**
 
-**Compared with Silo:** Silo's administrators turn box sets on for each library, with the least number of movies; Polyfin has them in every library of movies while the TMDB key is saved, from two movies, with no setting: the key is the setting. Silo gives the collections' overview; Polyfin does not.
+- Silo's administrators turn box sets on for each library, with the least number of movies; Polyfin has them in every library of movies while the TMDB key is saved, from two movies, with no setting: the key is the setting. Silo gives the collections' overview; Polyfin does not.
 
-**Compared with Jellyfin:** Jellyfin keeps the collection TMDB names for a movie ([TmdbMovieProvider.cs, lines 218 to 221](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L218-L221)) and, for a library whose "Automatically add to collection" is on, makes a collection of each with two or more of its movies ([CollectionPostScanTask.cs, lines 53 to 123](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/Validators/CollectionPostScanTask.cs#L53-L123)). Polyfin makes no collections of them: its box sets are for Silo's apps, and Jellyfin apps see the collections users and addons make.
+**Compared with Jellyfin**
+
+- Jellyfin keeps the collection TMDB names for a movie ([TmdbMovieProvider.cs, lines 218 to 221](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L218-L221)) and, for a library whose "Automatically add to collection" is on, makes a collection of each with two or more of its movies ([CollectionPostScanTask.cs, lines 53 to 123](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/Validators/CollectionPostScanTask.cs#L53-L123)). Polyfin makes no collections of them: its box sets are for Silo's apps, and Jellyfin apps see the collections users and addons make.
+
+<details>
+<summary>For app developers</summary>
+
+- `UserLibrary.box_sets_enabled` is true on the libraries of movies, and `box_sets` true in `GET /api/v2/catalog/search/capabilities`, while the key is saved. `GET /api/v2/catalog/box-sets/{id}` needs `library_id` (422 without), and answers 404 for a box set the library does not show the user; `GET /api/v2/catalog/items/{id}/box-set` answers `{}` for a movie in none, and 404 for a season or an episode. `group=box_set` is answered as without it, in `GET /api/v2/catalog` and `POST /api/v2/catalog/query`, as Silo's contract has had since it dropped it. Without the key, the three operations answer 404, as on a server without box sets. A box set's artwork is at `/api/v2/artwork/box-sets/{id}/Primary` and `Backdrop`, at the width the app asks, as titles' artwork is at `/api/v2/artwork/{id}/{kind}`.
+
+</details>
 
 ## Signing a TV in with a code
 
@@ -155,7 +164,13 @@ The TV then signs in as the user who approved it, with the session a password gi
 
 Polyfin does not tell the TV when a phone opened its code, does not approve Jellyfin apps' 6-digit codes from Silo's app, and does not move a phone's playback to a TV: the apps are told so, and offer none of these.
 
-**For app developers:**
+**Compared with Jellyfin**
+
+- Jellyfin does not answer Silo's apps. Its Quick Connect codes have 6 digits; Silo's TV apps take 8, which Polyfin gives them, from the same requests.
+- The secret a Jellyfin app polls with signs it in until its request expires, as in Jellyfin, so that an app retrying after a network error is not refused; a Silo TV's signs in once, as Silo's apps expect.
+
+<details>
+<summary>For app developers</summary>
 
 - `GET /api/v2/auth/device/capability` answers the `state` `available` with `cancel` while Quick Connect is on, `disabled` otherwise. `remote_playback_handoff`, `jellyfin_quick_connect` and `opened_signal` are false.
 - `POST /api/v2/auth/device/start` answers 201 with a `user_code` written `4821-7730`, `verification_uri` ending in `/activate`, `verification_uri_complete` with `?code=48217730`, `expires_in` 600 and `interval` 5. A remote playback's start (`client_purpose` `remote_playback`, or `temporary`) is 501 `capability_unsupported`; while 1,000 Quick Connect requests are pending, a start is 429 `rate_limited`, which the TV retries; with Quick Connect off, every operation below is 404.
@@ -165,27 +180,31 @@ Polyfin does not tell the TV when a phone opened its code, does not approve Jell
 - `GET /activate?code=` leads to `/admin/me/quick-connect?code=`.
 - Polyfin's tests check these answers against the rules the apps apply to them, read from their code at the commits named below.
 
-**Compared with Jellyfin:**
-
-- Jellyfin does not answer Silo's apps. Its Quick Connect codes have 6 digits; Silo's TV apps take 8, which Polyfin gives them, from the same requests.
-- The secret a Jellyfin app polls with signs it in until its request expires, as in Jellyfin, so that an app retrying after a network error is not refused; a Silo TV's signs in once, as Silo's apps expect.
+</details>
 
 ## The contract followed
 
 Polyfin follows Silo's published OpenAPI contract, `contracts/api/v2/openapi.json` in Silo-Server/silo-server, at the commit [`internal/silo/followed.json`](../internal/silo/followed.json) records. `GET /api/v2/system/info` gives that file's SHA-256 as `contract_digest`, and the links the contract requires; Polyfin serves neither the contract file nor the list of capabilities they name. Silo has no release yet, and its contract still changes: a later version of the apps may need operations or fields Polyfin does not answer.
 
-Its tests also check the capabilities, plans, libraries, rows, Home's layout, catalog pages, Collections tabs, favorites and watchlist, people, similar titles, For You, the calendar, skip markers and the discovery documents Polyfin gives against the rules the apps apply, read from their code: Silo-Server/silo-apple and Silo-Server/silo-android at the commits that file records. Among them, the apps start a playback only when the server announces every feature they need, and take only playback sessions named by a UUID; they show only libraries of movies, of series, or of both, and leave out of a row on Home or on a library's first page any card but a movie, a series or an episode; the Android app opens a person's page only by a number, which Polyfin gives each person as it does libraries and files; a row of Home's layout reads alone as the same type, or the TV apps leave the home screen's rows as they were; a version's `marker_segments` holds its single markers, as the apps take it in their place; and a feature whose discovery document is not available is hidden.
+Its tests also check the capabilities, plans, libraries, rows, Home's layout, catalog pages, Collections tabs, favorites and watchlist, people, similar titles, For You, the calendar, skip markers and the discovery documents Polyfin gives against the rules the apps apply. Those rules are read from the apps' code: Silo-Server/silo-apple and Silo-Server/silo-android at the commits that file records. Among them:
 
-That record also gives the contract's SHA-256 and lists the files of the apps the rules come from, which the tests' rules cite. Each Monday, a workflow ([Development](development.md#following-silo)) compares it with the main branches of Silo's repositories: in the contract, the operations Polyfin serves, those it answers as unsupported included, with their parameters, request bodies and answers, through the schemas they name, leaving out what only documents them; in the apps, the files the rules come from. When something changed, it opens an issue labelled `clients`, or updates the open one, with what changed, so that the rules are read again before users meet the change. Once Polyfin answers as the new versions want, the record names the new commits.
+- the apps start a playback only when the server announces every feature they need, and take only playback sessions named by a UUID;
+- they show only libraries of movies, of series, or of both, and leave out of a row on Home or on a library's first page any card but a movie, a series or an episode;
+- the Android app opens a person's page only by a number, which Polyfin gives each person as it does libraries and files;
+- a row of Home's layout reads alone as the same type, or the TV apps leave the home screen's rows as they were;
+- a version's `marker_segments` holds its single markers, as the apps take it in their place;
+- a feature whose discovery document is not available is hidden.
+
+That record also gives the contract's SHA-256 and the app files the tests' rules cite. A weekly workflow compares it with the main branches of Silo's repositories, the operations Polyfin answers as unsupported included, and opens or updates an issue labelled `clients` when something changed. See [Following Silo](development.md#following-silo).
 
 The tests of filters ask for them as the apps do: the Apple apps send the facets picked as the `groups` of `GET /api/v2/catalog`, their values typed, and the Android apps in the body of `POST /api/v2/catalog/query`, flags as booleans and every other value a text; the apps need every list of `GET /api/v2/catalog/filters`, and the Apple app lists each value once. A filter Polyfin cannot apply, such as HDR, is refused as not supported (501 `capability_unsupported`).
 
 Polyfin's code is its own, written from the contract's facts; no part of Silo, which is under the AGPL-3.0, is in Polyfin.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Jellyfin does not answer Silo's apps.
 - Library and file identifiers are numbers in Silo's API, which Polyfin gives each library and version the first time it lists them, and keeps.
 - Polyfin's sessions do not expire: the app's refresh token is its session's token, and refreshing it tells the app whether it was signed out.
-- Jellyfin's media segments do not say where they come from. Polyfin tells Silo's apps, and `GET /Polyfin/MediaSegments/{id}` tells other apps (see [Skip segments](skip-segments.md#how-skip-buttons-work)).
+- Jellyfin's media segments do not say where they come from. Polyfin tells Silo's apps, and `GET /Polyfin/MediaSegments/{id}` tells other apps (see [Skip buttons](skip-segments.md#how-skip-buttons-work)).
 - Jellyfin's `/Items/Filters` lists the genres, official ratings and years of the items a user sees under a folder ([FilterController.cs, lines 53 to 95](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/FilterController.cs#L53-L95)); Polyfin's lists the genres of a library's catalog's filter (see [Genre, studio and year pages](addons-and-libraries.md#genre-studio-and-year-pages)). Silo's apps get those, with the content ratings of the library's first 2,000 titles.

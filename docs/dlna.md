@@ -45,7 +45,7 @@ Each movie or episode offers one file: the version Polyfin would pick for the us
 
 - When the device's profile takes the version's container and codecs, the file is sent as it is, and the device may jump through it with byte ranges.
 - Otherwise FFmpeg converts it to an MPEG-TS stream the profile takes, copying the video or the audio when the profile takes them. The device jumps through it with `TimeSeekRange.dlna.org`, and the conversion starts again from the time asked.
-- Conversions count against **Video conversions at once**, and every playback against the user's **Playbacks at once**. **Maximum quality** and **Can use conversion** apply as for apps: a user who may not have video converted plays only what the device takes as it is, or with its video copied.
+- Conversions count against **Video conversions at once (0 = no limit)**, and every playback against the user's **Playbacks at once**. **Maximum quality** and **Can use conversion** apply as for apps: a user who may not have video converted plays only what the device takes as it is, or with its video copied.
 - A text subtitle in the user's language, as their subtitle preferences choose it, is offered beside the video to profiles that take subtitle files, through `CaptionInfo.sec`. A picture subtitle the user chose is burned into converted video.
 - **Live TV** channels are MPEG-TS streams, relayed as their source sends them.
 - Songs are sent as they are when the profile takes their format, and otherwise converted to MP3.
@@ -62,18 +62,19 @@ SSDP uses multicast, which reaches the container only on the host's network or o
 
 Only one program on a host's network can use port 1900: next to another DLNA server on the same host, such as a NAS's media server, Polyfin starts anyway, logs it, and **System › Health** says that it cannot listen. Devices that know the description's address may still browse Polyfin.
 
-The description, control and media addresses live under `/dlna/` on Polyfin's HTTP port, and answer 403 to any address outside the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback. Behind a reverse proxy listed in Known proxies, the address of the client the proxy forwards counts. Devices never send `X-Forwarded-For`, `X-Real-IP` or `Forwarded`: a request that carries one of them from an address that is not a known proxy gets 403, as it comes through a reverse proxy missing from Known proxies, which would otherwise show every client on the internet as one device of the local network. A request that names its client in `Forwarded` alone, without `X-Forwarded-For` or `X-Real-IP`, gets 403 even from a known proxy: Polyfin does not read `Forwarded`, so it cannot tell that client. Posters, captions and media are only served for titles the device's user may see, as browsing lists them.
+The description, control and media addresses live under `/dlna/` on Polyfin's HTTP port. They answer 403 to any address outside the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback. Behind a reverse proxy listed in [Known proxies](reverse-proxy.md#known-proxies), the address of the client the proxy forwards counts. Devices never send `X-Forwarded-For`, `X-Real-IP` or `Forwarded`. So a request that carries one of them from an address that is not a known proxy gets 403: it comes through a reverse proxy missing from Known proxies, which would otherwise show every client on the internet as one device of the local network. A request that names its client in `Forwarded` alone, without `X-Forwarded-For` or `X-Real-IP`, gets 403 even from a known proxy: Polyfin does not read `Forwarded`, so it cannot tell that client. Posters, captions and media are only served for titles the device's user may see, as browsing lists them.
 
 ## Limits
 
 - Devices send no position. Resume points are neither set nor offered: playback always starts at the beginning, unless the device jumps.
-- A title counts as played once the device has read past **Marked played after (%)** of it: for a file sent as it is, by the share of the file's bytes sent to the device during the playback, wherever they are in the file, each counted once; for a conversion, by the time asked plus the time streamed. Reading the end of a file, as TVs do to find its index, therefore counts for those bytes only. Devices read ahead, so a title can be marked early: this is off unless **Mark played what DLNA devices play** is on. Played marks then reach the user's tracking services as other marks do.
-- Playbacks appear in **Sessions** and in the statistics with the app named `DLNA` and the device's name. They end two minutes after the device last asked for anything.
+- A title counts as played once the device has read past **Marked played after (%)** of it. For a file sent as it is, that is the share of the file's bytes sent to the device during the playback, wherever they are in the file, each counted once. For a conversion, it is the time asked plus the time streamed. Reading the end of a file, as TVs do to find its index, therefore counts for those bytes only. Devices read ahead, so a title can be marked early: this is off unless **Mark played what DLNA devices play** is on. Played marks then reach the user's tracking services as other marks do.
+- Playbacks appear under **Now playing** on the admin app's Home, and in the statistics, with the app named `DLNA` and the device's name. They end two minutes after the device last asked for anything.
 - Polyfin does not control renderers: there is no "Play To".
 - A text subtitle a profile does not take as a file is not burned in: FFmpeg's conversions burn in picture subtitles only.
 - A channel whose source sends an HLS playlist does not play over DLNA.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Settings: `/admin/api/settings` holds `dlna`, `dlnaName`, `dlnaNewDevicesUser` (a user's ID, or `null` for no one) and `dlnaMarkPlayed`; a `PUT` naming a user that does not exist answers 400 `invalid_dlna_user`, a name longer than 256 bytes 400 `invalid_dlna_name`.
 - `GET /admin/api/dlna/devices` lists the devices, the latest seen first: `id`, `name`, `manufacturer`, `model`, `address`, `userAgent`, `clientInfo`, `userId` (or `null`), `userName`, `blocked`, `profile` (empty, `builtin:` and a built-in profile's name, or an added profile's ID), `matchedProfile` (the name of the profile it gets now), `firstSeen` and `lastSeen`.
@@ -81,3 +82,5 @@ The description, control and media addresses live under `/dlna/` on Polyfin's HT
 - `GET /admin/api/dlna/profiles` lists the profiles, built-in ones first: `id`, `name`, `builtin`, and `createdAt` for added ones. `GET /admin/api/dlna/profiles/{id}` answers a profile's XML. `POST /admin/api/dlna/profiles`, with the XML as its body, adds one (201), and `PUT /admin/api/dlna/profiles/{id}` replaces it; XML that is not a profile answers 400 `invalid_dlna_profile`, with why in `message`. `DELETE` removes it, and the devices forced to it get theirs chosen again.
 - `GET /admin/api/health/problems` lists the warning of a port Polyfin cannot listen on as `dlna_port`, with `port`.
 - For tests, `POLYFIN_DLNA_PORT` changes the UDP port, which devices never use.
+
+</details>
