@@ -1,57 +1,31 @@
 <p align="center"><a href="https://moodiness.github.io/polyfin/videos/polyfin-ad.mp4"><img src="assets/polyfin-social.png" alt="Polyfin"></a></p>
 
-Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes from:
-- **Stremio addons:** catalogs, metadata, streams and subtitles;
-- **Eclipse music addons:** music, audiobooks and podcasts;
-- **IPTV sources:** M3U playlists and Xtream Codes accounts, with XMLTV guides.
+Polyfin is a self-hosted server that speaks the Jellyfin API. It turns Stremio addons, music addons, IPTV sources and your own folders into libraries that any Jellyfin app plays, with real user accounts and transcoding, and without Jellyfin installed.
 
-Any Jellyfin app connects to it like a regular Jellyfin server, with real user accounts and transcoding, and without Jellyfin installed.
+[![Latest release](https://img.shields.io/github/v/release/moodiness/polyfin)](https://github.com/moodiness/polyfin/releases/latest) [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fmoodiness%2Fpolyfin-blue)](https://github.com/moodiness/polyfin/pkgs/container/polyfin) [![License: MIT](https://img.shields.io/github/license/moodiness/polyfin)](LICENSE) [![Documentation](https://img.shields.io/badge/docs-website-blue)](https://moodiness.github.io/polyfin/docs/)
 
-See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a short tour, a video for each feature, and the documentation.
+## What you get
 
-> [!NOTE]
-> Polyfin is in early development. Expect changes between releases, and report problems in the [issues](https://github.com/moodiness/polyfin/issues).
+- **Your addons as libraries:** Stremio catalogs become libraries and collections, and their streams become versions of a title, torrents too once you turn them on. [Addons and libraries](docs/addons-and-libraries.md), [Torrents](docs/torrents.md)
+- **Your own files:** folders on the server, SMB and WebDAV shares, S3 buckets, SFTP servers and rclone remotes. [Local folders](docs/local-folders.md)
+- **Live TV and IPTV:** M3U playlists, Xtream Codes accounts and HDHomeRun tuners, with a programme guide, recordings and Replay. [Live TV](docs/live-tv.md), [IPTV sources](docs/iptv.md)
+- **Music, audiobooks and podcasts:** Eclipse music addons become music and book libraries. [Music addons](docs/addons-and-libraries.md#music-addons)
+- **Real accounts:** each user has their own watch state, limits and parental control, and can bring their history from Jellyfin, Emby or Plex. [Users and permissions](docs/users.md)
+- **Transcoding on your GPU:** direct play when the app can, else repackaging or conversion on an NVIDIA, AMD or Intel GPU or VideoToolbox, HDR tone mapping included. [Transcoding](docs/transcoding.md)
+- **Built in:** the web player, the admin app, skip buttons, tracking, DLNA, notifications, statistics and backups. [Documentation](docs/README.md)
+- **Six languages:** the admin app, Polyfin's own names and messages, its additions to the web player and Polyfin Desktop speak English, French, German, Spanish, Italian and Brazilian Portuguese.
 
-## Features
+<p align="center"><a href="https://moodiness.github.io/polyfin/videos/polyfin-showcase.mp4"><img src="docs/public/videos/polyfin-stremio.jpg" width="720" alt="A Jellyfin app showing a Polyfin library. Opens the tour video."></a></p>
 
-- **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.4 API.
-- **Stremio addons as libraries:** catalogs become libraries and collections, streams become versions of a title, and addon subtitles become subtitle tracks.
-- **Live TV and IPTV:** TV catalogs, M3U playlists and Xtream Codes accounts become Live TV, with a programme guide and recordings. IPTV providers' archives of past programmes play from a Replay view. IPTV movies and series become libraries.
-- **Music, audiobooks and podcasts:** Eclipse music addons install like Stremio addons and become music and books libraries. Tracks play as they are, or are converted when the app needs it.
-- **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU, or VideoToolbox on macOS, when there is one, with HDR tone mapped on NVIDIA and Intel GPUs and VideoToolbox, else on the processor.
-- **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
-- **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits. Invite links let people create their own account.
-- **Skip buttons:** intros, recaps, credits and previews to skip, from four community databases.
-- **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there, or in their Stremio or Nuvio account.
-- **Built in:** Jellyfin's own web client at `/web/`, and an admin app at `/admin/`.
-- **Languages:** the admin app, the names and messages Polyfin writes itself, its additions to the web client and Polyfin Desktop are in English, French, German, Spanish, Italian and Brazilian Portuguese.
+## Works with your apps
 
-## How it works
+Infuse, Swiftfin, Findroid, Streamyfin, Nuvio, Strand, Odin, VidHub, the official Jellyfin apps, Kodi and other apps that connect to a Jellyfin server, as Polyfin targets the Jellyfin 12.4 API, plus Silo's apps through their own API. See [Jellyfin apps](docs/jellyfin-compatibility.md) and [Silo's apps](docs/silo-apps.md).
 
-```text
-Jellyfin client ──Jellyfin API──> Polyfin ──Stremio protocol──> metadata and stream addons
-      │                              │
-      │ direct play: 302 ────────────┼──────────────> debrid / provider URL
-      │                              │
-      └── transcoding: HLS <── FFmpeg (reads the stream through Polyfin's cache, serves the segments)
-```
+## Install
 
-Polyfin always handles authentication, accounts, browsing, metadata, source selection and playback state.
+### Docker Compose
 
-It reads the remote stream itself only in these cases:
-- when it transcodes;
-- to relay a source the app could not reach (one that needs request headers, or is on a local network address);
-- to relay a redirect the app could not follow.
-
-So whether a title plays directly or is transcoded decides how much bandwidth the server uses. Apps never see the addons' stream URLs: they receive Polyfin's own, signed for the user.
-
-## Compatible clients
-
-Polyfin targets the apps that connect to a Jellyfin server, including Infuse, Swiftfin, Findroid, Streamyfin, Nuvio, Strand, Odin, VidHub, the official Jellyfin apps and Kodi. See [Jellyfin compatibility](docs/jellyfin-compatibility.md).
-
-## Quick start (Docker)
-
-Requirements: Docker with Compose v2. The image, `ghcr.io/moodiness/polyfin`, is published for linux/amd64 and linux/arm64.
+You need Docker with Compose v2. The image, `ghcr.io/moodiness/polyfin`, is published for linux/amd64 and linux/arm64.
 
 ```sh
 git clone https://github.com/moodiness/polyfin.git
@@ -60,35 +34,24 @@ cp .env.example .env    # then set POSTGRES_PASSWORD, e.g. openssl rand -hex 24
 docker compose up -d
 ```
 
-1. Open `http://<server>:8096/admin/`.
-2. Enter the one-time setup code from the log (`docker compose logs polyfin`) to create the administrator.
-3. Continue with [Getting started](docs/getting-started.md).
+Open `http://<server>:8096/admin/`, and enter the one-time setup code from the log (`docker compose logs polyfin`) to create the administrator. [Installation](docs/installation.md) covers the rest.
 
-Without Docker, [Polyfin Desktop](docs/desktop.md) runs Polyfin on Windows, macOS or Linux, with its own database, from an icon in the tray: each release has an installer for Windows, x64 or arm64, a disk image for macOS, and a `.deb` and an AppImage for Linux.
+### Desktop app
 
-[Installation](docs/installation.md) covers:
-- pinning a version;
-- building the image from source;
-- the Unraid template;
-- giving the container a GPU;
-- the health check, and monitoring addresses;
-- daily database backups.
+[Polyfin Desktop](docs/desktop.md) runs Polyfin from the tray on Windows, macOS and Linux, on x64 or arm64, with its own database. Its installers are on the [releases page](https://github.com/moodiness/polyfin/releases).
+
+Next: [Getting started](docs/getting-started.md).
 
 ## Documentation
 
-The full documentation is in [`docs/`](docs/README.md), and on the [website](https://moodiness.github.io/polyfin/docs/):
+Read it on the [website](https://moodiness.github.io/polyfin/docs/), or in [`docs/`](docs/README.md).
 
-- **Set up:** [Installation](docs/installation.md), [Desktop version](docs/desktop.md), [Getting started](docs/getting-started.md), [Configuration](docs/configuration.md), [Reverse proxy](docs/reverse-proxy.md), [Backups](docs/backups.md)
-- **Content:** [Addons and libraries](docs/addons-and-libraries.md), [Live TV](docs/live-tv.md), [IPTV](docs/iptv.md)
-- **Watching:** [Playback](docs/playback.md), [Transcoding](docs/transcoding.md), [Subtitles](docs/subtitles.md), [Skip segments](docs/skip-segments.md), [Tracking](docs/tracking.md)
-- **Users and administration:** [Users](docs/users.md), [Administration](docs/administration.md), [Web client](docs/web-client.md), [Jellyfin compatibility](docs/jellyfin-compatibility.md)
-- **Contributing:** [Development](docs/development.md)
+## Status
 
-## Configuration
+> [!NOTE]
+> Polyfin is in early development. Expect changes between releases, and report problems in the [issues](https://github.com/moodiness/polyfin/issues).
 
-With the Compose file, the only value you must set is `POSTGRES_PASSWORD` in `.env`, and `POLYFIN_SECRET_KEY` is advised. Every option is set in the admin app, under **Settings**. See [Configuration](docs/configuration.md).
-
-## Community
+## Community and support
 
 Ask questions in [Q&A](https://github.com/moodiness/polyfin/discussions/categories/q-a), post and vote for ideas in [Ideas](https://github.com/moodiness/polyfin/discussions/categories/ideas), follow the [roadmap](https://github.com/users/moodiness/projects/1), and report bugs with the [bug report form](https://github.com/moodiness/polyfin/issues/new?template=bug_report.yml). See [Contributing](CONTRIBUTING.md), [Getting help](SUPPORT.md) and the [code of conduct](CODE_OF_CONDUCT.md).
 

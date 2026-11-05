@@ -9,8 +9,9 @@
     "dev": "vitepress dev --host 127.0.0.1",
     "build": "vitepress build",
     "preview": "vitepress preview --host 127.0.0.1",
-    "format": "prettier --write .vitepress/config.mts .vitepress/theme index.md",
-    "format:check": "prettier --check .vitepress/config.mts .vitepress/theme index.md"
+    "check": "node scripts/check-docs.mjs",
+    "format": "prettier --write .vitepress/config.mts .vitepress/theme scripts index.md",
+    "format:check": "prettier --check .vitepress/config.mts .vitepress/theme scripts index.md"
   },
   "prettier": {
     "singleQuote": true,

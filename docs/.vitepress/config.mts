@@ -8,18 +8,22 @@ const site = 'https://moodiness.github.io/polyfin/'
 const docsDir = fileURLToPath(new URL('..', import.meta.url))
 const repoDir = resolve(docsDir, '..')
 
-/** docs/README.md is the documentation's index on GitHub: each of its sections is a sidebar group. */
+/**
+ * docs/README.md is the documentation's index on GitHub: each of its sections is a sidebar group,
+ * and each table row a link, to a page or to a section of one.
+ */
 function sidebar(): DefaultTheme.SidebarItem[] {
-  const items: DefaultTheme.SidebarItem[] = [{ text: 'Overview', link: '/docs/' }]
+  const groups: DefaultTheme.SidebarItem[] = []
   for (const line of readFileSync(resolve(docsDir, 'README.md'), 'utf8').split('\n')) {
     const section = /^## (.+)/.exec(line)
-    const page = /^\| \[(.+?)\]\(([\w-]+)\.md\) \|/.exec(line)
-    if (section) items.push({ text: section[1], items: [] })
-    else if (page && items.length > 1) {
-      items.at(-1)!.items!.push({ text: page[1], link: `/docs/${page[2]}` })
+    const page = /^\| \[(.+?)\]\(([\w-]+)\.md(#[\w-]+)?\) \|/.exec(line)
+    if (section) groups.push({ text: section[1], items: [] })
+    else if (page && groups.length > 0) {
+      groups.at(-1)!.items!.push({ text: page[1], link: `/docs/${page[2]}${page[3] ?? ''}` })
     }
   }
-  return items
+  groups[0]?.items!.unshift({ text: 'Overview', link: '/docs/' })
+  return groups
 }
 
 /** The first paragraph of a page, as plain text, for search engines and link previews. */
@@ -117,7 +121,7 @@ export default defineConfig({
     ],
     socialLinks: [{ icon: 'github', link: repo, ariaLabel: 'Polyfin on GitHub' }],
     sidebar: { '/docs/': sidebar() },
-    outline: { level: [2, 3] },
+    outline: 'deep',
     editLink: { pattern: `${repo}/edit/main/docs/:path`, text: 'Edit this page on GitHub' },
     search: { provider: 'local' },
     notFound: {
