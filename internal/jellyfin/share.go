@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -34,7 +35,8 @@ import (
 //
 //	GET  /share/{token}                    the page;
 //	GET  /share/{token}/image/{kind}       its artwork, primary or backdrop;
-//	POST /share/{token}/play               starts a guest's playback;
+//	POST /share/{token}/play               starts a guest's playback, from
+//	                                       the position its body may give;
 //	GET  /share/{token}/play/{session}/…   its HLS playlists, segments and
 //	                                       text subtitles;
 //	POST /share/{token}/play/{session}/progress, …/stop
@@ -49,9 +51,11 @@ import (
 // their Playbacks at once, which guests count toward, their Allowed hours,
 // their permissions to have video and audio converted, and the server's
 // Video conversions at once. A guest changes nothing in the sharer's watch
-// state: no report reaches the user data. The playbacks show on the admin
-// app's Home under the sharer's name, with guestApp as the app, and count
-// in the sharer's statistics, marked as shared.
+// state: no report reaches the user data. Where the guest stopped is kept
+// by the page, in the guest's browser, under the link's ID: the server
+// keeps nothing of it once the playback ends. The playbacks show on the
+// admin app's Home under the sharer's name, with guestApp as the app, and
+// count in the sharer's statistics, marked as shared.
 
 const (
 	// guestApp and guestDevice name a guest's playback where an app's
@@ -373,6 +377,12 @@ type sharePageData struct {
 	Language string
 	Text     shareText
 	Server   string
+	// Link is the link's ID, which the page keeps the guest's position
+	// under, never its token; empty for a token that is no link's. Gone
+	// tells the page of a link expired or revoked, whose position it
+	// forgets.
+	Link string
+	Gone bool
 	// Title is unset for a link that does not open its title, Message
 	// then saying why.
 	Title    *shareTitleData
@@ -386,7 +396,10 @@ type shareTitleData struct {
 	Overview string
 	Year     int
 	Minutes  int
-	Expires  time.Time
+	// Seconds is the runtime, which tells the page a position near the
+	// end, before the video says its own.
+	Seconds int
+	Expires time.Time
 }
 
 // sharePage serves the page of a link, or says why the link opens
@@ -396,13 +409,17 @@ func (h *Handler) sharePage(w http.ResponseWriter, r *http.Request) {
 	text := shareTexts[language]
 	data := sharePageData{Language: language, Text: text, Server: h.Accounts.Settings().ServerName, Messages: text.messages()}
 	link, _, item, failed := h.openTitle(r)
+	if link.ID != (accounts.ID{}) {
+		data.Link = link.ID.String()
+	}
 	status := http.StatusOK
 	if failed != nil {
 		status = failed.status
 		data.Message = text.refusal(failed.code)
+		data.Gone = failed.code == "expired" || failed.code == "revoked"
 	} else {
 		title := &shareTitleData{Name: item.Name, Overview: item.Overview, Year: item.ProductionYear, Minutes: int(item.Runtime.Minutes()),
-			Expires: link.ExpiresAt}
+			Seconds: int(item.Runtime.Seconds()), Expires: link.ExpiresAt}
 		if item.Kind == library.KindEpisode {
 			title.Name = item.SeriesName
 			title.Subtitle = text.episode(item)
@@ -458,8 +475,16 @@ func (h *Handler) shareImage(w http.ResponseWriter, r *http.Request) {
 // startGuest starts a guest's playback of the link's title, unless the
 // link has as many guests as it allows, the sharer plays on as many
 // devices as they may, it is outside their allowed hours, or nothing can
-// play: the answer says which.
+// play: the answer says which. The body may give the position the guest
+// resumes at, which the source is read ahead from.
 func (h *Handler) startGuest(w http.ResponseWriter, r *http.Request) {
+	var asked struct {
+		Position float64 `json:"position"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxGuestReport)).Decode(&asked); err != nil && !errors.Is(err, io.EOF) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	link, sharer, item, failed := h.openTitle(r)
 	if failed != nil {
 		writeShareError(w, *failed)
@@ -476,14 +501,14 @@ func (h *Handler) startGuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	play := &guestPlay{id: "share" + randomHex(16), device: randomID(), link: link, user: sharer.ID, item: item,
-		address: forwarded.Client(r), started: h.now(), seen: h.now()}
+		address: forwarded.Client(r), started: h.now(), seen: h.now(), position: guestStart(asked.Position, item.Runtime)}
 	// The limits are checked before choosing what plays, which may read
 	// the sources, and again as the playback is admitted.
 	if most := sharer.MaxPlaybacks; most > 0 && playing+h.guests.ofUser(sharer.ID) >= most {
 		writeShareError(w, shareError{http.StatusTooManyRequests, shareRefusedLimit})
 		return
 	}
-	plan, refused := h.planGuest(r, shareUser(sharer), item, play.id)
+	plan, refused := h.planGuest(r, shareUser(sharer), item, play.id, play.position)
 	if refused != "" {
 		status := http.StatusServiceUnavailable
 		if refused == shareRefusedUnavailable {
@@ -511,6 +536,19 @@ func (h *Handler) startGuest(w http.ResponseWriter, r *http.Request) {
 	h.followGuest(*play, plays.ReportStart)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]string{"session": play.id})
+}
+
+// guestStart is where a guest's playback starts, from the position in
+// seconds the page asks for: the start for a position that is not within
+// the title's runtime, or within a week when the runtime is not known.
+func guestStart(seconds float64, runtime time.Duration) time.Duration {
+	if runtime <= 0 {
+		runtime = 7 * 24 * time.Hour
+	}
+	if seconds <= 0 || seconds >= runtime.Seconds() {
+		return 0
+	}
+	return time.Duration(seconds * float64(time.Second))
 }
 
 // devicesPlaying counts the devices of user playing, or making a converted
@@ -546,9 +584,10 @@ type guestPlan struct {
 // planGuest chooses the version a guest plays and how, as PlaybackInfo
 // chooses for an app, for guestProfile: the sharer's version rules, quality
 // group (at most 1080p), Maximum quality and permissions apply. No
-// subtitle is chosen: the page offers the text ones. It returns why
-// nothing plays, empty when something does.
-func (h *Handler) planGuest(r *http.Request, user accounts.User, item library.Item, session string) (guestPlan, string) {
+// subtitle is chosen: the page offers the text ones. The source is read
+// ahead from start, where the guest resumes. It returns why nothing plays,
+// empty when something does.
+func (h *Handler) planGuest(r *http.Request, user accounts.User, item library.Item, session string, start time.Duration) (guestPlan, string) {
 	ctx := r.Context()
 	request := playbackInfoRequest{DeviceProfile: &guestProfile, EnableDirectPlay: new(false)}
 	limitBitrate(&request, user)
@@ -589,7 +628,7 @@ func (h *Handler) planGuest(r *http.Request, user accounts.User, item library.It
 	if !found {
 		return guestPlan{}, shareRefusedUnavailable
 	}
-	h.Playback.Warm(chosen.version, 0)
+	h.Playback.Warm(chosen.version, start)
 	method := "DirectStream"
 	if chosen.decision.Video != nil || chosen.decision.Audio != nil {
 		method = "Transcode"

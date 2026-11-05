@@ -13,9 +13,13 @@ type shareText struct {
 	PageTitle  string
 	SharedFrom string
 	Play       string
-	Expires    string
-	Minutes    string
-	NoTitle    string
+	// ResumeAt offers to resume where the guest stopped, at {time};
+	// FromStart, next to it, starts from the beginning.
+	ResumeAt  string
+	FromStart string
+	Expires   string
+	Minutes   string
+	NoTitle   string
 	// episodeFormat names an episode by its season, number and name.
 	episodeFormat     string
 	episodeFormatBare string
@@ -50,6 +54,8 @@ var shareTexts = map[string]shareText{
 		PageTitle:         "Shared with you",
 		SharedFrom:        "Shared from",
 		Play:              "Play",
+		ResumeAt:          "Resume at {time}",
+		FromStart:         "From the beginning",
 		Expires:           "This link expires on",
 		Minutes:           "min",
 		NoTitle:           "Nothing to watch here",
@@ -66,7 +72,7 @@ var shareTexts = map[string]shareText{
 			"viewers":           "As many people as this link allows are already watching. Try again later.",
 			"hours":             "This link cannot be watched at this hour.",
 			"busy":              "The server is converting as many videos as it can. Try again in a moment.",
-			"ended":             "This playback ended. Press Play to watch again.",
+			"ended":             "This playback ended. Press Play to continue where you stopped.",
 			"error":             "Something went wrong. Try again.",
 		},
 	},
@@ -74,6 +80,8 @@ var shareTexts = map[string]shareText{
 		PageTitle:         "Partagé avec vous",
 		SharedFrom:        "Partagé depuis",
 		Play:              "Lecture",
+		ResumeAt:          "Reprendre à {time}",
+		FromStart:         "Depuis le début",
 		Expires:           "Ce lien expire le",
 		Minutes:           "min",
 		NoTitle:           "Rien à regarder ici",
@@ -90,7 +98,7 @@ var shareTexts = map[string]shareText{
 			"viewers":           "Autant de personnes que ce lien le permet regardent déjà. Réessayez plus tard.",
 			"hours":             "Ce lien ne peut pas être regardé à cette heure-ci.",
 			"busy":              "Le serveur convertit déjà autant de vidéos qu’il le peut. Réessayez dans un instant.",
-			"ended":             "Cette lecture est terminée. Appuyez sur Lecture pour regarder à nouveau.",
+			"ended":             "Cette lecture est terminée. Appuyez sur Lecture pour reprendre là où vous en étiez.",
 			"error":             "Une erreur est survenue. Réessayez.",
 		},
 	},
@@ -98,6 +106,8 @@ var shareTexts = map[string]shareText{
 		PageTitle:         "Mit dir geteilt",
 		SharedFrom:        "Geteilt von",
 		Play:              "Abspielen",
+		ResumeAt:          "Fortsetzen bei {time}",
+		FromStart:         "Von vorne",
 		Expires:           "Dieser Link ist gültig bis",
 		Minutes:           "Min.",
 		NoTitle:           "Hier gibt es nichts zu sehen",
@@ -114,7 +124,7 @@ var shareTexts = map[string]shareText{
 			"viewers":           "Es schauen bereits so viele Personen, wie dieser Link erlaubt. Versuche es später erneut.",
 			"hours":             "Dieser Link kann zu dieser Uhrzeit nicht angesehen werden.",
 			"busy":              "Der Server konvertiert bereits so viele Videos, wie er kann. Versuche es gleich noch einmal.",
-			"ended":             "Diese Wiedergabe ist beendet. Drücke auf „Abspielen“, um erneut zu schauen.",
+			"ended":             "Diese Wiedergabe ist beendet. Drücke auf „Abspielen“, um dort weiterzuschauen, wo du aufgehört hast.",
 			"error":             "Etwas ist schiefgelaufen. Versuche es erneut.",
 		},
 	},
@@ -122,6 +132,8 @@ var shareTexts = map[string]shareText{
 		PageTitle:         "Compartido con usted",
 		SharedFrom:        "Compartido desde",
 		Play:              "Reproducir",
+		ResumeAt:          "Reanudar en {time}",
+		FromStart:         "Desde el principio",
 		Expires:           "Este enlace caduca el",
 		Minutes:           "min",
 		NoTitle:           "No hay nada que ver aquí",
@@ -138,7 +150,7 @@ var shareTexts = map[string]shareText{
 			"viewers":           "Ya hay tantas personas viendo como permite este enlace. Vuelva a intentarlo más tarde.",
 			"hours":             "Este enlace no se puede ver a esta hora.",
 			"busy":              "El servidor ya está convirtiendo tantos vídeos como puede. Vuelva a intentarlo en un momento.",
-			"ended":             "Esta reproducción ha terminado. Pulse «Reproducir» para volver a verla.",
+			"ended":             "Esta reproducción ha terminado. Pulse «Reproducir» para continuar donde lo dejó.",
 			"error":             "Algo ha fallado. Vuelva a intentarlo.",
 		},
 	},
@@ -146,6 +158,8 @@ var shareTexts = map[string]shareText{
 		PageTitle:         "Condiviso con te",
 		SharedFrom:        "Condiviso da",
 		Play:              "Riproduci",
+		ResumeAt:          "Riprendi da {time}",
+		FromStart:         "Dall’inizio",
 		Expires:           "Questo link scade il",
 		Minutes:           "min",
 		NoTitle:           "Niente da guardare qui",
@@ -162,7 +176,7 @@ var shareTexts = map[string]shareText{
 			"viewers":           "Stanno già guardando tutte le persone consentite da questo link. Riprova più tardi.",
 			"hours":             "Questo link non può essere guardato a quest’ora.",
 			"busy":              "Il server sta già convertendo tutti i video che può. Riprova tra un momento.",
-			"ended":             "Questa riproduzione è terminata. Premi «Riproduci» per guardare di nuovo.",
+			"ended":             "Questa riproduzione è terminata. Premi «Riproduci» per riprendere da dove eri rimasto.",
 			"error":             "Si è verificato un errore. Riprova.",
 		},
 	},
@@ -170,6 +184,8 @@ var shareTexts = map[string]shareText{
 		PageTitle:         "Compartilhado com você",
 		SharedFrom:        "Compartilhado de",
 		Play:              "Reproduzir",
+		ResumeAt:          "Retomar em {time}",
+		FromStart:         "Do início",
 		Expires:           "Este link expira em",
 		Minutes:           "min",
 		NoTitle:           "Nada para assistir aqui",
@@ -186,7 +202,7 @@ var shareTexts = map[string]shareText{
 			"viewers":           "Já há tantas pessoas assistindo quanto este link permite. Tente novamente mais tarde.",
 			"hours":             "Este link não pode ser assistido neste horário.",
 			"busy":              "O servidor já está convertendo tantos vídeos quanto pode. Tente novamente em instantes.",
-			"ended":             "Esta reprodução terminou. Clique em “Reproduzir” para assistir de novo.",
+			"ended":             "Esta reprodução terminou. Clique em “Reproduzir” para continuar de onde parou.",
 			"error":             "Algo deu errado. Tente novamente.",
 		},
 	},

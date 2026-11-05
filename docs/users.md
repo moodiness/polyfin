@@ -703,6 +703,14 @@ The link opens a page Polyfin serves at `/share/…`, which needs no account, in
 
 The page plays HTTP Live Streaming, natively where the browser can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, which Polyfin serves itself: the page loads nothing from elsewhere.
 
+The page remembers where the guest stopped, in the guest's browser only:
+
+- It keeps the position every 10 seconds while the title plays, on pause and when the page closes, under the link's ID, never its token.
+- Opened again in the same browser, the page offers "Resume at 0:42:10", at the time where the guest stopped, and "From the beginning". Resuming starts the video there, and Polyfin reads the source ahead from there rather than from the start.
+- A playback Polyfin ended because the page sent nothing for 2 minutes (a device asleep, a tab in the background) says "This playback ended. Press Play to continue where you stopped.": Play starts again where the guest was.
+- The page forgets the position once the guest reaches the last 5 % of the title or its last 2 minutes, whichever is longer, after 31 days, and as soon as the link answers that it expired or was revoked.
+- Nothing of it is kept on the server: the sharer's resume points and Continue Watching are untouched, and the guest's plays count in the statistics as before. Each browser keeps its own position: it does not follow the guest to another device, and a private window or clearing the site's data loses it.
+
 ### Limits
 
 The guest plays as the sharer would, with less:
@@ -731,7 +739,7 @@ Each link made, revoked or expired, and each guest playback, is written to the a
 - The admin API serves a user's own links: `GET /admin/api/account/share-links` answers `allowed` (whether the user may make one now) and `links`; each link has `id`, `user` (`id`, `name`), `item` (`id`, `kind`: `movie` or `episode`, `name`), `maxViewers`, `createdAt`, `expiresAt`, `revokedAt`, `plays` and `state`: `active`, `expired` or `revoked`. `POST /admin/api/account/share-links` makes one from `itemId`, `expiresInHours` (1, 24 by default, 168 or 720) and `maxViewers` (1 by default, up to 5), and answers 201 with the link, its `token` and its `url` (null without a public address: the link is then `/share/<token>`). Errors: 403 `share_links_off`, 400 `not_shareable`, `invalid_share_expiry` or `invalid_share_viewers`, 404 `not_found`. `POST /admin/api/account/share-links/{id}/revoke` revokes one.
 - `GET /admin/api/account/share-titles?search=…` finds movies and series to share, `GET /admin/api/account/share-titles/{id}` describes one title and `GET /admin/api/account/share-titles/{id}/episodes` lists a series' episodes.
 - Administrators: `GET /admin/api/users/{id}/share-links` and `POST /admin/api/share-links/{id}/revoke`. Users carry `canShare`, and the settings `shareLinks`.
-- The guest's page uses `GET /share/{token}`, `GET /share/{token}/image/primary` and `…/backdrop`, `POST /share/{token}/play` (which answers `session`, or `error`: `limit`, `viewers`, `hours`, `busy` or `unavailable`), `GET /share/{token}/play/{session}/master.m3u8` with its playlists and segments, and `POST /share/{token}/play/{session}/progress` and `…/stop`. A link that opens nothing answers 404 `unknown`, or 410 `expired`, `revoked`, `off` or `unavailable`.
+- The guest's page uses `GET /share/{token}`, `GET /share/{token}/image/primary` and `…/backdrop`, `POST /share/{token}/play` (whose JSON body may give `position`, in seconds, to start at, and which answers `session`, or `error`: `limit`, `viewers`, `hours`, `busy` or `unavailable`), `GET /share/{token}/play/{session}/master.m3u8` with its playlists and segments, and `POST /share/{token}/play/{session}/progress` and `…/stop`. A link that opens nothing answers 404 `unknown`, or 410 `expired`, `revoked`, `off` or `unavailable`. The page carries the link's ID as `data-link`, and keeps the guest's position in the browser's `localStorage` as `polyfin.share.<link ID>`: `{"position": seconds, "savedAt": milliseconds}`.
 
 ## Parental control
 

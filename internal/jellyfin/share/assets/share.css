@@ -49,10 +49,21 @@ body {
   object-fit: contain;
   background: #000;
 }
-.play {
+/* The buttons that start the playback: Play, or Resume above From the
+   beginning when the page kept where the guest stopped. */
+.start {
   position: absolute;
   inset: 50% auto auto 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  pointer-events: none;
+}
+.play {
+  pointer-events: auto;
+  white-space: nowrap;
   padding: 14px 32px;
   border: 0;
   border-radius: 999px;
@@ -62,6 +73,13 @@ body {
   font-weight: 600;
   font-size: 18px;
   cursor: pointer;
+}
+.play.secondary {
+  padding: 10px 24px;
+  background: rgba(14, 15, 18, 0.72);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink-2);
+  font-size: 16px;
 }
 .play:disabled {
   opacity: 0.6;

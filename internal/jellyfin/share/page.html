@@ -11,12 +11,15 @@
 <script src="/share/assets/share.js" defer></script>
 </head>
 <body{{if .Title}} class="has-title"{{end}}>
-<main class="share">
+<main class="share"{{if .Link}} data-link="{{.Link}}"{{end}}{{if .Gone}} data-gone{{end}}{{if .Title}} data-runtime="{{.Title.Seconds}}"{{end}}>
 <p class="from">{{.Text.SharedFrom}} <strong>{{.Server}}</strong></p>
 {{- if .Title}}
 <div class="player">
 <video id="video" controls playsinline preload="none" poster="" data-backdrop="image/backdrop"></video>
-<button id="play" class="play" type="button">{{.Text.Play}}</button>
+<div class="start">
+<button id="resume" class="play" type="button" data-label="{{.Text.ResumeAt}}" hidden></button>
+<button id="play" class="play" type="button" data-again="{{.Text.FromStart}}">{{.Text.Play}}</button>
+</div>
 </div>
 <p id="message" class="message" role="status" aria-live="polite" hidden></p>
 <section class="title">
