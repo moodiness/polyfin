@@ -1,13 +1,13 @@
 # Live TV
 
-This page covers Live TV in Polyfin: the channels that come from addon TV catalogs and IPTV sources, the channels Polyfin airs from your own titles, the programme guide, and recordings. To import an M3U playlist or an Xtream Codes account directly, see [IPTV sources](iptv.md). The past programmes an IPTV provider keeps play from a Replay view, described there under [Replay](iptv.md#replay).
+This page covers Live TV in Polyfin: the channels that come from addon TV catalogs and IPTV sources, the channels Polyfin airs from your own titles, the programme guide, and recordings. To import an M3U playlist or an Xtream Codes account directly, see [IPTV sources](iptv.md). The past programmes an IPTV provider keeps play from a Replay view, described there under [Replay](iptv-replay.md#replay).
 
 ## Channels from addons
 
 Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enabled under **Content › Libraries** adds no library. Its channels appear in the Live TV view of Jellyfin apps instead, with their logos, numbered in the order the catalogs list them. See [Addons and libraries](addons-and-libraries.md) for enabling catalogs.
 
 - Polyfin reads at most **Channels read per Live TV catalog** channels from each TV catalog, and as many programmes from each day of its guide.
-- Who can watch is set per user with the **Live TV** permission on [Users](users.md), and which channels of the server's sources each user, or each group's members, see with **Live TV channels**: all of them, only some groups and channels, or all but some, optionally hiding the groups sources add later (see [Live TV channels](users.md#live-tv-channels)). A hidden channel is left out of the channel lists, the guide, searches, Replay, timers, reminders and the recordings shown, and does not play.
+- Who can watch is set per user with the **Live TV** permission on [Users](users.md), and which channels of the server's sources each user, or each group's members, see with **Live TV channels**: all of them, only some groups and channels, or all but some, optionally hiding the groups sources add later (see [Live TV channels](user-limits.md#live-tv-channels)). A hidden channel is left out of the channel lists, the guide, searches, Replay, timers, reminders and the recordings shown, and does not play.
 - A channel of an IPTV source opens and plays by its identifier, the one its line-up gives in the admin app, as soon as the source is added, before any app listed the channels.
 
 ### The Live TV page
@@ -28,7 +28,7 @@ Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enable
 
 A channel plays as the addon streams it when the app takes it.
 
-- An HLS stream is relayed through Polyfin, with the headers the source needs, unless the app can reach the source itself. jellyfin-web always gets it relayed, as browsers cannot read other sites' playlists. The channels of IPTV sources are requested with the user agent and headers their list or source gives, else a web browser's user agent (see [Headers and user agent](iptv.md#headers-and-user-agent)).
+- An HLS stream is relayed through Polyfin, with the headers the source needs, unless the app can reach the source itself. jellyfin-web always gets it relayed, as browsers cannot read other sites' playlists. The channels of IPTV sources are requested with the user agent and headers their list or source gives, else a web browser's user agent (see [Headers and user agent](iptv-streams.md#headers-and-user-agent)).
 - Otherwise FFmpeg repackages the stream into HLS as it comes, or converts what the app cannot take (see [Transcoding](transcoding.md)). This runs from the moment the app opens the channel until it leaves it. A minute without requests stops it.
   - Converted video has a keyframe every 3 seconds, which cut its segments. Video copied as it is can only be cut at the source's keyframes.
   - The app gets the first playlist once it lists the segments the app asks for (`MinSegments`: jellyfin-web asks 1, and 2 on Apple's systems), and at least two segments, of 4 seconds or more in all. Players start a live stream at the first segment its playlist lists: with this lead they stay a few seconds behind FFmpeg, so that a source that pauses a moment, or a conversion that falls behind briefly, does not stall the picture.
@@ -36,7 +36,7 @@ A channel plays as the addon streams it when the app takes it.
   - When the stream's connection is open already, as after its analysis, a play prepared ahead from the title's page, or a return to the channel within 20 seconds, FFmpeg starts from what the connection kept: the lead is there at once, and playback starts within a second or two for video copied, a few seconds sooner for video converted. The lead itself is no shorter.
   - Once FFmpeg was started again (see below), a playlist is answered as soon as it lists a segment.
 - An MPEG-TS stream played as it is (apps such as Android TV) is relayed from the same connection, unless the app can reach the source itself and the source has no connection limit, in which case the app is sent to it.
-- A DASH stream (an MPD manifest) of an IPTV source or an addon always plays converted: FFmpeg reads the manifest and its segments through Polyfin and repackages it into HLS, decrypting a ClearKey stream with the keys its list gives. An app that sends no device profile is offered no DASH stream; Widevine and PlayReady streams are not played (see [DASH channels and encryption](iptv.md#dash-channels-and-encryption)).
+- A DASH stream (an MPD manifest) of an IPTV source or an addon always plays converted: FFmpeg reads the manifest and its segments through Polyfin and repackages it into HLS, decrypting a ClearKey stream with the keys its list gives. An app that sends no device profile is offered no DASH stream; Widevine and PlayReady streams are not played (see [DASH channels and encryption](iptv-streams.md#dash-channels-and-encryption)).
 
 The files of an HLS stream reach FFmpeg, and apps relayed, through Polyfin, which takes care of what some providers do to pass their segments for something else:
 
@@ -67,12 +67,32 @@ The analysis takes at most **Maximum time to analyze a version**, and never more
 
 FFmpeg then reads the stream with at most a second and a half of probing. That is enough for audio that comes a second after the video, as in streams FFmpeg itself muxed. FFmpeg keeps what it probed as the start of what it writes. If FFmpeg fails within 10 seconds, the stream is analyzed again in full.
 
-<details><summary>For app developers</summary>
+```mermaid
+sequenceDiagram
+    participant App
+    participant Polyfin
+    participant Connection as Shared connection
+    participant Source
+    participant FFmpeg
+    App->>Polyfin: Asks to play the channel
+    opt No analysis kept from the last week
+        Polyfin->>Connection: Opens the channel's connection, or joins it
+        Connection->>Source: Requests the stream
+        Source-->>Connection: First bytes, checked within 20 seconds
+        Polyfin->>Connection: Analyzes about a second, 8 seconds at most
+    end
+    Polyfin-->>App: The stream's format
+    App->>Polyfin: Asks for the stream
+    alt The app takes the stream as it comes
+        Connection-->>App: Relayed by Polyfin, unless the app may reach the source itself
+    else The app needs it repackaged or converted
+        Polyfin->>FFmpeg: Starts FFmpeg on the shared connection
+        FFmpeg-->>App: HLS playlist and segments, through Polyfin
+    end
+    Note over Polyfin,Source: A connection not open yet opens here, and its first bytes are checked
+```
 
-- The 20 seconds, with the analysis, stay within what the Android apps' client gives PlaybackInfo: 30 seconds in all.
-- While it waits, PlaybackInfo sends its answer's status after 5 seconds, then a space every 5 seconds, which JSON allows before the answer. Swiftfin gives up on an answer after 20 seconds without a byte.
-
-</details>
+API details: [Channel start and PlaybackInfo timing](jellyfin-api.md#channel-start-and-playbackinfo-timing).
 
 Interlaced channels, such as most TV sports in 1080i50, are converted for the apps that do not take interlaced video, jellyfin-web among them. They are deinterlaced to 25 frames a second by default, which looks jerky in sports: **Double the frame rate** under **Settings › Conversion (transcoding)** makes them 50 frames a second, for about 15% more processor time on a 1080i50 stream (see [Transcoding](transcoding.md)).
 
@@ -106,20 +126,14 @@ An app's search finds the user's channels by name, those of TV catalogs and IPTV
 
 Polyfin adds nothing to the web player for this: jellyfin-web already asks for channels from the home page, and labels them itself. Its search also asks for every video but movies, episodes and channels, which it lists under "Videos". Polyfin leaves programmes out of that answer, so that each programme shows once, under "Programs".
 
-<details><summary>For app developers</summary>
-
-- `/Items` with `searchTerm` finds channels asked as `TvChannel` or `LiveTvChannel`, and programmes asked as `LiveTvProgram`, `Program` or `TvProgram`, filtered by `isMovie`, `isSeries`, `isNews`, `isKids` and `isSports`. It finds at most `limit` of each.
-- A search that names no type finds channels, and programmes only when it sets one of those five filters. A search that names types finds programmes only when one of them is a programme type.
-- Search hints leave channels and programmes out.
-
-</details>
+API details: [Live TV in item search](jellyfin-api.md#live-tv-in-item-search).
 
 ## Channels of your titles
 
 Polyfin can air channels of its own, around the clock, from the movies and episodes Jellyfin apps list: **Content › Live TV**, under **Channels of your titles**, with **Add a channel**. Under **Built from**, a channel airs one of:
 
 - **Collection**: one made in a Jellyfin app, or one of an addon, its titles listed as a collection row lists them;
-- **Smart list**: one of the server's (see [Smart lists](addons-and-libraries.md#smart-lists));
+- **Smart list**: one of the server's (see [Smart lists](smart-lists-and-search.md#smart-lists));
 - **Series**: its episodes, season after season, specials and episodes not aired yet left out;
 - **Titles**: movies and series you pick by searching them; a series airs its episodes.
 
@@ -139,7 +153,7 @@ The channel is an ordinary channel for apps: listed after the channels of TV cat
 The programme airing when a player tunes in plays from where it is: tuned 90 seconds after a programme started, the channel starts 90 seconds into it. The next programmes follow as one live HLS stream, converted by FFmpeg in real time to H.264, at most 1080p, or what **Maximum quality of converted video** allows, and stereo AAC, with a discontinuity at each programme. The stream plays as an IPTV channel's HLS stream does (see [How a channel plays](#how-a-channel-plays)): relayed to apps, converted again only for an app that cannot take it, and recorded from the same playlist.
 
 - One FFmpeg airs a channel, whoever watches or records it, from the first player on, and stops a minute after the last left. It counts among the server's 16 live encodings and among **Video conversions at once**.
-- A user whose quality group is below the shared stream, such as 720p for a 1080p programme, gets it converted down to their group by a live encoding of their own, as for any channel taller than their group (see [Quality groups](users.md#quality-groups)); without the permission to convert video, the channel is refused to them.
+- A user whose quality group is below the shared stream, such as 720p for a 1080p programme, gets it converted down to their group by a live encoding of their own, as for any channel taller than their group (see [Quality groups](user-limits.md#quality-groups)); without the permission to convert video, the channel is refused to them.
 - Each programme plays from its title's versions: those of local folders first, then the others in the order of the [version rules](playback.md), at most **Versions tried when one does not work** of them. A version that fails, at its start or later, passes the programme to the next one from where it stopped.
 - When none plays, a black and silent slate airs for a minute at most, and the versions are tried again. A programme shorter than its runtime is followed by the slate until its time ends.
 - The log tells it: `A version of a programme could not air`, `No version of a programme plays: a slate airs instead`.
@@ -148,12 +162,7 @@ The programme airing when a player tunes in plays from where it is: tuned 90 sec
 
 - Jellyfin has no channels of its own titles. Apps see these channels and their programmes as Jellyfin's `TvChannel` and `Program` items, and play them as live streams.
 
-<details><summary>For app developers</summary>
-
-- The admin app's routes, for administrators: `GET` and `POST /admin/api/live-tv/channels`, `GET`, `PUT` and `DELETE /admin/api/live-tv/channels/{id}`, `GET /admin/api/live-tv/channels/choices` for the collections and smart lists, and `GET /admin/api/live-tv/channels/titles?q=` for movies and series.
-- A `PUT` that changes the sources, the blocks or the shuffle, or sets `rebuild`, reads the titles again and starts the schedule again today.
-
-</details>
+API details: [Channels of your titles in the admin API](jellyfin-api.md#channels-of-your-titles-in-the-admin-api).
 
 ## Programme guide
 
@@ -201,7 +210,7 @@ The catalog's row then shows when its first guide was last fetched, when it will
 #### What a download keeps
 
 - The guide's channels, with their names and icons. A channel its programmes name without declaring it counts as one without a name.
-- Its programmes from a day before the fetch to eight days after it, with their title, episode title, description, categories, season and episode numbers, image, and whether the guide marks them new (`<new/>`) or previously shown (`<previously-shown>`); a programme marked both is new. The guide channels of IPTV channels whose provider keeps past programmes keep theirs as far back as that archive, at most 30 days (see [Replay](iptv.md#guides-and-the-archive-window)).
+- Its programmes from a day before the fetch to eight days after it, with their title, episode title, description, categories, season and episode numbers, image, and whether the guide marks them new (`<new/>`) or previously shown (`<previously-shown>`); a programme marked both is new. The guide channels of IPTV channels whose provider keeps past programmes keep theirs as far back as that archive, at most 30 days (see [Replay](iptv-replay.md#guides-and-the-archive-window)).
 - A failed fetch keeps those of the last one.
 
 #### How channels are matched to the guide
@@ -251,13 +260,7 @@ Recommended programmes airing now are listed by channel number; those to come, b
 - Polyfin attaches a guide to a TV catalog. Jellyfin's XMLTV guides belong to its tuner setup.
 - Polyfin keeps a channel's own logo over the guide's icon. Jellyfin uses the guide's icon even over the channel's own logo ([ListingsManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/ListingsManager.cs#L303-L305)).
 
-<details><summary>For app developers</summary>
-
-- Programmes from either guide give apps their episode title and their season and episode numbers, as Jellyfin's do.
-- XMLTV programmes the guide marks previously shown, and not new, are repeats (`IsRepeat`), as Jellyfin reads XMLTV guides.
-- `/LiveTv/GuideInfo` still answers the seven days Jellyfin's guide spans.
-
-</details>
+API details: [Programme guide fields for apps](jellyfin-api.md#programme-guide-fields-for-apps).
 
 ## Programme reminders
 
@@ -271,16 +274,7 @@ A reminder is checked against the guide when it is due. A programme the guide mo
 
 - Reminders set in the web player reach the user wherever their targets are. Jellyfin's API has nothing for reminders, and Jellyfin apps show no button for them.
 
-<details><summary>For app developers</summary>
-
-Polyfin's own routes, under the Live TV permission:
-
-- `GET /Polyfin/Reminders` lists the user's reminders and series reminders.
-- `GET /Polyfin/Reminders/Programs/{programId}` tells how a programme stands (`Started`, `ReminderId`, `SeriesReminderId`, `Reaches`, `BeforeMinutes`). It answers 204 with nothing, without the permission too, for an item that is no programme of the user's guide or for a user without Live TV, as the web player's script asks it of every page.
-- `POST /Polyfin/Reminders` with `ProgramId`, `Series` and `Language` sets one.
-- `DELETE /Polyfin/Reminders/{id}` deletes a reminder or a series reminder.
-
-</details>
+API details: [Programme reminder routes](jellyfin-api.md#programme-reminder-routes).
 
 ## Recordings
 
@@ -319,11 +313,7 @@ Notes on series timers:
 
 Timers, series timers and recordings are kept in the database.
 
-<details><summary>For app developers</summary>
-
-- Guide programmes show their timers (`TimerId`, `SeriesTimerId`).
-
-</details>
+API details: [Recordings and timers for apps](jellyfin-api.md#recordings-and-timers-for-apps).
 
 ### Recording settings
 
@@ -392,11 +382,4 @@ Recordings are listed newest first, and in a **Recordings** folder. They are sho
 - Jellyfin's keep-until choices are kept, but only **Keep recordings for** and **Keep up to** delete recordings.
 - Jellyfin's `IsPrePaddingRequired` and `IsPostPaddingRequired` are not kept.
 
-<details><summary>For app developers</summary>
-
-- A recording under way can be followed at `/LiveTv/LiveRecordings/{id}/stream`. Unlike Jellyfin, it needs a signed-in user's credentials or play session, like Polyfin's other media.
-- Recordings are listed under `/LiveTv/Recordings`, and the folder at `/LiveTv/Recordings/Folders`.
-- A timer or series timer asked for a programme Polyfin does not know answers 404 (`Timers/Defaults`) or 400 (`SeriesTimers`), where Jellyfin fails with 500.
-- `POST /LiveTv/Timers/{id}` changes the timer the route names, not the one in the body.
-
-</details>
+API details: [Recordings and timers for apps](jellyfin-api.md#recordings-and-timers-for-apps).

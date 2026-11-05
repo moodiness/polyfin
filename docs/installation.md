@@ -65,19 +65,17 @@ docker run -d --name polyfin --network host -v polyfin_data:/data \
   -e POLYFIN_DATABASE_URL=postgresql://polyfin:password@127.0.0.1:5432/polyfin ghcr.io/moodiness/polyfin:latest
 ```
 
-Only one program on a host's network can use port 7359: next to a Jellyfin server on the same host's network, Polyfin starts anyway, logs it, and **System › Health** says that it cannot answer. When the answers would give the container's address, **System › Health** says so too. To stop answering, turn off **Answer local network discovery**, under **Settings › General**. See [Local network discovery](administration.md#local-network-discovery) for both settings.
+Only one program on a host's network can use port 7359: next to a Jellyfin server on the same host's network, Polyfin starts anyway, logs it, and **System › Health** says that it cannot answer. When the answers would give the container's address, **System › Health** says so too. To stop answering, turn off **Answer local network discovery**, under **Settings › General**. See [Local network discovery](https-and-networking.md#local-network-discovery) for both settings.
 
 TVs and players that browse DLNA servers find Polyfin the same way, once **Share libraries over DLNA** is on under **Settings › DLNA**: they search by multicast on UDP port 1900, which reaches the container only on the host's network or on a network that gives it its own address. Publishing `1900:1900/udp` on a bridge network only helps devices that search the host's address directly. Next to another DLNA server on the same host's network, Polyfin starts anyway and **System › Health** says that it cannot listen on 1900. See [DLNA](dlna.md#docker-networking).
 
 ### Find HDHomeRun tuners
 
-**Find tuners**, on the **HDHomeRun tuner** tab of **Add a source**, broadcasts HDHomeRun's discovery to UDP port 65001 of the local network (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)). Like the messages of Jellyfin apps above, a broadcast crosses no bridge network: from a container on Docker Desktop or on a bridge network of Docker Engine, it never reaches the tuners. On the host's network (`compose.host.yaml`), or on a network that gives the container its own address, it does.
-
-Elsewhere, add the tuner by its address (**Add by address**), which works on any network the container reaches the tuner from, or set `POLYFIN_HDHOMERUN_ADDRESSES` to the tuners' addresses, such as `192.168.1.20`: **Find tuners** then asks each one directly instead of broadcasting (see [Configuration](configuration.md)).
+**Find tuners** reaches HDHomeRun tuners only from the host's network, or from a network that gives the container its own address. See [Finding tuners with Docker](hdhomerun.md#finding-tuners-with-docker) for the other ways to add a tuner.
 
 ### Serve HTTPS
 
-Polyfin can serve HTTPS itself, on port 8920 by default, with certificate files or a certificate from Let's Encrypt (see [HTTPS](administration.md#https)). Publish the HTTPS port next to 8096 in `compose.yaml`, then choose **Serve HTTPS** under **Settings › Security**:
+Polyfin can serve HTTPS itself, on port 8920 by default, with certificate files or a certificate from Let's Encrypt (see [HTTPS](https-and-networking.md#https)). Publish the HTTPS port next to 8096 in `compose.yaml`, then choose **Serve HTTPS** under **Settings › Security**:
 
 ```yaml
     ports:
@@ -104,7 +102,7 @@ With **Let's Encrypt**, the container's user cannot listen below 1024, so the in
       - "443:8920"    # TLS-ALPN-01, and HTTPS on the usual port
 ```
 
-Each line needs the host's own port free: forward the port on the router instead, to the host's 8096 or 8920, when another service uses it. Apps reach Polyfin at `https://media.example.org:8920`, or at `https://media.example.org` once 443 reaches the HTTPS port. In that case, set **Public address**, under **Settings › Notifications**, to `https://media.example.org`, without a port: **Redirect HTTP to HTTPS** sends clients to the port of an `https://` public address, 443 when it names none, and without one to the HTTPS port, 8920, which the internet may not reach (see [The redirect](administration.md#the-redirect)).
+Each line needs the host's own port free: forward the port on the router instead, to the host's 8096 or 8920, when another service uses it. Apps reach Polyfin at `https://media.example.org:8920`, or at `https://media.example.org` once 443 reaches the HTTPS port. In that case, set **Public address**, under **Settings › Notifications**, to `https://media.example.org`, without a port: **Redirect HTTP to HTTPS** sends clients to the port of an `https://` public address, 443 when it names none, and without one to the HTTPS port, 8920, which the internet may not reach (see [The redirect](https-and-networking.md#the-redirect)).
 
 ### Keep torrents to a VPN
 
@@ -116,7 +114,7 @@ Replace the image's `latest` tag in `compose.yaml` with a release: the version y
 
 ### Restart from the admin app
 
-**Restart**, on the admin app's **Home**, stops Polyfin and exits with code 75 (`EX_TEMPFAIL`), not 0, and the container's restart policy starts it again (see [Restart and updates](administration.md#restart)):
+**Restart**, on the admin app's **Home**, stops Polyfin and exits with code 75 (`EX_TEMPFAIL`), not 0, and the container's restart policy starts it again (see [Restart and updates](updates-and-restarts.md#restart)):
 
 | Restart policy | After Restart |
 |---|---|
@@ -127,7 +125,7 @@ Replace the image's `latest` tag in `compose.yaml` with a release: the version y
 
 With `docker run`, give it with `--restart unless-stopped`. Polyfin cannot see the policy from inside the container, so the admin app warns before restarting until an administrator turns on **Polyfin is started again when it stops**, under **Settings › General**.
 
-Updating the image needs Docker itself: pull the new image and recreate the container, or let an update tool that runs beside Polyfin do it, which **Update now** can ask (see [Update now](administration.md#update-now)). Polyfin is never given the Docker socket.
+Updating the image needs Docker itself: pull the new image and recreate the container, or let an update tool that runs beside Polyfin do it, which **Update now** can ask (see [Update now](updates-and-restarts.md#update-now)). Polyfin is never given the Docker socket.
 
 ### Back up the database
 
@@ -163,7 +161,7 @@ The `tmpfs` above is a memory folder, made empty at each start of the container,
 
 ### An rclone container
 
-Polyfin reads folders from the many storages rclone reaches through an rclone instance serving its remote control interface (see [rclone remotes](local-folders.md#addresses)). Run it next to Polyfin: add a service to `compose.yaml`, with its configuration in a folder beside the file, made with `rclone config`:
+Polyfin reads folders from the many storages rclone reaches through an rclone instance serving its remote control interface (see [rclone remotes](network-shares.md#addresses)). Run it next to Polyfin: add a service to `compose.yaml`, with its configuration in a folder beside the file, made with `rclone config`:
 
 ```yaml
   rclone:
@@ -214,7 +212,7 @@ To keep the segments being played, the files being read or the cache on another 
 
 For Jellyfin apps to find Polyfin on the local network by themselves, set the container's **Network Type** to `br0`, which gives it its own address on your network, or to `Host`: on the default `bridge`, their broadcasts do not reach it, even with **Discovery port** published (see [Let apps find Polyfin on the local network](#let-apps-find-polyfin-on-the-local-network)).
 
-To serve HTTPS, add the HTTPS port to the container: **Add another Path, Port, Variable, Label or Device**, of type `Port`, with `8920` as both the container's and the host's port, over TCP. Then choose **Serve HTTPS** in the admin app, under **Settings › Security** (see [HTTPS](administration.md#https)). For **Certificate files**, add a `Path` mapping the folder that holds them, read-only, such as `/mnt/user/appdata/certs` to `/certs`. For **Let's Encrypt**, Unraid's own web interface usually holds ports 80 and 443 on the server: forward the router's port 80 to the server's port 8096 for **HTTP-01**, or its port 443 to the server's 8920 for **TLS-ALPN-01**, rather than mapping them on the container. When the router forwards 443 to 8920, set **Public address**, under **Settings › Notifications**, to `https://your-host`, so that **Redirect HTTP to HTTPS** sends clients to 443.
+To serve HTTPS, add the HTTPS port to the container: **Add another Path, Port, Variable, Label or Device**, of type `Port`, with `8920` as both the container's and the host's port, over TCP. Then choose **Serve HTTPS** in the admin app, under **Settings › Security** (see [HTTPS](https-and-networking.md#https)). For **Certificate files**, add a `Path` mapping the folder that holds them, read-only, such as `/mnt/user/appdata/certs` to `/certs`. For **Let's Encrypt**, Unraid's own web interface usually holds ports 80 and 443 on the server: forward the router's port 80 to the server's port 8096 for **HTTP-01**, or its port 443 to the server's 8920 for **TLS-ALPN-01**, rather than mapping them on the container. When the router forwards 443 to 8920, set **Public address**, under **Settings › Notifications**, to `https://your-host`, so that **Redirect HTTP to HTTPS** sends clients to 443.
 
 Containers made from an older template keep working: the variables they set, such as `POLYFIN_CACHE_SIZE` or `POLYFIN_BACKUP_DIR`, are copied into the settings at their first start with a version that made them settings. You can remove them from the container afterwards.
 
@@ -248,7 +246,7 @@ Polyfin answers two addresses, without signing in, for monitoring tools:
 - `/healthz` answers 200 while Polyfin's process serves, PostgreSQL reachable or not. The health check asks it.
 - `/readyz` answers 200 when PostgreSQL is reachable too, and 503 when it is not, or while a backup is being restored.
 
-Both answer `ok` in plain text; `/readyz` answers `database unavailable` with its 503. For Prometheus, Polyfin can also expose its metrics at `/metrics`, with a token: see [Metrics](administration.md#metrics).
+Both answer `ok` in plain text; `/readyz` answers `database unavailable` with its 503. For Prometheus, Polyfin can also expose its metrics at `/metrics`, with a token: see [Metrics](metrics-and-api-keys.md#metrics).
 
 ## GPU
 
