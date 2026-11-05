@@ -3,6 +3,7 @@ package stremio
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,10 +12,15 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/moodiness/polyfin/internal/logs"
 )
 
 const (
@@ -187,7 +193,11 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 			failure = FailureRateLimited
 		}
 		c.health.record(ctx, manifestURL, target, started, failure)
-		return nil, answered{status: httpStatus(response.StatusCode), wait: wait, waits: waits}
+		answer := answered{status: httpStatus(response.StatusCode), wait: wait, waits: waits}
+		if answer.refused() {
+			answer.reason = refusalReason(response)
+		}
+		return nil, answer
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
@@ -211,11 +221,20 @@ func (s httpStatus) Error() string { return fmt.Sprintf("HTTP %d", int(s)) }
 // ErrUnreachable to its callers, as no resource came of it, with its status
 // for StatusOf and, when the addon asked to wait, the wait for RetryAfter.
 // Its text tells what the addon answered, as Health names it, rather than
-// calling an addon that answered unreachable.
+// calling an addon that answered unreachable, and the reason the addon gave
+// for a refusal.
 type answered struct {
 	status httpStatus
 	wait   retryAfter
 	waits  bool
+	reason string
+}
+
+// refused reports an answer refusing the request: an HTTP error of the
+// client's but "not found" and "too many requests".
+func (a answered) refused() bool {
+	status := int(a.status)
+	return status >= 400 && status < 500 && status != http.StatusNotFound && status != http.StatusTooManyRequests
 }
 
 func (a answered) Error() string {
@@ -227,10 +246,85 @@ func (a answered) Error() string {
 		return fmt.Sprintf("addon asked to slow down: %v", a.status)
 	case status >= 500:
 		return fmt.Sprintf("addon failed: %v", a.status)
-	case status >= 400 && status != http.StatusNotFound:
+	case a.refused() && a.reason != "":
+		return fmt.Sprintf("addon refused the request: %v (%s)", a.status, a.reason)
+	case a.refused():
 		return fmt.Sprintf("addon refused the request: %v", a.status)
 	}
 	return fmt.Sprintf("addon answered %v", a.status)
+}
+
+const (
+	// maxReasonBytes bounds what is read of a refusal's body.
+	maxReasonBytes = 4 << 10
+	// maxReasonLength bounds the reason a refusal gives, in characters.
+	maxReasonLength = 120
+)
+
+var (
+	// reasonAddresses matches URLs of any scheme in a refusal's reason.
+	reasonAddresses = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.\-]*://\S+`)
+	// reasonWords matches runs of characters that tokens and keys are made
+	// of; those long enough and holding a digit are taken for one.
+	reasonWords = regexp.MustCompile(`[A-Za-z0-9_\-.~+/=]{16,}`)
+)
+
+// refusalReason is the reason the body of a refusal gives: the "error" or
+// "message" of a JSON answer, or a short text, on one line, cut to
+// maxReasonLength, with what looks like an address, a token or a key
+// redacted, as the reason may repeat the request. It is empty when the
+// body gives none.
+func refusalReason(response *http.Response) string {
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxReasonBytes+1))
+	if err != nil || len(body) == 0 {
+		return ""
+	}
+	var reason string
+	var fields struct {
+		Error   json.RawMessage `json:"error"`
+		Message json.RawMessage `json:"message"`
+	}
+	if json.Valid(body) {
+		if json.Unmarshal(body, &fields) != nil {
+			return ""
+		}
+		// An error may be an object with its own message.
+		var nested struct {
+			Message string `json:"message"`
+		}
+		switch {
+		case json.Unmarshal(fields.Error, &reason) == nil && strings.TrimSpace(reason) != "":
+		case json.Unmarshal(fields.Error, &nested) == nil && strings.TrimSpace(nested.Message) != "":
+			reason = nested.Message
+		case json.Unmarshal(fields.Message, &reason) == nil:
+		}
+	} else {
+		// A page, or a body too long to be a reason, says nothing short.
+		media, _, _ := strings.Cut(response.Header.Get("Content-Type"), ";")
+		media = strings.ToLower(strings.TrimSpace(media))
+		if len(body) > maxReasonBytes || (media != "text/plain" && media != "") || !utf8.Valid(body) {
+			return ""
+		}
+		reason = string(body)
+	}
+	reason = strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || !unicode.IsPrint(r) {
+			return ' '
+		}
+		return r
+	}, reason)), " ")
+	reason = reasonAddresses.ReplaceAllString(reason, "<redacted>")
+	reason = reasonWords.ReplaceAllStringFunc(reason, func(word string) string {
+		if strings.ContainsAny(word, "0123456789") {
+			return "<redacted>"
+		}
+		return word
+	})
+	reason = logs.Redact(reason)
+	if runes := []rune(reason); len(runes) > maxReasonLength {
+		reason = strings.TrimSpace(string(runes[:maxReasonLength-1])) + "…"
+	}
+	return reason
 }
 
 func (a answered) Unwrap() []error {

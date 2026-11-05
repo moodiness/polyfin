@@ -143,6 +143,52 @@ func TestAnErrorAnswerTellsWhatTheAddonAnswered(t *testing.T) {
 	}
 }
 
+// A refusal tells the reason the addon gave, from the error or message of
+// its JSON answer or from a short text, on one line, cut short, with what
+// looks like an address, a token or a key redacted.
+func TestARefusalTellsTheAddonsReason(t *testing.T) {
+	type answer struct {
+		status            int
+		contentType, body string
+	}
+	answers := map[string]answer{
+		"error":   {http.StatusForbidden, "application/json", `{"error":"Unavailable"}`},
+		"nested":  {http.StatusUnauthorized, "application/json", `{"error":{"code":7,"message":"Token expired"}}`},
+		"token":   {http.StatusUnauthorized, "application/json", `{"message":"invalid key eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln"}`},
+		"text":    {http.StatusForbidden, "text/plain; charset=utf-8", "Blocked:\n see https://addon.example/u/secret-token/manifest.json\tor ask token=abc"},
+		"long":    {http.StatusBadRequest, "application/json", `{"message":"` + strings.Repeat("word ", 40) + `"}`},
+		"page":    {http.StatusForbidden, "text/html", "<html><body>Forbidden</body></html>"},
+		"other":   {http.StatusForbidden, "application/json", `{"metas":[]}`},
+		"empty":   {http.StatusForbidden, "", ""},
+		"missing": {http.StatusNotFound, "application/json", `{"error":"No such track"}`},
+	}
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a := answers[r.URL.Query().Get("case")]
+		w.Header().Set("Content-Type", a.contentType)
+		w.WriteHeader(a.status)
+		_, _ = w.Write([]byte(a.body))
+	}))
+	defer addon.Close()
+	manifest := addon.URL + "/secret-config/manifest.json"
+	client := NewClient("test")
+	for name, want := range map[string]string{
+		"error":   "addon refused the request: HTTP 403 (Unavailable)",
+		"nested":  "addon refused the request: HTTP 401 (Token expired)",
+		"token":   "addon refused the request: HTTP 401 (invalid key <redacted>)",
+		"text":    "addon refused the request: HTTP 403 (Blocked: see <redacted> or ask token=<redacted>)",
+		"long":    "addon refused the request: HTTP 400 (" + strings.TrimSpace(strings.Repeat("word ", 24)) + "…)",
+		"page":    "addon refused the request: HTTP 403",
+		"other":   "addon refused the request: HTTP 403",
+		"empty":   "addon refused the request: HTTP 403",
+		"missing": "not found by the addon: HTTP 404",
+	} {
+		_, err := client.Fetch(t.Context(), manifest, addon.URL+"/secret-config/search?case="+name, false)
+		if err == nil || err.Error() != want || !errors.Is(err, ErrUnreachable) && name != "missing" {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 // The metrics count an addon's requests by resource and outcome, under
 // the name the addon is listed with: a failing request moves the failures.
 func TestAddonRequestsAreCountedInTheMetrics(t *testing.T) {
