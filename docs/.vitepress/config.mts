@@ -10,15 +10,29 @@ const repoDir = resolve(docsDir, '..')
 
 /**
  * docs/README.md is the documentation's index on GitHub: each of its sections is a sidebar group,
- * and each table row a link, to a page or to a section of one.
+ * and each table row a link, to a page or to a section of one. Each group takes one of the logo's
+ * facets (see style.css, "Sidebar groups"); a group missing from `facets` is lavender grey.
  */
+const facets: Record<string, string> = {
+  Start: 'indigo',
+  Sources: 'violet',
+  Playback: 'periwinkle',
+  Apps: 'cyan',
+  Server: 'blue',
+}
+
 function sidebar(): DefaultTheme.SidebarItem[] {
   const groups: DefaultTheme.SidebarItem[] = []
   for (const line of readFileSync(resolve(docsDir, 'README.md'), 'utf8').split('\n')) {
     const section = /^## (.+)/.exec(line)
     const page = /^\| \[(.+?)\]\(([\w-]+)\.md(#[\w-]+)?\) \|/.exec(line)
-    if (section) groups.push({ text: section[1], items: [] })
-    else if (page && groups.length > 0) {
+    if (section) {
+      const facet = facets[section[1]] ?? 'grey'
+      groups.push({
+        text: `<span class="pf-group" data-facet="${facet}">${section[1]}</span>`,
+        items: [],
+      })
+    } else if (page && groups.length > 0) {
       groups.at(-1)!.items!.push({ text: page[1], link: `/docs/${page[2]}${page[3] ?? ''}` })
     }
   }
@@ -86,7 +100,7 @@ export default defineConfig({
     ['link', { rel: 'icon', href: '/polyfin/polyfin.ico', sizes: 'any' }],
     ['link', { rel: 'icon', href: '/polyfin/polyfin.svg', type: 'image/svg+xml' }],
     ['link', { rel: 'apple-touch-icon', href: '/polyfin/polyfin.png' }],
-    ['meta', { name: 'theme-color', content: '#08080e' }],
+    ['meta', { name: 'theme-color', content: '#0A0B16' }],
     ['meta', { property: 'og:site_name', content: 'Polyfin' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:image', content: `${site}polyfin-social.png` }],
@@ -115,6 +129,8 @@ export default defineConfig({
   themeConfig: {
     logo: { src: '/polyfin.svg', width: 28, height: 28, alt: '' },
     nav: [
+      { text: 'How it works', link: '/#how' },
+      { text: 'Features', link: '/#features' },
       { text: 'Docs', link: '/docs/', activeMatch: '^/docs/' },
       { text: 'Releases', link: `${repo}/releases` },
       { text: 'Community', link: `${repo}/discussions` },

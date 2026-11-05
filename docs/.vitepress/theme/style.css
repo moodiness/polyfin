@@ -1,90 +1,1192 @@
 /*
- * The admin app's « Nuit » tokens (web/src/index.css), and the default theme's variables mapped
- * to them. Like the admin app, the site is dark only.
+ * Facets: the site's look, grown from the logo. A deep indigo ink, and the logo's five facets as
+ * flat colours, never blended: violet for your sources, cyan for the apps, the server between.
+ * The site is dark only. The default theme's variables are mapped onto these tokens, and the CSS
+ * below restyles its components; the layout stays the default theme's.
  */
+
+/* Latin subsets only: the site is in English. */
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('@fontsource-variable/sora/files/sora-latin-wght-normal.woff2')
+    format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/geist/files/geist-latin-wght-normal.woff2')
+    format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2')
+    format('woff2-variations');
+}
+
 :root {
-  --nuit-bg: #08080e;
-  --nuit-s1: #0d0d15;
-  --nuit-s2: #12121c;
-  --nuit-s3: #191925;
-  --nuit-s4: #232331;
-  --nuit-line: rgb(236 236 255 / 0.07);
-  --nuit-line-2: rgb(236 236 255 / 0.11);
-  --nuit-line-3: rgb(236 236 255 / 0.17);
-  --nuit-ink: #ededf5;
-  --nuit-ink-2: #a6a6ba;
-  --nuit-ink-3: #80809a;
-  --nuit-accent: #5b63f6;
-  --nuit-accent-press: #4f57ec;
-  --nuit-link: #9aa0ff;
-  --nuit-link-hover: #c3c6ff;
-  /* The brand gradient: the logo and playback progress only. */
-  --nuit-brand: linear-gradient(
-    90deg,
-    #6d4aff 0%,
-    #4c3fd9 22%,
-    #5b63f6 48%,
-    #3e8ef7 74%,
-    #22d3ee 100%
-  );
-  --nuit-shadow-pop: 0 28px 70px -20px rgb(3 3 14 / 0.9), 0 0 0 1px var(--nuit-line-2);
-  --nuit-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --nuit-radius-panel: 16px;
-  --nuit-radius-row: 12px;
-  --nuit-radius-field: 8px;
+  --pf-bg: #0a0b16;
+  --pf-s1: #0e1022;
+  --pf-s2: #121430;
+  --pf-s3: #191c3e;
+  --pf-s4: #22264f;
+  --pf-line: rgb(178 184 255 / 0.08);
+  --pf-line-2: rgb(178 184 255 / 0.14);
+  --pf-line-3: rgb(178 184 255 / 0.24);
+  --pf-ink: #eef0fa;
+  --pf-ink-2: #c9cbe2;
+  --pf-mute: #9a9dbc;
+  --pf-mute-2: #8285aa;
 
-  /* The landing page's content, which its navigation bar lines up with. */
-  --pf-content-width: 1232px;
+  /* The logo's facets, from bottom left to top right. */
+  --pf-violet: #6d4aff;
+  --pf-indigo: #4c3fd9;
+  --pf-periwinkle: #5b63f6;
+  --pf-blue: #3e8ef7;
+  --pf-cyan: #22d3ee;
+  --pf-cyan-hover: #4adcf2;
+  --pf-on-cyan: #071019;
+  /* Group and page colour where none applies: the Contributing group, the docs' home. */
+  --pf-grey: #9a9dbc;
 
-  --vp-font-family-base:
-    'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --vp-font-family-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  --pf-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --pf-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --pf-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --pf-content-width: 1240px;
+
+  --vp-font-family-base: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* The navigation pill floats 14px below the top of the page. */
+  --vp-nav-height: 72px;
+  --pf-nav-pill: 56px;
 }
 
 .dark {
-  --vp-c-bg: var(--nuit-bg);
-  --vp-c-bg-alt: var(--nuit-s1);
-  --vp-c-bg-elv: var(--nuit-s2);
-  --vp-c-bg-soft: var(--nuit-s2);
-  --vp-c-border: var(--nuit-line-3);
-  --vp-c-divider: var(--nuit-line-2);
-  --vp-c-gutter: var(--nuit-line);
-  --vp-c-text-1: var(--nuit-ink);
-  --vp-c-text-2: var(--nuit-ink-2);
-  --vp-c-text-3: var(--nuit-ink-3);
-  --vp-c-default-soft: var(--nuit-line-2);
-  --vp-c-brand-1: var(--nuit-link);
-  --vp-c-brand-2: var(--nuit-link-hover);
-  --vp-c-brand-3: var(--nuit-accent);
-  --vp-c-brand-soft: rgb(91 99 246 / 0.16);
-  --vp-button-brand-hover-bg: var(--nuit-accent-press);
-  --vp-button-brand-active-bg: var(--nuit-accent-press);
-  --vp-code-color: var(--nuit-ink);
-  --vp-code-bg: var(--nuit-line-2);
-  --vp-code-block-bg: var(--nuit-s1);
+  --vp-c-bg: var(--pf-bg);
+  --vp-c-bg-alt: var(--pf-bg);
+  --vp-c-bg-elv: var(--pf-s2);
+  --vp-c-bg-soft: var(--pf-s2);
+  --vp-c-border: var(--pf-line-3);
+  --vp-c-divider: var(--pf-line);
+  --vp-c-gutter: var(--pf-line);
+  --vp-c-text-1: var(--pf-ink);
+  --vp-c-text-2: var(--pf-ink-2);
+  --vp-c-text-3: var(--pf-mute);
+  --vp-c-default-1: var(--pf-s4);
+  --vp-c-default-2: var(--pf-s3);
+  --vp-c-default-3: var(--pf-s3);
+  --vp-c-default-soft: var(--pf-s3);
+  --vp-c-brand-1: var(--pf-cyan);
+  --vp-c-brand-2: var(--pf-cyan-hover);
+  --vp-c-brand-3: var(--pf-cyan);
+  --vp-c-brand-soft: rgb(34 211 238 / 0.14);
+  --vp-c-note-1: #a9aefb;
+  --vp-c-note-3: var(--pf-periwinkle);
+  --vp-c-warning-1: #f4c867;
+  --vp-c-warning-3: #f4c867;
+  --vp-c-danger-1: #ff8a9b;
+  --vp-c-danger-3: #ff8a9b;
+  --vp-c-caution-1: #ff8a9b;
+  --vp-c-important-1: #b7a6ff;
+  --vp-button-brand-bg: var(--pf-cyan);
+  --vp-button-brand-text: var(--pf-on-cyan);
+  --vp-button-brand-hover-bg: var(--pf-cyan-hover);
+  --vp-button-brand-hover-text: var(--pf-on-cyan);
+  --vp-button-brand-active-bg: var(--pf-cyan);
+  --vp-button-brand-active-text: var(--pf-on-cyan);
+  --vp-code-color: var(--pf-ink);
+  --vp-code-bg: var(--pf-s3);
+  --vp-code-block-bg: var(--pf-s2);
+  --vp-code-block-divider-color: var(--pf-line);
+  --vp-code-tab-bg: var(--pf-s2);
+  --vp-code-tab-divider: var(--pf-line);
+  --vp-code-tab-active-bar-color: var(--pf-page-facet);
+  --vp-code-copy-code-bg: var(--pf-s3);
+  --vp-code-copy-code-hover-bg: var(--pf-s4);
+  --vp-code-copy-code-active-text: var(--pf-cyan);
+  --vp-nav-bg-color: transparent;
+  --vp-nav-screen-bg-color: rgb(10 11 22 / 0.96);
+  --vp-local-nav-bg-color: transparent;
+  --vp-sidebar-bg-color: var(--pf-bg);
+  --vp-custom-block-info-bg: var(--pf-s2);
+  --vp-custom-block-note-bg: var(--pf-s2);
+  --vp-custom-block-tip-bg: var(--pf-s2);
+  --vp-custom-block-important-bg: var(--pf-s2);
+  --vp-custom-block-warning-bg: var(--pf-s2);
+  --vp-custom-block-danger-bg: var(--pf-s2);
+  --vp-custom-block-caution-bg: var(--pf-s2);
+  --vp-custom-block-details-bg: var(--pf-s2);
+  --vp-custom-block-info-code-bg: var(--pf-s3);
+  --vp-custom-block-note-code-bg: var(--pf-s3);
+  --vp-custom-block-tip-code-bg: var(--pf-s3);
+  --vp-custom-block-important-code-bg: var(--pf-s3);
+  --vp-custom-block-warning-code-bg: var(--pf-s3);
+  --vp-custom-block-danger-code-bg: var(--pf-s3);
+  --vp-custom-block-caution-code-bg: var(--pf-s3);
+  --vp-custom-block-details-code-bg: var(--pf-s3);
+  --vp-custom-block-font-size: 15px;
+  --vp-local-search-bg: var(--pf-bg);
+  --vp-local-search-result-bg: var(--pf-s2);
+  --vp-local-search-result-border: transparent;
+  --vp-local-search-result-selected-bg: var(--pf-s3);
+  --vp-local-search-result-selected-border: var(--pf-cyan);
+  --vp-local-search-highlight-bg: rgb(34 211 238 / 0.2);
+  --vp-local-search-highlight-text: var(--pf-ink);
+  --vp-backdrop-bg-color: rgb(5 6 14 / 0.7);
+  --vp-badge-tip-border: transparent;
+  --vp-badge-tip-text: var(--pf-on-cyan);
+  --vp-badge-tip-bg: var(--pf-cyan);
+  --vp-badge-info-border: transparent;
+  --vp-badge-info-text: var(--pf-ink-2);
+  --vp-badge-info-bg: var(--pf-s3);
+  --vp-badge-warning-border: transparent;
+  --vp-badge-warning-text: #231a05;
+  --vp-badge-warning-bg: #f4c867;
+  --vp-badge-danger-border: transparent;
+  --vp-badge-danger-text: #2a070d;
+  --vp-badge-danger-bg: #ff8a9b;
+  --vp-home-hero-name-color: var(--pf-ink);
+
+  /* A page's facet: its sidebar group's (see "Sidebar groups"). */
+  --pf-page-facet: var(--pf-grey);
 }
 
 ::selection {
-  background: rgb(91 99 246 / 0.4);
+  background: var(--pf-cyan);
+  color: var(--pf-on-cyan);
 }
 
-.vp-doc h1,
-.vp-doc h2,
-.vp-doc h3 {
-  letter-spacing: -0.02em;
+:focus-visible {
+  outline: 2px solid var(--pf-cyan);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
-/* The landing page ends with its own footer, and keeps the page still behind the tour. */
-.Layout .VPHome:has(.pf-home) {
-  margin-bottom: 0;
+/* ---------------------------------------------------------------- Navigation: a floating pill */
+
+.VPNav .VPNavBar,
+.VPNav .VPNavBar.screen-open {
+  background: transparent;
+  border-bottom: 0;
 }
 
-html:has(.pf-tour[open]) {
-  overflow: hidden;
+.VPNav .VPNavBar .divider {
+  display: none;
+}
+
+.VPNav .VPNavBar > .wrapper,
+.VPNav .VPNavBar.has-sidebar > .wrapper {
+  padding: 14px 14px 0;
+}
+
+.VPNav .VPNavBar > .wrapper > .container,
+.VPNav .VPNavBar.has-sidebar > .wrapper > .container {
+  /* Inside the pill, the default theme's nav height is the pill's. */
+  --vp-nav-height: var(--pf-nav-pill);
+  max-width: 1040px;
+  height: var(--pf-nav-pill);
+  padding: 0 8px 0 18px;
+  border-radius: 999px;
+  background: rgb(14 16 34 / 0.78);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow:
+    inset 0 0 0 1px var(--pf-line-2),
+    0 18px 40px -18px rgb(4 5 14 / 0.8);
+}
+
+.VPNav .VPNavBar.has-sidebar > .wrapper > .container > .title,
+.VPNav .VPNavBar > .wrapper > .container > .title {
+  position: static;
+  width: auto;
+  height: var(--pf-nav-pill);
+  padding: 0;
+  background: transparent;
+}
+
+.VPNav .VPNavBar.has-sidebar > .wrapper > .container > .content,
+.VPNav .VPNavBar > .wrapper > .container > .content {
+  padding: 0;
+}
+
+.VPNav .VPNavBar .content > .content-body {
+  height: var(--pf-nav-pill);
+  background: transparent;
+}
+
+.VPNav .VPNavBarTitle .title {
+  gap: 10px;
+  border-bottom: 0;
+  font-family: var(--pf-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.VPNav .VPNavBarTitle .logo {
+  margin-right: 0;
+}
+
+.VPNav .VPNavBarMenuLink {
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pf-mute);
+}
+
+.VPNav .VPNavBarMenuLink:hover,
+.VPNav .VPNavBarMenuLink.active {
+  color: var(--pf-ink);
+}
+
+/* Links after the title, then search, GitHub and Install on the right. */
+.VPNav .VPNavBar .content > .content-body {
+  justify-content: flex-start;
+}
+
+.VPNav .VPNavBarMenu {
+  order: 0;
+  margin: 0 auto 0 14px;
+}
+
+.VPNav .VPNavBarSearch {
+  order: 1;
+  flex-grow: 0;
+  padding-left: 0;
+}
+
+.VPNav .VPNavBar .social-links {
+  order: 2;
+  margin-right: 0;
+}
+
+.VPNav .VPNavBar .extra {
+  order: 3;
+}
+
+.VPNav .pf-nav-install {
+  order: 4;
+}
+
+.VPNav .VPNavBar .hamburger {
+  order: 5;
+}
+
+@media (max-width: 767px) {
+  .VPNav .VPNavBarSearch {
+    margin-left: auto;
+  }
+}
+
+.VPNav .DocSearch-Button {
+  height: 36px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pf-line);
+}
+
+.VPNav .DocSearch-Button:hover {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pf-line-3);
+}
+
+.VPNav .DocSearch-Button .DocSearch-Button-Keys {
+  border-color: transparent;
+  border-radius: 6px;
+  background: rgb(178 184 255 / 0.08);
+}
+
+.VPNav .menu + .social-links::before {
+  display: none;
+}
+
+.VPNav .VPSocialLink {
+  color: var(--pf-mute);
+}
+
+.VPNav .VPSocialLink:hover {
+  color: var(--pf-ink);
+}
+
+.VPNavScreen {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.VPNavScreen .container {
+  padding-top: 24px;
+}
+
+.VPNavScreen .VPNavScreenMenuLink {
+  padding: 10px 0;
+  border-bottom: 0;
+  font-family: var(--pf-display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+
+.VPNavScreen .VPNavScreenMenuLink:hover {
+  color: var(--pf-cyan);
+}
+
+/* ---------------------------------------------------------------- Buttons and links */
+
+.pf-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 8px 0 22px;
+  border-radius: 999px;
+  font: 600 15px/1 var(--vp-font-family-base);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.5s var(--pf-ease),
+    background-color 0.3s var(--pf-ease),
+    box-shadow 0.3s var(--pf-ease);
+}
+
+.pf-button:active {
+  transform: scale(0.97);
+}
+
+.pf-button.primary {
+  background: var(--pf-cyan);
+  color: var(--pf-on-cyan);
+}
+
+.pf-button.primary:hover {
+  background: var(--pf-cyan-hover);
+}
+
+.pf-button.ghost {
+  padding: 0 22px;
+  color: var(--pf-ink);
+  box-shadow: inset 0 0 0 1px var(--pf-line-3);
+}
+
+.pf-button.ghost:hover {
+  background: rgb(178 184 255 / 0.05);
+  box-shadow: inset 0 0 0 1px rgb(178 184 255 / 0.42);
+}
+
+.pf-button .knob {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgb(7 16 25 / 0.12);
+  transition: transform 0.5s var(--pf-ease);
+}
+
+.pf-button:hover .knob {
+  transform: translateX(3px);
+}
+
+/* The navigation's Install, from the nav-bar-content-after slot. */
+.pf-nav-install {
+  height: 36px;
+  margin-left: 8px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+@media (max-width: 959px) {
+  .pf-nav-install {
+    display: none;
+  }
+}
+
+.pf-screen-install {
+  margin-top: 28px;
+  padding: 0 24px;
+}
+
+/* A flat triangle in a facet's colour: bullets, markers, eyebrows. */
+.pf-tri {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: var(--facet, var(--pf-cyan));
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+/* ---------------------------------------------------------------- Sidebar groups */
+
+/*
+ * Each group's heading carries its facet (config.mts wraps it in .pf-group[data-facet]). The group
+ * and the page whose link is active in it take that colour: the active link's pointer, the page's
+ * headings and bullets. A group added to docs/README.md without a facet in config.mts is grey.
+ */
+.pf-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pf-group::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--pf-group, var(--pf-grey));
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+.pf-group[data-facet='violet'],
+.VPSidebarItem.level-0:has(> .item .pf-group[data-facet='violet']) {
+  --pf-group: var(--pf-violet);
+}
+.pf-group[data-facet='indigo'],
+.VPSidebarItem.level-0:has(> .item .pf-group[data-facet='indigo']) {
+  --pf-group: var(--pf-indigo);
+}
+.pf-group[data-facet='periwinkle'],
+.VPSidebarItem.level-0:has(> .item .pf-group[data-facet='periwinkle']) {
+  --pf-group: var(--pf-periwinkle);
+}
+.pf-group[data-facet='blue'],
+.VPSidebarItem.level-0:has(> .item .pf-group[data-facet='blue']) {
+  --pf-group: var(--pf-blue);
+}
+.pf-group[data-facet='cyan'],
+.VPSidebarItem.level-0:has(> .item .pf-group[data-facet='cyan']) {
+  --pf-group: var(--pf-cyan);
+}
+
+.dark .Layout:has(.VPSidebarItem.level-0.has-active .pf-group[data-facet='violet']) {
+  --pf-page-facet: var(--pf-violet);
+}
+.dark .Layout:has(.VPSidebarItem.level-0.has-active .pf-group[data-facet='indigo']) {
+  --pf-page-facet: var(--pf-indigo);
+}
+.dark .Layout:has(.VPSidebarItem.level-0.has-active .pf-group[data-facet='periwinkle']) {
+  --pf-page-facet: var(--pf-periwinkle);
+}
+.dark .Layout:has(.VPSidebarItem.level-0.has-active .pf-group[data-facet='blue']) {
+  --pf-page-facet: var(--pf-blue);
+}
+.dark .Layout:has(.VPSidebarItem.level-0.has-active .pf-group[data-facet='cyan']) {
+  --pf-page-facet: var(--pf-cyan);
+}
+
+.VPSidebar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.VPSidebar:hover {
+  scrollbar-color: var(--pf-s3) transparent;
+}
+
+.VPSidebar .group + .group {
+  border-top: 0;
+  padding-top: 6px;
+}
+
+.VPSidebarItem.level-0 {
+  padding-bottom: 18px;
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-family: var(--pf-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--pf-ink);
+}
+
+.VPSidebarItem.level-1 > .item {
+  border-radius: 10px;
+}
+
+.VPSidebarItem.level-1 > .item > .link > .text {
+  padding: 6px 12px 6px 20px;
+  font-size: 14.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--pf-mute);
+  transition: color 0.25s var(--pf-ease);
+}
+
+.VPSidebar .group .VPSidebarItem.level-1.is-link > .item > .link:hover .text {
+  color: var(--pf-ink);
+}
+
+.VPSidebarItem.level-1.is-active > .item {
+  background: var(--pf-s2);
+}
+
+.VPSidebar .group .VPSidebarItem.level-1.is-active > .item > .link > .text {
+  font-weight: 500;
+  color: var(--pf-ink);
+}
+
+/* The default theme's active bar becomes a pointer in the group's facet. */
+.VPSidebarItem.level-1 > .item > .indicator {
+  top: 50%;
+  left: 8px;
+  bottom: auto;
+  width: 7px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.VPSidebarItem.level-1.is-active > .item > .indicator {
+  background: var(--pf-group, var(--pf-grey));
+}
+
+/* ---------------------------------------------------------------- Local nav: Menu, On this page */
+
+/* From 960 to 1279 px, the outline's bar sits under the pill, the sidebar beside it. */
+.Layout .VPLocalNav {
+  border-bottom: 0;
 }
 
 @media (min-width: 960px) {
-  .Layout:has(.pf-home) .VPNavBar .container {
-    max-width: var(--pf-content-width);
+  .Layout .VPLocalNav {
+    background: rgb(10 11 22 / 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
+@media (max-width: 959px) {
+  .Layout .VPLocalNav {
+    top: var(--vp-nav-height);
+    padding: 6px 14px 0;
+    border-bottom: 0;
+  }
+
+  .VPLocalNav .container {
+    height: 46px;
+    padding: 0 6px;
+    border-radius: 14px;
+    background: rgb(14 16 34 / 0.86);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 0 0 1px var(--pf-line-2);
+  }
+
+  .VPLocalNav .menu {
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: var(--pf-s3);
+    color: var(--pf-ink);
+  }
+
+  .VPLocalNavOutlineDropdown button {
+    color: var(--pf-mute);
+  }
+
+  .VPSidebar {
+    background: var(--pf-s1);
+    box-shadow: inset -1px 0 0 var(--pf-line-2);
+  }
+}
+
+/* ---------------------------------------------------------------- Documentation */
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4 {
+  font-family: var(--pf-display);
+  color: var(--pf-ink);
+  text-wrap: balance;
+}
+
+.vp-doc h1 {
+  font-size: clamp(36px, 4.2vw, 50px);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+}
+
+.vp-doc h2 {
+  margin: 64px 0 18px;
+  padding-top: 28px;
+  border-top: 1px solid var(--pf-line);
+  font-size: clamp(25px, 2.3vw, 29px);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.035em;
+}
+
+.vp-doc h2::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 0;
+  width: 12px;
+  height: 10px;
+  background: var(--pf-page-facet);
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+.vp-doc h3 {
+  margin: 40px 0 12px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.vp-doc h4 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.vp-doc .header-anchor {
+  color: var(--pf-mute-2);
+}
+
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.75;
+  color: var(--pf-ink-2);
+}
+
+.vp-doc strong {
+  font-weight: 600;
+  color: var(--pf-ink);
+}
+
+.vp-doc a {
+  font-weight: 400;
+  color: var(--pf-ink);
+  text-decoration: underline;
+  text-decoration-color: rgb(34 211 238 / 0.55);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.25s var(--pf-ease);
+}
+
+.vp-doc a:hover {
+  color: var(--pf-ink);
+  text-decoration-color: var(--pf-cyan);
+}
+
+.vp-doc a.header-anchor {
+  text-decoration: none;
+}
+
+.vp-doc ul:not([class]) {
+  list-style: none;
+  padding-left: 0;
+}
+
+.vp-doc ul:not([class]) > li {
+  position: relative;
+  padding-left: 26px;
+}
+
+.vp-doc ul:not([class]) > li::before {
+  content: '';
+  position: absolute;
+  top: 0.72em;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--pf-page-facet);
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+.vp-doc ol > li::marker {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.88em;
+  color: var(--pf-mute);
+}
+
+.vp-doc :not(pre) > code {
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.86em;
+}
+
+.vp-doc a > code {
+  color: var(--pf-ink);
+}
+
+.vp-doc blockquote {
+  border-left: 2px solid var(--pf-page-facet);
+}
+
+.vp-doc blockquote > p {
+  color: var(--pf-mute);
+}
+
+.vp-doc hr {
+  border-top-color: var(--pf-line);
+}
+
+.vp-doc img {
+  border-radius: 12px;
+}
+
+/* Tables: one flat surface, with a mono header. */
+.vp-doc table {
+  border-radius: 16px;
+  background: var(--pf-s1);
+  box-shadow: inset 0 0 0 1px var(--pf-line);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.vp-doc tr {
+  border-top: 1px solid var(--pf-line);
+  background: transparent;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: transparent;
+}
+
+.vp-doc th,
+.vp-doc td {
+  border: 0;
+  padding: 13px 16px;
+}
+
+.vp-doc th {
+  background: var(--pf-s2);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-mute);
+}
+
+.vp-doc td {
+  color: var(--pf-ink-2);
+}
+
+/* On phones a table scrolls sideways inside its surface rather than squeezing its columns. */
+@media (max-width: 639px) {
+  .vp-doc th,
+  .vp-doc td {
+    min-width: 9em;
+    padding: 11px 13px;
+  }
+
+  .vp-doc td:last-child {
+    min-width: 15em;
+  }
+}
+
+/* Code blocks and groups: flat surfaces. */
+.vp-doc div[class*='language-'] {
+  border-radius: 16px;
+}
+
+.vp-doc div[class*='language-'] > span.lang {
+  font-family: var(--vp-font-family-mono);
+  color: var(--pf-mute-2);
+}
+
+.vp-doc [class*='language-'] > button.copy {
+  border-radius: 10px;
+  border-color: var(--pf-line-2);
+}
+
+.vp-code-group .tabs {
+  border-radius: 16px 16px 0 0;
+  box-shadow: inset 0 -1px 0 var(--pf-line);
+}
+
+.vp-code-group .tabs label {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+}
+
+.vp-code-group div[class*='language-'] {
+  border-radius: 0 0 16px 16px;
+}
+
+/* <details> in pages (raw HTML) and ::: details: a surface with a facet that turns. */
+.vp-doc details:not(.custom-block),
+.custom-block.details {
+  margin: 18px 0;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--pf-s1);
+  box-shadow: inset 0 0 0 1px var(--pf-line);
+}
+
+.vp-doc details:not(.custom-block) > summary,
+.custom-block.details > summary {
+  position: relative;
+  margin: 0;
+  padding: 14px 0 14px 22px;
+  list-style: none;
+  font-family: var(--pf-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--pf-ink);
+  cursor: pointer;
+}
+
+.vp-doc details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.vp-doc details:not(.custom-block) > summary::before,
+.custom-block.details > summary::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 8px;
+  height: 10px;
+  margin-top: -5px;
+  background: var(--pf-page-facet);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transition: transform 0.4s var(--pf-ease);
+}
+
+.vp-doc details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.vp-doc details:not(.custom-block)[open],
+.custom-block.details[open] {
+  padding-bottom: 6px;
+}
+
+.vp-doc details:not(.custom-block) > summary:focus-visible,
+.custom-block.details > summary:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Custom containers: a flat surface, a facet beside the title in the block's colour. */
+.custom-block {
+  border: 0;
+  border-radius: 14px;
+  padding: 16px 20px 8px;
+  box-shadow: inset 0 0 0 1px var(--pf-line);
+}
+
+.custom-block .custom-block-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--pf-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.custom-block:not(.details) .custom-block-title::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--block, var(--pf-periwinkle));
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+.custom-block.info,
+.custom-block.note {
+  --block: var(--pf-periwinkle);
+}
+.custom-block.tip {
+  --block: var(--pf-cyan);
+}
+.custom-block.important {
+  --block: var(--pf-violet);
+}
+.custom-block.warning {
+  --block: #f4c867;
+}
+.custom-block.danger,
+.custom-block.caution {
+  --block: #ff8a9b;
+}
+
+.custom-block .custom-block-title {
+  color: var(--pf-ink);
+}
+
+.custom-block a {
+  color: var(--pf-ink);
+}
+
+.VPBadge {
+  border-radius: 6px;
+  font-family: var(--vp-font-family-mono);
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------------- Outline, footer, search, 404 */
+
+.VPDocAsideOutline .outline-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--pf-mute);
+}
+
+.VPDocAsideOutline .content {
+  border-left-color: var(--pf-line);
+}
+
+.VPDocAsideOutline .outline-link {
+  color: var(--pf-mute);
+  font-size: 13.5px;
+}
+
+.VPDocAsideOutline .outline-link:hover,
+.VPDocAsideOutline .outline-link.active {
+  color: var(--pf-ink);
+}
+
+.VPDocAsideOutline .outline-marker {
+  width: 2px;
+  background: var(--pf-page-facet);
+}
+
+.VPDocFooter .edit-link-button {
+  font-weight: 400;
+  color: var(--pf-mute);
+}
+
+.VPDocFooter .edit-link-button:hover {
+  color: var(--pf-ink);
+}
+
+.VPDocFooter .prev-next {
+  border-top-color: var(--pf-line);
+}
+
+.VPDocFooter .pager-link {
+  border: 0;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px var(--pf-line-2);
+  transition:
+    box-shadow 0.3s var(--pf-ease),
+    background-color 0.3s var(--pf-ease);
+}
+
+.VPDocFooter .pager-link:hover {
+  background: var(--pf-s1);
+  box-shadow: inset 0 0 0 1px var(--pf-line-3);
+}
+
+.VPDocFooter .pager-link .desc {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: var(--pf-mute-2);
+}
+
+.VPDocFooter .pager-link .title {
+  font-family: var(--pf-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--pf-ink);
+}
+
+.VPLocalSearchBox .shell {
+  border-radius: 20px;
+  background: var(--pf-s2);
+  box-shadow:
+    inset 0 0 0 1px var(--pf-line-2),
+    0 40px 80px -30px rgb(3 4 12 / 0.9);
+}
+
+.VPLocalSearchBox .search-bar {
+  border-radius: 12px;
+  border-color: var(--pf-line-2);
+  background: var(--pf-bg);
+}
+
+.VPLocalSearchBox .search-bar:focus-within {
+  border-color: var(--pf-cyan);
+}
+
+.VPLocalSearchBox .search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.VPLocalSearchBox .result {
+  border-radius: 12px;
+}
+
+.VPLocalSearchBox .titles .title-icon {
+  color: var(--pf-mute-2);
+}
+
+.NotFound .code {
+  font-family: var(--pf-display);
+  font-size: 96px;
+  letter-spacing: -0.06em;
+  color: var(--pf-ink);
+}
+
+.NotFound .title {
+  font-family: var(--pf-display);
+  letter-spacing: -0.02em;
+  color: var(--pf-ink);
+}
+
+.NotFound .divider {
+  width: 76px;
+  height: 11px;
+  border: 0;
+  background: linear-gradient(
+    90deg,
+    var(--pf-violet) 0 20%,
+    var(--pf-indigo) 20% 40%,
+    var(--pf-periwinkle) 40% 60%,
+    var(--pf-blue) 60% 80%,
+    var(--pf-cyan) 80%
+  );
+  clip-path: polygon(
+    0 100%,
+    6.5% 0,
+    13% 100%,
+    20% 100%,
+    26.5% 0,
+    33% 100%,
+    40% 100%,
+    46.5% 0,
+    53% 100%,
+    60% 100%,
+    66.5% 0,
+    73% 100%,
+    80% 100%,
+    86.5% 0,
+    93% 100%
+  );
+}
+
+.NotFound .quote {
+  color: var(--pf-mute);
+}
+
+.NotFound .link {
+  border: 0;
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: var(--pf-cyan);
+  color: var(--pf-on-cyan);
+  font-weight: 600;
+}
+
+.NotFound .link:hover {
+  border: 0;
+  background: var(--pf-cyan-hover);
+  color: var(--pf-on-cyan);
+}
+
+/* ---------------------------------------------------------------- The landing page */
+
+/* It ends with its own footer, and keeps the page still behind the tour. */
+.Layout .VPHome:has(.pf-home) {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.VPContent.is-home:has(.pf-home) {
+  padding-top: 0;
+}
+
+html:has(.pf-theater[open]) {
+  overflow: hidden;
+}
+
+/*
+ * Media frames (the tour, the feature player): one clean frame, with a facet tab inside its top
+ * left corner and a facet behind its bottom right corner. --facet colours both, or --facet-back
+ * the one behind.
+ */
+.pf-media {
+  position: relative;
+}
+
+.pf-media .clip {
+  position: relative;
+  z-index: 1;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #05060e;
+}
+
+.pf-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pf-media .facet-tab,
+.pf-media .facet-back {
+  position: absolute;
+  pointer-events: none;
+  transition: background-color 0.7s var(--pf-ease);
+}
+
+.pf-media .facet-tab {
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: 76px;
+  height: 76px;
+  background: var(--facet);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.pf-media .facet-back {
+  right: -20px;
+  bottom: -20px;
+  z-index: 0;
+  width: clamp(120px, 14vw, 190px);
+  aspect-ratio: 1;
+  background: var(--facet-back, var(--facet));
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+@media (max-width: 639px) {
+  .pf-media .clip {
+    border-radius: 16px;
+  }
+
+  .pf-media .facet-tab {
+    width: 54px;
+    height: 54px;
+  }
+
+  .pf-media .facet-back {
+    right: -12px;
+    bottom: -12px;
+    width: 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
