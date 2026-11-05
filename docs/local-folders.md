@@ -1,12 +1,20 @@
 # Local folders
 
-Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container, or network shares Polyfin reads itself; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it. A folder may also hold music, see [Music folders](#music-folders), or videos no metadata addon knows, see [Home videos](#home-videos).
+This page is for administrators who want Polyfin to serve their own video files. It covers adding folders and network shares, scanning them, changing what they hold, and home videos.
 
-Folders on a NAS or another computer can be mounted on the host and declared as local folders, or read by Polyfin over SMB or WebDAV, from an S3-compatible bucket, an SFTP server or an rclone remote, with no mount: see [network shares](#network-shares).
+Each file is matched to a title and becomes one more version of it, beside the addons' streams. It gets the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library that apps see, listing the titles found in it.
+
+- How files are named and matched: [Naming and matching files](naming-and-matching.md).
+- Files left unmatched, Identify and plain videos: [Unmatched files](unmatched-files.md).
+- How a show's files map to the catalog's episodes: [Episode numbering](episode-numbering.md).
+- Blu-ray discs, DVDs and disc images: [Discs](discs.md).
+- Music folders: [Music, audiobooks and podcasts](music.md#music-folders).
+
+Folders on a NAS or another computer can be mounted on the host and added as local folders. Polyfin can also read them itself, with no mount: see [Network shares](network-shares.md).
 
 ## Mounting folders
 
-Mount each folder in the container, read-only is enough. With Docker:
+Mount each folder in the container. Read-only is enough. With Docker:
 
 ```sh
 docker run … -v /srv/media/movies:/media/movies:ro -v /srv/media/shows:/media/shows:ro ghcr.io/moodiness/polyfin:latest
@@ -22,802 +30,245 @@ With compose, add the volumes to the `polyfin` service:
       - /srv/media/shows:/media/shows:ro
 ```
 
-Then, in the admin app, open **Content › Sources**, choose **Add a source**, then **Folder**, keep **Local folder**, and give its name (the library's name in apps) and its path in the container (`/media/movies`, not the host's path). Under **It holds**, choose **Movies**, **Shows**, **Music** or **Home videos**. What a folder holds can change afterwards (see [Changing what a folder holds](#changing-what-a-folder-holds)).
+Then add the folder in the admin app:
+
+1. Open **Content › Sources**, choose **Add a source**, then **Folder**.
+2. Keep **Local folder**.
+3. Give its name, which is the library's name in apps.
+4. Give its path in the container, such as `/media/movies`, not the host's path.
+5. Under **It holds**, choose **Movies**, **Shows**, **Music** or **Home videos**.
+
+![The Add a source dialog with Folder chosen: Local folder, the name Movies, the path in the container /media/movies, and Movies under It holds](images/add-a-source-folder.webp)
+
+What a folder holds can change later: see [Changing what a folder holds](#changing-what-a-folder-holds).
 
 ### On Windows and macOS
 
-Outside Docker, as with Polyfin Desktop, there is nothing to mount: a local folder is a folder of the computer Polyfin runs on, by its full path, which the admin app's form names for the system Polyfin runs on. It learns that system from `GET /admin/api/status`, whose `system` is `container` in a container, else `linux`, `macos` or `windows`.
+Outside Docker, as with Polyfin Desktop, there is nothing to mount. A local folder is a folder of the computer Polyfin runs on, given by its full path. The admin app's form names the paths of the system Polyfin runs on.
 
-- **Windows:** a drive's folder, `D:\Movies`, or a share's, `\\nas\media\Movies`, with backslashes or slashes, in any letter case. A drive's root, such as `E:\` for a disk of movies, may be one; the system's drive, `C:\`, may not, as `/` may not elsewhere. A mapped network drive exists only in the session that mapped it: give the share's path rather than its letter. The folders Windows makes at a drive's root, `$RECYCLE.BIN` and `System Volume Information`, are left out, everywhere.
-- **macOS:** a full path, such as `/Users/me/Movies`; an external disk's folders are under `/Volumes`, such as `/Volumes/Media/Movies`. macOS asks once whether Polyfin may read the folders of Desktop, Documents, Downloads and removable disks: allow it, or **Health** reports such a folder as `unreadable`.
+- **Windows:**
+  - A drive's folder, `D:\Movies`, or a share's, `\\nas\media\Movies`, with backslashes or slashes, in any letter case.
+  - A drive's root, such as `E:\` for a disk of movies, may be a folder. The system's drive, `C:\`, may not, just as `/` may not elsewhere.
+  - A mapped network drive exists only in the session that mapped it. Give the share's path rather than its letter.
+  - The folders Windows makes at a drive's root, `$RECYCLE.BIN` and `System Volume Information`, are always left out.
+- **macOS:**
+  - Give a full path, such as `/Users/me/Movies`. An external disk's folders are under `/Volumes`, such as `/Volumes/Media/Movies`.
+  - macOS asks once whether Polyfin may read Desktop, Documents, Downloads and removable disks. Allow it, or **System › Health** reports such a folder as `unreadable`.
 
-Everything else works as in Docker: names, NFO and subtitle files beside the videos, discs and images, links, scans and [watching for changes](#watching-for-changes). An M3U playlist of a music folder may name its tracks by their Windows paths, `D:\Music\…`, or `file:///D:/Music/…` addresses, in any letter case.
+Everything else works as in Docker: names, NFO and subtitle files, discs and images, links, scans and [watching for changes](#watching-for-changes). A music folder's M3U playlist may name its tracks by Windows paths, `D:\Music\…`, or `file:///D:/Music/…` addresses, in any letter case.
+
+API details: [Local folders in the admin API](jellyfin-api.md#local-folders-in-the-admin-api).
 
 ### Permissions
 
-Polyfin runs as user 65532 (group 65532). It must be able to read every file and to open every folder under the path: on the host, files need the "read" permission and folders "read" and "execute" for that user, its group or everyone, such as `chmod -R a+rX /srv/media`. Polyfin never writes to these folders. Outside Docker, Polyfin reads the folders as the account it runs as, such as yours with Polyfin Desktop.
+Polyfin runs as user 65532, group 65532. It must be able to read every file and open every folder under the path.
 
-A folder Polyfin cannot read is reported on its page in the admin app and under **System › Health**:
+- On the host, files need "read" and folders need "read" and "execute", for that user, its group or everyone: `chmod -R a+rX /srv/media`.
+- Polyfin never writes to these folders.
+- Outside Docker, Polyfin reads the folders as the account it runs as. With Polyfin Desktop, that is yours.
 
-- the path does not exist in the container, usually a share that is not mounted (`missing`);
-- it exists but Polyfin may not list it, a permissions problem (`unreadable`);
-- the path is a file (`not_folder`).
+A folder Polyfin cannot read is reported on its page in the admin app, and under **System › Health**:
 
-The files found before stay in the library while the folder cannot be read, so a share that is unmounted for a while empties no library.
-
-A folder Polyfin cannot watch for changes is listed under **System › Health** too, as a warning: see [watching for changes](#watching-for-changes).
-
-## Network shares
-
-Polyfin reads folders shared over the network itself, without mounting them: SMB shares (Windows file sharing, which most NAS offer), WebDAV folders, prefixes of S3-compatible buckets, folders of SFTP servers, and folders of the many storages rclone reaches, through an rclone instance. Open **Content › Sources**, choose **Add a source**, then **Folder**, choose **SMB share**, **WebDAV folder**, **S3 bucket**, **SFTP folder** or **rclone remote**, and give its name, its address, its credentials, and what it holds (**Movies**, **Shows**, **Music** or **Home videos**). Everything else works as for a local folder: naming, matching, NFO files, discs and images, music, unmatched files, links, scans and versions.
-
-Without these, such storage has to be mounted on the host, for example with `rclone mount`, and declared as a local folder: the mount has to be kept alive, a dropped one leaves the folder `missing`, inotify sees none of the changes made on the storage itself, and the credentials live in the host's configuration rather than in Polyfin, which encrypts them when `POLYFIN_SECRET_KEY` is set.
-
-### Addresses
-
-- An SMB share is `smb://` then the server, the share, and the folder in the share if the videos are not at its root: `smb://nas.local/media/movies`. A server listening on another port than 445 takes it after its name: `smb://nas.local:4450/media`. Polyfin speaks SMB 2 and 3, and signs in with NTLM; SMB 1 is not supported.
-- A WebDAV folder is its address: `https://nas.local/dav/movies`. Polyfin signs in with HTTP Basic authentication: prefer `https://`, since `http://` sends the password unencrypted.
-- An S3 bucket is `s3://` then the bucket, and the prefix in it if the videos are not at its root: `s3://media/movies`. Its **Endpoint** is the address of the storage's S3 service, such as `https://s3.example.org`, and its **Region** the one requests are signed for, `us-east-1` when left empty, which most S3-compatible storages accept. Objects are listed as folders by `/`, with their size and last modified date; a folder is a prefix, and the empty objects some tools make for folders are left out. Polyfin names the bucket in the path of its requests (path-style), which every S3-compatible storage answers, but at Amazon's own endpoints (`*.amazonaws.com`), where the bucket is named in the host when its name allows it. A storage answering a range with `200 OK` and its `Content-Range`, as `rclone serve s3` does, is read as one answering `206`.
-- An SFTP folder is `sftp://` then the server and the folder's full path on it: `sftp://nas.local/srv/media/movies`. A server listening on another port than 22 takes it after its name: `sftp://nas.local:2222/srv/media/movies`. Symbolic links on the server are followed.
-- An rclone remote is read through an rclone instance running its remote control interface with `--rc-serve` (`rclone rcd --rc-serve`), such as a container next to Polyfin (see [installation](installation.md#an-rclone-container)), rather than Polyfin supporting each storage itself. Give the **rclone address**, such as `http://rclone:5572`, reached over `http://`, a **Remote** among those of rclone's configuration, which **List the remotes** asks rclone for (`config/listremotes`), and the **Path in the remote**. Its address is then `rclone://` the instance's host and port and the path: `rclone://rclone:5572/movies`. Folders are listed with `operations/list`, and files are read by ranges from the objects `--rc-serve` serves.
-- A server sharing over WebDAV already works as a WebDAV folder, `rclone serve webdav` included.
-
-The address holds no user or password: they have fields of their own, and an address with them is refused.
-
-### Credentials
-
-- **User** and **Password** are those of an account that may read the folder on the server. Leave both empty for a share open to guests. For an SMB domain account, write the user as `DOMAIN\user`.
-- An S3 bucket takes an **Access key** and a **Secret key** in place of a user and password, those of a key that may list the bucket and read its objects. Leave both empty for a bucket everyone may read: its requests are then sent unsigned.
-- An SFTP folder takes a **User**, and a **Password**, a **Private key**, or both. The key is an OpenSSH or PEM private key, pasted whole, with its **Passphrase** when it has one; a key that cannot be read, or a passphrase that does not open it, is refused.
-- An rclone remote takes the user and password of rclone's remote control (`--rc-user` and `--rc-pass`), empty when it has none. The storage's own credentials stay in rclone's configuration.
-- The passwords, secret keys, private keys and passphrases are stored encrypted with `POLYFIN_SECRET_KEY` when that key is set, like the other stored secrets (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)), never shown again, and never written to the log. One the key cannot decrypt counts as wrong, the share failing as `refused`, and **System › Health** lists it under **Stored keys**.
-- To change one, edit the folder and choose **Replace** beside it; left alone, the stored one stays. A private key is replaced by pasting another, and removed with **Remove the saved key**. New credentials scan the share again at once, and keep the files found, and its titles that could not be played meanwhile are tried again at once rather than 15 minutes later. A new address forgets the files found at the former one, links included.
-- The stored secrets are only sent to the server they were given for. A folder moved to another server or port, or to another kind of share, and an S3 bucket given another endpoint, keep none of them: **Edit the folder** then asks for them again, and those left empty are removed on save. **List the remotes** uses the stored rclone password only at the folder's own rclone address. Another folder or bucket on the same server or endpoint keeps them.
-
-#### SFTP host keys
-
-The SFTP server's host key is saved at the first connection, and its fingerprint shown under **Edit the folder**. Polyfin refuses to connect when the server later offers another one, as `ssh` does: the folder fails with `host_key_changed` and keeps its files, its page shows it as **Cannot be read** as soon as the server offered the key, before the next scan, and **Edit the folder** shows the new key's fingerprint with **Accept the new key**. Accept it only when the server was reinstalled or its key changed on purpose; Polyfin then saves it, tries again at once the titles that could not be played meanwhile, and scans the folder again. A folder moved to another server forgets the key of the former one.
-
-### Performance
-
-- Files are read from the share at each request, with byte ranges. Direct play, repackaging, conversions, analysis and thumbnails read them through Polyfin as they read a local file; seeking asks the share for the part needed only.
-- The videos of S3 buckets, SFTP folders and rclone remotes are read in blocks through Polyfin's source cache, straight from the storage, as addons' streams are (see [reading the sources](playback.md#reading-the-sources)): read ahead of the playback, kept on disk for seeks, and limited per host. They count against **Disk space for files being read (GB)** under **Settings › Playback**. S3 and rclone are read over HTTP with ranges, SFTP in blocks over the folder's SSH connection. Subtitle files, images, NFO files and discs are read from the storage by ranges, as on the other shares.
-- Connections are kept between requests: one SMB session per share, signed in again when it ends, such as when the server restarts; HTTP keep-alive for WebDAV, S3 and rclone; one SSH connection per SFTP folder, made again when it drops.
-- A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Scan local folders every (hours, 0 = never)** in **Settings › Catalogs**, and are watched for changes: through the server's notifications for SMB, by listing their folders again every 2 minutes for WebDAV, and as often as each folder asks for S3 buckets, SFTP folders and rclone remotes (see [watching for changes](#watching-for-changes)). A share mounted on the host and declared as a local folder is watched with inotify instead, which only sees the changes made through that host, not those made on the NAS.
-- A video plays only as fast as the network carries it: a high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
-
-### Discs on shares
-
-Blu-ray discs, DVDs and disc images on a share are read on the share itself, as on a local folder: they have the same titles, units, links and names (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)).
-
-- A scan reads a disc's playlists and IFO files, and an image's ISO 9660 or UDF file system, by byte ranges: a few reads per disc, the image never read whole.
-- FFmpeg cannot read a disc from a share, so Polyfin serves it each title as one file:
-  - for a Blu-ray disc, its playlist's clips, each from its in time to its out time, in order, the bytes FFmpeg's Blu-ray reader reads of a local disc, as one MPEG-TS stream;
-  - for a DVD, its title's cells, in order, from its title set's `.VOB` files, as one MPEG program stream.
-- A Blu-ray disc's video is copied when the app takes it, cut on the keyframes its clips' information files list, read on the share; a DVD's is converted, as on a local folder.
-- A DVD's track languages and length come from its IFO files, as FFmpeg's DVD reader reads them on a local folder.
-
-### Health
-
-A share Polyfin cannot read is reported on its page and under **System › Health**, with why:
-
-- the server does not answer: it is off, or the address's server or port is wrong (`unreachable`);
-- the server refuses the user or password, the access key or secret key, or the private key (`refused`), also when the key cannot decrypt the one stored;
-- the share, or the folder in it, does not exist (`missing`): for S3 a bucket the storage does not have, for rclone a remote the rclone instance does not know, or a folder missing in it;
-- the user may not list the folder (`unreadable`);
-- the address is a file (`not_folder`);
-- an SFTP server offers another host key than the one saved (`host_key_changed`, see [SFTP host keys](#sftp-host-keys)).
-
-An empty prefix of a bucket is an empty folder: S3 cannot tell it from a prefix that does not exist.
-
-As with a local folder, the files found before stay in the library while the share cannot be read, so a NAS that is off for a while empties no library.
-
-A share that was read but cannot be listed while it is watched is reported under **System › Health** as a warning, with why: it does not answer (`unreachable`), it refuses the user or password (`refused`), or an SFTP server offers another host key (`host_key_changed`). It keeps its schedule meanwhile, and is scanned again once it answers.
-
-**System › Health › Network shares** lists each enabled share with how it is watched:
-
-- **Notified**: its server tells of its changes.
-- **Polled**: its folders are listed again every few minutes, with why: a WebDAV server; an SMB server that does not tell of changes, did not tell of one a listing found, or whose notifications were lost and are asked for again; or an S3 bucket, SFTP folder or rclone remote, with how often.
-- **At scans only**: it is listed only at its scans.
-- **Not watched**: it cannot be watched, with why.
-
-## Naming files
-
-Movies, one file per movie, alone or in a folder of its own, a Blu-ray disc or a DVD copied as it is (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)), or a disc image (see [Disc images](#disc-images)):
-
-```
-/media/movies/Night of the Living Dead (1968).mkv
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.mkv
-/media/movies/The.General.1926.1080p.BluRay.mkv
-```
-
-Shows, a folder per show, the season and episode in each file's name, or discs copied as they are (see [Shows on discs](#shows-on-discs)):
-
-```
-/media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E02.mkv
-/media/shows/The Lone Ranger (1949)/The.Lone.Ranger.S02E10.720p.mkv
-/media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E03-E04.mkv
-```
-
-`S01E02`, `s01e02`, `1x02` and, in a season folder, `E02` or `Episode 2` are read, and an absolute number alone, as `Show - 41` (see [Absolute episode numbers](#absolute-episode-numbers)). A file holding several episodes, `S01E01-E02`, `S01E01E02` or `S01E01-02`, plays for each of them. As Jellyfin reads them, the episode ending such a range has at most 3 digits and is followed by no other digit, nor by a resolution's `p` or `i` ([`EpisodePathParser.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/TV/EpisodePathParser.cs#L151-L167)): a year or a resolution glued to the episode ends no range, so `Show.S01E01-2022.mkv` and `Show.S09E14-1080p.mkv` hold one episode each, while `S01E99-E101` holds three. A range ending lower than it starts is no range either. Each scan reads the files' names again: a file an earlier version read otherwise, such as `S01E01-2022`, which earlier versions read as episodes 1 to 2022, is read anew at the first scan, at startup, without its title being searched again.
-
-An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`, `[imdbid-tt0063350]`, `{tmdb-10331}` or `[tmdbid-10331]`.
-
-Extras, local trailers and theme media, named as Jellyfin names them, are no titles: they show under their titles (see [Extras and theme media](#extras-and-theme-media)). Hidden folders and folders named `sample` are left out, as are a Blu-ray disc's streams and playlists, which its titles play, and the files of a DVD.
-
-### Episode numbers
-
-A show's seasons and episodes are those its metadata addon describes, the catalog's. A file becomes a version of a catalog episode only when the season and episode number its name gives are exactly ones the catalog lists, or, for a name giving an absolute number alone, when the catalog reaches that number (see [Absolute episode numbers](#absolute-episode-numbers)). Unless an administrator says how a show's files are numbered (see [How show files are numbered](#how-show-files-are-numbered)), Polyfin maps no other numbering onto the catalog's: a file numbered otherwise is an episode of its own, named after the file, beside the catalog's (see [Episodes the metadata addon does not list](#episodes-the-metadata-addon-does-not-list)), and the folder's page lists it under **Episodes only in the files**, next to the catalog's numbers for its season.
-
-The numbering of the files and the catalog's differ most often in these cases:
-
-- **Files continuing from season 1:** season 2 starts at `S02E41` because season 1 had 40, while the catalog starts each season at 1. The files' episodes come after the catalog's last episode of the season.
-- **Seasons split otherwise:** the files keep in a season 3 what the catalog lists in its season 2, or the reverse. Numbers the catalog has in another season are extra episodes, and a season it has not is an extra season.
-- **A catalog numbering on from season 1:** its season 2 starts at 25, say, while the files start each season at 1. The files' `S02E01` comes before the catalog's list of season 2.
-- **Absolute names:** `Show - 41.mkv`, `Show 41.mkv` or `[Group] Show - 041 [1080p].mkv` give the episode's place among all the show's episodes, but no season, as anime is often named. Polyfin makes such a file a version of the catalog's episode of that place, specials left out (see [Absolute episode numbers](#absolute-episode-numbers)); a number the catalog does not reach is an episode of its own, which **Episodes only in the files** shows as named by an absolute number. Names giving an air date, such as `Show 2024-03-15.mkv`, are not read.
-
-To have the files play as the catalog's episodes, choose how the show's files are numbered on the folder's page, which renames nothing and moves what users did with them (see [How show files are numbered](#how-show-files-are-numbered)). Or name them with the catalog's numbers:
-
-1. Find the catalog's season and number of each episode: open the show in the web player, whose seasons and episodes are the catalog's, or read them beside the files' under **Episodes only in the files**.
-2. Rename each file with them, such as `Show S02E01.mkv`, or `Episode 1.mkv` inside the `Season 02` folder; a file at the top of the show's folder needs the season in its name.
-3. Scan the folder. The files are then versions of the catalog's episodes, and the episodes only they held are gone. Played marks and resume points stay with the season and number they were given at: those of an episode only a file held do not follow the file to the catalog's episode.
-
-### Absolute episode numbers
-
-A show's file may be named by its episode's absolute number alone, its place among all the show's episodes, as anime often is:
-
-```
-/media/shows/Harbor Tales/Season 02/Harbor Tales - 41.mkv
-/media/shows/Harbor Tales/Harbor Tales 41.mkv
-/media/shows/Harbor Tales/[Group] Harbor Tales - 041 [1080p].mkv
-```
-
-Such a file, in a season folder or at the top of its show's folder, is the 41st episode the show's metadata addon lists, specials left out, counted by season then number as [tracking](tracking.md) counts an absolute numbering: with 40 episodes in season 1, it is a version of season 2's first episode, and plays as that episode, at that season and number, whatever season folder it is in.
-
-- The names read are those Jellyfin reads an absolute number in ([`NamingOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L361-L390)): `Show - 41`, with a dash between spaces or underscores, followed by tags between brackets or parentheses, an episode's title or `v2`; `[Group] Show-41 [1080p]`, a dash without spaces, when the name has a tag between brackets; and `Show 41`, the show's name in letters and digits, then the number, up to 4 digits.
-- A name that also tells a season and an episode, `S02E01`, `2x01`, or `Episode 1` in a season folder, keeps them: its other numbers are never read as an absolute one.
-- A year, `Show 2019` or `Show - 2019`, and a resolution, `Show 1080p` or `Show 720`, are no episodes, and neither is a number told as a season's or a part's (`Show S2 - 05`, `Show Part 2`) nor a range (`Show 41-42`): such a file stays unmatched, its name unreadable. `Show - 1080`, with its dash, is episode 1080 of a long show.
-- In a `Specials` folder, `Show - 03` is the third special, as Jellyfin reads it.
-- A number the show's catalog does not reach, as for a show whose addon lists 52 episodes and a file named `Show - 60`, makes an episode of its own, at its season folder's season, else season 1, and its number, named after its file (see [Episodes the metadata addon does not list](#episodes-the-metadata-addon-does-not-list)). Once the catalog lists that many episodes, as for a show still airing, the file becomes a version of the 60th the next time the show is described, and what users did with its own episode follows it there, as in [How show files are numbered](#how-show-files-are-numbered).
-- The catalog is the one the server's metadata addons give: a user's own metadata addon numbering the show otherwise moves no file. A catalog missing an episode moves every file numbered after it onto the next one.
-- The folder's page under **Content › Sources** counts the files matched so: "3 files are matched by their absolute number".
-
-<a id="how-a-show-s-files-are-numbered"></a><a id="how-a-shows-files-are-numbered"></a>
-
-### How show files are numbered
-
-A show's files are numbered as its catalog until an administrator says otherwise: Polyfin never guesses another numbering. When a show's files are numbered another way, choose how on the folder's page under **Content › Sources**, in **How shows' files are numbered**, which lists the folder's shows, or beside the show under **Episodes only in the files**. The files then become versions of the catalog's episodes, without renaming them, and the show lists no separate entries for them. The choice is the folder's, for each show: another folder holding the same show keeps its own.
-
-| Choice | The files | Example |
-|---|---|---|
-| **As the catalog** | carry the catalog's own seasons and numbers; a name telling an absolute number alone is the catalog's episode of that place (see [Absolute episode numbers](#absolute-episode-numbers)). This is the default. | `S02E05` is the catalog's S02E05. |
-| **Per season** | start each season at 1: a file's number counts among the episodes the catalog lists in its season, in order, as when the catalog numbers on from season 1. | The catalog's season 2 is E13 to E24: `S02E01` is its S02E13, `S02E12` its S02E24. |
-| **Continuing from season 1** | number on across seasons, each season starting after the episodes the catalog lists in the seasons before it. | The catalog lists 12 episodes in season 1 and 40 in season 2, each from 1: `S02E13` is its S02E01, `S02E52` its S02E40. |
-| **Absolute** | carry each episode's place among all the show's episodes, specials left out, whatever their season: the number of a name telling an absolute number alone, the episode number of the others. A season whose numbers start again at or below the previous season's last counts on from it, so that files split into seasons otherwise than the catalog are read in their order. | The catalog lists 12 episodes in each of its 2 seasons: `Season 01/Show S01E14.mkv` is its S02E02, `Show - 20.mkv` its S02E08, and after files up to `S01E14`, `S03E01` is the 15th, its S02E03. |
-| **An episode order** | follow one of the series' TMDB episode groups, chosen by name, such as its DVD order: the group at order N is season N, and its episode at order N is episode N+1, as Jellyfin reads a group. It needs a TMDB key under **Settings › Content**. | A DVD order whose first volume holds the aired S01E02, then S01E01: `S01E01` is the catalog's S01E02, `S01E02` its S01E01. |
-
-- Specials, season 0, keep their numbers, and so do the episodes given by hand to the titles of a show's disc (see [Shows on discs](#shows-on-discs)), but in an episode order, whose season 0 holds the specials.
-- A file holding several episodes, such as `S02E03-E04`, holds those its numbers map to while they follow one another in one season of the catalog.
-- The catalog is the one the server's metadata addons give, as for [absolute numbers](#absolute-episode-numbers): a user's own metadata addon numbering the show otherwise moves no file. When the catalog changes, as for a show still airing, the files are mapped again the next time the show is described.
-- An episode order is read from TMDB when the show is described. While TMDB does not answer, the files keep the places they had.
-- A file mapped so plays as its episode whatever episode its name tells: the check that leaves out an addon's stream naming another episode does not apply to a folder's files (see [Versions of another title](playback.md#versions-of-another-title)).
-- A scan places the files it finds as their show's choice says. A show linked to another title is numbered as that title's catalog until a choice is made for it.
-- The choice maps the files only: the show still lists its seasons as its catalog does, or in the order chosen for it under **Content › Libraries** (see [Episode orders](addons-and-libraries.md#episode-orders)). Choosing the same TMDB group for both shows the files' episodes at the numbers they were named with.
-
-**Files the numbering cannot place:** A file the choice cannot map stays an episode of its own, named after its file, at its own season and number, or, when the catalog lists that number, after the catalog's and the other files' last episode of its season: it is never a version of an episode it is not. The show's row on the folder's page lists it with why, and with the episode it is listed as:
-
-| Reason | Meaning |
+| Status | Meaning |
 |---|---|
-| `outside_season` | Per season or continuing: the catalog's season has no episode at that place, as `S02E15` against a season of 12 episodes, or the catalog has no such season |
-| `beyond_catalog` | Absolute: the catalog lists fewer regular episodes than the file's number |
-| `not_in_order` | An episode order: the group has no episode at the file's season and number |
-| `not_listed` | An episode order: the group's episode at that place is not one the catalog lists |
-| `no_order` | An episode order: TMDB could not tell the group when the file was scanned; it is placed once the show is described with TMDB answering |
-| `no_catalog` | No metadata addon of the server describes the show |
+| `missing` | The path does not exist in the container. This is usually a share that is not mounted. |
+| `unreadable` | The path exists, but Polyfin may not list it: a permissions problem. |
+| `not_folder` | The path is a file. |
 
-**Changing the choice:** The files are placed again at once. What users did with the episodes they were listed as follows them to their new episodes, by an import's rules, as when a folder's kind changes: played marks and favorites are given to the new episode, the former keeping its own, and a resume point moves (see [Changing what a folder holds](#changing-what-a-folder-holds)). **Episodes only in the files** is updated at the same time, and choosing **As the catalog** again puts the files back where their names number them, their played marks and resume points following them back.
+The files found before stay in the library while the folder cannot be read. A share unmounted for a while empties no library.
 
-### Video files
-
-A scan reads videos by their extension, in any letter case: Matroska and WebM (`.mkv`, `.webm`), MP4 and QuickTime (`.mp4`, `.m4v`, `.mov`), MPEG-TS (`.ts`, `.m2ts`, `.mts`, and `.m2t`, `.tp` and `.trp`, as TV recordings are often named), MPEG program streams (`.mpg`, `.mpeg`, `.vob`), AVI (`.avi`), Windows Media (`.wmv`), Flash Video (`.flv`) and Ogg (`.ogv`). The `.VOB` files of a `VIDEO_TS` folder are its DVD's, never videos of their own (see [DVD folders](#dvd-folders)).
-
-Each plays as it is on an app that takes its container and codecs. Otherwise:
-
-- Matroska, WebM, MP4 and QuickTime files are repackaged into HLS, cut on their keyframe index, their video copied when the app takes its codec, else converted.
-- MPEG-TS files have no index, so Polyfin reads their keyframes once from the whole file, in the background when the title's details open, or at the first play over HLS, which waits for it 5 seconds at most and otherwise plays converted while the read goes on. They are then repackaged into HLS as Matroska files are, cut on those keyframes, their video copied when the app takes its codec, and a seek lands where asked. A file whose keyframes cannot be read plays as below (see [HLS segments](transcoding.md#hls-segments)).
-- MPEG program streams and AVI files have no index Polyfin reads: over HLS, their video is always converted, cut every few seconds, and a seek lands where asked (see [HLS segments](transcoding.md#hls-segments)). A user who may not have video converted is offered them only as they are. jellyfin-web plays none of these files as they are; the Android TV app and Swiftfin play MPEG-TS as it is, and the Android TV app plays MPEG program streams and AVI files over HLS.
-- Windows Media, Flash Video and Ogg files are never cut into HLS segments: they play only on an app that takes them as they are.
-
-### Extras and theme media
-
-A movie in a folder of its own, a show's folder and a season's folder may hold extras beside the titles, read as Jellyfin reads them:
-
-```
-/media/movies/Nosferatu (1922)/Nosferatu (1922).mkv
-/media/movies/Nosferatu (1922)/Extras/Making of.mkv
-/media/movies/Nosferatu (1922)/Nosferatu (1922)-featurette.mkv
-/media/movies/Nosferatu (1922)/trailer.mp4
-/media/movies/Nosferatu (1922)/backdrops/intro.mkv
-/media/shows/The Lone Ranger (1949)/theme.mp3
-/media/shows/The Lone Ranger (1949)/Season 01/Deleted Scenes/Ambush.mkv
-```
-
-- The videos in folders named `Behind The Scenes`, `Deleted Scenes`, `Interviews`, `Scenes`, `Samples`, `Shorts`, `Featurettes`, `Clips`, `Other`, `Extras` or `Trailers`, in any letter case, are extras of that kind: `Extras` and `Other` hold extras of no kind in particular.
-- So are the videos whose names end in `-trailer`, `.trailer`, `_trailer`, ` trailer`, `-sample`, `.sample`, `_sample`, ` sample`, `-scene`, `-clip`, `-interview`, `-behindthescenes`, `-deleted`, `-deletedscene`, `-featurette`, `-short`, `-other` or `-extra`, and those named `trailer` or `sample`.
-- Theme songs are the audio files named `theme`, such as `theme.mp3`, and those in a `theme-music` folder; theme videos are the videos in a `backdrops` folder.
-- An extra is never matched, listed nor offered as a version. Its name is its file's, without its extension or suffix, else its NFO file's `<title>`, else its file's as written: `Nosferatu (1922)-featurette.mkv` is named `Nosferatu (1922)`, `trailer.mp4` takes the title of `trailer.nfo` beside it.
-- A link made by hand wins over the name: a file linked to a title (see [Unmatched files](#unmatched-files)) stays that title, or a version of it, whatever its name or folder. Removing the link makes it an extra again, at once.
-- A movie's extras belong to the movies directly in their folder, its versions included; in a folder shared by several movies, an extra named with a suffix belongs to the one its name begins with, such as `Nosferatu (1922)-trailer.mkv` beside `Nosferatu (1922).mkv`, and the extras folders belong to none. An extra named with a suffix whose movie is not beside it is listed in the unmatched files, as "An extra without its title beside it", so that it can be linked: linked, it is a title. A disc folder is its movie's own. A show's folder holds the show's extras, and a season's folder, such as `Season 01` or `Specials`, the season's.
-- Only the files directly in an extras folder are read; the other files of such a folder, discs and audio files among them, are left out, as is an audio file other than a theme song.
-
-Apps show them as Jellyfin's do: jellyfin-web lists a title's extras under its Special Features, plays its local trailer from its Trailer button (the addons' trailers still show), and plays its theme songs and videos in the background of its page, and of its seasons' and episodes' pages, for the users who turned theme songs or videos on in its display settings. An extra shows its title's backdrop, and its title's poster to apps that ask for its Primary image. An extra plays as a local file does (see [Versions](#versions)): direct play, repackaging or conversion, with the subtitle files beside it, named after it. It has its own watch state and resume point, apart from its title's. Its user sees it while they see its title and its folder is one of their sources, as for the title's versions.
-
-A folder's page shows how many extras its last scan found. **Read extras and theme media** (fr « Lire les bonus et les thèmes »), on a movies or shows folder's page, is on by default; off, the next scan leaves them out as scans did before Polyfin read them, the files with a suffix and those of `Clips` and `backdrops` folders being read as titles, and those of the other extras folders, samples and audio files left out. Home videos folders read no extras: their extras folders are left out.
-
-### Shows on discs
-
-A show kept on discs, as box sets are, may be copied as it is into the show's folder or one of its season folders: a Blu-ray disc's folder, a DVD's folder or a disc image (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)).
-
-```
-/media/shows/The Lone Ranger (1949)/Season 01/Disc 1/VIDEO_TS/VIDEO_TS.IFO
-/media/shows/The Lone Ranger (1949)/Season 01/Disc 2/BDMV/PLAYLIST/00001.mpls
-/media/shows/The Lone Ranger (1949)/Season 02/The Lone Ranger S02E01-E04.iso
-```
-
-The show is matched by its folder, as for its files: its name, its `tvshow.nfo` or a link. A disc's episodes are its titles, a Blu-ray disc's playlists or a DVD's titles:
-
-- a title plays at least 3 minutes: shorter ones are trailers, menus' clips and most extras;
-- a "play all" title, which chains other titles, is left out: it plays mostly the parts of two or more other titles, whatever their order, a DVD's cells or the parts of a Blu-ray disc's clips;
-- a title playing the same parts as one of a lower number, such as an episode with another audio track, counts once;
-- a disc keeps at most 40 titles, the first by number, in the order of their numbers.
-
-A disc in a season folder is of that season; else of the season its name gives, as `Season 2 Disc 1` or `S02D01` do; else of season 1. Its place among the season's discs is the number its name gives: `Disc 2`, `DISC02`, `Disk 2`, `DVD 2`, `BD 2`, `Vol. 2`, `Part 2`, or the `D` of `S01D02`.
-
-Each title holds the episodes:
-
-- given by hand: the unmatched files list each title without episodes, as `DVD: The Lone Ranger (1949)/Season 01/Disc 1 · title 3`, with its length; type its episode beside it as a file's name gives it, `S01E05`, or `S01E05-E06` for a title holding two (see [Unmatched files](#unmatched-files));
-- else those of the disc's name, as `The Lone Ranger S02E01-E04.iso` or a disc folder named `S01E05-E08` give: its titles are numbered in order without asking, when the disc has as many titles as the name gives episodes.
-
-Polyfin suggests each disc's episodes: its titles in order, after the episodes the season's discs before it hold, from episode 1 for a season's first, or from the first its name gives. **Use these episodes**, beside the disc, gives them all at once. The episodes given survive every scan, even while the disc is away, and are listed under **Linked by hand**, where removing them leaves the title to its disc's name, or to the suggestion, again.
-
-An episode plays as another movie of a disc does: a DVD's title converted, through FFmpeg's DVD reader; a Blu-ray disc's playlist through its Blu-ray reader, its video copied when the app takes it; an image's from the image; and on a share, as on a local folder (see [Discs on shares](#discs-on-shares)). Through the Jellyfin API, its version is named after the disc and its title, such as `Season 01 - Disc 2 - title 1.m2ts` or `The Lone Ranger S02E01-E04 - title 2.iso`.
-
-Limits:
-
-- A DVD whose episodes are the chapters of one title lists that title alone: give it all its episodes, such as `S01E01-E04`.
-- A disc whose titles cannot be read is left out: a Blu-ray disc without playlists Polyfin reads, a DVD without IFO files it reads, and an image whose UDF file system it does not read.
-- Extras of 3 minutes or more are listed as titles too: leave them without episodes.
-- A DVD folder's episode is sized as its cells, and a Blu-ray disc folder's as the clips it plays, so the episodes cut from one clip each have the clip's size; an image's episodes each have the image's size, as its movies do.
-- A disc at the root of a shows folder, or an image at its top, belongs to no show, and is left out.
-- The titles of shows' discs have no subtitle files.
-- A title's episodes are typed in the admin app or given by the disc's name: episodes' NFO files and chapter names are not read.
-
-### NFO files
-
-Folders organized by Jellyfin or a media manager often hold NFO files, which give each title's identifiers. Polyfin reads them from:
-
-- a movie's own NFO file, the video's name with `.nfo`, such as `Nosferatu (1922) - 1080p.nfo`;
-- else `movie.nfo` in the movie's folder, when that folder is the movie's own: its videos are all read as one title, such as the versions of one movie;
-- a Blu-ray disc's `movie.nfo`, in its disc folder;
-- a show's `tvshow.nfo`, in its folder.
-
-```
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.mkv
-/media/movies/Nosferatu (1922)/movie.nfo
-/media/shows/The Lone Ranger (1949)/tvshow.nfo
-```
-
-In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, or the `<imdb_id>` that Jellyfin writes in a show's `tvshow.nfo`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots and ratings still come from the metadata addons, and artwork from them or the images beside the files (see [Artwork](#artwork)), and episodes' NFO files are not read.
-
-### Subtitle files
-
-Subtitle files beside a video are offered as subtitles of its version, as Jellyfin reads them: SubRip (`.srt`), ASS (`.ass`), SSA (`.ssa`) and WebVTT (`.vtt`) files, PGS picture subtitles (`.sup`) and VobSub picture subtitles (an `.idx` file with the `.sub` file of the same name) in the video's folder whose name begins with the video's, followed by a dot.
-
-```
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.mkv
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.srt
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.fr.srt
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.en.forced.srt
-/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.en.sdh.ass
-/media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E02.fre.srt
-```
-
-The words after the video's name, separated by dots, are read in any order and letter case:
-
-- a language, as an ISO 639-1 code (`fr`), an ISO 639-2 code (`fre` or `fra`), with a region (`pt-BR`), or a name in English or French (`French`, `Français`);
-- `forced` or `foreign`: forced subtitles, which translate only what is not in the audio's language;
-- `sdh`, `hi` or `cc`: subtitles for the deaf and hard of hearing;
-- `default`: the subtitles shown by default;
-- any other word is the subtitles' title, such as `Movie (2001).en.Commentary.srt`.
-
-When videos of the same folder begin alike, such as `Movie (2001).mkv` and `Movie (2001) - 1080p.mkv`, a subtitle file belongs to the longest name it begins with. A Blu-ray disc's subtitle files sit in its disc folder, beside `BDMV`, named after the disc folder: `Nosferatu (1922)/Nosferatu (1922).fr.srt`. A VobSub pair is named by its `.idx` file; an `.idx` file without its `.sub` file is left out, and a `.sub` file alone is not read. When the name of a VobSub pair tells no language, the language of the first track its `.idx` file lists is used, and only that first track is offered. See [Subtitles](subtitles.md#subtitle-files-beside-local-files) for how they reach apps. With **Turn picture subtitles into text** on, PGS files and VobSub pairs are also read into text copies, read again when the file changes (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
-
-## Blu-ray discs
-
-A Blu-ray disc copied as it is is a folder tree: the disc folder holds a `BDMV` folder, whose `STREAM` folder holds the disc's streams, `.m2ts` files, and whose `PLAYLIST` folder holds its playlists, `.mpls` files, beside `index.bdmv`, `CLIPINF` and often a `CERTIFICATE` folder. A movie is a playlist, which plays one or more streams in order; the other playlists are extras, menus and other cuts.
-
-```
-/media/movies/Night of the Living Dead (1968)/BDMV/PLAYLIST/00800.mpls
-/media/movies/Night of the Living Dead (1968)/BDMV/STREAM/00001.m2ts
-/media/movies/Box/DISC02/BDMV/PLAYLIST/00002.mpls
-```
-
-In a movies folder, any folder holding a `BDMV` folder (any case) is a disc. Its main title is its longest playlist:
-
-- it plays whole, every stream in order, with its audio tracks, through FFmpeg's Blu-ray reader;
-- its size is that of the streams it plays;
-- its title is read from the disc folder's name, as a movie file's name is, the year coming from the folder above when the disc folder's name has none;
-- a disc folder named only after the disc's number, such as `Disc 1`, `DISC01`, `Disk 2`, `CD1`, `BD 1` or `Part 2`, takes its title from the folder above;
-- a disc at the root of a folder takes the folder's own name;
-- a link covers the disc folder; the unmatched files list it as `Blu-ray disc: …`;
-- through the Jellyfin API, its version is named after the disc folder.
-
-A disc holding several movies, as a box set's discs do, lists each other movie as a title of its own:
-
-- a title is a playlist of at least 20 minutes that plays mostly streams the longer titles do not: another cut, angle or language of a movie counts once;
-- a disc that would have more than 6 titles keeps its main title only, as some discs hide their movie among hundreds of playlists;
-- a title other than the main one is not matched by the disc folder's name: link it by hand, beside its playlist in the unmatched files, listed as `Blu-ray disc: Box/DISC02 · title 2` for playlist `00002.mpls`;
-- through the Jellyfin API, its version is named after the disc folder and its number, such as `Box - DISC02 - title 2`.
-
-A disc plays its playlists from its folder rather than as one file, so it plays over HLS only. Its segments are cut on the keyframes its clips' information files (`BDMV/CLIPINF/*.clpi`) list, so its video is copied when the app takes its codec, as a file's is: H.264 and HEVC, HDR10 included, on most apps; VC-1 and MPEG-2 video only on apps that declare them, and converted otherwise. Its audio is copied when the app takes it. A disc whose clips' information cannot be read is cut every few seconds and its video converted, as a DVD's is (see [DVD folders](#dvd-folders)).
-
-Files beside `BDMV` in a disc folder are read as any other file, and its extras, such as an `Extras` folder, are its movie's (see [Extras and theme media](#extras-and-theme-media)).
-
-In a shows folder, a show's disc is its episodes, its playlists chosen otherwise (see [Shows on discs](#shows-on-discs)).
-
-Limits:
-
-- A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream, as one file, played as it is when the app takes it. A movie split over several streams then plays its largest stream only.
-- On a network share, a disc is read as on a local folder (see [Discs on shares](#discs-on-shares)). A play item that ends before its clip does ends on the clip's next keyframe, as libbluray reads it: a title whose play items replay parts of clips, as seamless branching does, may show a few frames twice where they join.
-- There is no direct play and no download of a playlist, and no thumbnails or chapter images are made for it.
-- A seek in a disc starts FFmpeg one segment early, as its Blu-ray reader lands on the keyframe after the time asked: the first segment after a seek takes a little longer to come.
-- The disc must not be encrypted: Polyfin reads discs copied without their copy protection.
-
-## DVD folders
-
-A DVD copied as it is is a disc folder holding a `VIDEO_TS` folder. `VIDEO_TS.IFO` lists the disc's titles; each title is in a title set, whose video is in `VTS_01_1.VOB`, `VTS_01_2.VOB` and so on for set 1. The movie is the disc's main title; the other titles are extras, trailers and menus' clips, or the other movies of a disc holding several.
-
-```
-/media/movies/Night of the Living Dead (1968)/VIDEO_TS/VIDEO_TS.IFO
-/media/movies/Night of the Living Dead (1968)/VIDEO_TS/VTS_01_1.VOB
-/media/movies/Nosferatu (1922)/Disc 1/VIDEO_TS/VTS_02_1.VOB
-```
-
-In a movies folder, any folder holding a `VIDEO_TS` folder (any case) is a DVD, and its main title is one movie:
-
-- it plays its main title, the longest the IFO files list, whole, with its audio tracks and chapters, through FFmpeg's DVD reader;
-- its title, its year, a `Disc 1` folder and a DVD at the root of a folder are read as for [Blu-ray discs](#blu-ray-discs);
-- its size is that of the main title's set, its `.VOB` files;
-- a link covers the disc folder; the unmatched files list it as `DVD: …`;
-- through the Jellyfin API, its version is named after the disc folder.
-
-A DVD holding several movies lists each other movie as a title of its own, with the rules of [Blu-ray discs](#blu-ray-discs):
-
-- a title is one the IFO files list that plays at least 20 minutes, and mostly cells the longer titles do not: another cut of a movie, playing the same scenes, counts once;
-- a DVD that would have more than 6 titles keeps its main title only;
-- a title other than the main one is not matched by the disc folder's name: link it by hand, listed in the unmatched files as `DVD: Box/DISC02 · title 2` for title 2, beside the first `.VOB` of its set with its number, such as `VTS_02_1.VOB#2`;
-- its size is that of its set's `.VOB` files;
-- through the Jellyfin API, its version is named after the disc folder and its number, such as `Box - DISC02 - title 2`.
-
-The DVD is read from its folder rather than as one file, so it always plays converted: its video is converted over HLS, cut every few seconds as an MPEG-TS file's is, and its audio is copied when the app takes it. A user who may not have video converted is not offered it.
-
-In a shows folder, a show's DVD is its episodes, its titles chosen otherwise (see [Shows on discs](#shows-on-discs)).
-
-Limits:
-
-- On a network share, a DVD's title is read as one MPEG program stream of its cells (see [Discs on shares](#discs-on-shares)) rather than through FFmpeg's DVD reader: it has no chapters, and its cells' timestamps are read as they are, without the corrections FFmpeg's DVD reader makes where they restart.
-- There is no direct play, and no download.
-- A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video. With **Turn picture subtitles into text** on, their text copies are offered as files once read, to every app (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
-- No thumbnails or chapter images are made for a DVD.
-- A DVD's MPEG-2 video is converted even for an app that takes it: the IFO files' time maps tell where each second starts, not where each keyframe does, and FFmpeg's DVD reader starts a seek's timestamps at the time asked rather than at the keyframe it lands on, so copied segments would not join.
-- The DVD must not be encrypted: Polyfin reads DVDs copied without their copy protection.
-
-## Disc images
-
-A disc kept as an image is an `.iso` file. In a movies folder, an image of a DVD or of a Blu-ray disc is one movie, its main title:
-
-```
-/media/movies/Night of the Living Dead (1968).iso
-/media/movies/Nosferatu (1922)/Nosferatu (1922).iso
-```
-
-- its title is read from the image's file name, as a movie file's name is, the year coming from the folder above when the name gives none;
-- a link covers the image; the unmatched files list it as `DVD image: …` or `Blu-ray image: …`;
-- it plays its main title from the image itself: a DVD image its longest title, as a DVD folder does, and a Blu-ray image its longest playlist;
-- through the Jellyfin API, its version is named after the image's file.
-
-An image holding several movies, as a box set's often does, lists each other movie as a title of its own, chosen as a DVD folder's or a Blu-ray disc folder's are: link it by hand, listed in the unmatched files as `Blu-ray image: Box.iso · title 2` beside the image's path with its number, `Box.iso#2`. Through the Jellyfin API, its version is named after the image and its number, such as `Box - title 2.iso`. In a shows folder, a show's image is its episodes, each beside the image's path with its number, `Disc 1.iso#2` (see [Shows on discs](#shows-on-discs)).
-
-A scan reads what each new or changed image is, and its titles, and keeps the answer while the image's size and modification time stay the same. It reads the image's ISO 9660 file system, or its UDF one when the image has no ISO 9660 one holding the disc, as many Blu-ray images do (UDF 1.02 to 2.60, a UDF 2.50 metadata partition included):
-
-- an image holding a `VIDEO_TS` folder is a DVD's, as DVD images are;
-- one holding a `BDMV` folder is a Blu-ray disc's; when its playlists cannot be read, its main title is the playlist FFmpeg's reader takes for the longest;
-- one whose UDF file system Polyfin does not read, as images of rewritable and write-once media have (a sparable or virtual partition, blocks other than 2,048 bytes), is a Blu-ray disc's when FFmpeg's Blu-ray reader opens it, which it tries once per new or changed image: as before Polyfin read UDF, it is one movie, the playlist FFmpeg's reader takes for the longest, and it plays converted;
-- any other image, such as a data disc's, is left out.
-
-An image plays as the disc it holds does (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)): a Blu-ray image's video is copied when the app takes its codec, its keyframes read through the image's file system, and a DVD image's video is converted.
-
-Images a scan read before Polyfin listed their other movies, and UDF-only images, are read again at the next scan; their main titles keep their links.
-
-Limits:
-
-- On a network share, an image is read on the share (see [Discs on shares](#discs-on-shares)); one whose titles cannot be read there, or whose UDF file system Polyfin does not read, is left out, as FFmpeg's Blu-ray reader cannot open it from the share.
-- There is no direct play and no download, and no thumbnails or chapter images are made for an image.
-- A Blu-ray image's main title must last at least 3 minutes, as FFmpeg's Blu-ray reader requires.
-- An image whose UDF file system Polyfin does not read (see above) lists its main title only, and plays it converted.
-- The image's disc must not be encrypted, and a DVD image's subtitles are pictures, as a DVD folder's are.
-
-## Matching
-
-Each file, each disc, or each show's folder, is matched to a title:
-
-1. a link made by hand (see below);
-2. else an identifier written in its name: an IMDb identifier as it is; a TMDB identifier through the metadata addons, which give its IMDb identifier;
-3. else an identifier its NFO file gives (see [NFO files](#nfo-files)), read the same way, the IMDb identifier when it gives both;
-4. else its name and year are searched in the server's metadata addons, the searches the metadata editor uses: the match is kept only when the addons find exactly one title of that name and kind, of that year when the name gives one, or, when they find none, exactly one title a looser rule leaves (see [Looser matches](#looser-matches)).
-
-The title is kept under its IMDb identifier, which the addons answer streams for, with its TMDB identifier when known. A folder's figures tell how its matched files were matched: by an identifier in the name, by an NFO file, by a search, by a search under each looser rule, or by hand.
-
-### Looser matches
-
-When the addons find no title of the very name and year a file's name gives, two looser rules are tried, and the match is kept only when exactly one title is left:
-
-1. a title of the same name, of the year before or after, such as `Harbor Lights (2011).mkv` for a title the addon dates 2012; or a title of the same year named alike once numerals are read: Roman and Arabic numerals read alike, as do numbers written in words after "Part", in the file's name and in the titles found, so `Harbor Lights 2` finds `Harbor Lights II` and `Tidewater Part 1` finds `Tidewater: Part One`. Both rules count together: a title of each leaves two, and none is kept;
-2. else a title both rules leave: named alike once numerals are read, of the year before or after.
-
-A title of the very name and year always wins: a looser rule never chooses among titles when one matches exactly, and several of the very name and year leave the file unmatched as **Several titles have this name**. A name without a year is matched by its numerals only. While a metadata addon's search fails, a looser match waits, as the file would be left when nothing is found (see [Failed searches](#failed-searches)): the addon that failed may know the title of the very name and year.
-
-Numerals are read with care, so that words are not taken for numbers:
-
-- only Roman numerals written with I, V and X are read, from I to XXXIX, so that words such as "Mix", "Civil" or "Liv" stay words;
-- a title of a single word is never read as a number: "I", "X" or "XXX" is a title, not 1, 10 or 30;
-- a single letter, I, V or X, is read as a numeral only as the title's last word or after "Part": "I, Robot" and "V for Vendetta" keep their words, while "Harbor Lights V" is "Harbor Lights 5";
-- numbers written in words, from one to twenty, are read only after "Part": "One Day" stays as it is.
-
-Many addons search names as they are written: asked for `Harbor Lights 2`, they do not answer `Harbor Lights II`. So when a file's search finds no title of its name, not even one named alike once numerals are read, and the name holds a numeral read as above, Polyfin searches once more with its numerals written the other way: Arabic numerals from 1 to 39 in Roman numerals, or in words after "Part" up to twenty, and Roman numerals, and numbers written in words after "Part", in figures. `Harbor Lights 2` is searched again as `Harbor Lights II`, `Gull Point II` as `Gull Point 2`, and `Tidewater Part 1` as `Tidewater Part One`. What that search finds is matched by the same rules, and flagged the same way. There is no second search for a name found at once, for a name without such a numeral, for a unit unlinked from a looser match, nor while the first search fails.
-
-This costs at most one more search per name. For a large folder, that is as many more searches as it holds distinct names with a numeral the first search does not find, each reading the first page of each search catalog as the first does, at the same pace (4 at once) and with the same waits for addons that ask to slow down (see [Failed searches](#failed-searches)). Each name is searched once per scan, both forms included. Files left unmatched are searched again at each scan, so such a file costs two searches per scan instead of one until it is matched, renamed or linked, though Polyfin answers a search whose results it still keeps in memory without asking the addon again.
-
-Looser matches apply without anyone acting, but they are flagged: the folder's figures count them apart, by rule, and the folder's page lists them under **Matched by a looser rule**, each with its rule (**A title of a year one apart**, **Numerals read alike**, or both), the name its file was read as, and the title it was matched to. Check them. Unlinking one (the broken link beside it) removes the match for good: the file, its show folder or its disc is matched again by the exact rule only, through every scan, and is left unmatched, with its reason, when that finds nothing; link it by hand then. A link made later wins, as always, and removing that link leaves it to the exact rule again.
-
-### What a search needs
-
-Matching files by their names needs a metadata addon among the server's addons (under **Content › Sources**, not a user's own under **My sources**) that:
-
-- describes titles of the folder's kind, movies or shows: its manifest offers the `meta` resource for them, as metadata addons do; addons that only list streams do not;
-- has a search catalog of that kind: a catalog that takes the `search` property and requires no other, the catalogs Stremio apps search.
-
-Polyfin sends each file's title as its name gives it, without the year, such as `The Matrix` for `The Matrix (1999).mkv`, and reads the first page of each such catalog, as Stremio apps do; the year is then compared with the titles found. A name with a numeral that this search does not find is searched once more with its numerals written the other way (see [Looser matches](#looser-matches)). Catalogs that search the people credited in titles, and Polyfin's own sources (IPTV sources, local folders), are not searched. An addon given a language (see [Languages](addons-and-libraries.md#languages)) is searched only when no addon without one has such a catalog. A scan searches up to 4 titles at once, each name once.
-
-Without such an addon, only identifiers in names and NFO files, and links, match files. The others are listed as **No addon of the server describes and searches titles of this kind**, the folder's page says how many, and **System › Health** warns, pointing to **Content › Sources**, until a scan matches them or they are gone. A user's own metadata addon, under **My sources**, does not count. Once such an addon is added, scan the folder.
-
-## Unmatched files
-
-A folder's page lists the files no title was found for, with why; its library lists most of them as plain videos meanwhile (see [Plain videos](#plain-videos)):
-
-| Reason | What it means | What to do |
-| --- | --- | --- |
-| Its name gives no title, or no episode number | The name could not be read (see [Naming files](#naming-files)) | Rename it, such as `Title (Year).mkv` or `Show (Year)/Season 01/Show S01E01.mkv`, and scan |
-| Its name gives an episode number but no season | A show's file named `E05` or `Episode 5` outside a season's folder | Move it into its season's folder, such as `Season 02`, or rename it with its season, such as `S02E05`, and scan |
-| Its name gives an air date | A show's file named with the date it was aired, `Show 2024-03-15.mkv`, which Polyfin does not read | Rename it with the catalog's season and number, and scan |
-| Its name gives no episode number | A show's file whose name gives no number at all | Rename it with the catalog's season and number, and scan |
-| The metadata addons know no title of this name | The search went through, and found no title of that name and kind, even with numerals read alike | Check the name as it was read, shown beside the file; rename it, add an NFO file, or link it |
-| Several titles have this name | Titles of that name and kind were found, and the name gives no year that leaves one; or no title of the very name and year, but several a looser rule leaves, such as titles of the year before and of the year after | Add the year to the name, correct it, or link it |
-| Titles of this name are of other years | Titles of that name were found, none of the year the name gives nor of the year before or after; or the file was unlinked from a looser match, and is matched by the exact rule only | Correct the year, or link it |
-| No addon of the server describes and searches titles of this kind | No addon among the server's sources describes titles of the folder's kind and has a search catalog for them (see [What a search needs](#what-a-search-needs)); a user's own addons do not count | Add such an addon under **Content › Sources** and scan, or link the file |
-| The search failed | A metadata addon's search could not be read: the file names the addon and why (see [Failed searches](#failed-searches)) | Nothing at first: Polyfin searches again on its own. If it keeps failing, check the addon, or link the file |
-| Another movie of the disc | A title of a Blu-ray disc, a DVD or a disc image other than its main one | Link it |
-| A title of a show's disc | Its episodes are not known | Give its episode (see below) |
-| An extra without its title beside it | Its name is an extra's, but its movie is not beside it (see [Extras and theme media](#extras-and-theme-media)) | Link it, to make it a title |
-
-Rename the file and scan again, add an NFO file giving its identifier (see [NFO files](#nfo-files)), or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc or a DVD, the whole disc folder, or one title of a disc holding several movies; for a disc image, the image. A link to an identifier no metadata addon of the server describes as the folder's kind, movie or show, is flagged under **Linked by hand**, as when an episode's identifier was typed for its series': the title then shows only its name, and its episodes those its files hold. This is checked when the link is made, and again each time its files are matched; an addon that failed at that moment flags it too, until the files are matched again. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. A file unlinked from a looser match (see [Looser matches](#looser-matches)) is listed here with the reason the exact rule gives, such as **Titles of this name are of other years**. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
-
-A title of a show's disc is listed with its disc and number, such as `Blu-ray disc: The Lone Ranger (1949)/Season 01/Disc 2 · title 1`, and its length; a disc's titles follow one another, in order, under the episodes Polyfin suggests for them (see [Shows on discs](#shows-on-discs)). Type a title's episode beside it, `S01E05` or `S01E05-E06`, and choose **Save**, or choose **Use these episodes** to give the disc's titles those suggested. A title whose show is matched leaves the list once numbered, and its episodes are listed under **Linked by hand**, where they can be removed. While its show is unmatched, a title keeps the show's reason and its link form, which links the show.
-
-To find the title without leaving Polyfin, choose **Find the title** beside a file. The search is filled with what the file's name was read as, and its year; change them and choose **Search**, or press Enter. Polyfin searches the server's metadata addons for titles of the folder's kind, movies or shows, and lists at most 10 with their poster, name, year and kind, those of the year given first. Choosing one links the file, its show folder or its disc, as typing its identifier does. Only titles with an IMDb identifier are listed, since links are made to IMDb identifiers; for a title the search does not find, type its identifier. When some addons fail, the titles the others found are listed; when none found any, the search tells it failed.
-
-### Identify in the web player
-
-An administrator can also link a movie's file or a show folder from jellyfin-web's **Identify**, in the ⋮ menu of its page: a plain video (see [Plain videos](#plain-videos)), or a title the folder's files were matched to, a wrong one a search chose included. Identify looks the title up as Jellyfin does:
-
-- By an identifier typed, first. An IMDb identifier is looked up in the server's metadata addons. A TMDB identifier is turned into the title's IMDb identifier by TMDB, with the server's **TMDB API key** (see [Edit images](addons-and-libraries.md#edit-images)), else looked up as `tmdb:…` in the metadata addons that take such identifiers. A TVDB identifier is found on TMDB, with the key only: Polyfin has no access to TVDB of its own, so without the key a TVDB identifier finds nothing. The title found is the one result, whatever the name and year say; an identifier of a title of the other kind, a movie's typed for a show, finds nothing.
-- By the name and year typed, when no identifier is typed or none finds a title: the server's metadata addons are searched, and what they find is listed.
-
-Choosing a title and **OK** links the file, or the whole show folder, to it, as **Find the title** does: the link is the same, listed on the folder's page under **Linked by hand**, and survives every scan. A title the files were matched to has all of them linked: every file or disc of the movie, every folder of the show, in every movies or shows folder, since they all hold that one title. The page then shows the title chosen, with its description, artwork and versions, and a show its seasons and episodes, the folder's files among them. jellyfin-web opens the item again by its identifier: a former title, last listed by the folder, answers the title chosen, or its season or episode of the same numbers, under their own identifiers, as long as none of the folder's files is matched to it again. The played marks, resume points and favorites of the former title's items follow the files, as for a plain video (see [Once matched](#once-matched)).
-
-- jellyfin-web offers Identify for movies and series, not for seasons or episodes. Other apps may apply a result to a season or episode: it links the show's whole folder too.
-- Links are made to IMDb identifiers: a result without one is refused (400). Identify lists every title the addons find, those without an IMDb identifier included, where **Find the title** lists only those a link can name.
-- A title only addons list, which no file of a local folder is matched to, is its addon's title: Identify still finds titles for it, but applying a result fails, as a failed identification does in Jellyfin (see [Identify](addons-and-libraries.md#identify)).
-- Identify is for administrators, as in Jellyfin.
-
-An IMDb identifier typed in jellyfin-web's **Edit metadata** of such a movie or show, plain or matched, links it the same way once saved. The other identifiers typed there, and one typed for a season or an episode, change nothing.
-
-**Refresh metadata** on such a title, or on one of its seasons or episodes, matches its files again before the metadata addons describe it again, as a scan matches a file: by its link, else the identifier its name or NFO file gives, else a search. A plain video whose search failed, or found nothing then, is matched once a title is found; a title already matched keeps its files when nothing is found. It works from what the last scan read: new files, and NFO files added or changed, are read by the next scan, which watching the folder starts. jellyfin-web shows the result once the title's page is opened again.
-
-To match a file or show folder to another title, use Identify, or type the title's IMDb identifier in its name (see [Naming files](#naming-files)) or in an NFO file. Unlinking on the folder's page removes a link, or a match made by a looser rule; it does not apply to a title an exact search found.
-
-**Compared with Jellyfin**
-
-- Jellyfin's TMDB providers look a title up by its TMDB identifier, then by its IMDb identifier and then its TVDB one through TMDB's find, then by its name, and answer what the first finds ([TmdbSeriesProvider.cs, lines 55 to 127](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L55-L127), [TmdbMovieProvider.cs, lines 55 to 115](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L55-L115)). Polyfin tries them in the same order, but describes the title found from its metadata addons, by its IMDb identifier: TMDB only turns a TMDB or TVDB identifier into one, and only with the server's key.
-- Jellyfin sets the provider identifiers of any item identified and refreshes it ([ItemLookupController.cs, lines 249 to 282](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemLookupController.cs#L249-L282)). Polyfin links the files of a local title, the same title in every folder; a title only addons list cannot be bound to another.
-- Jellyfin keeps every provider identifier typed in **Edit metadata** ([ItemUpdateController.cs, lines 435 to 438](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemUpdateController.cs#L435-L438)), used at the item's next refresh. Polyfin keeps only the IMDb identifier of a local movie or show, as a link, at once.
-- Jellyfin's **Refresh metadata** queues the item's refresh, which reads its files again ([ItemRefreshController.cs, lines 62 to 93](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemRefreshController.cs#L62-L93)). Polyfin matches the title's files again before it answers, from what the folder's last scan read.
-
-### Failed searches
-
-A search fails when a metadata addon could not be reached, did not answer in time, asked to slow down (HTTP 429, or 503 with `Retry-After`), answered with a server error, refused the request (another HTTP error, "not found" included), or sent an answer Polyfin cannot read. Each file left unmatched so names the addon and why, as in `The search failed: Meta answered with a server error`. The folder's figures tell how many files are, and when Polyfin searches them again; **System › Health**, and the notifications of health problems, tell it while files are left so; the log tells it once per scan, as a warning with the addon's error (`The metadata addons could not search the titles of a local folder's files`).
-
-One addon failing fails no other: a title another addon finds is matched. A file none of the addons that answered knows stays unmatched as a failed search, not as a title not found, since the addon that failed may know it; so does a file only a looser rule would match, since the addon that failed may know the title of its very name and year.
-
-Within a scan, Polyfin retries a failed search as follows:
-
-| The addon's search | Polyfin, during the scan |
-|---|---|
-| Fails with a server error (HTTP 5xx), often brief | Tries again after 1 s, then 3 s |
-| Asks to slow down | Waits as its `Retry-After` asks (1 minute at most), else 1, 2, then 4 s, then tries again, 3 times at most |
-| Refuses (any other HTTP error, "not found" included) | Does not try again |
-
-A folder whose files are left unmatched by failed searches is scanned again 5 minutes after the scan. The wait doubles each time (10, 20, 40 minutes and so on) while its searches fail, up to 6 hours, and is never shorter than an addon's `Retry-After` asks. The scans due are looked for every 10 minutes. Once the searches go through, the files are matched without anyone acting, and the folder is scanned on its schedule again. **Scan now** searches them again at once.
-
-When searches keep failing, check the addon under **System › Health › Addons**, and that the computer running Polyfin reaches it; meanwhile, files can be linked by hand or given an NFO file, or their title's IMDb identifier can be added to their names, a show's folder or a movie's file, such as `Victorious (2010) [imdbid-tt1604099]`: an identifier in a name is matched without any search (see [Matching](#matching)). The folder's page says so beside the failed searches. Adding a second metadata addon with a search catalog under **Content › Sources** helps too: a title either finds is matched.
-
-#### Through TMDB, when every addon fails
-
-While the server has a **TMDB API key** (see [Edit images](addons-and-libraries.md#edit-images)), a file whose search every metadata addon of the server failed is searched on TMDB instead, by the name and year its name gives:
-
-- **The same strict rule:** the file is matched only to the one movie or show of that name, of the folder's kind, and of that year when the name gives one, as a search of the addons matches first (see [Matching](#matching)). TMDB's original names count as names. No looser rule applies.
-- **Its IMDb identifier:** the file is matched to the title's IMDb identifier, from TMDB's external identifiers, as a link would match it. The addons describe the title once they answer again; meanwhile it shows TMDB's name, year and poster.
-- **Told apart:** the folder's figures count such files apart, as matched "by a TMDB search, as the metadata addons' searches failed". They no longer count among the failed searches of the folder's page and of **System › Health**.
-- **Otherwise, as before:** a name TMDB does not find, finds several titles of, or whose title has no IMDb identifier, stays unmatched as a failed search, and is searched again on the schedule above. So does every such file without a key, or when TMDB cannot be reached, which the log tells as a warning.
-- **Only failures:** a search an addon answered, even finding nothing, is never asked of TMDB, nor is one only some addons failed while another answered. Files once matched keep their title, as other matches do.
-
-**Compared with Jellyfin**
-
-- Jellyfin searches TMDB for an item's title by its name and year when it has no provider identifier ([TmdbSeriesProvider.cs, lines 198 to 214](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L198-L214), [TmdbMovieProvider.cs, lines 160 to 176](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L160-L176)), and keeps the best-scored result, its IMDb identifier from TMDB's external identifiers ([TmdbSeriesProvider.cs, lines 306 to 310](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L306-L310)). Polyfin's titles come from its metadata addons: it asks TMDB only when all of them fail, and keeps a title only when it is the only one of its name and year.
-
-## Plain videos
-
-A movies or shows folder's library lists the files it leaves unmatched, so that a folder whose files match no title does not look empty in Jellyfin apps, as Jellyfin lists the files it cannot identify. Each is a plain video: a title of the folder's own, which no metadata addon is asked about, without a description, a rating or a provider identifier.
-
-```
-/media/movies/Harbor.Lights.2.2011.1080p.mkv                → the movie "Harbor Lights 2", 2011
-/media/movies/[Group].mkv                                    → the movie "[Group]"
-/media/shows/Harbor Show (2011)/Season 01/Harbor Show S01E02.mkv → "Harbor Show", 2011: season 1, episode 2, "Harbor Show S01E02"
-```
-
-- In a movies folder, each file, disc or disc image left unmatched is a `Movie`, named as its name was read for the search, the name shown beside it in the unmatched files, with the year the name gives. A name that gives no title names it as its file, without its extension.
-- In a shows folder, each show folder left unmatched is a `Series`, named as its folder's name was read, with the year it gives. Its seasons and episodes are those its files' names give, read as a matched show's are (see [Naming files](#naming-files)): a file holding two episodes is both, and a title of a show's disc is the episodes given to it (see [Shows on discs](#shows-on-discs)). Apps order them by season, the specials being season 0, then by number. Each episode is named after its file, without its extension, as `Harbor Show S01E02`, and a disc's title as `Episode 5`.
-- A file whose name gives no episode is left out of its show, unmatched as matched: it has no place among the episodes, nor an episode to keep once the show is matched. The folder's page still lists it; rename it with its episode, such as `S01E05`, and scan.
-- The other movies of a disc, the titles of a show's disc without their episodes and the extras without their title are no plain videos, as Jellyfin lists a disc as one movie and an extra only under its title: link them to list them.
-
-Plain videos play as the folder's other files do: direct play, repackaging or conversion, with the subtitle files beside them, and a disc over HLS (see [Versions](#versions)). The images beside them are theirs, as a matched title's are, when the folder shows its artwork (see [Artwork](#artwork)). Search, watch state, resume points, favorites, Continue Watching, collections and downloads work as for other titles. Each user's hidden titles and the libraries they see apply to them, and so do smart lists drawing from the folder, by their rules, and the version rules and quality groups. Tracking services and scrobbling never hear of them: they have no identifier a service knows.
-
-Parental control judges them as unrated titles, as Jellyfin judges the items it cannot identify: a plain movie as an unrated **Movie**, a plain series, with its seasons and episodes, as an unrated **Series**. A user blocking unrated movies sees none of the plain movies, and a highest rating alone hides none of them.
-
-### Identifiers
-
-A plain video's identifier is made of its folder's identifier and the path, in the folder, of its file, disc or show folder: `polyfin-plain:` and the first 32 hexadecimal digits of their SHA-256 hash. An episode's adds its season and number. It is the same through every scan and restart, so that apps' links, watch states and resume points stay with it. A file or show folder renamed or moved, within its folder or to another, is another plain video, as Jellyfin makes another item of an unidentified file whose path changed: Polyfin does not follow it, and what users did with the former one stays with it, no longer listed.
-
-### Once matched
-
-A plain video leaves the library once its file, disc or show is matched, by a scan or by hand (see [Matching](#matching)), and its title is listed in its place. What users did with it goes to that title, as when what a folder holds changes, by an import's rules (see [Changing what a folder holds](#changing-what-a-folder-holds)): a played mark is added to the title's, the newer resume point is kept, and a favorite is set. The resume point moves, so that Continue Watching lists the file once, under its title. A plain episode's goes to the matched show's episode of the same season and number. A link made by hand moves them at once, a scan at its end.
-
-The plain video is gone: no list shows it any more, not the library, Continue Watching, the favorites nor the played items. An app that opens it again by its identifier, as jellyfin-web does right after **Identify**, is answered the title it became, or that title's season or episode of the same numbers, with the title's own identifier, as Jellyfin keeps an item it identifies; anything else asked of that identifier, such as playing it or marking it, is answered that it does not exist. It keeps its played mark and favorite all the same. Removing the link, or the match going, as when an NFO file is removed, lists the file as the same plain video again, with the played mark and favorite it had; what users did with the title meanwhile stays with the title. A file renamed and matched at once is a new file to the scan: its title gets nothing of the plain video it was.
+A folder Polyfin cannot watch for changes is listed under **System › Health** as a warning: see [Watching for changes](#watching-for-changes).
 
 ## Scanning
 
-Folders are scanned at startup, on the schedule of **Scan local folders every (hours, 0 = never)**, in **Settings › Catalogs** (6 by default, 0 turns the schedule off), and when an administrator chooses **Scan now** on a folder or runs **Scan local folders** under **System › Schedule** (which scans every folder).
+Folders are scanned:
+
+- at startup;
+- on the schedule of **Scan local folders every (hours, 0 = never)**, in **Settings › Catalogs**: 6 by default, and 0 turns the schedule off;
+- when an administrator chooses **Scan now** on a folder;
+- when an administrator runs **Scan local folders** under **System › Schedule**, which scans every folder.
+
+A scan reads only what changed:
+
+- A file is new or changed by its path, size and modification time. Files gone are forgotten.
+- Files whose title is known keep it without asking the addons again.
+- An NFO file is read when it is new or changed. One added, changed or removed matches its movie, disc or show again, even when the videos did not change. One removed leaves the title to its name and the search.
+- Subtitle files and images added, changed or removed are offered as they are now from the next scan on.
+- Files left unmatched are matched again at each scan.
+- On a share, NFO and subtitle files and images are listed with the folders. Only the new or changed NFO files are read.
+
+A few titles are looked up at once, so a large first scan takes a while. The folder's figures follow it.
+
+Symbolic links to files of the folder are followed. Links leading out of the folder, and links to folders, are not.
 
 ### Watching for changes
 
-Folders mounted in the container are also watched for changes, with inotify on Linux. When files are added, renamed or removed in a folder, or in any folder under it, Polyfin waits until they stop changing for a few seconds, then scans that folder again. A movie copied into a folder shows in its library within a minute of the copy's end, without **Scan now**.
+Folders mounted in the container are watched for changes, with inotify on Linux. When files are added, renamed or removed in a folder or any folder under it, Polyfin waits until they stop changing for a few seconds. Then it scans that folder again. A movie copied into a folder shows in its library within a minute of the copy's end, without **Scan now**.
 
-- **Watch folders and shares for changes**, in **Settings › Catalogs**, turns it off or on, for folders and network shares alike (on by default). Off, no folder or share is watched.
-- Network shares are watched through their server's notifications for SMB, and by listing their folders again for WebDAV, S3 buckets, SFTP folders and rclone remotes, as described below.
+- **Watch folders and shares for changes**, in **Settings › Catalogs**, turns watching on or off for folders and network shares alike. It is on by default.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
-- A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
-- Hidden folders and the folders a scan leaves out, such as a home videos folder's `Extras`, are not watched, and changes to files other than videos, theme songs, disc images, NFO files, subtitle files, images (see [Artwork](#artwork)), a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan. The folders of extras of movies and shows folders are watched as their titles' folders are (see [Extras and theme media](#extras-and-theme-media)), whether the folder reads extras or not. In a music folder, its subfolders named `Extras` or `Other` are watched, as its scans read them, and its audio files, artwork, lyrics files and playlists start a scan.
+- A folder that disappears is scanned, which reports it missing. When it is back, it is scanned and watched again within a minute.
+- Hidden folders and the folders a scan leaves out, such as a home videos folder's `Extras`, are not watched.
+- Only changes to these files start a scan: videos, theme songs, disc images, NFO files, subtitle files, images (see [Artwork](naming-and-matching.md#artwork)), a DVD's `.IFO` and `.VOB` files, and a Blu-ray disc's playlists.
+- The extras folders of movies and shows folders are watched as their titles' folders are (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)), whether the folder reads extras or not.
+- In a music folder, subfolders named `Extras` or `Other` are watched, as its scans read them. Its audio files, artwork, lyrics files and playlists start a scan.
 
-An SMB server tells Polyfin of the changes on a share: Polyfin asks it to report each change in the share's folder and in every folder under it (SMB's change notifications). After a change, Polyfin waits until the changes stop for a few seconds, as for a folder in the container, then scans the share again, which reads only what changed. A movie copied onto the share, renamed or removed shows within seconds of the copy's end. When the server had too many changes to tell them one by one, the share is scanned all the same.
+| Share | Watched by |
+|---|---|
+| SMB | The server's change notifications (below) |
+| WebDAV | Listing its folders again every 2 minutes |
+| S3 bucket, SFTP folder, rclone remote | Listing its folders as often as **Look for changes every (minutes, 0 = only at scans)** asks |
+| Share mounted on the host, added as a local folder | inotify, which sees only the changes made through that host, not those made on the NAS |
 
-- The share's folders are still listed again every 10 minutes, as described below, in case a change goes untold.
-- Samba tells of every change made through the network, but of those made on the server's own disk, such as by a download client running on the NAS, only those in the share's folder itself, not in the folders under it. When a listing finds such a change in a folder of the share that the server did not tell of, Polyfin keeps the notifications and lists the share's folders every 2 minutes too.
-- When the server ends Polyfin's session, such as when it restarts, Polyfin signs in again, asks again for its changes, and scans the share for what changed meanwhile. While the server cannot be reached, Polyfin asks again every 30 seconds, and lists the share's folders every 2 minutes.
-- Windows servers were seen to accept a watch of a whole share from its top folder and never answer it. When a listing finds a change in a share's top folder that the server did not tell of, Polyfin watches that top folder and each folder in it apart, which Windows answers. When that watch is silent too, or the top folder holds more than 256 folders, the share is listed every 2 minutes until Polyfin restarts. An address that names a folder of the share, such as `smb://nas.local/media/Movies`, rather than the share itself, avoids this.
-- The folders watched stay open to others: they can be renamed, moved or deleted while Polyfin watches them. Polyfin never writes to a share.
-- **System › Health › Network shares** tells which shares are notified of their changes and which are polled, and why (see [Health](#health)).
+**System › Health › Network shares** tells which shares are notified and which are polled, and why (see [Health](network-shares.md#health)).
 
-WebDAV servers give no notice of their changes, nor do SMB servers that refuse to, S3 buckets, SFTP servers or rclone remotes. So Polyfin lists those shares' folders again every 2 minutes, and compares each listing with the one its last scan read: the names of its folders, and the names, sizes and modification times of its videos, NFO, subtitle and other files a scan reads. When one differs, the share is scanned again a few seconds later, which reads only what changed. A movie copied onto such a share shows within a few minutes of the copy's end.
+### SMB change notifications
 
-- Each round lists the share's top folder first, where a new movie's folder lands, then the folders under it in turn, at most 100 listings a round, half a second apart. A share of more folders is listed whole over several rounds, from where the last round stopped: with 1,000 folders, a change deep in it is seen within 20 minutes, a new folder at the top within 2.
-- The folders listed are those the last scan read: hidden folders and those a scan leaves out are not, and a new folder is seen through its parent's listing.
-- The first round comes 2 minutes after Polyfin starts, or after the share is added, which are scanned then anyway.
-- A copy still under way may be scanned before it ends; the next round sees its size change and scans it again.
-- A share that cannot be listed is reported under **System › Health** (see [Health](#health)), and scanned again once it answers.
+An SMB server tells Polyfin of changes on a share. Polyfin asks it to report each change in the share's folder and every folder under it. After a change, Polyfin waits until changes stop for a few seconds, then scans the share again, reading only what changed. A movie copied onto the share, renamed or removed shows within seconds of the copy's end. When the server had too many changes to tell one by one, the share is scanned all the same.
 
-S3 buckets, SFTP folders and rclone remotes are listed so too, but each as often as its **Look for changes every (minutes, 0 = only at scans)** asks, set on the folder's form. It is 2 minutes by default for SFTP folders and rclone remotes, and 30 for S3 buckets, as S3 providers may bill each listing (a round of a bucket lists one folder per request, its pages of 1,000 entries each a request). 0 lists the folder only at its scans, which its schedule and **Scan now** make. A change of it applies at once.
+- **Safety net:** the share's folders are still listed every 10 minutes, as for polled shares (below), in case a change goes untold.
+- **Samba:** it tells of every change made through the network. Of changes made on the server's own disk, such as by a download client on the NAS, it tells only those in the share's top folder. When a listing finds an untold change in a folder of the share, Polyfin keeps the notifications and also lists the share every 2 minutes.
+- **Server restarts:** when the server ends Polyfin's session, Polyfin signs in again, asks again for changes, and scans the share for what changed meanwhile. While the server cannot be reached, Polyfin retries every 30 seconds and lists the share every 2 minutes.
+- **Windows servers:** they were seen to accept a watch of a whole share from its top folder and never answer it. When a listing finds an untold change in the top folder, Polyfin watches the top folder and each folder in it apart, which Windows answers. When that watch is silent too, or the top folder holds more than 256 folders, the share is listed every 2 minutes until Polyfin restarts. An address naming a folder of the share, such as `smb://nas.local/media/Movies`, avoids this.
+- **Open to others:** the folders watched can still be renamed, moved or deleted. Polyfin never writes to a share.
 
-A storage served through `rclone serve` (`webdav`, `s3` or `sftp`) answers from rclone's directory cache, which keeps each listing for 5 minutes by default (`--dir-cache-time`): a file added on the storage behind it shows only once rclone lists that folder again, up to 5 minutes later than these listings alone would find it. Start `rclone serve` with a shorter `--dir-cache-time`, such as `--dir-cache-time 30s`, for changes to show sooner.
+### Polled shares
 
-Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
+WebDAV servers give no notice of changes, nor do S3 buckets, SFTP servers, rclone remotes and SMB servers that refuse to. Polyfin lists those shares' folders again every 2 minutes. It compares each listing with the one its last scan read:
+
+- the names of its folders;
+- the names, sizes and modification times of its videos, NFO and subtitle files, and the other files a scan reads.
+
+When one differs, the share is scanned again a few seconds later, reading only what changed. A movie copied onto such a share shows within a few minutes of the copy's end.
+
+- **Rounds:** each round lists the top folder first, where a new movie's folder lands, then the folders under it in turn. A round makes at most 100 listings, half a second apart. A larger share is listed over several rounds, each starting where the last stopped. With 1,000 folders, a change deep in it is seen within 20 minutes, a new folder at the top within 2.
+- **Folders listed:** those the last scan read. Hidden folders and those a scan leaves out are not. A new folder is seen through its parent's listing.
+- **First round:** 2 minutes after Polyfin starts or the share is added. Both scan the share anyway.
+- **Copies under way:** they may be scanned before they end. The next round sees the size change and scans again.
+- **Errors:** a share that cannot be listed is reported under **System › Health** (see [Health](network-shares.md#health)), and scanned again once it answers.
+
+**S3, SFTP and rclone:** each is listed as often as **Look for changes every (minutes, 0 = only at scans)** asks, on the folder's form.
+
+| Kind | Default |
+|---|---|
+| SFTP folder, rclone remote | 2 minutes |
+| S3 bucket | 30 minutes, as S3 providers may bill each listing. A round lists one folder per request, and each page of 1,000 entries is a request. |
+
+0 lists the folder only at its scans, from its schedule and **Scan now**. A change of this setting applies at once.
+
+**`rclone serve`:** a storage served through `rclone serve` (`webdav`, `s3` or `sftp`) answers from rclone's directory cache. It keeps each listing for 5 minutes by default (`--dir-cache-time`). A file added on the storage behind it shows only once rclone lists that folder again, up to 5 minutes later. Start `rclone serve` with a shorter cache, such as `--dir-cache-time 30s`, for changes to show sooner.
+
+### Watch limits
+
+**Linux:** it limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it.
+
+- A folder that cannot be watched is still scanned on its schedule.
+- **System › Health** lists it with why, and Polyfin tries again every 10 minutes.
+- The container shares the host's limits, so raise it on the host:
 
 ```sh
 echo fs.inotify.max_user_watches=524288 | sudo tee /etc/sysctl.d/90-inotify.conf
 sudo sysctl --system
 ```
 
-When Health says the limit of watchers or of open files is reached, raise `fs.inotify.max_user_instances` the same way, or the container's limit of open files (`--ulimit nofile=…` with Docker).
+When **System › Health** says the limit of watchers or open files is reached, raise `fs.inotify.max_user_instances` the same way. Or raise the container's limit of open files (`--ulimit nofile=…` with Docker).
 
-On macOS, Polyfin watches each folder and each file of a tree through a file it keeps open, so a very large library may reach the limit of open files of a process. Health then says so (`open_files_limit`); raise the limit, which lasts until the Mac restarts:
+**macOS:** Polyfin watches each folder and file of a tree through a file it keeps open. A very large library may reach the process's limit of open files. **System › Health** then says `open_files_limit`. Raise the limit, which lasts until the Mac restarts:
 
 ```sh
 sudo sysctl kern.maxfiles=524288 kern.maxfilesperproc=262144
 ```
 
-Windows has no such limit: a folder it cannot watch is told as a failure, and tried again every 10 minutes too.
+**Windows:** it has no such limit. A folder it cannot watch is reported as a failure, and tried again every 10 minutes too.
 
-A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. An NFO file is read when it is new or changed the same way; one added, changed or removed matches its movie, disc or show again, even when the videos did not change, and one removed leaves it to its name and the search. Subtitle files and images added, changed or removed are offered as they are now from the next scan on. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it. On a share, NFO and subtitle files and images are listed with the folders, and only the NFO files new or changed are read.
+**Compared with Jellyfin**
 
-Symbolic links to files of the folder are followed; links leading out of the folder, and links to folders, are not.
+- Polyfin also scans folders at startup, on its schedule and on demand. Both watch folders for changes.
+- Polyfin also watches the network shares it reads itself, by listing them again every few minutes.
+
+API details: [Local folder routes](jellyfin-api.md#local-folder-routes).
 
 ## Changing what a folder holds
 
-On a folder's page under **Content › Sources**, **Edit the folder** changes what it holds, **It holds**: movies, shows, music or home videos. Before changing anything, the admin app says what follows and what is dropped, and asks. The folder keeps its library, which apps know by its identifier, with its place in their home screens and menus, its address, user and password, and its other settings. A scan under way stops, and the folder is scanned again as the new kind, in the background.
+On a folder's page under **Content › Sources**, **Edit the folder** changes **It holds**: movies, shows, music or home videos. Before changing anything, the admin app says what follows and what is dropped, and asks.
 
-- Between movies, shows and home videos, what users did with a video follows it, as an import adds it (see [How the data merges with Polyfin's](users.md#how-the-data-merges-with-polyfin-data)): a played mark is added, the newer resume point is kept, and a favorite is set. A home video that becomes a movie or an episode gives it its watch state, resume point and favorite; a movie or an episode that becomes a home video gives the home video theirs. A file the new scan does not match gets them once it is matched, by hand or by a later scan.
-- Played marks and favorites are given: the former titles keep theirs. A resume point moves, as it was recorded through the file, which the former title no longer plays: the former title loses it once the new one has it, or a newer one, so that Continue Watching lists the file once. A new title played before the resume point was set takes none, as with an import, and the former title then keeps it.
-- A folder turned away from home videos keeps its videos' identifiers for 30 days (see [Titles](#titles)): meanwhile they leave Continue Watching, and holding home videos again within that time, it lists them as the same titles, with what users did with them.
-- The links made by hand and the episodes given to shows' discs are dropped: each was made for one kind.
-- To or from music, nothing follows: songs and videos are other files. What users did with the former titles stays with them and no longer shows.
+The folder keeps:
+
+- its library, which apps know by its identifier, with its place in their home screens and menus;
+- its address, user and password, and its other settings.
+
+A scan under way stops. The folder is scanned again as the new kind, in the background.
+
+What users did follows the videos as follows:
+
+- **Between movies, shows and home videos**, what users did with a video follows it, as an import adds it (see [How the data merges with Polyfin's](moving-to-polyfin.md#how-the-data-merges-with-polyfin-data)):
+  - a played mark is added, the newer resume point is kept, and a favorite is set;
+  - a home video that becomes a movie or an episode gives it its watch state, resume point and favorite, and the reverse;
+  - a file the new scan does not match gets them once it is matched, by hand or by a later scan.
+- **Played marks and favorites are given:** the former titles keep theirs.
+- **A resume point moves:** as it was recorded through the file, which the former title no longer plays. The former title loses it once the new one has it, or a newer one, so Continue Watching lists the file once. A new title played before the resume point was set takes none, as with an import, and the former title keeps it.
+- **Away from home videos:** the folder keeps its videos' identifiers for 30 days (see [Titles](#titles)). Meanwhile they leave Continue Watching. If the folder holds home videos again within that time, it lists them as the same titles, with what users did with them.
+- **Links made by hand** and the episodes given to shows' discs are dropped: each was made for one kind.
+- **To or from music:** nothing follows: songs and videos are other files. What users did with the former titles stays with them and no longer shows.
 
 ## Versions
 
-A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, repackaging or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play over HLS only, a Blu-ray disc's video copied when the app takes it and a DVD's converted (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
+A matched file is one more version of its title, or of each of its episodes. The version is named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`.
 
-### Episodes the metadata addon does not list
+- Polyfin reads it from the disk or the share, with byte ranges.
+- It plays like any other version: direct play, repackaging or conversion.
+- It has its embedded audio and subtitle tracks, and the subtitle files beside it.
+- A Blu-ray disc's playlist, a DVD and a disc image play over HLS only. A Blu-ray disc's video is copied when the app takes it, a DVD's is converted (see [Discs](discs.md)).
+- The folder's library lists its titles, the latest found first.
 
-A show's seasons and episodes are those its metadata addon describes, and those its files hold besides: an episode a file holds that the addon does not list, as when it numbers the seasons or the specials otherwise than the files, or a show the addon describes without any episode, is listed all the same, as Jellyfin makes an episode of every file whatever its provider knows ([`EpisodeResolver.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/Resolvers/TV/EpisodeResolver.cs#L50-L88)). Such an episode is named after its file, without its extension, as `The Lone Ranger S02E07`, has no description, and plays its files as the other episodes do; a file holding two episodes is both.
+Episodes the files hold that the catalog does not list: see [Episodes the metadata addon does not list](episode-numbering.md#episodes-the-metadata-addon-does-not-list).
 
-- Only the enabled shows folders give them, matched to that show by a scan or a link.
-- The folder's page tells how many there are, as the shows were last described: a show no one opened since its files were added is counted once it is described, when someone opens it or its library's descriptions are read again.
-- Under **Episodes only in the files**, the folder's page lists their shows, by name, each with its IMDb identifier and folder, and season by season the numbers its files hold that the addon does not list, next to those the addon lists in that season: `Season 2`, `In the files: E41-E42`, `In the catalog: E1-E40`. For a season the addon does not have, it gives the addon's first and last episodes, specials left out, such as `The catalog has no season 3: it lists S01E01 to S02E40`. A show described last by an older Polyfin shows the addon's numbers once an app opens it again. Renaming the files with the catalog's numbers makes them versions of its episodes (see [Episode numbers](#episode-numbers)).
-- An episode the addon lists that no file holds is listed as before, playing the addons' streams only.
-- A show matched to a title no metadata addon describes lists the episodes its files hold, named after their files, as `Harbor Show S01E02`, the title of a show's disc as `Episode 5`.
+**Compared with Jellyfin**
 
-An episode whose file has no intro or credits in its chapters, of a series or a season the segment databases do not know, gets the intro and the credits the episodes of its season share in their audio, once one of them was played (see [Intros and credits found in local episodes' audio](skip-segments.md#intros-and-credits-found-in-the-audio-of-local-episodes)).
+- Polyfin takes titles and their descriptions from the metadata addons. A local file adds a version, and its artwork when the folder holds some. Jellyfin reads metadata from files and providers of its own.
+
+API details: [Local files in the Jellyfin API](jellyfin-api.md#local-files-in-the-jellyfin-api).
 
 ### Listing local files first
 
-A folder's versions take its place among the sources: moving it up under **Content › Sources** puts its files before the addons' streams while no criterion orders versions. With criteria, such as **Preferred audio language**, a local file often ranks low: a scan does not analyze the files, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description. To list local files first for everyone, or for some users with **Play local files first**, follow [Local files first for some users](playback.md#local-files-first-for-some-users) and [Version order](playback.md#version-order). **Add a criterion** adds a criterion last: move it up with its arrow.
+A folder's versions take its place among the sources. Moving it up under **Content › Sources** puts its files before the addons' streams, while no criterion orders versions.
+
+With criteria, such as **Preferred audio language**, a local file often ranks low. A scan does not analyze the files, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description.
+
+To list local files first for everyone, or for some users with **Play local files first**, see [Local files first for some users](versions.md#local-files-first-for-some-users) and [Version order](versions.md#version-order). **Add a criterion** adds a criterion last: move it up with its arrow.
 
 ### Titles your catalogs list too
 
-A movie or a show of a folder matched or linked to an IMDb identifier is the title of that identifier: the one a catalog listing the same IMDb identifier lists. It is one item, with the same seasons, episodes, watch state, favorites and resume points, and the folder's files are versions of it, or of its episodes, beside the addons' streams. Two libraries list it, though: the catalog's and the folder's, so it shows in both, in the "My Media" row and in each library's row of the home screen, as Jellyfin shows a movie twice when two of its libraries hold it. Continue Watching, Next Up, search and the title's page list it once.
+A folder's movie or show matched or linked to an IMDb identifier is the title of that identifier. It is the same title a catalog lists under that IMDb identifier.
 
-A catalog may list a title under another identifier than IMDb's, such as a TMDB one (`tmdb:…`) or an anime database's. That entry is another title of its own: it has its own watch state, and plays the addons' streams only, never the folder's files, as a folder only answers for the titles it lists by their own identifiers (see [Identifiers addons accept](addons-and-libraries.md#identifiers-addons-accept)). Next Up and Continue Watching may then list the show twice, once for each.
+- It is one item, with the same seasons, episodes, watch state, favorites and resume points.
+- The folder's files are versions of it, or of its episodes, beside the addons' streams.
+- Two libraries list it: the catalog's and the folder's. It shows in both, in the "My Media" row and in each library's row of the home screen, as Jellyfin shows a movie twice when two libraries hold it.
+- Continue Watching, Next Up, search and the title's page list it once.
 
-To tell whether two entries are one title, open each in the web player: the address of a title's page ends with `id=` and its identifier. The same identifier is the same title; two identifiers are two titles.
+A catalog may list a title under another identifier than IMDb's, such as a TMDB one (`tmdb:…`) or an anime database's. That entry is a title of its own:
 
-- **Local files first:** see [Listing local files first](#listing-local-files-first). It applies to every user, or, with **Play local files first**, to some users only.
-- **Only the folder's library for these titles:** under **Content › Libraries**, **Leave out the titles local folders hold** in the catalog library's row takes the titles a local folder holds out of that library, for every user who sees the folder's library: the folder's library alone lists them, and they stay one title (see [Titles local folders hold](addons-and-libraries.md#titles-local-folders-hold)).
-- **The catalog's entry off the home screen:** in the web player's **Settings › Home**, under the catalog's library, untick "Display in home screen sections such as 'Recently Added Media' and 'Continue Watching'". The library's row leaves the home screen, and so do the titles only that library lists from Next Up and Continue Watching; a title the folder's library lists too stays there (see [Home screen sections](jellyfin-compatibility.md#home-screen-sections)). Untick "Display on home screen" instead to leave the library out of the menus as well. Each user chooses for themselves; the library still opens from the "My Media" row.
-- **The catalog's library out of a user's libraries:** under **Users**, on the user's or their group's page, untick the library in [Visible libraries](users.md#visible-libraries). Its titles stay reachable through the folder's library and search.
-- **Only the catalog's entry of one show, listed under another identifier:** "Hide this title" in its ⋮ menu takes it off the user's lists, the folder's entry staying (see [Watch state](users.md#watch-state)). For a title of the same identifier, it would hide the folder's entry too, as they are one.
+- it has its own watch state;
+- it plays the addons' streams only, never the folder's files, as a folder answers only for the titles it lists by their own identifiers (see [Identifiers addons accept](addons.md#identifiers-addons-accept));
+- Next Up and Continue Watching may list the show twice, once for each.
 
-## Artwork
+To tell whether two entries are one title, open each in the web player. The address of a title's page ends with `id=` and its identifier. The same identifier is the same title. Two identifiers are two titles.
 
-Folders organized by Jellyfin or a media manager often hold posters, backdrops and logos beside their files, chosen by hand. Polyfin reads them as Jellyfin does, as `.jpg`, `.jpeg`, `.png` or `.webp` files, names compared in any letter case, and shows them in place of the metadata addons' artwork of the same type; the types a folder has no image of still come from the addons.
-
-```
-/media/movies/Nosferatu (1922)/Nosferatu (1922).mkv
-/media/movies/Nosferatu (1922)/poster.jpg
-/media/movies/Nosferatu (1922)/fanart.jpg
-/media/movies/The General (1926).mkv
-/media/movies/The General (1926)-poster.jpg
-/media/shows/The Lone Ranger (1949)/poster.jpg
-/media/shows/The Lone Ranger (1949)/season01-poster.jpg
-/media/shows/The Lone Ranger (1949)/Season 02/folder.jpg
-/media/shows/The Lone Ranger (1949)/Season 02/The Lone Ranger - S02E01.mkv
-/media/shows/The Lone Ranger (1949)/Season 02/The Lone Ranger - S02E01-thumb.jpg
-```
-
-A movie's images are named after its file, `<file name>-<name>`, such as `The General (1926)-poster.jpg`, its poster also `<file name>.jpg`; when the movie is alone in its folder (every video directly in it is the same movie, its versions included), or is a Blu-ray disc or a DVD, whose images sit in its disc folder, the names alone count too, such as `poster.jpg`. In a folder holding several movies, `poster.jpg` belongs to none of them. Of each type, the first name found counts:
-
-| Type | Names |
+| To get | Do this |
 |---|---|
-| Primary (poster) | `poster`, `folder`, `cover`, `default`, `movie` |
-| Backdrop | `fanart`, `fanart-1` to `fanart-20`, `background`, `background-1`…, `art`, `art-1`…, `backdrop`, `backdrop1`… |
-| Logo | `logo`, `clearlogo` |
-| Thumb | `landscape`, `thumb` |
-| Banner | `banner` |
-| Art | `clearart` |
-| Disc | `disc`, `cdart`, `discart` |
-
-The names after the file's name come before the names alone, and `.jpg` before `.jpeg`, `.png` and `.webp`. A title has one backdrop: the first found.
-
-A show's images are in its folder, with the same names (`show` in place of `movie`, and no Disc image), alone or after the folder's name. A season's are in the show's folder, named after the season, `season01-poster`, `season01-fanart`, `season01-banner` and `season01-landscape` (`season1-…` comes first when both are there), and for the specials `specials-…` or `season-specials-…`; then in its season folder, the folder directly in the show's holding its episodes, with the names of the table, such as `folder.jpg` or `poster.jpg`. A season without a poster of its own shows its show's, as with the addons' artwork.
-
-An episode's image is beside its file, named after it, with the names Jellyfin reads for episodes: `<file name>-thumb`, such as `The Lone Ranger - S02E01-thumb.jpg`, then `<file name>` alone, such as `The Lone Ranger - S02E01.jpg`, then the same two names in a `metadata` folder beside the file. It shows in place of the metadata addon's still, for each episode the file holds (both episodes of `S01E03-E04`). Other images beside the file, such as `<file name>-poster.jpg`, are not the episode's. The episodes of shows' discs and disc images (see [Shows on discs](#shows-on-discs)) have no file of their own: they keep the addon's still.
-
-An episode with no image, neither the metadata addon's still nor one beside its file, shows a frame of its file, as Jellyfin's Screen Grabber takes one ([`VideoImageProvider.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/MediaInfo/VideoImageProvider.cs#L57-L117)): a tenth into it, else its first frame, tone mapped when it is HDR and FFmpeg can. The frame is made when an app first asks for the image, two at most at once, each within a minute to read the file and another to take the frame; the apps asking meanwhile wait for that one. It is then kept with the other artwork, and made again once the file changes; listings do not wait for it. A frame that could not be made, as of a file FFmpeg cannot read, is not tried again for 10 minutes unless the file changes, and the episode shows no image meanwhile. Episodes of shows matched or not, plain episodes among them (see [Plain videos](#plain-videos)), have one, whatever **Use its artwork**; those of shows' discs and disc images have none, as in Jellyfin.
-
-The images belong to the title the file, disc or show folder is matched to, and an episode's to the episodes its file holds, a link made by hand included, from the moment the link is made. When the files of a title in several folders have images, each type comes from the folder listed first on the **Sources** page, then from the first of the title's files or folders by path; a disabled folder gives none.
-
-**Use its artwork**, on the form of a movies or shows folder, chooses whether its titles and episodes show its images; it is on by default, and turning it off brings the addons' artwork and stills back at once. Artwork an administrator uploads in a Jellyfin app wins over both.
-
-Images are read from the folder or the share when an app first asks for them, then kept with the other artwork, at the sizes apps ask for. A scan notices an image added, replaced or removed, an episode's too, by its size and modification time, and apps see the new one, since its tag changes.
-
-## Music folders
-
-A folder or share added as holding **Music** is a music library of its own. Its audio files are read with their tags and grouped into albums and artists, and the library answers as an [Eclipse music addon](addons-and-libraries.md#music-addons)'s does: albums, artists and songs views, album and artist pages, search, lyrics, scrobbling, statistics and playback all work as for an addon's music. What a folder holds can change (see [Changing what a folder holds](#changing-what-a-folder-holds)): to or from music, nothing users did follows.
-
-```
-/media/music/Tone Quartet/Sine Studies/01 First Light.flac
-/media/music/Tone Quartet/Sine Studies/CD2/01 Second Wind.flac
-/media/music/Tone Quartet/Sine Studies/cover.jpg
-```
-
-### Files and tags
-
-A scan lists the files ending in `.mp3`, `.flac`, `.m4a`, `.m4b`, `.alac`, `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.aif`, `.aiff`, `.wma`, `.ape`, `.wv` and `.dsf`, and beside them the artwork images, the lyrics files (`.lrc`) and the playlists (`.m3u` and `.m3u8`). Hidden folders are left out; a music folder's subfolders named `Extras` or `Other` are read, as an album may bear such a name.
-
-Each new or changed file is read with ffprobe: its title, artist, artists, album, album artist, track and disc numbers, year (from its date), genres (several separated by `;`), whether it is part of a compilation, its lyrics, its length, its audio and whether it embeds a cover. Tags of MP3 (ID3), FLAC, Ogg and Opus (Vorbis comments), MP4 and M4A, WMA and WAV are read as ffprobe reads them.
-
-A scan also keeps a file's gains, which even the volume between songs (see [Volume between songs](addons-and-libraries.md#volume-between-songs)): its `REPLAYGAIN_TRACK_GAIN` and `REPLAYGAIN_ALBUM_GAIN` tags, from ID3, Vorbis comments and MP4 alike, such as `-6.54 dB`, else Opus's `R128_TRACK_GAIN` and `R128_ALBUM_GAIN`, moved from EBU R128's -23 LUFS to the same -18 LUFS reference. The first scan after the upgrade that brought gains reads the tags of the files already kept again, once. With **Measure the loudness of songs without a gain** set to **Local songs** or **Local and addon songs**, the songs without a track gain are measured in the background after each scan, once, and again when their file changes; songs longer than 15 minutes never are.
-
-A file without some tags takes them from its path, as in `Artist/Album/01 Title.flac`:
-
-- its title is its name without the number heading it, which is its track number (`1-07 Title` gives disc 1, track 7);
-- its album is its folder's name; a folder named only after a disc, such as `CD2` or `Disc 2`, gives the disc number, and the folder above gives the album;
-- its artist is the name of the folder above the album's.
-
-A file whose tags and path give no title or no album, such as an untagged file at the folder's root, is left out of the library, and its page lists it under **Tracks left out** with why.
-
-On a share, ffprobe and FFmpeg read each new or changed file through Polyfin, at most 16 MB of it per scan: the tags, the stream headers and the embedded cover at its head, and the index at its end for the MP4 files that keep it there. A file whose tags lie beyond is read by its path.
-
-### Albums and artists
-
-- Tracks of the same album name and album artist, in any letter case, are one album. A track's album artist is its album artist tag, else "Various Artists" for a compilation (the compilation tag set to 1), else its artist tag as written.
-- A track's artists are the names of its artists tag (a tag given several times, as Vorbis comments allow), else of its artist tag, separated by `;`: `Ann; Ben` gives Ann and Ben, each with their page, the song listed under each. Its artist tag is kept as written, for search. An album's artists are its album artist tag's, split the same way.
-- An album's tracks are in disc, then track order, then by path. Its title and artist are those of its first track; its year, the latest of its tracks'; its genres, all of theirs.
-- Albums group into artists by album artist. An artist's page lists their albums and their songs, including those on other artists' albums, at most 100.
-- An album's artwork is the cover its first track embedding one embeds, else `cover`, `folder` or `front` (`.jpg`, `.jpeg`, `.png` or `.webp`, any letter case) beside its first track.
-- An artist's picture is `artist`, `folder` or `photo` (`.jpg`, `.jpeg`, `.png` or `.webp`, any letter case) in their folder: the folder holding the folders of their albums, and of no album of another artist. Without one, it is the artwork of their first album. The artists views show it.
-- Search finds songs by title, artist and album, albums by title and artist, and artists by name; every word must be found, in any letter case.
-
-The folder's figures count its tracks, albums and album artists, its tracks with a gain (from their tags or measured) and those measured, and the tracks left out.
-
-### Playlists
-
-The `.m3u` and `.m3u8` files of the folder are the playlists of its library: its Playlists view lists them with the user's own playlists, by name. A playlist's title is its `#PLAYLIST:` line, else its file's name. Its lines name tracks by paths relative to the playlist's folder, or absolute within the folder's path in the container (as paths or `file:` addresses), with slashes or backslashes, in any letter case; its songs are those, in order. A line that names no track of the folder, or leads out of it, is left out; a playlist naming none is not listed. Search finds playlists by title.
-
-### Lyrics
-
-A song's lyrics are those of the `.lrc` file of the same name beside it, else those of its lyrics tag, synced line by line when timed, plain otherwise. They come before LRCLIB's: Polyfin never looks up a song with lyrics of its own on LRCLIB, and serves them with **Song lyrics from LRCLIB** off too. Other songs have LRCLIB's (see [Lyrics](addons-and-libraries.md#lyrics)). Lyrics an administrator chooses in the web player's lyrics editor while that setting is on, or uploads there whatever it says, replace a song's own until they are deleted there: the file and the tag are never changed (see [Choosing lyrics](addons-and-libraries.md#choosing-lyrics)).
-
-### Playback
-
-Songs play from the folder or the share through Polyfin, as other local files do: as they are when the app takes their format, else converted as an addon's songs are (see [Music playback](addons-and-libraries.md#music-playback)). Their format, codec, sample rate and bit depth come from the scan, so playback decides without probing them.
-
-### Rescans
-
-A rescan reads again the files new or changed by size and modification time, forgets the files gone, and chooses again the artwork of the albums and artists whose first track or image changed. Lyrics files and playlists are read again when they change. Watching notices audio files, artwork, lyrics files and playlists, as it notices videos.
-
-The tracks a scan first finds count among the files added of the [weekly summary](notifications.md#weekly-summary), which names them by album.
-
-<a id="limits"></a>
-
-### Music folder limits
-
-- A folder's playlists are read only: apps cannot add songs to them, reorder or delete them. On a share, a playlist's absolute paths name nothing; relative paths do.
-- Artist names split at `;` only: `A feat. B`, `A & B` or `A/B` is one artist unless an artists tag names them. Without an album artist tag, an album's artist is the artist tag as written, one name.
-- Apps list a song's artists one by one, as Jellyfin does, rather than its artist tag as written.
-- The artists views list album artists; an artist credited only on songs is reached from those songs and from search.
-- Lyrics are read from `.lrc` files and tags, not from `.txt` files.
+| Local files first | See [Listing local files first](#listing-local-files-first). It applies to every user, or to some users with **Play local files first**. |
+| Only the folder's library for these titles | Under **Content › Libraries**, turn on **Leave out the titles local folders hold** in the catalog library's row. For every user who sees the folder's library, only that library lists them, and they stay one title (see [Titles local folders hold](addons-and-libraries.md#titles-local-folders-hold)). |
+| The catalog's entry off the home screen | In the web player, open **Settings › Home** and, under the catalog's library, untick "Display in home screen sections such as 'Recently Added Media' and 'Continue Watching'". The library's row leaves the home screen. So do the titles only that library lists, from Next Up and Continue Watching. A title the folder's library lists too stays (see [Home screen sections](jellyfin-compatibility.md#home-screen-sections)). Untick "Display on home screen" instead to leave the library out of the menus too. Each user chooses for themselves. The library still opens from the "My Media" row. |
+| The catalog's library out of a user's libraries | Under **Users**, on the user's or their group's page, untick the library in [Visible libraries](user-limits.md#visible-libraries). Its titles stay reachable through the folder's library and search. |
+| Only the catalog's entry of one show listed under another identifier off the lists | "Hide this title" in its ⋮ menu takes it off the user's lists. The folder's entry stays (see [Watch state](watch-state.md#watch-state)). For a title of the same identifier, it would hide the folder's entry too, as they are one. |
 
 ## Home videos
 
-A folder or share added as holding **Home videos** (fr « Vidéos personnelles ») lists videos no metadata addon knows: recordings of a family, a concert or a school play. Each video is a title of its own, which the folder names, dates and plays itself: nothing is sent to the metadata addons, and nothing is ever unmatched. What a folder holds can change (see [Changing what a folder holds](#changing-what-a-folder-holds)): its videos' watch state follows them to the movies and episodes they become, and back.
+A folder or share added as holding **Home videos** (fr « Vidéos personnelles ») lists videos no metadata addon knows: recordings of a family, a concert or a school play.
+
+- Each video is a title of its own, which the folder names, dates and plays itself.
+- Nothing is sent to the metadata addons, and nothing is ever unmatched.
+- What a folder holds can change (see [Changing what a folder holds](#changing-what-a-folder-holds)). Its videos' watch state follows them to the movies and episodes they become, and back.
 
 ```
 /media/family/Beach.mp4
@@ -830,27 +281,43 @@ A folder or share added as holding **Home videos** (fr « Vidéos personnelles �
 
 ### Titles
 
-- A video alone in a folder of its own, with its side files, is one title named after the folder (`School play 2018`). Several videos in one folder are as many titles, each named after its file without its extension (`day 1`, `day 2`); so is a video at the folder's top (`Beach`). Names are kept as written: no year or quality is read out of them.
-- A title's NFO file is the video's own (`play.nfo`), else `movie.nfo` in the video's own folder. Its `<title>` names the title, its `<plot>` describes it, and its date is its `<premiered>`, else `<aired>`, else `<releasedate>`.
-- Without a date in its NFO file, a title is dated by the creation time its video tells, as phones and cameras write it (`creation_time`, or the time Apple's devices write with its time zone), else by its file's modification time. A creation time before 1971, from a clock never set, is not believed. An NFO file that gives a `<year>` alone keeps the video's own date when it is of that year, and is the 1st of January of it otherwise.
-- Its artwork is the images beside it, with the names a movie's take (see [Artwork](#artwork)): `day 2-poster.jpg`, or `poster.jpg` in its own folder. Without a poster, it shows a frame of the video, taken a tenth into it as Jellyfin takes one, at most 640 pixels wide as chapter images are, kept with the scan and made again when the video changes.
-- Subtitle files beside a video are offered with it, as for any local file. Discs and disc images are left out, as in a shows folder.
+- **Names:** a video alone in a folder of its own, with its side files, is one title named after the folder (`School play 2018`). Several videos in one folder are as many titles, each named after its file without its extension (`day 1`, `day 2`). So is a video at the folder's top (`Beach`). Names are kept as written: no year or quality is read out of them.
+- **NFO file:** the video's own (`play.nfo`), else `movie.nfo` in the video's own folder. Its `<title>` names the title and its `<plot>` describes it. Its date is `<premiered>`, else `<aired>`, else `<releasedate>`.
+- **Date without an NFO date:** the creation time the video tells, as phones and cameras write it (`creation_time`, or the time Apple's devices write with its time zone). Else the file's modification time. A creation time before 1971, from a clock never set, is ignored. An NFO file giving a `<year>` alone keeps the video's own date when it is of that year, and is January 1 of that year otherwise.
+- **Artwork:** the images beside the video, with the names a movie's take (see [Artwork](naming-and-matching.md#artwork)): `day 2-poster.jpg`, or `poster.jpg` in its own folder. Without a poster, it shows a frame of the video taken a tenth into it, as Jellyfin takes one. The frame is at most 640 pixels wide, as chapter images are, kept with the scan and made again when the video changes.
+- **Subtitles:** subtitle files beside a video are offered with it, as for any local file.
+- **Discs:** discs and disc images are left out, as in a shows folder.
 
-A title's identifier is kept with its video through scans and restarts, and follows it when it is renamed or moved: what users did with it, its watch state, resume point, favorites and collections, stays with it, and apps' links to it still lead to it. A scan reads the size of each video it finds and a hash of its first and last MiB, once, when it first finds it or the file changes. A video found with the size and hash of exactly one video gone is that video again:
+A title's identifier stays with its video through scans and restarts, and follows it when it is renamed or moved. What users did with it stays with it: watch state, resume point, favorites and collections. Apps' links to it still lead to it.
 
-- renamed, moved into a subfolder, or in a folder renamed, as `Trip/day 2.mov` becoming `Summer 2019/Beach.mov`;
-- moved into another Home videos folder, whichever folder is scanned first. When the folder it went to is scanned first, the video is still in the one it left, and the video found is a new title for a moment: the scan of the folder it left, finding it gone, gives it back its identifier, unless users already did something with the new title (played, marked, rated, made a favorite, added to a collection or playlist, given a subtitle file or edited), which then stays as it is. A copy and a delete seen by scans in between, as a slow move between disks, count as a move too;
-- moved out and back within 30 days: the videos gone from every Home videos folder of the server are remembered for 30 days, those of a folder removed, given another path or holding something else too.
+A scan reads the size of each video and a hash of its first and last MiB, once, when it first finds it or the file changes. A video found with the size and hash of exactly one video gone is that video again. This covers a video:
 
-A copy is a title of its own while its original is still there, and stays one when the original goes later, its folder scanned after the copy was found. So are videos when several gone, or several found by one scan, have the same contents. A video replaced at the same path, its contents changed, keeps its title. A video found again keeps the time it was first found: the weekly summary does not count it as added.
+- renamed, moved into a subfolder, or in a renamed folder, as `Trip/day 2.mov` becoming `Summer 2019/Beach.mov`;
+- moved into another Home videos folder, whichever folder is scanned first. If the folder it went to is scanned first, the video is briefly a new title. The scan of the folder it left then gives it back its identifier. That is unless users already did something with the new title (played, marked, rated, made a favorite, added to a collection or playlist, given a subtitle file or edited it), which then stays as it is.
+- copied then deleted, with scans in between, as a slow move between disks: it counts as a move;
+- moved out and back within 30 days. Videos gone from every Home videos folder of the server are remembered for 30 days, including those of a folder removed, given another path or now holding something else.
+
+Some cases make a new title:
+
+- A copy is a title of its own while its original is still there. It stays one when the original goes later, its folder scanned after the copy was found.
+- Several videos gone, or several found by one scan, with the same contents, are new titles.
+
+A video replaced at the same path, its contents changed, keeps its title. A video found again keeps the time it was first found: the weekly summary does not count it as added.
 
 ### In apps
 
-The folder is a library of Jellyfin's `homevideos` type, its titles `Video` items, as Jellyfin's home videos are: jellyfin-web shows it with its Folders and Videos views, newest recording first in the Folders view. Search, watch state, resume points, Continue Watching, collections, the libraries a user sees, allowed hours and downloads work as for other titles, and the videos play, seek and show their scrubbing thumbnails as other local files do.
+The folder is a library of Jellyfin's `homevideos` type, and its titles are `Video` items, as Jellyfin's home videos are.
 
-A home video no folder holds any more, deleted from disk or in a folder that holds something else now, leaves Continue Watching and the lists of resumable, favorite and played items. What users did with it stays: found again within 30 days (see [Titles](#titles)), it shows again with its watch state and resume point. A movie or an episode a home video became stays listed, as its addon still describes it, but its resume point goes back to the video with the file (see [Changing what a folder holds](#changing-what-a-folder-holds)).
+- The web player shows it with its Folders and Videos views, newest recording first in the Folders view.
+- Search, watch state, resume points, Continue Watching, collections, the libraries a user sees, allowed hours and downloads work as for other titles.
+- The videos play, seek and show their scrubbing thumbnails as other local files do.
 
-Parental control judges them as Jellyfin judges its videos: unrated, of the **Other** kind. A user blocking unrated **Other** items sees none of them; a highest rating alone hides none.
+A home video no folder holds any more leaves Continue Watching and the lists of resumable, favorite and played items. That covers a video deleted from disk, or in a folder that now holds something else.
+
+- What users did with it stays. Found again within 30 days (see [Titles](#titles)), it shows again with its watch state and resume point.
+- A movie or episode a home video became stays listed, as its addon still describes it. Its resume point goes back to the video with the file (see [Changing what a folder holds](#changing-what-a-folder-holds)).
+
+Parental control judges home videos as Jellyfin judges its videos: unrated, of the **Other** kind. A user blocking unrated **Other** items sees none of them. A highest rating alone hides none.
 
 Tracking services and scrobbling never hear of them: they have no identifier a service knows. The [weekly summary](notifications.md#weekly-summary) counts the videos a scan first finds among the files added, as videos, never as movies.
 
@@ -861,65 +328,58 @@ The folder's page counts its videos, and how many are dated by an NFO file, by t
 ### Home video limits
 
 - Polyfin reads no other field of NFO files, such as people, tags or ratings, and does not write them.
-- A video is one title: several files of one recording are not joined, and a folder holding several videos is no title of its own.
-- A frame is made once per video as it is; one that cannot be made (an unreadable video) is tried again only once the video changes.
-- A video renamed or moved and changed at once, or before a scan read its contents, is another title. The first scan after updating Polyfin reads the contents of the videos found before.
+- A video is one title. Several files of one recording are not joined, and a folder holding several videos is no title of its own.
+- A frame is made once per video as it is. One that cannot be made, from an unreadable video, is tried again only once the video changes.
+- A video renamed or moved and changed at once, or before a scan read its contents, is another title.
+- After an update, the first scan reads the contents of the videos found before.
 
-<a id="compared-with-jellyfin"></a><a id="for-app-developers"></a>
-
-## Notes for Jellyfin users and app developers
+<a id="notes-for-jellyfin-users-and-app-developers"></a><a id="compared-with-jellyfin"></a><a id="for-app-developers"></a>
 
 **Compared with Jellyfin**
 
-- Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file adds a version, and its artwork when the folder holds some.
-- Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and watches the network shares it reads itself by listing them again every few minutes.
-- Both match an item by hand from a search of their providers, or by an identifier typed, jellyfin-web's **Identify** included. Jellyfin sets the item's provider identifiers and keeps its identifier ([`ItemLookupController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemLookupController.cs#L249-L282), `ApplySearchCriteria`); Polyfin links the file, or its whole show folder, unmatched or matched, to an IMDb identifier, and the item opened again by its identifier answers the title it became, under the title's own identifier (see [Identify in the web player](#identify-in-the-web-player)). Polyfin's admin app also takes an identifier typed, and identifies a file from its show's episodes too; jellyfin-web offers Identify for movies and series only.
-- Both accept a title dated a year apart from the name's, as release dates straddle a new year. Jellyfin 12.4 scores a year one off as high as the very year, and keeps the provider's first title of the best score ([`TmdbUtils.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L246-L255), `ScoreYear`, and lines 188-227, `FindBestMatch`), so a better known title of the year after can win over one of the very year. Polyfin keeps a title of the very year whenever there is one, and a title of a year one off only when it is the only one left, flagged; Jellyfin also takes a title whose name only starts with the file's, which Polyfin never does.
-- Polyfin reads Roman and Arabic numerals, and numbers written in words after "Part", alike, and searches a name with a numeral it does not find once more with the numeral written the other way; Jellyfin compares names as they are, keeping the provider's first title when none matches ([`TmdbUtils.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L180-L187)).
-- Both read the identifiers of NFO files; Polyfin reads nothing else of them for movies and shows, neither names, plots nor artwork, and only the title, plot and date for home videos.
-- Both read videos by their extension, MPEG-TS ones among them: `.ts`, `.m2ts`, `.mts`, `.m2t` and `.tp`, and MPEG program streams, `.vob` among them. Jellyfin reads some fifty extensions ([`NamingOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L24-L79)), Polyfin those listed in [Video files](#video-files), `.trp` among them, which Jellyfin does not read. In a browser, Jellyfin copies the video of an MPEG-TS file or an MPEG program stream into HLS. Polyfin copies that of an MPEG-TS file too, once it has read its keyframes, and converts that of an MPEG program stream (see [HLS segments](transcoding.md#hls-segments)).
-- Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder.
-- Both read the artwork beside movies and shows, and the image beside an episode's file, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor images for the episodes of discs, and shows the addons' artwork of the types a folder has none of.
-- Both list every episode a show's files hold, those the metadata provider does not know named after their files, and show a frame of the file for an episode without an image. Jellyfin also makes frames for movies and makes them during scans; Polyfin makes them for episodes only, when an app first asks.
-- Jellyfin's episodes are the files, numbered as their names say, and its provider reads each one's metadata at that season and number in the series' display order, which may be a TMDB episode group such as absolute or DVD order ([`TmdbClientManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L276-L297)): a file is never listed next to a catalog copy of itself. Polyfin's episodes are the catalog's, and a file numbered otherwise is an episode of its own, listed on the folder's page (see [Episode numbers](#episode-numbers)), until an administrator says how the show's files are numbered: per season, continuing from season 1, absolute, or in a TMDB episode group read as Jellyfin reads it. The files are then mapped to the catalog's episodes, and the series keeps its own display order, while Jellyfin's episodes keep the files' numbers and read their metadata in the display order (see [How show files are numbered](#how-show-files-are-numbered)). Jellyfin needs no such choice, and Polyfin never guesses it. Jellyfin also reads air dates in names ([`NamingOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L332-L351)); Polyfin does not, and tells why on the folder's page.
-- Both read an episode's absolute number in `Show - 41`, `[Group] Show - 041 [1080p]` and `Show 41` ([`NamingOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L361-L390)). Jellyfin makes the file episode 41 of its season folder's season, else of none, which its TMDB provider reads as season 1 ([`TmdbEpisodeProvider.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbEpisodeProvider.cs#L99-L100)); Polyfin makes it a version of the catalog's 41st episode, specials left out, and lists it as Jellyfin does only when the catalog does not reach it (see [Absolute episode numbers](#absolute-episode-numbers)). Jellyfin reads `Show 2019` as episode 2019, `Show 1080p` as 1080, and the first number of `Show 2 - 05` or `Station 100 05`; Polyfin reads no year nor resolution, the number after the dash, and the last number of a name without one. Jellyfin's `Show 41-42` holds two episodes; Polyfin reads no range of absolute numbers.
-- Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
-- Both read extras, local trailers and theme media with the same names. Polyfin reads them only beside movies in folders of their own, shows and seasons, not beside episodes, reads only the files directly in an extras folder, and names an extra without its suffix.
-- Both list home videos as `Video` items of a `homevideos` library, judged as **Other** by parental control, with a frame of the video when no image is beside it. Polyfin dates them by the recording's creation time as well, lists no photos nor photo albums in such a library, makes a video alone in its folder a title named after the folder, and keeps a video's item when it is renamed or moved, where Jellyfin makes another.
-- Both list the files they cannot identify. Jellyfin names such a movie after its file, cleaned of what follows its year or a release tag, its dots kept, as `curse.of.chucky` for `curse.of.chucky.2013.1080p.bluray` ([CleanDateTimeTests.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/tests/Jellyfin.Naming.Tests/Video/CleanDateTimeTests.cs#L22)), with the year it gives ([MovieResolver.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Server.Implementations/Library/Resolvers/Movies/MovieResolver.cs#L305-L306), [VideoResolver.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Naming/Video/VideoResolver.cs#L87-L96)); a series after its folder, `Name (Year)` giving its year ([SeriesResolver.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Naming/TV/SeriesResolver.cs#L36-L51)); an episode after its file as written ([EpisodeResolver.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Server.Implementations/Library/Resolvers/TV/EpisodeResolver.cs#L58), [BaseVideoResolver.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Server.Implementations/Library/Resolvers/BaseVideoResolver.cs#L117-L122)). Polyfin names a plain movie as its name was read for the search, its dots and underscores read as spaces, and leaves out an episode whose name gives no number, which Jellyfin lists without one. Neither lists an extra without its title ([VideoListResolver.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Naming/Video/VideoListResolver.cs#L51-L55)). Both judge them as unrated movies and series ([BaseItem.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/MediaBrowser.Controller/Entities/BaseItem.cs#L2000-L2024)). Jellyfin's item identifier is a hash of the item's type and path ([LibraryManager.cs](https://github.com/jellyfin/jellyfin/blob/c7ce6a1b56ee7dcc1896250df0f2f9deaa828a81/Emby.Server.Implementations/Library/LibraryManager.cs#L792-L818)), a plain video's a hash of its folder and path: both change when the file is renamed. Jellyfin keeps the item it identifies later, its metadata filled in; Polyfin lists the title found in place of the plain video, which gives it its watch state, resume point and favorite (see [Plain videos](#plain-videos)).
+- Polyfin also dates home videos by the recording's creation time. Both list them as `Video` items of a `homevideos` library, judged as **Other** by parental control, with a frame of the video when no image is beside it.
+- Polyfin lists no photos nor photo albums in such a library.
+- Polyfin makes a video alone in its folder a title named after the folder.
+- Polyfin keeps a video's item when it is renamed or moved. Jellyfin makes another.
 
-<details>
-<summary>For app developers</summary>
+API details: [Home videos in the API](jellyfin-api.md#home-videos-in-the-api).
 
-A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind (`movies`, `shows`, `music` or `homevideos`), last scan, error, counts and links, `useArtwork`, whether its titles show the artwork beside its files (see [Artwork](#artwork)), `readExtras`, whether its scans read the extras beside its titles, and `extras`, how many its last scan found (see [Extras and theme media](#extras-and-theme-media)). `links` lists the units linked by hand, `[{"unit", "imdbId", "described"}]`, `described` false when no metadata addon of the server described the title as the folder's kind when the unit's files were last matched to it. `unlistedEpisodes` counts the episodes its files hold that their show's metadata addon does not list, as the shows were last described (see [Episodes the metadata addon does not list](#episodes-the-metadata-addon-does-not-list)), which `GET …/folders/{id}/unlisted` lists. `episodes` lists the episodes given by hand to the titles of shows' discs: `[{"path", "disc", "discPath", "number", "episode"}]`, `disc` the disc's kind as in the unmatched files (empty while an image is gone), `discPath` its folder or image, `number` the title's and `episode` such as `S01E05` or `S01E05-E06`. `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "year", "numerals", "yearNumerals", "link"}`, `year`, `numerals` and `yearNumerals` those a looser rule matched (see [Looser matches](#looser-matches)): a title of the year before or after, one named alike once numerals are read, or both. `searchFailed` counts the files left unmatched as their titles' searches failed (see [Failed searches](#failed-searches)), `searchFailure` tells the addon that failed most of them and why, `{"addon", "failure"}` (null when none did), and `searchRetryAt` when the folder is scanned again to search them again (null when it is not to be); `failure` is `unreachable`, `timeout`, `private_network`, `rate_limited`, `server_error`, `http_error` or `invalid_response`, or `failed` with an empty `addon` for a failure that is no addon's. `noSearch` counts the files left unmatched with `reason` `no_search`, as no addon of the server describes and searches titles of the folder's kind. `absoluteEpisodes` counts the files named by an absolute number that are versions of the catalog's episodes of their places (see [Absolute episode numbers](#absolute-episode-numbers)), and `unmappedEpisodes` the files their show's numbering could not place (see [How show files are numbered](#how-show-files-are-numbered)). For a music folder, `files` counts its tracks, `matched` those in an album, `unmatched` those left out, and `albums` and `artists` its albums and their artists; its unmatched files are the tracks left out, with `reason` `no_title` or `no_album`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
+<div class="moved-sections">
 
-| Route | What it does |
-|---|---|
-| `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind"}`, `kind` being `movies`, `shows`, `music` or `homevideos`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address; `"useArtwork": false` adds a movies or shows folder whose artwork its titles do not show, `"readExtras": false` one whose scans read no extras. An S3 bucket also takes `"endpoint"` and `"region"`, its `user` and `password` being its access key and secret key; an SFTP folder `"privateKey"` and `"passphrase"`; an rclone remote `"rcloneRemote"`; those three `"pollMinutes"`, from 0 to 1,440, their kind's default when left out |
-| `POST /admin/api/scopes/shared/folders/rclone-remotes` | lists the remotes of an rclone instance, `{"address", "user", "password"}`, `address` such as `http://rclone:5572`; with `"folder"`, a folder's identifier, and no `password`, the one stored for that folder when `address` is that rclone folder's own instance, else none: `{"remotes": […], "error"}`, `error` `unreachable` or `refused` when rclone could not tell them |
-| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user`, `password`, `endpoint`, `region`, `privateKey`, `passphrase`, `rcloneRemote`, `pollMinutes`, `useArtwork`, `readExtras` (applied at the next scan) or `kind`; `"acceptHostKey": true` accepts the host key an SFTP server offers in place of the one saved; a new path or address forgets the files found; a `password`, `privateKey` or `passphrase` left out keeps the stored one, an empty one removes it, but a `path` on another server, port or kind of share, or an S3 `endpoint` on another server, removes those left out; a new `kind` (`movies`, `shows`, `music` or `homevideos`, else `invalid_folder_kind`) keeps the folder's identifier and its library's, stops its scan under way, forgets its files, links and discs' episodes, and scans it again |
-| `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
-| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "search", "disc", "discTitle"}]}`; `search` is, for `reason` `search_failed`, the addon that failed the search and why, `{"addon", "failure"}` as the folder's `searchFailure` gives them, and `null` for other files. `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's or title's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, or for a title other than its main one the image, `#` and its number (`Box.iso#00002`), and `null` for other files. A DVD's or an image's title other than its main one has as `path` its disc's file with `#` and its number (`Box/VIDEO_TS/VTS_02_1.VOB#2`, `Box.iso#2`), which links take as any path. A title of a show's disc has as `unit` its show's folder, as `reason` `disc_episode` while its show is matched, and `discTitle` `{"discPath", "number", "length", "episode", "suggested"}`: its disc's folder or image, its number, how long it plays in seconds (null when unknown), its episodes and those suggested, such as `S01E05` (null for none); `discTitle` is null for other files. A disc's titles follow one another, in the order of their numbers. A matched show's file whose name gives no episode has as `reason`, rather than `unreadable_name`, why: `no_season` (`E05` or `Episode 5` outside a season's folder), `air_date` or `no_episode_number`; `number` is the absolute number of an `absolute_number` file, null for other files |
-| `GET /admin/api/scopes/shared/folders/{id}/looser` | lists the units a looser rule matched (see [Looser matches](#looser-matches)), by unit, at most 1,000: `{"total", "units": [{"unit", "path", "files", "title", "year", "imdbId", "name", "titleYear", "rule"}]}`; `unit` is what an unlink names (a file, a show's folder, a disc's folder), `path` its first file and `files` how many it has, `title` and `year` what its name was read as (`year` null when it gives none), `imdbId`, `name` and `titleYear` the title it was matched to, and `rule` `year` (a title of the year before or after), `numerals` (named alike once numerals are read) or `year_numerals` (both) |
-| `GET /admin/api/scopes/shared/folders/{id}/unlisted` | lists the shows whose files hold episodes their metadata addon does not list, as the shows were last described (see [Episodes the metadata addon does not list](#episodes-the-metadata-addon-does-not-list)), by name: `{"shows": [{"imdbId", "name", "unit", "described", "catalogFirst", "catalogLast", "seasons": [{"season", "files", "catalog"}]}]}`; `unit` is the first of its files' units, a show's folder or a file. `files` are, as ranges `[first, last]` of numbers that follow one another, the numbers its files hold in that season that the addon does not list, and `catalog` those the addon lists in the season, empty when it has no such season. `catalogFirst` and `catalogLast` are the addon's first and last episodes, `{"season", "episode"}`, specials left out unless it lists only specials, null when it lists none. `described` is false for a show last described by an older Polyfin, whose addon's numbers are not known until an app opens it again: `catalog` is then empty and `catalogFirst` and `catalogLast` null. Seasons whose files hold no such episode are left out. `numbering` and `group` tell how the show's files are numbered, as `/shows` gives them |
-| `GET /admin/api/scopes/shared/folders/{id}/shows` | lists the shows a shows folder holds, by name (see [How show files are numbered](#how-show-files-are-numbered)): `{"shows": [{"imdbId", "name", "unit", "files", "numbering", "group", "mapped", "unmapped": [{"path", "season", "episode", "lastEpisode", "absolute", "listed": {"season", "episode"}, "reason"}]}]}`; `numbering` is `catalog`, `per_season`, `continuing`, `absolute` or `order`, `group` the TMDB episode group of `order`, empty otherwise, `files` how many files the show has and `mapped` how many of them the numbering mapped to the catalog's episodes. `unmapped` lists the files it could not place, by path: the season and episodes they tell, `absolute` the absolute number a name telling one alone gives (null otherwise), `listed` the episode of their own they are listed as, and `reason` why: `outside_season`, `beyond_catalog`, `not_in_order`, `not_listed`, `no_order` or `no_catalog` |
-| `PUT /admin/api/scopes/shared/folders/{id}/shows/{imdbId}/numbering` | says how a show's files are numbered, `{"numbering", "group"}`, `numbering` as `/shows` gives it and `group` the TMDB episode group of `order`, one of those `/groups` lists, and places them at once, what users did with their episodes following them. Answers the folder; `invalid_numbering` (400) for another numbering or an `order` without a group, `unknown_episode_group` (400) for a group the series does not have, `no_tmdb_key` (409) without a TMDB key, `episode_groups_unreachable` (502) when TMDB could not tell the series' groups, 404 for a show the folder does not hold |
-| `GET /admin/api/scopes/shared/folders/{id}/shows/{imdbId}/groups` | lists the series' TMDB episode groups a show's files may be numbered in: `{"groups": [{"id", "name", "type", "episodes", "seasons"}], "lookup"}`, as `GET /admin/api/titles/{id}/episode-order` gives them; `lookup` is `no_key` without a TMDB key, `unknown` for a series TMDB does not know or no metadata addon describes, `failed` when TMDB could not be asked, empty otherwise |
-| `GET /admin/api/scopes/shared/folders/{id}/titles?query=…&year=…` | searches the metadata addons for titles of the folder's kind: `{"titles": [{"imdbId", "name", "year", "kind", "posterId"}]}`, at most 10, only titles with an IMDb identifier, those of `year` (optional) first; `kind` is `movie` or `show`, and `posterId` the item whose Primary image (`/Items/{posterId}/Images/Primary`) is the poster, null without one. When some addons fail, it answers the titles the others found; when none found any as addons failed, it answers 502, `addon_unreachable` when an addon could not be reached, `title_search_failed` otherwise |
-| `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a disc's folder |
-| `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link; for a unit a looser rule matched, without a link, removes that match for good: the unit is matched again by the exact rule only, through every scan. Answers the folder; 404 for a unit with neither |
-| `PUT /admin/api/scopes/shared/folders/{id}/episodes` | gives titles of shows' discs their episodes, `{"episodes": [{"path", "episode"}]}`, at most 1,000: `path` a title's, as the unmatched files give it, `episode` as a file's name gives it (`S01E05`, `s1e5`, `S01E05-E06`, `S01E05E06`), an empty one removing those given. Answers the folder; `invalid_episode` (400) for an episode written otherwise, 404 for a path that is no title of a show's disc |
+<a id="blu-ray-discs"></a>*Blu-ray discs* moved to [Discs](discs.md#blu-ray-discs).
 
-An address that is not `smb://host[:port]/share[/path]`, `http(s)://host/path`, `s3://bucket[/prefix]` (without a port), `sftp://host[:port][/path]` or `rclone://host[:port][/path]`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`; an S3 bucket without an `http(s)://` endpoint, or with a region longer than 64 characters or holding spaces, with `invalid_share_endpoint`; a private key that cannot be read, or opened with its passphrase, with `invalid_share_key`; an rclone remote empty, longer than 128 characters or holding `:` or `/` with `invalid_rclone_remote`; `pollMinutes` out of 0 to 1,440 with `invalid_poll_minutes`. A folder's `folder` field gives `endpoint`, `region`, `rcloneRemote`, `privateKeySet` and `passphraseSet`, never the key nor the passphrase, `hostKey` and `offeredHostKey`, the SHA-256 fingerprints of the SFTP host key saved and of another one its server offers, and `pollMinutes`, null for the other folders; `error` may be `host_key_changed`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder that cannot be watched is a problem of its own (`code` `folder_unwatched`): for a local folder, its `failure` is `watch_limit` (on Linux, the limit of watches, ENOSPC), `instance_limit` (on Linux, the limit of watchers or of open files, EMFILE), `open_files_limit` (on macOS, the limit of open files, EMFILE) or `failed`, the only one on Windows; for a share, which carries `share`, it is `unreachable`, `refused`, `host_key_changed` or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
+<a id="disc-images"></a>*Disc images* moved to [Discs](discs.md#disc-images).
 
-`GET /admin/api/health` lists the enabled shares under `shares`, each with its `id`, `name`, `share` (`smb`, `webdav`, `s3`, `sftp` or `rclone`), `pollMinutes` (null for SMB and WebDAV, 0 for a folder listed only at its scans, which is not watched), and `watch`: `notified`, `polled`, or empty while it is not watched. A polled share's `polled` tells why: `webdav`, `s3`, `sftp` or `rclone`, `unsupported` (the SMB server refuses change notifications), `silent` (it did not tell of a change a listing found), `failed` (its notifications were lost, and are asked for again), or empty while they are asked for. A notified share's `polled` is `partial` when its server missed a change in one of its folders, and its folders are listed every 2 minutes too. `unwatched` is the share's `folder_unwatched` failure, and `watchFolders` whether **Watch folders and shares for changes** is on.
+<a id="discs-on-shares"></a>*Discs on shares* moved to [Discs](discs.md#discs-on-shares).
 
-Through the Jellyfin API, an episode only a file holds is an `Episode` of its series like the others, `Name` its file's without extension, without `Overview`, its `Id` made from the series' identifier and its season and number, as an addon's episode's; an episode without an image has a `Primary` image tag, its frame, which `/Items/{id}/Images/Primary` serves. Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`, or `Box - DISC02 - title 2.VOB` for a title other than its main one; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, or `Box - title 2.iso` for a title other than its main one, and its media source plays as a DVD's does. A title of a show's disc is a media source of its episodes, named as a disc's title other than its main one: `Season 01 - Disc 2 - title 1.m2ts`, `Season 01 - Disc 1 - title 3.VOB` or `Disc 1 - title 2.iso`. A share's files are served the same way.
+<a id="dvd-folders"></a>*DVD folders* moved to [Discs](discs.md#dvd-folders).
 
-A title's local artwork is one of its images like the addons': its `ImageTags`, `BackdropImageTags` and `/Items/{id}/Images` list it by tags that change when the image's size or modification time changes, and `/Items/{id}/Images/{type}` serves it, resized as apps ask, from the folder or the share. Besides `Primary`, `Backdrop`, `Logo`, `Thumb` and `Banner`, a local image may be an `Art` or a `Disc` image. No path of the server's shows: `/Items/{id}/Images` gives no `Path`.
+<a id="shows-on-discs"></a>*Shows on discs* moved to [Discs](discs.md#shows-on-discs).
 
-A home videos folder's `kind` is `homevideos` in the admin API, added with `"kind": "homevideos"`; it takes no `useArtwork`, its artwork always showing. Its `files` and `matched` count its videos, `unmatched` is 0, and `datedBy` counts them by where their dates come from: `{"nfo", "created", "file"}` (zero for other folders). Its unmatched list is empty, and its `titles` and `links` routes answer 404. Through the Jellyfin API, its library's `CollectionType` is `homevideos`, and its titles have `Type` and `MediaType` `Video`, `PremiereDate` and `ProductionYear` from their date, `Overview` from their NFO file's plot, no `ProviderIds`, and a `Primary` image, the poster beside them or a frame; they answer `IncludeItemTypes=Video`, never `Movie`. In the playback history and the statistics, their `kind` is `video`.
+<a id="absolute-episode-numbers"></a>*Absolute episode numbers* moved to [Episode numbering](episode-numbering.md#absolute-episode-numbers).
 
-Through the Jellyfin API, a plain video of a movies folder is a `Movie` item of the folder's library, and one of a shows folder a `Series` with its `Season` and `Episode` items (see [Plain videos](#plain-videos)). They have no `Overview`, `OfficialRating` nor `ProviderIds`; a plain movie's or series' `ProductionYear` is the year its name gives, and an episode's `Name` its file's, without extension. Their identifiers are those of other titles, made from the plain video's own (`polyfin-plain:…`), which an app never needs. An item of a plain video whose file is gone or was renamed answers 404, as Jellyfin answers for an item that is gone. One matched since answers `/Items/{id}` and `/Users/{userId}/Items/{id}` with the title it became, or its season or episode of the same numbers, whose `Id` is the title's own, not the identifier asked; it answers 404 to everything else, and lists never show it. `POST /Items/RemoteSearch/Apply/{id}` on a plain movie, series, season or episode links its unit to the result's `ProviderIds.Imdb` and answers 204, 400 for a result without an IMDb identifier, 404 for a plain video matched already, and 500 for any other item; administrators only (403 otherwise). The admin API lists the files as before, among the unmatched files of the folder.
+<a id="episode-numbers"></a>*Episode numbers* moved to [Episode numbering](episode-numbering.md#episode-numbers).
 
-</details>
+<a id="how-a-shows-files-are-numbered"></a>*How show files are numbered* moved to [Episode numbering](episode-numbering.md#how-show-files-are-numbered).
+
+<a id="music-folders"></a>*Music folders* moved to [Music, audiobooks and podcasts](music.md#music-folders).
+
+<a id="artwork"></a>*Artwork* moved to [Naming and matching files](naming-and-matching.md#artwork).
+
+<a id="extras-and-theme-media"></a>*Extras and theme media* moved to [Naming and matching files](naming-and-matching.md#extras-and-theme-media).
+
+<a id="matching"></a>*Matching* moved to [Naming and matching files](naming-and-matching.md#matching).
+
+<a id="nfo-files"></a>*NFO files* moved to [Naming and matching files](naming-and-matching.md#nfo-files).
+
+<a id="subtitle-files"></a>*Subtitle files* moved to [Naming and matching files](naming-and-matching.md#subtitle-files).
+
+<a id="video-files"></a>*Video files* moved to [Naming and matching files](naming-and-matching.md#video-files).
+
+<a id="network-shares"></a>*Network shares* moved to [Network shares](network-shares.md#network-shares).
+
+<a id="identify-in-the-web-player"></a>*Identify in the web player* moved to [Unmatched files](unmatched-files.md#identify-in-the-web-player).
+
+<a id="unmatched-files"></a>*Unmatched files* moved to [Unmatched files](unmatched-files.md#unmatched-files).
+
+</div>
