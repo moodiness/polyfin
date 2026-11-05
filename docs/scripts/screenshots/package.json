@@ -1,0 +1,16 @@
+{
+  "name": "polyfin-docs-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Retakes the admin app's screenshots of the documentation from a demo server.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "take": "node take.mjs"
+  },
+  "dependencies": {
+    "pg": "8.23.1",
+    "puppeteer-core": "25.16.0"
+  }
+}
