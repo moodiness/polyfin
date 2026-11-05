@@ -1,703 +1,185 @@
 # Users and permissions
 
-This page covers user accounts: what Polyfin keeps for each user, and the limits an administrator can set on them. It also covers the server-wide security settings.
+This page is for administrators. It covers user accounts, groups, and the limits you can set on each user: ratings, genres, libraries, hours, playback and quality.
 
 ## Accounts and permissions overview
 
-Polyfin has separate accounts for each user, with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points and Next Up are tracked per user, and each user can be limited to titles up to a rating.
+Each user has their own account, and signs in with a password or Quick Connect, as on Jellyfin. Polyfin keeps watch state, favorites, resume points and Next Up for each user. Each user can be limited to titles up to a rating.
 
-Create a user with **Create a user**, at the top of **Users**. Open a user from the list to set their limits. Their page has these sections:
+Create a user with **Create a user**, at the top of **Users**. Open a user from the list to set their limits.
 
 | Section | What it sets | Saved |
 |---|---|---|
 | **Name and password** | Name, password | Its own save button |
-| **Access** | Administrator, disabled, end date | Switches: at once. **Ends on**: **Save date** (see [Ending an account](#ending-an-account)) |
-| **Metadata language** · **Web player theme** · **Audio region** | Per-user choices (see [Metadata language](#metadata-language), [Web player theme](#web-player-theme), [Audio region](#audio-region)) | Its own save button |
+| **Access** | Administrator, disabled, end date, permissions | Switches: at once. **Ends on**: **Save date** (see [Ending an account](#ending-an-account)) |
+| **Metadata language** · **Web player theme** · **Audio region** | Per-user choices (see [Metadata language](watch-state.md#metadata-language), [Web player theme](themes-and-custom-code.md#theme-per-user), [Audio region](watch-state.md#audio-region)) | Its own save button |
 | **Playback and access** | Playbacks at once, maximum quality, conversion, torrents and more | **Save playback and access** |
 | **Parental control** | Highest rating allowed | **Save parental control** |
 | **Visible libraries** · **Blocked genres** · **Allowed hours** | What the user sees, and when | **Save visible libraries**, **Save blocked genres**, **Save allowed hours** |
 | **Live TV channels** | The channels the user sees | **Save Live TV channels** |
-| **Shared links** | The share links the user made (see [Share links](#share-links)) | |
+| **Shared links** | The share links the user made (see [Share links](invite-and-share-links.md#share-links)) | |
 | **Devices** | Signed-in devices | Signing out a device asks first |
 
-Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
+![A member's page in Users, with its sections listed on the left and Name and password open](images/user-page.webp)
 
-- To give several accounts the same limits at once, an administrator puts them in a group (see [User groups](#user-groups)).
+Administrators can set most of these from a Jellyfin app too. Each section below says where a setting lives.
+
+- **Groups** give several accounts the same limits at once (see [User groups](#user-groups)).
 - **Reset to defaults**, at the top of the page, puts the limits back to a new user's (see [Resetting settings to their defaults](#resetting-settings-to-their-defaults)).
 
-Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Other ways to bring users and their history in:
+Other ways to bring users and their history in:
 
-- **Import from another server**: an administrator moving from a Jellyfin, Emby or Plex server brings its accounts over, with what each user watched (see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex)).
-- Users can import their own watch history too (see [Importing your own watch history](#importing-your-own-watch-history)).
-- **Import from an app** brings what users watched in an app built on addons, such as Stremio or Nuvio (see [Importing from an app](#importing-from-an-app)).
-- Rather than choosing a password for each person, an administrator can send them an invite link, with which they create their own account (see [Invite links](#invite-links)).
+- **Import from another server** brings the accounts of a Jellyfin, Emby or Plex server over, with what each user watched (see [Moving to Polyfin](moving-to-polyfin.md)).
+- Users can import their own watch history too (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history)).
+- **Import from an app** brings what users watched in an app built on addons, such as Stremio or Nuvio (see [Importing from an app](moving-to-polyfin.md#importing-from-an-app)).
+- An invite link lets people create their own account, so you need not choose a password for each (see [Invite links](invite-and-share-links.md#invite-links)).
+- Each user can connect their own tracking accounts (see [Tracking services](tracking.md)).
 
 ### Deleting a user
 
-**Delete user**, on a user's page, deletes the account with its devices and sessions, and everything kept for it; deleting the user from a Jellyfin app does the same. Polyfin also signs out, in the background, what it opened for that user at apps and services outside Polyfin:
+**Delete user**, on a user's page, deletes the account with its devices, sessions and everything kept for it. Deleting the user from a Jellyfin app does the same.
 
-- the Stremio auth keys it got by a link code or a password, and the Nuvio sessions it opened, its own only, for a connection (see [Staying connected](#staying-connected)) or for an account still held while the user chose what to import. A Stremio key the user pasted is only forgotten, as signing it out would sign their browser out;
-- the Trakt and Simkl tokens of their tracking connections, which are revoked. The keys they typed, for MDBList, PublicMetaDB and ListenBrainz, and their Last.fm session key, are only forgotten (see [Tokens and keys](tracking.md#tokens-and-keys)).
+Polyfin also ends, in the background, what it opened for that user at apps and services outside Polyfin:
 
-The deletion never waits for an app or a service, and does not fail when one fails or does not answer: Polyfin logs a session it could not sign out, without its key or token, and that session stays valid there until it expires or the user signs it out there.
-
-Stopping Polyfin also signs out the sessions it opened for the accounts held while users choose what to import, waiting 5 seconds at most.
-
-## Watch state
-
-Polyfin keeps each user's played titles, resume points, favorites and ratings. They follow the user from one Jellyfin app to another.
-
-- Playback moves the resume point, and marks a title played near its end, with Jellyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)).
-- **Continue Watching** lists what is under way. "Remove from Continue Watching" takes a title off it and changes nothing else: the title stays played or not, with its plays and the date it was last played. Polyfin remembers when: an import from a tracking service or an app brings the title back only with a resume point set after that (see [How the history merges with Polyfin's](tracking.md#how-the-history-merges-with-polyfin-s)). Playing the title again sets a resume point as usual, and nothing is sent to tracking services.
-- "Remove from Next Up" takes a series off the user's Next Up and changes nothing else: what they watched stays as it was. The series stays off until one of its episodes is played after the removal (a play, a mark played dated after it, or an import of such a play), a new episode of it comes out after it, or the user puts it back (see [Continue Watching and Next Up](#continue-watching-and-next-up)).
-- "Hide this title" takes a movie, a home video, a series or a folder of videos off the user's lists: libraries, home rows (Latest, Continue Watching, Next Up, Upcoming), searches, similar titles, recommendations, person pages, collections and the Watchlist. A hidden series takes its episodes with it, and a hidden folder its videos. The title still opens and plays from a link, and its page still lists its seasons and episodes. Other users are not affected. "Show this title again" brings it back.
-- In the web player, these are in the ⋮ menus (see [Web player](web-client.md#dashboard-links-and-single-sign-on)). For the other apps, which have no such buttons, **My account** in the admin app has a **Continue Watching** section, each title with **Remove**; a **Next Up** section, each episode with **Remove**, and below them the series taken off, each with **Show again**; and a **Hidden titles** section, each with **Show again**. Other apps see the change at their next refresh.
-- **Next Up** lists the next episode of each series being watched (see [Continue Watching and Next Up](#continue-watching-and-next-up)).
-- The **Upcoming** row lists the coming episodes of the series the user watches or marked favorite.
-- Both look at the 50 series the user watched most recently, as each series asks its addon for its episodes. A history imported from a tracking service can hold hundreds of series (see [Importing your watch history](tracking.md#importing-your-watch-history)).
-- Marking a series or a season played marks its released episodes.
-- Apps that keep Jellyfin's live connection (WebSocket) open are told of these changes as they happen, from any of the user's apps.
-
-Users can also make playlists of movies and episodes from their apps. A playlist can be private, shared with other users, or open to all.
-
-### Continue Watching and Next Up
-
-**Continue Watching** lists the movies, episodes and videos the user stopped past **Resume point kept after (%)** and before **Marked played after (%)**, 5% and 90% by default (see [Played and resume thresholds](#played-and-resume-thresholds)), the most recently played first. A 45-minute episode stopped in its first 2 minutes 15 seconds keeps no resume point, and does not show there. Whatever version plays, a torrent's or another, the resume point is the title's: the movie's or the episode's.
-
-**Next Up** lists one episode for each series the user watches, or two for a series being rewatched (see below):
-
-- A series is watched once the user played or started one of its episodes, even an episode stopped before the resume threshold.
-- Its episode is the first released, unplayed one after the furthest episode played, specials left out. For a series none of whose episodes is played, it is the first episode.
-- When that episode is under way, it is offered to the apps that ask for such episodes. The web player's home does not, and leaves the series out: the episode is in Continue Watching instead.
-- Series come by when their furthest played episode was played, the latest first, then the series with no episode played, the latest started first.
-- The web player's home also leaves out the series not watched for longer than its "Max days in 'Next Up'" setting, on its Display settings page: a year by default.
-- With the web player's "Enable Rewatching in Next Up" setting, on the same Display settings page and off by default, a series played again from an earlier episode also shows the episode after the one played last, if that one was played before: a series watched to the end and started again from its first episode shows its second. A series being rewatched before its end can show twice, its next unplayed episode and the next one of the rewatch, each placed by when the episode before it was played. An episode of the rewatch under way is left out. The setting is saved in the browser only, for each user, as jellyfin-web saves it, and the web player's home and Next Up page send it; other apps may have their own.
-- "Remove from Continue Watching" on an episode only takes its resume point: its series is still being watched, so the episode, when it is the next one of the series, shows in Next Up, the web player's home included.
-
-A user who wants Continue Watching alone hides Next Up in the web player: in the web player's **Settings › Home**, set the section that shows **Next Up**, the sixth by default, to **None**. It is saved in the account, so it follows the user to other browsers. Other apps have their own home settings. Rows the administrator placed **After Next Up** then take the place before it (see [Home rows](web-client.md#home-rows)).
-
-**Remove from Next Up**, in the ⋮ menu of a Next Up card in the web player, or **Remove** in **My account › Next Up**, takes a series off the user's Next Up, whatever episode it shows, both entries of a series being rewatched included, without changing what they watched. Every app's Next Up leaves it out, DLNA's too, until:
-
-- one of its episodes is played after the removal: a play, a mark played dated after it (jellyfin-web's ✓ dates it now; a mark without a date dates only an episode never played), or an import from a tracking service or an app of a play after it. An older play imported keeps it off;
-- one of its episodes comes out after the removal, its date known and passed; specials do not count;
-- or the user puts it back with **Show again** under **My account › Next Up**, which lists the series still off.
-
-Next Up asked for one series still answers its next episode: its page's **Next Up** and playing the series from its page keep working. Continue Watching and Upcoming do not change. Taking the series off again counts from the new removal. In **My account › Next Up**, **Remove from Continue Watching also takes the series off Next Up**, off by default, makes "Remove from Continue Watching" on an episode, a season or a series also take its series off Next Up, the same way; without it, an episode taken off Continue Watching shows in Next Up, as its series is still being watched. **Reset my preferences** turns it off. Polyfin does not tell tracking services of a removal, and deleting the user deletes their removals.
-
-The web player's home keeps its rows for a minute. jellyfin-web 12.4 keeps what Continue Watching and Next Up list for up to a minute after it last asked, also across a reload, and draws the rows again from it without asking. Polyfin's script in the web player has these rows ask Polyfin again at once when an item of theirs is marked played or unplayed, or its resume point moves, and on each of their refreshes for a minute after. A card marked played with its ✓ makes way for the next episode within seconds (see [Web player](web-client.md#dashboard-links-and-single-sign-on)). A change made in another app does the same, without a reload, as soon as the web player hears of it on its live connection. Polyfin answers the change at once, and other apps show it at their next refresh. A card taken off with "Remove from Continue Watching" or "Remove from Next Up" leaves the row at once, and stays off when the row asks again.
-
-**Compared with Jellyfin**
-
-- Next Up follows Jellyfin 12.4: a series is watched once one of its episodes has a date, played or only started ([NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L42-L70)), and a series with no episode played comes after the others, from its first unplayed episode ([NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L204-L247), [TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L145-L151)). An episode under way is left out when the app asks so ([TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L227-L237)).
-- The web player keeps its rows for a minute on a Jellyfin server too: its queries stay fresh for a minute ([queryClient.ts](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/utils/query/queryClient.ts#L12-L50)), and the changes the server announces do not reach the rows' queries ([QueryClientEventHandler.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/QueryClientEventHandler.tsx#L20)). This is reported upstream as jellyfin/jellyfin-web#8543. Polyfin's script asking again after a played change is Polyfin's own: on a Jellyfin server, a card marked played stays as it was until the home is drawn again more than a minute after it last asked.
-- "Enable Rewatching in Next Up" (`enableRewatching`) follows Jellyfin 12.4, off unless the app sends it ([TvShowsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L90-L91)): the episode played last is the played one with the latest date, and the rewatch's next episode the first played, released one after it, specials left out ([NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L119-L156), [NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L249-L306)), left out when under way, dated with the play before it, and listed beside the series' next unplayed episode ([TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L154-L176), [TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L242-L248)). It applies to a series asked for by `seriesId` too, as in Jellyfin. DLNA's Next Up and the preloading of next episodes leave it off.
-- Jellyfin 12.4 has no way to take a series off Next Up but its watch state: marked played, or every episode played or started marked unplayed ([TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L71-L171), [NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L42-L70)). Remove from Next Up, its routes `DELETE` and `POST /Polyfin/UserItems/{itemId}/NextUp`, and the choice that ties it to Remove from Continue Watching are Polyfin's own.
-
-### Home rows
-
-**My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. A row with a schedule is listed outside its schedule too, so that the user can turn it off beforehand. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay in the web player's **Settings › Home**. **Reset my preferences** turns every row on again (see [Your own preferences](#your-own-preferences)).
-
-### Taste profile
-
-**My account › Taste profile** shows the user the taste profile Polyfin built of them (see [Top picks for you](web-client.md#top-picks-for-you)): when it was built and from how many titles, how well it knows them, and, of genres, directors, cast, decades and languages, up to eight values they like and eight they like less, the weightiest first. A genre whose titles leave **Top picks for you** says so. Before the profile is confident, the section says the lists keep their usual order. The profile stays on the server: only its user sees it, an administrator included, and deleting the user deletes it.
-
-**Tell me why a title is for me**, on by default, starts a title's page with "87% for you · because you like …" once the profile is confident. Off, no title's page says it.
-
-### Track choices
-
-**My account › Track choices** tells for how many series and movies Polyfin keeps the audio and subtitle tracks the user chose, which their next plays show by default in every app (see [Remembered track choices](playback.md#remembered-track-choices)). **Forget my track choices** forgets them all, after asking first: every title plays the tracks the user's language preferences choose again. **Reset my preferences** forgets them too (see [Your own preferences](#your-own-preferences)).
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/account/track-choices` answers `{"titles": n}`, the number of series and movies with a choice of the user signed in to the admin app.
-- `DELETE /admin/api/account/track-choices` forgets them, answering 204.
-
-</details>
-
-### Played and resume thresholds
-
-Two settings in **Settings › Content** decide when a title counts as played and when a resume point is kept.
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Marked played after (%)** | **Settings › Content** | 90 (from 50 to 100) | A position past this marks the title played. |
-| **Resume point kept after (%)** | **Settings › Content** | 5 (from 0 to 50) | A position before this keeps no resume point. |
-
-- The resume threshold must be below the played one; Polyfin refuses one that is not.
-- A title shorter than 5 minutes is still marked played as soon as it is past the resume threshold, as in Jellyfin.
-
-**Compared with Jellyfin**
-
-- These settings replace Jellyfin's `MaxResumePct` and `MinResumePct`, and default to Jellyfin's 90 and 5.
-- Jellyfin takes any values; Polyfin keeps them in the ranges above.
-
-## Moving from Jellyfin
-
-**Import from another server**, at the top of **Users** next to **Create a user**, brings a Jellyfin server's accounts over, and what each of their users watched. It sits under **Users** because it creates accounts and fills each account's watch state. Only administrators see it. **Server** chooses the kind of server: **Jellyfin**, for Jellyfin and the servers that speak its API, as described here, or **Emby** and **Plex** (see [Moving from Emby and Plex](#moving-from-emby-and-plex)).
-
-The page shows the import running, or the last one, whoever started it: an administrator here, or a user importing their own watch history (see [Importing your own watch history](#importing-your-own-watch-history)).
-
-### Connecting to the server
-
-- **Server address**: the address Jellyfin opens at in a browser, such as `http://192.168.1.10:8096`, with the path it is served under if any. A host and port alone mean `http://`. Local network addresses work.
-- **Connect with** chooses how Polyfin reads the server:
-  - **An API key**: create one in Jellyfin's dashboard, under API Keys. It reads every user's watch data at once.
-  - **A user account**: a **User name** and its **Password** on the server, empty if the account has none. Polyfin signs in as Jellyfin's apps do, which every server that speaks Jellyfin's API allows, even one without API keys, and signs out once done. An administrator's account lists every user. Any other account lists only itself, even on a server that shows every user to anyone: only that account can be imported.
-
-Polyfin uses the key and passwords for this import only, and never saves them: each import asks for them again.
-
-**Connect** lists the server's users, with their administrator status and whether they are disabled. A wrong key, name or password, a key or account that may not list the server's users, an address where nothing answers, and an address where something other than Jellyfin answers each say so.
-
-<a id="reading-each-user-s-watch-data"></a><a id="reading-each-users-watch-data"></a>
-
-### Reading the watch data of each user
-
-- A key from the server's dashboard belongs to no user: it reads every user's watch data.
-- A user's own key, the access token of a user's session, or a user account belongs to that user, and reads only their watch data. Polyfin asks the server whose key it is, and names its owner on the page.
-- When that user is not an administrator of the server, Polyfin lists and imports only them, and the page says so. To list the server's other users, connect with an administrator's account or an API key. Emby, whose users' own keys are refused, follows the same rule when connected with a user account.
-
-Jellyfin refuses a user's key the other users' data. Some servers that speak Jellyfin's API answer it with that user's data whatever user is asked, which would put one user's history into another's account. So, connected with an administrator's account or own key, Polyfin reads each other user's watch data signed in as them: with **Import watch data** ticked, their row asks for their **Password on …** the server, left empty if their account has none. Polyfin signs in as them when the import starts, reads their watch data, then signs out. Without their password, untick **Import watch data**: their account can still be created.
-
-For a new account, **Keep this password in Polyfin** gives it that same password, so the user signs in to Polyfin as before. Polyfin passwords have at least 8 characters: a shorter one is refused, and the row asks for another.
-
-### Choosing who to import
-
-For each Jellyfin user, **Import into** chooses where their data goes:
-
-- **New user**: a Polyfin account is created, named as in Jellyfin, an administrator if they were one, hidden from the sign-in screen if they were. Jellyfin does not give out passwords: set one for each new account, under the same rules as **Create a user**, or keep the one the user signs in with (see above). The name can be changed too.
-- An existing Polyfin user: the one with the same name, whatever its case, is chosen at first. Several Jellyfin users can go into one account.
-- **Do not import**: the user is left out. Disabled Jellyfin users start so.
-
-**Import watch data** tells, user by user, whether their watch data comes along; a new account can be created without it. **Start import** creates the new accounts, all of them or none: when one name is taken, one password is too short, or the server refuses a user's password, nothing is created, and the row says why. Then the watch data is imported in the background.
-
-### What is imported
-
-| From Jellyfin | Into Polyfin |
+| What Polyfin opened or holds | What it does |
 |---|---|
-| User names, administrator status, hidden from the sign-in screen | New accounts, with the passwords the administrator sets or keeps. |
-| Played movies and episodes, with the date last played and the play count | Played marks. |
-| Resume points of movies and episodes | Resume points, for titles not played. |
-| Favorite movies, series and episodes | Favorites. |
-| Each user's ratings of movies, series and episodes, from 0 to 10, with **Ratings** | Ratings: a rating Polyfin has stays. A thumb up without a rating becomes a favorite. |
-| The server's collections, with **Collections** | Collections every Polyfin user sees, with the titles found. |
-| Each user's video playlists, with **Playlists** | That user's own playlists, in order, with the titles found. |
-
-Nothing else comes over: users' limits and settings, profile pictures, and music, books and Live TV.
-
-### Ratings, collections and playlists
-
-Under the users, **Also bring** offers **Ratings**, **Collections** and **Playlists**, each ticked by default. Untick one and the import does not read it.
-
-- **Ratings**: a rating from 0 to 10 comes as it is. Emby can keep a thumb up without a rating: such a title becomes a favorite, as Letterboxd's liked movies can (see [Letterboxd](#letterboxd)). A thumb down alone brings nothing. A rating Polyfin already has stays, as for every import.
-- **Collections**: each collection of the server becomes a Polyfin collection, which every user sees (see [Collections made by users](addons-and-libraries.md#collections-made-by-users)), holding the titles found, in the server's order; the titles not found are listed with the others. A collection with no title found is not created: the user's result names it. A collection that several users see is created once, by the first of them, and gets the titles the next ones see added.
-- **Playlists**: each video playlist a user sees on the server becomes a playlist of their own in Polyfin, with its movies and episodes found, in order, a title as many times as the playlist holds it. Its other entries, and the playlists of music, photos or books, are left out. A playlist with no title found is not created, and the result names it. A playlist several users see, as one shared with them, becomes a playlist of each of them.
-
-Polyfin remembers which collection and playlist of which server each one it created came from, by the server's identifier and the list's. Importing again therefore creates nothing twice: it adds to a collection the titles found that it does not hold yet, and to a playlist those it does not hold at all, after its entries. The result counts these titles as added to lists brought before, and a list that already held every title found as already in Polyfin. A collection or playlist deleted in Polyfin since is created again by the next import.
-
-**Compared with Jellyfin**
-
-- Jellyfin keeps one rating per user and title, and derives the thumb from it: up for a rating of 6.5 or more, and setting a thumb sets the rating to 10 or 1 ([`UserItemData.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/UserItemData.cs#L96-L118), Jellyfin 12.4). Its API lists the titles liked (`Filters=Likes`, [`InternalItemsQuery.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/InternalItemsQuery.cs#L599-L614)), but no list holds only the titles rated lower: those are brought when they are played, in progress or favorite, which Polyfin reads anyway, and not otherwise.
-- Jellyfin's collections are seen by every user who sees their titles, as Polyfin's are; its playlists belong to one user and can be shared or open to everyone ([`PlaylistsController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/PlaylistsController.cs#L509-L568)). Polyfin brings a shared playlist as each user's own copy, without the sharing.
-- A user's own import (see [Importing your own watch history](#importing-your-own-watch-history)) creates collections only for a user who may manage collections, as Jellyfin lets only them create one.
-
-### How titles are matched
-
-Titles are found as an [imported watch history](tracking.md#importing-your-watch-history) finds them: by the IMDb identifier Jellyfin gives, the way the usual metadata addons name titles, or by TMDB, or by TVDB for series, when a catalog listed the title under one of those. Episodes are found by their series' identifiers and their season and episode numbers; a file holding several episodes counts for each of them. A title no catalog listed yet shows in the user's lists at once, described by the addons. One known by its TMDB identifier only, or a series by its TVDB one, is asked of the server's metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`): it is found by the other identifiers their description gives, else shows under `tmdb:<id>` or `tvdb:<id>`.
-
-A title that cannot be matched is left out, and the import goes on. Each user's result lists these titles with why: **No IMDb, TMDB or TVDB identifier** (a home video, or an episode Jellyfin did not number) or **Not in Polyfin** (it has no IMDb identifier, no catalog listed it under its TMDB or TVDB one, and no metadata addon of the server describes it by its TMDB one, or a series by its TVDB one). Plex adds two more (see [Plex](#plex)).
-
-<a id="how-the-data-merges-with-polyfin-s"></a><a id="how-the-data-merges-with-polyfins"></a>
-
-### How the data merges with Polyfin data
-
-The data merges as an imported watch history does (see [How the history merges with Polyfin's](tracking.md#how-the-history-merges-with-polyfin-s)):
-
-- Played marks, resume points and favorites are only added, never removed.
-- A title keeps Polyfin's date when it is later than Jellyfin's, and the larger of the two play counts.
-- Of two resume points, the more recent one stays.
-- Importing again adds nothing twice and never overwrites newer Polyfin data, so an import can safely run again.
-
-Nothing is written to the Jellyfin server: the import only reads it. Signing in opens a session there, as an app does, which Polyfin ends as soon as it is done with it.
-
-### Progress and limits
-
-- One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it read and added: the items read, titles marked played, resume points and favorites, titles rated, collections and playlists created, what Polyfin already had, the titles not found, and the collections and playlists not created as none of their titles was found.
-- **Stop import** stops it at once. What was imported stays: a user whose data was being saved is saved whole, and one whose data was being read gets nothing until the next import.
-- Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user. A user whose data the server does not let the key read is marked so, and the import goes on with the next users.
-- A resume point without a date is counted, not added: whether Polyfin's own is newer cannot be told. Jellyfin dates every resume point; Plex dates the ones a player saved.
-- An answer the import cannot read ends it with `not_jellyfin`, and Polyfin's log says where, at the warning level: `An import could not read an answer`, with the path asked and why it could not be read, never the query or the key.
-- Once each user is read and saved, Polyfin's log says, at the info level, `An import read a user's watch data`, with the user's identifier on the server and what was read and done: for Plex the library `sections`, the items `listed` and, for an account other than the owner, the `history` rows and the rows of `otherAccounts` left out; then `read`, `matched`, `played`, `resumed`, `favorites`, `ratings`, `watchlist`, `collections`, `playlists`, `listTitles`, `skippedLists`, `upToDate`, `undated`, `unmatched`, `nothingAdded` and `problem`. Never the server's address nor the key.
-- A user signed in is signed out once their watch data is read, and the import's own session when it ends, stopped or failed. A restart during an import leaves them open: they show among the users' devices on the server, which can end them.
-- Polyfin keeps the running import and the last result in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
-
-#### Nothing imported?
-
-A user whose import ended without a problem and added nothing says why, under the counts:
-
-- **Everything read was already in Polyfin**: an earlier import, or Polyfin itself, has it all (`up_to_date`).
-- **The server lists nothing played, in progress or favorite for this user**: Jellyfin and Emby (`nothing_played`).
-- **This Plex server has no movie or show library** (`no_sections`).
-- **The owner has nothing played or in progress** in the Plex server's movie and show libraries (`plex_owner_nothing_watched`); a user's own Plex import says the same of their account (`plex_nothing_watched`, see [Plex, signing in](#plex-signing-in)).
-- **Plex lists no play of this account on this server** (`plex_no_history`): see [Plex](#plex) for what Plex's playback history holds. Everything comes over when the administrator signs in to Plex as the owner (see [Signing in to Plex as the owner](#signing-in-to-plex-as-the-owner)), or when the person signs in to Plex themselves (see [Plex, signing in](#plex-signing-in)).
-
-A user whose titles were read but could not be matched says nothing more: the titles not found tell why.
-
-**Compared with Jellyfin**
-
-- Jellyfin keeps watch data for the files of its libraries; Polyfin keeps it for the titles of its catalogs. Titles are therefore matched by their identifiers, not by their files.
-
-<details>
-<summary>For app developers</summary>
-
-- The admin API serves the import to administrators:
-  - `POST /admin/api/jellyfin-import/users` lists a server's users, given `kind` (`jellyfin`, the default, `emby` or `plex`), `address`, and `apiKey`, or `account` with `name` and `password`. It answers `server` with its `kind`, and `keyOwner`, the user the key belongs to or who signed in, `null` for a server's key. An account the server refuses is `jellyfin_sign_in_refused`, and one it does not let sign in `jellyfin_sign_in_forbidden`.
-  - `POST /admin/api/jellyfin-import` takes the same, creates the accounts and starts the import. An entry's `jellyfinPassword`, given with `watchData`, has the import sign in as that user. Connected as a user, another user's watch data needs it: without it, the answer is `jellyfin_key_owner_only`. A password the server refuses is `jellyfin_password_refused`, an account it does not let sign in `jellyfin_sign_in_forbidden`, and a sign-in that opens another user's session `jellyfin_other_user`. Each names the `jellyfinId`, and comes before anyone is created. `ratings`, `collections` and `playlists`, each `true` when left out, choose the extras (see [Ratings, collections and playlists](#ratings-collections-and-playlists)).
-  - `GET /admin/api/jellyfin-import` reads the import, and `POST /admin/api/jellyfin-import/stop` stops it. The import names its `server.kind`, `startedBy` (`id` and `name`), `own`, set for a user's import of their own watch history, and `extras` (`ratings`, `collections`, `playlists`), what it brings. Each user names what was read: `read` (the items with watch data, and the titles of the collections and playlists), for Plex `sections`, `listed` and `history` (`null` for Jellyfin and Emby), and `matched`; what was done: `played`, `resumed`, `favorites`, `ratings`, `watchlist`, `collections` and `playlists` (those created), `listTitles` (the titles added to collections and playlists an earlier import brought), `upToDate` (the marks, resume points, favorites and ratings Polyfin already had, and the collections and playlists an earlier import brought that held every title found) and `undated` (the resume points without a date, not added); `unmatchedCount` and `unmatched`, whose `reason` is `no_identifier`, `not_found`, `not_in_library` or `other_episode_order`; `skipped`, the collections and playlists not created, each with its `kind` (`collection` or `playlist`) and `name`; `problem`; and `nothingAdded`, `null` unless the user's import ended without a problem and added nothing: `up_to_date`, `nothing_played`, `no_sections`, `plex_owner_nothing_watched` or `plex_no_history`.
-  - While any import runs, starting another is `jellyfin_import_running` (409).
-  - The key and passwords are never answered back.
-- Polyfin reads Jellyfin with `GET` requests, sending the key or session token as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`, and `Likes` for the ratings) and `Fields=ProviderIds`, then the episodes' series by `Ids`. For the collections, it lists `IncludeItemTypes=BoxSet`, then each one's titles with `ParentId`; for the playlists, `IncludeItemTypes=Playlist`, then each one's entries with `GET /Playlists/{id}/Items?UserId=…`, as that user sees them.
-- It signs in with `POST /Users/AuthenticateByName`, naming itself and a device of its own in the `Authorization` header as Jellyfin's apps do, and signs out with `POST /Sessions/Logout`.
-
-</details>
-
-## Moving from Emby and Plex
-
-Under **Import from another server**, **Server** also offers **Emby** and **Plex**. Accounts are chosen, created and filled as for Jellyfin (see [Choosing who to import](#choosing-who-to-import)), titles are matched the same way (see [How titles are matched](#how-titles-are-matched)), and the data merges the same way. The result shows, user by user, what was added and the titles not found.
-
-### Emby
-
-The flow is Jellyfin's: **Server address**, then **Connect with** an API key or a user account, then each user's **Password on …** the server when connected as one user.
-
-- **API key**: create one in Emby's settings, under API Keys. It reads every user's watch data.
-- A user's own key or access token is refused (`emby_user_key`): Emby has no way to tell whose a key is, and it answers a user's key with that user's own data whatever user is asked. Connect with a user account instead: the user who signs in is known.
-- Emby keeps listing Polyfin among its devices after Polyfin signs out, without a session.
-- Polyfin first reads what the server says of itself, which Jellyfin and Emby tell anyone, and sends the key or password only to a server of the kind chosen: Jellyfin names itself, Emby does not. **Emby** chosen for a Jellyfin server, or **Jellyfin** for an Emby server, stops there with `not_jellyfin`: a server answered, but not of that kind.
-
-What comes over is what comes over from Jellyfin: played movies and episodes with their dates and play counts, resume points, favorites, and, as chosen, ratings, collections and playlists.
-
-### Plex
-
-- **Server address**: the address of Plex Media Server itself, such as `http://192.168.1.10:32400`.
-- **Plex token**: the server owner's token. To find it, open Plex in a browser, signed in as the owner, open the menu of any movie, choose Get Info, then View XML: the address of the page that opens ends with `X-Plex-Token=` followed by the token.
-
-The users listed are the accounts the server knows, the owner first, marked as an administrator.
-
-| From Plex | Into Polyfin |
-|---|---|
-| The owner's played movies and episodes, with their play counts and the date last played | Played marks. |
-| The owner's resume points | Resume points, for titles not played. |
-| The owner's ratings of movies, shows and episodes, from 0 to 10, with **Ratings** | Ratings, as an imported Letterboxd rating: a rating Polyfin has stays. |
-| Another account's playback history on this server: each movie and episode it played to the end there, with the number of plays and the date of the last one | Played marks. |
-| The collections of the movie and show sections, with **Collections** | Collections, as Jellyfin's (see [Ratings, collections and playlists](#ratings-collections-and-playlists)), read once with the owner's token. |
-| The owner's video playlists, with **Playlists** | The owner's account's playlists. |
-
-With the owner's token, Plex gives Polyfin the owner's own watch state, but of the other accounts only their playback history on this server, and Plex's history holds only plays:
-
-- a title played to the end on this server;
-- not a title marked as watched without playing it: since Plex Media Server 1.40, marking makes no history entry;
-- not a title synced from the account's Plex account, as Plex does when an account is given access to a new server;
-- not a resume point: those stay on Plex too.
-
-So an account that shows titles as watched in Plex may have nothing to import: the page then says that Plex lists no play of this account on this server, and that everything comes over when the administrator signs in to Plex as the owner (see [Signing in to Plex as the owner](#signing-in-to-plex-as-the-owner)), or when the person signs in to Plex under **My account** (see [Plex, signing in](#plex-signing-in)): their own token reads their marked and synced titles, resume points and ratings. Plex has no favorites to import, and the owner's Watchlist is not imported here. A history row of another account than the one asked is left out.
-
-#### Signing in to Plex as the owner
-
-Once connected, the page offers **Sign in with Plex as the owner**, above the accounts. **Open Plex’s sign-in page** opens Plex's own page in a new tab, where the administrator signs in to the Plex account that owns the server; Polyfin never sees the Plex password. Polyfin then checks, with plex.tv, that this account owns the server connected to (the same machine identifier): another account is refused (**This Plex account does not own the server**, `plex_not_owner`), and the sign-in is kept for another try or **Sign out of Plex**.
-
-With the owner's account, Plex gives Polyfin the token each account the server is shared with has for this server, the one that account's own Plex apps use to read it, and switches to the profiles of the owner's Plex Home. Each account then shows what will be read of it:
-
-| Account | Read with | What comes over |
-|---|---|---|
-| The owner | The owner's token, as without the sign-in | Played titles, resume points, ratings and playlists. |
-| An account the server is shared with | Its own token for the server | **Everything**: the titles it played, marked or synced as watched, its resume points, its ratings and its playlists, as its own import would bring them (see [Plex, signing in](#plex-signing-in)), but not its Watchlist. |
-| A profile of the owner's Plex Home | Its own token, once switched to as Plex's apps do | **Everything**, as above. A profile with a PIN asks for it in its row, under **Profile PIN**; a PIN Plex refuses stops the import before anyone is created (`plex_profile_pin_refused`), and without it the profile is read as the next row. |
-| An account Plex gives no token for | The owner's token | **Plays only**: its playback history on this server, as without the sign-in, and the reason when it gives nothing. |
-
-Transparency: the import reads the other accounts with the tokens Plex gives the owner for the accounts the server is shared with, as those accounts' own Plex apps read the server. It reads only the server's libraries with them, and writes nothing. The tokens are held in memory for this import only, never stored, logged nor answered. The owner's sign-in, and the sign-ins of the Home profiles switched to, are signed out of Plex once the import ends; the shared accounts' tokens, which are not sign-ins but the server's sharing, are just dropped. An administrator who does not sign in has the import as before.
-
-Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; an episode by its show's identifiers and its season and episode numbers. An item an older Plex agent matched has no `Guid` list: its `guid` names its identifier instead, as `com.plexapp.agents.imdb://tt…`, `com.plexapp.agents.themoviedb://…` or `com.plexapp.agents.thetvdb://…`, or after an agent's own scheme as `://tvdb-…`, `://tmdb-…` or `://imdb-tt…`. Two kinds of titles are listed as not found:
-
-- **No longer in Plex's libraries**: a title a history names that no library section lists any longer, which leaves no identifier to find it by.
-- **Numbered in another of TheTVDB's episode orders**: an episode of a show an older agent matched as `tvdb2-`, `tvdb3-`…, whose numbers are not TheTVDB's usual ones. Its show's identifier is known, but marking the episode its numbers name could mark the wrong one.
-
-Plex is only read, with `GET` requests: it is never written to.
-
-<details>
-<summary>For app developers</summary>
-
-- The import's API is Jellyfin's, with `kind` set to `emby` or `plex`. Plex takes its owner's token as `apiKey`, and no `account` nor `jellyfinPassword`. With the owner signed in to Plex, `plexOwner` `true` reads each account with its own token, and an entry's `plexPin` is a Home profile's PIN; a PIN Plex refuses is `plex_profile_pin_refused` with the entry's `jellyfinId`, and an account that does not own the server `plex_not_owner`.
-- `POST /admin/api/jellyfin-import/plex/sign-in`, `POST /admin/api/jellyfin-import/plex/sign-in/poll` and `DELETE /admin/api/jellyfin-import/plex/sign-in` sign the administrator in to Plex as a user's own sign-in does (see [Plex, signing in](#plex-signing-in)), whether or not users may import from another server. `POST /admin/api/jellyfin-import/plex/owner` takes the connection (`kind` `plex`, `address`, `apiKey`) and answers `accounts`, each account but the owner's by its identifier: `all`, `pin` (a Home profile with a PIN: everything with it, plays only without) or `plays`. The import takes the sign-in over: once it starts, the sign-in has ended.
-- With the owner signed in, Polyfin also asks plex.tv `GET /api/v2/resources?includeHttps=1&includeRelay=1` with the account's token, to find the server among those it owns; `GET /api/servers/{machineIdentifier}/shared_servers`, in XML, whose `SharedServer` entries give each account's `userID`, the identifier `/accounts` lists it by, and its `accessToken`; `GET /api/v2/home/users`, whose `id` is that same identifier; and, for a profile, `POST /api/v2/home/users/{uuid}/switch?pin=…`, then `GET /api/v2/resources` with the profile's token for its own token for the server. An account read with its own token is read as a user's own import reads it, never `/accounts` nor the history.
-- Emby is read under `/emby` when the address does not end with it, else at the address given, with the key in `X-Emby-Token`. The requests are Jellyfin's, but for `/Users/Me`, which Emby does not have: a key is taken only when `GET /Auth/Keys` lists it among the server's API keys. Lists ask for `Fields=ProviderIds,UserDataPlayCount,UserDataLastPlayedDate`, without which Emby leaves the play count and date out. Signing in sends the app and device in `X-Emby-Authorization`.
-- Plex is read in JSON (`Accept: application/json`), with the token in `X-Plex-Token` and Polyfin's device in `X-Plex-Client-Identifier`: `/identity`, `/`, `/accounts` (account 1 is the owner, account 0 nobody), `/library/sections`, each movie and show section's `/library/sections/{key}/all` with `type=1` or `type=2` and `includeGuids=1`, the show sections' episodes with `type=4` for the owner, and `/status/sessions/history/all?accountID=…&sort=viewedAt:desc` for the other accounts, a page at a time with `X-Plex-Container-Start` and `X-Plex-Container-Size`. A history row whose `accountID` is not the one asked is left out, and one without a `ratingKey`, a title deleted from the libraries, is listed as `not_in_library` once per title. The collections come from each movie and show section's `/library/sections/{key}/collections`, then `/library/collections/{ratingKey}/children`; the playlists of an account read with its own token from `/playlists?playlistType=video`, then `/playlists/{ratingKey}/items`. A collection's or playlist's title that no library section lists is `not_in_library`.
-
-</details>
-
-## Importing your own watch history
-
-Under **My account**, **Import from another server** lets each user bring their own watch history over from a Jellyfin, Emby or Plex server they used before, when an administrator could not: a server without API keys, or whose passwords the administrator does not know, or a Plex server whose owner's token reads only the plays of other accounts (see [Plex](#plex)). It also takes the export file of a Letterboxd account (see [Letterboxd](#letterboxd)).
-
-- **Server**: **Jellyfin**, **Emby**, **Plex** (see [Plex, signing in](#plex-signing-in)), or **Letterboxd (export file)**.
-- **Server address**, then **Your user name there** and **Your password there**, empty if the account has none.
-
-**Import my watch history** signs in to that server as the user, as its apps do, and imports that user's played movies and episodes, resume points and favorites into their own Polyfin account only, and, under **Also bring**, their ratings, the server's collections and their playlists, as an administrator's import does (see [Ratings, collections and playlists](#ratings-collections-and-playlists)). **Collections** is offered only to a user who may manage collections. Titles are matched and merged as an administrator's import does. The section then shows the import, and its result: what was added, and the titles not found. Polyfin never lists the server's users, which a user's session may not, and reads only the user signed in: even a server that answers every user with the session's data gives them their own. It signs out once done. The password is used for that import only, and never kept.
-
-- One import from a server runs at a time on the whole server, and one import into an account, from a server or Letterboxd. While another runs, the import is refused (`server_import_running`): try again a few minutes later.
-- A user sees only their own imports: the section shows their latest one, from a server or Letterboxd. The administrator's **Import from another server** page shows the import from a server running or the last one, saying who started it.
-- **Users may import their watch history from another server or app**, under **Settings › Security**, on by default, turns the section off, Letterboxd included: it is hidden, and the API refuses (`server_imports_disabled`). It turns off the import from an app too (see [Importing from an app](#importing-from-an-app)).
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/account/server-import` answers `enabled`, `letterboxd` (whether a Letterboxd export may be imported), `searchable` (whether a metadata addon of the server searches movies), `collections` (whether the user may manage collections, and so bring a server's), and `import`, the user's latest import running or ended, from a server or Letterboxd (`kind` `letterboxd`), `null` when none.
-- `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and `ratings`, `collections` and `playlists`, each `true` when left out, and answers `import`; `collections` is ignored for a user who may not manage collections. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import. For Plex it takes `kind` `plex`, `server` and `watchlist` (see [Plex, signing in](#plex-signing-in)). A Letterboxd export is sent as described below.
-- Polyfin sends the sign-in, the items requests and the sign-out of the administrator's import, never `/Users`.
-
-</details>
-
-### Plex, signing in
-
-Choose **Plex**, then **Sign in with Plex**: **Open Plex’s sign-in page** opens Plex's own page in a new tab, where the user signs in to their Plex account as on any Plex app. Polyfin never sees the Plex password. Once Plex signed them in, the section names the account and lists the Plex servers it reaches, the server the administrators last imported from chosen first:
-
-- **Plex Home profile**, for an account in a Plex Home: the profile whose watch data comes over, the account signed in first. A managed profile has no sign-in of its own, as Plex says (see Plex's support article "Managed Accounts"): the Home's member signs in, then chooses it here, with its **Profile PIN** when it has one, and **Use this profile** switches to it as Plex's apps do.
-- **Server**: the server to import from. Polyfin reaches it at the addresses Plex gives for it, those on the local network first, then the remote ones, then those Plex relays, each an address the server's import takes; an address counts only when the server answers there with its own machine identifier.
-- **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, which Plex keeps with the account rather than on a server, go to the user's [Watchlist](tracking.md#the-watchlist), as a one-off app import's library does: they stay until started.
-
-**Import my watch history** then reads the server with the profile's own token for it, as the owner's import reads the owner's data, into the user's own Polyfin account only:
-
-| From Plex | Into Polyfin |
-|---|---|
-| The movies and episodes played, marked as watched or synced as watched, with their play counts and the date last played | Played marks. |
-| The resume points | Resume points, for titles not played. |
-| The ratings of movies, shows and episodes, from 0 to 10, with **Ratings** | Ratings, as an imported Letterboxd rating: a rating Polyfin has stays, and apps see `Likes` for a rating of 5 or more. A season's rating has no title in Polyfin, and stays on Plex. |
-| The collections of the server's movie and show sections, with **Collections**, for a user who may manage collections | Collections every user sees, as the administrator's import brings them. |
-| The profile's video playlists, with **Playlists** | The user's own playlists, in order. |
-| The Watchlist, when ticked | The Watchlist. |
-
-An account that has nothing played, in progress or rated there says so (`plex_nothing_watched`). Titles are matched as the administrator's Plex import matches them; a Watchlist item whose identifiers Plex's list leaves out is asked of Plex one by one, 500 at most, and is listed as not found when it has none.
-
-About the tokens: Plex gives Polyfin a token for the account, which only lists the profiles and servers, switches profiles and reads the Watchlist, a token for the profile chosen, and one for the server. They are held in memory for the user who signed in only, never stored, logged nor answered, and dropped 10 minutes after the last choice, or once the import ends: then Polyfin signs them out of Plex, which takes Polyfin off the account's authorized devices for them. Polyfin names itself to Plex by one identifier, kept with the server's identity, so that repeated sign-ins reuse one entry. Should an entry stay, as after a restart during an import, remove Polyfin from the account's authorized devices in Plex's settings. The administrator's sign-in as the owner is held, and signed out, the same way.
-
-**Compared with the administrator's Plex import**
-
-- The owner's token reads only the plays Plex recorded for other accounts on the server; the profile's own token reads its whole watched state, its resume points, its ratings and its Watchlist.
-- With the owner signed in to Plex, the administrator's import reads the accounts with their own tokens too, but not their Watchlists (see [Signing in to Plex as the owner](#signing-in-to-plex-as-the-owner)). Without it, it tells each account other than the owner that gave nothing to import this way.
-
-<details>
-<summary>For app developers</summary>
-
-- `POST /admin/api/account/server-import/plex/sign-in` starts the caller's sign-in, dropping the one they held, and answers `link`, Plex's sign-in page with the PIN's code, and `expiresAt`.
-- `POST /admin/api/account/server-import/plex/sign-in/poll` answers 202 and `pending` until Plex signs the caller in, then the account: `name`, `profiles` (`id`, `name`, `managed`, `protected`), `profile`, the one read, and `servers` (`id`, the machine identifier, `name`, `owned`, `preselected`). An expired or ended sign-in is `plex_sign_in_ended` (409).
-- `POST /admin/api/account/server-import/plex/profile` takes `profile` and `pin`, and answers the account; a PIN Plex refuses is `plex_profile_pin_refused`.
-- `DELETE /admin/api/account/server-import/plex/sign-in` drops the sign-in and signs it out.
-- `POST /admin/api/account/server-import` with `kind` `plex`, `server` and `watchlist` (by default `true`), and `ratings`, `collections` and `playlists` as for Jellyfin, starts the import; a server the account does not reach is `plex_unknown_server`, one none of whose addresses answers as it `plex_server_unreachable` (the sign-in is kept), and plex.tv failing `plex_tv_failed` or `plex_tv_unreachable`.
-- Polyfin asks plex.tv, with its client identifier in `X-Plex-Client-Identifier` and `X-Plex-Product` `Polyfin`: `POST /api/v2/pins?strong=true`, `GET /api/v2/pins/{id}` once a second at most, `GET /api/v2/user`, `GET /api/v2/home/users`, `POST /api/v2/home/users/{uuid}/switch?pin=…`, `GET /api/v2/resources?includeHttps=1&includeRelay=1`, and `DELETE /api/v2/users/signout`; and Plex's Discover service `GET /library/sections/watchlist/all?includeGuids=1`, 100 items a page, and `GET /library/metadata/{ratingKey}?includeGuids=1`. The server is read as the owner's import reads it, with the server's token, but neither `/accounts` nor the history.
-
-</details>
-
-### Letterboxd
-
-Letterboxd has no API for this, but gives every member their data as a file: on Letterboxd, Settings › Import & Export, then Export your data, downloads a ZIP of CSV files. Choose **Letterboxd (export file)**, then the ZIP as it is, of 20 MB at most, under **Export file**, tick what to bring besides the movies watched, and choose **Import from Letterboxd**:
-
-- **Watchlist to my Watchlist** (on by default): the movies of the Letterboxd watchlist go to the user's [Watchlist](tracking.md#the-watchlist), as a one-off app import's library does: they stay until started.
-- **Ratings** (on by default): stars × 2 give Polyfin's rating from 0 to 10, so 3.5 stars is 7, and apps see `Rating` and `Likes` (a rating of 5 or more) as for a rating set in them. A movie rated in the diary only takes that rating, its latest.
-- **Liked movies as favorites** (off by default): the movies liked on Letterboxd become favorites.
-
-The movies of `watched.csv` and `diary.csv` are marked played. Each one's date is the latest `Watched Date` of the diary when it has one, else the date of `watched.csv`, and its play count the number of its diary lines, at least 1. Diary lines are joined to movies by name and year, as their links point to the diary entry. Only those files, `ratings.csv`, `watchlist.csv` and the liked movies' file of the `likes` folder are read, by their columns' names, so columns Letterboxd adds later do no harm; reviews, lists and the profile are not. A file without `watched.csv` or `diary.csv`, at the ZIP's root or in the folder holding them, is refused (`letterboxd_export_invalid`), and one over 20 MB, or naming more than 50,000 movies, too (`letterboxd_export_too_large`). A line whose name, link, year, date or rating is longer than 512 bytes is skipped. Polyfin reads the file in memory, never writes it to disk, and drops it once read.
-
-**Matching:** The export names movies by their name, year and Letterboxd link only. Each one is searched as a movie by its name in the server's metadata addons, the searches local files use (see [Matching](local-folders.md#matching)), and matches only when they find exactly one movie of that name and year. Searches run one at a time, and each name is searched once per import, whatever the files it is in. Without a metadata addon that searches movies, nothing can match: the form says so before the upload. The result lists the movies not found, with their Letterboxd link and why: **Not found** (no movie of that name and year, a movie listed under another year or name included), **Several movies of that name and year**, or **Search failed**.
-
-**Merging:** As the other imports do (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)): played marks, ratings and favorites are only added, a title keeps Polyfin's date when it is later and the larger play count, and a rating Polyfin already has stays. Importing the same export again adds nothing twice.
-
-**Progress:** One import into an account runs at a time: an export sent while another is being uploaded or imported into the same account is refused (`server_import_running`) before it is read. While the movies are searched, the section shows how many were; then it counts the movies marked played, the titles added to the Watchlist, the ratings and favorites set, and lists the movies not found. The import and its result are kept in memory, as an app import's are (see [Progress of an app import](#progress-of-an-app-import)).
-
-An administrator can run it for a user: **Import from Letterboxd**, at the top of **Users**, asks **Into the account of** which user, then takes the file the same way. The setting that turns the users' own imports off does not turn off the administrator's.
-
-<details>
-<summary>For app developers</summary>
-
-- `POST /admin/api/account/server-import`, or `/admin/api/users/{id}/server-import` for an administrator, takes the export as `multipart/form-data`: `kind` (`letterboxd`), `file`, and `watchlist`, `ratings` and `likesAsFavorites` (`true` or `false`, by default `true`, `true` and `false`).
-- It answers `import`: `movies`, `searched`, `added` (`played`, `watchlist`, `ratings`, `favorites`), `unmatchedCount` and `unmatched` (`name`, `year`, `link`, `reason`: `not_found`, `ambiguous` or `search_failed`).
-- `GET /admin/api/users/{id}/server-import` answers `searchable` and the user's Letterboxd `import`.
-
-</details>
-
-## Importing from an app
-
-Apps built on addons, as Polyfin is, keep what their users watched in an account: Polyfin imports from Nuvio and Stremio. Under **My account**, **Import from an app** lets each user bring theirs over: the movies and episodes they played, their resume points, the app's library, and the app's addons they choose.
-
-1. Choose the **App**, tick **Stay connected** to have it imported again on its own, every 6 hours by default (see [Staying connected](#staying-connected)), and sign in to it, the way that app signs in (see [Nuvio](#nuvio) and [Stremio](#stremio)). Polyfin reads the account once, then signs out, but for a Stremio key you paste, and unless you stay connected.
-2. **Profile** lists the account's profiles by name, with what each watched, resumed and keeps in its library: choose the one to import. A Stremio account without profiles has one: **The whole account**. A Stremio profile with a PIN asks for it before it shows what it holds (see [Stremio](#stremio)). Under **Addons**, tick those to add, if any (see [Addons from the app](#addons-from-the-app)).
-3. **Import this profile** imports it into the user's account, in the background. The section then shows the import, and its result: what was added, the titles not found, and the addons added.
-
-Polyfin keeps what it read of the account in memory only, while the profile is chosen, and for 5 minutes at most: after that, or after **Sign in again**, it is gone, and the import asks to sign in again (`app_import_expired`). The password is used for that sign-in only: it is never kept, nor logged. The key or the session the app gives is used for that sign-in only too, unless you stay connected, or a Stremio profile asks for its PIN, which needs it while the profile is chosen; a session Polyfin opened for a connection or a PIN and that is not imported in those 5 minutes is signed out, as it is when Polyfin stops or the user is deleted meanwhile.
-
-An administrator can run the same import for a user: **Import from an app**, at the top of **Users**, asks **Into the account of** which user, then goes on as the user's import does, with the user's sign-in to the app. **Users may import their watch history from another server or app**, under **Settings › Security**, turns the users' own import off (`server_imports_disabled`), not the administrator's.
-
-### What comes over from an app
-
-| From the app | Into Polyfin |
-|---|---|
-| Movies and episodes watched, with the date when the app keeps one | Played marks. |
-| Resume points of movies and episodes | Resume points, for titles not played. |
-| The library's movies and series | The [Watchlist](tracking.md#the-watchlist). |
-| The addons ticked | The user's own addons. |
-
-An app's library is a watchlist: its titles go on the user's Watchlist, the view Jellyfin apps show beside the libraries, never in the favorites. A one-off import adds its titles there until the user starts them; a connection's import replaces what the connection put there before, so a title taken off the app's library leaves at its next import, unless another list holds it. Favorites stay the user's own: imports set none, and those earlier imports set stay. Nothing else comes over: settings, collections, home screen layouts, and what the app keeps on the device only.
-
-<a id="how-an-app-s-titles-are-matched"></a><a id="how-an-apps-titles-are-matched"></a>
-
-### How app titles are matched
-
-Apps built on addons name titles by the identifiers of the addons that described them. Polyfin finds them by IMDb (`tt…`) and TMDB (`tmdb:…`) identifiers, as an [imported watch history](tracking.md#importing-your-watch-history) does, and by Kitsu identifiers (`kitsu:…`), through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and its season and episode numbers; an episode of a Kitsu entry by its number in the entry. A title no catalog listed yet shows in the user's lists at once, described by the addons. One named `tmdb:…` that no catalog listed is asked of the server's metadata addons that describe titles by it: it is found by the IMDb and TVDB identifiers their description gives, else shows under its `tmdb:…` identifier, its episodes as the description lists them.
-
-A title that cannot be matched is left out, and the import goes on. The result lists these titles with why: **Not an IMDb, TMDB or Kitsu identifier** (an addon's own identifier) or **Not in Polyfin** (no catalog listed it under its identifier, nor, for a `tmdb:…` one, does a metadata addon of the server describe it). A Stremio series can also be listed with **Its episodes do not match Polyfin's list** (see [Stremio](#stremio)): its episodes watched are not marked played, but the series goes on the Watchlist when it is in the library.
-
-The data merges as the other imports' does (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)): played marks and resume points are only added, a title keeps Polyfin's date when it is later, the more recent of two resume points stays, and the resume points imported follow Polyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)): one past the played threshold marks the title played. Importing again adds nothing twice. The result counts the titles of the library added to the Watchlist: those it did not hold, and the user has not started.
-
-<a id="the-app-s-addons"></a><a id="the-apps-addons"></a>
-
-### Addons from the app
-
-When users' own addons are allowed, by **Allow users' own addons** and the user's **Can add their own addons** (see [Users' own addons](#users-own-addons)), **Addons** offers the profile's addons one by one, by name. Each one ticked becomes one of the user's own addons, under **My sources**, as if they had added it there. When they are not allowed, none are offered, and choosing some anyway is refused (`personal_addons_disabled`).
-
-An addon's address may hold its user's settings and keys: Polyfin shows only its host, never logs it, and keeps it only as the user's addon. A user's own import reaches public addresses only, as their own addons do; an administrator's may reach the local network. The result tells, addon by addon, whether it was added, or why not: already installed, on a local network, not answering, or not an addon.
-
-### Progress of an app import
-
-- One import into an account runs at a time: while one runs, another is refused (`app_import_running`). Imports into different accounts run side by side.
-- Leaving the page does not stop an import. Polyfin keeps the running import and the last result of each account in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
-- A user sees only the imports into their own account; an administrator's page shows the import into the user chosen, saying who started it.
-
-### Staying connected
-
-Someone who goes on watching in Nuvio or Stremio on some devices, and through Polyfin on others, can stay connected rather than import again by hand. **Stay connected**, ticked before signing in, keeps what reads the account again, and the import that follows becomes the first of a connection: Polyfin imports the account again as often as **Import connected accounts every** says, every 6 hours by default, the same way (see [How often connected accounts are imported](#how-often-connected-accounts-are-imported)).
-
-- What is kept: for Stremio, the account's auth key: the one Polyfin got by a link code or a password is not signed out at the end of the import, and a key you paste is kept as it is; for a profile with a PIN, the session Polyfin opened with the PIN as well, never the PIN. For Nuvio, the backend's address, the profile chosen, and the session's refresh token, saved again each time Nuvio renews it, at every import. The password is never kept. One connection per app per user: signing in again with **Stay connected** replaces it, and signs out the sessions Polyfin opened before.
-- How it is protected: it is stored in the database encrypted with `POLYFIN_SECRET_KEY`, as tracking tokens are (see [Configuration](configuration.md)), never shown, never sent back to the browser, and never logged. Without the key, it is stored as it is, and **System › Health** warns about it. A connection the key cannot decrypt counts as none: sign in again.
-- The imports: at that interval, Polyfin reads the account again and imports the profile chosen when connecting, with the same rules as the first import: played marks only added, the newer resume point wins. The library replaces what the connection put on the Watchlist: a title taken off it leaves the Watchlist, unless another list holds it. Disconnecting takes off the Watchlist the titles the connection alone held; those a one-off import brought stay until started. The addons are chosen once, at the first import: later imports never install any. Polyfin only reads the account: nothing is ever written to the app.
-- Status: under **Import from an app**, **Connected apps** shows each connection: the account, by the email the app gives, who connected it and when, the last import with what it added, and when the next one runs. **Import now** imports at once. When the app refuses what Polyfin kept, a key signed out or a session ended, the connection stops, says so, and is not imported until you sign in again with **Stay connected** ticked. An app that does not answer, or asks to wait, is tried again at the next import, and nothing is told. When the profile chosen is no longer in the account, or, for Stremio, asks for a PIN Polyfin does not have, one set or changed since it was chosen, the last import says so, and nothing is imported until you sign in again to choose it.
-- Told when it stops: the connection stopping is told once, as it stops, to the user's notification targets and the server's that chose **Connection stopped** (see [Stopped connections](notifications.md#stopped-connections)), and **System › Health** lists the connections stopped, by user and app. Signing in again, then a new refusal, tells again.
-- Disconnecting: **Disconnect** forgets everything kept, after signing out the sessions Polyfin opened: the Stremio key it got by a link code or a password, a Stremio profile's session it opened with the PIN, and the Nuvio session. A key you pasted is only forgotten, as signing it out would sign your browser out. What was imported stays, but for the titles of the Watchlist the connection alone held, which leave it. Deleting the user signs out the same sessions, in the background (see [Deleting a user](#deleting-a-user)).
-- Who: users connect their own accounts while **Users may import their watch history from another server or app**, under **Settings › Security**, allows it: turned off, their connections are paused, still shown, and they may still disconnect them. An administrator can connect an app for a user from **Import from an app**, at the top of **Users**, as for the import; the page lists the connections of the user chosen, with **Import now** and **Disconnect**. An administrator's own connections are never paused.
-
-Staying connected to Stremio deepens the risk of reading it (see [Stremio](#stremio)): its terms forbid extracting its data by automated means, and reading an account again and again is more plainly automated than a one-off import, the more so at a short interval.
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/account/app-import` also answers `connections`, each with its `app`, `account` (`null` when the app gives none), `connectedAt`, `connectedBy` (`id` and `name`, `null` once that account is deleted), `problem` (`sign_in_refused`, or `null`), `paused`, `importing`, `lastImport` (`at`, `read`, `played`, `resumed`, `watchlist`, `unmatched` and `problem`: `unreachable`, `rate_limited`, `unexpected`, `profile_missing`, `profile_locked` (a Stremio profile asking for a PIN Polyfin does not have), `sign_in_refused`, `internal`, or `null`) and `nextImportAt`, the last import, or the connection, plus the interval set (`null` while stopped or paused), and `importEveryMinutes`, the interval. What a connection signs in with is never answered.
-- The sign-in routes take `stayConnected`; the account read answers it back, and the import of it saves the connection.
-- `POST /admin/api/account/app-connections/{app}/import` imports at once, and answers `connection`. A connection stopped is `app_connection_stopped`, none `app_not_connected`, and the setting off for a user `server_imports_disabled`.
-- `DELETE /admin/api/account/app-connections/{app}` disconnects, even with the setting off, and answers `204`.
-- An administrator's routes are the same under `/admin/api/users/{id}`, and answer the user's connections under `/admin/api/users/{id}/app-import`.
-
-</details>
-
-### Nuvio
-
-A Nuvio account keeps, for each of its profiles, up to 6, the movies and episodes watched with their dates, the resume point of each, its library, and its addons. Polyfin reads them all at once, in the account backup Nuvio's own scripts move accounts with.
-
-- **Nuvio backend**: empty for Nuvio's own, or the address of a self-hosted backend, on the local network as well.
-- **Email** and **Password**: the account's, as in Nuvio's apps. **Sign in to Nuvio** signs in, reads the account, and signs out, unless you stay connected.
-
-A wrong email or password, an address where nothing answers, or where something other than a Nuvio backend answers, each say so. Nuvio may ask to wait before signing in again: Polyfin waits up to 30 seconds, twice at most, and says so past that. The account backup is versioned: Polyfin reads its version 1, and refuses another, saying so, until it reads it too.
-
-What comes over, profile by profile:
-
-- Watched: each movie and episode, with the date it was marked watched, older apps' dates included. A series marked watched as a whole, without its episodes, is not marked played: Polyfin counts a series played from its episodes.
-- Resume points: each movie's and episode's, with its runtime and date, unless it was watched since. Those of the titles of a Jellyfin or Emby server connected in Nuvio (`srv1:…`) stay in Nuvio.
-- Library: its movies and series, on the Watchlist from the date Nuvio added them.
-- Addons: those turned on in the profile, or in the first profile for a profile that uses its addons. Nuvio's plugins are not addons: they do not come over.
-
-What Nuvio keeps without an account, as a guest, stays on the device. Progress Nuvio sends to Trakt or Simkl is imported from there (see [Tracking services](tracking.md)).
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/account/app-import` answers `enabled`, `addonsAllowed`, and `import`, the import into the user's account running or the last one, `null` when none.
-- `POST /admin/api/account/app-import/nuvio` takes `backend` (empty for Nuvio's own), `email`, `password` and `stayConnected`, and answers `key`, `app`, `stayConnected`, and `profiles`, each with its `id`, `name`, counts (`entries`, `played`, `resumes`, `library`) and `addons`, each with its `index`, `name` and `address`, redacted to its host. A refused email or password is `nuvio_sign_in_refused`, an invalid address `invalid_nuvio_address`, a backend that does not answer `nuvio_unreachable`, something else answering `not_nuvio`, a backend asking to wait too long `nuvio_rate_limited`, and a backup of another version `nuvio_backup_unsupported`, with its `version`.
-- `POST /admin/api/account/app-import` takes `key`, `profile` and `addons`, the indexes of the addons to add, and answers `import`.
-- An administrator's routes are the same under `/admin/api/users/{id}/app-import`, for the user `{id}`.
-- An import names its `app`, `profile`, `user` and `startedBy` (`id` and `name`), `state` (`running`, `done` or `failed`), its counts (`read`, `played`, `resumed`, `watchlist`: the titles added to the Watchlist, `unmatchedCount`), `unmatched` (`id`, `name`, `type`, `season`, `episode`, `reason`), and `addons` (`name`, `address`, `installed`, `problem`).
-- Polyfin reads Nuvio's public configuration at `GET {backend}/.well-known/nuvio` for its publishable key, signs in with `POST {backend}/auth/v1/token?grant_type=password`, reads the account with one `POST {backend}/rest/v1/rpc/sync_export_account_backup`, which must answer `format` `nuvio_account_backup` and `version` 1, and signs out with `POST {backend}/auth/v1/logout?scope=local`, which ends its own session only. A connection renews its session with `POST {backend}/auth/v1/token?grant_type=refresh_token` before each read, and keeps the new refresh token, the old one being refused from then on. The key goes in the `apikey` header and the session's token in `Authorization: Bearer …`, never in an address. A `429` or `503` answer with `Retry-After` is waited for.
-
-</details>
-
-### Stremio
-
-A Stremio account keeps a library: for each title, whether it was watched and when last, the resume point of the video played last, and whether it is in the user's library; and the addons the user installed. Stremio's supporters have up to 6 profiles, each with its own library and addons; an account without profiles keeps one for the whole account. Polyfin reads it all at once, with the calls Stremio's own apps make.
-
-**Sign in with** offers three ways, the first working for every account:
-
-- **A link code**: **Get a link code** asks Stremio for a code, as Stremio's TV apps sign in, and shows it with **Open the link**. Open the link in a browser where you are signed in to Stremio, check that it shows the code, and approve it. The page asks every few seconds whether it is approved, then reads the account and signs out, unless you stay connected. A code lasts 5 minutes: past that, ask for another. This works however the account signs in, with Facebook and Apple too, and Polyfin never sees the password.
-- **Email and password**: the account's, as in Stremio's apps. **Sign in to Stremio** signs in, reads the account, and signs out, unless you stay connected. An account made with Facebook or Apple has no password: use a link code.
-- **An auth key**: the key Stremio's web app keeps once you sign in there, which `JSON.parse(localStorage.getItem("profile")).auth.key` gives in the browser's console on that page. **Read the account** reads it with the key, and does not sign it out: that would sign your browser out too.
-
-The key Polyfin gets, or is given, serves this one read: it stays in memory for the read only, and is never logged, nor sent back to the browser. It is stored, encrypted, only to stay connected (see [Staying connected](#staying-connected)). A wrong email or password, a refused key, and Stremio not answering each say so.
-
-What comes over:
-
-- Watched movies: each movie Stremio counts watched, or saw watched most of the way, with the date it was last watched, else of its last change, and how many times it was.
-- Watched episodes: Stremio keeps those of a series as a row of bits, one per episode, in the order of the series' episode list as the user's app listed it, anchored on the episode watched last. Polyfin reads the row against the series' episodes as the server's addons list them, in the same order (by season, episode, then release date, episodes without numbers first), shifted on the anchor, so that episodes listed since before it still fall in place. Stremio keeps no date per episode: each takes the date the series was last watched.
-- Resume points: one per title, at the video played last, the movie or an episode, with its runtime and date, while the title shows in Continue Watching: in the library, or played without being added. A title removed from the library keeps its watched marks, not its resume point.
-- Library: its movies and series, on the Watchlist from the date Stremio first kept them. Titles only played, and those removed from the library, are not on it.
-- Addons: those the user installed. Stremio's own, which come with it, are left out.
-
-Channels, TV channels and other videos do not come over.
-
-The row of bits has its limit: it means something only against the same episode list as the user's app had. When the server's addons do not list the anchor episode at all, none of the series' episodes is marked played, and the result lists the series with **Its episodes do not match Polyfin's list**. When they list other episodes after the anchor, or other specials, the episodes marked can be the wrong ones, and nothing tells it: the server's metadata addons should list series as the user's app did.
-
-Profiles: **Profile** lists the profiles of a supporter's account by name, in Stremio's order, each with what it watched, resumed and keeps in its library, and **Addons** offers the chosen profile's addons. Polyfin reads each profile as Stremio's apps switch to it: the account's own with the account's key, any other with a session of the profile's own that Stremio opens for the account, which Polyfin signs out once the profile is read. An account without profiles keeps **The whole account**.
-
-- A profile with a PIN is listed with "(PIN)" after its name, and no counts: **PIN**, then **Open this profile**, reads it. The PIN goes to Stremio only, to open the profile's session: Polyfin never keeps it, logs it, nor sends it back. A wrong PIN says so (`stremio_pin_refused`). Until a profile is chosen and imported, or **Sign in again**, the account's session stays open, for 5 minutes at most, then is signed out, but for a key you pasted.
-- **Staying connected** to a profile imports that profile again each time. A profile without a PIN is opened again for each import, then signed out; for a profile with a PIN, Polyfin keeps the session it opened with the PIN, never the PIN, and reads the profile with it. When the profile is removed from the account, the last import says it is no longer there; when a PIN is set on it since, or Stremio refuses the session kept, as a new PIN may end it, the last import asks to sign in again to choose it with its PIN. Either way, nothing is imported until you sign in again.
-- A connection made before Polyfin read profiles keeps reading with the account's own key, as it did: the account's own profile.
-
-Reading a Stremio account has its risks:
-
-- Stremio's account API is not documented. Polyfin calls it as Stremio's own apps do; Stremio may change it, or turn other clients away, without notice. Its profiles were read from Stremio's web app alone, not tried against an account with several: that each profile's library and addons are read with its own session, and that a profile's session ends when its PIN changes, are how that app behaves as far as it shows.
-- Stremio's General Terms (section 5.4.1) forbid using Stremio for "monitoring, copying or extracting any information from Stremio, including its contents, graphic user interface or Database whether done mechanically or by automated means". A user reading their own account with their own key is a grey zone: nothing says it is allowed. Staying connected, which reads the account again at the interval set, every 6 hours by default, makes that grey zone more pronounced, the more so as the interval is short.
-- Stremio's own export of an account's data, under its settings, is reported broken: its library repeats one title many times (Stremio/stremio-bugs#614). Polyfin does not read it.
-
-Users who connected Trakt in Stremio can import their history from Trakt as well (see [Tracking services](tracking.md)).
-
-<details>
-<summary>For app developers</summary>
-
-- `POST /admin/api/account/app-import/stremio/link` asks for a link code, and answers `code` and `link`, the address to approve it at, never a key. A user waits for one code at a time, for 5 minutes.
-- `POST /admin/api/account/app-import/stremio/link/poll` takes `stayConnected`, answers `202` and `pending` until the code is approved, then reads the account, signs out unless asked to stay connected, and answers it as `…/nuvio` does. A code expired, already used, or never asked for is `stremio_link_expired`.
-- `POST /admin/api/account/app-import/stremio/password` takes `email`, `password` and `stayConnected`, and `POST /admin/api/account/app-import/stremio/key` takes `key` and `stayConnected`; both answer the account read. A refused email or password is `stremio_sign_in_refused`, a refused key `stremio_key_refused`, Stremio not answering `stremio_unreachable`, and an answer Polyfin does not read `stremio_unexpected`.
-- Each profile of the account read has `locked` `true` when it asks for its PIN: it has no counts nor addons until `POST /admin/api/account/app-import/stremio/unlock` opens it, which takes `key`, the account held, `profile`, its `id`, and `pin`, and answers the account held again, the profile read. A wrong PIN is `stremio_pin_refused`, a profile that is not the account's or asks for no PIN `invalid_request`, and the account no longer held `app_import_expired`. Importing a profile still locked is `invalid_request`.
-- An unmatched series whose episodes could not be read has the `reason` `episode_list`.
-- Polyfin asks for a link code with `GET https://link.stremio.com/api/v2/create?type=Create` and polls it with `GET https://link.stremio.com/api/v2/read?type=Read&code=…`, signs in with `POST https://api.strem.io/api/login` (`email`, `password`, `facebook` `false`), reads the account's email and profiles with `POST https://api.strem.io/api/getUser` (`premiumPrefs.userProfiles`, each with its `_id`, `name`, `isMaster` and `hasPin`), opens a profile's session with `POST https://api.strem.io/api/premiumPrefs/authenticateProfile` (`type` `AuthenticateProfile`, `profileId`, `pin`, `null` for none), which answers its `authKey`, reads the library with `POST https://api.strem.io/api/datastoreGet` (`collection` `libraryItem`, `ids` `[]`, `all` `true`) and the addons with `POST https://api.strem.io/api/addonCollectionGet` (`update` `true`), with the account's key or the profile's, and signs out with `POST https://api.strem.io/api/logout` the keys it obtained, never a key pasted. Keys and PINs go in bodies, `authKey` and `pin`, never in an address.
-
-</details>
-
-## Louder sound
-
-Some players sound louder than the web player: they normalize the sound, or let the volume go past 100%, which jellyfin-web never does. Two options, both off, make a user's videos louder, each with its cost. The user turns them on and off under **My account › Sound**; an administrator sets them in the **Playback and access** section of the user's page or of a group's page. A member who follows their group keeps the group's: **My account** shows them, with "Your group sets these".
-
-- **Boost the volume in the web player** makes videos louder in jellyfin-web, in a browser and in the Jellyfin apps for Android and iOS that show it: about 8 dB on quiet passages and 5 dB on loud ones, through a gain and a compressor in the browser itself. The player's volume still works, and its settings menu gets **Boost the volume**, which turns it on and off. The browser can boost only sound it reads from the page's own server, or from another site that allows it: for a user who boosts, on a device where the web player has started, the server sends the streams of addons itself rather than sending the player to their source, which takes the server's bandwidth. It reaches no app's own player, nor streams Safari, an iPhone or an iPad plays as HLS. See [Louder videos in the web player](web-client.md#louder-videos-in-the-web-player).
-- **Convert the sound to even it** has the server convert the audio of the user's videos and channels and even it at -16 LUFS, the picture copied, so that every app plays it louder and evenly. Nothing plays directly for that user, each play takes a little of the server's processor, and surround sound reaches a receiver converted rather than as the original track. See [Louder sound for one user](transcoding.md#louder-sound-for-one-user).
-
-**Compared with Jellyfin**
-
-- Jellyfin has neither option: its web player plays videos at most at 100%, and it normalizes music only.
+| Stremio auth keys it got by a link code or a password, for a connection or for an account held while the user chose what to import | Signs them out |
+| A Stremio key the user pasted | Forgets it only, as signing it out would sign their browser out |
+| Nuvio sessions it opened, its own only, for a connection (see [Staying connected](moving-to-polyfin.md#staying-connected)) or for an account held while the user chose what to import | Signs them out |
+| Trakt and Simkl tokens of their tracking connections | Revokes them |
+| Keys they typed for MDBList, PublicMetaDB and ListenBrainz, and their Last.fm session key | Forgets them (see [Tokens and keys](tracking.md#tokens-and-keys)) |
+
+- The deletion never waits for an app or a service, and does not fail when one fails or does not answer.
+- Polyfin logs a session it could not sign out, without its key or token.
+- That session stays valid there until it expires, or the user signs it out there.
+
+Stopping Polyfin also signs out the sessions it opened for accounts held while users choose what to import. It waits 5 seconds at most.
 
 ## User groups
 
-To give several accounts the same limits, such as a family's children, an administrator puts them in a group: a change to the group reaches all of them at once, rather than one page at a time.
+A group gives several accounts, such as a family's children, the same limits. A change to the group reaches every member at once.
 
-**Users › Groups** lists the groups with how many members each has, and **Create a group** asks for a **Name** and **Settings of**: a new user, as with **Create a user**, or a user whose settings the group copies when it is created. A group's page holds the sections of a user's page that set limits, each saved on its own as on a user's page:
+**Users › Groups** lists the groups and their member counts. **Create a group** asks for a **Name** and **Settings of**: a new user, as with **Create a user**, or a user whose settings the group copies at creation.
+
+A group's page holds the limit sections of a user's page, each saved on its own:
 
 - **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
-- **Playback and access**, with the **Quality group** and the two options of [Louder sound](#louder-sound);
+- **Playback and access**, with the **Quality group** and the two options of [Louder sound](loudness.md#louder-sound);
 - **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**.
 
-Its page also lists its **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
+It also lists the **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
 
 ### Members
 
-- A user belongs to one group at most, chosen with **Group**, in the **Access** section of their page, or **No group**, the default. Joining a group asks first, as it replaces the user's values with the group's. Adding a user who is in another group moves them.
-- Administrators cannot join a group, as their permissions differ: making a member an administrator takes them out of it, and they keep its values as their own.
-- **Users** shows each user's group, and filters the list by group.
-- **Create a user** and **Create an invite link** can name a group: the accounts made join it and follow it (see [Invite links](#invite-links)).
+- A user is in one group at most, set with **Group** in the **Access** section of their page. The default is **No group**.
+- Joining asks first, as the group's values replace the user's.
+- Adding a user from another group moves them.
+- Administrators cannot join a group, as their permissions differ. A member made administrator leaves it and keeps its values.
+- **Users** shows each user's group and filters by group.
+- Users made by **Create a user** or **Create an invite link** can join a named group and follow it (see [Invite links](invite-and-share-links.md#invite-links)).
 
 ### Following the group
 
-**Follow the group**, in the **Access** section of a member's page, is on by default. While it is on, the sections the group holds show its values, read only, with "Set by the group Kids.", and a change to the group reaches the member at once, as saving their own page would: their apps already signed in have the new limits from their next request, downloads and allowed hours included, and a member who may no longer share titles loses their share links.
+**Follow the group**, in the **Access** section of a member's page, is on by default. While it is on:
 
-Turned off, the member stays in the group, listed as **Own settings**, keeps the group's current values as their own, and their page can change them; the group's later changes pass them by. Turned on again, after asking, they take the group's values back.
+- the group's sections show its values read only, with "Set by the group Kids.";
+- a group change reaches the member at once, as saving their page would;
+- their signed-in apps get the new limits from their next request, downloads and allowed hours included;
+- a member who may no longer share titles loses their share links.
 
-Leaving a group, with **No group**, or deleting it, works as turning **Follow the group** off: the members keep its values as their own. An invite link that named a deleted group creates accounts in no group.
+Turned off, the member stays in the group, listed as **Own settings**. They keep the group's current values, their page can change them, and later group changes pass them by. Turned back on, after asking, they take the group's values again.
 
-**Turn off downloads for everyone** (see [Transcoding](transcoding.md)) also turns **Can download** off on every group, so that its members keep following it.
+Leaving with **No group**, or deleting the group, works like turning **Follow the group** off: members keep its values. An invite link naming a deleted group creates accounts in no group.
+
+**Turn off downloads for everyone** (see [Transcoding](transcoding.md)) also turns **Can download** off on every group, so members keep following.
 
 ### Server sources a group uses
 
-A group holds no addon setting of its own: each server source says who uses it, everyone or only some groups and users (see [Who uses a server addon](addons-and-libraries.md#who-uses-a-server-addon)). A user uses a limited source when they are ticked, or their group is, whether they follow the group or keep **Own settings**; a new user in no group uses none of the limited sources. Deleting a group removes it from every source's list. Unlike **Visible libraries**, which only hides libraries and leaves their titles reachable, a source a user does not use gives them nothing: no library, title only it knows, version, subtitle or channel.
+A group has no addon setting. Each server source is used by everyone, or only by some groups and users (see [Who uses a server addon](addons.md#who-uses-a-server-addon)).
+
+- A user uses a limited source when they or their group are ticked, following the group or not.
+- A new user in no group uses no limited source.
+- Deleting a group removes it from every source's list.
+- A source a user does not use gives them nothing: no library, title only it knows, version, subtitle or channel. **Visible libraries**, by contrast, only hides libraries and leaves their titles reachable.
 
 **Compared with Jellyfin**
 
-- Jellyfin has no groups and no addons; its closest setting, a user's "Library access", is Polyfin's **Visible libraries**. jellyfin-web's library list still shows, ticked or not, the libraries of a source the user does not use: ticking them grants nothing.
+- Jellyfin has no groups and no addons. Its closest setting, "Library access", is Polyfin's **Visible libraries**. jellyfin-web still lists the libraries of a source the user does not use, ticked or not; ticking them grants nothing.
 
 ### Groups and Jellyfin apps
 
-- `GET /Users` and `GET /Users/{id}` show a member's policy with the values that apply to them, the group's while they follow it.
-- `POST /Users/{id}/Policy`, from an administrator's app, changes the fields no group holds as for any user, such as `IsAdministrator`, `IsDisabled` and `IsHidden`. A field the group holds sent with another value than the group's detaches the member, as turning **Follow the group** off would, and the activity log says so, as "sam no longer follows the group Kids: changed from Jellyfin Web": the policy is kept whole, and nothing the app sent is lost. A policy sent back as the app read it, with only `IsDisabled` changed for instance, leaves the member following. A library the group hides that the server no longer has does not count as a change, as apps cannot name it.
+- `GET /Users` and `GET /Users/{id}` show the values that apply to a member: the group's while they follow it.
+- `POST /Users/{id}/Policy`, from an administrator's app, changes fields no group holds as for any user, such as `IsAdministrator`, `IsDisabled` and `IsHidden`.
+- Sending a group-held field with a value other than the group's detaches the member, like turning **Follow the group** off. The policy is kept whole; nothing sent is lost.
+- The activity log then says, for example, "sam no longer follows the group Kids: changed from Jellyfin Web".
+- A policy sent back as read, with only `IsDisabled` changed for instance, leaves the member following.
+- A hidden library the server no longer has is not a change, as apps cannot name it.
 - Jellyfin has no groups: apps show neither the group nor **Follow the group**.
 
-The activity log records groups created, changed, naming the sections changed, and deleted, and members added, removed, or no longer following their group (see [Activity log](administration.md#activity-log)).
+The activity log records groups created, changed (naming the sections) and deleted, and members added, removed or no longer following (see [Activity log](administration.md#activity-log)).
 
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/groups` lists the groups, sorted by name: `id`, `name` and `memberCount`.
-- `POST /admin/api/groups` creates one from `name` and `copyFrom`, a user's `id`, or null or left out for a new user's settings; it answers 201 with the group. `GET /admin/api/groups/{id}` answers the group: `id`, `name`, `memberCount`, and the fields of a user's JSON the group holds: `transcoding`, `downloads`, `personalAddons`, `collectionManagement`, `subtitleManagement`, `canShare`, `maxPlaybacks`, `maxBitrate`, `qualityGroup`, `localFirst`, `syncPlay`, `liveTv`, `remoteControl`, `liveTvManagement`, `parentalControl`, `hiddenLibraries`, `blockedGenres` and `accessSchedules`.
-- `PATCH /admin/api/groups/{id}` takes `name` and any of those fields, as `PATCH /admin/api/users/{id}` takes them, with the same errors, and answers the group. `DELETE /admin/api/groups/{id}` deletes it (204).
-- `GET /admin/api/groups/{id}/members` lists the members, sorted by name: `id`, `name` and `followGroup`. `POST /admin/api/groups/{id}/members` with `userIds` adds those users, all of them or none, and answers the members.
-- A user's JSON has `groupId` and `groupName`, null for none, and `followGroup`. `PATCH /admin/api/users/{id}` takes `groupId`, a group's `id` or `""` for none, and `followGroup`. A field the group holds, sent for a member who follows it without `followGroup` false in the same change, is 409 `follows_group`. `POST /admin/api/users` and `POST /admin/api/invites` take `groupId`.
-- Errors: 409 `admin_cannot_join_group` for an administrator joining, or added, or created in a group; 400 `invalid_group` for a group that does not exist; 400 `invalid_name` and 409 `name_taken` for a group's name, from 1 to 64 characters, unique without regard to case; 400 `invalid_copy_from` for a user to copy who does not exist; 404 `not_found` for a group or a user to add that does not exist.
-
-</details>
+API details: [User groups](jellyfin-api.md#user-groups-for-apps).
 
 ## Resetting settings to their defaults
 
-Rather than finding each value and setting it again, an administrator can put a user's limits, or a group's, back to a new user's settings, and each user can put back the server's defaults for what they chose themselves.
+An administrator can put a user's or group's limits back to a new user's settings in one step. Each user can restore the server's defaults for their own choices.
 
 <a id="a-user-s-limits"></a><a id="a-users-limits"></a>
 
 ### Limits of a user
 
-**Reset to defaults**, at the top of a user's page, puts the sections that set limits back to a new user's settings, the ones **Create a user** gives: the permissions of **Access**, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change and, for **Access** and **Playback and access**, the settings that change in them, or saying that nothing changes.
+**Reset to defaults**, at the top of a user's page, gives the limit sections the settings **Create a user** gives: **Access** permissions, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change, and the settings that change in **Access** and **Playback and access**, or saying nothing changes.
 
-- An administrator gets an administrator's settings: **Can control other users' apps**, **Can manage collections**, **Can manage subtitles** and **Can record Live TV** on, as **Create a user** gives them with **Administrator**. Any other user gets them off.
-- Kept: the name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, the **Metadata language**, the **Web player theme**, the **Audio region**, the user's own addons, connections and tracking accounts, and everything they watched.
-- It applies as saving does: the user's apps already signed in have the new limits from their next request. A new user may not share titles, so a user who could loses their share links (see [Share links](#share-links)).
-- A member who follows their group has its values: their page does not offer the button, and the group's page resets them. A member with **Own settings** gets a new user's settings and stays in the group, still not following it.
-- The activity log records who reset whose settings, as "alex reset the settings of sam to their defaults".
+- Administrators get **Can control other users' apps**, **Can manage collections**, **Can manage subtitles** and **Can record Live TV** on, as **Create a user** does with **Administrator**. Other users get them off.
+- Kept: name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, **Metadata language**, **Web player theme**, **Audio region**, the user's own addons, connections and tracking accounts, and everything they watched.
+- Signed-in apps get the new limits from their next request, as after saving.
+- A new user may not share titles, so the user loses their share links (see [Share links](invite-and-share-links.md#share-links)).
+- A member following their group has no button: the group's page resets them.
+- A member with **Own settings** gets a new user's settings and stays in the group, not following.
+- The activity log records it, as "alex reset the settings of sam to their defaults".
 
 <a id="a-group-s-limits"></a><a id="a-groups-limits"></a>
 
 ### Limits of a group
 
-**Reset to defaults**, at the top of a group's page, does the same for the group's sections: they take the values a group starts with when **Create a group** makes it from a new user's settings. It asks first, listing what changes, and says how many members follow the group, as the change reaches them at once, as any change to the group does. Members with **Own settings** keep theirs. The group keeps its name and its members. The activity log records it as "alex reset the settings of the group Kids to their defaults".
+**Reset to defaults**, at the top of a group's page, gives the group's sections the values **Create a group** gives from a new user's settings.
+
+- It asks first, listing what changes and how many members follow the group, as they get the change at once.
+- Members with **Own settings** keep theirs.
+- The group keeps its name and members.
+- The activity log records "alex reset the settings of the group Kids to their defaults".
 
 ### Your own preferences
 
-**Reset my preferences**, at the top of **My account**, puts back the server's defaults for what the user chose themselves, after asking first:
+**Reset my preferences**, at the top of **My account**, asks first, then restores the server's defaults for the user's own choices:
 
-- the **Metadata language** goes back to **The server's** (see [Metadata language](#metadata-language));
-- the **Web player theme** goes back to the server's, unless the administrator turned off **Let them change it** (see [Web player theme](#web-player-theme));
-- the **Audio region** goes back to **None** (see [Audio region](#audio-region));
-- every row of **Home rows** is shown again (see [Home rows](#home-rows));
-- the tracks the user chose on series and movies are forgotten (see [Track choices](#track-choices));
-- **Remove from Continue Watching also takes the series off Next Up** is turned off (see [Continue Watching and Next Up](#continue-watching-and-next-up));
-- the preferences Jellyfin apps saved in the account are forgotten: the audio and subtitle languages and the subtitle mode, the home screen (the order of the libraries and those left out), and the display preferences, such as each library's sorting and view. The user has a new user's again, which their apps already signed in read from their next request. Settings an app also keeps on the device stay there: jellyfin-web keeps a copy of its home sections in the browser, and still shows them on that browser.
+- **Metadata language** goes back to **The server's** (see [Metadata language](watch-state.md#metadata-language));
+- **Web player theme** goes back to the server's, unless the administrator turned off **Let them change it** (see [Web player theme](themes-and-custom-code.md#theme-per-user));
+- **Audio region** goes back to **None** (see [Audio region](watch-state.md#audio-region));
+- every **Home rows** row shows again (see [Home rows](home-rows.md#home-rows));
+- track choices on series and movies are forgotten (see [Track choices](watch-state.md#track-choices));
+- **Remove from Continue Watching also takes the series off Next Up** turns off (see [Continue Watching and Next Up](watch-state.md#continue-watching-and-next-up));
+- preferences Jellyfin apps saved in the account are forgotten: audio and subtitle languages, subtitle mode, home screen (library order and hidden libraries) and display preferences such as each library's sorting and view.
 
-It never touches what the user watched, their favorites, resume points, hidden titles and the series they took off Next Up, their connections, tracking accounts and imports, or their limits, which are the administrator's.
+Signed-in apps read the new user's preferences from their next request. Settings an app keeps on the device stay: jellyfin-web keeps its home sections in the browser and still shows them there.
+
+It never touches watch history, favorites, resume points, hidden titles, series taken off Next Up, connections, tracking accounts, imports, or the administrator's limits.
 
 **Compared with Jellyfin**
 
-- Jellyfin has no such button. jellyfin-web's only resets are a user's password, which an administrator's "Reset Password" empties ([UserPasswordForm.tsx, lines 116 to 137](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/dashboard/users/UserPasswordForm.tsx#L116-L137)), the filters of a library ([LibraryToolbar.tsx, lines 128 to 152](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/apps/modern/features/libraries/components/LibraryToolbar.tsx#L128-L152), and [filterdialog.js, lines 302 to 309](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/filterdialog/filterdialog.js#L302-L309) in the older views), and an item's metadata, whose "Reset" in the metadata editor empties the form before it is saved ([metadataEditor.js, lines 305 to 341](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/metadataEditor/metadataEditor.js#L305-L341)). In Jellyfin, an administrator sets each limit of a user again by hand, and a user each preference.
-- Jellyfin apps see a reset user's new policy in `GET /Users` and `GET /Users/{id}`, and the activity log's entries have Jellyfin's types: `UserPolicyUpdated`, about the user, for a user's reset, and Polyfin's `GroupChanged` for a group's.
+- Jellyfin has no such button. jellyfin-web's only resets are a user's password, which an administrator's "Reset Password" empties ([UserPasswordForm.tsx, lines 116 to 137](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/dashboard/users/UserPasswordForm.tsx#L116-L137)), the filters of a library ([LibraryToolbar.tsx, lines 128 to 152](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/apps/modern/features/libraries/components/LibraryToolbar.tsx#L128-L152), and [filterdialog.js, lines 302 to 309](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/filterdialog/filterdialog.js#L302-L309) in the older views), and an item's metadata, whose "Reset" in the metadata editor empties the form before saving ([metadataEditor.js, lines 305 to 341](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/metadataEditor/metadataEditor.js#L305-L341)). In Jellyfin, an administrator resets each limit by hand, and a user each preference.
+- Jellyfin apps see a reset user's new policy in `GET /Users` and `GET /Users/{id}`. Log entries use Jellyfin's `UserPolicyUpdated`, about the user, for a user's reset, and Polyfin's `GroupChanged` for a group's.
 
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/users/{id}/defaults` answers the fields of a user's JSON a group holds (see [User groups](#user-groups)) as **Reset to defaults** would set them, changing nothing. `POST /admin/api/users/{id}/reset` sets them and answers the user. Both are 409 `follows_group` for a member who follows their group, and 404 `not_found` for a user who does not exist.
-- `GET /admin/api/groups/{id}/defaults` and `POST /admin/api/groups/{id}/reset` do the same for a group; the reset answers the group, and is 404 `not_found` for a group that does not exist.
-- `POST /admin/api/account/preferences/reset`, for any user signed in to the admin app, resets their own preferences and answers 204. Their Jellyfin apps then read a new user's `Configuration` in `GET /Users/{id}` and `GET /Users/Me`, and `GET /DisplayPreferences/{id}` answers the defaults it gives a user who never saved any.
-
-</details>
+API details: [Resetting to defaults](jellyfin-api.md#resetting-to-defaults-for-apps).
 
 ## Ending an account
 
-**Ends on** closes an account on a date, such as after a friend's weekend, so that it need not stay until someone remembers to delete it. Set it in the **Access** section of the user's page, then choose **Save date**. The date follows the server's time zone. The default is **Never**, which clears it.
+**Ends on** closes an account on a date, such as after a friend's weekend, so nobody must remember to delete it. Set it in the **Access** section of the user's page, then choose **Save date**.
 
-From that date, the account is refused as a disabled one is. It differs from **Disabled** in what it signs out:
+- The date follows the server's time zone.
+- The default, **Never**, clears it.
+
+From that date the account is refused like a disabled one, but signs out less:
 
 | | Disabled | Ended |
 |---|---|---|
@@ -706,695 +188,89 @@ From that date, the account is refused as a disabled one is. It differs from **D
 | What the account has | Kept | Kept, its devices included |
 | Undo | Turn **Disabled** off | A later date, or **Never**: the account comes back as it was |
 
-- **Users** lists each account's end date, as "Ends on October 20, 2026", and shows **Ended** once it has passed, as does the user's page.
-- The activity log records each account that ends, once, as "The account of sam ended", within the hour: a scheduled task looks for them every hour (see [Scheduled tasks](administration.md#scheduled-tasks)). An account given a later date is recorded again when it reaches it.
+- **Users** shows each end date, as "Ends on October 20, 2026", and **Ended** once passed, as does the user's page.
+- An hourly scheduled task logs each ended account once, within the hour, as "The account of sam ended" (see [Scheduled tasks](administration.md#scheduled-tasks)). Given a later date, it is logged again on reaching it.
 - Jellyfin apps see an ended account as disabled. Jellyfin has no end date: an app sending back the policy it read leaves **Disabled** off, and only the admin app changes the date.
-- An administrator's account never ends, so that the last administrator is never locked out: an administrator cannot be given an end date, and making a user an administrator clears theirs.
-- An ended account's Live TV recordings, new episode notifications, weekly summary and imports from an app stop, as a disabled one's do. Its devices still count as unused for **Sign out devices unused for (days, 0 = never)** (see [Signing out unused devices](#signing-out-unused-devices)).
+- An administrator's account never ends, so the last administrator is never locked out. Administrators cannot get an end date, and becoming one clears it.
+- Live TV recordings, new episode notifications, the weekly summary and imports from an app stop, as for a disabled account.
+- Its devices still count as unused for **Sign out devices unused for (days, 0 = never)** (see [Signing out unused devices](sign-in-and-security.md#signing-out-unused-devices)).
 
-<details>
-<summary>For app developers</summary>
+API details: [Account end dates](jellyfin-api.md#account-end-dates-for-apps).
 
-- `GET /admin/api/users` and `PATCH /admin/api/users/{id}` answer `endsOn`, a `YYYY-MM-DD` date in the server's time zone or null for never, and `ended`, true once that date has come. `PATCH` takes `endsOn`, a date or null; anything else is 400 `invalid_ends_on`, and a date for an administrator, or for a user made one in the same change, is 409 `administrator_cannot_end`.
-- An ended account signs in as a disabled one does: 403 from `/Users/AuthenticateByName`, Quick Connect and `POST /admin/api/session` (`account_disabled`), and `denied` to a Silo TV's poll. Its access tokens answer 401, and its policy's `IsDisabled` is true.
+## User limits
 
-</details>
-
-## Invite links
-
-An invite link lets the people an administrator sends it to create their own account, so that nobody has to choose a password for them and send it in a message. **Create an invite link**, at the top of **Users**, asks for:
-
-- **Accounts it may create**: from 1 to 100, 1 by default. One link can serve a whole family.
-- **Expires**: after 1, 7 (the default), 30 or 90 days, or **Never**.
-- **Accounts end**: **Never**, the default, or 1, 7, 30 or 90 days after each is created. Each account the link creates is given that end date (see [Ending an account](#ending-an-account)).
-- **Settings of**: the user whose settings the new accounts copy, or a new user, as with **Create a user**.
-- **Group**: **No group**, the default, or a group the new accounts join and follow (see [User groups](#user-groups)).
-
-With a model, a new account copies everything the model's page sets except the name, the password, **Administrator**, **Ends on** and **Group**: the **Access** permissions, the **Playback and access** limits with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours**, and whether it shows on the sign-in screen. The model is read when each account is created, so a change to the model reaches the accounts created after it. Without a model, a new account has the settings of a user made with **Create a user**, hidden from the sign-in screen. With a group, the account then takes the group's values for the settings it holds, and follows it: a change to the group reaches the accounts already created too. An invite link never makes an administrator.
-
-The link is shown once, with **Copy link**: Polyfin keeps only a hash of it and cannot show it again. It starts with the **Public address** (**Settings › Notifications**) when one is set, and with the address the admin app is open at otherwise.
-
-**Invite links**, under the accounts, lists each link with the accounts it created out of those it may create, whose settings it gives, when it expires, when its accounts end, who created it, and its state: **Active**, **Used up**, **Expired** or **Revoked**. **Revoke** stops an active link at once; the accounts it created are kept. Deleting the user a link copies revokes the link too.
-
-<a id="the-guest-s-page"></a><a id="the-guests-page"></a>
-
-### The guest page
-
-The link opens a page of the admin app, `/admin/invite/…`, that needs no account, in the language the guest chooses among the admin app's. It shows the server's name and asks for **Your name**, a **Password** and **Confirm password**, under the rules of **Create a user**. Once the account is created, the guest lands on the [web player](web-client.md), signed in. Without the web player, they land on the admin app instead, signed in, where a member sees their own pages.
-
-A link that is used up, expired or revoked says so, and so does an address that is no link at all.
-
-Each account created through a link is written to the activity log, as "sam joined through alex's invite", followed by "sam joined the group Kids" when the link names a group, and is told to the notification targets that chose **User joined** (see [Notifications](notifications.md#events)).
-
-### How links are kept safe
-
-- A link's token is the invite's ID followed by 32 random bytes, as many as an admin session's. Polyfin stores only the SHA-256 hash of the random part, and compares it in constant time.
-- The guest's requests count toward the client's failed sign-ins: a token that is no link's counts as a wrong password does. After too many failures, the client is refused for a while (429), as on the sign-in page.
-- A link's uses are counted in the transaction that creates the account, with the link locked: two guests on the last use of a link create one account, and the other is told the link is used up. A name or password that is refused uses nothing up.
-- The guest sends a name and a password only. Anything else in the request is ignored: the account's settings come from the link.
-
-**Compared with Jellyfin**
-
-- Jellyfin has no invite links: its administrators create every account and choose its password.
-
-<details>
-<summary>For app developers</summary>
-
-- The admin API serves the links to administrators:
-  - `GET /admin/api/invites` lists them, the newest first: `id`, `maxUses`, `uses`, `expiresAt` (null for never), `createdAt`, `revokedAt`, `model`, `group` and `createdBy` (each `id` and `name`, or null; `createdBy` is null once that user is deleted, `group` once that group is), `state`: `active`, `used_up`, `expired` or `revoked`, and `accountsEndInDays` (null for never).
-  - `POST /admin/api/invites` creates one from `maxUses` (1 by default, up to 100), `expiresInDays` (7 by default, up to 365, `null` for never), `modelUserId` (null or left out for a new user's settings), `groupId` (null or left out for none) and `accountsEndInDays` (up to 365, null or left out for never). It answers 201 with the link as listed, plus its `token` and its `url`, which is null without a public address: the link is then `/admin/invite/<token>` on the server's address. The token is never answered again. Errors: `invalid_invite_uses`, `invalid_invite_expiry`, `invalid_invite_model`, `invalid_group` and `invalid_invite_account_end`.
-  - `POST /admin/api/invites/{id}/revoke` revokes one, and answers it.
-- The guest's page uses two routes that need no session:
-  - `GET /admin/api/invite/{token}` answers `serverName` while the link may create an account.
-  - `POST /admin/api/invite/{token}` with `name` and `password` creates the account. It answers 201 with `user` (`id`, `name`, `isAdministrator`, `imageTag`) and `webClient`. Without the web player (`webClient` false), the answer opens an admin session, as signing in does. With it, the page signs in with `POST /Users/AuthenticateByName` as jellyfin-web does, naming jellyfin-web's app and device, and keeps the session where jellyfin-web 12.4 reads it, in `jellyfin_credentials` in the browser's local storage.
-  - A token that is no link's answers 404 `invite_unknown`, and a link used up, expired or revoked 410 `invite_used_up`, `invite_expired` or `invite_revoked`. A refused name or password answers as creating a user does: `invalid_name`, `invalid_password` or `name_taken`. Too many failures answer 429 `too_many_attempts`, with `Retry-After`.
-
-</details>
-
-## Share links
-
-A share link lets a member give one movie or one episode to someone who has no account, for a while, without an administrator creating an account. The guest sees that title alone.
-
-Two switches allow it, both off by default:
-
-- **Allow share links**, under **Settings › Security**, for the server. Turned off, no link can be made, and every link is refused with 410, without being deleted: turning it on again makes the links work again until they expire.
-- **Can share titles**, under **Access** on a user's page, for each user, administrators included. An invite link's model passes it on, as the other **Access** permissions.
-
-A user who loses **Can share titles**, is disabled, ends (see [Ending an account](#ending-an-account)) or is deleted loses their links at once: they are revoked, or deleted with the account.
-
-### Making a link
-
-Under **My account › Shared links**, **Share a title** searches the libraries the user sees. A movie is shared as it is; a series opens its episodes, and one episode is shared. A series, a channel or a recording is never shared. Parental control, blocked genres and the titles the user hid apply: a title the user may not see cannot be shared. On a movie's or an episode's page in the web player, **Share** opens the same form with the title chosen (see [Web player](web-client.md)).
-
-The form asks for:
-
-- **Expires after**: 1 hour, 1 day (the default), 7 days or 30 days.
-- **Viewers at once**: from 1 (the default) to 5 guests watching through the link at the same time.
-
-**Create link** shows the link once, with **Copy link**: Polyfin keeps only a hash of it. It starts with the **Public address** (**Settings › Notifications**) when one is set, as an invite link does, and with the address the admin app is open at otherwise.
-
-**My account › Shared links** lists the user's links, with the title, when each expires, how many times it was played, its state (**Active**, **Expired** or **Revoked**) and **Revoke**. Administrators see a user's links in the **Shared links** section of that user's page, and can revoke them. Links that ended more than 30 days ago are deleted.
-
-### What the guest sees
-
-The link opens a page Polyfin serves at `/share/…`, which needs no account, in the first language Polyfin speaks among those the guest's browser prefers (else the server's language). It shows the server's name, the title, its artwork and overview, when the link expires, a player, and the text subtitles of the version played, which the player's captions menu offers. The title's name, overview and artwork are those the sharer sees, in their [metadata language](#metadata-language). It lists no library, no search and no other title. A link expired, revoked, turned off or unknown says so.
-
-The page plays HTTP Live Streaming, natively where the browser can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, which Polyfin serves itself: the page loads nothing from elsewhere.
-
-The page remembers where the guest stopped, in the guest's browser only:
-
-- It keeps the position every 10 seconds while the title plays, on pause and when the page closes, under the link's ID, never its token.
-- Opened again in the same browser, the page offers "Resume at 0:42:10", at the time where the guest stopped, and "From the beginning". Resuming starts the video there, and Polyfin reads the source ahead from there rather than from the start.
-- A playback Polyfin ended because the page sent nothing for 2 minutes (a device asleep, a tab in the background) says "This playback ended. Press Play to continue where you stopped.": Play starts again where the guest was.
-- The page forgets the position once the guest reaches the last 5 % of the title or its last 2 minutes, whichever is longer, after 31 days, and as soon as the link answers that it expired or was revoked.
-- Nothing of it is kept on the server: the sharer's resume points and Continue Watching are untouched, and the guest's plays count in the statistics as before. Each browser keeps its own position: it does not follow the guest to another device, and a private window or clearing the site's data loses it.
-
-### Limits
-
-The guest plays as the sharer would, with less:
-
-- Everything goes through Polyfin: the guest is never sent to the source, as stream addresses can hold keys. The page gets HLS playlists and segments only: there is no download.
-- The version played is the one the sharer's version rules choose (see [Playback](playback.md)). Video is sent at 1080p at most, and never above the sharer's [quality group](#quality-groups) or **Maximum quality**: a taller version is converted down, and plays only when the sharer may have video converted.
-- A guest counts as one of the sharer's playbacks for **Playbacks at once**, and a conversion for **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)). At the limit, the page says that the owner of the link is already watching on as many devices as allowed. A link takes no more guests at once than its **Viewers at once**.
-- The sharer's **Allowed hours** apply: outside them, nothing plays.
-- A guest changes nothing of the sharer's played marks, resume points or Next Up. Their plays count in the sharer's statistics, marked **Shared**, and Home in the admin app shows them under the sharer's name, with "Shared link" as the app.
-
-Each link made, revoked or expired, and each guest playback, is written to the activity log, as "A guest played Example Movie through the link shared by alex" (see [Administration](administration.md#activity-log)). The event **Shared link played** tells the sharer's notification targets and the server's, at most once an hour per link (see [Notifications](notifications.md#events)).
-
-### How share links are kept safe
-
-- A link's token is made and checked as an invite link's: its ID followed by 32 random bytes, only the SHA-256 hash of which is kept, compared in constant time (see [How links are kept safe](#how-links-are-kept-safe)).
-- A token that is no link's counts as a failed sign-in of the client; after too many, the client is refused for a while (429).
-- The token opens the page's routes only: the Jellyfin API, the admin API and the web player refuse it as any unknown token. The guest's play session is signed for no one, so the API's own HLS routes refuse it too.
-- What is converted and sent is kept by the server when the playback starts: the guest's requests cannot change it.
-
-**Compared with Jellyfin**
-
-- Jellyfin has no share links: watching needs an account.
-
-<details>
-<summary>For app developers</summary>
-
-- The admin API serves a user's own links: `GET /admin/api/account/share-links` answers `allowed` (whether the user may make one now) and `links`; each link has `id`, `user` (`id`, `name`), `item` (`id`, `kind`: `movie` or `episode`, `name`), `maxViewers`, `createdAt`, `expiresAt`, `revokedAt`, `plays` and `state`: `active`, `expired` or `revoked`. `POST /admin/api/account/share-links` makes one from `itemId`, `expiresInHours` (1, 24 by default, 168 or 720) and `maxViewers` (1 by default, up to 5), and answers 201 with the link, its `token` and its `url` (null without a public address: the link is then `/share/<token>`). Errors: 403 `share_links_off`, 400 `not_shareable`, `invalid_share_expiry` or `invalid_share_viewers`, 404 `not_found`. `POST /admin/api/account/share-links/{id}/revoke` revokes one.
-- `GET /admin/api/account/share-titles?search=…` finds movies and series to share, `GET /admin/api/account/share-titles/{id}` describes one title and `GET /admin/api/account/share-titles/{id}/episodes` lists a series' episodes.
-- Administrators: `GET /admin/api/users/{id}/share-links` and `POST /admin/api/share-links/{id}/revoke`. Users carry `canShare`, and the settings `shareLinks`.
-- The guest's page uses `GET /share/{token}`, `GET /share/{token}/image/primary` and `…/backdrop`, `POST /share/{token}/play` (whose JSON body may give `position`, in seconds, to start at, and which answers `session`, or `error`: `limit`, `viewers`, `hours`, `busy` or `unavailable`), `GET /share/{token}/play/{session}/master.m3u8` with its playlists and segments, and `POST /share/{token}/play/{session}/progress` and `…/stop`. A link that opens nothing answers 404 `unknown`, or 410 `expired`, `revoked`, `off` or `unavailable`. The page carries the link's ID as `data-link`, and keeps the guest's position in the browser's `localStorage` as `polyfin.share.<link ID>`: `{"position": seconds, "savedAt": milliseconds}`.
-
-</details>
-
-## Parental control
-
-On a user's page under **Users**, the **Parental control** section can limit the user to titles up to a rating (**Maximum rating**). The administrator can also hide from them the movies or shows that have no rating (**Block unrated movies**, **Block unrated shows**). Administrators' Jellyfin apps can set the same limit from their user settings. For a member who follows a group, the group sets it, and an app that changes it detaches them from the group (see [User groups](#user-groups)).
-
-<a id="how-a-title-s-rating-is-found"></a><a id="how-a-titles-rating-is-found"></a>
-
-### How the rating of a title is found
-
-- A title's rating is the certification the server's metadata addon gives, usually the US one, or its local one when it gives no other.
-- Polyfin also reads the French, German and British ratings, and plain ages ("12", "16+").
-- A rating Polyfin does not know counts as none.
-- Users' own addons never rate titles.
-- Seasons and episodes follow their series.
-
-A limited user's apps show the server's addons and libraries only. Their own addons are kept but not used, and they cannot turn the server's addons off.
-
-### What a limited user sees
-
-A title above the limit is hidden from the user everywhere, as Jellyfin hides it:
-
-- libraries, collections, genre, studio and year pages, search, latest, Continue Watching, Next Up, Upcoming, playlists, similar titles and the titles of a person leave it out;
-- people credited only in hidden titles are not listed;
-- opening, playing, downloading it or searching subtitles for it is refused.
-
-Artwork stays reachable without signing in, as in Jellyfin.
-
-### Ratings looked up for limited users
-
-Addon catalogs rarely carry ratings. For a limited user, Polyfin asks the metadata addon for each listed title whose rating it does not know yet, a few at a time, once per title.
-
-- The rating is kept, whichever user opened the title.
-- It is asked again after a week, or after a few hours for a title that had none.
-- A listing waits a few seconds for these ratings. It then stops at the titles still unknown, which appear in later listings.
-- A listing reads at most a few times as far into a catalog as it would for a user without a limit.
-
-## Blocked genres, visible libraries and allowed hours
-
-On a user's page under **Users**, three more sections hold three more settings, each with its own save button. Administrators' Jellyfin apps can also set them from their user pages. For a member who follows a group, the group sets all three, and an app that changes the visible libraries or the allowed hours detaches them from the group (see [User groups](#user-groups)).
-
-### Visible libraries
-
-**Visible libraries** chooses which of the server's libraries the user's apps show. By default the apps show all of them, and libraries added later show too.
-
-This setting only chooses the libraries shown; it blocks no title. A hidden library's titles stay reachable through other libraries, search or links. Listing the hidden library itself is refused, as Jellyfin refuses a folder the user may not access (401). Parental control and blocked genres are what block titles.
-
-<details>
-<summary>For app developers</summary>
-
-- Apps read and set this as the policy's `EnableAllFolders` and `EnabledFolders`.
-- Jellyfin keeps the libraries shown, while Polyfin keeps those hidden. That way a library added later shows even when an app chose the libraries.
-
-</details>
-
-### Blocked genres
-
-**Blocked genres** hides the titles of any of these genres, in any letter case, everywhere parental control hides titles: lists, search, details, playback, downloads, Continue Watching, Next Up, similar titles and person pages.
-
-- A title's genres are those the server's addons give in its complete description. They are looked up and kept like its rating.
-- A title is hidden until its genres are known.
-- A user who blocks genres browses the server's addons only, as under parental control.
-- The admin app offers the genres of the server's libraries (those their genre pages are named after), or any genre typed.
-
-**Compared with Jellyfin**
-
-- Jellyfin has no such setting. Its `BlockedTags` are tags, which Polyfin's titles do not have, so the policy reports none and Polyfin ignores those apps send.
-
-### Allowed hours
-
-**Allowed hours** are Jellyfin's access schedules. Each row has:
-
-- a day: one day of the week, every day, weekdays or weekends;
-- a start and end hour from 0 to 24, both included, in the server's time zone.
-
-A user with at least one row who is outside all of them cannot sign in (403). Their apps' requests are refused with an empty 403, as Jellyfin does, except reading their own user and the server's information.
-
-- As in Jellyfin, administrators are refused sign-in outside their hours, but their apps already signed in are served.
-- A Quick Connect sign-in is not checked, a Silo TV's code included, though the app's requests then are.
-- Polyfin refuses hours outside 0 to 24, or ending before they start.
-- In the admin app, nobody signs in outside their hours, and a member already signed in sees only who they are.
-
-**Compared with Jellyfin**
-
-- Jellyfin serves direct streams without checking who asks; Polyfin also refuses a user's media outside their hours.
-- jellyfin-web never sends hours outside 0 to 24 or ending before they start.
-
-### Connections from outside the local network
-
-**Can connect from outside the local network**, in the **Access** section of a user's page and on a group's page, is Jellyfin's "Allow remote connections to this server" (`EnableRemoteAccess`). It is on for every user and every group until an administrator turns it off. jellyfin-web's user editor sets it too, through `POST /Users/{userId}/Policy`; a policy that leaves it out turns it on, as in Jellyfin. Groups, invites' model users and **Reset to defaults** carry it like the other settings of **Access**.
-
-Turned off, the user may use the server only from the local network, administrators included:
-
-- signing in from outside is refused (403): with a password, from a Jellyfin app, Silo's apps or the admin app, through the identity provider, at the second step of two-step sign-in, and through Quick Connect;
-- each refused sign-in is a failed sign-in in the activity log, about the user, with the client's address;
-- their apps' requests from outside are refused with an empty 403, those served outside the allowed hours included, and so are their WebSockets, stream and download addresses, repackaged streams and Live TV relays (401 for media, as for a play session that is not theirs);
-- in the admin app, a session taken outside is refused (`outside_local_network`), but still reads and ends itself;
-- `/Users/Public` from outside leaves them out of the sign-in screen.
-
-The local network is judged as for a forgotten password's PIN: loopback, private and link-local addresses, of the client [Known proxies](#known-proxies) tells. Behind a reverse proxy missing from **Known proxies**, every client looks like the proxy, often on the local network, so the setting cannot hold; when **System › Health** sees such a proxy, the section warns of it while the setting is off.
-
-Some things stay allowed:
-
-- the [share links](#share-links) the user gives play anywhere: sharing is the user's choice;
-- Quick Connect checks both requests: the approval is refused from where the approver may not connect, and the app signing in from where the user may not;
-- DLNA answers the local network only anyway;
-- API keys are not users, and are never refused.
-
-An administrator connected from outside the local network cannot turn off their own remote access, in the admin app or from a Jellyfin app's user editor: they would be locked out at once. The change is refused (409, `remote_access_self` in the admin app, a message in the server language from `POST /Users/{userId}/Policy`); from the local network it goes through. A group never holds an administrator, so a group's change cannot lock its author out.
-
-**Compared with Jellyfin**
-
-- Jellyfin refuses the sign-in ([`UserManager.cs`, lines 633 to 641](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Users/UserManager.cs#L633-L641)) and every request, administrators' too ([`DefaultAuthorizationHandler.cs`, lines 58 to 71](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Auth/DefaultAuthorizationPolicy/DefaultAuthorizationHandler.cs#L58-L71)), and leaves the user out of `/Users/Public` ([`UserController.cs`, lines 626 to 632](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/UserController.cs#L626-L632)), as Polyfin does.
-- Jellyfin refuses a password sign-in from outside before checking the password, and only logs it; Polyfin refuses it once the password is right, so that a refusal tells nothing of it, and writes it to the activity log.
-- Jellyfin lets a Quick Connect sign-in through and refuses its requests; Polyfin refuses the sign-in itself. Jellyfin serves direct streams without checking who asks; Polyfin refuses them from outside, as it does outside the allowed hours.
-- Jellyfin's local network may be set in its networking options; Polyfin's is the private, link-local and loopback ranges, Jellyfin's default.
-- Jellyfin has no guard against an administrator taking their own remote access away from outside: Polyfin refuses it, on purpose.
-
-<details>
-<summary>For app developers</summary>
-
-- jellyfin-web's user editor shows "Allow remote connections to this server" only when the server's network configuration allows remote access. `GET /System/Configuration/network` answers Jellyfin's `NetworkConfiguration` with `EnableRemoteAccess` true, the server's port, local discovery and Known proxies, and Jellyfin's defaults for the rest.
-
-</details>
-
-## Metadata language
-
-**Metadata language** is the language a user reads titles in: their names, overviews and images, and their episodes'. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **The server's**, the default, shows the descriptions of the server's addons without a language. The other choices are the languages the server's addons were given (see [Languages](addons-and-libraries.md#languages)). **Reset my preferences** puts it back to **The server's** (see [Your own preferences](#your-own-preferences)).
-
-- A user under parental control or blocking genres gets their language too.
-- A title's genres, ratings, people, versions and subtitles are the same in every language, so parental control, blocked genres, hidden titles and smart lists judge every user alike.
-- A title that no addon in the language describes shows the server's description.
-- When Polyfin speaks the language, the names it generates follow it too (see [Language of generated names](getting-started.md#language-of-generated-names)).
-- An invite link's model user passes on their metadata language.
-- The page of a link the user shares shows the title in their language: its name, overview, poster and backdrop (see [Share links](#share-links)).
-- **Edit images** lists TMDB's images in their language first (see [Edit images](addons-and-libraries.md#edit-images)).
-
-<details>
-<summary>For app developers</summary>
-
-- Jellyfin sets a metadata language per library, and its apps send none per user: Polyfin reads the user's own, and the server configuration's `PreferredMetadataLanguage` stays `en`.
-- Images come without a user. An image asked for with the tag of a user's language gets that image.
-
-</details>
-
-## Web player theme
-
-**Web player theme** is the look of Polyfin's web player for a user, on every browser they sign in with. The choices are those of [Theme per user](web-client.md#theme-per-user): **The server's**, the default, **LumaaGlaass**, **jellyfin-web's own look**, or **Custom** while the Custom theme has a text. Administrators set it in its own panel on the user's page under **Users**; users set their own in its own section under **My account**.
-
-- **Let them change it**, beside the administrator's choice, is on by default. Off, the theme the administrator chose stays the user's: their **My account** shows it, read only, with "Your administrator chose your web player theme.", and refuses a change.
-- **Reset my preferences** puts it back to the server's, unless **Let them change it** is off (see [Your own preferences](#your-own-preferences)).
-- An invite link's model user passes on their theme and **Let them change it**.
-- A browser too old for LumaaGlaass gets jellyfin-web's own look, and other apps than the web player draw their own screens (see [Theme per user](web-client.md#theme-per-user)).
-
-**Compared with Jellyfin**
-
-- Jellyfin has no theme per user: its custom CSS is the server's, for everyone, and jellyfin-web keeps each user's display theme, such as Light, in the browser, not in the account.
-
-<details>
-<summary>For app developers</summary>
-
-- A user's JSON in the admin API has `webTheme`, `lumaaglaass`, `none` or `custom`, empty for the server's, and `webThemeLocked`, `true` while **Let them change it** is off; `PATCH /admin/api/users/{id}` sets them. A theme not offered is `400 invalid_web_theme`.
-- `GET /admin/api/web-themes`, for any user signed in to the admin app, answers `serverTheme` and `themes`, those a user may be given: `lumaaglaass` and `none`, and `custom` while the Custom theme has a text.
-- `GET /admin/api/account/web-theme` answers the caller's `webTheme`, `locked`, and the same `serverTheme` and `themes`; `PUT` with `{"webTheme": "none"}` changes it, `403 web_theme_locked` while **Let them change it** is off.
-
-</details>
-
-## Audio region
-
-**Audio region** is the dub a user prefers where a language is dubbed apart for a region: **French (France)** or **French (Quebec)**, **Spanish (Spain)** or **Spanish (Latin America)**, **Portuguese (Brazil)** or **Portuguese (Portugal)**. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **None**, the default, prefers no region. **Reset my preferences** puts it back to **None** (see [Your own preferences](#your-own-preferences)).
-
-- It refines the user's audio language: the one they chose in their app, else the server's **Default audio language**, when that is the region's language. A user who chose French and Quebec gets the Quebec dub first; a user who chose English keeps English, whatever their region.
-- A user with no audio language of their own and no server default gets the region's language, as the server's default would give it.
-- In that language, the audio track of the region plays by default, then one of no known region, then one of another region; and with **Preferred audio language** in the version order, the versions carrying that dub come first among those in the language. How Polyfin reads a track's or a release's region is in [Regional audio](playback.md#regional-audio).
-- An invite link's model user does not pass it on: it is the guest's own choice.
-
-<details>
-<summary>For app developers</summary>
-
-- The user's JSON in `/admin/api/users` holds `audioRegion`, a BCP 47 tag (`fr-CA`, `es-419`, `pt-BR`) or empty, and `audioRegions`, the tags offered; `PATCH /admin/api/users/{id}` takes `audioRegion`.
-- `GET /admin/api/account/audio-region` answers the caller's own as `{"region": "fr-CA", "regions": [...]}`, and `PUT` with `{"region": "..."}` changes it. A tag not offered is 400 `invalid_audio_region`.
-- Jellyfin's `AudioLanguagePreference` has no region, and Jellyfin apps neither show nor send this setting.
-
-</details>
-
-## Playback and access limits
-
-On a user's page under **Users**, the **Playback and access** section holds five more limits, saved with **Save playback and access**. Administrators' Jellyfin apps also set them from the user's settings. For a member who follows a group, the group sets them, with the **Quality group**, and an app that changes one detaches them from the group (see [User groups](#user-groups)).
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Playbacks at once (0 = no limit)** | The user's **Playback and access** section | 0, no limit (up to 20) | How many of the user's devices may play at once. |
-| **Maximum quality** | The user's **Playback and access** section | No limit | Caps the bitrate of everything the user plays. |
-| **Live TV** | The user's **Playback and access** section | On | Whether the user can see and play Live TV. |
-| **Watch together** | The user's **Playback and access** section | Create and join | Whether the user may create and join SyncPlay groups, only join them, or not watch together at all. |
-| **Can control other users' apps** | The user's **Playback and access** section | On for administrators, off for others | Lets the user see and control the apps of other users from theirs. |
-
-The same section also holds **Quality group** (see [Quality groups](#quality-groups)) and **Play local files first**, off by default, which offers the user the versions of local folders and network shares before the addons' streams, whatever the server's version order says (see [Local files first for some users](playback.md#local-files-first-for-some-users)). Jellyfin apps neither show nor set it. The user's JSON in `/admin/api/users` and a group's hold `localFirst`, which `PATCH` takes.
-
-### Playbacks at once
-
-Once that many of the user's other devices are playing, as **Now playing** on **Home** lists them, DLNA devices showing the user's libraries included, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web player script closes the generic error jellyfin-web shows over it (see [Web player](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title. A device making a [converted download](transcoding.md#converted-downloads) counts as playing while it runs.
-
-Apps report their playback every 10 seconds, paused too. A device whose app reported nothing for five minutes stops playing, at the position it last reported (see [Playbacks](statistics.md#playbacks)): a tab closed while it played, a phone that lost its network, an app that crashed. Its resume point stays at that position, and it no longer counts here, nor in **Now playing**. Its conversions end, and its torrent lingers then stops as after a stop.
-
-**Compared with Jellyfin**
-
-- PlaybackInfo from the extra device answers Jellyfin's `RateLimitExceeded`.
-- Jellyfin also stops a playback whose app reported nothing for five minutes, paused or not, at the position last reported. It checks every five minutes, so the playback stops five to ten minutes after the last report; Polyfin checks every minute, so five to six, as the playback holds a place here.
-- Jellyfin's `MaxActiveSessions` counts signed-in sessions and refuses signing in. Polyfin counts playbacks instead, on purpose, so a user stays signed in on every device.
-- Polyfin refuses a policy setting more than 20 (400).
-
-### Maximum quality
-
-Polyfin uses the lower of the app's limit and this one. A version above it is:
-
-- converted down to it, when the user may use conversion (see [Transcoding](transcoding.md));
-- else skipped for the next version under it;
-- else nothing plays (`NoCompatibleStream`).
-
-A version above the limit is never played as it is or with its video copied, even from a kept or made-up URL.
-
-**Compared with Jellyfin**
-
-- Jellyfin's `RemoteClientBitrateLimit` applies to remote apps only. Polyfin applies it, on purpose, to all of the user's playback.
-
-### Live TV
-
-With **Live TV** off, the Live TV view leaves the user's apps, and channels and programmes can be neither found nor played. See [Live TV](live-tv.md).
-
-<details>
-<summary>For app developers</summary>
-
-- The `/LiveTv` routes answer 403, as Jellyfin's do without `EnableLiveTvAccess`.
-
-</details>
-
-### Live TV channels
-
-**Live TV channels**, a section of its own on a user's page and on a group's page, saved with **Save Live TV channels**, chooses which channels of the server's Live TV sources the user sees, while **Live TV** is on:
-
-- **All** (the default): every channel.
-- **Only these**: only the groups and channels ticked.
-- **All except these**: every channel but the groups and channels ticked. **Hide channels from groups added later** also hides the groups a source adds after the section is saved. They show in the section ticked and marked **New**, and saving the section again with them unticked shows them.
-
-A group is a category of an IPTV source's line-up, or the first genre an addon's TV catalog gives a channel (the catalog itself for a channel without one). Groups list their source and how many channels they hold; a filter finds a group, and a search finds channels by name or number, among line-ups of tens of thousands of channels.
-
-A rule names groups and channels by the keys their line-ups keep across refreshes (see [How the line-up is kept](iptv.md#how-the-line-up-is-kept)): a channel renumbered, renamed or moved to another category by the administrator is still the channel ticked. An M3U entry whose provider moves it to another group, or renames it, becomes a new channel.
-
-A hidden channel is hidden wherever **Live TV** off hides Live TV: the channel lists, the guide, what airs now, searches, the channel and its programmes opened by their identifiers, playback, Replay, timers, series timers, reminders and the recordings shown. A recording of a hidden channel is hidden even from the user who scheduled it, and a timer on it records nothing, as for a user without **Live TV**. Other users still see the channel. Hidden channels keep their place in the numbering, so a channel has the same number for everyone.
-
-The rule applies to the server's sources only: a user's own sources, under **My sources**, are theirs. Groups, invites' model users and **Reset to defaults** carry it like the other sections.
-
-**Compared with Jellyfin**
-
-- Jellyfin has no such setting for Live TV. Its policy's `EnableAllChannels` and `EnabledChannels` choose its channel plugins, not Live TV channels ([Channel.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Channels/Channel.cs#L38-L39)). Polyfin keeps reporting `EnableAllChannels` on, so jellyfin-web's user editor neither shows nor changes the rule, and saving a policy keeps it.
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/live-tv/channel-choices`, for administrators, answers every group (`key`, `name`, `source`, `channels`) and a page of channels (`key`, `name`, `number`, `group`), with `total`; `q` searches channels by name or number, `group` keeps one group's, repeated `key` the channels named, and `offset` and `limit` (100, at most 500) page them.
-- The user's and the group's JSON hold `liveTvChannels`: `mode` (`all`, `only` or `except`), `groups`, `channels`, `hideNewGroups` and `knownGroups`. `PATCH` takes the first four; saving with `hideNewGroups` sets `knownGroups` to the groups the server's sources have then, and had before. A rule that is not valid, or lists more than 10,000 groups or channels, is 400 `invalid_live_tv_channels`.
-
-</details>
-
-### Watch together
-
-**Watch together** chooses, as Jellyfin's `SyncPlayAccess` does, whether the user may:
-
-- create and join SyncPlay groups (the default);
-- only join them;
-- not watch together at all, in which case jellyfin-web hides its button.
-
-Creating a group takes the first choice. Listing and joining groups takes either of the first two. Other SyncPlay requests answer 403 unless the user is in a group.
-
-### Playing torrent streams
-
-**Can play torrent streams**, in **Access** next to **Can download**, offers the user the torrents addons list, while **Play torrent streams** is on under **Settings › Torrents** (see [Torrents](torrents.md)). It is off for every user, administrators included, and in every group, until given. Without it, the user's versions hold no torrent, from the server's addons or their own, and a torrent version listed to another user is not found for them. Torrent versions never download, whatever **Can download** says.
-
-### Can control other users' apps
-
-**Can control other users' apps** is Jellyfin's `EnableRemoteControlOfOtherUsers`.
-
-- Administrators have it when created, and when upgrading from an older Polyfin.
-- Other users do not.
-- A user made administrator later keeps the value they had.
-
-## Quality groups
-
-**Quality group**, on a user's page under **Users** in **Playback and access** next to the maximum quality, sets the highest resolution each user is offered. For a member who follows a group, the group sets it (see [User groups](#user-groups)).
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Quality group** | The user's **Playback and access** section | **Original (no limit)** | Highest resolution offered: **Original (no limit)**, **4K**, **1440p**, **1080p**, **720p** or **480p**. |
-
-### How the height of a version is found
-
-Once Polyfin has analyzed a version, its height is the one the analysis found. Before that, it is the one RemuxDB found in its file, when [Describe versions from RemuxDB](playback.md#tracks-from-remuxdb) is on and RemuxDB knows the file. Otherwise, it is the one its labels name, in the addon's stream name, title, description or file name:
-
-- 2160p, 4K or UHD;
-- 1440p, 2K or QHD;
-- 1080p or FHD;
-- 720p or HD;
-- 576p, 480p or SD.
-
-Labels that disagree, or name none, leave the height unknown.
-
-### Which versions a user is offered
-
-While at least one version fits the group or has an unknown height:
-
-- versions taller than the group are left out of what the user is offered and of the versions tried for playback;
-- they are not analyzed;
-- the others keep their order: the addons', or the one the [version order](playback.md#version-order) settings give.
-
-When every version is taller, all are kept rather than none, the closest to the group first (720p before 1080p before 4K; versions of the same height keep their order, or are ordered by the version order settings). That way the least is read and decoded.
-
-The group applies after the version order settings hide versions, and before they order them (see [Version order](playback.md#version-order)).
-
-- The version played is converted down to the group, or to **Maximum quality of converted video** when that is lower, and to 1080p at most when the processor converts (4K on a GPU), as every conversion is. See [Transcoding](transcoding.md).
-- A version that fits plays as it is, or repackaged, as before.
-- A taller version is never sent at full size.
-- A user who may not have video converted (their **Can use conversion** permission, or the server's **Conversion** switch, off) is refused taller versions, as other conversions are refused (`NoCompatibleStream`).
-
-### Live TV, recordings and downloads
-
-- Live TV channels follow the same rule once analyzed, as their height is only known then. So do recordings.
-- A version's file downloads only when it fits. When none fits, the file is refused (403), as without the permission.
-- With **Converted downloads** on, under **Settings › Conversion (transcoding)**, apps that ask for a smaller copy, such as Streamyfin, download a taller version converted down to the group, when the user may have video converted. See [Converted downloads](transcoding.md#converted-downloads).
-
-**Compared with Jellyfin**
-
-- Jellyfin has no such setting. Apps neither show nor change it, and a policy they post keeps it.
-
-<details>
-<summary>For app developers</summary>
-
-- PlaybackInfo reports the conversion of a taller version as Jellyfin reports a resolution limit (`VideoResolutionNotSupported`), describing its video at the size sent.
-
-</details>
-
-## Two-step sign-in
-
-Each user can ask for a second step after their password: a 6-digit code from an authenticator app on their phone, such as the one their phone's password manager includes. Once it is on, the password alone signs in nowhere.
-
-### Turning it on
-
-Under **My account › Two-step sign-in**, **Turn on** shows a new key, as a QR code and as text, with a link that opens an authenticator app on the same device. The QR code is drawn by Polyfin itself: the key goes to no other service. Scanning it adds the account to the app, named Polyfin. Two-step sign-in is on only once a code the app shows is entered: a key that was never confirmed signs in no one, and **Turn on** again makes a new one.
-
-Then come ten recovery codes, shown this once, written like `7k2m-q9xd-4tbh-z0ce`: 16 letters and digits in four groups, without i, l, o or u, which look like other characters. Each signs in once in place of a code from the app, should the phone be lost, typed in capitals or not, with or without its dashes, or with spaces in their place. Polyfin keeps only their hashes, and can never show them again: keep them in a password manager, or printed. The section counts the codes left. **New recovery codes** makes ten new ones, which void the former ones.
-
-**Turn off** and **New recovery codes** ask first for a code of the app, a recovery code, or the password.
-
-### Signing in with a code
-
-In the admin app, after a right password, the sign-in page asks for the code. No session exists until it is entered: the step between the two belongs to the browser that entered the password, and ends after 5 minutes, after which the password is asked again. A recovery code is entered in the same field. The activity log records each sign-in with a recovery code.
-
-- The app's code changes every 30 seconds. Polyfin accepts the codes of the 30 seconds before and after too, for a phone whose clock is a little off.
-- Each code is accepted once: entered again, even within its 30 seconds, it is refused.
-- Wrong codes count as wrong passwords do toward the client's failed attempts (429 once too many), and also toward the account's, whatever the client, with the same limit. A right password between wrong codes does not reset them. They do not count toward **Block an account after this many wrong passwords (0 = never)**.
-- Each code counts toward the limit as soon as it arrives, before it is checked, as passwords, PINs and tokens do: of codes sent at once, those past the limit are refused without being checked.
-- The key is encrypted with `POLYFIN_SECRET_KEY`, like the other stored keys, and never shown again once set up (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
-
-Turning it on or off keeps the sessions already open, in the admin app and in Jellyfin apps: sign out the devices you no longer trust under **My account › Devices**.
-
-### Jellyfin apps
-
-Jellyfin apps, the web player included, cannot ask for a code. An account with two-step sign-in signs in to them with Quick Connect, approved on the admin app's **Quick Connect** page, which itself asked for the code (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)), or through an identity provider in the web player (see [Signing in with an identity provider](#signing-in-with-an-identity-provider)). The password alone is refused there as a wrong password is. API keys made by administrators work as before. The web player does not open an admin app session for such an account, unless it signed in through the identity provider: the admin app asks for the password and the code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
-
-<a id="silo-s-apps"></a><a id="silos-apps"></a>
-
-### Apps by Silo
-
-Silo's apps cannot ask for a code either. Silo's TV apps sign in with a code of their own, which is a Quick Connect request too: an account with two-step sign-in approves it on the admin app's **Quick Connect** page, which `/activate` leads to, as for Jellyfin apps (see [Signing a TV in with a code](silo-apps.md#signing-a-tv-in-with-a-code)). Silo's apps for phones, tablets and Mac take a password only, which is refused for such an account as a wrong password is.
-
-### For administrators
-
-**Require two-step sign-in for administrators**, under **Settings › Security**, off by default, makes the second step a must for administrators:
-
-- an administrator without it is shown the QR code right after their password, and gets a session once a code of the app confirms it, with their recovery codes;
-- their password alone signs in to no Jellyfin app, set up or not: Quick Connect does;
-- they cannot turn theirs off under **My account**;
-- sessions already open stay, until they sign out.
-
-A user who lost their phone and their recovery codes asks an administrator: **Turn off two-step sign-in**, on their page under **Users**, turns it off after a confirmation. The activity log records who turned it off for whom. They then sign in with their password alone, and set it up again from **My account**, or right after their password if it is required of them. An administrator turns their own off from **My account**.
-
-A reset of a forgotten password by PIN from a Jellyfin app changes the password only: two-step sign-in stays on (see [Forgotten password](administration.md#forgotten-password)).
-
-A database restored under another `POLYFIN_SECRET_KEY` holds keys that the current key cannot read. Their users still sign in with a recovery code, and **My account** says so; an administrator can turn theirs off, and **System › Health** names them (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
-
-<details>
-<summary>For app developers</summary>
-
-- `POST /admin/api/session` answers `{"user": …}` without a second step, `{"twoStep": "code"}`, or `{"twoStep": "setup", "setup": {"secret", "uri", "qr"}}` for an administrator setting it up, with an HttpOnly cookie for the step. `POST /admin/api/session/two-step` with `{"code"}` then opens the session (`invalid_code`, or 401 `two_step_expired`), with `recoveryCodes` after a setup.
-- `GET /admin/api/account/two-step` answers `on`, `recoveryCodes` (those left), `unreadable` and `required`. `POST …/two-step/setup` answers the key, its `otpauth://` address and its QR code as rows of `0` and `1`; `POST …/two-step/confirm` with `{"code"}` turns it on and answers the recovery codes. `POST …/two-step/recovery-codes` and `POST …/two-step/off` take `{"code"}` or `{"password"}`.
-- `POST /admin/api/users/{id}/two-step/off`, for administrators, answers the user, whose `twoStep` tells whether it is on.
-- The codes follow RFC 6238: HMAC-SHA-1, 30-second steps, 6 digits, a 160-bit key.
-- A recovery code holds 80 random bits, in lowercase Crockford base32. Polyfin stores its SHA-256 hash: at 80 bits, a copy of the database does not let anyone search it out.
-
-</details>
-
-## Signing in with an identity provider
-
-When an administrator sets up an OpenID Connect provider in **Settings › Security** (see [Identity provider](administration.md#identity-provider)), the sign-in pages of the admin app and of the web player get a **Sign in with …** button, named after the provider. It leads to the provider's own sign-in page, which asks for its password and its own second step, then back to Polyfin, signed in:
-
-- in the admin app, the button sits under **Sign in**; the browser comes back to the admin app's home, with a session that lasts as one opened with a password does;
-- in the web player, Polyfin's script adds the button first among the buttons of jellyfin-web's sign-in page. The browser comes back to the web player, signed in as a device of its own, as a password signs it in: the device shows under **My account › Devices**, and signing out signs it out.
-
-The sign-in starts and ends at the server's **Public address**, set in **Settings › Notifications**, which must be set for the button to show: a web player opened at another address comes back at the public one.
-
-### Which account signs in
-
-The first time someone signs in through the provider, Polyfin looks for their account:
-
-1. the account whose name is the claim set under **Claim naming the user**, `preferred_username` by default, without regard to case;
-2. else the account whose name is their email, only when the ID token says the email is verified (`email_verified` true): an email the provider does not vouch for, or says nothing of, matches no account;
-3. else, with **Create accounts** on, a new account, named after the claim, or the email when the claim is no valid name. It has the permissions of an account created under **Users** without a group, and **Identity provider only** set. With **Create accounts** off, the default, the sign-in is refused.
-
-The account found is linked to the person at the provider, by the provider's issuer and their subject (`sub`), which never change there. Later sign-ins find the same account by that link, even when the claim or the email changed. An account linked to someone else at the provider, matched by name or email, is refused. Changing the issuer under **Settings › Security** starts the links over.
-
-With **Administrators' claim** and **Administrators' value** set, someone whose claim holds the value, such as a `groups` claim listing `polyfin-admins`, becomes an administrator as they sign in, unless the account is disabled. The group only grants: removing someone from the group in the provider does not demote them in Polyfin. They stay an administrator until you turn **Administrator** off on their page under **Users**.
-
-A disabled account, and one that ended, is refused as with a password, and so is a sign-in outside the account's allowed hours, or from outside the local network without remote access (see [Connections from outside the local network](#connections-from-outside-the-local-network)).
-
-### Accounts without a password
-
-**Identity provider only**, on a user's page under **Users** and when creating one, has the account sign in through the provider alone. Its password, even the right one, is refused as a wrong password is, in the admin app and in Jellyfin apps, and counts toward the client's failed attempts but not toward the account's, so that nobody can block it with passwords. An account created so needs no password: Polyfin gives it one nobody knows. Turning it off lets the account's password sign in again: set one first.
-
-### Two-step sign-in and the provider
-
-Polyfin does not ask for the code of its own two-step sign-in after the provider: the provider asked for its own second step, as Jellyfin's SSO plugins leave it to the provider. An administrator required to use two-step sign-in signs in through the provider without setting it up. The web player signed in through the provider also opens the admin app without a code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)), which a web player signed in with Quick Connect does not.
-
-In the same way, the block after wrong passwords does not stop a sign-in through the provider: it blocks passwords only (see [Blocking after wrong passwords](#blocking-after-wrong-passwords)). An account blocked by someone guessing its password still signs in through the provider, which checked its own credentials, and stays blocked for passwords.
-
-<a id="jellyfin-apps-1"></a>
-
-### Jellyfin apps and the provider
-
-Jellyfin apps cannot open the provider's page. They sign in with Quick Connect: the app shows a code, approved on the admin app's **Quick Connect** page, or in the web player's own **Quick Connect** page, opened through the provider (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)). An account with a password may also type it in the app, unless it signs in through the provider only.
-
-### How the sign-in is kept safe
-
-- Polyfin uses the authorization code flow with PKCE (S256), a state and a nonce, each made of 32 random bytes. The state is given to the browser in a cookie too, and taken once, within 10 minutes: a state replayed, made up, expired, or brought back by another browser is refused.
-- The ID token must be signed with RS256 or ES256 by a key of the provider's JWKS, issued by the issuer set, exactly, for the client ID set, with the nonce of the sign-in; its expiry must not have passed and its issue time must not be to come, 2 minutes allowed either way for clocks that differ. A token naming a key the JWKS lacks has Polyfin fetch the keys again, at most once every 30 seconds.
-- The discovery document must name the issuer set, exactly. Polyfin keeps it an hour, and the keys until a token needs another.
-- The redirect URI is built from the public address, and must be registered at the provider exactly as **Settings › Security** shows it.
-- An `http://` issuer is accepted, for a provider on the local network, but over HTTP the client secret, the codes and the tokens cross the network unencrypted: use HTTPS for the provider and for the public address (see [Identity provider](administration.md#identity-provider)).
-- Each return from the provider counts toward the client's failed attempts as a sign-in with a password does: a refused state, code or token counts as a wrong password, and once too many are refused, the browser comes back with "Too many attempts". Someone whose account is refused counts as no wrong guess.
-- No token, code, state or secret is written to the log or sent back. The browser gets the Jellyfin access token of its own device, as a sign-in with a password gives it, through a one-time ticket in a cookie its page cannot read, valid 2 minutes.
-- The client secret is stored encrypted with `POLYFIN_SECRET_KEY` (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
-- The activity log records the sign-ins, the refused ones with the name the provider gave, and the accounts it created.
-
-**Compared with Jellyfin**
-
-- Jellyfin has no OpenID Connect sign-in of its own: plugins add it, with a sign-in page of their own. Polyfin adds the button to jellyfin-web's own sign-in page, through its script, rather than sending `/web/` to the provider: jellyfin-web keeps its sign-in in the browser, which the server cannot see, so a redirect would also send to the provider people already signed in, or wishing to use their password or Quick Connect.
-- Polyfin finds accounts by the link to the provider, then by name, then by email, and makes administrators from a group; it never takes administrators back, so that a provider's change cannot leave the server without one.
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/status` answers `provider`, `{"name", "start"}`, or `null` without a provider or a public address. `start` is `<public address>/admin/api/provider/start`, to which the admin app adds `?app=admin` and the web player `?app=web`.
-- `GET /admin/api/provider/callback` is the redirect URI. It sends the browser to `/admin/`, signed in, or `/admin/?provider=<error>`; for the web player, to `/web/?polyfinProvider=signed-in` or `/web/?polyfinProvider=<error>`. The errors are `provider_refused`, `provider_no_account`, `account_disabled`, `outside_allowed_hours`, `outside_local_network`, `too_many_attempts`, `provider_state`, `provider_failed`, `provider_off`, `provider_unreachable` and `internal`.
-- `POST /admin/api/provider/web`, with the ticket's cookie and the device in a `MediaBrowser` `Authorization` header (`Client`, `Device`, `DeviceId`, `Version`), signs that device in once and answers `{"accessToken", "userId", "serverId", "serverName"}`; 401 `invalid_credentials` without a valid ticket, 403 `account_disabled`, `outside_local_network` or `outside_allowed_hours`.
-- A user's `providerOnly` tells whether they sign in through the provider only; `POST /admin/api/users` and `PATCH /admin/api/users/{id}` take it.
-
-</details>
-
-## Security settings
-
-**Settings › Security** gathers the eight settings below, the identity provider and HTTPS (see [HTTPS](administration.md#https)). **Settings › Diagnostics** holds a ninth setting. They apply at once, without a restart.
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
-| **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows the imports from a Jellyfin, Emby or Plex server, from a Letterboxd export and from an app under **My account** (see [Importing your own watch history](#importing-your-own-watch-history) and [Importing from an app](#importing-from-an-app)). |
-| **Allow share links** | **Settings › Security** | Off | Lets the users with **Can share titles** give a movie or an episode to someone without an account, through a link that expires (see [Share links](#share-links)). Off, every link is refused, without being deleted. |
-| **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often the apps users stay connected to, and the watch histories they import from tracking services, are imported again (see [How often connected accounts are imported](#how-often-connected-accounts-are-imported)). |
-| **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
-| **Require two-step sign-in for administrators** | **Settings › Security** | Off | Administrators must sign in with a code from an authenticator app after their password (see [Two-step sign-in](#two-step-sign-in)). |
-| **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
-| **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
-| **Identity provider** | **Settings › Security** | None | An OpenID Connect provider people sign in with, in the admin app and the web player (see [Signing in with an identity provider](#signing-in-with-an-identity-provider) and [Identity provider](administration.md#identity-provider)). |
-| **Detailed log (to diagnose a problem)** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
-
-### Users' own addons
-
-Under **My sources**, users choose which catalogs of their own addons are libraries, in which order, with their names, images, genres and maximums, and whether the web player's top bar shows them, as administrators do under **Content › Libraries** (see [The order of libraries](addons-and-libraries.md#the-order-of-libraries), [Library images](addons-and-libraries.md#library-images), [Genre and maximum](addons-and-libraries.md#genre-and-maximum) and [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). Their image addresses must be public: only administrators can use local network addresses.
-
-A server source limited to some groups and users (see [Who uses a server addon](addons-and-libraries.md#who-uses-a-server-addon)) keeps others from it, but a user who may add their own addons can still add the same addon under **My sources**, at a public address. To prevent it, turn **Can add their own addons** off for them or their group.
-
-Users also make their own smart lists under **My sources**, with **Add a smart list**, as administrators make the server's (see [Smart lists](addons-and-libraries.md#smart-lists)). A user's own list may draw from their own addons' catalogs and, while they use the server's sources, from the server's. Only they see it: as a library among their own, or in the Collections view. The rules on what was played, started or marked favorite follow what they did, in their own lists as in the server's.
-
-On a user's page under **Users**, the **Access** section also holds **Can add their own addons**, on by default. While either this or **Allow users' own addons** is off:
-
-- the user's own addons are kept but not used;
-- their apps show the server's addons, libraries and smart lists only: their own smart lists are kept but not shown, and cannot be made or changed;
-- **My sources** says why;
-- their addons cannot be added, replaced, refreshed or turned on (403 `personal_addons_disabled`).
-
-The addons come back once both are on again. See [Addons and libraries](addons-and-libraries.md).
-
-### How often connected accounts are imported
-
-**Import connected accounts every** sets how often Polyfin imports again the Nuvio and Stremio accounts users stay connected to (see [Staying connected](#staying-connected)) and the watch histories they import from tracking services (see [Importing your watch history](tracking.md#importing-your-watch-history)): from 15 minutes to 24 hours, 6 hours by default. The AniList and MyAnimeList lists follow the same interval: **Import my AniList lists** and **Import my MyAnimeList lists**, their **Plan to Watch** switches, and **Sync my ratings**, which imports their scores onto unrated titles with each import (see [AniList and MyAnimeList](tracking.md#anilist-and-myanimelist)). All are off by default. Someone who watches in one of those apps, then opens a Jellyfin app, finds their progress sooner with a short interval, or at once with **Import now**.
-
-- A change applies at once: the next import of each connection comes that long after its last import, or after it was connected, so a shorter interval brings the imports due forward, and a longer one puts them off. The next import that **Connected apps** and **My account › Tracking** show follows it. Polyfin looks for the imports due every minute.
-- Each import reads the whole account again, so a short interval sends more requests to those services. Polyfin already waits when one asks it to, and keeps to each service's pace (see [Pace and problems](tracking.md#pace-and-problems)).
-- Stremio's terms forbid extracting its data by automated means: the more often Polyfin reads a Stremio account, the more pronounced that grey zone grows (see [Stremio](#stremio)).
-
-<details>
-<summary>For app developers</summary>
-
-- `GET /admin/api/settings` answers `importEveryMinutes`, in minutes, its choices in `bounds`. `PUT` takes one of them; any other is `invalid_import_every_minutes`.
-
-</details>
-
-### Blocking after wrong passwords
-
-After that many wrong passwords in a row for one account, from a Jellyfin app or the admin app, the account refuses every sign-in for 15 minutes. That includes the right password, which gets the answer of a wrong password.
-
-The count starts again after any of these:
-
-- a sign-in;
-- a new password set by an administrator;
-- **Unblock** on the user's page under **Users**, where the account shows until when it is blocked;
-- setting the limit to 0.
-
-Each block is told once to the notification targets that chose **Account blocked** (see [Blocked accounts](notifications.md#blocked-accounts)): the server's targets and administrators' own, with a link to the user's page where **Unblock** is, and the user's own, with until when, and the address and the app of the last attempt. Attempts from a client refused for a while after too many failed sign-ins from its address (429) never reach the account, and are not told: such attempts come all the time from anywhere on the internet. A sign-in from a device the account never used is told to the user (see [Sign-ins on new devices](notifications.md#sign-ins-on-new-devices)).
-
-**Compared with Jellyfin**
-
-- Jellyfin disables the account until an administrator enables it again. Polyfin only blocks it for a while, so that the last administrator can never be locked out for good.
-
-<details>
-<summary>For app developers</summary>
-
-- Jellyfin apps read the limit (-1 when there is none) and the count in the user's policy, as `LoginAttemptsBeforeLockout` and `InvalidLoginAttemptCount`.
-- The limit is the server's, so a policy an app posts does not change it, nor the count.
-
-</details>
-
-### Signing out unused devices
-
-Polyfin signs out the Jellyfin apps not used for that many days, at startup and every hour. It closes their connections and takes them out of SyncPlay groups, as any sign-out does. Admin app sessions are not concerned.
-
-### Known proxies
-
-Behind a reverse proxy, list the proxy so that Polyfin sees the client of each request, for failed sign-ins, device addresses and the local network. See [Known proxies](reverse-proxy.md#known-proxies).
-
-### Detailed log
-
-With **Detailed log (to diagnose a problem)** on, Polyfin logs at the `debug` level until it is turned off again, and at the `info` level otherwise. See [Configuration](configuration.md).
+Parental control, blocked genres, visible libraries, allowed hours, remote access, playback and access limits and quality groups are on [User limits](user-limits.md).
 
 ## DLNA devices
 
-TVs and players that play over DLNA cannot sign in: each shows the libraries of the user an administrator chose for it under **Settings › DLNA**, or of **No one** until then (see [DLNA](dlna.md#devices-and-users)). **Show new devices the libraries of** chooses the user of the devices seen for the first time, **No one** by default.
+DLNA TVs and players cannot sign in. Each shows the libraries of the user an administrator chose for it under **Settings › DLNA**, or of **No one** until then (see [DLNA](dlna.md#devices-and-users)). **Show new devices the libraries of** sets the user for newly seen devices, **No one** by default.
 
-A device browses and plays as its user: their visible libraries, blocked genres, parental control, hidden titles, allowed hours, **Playbacks at once**, **Maximum quality**, quality group and **Can use conversion** apply. Its playbacks show under the user in **Now playing**, on **Home**, and count in their statistics. Deleting the user leaves the device showing **No one**'s libraries; blocking it with **Blocked** gives it nothing at all.
+A device browses and plays as its user, under their visible libraries, blocked genres, parental control, hidden titles, allowed hours, **Playbacks at once**, **Maximum quality**, quality group and **Can use conversion**.
+
+- Its playbacks show under the user in **Now playing** on **Home** and count in their statistics.
+- Deleting the user leaves the device showing **No one**'s libraries.
+- **Blocked** gives it nothing at all.
+
+<div class="moved-sections">
+
+<a id="taste-profile"></a>*Taste profile* moved to [Home rows](home-rows.md#the-taste-profile).
+
+<a id="invite-links"></a>*Invite links* moved to [Invite and share links](invite-and-share-links.md#invite-links).
+
+<a id="share-links"></a>*Share links* moved to [Invite and share links](invite-and-share-links.md#share-links).
+
+<a id="louder-sound"></a>*Louder sound* moved to [Loudness](loudness.md#louder-sound).
+
+<a id="how-an-app-s-titles-are-matched"></a>*How app titles are matched* moved to [Moving to Polyfin](moving-to-polyfin.md#how-app-titles-are-matched).
+
+<a id="how-often-connected-accounts-are-imported"></a>*How often connected accounts are imported* moved to [Moving to Polyfin](moving-to-polyfin.md#how-often-connected-accounts-are-imported).
+
+<a id="how-titles-are-matched"></a>*How titles are matched* moved to [Moving to Polyfin](moving-to-polyfin.md#how-titles-are-matched).
+
+<a id="importing-from-an-app"></a>*Importing from an app* moved to [Moving to Polyfin](moving-to-polyfin.md#importing-from-an-app).
+
+<a id="importing-your-own-watch-history"></a>*Importing your own watch history* moved to [Moving to Polyfin](moving-to-polyfin.md#importing-your-own-watch-history).
+
+<a id="letterboxd"></a>*Letterboxd* moved to [Moving to Polyfin](moving-to-polyfin.md#letterboxd).
+
+<a id="moving-from-emby-and-plex"></a>*Moving from Emby and Plex* moved to [Moving to Polyfin](moving-to-polyfin.md#moving-from-emby-and-plex).
+
+<a id="moving-from-jellyfin"></a>*Moving from Jellyfin* moved to [Moving to Polyfin](moving-to-polyfin.md#moving-from-jellyfin).
+
+<a id="nothing-imported"></a>*Nothing imported?* moved to [Moving to Polyfin](moving-to-polyfin.md#nothing-imported).
+
+<a id="nuvio"></a>*Nuvio* moved to [Moving to Polyfin](moving-to-polyfin.md#nuvio).
+
+<a id="plex-signing-in"></a>*Plex, signing in* moved to [Moving to Polyfin](moving-to-polyfin.md#plex-signing-in).
+
+<a id="progress-and-limits"></a>*Progress and limits* moved to [Moving to Polyfin](moving-to-polyfin.md#progress-and-limits).
+
+<a id="ratings-collections-and-playlists"></a>*Ratings, collections and playlists* moved to [Moving to Polyfin](moving-to-polyfin.md#ratings-collections-and-playlists).
+
+<a id="signing-in-to-plex-as-the-owner"></a>*Signing in to Plex as the owner* moved to [Moving to Polyfin](moving-to-polyfin.md#signing-in-to-plex-as-the-owner).
+
+<a id="staying-connected"></a>*Staying connected* moved to [Moving to Polyfin](moving-to-polyfin.md#staying-connected).
+
+<a id="stremio"></a>*Stremio* moved to [Moving to Polyfin](moving-to-polyfin.md#stremio).
+
+<a id="signing-in-with-an-identity-provider"></a>*Signing in with an identity provider* moved to [Sign-in and security](sign-in-and-security.md#signing-in-with-an-identity-provider).
+
+<a id="two-step-sign-in"></a>*Two-step sign-in* moved to [Sign-in and security](sign-in-and-security.md#two-step-sign-in).
+
+<a id="users-own-addons"></a>*Users' own addons* moved to [Sign-in and security](sign-in-and-security.md#users-own-addons).
+
+<a id="web-player-theme"></a>*Web player theme* moved to [Themes and custom code](themes-and-custom-code.md#theme-per-user).
+
+<a id="connections-from-outside-the-local-network"></a>*Connections from outside the local network* moved to [User limits](user-limits.md#connections-from-outside-the-local-network).
+
+<a id="live-tv-channels"></a>*Live TV channels* moved to [User limits](user-limits.md#live-tv-channels).
+
+<a id="audio-region"></a>*Audio region* moved to [Watch state and preferences](watch-state.md#audio-region).
+
+<a id="continue-watching-and-next-up"></a>*Continue Watching and Next Up* moved to [Watch state and preferences](watch-state.md#continue-watching-and-next-up).
+
+<a id="metadata-language"></a>*Metadata language* moved to [Watch state and preferences](watch-state.md#metadata-language).
+
+<a id="watch-state"></a>*Watch state* moved to [Watch state and preferences](watch-state.md#watch-state).
+
+</div>
