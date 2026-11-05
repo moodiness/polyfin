@@ -238,7 +238,7 @@ The server has one switch, **Conversion (transcoding)**, in **Settings › Conve
 
 - Apps play files as they are, or repackaged into HLS with their tracks copied.
 - Polyfin picks the next version that plays that way.
-- A title with no version that plays that way on an app does not start on that app. An example is a recording converted to HEVC, on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)).
+- A title with no version that plays that way on an app does not start on that app. An example is a recording converted to HEVC, on an app that does not play HEVC (see [Smaller recordings](recordings.md#smaller-recordings)).
 - Picture subtitles the app cannot show are left out, except their text copies (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 
 Each user also has two permissions, in the **Access** section of their page under **Users**, both on by default:
@@ -268,7 +268,7 @@ API details: [Conversion permissions for apps](jellyfin-api.md#conversion-permis
 - **One playback:** what a user plays of a version, from its first converted segment until the app stops it or asks for nothing for 3 minutes (1 minute for Live TV). Its next segments, its seeks, and the new play session apps open to switch tracks never count again.
 - **Several qualities:** the lower qualities of a playback with **Several qualities when converting** count with it, as one playback. An app stepping down at the cap is never refused. While an app switches, the qualities it asked for in the last 10 seconds keep converting, so that switching back does not start over. That costs more of the machine for those seconds only, never another place under the cap. See [Adaptive quality](#adaptive-quality).
 - **Kept video:** with **Keep the converted video when the audio track changes**, a playback whose session stopped keeps its converted video 30 seconds, for the next session to take over. It counts as one playback meanwhile, then with that session once it does. See [Changing the audio track](#changing-the-audio-track).
-- **Recordings:** a recording converted to HEVC in the background counts as one conversion while it runs. It starts only below the cap, and waits while playbacks fill it. See [Smaller recordings](live-tv.md#smaller-recordings).
+- **Recordings:** a recording converted to HEVC in the background counts as one conversion while it runs. It starts only below the cap, and waits while playbacks fill it. See [Smaller recordings](recordings.md#smaller-recordings).
 - **At the cap:** Polyfin plans no new video conversion, as when conversion is off. It picks the next version that plays without one, or else reports that no version is compatible.
 
 **Compared with Jellyfin**
@@ -390,7 +390,7 @@ API details: [Audio track switching for apps](jellyfin-api.md#audio-track-switch
 
 **Settings › Conversion (transcoding)** tunes how video and audio are converted, for files and Live TV alike. Its groups follow below in the admin app's order. A change applies to the next playback, without a restart.
 
-**Recordings:** they copy the stream, and are converted like any file when played (see [Live TV](live-tv.md)). Finished recordings can also be converted to HEVC at night, to take less space, with **Convert finished recordings to HEVC** in **Settings › Recordings** (see [Smaller recordings](live-tv.md#smaller-recordings)). Those conversions:
+**Recordings:** they copy the stream, and are converted like any file when played (see [Live TV](live-tv.md)). Finished recordings can also be converted to HEVC at night, to take less space, with **Convert finished recordings to HEVC** in **Settings › Recordings** (see [Smaller recordings](recordings.md#smaller-recordings)). Those conversions:
 
 - use the **Graphics card used to convert**, the **Encoding speed**, the **HEVC quality** (28 when it is 0), the **Deinterlacing method** and **Double the frame rate**;
 - never tone map;

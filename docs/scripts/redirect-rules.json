@@ -72,7 +72,11 @@
       "sign-in-and-security",
       "jellyfin-api"
     ],
-    "installation": ["installation", "hdhomerun"]
+    "installation": ["installation", "hdhomerun"],
+    "live-tv": ["live-tv", "recordings"],
+    "tracking": ["tracking", "tracking-imports"],
+    "torrents": ["torrents", "torrent-peers"],
+    "desktop": ["desktop", "development"]
   },
   "overrides": {
     "local-folders#limits": "music#limits",

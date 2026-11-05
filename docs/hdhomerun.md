@@ -73,7 +73,7 @@ The source page's **Summary** has a **Tuner** panel, with the tuner's model and 
 Each channel watched or recorded takes one of the tuner's tuners, whoever reads it. A channel's stream is read once for every viewer.
 
 - With every tuner taken, a channel opens or is refused as under an account's [connection limit](live-tv.md#connection-limits).
-- A recording takes the tuner of a channel only watched, never another recording's (see [Recordings and tuners](live-tv.md#recordings-and-tuners)).
+- A recording takes the tuner of a channel only watched, never another recording's (see [Recordings and tuners](recordings.md#recordings-and-tuners)).
 
 Streams play as IPTV channels do: as they come when the app takes them, else converted.
 

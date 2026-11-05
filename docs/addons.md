@@ -280,7 +280,7 @@ While Polyfin waits:
 - A listing that would start past them fails as before, and so does a library whose first page was never read. Apps show their error.
 - Once the wait ends, the next visit reads the rest.
 - Searches are still asked, one request a term. [Local folders](unmatched-files.md#failed-searches) wait as the addon asks.
-- **Watchlist checks:** they ask no stream of an addon whose server waits. A check the addon answers "too many requests" starts its server's wait too (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)). Title pages and playback ask for streams as before.
+- **Watchlist checks:** they ask no stream of an addon whose server waits. A check the addon answers "too many requests" starts its server's wait too (see [Now available and Still waiting](tracking-imports.md#now-available-and-still-waiting)). Title pages and playback ask for streams as before.
 
 What the log and Health say:
 

@@ -8,8 +8,8 @@ These pages explain how to run Polyfin and what it does for the people who use i
 
 | Page | What it covers |
 |---|---|
-| [Installation](installation.md) | Choosing between Docker and Polyfin Desktop, Docker Compose, Unraid, the health check and monitoring, and giving the container a GPU |
-| [Polyfin Desktop](desktop.md) | Polyfin Desktop on Windows, macOS and Linux: installing it, the menu, starting with the computer, its folders, the secret key, updates, and moving to Docker and back |
+| [Installation](installation.md) | Choosing between Docker and Polyfin Desktop, Docker Compose (network modes, ports, HTTPS and work folders), Unraid, the health check, and giving the container a GPU |
+| [Polyfin Desktop](desktop.md) | Polyfin Desktop on Windows, macOS and Linux: installing it, the first start, NVIDIA GPUs, the menu, its folders, the secret key, updates, restarting, and moving to Docker and back |
 | [Getting started](getting-started.md) | A first-hour tutorial from install to playing a title in a Jellyfin app, then users and Quick Connect |
 | [Moving to Polyfin](moving-to-polyfin.md) | Importing accounts and watch history from Jellyfin, Emby, Plex, Letterboxd, Nuvio and Stremio, and how often connected accounts are imported |
 
@@ -36,13 +36,15 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Unmatched files](unmatched-files.md) | Files left unmatched and how to link them, Identify in the web player, failed searches and retries, and plain videos |
 | [Episode numbering](episode-numbering.md) | How show files' numbers map to the catalog's episodes, absolute numbers, the numbering choices with diagrams, and episodes only the files hold |
 | [Discs](discs.md) | Blu-ray discs, DVD folders, disc images, discs on network shares, and shows kept on discs |
-| [Torrents](torrents.md) | Playing the torrents addons list over a network interface, a SOCKS5 proxy or a WireGuard tunnel alone: the kill switch, the limits, the permission, and Docker |
+| [Torrents](torrents.md) | Turning torrents on, the three routes and what each carries, Docker, the kill switch, how a torrent starts and when it stops, the cap, failures to start, trackers, the file played, and Health |
+| [Torrent peers and pieces](torrent-peers.md) | How Polyfin downloads a torrent: trackers and the DHT, pieces and reading ahead, peers, peer exchange, slow peers, bounds, and uTP |
 
 ## Live TV
 
 | Page | What it covers |
 |---|---|
-| [Live TV](live-tv.md) | Channels from addons and IPTV sources, channels of your own titles, the programme guide (Native EPG and XMLTV), and recordings |
+| [Live TV](live-tv.md) | Channels from addon TV catalogs and IPTV sources (how they play, start, share connections and fail), channels of your titles, the programme guide (Native EPG and XMLTV) and programme reminders |
+| [Recordings](recordings.md) | Recording Live TV: the recordings folder, who can record, scheduling and series timers, settings, tuners, smaller HEVC recordings and watching recordings |
 | [IPTV sources](iptv.md) | Adding M3U and Xtream sources, files of the server, the import options, the source page, the line-up, refreshing, and Dispatcharr |
 | [Replay](iptv-replay.md) | The Replay view of past programmes: what lists tell, archive addresses and placeholders, time zones, the guide window, playing a programme and its connection |
 | [IPTV movies and series](iptv-movies-and-series.md) | An IPTV source's movies and series: their libraries, how titles are read, how they show and play in apps, and enrichment |
@@ -64,9 +66,10 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Quality of converted video](conversion-quality.md) | How large converted video is, the bitrate its video and audio get, and what an app's profile and the settings allow |
 | [GPUs and HDR](gpus-and-hdr.md) | Converting on NVIDIA, AMD, Intel and Apple GPUs, Docker GPU setup, and HDR tone mapping |
 | [Loudness](loudness.md) | How loud titles play, the stereo mix, evening converted audio, and each user's louder-sound options |
-| [Subtitles](subtitles.md) | Addon subtitles, text tracks inside files, ASS styles and fonts, and picture subtitles |
-| [Skip segments](skip-segments.md) | The skip buttons for intros, recaps, credits and previews: the sources, their order, and their keys |
-| [Tracking services](tracking.md) | Sending what you watch to Trakt, Simkl, MDBList, PublicMetaDB, AniList and MyAnimeList, and the songs you play to Last.fm and ListenBrainz, and importing what you watched there |
+| [Subtitles](subtitles.md) | Where each app's subtitles come from: addon subtitles and their sync, subtitle files from streams, local folders and torrents, text tracks inside files, ASS fonts, and picture subtitles read into text |
+| [Skip segments](skip-segments.md) | Skip buttons: which source wins, chapters, the four databases and their keys, intros and credits found in local episodes' audio, and commercials in recordings |
+| [Tracking services](tracking.md) | Connecting Trakt, Simkl, MDBList, PublicMetaDB, AniList, MyAnimeList, Last.fm and ListenBrainz, what each one is sent, the anime mapping, music scrobbling, administrator set-up, and delivery |
+| [Tracking imports and the Watchlist](tracking-imports.md) | Importing watch history and watchlists from tracking services, the Watchlist view, the Now available and Still waiting rows, and Recommended on Trakt |
 
 ## Apps
 
@@ -76,8 +79,8 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Web player](web-client.md) | The built-in web player, what Polyfin's script adds to it, dashboard links and the sign-in handoff to the admin app, caching, and the license |
 | [Home rows](home-rows.md) | Rows an administrator adds to the web player's home page: kinds, places, schedules, preview, and the taste profile behind Top picks for you |
 | [Themes and custom code](themes-and-custom-code.md) | The web player's themes, a theme per user, LumaaGlaass, other themes and copies of them, custom CSS and JavaScript, the sign-in message and branding |
-| [Silo's apps](silo-apps.md) | Silo's apps for Apple devices and Android on Polyfin: turning them on, what works, what they lack, and the contract followed |
-| [DLNA](dlna.md) | Sharing the libraries with TVs and players that have no Jellyfin app: devices and their users, profiles, Docker networking, and limits |
+| [Silo's apps](silo-apps.md) | Using Silo's apps with Polyfin: setup, what works, what does not yet, skip markers, Home layout, subtitle tracks, box sets, TV sign-in with a code, and the Silo contract Polyfin follows |
+| [DLNA](dlna.md) | Sharing the libraries with TVs and players over DLNA: setup, devices and their users, browsing, playing, profiles, Docker networking and limits |
 
 <a id="users-and-administration"></a>
 
@@ -99,12 +102,12 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Health](health.md) | What **System › Health** shows, each check it runs, and each warning and error, with how to fix it |
 | [Notifications](notifications.md) | Targets and their kinds, the events each one tells and who receives them, and how messages are delivered, paced and logged |
 | [Webhook reference](webhook-reference.md) | The JSON a webhook receives, what each target kind receives, and the admin API for targets |
-| [Statistics](statistics.md) | The playback history, the Statistics page, each user's own figures, the CSV export and their API |
+| [Statistics](statistics.md) | How playbacks are tracked, the playback history and its settings, and the Statistics pages of System and My account |
 | [Updates and restarts](updates-and-restarts.md) | How Polyfin tells you of a new version, and how you restart or update it from Home |
 | [HTTPS and networking](https-and-networking.md) | Letting apps find Polyfin on the local network, and serving HTTPS with your own certificate or Let's Encrypt |
-| [Reverse proxy](reverse-proxy.md) | Serving Polyfin over HTTPS behind a proxy: the headers to pass, WebSockets, known proxies, and an example with Traefik |
-| [Configuration](configuration.md) | Environment variables and the Compose `.env` file |
-| [Backups](backups.md) | Daily database backups, how many are kept, and restoring one |
+| [Reverse proxy](reverse-proxy.md) | Running Polyfin behind a reverse proxy: headers, WebSockets, slow answers, HTTPS, known proxies and a worked Traefik example |
+| [Configuration](configuration.md) | The environment variables, the data folder, the work folders, `.env`, and how stored secrets are encrypted with `POLYFIN_SECRET_KEY` |
+| [Backups](backups.md) | Daily database backups, their encryption, destinations, and restoring from the admin app, the setup page or by hand |
 | [Metrics and API keys](metrics-and-api-keys.md) | Prometheus metrics, API keys for other tools, and what Jellyfin apps can administer |
 
 <a id="contributing"></a>
@@ -114,4 +117,4 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | Page | What it covers |
 |---|---|
 | [Jellyfin API notes](jellyfin-api.md) | For app developers: where Polyfin's Jellyfin API differs from Jellyfin 12.4, Polyfin's own routes, and the admin app API |
-| [Development](development.md) | Building, running and testing Polyfin, following Silo's changes, and its website |
+| [Development](development.md) | Running Polyfin from source, its tests, the Jellyfin fixtures, CI, following Silo, working on the website, and building and signing Polyfin Desktop's packages |

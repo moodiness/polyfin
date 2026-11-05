@@ -85,7 +85,7 @@ Polyfin remembers each created list's source, by the server's and the list's ide
 
 ### How titles are matched
 
-Titles are found as an [imported watch history](tracking.md#importing-your-watch-history) finds them: by Jellyfin's IMDb identifier, as the usual metadata addons name titles, or by TMDB, or TVDB for series, when a catalog listed them so. Episodes are found by their series' identifiers and season and episode numbers. A multi-episode file counts for each episode.
+Titles are found as an [imported watch history](tracking-imports.md#importing-your-watch-history) finds them: by Jellyfin's IMDb identifier, as the usual metadata addons name titles, or by TMDB, or TVDB for series, when a catalog listed them so. Episodes are found by their series' identifiers and season and episode numbers. A multi-episode file counts for each episode.
 
 A title no catalog listed yet shows in the user's lists at once, described by the addons. One known only by TMDB, or a series only by TVDB, is asked of the metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`). It is found by the other identifiers they give, else shows under `tmdb:<id>` or `tvdb:<id>`.
 
@@ -100,7 +100,7 @@ Plex adds two more (see [Plex](#plex)).
 
 ### How the data merges with Polyfin data
 
-As for an imported watch history (see [How the history merges with Polyfin's](tracking.md#how-the-history-merges-with-polyfin-s)):
+As for an imported watch history (see [How the history merges with Polyfin's](tracking-imports.md#how-the-history-merges-with-polyfin-s)):
 
 - Played marks, resume points and favorites are only added, never removed.
 - A title keeps Polyfin's date when it is later, and the larger play count.
@@ -236,7 +236,7 @@ Choose **Plex**, then **Sign in with Plex**. **Open Plex’s sign-in page** open
 
 - **Plex Home profile**, for a Plex Home account: whose data comes over, the signed-in account first. A managed profile has no sign-in of its own, as Plex says (see Plex's support article "Managed Accounts"). A Home member signs in, picks it here with its **Profile PIN** if any, and **Use this profile** switches as Plex's apps do.
 - **Server**: the server to import from. Polyfin tries the addresses Plex gives: local network first, then remote, then Plex relays. Each is an address the server import takes. One counts only when the server answers with its own machine identifier.
-- **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, kept by Plex with the account, not a server, go to the user's [Watchlist](tracking.md#the-watchlist). Like a one-off app import's library, they stay until started.
+- **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, kept by Plex with the account, not a server, go to the user's [Watchlist](tracking-imports.md#the-watchlist). Like a one-off app import's library, they stay until started.
 
 **Import my watch history** reads the server with the profile's own token, as the owner's import reads the owner, into the user's own account only:
 
@@ -272,7 +272,7 @@ Letterboxd has no API for this, but gives members their data as a file: Settings
 
 | Option | Default | What it does |
 |---|---|---|
-| **Watchlist to my Watchlist** | On | Letterboxd watchlist movies go to the user's [Watchlist](tracking.md#the-watchlist), until started, like a one-off app import's library. |
+| **Watchlist to my Watchlist** | On | Letterboxd watchlist movies go to the user's [Watchlist](tracking-imports.md#the-watchlist), until started, like a one-off app import's library. |
 | **Ratings** | On | Stars × 2 give the 0 to 10 rating, so 3.5 stars is 7. Apps see `Rating` and `Likes` (5 or more) as for their own ratings. A movie rated only in the diary takes its latest diary rating. |
 | **Liked movies as favorites** | Off | Liked movies become favorites. |
 
@@ -317,7 +317,7 @@ An administrator can import for a user: **Import from an app**, at the top of **
 |---|---|
 | Movies and episodes watched, with the date when the app keeps one | Played marks. |
 | Resume points of movies and episodes | Resume points, for titles not played. |
-| The library's movies and series | The [Watchlist](tracking.md#the-watchlist). |
+| The library's movies and series | The [Watchlist](tracking-imports.md#the-watchlist). |
 | The addons ticked | The user's own addons. |
 
 An app's library is a watchlist: its titles go on the user's Watchlist, which Jellyfin apps show beside the libraries, never in favorites. A one-off import's titles stay until started. A connection's import replaces what it put there before, so a title removed from the app's library leaves at the next import, unless another list holds it. Imports set no favorites, and those earlier imports set stay.
@@ -328,7 +328,7 @@ Nothing else comes over: settings, collections, home screen layouts, and device-
 
 ### How app titles are matched
 
-Addon-based apps name titles by their addons' identifiers. Polyfin finds IMDb (`tt…`) and TMDB (`tmdb:…`) ones as an [imported watch history](tracking.md#importing-your-watch-history) does, and Kitsu ones (`kitsu:…`) through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and season and episode numbers, or for Kitsu, by its number in the entry.
+Addon-based apps name titles by their addons' identifiers. Polyfin finds IMDb (`tt…`) and TMDB (`tmdb:…`) ones as an [imported watch history](tracking-imports.md#importing-your-watch-history) does, and Kitsu ones (`kitsu:…`) through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and season and episode numbers, or for Kitsu, by its number in the entry.
 
 A title no catalog listed yet shows in the user's lists at once, described by the addons. An unlisted `tmdb:…` title is asked of the metadata addons that describe titles by it. It is found by the IMDb and TVDB identifiers they give, else shows under its `tmdb:…` identifier, with episodes as described.
 
@@ -475,14 +475,14 @@ API details: [Stremio import](jellyfin-api.md#stremio-import-for-apps).
 It applies to:
 
 - Nuvio and Stremio accounts users stay connected to (see [Staying connected](#staying-connected));
-- watch histories users import from tracking services (see [Importing your watch history](tracking.md#importing-your-watch-history));
+- watch histories users import from tracking services (see [Importing your watch history](tracking-imports.md#importing-your-watch-history));
 - AniList and MyAnimeList lists: **Import my AniList lists**, **Import my MyAnimeList lists**, their **Plan to Watch** switches, and **Sync my ratings**, which imports their scores onto unrated titles each time (see [AniList and MyAnimeList](tracking.md#anilist-and-myanimelist)). All are off by default.
 
 With a short interval, someone who watches in one of those apps finds their progress sooner in a Jellyfin app. **Import now** brings it at once.
 
 - A change applies at once. Each connection's next import comes that long after its last import, or after connecting. A shorter interval brings due imports forward; a longer one delays them.
 - The next import shown in **Connected apps** and **My account › Tracking** follows it. Polyfin checks for due imports every minute.
-- Each import re-reads the whole account, so a short interval means more requests. Polyfin still waits when asked and keeps each service's pace (see [Pace and problems](tracking.md#pace-and-problems)).
+- Each import re-reads the whole account, so a short interval means more requests. Polyfin still waits when asked and keeps each service's pace (see [Pace and problems](tracking-imports.md#pace-and-problems)).
 - Stremio's terms forbid automated data extraction: the more often Polyfin reads a Stremio account, the deeper that grey zone (see [Stremio](#stremio)).
 
 API details: [Connected account import interval](jellyfin-api.md#connected-account-import-interval-for-apps).

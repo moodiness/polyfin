@@ -32,7 +32,7 @@ Each row has these fields:
 | **A collection** | A collection made by users, a smart list shown as a collection, or an addon's collection. |
 | **Because you watched** | One row for each of the last movies and series the user played, of the titles similar to it. |
 | **New in your libraries** | The titles that came into the catalogs of the user's libraries in the last 7 days, newest first. |
-| **Now available** | The titles of the user's [Watchlist](tracking.md#the-watchlist) they have not started that versions were found for, the latest found first. |
+| **Now available** | The titles of the user's [Watchlist](tracking-imports.md#the-watchlist) they have not started that versions were found for, the latest found first. |
 | **Still waiting** | The titles of the user's Watchlist they have not started that no version was found for yet, or that are not out yet, the latest added first. |
 | **Recommended on Trakt** | The movies and series Trakt recommends to the user, for the users who connected Trakt only. |
 | **Top picks for you** | The movies and series of the first page of each of the user's libraries that their taste profile ranks first, without those they played. |
@@ -55,11 +55,11 @@ A title is new from the first time Polyfin saw it in each catalog. Polyfin sees 
 
 ### Now available and Still waiting
 
-How often the Watchlist titles behind **Now available** and **Still waiting** are checked, and what a version found means: see [Now available and Still waiting](tracking.md#now-available-and-still-waiting).
+How often the Watchlist titles behind **Now available** and **Still waiting** are checked, and what a version found means: see [Now available and Still waiting](tracking-imports.md#now-available-and-still-waiting).
 
 ### Recommended on Trakt
 
-**Recommended on Trakt** lists what Trakt recommends to each user (see [Recommended on Trakt](tracking.md#recommended-on-trakt)).
+**Recommended on Trakt** lists what Trakt recommends to each user (see [Recommended on Trakt](tracking-imports.md#recommended-on-trakt)).
 
 - Polyfin reads it with the user's Trakt connection, and again every 12 hours.
 - The titles they played are left out, as **Because you watched** leaves them out.

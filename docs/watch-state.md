@@ -9,7 +9,7 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings, a
 - Playback moves the resume point, and marks a title played near its end, with Jellyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)).
 - **Continue Watching** lists titles under way; **Next Up**, the next episode of each series watched (see [Continue Watching and Next Up](#continue-watching-and-next-up)).
 - The **Upcoming** row lists coming episodes of series watched or marked favorite.
-- Next Up and Upcoming look at the 50 series watched last, as each series asks its addon for episodes. An imported history can hold hundreds (see [Importing your watch history](tracking.md#importing-your-watch-history)).
+- Next Up and Upcoming look at the 50 series watched last, as each series asks its addon for episodes. An imported history can hold hundreds (see [Importing your watch history](tracking-imports.md#importing-your-watch-history)).
 - Marking a series or season played marks its released episodes.
 - Apps keeping Jellyfin's live connection (WebSocket) open hear of changes from the user's other apps at once.
 
@@ -24,7 +24,7 @@ These actions take a title off the user's lists and change nothing else:
 | "Hide this title" | A movie, home video, series or folder of videos | "Show this title again" |
 
 - A title removed from Continue Watching keeps its played state, plays and last played date. Tracking services are not told.
-- Polyfin remembers the removal date for imports from tracking services and apps (see [How the history merges with Polyfin's](tracking.md#how-the-history-merges-with-polyfin-s)).
+- Polyfin remembers the removal date for imports from tracking services and apps (see [How the history merges with Polyfin's](tracking-imports.md#how-the-history-merges-with-polyfin-s)).
 - A hidden title leaves libraries, home rows (Latest, Continue Watching, Next Up, Upcoming), searches, similar titles, recommendations, person pages, collections and the Watchlist.
 - A hidden series hides its episodes; a hidden folder, its videos.
 - A hidden title still opens and plays from a link, and its page still lists its seasons and episodes. Other users are not affected.

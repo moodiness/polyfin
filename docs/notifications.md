@@ -336,7 +336,7 @@ A new target in the admin app has the event chosen. Targets saved before it exis
 
 ### Watchlist titles available
 
-Polyfin checks the titles of each user's Watchlist they have not started for versions (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)). The user's own targets are told the first time versions are found for a title that earlier checks found none for.
+Polyfin checks the titles of each user's Watchlist they have not started for versions (see [Now available and Still waiting](tracking-imports.md#now-available-and-still-waiting)). The user's own targets are told the first time versions are found for a title that earlier checks found none for.
 
 - The title is "Versions found: Example Movie (2008)".
 - The message is "Versions of Example Movie (2008), on your watchlist, were found. They have not been tried yet.".
