@@ -92,12 +92,18 @@ jobs:
           check_job='Lint, build, admin app and deployment checks'
           tested() {
             if [ "$FORCED" = true ]; then echo "main was pushed with force"; return 1; fi
-            # The pull request merged by rebase as this commit; GitHub may
-            # link them a few seconds after the push.
+            # The pull request merged by rebase as this commit. GitHub's
+            # commit-to-pull-request link can lag, or never come for a
+            # rebased commit (#915), so the recently closed pull requests'
+            # merge commits are read too.
             local head="" try
             for try in 1 2 3 4 5 6; do
               head="$(gh api "repos/$REPO/commits/$SHA/pulls" \
                 --jq ".[] | select(.merged_at != null and .base.ref == \"main\" and .merge_commit_sha == \"$SHA\") | .head.sha")" || head=""
+              if [ "$(wc -w <<< "$head")" -ne 1 ]; then
+                head="$(gh api "repos/$REPO/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30" \
+                  --jq ".[] | select(.merged_at != null and .merge_commit_sha == \"$SHA\") | .head.sha")" || head=""
+              fi
               if [ "$(wc -w <<< "$head")" -eq 1 ]; then break; fi
               echo "Try $try: no single pull request merged as $SHA yet"
               head=""
