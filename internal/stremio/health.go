@@ -107,7 +107,8 @@ func resourceOf(manifestURL, target string) string {
 	if target == manifestURL {
 		return "manifest"
 	}
-	rest, ok := strings.CutPrefix(target, BaseURL(manifestURL)+"/")
+	base, _ := SplitManifestURL(manifestURL)
+	rest, ok := strings.CutPrefix(target, base+"/")
 	resource, _, _ := strings.Cut(rest, "/")
 	switch {
 	case !ok:

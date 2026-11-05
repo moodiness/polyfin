@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -308,5 +309,52 @@ func TestARateLimitNoticeOfTheTypeAskedIsNoDescription(t *testing.T) {
 	meta, err := NewClient("test").Meta(t.Context(), addon.URL+"/manifest.json", "movie", "tt1", false)
 	if !errors.Is(err, ErrRateLimited) || !errors.Is(err, ErrInvalidResponse) {
 		t.Errorf("a rate-limit notice of a movie: %v %+v", err, meta)
+	}
+}
+
+// A manifest URL with a query asks for each resource in place of
+// /manifest.json, the query following, as Stremio does: a token kept
+// there reaches every request.
+func TestAManifestURLsQueryFollowsEachResource(t *testing.T) {
+	var mu sync.Mutex
+	var asked []string
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked = append(asked, r.URL.EscapedPath()+"?"+r.URL.RawQuery)
+		mu.Unlock()
+		if r.URL.Query().Get("token") != "abc" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		_, _ = w.Write([]byte(`{"metas":[],"meta":{"id":"tt1","type":"movie","name":"A"},"streams":[],"subtitles":[]}`))
+	}))
+	defer addon.Close()
+	manifest := addon.URL + "/cfg/manifest.json?token=abc"
+	client := NewClient("test")
+	if _, err := client.Catalog(t.Context(), manifest, "movie", "top", []ExtraValue{{Name: "skip", Value: "100"}}, false); err != nil {
+		t.Errorf("catalog: %v", err)
+	}
+	if _, err := client.Meta(t.Context(), manifest, "movie", "tt1", false); err != nil {
+		t.Errorf("meta: %v", err)
+	}
+	if _, err := client.Streams(t.Context(), manifest, "movie", "tt1", false); err != nil {
+		t.Errorf("streams: %v", err)
+	}
+	if _, err := client.Subtitles(t.Context(), manifest, "movie", "tt1", nil, false); err != nil {
+		t.Errorf("subtitles: %v", err)
+	}
+	want := []string{
+		"/cfg/catalog/movie/top/skip=100.json?token=abc",
+		"/cfg/meta/movie/tt1.json?token=abc",
+		"/cfg/stream/movie/tt1.json?token=abc",
+		"/cfg/subtitles/movie/tt1.json?token=abc",
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Equal(asked, want) {
+		t.Errorf("asked %q", asked)
+	}
+	if health, _ := client.Health(manifest); health.Requests != 4 || health.Failures != 0 {
+		t.Errorf("health: %+v", health)
 	}
 }

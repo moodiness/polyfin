@@ -192,7 +192,30 @@ func RedactManifestURL(manifestURL string) string {
 	return parsed.Scheme + "://" + parsed.Host + "/…/manifest.json"
 }
 
-// BaseURL is the address resources are requested under.
+// BaseURL is the key the addon manifestURL installs is known by, in Health
+// and the metrics: its manifest URL without /manifest.json. A manifest URL
+// with a query stays whole, so that installs differing only by their query
+// stay apart. Resources are requested at ResourceURL.
 func BaseURL(manifestURL string) string {
 	return strings.TrimSuffix(manifestURL, "/manifest.json")
+}
+
+// SplitManifestURL returns the address the resources of the addon
+// manifestURL installs are under, its manifest URL's path without
+// /manifest.json, and the manifest URL's query, as it is written.
+func SplitManifestURL(manifestURL string) (base, rawQuery string) {
+	base, rawQuery, _ = strings.Cut(manifestURL, "?")
+	return strings.TrimSuffix(base, "/manifest.json"), rawQuery
+}
+
+// ResourceURL is the address of the resource at path, such as
+// /stream/movie/tt1.json, of the addon manifestURL installs: path takes
+// the place of /manifest.json, and the manifest URL's query, in which some
+// addons keep the user's token, follows it, as Stremio requests it.
+func ResourceURL(manifestURL, path string) string {
+	base, query := SplitManifestURL(manifestURL)
+	if query == "" {
+		return base + path
+	}
+	return base + path + "?" + query
 }
