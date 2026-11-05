@@ -121,6 +121,12 @@ RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarc
 		mkdir "/pg-dump/usr/share/doc/$package" && cp "/doc/$package/copyright" "/pg-dump/usr/share/doc/$package/"; \
 	done
 
+# pg_dump and pg_restore alone, with the libraries the stage above copies,
+# which they find through LD_LIBRARY_PATH on a system with glibc 2.39 or
+# later. CI tests the backups with this stage.
+FROM scratch AS postgresql-client
+COPY --from=pg-dump /pg-dump/usr/ /usr/
+
 # Tesseract 5.5, which reads picture subtitles into text, with the data of
 # English, French, German, Spanish, Italian, Portuguese and Dutch: Debian's
 # packages of the target platform, with those of the libraries they load
