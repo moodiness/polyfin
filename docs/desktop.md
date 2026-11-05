@@ -2,13 +2,23 @@
 
 # Polyfin Desktop
 
-Polyfin Desktop runs Polyfin on the computer you have, Windows, macOS or Linux, without Docker. An icon in the system tray, or in the menu bar on macOS, starts Polyfin in the background and stops it. Everything the Docker image brings comes with it or is set up at its first start: a PostgreSQL 18 database of its own, FFmpeg and ffprobe 9.0, pg_dump and pg_restore for backups, jellyfin-web, and the secret key the stored keys and tokens are encrypted with.
+Polyfin Desktop runs Polyfin on your own computer, with Windows, macOS or Linux, without Docker. This page is for anyone who installs it, and its last section for those who build it.
 
-It runs the very server of the Docker image, `polyfin serve`, with the same admin app and the same apps. To run Polyfin on a NAS or a server that stays on, the Docker image remains the way (see [Installation](installation.md)); a backup moves from one to the other (see [Moving to Docker and back](#moving-to-docker-and-back)).
+An icon in the system tray starts Polyfin in the background and stops it. On macOS the icon is in the menu bar.
+
+Everything the Docker image brings comes with the app, or is set up at its first start:
+
+- a PostgreSQL 18 database of its own;
+- FFmpeg and ffprobe 9.0;
+- pg_dump and pg_restore, for backups;
+- jellyfin-web, the web player;
+- the secret key that encrypts the stored keys and tokens.
+
+The app runs the same server as the Docker image, `polyfin serve`, with the same admin app and the same apps. For a NAS or a server that stays on, use the Docker image instead (see [Installation](installation.md)). A backup moves from one to the other (see [Moving to Docker and back](#moving-to-docker-and-back)).
 
 ## Install
 
-Each release has a package per system, among the files of its GitHub release:
+Download the package for your system from the files of a GitHub release:
 
 | System | Package |
 | --- | --- |
@@ -17,16 +27,30 @@ Each release has a package per system, among the files of its GitHub release:
 | macOS 13 or later, Intel | `Polyfin-Desktop-<version>-macos-x64.dmg` |
 | Linux, x64 or arm64 | `polyfin-desktop_<version>_amd64.deb` or `_arm64.deb`, and `Polyfin-Desktop-<version>-linux-x86_64.AppImage` or `-aarch64.AppImage` |
 
-Each holds the app, `polyfin-desktop`, beside what it runs: the server, `polyfin`, the very one of the Docker image; PostgreSQL 18's programs; jellyfin-web, unmodified; the fallback fonts; and their licenses, in the folder `licenses`. FFmpeg is downloaded at the first start (see [First start](#first-start)).
+Each package holds the app, `polyfin-desktop`, beside what it runs:
 
-- **Windows:** the installer installs Polyfin for you alone, without administrator rights, in `%LOCALAPPDATA%\Programs\Polyfin`, adds it to the Start menu, and offers to start it at the end. To remove it, uninstall Polyfin under Settings › Apps › Installed apps: its programs, its Start menu entry and Start with the computer go, and the data folder stays (see [Folders](#folders)). On Windows on Arm, an install of the x64 package moves to the arm64 one with a backup (see [Moving to the arm64 package on Windows on Arm](#moving-to-the-arm64-package-on-windows-on-arm)).
-- **macOS:** open the disk image and drag Polyfin to Applications. To remove it, move it from Applications to the Bin.
-- **Linux:** install the `.deb` with `sudo apt install ./polyfin-desktop_<version>_amd64.deb`, then start Polyfin from the applications menu. It goes in `/opt/polyfin`, with the command `polyfin-desktop`; `sudo apt remove polyfin-desktop` removes it. An AppImage needs no installation: make it executable with `chmod +x`, then run it. Both need glibc 2.35 or later, as in Ubuntu 22.04 or Debian 12, and later releases. A system without FUSE runs an AppImage with `--appimage-extract-and-run` after its name.
+- the server, `polyfin`, the same one as in the Docker image;
+- PostgreSQL 18's programs;
+- jellyfin-web, unmodified;
+- the fallback fonts;
+- their licenses, in the folder `licenses`.
+
+FFmpeg is downloaded at the first start (see [First start](#first-start)).
+
+| System | Install | Remove |
+| --- | --- | --- |
+| Windows | Run the installer. It installs Polyfin for you alone, without administrator rights, in `%LOCALAPPDATA%\Programs\Polyfin`, adds it to the Start menu, and offers to start it at the end. | Uninstall Polyfin under Settings › Apps › Installed apps. Its programs, its Start menu entry and Start with the computer go; the data folder stays (see [Folders](#folders)). |
+| macOS | Open the disk image and drag Polyfin to Applications. | Move Polyfin from Applications to the Bin. |
+| Linux, `.deb` | Run `sudo apt install ./polyfin-desktop_<version>_amd64.deb`, then start Polyfin from the applications menu. It goes in `/opt/polyfin`, with the command `polyfin-desktop`. | Run `sudo apt remove polyfin-desktop`. |
+| Linux, AppImage | No installation: make it executable with `chmod +x`, then run it. | Delete the file. |
+
+- **Linux:** both packages need glibc 2.35 or later, as in Ubuntu 22.04, Debian 12 and later releases. On a system without FUSE, run an AppImage with `--appimage-extract-and-run` after its name.
+- **Windows on Arm:** an install of the x64 package moves to the arm64 one with a backup (see [Moving to the arm64 package on Windows on Arm](#moving-to-the-arm64-package-on-windows-on-arm)).
 
 The packages are not signed yet, so Windows and macOS warn before opening them the first time:
 
 - **Windows:** SmartScreen says that it protected your computer. Choose More info, then Run anyway.
-- **macOS:** once Polyfin is in Applications, open it with a right click on it and Open, and Open again in the dialog. On recent versions of macOS, which offer no Open there, try to open it once, then open System Settings › Privacy & Security, and choose Open Anyway beside the line about Polyfin.
+- **macOS:** once Polyfin is in Applications, right-click it and choose Open, then Open again in the dialog. Recent versions of macOS offer no Open there. Try to open the app once, then open System Settings › Privacy & Security, and choose Open Anyway beside the line about Polyfin.
 
 ## First start
 
@@ -34,69 +58,110 @@ At its first start, Polyfin Desktop:
 
 1. makes a secret key and keeps it in the system's key store (see [The secret key](#the-secret-key));
 2. creates its database cluster in the data folder, with a random password, listening on `127.0.0.1` only;
-3. downloads FFmpeg and ffprobe 9.0 for the system into the data folder, 60 to 90 MB depending on the system: the menu shows the progress. Each download is checked against the checksum the app carries, and one that differs is refused. Without a network, Polyfin starts without them, and tries again at its next start;
-4. starts Polyfin, which creates its tables as in Docker, and opens the admin app in the browser, at `http://localhost:8096/admin/`.
+3. downloads FFmpeg and ffprobe 9.0 for the system into the data folder, 60 to 90 MB depending on the system, with the progress in the menu;
+4. starts Polyfin, which creates its tables as in Docker;
+5. opens the admin app in the browser, at `http://localhost:8096/admin/`.
 
-The admin app asks for the setup code, to create the administrator (see [Getting started](getting-started.md#create-the-administrator)). The menu shows the code while no administrator exists: choose it to copy the code and open the admin app again.
+- **Checksums:** each FFmpeg download is checked against the checksum the app carries. A download that differs is refused.
+- **Without a network:** Polyfin starts without FFmpeg, and tries the download again at its next start.
+
+The admin app asks for the setup code to create the administrator (see [Getting started](getting-started.md#create-the-administrator)). The menu shows the code while no administrator exists. Choose it to copy the code and open the admin app again.
 
 ### Firewall prompts
 
-Polyfin listens on port 8096 for apps and the browser, and on UDP port 7359 for Jellyfin apps that look for servers on the local network (see [Local network discovery](https-and-networking.md#local-network-discovery)). The first time it does, the system asks whether to let it:
+Polyfin listens on these ports, and the system asks whether to let it the first time it does:
 
-- **Windows:** Windows Defender Firewall asks whether to allow Polyfin on private and public networks. Allow it on private networks for the TVs, phones and other computers of your home to reach it.
-- **macOS:** macOS asks whether `polyfin` may accept incoming network connections. Allow it for other devices to reach it. As the app is not signed, macOS may ask again after an update.
+| Port | For |
+| --- | --- |
+| 8096 (TCP) | Apps and the browser |
+| 7359 (UDP) | Jellyfin apps that look for servers on the local network (see [Local network discovery](https-and-networking.md#local-network-discovery)) |
+| 1900 (UDP) | DLNA, once turned on (see [DLNA](dlna.md)) |
 
-Refused, Polyfin still works on the computer itself, at `localhost`, and other devices cannot reach it. On Linux, a firewall such as `ufw` asks nothing: open the ports yourself, such as `sudo ufw allow 8096/tcp` and `sudo ufw allow 7359/udp`. DLNA, once on, listens on UDP port 1900 too (see [DLNA](dlna.md)).
+- **Windows:** Windows Defender Firewall asks whether to allow Polyfin on private and public networks. Allow it on private networks, so that the TVs, phones and other computers of your home reach it.
+- **macOS:** macOS asks whether `polyfin` may accept incoming network connections. Allow it, so that other devices reach it. As the app is not signed, macOS may ask again after an update.
+- **Linux:** a firewall such as `ufw` asks nothing. Open the ports yourself, such as with `sudo ufw allow 8096/tcp` and `sudo ufw allow 7359/udp`.
 
-## NVIDIA graphics cards
+If you refuse, Polyfin still works on the computer itself, at `localhost`, but other devices cannot reach it.
 
-On Windows and Linux, Polyfin converts video on an NVIDIA graphics card through NVENC, which the downloaded FFmpeg 9.0 opens with NVIDIA driver 610.00 or newer. With a driver from 570 to 609, such as the R580 drivers that are the last of Maxwell, Pascal and Volta cards (the GeForce GTX 900 and 10 series, the Quadro M and P series), Polyfin downloads at its first need an FFmpeg built for these drivers into the data folder's `tools/nvenc13`, and converts on the card with it.
+<a id="nvidia-graphics-cards"></a>
 
-With a driver older than 570, or until that FFmpeg could be downloaded, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** says why. See [NVIDIA driver](gpus-and-hdr.md#nvidia-driver).
+## NVIDIA GPUs
 
-Polyfin Desktop always runs the FFmpeg it downloads, or the one for these older drivers: another FFmpeg can be given only to `polyfin serve` and Docker. See [Which FFmpeg runs](gpus-and-hdr.md#which-ffmpeg-runs).
+On Windows and Linux, Polyfin converts video on an NVIDIA GPU through NVENC. Which FFmpeg it uses depends on the NVIDIA driver:
+
+| NVIDIA driver | What converts the video |
+| --- | --- |
+| 610.00 or newer | The downloaded FFmpeg 9.0, on the GPU |
+| 570 to 609 | An FFmpeg built for these drivers, on the GPU. Polyfin downloads it into the data folder's `tools/nvenc13` the first time it needs it. |
+| Older than 570 | Another GPU of the computer, if one encodes, or else the processor |
+
+- **Older cards:** drivers 570 to 609 include the R580 drivers, the last for Maxwell, Pascal and Volta cards: the GeForce GTX 900 and 10 series, and the Quadro M and P series.
+- **Until the download ends:** with a driver from 570 to 609, video converts as with an older driver until that FFmpeg is downloaded.
+- **System › Health** says why video does not convert on the NVIDIA GPU. See [NVIDIA driver](gpus-and-hdr.md#nvidia-driver).
+
+Polyfin Desktop always runs the FFmpeg it downloads, or the one for older drivers. Another FFmpeg can be given only to `polyfin serve` and Docker (see [Which FFmpeg runs](gpus-and-hdr.md#which-ffmpeg-runs)).
 
 ## The menu
 
-The icon shows whether Polyfin runs: faded while it starts or is stopped. Its menu has:
+The icon shows whether Polyfin runs: it is faded while Polyfin starts or is stopped. Its menu has these items:
 
 | Item | What it does |
 | --- | --- |
-| The first line | What Polyfin is doing: starting, downloading FFmpeg or an update, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped. A second line tells about a problem, and opens the log folder, whose `desktop.log` tells why: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
-| Setup code | Shown until the administrator exists: copies the code and opens the admin app |
+| The first line | Says what Polyfin is doing: starting, downloading FFmpeg or an update, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped |
+| A second line | Shown after a problem: the key store could not be read, FFmpeg could not be downloaded, or an update could not be installed. Opens the log folder, whose `desktop.log` says why |
+| Setup code | Shown until the administrator exists. Copies the code and opens the admin app |
 | Open the admin app | Opens `http://localhost:8096/admin/` in the browser |
-| Open the web player | Opens jellyfin-web, the web player, at `http://localhost:8096/web/` (see [Web player](web-client.md)) |
-| Open the log folder | Opens the folder of the logs in a window of the system's file manager, such as Explorer on Windows or Finder on macOS (see [Folders](#folders)) |
+| Open the web player | Opens the web player at `http://localhost:8096/web/` (see [Web player](web-client.md)) |
+| Open the log folder | Opens the folder of the logs in the system's file manager, such as Explorer on Windows or Finder on macOS (see [Folders](#folders)) |
 | Copy the secret key | Copies the secret key from the system's key store to the clipboard, to keep with your backups (see [The secret key](#the-secret-key)) |
-| Stop Polyfin, Start Polyfin | Stops Polyfin, then its database, or starts them again, the app staying open |
-| Start with the computer | Whether the system starts the app when you sign in (see below) |
-| Install Polyfin `<version>` | Shown when a new version is out: downloads it, stops Polyfin, installs the new version and quits (see [Updates](#updates)) |
-| Quit Polyfin | Stops Polyfin, then its database, and quits: no process is left |
+| Stop Polyfin, Start Polyfin | Stops Polyfin, then its database, or starts them again. The app stays open |
+| Start with the computer | Whether the system starts the app when you sign in (see [Start with the computer](#start-with-the-computer)) |
+| Install Polyfin `<version>` | Shown when a new version is out. Downloads it, stops Polyfin, installs the new version and quits (see [Updates](#updates)) |
+| Quit Polyfin | Stops Polyfin, then its database, and quits. No process is left |
 
-Opening the app while it runs opens the admin app. The menu speaks the system's language when Polyfin does (English, French, German, Spanish, Italian or Portuguese, in Brazilian Portuguese), and English otherwise. When the system shows no icon, such as a Windows session without its taskbar, Polyfin starts all the same: after 30 seconds without its icon, the app writes an error to `desktop.log` (see [Folders](#folders)) and runs on without it, until `polyfin-desktop -quit` quits it (see [Quitting from a terminal](#quitting-from-a-terminal)).
+- **Opening the app** while it runs opens the admin app.
+- **Language:** the menu speaks the system's language when Polyfin does: English, French, German, Spanish, Italian or Brazilian Portuguese. Otherwise it speaks English.
+- **No icon:** when the system shows no icon, such as in a Windows session without its taskbar, Polyfin starts all the same. After 30 seconds without its icon, the app writes an error to `desktop.log` and runs on without it. `polyfin-desktop -quit` quits it then (see [Quitting from a terminal](#quitting-from-a-terminal)).
 
-Polyfin stops by itself only when you stop it. When the server ends by itself, the app starts it again, a few seconds later. When the database stops by itself, it is started again too. After a crash of the app, or of the computer, the next start stops the server and the database that were left running, or clears the lock file of a database that crashed, which recovers its data as it starts.
+Polyfin stops only when you stop it:
+
+- **The server ends by itself:** the app starts it again a few seconds later.
+- **The database stops by itself:** the app starts it again too.
+- **After a crash:** after a crash of the app or of the computer, the next start stops the server and the database left running. For a database that crashed, it clears the lock file, and the database recovers its data as it starts.
 
 ### Start with the computer
 
-Once the administrator exists, Start with the computer turns on by itself, unless you chose otherwise before: the system starts Polyfin when you sign in, without opening the browser. Uncheck it to start Polyfin yourself. Each system has its own way:
+Start with the computer turns on by itself once the administrator exists, unless you chose otherwise before. The system then starts Polyfin when you sign in, without opening the browser. Uncheck it to start Polyfin yourself.
 
-- **Windows:** a value named `io.github.moodiness.polyfin-desktop` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, which Task Manager lists under Startup apps.
-- **macOS:** a launch agent, `~/Library/LaunchAgents/io.github.moodiness.polyfin-desktop.plist`, which System Settings › General › Login Items lists under Allow in the Background.
-- **Linux:** an autostart entry, `~/.config/autostart/polyfin-desktop.desktop`, which the desktop's startup applications list.
+| System | What it adds | Where the system lists it |
+| --- | --- | --- |
+| Windows | A value named `io.github.moodiness.polyfin-desktop` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` | Task Manager, under Startup apps |
+| macOS | A launch agent, `~/Library/LaunchAgents/io.github.moodiness.polyfin-desktop.plist` | System Settings › General › Login Items, under Allow in the Background |
+| Linux | An autostart entry, `~/.config/autostart/polyfin-desktop.desktop` | The desktop's startup applications |
 
 ### Quitting from a terminal
 
-`polyfin-desktop -quit` quits the app as Quit Polyfin does: it stops Polyfin, then its database, and waits until the app has ended, for up to 4 minutes. On Windows the program is `%LOCALAPPDATA%\Programs\Polyfin\polyfin-desktop.exe`, on macOS `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`. Its exit code tells what happened:
+`polyfin-desktop -quit` quits the app as Quit Polyfin does. It stops Polyfin, then its database, and waits up to 4 minutes for the app to end.
+
+- **Windows:** the program is `%LOCALAPPDATA%\Programs\Polyfin\polyfin-desktop.exe`.
+- **macOS:** the program is `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`.
+
+Its exit code says what happened:
 
 | Code | Meaning |
 | --- | --- |
 | 0 | The app has quit |
 | 1 | An error, which it prints |
+| 2 | Wrong arguments |
 | 3 | No app runs on the data folder |
 | 4 | The app still runs after 4 minutes |
 
-It quits the app that uses the same data folder (see [Folders](#folders)), through two files of that folder, which is yours alone: `desktop.pid`, which the app writes as it starts, with its process number and a random token, and `desktop.quit`, the request, which must carry that token. Other users of the computer cannot quit your app, and a request a crash left behind does not quit the next start.
+It quits the app that uses the same data folder (see [Folders](#folders)). It does so through two files of that folder, which only you can open:
+
+- `desktop.pid`, which the app writes as it starts, with its process number and a random token;
+- `desktop.quit`, the request, which must carry that token.
+
+Other users of the computer cannot quit your app. A request that a crash left behind does not quit the next start.
 
 ## Folders
 
@@ -108,146 +173,187 @@ Polyfin Desktop keeps its files in the system's usual place:
 | macOS | `~/Library/Application Support/Polyfin` |
 | Linux | `$XDG_DATA_HOME/polyfin`, else `~/.local/share/polyfin` |
 
-The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configuration.md)), and holds:
+The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configuration.md)). It holds:
 
 | Folder or file | What it holds |
 | --- | --- |
-| `postgresql` | The database cluster, with the database password in `polyfin.password`, readable by you only |
+| `postgresql` | The database cluster, with the database password in `polyfin.password`, which only you can read |
 | `tools` | FFmpeg and ffprobe |
-| `log` | The logs: `desktop.log`, the app's; `polyfin.log`, the server's, which **System › Logs** shows too; `postgresql.log`, the database's. Each is renamed with `.1` when it passes 10 MB, at a start |
-| `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another (see [Backups](backups.md)) |
-| `recordings` | The Live TV recordings, unless **Recordings folder** names another (see [Live TV](live-tv.md)) |
-| `cache` | The work files: segments being played, guides and picture subtitles being read, parts of the files read and relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Data folder](configuration.md#data-folder) and [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
+| `log` | The logs: `desktop.log`, the app's; `polyfin.log`, the server's, which **System › Logs** shows too; `postgresql.log`, the database's. At a start, a log past 10 MB is renamed with `.1` |
+| `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another folder (see [Backups](backups.md)) |
+| `recordings` | The Live TV recordings, unless **Recordings folder** names another folder (see [Live TV](live-tv.md)) |
+| `cache` | The work files: segments being played, guides and picture subtitles being read, parts of the files read, and relayed images. **Conversion folder**, **Folder for files being read** and **Cache folder** can name other folders (see [Data folder](configuration.md#data-folder) and [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
 | `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](themes-and-custom-code.md#keeping-a-copy-of-a-theme)) |
-| `updates` | The downloaded update, and while the new version has not answered yet, the copy of the database's folder, `postgresql.previous` (see [Going back to the previous version](#going-back-to-the-previous-version)) |
+| `updates` | The downloaded update. Until the new version answers, also the copy of the database's folder, `postgresql.previous` (see [Going back to the previous version](#going-back-to-the-previous-version)) |
 | `desktop.json` | The app's choice of Start with the computer |
-| `desktop-update-pending.json`, `desktop-update-rollback.json` | The update whose new version has not answered yet, with what was kept to go back; and the version the app went back from, and why |
+| `desktop-update-pending.json` | The update whose new version has not answered yet, with what was kept to go back |
+| `desktop-update-rollback.json` | The version the app went back from, and why |
 
-Uninstalling the app leaves the data folder: remove it to remove everything Polyfin kept. The database listens on `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free; its port is in `postgresql/polyfin.port`, and its user is `polyfin`, with the password of `polyfin.password`, to reach it with your own tools.
+Uninstalling the app leaves the data folder. Remove the folder to remove everything Polyfin kept.
+
+To reach the database with your own tools:
+
+- **Address:** `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free. The port is in `postgresql/polyfin.port`.
+- **User:** `polyfin`, with the password in `polyfin.password`.
 
 ## The secret key
 
-The key the stored keys and tokens are encrypted with (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)) is made at the first start and kept in the system's key store, never in the data folder: in Windows Credential Manager, in the macOS keychain, or in the Secret Service on Linux, such as GNOME Keyring or KWallet. It is stored for the service `Polyfin`, under the account `Secret key of <data folder>`, such as `Secret key of /Users/alex/Library/Application Support/Polyfin`.
+Polyfin Desktop makes the secret key at its first start (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)). It keeps the key in the system's key store, never in the data folder:
 
-Keep a copy with your backups: a backup restored elsewhere needs it to read its keys and tokens. Copy the secret key, in the menu, copies it to the clipboard, and says for a few seconds to keep it with your backups: paste it into your password manager, or a file kept beside them. The key never leaves the computer otherwise: the admin app does not show it, as administrators may sign in from elsewhere. The system's own tools read it too:
+| System | Key store |
+| --- | --- |
+| Windows | Windows Credential Manager |
+| macOS | The macOS keychain |
+| Linux | The Secret Service, such as GNOME Keyring or KWallet |
 
-- **macOS:** `security find-generic-password -s Polyfin -a "Secret key of $HOME/Library/Application Support/Polyfin" -w`. The answer starts with `go-keyring-base64:`: the key is what follows, decoded with `base64 -d`.
+The key is stored for the service `Polyfin`, under the account `Secret key of <data folder>`. An example is `Secret key of /Users/alex/Library/Application Support/Polyfin`.
+
+Keep a copy with your backups: a backup restored elsewhere needs the key to read its keys and tokens. Choose Copy the secret key in the menu, then paste the key into your password manager or a file kept beside the backups. The item says for a few seconds to keep it with your backups.
+
+The key never leaves the computer otherwise. The admin app does not show it, as administrators may sign in from elsewhere. The system's own tools read it too:
+
+- **macOS:** `security find-generic-password -s Polyfin -a "Secret key of $HOME/Library/Application Support/Polyfin" -w`. The answer starts with `go-keyring-base64:`. The key is what follows, decoded with `base64 -d`.
 - **Linux:** `secret-tool lookup service Polyfin username "Secret key of $HOME/.local/share/polyfin"`.
-- **Windows:** the key is the generic credential `Polyfin:Secret key of C:\Users\<you>\AppData\Local\Polyfin` of Credential Manager, which does not show its password: use the menu's item.
+- **Windows:** the key is the generic credential `Polyfin:Secret key of C:\Users\<you>\AppData\Local\Polyfin` in Credential Manager. Credential Manager does not show its password, so use the menu item.
 
-When the key store cannot be read at a start, such as a Linux session without a Secret Service, Polyfin starts without the key, and the menu says so. Keys and tokens saved meanwhile are stored unencrypted, and are encrypted once the key is back, at the next start that reads it; those encrypted before count as not set until then.
+When the key store cannot be read at a start, Polyfin starts without the key, and the menu says so. A Linux session without a Secret Service is one such case. Until a start reads the key again:
+
+- keys and tokens saved meanwhile are stored unencrypted, and are encrypted at that start;
+- those encrypted before count as not set.
 
 ## Updates
 
-While **Check for new versions** is on, in **Settings › General**, Polyfin looks for new releases, as for the Docker image, and for pre-releases too while **Include pre-releases** is on (see [New versions](updates-and-restarts.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system and the release's signed manifest, checks the manifest (see [Signed manifests](#signed-manifests)), and the menu offers to install it.
+Polyfin looks for new releases while **Check for new versions** is on, in **Settings › General**, as for the Docker image. It looks for pre-releases too while **Include pre-releases** is on (see [New versions](updates-and-restarts.md#new-versions)).
+
+When a release is out, the app asks GitHub for the release's package for its system and the release's signed manifest. It checks the manifest (see [Signed manifests](#signed-manifests)), then the menu offers to install the release.
 
 Installing it:
 
 1. checks again that the manifest has not expired;
 2. downloads the package, and checks it against the SHA-256 that both GitHub and the manifest give for it, refusing it otherwise;
 3. stops Polyfin and its database;
-4. keeps a copy of the database's folder and the previous app (see [Going back to the previous version](#going-back-to-the-previous-version));
-5. then, on each system:
-   - **Windows:** copies the install folder to `Polyfin.old` beside it, opens the installer's window, as a download does, and quits: choose Next to replace the app, and its last page offers to start the new version;
-   - **macOS:** replaces the app with the one of the disk image, keeping the previous one as `Polyfin.app.old` beside it, and starts it;
-   - **Linux:** replaces the AppImage with the new one, keeping the previous one with `.old` after its name, and starts it, or opens the `.deb` in the system's package installer, which keeps nothing.
+4. keeps a copy of the database's folder and of the previous app (see [Going back to the previous version](#going-back-to-the-previous-version));
+5. installs the new version, in each system's way:
 
-When the package cannot be downloaded, checked or installed, the copy of the database cannot be made, or the installer cannot start, Polyfin runs on as it was: the menu's second line says that the update could not be installed, and the menu offers it again. A release whose manifest is refused is not offered: the app's log, `desktop.log`, tells why.
+| System | What the update does |
+| --- | --- |
+| Windows | Copies the install folder to `Polyfin.old` beside it, opens the installer's window as a download does, and quits. Choose Next to replace the app; the installer's last page offers to start the new version |
+| macOS | Replaces the app with the one in the disk image, keeps the previous one as `Polyfin.app.old` beside it, and starts the new one |
+| Linux, AppImage | Replaces the AppImage, keeps the previous one with `.old` after its name, and starts the new one |
+| Linux, `.deb` | Opens the `.deb` in the system's package installer, which keeps nothing |
 
-The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
+Polyfin runs on as it was when an update fails. The menu's second line says that the update could not be installed, and the menu offers it again. An update fails when:
 
-The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Polyfin Desktop update](updates-and-restarts.md#polyfin-desktop-update)). It does what the menu item does, through the data folder, which is yours alone:
+- the package cannot be downloaded, checked or installed;
+- the copy of the database cannot be made;
+- the installer cannot start.
+
+A release whose manifest is refused is not offered. The app's log, `desktop.log`, says why.
+
+The data folder stays as it is. The new version upgrades the database's tables as it starts, as in Docker.
+
+The new version's PostgreSQL may sort text with another ICU version. If it does, Polyfin first rebuilds the database's indexes, which follow the order of text:
+
+- it records the new collation version, so that PostgreSQL stops warning of a mismatch;
+- the menu's first line says so meanwhile, for seconds, or a few minutes on a large library;
+- the log says what was rebuilt.
+
+A development build offers no update.
+
+The admin app offers the same update to administrators while the menu offers it. It appears as **Install Polyfin `<version>`** in the notice of the new version on **Home** (see [Polyfin Desktop update](updates-and-restarts.md#polyfin-desktop-update)). It does what the menu item does, through the data folder, which only you can open:
 
 - the app writes the update it offers to `desktop-update.json` while the server runs, with the download's progress and whether the last install failed;
 - the server, asked by an administrator, writes the app's token and the version to `desktop.install`, which the app looks for twice a second.
 
-A request left by a crash carries another run's token, and installs nothing; one for a version the app does not offer, or while Polyfin is not running, is ignored. The server knows it runs in the app from `POLYFIN_DESKTOP=1`, which the app sets.
+A request left by a crash carries another run's token, and installs nothing. A request is ignored when it names a version the app does not offer, or arrives while Polyfin is not running. The server knows it runs in the app from `POLYFIN_DESKTOP=1`, which the app sets.
 
 ### Signed manifests
 
-Each release carries `polyfin-<version>.manifest.json`, which lists each package of Polyfin Desktop with its size and SHA-256, the time it was issued and the time it expires, 30 days later, signed with ed25519 by the release workflow. The app carries two public keys, the one the workflow signs with and a spare one, so that the signing key can change without a release that cannot install the next one. It installs a package only when:
+Each release carries `polyfin-<version>.manifest.json`, signed with ed25519 by the release workflow. It lists:
+
+- each package of Polyfin Desktop, with its size and SHA-256;
+- the time it was issued;
+- the time it expires, 30 days later.
+
+The app carries two public keys: the one the workflow signs with, and a spare. The signing key can then change without a release that cannot install the next one.
+
+The app installs a package only when:
 
 - a key it carries signed the manifest, and nothing in it changed since;
 - the manifest is the release's own, and has not expired;
-- the manifest lists the package with the size and SHA-256 GitHub gives for it, and the download matches them.
+- the manifest lists the package with the size and SHA-256 that GitHub gives for it, and the download matches them.
 
-This is on top of GitHub's own checksum: someone who could replace a package on GitHub, and its checksum with it, cannot sign a manifest that lists it. A workflow renews the manifests of the latest releases every week, so that a release stays installable while it is the latest; an expired one, such as a release's left behind, is refused, which also keeps an older manifest from being passed off again. A release without a manifest, as the releases before this one, is never offered: install it by hand from its release page.
+This adds to GitHub's own checksum. Someone who could replace a package on GitHub, and its checksum with it, cannot sign a manifest that lists it.
+
+- **Renewal:** a workflow renews the manifests of the latest releases every week, so that a release stays installable while it is among the latest.
+- **Expired manifests:** they are refused, such as that of a release left behind. This also keeps an older manifest from being passed off again.
+- **Releases without a manifest:** they are never offered, such as the releases before signed manifests. Install them by hand from their release page.
 
 ### Going back to the previous version
 
-Until the new version's server answers `/healthz`, the app keeps the previous app beside it and the copy of the database's folder, `updates/postgresql.previous` in the data folder, taken while the database was stopped: the new version may change the database's tables as it starts, and the previous version refuses tables newer than its own. Once the new server answers, both are removed. The copy takes as much room as the database: an update that cannot make it is not installed.
+Until the new version's server answers `/healthz`, the app keeps two things:
 
-When the new version's server ends before it answers, 3 starts in a row, quitting and opening the app counting too, the app goes back: it stops the database, puts the copy of the database and the previous app back, removing the new ones, and starts the previous version. **System › Health** then tells, under **Needs attention**, which version did not start and why, as the app's log tells it, while the previous version runs. That version is no longer offered; the next one is. A server that runs without answering, such as one still upgrading a large database, is left to finish.
+- the previous app, beside the new one;
+- a copy of the database's folder, `updates/postgresql.previous` in the data folder, taken while the database was stopped.
 
-A `.deb` is replaced by the system's package installer, which keeps no previous app: the app cannot go back, and keeps no copy of the database. Reinstall the previous `.deb` from its release page, and restore a backup if the new version changed the database (see [Backups](backups.md)).
+The new version may change the database's tables as it starts, and the previous version refuses tables newer than its own. Once the new server answers, both copies are removed. The database copy takes as much room as the database: an update that cannot make it is not installed.
+
+The app goes back when the new version's server ends before it answers, 3 starts in a row. Quitting and opening the app counts as a start too. Going back:
+
+1. stops the database;
+2. puts the copy of the database and the previous app back, removing the new ones;
+3. starts the previous version.
+
+**System › Health** then says, under **Needs attention**, which version did not start and why, as the app's log does. That version is no longer offered; the next one is. A server that runs without answering, such as one still upgrading a large database, is left to finish.
+
+A `.deb` cannot go back. The system's package installer replaces it and keeps no previous app, and the app keeps no copy of the database. Reinstall the previous `.deb` from its release page, and restore a backup if the new version changed the database (see [Backups](backups.md)).
 
 ## Restart
 
-**Restart**, on the admin app's **Home**, stops the server, which exits with code 75, and the app starts it again within seconds, as when the server ends by itself: the menu's first line says Starting meanwhile. The database keeps running. No restart policy is needed, and the admin app does not warn.
+**Restart**, on the admin app's **Home**, stops the server, which exits with code 75. The app starts it again within seconds, as when the server ends by itself.
+
+- The menu's first line says that Polyfin is starting meanwhile.
+- The database keeps running.
+- No restart policy is needed, and the admin app does not warn.
 
 ## Moving to Docker and back
 
-The database is a PostgreSQL 18 database like the Docker image's, and a backup made on the desktop restores into a Docker server, and back, from the admin app (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)):
+The database is a PostgreSQL 18 database like the Docker image's. A backup made on the desktop restores into a Docker server, and back, from the admin app (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)):
 
-1. On the source, make a backup with **Back up now** in the **Database backups** panel of **System › Schedule**, or wait for the daily one, and copy it from the `backups` folder.
+1. On the source, choose **Back up now** in the **Database backups** panel of **System › Schedule**, or wait for the daily backup. Copy the backup from the `backups` folder.
 2. Give the destination the source's secret key, so that it reads the backup's keys and tokens:
-   - to Docker, set `POLYFIN_SECRET_KEY` in `.env` to the desktop's key (see [The secret key](#the-secret-key)), then start the container again;
-   - to the desktop, write Docker's `POLYFIN_SECRET_KEY` in a file, quit Polyfin Desktop, then run `polyfin-desktop -import-secret-key <file>`, which keeps it in the key store in place of the desktop's own, and start the app again. On macOS the program is `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`.
-3. On the destination, restore the backup with **Restore**, in the **Database backups** panel of **System › Schedule**. Before restoring, the admin app counts the keys and tokens the destination's key cannot read, and asks before going ahead.
+   - **to Docker:** set `POLYFIN_SECRET_KEY` in `.env` to the desktop's key (see [The secret key](#the-secret-key)), then start the container again;
+   - **to the desktop:** write Docker's `POLYFIN_SECRET_KEY` in a file and quit Polyfin Desktop. Run `polyfin-desktop -import-secret-key <file>`, which puts the key in the key store in place of the desktop's own, then start the app again. On macOS the program is `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`.
+3. On the destination, choose **Restore** in the **Database backups** panel of **System › Schedule**. Before restoring, the admin app counts the keys and tokens that the destination's key cannot read, and asks before going ahead.
 
-Paths do not move with the backup: local folders, the recordings folder and the backups folder name folders of the source. Change them on the destination, in **Content › Sources** and in **Settings › Recordings** and **Settings › Backups**.
+Paths do not move with the backup. Local folders, the recordings folder and the backups folder still name folders of the source. Change them on the destination in **Content › Sources**, **Settings › Recordings** and **Settings › Backups**.
 
 ## Moving to the arm64 package on Windows on Arm
 
-An install of the x64 package on Windows on Arm runs under Windows' emulation. It keeps working, but stays x64: its updates are the x64 package's. Its data folder should not go to the arm64 package as it is: its database was made by the x64 package's PostgreSQL, another build with another ICU. The database moves with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back), but on the same computer: the secret key and the paths stay the same, and nothing needs to be imported or changed.
+An install of the x64 package on Windows on Arm runs under Windows' emulation. It keeps working, but stays x64, and its updates are the x64 package's.
 
-1. In the admin app, turn **Back up the database every day** on in **Settings › Backups** if it is off, then press **Back up now** in the **Database backups** panel of **System › Schedule**.
+Do not move its data folder to the arm64 package as it is. Its database was made by the x64 package's PostgreSQL, another build with another ICU.
+
+Move the database with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back). On the same computer, the secret key and the paths stay the same, and nothing needs importing or changing.
+
+1. In the admin app, turn on **Back up the database every day** in **Settings › Backups** if it is off. Then choose **Back up now** in the **Database backups** panel of **System › Schedule**.
 2. Quit Polyfin from its menu, then uninstall it under Settings › Apps › Installed apps. The data folder stays.
 3. Rename the data folder, `%LOCALAPPDATA%\Polyfin`, such as to `Polyfin-x64`.
-4. Install the arm64 package. Polyfin makes a new data folder and database, and finds the secret key it kept in Windows Credential Manager for the data folder's path. Create an administrator with the setup code (see [First start](#first-start)), and turn **Back up the database every day** on in **Settings › Backups**, which a restore needs.
-5. Restore the backup with **Restore**, in the **Database backups** panel of **System › Schedule**, sending the file from `Polyfin-x64\backups` (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)). The backup brings back its users, settings and libraries.
+4. Install the arm64 package. Polyfin makes a new data folder and database, and finds the secret key it kept in Windows Credential Manager for the data folder's path.
+5. Create an administrator with the setup code (see [First start](#first-start)). Turn on **Back up the database every day** in **Settings › Backups**, which a restore needs.
+6. Choose **Restore** in the **Database backups** panel of **System › Schedule**, and send the file from `Polyfin-x64\backups` (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)). The backup brings back its users, settings and libraries.
 
-Then move the `recordings` folder from `Polyfin-x64` into the new data folder if Live TV recorded there, and the older backups of its `backups` folder if you want to keep them: the restored settings name the same folders as before. Nothing else is needed: the arm64 FFmpeg is downloaded at the first start, and the rest is made again. Start with the computer turns on again once the administrator exists: uncheck it in the menu if you had turned it off. Once Polyfin runs as before, remove `Polyfin-x64`.
+Then finish the move:
 
-## Development
+- **Recordings:** if Live TV recorded into the data folder, move the `recordings` folder from `Polyfin-x64` into the new data folder. The restored settings name the same folders as before.
+- **Older backups:** move those of `Polyfin-x64\backups` too if you want to keep them.
+- **Start with the computer:** it turns on again once the administrator exists. Uncheck it in the menu if you had turned it off.
+- **Everything else:** it comes back by itself. The arm64 FFmpeg downloads at the first start, and the rest is made again.
 
-For development and tests, these variables of the app change where it runs from. The server never reads them.
+Once Polyfin runs as before, remove `Polyfin-x64`.
 
-| Variable | What it does |
-| --- | --- |
-| `POLYFIN_DESKTOP_INSTALL_DIR` | Install folder to run the programs from, instead of the app's own: it holds `polyfin` (`polyfin.exe`), `postgresql/bin`, `postgresql/lib` and `postgresql/share`, `jellyfin-web` and `fonts`, as the packages lay them out |
-| `POLYFIN_DESKTOP_DATA_DIR` | Data folder, as an absolute path, instead of the system's usual place |
-| `POLYFIN_DESKTOP_DATABASE_PORT` | Port of the database, instead of a free one |
-| `POLYFIN_DESKTOP_TOOLS` | JSON file of the FFmpeg downloads, instead of the pinned ones: a local server's, for tests |
+<a id="development"></a>
 
-`polyfin-desktop -headless` runs the app without the icon, the browser and the login item, logging to the terminal too, until it is interrupted or `-quit` quits it. `scripts/desktop-smoke.py` starts it twice, on a data folder of its own, with a local server for FFmpeg and a proxy that refuses every request for outside, and checks that quitting leaves no process: CI runs it on Linux, Windows and macOS. It quits the app with `-quit`, but for the first start on Linux and macOS, which it interrupts; on Windows, it runs the build without a console, as the packages do, the second time with its icon, which must show when explorer.exe runs in the session, and else the app must log that it runs without it. `DESKTOP_SMOKE_NO_TRAY=1` expects the latter even with explorer.exe: CI sets it on Windows on Arm, whose runners' sessions refuse every notification icon, x64 programs' included. The other variables, such as `POLYFIN_LISTEN`, reach the server as they are. See [Development](development.md) to build the server and the admin app; the app itself builds with `go build ./cmd/polyfin-desktop`, which needs cgo on macOS, for the menu bar.
+## Building and signing the packages
 
-### Building the packages
-
-The scripts of `scripts/packaging` build the packages into `dist/packages`, as CI does, for the version in `VERSION` (`dev` otherwise). Each needs Go, Node.js for the admin app, Python 3, and Docker:
-
-| Script | Builds | Where |
-| --- | --- | --- |
-| `macos.sh arm64`, `macos.sh x64` | The `.dmg` of Apple silicon or Intel | On a Mac |
-| `windows.sh x64` | The Windows x64 installer, with NSIS | On Linux or macOS |
-| `windows.sh arm64` | The Windows arm64 installer, with NSIS | On Windows on Arm, in Git Bash |
-| `linux.sh amd64`, `linux.sh arm64` | The `.deb` and the AppImage | On Linux or macOS |
-
-Each takes PostgreSQL 18 from a pinned build: EnterpriseDB's binaries for Windows x64 and macOS, which postgresql.org links, and for Linux a build from PostgreSQL's source made by `postgresql-linux.Dockerfile`, on Ubuntu 22.04 with ICU, which runs from any folder. EnterpriseDB makes none for Windows on Arm: `postgresql-windows.sh` builds it from the same source, with PostgreSQL's upstream change for Visual Studio on Arm applied (`postgresql-msvc-arm64.patch`), using Meson and Visual Studio 2022's ARM64 build tools, with ICU's own ARM64 build and zlib, and puts Visual Studio's runtime beside the programs. It then makes a cluster with ICU, and restores a backup made with `pg_dump`. `windows.sh arm64` runs it, and keeps the build in `dist/packaging/postgresql-windows-arm64` while its inputs stay the same: it needs Visual Studio 2022 with the ARM64 build tools, a native Perl such as Strawberry Perl, Ninja and NSIS, as GitHub's `windows-11-arm` runners have them, and Docker only when `POLYFIN_DESKTOP_FILES` names no folder made by `files.sh`. jellyfin-web and the fonts come from the Docker image's stages, through `files.sh`; a Mac without Docker is given the folder it made with `POLYFIN_DESKTOP_FILES`. Every download is checked against its checksum, and kept in `~/.cache/polyfin-packaging`.
-
-`scripts/packaging/test.sh <package>` installs or opens a package on the system it is for, checks what it holds, runs `desktop-smoke.py --installed` on the installed app, which then finds its programs itself, and removes it: CI runs it on Windows, macOS and Linux runners for every package, before a release gets them. On Windows it checks too that the version info of `polyfin.exe` and `polyfin-desktop.exe`, which `windows.sh` adds with Polyfin's icon using go-winres, is the package's. It changes the system it runs on: run it on a throwaway machine or container.
-
-### The release signing key
-
-The release workflow signs each release's manifest with the private key of the repository secret `POLYFIN_RELEASE_SIGNING_KEY`, and `.github/workflows/desktop-manifests.yml` renews the manifests of the 10 latest releases every Monday with it, each only once its signature checks. Both use `cmd/polyfin-release-sign`. The app carries the two public keys of `releaseKeys`, in `internal/desktop/update/manifest.go`. A release refuses to start, at its step `Check the release signing key`, while the secret is missing, or its public key is not one the app carries: the packages it would publish could never be installed by an update.
-
-Once, on a computer you trust, before the first release with signed manifests:
-
-1. Make two key pairs: `go run ./cmd/polyfin-release-sign keygen -out release.key`, then `go run ./cmd/polyfin-release-sign keygen -out spare.key`. Each writes its private key to the file, readable by you only, and prints its public key.
-2. Put both public keys in `releaseKeys`, separated by a comma, and commit them.
-3. Store the signing key as the secret: `gh secret set POLYFIN_RELEASE_SIGNING_KEY < release.key`, or paste the file's line under the repository's Settings › Secrets and variables › Actions. Then remove `release.key`, or keep it offline.
-4. Keep `spare.key` offline, never in the repository's secrets.
-
-`go run ./cmd/polyfin-release-sign key`, with the secret's value in `POLYFIN_RELEASE_SIGNING_KEY`, checks a key and prints its public key; `verify -in <manifest> [packages]` checks a manifest as the app does.
-
-To change the signing key, as when it may have leaked: store `spare.key` as the secret, make a new spare with `keygen`, put its public key in `releaseKeys` in place of the old signing key's, and release. Apps of earlier releases accept the spare's signatures, as they carry its key, and the new release no longer accepts the old key; apps that do not update meanwhile still accept it. GitHub stops the scheduled workflows of a repository without activity for 60 days: run the `Polyfin Desktop manifests` workflow by hand then, before the manifests expire.
+Building and signing the packages, and running the app for development, is in [Polyfin Desktop packages](development.md#polyfin-desktop-packages).
