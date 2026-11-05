@@ -1,57 +1,102 @@
 # Transcoding
 
-This page covers when Polyfin converts (transcodes) video and audio, how to give it a GPU for that, how HDR is tone mapped, and every setting under **Settings › Conversion (transcoding)**.
+This page covers when Polyfin converts (transcodes) video and audio. It also covers adaptive quality, converted downloads and every setting under **Settings › Conversion (transcoding)**. It is for administrators and for anyone wondering why a title plays converted.
+
+Three topics have their own pages: [Quality of converted video](conversion-quality.md), for its size and bitrate; [GPUs and HDR](gpus-and-hdr.md), for converting on a graphics card and tone mapping; and [Loudness](loudness.md), for how loud converted audio plays.
 
 ## When Polyfin converts
 
 Polyfin picks the lightest way an app can play a file:
 
-- **Direct play:** when the app supports the file, Polyfin redirects the app to the stream and stays out of the video path.
-- **Repackage:** when the app can play the video but not the container, Polyfin repackages it into its own on-demand HLS, built on FFmpeg for remote sources.
-- **Audio conversion:** when the app cannot take the audio, Polyfin converts the audio.
-- **Video conversion:** when the app cannot take the video, or must have picture subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. A text copy of a PGS or VobSub track, with **Turn picture subtitles into text** on, spares that conversion once it is ready. See [Subtitles](subtitles.md).
+| Way | When | What Polyfin does |
+|---|---|---|
+| Direct play | The app supports the file | Redirects the app to the stream, and stays out of the video path |
+| Repackage | The app plays the video but not the container | Repackages it into its own on-demand HLS, built on FFmpeg for remote sources |
+| Audio conversion | The app cannot take the audio | Converts the audio |
+| Video conversion | The app cannot take the video, or must have picture subtitles (PGS, VobSub, DVB) burned in | Converts the video, HDR to SDR included |
 
-The audio Polyfin checks is the track the app names, else the one that plays: the track the user's preferences choose, else the one the file flags as default, else the first. A file whose tracks carry no default flag has its first track checked even when the app names none, as jellyfin-web does for a version not analyzed yet, whose page lists no tracks: an AC-3 track there plays in Chrome converted, with sound.
+A text copy of a PGS or VobSub track spares that conversion once it is ready, with **Turn picture subtitles into text** on. See [Subtitles](subtitles.md).
+
+The audio Polyfin checks is the track the app names. Else it is the one that plays:
+
+1. the track the user's preferences choose;
+2. else the one the file flags as default;
+3. else the first.
+
+A file whose tracks carry no default flag has its first track checked even when the app names none. jellyfin-web names none for a version not analyzed yet, whose page lists no tracks. An AC-3 track there plays in Chrome converted, with sound.
 
 **Compared with Jellyfin**
 
-- Jellyfin 12.4 checks no audio when the app names no track and none is flagged default, and plays such a file as it is ([`StreamBuilder.cs`, lines 675 to 707](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L675-L707)); a browser then plays the picture without sound. See [Versions and analysis](playback.md#versions-and-analysis).
+- Jellyfin 12.4 checks no audio when the app names no track and none is flagged default. It plays such a file as it is, and a browser then plays the picture without sound ([`StreamBuilder.cs`, lines 675 to 707](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L675-L707)). See [Versions and analysis](playback.md#versions-and-analysis).
 
-Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. Converted H.264 is in the High profile the master playlist announces, from x264 on the processor as from every GPU, unless the app's profile allows only Main or Baseline (see [What the app allows](#what-the-app-allows)); converted HEVC is in the Main profile. For how apps choose between versions of a title, see [Playback](playback.md).
+**Where it converts:** Video converts on a GPU when one is available, else on the processor (see [GPUs and HDR](gpus-and-hdr.md#gpu-methods-per-system)). A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most.
 
-Converted video keeps the colors its source states: range, matrix, transfer and primaries, as Polyfin's analysis reads them, from the video track or, when only there, from its container, such as Matroska's color information. FFmpeg's encoders write the colors the decoded frames carry, and its HEVC decoder knows only those of the video track, so Polyfin tags the converted frames with the source's itself. A color the source does not state stays unstated, and apps pick their own. HDR tone mapped to SDR is tagged BT.709, by the GPU's or the processor's tone mapping.
+**Profiles:** Converted H.264 is in the High profile the master playlist announces, from x264 on the processor as from every GPU. The exception is an app whose profile allows only Main or Baseline (see [What the app allows](conversion-quality.md#what-the-app-allows)). Converted HEVC is in the Main profile. For how apps choose between versions of a title, see [Playback](playback.md).
 
-With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
+**Colors:** Converted video keeps the colors its source states: range, matrix, transfer and primaries.
+
+- Polyfin's analysis reads them from the video track or, when only there, from its container, such as Matroska's color information.
+- FFmpeg's encoders write the colors the decoded frames carry, and its HEVC decoder knows only those of the video track. So Polyfin tags the converted frames with the source's colors itself.
+- A color the source does not state stays unstated, and apps pick their own.
+- HDR tone mapped to SDR is tagged BT.709 (see [HDR and tone mapping](gpus-and-hdr.md#hdr-and-tone-mapping)).
+
+**Version names.** With **Say in version names how they play** on, the default, each version's name says which way it takes:
+
+- "(direct play)";
+- "(direct stream)" when its tracks are copied into HLS;
+- "(converted: reason)";
+- "(cannot play here)" when it needs a conversion the server or the user may not have.
+
+See [Version names](versions.md#version-names).
 
 ### Direct play turned off by the app
 
-An app may ask for a title again with direct play turned off, as the Jellyfin app for Android's integrated player does after two playback errors within 30 seconds. Polyfin then still checks whether the app would play the file as it is:
+An app may ask for a title again with direct play turned off. The Jellyfin app for Android's integrated player does so after two playback errors within 30 seconds. Polyfin then still checks whether the app would play the file as it is:
 
-- **It would:** the file is repackaged or converted to what the app's conversion formats take, and **Direct play failed** joins the reasons: in **Home › Now playing › Details** under **Why**, and as `DirectPlayError` in the `TranscodeReasons` of the `TranscodingUrl`. A version converted so ends its name with "(converted: app’s request)". For instance, an HEVC Main 10 file with E-AC-3 audio, which the integrated player plays as it is, is converted to H.264 for its MPEG-TS format with the reasons "Video codec not supported" and "Direct play failed", where the codec alone would point at the wrong cause.
+- **It would:** the file is repackaged or converted to what the app's conversion formats take, and **Direct play failed** joins the reasons.
+  - The reasons show in **Home › Now playing › Details** under **Why**, and as `DirectPlayError` in the `TranscodeReasons` of the `TranscodingUrl`.
+  - A version converted so ends its name with "(converted: app’s request)".
+  - For instance, the integrated player plays an HEVC Main 10 file with E-AC-3 audio as it is. Asked again, it is converted to H.264 for its MPEG-TS format, with the reasons "Video codec not supported" and "Direct play failed". The codec alone would point at the wrong cause.
 - **It would not:** the reasons are those the check finds, such as "File format not supported" for an AVI file, as when direct play is on.
 
-Discs and DASH channels never play as they are, so they skip the check, as do DLNA devices and guests through share links, which Polyfin sends a stream itself: their reasons are those of their conversion alone, or "Direct play failed" when no other reason applies.
+Some plays skip the check: discs and DASH channels, which never play as they are, and DLNA devices and guests through share links, which Polyfin sends a stream itself. Their reasons are those of their conversion alone, or "Direct play failed" when no other reason applies.
 
 The Jellyfin app for Android's integrated player gets its versions described as files, and plays them as they are (see [The integrated player of the Jellyfin app for Android](jellyfin-compatibility.md#the-integrated-player-of-the-jellyfin-app-for-android)).
 
 **Compared with Jellyfin**
 
-- Jellyfin 12.4 runs the check too when the app turns direct play off ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)), and gives the same reasons. Version names are Polyfin's own.
+- Jellyfin 12.4 runs the check too when the app turns direct play off, and gives the same reasons ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)). Version names are Polyfin's own.
 
 ### Audio in HLS segments
 
-The audio of a video repackaged or converted into HLS is copied only when the app takes its codec and the HLS segments carry it: AAC, AC-3, E-AC-3 and MP3 in MPEG-TS segments, and also ALAC, FLAC, Opus, DTS and TrueHD in fragmented MP4 ones. Another track is converted to a codec the app takes that the segments carry, even when the app's profile names its own codec: jellyfin-web names MP2 for Chrome, which refuses it in both kinds of segments, so in Chrome the MP2 of TV recordings and channels is converted to AAC, whether the video is copied or converted, and plays at the first try. The `TranscodingUrl` writes those codecs alone as `AudioCodec`. A stream sent as one file, to an app that asks for one or to a DLNA device, keeps to the app's codecs as they are.
+The audio of a video repackaged or converted into HLS is copied only when the app takes its codec and the HLS segments carry it:
+
+| Segments | Codecs copied |
+|---|---|
+| MPEG-TS | AAC, AC-3, E-AC-3, MP3 |
+| Fragmented MP4 | The same, plus ALAC, FLAC, Opus, DTS and TrueHD |
+
+Another track is converted to a codec the app takes that the segments carry, even when the app's profile names its own codec. jellyfin-web names MP2 for Chrome, which refuses it in both kinds of segments. So in Chrome, the MP2 of TV recordings and channels is converted to AAC, whether the video is copied or converted, and plays at the first try.
+
+- The `TranscodingUrl` writes those codecs alone as `AudioCodec`.
+- A stream sent as one file, to an app that asks for one or to a DLNA device, keeps to the app's codecs as they are.
 
 **Compared with Jellyfin**
 
 - Jellyfin keeps the same codecs, in `StreamBuilder.BuildStreamVideoItem`, for HLS only, as Polyfin does.
-- Jellyfin's `TranscodingUrl` writes the codec of a copied track alone as `AudioCodec`; Polyfin writes the codecs the segments carry either way, as it does when the track is converted.
+- Jellyfin's `TranscodingUrl` writes the codec of a copied track alone as `AudioCodec`. Polyfin writes the codecs the segments carry either way, as it does when the track is converted.
 
 ### Dolby audio in browsers
 
-Browsers built on Chromium, such as Chrome and Android's web view, and Firefox do not decode AC-3 or E-AC-3 (Dolby Digital and Dolby Digital Plus). jellyfin-web asks the browser what it plays, so in these browsers a file with such audio is not played as it is: Polyfin repackages it into HLS, copies the video when the browser takes it, as HEVC with a GPU that decodes it, and converts only the audio, to AAC. Nothing is encoded for the video, and the GPU does no work for it. Edge on Windows and Safari decode both, and play such a file as it is when they take its video and container.
+Browsers built on Chromium, such as Chrome and Android's web view, and Firefox do not decode AC-3 or E-AC-3 (Dolby Digital and Dolby Digital Plus). jellyfin-web asks the browser what it plays, so in these browsers such a file is not played as it is:
 
-To play it without any conversion in such a browser, a version with AAC or Opus audio plays as it is, and **Prefer versions the app plays without conversion** picks one first when there is one (see [Prefer versions the app plays without conversion](playback.md#prefer-versions-the-app-plays-without-conversion)).
+- Polyfin repackages it into HLS.
+- It copies the video when the browser takes it, as HEVC with a GPU that decodes it.
+- It converts only the audio, to AAC. Nothing is encoded for the video, and the GPU does no work for it.
+
+Edge on Windows and Safari decode both, and play such a file as it is when they take its video and container.
+
+To play it without any conversion in such a browser, use a version with AAC or Opus audio. **Prefer versions the app plays without conversion** picks one first when there is one (see [Prefer versions the app plays without conversion](versions.md#prefer-versions-the-app-plays-without-conversion)).
 
 **Compared with Jellyfin**
 
@@ -61,227 +106,89 @@ To play it without any conversion in such a browser, a version with AAC or Opus 
 
 The Jellyfin app for iPhone and iPad has two players, and each tells the server something different:
 
-- Its web player, the default, is jellyfin-web in Safari's engine. It takes AC-3 and E-AC-3, in files and in both kinds of HLS segments, so their audio is copied.
-- Its native player, **Use Native Video Player** in the app's settings (beta), declares its own formats. Its HLS format takes AAC, MP3, FLAC and ALAC; after it comes a progressive MP4 taking H.264 with AC-3 and E-AC-3 too. With **Prefer fMP4 in HLS** on, its default, the HLS segments are fragmented MP4 and HEVC is copied into them; with it off, they are MPEG-TS with H.264, so HEVC is converted to H.264.
+- **Its web player:** the default, is jellyfin-web in Safari's engine. It takes AC-3 and E-AC-3, in files and in both kinds of HLS segments, so their audio is copied.
+- **Its native player:** **Use Native Video Player** in the app's settings (beta), declares its own formats.
+  - Its HLS format takes AAC, MP3, FLAC and ALAC. After it comes a progressive MP4, taking H.264 with AC-3 and E-AC-3 too.
+  - With **Prefer fMP4 in HLS** on, its default, the HLS segments are fragmented MP4 and HEVC is copied into them.
+  - With it off, they are MPEG-TS with H.264, so HEVC is converted to H.264.
 
-Polyfin ranks the native player's formats as Jellyfin does, and where the progressive MP4 wins, it sends what that MP4 would carry over HLS instead, in the segments the app chose, MPEG-TS or fragmented MP4. The progressive MP4 wins where it keeps what the HLS format would convert, so AC-3 and E-AC-3 are copied:
+Polyfin ranks the native player's formats as Jellyfin does. Where the progressive MP4 wins, Polyfin sends what that MP4 would carry over HLS instead, in the segments the app chose. The progressive MP4 wins where it keeps what the HLS format would convert, so AC-3 and E-AC-3 are copied:
 
 | Source | **Prefer fMP4 in HLS** on | Off |
 |---|---|---|
 | HEVC with E-AC-3, in MKV | HEVC copied, E-AC-3 converted to AAC 5.1 (the HLS format wins, as it copies the video) | H.264, E-AC-3 copied, in MPEG-TS |
 | H.264 with E-AC-3 or AC-3, in MKV | Both copied, in fragmented MP4 | Both copied, in MPEG-TS |
 
-The native player's plays are never sent as one file, even with **Converted downloads** on. Its downloads, which ask under another profile name and without HLS, get a converted MP4 as any app's (see [Converted downloads](#converted-downloads)).
+- **Downloads:** the native player's plays are never sent as one file, even with **Converted downloads** on. Its downloads ask under another profile name and without HLS, and get a converted MP4 as any app's (see [Converted downloads](#converted-downloads)).
+- **MKV:** neither player plays MKV as it is, so an MKV is always repackaged on iPhone and iPad. HEVC is tagged `hvc1`, which Apple's players need. For the fewest conversions, turn **Use Native Video Player** off.
 
-Neither player plays MKV as it is, so an MKV is always repackaged on iPhone and iPad, and HEVC is tagged `hvc1`, which Apple's players need. For the fewest conversions, turn **Use Native Video Player** off.
-
-Polyfin never sends the native player a conversion as one file: the native player is Apple's AVPlayer, which cannot play one.
+Polyfin never sends the native player a conversion as one file. The native player is Apple's AVPlayer, which cannot play one:
 
 - Sent without byte ranges (`Accept-Ranges: none`), it stops AVPlayer at once with "The server is not correctly configured".
-- Sent with byte ranges, it is read by AVPlayer fragment by fragment, every one of them, before the play starts, so a conversion made as it plays would start only once the whole title is converted.
+- Sent with byte ranges, AVPlayer reads every fragment before the play starts. A conversion made as it plays would start only once the whole title is converted.
 
-Over HLS, the same tracks start at once, and seeking, the bandwidth in **Now playing** and stopping work as for any HLS play.
-
-**Compared with Jellyfin**
-
-- Jellyfin 12.4 ranks the formats the same way ([`StreamBuilder.cs`, lines 874 to 927](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L874-L927)), and sends the native player the progressive MP4 itself. Polyfin does not, on purpose.
-- Jellyfin sends a conversion without byte ranges ([`FileStreamResponseHelpers.cs`, line 135](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/FileStreamResponseHelpers.cs#L135)), which stops AVPlayer as above.
-
-<details>
-<summary>For app developers</summary>
-
-- The native player is told by its device profile's `Name`, `iOS 11+ Native Profile`, `iOS 13+ Native Profile` or `iOS 13+ Native Profile + fMP4` (jellyfin-expo 1.8.0.5's [`utils/profiles`](https://github.com/jellyfin/jellyfin-expo/tree/v1.8.0.5/utils/profiles)), with the client `Jellyfin iOS` or `Jellyfin iPadOS` in the request's `Authorization` header; both are required.
-- Its `TranscodingProfile`s with `Protocol` `http` and `Context` `Streaming` are read as HLS, with the `Container`, `MinSegments` and `BreakOnNonKeyFrames` of its first HLS video profile.
-
-</details>
-
-### Loudness
-
-How loud a title plays is decided in one place, which depends on how it plays:
-
-- **Direct play, and audio copied into HLS:** the app decides. Polyfin sends the track as it is, byte for byte, and the app's decoder sets the level: its own mix of surround sound down to its speakers and, for AC-3 and E-AC-3 (Dolby Digital and Dolby Digital Plus), whether it applies the track's dialogue level (dialnorm) and its dynamic range compression. Dolby decoders, in TVs, receivers, Apple devices and some phones, apply both: a track stating its dialogue at -27 dB plays 4 dB lower there than in a player built on FFmpeg, which ignores dialnorm. No server setting changes the level of these plays.
-- **Converted audio:** the server decides, with FFmpeg's decoder, which ignores dialnorm and applies the track's dynamic range compression as **Dynamic range of converted Dolby audio** says, as encoded by default.
-  - Converted with the source's channels, 5.1 to 5.1 or stereo to stereo, the audio keeps the source's level, to 0.1 dB, unless **Even the loudness of converted videos** is on.
-  - Mixed down to stereo, when an app asks for 2 channels of a surround track, it goes through **Mix to stereo**, then **Volume when mixing to stereo**, then **Even the loudness of converted videos** when it is on, then a limiter.
-
-The app chooses the path. jellyfin-web in Chrome, Firefox and Android's web view cannot decode AC-3 or E-AC-3 (see [Dolby audio in browsers](#dolby-audio-in-browsers)), so their audio is converted, to stereo when the browser reports 2 speakers. jellyfin-web's **Maximum allowed audio channels**, in the app's playback settings and kept by each browser, overrides what the browser reports. The Jellyfin app for Android's integrated player, Android TV with bitstream output, and the iOS app's default web player receive E-AC-3 as it is; the iOS app's native player receives it as it is too, except with HEVC video and **Prefer fMP4 in HLS** on, where it is converted to AAC 5.1 (see [Two players in the Jellyfin iOS app](#two-players-in-the-jellyfin-ios-app)). To tell which path a play takes, look at the end of its version's name, "(direct play)", "(direct stream)" or "(converted: audio)", or at jellyfin-web's Playback Info (see [Seeing how a play goes](#seeing-how-a-play-goes)).
-
-In direct play, nothing on the server changes the level; the app sets it:
-
-- **The file:** Polyfin sends it as it is, byte for byte, with the same fields as Jellyfin 12.4. Neither sends a `NormalizationGain` on videos: Jellyfin computes it from a loudness it measures on songs and albums only ([`DtoService.cs`, lines 1295 to 1303](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Dto/DtoService.cs#L1295-L1303); [`AudioNormalizationTask.cs`, lines 89 and 169](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/ScheduledTasks/Tasks/AudioNormalizationTask.cs#L89-L169)), and jellyfin-web applies it in its audio player alone ([`htmlAudioPlayer/plugin.js`, lines 125 to 130](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/plugins/htmlAudioPlayer/plugin.js#L125-L130)).
-- **The browser's decoder:** Chrome decodes AAC and HE-AAC, stereo and 5.1, to the same level as FFmpeg, to 0.1 dB, measured with HE-AAC 5.1 and stereo test files. Chromium mixes 5.1 down to a stereo device without lowering it, center, surround and LFE added to the front at 0.707 ([`channel_mixing_matrix.cc`, lines 270 to 279](https://github.com/chromium/chromium/blob/d1a70bc/media/base/channel_mixing_matrix.cc#L270-L279)), so a 5.1 file is not quieter there.
-- **jellyfin-web's volume:** its video player plays at 100% at most, as a browser's media element cannot go higher, and keeps the last volume set, in each browser and in each Jellyfin app separately ([`htmlMediaHelper.js`, lines 7 to 12](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/htmlMediaHelper.js#L7-L12)). A volume lowered once stays lower for every title there.
-- **Android 12 and older:** when the phone mixes 5.1 down itself, as for the Jellyfin app for Android's integrated player playing a 5.1 file, each channel is halved, 6 dB quieter; Android 12L and later mix at full level ([`ChannelMix.h`, lines 44 to 64](https://android.googlesource.com/platform/system/media/+/refs/heads/main/audio_utils/include/audio_utils/ChannelMix.h#44)).
-- **Players that sound louder:** they usually boost by default, with an audio normalizer that raises quiet passages and voices, or a volume that goes above 100%. To compare fairly, turn such a normalizer off and set every player to 100%.
-
-In a stereo mix, FFmpeg's own downmix adds the channels without lowering them, with the center and surround levels an AC-3 track states, so a 5.1 track's voices, in the center, end up to 3 dB under the source's. **Volume when mixing to stereo**, 2 by default, raises the mix by 6 dB. A limiter then holds the peaks of the stereo mix 1.5 dB under full scale, so that loud scenes end at or under -1 dBTP once encoded, where they would overload the encoder, which distorts them. On a 5.1 test scene, with voices at -26.8 LUFS in the center and effect bursts peaking at -2.7 dBTP, the stereo mix measures:
-
-| Volume | Voices alone | Whole scene | Peaks |
-|---|---|---|---|
-| 1 | -28.3 LUFS | -16.9 LUFS | -2.6 dBTP |
-| 2 with the limiter, the default | -22.3 LUFS | -13.3 LUFS | -1.3 dBTP |
-| 2 without a limiter, as in Jellyfin | -22.3 LUFS | -13.0 LUFS | +0.9 dBTP |
-
-Each **Mix to stereo** sets how loud voices are against effects, before the volume. Measured on the same scene against FFmpeg's own mix, the track stating a -4.5 dB center level:
-
-| Mix | Left channel | Voices | Whole scene |
-|---|---|---|---|
-| FFmpeg's own | FL, C at the track's center level, SL at its surround level | 0 | 0 |
-| Dave750 | 0.707 FL + 0.5 C + 0.707 SL + 0.5 LFE | -1.5 dB | -3.6 dB |
-| Night mode (clearer voices) | C + 0.3 FL + 0.3 SL | +4.5 dB | -5.9 dB: effects in front and behind 10.5 dB lower |
-| RFC 7845 | 0.53 FL + 0.37 C + 0.46 SL + 0.26 SR + 0.37 LFE | -4.0 dB | -6.1 dB |
-| AC-4 | FL + 0.707 C + 0.707 SL | +1.5 dB | -0.6 dB |
-
-The right channel mirrors the left. Night mode suits speech at a low volume; RFC 7845 and Dave750 lower everything to stay under full scale. Music and audiobooks converted to stereo go through the same mix, volume and limiter.
-
-**Even the loudness of converted videos**, off by default, brings the audio of the movies, episodes and channels the server converts to -16 LUFS, with FFmpeg's EBU R128 normalization (`loudnorm`) in one pass: peaks at -1.5 dBTP at most and a loudness range of 11 LU at most. It comes after the stereo mix and its volume, and the limiter after it, so the normalizer measures what the volume made: with it on, **Volume when mixing to stereo** no longer changes the level, only the balance **Mix to stereo** sets. Direct play, copied audio, music and audiobooks never go through it; music has its own evening, **Even the volume between songs**, which apps apply. Measured through Polyfin:
-
-| Source | Sent | Off | On |
-|---|---|---|---|
-| Test scene, voices alone | Stereo | -22.3 LUFS | -15.9 LUFS |
-| Test scene, voices alone | 5.1 | -26.8 LUFS | -15.9 LUFS |
-| Test scene, 1 minute, loudness range 15 LU | Stereo | -13.3 LUFS | -18.2 LUFS |
-| Test scene 12 dB quieter | Stereo | -22.9 LUFS | -18.2 LUFS |
-| E-AC-3 7.1 from a movie | Stereo | -17.3 LUFS | -16.0 LUFS |
-| E-AC-3 stereo from a series | Stereo | -27.7 LUFS | -16.0 LUFS |
-| AC-3 stereo from a movie, peaks 19 dB above its loudness | Stereo | -31.5 LUFS | -20.8 LUFS |
-
-In one pass, the normalizer reads 3 seconds ahead and settles over the first seconds of each conversion, so a short scene with a wide loudness range ends up to 2 LU under the target, and the sound of a live channel starts some 3 seconds later. A track whose peaks stand far above its loudness rises only as far as its peaks allow under -1.5 dBTP. Each seek starts a new conversion, which settles again.
-
-**Dynamic range of converted Dolby audio** sets how converted AC-3 and E-AC-3 apply the dynamic range compression stored in the track, which lifts quiet passages and lowers loud ones: **As encoded**, the default, as FFmpeg and Jellyfin decode them; **None (full range)** (`-drc_scale 0`); or **Night (quiet passages louder)** (`-drc_scale 2`), which lifts quiet passages twice as much as encoded and lowers loud ones as encoded, as FFmpeg's decoder applies a scale above 1 to lifts alone ([`ac3dec.c`, lines 988 to 995](https://github.com/FFmpeg/FFmpeg/blob/n9.0.2/libavcodec/ac3dec.c#L988-L995)). It is a decoder option, so it never touches direct play or copied audio, nor other codecs, and comes before the mix and the normalizer. Measured through Polyfin in a browser taking stereo, on FFmpeg's test samples from movies and series, against **None**, as the gain on the loudest and the quietest tenth of their 100 ms windows:
-
-| Track | As encoded: loud / quiet | Night: loud / quiet | Range of levels, none / encoded / night |
-|---|---|---|---|
-| E-AC-3 7.1 from a movie | -0.3 / +5.8 dB | -0.2 / +11.6 dB | 16.8 / 14.0 / 11.5 dB |
-| AC-3 stereo from a movie | -0.3 / +5.5 dB | -0.2 / +11.6 dB | LRA 19.7 / 14.0 / 8.9 LU |
-| E-AC-3 stereo from a series | +0.1 / +0.6 dB | +0.2 / +1.1 dB | 22.8 / 22.4 / 21.9 dB |
-
-Tracks made by FFmpeg's own encoder carry no compression, and play the same with each choice.
+Over HLS, the same tracks start at once. Seeking, the bandwidth in **Now playing** and stopping work as for any HLS play.
 
 **Compared with Jellyfin**
 
-- Jellyfin 12.4 mixes down with the same filters at the same volume, 2 by default ([`EncodingOptions.cs`, lines 21 to 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L21-L22); [`EncodingHelper.cs`, lines 2975 to 2977](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2975-L2977)), but without a limiter: its loud scenes pass full scale, and the encoder distorts them.
-- It decodes AC-3 and E-AC-3 with FFmpeg's defaults, as **As encoded** does, and has no choice of dynamic range.
-- It has no normalization of converted video's audio: its own loudness normalization is for music, as `NormalizationGain`.
+- Jellyfin 12.4 ranks the formats the same way, and sends the native player the progressive MP4 itself ([`StreamBuilder.cs`, lines 874 to 927](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L874-L927)). Polyfin does not, on purpose.
+- Jellyfin sends a conversion without byte ranges, which stops AVPlayer as above ([`FileStreamResponseHelpers.cs`, line 135](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/FileStreamResponseHelpers.cs#L135)).
 
-### Louder sound for one user
+API details: [iOS native player profile for apps](jellyfin-api.md#ios-native-player-profile-for-apps).
 
-**Convert the sound to even it**, a user's option (see [Louder sound](users.md#louder-sound)), sends every app of that user its sound converted and evened, through the same normalization as **Even the loudness of converted videos**, at -16 LUFS with the limiter, whether that setting is on or not:
+### Loudness and louder sound
 
-- A version the app would play as it is is streamed over HLS instead, its video copied and its audio converted, with the app's channels, 5.1 included. One whose video is converted anyway gets its audio converted and evened too. Its name ends "(converted: audio)", and its `TranscodeReasons` say `DirectPlayError`, as Jellyfin has no reason for a choice of the user.
-- The audio is converted only where it costs no video conversion: a version whose video the app plays only converted over HLS, such as an MPEG-TS file whose keyframes are not read, or whose subtitle would then be burned in, or whose keyframe index cannot be read, plays as it does for other users. So does every version for a user who may not use conversion.
-- **Prefer versions the app plays without conversion** counts a version whose video is copied as one without conversion for that user: their every version has its audio converted.
-- Channels follow, converted as they come, their sound starting some 3 seconds later (see [Loudness](#loudness)); a source a play switches to keeps the normalization.
-- Music and audiobooks do not follow: apps even them with their own normalization. DLNA devices and guests of share links play as before.
-
-The cost is direct play: each play takes a little of the server's processor, a torrent's first play waits for its keyframe index, and surround sound reaches a receiver as converted AAC or AC-3 rather than as the original track. Measured through Polyfin with jellyfin-web 12.4's Chrome profile: a stereo scene at -29.6 LUFS plays at -17.3 LUFS, peaks at -1.6 dBTP, its H.264 copied; its one-pass normalization settles under the target on a one-minute scene with loud bursts, as above.
-
-**Compared with Jellyfin**
-
-- Jellyfin has no such option.
+How loud converted audio plays, the stereo mix, evening the loudness and each user's louder sound are on [Loudness](loudness.md).
 
 ### Seeing how a play goes
 
-- **In the web player:** "Playback Info", in the player's settings menu, names how the play goes: "Direct playing", "Direct streaming" when the video is copied and the audio converted, "Remuxing" (repackaged) when both are copied into HLS, and "Transcoding" when the video is converted. A play streamed by Polyfin adds a section with the target codecs, "(direct)" beside a copied one, and the reasons, such as "The audio codec is not supported". The section shows once the play's first segment is made, and stays while the encoding waits between requests.
-- **In the version's name:** it ends with how it plays, such as "(converted: audio)" (see [Version names](playback.md#version-names)).
+- **In the web player:** "Playback Info", in the player's settings menu, names how the play goes.
+  - "Direct playing";
+  - "Direct streaming" when the video is copied and the audio converted;
+  - "Remuxing" (repackaged) when both are copied into HLS;
+  - "Transcoding" when the video is converted.
+  
+  A play streamed by Polyfin adds a section with the target codecs, "(direct)" beside a copied one, and the reasons, such as "The audio codec is not supported". The section shows once the play's first segment is made. It stays while the encoding waits between requests.
+- **In the version's name:** it ends with how it plays, such as "(converted: audio)" (see [Version names](versions.md#version-names)).
 - **In the admin app:** **Home › Now playing › Details** shows the encoder, "Copied" for copied video, the audio sent, and why.
-- **In the detailed log:** one line for each play (see [Logs](administration.md#logs)), `A version plays as it is`, or `A version plays over HLS` (`A version plays as one stream` for a stream sent as one file) with `video` (`copied`, or the codec and encoder, such as `h264 with h264_nvenc`), `audio` (`copied`, `none`, or the codec and channels, such as `aac 2 ch`) and `reasons`. Each FFmpeg run then logs `Started a remux` with `video` (`copy` or the encoder) and `audio` (`copy`, `none` or the encoder). Neither names an address.
+- **In the detailed log:** one line for each play (see [Logs](administration.md#logs)). Neither line below names an address.
+  - `A version plays as it is`, or `A version plays over HLS` (`A version plays as one stream` for a stream sent as one file). It has `video` (`copied`, or the codec and encoder, such as `h264 with h264_nvenc`), `audio` (`copied`, `none`, or the codec and channels, such as `aac 2 ch`) and `reasons`.
+  - Each FFmpeg run then logs `Started a remux`, with `video` (`copy` or the encoder) and `audio` (`copy`, `none` or the encoder).
 
 **Compared with Jellyfin**
 
-- Jellyfin reports the same on the device's session, as `TranscodingInfo` ([TranscodeManager.cs, lines 343 to 366](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs#L343-L366); [SessionManager.cs, lines 2008 to 2023](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L2008-L2023)), and clears it when its transcode ends; Polyfin keeps it until the play stops, as its encodings stop and start again within a play.
-- Jellyfin also reports the conversion's frame rate and progress, which Polyfin leaves out, and its configured hardware acceleration even for copied video, where Polyfin names the GPU of a video conversion alone.
-- Jellyfin logs its decision at the debug level with the file's path and URL ([StreamBuilder.cs, lines 833 to 841](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L833-L841)); Polyfin's line names no address.
+- Jellyfin reports the same on the device's session, as `TranscodingInfo`, and clears it when its transcode ends ([TranscodeManager.cs, lines 343 to 366](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs#L343-L366); [SessionManager.cs, lines 2008 to 2023](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L2008-L2023)). Polyfin keeps it until the play stops, as its encodings stop and start again within a play.
+- Jellyfin also reports the conversion's frame rate and progress, which Polyfin leaves out. It names its configured hardware acceleration even for copied video; Polyfin names the GPU of a video conversion alone.
+- Jellyfin logs its decision at the debug level, with the file's path and URL ([StreamBuilder.cs, lines 833 to 841](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L833-L841)). Polyfin's line names no address.
 
 ### Lower quality during a play
 
-jellyfin-web's player offers **Quality** in its settings menu during a play, to lower the bitrate of a play that stutters. Picking a quality plays the version again from the same position at that bitrate: a version whose bitrate is above it is converted down to it (see [Size of converted video](#size-of-converted-video)); one within it plays as before. A version or a channel whose bitrate is not known, as a live HLS stream's, counts as the usual bitrate of its height, the one its conversion gets (see [Bitrate of converted video](#bitrate-of-converted-video)): a 1080p channel counts as 10 Mb/s, and converts at 3 Mbps. This holds for every bitrate limit, the app's and the user's **Maximum quality** too. The menu shows for a version played as it is, a movie, an episode, a recording or a channel, as for one Polyfin repackages or converts, when a lower quality would play it converted:
+jellyfin-web's player offers **Quality** in its settings menu during a play, to lower the bitrate of a play that stutters. Picking a quality plays the version again from the same position at that bitrate:
+
+- A version whose bitrate is above it is converted down to it (see [Size of converted video](conversion-quality.md#size-of-converted-video)).
+- One within it plays as before.
+- A version or a channel whose bitrate is not known, as a live HLS stream's, counts as the usual bitrate of its height, the one its conversion gets (see [Bitrate of converted video](conversion-quality.md#bitrate-of-converted-video)). A 1080p channel counts as 10 Mb/s, and converts at 3 Mbps. This holds for every bitrate limit, the app's and the user's **Maximum quality** too.
+
+The menu shows for a version played as it is (a movie, an episode, a recording or a channel), as for one Polyfin repackages or converts. It shows only when a lower quality would play it converted:
 
 - the server converts video (**Conversion (transcoding)**), and the user may have it converted (**Can use conversion (transcoding)**), while the server is not at its **Video conversions at once**;
 - FFmpeg can convert its video to a codec the app takes;
-- a file is known to be cut into HLS segments: it is an MPEG-TS file, an MPEG program stream or an AVI file (see [HLS segments](#hls-segments)), or its keyframe index or, for a local MPEG-TS file, its keyframes were read, as [Prepare playback in advance](playback.md#preparing-playback-in-advance) reads it when a title's details open, or as an earlier play over HLS did. A play as it is never waits to read the index: a version whose index is not read yet, such as a torrent's at its first play, or that has none Polyfin reads, such as a WMV file, plays without the menu. A channel's stream is converted as it comes, and needs none.
+- a file is known to be cut into HLS segments (see [HLS segments](#hls-segments)):
+  - it is an MPEG-TS file, an MPEG program stream or an AVI file;
+  - or its keyframe index or, for a local MPEG-TS file, its keyframes were read. [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) reads it when a title's details open, or an earlier play over HLS did.
+
+A play as it is never waits to read the index. A version whose index is not read yet, such as a torrent's at its first play, plays without the menu. So does one that has no index Polyfin reads, such as a WMV file. A channel's stream is converted as it comes, and needs none.
 
 **Compared with Jellyfin**
 
 - Jellyfin offers the menu whenever the app's profile can convert video for streaming, which jellyfin-web's always can, unless the user may neither convert nor repackage (`MediaInfoHelper.SetDeviceSpecificData`). Polyfin offers it only when a lower quality would play, so that picking one never ends the play.
-- Jellyfin never lowers a remote source, such as a channel or a `.strm` stream, to the quality picked, and counts a local file whose bitrate is not known as 40 Mb/s (`StreamBuilder.IsBitrateLimitExceeded`): its menu does nothing for a channel played as it is. Polyfin lowers any version or channel, remote or not, above the quality picked, counting one whose bitrate is not known as the usual bitrate of its height.
+- Jellyfin never lowers a remote source, such as a channel or a `.strm` stream, to the quality picked. It counts a local file whose bitrate is not known as 40 Mb/s (`StreamBuilder.IsBitrateLimitExceeded`), so its menu does nothing for a channel played as it is. Polyfin lowers any version or channel above the quality picked, counting one whose bitrate is not known as the usual bitrate of its height.
 
-<details>
-<summary>For app developers</summary>
+API details: [Lower quality menu for apps](jellyfin-api.md#lower-quality-menu-for-apps).
 
-- PlaybackInfo's media source says `SupportsTranscoding: true` for a version played as it is under the conditions above, with no `TranscodingUrl`, as from Jellyfin: a `TranscodingUrl` comes only with a source not played as it is.
-- A lower `MaxStreamingBitrate` in a new PlaybackInfo, as jellyfin-web sends it, gives the `TranscodingUrl` of the conversion.
+### Size and quality of converted video
 
-</details>
-
-## Size of converted video
-
-Converted video is never larger than its source. It is smaller when one of these limits is below the source's size, the lowest one winning:
-
-- **GPU:** up to 4K.
-- **Processor:** up to 1080p.
-- **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
-- **HDR on a GPU too slow for it:** up to 720p, when the GPU tone maps HDR slower than real time at 1080p (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)).
-- **Quality group:** the user's, set on their page under **Users**.
-- **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
-- **The app's profile:** the largest picture, or the highest codec level, the app says it decodes (see [What the app allows](#what-the-app-allows)).
-- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's (see [Audio bitrate](#audio-bitrate)), or the track's own when it is copied. A copied track whose bitrate is not known, as AC-3 or DTS in a Matroska file often is, counts as converted audio of its channels would: 128 kb/s in mono, 384 kb/s up to five channels, 640 kb/s from six. A lossless track of several Mb/s converted to stereo AAC at 384 kb/s thus leaves 1080p 9.6 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
-
-When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the app's profile, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
-
-On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p", "Quality allowed by the app: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
-
-### What the app allows
-
-An app's device profile can limit the video it decodes, in its codec profiles: for instance, H.264 no taller than 720 lines. A source above such a limit does not play as it is, and Polyfin converts it within the limit, as Jellyfin does. It reads the conditions of the codec profiles of the codecs the app takes converted video in (its transcoding profile's `VideoCodec`), in the transcoding profile's container, whose `ApplyConditions` the source meets; and, when the video cannot play as it is or the file is above the bitrate limit, those of the transcoding profile itself. A condition applies whether `IsRequired` is set or not; one about another codec, which the app is not sent converted, does not.
-
-- **`Width` and `Height`:** the picture is scaled down to fit both, keeping its shape: a 1080p source under `Height` 720 converts to 1280×720, and under `Width` 1280 too. Its bitrate follows the smaller picture (see [Bitrate of converted video](#bitrate-of-converted-video)). The `TranscodingUrl` writes them as `MaxWidth` and `MaxHeight`.
-- **`VideoBitrate`:** the video's bitrate stays within it, and the picture is no taller than that bitrate allows, as under a bitrate limit. The `TranscodingUrl` writes the lower of the two as `VideoBitrate`.
-- **`VideoFramerate`:** a source above it is brought down to it, frames dropped, and its master playlist's `FRAME-RATE` says so. The `TranscodingUrl` writes it as `MaxFramerate`.
-- **`VideoLevel`:** Polyfin declares the lowest level that holds the picture it sends. When that is above the app's, the picture goes down the ladder until a level the app decodes holds it: under H.264 level 3.1, 1080p converts to 720p. The `TranscodingUrl` writes it as `h264-level` or `hevc-level`.
-- **`VideoProfile`:** converted H.264 is in the highest of High, Main and Baseline the condition allows, Baseline as constrained baseline, under the name each encoder gives it. A condition allowing none of the three, such as `high 10` alone, leaves High. HEVC stays in Main. The `TranscodingUrl` writes the profiles allowed as `h264-profile`.
-
-The other conditions, about reference frames, bit depth, dynamic range, codec tag, anamorphic or interlaced video, decide only whether the source plays as it is or its video is copied, as in Jellyfin, whose encoder does not read them either.
-
-**Compared with Jellyfin**
-
-- Jellyfin applies these conditions in `StreamBuilder.BuildStreamVideoItem` and `ApplyTranscodingConditions`, its encoder scales the picture within `MaxWidth` and `MaxHeight` (`EncodingHelper.GetFixedOutputSize`), aims for the `VideoBitrate`, drops frames above `MaxFramerate` (`GetFramerateParam`, `-r`), and passes the profile and the level asked to the encoder (`GetVideoQualityParam`). Polyfin does the same, but for the level and the profile.
-- Jellyfin passes the app's level to the encoder whatever the picture, starting from the source's own level, so that a 1080p picture can be declared at a level that does not hold it. Polyfin keeps the level it computes from the picture and makes the picture smaller instead.
-- Jellyfin passes the encoder the profile the source has when the condition allows it, else the first the condition lists. Polyfin writes the highest the condition allows.
-- Jellyfin keeps the source's whole bitrate when the picture is made smaller. Polyfin keeps the share of it the smaller picture is, as for its own caps.
-- Under the app's `VideoBitrate`, Jellyfin decides the audio under the app's bitrate limit only. Polyfin counts that cap, with the audio sent, as the limit the audio is decided under too, so that PlaybackInfo and the conversion, which reads only the `TranscodingUrl`'s bitrates, agree.
-
-### Bitrate of converted video
-
-Converted video keeps about its source's bitrate, as in Jellyfin, up to what the bitrate limit leaves it:
-
-- The source's bitrate, for the share of its picture the conversion keeps: a 4K source converted to 1080p keeps a quarter of it.
-- More for a codec that needs more bits: H.264 gets 1/0.6 times (about 1.67 times) the bitrate of an HEVC or VP9 source, and twice an AV1 source's. HEVC gets as much as an H.264 source. Nothing is added from 30 Mb/s.
-- More for 10-bit video, which converted video turns into 8 bits: 5 % more above 12 Mb/s, up to 50 % more at 4 Mb/s and below.
-- More for a low bitrate: up to two and a half times below 3 Mb/s, so that a small source loses less to a second encoding.
-- A source whose bitrate is not known gets the usual bitrate of its height: 40 Mb/s for 4K, 20 for 1440p, 10 for 1080p, 5 for 720p, 3 for 540p, 2 for 480p and 1 for 360p.
-
-A 15 Mb/s 10-bit HEVC movie in 1080p thus converts to H.264 at 26 Mb/s with no limit, and at 9.6 Mb/s within 10 Mb/s with its audio converted to stereo. The user's quality group, **Maximum quality of converted video** and the app's profile lower the bitrate with the picture's size.
-
-**Peaks:** the encoder lets the video peak at one and a half times its bitrate, over a buffer of two seconds of it. Under the app's or the user's limit, the peak stays within what the limit leaves once the audio sent is taken off, so that video and audio together never go above the limit: where the limit sets the bitrate, as with 10 Mb/s above, the video peaks at its bitrate. Within 3 Mb/s, 720p H.264 aims for 2.6 Mb/s and peaks at 2.6 Mb/s, with 384 kb/s of audio. With **H.264 quality** or **HEVC quality** set, the encoder aims for that quality, and peaks as much. The master playlist's `BANDWIDTH` is that peak with the audio sent, counted as above, and its `AVERAGE-BANDWIDTH` the video's bitrate with that audio: within 3 Mb/s, both are 3000000.
-
-**Cost:** a higher bitrate takes more bandwidth, and more of the processor without a GPU. In Auto on the local network, jellyfin-web asks for at least 140 Mb/s, so its conversions get about the source's bitrate. To keep them smaller, set a **Maximum quality** for the user, or a quality in the app.
-
-### Audio bitrate
-
-Converted audio gets Jellyfin's bitrates, with **Audio bitrate per channel in kb/s** at 0: 128 kb/s in mono, 384 kb/s from stereo to five channels, 640 kb/s in 5.1. Under a low bitrate limit, it gets at most its share of the limit, as in Jellyfin: 128 kb/s within 640 kb/s, 384 kb/s within 2 Mb/s, 448 kb/s within 3 Mb/s, and 640 kb/s above. A number in the setting gives that much per channel, whatever the limit.
-
-**Copied audio under a limit:** when the video is converted under the app's or the user's limit, a track the app takes is copied only when its bitrate is within that share: 448 kb/s within 3 Mb/s, 1.536 Mb/s within 10 Mb/s, up to 7.168 Mb/s above 20 Mb/s. A heavier track is converted, to a lossy codec the app takes, at the bitrates above, with as many channels as the app takes, so that it does not leave the video too little. Within 3 Mb/s, a FLAC 5.1 track, counted at 2.88 Mb/s (480 kb/s a channel when it states no bitrate), becomes AAC 5.1 at 448 kb/s and leaves the video 2.55 Mb/s, where it left it the 300 kb/s floor; an AC-3 5.1 track at 448 kb/s is still copied. With no limit, and when the video is copied, which happens only when the whole file fits the limit, the track is copied as before. A track whose bitrate is not known at all is copied. Audio converted under a limit goes to a lossy codec when the app takes one, even when it lists FLAC first.
-
-**Compared with Jellyfin**
-
-- Jellyfin keeps the source's whole bitrate when the picture is made smaller. Polyfin keeps the share of it the smaller picture is, so that a 4K source converted to 1080p does not get the bitrate of 4K.
-- With no limit at all, Jellyfin's encoder aims for no bitrate. Its apps always send one: jellyfin-web asks for at least 140 Mb/s on the local network, which gives what Polyfin gives with no limit.
-- Jellyfin's encoders peak at the bitrate they aim for, whatever the limit (`-maxrate` equal to the bitrate, VideoToolbox without one, QSV one bit per second above), over a buffer of twice the bitrate. Polyfin does the same where a limit sets the bitrate, and peaks at one and a half times the bitrate otherwise, within the limit: a conversion well below the limit, as on the local network, keeps room for its hardest scenes.
-- Jellyfin counts 384 kb/s for stereo AAC in its `TranscodingUrl`, but its encoder makes 256 kb/s. Polyfin sends what it counts.
-- When the audio is copied, Jellyfin takes off the limit at most its share of the limit for audio (1.5 Mb/s within 10 Mb/s), and Polyfin the track's own bitrate, which is within that share. A copied track whose bitrate is not known counts the same in both.
-- Jellyfin decides whether to copy a track when the encoding starts: its encoder refuses to copy one whose bitrate is above the audio bitrate it counts, that share at most (`EncodingHelper.GetAudioStreamCopyFailureReasons`), and its PlaybackInfo already plans to convert the audio when the file is above the limit (`StreamBuilder.BuildStreamVideoItem`). Polyfin decides it in PlaybackInfo, by the same share, when the video is converted under a limit. A file whose video is copied fits the limit whole, so its track is copied even above the share, where Jellyfin would convert it.
-- Jellyfin's master playlist writes, as both `BANDWIDTH` and `AVERAGE-BANDWIDTH`, the bitrate its encoder aims for with the audio bitrate it counts: for a copied track, the request's audio bitrate capped by its channels (256 kb/s in stereo), whatever the track's own. Polyfin writes the video's peak and its average apart, each with the audio actually sent. Jellyfin's lower qualities, offered only when an app asks, are the first less 50 kb/s to 2 Mb/s, then twice that; Polyfin's are the steps of its ladder.
+How large converted video is, the bitrate of its video and audio, and what an app's profile allows are on [Quality of converted video](conversion-quality.md).
 
 ## Adaptive quality
 
@@ -289,251 +196,160 @@ Converted audio gets Jellyfin's bitrates, with **Audio bitrate per channel in kb
 
 | Choice | Lower qualities go to |
 |---|---|
-| **Off** (default) | No app. Converted video has one quality, the one Polyfin picks (see [Size of converted video](#size-of-converted-video)). |
+| **Off** (default) | No app. Converted video has one quality, the one Polyfin picks (see [Size of converted video](conversion-quality.md#size-of-converted-video)). |
 | **Outside the local network** | Apps outside the local network |
 | **Always** | Every app |
 
 The local network is judged as for password reset PINs: loopback, private and link-local addresses. Behind a reverse proxy, add the proxy to [Known proxies](reverse-proxy.md#known-proxies), or every app looks local.
 
-- **Qualities:** the first is the one Polyfin picks, at about the source's bitrate (see [Bitrate of converted video](#bitrate-of-converted-video)). After it come up to two lower steps of the ladder (2160p, 1440p, 1080p, 720p, 540p, 480p, 360p), each the tallest whose usual bitrate is at most half that of the quality above, at that bitrate. 1080p at 26 Mb/s or at 10 Mb/s adds 720p at 5 Mb/s and 480p at 2 Mb/s; 720p at 5 Mb/s adds 480p and 360p. Nothing goes below 360p, so a 360p conversion keeps one quality. Each keeps the first's codec, encoder, tone mapping, frame rate, audio and subtitles, at its own size and bitrate, and peaks at one and a half times that bitrate, below the first quality's peak and so within the limit.
-- **Only converted video:** video copied without conversion keeps one quality. A converted quality beside a copy would turn a playback that costs nothing into a conversion when the network is at its worst, which **Video conversions at once** could refuse mid-play, and would mix codecs, and HDR with SDR, in one playlist. Live TV and music keep one quality too.
-- **Cost:** a lower quality is converted only once the app asks for one of its segments, by an FFmpeg of its own, from that segment; the quality the app asks for last runs as with one quality, preparing **Seconds prepared ahead**. While an app switches, as jellyfin-web's player does when it measures each quality, the qualities it asked for in the last 10 seconds keep converting, each with one FFmpeg, so that switching back does not start over. Another quality the app has not asked for in 10 seconds stops: the extra cost of switching lasts only that long. The segments already made stay until the playback ends. All the qualities count as one playback toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)).
-- **Home:** a playback's **Details** show the **Quality played** among those offered, and the **Smaller than the source** row says when the app stepped down from the first.
+- **Qualities:** the first is the one Polyfin picks, at about the source's bitrate (see [Bitrate of converted video](conversion-quality.md#bitrate-of-converted-video)).
+  - Up to two lower steps of the ladder come after it: 2160p, 1440p, 1080p, 720p, 540p, 480p, 360p.
+  - Each is the tallest whose usual bitrate is at most half that of the quality above, at that bitrate.
+  - 1080p at 26 Mb/s or at 10 Mb/s adds 720p at 5 Mb/s and 480p at 2 Mb/s. 720p at 5 Mb/s adds 480p and 360p.
+  - Nothing goes below 360p, so a 360p conversion keeps one quality.
+  - Each keeps the first's codec, encoder, tone mapping, frame rate, audio and subtitles, at its own size and bitrate. It peaks at one and a half times that bitrate, below the first quality's peak, and so within the limit.
+- **Only converted video:** video copied without conversion keeps one quality. Live TV and music keep one quality too. A converted quality beside a copy would cause three problems:
+  - a playback that costs nothing would turn into a conversion when the network is at its worst;
+  - **Video conversions at once** could refuse it mid-play;
+  - one playlist would mix codecs, and HDR with SDR.
+- **Cost:** a lower quality is converted only once the app asks for one of its segments, by an FFmpeg of its own, from that segment.
+  - The quality the app asks for last runs as with one quality, preparing **Seconds prepared ahead**.
+  - While an app switches, as jellyfin-web's player does when it measures each quality, the qualities it asked for in the last 10 seconds keep converting. Each has one FFmpeg, so switching back does not start over.
+  - Another quality the app has not asked for in 10 seconds stops: the extra cost of switching lasts only that long.
+  - The segments already made stay until the playback ends.
+  - All the qualities count as one playback toward **Video conversions at once** (see [Video conversions at once](#video-conversions-at-once)).
+- **Home:** a playback's **Details** show the **Quality played** among those offered. The **Smaller than the source** row says when the app stepped down from the first.
 
-Apps that do not switch play the first quality, as with the setting off. jellyfin-web plays HLS through hls.js, which picks among the qualities itself; Safari and iOS use their own HLS player, which does too, and Jellyfin Android TV's player adapts to the bandwidth.
+Apps that do not switch play the first quality, as with the setting off. Apps that do:
+
+- jellyfin-web plays HLS through hls.js, which picks among the qualities itself;
+- Safari and iOS use their own HLS player, which does too;
+- Jellyfin Android TV's player adapts to the bandwidth.
 
 **Compared with Jellyfin**
 
 - Jellyfin adds two lower-bitrate qualities only when the app asks with `EnableAdaptiveBitrateStreaming`, off by default, and never on the local network. Polyfin ignores that parameter and follows the setting.
 
-<details>
-<summary>For app developers</summary>
-
-- The master playlist lists the first quality first, then the lower ones, each with its own `BANDWIDTH` (its video's peak with the audio sent), `AVERAGE-BANDWIDTH` (its video's bitrate with the audio sent), `RESOLUTION` and `CODECS`, and says `#EXT-X-INDEPENDENT-SEGMENTS`. Every quality is cut on the same plan, with a keyframe forced at each segment's start, so segment n covers the same time in each, and an app may switch at any segment.
-- The first quality's media playlist is `main.m3u8`, its segments under `hls1/main/`, as with one quality. The lower ones' are `hls1/main1/main.m3u8` and `hls1/main2/main.m3u8`, their segments beside them under `hls1/main1/` and `hls1/main2/`, in the same play session and with the same query.
-- Asking for one quality never stops another: an app may ask for the same segment of two qualities at once, and gets both.
-
-</details>
+API details: [Adaptive quality playlists for apps](jellyfin-api.md#adaptive-quality-playlists-for-apps).
 
 ## Turning conversion and downloads on or off
 
-The server has one switch, **Conversion (transcoding)** under **Settings › Conversion (transcoding)**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or repackaged into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app, as a recording converted to HEVC on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)). Picture subtitles the app cannot show are left out, but for their text copies (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
+The server has one switch, **Conversion (transcoding)**, in **Settings › Conversion (transcoding) › General**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in.
 
-On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Conversion needs both the server's switch and the user's permission; downloads need the user's permission only. **Turn off downloads for everyone**, on the **Users** page, takes it away from every user and every user group at once, also in the apps already signed in. A user group can hold both permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
+- Apps play files as they are, or repackaged into HLS with their tracks copied.
+- Polyfin picks the next version that plays that way.
+- A title with no version that plays that way on an app does not start on that app. An example is a recording converted to HEVC, on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)).
+- Picture subtitles the app cannot show are left out, except their text copies (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
+
+Each user also has two permissions, in the **Access** section of their page under **Users**, both on by default:
+
+| Permission | Needed for |
+|---|---|
+| **Can use conversion (transcoding)** | Conversion, together with the server's switch |
+| **Can download** | Downloads, on its own |
+
+- **Turn off downloads for everyone**, on the **Users** page, takes downloads away from every user and every user group at once. It also applies in the apps already signed in.
+- A user group can hold both permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
 
 **Compared with Jellyfin**
 
 - The per-user permissions are on by default, as in Jellyfin.
 - A title that cannot play without conversion fails as Jellyfin's `NoCompatibleStream`.
 
-<details>
-<summary>For app developers</summary>
+API details: [Conversion permissions for apps](jellyfin-api.md#conversion-permissions-for-apps).
 
-- With conversion off, PlaybackInfo picks the next version that plays without conversion.
-- Without the user's **Can download** permission, `/Items/{id}/Download` answers 403.
-- Administrators' Jellyfin apps set the same permissions through the user policy (`EnableVideoPlaybackTranscoding`, `EnableAudioPlaybackTranscoding`, `EnableContentDownloading`), where video and audio conversion can be allowed separately.
-- The policy shows the user's own permissions, whatever the server's switches.
+## Video conversions at once
 
-</details>
+**Video conversions at once (0 = no limit)**, in **Settings › Conversion (transcoding) › General**, caps the playbacks whose video the server converts. It is 0, no limit, by default, and goes up to 32.
+
+- **What counts:** conversions of files and Live TV together, burning subtitles in included.
+- **Converted downloads:** those whose video is converted count from their start to their end (see [Converted downloads](#converted-downloads)). Each counts on its own, even next to the user's playback of the same title, as it runs a conversion of its own.
+- **Live TV:** it keeps its own caps on top, 4 channels per user and 16 for the server. See [Live TV](live-tv.md).
+- **One playback:** what a user plays of a version, from its first converted segment until the app stops it or asks for nothing for 3 minutes (1 minute for Live TV). Its next segments, its seeks, and the new play session apps open to switch tracks never count again.
+- **Several qualities:** the lower qualities of a playback with **Several qualities when converting** count with it, as one playback. An app stepping down at the cap is never refused. While an app switches, the qualities it asked for in the last 10 seconds keep converting, so that switching back does not start over. That costs more of the machine for those seconds only, never another place under the cap. See [Adaptive quality](#adaptive-quality).
+- **Kept video:** with **Keep the converted video when the audio track changes**, a playback whose session stopped keeps its converted video 30 seconds, for the next session to take over. It counts as one playback meanwhile, then with that session once it does. See [Changing the audio track](#changing-the-audio-track).
+- **Recordings:** a recording converted to HEVC in the background counts as one conversion while it runs. It starts only below the cap, and waits while playbacks fill it. See [Smaller recordings](live-tv.md#smaller-recordings).
+- **At the cap:** Polyfin plans no new video conversion, as when conversion is off. It picks the next version that plays without one, or else reports that no version is compatible.
+
+**Compared with Jellyfin**
+
+- Jellyfin has no such cap. Its nearest, a tuner's stream limit, fails with a `500`, which apps take the same way, as a server error.
+
+API details: [Conversion cap answers for apps](jellyfin-api.md#conversion-cap-answers-for-apps).
 
 ## Converted downloads
 
-Apps that keep titles for offline viewing download a version's file as it is, unless **Converted downloads**, under **Settings › Conversion (transcoding)**, is on. It is off by default.
+Apps that keep titles for offline viewing download a version's file as it is. **Converted downloads**, in **Settings › Conversion (transcoding) › General**, changes that. It is off by default.
 
-With it on, an app that asks for a smaller copy, as Streamyfin's download sheet does with the quality the user picks, gets one:
+With it on, an app that asks for a smaller copy gets one, as Streamyfin's download sheet does with the quality the user picks:
 
-- **Video:** copied when the app plays it and it fits the quality picked, else converted, within the same limits as any converted video (see [Size of converted video](#size-of-converted-video)): the quality picked, the user's **Maximum quality** and quality group, and **Maximum quality of converted video**. A version taller than the user's quality group downloads converted down to it, where its file would be refused.
-- **Audio:** copied when the app takes its codec, and, when the video is converted, when it fits the audio's share of the quality picked (see [Audio bitrate](#audio-bitrate)); else converted to one it takes.
-- **Subtitles:** a picture subtitle the app chose is burned into the video; text subtitles stay files the app saves beside it (see [Subtitles](subtitles.md)).
-- **Made on the fly:** FFmpeg makes the copy as the app downloads it, at the app's pace, and Polyfin keeps nothing on disk. The file's size is only known at its end, so an interrupted download starts again from the beginning.
-- **Permissions:** the user needs **Can download**, and, when the video or the audio is converted, **Can use conversion (transcoding)** with the server's **Conversion (transcoding)** switch on, as for a playback. Without them, the app downloads the file as it is, if the user may download.
-- **Cost:** while it runs, a converted download counts toward **Video conversions at once** when it converts the video, on its own even next to the user's playback of the same title, and as one of the user's **Playbacks at once** on its device (see [Playback](playback.md#video-conversions-at-once)). At either limit, no converted download is planned, as no conversion is for a playback; one that starts past the cap anyway, planned at the same time as another, is refused with a `503`.
-- **Home:** a converted download shows in the admin app's **Now playing** with a "Downloading" label, its bar telling how far the copy is made.
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Converted downloads** | **Settings › Conversion (transcoding)** | Off | Sends apps that ask for it a copy of a title copied or converted to the quality picked, rather than its file. |
+- **Video:** copied when the app plays it and it fits the quality picked, else converted.
+  - It stays within the same limits as any converted video (see [Size of converted video](conversion-quality.md#size-of-converted-video)): the quality picked, the user's **Maximum quality** and quality group, and **Maximum quality of converted video**.
+  - A version taller than the user's quality group downloads converted down to it, where its file would be refused.
+- **Audio:** copied when the app takes its codec and, when the video is converted, when it fits the audio's share of the quality picked (see [Audio bitrate](conversion-quality.md#audio-bitrate)). Else it is converted to one the app takes.
+- **Subtitles:** a picture subtitle the app chose is burned into the video. Text subtitles stay files the app saves beside it (see [Subtitles](subtitles.md)).
+- **Made on the fly:** FFmpeg makes the copy as the app downloads it, at the app's pace, and Polyfin keeps nothing on disk. The file's size is known only at its end, so an interrupted download starts again from the beginning.
+- **Permissions:** the user needs **Can download**. When the video or the audio is converted, they also need **Can use conversion (transcoding)**, with the server's **Conversion (transcoding)** switch on, as for a playback. Without them, the app downloads the file as it is, if the user may download.
+- **Cost:** while it runs, a converted download counts toward **Video conversions at once** when it converts the video (see [Video conversions at once](#video-conversions-at-once)).
+  - It counts on its own, even next to the user's playback of the same title.
+  - It also counts as one of the user's **Playbacks at once** on its device.
+  - At either limit, no converted download is planned, as no conversion is for a playback.
+  - One that starts past the cap anyway, planned at the same time as another, is refused with a `503`.
+- **Home:** a converted download shows in the admin app's **Now playing** with a "Downloading" label. Its bar tells how far the copy is made.
 
 **Compared with Jellyfin**
 
 - Jellyfin gives such apps the same kind of `TranscodingUrl`, with no setting to turn it off.
 - Jellyfin does not count downloads toward a user's playbacks, and has no quality groups.
 
-<details>
-<summary>For app developers</summary>
-
-- A device profile whose video `TranscodingProfile` has `Protocol` `http` and `Container` `mp4` or `ts` gets, when the version does not direct play, a `TranscodingUrl` of the form `/videos/{id}/stream.mp4?…`, with `TranscodingSubProtocol` `http`, as from Jellyfin. Polyfin sends one fragmented MP4 file, or MPEG-TS for `ts`, as FFmpeg writes it, without `Content-Length` and without byte ranges: a request with a `Range` header gets the whole file (200).
-- The Jellyfin iOS app's native player never gets one: its plays go over HLS (see [Two players in the Jellyfin iOS app](#two-players-in-the-jellyfin-ios-app)).
-- `startTimeTicks` starts the copy later; the file then starts at zero.
-- The `TranscodingUrl` stands for the user PlaybackInfo answered, through its play session. With another user's token, it is refused (403).
-- `DELETE /Videos/ActiveEncodings?playSessionId=` stops it.
-- `/Items/{id}/Download` and `/Videos/{id}/stream?static=true` keep serving the file as it is, under the quality group rule. So does a `TranscodingUrl` kept from before the setting was turned off.
-
-</details>
-
-## GPUs
-
-### GPU methods per system
-
-Each system offers only its own GPU methods, under **Graphics card used to convert** and in `POLYFIN_HWACCEL`, in the order **Automatic** tries them:
-
-| System | Methods | Decoding | Encoders |
-| --- | --- | --- | --- |
-| Linux | NVIDIA (`nvenc`), then AMD or Intel (`vaapi`) | CUDA; VAAPI | `h264_nvenc`, `hevc_nvenc`; `h264_vaapi`, `hevc_vaapi` |
-| macOS | VideoToolbox (`videotoolbox`) | VideoToolbox | `h264_videotoolbox`, `hevc_videotoolbox` |
-| Windows | NVIDIA (`nvenc`), then Intel (`qsv`), then AMD (`amf`) | CUDA; Direct3D 11 (D3D11VA) for Intel and AMD | `h264_nvenc`, `hevc_nvenc`; `h264_qsv`, `hevc_qsv`; `h264_amf`, `hevc_amf` |
-
-On Windows, Intel and AMD GPUs are opened through the Direct3D 11 adapter of their vendor, so a computer with two GPUs uses the right one for each method. A system without a GPU that encodes, such as a Windows computer without a GPU, converts on the processor, as on Linux.
-
-A backup restored on another system keeps its choice of method; when the new system does not offer it, it reads as **Automatic**.
-
-### Detection
-
-At startup Polyfin encodes a few frames with each encoder of the system's methods, in the order above, and logs the one it converts video on. It skips this when **Settings › Conversion (transcoding)** chooses a GPU. For VAAPI, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
-
-A method whose encoders all fail is logged with FFmpeg's reason (`A GPU method does not encode`, with the method, the encoder and the end of what FFmpeg wrote), at the level of the line that tells what video is converted on: information under **Automatic**, a warning when the settings choose that method.
-
-It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
-
-On arm64, VAAPI is tried only where libva is installed. The arm64 image has no libva, nor the AMD and Intel drivers VAAPI uses, so there VAAPI is not tried, and the log says `VAAPI is not offered here: libva is not installed`. On amd64, and on an arm64 system with libva, a failure gives FFmpeg's own reason.
-
-### Which FFmpeg runs
-
-- **Polyfin Desktop:** it always runs the FFmpeg it downloads, or the one for older NVIDIA drivers (see [NVIDIA driver](#nvidia-driver)), and cannot be given another: `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` in the environment it starts from are left out (see [Configuration](configuration.md)).
-- **`polyfin serve` and Docker:** they run the FFmpeg and ffprobe that `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` name, FFmpeg 9.0 or later. Polyfin does not check the version at startup: an older FFmpeg, such as Jellyfin's 8.1, starts, and may fail later on what it lacks.
-- **When it does not matter:** when the video is copied, as for audio converted alone (see [Dolby audio in browsers](#dolby-audio-in-browsers)), no video encoder runs. A conversion on a GPU uses the GPU's own encoder, such as NVENC, whichever FFmpeg drives it.
-
-### NVIDIA driver
-
-The FFmpeg 9.0 of the Docker image and of Polyfin Desktop is built for NVENC's API 13.1, which needs NVIDIA driver 610.00 or newer, on Linux and on Windows. In Docker, this is the host's driver. NVIDIA's R580 drivers are the last for Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series, the Quadro M and P series and the Titan V: they never reach 610.
-
-For drivers from 570 to 609, R570 and R580 among them, Polyfin uses a second FFmpeg: the same FFmpeg 9.0, built for NVENC's API 13.0, which takes drivers from 570. API 13.1 adds nothing Polyfin uses.
-
-- **When:** NVENC's test encode at startup fails with `Driver does not support the required nvenc API version. Required: 13.1 Found: 13.0`, as it does with such a driver.
-- **Download:** Polyfin downloads that FFmpeg into the data folder, in `tools/nvenc13` (64 MB on Linux amd64, 50 MB on arm64, 86 MB on Windows), checks it against the checksum pinned in Polyfin, and keeps it. Video is converted on the processor meanwhile, a few seconds to a minute.
-- **Use:** NVENC is then tested again with it. When it encodes, Polyfin runs that FFmpeg for every conversion while the NVIDIA card is the one chosen, and its own FFmpeg otherwise.
-- **What tells it:** **Detected on this server**, in **Settings › Conversion (transcoding) › Graphics card**, and **System › Health › Transcoder** name the FFmpeg used: **The one Polyfin ships** or **For NVIDIA drivers older than 610**.
-- **Download failed:** **System › Health** warns, with why, and Polyfin tries again at its next start, or when the conversion settings are saved. A server without internet keeps converting on the processor until it has downloaded it once.
-- **NVENC fails with it too:** **System › Health** warns, with FFmpeg's reason.
-- **Drivers older than 570:** nothing is downloaded, and **System › Health** warns that the driver is older than version 570.0. Update the driver to use the card.
-- **Other systems:** this FFmpeg exists for Linux on amd64 and arm64 and for Windows on x64, where NVIDIA's drivers run NVENC.
-
-Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones get drivers from 610 on, and convert with the FFmpeg Polyfin ships once their driver is updated.
-
-**License and source code:** this FFmpeg is free software under the GNU General Public License, version 3, a separate program from Polyfin. Its license is `LICENSE.txt` in its folder. It is built by `scripts/ffmpeg-nvenc13.sh` with the workflow `ffmpeg-nvenc13`, and published with its complete source code as the release `ffmpeg-nvenc13.0-autobuild-2026-09-30-13-08` of Polyfin's repository (see [`third_party/ffmpeg-nvenc13`](../third_party/ffmpeg-nvenc13)).
-
-**Compared with Jellyfin**
-
-- Jellyfin ships one FFmpeg, whose NVENC needs the driver its NVIDIA headers ask for. Polyfin adds the second FFmpeg so that the last drivers of older cards still convert on the card.
-
-### Frames on the GPU
-
-A GPU's decoded frames can stay in its memory until it encodes them, or come back to memory for the filters and go to the GPU again. Depending on the card and its driver, either may be faster, so Polyfin measures both ways at startup and uses the faster one for each kind of conversion:
-
-- **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel through VAAPI, `scale_vt` with VideoToolbox, `scale_qsv` on Intel through QSV, `vpp_amf` on AMD through AMF), and deinterlaced there with the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`, `yadif_videotoolbox`, or `vpp_qsv`'s deinterlacer; AMF has none). A deinterlacer is used only once it deinterlaced a short sample on the GPU at startup: one that fails there, or makes FFmpeg crash, leaves interlaced video to the processor. On Windows, Intel and AMD GPUs decode into Direct3D 11 frames, which QSV maps to its own.
-- **HDR video on NVIDIA:** kept on the GPU, it is decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
-- **HDR video on Intel and VideoToolbox:** always kept on the GPU, which deinterlaces it, scales it and tone maps it there, with `scale_vaapi` and `tonemap_vaapi` through VAAPI, `vpp_qsv` through QSV, `scale_vt` with VideoToolbox, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. There is no other way on the GPU to choose from, but its speed is measured (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)).
-
-Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The GPU's HDR tone mapping, on every GPU that tone maps, and the processor's tone mapping are measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
-
-Frames always go through memory for burned-in subtitles (except on Intel and VideoToolbox when they tone map), for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
-
-### Giving the container an NVIDIA GPU
-
-- Docker: `--runtime=nvidia`. Compose: `runtime: nvidia`.
-- This needs the NVIDIA Container Toolkit, or Unraid's Nvidia Driver plugin.
-- The host's NVIDIA driver must be 610.00 or newer for the image's FFmpeg; from 570 to 609, Polyfin downloads an FFmpeg built for it (see [NVIDIA driver](#nvidia-driver)).
-- HDR is also tone mapped on the NVIDIA GPU, through Vulkan. This needs `graphics` among `NVIDIA_DRIVER_CAPABILITIES`; the image sets it.
-
-### Giving the container an AMD or Intel GPU
-
-- Docker: `--device /dev/dri`. Compose: `devices`.
-- This works with the amd64 image only: the arm64 image has no VAAPI.
-
-### Permissions
-
-The container runs as user 65532. When the render nodes in `/dev/dri` are not open to every user, add the group that owns them with `--group-add`.
-
-## HDR and tone mapping
-
-When HDR video is converted to SDR, Polyfin tone maps it:
-
-- **On an NVIDIA GPU:** with libplacebo, up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when that is faster (see [Frames on the GPU](#frames-on-the-gpu)).
-- **On an Intel GPU, through VAAPI on Linux or QSV on Windows:** with `tonemap_vaapi` or `vpp_qsv`, up to 4K, without Dolby Vision profile 5. It takes only HDR10 videos whose frames carry their mastering display information (SMPTE ST 2086), which both filters need: HLG, and HDR10 files without that information, go to the processor.
-- **With VideoToolbox, on macOS:** with `scale_vt`, which converts the colors to BT.709 through the system's own tone mapping, up to 4K: HDR10 and HLG, without Dolby Vision profile 5.
-- **Elsewhere:** on the processor, up to **Maximum quality of HDR converted by the processor**, without Dolby Vision profile 5. With **Automatic**, Polyfin measures the processor at startup, in the background: it converts 2 seconds of generated 4K HDR10 to 1080p the way conversions run on the server, decoded and encoded on the GPU when there is one. 1080p when that runs at 1.5 times real time or faster, else 720p, which also applies until the measurement ends or when it fails. The log shows the speed and the height chosen (`Timed the processor's HDR tone mapping`).
-
-AMD GPUs never tone map. Their Linux driver failed each way Polyfin tried to do it on the GPU with FFmpeg: frames handed to libplacebo from memory crashed the driver, VAAPI frames cannot be passed to Vulkan, and Vulkan's HEVC decoding froze the card's video decoder until the kernel reset it. On Windows, FFmpeg's AMF filter converts colors but does not tone map. Their HDR is tone mapped on the processor.
-
-An Intel GPU, or VideoToolbox, tone maps only once a short HDR10 sample converted on it at startup; the check needs FFmpeg's x265 encoder to make that sample. Whether an HDR10 file carries its mastering display information comes from its container when Polyfin analyzes it. Otherwise, the first time an Intel GPU would tone map the file, Polyfin reads its first frame once and keeps the answer. Other GPUs and the processor never need it.
-
-If HDR looks wrong when the GPU tone maps it, turn off **Tone map HDR on the graphics card**: the processor then tone maps it, on every GPU alike. You can also turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
-
-### A GPU too slow for HDR
-
-Tone mapping costs a GPU more than scaling SDR, and a small or older card can fall behind playback: an NVIDIA Quadro P2000 tone maps 4K HDR10 to 1080p at about half real time. So Polyfin also times the HDR tone mapping of each GPU that does it, at startup, in the background, the way conversions run: 2 seconds of generated 4K HDR10 converted to 1080p (from an x265 sample carrying its mastering display on Intel and VideoToolbox), then to 720p when that is slower than real time. A GPU keeping up, or not timed yet, tone maps HDR as above. A GPU slower than real time hands HDR, once the processor is timed too:
-
-- To the processor, when it keeps up, 1x real time or faster: up to its own cap, **Maximum quality of HDR converted by the processor**. The GPU still decodes and encodes the video.
-- Else to the GPU up to 720p, when it keeps up there.
-- Else to the faster of the two, the GPU up to 720p. HDR titles may then pause while they convert.
-
-Dolby Vision profile 5, which only NVIDIA GPUs tone map, and all HDR when FFmpeg has no tone mapping filters for the processor, stay on the GPU, up to 720p. **Tone map HDR on the graphics card** turned off still gives every HDR title to the processor.
-
-Where HDR goes, and why:
-
-- The log shows each timing, `Timed the GPU's conversion chains` with `kind=HDR` on NVIDIA, `Timed the GPU's HDR tone mapping` on Intel and VideoToolbox, `Timed the GPU's HDR tone mapping at a lower height` and `Timed the processor's HDR tone mapping`, then the choice: `Chose where HDR is tone mapped`, with `tone_mapping=gpu` or `processor`, the GPU's `height`, the `reason` (`keepsUp`, `notTimed`, `processorFaster`, `lowerHeight` or `noneKeepsUp`) and the speeds.
-- With **Detailed log (to diagnose a problem)** on, each conversion's `Started a remux` line has `tone_mapping=gpu` or `processor` for HDR, and `tone_mapping_reason` when the GPU does not tone map it at full height: `slow_gpu` (with the speeds), `turned_off` or `unsupported`.
-- **Detected on this server**, in **Settings › Conversion (transcoding) › Graphics card**, and **System › Health › Transcoder** show **HDR titles**: where they are converted, and why, with the speeds.
-- On Home, a playback's **Details** say "720p at most: the graphics card converts HDR in time only up to there" when the GPU's lower height set the size.
-
-**Compared with Jellyfin**
-
-- Jellyfin tone maps on the GPU whenever its hardware tone mapping is on and the GPU takes the video (`IsHwTonemapAvailable` in `MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs`, L359-L391 at v12.4), however fast the GPU is. Polyfin times the GPU and the processor, and gives HDR to the one that keeps up.
+API details: [Converted download streams for apps](jellyfin-api.md#converted-download-streams-for-apps).
 
 ## HLS segments
 
-Repackaged and converted plays of files are cut into HLS segments on the source's own keyframes:
+Repackaged and converted plays of files are cut into HLS segments on the source's own keyframes.
 
-- The first segment ends on the first keyframe at least 2 seconds in, and each next one on the first keyframe at least 4 seconds after its start. A file with a keyframe every 2 seconds plays its first segment after 2 seconds of picture; one with a keyframe every 10 seconds gets 10-second segments.
-- An MPEG-TS file of a local folder or a network share (`.ts`, `.m2ts`, `.mts`, `.m2t`, `.tp`, `.trp`) has no keyframe index either: Polyfin reads its keyframes once, with ffprobe reading the whole file, as Jellyfin's keyframe extraction does. It does so in the background when the title's details open, with [Prepare playback in advance](playback.md#preparing-playback-in-advance), else at the file's first play over HLS, which waits for the read 5 seconds at most: about what a recording of an hour or two takes on a local SSD. A play that comes before the read is done plays converted and cut every few seconds, and keeps that cut to its end, while the read goes on, 3 minutes at most; its version is named "(converted)" meanwhile. The keyframes are kept in the database, as a file's index is, and the next plays cut the file on them as other files are: its video is copied when the app takes its codec, a user who may not have video converted plays it, and a seek lands where asked, Polyfin starting FFmpeg a segment early as below. A file whose keyframes cannot be read within 3 minutes, or are unusable, as in a file joined from recordings whose times go back where the next one starts, plays converted and cut every few seconds, as before, and is not read again for 6 hours.
-- An addon's MPEG-TS file, a local MPEG-TS file whose keyframes could not be read, an MPEG program stream (`.mpg`, `.mpeg`, `.vob`) or an AVI file, which have no keyframe index Polyfin reads, is converted and cut the same way: 2 seconds, then every 4 seconds, even when the app takes its video, as browsers take H.264. Its segments count from its start, whatever time its first packet tells, such as an hour into a broadcast, and a seek lands where asked, however far apart its keyframes are. An AVI file's index lists its frames in decoding order, without the times they show at, which B-frames reorder: its video could not be copied with the right times even with an index. A user who may not have video converted is not offered such a file over HLS, and its version's name says so (see [Version names](playback.md#version-names)). Apps that play the file as it is, such as Android TV and Swiftfin for MPEG-TS, need no segments (see [Video files](local-folders.md#video-files)).
-- A Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it; a DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](local-folders.md#blu-ray-discs).
-- Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
-- An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good reads on from a mirror of its file, or else the play goes on from another version of the title, at the same time and with the same segment numbers, converted into what the app plays (see [Carrying a play on](playback.md#carrying-a-play-on)); when neither can, its conversion ends, and the next request answers `503` too.
-- Repackaging or conversion stops when its app stops its play session (`/Sessions/Playing/Stopped`, or `DELETE /Videos/ActiveEncodings`), and once its app has asked nothing of it for 3 minutes, as when a player stays paused; it starts again at the next request.
-- An app may play another title without stopping the one before, as an app that sends no stop does, or one that crashed and started again. As it reports the new title, the repackaging and conversions of the play sessions its device reported for the title before stop, as its stop would have stopped them, and they no longer read their source, a torrent's swarm included (see [Torrents](torrents.md#only-while-playing)). The same title played again, as for another audio track, stops nothing: the app stops what it leaves itself. Only the device's latest playback changes its title: a start, or a report of its latest play session, or of one it never reported before. A late report of a play session of the title it left, such as a progress sent before the switch that arrives after it, stops nothing. The playbacks of the user's other devices, of DLNA devices, of guests through share links and of converted downloads go on.
+- **Segment length:** the first segment ends on the first keyframe at least 2 seconds in. Each next one ends on the first keyframe at least 4 seconds after its start. A file with a keyframe every 2 seconds plays its first segment after 2 seconds of picture; one with a keyframe every 10 seconds gets 10-second segments.
+- **Local MPEG-TS files** (`.ts`, `.m2ts`, `.mts`, `.m2t`, `.tp`, `.trp`) have no keyframe index. Polyfin reads their keyframes once, in the background when the title's details open (see [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance)), else at the first play over HLS.
+  - That first play waits 5 seconds at most for the read, about what a recording of an hour or two takes on a local SSD.
+  - A play before the read is done plays converted, its version named "(converted)" meanwhile. It keeps that cut to its end, while the read goes on, 3 minutes at most.
+  - Once read, the file's video is copied when the app takes its codec, and a seek lands where asked. A user who may not have video converted then plays it too.
+  - A file whose keyframes cannot be read within 3 minutes, or are unusable, plays converted and is not read again for 6 hours.
+- **Files without an index Polyfin reads:** they are converted and cut every 2, then 4 seconds, even when the app takes their video. A seek lands where asked, however far apart their keyframes are. These are an addon's MPEG-TS file, an MPEG program stream (`.mpg`, `.mpeg`, `.vob`) or an AVI file. A user who may not have video converted is not offered such a file over HLS, and its version's name says so (see [Version names](versions.md#version-names)). Apps that play the file as it is, such as Android TV and Swiftfin for MPEG-TS, need no segments (see [Video files](naming-and-matching.md#video-files)).
+- **Discs:** a Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it. A DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](discs.md#blu-ray-discs).
+- **Prepared ahead:** Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
+- **A stalled source:** after 20 seconds without data, the app gets `503` at once rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good reads on from a mirror, or else from another version of the title (see [Carrying a play on](reading-the-sources.md#carrying-a-play-on)). When neither can, the conversion ends, and the next request answers `503` too.
+- **Stopping:** repackaging or conversion stops when the app stops its play session, or once the app has asked nothing for 3 minutes, as when a player stays paused. It starts again at the next request.
+- **Another title:** when a device starts another title without stopping the one before, the conversions of the title it left stop. They no longer read their source, a torrent's swarm included (see [Torrents](torrents.md#only-while-playing)). The same title played again, as for another audio track, stops nothing. The user's other devices, DLNA devices, guests and converted downloads go on.
 
 **Compared with Jellyfin**
 
-- Jellyfin cuts every file but a Matroska one into segments of equal length when it repackages it, FFmpeg ending each on the next keyframe, so that their lengths in the playlist are approximate ([DynamicHlsPlaylistGenerator.cs, lines 37 to 47](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.MediaEncoding.Hls/Playlist/DynamicHlsPlaylistGenerator.cs#L37-L47); [EncodingOptions.cs, line 63](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L63)), and copies the video of an MPEG-TS file or an MPEG program stream when the app takes its codec ([`DynamicHlsController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/DynamicHlsController.cs#L1853-L1866)). Polyfin's segments are exact, of the lengths its playlist gives, which, without an index, needs the video converted. So it copies the video of a local MPEG-TS file only once it has read the file's keyframes, which Jellyfin reads from the whole file only in its scheduled keyframe extraction, and does not use for MPEG-TS files ([`FfProbeKeyframeExtractor.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.MediaEncoding.Keyframes/FfProbe/FfProbeKeyframeExtractor.cs#L28-L33); [DynamicHlsPlaylistGenerator.cs, line 30](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.MediaEncoding.Hls/Playlist/DynamicHlsPlaylistGenerator.cs#L30)). An addon's MPEG-TS file is not read whole, and plays converted. Both convert the H.264 of an AVI file ([EncodingHelper.cs, lines 2630 to 2636](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2630-L2636)), and the MPEG-2 and MPEG-4 Part 2 video no browser plays.
-- Jellyfin stops repackaging or a conversion one minute after its last segment request or playback report naming its play session, and never because its device started another title: a conversion left without a stop runs on for that minute. Polyfin keeps a paused conversion 3 minutes, and stops that of a title its device left at once.
+- Jellyfin cuts files other than Matroska into segments of approximate length, and copies the video of an MPEG-TS file or an MPEG program stream when the app takes its codec ([DynamicHlsPlaylistGenerator.cs, lines 37 to 47](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.MediaEncoding.Hls/Playlist/DynamicHlsPlaylistGenerator.cs#L37-L47); [`DynamicHlsController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/DynamicHlsController.cs#L1853-L1866)). Polyfin's segments are exact, which, without an index, needs the video converted. Both convert the H.264 of an AVI file ([EncodingHelper.cs, lines 2630 to 2636](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2630-L2636)), and the MPEG-2 and MPEG-4 Part 2 video no browser plays. The full comparison is in [HLS segment cutting for apps](jellyfin-api.md#hls-segment-cutting-for-apps).
+- Jellyfin stops repackaging or a conversion one minute after its last request, and never because its device started another title. Polyfin keeps a paused conversion 3 minutes, and stops that of a title its device left at once.
 
-<details>
-<summary>For app developers</summary>
-
-- `EXT-X-TARGETDURATION` is the longest segment, rounded up.
-- After a seek, FFmpeg probes 2 MB of the file's head, which the analysis already read, rather than 5 MB; conversions burning subtitles in, files cut every few seconds and discs probe as usual.
-- After a seek in an MPEG-TS file, an MPEG program stream, an AVI file or a disc, FFmpeg starts at the previous segment's start, as its MPEG-TS and MPEG program stream readers land on the first keyframe after the time asked, and an AVI file's keyframe may show after the time it is listed at; what comes before the segment asked is left out, without being converted. A seek to the second segment reads the file from its start.
-- When FFmpeg still lands past the segment's start, as in a file with a keyframe every 10 seconds, it starts again further back: as much further back as it went past the time asked, so at least twice as far, until it lands before the segment or reads the file from its start. Each try costs an FFmpeg start; the frames read before the segment are decoded but not converted.
-- Polyfin keeps that distance with the file, in its database: the playback's later seeks, and those of the next playbacks of the same file, by any user and after a restart too, start as far back, and land where asked with one FFmpeg start. It knows a local file by its folder, path, size and modification time, so that a file that changed learns the distance again; an addon's file by its version, which follows the file by its name and size, else its link (see [Playback](playback.md)); an IPTV catch-up programme by its channel, whose programmes usually come from the same encoder; a recording by itself. A playback that needs to start further back keeps the larger distance; a shorter one never replaces it. Files FFmpeg lands in where asked, such as Matroska and MP4 files, never use it.
-
-</details>
+API details: [HLS segment cutting for apps](jellyfin-api.md#hls-segment-cutting-for-apps).
 
 ### A faster start for remote sources
 
-A play shows its first picture once its first segment is made, and a segment ends on a keyframe: from an addon's link or a torrent with a keyframe every 10 seconds, Polyfin first reads 10 seconds of the file, at its bitrate, from a host that may send it barely faster than it plays.
+A play shows its first picture once its first segment is made, and a segment ends on a keyframe. From an addon's link or a torrent with a keyframe every 10 seconds, Polyfin first reads 10 seconds of the file. It reads them at the file's bitrate, from a host that may send it barely faster than it plays.
 
-With **Start remote plays faster** under **Settings › Conversion (transcoding) › Performance**, off by default:
+**Start remote plays faster**, in **Settings › Conversion (transcoding) › Performance**, is off by default. With it on:
 
-- **Which plays:** a repackaged or converted HLS play of an addon's link or a torrent, not of a local folder's file, a recording or Live TV, whose segment where it starts lasts more than 4 seconds: at the start, or where it resumes, as PlaybackInfo's `StartTimeTicks` tells.
-- **Fast segments:** that segment is cut into 2-second segments, its last part up to 4 seconds long. They are converted quickly (x264's `ultrafast`, or the GPU's fastest preset), by bitrate, at 720p at most and 5 Mb/s at most, in the codec the app gets: the conversion's own, or the copied video's H.264 or HEVC. The first is ready once 2 seconds of the file are read and converted. The play then goes on as without the setting, copied or at full quality, from the keyframe the next segment starts on: one FFmpeg makes the fast segments, and hands over to another there.
-- **Playlist:** an `#EXT-X-DISCONTINUITY` comes before the first segment after the fast ones, and before the first fast one when the play resumes past the start. In fragmented MP4, the fast segments have their own initialization segment, `-2.mp4`, which an `#EXT-X-MAP` names after the discontinuity, `-1.mp4` naming the others'.
-- **Apps:** in MPEG-TS segments, which carry what decodes them, every app, as when a play goes on from another version (see [Carrying a play on](playback.md#carrying-a-play-on)); in fragmented MP4, jellyfin-web only, whose players load each initialization segment. Other apps in fragmented MP4 start as without the setting.
-- **Left as they were:** copied video that is HDR, 10-bit, or neither H.264 nor HEVC, which fast segments would show differently; converted video kept with **Keep the converted video when the audio track changes**, which a new session takes over with its segments; a user who may not have video converted. A setting changed applies to the next plays: a play keeps the segments its PlaybackInfo gave it.
-- **Seeks:** a seek inside a play gets no fast segments: the app loaded the playlist once, cut as it is. Apps that start a new play to change the audio track, as jellyfin-web does, get them where the new play starts.
+- **Which plays:** a repackaged or converted HLS play of an addon's link or a torrent, whose segment where it starts lasts more than 4 seconds. That is at the start, or where it resumes, as PlaybackInfo's `StartTimeTicks` tells. Local folders' files, recordings and Live TV are left out.
+- **Fast segments:** that segment is cut into 2-second segments, its last part up to 4 seconds long.
+  - They are converted quickly (x264's `ultrafast`, or the GPU's fastest preset), by bitrate, at 720p at most and 5 Mb/s at most.
+  - They are in the codec the app gets: the conversion's own, or the copied video's H.264 or HEVC.
+  - The first is ready once 2 seconds of the file are read and converted.
+  - The play then goes on as without the setting, copied or at full quality, from the keyframe the next segment starts on. One FFmpeg makes the fast segments, and hands over to another there.
+- **Apps:** in MPEG-TS segments, which carry what decodes them, every app, as when a play goes on from another version (see [Carrying a play on](reading-the-sources.md#carrying-a-play-on)). In fragmented MP4, jellyfin-web only, whose players load each initialization segment. Other apps in fragmented MP4 start as without the setting.
+- **Left as they were:**
+  - copied video that is HDR, 10-bit, or neither H.264 nor HEVC, which fast segments would show differently;
+  - converted video kept with **Keep the converted video when the audio track changes**, which a new session takes over with its segments;
+  - a user who may not have video converted.
+- **Changes:** a setting changed applies to the next plays. A play keeps the segments its PlaybackInfo gave it.
+- **Seeks:** a seek inside a play gets no fast segments, as the app loaded the playlist once. Apps that start a new play to change the audio track, as jellyfin-web does, get them where the new play starts.
 - **Conversions at once:** the fast segments of a repackaged play do not count toward **Video conversions at once**: they last a few seconds at 720p.
 
-Measured on a 1080p file of about 7 Mb/s with a keyframe every 10 seconds, from a host sending 1 MB/s per connection, from PlaybackInfo to the first segment played, median of 3 plays, each with an empty source cache:
+Measured on a 1080p file of about 7 Mb/s with a keyframe every 10 seconds, from a host sending 1 MB/s per connection. Times run from PlaybackInfo to the first segment played, median of 3 plays, each with an empty source cache:
 
 | Play | Off | On |
 |---|---|---|
@@ -546,46 +362,47 @@ Measured on a 1080p file of about 7 Mb/s with a keyframe every 10 seconds, from 
 
 - Jellyfin has no faster start: its first segment is made at full quality, as long as the others.
 
-<details>
-<summary>For app developers</summary>
-
-- A play PlaybackInfo starts with fast segments has `FastStartTicks`, where it starts, last in its `TranscodingUrl`; every request of the play cuts it the same way.
-
-</details>
+API details: [Fast start segments for apps](jellyfin-api.md#fast-start-segments-for-apps).
 
 ### Changing the audio track
 
-Apps change the audio track of a converted video by playing it again: jellyfin-web asks `PlaybackInfo` for the new track, stops the old play session with `DELETE /Videos/ActiveEncodings`, and loads the new stream from the same position; Jellyfin Android TV, Swiftfin and Streamyfin stop the player and play again too. Without the setting below, the new session converts the video again from the keyframe before the position, though the picture has not changed, and the segments already made are deleted.
+Apps change the audio track of a converted video by playing it again, from the same position. By default, the new play converts the video again from the keyframe before the position, though the picture has not changed. The segments already made are deleted.
 
-With **Keep the converted video when the audio track changes** under **Settings › Conversion (transcoding) › Performance**, off by default:
+**Keep the converted video when the audio track changes**, in **Settings › Conversion (transcoding) › Performance**, is off by default. With it on:
 
-- **Video and audio apart:** a converting FFmpeg makes the video alone, and a second FFmpeg the audio track played, copied or converted as before, cut at the same segment times. The audio's FFmpeg reads the file through the source cache, as the video's does, and makes no segment the video has not reached, nor further than **Seconds prepared ahead**. With [several qualities](#adaptive-quality), one audio FFmpeg serves them all.
-- **Joined as served:** each segment joins the video and the audio of the same times, copying both, in fragmented MP4 (one initialization segment holding both tracks) and in MPEG-TS (the audio's packets interleaved with the video's). Apps see the same endpoints, master playlist, `CODECS` and segment numbers as before.
-- **Kept video:** the converted video is known by its user, device, version, segment format and conversion (codec, size, bitrate, tone mapping, burned subtitle, quality), not by its play session or audio track. Once its play session stops, it is kept 30 seconds, its FFmpeg waiting where it was. A new play session asking for the same video takes it over, with the segments made: its track's FFmpeg starts at the segment the app asks for, the old track's stops, and the first segment after the change comes once its audio is made, without converting the picture again.
-- **Late stops:** jellyfin-web sends the old session's `DELETE` again once the new stream plays; it stops nothing the new session took over.
-- **Bounds:** one kept video per user, device and version: another quality or burned subtitle converts anew, and ends the video kept there. A play session that did not stop is never taken over, so two players of the same device each convert their own. Kept video counts once toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)). Kept video no session takes over within 30 seconds stops, and its segments are removed. Copied video (DirectStream), Live TV and [converted downloads](#converted-downloads) start again as before.
-
-**Why the audio stays inside the segments:** HLS can carry audio tracks as renditions of their own, which a player switches between without reloading the stream. Jellyfin's master playlists list subtitle renditions only, and its apps never switch audio inside a converted stream: they ask for a new one, as above. Separate audio renditions would go unused, and players that take only the main playlist's segments would play no sound. Keeping each segment whole, its audio joined as it is served, works with every app as it is.
+- **Video and audio apart:** the video and the audio track are converted separately, and joined in each segment as it is served. Apps see the same stream as before.
+- **Kept video:** once its play session stops, the converted video is kept 30 seconds. A new play session asking for the same video takes it over, with the segments made. The first segment after the change comes once its audio is made, without converting the picture again.
+- **Same video:** the video is known by its user, device, version, segment format and conversion (codec, size, bitrate, tone mapping, burned subtitle, quality), not by its audio track.
+- **Bounds:**
+  - one kept video per user, device and version: another quality or burned subtitle converts anew, and ends the video kept there;
+  - a play session that did not stop is never taken over, so two players of the same device each convert their own;
+  - kept video counts once toward **Video conversions at once** (see [Video conversions at once](#video-conversions-at-once));
+  - kept video no session takes over within 30 seconds stops, and its segments are removed;
+  - copied video (DirectStream), Live TV and [converted downloads](#converted-downloads) start again as before.
 
 **Compared with Jellyfin**
 
 - Jellyfin converts the video again whenever the audio track changes, as Polyfin does with the setting off.
 
+API details: [Audio track switching for apps](jellyfin-api.md#audio-track-switching-for-apps).
+
 ## Conversion settings
 
-**Settings › Conversion (transcoding)** also tunes how video and audio are converted, for files and Live TV alike. Recordings copy the stream, and are converted like any file when played. See [Live TV](live-tv.md).
+**Settings › Conversion (transcoding)** tunes how video and audio are converted, for files and Live TV alike. Its groups follow below in the admin app's order. A change applies to the next playback, without a restart.
 
-Finished recordings can also be converted to HEVC at night, to take less space, with **Convert finished recordings to HEVC** under **Settings › Recordings** (see [Smaller recordings](live-tv.md#smaller-recordings)). Those conversions use the **Graphics card used to convert**, the **Encoding speed**, the **HEVC quality**, 28 when it is 0, and the **Deinterlacing method** and **Double the frame rate** below, never tone mapping. Each counts as one of the **Video conversions at once**, and waits while playbacks fill them.
+**Recordings:** they copy the stream, and are converted like any file when played (see [Live TV](live-tv.md)). Finished recordings can also be converted to HEVC at night, to take less space, with **Convert finished recordings to HEVC** in **Settings › Recordings** (see [Smaller recordings](live-tv.md#smaller-recordings)). Those conversions:
 
-A change applies to the next playback, without a restart.
+- use the **Graphics card used to convert**, the **Encoding speed**, the **HEVC quality** (28 when it is 0), the **Deinterlacing method** and **Double the frame rate**;
+- never tone map;
+- count each as one of the **Video conversions at once**, and wait while playbacks fill them.
 
 ### General
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Conversion (transcoding)** | **Settings › Conversion (transcoding) › General** | On | The server's switch for every conversion. See [Turning conversion and downloads on or off](#turning-conversion-and-downloads-on-or-off). |
-| **Video conversions at once (0 = no limit)** | **Settings › Conversion (transcoding) › General** | 0 | How many playbacks may have their video converted at the same time. See [Playback](playback.md#video-conversions-at-once). |
-| **Maximum quality of converted video** | **Settings › Conversion (transcoding) › General** | **Original** | The tallest picture converted video gets. See [Size of converted video](#size-of-converted-video). |
+| **Video conversions at once (0 = no limit)** | **Settings › Conversion (transcoding) › General** | 0, no limit (up to 32) | How many playbacks may have their video converted at the same time. See [Video conversions at once](#video-conversions-at-once). |
+| **Maximum quality of converted video** | **Settings › Conversion (transcoding) › General** | **Original** (or 480p to 2160p) | The tallest picture converted video gets. See [Maximum quality of converted video](conversion-quality.md#maximum-quality-of-converted-video). |
 | **Converted downloads** | **Settings › Conversion (transcoding) › General** | Off | See [Converted downloads](#converted-downloads). |
 | **Conversion folder** | **Settings › Conversion (transcoding) › General** | Empty, `cache` in the data folder | The folder the segments of files converted or repackaged are written to, from the next start on. See [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache). |
 
@@ -595,16 +412,7 @@ A change applies to the next playback, without a restart.
 
 ### Graphics card
 
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Graphics card used to convert** | **Settings › Conversion (transcoding) › Graphics card** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic** (the first that works, in the order of [GPU methods per system](#gpu-methods-per-system)), the system's methods, or **None**, applied once saved: **NVIDIA (NVENC)** and **AMD or Intel (VAAPI)** on Linux, **VideoToolbox** on macOS, **NVIDIA (NVENC)**, **Intel (QSV)** and **AMD (AMF)** on Windows. |
-| **Graphics card for VAAPI** | **Settings › Conversion (transcoding) › Graphics card** | **Each in turn** | On Linux, with **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several GPUs could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
-| **Detected on this server** | **Settings › Conversion (transcoding) › Graphics card** | Read only | Shows the GPU chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping, with the height it tone maps up to. |
-| **Read these formats on the graphics card** | **Settings › Conversion (transcoding) › Graphics card** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
-
-- The chosen GPU is detected when you save, once per choice. Playbacks already converting go on as they started.
-- Options the hardware cannot do are disabled.
-- Formats not in the list are always tried on the GPU.
+**Graphics card used to convert**, **Graphics card for VAAPI**, **Detected on this server** and **Read these formats on the graphics card**, in **Settings › Conversion (transcoding) › Graphics card**, are described in [Graphics card settings](gpus-and-hdr.md#graphics-card-settings).
 
 <a id="video-encoding"></a>
 
@@ -612,39 +420,50 @@ A change applies to the next playback, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Encoding speed** | **Settings › Conversion (transcoding) › Video** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the encoder's own for VAAPI, VideoToolbox, QSV and AMF. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1`, VAAPI's compression levels 1 to 7, QSV's presets of the same names (`veryfast` for the two fastest), AMF's `quality`, `balanced` and `speed`, and VideoToolbox's speed priority (off from **Slow** down, on from **Fast** up). |
-| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion (transcoding) › Video** | 0 (range 1 to 51) | 0 aims for the bitrate alone. A number is a quality factor that the video's peak caps (see [Bitrate of converted video](#bitrate-of-converted-video)): CRF for x264 and x265, CQ for NVENC, QVBR's quality for the VAAPI drivers that have it, and VideoToolbox's quality, from 1 to 100, as 100 minus twice the number. Other VAAPI drivers, QSV and AMF ignore it: their quality modes leave the maximum bitrate out. Recordings converted to HEVC use it with every encoder. |
+| **Encoding speed** | **Settings › Conversion (transcoding) › Video** | **Automatic** | **Automatic** keeps Polyfin's speeds. The other choices, **Very slow (best picture)** to **Ultra fast (lightest work)**, are x264's presets, mapped to each encoder below. |
+| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion (transcoding) › Video** | 0 (range 1 to 51) | 0 aims for the bitrate alone. A number is a quality factor that the video's peak caps (see [Bitrate of converted video](conversion-quality.md#bitrate-of-converted-video)). Recordings converted to HEVC use it with every encoder. |
 | **Allow converting to HEVC** | **Settings › Conversion (transcoding) › Video** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC. |
 | **Several qualities when converting** | **Settings › Conversion (transcoding) › Video** | Off | **Off**, **Outside the local network** or **Always**: converted video also offers up to two lower qualities that apps step down to on a slow connection. See [Adaptive quality](#adaptive-quality). |
 
+How each encoder takes **Encoding speed** and the quality number:
+
+| Encoder | **Automatic** speed | Speed choices | Quality number |
+|---|---|---|---|
+| x264 and x265 | `veryfast` | x264's presets | CRF |
+| NVENC | `p4` | `p7` to `p1` | CQ |
+| VAAPI | The encoder's own | Compression levels 1 to 7 | QVBR's quality, for the drivers that have it; other drivers ignore it |
+| QSV | The encoder's own | Presets of the same names (`veryfast` for the two fastest) | Ignored |
+| AMF | The encoder's own | `quality`, `balanced` and `speed` | Ignored |
+| VideoToolbox | The encoder's own | Speed priority, off from **Slow** down, on from **Fast** up | Its quality from 1 to 100, as 100 minus twice the number |
+
+The VAAPI drivers without QVBR, QSV and AMF ignore the quality number because their quality modes leave the maximum bitrate out.
+
 ### HDR
 
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Convert HDR to SDR (tone mapping)** | **Settings › Conversion (transcoding) › HDR** | On | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
-| **Tone mapping method** | **Settings › Conversion (transcoding) › HDR** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA GPU, Hable on the processor), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA GPUs only: the processor's filter has none and uses Hable. Intel GPUs and VideoToolbox use their own curve and ignore the method. |
-| **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding) › HDR** | On | NVIDIA GPUs, Intel GPUs through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K, unless they are too slow for it (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)). Off: the processor tone maps it on every GPU, a way out when a GPU's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
-| **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding) › HDR** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding) › HDR** | 0 (the video's), or 100 to 10,000 nits | Processor only; GPUs do not take it, so it is hidden when an NVIDIA GPU tone maps, unless the GPU is too slow for HDR. |
-| **Highlight desaturation (0 = off)** | **Settings › Conversion (transcoding) › HDR** | 0 to 10 | Processor only, shown as the peak is. |
+**Convert HDR to SDR (tone mapping)**, **Tone mapping method**, **Tone map HDR on the graphics card**, **Maximum quality of HDR converted by the processor**, **Peak brightness in nits (0 = from the video)** and **Highlight desaturation (0 = off)**, in **Settings › Conversion (transcoding) › HDR**, are described in [HDR settings](gpus-and-hdr.md#hdr-settings).
 
 ### Interlaced video
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Deinterlacing method** | **Settings › Conversion (transcoding) › Interlaced video** | Yadif | Yadif or Bwdif, on the NVIDIA GPU too when it keeps the frames, and Yadif with VideoToolbox (Bwdif goes through the processor there). An AMD or Intel GPU keeping the frames uses its own deinterlacer whatever the method; AMF has none, and its interlaced video is deinterlaced on the processor. |
+| **Deinterlacing method** | **Settings › Conversion (transcoding) › Interlaced video** | Yadif | Yadif or Bwdif. See the list below for each GPU. |
 | **Double the frame rate** | **Settings › Conversion (transcoding) › Interlaced video** | Off | Makes a frame of each field of video up to 30 frames a second. |
+
+- An NVIDIA GPU keeping the frames uses the method chosen.
+- VideoToolbox uses Yadif; Bwdif goes through the processor there.
+- An AMD or Intel GPU keeping the frames uses its own deinterlacer, whatever the method.
+- AMF has none: its interlaced video is deinterlaced on the processor.
 
 ### Audio
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Mix to stereo** | **Settings › Conversion (transcoding) › Audio** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
-| **Volume when mixing to stereo** | **Settings › Conversion (transcoding) › Audio** | 2, as in Jellyfin (range 0.5 to 3) | Volume of the stereo mix, 1 changing nothing. Above 1, a limiter follows it. See [Loudness](#loudness). |
-| **Even the loudness of converted videos** | **Settings › Conversion (transcoding) › Audio** | Off | Brings the audio of the videos and channels the server converts to -16 LUFS, then limits it. Direct play, copied audio and music never change. See [Loudness](#loudness). |
-| **Dynamic range of converted Dolby audio** | **Settings › Conversion (transcoding) › Audio** | **As encoded** | **None (full range)** or **Night (quiet passages louder)**: how converted AC-3 and E-AC-3 apply the compression their tracks carry. See [Loudness](#loudness). |
+| **Mix to stereo** | **Settings › Conversion (transcoding) › Audio** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. See [Loudness](loudness.md#mixing-to-stereo). |
+| **Volume when mixing to stereo** | **Settings › Conversion (transcoding) › Audio** | 2, as in Jellyfin (range 0.5 to 3) | Volume of the stereo mix, 1 changing nothing. Above 1, a limiter follows it. See [Loudness](loudness.md#mixing-to-stereo). |
+| **Even the loudness of converted videos** | **Settings › Conversion (transcoding) › Audio** | Off | Brings the audio of the videos and channels the server converts to -16 LUFS, then limits it. Direct play, copied audio and music never change. See [Loudness](loudness.md#evening-the-loudness). |
+| **Dynamic range of converted Dolby audio** | **Settings › Conversion (transcoding) › Audio** | **As encoded** | **None (full range)** or **Night (quiet passages louder)**: how converted AC-3 and E-AC-3 apply the compression their tracks carry. See [Loudness](loudness.md#dynamic-range-of-dolby-audio). |
 | **Most audio channels** | **Settings › Conversion (transcoding) › Audio** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
-| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding) › Audio** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates: 128 kb/s in mono, 384 kb/s from stereo to five channels, 640 kb/s in 5.1, less under a low bitrate limit (see [Audio bitrate](#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
+| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding) › Audio** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates, less under a low bitrate limit (see [Audio bitrate](conversion-quality.md#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
 
 ### Performance
 
@@ -652,19 +471,37 @@ A change applies to the next playback, without a restart.
 |---|---|---|---|
 | **Processor threads per conversion (0 = automatic)** | **Settings › Conversion (transcoding) › Performance** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Seconds prepared ahead** | **Settings › Conversion (transcoding) › Performance** | 120 (range 30 to 600) | How many seconds of picture repackaging or converting a file makes past the last segment the app asked for, before it waits. |
-| **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding) › Performance** | Off | Converts the video apart from its audio, and keeps it 30 seconds once its play session stops, for a new session asking for another audio track to take over. Off, a track change converts the video again. See [Changing the audio track](#changing-the-audio-track). |
-| **Start remote plays faster** | **Settings › Conversion (transcoding) › Performance** | Off | Starts repackaged and converted plays of addon links and torrents whose first segment is long with 2-second segments converted quickly at 720p at most. See [A faster start for remote sources](#a-faster-start-for-remote-sources). |
+| **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding) › Performance** | Off | Keeps converted video 30 seconds once its play session stops, for a new session with another audio track to take over. See [Changing the audio track](#changing-the-audio-track). |
+| **Start remote plays faster** | **Settings › Conversion (transcoding) › Performance** | Off | Starts plays of addon links and torrents whose first segment is long with quick 2-second segments, at 720p at most. See [A faster start for remote sources](#a-faster-start-for-remote-sources). |
 
 **Compared with Jellyfin**
 
 - **Settings › Conversion (transcoding)** works as Jellyfin's Transcoding page does.
-- Jellyfin checks only H.264 and VC-1 under hardware decoding by default.
-- Polyfin maps encoding speeds to NVENC and VAAPI as Jellyfin does; Jellyfin sets VAAPI compression levels on Intel drivers only.
+- Polyfin maps encoding speeds to NVENC and VAAPI as Jellyfin does. Jellyfin sets VAAPI compression levels on Intel drivers only.
 - Jellyfin's quality defaults are CRF 23 (H.264) and 28 (HEVC), and only for x264 and x265.
-- **Allow converting to HEVC** matches Jellyfin's **Allow encoding in HEVC format**; with it off, Polyfin behaves as Jellyfin does.
-- Jellyfin's HDR-to-SDR conversion is off by default; its peak brightness is 100 by default.
+- **Allow converting to HEVC** matches Jellyfin's **Allow encoding in HEVC format**. With it off, Polyfin behaves as Jellyfin does.
 - **Double the frame rate** works as in Jellyfin.
 - Jellyfin's stereo mix volume is 2 by default too, without a limiter.
 - Jellyfin has no **Most audio channels**, **Audio bitrate per channel**, **Even the loudness of converted videos** or **Dynamic range of converted Dolby audio** setting.
 - **Processor threads per conversion** is Jellyfin's encoding thread count.
 - Jellyfin also throttles by seconds, but not by default.
+
+<div class="moved-sections">
+
+<a id="audio-bitrate"></a>*Audio bitrate* moved to [Quality of converted video](conversion-quality.md#audio-bitrate).
+
+<a id="bitrate-of-converted-video"></a>*Bitrate of converted video* moved to [Quality of converted video](conversion-quality.md#bitrate-of-converted-video).
+
+<a id="size-of-converted-video"></a>*Size of converted video* moved to [Quality of converted video](conversion-quality.md#size-of-converted-video).
+
+<a id="a-gpu-too-slow-for-hdr"></a>*A GPU too slow for HDR* moved to [GPUs and HDR](gpus-and-hdr.md#a-gpu-too-slow-for-hdr).
+
+<a id="gpu-methods-per-system"></a>*GPU methods per system* moved to [GPUs and HDR](gpus-and-hdr.md#gpu-methods-per-system).
+
+<a id="hdr-and-tone-mapping"></a>*HDR and tone mapping* moved to [GPUs and HDR](gpus-and-hdr.md#hdr-and-tone-mapping).
+
+<a id="nvidia-driver"></a>*NVIDIA driver* moved to [GPUs and HDR](gpus-and-hdr.md#nvidia-driver).
+
+<a id="loudness"></a>*Loudness* moved to [Loudness](loudness.md#loudness).
+
+</div>
