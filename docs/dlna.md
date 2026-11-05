@@ -41,7 +41,7 @@ Everything a device lists follows the user: their visible libraries, blocked gen
 
 ## Playing
 
-Each movie or episode offers one file: the version Polyfin would pick for the user, as for a Jellyfin app (see [Choosing a version](playback.md#choosing-a-version)), with the version rules and quality groups. Its address is signed for the user, as apps' are.
+Each movie or episode offers one file: the version Polyfin would pick for the user, as for a Jellyfin app (see [Choosing a version](versions.md#choosing-a-version)), with the version rules and quality groups. Its address is signed for the user, as apps' are.
 
 - When the device's profile takes the version's container and codecs, the file is sent as it is, and the device may jump through it with byte ranges.
 - Otherwise FFmpeg converts it to an MPEG-TS stream the profile takes, copying the video or the audio when the profile takes them. The device jumps through it with `TimeSeekRange.dlna.org`, and the conversion starts again from the time asked.
@@ -73,14 +73,4 @@ The description, control and media addresses live under `/dlna/` on Polyfin's HT
 - A text subtitle a profile does not take as a file is not burned in: FFmpeg's conversions burn in picture subtitles only.
 - A channel whose source sends an HLS playlist does not play over DLNA.
 
-<details>
-<summary>For app developers</summary>
-
-- Settings: `/admin/api/settings` holds `dlna`, `dlnaName`, `dlnaNewDevicesUser` (a user's ID, or `null` for no one) and `dlnaMarkPlayed`; a `PUT` naming a user that does not exist answers 400 `invalid_dlna_user`, a name longer than 256 bytes 400 `invalid_dlna_name`.
-- `GET /admin/api/dlna/devices` lists the devices, the latest seen first: `id`, `name`, `manufacturer`, `model`, `address`, `userAgent`, `clientInfo`, `userId` (or `null`), `userName`, `blocked`, `profile` (empty, `builtin:` and a built-in profile's name, or an added profile's ID), `matchedProfile` (the name of the profile it gets now), `firstSeen` and `lastSeen`.
-- `PATCH /admin/api/dlna/devices/{id}` changes `userId`, `blocked` and `profile`, each kept when left out, and answers the device; `DELETE` forgets it.
-- `GET /admin/api/dlna/profiles` lists the profiles, built-in ones first: `id`, `name`, `builtin`, and `createdAt` for added ones. `GET /admin/api/dlna/profiles/{id}` answers a profile's XML. `POST /admin/api/dlna/profiles`, with the XML as its body, adds one (201), and `PUT /admin/api/dlna/profiles/{id}` replaces it; XML that is not a profile answers 400 `invalid_dlna_profile`, with why in `message`. `DELETE` removes it, and the devices forced to it get theirs chosen again.
-- `GET /admin/api/health/problems` lists the warning of a port Polyfin cannot listen on as `dlna_port`, with `port`.
-- For tests, `POLYFIN_DLNA_PORT` changes the UDP port, which devices never use.
-
-</details>
+API details: [DLNA routes in the admin API](jellyfin-api.md#dlna-routes-in-the-admin-api).

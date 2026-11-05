@@ -4,7 +4,7 @@ This page explains how to run Polyfin behind a reverse proxy, such as Traefik, C
 
 Polyfin listens on plain HTTP, on port 8096 by default (see [Configuration](configuration.md)). The proxy terminates HTTPS and forwards each request to that port. Apps and browsers on the local network can keep connecting to port 8096 directly.
 
-Polyfin can also serve HTTPS itself, with certificate files or a certificate from Let's Encrypt, on port 8920 by default, with one port forwarded on the router and no proxy (see [HTTPS](administration.md#https)). A proxy is still the way when:
+Polyfin can also serve HTTPS itself, with certificate files or a certificate from Let's Encrypt, on port 8920 by default, with one port forwarded on the router and no proxy (see [HTTPS](https-and-networking.md#https)). A proxy is still the way when:
 
 - Polyfin shares port 443 with other services under several names;
 - the certificate is a wildcard, or for names that resolve only on the local network, and another tool should not write its files where Polyfin reads them;
@@ -71,14 +71,7 @@ A name is only as trusted as the DNS that answers for it: whoever controls that 
 
 Names are written in letters, digits, hyphens, underscores and dots; Polyfin keeps them in lower case.
 
-<details>
-<summary>For app developers</summary>
-
-- In `/admin/api/settings`, `knownProxies` lists the addresses and networks first, then the names. A `PUT` with an entry that is no address, network or host name, or with more than 64 entries, answers 400 `invalid_known_proxies`.
-- `GET /admin/api/health` lists the names under `proxyNames`, each with its `addresses`, sorted, and `resolvedAt`.
-- `GET /admin/api/health/problems` warns of a name that resolves to nothing as `proxy_name_unresolved`, with `name`.
-
-</details>
+API details: [Known proxies in the admin API](jellyfin-api.md#known-proxies-in-the-admin-api).
 
 ### A proxy in a Docker network
 

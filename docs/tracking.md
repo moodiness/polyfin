@@ -15,7 +15,7 @@ Only movies and episodes known by an IMDb, TMDB or TVDB identifier are sent to T
 
 Starting, pausing, resuming and stopping a title reach Trakt, Simkl and MDBList as they happen (scrobbling), with how far into the title playback is. Each service decides from that whether the title was watched, as for its other apps (from 80%).
 
-PublicMetaDB does not follow playback. It gets a resume point when playback pauses or stops, and the title in its history once Polyfin marks it played (**Marked played after (%)** under **Settings › Content**; see [Played and resume thresholds](users.md#played-and-resume-thresholds)).
+PublicMetaDB does not follow playback. It gets a resume point when playback pauses or stops, and the title in its history once Polyfin marks it played (**Marked played after (%)** under **Settings › Content**; see [Played and resume thresholds](watch-state.md#played-and-resume-thresholds)).
 
 ### Played marks
 
@@ -30,7 +30,7 @@ Each user connects their accounts under **My account › Tracking** in the admin
 
 - **Trakt** and **Simkl** show a code to enter on their site, after **Connect**.
 - **Last.fm** opens its site after **Connect**: sign in there if asked, and allow Polyfin.
-- **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences. It is used for that user's tracking only: titles' ratings come from the server's own key, apart (see [Ratings](addons-and-libraries.md#ratings)).
+- **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences. It is used for that user's tracking only: titles' ratings come from the server's own key, apart (see [Ratings](collections-people-and-ratings.md#ratings)).
 - **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from the PublicMetaDB website (Settings, then API).
 - For ListenBrainz, the user pastes their token in **ListenBrainz user token**, from the settings of its site.
 - **AniList** opens its site after **Connect**: allow Polyfin there, copy the code AniList shows, and paste it in Polyfin (**AniList code**). **MyAnimeList** opens its site in the same tab: once you allow Polyfin, MyAnimeList sends your browser back to Polyfin, which connects. See [AniList and MyAnimeList](#anilist-and-myanimelist).
@@ -45,13 +45,13 @@ Trakt lets only the people an administrator added to the server's Trakt app sign
 
 Polyfin can also read what you watched elsewhere, in other apps that report to the same services, so that played marks, **Continue Watching** and **Next Up** match. It is off by default. Under **My account › Tracking**, each connected service has:
 
-- The **Import my … history** switch (such as **Import my Trakt history**): turning it on imports at once, then as often as the administrator's **Import connected accounts every** says, every 6 hours by default (see [How often connected accounts are imported](users.md#how-often-connected-accounts-are-imported)).
+- The **Import my … history** switch (such as **Import my Trakt history**): turning it on imports at once, then as often as the administrator's **Import connected accounts every** says, every 6 hours by default (see [How often connected accounts are imported](moving-to-polyfin.md#how-often-connected-accounts-are-imported)).
 - **Import now**: imports at once.
 - A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, when the next import runs, and what stopped it, if anything.
 
 A switch turned on while an import of the service runs, the watchlist or ratings ones included, is imported as soon as that import ends: the service is imported once more.
 
-Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user. Last.fm and ListenBrainz have no import: Polyfin only sends them what you play. An administrator moving from a Jellyfin, Emby or Plex server imports its users' watch data the same way (see [Moving from Jellyfin](users.md#moving-from-jellyfin) and [Moving from Emby and Plex](users.md#moving-from-emby-and-plex)), and you can import your own from a Jellyfin or Emby server you used before (see [Importing your own watch history](users.md#importing-your-own-watch-history)), or from your account on an app built on addons, such as Stremio or Nuvio (see [Importing from an app](users.md#importing-from-an-app)).
+Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user. Last.fm and ListenBrainz have no import: Polyfin only sends them what you play. An administrator moving from a Jellyfin, Emby or Plex server imports its users' watch data the same way (see [Moving from Jellyfin](moving-to-polyfin.md#moving-from-jellyfin) and [Moving from Emby and Plex](moving-to-polyfin.md#moving-from-emby-and-plex)), and you can import your own from a Jellyfin or Emby server you used before (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history)), or from your account on an app built on addons, such as Stremio or Nuvio (see [Importing from an app](moving-to-polyfin.md#importing-from-an-app)).
 
 ### What is imported
 
@@ -69,7 +69,7 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 ### How the history merges with Polyfin's
 
 - **Played marks**: an import only adds them, never removes one. A title gets the service's date unless Polyfin's is later, and is played at least once; a title already played keeps its play count.
-- **Resume points**: only for titles not played. Of Polyfin's resume point and the service's, the more recent one stays. A title taken off **Continue Watching** gets back only a resume point set after it was taken off (see [Watch state](users.md#watch-state)). A position past **Marked played after (%)** marks the title played; one before **Resume point kept after (%)** is ignored (see [Played and resume thresholds](users.md#played-and-resume-thresholds)).
+- **Resume points**: only for titles not played. Of Polyfin's resume point and the service's, the more recent one stays. A title taken off **Continue Watching** gets back only a resume point set after it was taken off (see [Watch state](watch-state.md#watch-state)). A position past **Marked played after (%)** marks the title played; one before **Resume point kept after (%)** is ignored (see [Played and resume thresholds](watch-state.md#played-and-resume-thresholds)).
 - **Several services**: a title played on any of them is played, and the most recent resume point wins.
 - Apps see the changes the next time they refresh: an import does not push them through Jellyfin's live connection, which would ask the addons for every title it changed.
 
@@ -84,34 +84,26 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 
 Trakt and Simkl also keep the titles you mean to watch: Trakt's watchlist, Simkl's Plan to Watch. Under **My account › Tracking**, a connected Trakt or Simkl has a second switch, **Import my Trakt watchlist** or **Import my Simkl Plan to Watch list**, off by default. Turned on, the list is read whole with each import of the service, whether the history switch is on or not, and its movies and series go to your Watchlist. A season or an episode on the list counts for its series. Titles are found as the history's are; those not found count among the titles not found, and the status line tells how many titles the import added to the Watchlist. Simkl's anime on the list are found through the [anime mapping](#anime): until the mapping is read, they wait for a later import.
 
-The Watchlist view (named in the server language, such as « À regarder » in French) shows in every Jellyfin app beside the libraries, with its row of latest items on the home screen, once your watchlist holds a title you have not started. It lists the movies and series of every list feeding it, the latest added first: Trakt's and Simkl's, the library of a Stremio or Nuvio account (see [Importing from an app](users.md#what-comes-over-from-an-app)), the watchlist of a Letterboxd export (see [Letterboxd](users.md#letterboxd)), and the Watchlist of a Plex account a user signs in with (see [Plex, signing in](users.md#plex-signing-in)). Each user has their own. Parental control and blocked genres hide its titles as everywhere.
+The Watchlist view (named in the server language, such as « À regarder » in French) shows in every Jellyfin app beside the libraries, with its row of latest items on the home screen, once your watchlist holds a title you have not started. It lists the movies and series of every list feeding it, the latest added first: Trakt's and Simkl's, the library of a Stremio or Nuvio account (see [Importing from an app](moving-to-polyfin.md#what-comes-over-from-an-app)), the watchlist of a Letterboxd export (see [Letterboxd](moving-to-polyfin.md#letterboxd)), and the Watchlist of a Plex account a user signs in with (see [Plex, signing in](moving-to-polyfin.md#plex-signing-in)). Each user has their own. Parental control and blocked genres hide its titles as everywhere.
 
 - A title leaves the view once you start it: a movie with a resume point or played, a series with an episode started or played. It then shows in **Continue Watching** or **Next Up**.
 - A title leaves it once no list holds it any longer, at the next import of the list that brought it. An import that could not read the list whole takes nothing off. A title a one-off app import, a Letterboxd export or a Plex Watchlist brought leaves only once started.
 - Jellyfin apps have no watchlist button: the view is not edited from them. Change the lists where they live, or use [Silo's apps](silo-apps.md), whose watchlist button puts a title on your Watchlist until you start it, and takes a title off every list holding it; a list read again whole, such as Trakt's watchlist, puts back a title it still holds.
 - Turning the switch off, or disconnecting the service, takes off the Watchlist the titles that list alone held: those another list holds stay.
 
-<details><summary>For app developers</summary>
-
-- The Watchlist view is a `CollectionFolder` without `CollectionType`, as a library of mixed content, with the same identifier on every server, listed in `/UserViews` after the Collections view.
-- `/Items?ParentId=` lists its movies and series, the latest added first, whatever `sortBy` says; `/Items/Latest?ParentId=` gives its home row.
-- `POST /Polyfin/UserItems/{itemId}/Watchlist` puts a movie or a series on the user's watchlist (a season or an episode stands for its series) unless a list holds it already, and `DELETE` takes it off every list. Both answer 204, and 400 for an item that is neither.
-- `GET /Polyfin/UserItems/Watchlist` answers `{"Items": [{"Id", "AddedAt"}]}`, the titles the user's lists hold, started or not, the latest added first.
-- `GET /admin/api/account/tracking` answers, for each service, `watchlist` (Trakt and Simkl) and `importWatchlist`, and `lastImport.watchlist`, the titles added. `PATCH /admin/api/account/tracking/{service}` takes `importWatchlist`, besides `importHistory`, and answers `not_found` for a service without a watchlist.
-
-</details>
+API details: [Watchlist for apps](jellyfin-api.md#watchlist-for-apps).
 
 ### Now available and Still waiting
 
 Polyfin looks for versions of the titles on each user's Watchlist they have not started, so that they know when one they wait for comes:
 
 - **When:** every hour, it checks up to 20 titles of each user's Watchlist, those never checked first, then those checked longest ago, each again only after **Look for versions of watchlist titles every (hours, 0 = never)**, under **Settings › Catalogs**: 6 hours by default, 0 turns the checks off. The scheduled task "Look for versions of watchlist titles" runs them, and an administrator can run it by hand. Disabled and ended accounts are left out.
-- **What counts:** a movie, or a series' first regular episode out, is asked of the user's stream addons, those of the server they use and their own, as a title's page asks them; torrents' files count for a user who may play them. It has versions when one of them is neither hidden by the [version order](playback.md#version-order) settings nor taller than the user's [quality group](users.md#quality-groups): a title found only in versions the user is not offered while others exist still waits. A movie whose release date is to come, and a series none of whose episodes is out, wait without asking any addon. With **Wait for the digital release** on, so does a movie not out at home yet (see [Movies waiting for their digital release](addons-and-libraries.md#movies-waiting-for-their-digital-release)).
+- **What counts:** a movie, or a series' first regular episode out, is asked of the user's stream addons, those of the server they use and their own, as a title's page asks them; torrents' files count for a user who may play them. It has versions when one of them is neither hidden by the [version order](versions.md#version-order) settings nor taller than the user's [quality group](user-limits.md#quality-groups): a title found only in versions the user is not offered while others exist still waits. A movie whose release date is to come, and a series none of whose episodes is out, wait without asking any addon. With **Wait for the digital release** on, so does a movie not out at home yet (see [Movies waiting for their digital release](smart-lists-and-search.md#movies-waiting-for-their-digital-release)).
 - **What is left out:** titles parental control, blocked genres, the libraries hidden from the user or their hidden titles keep from them are never asked for, listed or told of.
-- **The addons' wait rules:** an addon whose server asked to wait (see [Addons that ask to wait](addons-and-libraries.md#addons-that-ask-to-wait)) is not asked, and one that answers a check "too many requests" (429, or 503 with `Retry-After`) starts its server's wait, as a refused catalog page does. The checks are background work, paced: an addon whose background requests pause after a refusal is not asked either (see [How Polyfin paces addons](addons-and-libraries.md#how-polyfin-paces-addons)). A title some addon was not asked for, or failed, keeps what it had, and is checked again at the next hour. A version list an addon gave within **Keep version lists for (minutes)** is used as it is.
+- **The addons' wait rules:** an addon whose server asked to wait (see [Addons that ask to wait](addons.md#addons-that-ask-to-wait)) is not asked, and one that answers a check "too many requests" (429, or 503 with `Retry-After`) starts its server's wait, as a refused catalog page does. The checks are background work, paced: an addon whose background requests pause after a refusal is not asked either (see [How Polyfin paces addons](addons.md#how-polyfin-paces-addons)). A title some addon was not asked for, or failed, keeps what it had, and is checked again at the next hour. A version list an addon gave within **Keep version lists for (minutes)** is used as it is.
 - **Recorded:** each check records whether versions were found, and the first time they were. This survives a restart.
 
-Two [home rows](web-client.md#home-rows) list them: **Now available**, the titles that versions were found for, the latest found first, and **Still waiting**, those checked without any, or not out yet, the latest added first. A title not checked yet is in neither. A title whose versions are gone goes back to **Still waiting**, at the check after the one where the addon first answered without them: as a title's page does, a shorter answer is listed with the versions of the list it replaces while Polyfin asks the addon again (see [Title pages](playback.md#title-pages)). With **Also a library in other apps**, each is a library in other apps too, as the Watchlist is. "Versions found" is what the addons listed: a version is only tried when it plays, and may still fail.
+Two [home rows](home-rows.md#home-rows) list them: **Now available**, the titles that versions were found for, the latest found first, and **Still waiting**, those checked without any, or not out yet, the latest added first. A title not checked yet is in neither. A title whose versions are gone goes back to **Still waiting**, at the check after the one where the addon first answered without them: as a title's page does, a shorter answer is listed with the versions of the list it replaces while Polyfin asks the addon again (see [Title pages](versions.md#title-pages)). With **Also a library in other apps**, each is a library in other apps too, as the Watchlist is. "Versions found" is what the addons listed: a version is only tried when it plays, and may still fail.
 
 The first time versions are found for a title that earlier checks found none for, the user's own targets that chose **Watchlist title available** receive a message, once per title: see [Watchlist titles available](notifications.md#watchlist-titles-available).
 
@@ -121,7 +113,7 @@ The first time versions are found for a title that earlier checks found none for
 
 ### Recommended on Trakt
 
-Trakt recommends movies and series to each of its users from what they watched and rated. When the administrator adds a **Recommended on Trakt** row to the web player's home page (see [Home rows](web-client.md#home-rows)), the users who connected Trakt see there what Trakt recommends to them, read with their connection. Nothing is to turn on: connecting Trakt is enough, and each user can turn the row off under **My account › Home rows**.
+Trakt recommends movies and series to each of its users from what they watched and rated. When the administrator adds a **Recommended on Trakt** row to the web player's home page (see [Home rows](home-rows.md#home-rows)), the users who connected Trakt see there what Trakt recommends to them, read with their connection. Nothing is to turn on: connecting Trakt is enough, and each user can turn the row off under **My account › Home rows**.
 
 - Polyfin asks Trakt for up to 50 movies and 50 series, without those on your Trakt collection and watchlist, and lists them in Trakt's order, a movie and a series in turn.
 - Titles are found as the watchlist's are, by their IMDb, TMDB or TVDB identifier. Those found by none, or that the server's metadata addons do not describe, are left out. So are the titles you played in Polyfin or hid, and those your parental control or blocked genres hide.
@@ -140,7 +132,7 @@ AniDB, and Simkl's and Kitsu's anime that follow it, make each season of a serie
 - [Fribb/anime-lists](https://github.com/Fribb/anime-lists) (`anime-list-full.json`) gives the AniDB, Kitsu, MyAnimeList, AniList, TVDB, TMDB and IMDb identifiers of each anime.
 - [Anime-Lists/anime-lists](https://github.com/Anime-Lists/anime-lists) (`anime-list-master.xml`) gives where each AniDB episode is on TVDB: the season of each anime and the number to add to its episodes, the episodes it maps one by one, and the series numbered as TVDB's absolute numbering.
 
-The same mapping gives the identifiers stream addons that take only an anime database's, or only IMDb's, are asked by (see [Identifiers addons accept](addons-and-libraries.md#identifiers-addons-accept)).
+The same mapping gives the identifiers stream addons that take only an anime database's, or only IMDb's, are asked by (see [Identifiers addons accept](addons.md#identifiers-addons-accept)).
 
 ### How numbering is translated
 
@@ -188,7 +180,7 @@ Neither service follows playback: a title counts once Polyfin marks it played (*
 
 ### Importing the lists
 
-**Import my AniList lists** and **Import my MyAnimeList lists** are off by default, and run on the schedule of the other imports (see [How often connected accounts are imported](users.md#how-often-connected-accounts-are-imported)), with **Import now**. Each import reads your whole list.
+**Import my AniList lists** and **Import my MyAnimeList lists** are off by default, and run on the schedule of the other imports (see [How often connected accounts are imported](moving-to-polyfin.md#how-often-connected-accounts-are-imported)), with **Import now**. Each import reads your whole list.
 
 - Watching, On hold and Dropped: episodes 1 to the entry's progress are marked played.
 - **Completed**: all its episodes, dated with the entry's completion date when it has one. An entry being watched again counts as completed, undated.
@@ -239,13 +231,7 @@ A connected ListenBrainz token shows as dots, and its owner can show it with its
 
 - Jellyfin sends songs to Last.fm or ListenBrainz only through a plugin installed apart. Polyfin does it itself, for each user who connects an account, from the playback reports apps already send.
 
-<details><summary>For app developers</summary>
-
-- There is nothing to add. Polyfin follows the reports apps send for songs: `POST /Sessions/Playing`, `/Sessions/Playing/Progress` and `/Sessions/Playing/Stopped` (and the older `/PlayingItems` ones).
-- Send `PositionTicks` and `IsPaused` as playback goes, every few seconds as Jellyfin's apps do, and a new start for each play of a song, repeats included.
-- The scrobble goes out with the first report past the threshold, or the stop.
-
-</details>
+API details: [Scrobbles from playback reports](jellyfin-api.md#scrobbles-from-playback-reports).
 
 <a id="setting-up-trakt-simkl-and-last-fm-administrators"></a><a id="setting-up-trakt-simkl-and-lastfm-administrators"></a>
 

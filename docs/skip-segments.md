@@ -14,15 +14,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits, prev
 
 - Turned off, the server behaves as a Jellyfin server without a segment provider.
 
-<details>
-<summary>For app developers</summary>
-
-- Turned off, `/MediaSegments/{id}` lists none.
-- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in the audio of local episodes](#intros-and-credits-found-in-the-audio-of-local-episodes)). The media source of a recording says it when commercial breaks were found in it (see [Commercials of recordings](#commercials-of-recordings)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
-- `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
-- `GET /Polyfin/MediaSegments/{id}` lists the same segments, every type, each with its `Type`, `StartTicks` and `EndTicks` and where it comes from, which Jellyfin's segments do not tell: `Found`, `database`, `chapters` or `audio`, absent for the commercials of recordings; `Database`, the database of a `database` segment, as `POLYFIN_SEGMENTS` names it; and `Confidence`, from 0 to 1, the database's own rating of the segment, which only SkipDB gives. Credits split around a scene keep where they come from. [Silo's apps](silo-apps.md#skip-markers) get them this way.
-
-</details>
+API details: [Media segments for apps](jellyfin-api.md#media-segments-for-apps).
 
 ## The four databases
 
@@ -89,12 +81,7 @@ A version without either has its credits split by its chapters only, until its d
 
 - Jellyfin finds no such scene, and its credits run over it. jellyfin-web offers each segment as playback enters it, several `Outro` segments included, and **Skip** seeks to the segment's end (jellyfin-web 12.4, `src/apps/legacy/features/playback/utils/mediaSegmentManager.ts`, lines 37-57 and 123-144).
 
-<details>
-<summary>For app developers</summary>
-
-- `/MediaSegments/{id}` lists the credits of such a version as several `Outro` segments, one before each scene and one after the last when they go on after it.
-
-</details>
+API details: [Media segments for apps](jellyfin-api.md#media-segments-for-apps).
 
 <a id="intros-and-credits-found-in-local-episodes-audio"></a>
 
