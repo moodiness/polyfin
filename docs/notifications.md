@@ -1,6 +1,8 @@
 # Notifications
 
-Polyfin can tell users and administrators when something they care about happens:
+This page is for administrators and users who want Polyfin to tell them when something happens. It covers the targets messages go to, the events they tell, and how they are delivered. Integrators who read the messages with a program will find their format in the [Webhook reference](webhook-reference.md).
+
+Polyfin can tell users and administrators of:
 
 - a new episode of a series they follow;
 - a recording that finished or failed;
@@ -12,31 +14,70 @@ Polyfin can tell users and administrators when something they care about happens
 - a guest who played a title through a share link;
 - a Live TV programme a user asked to be reminded of, which starts soon;
 - a title of a user's Watchlist that versions were found for;
-- once a week, what happened that week (see [Weekly summary](#weekly-summary)); once a month and once a year, what happened that month or that year (see [Month in review](#month-in-review) and [Year in review](#year-in-review)).
+- what happened each week, month and year (see [Weekly summary](#weekly-summary), [Month in review](#month-in-review) and [Year in review](#year-in-review)).
 
-[Events](#events) lists each one, with who receives it. Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
+[Events](#events) lists each one, with who receives it.
 
 ## Targets
 
-There are two kinds of owners:
+A target is where messages go. Polyfin has seven kinds:
 
-- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events, server crashes, failed plays, the users who joined, new versions, the blocked accounts, and the server's weekly summary, month and year in review. Sign-ins on new devices, programme reminders and Watchlist titles go to the user's own targets only.
-- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes, recordings and playbacks, their stopped connections, their share links played, the blocks of their account and its sign-ins on new devices, their programme reminders, the titles of their Watchlist found available, and their weekly summary, month and year in review. An administrator's own targets may receive the health events, server crashes, failed plays, the users who joined, new versions and every blocked account too, and the server's summaries in place of their own.
+- a generic webhook;
+- a Discord channel's webhook;
+- an ntfy topic;
+- an email address;
+- a Telegram chat;
+- a Gotify server;
+- a Pushover user.
 
-**Add a target** asks for its kind, a **Name**, the **Events** it receives, and:
+Targets have two kinds of owners:
 
-- for a **Webhook**, its address, to which Polyfin posts each event as JSON (see [The webhook event](#the-webhook-event));
-- for **Discord**, the channel webhook's address (in Discord: the channel's settings, Integrations, Webhooks, Copy Webhook URL);
-- a Discord webhook's address pasted in a new **Webhook** target makes it a **Discord** target, and the form says so. Such an address is `https://discord.com/api/webhooks/…`, or the same on `discordapp.com` and their `ptb.` and `canary.` hosts. A **Webhook** target saved before with such an address is sent Discord's message, as a Discord target is, since Discord refuses any other;
-- for **ntfy**, the **ntfy server** (`https://ntfy.sh` when left empty), the **Topic**, and an **Access token** for a topic that needs signing in;
-- for **Email**, the **Email address** messages go to, through the server's SMTP server (see [Email](#email)); without one, the kind cannot be added, and the form says why;
-- for **Telegram**, the **Chat**, a chat's number such as `-1001234567890` or a public channel's `@name`, and the **Bot token** BotFather gave when the bot was created; the bot must be a member of the chat;
-- for **Gotify**, the **Gotify server**'s address and an **Application token** (in Gotify: Apps, Create Application);
-- for **Pushover**, the **User key** (or a group key) and the **Application token** of an application created on Pushover.
+| Where | Whose targets | What they receive |
+|---|---|---|
+| **Settings › Notifications** | The server's, for administrators | The events of every user, the health events, server crashes, failed plays, the users who joined, new versions, the blocked accounts, and the server's weekly summary, month and year in review. |
+| **My account › Notifications** | Each user's own | That user's new episodes, recordings and playbacks, their stopped connections, their share links played, the blocks of their account and its sign-ins on new devices, their programme reminders, the titles of their Watchlist found available, and their own weekly summary, month and year in review. |
 
-Webhook and Discord addresses, ntfy access tokens, Telegram bot tokens, Gotify application tokens, and Pushover user keys and application tokens are secrets: they are stored encrypted with `POLYFIN_SECRET_KEY` (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)), never shown again (the list shows a webhook's or Discord address's host only), and never written to the log. A secret that cannot be decrypted shows the target as **Enter it again**, and on **System › Health** under **Stored keys**. An email target's address, a Telegram chat and a Gotify server are shown as they are.
+- Sign-ins on new devices, programme reminders and Watchlist titles go to the user's own targets only.
+- An administrator's own targets may also receive the health events, server crashes, failed plays, the users who joined, new versions and every blocked account.
+- An administrator's own targets receive the server's summaries in place of their own.
 
-A user who is not an administrator may only add targets on public addresses, as their own addons: an address on the local network is refused, and messages never reach one.
+### Adding a target
+
+**Add a target** asks for its kind, a **Name** and the **Events** it receives. Each kind then asks for more:
+
+| Kind | What it asks for |
+|---|---|
+| **Webhook** | Its address. Polyfin posts each event to it as JSON (see [The webhook event](webhook-reference.md#the-webhook-event)). |
+| **Discord** | The channel webhook's address. In Discord, open the channel's settings, then Integrations, Webhooks, Copy Webhook URL. |
+| **ntfy** | The **ntfy server** (`https://ntfy.sh` when left empty), the **Topic**, and an **Access token** for a topic that needs signing in. |
+| **Email** | The **Email address** messages go to. They go through the server's SMTP server (see [Email](#email)). |
+| **Telegram** | The **Chat**, and the **Bot token** BotFather gave when the bot was created. The chat is a number such as `-1001234567890`, or a public channel's `@name`. |
+| **Gotify** | The **Gotify server**'s address and an **Application token**. In Gotify, open Apps, then Create Application. |
+| **Pushover** | The **User key** (or a group key), and the **Application token** of an application created on Pushover. |
+
+- A Discord webhook's address pasted in a new **Webhook** target makes it a **Discord** target, and the form says so.
+- Such an address is `https://discord.com/api/webhooks/…`, or the same on `discordapp.com` and their `ptb.` and `canary.` hosts.
+- A **Webhook** target saved before with such an address is sent Discord's message, since Discord refuses any other.
+- Without an SMTP server, the email kind cannot be added, and the form says why.
+- The Telegram bot must be a member of the chat.
+- A user who is not an administrator may only add targets on public addresses, as with their own addons. An address on the local network is refused, and messages never reach one.
+
+### Secrets
+
+Polyfin stores a target's secrets encrypted with `POLYFIN_SECRET_KEY` (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). The secrets are:
+
+- webhook and Discord addresses;
+- ntfy access tokens;
+- Telegram bot tokens;
+- Gotify application tokens;
+- Pushover user keys and application tokens.
+
+- A secret is never shown again: the list shows a webhook's or Discord address's host only.
+- A secret is never written to the log.
+- A secret that cannot be decrypted shows the target as **Enter it again**, and on **System › Health** under **Stored keys**.
+- An email target's address, a Telegram chat and a Gotify server are not secrets, and are shown as they are.
+
+### Target states
 
 Each target shows its state:
 
@@ -49,19 +90,33 @@ Each target shows its state:
 | **Not reached** | Recent messages could not be delivered: no answer, server errors, or for email no SMTP server. |
 | **Off** | **Send messages to this target** is off. |
 
-**Send a test** sends a test message at once and tells whether the target accepted it, and when it did not, the start of its answer, such as Discord's `{"message":"Cannot send an empty message","code":50006}`, up to 200 characters, with nothing left of the target's address, its path or tokens, or its topic, even in part: what the answer repeats of them shows as …. The log tells it too. A delivered message, a test included, clears the target's problem. The list shows the HTTP status the target answered with its problem, or for email the SMTP server's code, such as `SMTP 535`.
+- The list shows the HTTP status the target answered with its problem, or for email the SMTP server's code, such as `SMTP 535`.
+- A delivered message, a test included, clears the target's problem.
+
+### Sending a test
+
+**Send a test** sends a test message at once and tells whether the target accepted it.
+
+- When the target refused it, the result shows the start of its answer, up to 200 characters, such as Discord's `{"message":"Cannot send an empty message","code":50006}`.
+- That answer keeps nothing of the target's address, its path, its tokens or its topic, even in part: what it repeats of them shows as ….
+- The log tells the result too.
 
 ### Email
 
-Email targets go through one SMTP server, which an administrator sets under **Settings › Notifications**, in **Email**. Email targets can be added once an **SMTP server** and a **Sender address** are saved.
+Email targets go through one SMTP server, which an administrator sets in **Settings › Notifications › Email**. Email targets can be added once an **SMTP server** and a **Sender address** are saved.
 
 Polyfin connects to the server with the **SMTP encryption** chosen:
 
-- **STARTTLS** connects without encryption, then asks the server to encrypt: when it does not offer to, nothing is sent;
-- **TLS from the start** encrypts the connection from the start;
-- **None** sends everything as it is. The password is then only sent to a server on this machine (`localhost`).
+| Choice | What it does |
+|---|---|
+| **STARTTLS** | Connects without encryption, then asks the server to encrypt. When the server does not offer to, nothing is sent. |
+| **TLS from the start** | Encrypts the connection from the start. |
+| **None** | Sends everything as it is. The password is then only sent to a server on this machine (`localhost`). |
 
-The server's certificate must name its host. Polyfin signs in with the **SMTP user** and **SMTP password**, by `PLAIN`, or `LOGIN` when the server offers only that, once the connection is encrypted; with no user, it sends without signing in. The password is stored encrypted with `POLYFIN_SECRET_KEY` and never shown again.
+- The server's certificate must name its host.
+- Polyfin signs in with the **SMTP user** and **SMTP password** once the connection is encrypted, by `PLAIN`, or by `LOGIN` when the server offers only that.
+- With no user, it sends without signing in.
+- The password is stored encrypted with `POLYFIN_SECRET_KEY` and never shown again.
 
 ### Settings
 
@@ -81,6 +136,8 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | **Also show reminders on my apps** | **My account › Notifications** | off | Shows each of the user's programme reminders on their Jellyfin apps that accept messages too (see [Programme reminders](#programme-reminders)). |
 
 ## Events
+
+Each target chooses the events it receives in its **Events**. The `type` is the event's name in the [webhook event](webhook-reference.md#the-webhook-event).
 
 | Event | `type` | Who receives it |
 |---|---|---|
@@ -107,483 +164,345 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Programme starting | `programme_reminder` | The targets of the user who set the reminder only: the server's targets cannot choose it. |
 | Watchlist title available | `title_available` | The targets of the user whose Watchlist holds the title only: the server's targets cannot choose it. |
 
-**Shared link played** is not chosen by default for a new target. It tells that a guest without an account started a title through a share link (see [Share links](users.md#share-links)), as "Shared link played: Example Movie (2008)" and "A guest played Example Movie (2008) through the link shared by alex.", and opens **My account › Shared links**. The event's `share` object holds the link's `id`, the title's `itemId`, `kind` (`movie` or `episode`) and `name`, and the link's `expiresAt`. The guest's playback also counts as the sharer's for the playback events, with `shared` true in their `playback` object and "Shared link" as its `app`.
+Some events are urgent: ntfy, Gotify and Pushover show them with a higher priority (see [Messages for each kind](webhook-reference.md#messages-for-each-kind)). The sections below say which.
+
+### Shared links played
+
+**Shared link played** tells that a guest without an account started a title through a share link (see [Share links](invite-and-share-links.md#share-links)).
+
+- The message reads "Shared link played: Example Movie (2008)" and "A guest played Example Movie (2008) through the link shared by alex.".
+- It opens **My account › Shared links**.
+- The guest's playback also counts as the sharer's for the playback events, with "Shared link" as its app.
+- It is not chosen by default for a new target.
 
 ### New episodes
 
-A user follows the series they played an episode of (the 50 most recently played) and the series they marked favorite, as the Upcoming row of Jellyfin apps shows them. Every two hours, starting five minutes after Polyfin starts, Polyfin looks at the episodes of these series for those that became available. Only the users with a target for new episodes, the weekly summary or the month in review are looked at, or all of them when the server has one, or an administrator one for the weekly summary or the month in review. An episode is told once per user; never one the series already had when Polyfin first looked at it (so neither starting to use notifications nor following a series sends old episodes); never one released more than a week ago, which its addon added late; never one without a release date. The series' descriptions are those the library keeps: an old one is asked for again in the background, so a new episode may be told one check later. Each new episode found is kept for the weekly summary and the month in review, whether or not a target was told of it.
+A user follows two kinds of series, as the Upcoming row of Jellyfin apps shows them:
+
+- the series they played an episode of (the 50 most recently played);
+- the series they marked favorite.
+
+Every two hours, starting five minutes after Polyfin starts, Polyfin looks at these series for episodes that became available.
+
+- Only users with a target for new episodes, the weekly summary or the month in review are looked at.
+- All users are looked at when the server has such a target, or an administrator has one for the weekly summary or the month in review.
+
+An episode is told once per user. Polyfin never tells:
+
+- an episode the series already had when Polyfin first looked at it, so neither starting to use notifications nor following a series sends old episodes;
+- an episode released more than a week ago, which its addon added late;
+- an episode without a release date.
+
+The series' descriptions are those the library keeps. An old one is asked for again in the background, so a new episode may be told one check later. Each new episode found is kept for the weekly summary and the month in review, whether or not a target was told of it.
 
 ### Recordings
 
-A recording that ends is finished, or partial when part of its programme is missing (see [Live TV](live-tv.md#recordings)). One that recorded nothing failed.
+A recording that ends is finished, or partial when part of its programme is missing (see [Live TV](live-tv.md#recordings)). One that recorded nothing failed. A failed recording is urgent.
 
 ### Health problems
 
-Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**, such as the database, disk space, addons, IPTV sources and tuners, programme guides, failed tasks, backups, stored keys, HTTPS and local network discovery. Conversions at their limit and thumbnails paused for a host come and go with the load, and addons left out of searches for a few minutes with the searches: they are not told. Neither are the stopped connections it lists: their own event told them (see [Stopped connections](#stopped-connections)). A problem is told once two checks in a row found it, and solved once two checks in a row no longer find it, so that a brief failure sends nothing. What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved. Each problem told is kept for the weekly summary and the month in review too.
+Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**. They include the database, disk space, addons, IPTV sources and tuners, programme guides, failed tasks, backups, stored keys, HTTPS and local network discovery.
+
+- A problem is told once two checks in a row found it, so that a brief failure sends nothing.
+- It is told solved once two checks in a row no longer find it.
+- What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved.
+- Each problem told is kept for the weekly summary and the month in review too.
+- A problem that is an error is urgent.
+
+Some problems are never told:
+
+- conversions at their limit and thumbnails paused for a host, which come and go with the load;
+- addons left out of searches for a few minutes, which come and go with the searches;
+- the stopped connections **System › Health** lists, which their own event told (see [Stopped connections](#stopped-connections)).
 
 ### Users who joined
 
-A user who created their account through an invite link (see [Invite links](users.md#invite-links)) is told once, naming who created the link: the title is "New user: sam", which is an email's subject, and the message "sam joined through alex's invite.". The message opens the user's page in the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority. Each user who joined is kept for the weekly summary, the month and the year in review too.
+A user who created their account through an invite link (see [Invite links](invite-and-share-links.md#invite-links)) is told once, naming who created the link.
+
+- The title is "New user: sam", which is an email's subject.
+- The message is "sam joined through alex's invite.".
+- It opens the user's page in the admin app.
+- It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+- Each user who joined is kept for the weekly summary, the month and the year in review too.
 
 ### New versions
 
-While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub once a day for its latest release, and its latest pre-release while **Include pre-releases** is on (see [New versions](administration.md#new-versions)). A version newer than the running one is told once: the title is "New version: Polyfin 1.5.0", and the message "Polyfin 1.5.0 is available. This server runs version 1.4.0.". The message opens the release notes on GitHub, with or without a public address. The version told is kept in the database: a restart does not tell it again. A development build never tells one. Targets saved before this event existed do not receive it until it is chosen.
+Polyfin asks GitHub once a day for its latest release while **Check for new versions** is on, in **Settings › General**. It also asks for the latest pre-release while **Include pre-releases** is on (see [New versions](updates-and-restarts.md#new-versions)).
+
+A version newer than the running one is told once:
+
+- The title is "New version: Polyfin 1.5.0".
+- The message is "Polyfin 1.5.0 is available. This server runs version 1.4.0.".
+- It opens the release notes on GitHub, with or without a public address.
+- The version told is kept in the database, so a restart does not tell it again.
+- A development build never tells one.
+- Targets saved before this event existed do not receive it until it is chosen.
 
 ### Playbacks
 
-A video (a movie, an episode, a channel, a recording or a Replay programme) or a song or an audiobook that starts playing in a Jellyfin app, pauses, resumes or stops is told once per change, whatever the number of reports the app sends: positions as it plays are never told. A playback whose app stops reporting is told stopped five minutes after its last report (see [Statistics](statistics.md#playbacks)). Each message names the user, the title (a movie, an episode with its series, a channel, a song with its artist), the app and the device, the position, and how it plays: **Direct play**, **Remux** (repackaged) or **Conversion**. For example: "sam is watching Example Series S01E02" and "Pilot · Jellyfin Web on Chrome · 12:34 · Direct play".
+Polyfin tells when a title starts playing in a Jellyfin app, pauses, resumes or stops. The title can be a movie, an episode, a channel, a recording, a Replay programme, a song or an audiobook.
 
-Targets saved before these events existed do not receive them until they are chosen, and a new target in the admin app leaves them unchosen: each user plays many times a day.
+- Each change is told once, whatever the number of reports the app sends.
+- Positions as it plays are never told.
+- A playback whose app stops reporting is told stopped five minutes after its last report (see [Statistics](statistics.md#playbacks)).
+
+Each message names the user, the title, the app and the device, the position, and how it plays. The title is a movie, an episode with its series, a channel, or a song with its artist. How it plays is **Direct play**, **Remux** (repackaged) or **Conversion**. For example: "sam is watching Example Series S01E02" and "Pilot · Jellyfin Web on Chrome · 12:34 · Direct play".
+
+A new target in the admin app leaves these events unchosen, since each user plays many times a day. Targets saved before these events existed do not receive them until they are chosen.
 
 ### Failed plays
 
-A play that fails is told to the server's targets and administrators' own, so that they hear of it before the user complains. A play fails when none of the title's versions plays on the app (Jellyfin's `NoCompatibleStream`, or a torrent version that could not start), when a limit refuses it (the user's **Playbacks at once**, or a provider whose connections are all in use), or when its stream breaks while it plays: a segment that cannot be served because its source failed or its encoding did, or a direct stream whose source failed. The message names the user, the title, the reason, the app and the device, such as "sam could not play Example Movie" and "None of its versions plays on this app now. · Jellyfin Web on Chrome", and opens the title. The same user and title are told once an hour at most: an app that tries again, or asks for each segment of a broken stream, is told of once. The `failure` object of the webhook event holds the title's `itemId` (null when it is not known), `kind`, `name`, `seriesId`, `seriesName`, `season` and `number` for an episode, `app`, `device`, and `reason`: `no_compatible_stream`, `limit` or `stream_error`. Users' own targets cannot choose it: they saw the failure. A new target has it chosen; targets saved before it existed do not receive it until it is chosen.
+A play that fails is told to the server's targets and administrators' own, so that they hear of it before the user complains. A play fails when:
+
+- none of the title's versions plays on the app (Jellyfin's `NoCompatibleStream`, or a torrent version that could not start);
+- a limit refuses it: the user's **Playbacks at once**, or a provider whose connections are all in use;
+- its stream breaks while it plays: a segment that cannot be served because its source or its encoding failed, or a direct stream whose source failed.
+
+The message names the user, the title, the reason, the app and the device. For example: "sam could not play Example Movie" and "None of its versions plays on this app now. · Jellyfin Web on Chrome". It opens the title.
+
+- The same user and title are told once an hour at most. An app that tries again, or asks for each segment of a broken stream, is told of once.
+- Users' own targets cannot choose it: they saw the failure.
+- A new target has it chosen. Targets saved before it existed do not receive it until it is chosen.
 
 ### Crashes
 
-When Polyfin stops on an unrecovered panic or a fatal error, Go writes the trace to standard error and, through `debug.SetCrashOutput`, to `crash.log` in the data folder. A restart under Docker or a service manager loses standard error from the admin app; the next start reads the file instead. It keeps the crash in the database (the last ten), shows the last one under **System › Health › Polyfin** with its time and the first lines of its trace, and tells the server's targets and administrators' own once their targets are read: "Polyfin crashed", with the time and the first six lines of the trace, opening **System › Health**. The webhook event's `crash` object holds `at` and `trace`, its first 20 lines. A Go trace holds function names, file paths and memory addresses, never request data; the lines kept are still redacted as the log is, since a panic's message may hold anything: addresses keep only their host, and tokens, keys and passwords are hidden. The file is moved to `crash.previous.log` until the crash is kept, then deleted, so a start that cannot reach the database tells it at the next. It is urgent: ntfy, Gotify and Pushover show it with a high priority. Targets that chose **Health problem found** before this event existed have it chosen.
+Polyfin tells the server's targets and administrators' own when it stops on an unrecovered panic or a fatal error.
+
+- Go writes the trace to standard error and, through `debug.SetCrashOutput`, to `crash.log` in the data folder.
+- A restart under Docker or a service manager loses standard error from the admin app, so the next start reads the file instead.
+- Polyfin keeps the last ten crashes in the database.
+- **System › Health › Polyfin** shows the last one with its time and the first lines of its trace.
+- The message is "Polyfin crashed", with the time and the first six lines of the trace, and opens **System › Health**. It is sent once the targets are read.
+- It is urgent: ntfy, Gotify and Pushover show it with a high priority.
+
+A Go trace holds function names, file paths and memory addresses, never request data. A panic's message may still hold anything, so the lines kept are redacted as the log is: addresses keep only their host, and tokens, keys and passwords are hidden.
+
+The file is moved to `crash.previous.log` until the crash is kept in the database, then deleted. A start that cannot reach the database tells the crash at the next start.
+
+Targets that chose **Health problem found** before this event existed have it chosen.
 
 ### Blocked accounts
 
-While **Block an account after this many wrong passwords** is set, under **Settings › Security**, the wrong password that blocks an account is told once (see [Blocking after wrong passwords](users.md#blocking-after-wrong-passwords)): neither the attempts during the block nor the right password then tell it again, and a block after it ends is told again. Attempts refused for their address, after too many failed sign-ins from it (429), never reach the account and are not told: they come all the time from anywhere on the internet.
+The wrong password that blocks an account is told once, while **Block an account after this many wrong passwords** is set in **Settings › Security** (see [Blocking after wrong passwords](sign-in-and-security.md#blocking-after-wrong-passwords)).
 
-The server's targets and administrators' own receive "Account blocked: sam", and "5 wrong passwords in a row: sam cannot sign in until 21:15. Last attempt from 203.0.113.5, with Jellyfin Web on Chrome. Unblock it from its page.", which opens the user's page in the admin app, where **Unblock** is. The user's own targets receive "Your account is blocked", with the same figures and "If it was not you, someone is trying your password.", which opens **My account**, where the password is changed. The time is the server's; the address is the client's, as Polyfin resolves it: behind a reverse proxy, only once it is a [known proxy](users.md#known-proxies). A sign-in through the admin app names the admin app.
+- Neither the attempts during the block nor the right password then tell it again.
+- A new block after the first one ends is told again.
+- Attempts refused for their address, after too many failed sign-ins from it (429), never reach the account and are not told: they come all the time from anywhere on the internet.
+
+| Who | Title | Message | Opens |
+|---|---|---|---|
+| The server's targets and administrators' own | "Account blocked: sam" | "5 wrong passwords in a row: sam cannot sign in until 21:15. Last attempt from 203.0.113.5, with Jellyfin Web on Chrome. Unblock it from its page." | The user's page in the admin app, where **Unblock** is. |
+| The user's own targets | "Your account is blocked" | The same figures, and "If it was not you, someone is trying your password." | **My account**, where the password is changed. |
+
+- The time is the server's.
+- The address is the client's, as Polyfin resolves it. Behind a reverse proxy, it is the client's only once the proxy is a [known proxy](reverse-proxy.md#known-proxies).
+- A sign-in through the admin app names the admin app.
 
 ### Sign-ins on new devices
 
-When an account signs in from a Jellyfin app or the web player on a device it never used, its own targets receive "Sign-in on a new device", and "Jellyfin Web on Chrome signed in to sam from 203.0.113.5. If it was not you, change your password: a new password signs every other device out.", which opens **My account**. A device is the identifier the app sends: Polyfin keeps those each account signed in from, after their devices sign out too. The account's first device is not told, nor a device it used before, nor a sign-in through the admin app. The devices signed in when Polyfin started keeping them count as used.
+An account's own targets are told when it signs in from a Jellyfin app or the web player on a device it never used.
 
-A new target in the admin app has both events chosen; targets saved before they existed receive them once chosen.
+- The title is "Sign-in on a new device".
+- The message is "Jellyfin Web on Chrome signed in to sam from 203.0.113.5. If it was not you, change your password: a new password signs every other device out.".
+- It opens **My account**.
+
+A device is the identifier the app sends. Polyfin keeps the devices each account signed in from, even after they sign out. Polyfin does not tell:
+
+- the account's first device;
+- a device it used before;
+- a sign-in through the admin app;
+- the devices signed in when Polyfin started keeping them, which count as used.
+
+A new target in the admin app has both **Account blocked** and **Sign-in on a new device** chosen. Targets saved before they existed receive them once chosen.
 
 ### Programme reminders
 
-A user with the **Live TV** permission sets a reminder from a programme's page in the web player, for that programme or for every airing of it (see [Programme reminders](live-tv.md#programme-reminders)). As long before the programme as **Remind me before** says, 5 minutes by default, their own targets receive "Starting at 20:30: Example Show", and "Example Show starts in 5 minutes on Example TV.", which opens the channel in the web player when a **Public address** is set. The time is the server's. The message is in the language of the web player the reminder was set in when Polyfin speaks it, else in the server language. A reminder sent late, after Polyfin was off at its time, tells the minutes left. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+A user with the **Live TV** permission sets a reminder from a programme's page in the web player, for that programme or for every airing of it (see [Programme reminders](live-tv.md#programme-reminders)). Their own targets are told as long before the programme as **Remind me before** says, 5 minutes by default.
 
-With **Also show reminders on my apps**, under **My account › Notifications**, off by default, the same title and message also show on the user's Jellyfin apps that accept messages, as **Send a message** shows one (see [Administration](administration.md#stopping-a-playback-or-sending-a-message)), until dismissed. Those apps are the web player while it is open, and the apps that keep a connection open and accept remote control. When no target of the user chose the event and the apps option is off, the web player's button and **My account › Notifications** say that reminders reach the user nowhere.
+- The title is "Starting at 20:30: Example Show", with the server's time.
+- The message is "Example Show starts in 5 minutes on Example TV.".
+- It opens the channel in the web player when a **Public address** is set.
+- It is in the language of the web player the reminder was set in when Polyfin speaks it, else in the server language.
+- A reminder sent late, after Polyfin was off at its time, tells the minutes left.
+- It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
 
-A new target in the admin app has the event chosen; targets saved before it existed receive it once chosen.
+**Also show reminders on my apps**, in **My account › Notifications**, also shows the reminder on the user's Jellyfin apps that accept messages. It is off by default.
+
+- The reminder shows as **Send a message** shows one (see [Administration](administration.md#stopping-a-playback-or-sending-a-message)), until dismissed.
+- Those apps are the web player while it is open, and the apps that keep a connection open and accept remote control.
+- When no target of the user chose the event and this option is off, the web player's button and **My account › Notifications** say that reminders reach the user nowhere.
+
+A new target in the admin app has the event chosen. Targets saved before it existed receive it once chosen.
 
 ### Watchlist titles available
 
-Polyfin checks the titles of each user's Watchlist they have not started for versions (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)). The first time versions are found for a title that earlier checks found none for, the user's own targets receive "Versions found: Example Movie (2008)", and "Versions of Example Movie (2008), on your watchlist, were found. They have not been tried yet.", which opens the title in the [web player](web-client.md). The message says versions were found, not that the title plays: a version is only tried when it plays.
+Polyfin checks the titles of each user's Watchlist they have not started for versions (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)). The user's own targets are told the first time versions are found for a title that earlier checks found none for.
 
+- The title is "Versions found: Example Movie (2008)".
+- The message is "Versions of Example Movie (2008), on your watchlist, were found. They have not been tried yet.".
+- It opens the title in the [web player](web-client.md).
+- It says versions were found, not that the title plays: a version is only tried when it plays.
 - Each title is told of once: not when it already had versions at its first check, as when it was added, nor again when it finds versions anew after losing them.
-- A title parental control, blocked genres or the user's hidden titles keep from them is never told of.
+- A title that parental control, blocked genres or the user's hidden titles keep from them is never told of.
 - It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
 
-A new target in the admin app has the event chosen; targets saved before it existed receive it once chosen.
+A new target in the admin app has the event chosen. Targets saved before it existed receive it once chosen.
 
 ### Weekly summary
 
-Once a week, at the day and hour set under **Settings › Notifications** (Monday at 9:00 by default, in the server's time zone), Polyfin sends the summary of the 7 days before:
+Once a week, Polyfin sends the summary of the 7 days before. It goes at the day and hour set in **Settings › Notifications**, Monday at 9:00 by default, in the server's time zone.
 
-- to the server's targets and administrators' own, the server's week: the hours watched and the number of playbacks, the five movies and the five series played longest (from the [playback history](statistics.md)), the new episodes of the series users follow (as the new-episode check found them, see [New episodes](#new-episodes)), the users who joined through an invite link, the files added to the local folders, and the problems **System › Health** found that week;
-- to every other user's targets, their own week: their hours watched and playbacks, the movies and series they watched (ten of each at most), and the new episodes of the series they follow.
+| Recipients | What it tells |
+|---|---|
+| The server's targets and administrators' own | The server's week: the hours watched and the number of playbacks, the five movies and the five series played longest (from the [playback history](statistics.md)), the new episodes of the series users follow (as the new-episode check found them, see [New episodes](#new-episodes)), the users who joined through an invite link, the files added to the local folders, and the problems **System › Health** found that week. |
+| Every other user's targets | Their own week: their hours watched and playbacks, the movies and series they watched (ten of each at most), and the new episodes of the series they follow. |
 
-A recipient with nothing to tell that week (no playback and no new episode, and for the server's week no user who joined, no file added and no problem) receives nothing.
+A recipient with nothing to tell that week receives nothing. Nothing means no playback and no new episode, and for the server's week, no user who joined, no file added and no problem.
 
-The title is "The week on Home" for the server's week, and "Your week on Home" for a user's, Home being the server name. Discord, ntfy, Telegram, Gotify and Pushover receive a short text with the key figures, one per line, such as "Week of October 3 to 10.", "12.5 hours watched, 42 playbacks.", "Movies: Example Movie, Other Movie.", "New user: sam.", and the link to **System › Statistics**, or to the user's statistics under **My account**. An email holds the whole summary, each title linking to its page in the [web player](web-client.md) (see [Messages for each kind](#messages-for-each-kind)); a webhook receives the figures as JSON (see [The weekly summary event](#the-weekly-summary-event)).
+The title is "The week on Home" for the server's week, and "Your week on Home" for a user's, Home being the server name. Each kind receives it in its own form:
 
-The end of the last week sent is kept in the database: a restart does not send a week again, and a server that was off at the hour sends the summary when it starts again, for the week that ended at the hour. A server off for longer sends the last week only. Polyfin looks whether the summary is due every minute. **Send the weekly summary**, under **System › Schedule**, sends the summary of the last 7 days now, to every target that chose it, without changing when the next one is sent.
+- Discord, ntfy, Telegram, Gotify and Pushover receive a short text with the key figures, one per line. For example: "Week of October 3 to 10.", "12.5 hours watched, 42 playbacks.", "Movies: Example Movie, Other Movie.", "New user: sam.". It links to **System › Statistics**, or to the user's statistics in **My account**.
+- An email holds the whole summary, each title linking to its page in the [web player](web-client.md) (see [Messages for each kind](webhook-reference.md#messages-for-each-kind)).
+- A webhook receives the figures as JSON (see [The weekly summary event](webhook-reference.md#the-weekly-summary-event)).
 
-Targets saved before the weekly summary existed do not receive it until it is chosen in their **Events**. A new target has it chosen: it is one message a week.
+The end of the last week sent is kept in the database:
+
+- A restart does not send a week again.
+- A server that was off at the hour sends the summary when it starts again, for the week that ended at the hour.
+- A server off for longer sends the last week only.
+- Polyfin looks whether the summary is due every minute.
+
+**Send the weekly summary**, in **System › Schedule**, sends the summary of the last 7 days now to every target that chose it. It does not change when the next one is sent.
+
+A new target has the weekly summary chosen: it is one message a week. Targets saved before it existed do not receive it until it is chosen in their **Events**.
 
 ### Month in review
 
-On the 1st of each month, at the hour of the weekly summary (9:00 by default, in the server's time zone), Polyfin sends the review of the month that ended, from its 1st at 0:00 until the 1st of the next at 0:00: what the [weekly summary](#weekly-summary) tells, over the month. The lists are those of the weekly summary, as long: the five movies and five series played longest for the server, ten of each for a user, the first 20 new episodes, the first ten titles added to the local folders.
+On the 1st of each month, at the hour of the weekly summary (9:00 by default), Polyfin sends the review of the month that ended. The month runs from its 1st at 0:00 until the 1st of the next at 0:00, in the server's time zone.
 
-The title is "The month on Home" for the server's month, and "Your month on Home" for a user's; the short text starts with "Month of September 2026.". A recipient with nothing to tell that month receives nothing.
+- It tells what the [weekly summary](#weekly-summary) tells, over the month.
+- Its lists are as long as the weekly summary's: five movies and five series for the server, ten of each for a user, the first 20 new episodes, the first ten titles added to the local folders.
+- The title is "The month on Home" for the server's month, and "Your month on Home" for a user's.
+- The short text starts with "Month of September 2026.".
+- A recipient with nothing to tell that month receives nothing.
 
-No target has the month in review chosen at first, not even a new one: a target chooses it beside the weekly summary, or in its place.
+No target has the month in review chosen at first, not even a new one. A target chooses it beside the weekly summary, or in its place.
 
 ### Year in review
 
-On January 1st, at the same hour, Polyfin sends the review of the year that ended, from January 1st at 0:00 until the next January 1st at 0:00:
+On January 1st, at the same hour, Polyfin sends the review of the year that ended, from January 1st at 0:00 until the next January 1st at 0:00.
 
-- to the server's targets and administrators' own, the server's year: the hours watched and the number of playbacks, the ten movies and the ten series played longest, the month with the most hours, the users who joined through an invite link, and the files added to the local folders;
-- to every other user's targets, their own year: their hours watched and playbacks, the ten movies and the ten series they played longest, and their month with the most hours.
+| Recipients | What it tells |
+|---|---|
+| The server's targets and administrators' own | The server's year: the hours watched and the number of playbacks, the ten movies and the ten series played longest, the month with the most hours, the users who joined through an invite link, and the files added to the local folders. |
+| Every other user's targets | Their own year: their hours watched and playbacks, the ten movies and the ten series they played longest, and their month with the most hours. |
 
-The title is "The year on Home" for the server's year, and "Your year on Home" for a user's; the short text starts with "Year 2026.", then the hours watched, and "Most watched month: March, 41.5 hours.". A recipient with nothing to tell that year receives nothing. The year counts the playbacks the [playback history](statistics.md) still keeps: with **Days to keep playback history** at 365, the default, a year in review sent after January 1st misses as many days at the start of the year, and with fewer days, its first months are missing.
+- The title is "The year on Home" for the server's year, and "Your year on Home" for a user's.
+- The short text starts with "Year 2026.", then the hours watched, and "Most watched month: March, 41.5 hours.".
+- A recipient with nothing to tell that year receives nothing.
 
-Every target that had the weekly summary chosen when Polyfin added the year in review has the year in review chosen too, and so does a new target. It is an event of its own: unchosen, the target keeps its weekly summary or month in review.
+The year counts the playbacks the [playback history](statistics.md) still keeps. **Days to keep playback history** is 365 by default, so a year in review sent after January 1st misses as many days at the start of the year. With fewer days kept, its first months are missing.
 
-The month and the year in review keep, as the weekly summary does, the last month and year sent in the database: a restart does not send them again, and a server that was off on the 1st at the hour sends them when it starts again, within that month only: a server off until the 1st of the next month never sends that review. The "Send the month in review" and "Send the year in review" tasks, under **System › Schedule**, send now the review of the last month, or of the last year, that ended, to every target that chose it, without changing when the next one is sent.
+A new target has the year in review chosen. So does every target that had the weekly summary chosen when Polyfin added the year in review. It is an event of its own: unchosen, the target keeps its weekly summary or month in review.
+
+The month and year in review keep the last month and year sent in the database, as the weekly summary does:
+
+- A restart does not send them again.
+- A server that was off on the 1st at the hour sends them when it starts again, within that month only.
+- A server off until the 1st of the next month never sends that review.
+
+The "Send the month in review" and "Send the year in review" tasks, in **System › Schedule**, send the review of the last month or year that ended now. They send it to every target that chose it, without changing when the next one is sent.
 
 Messages are written in the server language (**Settings › General**).
 
 ### Stopped connections
 
-An app connection (see [Staying connected](users.md#staying-connected)) stops when Nuvio or Stremio refuses the sign-in Polyfin kept: a key signed out, a session ended. A tracking service (see [Connection status](tracking.md#connection-status)) stops when it refuses the user's token or key, and shows **Connect again**. Either way, nothing comes over from it, or reaches it, until the user connects it again.
+A connection stops when the app or service refuses what Polyfin kept for the user:
 
-A connection that stops is told once, as it stops: the title is "Connection stopped: Stremio", and the message names the app or service and the user and says what to do, such as "Stremio refused the sign-in Polyfin kept for sam: nothing is imported from it until sam signs in again under My account › Import from an app, with Stay connected ticked." or, for a tracking service, "until sam presses Connect again under My account › Tracking.". With a public address, the message opens that page of the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+- an app connection (see [Staying connected](moving-to-polyfin.md#staying-connected)) stops when Nuvio or Stremio refuses the sign-in Polyfin kept, such as a key signed out or a session ended;
+- a tracking service (see [Connection status](tracking.md#connection-status)) stops when it refuses the user's token or key, and shows **Connect again**.
 
-- Only refusals are told. An app or service that does not answer, fails or asks to wait is tried again, and nothing is told. An AniList token that expires, after a year, stops the connection as a refusal does, and is told the same way, with the service `anilist`; MyAnimeList's is `myanimelist` (see [AniList and MyAnimeList](tracking.md#anilist-and-myanimelist)).
-- What stopped is kept in the database: a restart does not tell it again, nor does a later refusal of the same connection. A connection made again, then refused again, is told again.
-- **System › Health** lists the connections stopped, by user and app or service, each opening the user's page. They are not told as health problems: this event already told them.
+Either way, nothing comes over from it, or reaches it, until the user connects it again.
+
+A connection that stops is told once, as it stops:
+
+- The title is "Connection stopped: Stremio".
+- The message names the app or service and the user, and says what to do. For example: "Stremio refused the sign-in Polyfin kept for sam: nothing is imported from it until sam signs in again under My account › Import from an app, with Stay connected ticked.". For a tracking service, it ends "until sam presses Connect again under My account › Tracking.".
+- With a public address, the message opens that page of the admin app.
+- It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+
+Only refusals are told:
+
+- An app or service that does not answer, fails or asks to wait is tried again, and nothing is told.
+- An AniList token that expires, after a year, stops the connection as a refusal does, and is told the same way, with the service `anilist`. MyAnimeList's is told with `myanimelist` (see [AniList and MyAnimeList](tracking.md#anilist-and-myanimelist)).
+- What stopped is kept in the database: neither a restart nor a later refusal of the same connection tells it again.
+- A connection made again, then refused again, is told again.
+- **System › Health** lists the connections stopped, by user and app or service, each opening the user's page. They are not told as health problems, since this event already told them.
 
 A new target has this event chosen. Targets saved before it existed do not receive it until it is chosen in their **Events**.
 
 ## Delivery
 
-Nothing is sent while a request is answered. Each target has its own queue, sent in order in the background, at most four requests at once. Each request, or each email from connecting to the SMTP server to its last answer, waits 10 seconds at most. After a network error, a timeout, a 5xx answer, or a 4xx answer from an SMTP server (busy, or too many messages), the message is tried again after 30 seconds, then twice as long each time, up to 10 minutes; a 429 answer waits as long as its `Retry-After` header (or the `retry_after` of Discord, or of Telegram's `parameters`) asks. A message not delivered within an hour is dropped, and the target shows **Not reached**; it shows so after three failures in a row already. A 401, 403, 404 or 410, or a refusal as in **Refused** above, drops the message and shows **Refused** at once. Messages still waiting when Polyfin stops are dropped; at most 100 wait for one target.
+Nothing is sent while a request is answered. Each target has its own queue, sent in order in the background.
+
+| Limit | Value |
+|---|---|
+| Requests at once, across all targets | 4 |
+| Wait for one request, or one email from connecting to the SMTP server to its last answer | 10 seconds |
+| First retry | after 30 seconds, then twice as long each time, up to 10 minutes |
+| Messages waiting for one target | 100 at most |
+| Time before an undelivered message is dropped | 1 hour |
+
+- A message is tried again after a network error, a timeout, a 5xx answer, or a 4xx answer from an SMTP server (busy, or too many messages).
+- A 429 answer waits as long as its `Retry-After` header asks, or Discord's `retry_after`, or the `retry_after` of Telegram's `parameters`.
+- A message not delivered within an hour is dropped, and the target shows **Not reached**. It shows so after three failures in a row already.
+- A 401, 403, 404 or 410, or another refusal listed under **Refused** in [Target states](#target-states), drops the message and shows **Refused** at once.
+- Messages still waiting when Polyfin stops are dropped.
 
 ### Pacing
 
-Each target's form has two more fields:
+Each target's form has two fields that pace its messages:
 
-- **Messages a minute, at most**, 1 to 60, empty for no limit: past it, the next messages wait their turn, in order, until a minute has passed since the oldest of the last ones. Each request counts, retries included; **Send a test** does not.
-- **Group plays and new episodes, in minutes**, 1 to 1,440, empty to send each at once: the playback events (started, paused, resumed, stopped), shared links played and new episodes wait that long after the first of them, then go as one message, "3 notifications", with a line per event, its title then its message. A group of one goes as the event alone, and a group reaching 100 events goes at once. Every other event, failures, crashes and Health problems among them, still goes at once. A webhook receives the group as one event of type `grouped`, whose `events` array holds each event whole, as it would have been sent alone. Messages a group holds when Polyfin stops are dropped, as are those waiting in a queue.
+| Field | Values | What it does |
+|---|---|---|
+| **Messages a minute, at most** | 1 to 60, empty for no limit | Past it, the next messages wait their turn, in order, until a minute has passed since the oldest of the last ones. Each request counts, retries included; **Send a test** does not. |
+| **Group plays and new episodes, in minutes** | 1 to 1,440, empty to send each at once | The playback events, shared links played and new episodes wait that long after the first of them, then go as one message. |
 
-The targets list shows both, as "At most 5 a minute" and "Grouped every 15 min".
+A group goes as "3 notifications", with a line per event: its title, then its message.
+
+- A group of one goes as the event alone.
+- A group reaching 100 events goes at once.
+- Every other event still goes at once, failures, crashes and Health problems among them.
+- A webhook receives the group as one event of type `grouped` (see [The webhook event](webhook-reference.md#the-webhook-event)).
+- Messages a group holds when Polyfin stops are dropped, as are those waiting in a queue.
+
+The targets list shows both fields, as "At most 5 a minute" and "Grouped every 15 min".
 
 ### Recent deliveries
 
-**Recent deliveries**, on each target, lists the last 100 messages sent to it, newest first, kept 30 days: when, the message's title (a test, or how many events a group held), and its outcome: **Delivered**, **Refused** (401, 403, 404 or 410), **Message refused** (another 4xx), **Not delivered** (given up after an hour of retries), **Dropped** (too many messages waited) or **Cannot be decrypted**, with the status the target answered, the start of its answer without its address or tokens, and how many attempts it took. Users see their own targets' deliveries only.
+**Recent deliveries**, on each target, lists the last 100 messages sent to it, newest first, kept 30 days. Users see their own targets' deliveries only.
 
-## The webhook event
+Each delivery shows when it was sent, the message's title (a test, or how many events a group held), and its outcome:
 
-A webhook receives each event as JSON in a `POST`, unless its address is a Discord webhook's, which receives Discord's message (see [Targets](#targets)), with the headers `Content-Type: application/json`, `User-Agent: Polyfin/<version>` and `X-Polyfin-Event: <type>`. Any 2xx answer counts as delivered.
+| Outcome | Meaning |
+|---|---|
+| **Delivered** | The target accepted it. |
+| **Refused** | It answered 401, 403, 404 or 410. |
+| **Message refused** | It answered another 4xx. |
+| **Not delivered** | Polyfin gave up after an hour of retries. |
+| **Dropped** | Too many messages waited. |
+| **Cannot be decrypted** | The target's secret cannot be decrypted. |
 
-```json
-{
-  "version": 1,
-  "id": "6f1d3c0a9b7e4f2c8a5d1e3b7c9f0a2d",
-  "type": "new_episode",
-  "at": "2026-10-09T18:00:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
-  "title": "New episode of Example Series",
-  "message": "S02E05 · The Fifth",
-  "url": "https://media.example.org/web/#/details?id=0a1b2c3d4e5f60718293a4b5c6d7e8f9&serverId=fedcba9876543210fedcba9876543210",
-  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
-  "episode": {
-    "id": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
-    "name": "The Fifth",
-    "seriesId": "99887766554433221100ffeeddccbbaa",
-    "seriesName": "Example Series",
-    "season": 2,
-    "number": 5,
-    "premiereDate": "2026-10-09T00:00:00Z",
-    "providerIds": { "Imdb": "tt0000000" }
-  }
-}
-```
-
-A user who joined through an invite link:
-
-```json
-{
-  "version": 1,
-  "id": "0f9e8d7c6b5a49382716051f2e3d4c5b",
-  "type": "user_joined",
-  "at": "2026-10-09T18:05:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
-  "title": "New user: sam",
-  "message": "sam joined through alex's invite.",
-  "url": "https://media.example.org/admin/users/11223344556677889900aabbccddeeff",
-  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
-  "invite": {
-    "id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
-    "createdBy": { "id": "ffeeddccbbaa00998877665544332211", "name": "alex" }
-  }
-}
-```
-
-| Field | Type | Meaning |
-|---|---|---|
-| `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
-| `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `server_crashed`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `playback_failed`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `share_played`, `programme_reminder`, `title_available`, `grouped` for a target's grouped message (see [Pacing](#pacing)), or `test` for **Send a test**. |
-| `at` | string | When the event happened, RFC 3339 in UTC. |
-| `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
-| `title`, `message` | string | The event for people, in the server language; a `programme_reminder` in the language its reminder was set in when Polyfin speaks it, else the server's. |
-| `url` | string or null | Opens what the event is about; null without a public address. For `new_version`, the release notes on GitHub, always set. |
-| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, `monthly_summary` and `yearly_summary`, the user whose week, month or year it is; for `connection_stopped`, the user whose connection stopped; for `account_blocked` and `new_device`, the account; for `programme_reminder`, the user who set the reminder. Null for health events, new versions, new episodes sent to the server's targets, and the server's summaries. |
-| `episode` | object | For `new_episode`: the episode's and its series' item IDs, names, season and number, release date, and the episode's provider IDs. |
-| `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
-| `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
-| `invite` | object | For `user_joined`: the invite link's `id`, and `createdBy`, the administrator who created it (`id`, `name`), null once deleted. |
-| `release` | object | For `new_version`: `version`, the new version, `url`, its release notes, and `current`, the version the server runs. |
-| `playback` | object | For playbacks; see below. `user` is the user who plays, and `at` when the change happened. |
-| `summary` | object | For `weekly_summary`, `monthly_summary` and `yearly_summary`; see [The weekly summary event](#the-weekly-summary-event) and [The month and year in review events](#the-month-and-year-in-review-events). |
-| `connection` | object | For `connection_stopped`: `kind`, `app` for an app connection or `tracking` for a tracking service; `service`, the app or service as the API names it (`nuvio`, `stremio`, `trakt`, `simkl`, `mdblist`, `publicmetadb`, `anilist`, `myanimelist`, `lastfm`, `listenbrainz`); and `name`, as people name it. |
-| `signIn`, `block` | object | For `account_blocked` and `new_device`; see [The sign-in events](#the-sign-in-events). |
-| `programme` | object | For `programme_reminder`: `id`, the programme's item as Jellyfin apps know it, `name`, `channelId`, `channelName`, and its `start` and `end`, RFC 3339 in UTC. `programme_reminder` was added within version 1, with this object; no other field changed. |
-| `watchlistTitle` | object | For `title_available`: `id`, the movie's or series' item as Jellyfin apps know it, `kind` (`movie` or `series`), `name`, `year` (0 when unknown) and `providerIds`, as `episode`'s. `title_available` was added within version 1, with this object; no other field changed. |
-
-The playback events were added within version 1: their `playback` object is new, and no other field changed. So was `new_version`, with its `release` object:
-
-```json
-{
-  "version": 1,
-  "id": "5d4c3b2a1f0e49d8c7b6a5948372615f",
-  "type": "new_version",
-  "at": "2026-10-10T09:01:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": null },
-  "title": "New version: Polyfin 1.5.0",
-  "message": "Polyfin 1.5.0 is available. This server runs version 1.4.0.",
-  "url": "https://github.com/moodiness/polyfin/releases/tag/v1.5.0",
-  "user": null,
-  "release": {
-    "version": "1.5.0",
-    "url": "https://github.com/moodiness/polyfin/releases/tag/v1.5.0",
-    "current": "1.4.0"
-  }
-}
-```
-
-```json
-{
-  "version": 1,
-  "id": "0c2b9e5d7a1f4e3c9b8a6d5e4f3c2b1a",
-  "type": "playback_paused",
-  "at": "2026-10-10T20:15:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": null },
-  "title": "sam paused Example Series S01E02",
-  "message": "Pilot · Jellyfin Web on Chrome · 12:34 · Conversion",
-  "url": null,
-  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
-  "playback": {
-    "itemId": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
-    "kind": "episode",
-    "name": "Pilot",
-    "seriesId": "99887766554433221100ffeeddccbbaa",
-    "seriesName": "Example Series",
-    "season": 1,
-    "number": 2,
-    "channelId": null,
-    "channelName": null,
-    "artist": null,
-    "app": "Jellyfin Web",
-    "device": "Chrome",
-    "position": 754,
-    "paused": true,
-    "method": "conversion",
-    "converted": true,
-    "startedAt": "2026-10-10T20:02:00Z",
-    "played": 754
-  }
-}
-```
-
-| `playback` field | Type | Meaning |
-|---|---|---|
-| `itemId` | string | The item played, as Jellyfin apps know it. |
-| `kind` | string | `movie`, `episode`, `channel`, `recording`, `replay` (a Replay programme), `song` or `audiobook`. |
-| `name` | string | The item's name. |
-| `seriesId`, `seriesName`, `season`, `number` | string, number or null | For an episode: its series, season and number. |
-| `channelId`, `channelName` | string or null | For a channel, a Replay programme or a recording: its channel. |
-| `artist` | string or null | For a song or an audiobook: its first artist. |
-| `app`, `device` | string | The app and the device, as they signed in. |
-| `position` | number | Where the playback is, in seconds. |
-| `paused` | boolean | Whether it is paused. |
-| `method` | string or null | `direct_play`, `direct_stream` (repackaged, nothing converted) or `conversion`; null when not known yet. A playback converted for a while stays `conversion`. |
-| `converted` | boolean | Whether `method` is `conversion`. |
-| `startedAt` | string | When the playback started, RFC 3339 in UTC. |
-| `played` | number | How long it played since, in seconds, pauses left out. |
-
-`connection_stopped` was added within version 1 too, with its `connection` object:
-
-```json
-{
-  "version": 1,
-  "id": "7e6d5c4b3a2f41e0d9c8b7a6f5e4d3c2",
-  "type": "connection_stopped",
-  "at": "2026-10-11T06:00:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
-  "title": "Connection stopped: Trakt",
-  "message": "Trakt refused the token or key Polyfin kept for sam: nothing is sent to it or imported from it until sam presses Connect again under My account › Tracking.",
-  "url": "https://media.example.org/admin/me/account#tracking",
-  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
-  "connection": { "kind": "tracking", "service": "trakt", "name": "Trakt" }
-}
-```
-
-### The sign-in events
-
-`account_blocked` and `new_device` were added within version 1: their `signIn` and `block` objects are new, and no other field changed. `user` is the account, and `at` when it was blocked or signed in.
-
-```json
-{
-  "version": 1,
-  "id": "7a8b9c0d1e2f43a5b6c7d8e9f0a1b2c3",
-  "type": "account_blocked",
-  "at": "2026-10-12T19:00:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
-  "title": "Account blocked: sam",
-  "message": "5 wrong passwords in a row: sam cannot sign in until 21:15. Last attempt from 203.0.113.5, with Jellyfin Web on Chrome. Unblock it from its page.",
-  "url": "https://media.example.org/admin/users/11223344556677889900aabbccddeeff",
-  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
-  "signIn": { "address": "203.0.113.5", "app": "Jellyfin Web", "appVersion": "10.11.0", "device": "Chrome", "deviceId": "TW96aWxsYS81LjA" },
-  "block": { "until": "2026-10-12T19:15:00Z", "attempts": 5 }
-}
-```
-
-| Field | Type | Meaning |
-|---|---|---|
-| `signIn` | object | For `new_device`, the sign-in; for `account_blocked`, the wrong password that blocked the account: `address`, the client's address as Polyfin resolves it, `app` and `appVersion`, and `device` and `deviceId`, the device's name and identifier, as the app sent them, empty when it sent none. Through the admin app, `app` is `Polyfin admin`, with no device. |
-| `block` | object | For `account_blocked` only: `until`, when the block ends, RFC 3339 in UTC, and `attempts`, the wrong passwords in a row that blocked it. |
-
-### The weekly summary event
-
-The weekly summary was added within version 1: its `summary` object is new, and no other field changed. The server's summary has `user` null; a user's names them, and leaves the server's parts empty. `at` is when it was sent, and `url` opens **System › Statistics**, or the user's statistics under **My account**.
-
-```json
-{
-  "version": 1,
-  "id": "4e5f6a7b8c9d40e1f2a3b4c5d6e7f809",
-  "type": "weekly_summary",
-  "at": "2026-10-12T07:00:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
-  "title": "The week on Home",
-  "message": "Week of October 5 to 12.\n3.1 hours watched, 4 playbacks.\nMovies: Example Movie.\nSeries: Example Series.\n1 new episode of the series users follow.\nNew user: sam.\n2 files added to the local folders.\n1 problem found by System › Health.",
-  "url": "https://media.example.org/admin/system/statistics",
-  "user": null,
-  "summary": {
-    "scope": "server",
-    "start": "2026-10-05T07:00:00Z",
-    "end": "2026-10-12T07:00:00Z",
-    "plays": 4,
-    "played": 11100,
-    "movies": [{ "id": "0b1c2d3e4f5061728394a5b6c7d8e9f0", "name": "Example Movie", "plays": 2, "played": 7200 }],
-    "series": [{ "id": "99887766554433221100ffeeddccbbaa", "name": "Example Series", "plays": 2, "played": 3900 }],
-    "newEpisodes": 1,
-    "episodes": [
-      {
-        "id": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
-        "name": "The Fifth",
-        "seriesId": "99887766554433221100ffeeddccbbaa",
-        "seriesName": "Example Series",
-        "season": 2,
-        "number": 5
-      }
-    ],
-    "users": [
-      {
-        "id": "11223344556677889900aabbccddeeff",
-        "name": "sam",
-        "joinedAt": "2026-10-09T18:05:00Z",
-        "invitedBy": { "id": "ffeeddccbbaa00998877665544332211", "name": "alex" }
-      }
-    ],
-    "addedFiles": 2,
-    "added": [{ "name": "Other Movie", "kind": "movie", "files": 2 }],
-    "problems": [{ "key": "backup", "severity": "error", "text": "The last backup failed.", "foundAt": "2026-10-08T04:10:00Z" }]
-  }
-}
-```
-
-| `summary` field | Type | Meaning |
-|---|---|---|
-| `scope` | string | `server` for the server's week, sent to the server's targets and administrators' own; `user` for a user's. |
-| `start`, `end` | string | The week, from `start` until before `end`, RFC 3339 in UTC: 7 days at the day and hour of the settings, or the 7 days before **Send the weekly summary** ran. |
-| `plays`, `played` | number | How many videos played that week, and how long, in seconds, pauses left out. |
-| `movies`, `series` | array | The movies and series played longest: five of each for the server, ten for a user. Each has the `id` of its item (a series' for a series) as Jellyfin apps know it, its `name`, its `plays`, and `played`, in seconds. |
-| `newEpisodes` | number | How many new episodes the new-episode check found that week, of the series users follow, or for a user of the series they follow. |
-| `episodes` | array | The first 20 of them, by series, season and number: the episode's `id` and `name`, its series' `seriesId` and `seriesName`, its `season` and `number`. |
-| `users` | array | For the server: the users who joined through an invite link, with `id`, `name`, `joinedAt`, and `invitedBy`, the administrator who created the invite (`id`, `name`), null once deleted. Empty for a user. |
-| `addedFiles` | number | For the server: how many files the scans of local folders first found that week. 0 for a user. |
-| `added` | array | For the server: the titles of these files, those with the most files first, ten at most: the `name` of the title they were matched to, or else the name the files tell, or for a music folder's tracks the title of their album; their `kind`, `movie`, `show` or `album`; and their number of `files` (an album's tracks). Empty for a user. |
-| `problems` | array | For the server: the problems **System › Health** found that week, as they were told: `key`, `severity`, `text`, and `foundAt`. Empty for a user. |
-
-### The month and year in review events
-
-The month and year in review were added within version 1, as `monthly_summary` and `yearly_summary`: their `summary` object is the weekly summary's, with one more field, and no other field changed. `start` and `end` are the month or the year, from its first day at 0:00 in the server's time zone until before the first day of the next, for the tasks that send them by hand too.
-
-A month in review fills the `summary` as the weekly summary does, over the month. A year in review leaves `newEpisodes` at 0 and `episodes` and `problems` empty, has ten `movies` and ten `series` for the server too, and adds `topMonth`:
-
-```json
-{
-  "version": 1,
-  "id": "5f6a7b8c9d0e41f2a3b4c5d6e7f80912",
-  "type": "yearly_summary",
-  "at": "2026-01-01T08:00:00Z",
-  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
-  "title": "Your year on Home",
-  "message": "Year 2025.\n41.5 hours watched, 30 playbacks.\nMost watched month: March, 9 hours.\nMovies: Example Movie.\nSeries: Example Series.",
-  "url": "https://media.example.org/admin/me/account#statistics",
-  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
-  "summary": {
-    "scope": "user",
-    "start": "2024-12-31T23:00:00Z",
-    "end": "2025-12-31T23:00:00Z",
-    "plays": 30,
-    "played": 149400,
-    "movies": [{ "id": "0b1c2d3e4f5061728394a5b6c7d8e9f0", "name": "Example Movie", "plays": 2, "played": 7200 }],
-    "series": [{ "id": "99887766554433221100ffeeddccbbaa", "name": "Example Series", "plays": 28, "played": 142200 }],
-    "newEpisodes": 0,
-    "episodes": [],
-    "users": [],
-    "addedFiles": 0,
-    "added": [],
-    "problems": [],
-    "topMonth": { "month": "2025-03", "plays": 6, "played": 32400 }
-  }
-}
-```
-
-| `summary` field | Type | Meaning |
-|---|---|---|
-| `topMonth` | object | For `yearly_summary` only: the month with the most hours, as `month`, `YYYY-MM` in the server's time zone, with its `plays` and `played`, in seconds; the one with more playbacks on a tie, then the earlier. Absent for a week or a month. |
-
-## Messages for each kind
-
-Failed recordings and health problems that are errors are urgent: ntfy, Gotify and Pushover show them with a higher priority.
-
-A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, stopped connections and sign-ins on new devices, orange for blocked accounts, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop, sky blue for new versions, indigo for weekly summaries and the month and year in review), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
-
-An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems and stopped connections, `white_check_mark` for solved ones, `wave` for users who joined, `package` for new versions, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bar_chart` for weekly summaries and the month and year in review, `lock` for blocked accounts, `key` for sign-ins on new devices, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
-
-An email target receives a `multipart/alternative` message, in plain text and in HTML, in the server language:
-
-- the subject is the event's title;
-- the body is its message, its link (named "Open" in HTML), and "Sent by Polyfin from" the server name. A weekly summary's body, or a month or year in review's, is the whole summary instead: the week, month or year and its figures, then a list for each part (the movies and series with how long and how many times they played, the month with the most hours, the new episodes, the users who joined, the files added, the problems found). Each title links to its page in the web player, each user to their page in the admin app, each problem to the page that shows it, and "Open the statistics" to the statistics;
-- the headers are `From` (the sender name and address), `To`, `Subject`, `Date` (when the event happened), `Message-ID` (the same for each try of a message, at the sender address's domain), `Auto-Submitted: auto-generated`, so that mail servers send no automatic reply, and `X-Polyfin-Event: <type>`.
-
-A Telegram target receives the Bot API's `sendMessage` (`POST https://api.telegram.org/bot<token>/sendMessage`), with `chat_id`, and `text` in HTML (`parse_mode` is `HTML`): the event's title in bold, its message, and its link named "Open", without a preview of the page.
-
-A Gotify target receives a `POST` to its server's `/message`, with the application token as the `X-Gotify-Key` header, and `title`, `message`, a `priority` of 8 for urgent events and 5 for the others, and the event's link as the address a click opens (`extras` `client::notification` `click` `url`).
-
-A Pushover target receives a `POST` to `https://api.pushover.net/1/messages.json`, with `token`, `user`, `title`, `message`, `url` (the event's link), a `priority` of 1 for urgent events and 0 for the others, and `timestamp`, when the event happened.
+Each delivery also shows the status the target answered, the start of its answer without its address or tokens, and how many attempts it took.
 
 <a id="compared-with-jellyfin"></a>
 
 **Compared with Jellyfin**
 
-Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination, and whose events are Jellyfin's own (item added, playback, users, tasks). Polyfin builds the messages itself, and:
-
-- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, Health problems, crashes of the server, playbacks and failed plays, stopped connections, users who joined through an invite link, accounts blocked after wrong passwords, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, and a weekly summary, a month and a year in review for the server and for each user;
-- each target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries;
-- each user chooses their own targets and events under **My account**, besides the server's;
-- the webhook format is one documented, versioned JSON event rather than templates; Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them;
-- addresses, tokens, keys and the SMTP password are stored encrypted, and failing targets are shown.
-
-Jellyfin apps see none of this: nothing of it is part of Jellyfin's API.
-
-<a id="for-app-developers"></a>
-
-<details><summary>For app developers</summary>
-
-The admin API serves the targets: the server's to administrators at `/admin/api/notifications`, and each user's own at `/admin/api/account/notifications`.
-
-- `GET` lists the `targets`, the `events` and `kinds` they may choose from, and `emailAvailable`, whether the SMTP server and sender address are set.
-- `POST …/targets` adds a target, `PATCH …/targets/{id}` changes one (fields left out keep their values), `DELETE …/targets/{id}` deletes one, and `POST …/targets/{id}/test` sends a test message, answering `delivered`, the `status` (an HTTP status, or an SMTP code for email), and the target.
-- A target has `kind` (`webhook`, `discord`, `ntfy`, `email`, `telegram`, `gotify` or `pushover`), `name`, `events`, `enabled`, and:
-  - `address`: a webhook's or Discord target's scheme and host, an ntfy or Gotify target's server, an email target's recipient, empty for Telegram and Pushover;
-  - `topic`: an ntfy target's topic;
-  - `chat`: a Telegram target's chat;
-  - `tokenSet`: whether an ntfy, Telegram, Gotify or Pushover target has a token.
-
-  It never answers a secret address, token or key.
-- To add or change one, send `address` (a webhook's or Discord target's address, an ntfy or Gotify target's server, an email target's recipient), `topic`, `chat`, `token` (an ntfy target's access token, empty for none, a Telegram bot's token, or a Gotify or Pushover application's token) and `userKey` (a Pushover target's user key).
-- Errors:
-  - `email_unavailable` (409): an email target without an SMTP server;
-  - `invalid_email_address`, `invalid_chat`, `invalid_token`, `invalid_user_key` (400): a malformed field;
-  - `target_unreadable` (409): a Pushover target whose key and token cannot be decrypted, changed with only one of them.
-- `GET /admin/api/settings` answers `smtpHost`, `smtpPort`, `smtpSecurity` (`starttls`, `tls` or `none`), `smtpUser`, `smtpPasswordSet`, `smtpFrom` and `smtpFromName`. `PUT` takes them and `smtpPassword`, which is never answered: left out, it is kept; empty, it is removed. The errors are `invalid_smtp_host`, `invalid_smtp_port`, `invalid_smtp_security`, `invalid_smtp_account` and `invalid_smtp_sender`.
-- `GET /admin/api/settings` answers `weeklySummaryDay`, the day the weekly summary is sent, 0 for Sunday to 6 for Saturday, and `weeklySummaryHour`, 0 to 23, in the server's time zone. `PUT` takes them; out of bounds, they are `invalid_weekly_summary_day` and `invalid_weekly_summary_hour`.
-- A target answers `perMinute` and `groupMinutes`, null when unset; a draft takes them, 0 to unset; out of bounds, they are `invalid_per_minute` and `invalid_group_minutes`.
-- `GET .../targets/{id}/deliveries` lists a target's recent deliveries: `id`, `eventId`, `type`, `title`, `events`, `outcome`, `status` (null when the target did not answer), `error` (null when it accepted the message), `attempts`, `queuedAt` and `at`.
-- `GET /admin/api/notifications/preview?event=weekly_summary&user=<id>`, for administrators, answers a summary (`weekly_summary`, `monthly_summary` or `yearly_summary`, else `invalid_summary`) as it would be sent now, of the server without `user`, else of that user: `subject`, `text` and `html`, exactly the email's parts, `start` and `end`, and `empty`, true when nothing would be sent. **Preview**, in **Settings › Notifications › Weekly summary**, shows it in a sandboxed frame. Nothing is sent.
-
-</details>
-
+- Polyfin builds the messages itself. Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin's events are its own: new episodes of followed series, recordings, Health problems, crashes, playbacks and failed plays, stopped connections, users who joined, blocked accounts, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, and the weekly summary, month and year in review. Jellyfin's are item added, playback, users and tasks; Polyfin has no library scan to tell of added items ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Each Polyfin target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Each Polyfin user chooses their own targets and events in **My account**, besides the server's ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin's webhook sends one documented, versioned JSON event rather than templates, and Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin stores addresses, tokens, keys and the SMTP password encrypted, and shows failing targets ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Jellyfin apps see none of this: nothing of it is part of Jellyfin's API ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
