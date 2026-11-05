@@ -1,6 +1,6 @@
 # Development
 
-This page explains how to run Polyfin from source, run its tests, refresh the Jellyfin fixtures, follow Silo's changes, and work on the website.
+This page explains how to run Polyfin from source, run its tests, refresh the Jellyfin fixtures, what CI runs and when, how to follow Silo's changes, and how to work on the website.
 
 ## Requirements
 
@@ -25,7 +25,7 @@ make check                    # formatting, vet and tests
 - Database tests run when `POLYFIN_TEST_DATABASE_URL` points to a disposable PostgreSQL database whose role may create databases. Most database tests work in a database of their own, copied from a template database migrated once and kept for later runs, `polyfin_template_` followed by a key of the migrations; the others work in a schema of their own.
 - Remux tests run when `POLYFIN_TEST_FFMPEG` names an `ffmpeg` executable with `ffprobe` beside it.
 - CI always provides both.
-- `make check` runs every package's tests under the race detector (`make test`), then, without it, the time bounds of a large IPTV line-up (`make bounds`): the race detector slows that work tenfold, and gets a tenth of the line-up. CI runs the tests of `internal/jellyfin`, by far the longest, in a job of their own (`make test-jellyfin`), and the others beside the rest of the checks (`make test-others`).
+- `make check` runs every package's tests under the race detector (`make test`), the slowest packages first, then, without it, the time bounds of a large IPTV line-up (`make bounds`): the race detector slows that work tenfold, and gets a tenth of the line-up. CI runs the tests in four jobs at once: those of `internal/jellyfin`, by far the longest, in two halves by the first letter after `Test` of their names (`make test-jellyfin-1` and `make test-jellyfin-2`), and the other packages in two shares balanced by their times on CI (`make test-race-1` and `make test-race-2`). A new package goes to the second share, and a new test of `internal/jellyfin` to the half its name falls in.
 - The tests of the slowest packages run in parallel. A test that changes state other tests read, such as a package variable, or that times waits of a few milliseconds, stays sequential and says why.
 - The SMB share tests run when `POLYFIN_TEST_SMB` names a share holding video files, its user and password in the address: `smb://user:password@host:port/share/folder`. The user must be allowed to write there: the change notification test adds, renames and removes files in a folder of its own, removed after. CI does not run them; WebDAV folders are tested against a server in the tests themselves.
 - `make image-check` builds the image and checks the version it prints; `make image-health` then starts it against the PostgreSQL of `IMAGE_DATABASE_URL`, by default the host's on port 5432 with the user, password and database `polyfin`, and waits for its health check to report it healthy, as CI does.
@@ -35,6 +35,18 @@ make check                    # formatting, vet and tests
 Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.2 server, recorded in `internal/jellyfin/testdata/`. Jellyfin 12.3 answers the same: recorded again from it with the same scripts, its answers differ only in identifiers, dates, timings and the encoded clips' bitrates, so the 12.2 recordings stand for both. Jellyfin 12.4 changes only its .NET packages and its version, so they stand for it too.
 
 `scripts/jellyfin-fixtures.sh` records them again from a disposable Jellyfin container. It requires Docker, curl and jq.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pull requests, on pushes to `main` and release tags, each night, and when run by hand. Its first job, "Decide what this run tests", chooses the others:
+
+- A pull request is opened as a draft, whose runs skip every job: CI runs once it is marked ready for review, and on each push after. A push cancels the run of the push before.
+- A pull request that changes only documentation (`docs/`, the Markdown files at the top of the repository, the issue and pull request templates, the website's workflow) runs nothing more: the website's workflow builds it.
+- Pull requests skip the macOS jobs: GitHub has few macOS runners, and a job that waits 15 minutes for one fails. They run on pushes to `main`, on release tags and each night.
+- A push to `main` runs nothing more when its pull request's last run tested its tree, and passed: the commit `main` was set to by the merge has the tree of the pull request's head, and that head descends from `main`'s commit before the push, so the pull request's run, which tested the head merged into an earlier `main`, tested this very tree. Any doubt, an error of GitHub's API among them, makes a full run.
+- Each night at 03:17 UTC, a full run tests `main`, the macOS jobs included.
+
+Go's build and module caches are restored from `main`'s latest run, and only runs on `main` save them, each under a key of its own, so that the next runs start from the latest build. The tests' PostgreSQL keeps its data in memory, and their `pg_dump` and `pg_restore` are the image's, from the Dockerfile's `postgresql-client` stage, as their FFmpeg comes from its `ffmpeg` stage. `.github/workflows/desktop-package.yml` builds each package of Polyfin Desktop, then installs and smokes it: the CI workflow calls it for each package, so that each test waits for its own package only.
 
 ## Following Silo
 

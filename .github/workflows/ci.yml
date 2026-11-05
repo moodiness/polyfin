@@ -1,62 +1,54 @@
 name: CI
 
 on:
+  # Pull requests are opened as drafts, whose runs skip every job: CI runs
+  # once one is marked ready for review, and on each push after.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
     tags: ["v[0-9]*"]
+  # Main in full each night: the macOS jobs, which pull requests skip,
+  # whatever a push to main skipped, and Go's caches kept for the next runs.
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A push to a pull request cancels the run of the push before. Each commit
+# of main, each tag, each night and each draft's run has a group of its own:
+# a draft's run, which runs nothing, never cancels the run of its ready head.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ci-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.pull_request.draft && github.run_id || github.ref) || format('{0}-{1}', github.ref, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
 
 jobs:
-  check:
-    name: Go, PostgreSQL, admin app and deployment checks
+  tested:
+    # What the run tests, and the version it builds:
+    # - a pull request that changes only documentation tests nothing, the
+    #   website's workflow building it;
+    # - a push to main whose tree its pull request's last run tested, and
+    #   passed, tests nothing more: the nightly run tests main in full;
+    # - any other run tests everything, the macOS jobs outside pull
+    #   requests only.
+    # Each other job needs this one, so that a draft's run skips them all.
+    name: Decide what this run tests
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
-    env: &test-environment
-      POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
-    services: &test-services
-      postgres:
-        # Docker Hub limits the pulls of shared runners: its images come
-        # from Google's mirror of it, pinned to the same digests.
-        image: mirror.gcr.io/library/postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
-        env:
-          POSTGRES_DB: polyfin
-          POSTGRES_USER: polyfin
-          POSTGRES_PASSWORD: polyfin
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U polyfin -d polyfin"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+      tested: ${{ steps.scope.outputs.tested }}
+      run: ${{ steps.scope.outputs.run }}
+      macos: ${{ steps.scope.outputs.macos }}
     steps:
-      - &checkout
-        name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-      - &setup-go
-        name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-      - &setup-node
-        name: Set up Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
       - name: Derive version from the release tag
         id: version
         env:
@@ -85,42 +77,179 @@ jobs:
             echo "version=${version}"
             echo "prerelease=${prerelease}"
           } >> "$GITHUB_OUTPUT"
-      - &setup-buildx
-        name: Set up Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Look for the passing run of a pull request on this tree
+        id: merged
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+          FORCED: ${{ github.event.forced }}
+        run: |
+          # Any doubt, an error of GitHub's API among them, makes a full run.
+          decide_job='Decide what this run tests'
+          check_job='Lint, build, admin app and deployment checks'
+          tested() {
+            if [ "$FORCED" = true ]; then echo "main was pushed with force"; return 1; fi
+            # The pull request merged by rebase as this commit; GitHub may
+            # link them a few seconds after the push.
+            local head="" try
+            for try in 1 2 3 4 5 6; do
+              head="$(gh api "repos/$REPO/commits/$SHA/pulls" \
+                --jq ".[] | select(.merged_at != null and .base.ref == \"main\" and .merge_commit_sha == \"$SHA\") | .head.sha")" || head=""
+              if [ "$(wc -w <<< "$head")" -eq 1 ]; then break; fi
+              echo "Try $try: no single pull request merged as $SHA yet"
+              head=""
+              sleep 10
+            done
+            if [ -z "$head" ]; then echo "no pull request was merged as $SHA"; return 1; fi
+            local tree head_tree
+            tree="$(gh api "repos/$REPO/git/commits/$SHA" --jq .tree.sha)" || return 1
+            head_tree="$(gh api "repos/$REPO/git/commits/$head" --jq .tree.sha)" || return 1
+            if [ "$tree" != "$head_tree" ]; then echo "the tree of $SHA is not the one of its pull request's head, $head"; return 1; fi
+            # A pull request's run tests its head merged into main as main
+            # then was, an ancestor of main before this push: when the head
+            # descends from that commit too, the merge was the head's tree.
+            local status
+            status="$(gh api "repos/$REPO/compare/$BEFORE...$head" --jq .status)" || return 1
+            if [ "$status" != ahead ]; then echo "$head does not descend from main before the push, $BEFORE ($status)"; return 1; fi
+            # The head's last run, a draft's skipped run left aside, passed,
+            # and tested the code.
+            local runs run conclusion jobs decided checked
+            runs="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$head&event=pull_request&per_page=30" \
+              --jq '.workflow_runs | sort_by(.created_at) | reverse | .[] | "\(.id) \(.conclusion)"')" || return 1
+            while read -r run conclusion; do
+              [ -n "$run" ] || continue
+              jobs="$(gh api "repos/$REPO/actions/runs/$run/jobs?filter=latest&per_page=100" --jq '.jobs[] | "\(.conclusion)\t\(.name)"')" || return 1
+              decided="$(awk -F '\t' -v name="$decide_job" '$2 == name { print $1 }' <<< "$jobs")"
+              if [ -z "$decided" ] || [ "$decided" = skipped ]; then continue; fi
+              checked="$(awk -F '\t' -v name="$check_job" '$2 == name { print $1 }' <<< "$jobs")"
+              if [ "$conclusion" = success ] && [ "$checked" = success ]; then
+                echo "run $run of $head, whose tree this is, passed"
+                return 0
+              fi
+              echo "the last run of $head, $run, ended with $conclusion, its checks with ${checked:-nothing}"
+              return 1
+            done <<< "$runs"
+            echo "no run of $head tested it"
+            return 1
+          }
+          if reason="$(tested)"; then
+            echo "Tested: $reason"
+            echo "tested=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Full run: $reason"
+            echo "tested=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Look for a change outside the documentation
+        id: changes
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # GitHub lists 3,000 files at most: a longer list counts as code.
+          files="$(gh api --paginate "repos/$REPO/pulls/$NUMBER/files?per_page=100" --jq '.[].filename')" || files=""
+          docs='^(docs/|[^/]+\.md$|\.github/(ISSUE_TEMPLATE|DISCUSSION_TEMPLATE)/|\.github/pull_request_template\.md$|\.github/workflows/pages\.yml$)'
+          if [ -n "$files" ] && [ "$(wc -l <<< "$files")" -lt 3000 ] && ! grep -qvE "$docs" <<< "$files"; then
+            echo "Only documentation changes"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Choose the jobs
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TESTED: ${{ steps.merged.outputs.tested == 'true' }}
+          CODE: ${{ steps.changes.outputs.code != 'false' }}
+        run: |
+          run=false
+          macos=false
+          if [ "$TESTED" != true ] && [ "$CODE" = true ]; then
+            run=true
+            if [ "$EVENT_NAME" != pull_request ]; then macos=true; fi
+          fi
+          echo "Tested already: ${TESTED}, tests: ${run}, macOS: ${macos}"
+          {
+            echo "tested=${TESTED}"
+            echo "run=${run}"
+            echo "macos=${macos}"
+          } >> "$GITHUB_OUTPUT"
+
+  check:
+    name: Lint, build, admin app and deployment checks
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env: &test-environment
+      POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
+    services: &test-services
+      postgres:
+        # Docker Hub limits the pulls of shared runners: its images come
+        # from Google's mirror of it, pinned to the same digests.
+        image: mirror.gcr.io/library/postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_DB: polyfin
+          POSTGRES_USER: polyfin
+          POSTGRES_PASSWORD: polyfin
+        ports: ["5432:5432"]
+        # Its data in memory: the tests copy a template database about
+        # 1,500 times a run, and drop each copy; nothing outlives the job.
+        options: >-
+          --tmpfs /var/lib/postgresql
+          --health-cmd "pg_isready -U polyfin -d polyfin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - &checkout
+        name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          # The Dockerfile's Docker Hub images come through Google's mirror
-          # of it, from Docker Hub only when the mirror lacks one.
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["mirror.gcr.io"]
-      - &install-ffmpeg
-        name: Install the image's FFmpeg for the remux tests
+          persist-credentials: false
+      - &setup-go
+        name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          # Its cache is saved only when its key is missed, so it grew
+          # stale: the steps below keep Go's caches instead.
+          cache: false
+      - &find-go-caches
+        name: Find Go's caches
+        id: go-env
+        shell: bash
         run: |
-          # The Dockerfile's FFmpeg stage: the very build the image ships.
-          docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
-          echo "POLYFIN_TEST_FFMPEG=$RUNNER_TEMP/ffmpeg/bin/ffmpeg" >> "$GITHUB_ENV"
-      - &install-postgresql-client
-        name: Install PostgreSQL 18's client tools for the backup and restore tests
-        run: |
-          # From PostgreSQL's own repository: Ubuntu's are an older version's,
-          # which refuse the service's server and its backups.
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSLo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-            | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client-18
-          echo "POLYFIN_TEST_PG_DUMP=/usr/lib/postgresql/18/bin/pg_dump" >> "$GITHUB_ENV"
-          echo "POLYFIN_TEST_PG_RESTORE=/usr/lib/postgresql/18/bin/pg_restore" >> "$GITHUB_ENV"
-      - name: Install Tesseract with English and French data for the OCR tests
-        # After the step above, which updated the package lists.
-        run: |
-          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra
-          echo "POLYFIN_TEST_TESSERACT=/usr/bin/tesseract" >> "$GITHUB_ENV"
-      - name: Build admin app, check formatting, vet and test
-        # internal/jellyfin's tests run meanwhile, in the job of their own.
-        run: make web lint test-others bounds
+          {
+            echo "paths<<PATHS"
+            go env GOCACHE GOMODCACHE
+            echo "PATHS"
+          } >> "$GITHUB_OUTPUT"
+      - &restore-go-caches
+        name: Restore Go's caches from main's latest run
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-env.outputs.paths }}
+          # Saved by each run on main under a key of its own, so that the
+          # next runs start from the latest build.
+          key: &go-cache-key go-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ strategy.job-index }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ strategy.job-index }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            go-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ strategy.job-index }}-
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build admin app, check formatting, vet, and time a large IPTV line-up
+        # The tests under the race detector run meanwhile, in jobs of their
+        # own.
+        run: make web lint bounds
       - name: Test the torrents' network interface route
         # A dummy interface with an address, which the tests set down and
         # up (NET_ADMIN, so as root); the build cache of root's run is its
@@ -140,7 +269,7 @@ jobs:
         run: go run ./cmd/polyfin-release-sign key
       - name: Build production binary and verify its version
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.tested.outputs.version }}
         run: |
           make build VERSION="$VERSION"
           test "$(./bin/polyfin version)" = "$VERSION"
@@ -151,26 +280,108 @@ jobs:
         # the Go checksum database, rather than from Docker Hub.
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
-            .github/workflows/ci.yml .github/workflows/pages.yml .github/workflows/desktop-manifests.yml
+            .github/workflows/ci.yml .github/workflows/desktop-package.yml .github/workflows/pages.yml \
+            .github/workflows/desktop-manifests.yml
           docker run --rm -i \
             ghcr.io/hadolint/hadolint@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
             < Dockerfile
+      - &save-go-caches
+        name: Keep Go's caches for the next runs
+        # From main's runs only, the nightly one among them: a pull
+        # request's would serve only itself.
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-env.outputs.paths }}
+          key: *go-cache-key
 
-  jellyfin:
-    # By far the longest package's tests: they would double the check job's.
-    name: Jellyfin API tests under the race detector
+  race:
+    # Every package's tests but internal/jellyfin's, in two shares balanced
+    # by their times on these runners (see the Makefile).
+    name: Go tests under the race detector, part ${{ matrix.part }} of 2
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     env: *test-environment
     services: *test-services
     steps:
       - *checkout
       - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
+      - &setup-buildx
+        name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # The Dockerfile's Docker Hub images come through Google's mirror
+          # of it, from Docker Hub only when the mirror lacks one.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+      - &install-ffmpeg
+        name: Install the image's FFmpeg for the remux tests
+        run: |
+          # The Dockerfile's FFmpeg stage: the very build the image ships.
+          docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
+          echo "POLYFIN_TEST_FFMPEG=$RUNNER_TEMP/ffmpeg/bin/ffmpeg" >> "$GITHUB_ENV"
+      - &install-postgresql-client
+        name: Install the image's pg_dump and pg_restore for the backup and restore tests
+        run: |
+          # The Dockerfile's postgresql-client stage: PostgreSQL 18's, which
+          # the image ships, with the libraries only they load, found
+          # through LD_LIBRARY_PATH, which the rest of the job goes without.
+          client="$RUNNER_TEMP/postgresql-client"
+          docker buildx build --target postgresql-client --output type=local,dest="$client" .
+          libraries="$(echo "$client"/usr/lib/*-linux-gnu)"
+          for program in pg_dump pg_restore; do
+            printf '#!/bin/sh\nexport LD_LIBRARY_PATH="%s"\nexec "%s" "$@"\n' "$libraries" "$client/usr/local/bin/$program" > "$client/$program"
+            chmod +x "$client/$program"
+            "$client/$program" --version
+          done
+          echo "POLYFIN_TEST_PG_DUMP=$client/pg_dump" >> "$GITHUB_ENV"
+          echo "POLYFIN_TEST_PG_RESTORE=$client/pg_restore" >> "$GITHUB_ENV"
+      - name: Install Tesseract with English and French data for the OCR tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra
+          echo "POLYFIN_TEST_TESSERACT=/usr/bin/tesseract" >> "$GITHUB_ENV"
+      - name: Test
+        env:
+          PART: ${{ matrix.part }}
+        run: make "test-race-$PART"
+      - *save-go-caches
+
+  jellyfin:
+    # By far the longest package's tests, in two halves of their own.
+    name: Jellyfin API tests under the race detector, part ${{ matrix.part }} of 2
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
+    env: *test-environment
+    services: *test-services
+    steps:
+      - *checkout
+      - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
       - *setup-buildx
       - *install-ffmpeg
       - *install-postgresql-client
       - name: Test internal/jellyfin
-        run: make test-jellyfin
+        env:
+          PART: ${{ matrix.part }}
+        run: make "test-jellyfin-$PART"
+      - *save-go-caches
 
   windows:
     # polyfin serve on Windows, as the desktop version runs it: the per-system
@@ -179,6 +390,8 @@ jobs:
     # image's FFmpeg built for Windows. The rest of the suite fakes its tools
     # with shell scripts, which Windows cannot run.
     name: Windows build and system tests
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -189,6 +402,8 @@ jobs:
     steps:
       - *checkout
       - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
       - name: Start PostgreSQL 18 and install the image's FFmpeg, for Windows
         run: |
           # PostgreSQL's Windows binaries, from EnterpriseDB as postgresql.org
@@ -233,12 +448,17 @@ jobs:
           go test ./internal/admin -run '^(TestStatusTellsTheSystem|TestUnwatchedFolderText|TestHealthTellsWhyTorrentsDoNotPlay|TestWireGuardSettingsAndHealth)$'
           go test ./internal/database -run '^TestMigrationsEndTheirLinesWithLF$'
           go test ./internal/jellyfin -run '^TestOverloadedByAResetConnection$'
+      - *save-go-caches
 
   macos:
     # polyfin serve on an Apple silicon Mac, as the desktop version runs it:
     # the whole suite, against a PostgreSQL 18 from Homebrew. The FFmpeg
-    # tests skip, Homebrew's FFmpeg not being the image's.
+    # tests skip, Homebrew's FFmpeg not being the image's. Outside pull
+    # requests only, as every macOS job: macOS runners are few, and a job
+    # that waits 15 minutes for one fails.
     name: macOS build and tests
+    needs: tested
+    if: needs.tested.outputs.macos == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     env:
@@ -246,6 +466,8 @@ jobs:
     steps:
       - *checkout
       - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
       - name: Start PostgreSQL 18
         run: |
           brew install postgresql@18
@@ -267,30 +489,22 @@ jobs:
         # the Linux runner, which the check job holds; a macOS runner is
         # slower at them without anything being wrong.
         run: go test -p 2 -skip '^TestLargeLineupsStayFast$' ./...
+      - *save-go-caches
 
   image:
     name: Build and smoke test the image without publishing
-    needs: [check, jellyfin]
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # The PostgreSQL the image starts against, on the runner's port 5432.
     services: *test-services
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        with:
-          # The Dockerfile's Docker Hub images come through Google's mirror
-          # of it, from Docker Hub only when the mirror lacks one.
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["mirror.gcr.io"]
+      - *checkout
+      - *setup-buildx
       - name: Build native image, check its version, then build both platforms
         env:
-          VERSION: ${{ needs.check.outputs.version }}
+          VERSION: ${{ needs.tested.outputs.version }}
         run: make image-check VERSION="$VERSION"
       - name: See the image become healthy
         run: make image-health
@@ -298,7 +512,7 @@ jobs:
   publish:
     name: Publish multi-platform image to GHCR
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [check, image]
+    needs: [tested, check, race, jellyfin, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -308,10 +522,7 @@ jobs:
       image: ${{ steps.tags.outputs.image }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
+      - *checkout
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
@@ -327,8 +538,8 @@ jobs:
       - name: Choose image tags
         id: tags
         env:
-          VERSION: ${{ needs.check.outputs.version }}
-          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+          VERSION: ${{ needs.tested.outputs.version }}
+          PRERELEASE: ${{ needs.tested.outputs.prerelease }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           {
@@ -349,11 +560,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          build-args: VERSION=${{ needs.check.outputs.version }}
+          build-args: VERSION=${{ needs.tested.outputs.version }}
           labels: |
             org.opencontainers.image.title=Polyfin
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.version=${{ needs.tested.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=MIT
           provenance: mode=max
@@ -361,7 +572,7 @@ jobs:
 
   release:
     name: Create GitHub release
-    needs: [check, publish]
+    needs: [tested, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -369,10 +580,7 @@ jobs:
       # A minor or major release starts its announcement in Discussions.
       discussions: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
+      - *checkout
       - name: Fetch the source of the jellyfin-web the image ships
         # GPL-2.0 section 3: the source goes with every release. The
         # Dockerfile pins it, beside the image jellyfin-web is taken from.
@@ -382,8 +590,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-          VERSION: ${{ needs.check.outputs.version }}
-          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+          VERSION: ${{ needs.tested.outputs.version }}
+          PRERELEASE: ${{ needs.tested.outputs.prerelease }}
           IMAGE: ${{ needs.publish.outputs.image }}
           DIGEST: ${{ needs.publish.outputs.digest }}
         run: |
@@ -403,8 +611,10 @@ jobs:
     # Polyfin Desktop on each system it is packaged for: its tests against a
     # PostgreSQL 18 of its own, then the app started on a data folder of its
     # own, behind a local proxy that refuses every request for outside, and
-    # quit, twice, leaving no process behind.
+    # quit, twice, leaving no process behind. The Macs' are desktop-macos.
     name: Polyfin Desktop on ${{ matrix.name }}
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
@@ -417,7 +627,7 @@ jobs:
             os: windows-latest
           # Its tests run against EnterpriseDB's x64 build, under Windows'
           # emulation; the arm64 package's own build is tested by
-          # desktop-package-test.
+          # desktop-package.
           - name: Windows on Arm
             os: windows-11-arm
             # The runner's notification area refuses icons: there,
@@ -427,16 +637,14 @@ jobs:
             # windows-latest (CI run 39293223088). The smoke expects the
             # app to run without its icon there.
             no-tray: true
-          - name: macOS on Apple silicon
-            os: macos-15
-          - name: macOS on Intel
-            os: macos-15-intel
-    defaults:
+    defaults: &bash
       run:
         shell: bash
-    steps:
+    steps: &desktop-steps
       - *checkout
       - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
       - name: Fetch PostgreSQL 18's server programs, into an install folder
         run: |
           # The install folder as the packages lay it out: postgresql/bin,
@@ -515,8 +723,7 @@ jobs:
         # It runs from the install folder, which the smoke checks is left
         # with no process.
         run: '"$DESKTOP_TEMP/install/postgresql/bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" -m fast -w stop'
-      - &windows-session
-        name: Show whether the session has a notification area
+      - name: Show whether the session has a notification area
         # The app's icon needs explorer.exe in its session; the smoke expects
         # the icon, or the app saying it runs without it, accordingly.
         if: runner.os == 'Windows'
@@ -548,12 +755,36 @@ jobs:
           if [ -d "$DESKTOP_TEMP/testdb" ] && "$bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" status > /dev/null; then
             "$bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" -m fast -w stop
           fi
+      - *save-go-caches
+
+  desktop-macos:
+    # The desktop job on the Macs, outside pull requests only (see macos).
+    name: Polyfin Desktop on ${{ matrix.name }}
+    needs: tested
+    if: needs.tested.outputs.macos == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS on Apple silicon
+            os: macos-15
+            # Their notification area takes icons.
+            no-tray: false
+          - name: macOS on Intel
+            os: macos-15-intel
+            no-tray: false
+    defaults: *bash
+    steps: *desktop-steps
 
   desktop-files:
     # What every package of Polyfin Desktop takes from the Docker image:
     # jellyfin-web and the fonts, through the Dockerfile's desktop-files
     # stage, once, for the Macs, which have no Docker.
     name: Polyfin Desktop's files from the image
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -570,158 +801,73 @@ jobs:
           retention-days: 1
 
   desktop-package:
-    # The packages of Polyfin Desktop, built by scripts/packaging as anyone
-    # builds them, kept as the run's artifacts. The Windows x64 installer is
-    # made on Linux, with NSIS, and installed on Windows below; the arm64
-    # one on Windows on Arm, which builds its PostgreSQL from source.
+    # Each package of Polyfin Desktop, built by scripts/packaging as anyone
+    # builds them, then installed and smoked on its system: each package's
+    # test waits for that package only. The Windows x64 installer is made
+    # on Linux, with NSIS, and installed on Windows; the arm64 one on
+    # Windows on Arm, which builds its PostgreSQL from source. The Macs'
+    # are desktop-package-macos.
     name: Package Polyfin Desktop for ${{ matrix.name }}
-    needs: [check, desktop-files]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    needs: [tested, desktop-files]
+    if: needs.tested.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: macOS on Apple silicon
-            id: macos-arm64
-            os: macos-15
-            script: macos.sh arm64
-          - name: macOS on Intel
-            id: macos-x64
-            os: macos-15-intel
-            script: macos.sh x64
           - name: Windows x64
             id: windows-x64
             os: ubuntu-24.04
+            test-os: windows-latest
             script: windows.sh x64
           - name: Windows arm64
             id: windows-arm64
             os: windows-11-arm
+            test-os: windows-11-arm
             script: windows.sh arm64
-          - name: Linux x64
-            id: linux-amd64
-            os: ubuntu-24.04
-            script: linux.sh amd64
-          - name: Linux arm64
-            id: linux-arm64
-            os: ubuntu-24.04-arm
-            script: linux.sh arm64
-    defaults:
-      run:
-        shell: bash
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-      POLYFIN_DESKTOP_FILES: ${{ github.workspace }}/dist/packaging/files
-      # Debian's image, for the packaging tools, as the Dockerfile's.
-      DOCKER_HUB_MIRROR: mirror.gcr.io
-    steps:
-      - *checkout
-      - *setup-go
-      - *setup-node
-      - name: Set up Buildx
-        if: runner.os == 'Linux'
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        with:
-          # PostgreSQL's build image through Google's mirror of Docker Hub,
-          # as in the check job.
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["mirror.gcr.io"]
-      - name: Fetch the files from the image
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: desktop-files
-          path: dist/packaging/files
-      - name: Restore PostgreSQL's build for Windows on Arm
-        # postgresql-windows.sh's, kept while the script and the patch it
-        # applies, which pin its inputs, stay the same.
-        if: matrix.id == 'windows-arm64'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: dist/packaging/postgresql-windows-arm64
-          key: postgresql-windows-arm64-${{ hashFiles('scripts/packaging/postgresql-windows.sh', 'scripts/packaging/postgresql-msvc-arm64.patch') }}
-      - name: Build the package
-        env:
-          SCRIPT: ${{ matrix.script }}
-          POLYFIN_PACKAGING_CACHE: ${{ runner.temp }}/downloads
-        run: |
-          read -r script arch <<< "$SCRIPT"
-          "scripts/packaging/$script" ${arch:+"$arch"}
-      - name: Keep the package
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: desktop-package-${{ matrix.id }}
-          path: dist/packages/*
-          if-no-files-found: error
-          # Already compressed.
-          compression-level: 0
-
-  desktop-package-test:
-    # Each package installed or opened on its system, its layout checked,
-    # and the installed app smoked as the desktop job smokes its build:
-    # behind a proxy that refuses every request for outside, and quit
-    # leaving no process. Then it is uninstalled. A package whose build
-    # failed fails alone.
-    name: Install and smoke Polyfin Desktop on ${{ matrix.name }}
-    needs: [check, desktop-package]
-    if: ${{ !cancelled() && needs.check.result == 'success' }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macOS on Apple silicon
-            id: macos-arm64
-            os: macos-15
-          - name: macOS on Intel
-            id: macos-x64
-            os: macos-15-intel
-          - name: Windows x64
-            id: windows-x64
-            os: windows-latest
-          - name: Windows arm64
-            id: windows-arm64
-            os: windows-11-arm
             # The runner refuses notification icons: see the desktop job.
             no-tray: true
           - name: Linux x64
             id: linux-amd64
             os: ubuntu-24.04
+            test-os: ubuntu-24.04
+            script: linux.sh amd64
           - name: Linux arm64
             id: linux-arm64
             os: ubuntu-24.04-arm
-    defaults:
-      run:
-        shell: bash
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-      DESKTOP_SMOKE_NO_TRAY: ${{ matrix.no-tray && '1' || '' }}
-    steps:
-      - *checkout
-      - name: Fetch the package
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: desktop-package-${{ matrix.id }}
-          path: dist/packages
-      - name: Install the tools the Linux checks use
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils squashfs-tools fuse3
-      - *windows-session
-      - name: Install, smoke and remove each package
-        run: |
-          for package in dist/packages/*; do
-            echo "== $package"
-            scripts/packaging/test.sh "$package" "$RUNNER_TEMP/test-$(basename "$package")"
-          done
-      - name: Show the app's logs
-        if: failure()
-        run: |
-          for log in "$RUNNER_TEMP"/test-*/smoke/data/log/*.log; do
-            if [ -f "$log" ]; then echo "== $log"; tail -n 100 "$log"; fi
-          done
+            test-os: ubuntu-24.04-arm
+            script: linux.sh arm64
+    uses: ./.github/workflows/desktop-package.yml
+    with: &package
+      id: ${{ matrix.id }}
+      os: ${{ matrix.os }}
+      test-os: ${{ matrix.test-os }}
+      script: ${{ matrix.script }}
+      no-tray: ${{ matrix.no-tray == true }}
+      version: ${{ needs.tested.outputs.version }}
+
+  desktop-package-macos:
+    # The Macs' packages, outside pull requests only (see macos).
+    name: Package Polyfin Desktop for ${{ matrix.name }}
+    needs: [tested, desktop-files]
+    if: needs.tested.outputs.macos == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS on Apple silicon
+            id: macos-arm64
+            os: macos-15
+            test-os: macos-15
+            script: macos.sh arm64
+            no-tray: false
+          - name: macOS on Intel
+            id: macos-x64
+            os: macos-15-intel
+            test-os: macos-15-intel
+            script: macos.sh x64
+            no-tray: false
+    uses: ./.github/workflows/desktop-package.yml
+    with: *package
 
   desktop-release:
     # The packages go with the release the release job creates, with their
@@ -731,7 +877,7 @@ jobs:
     # desktop-manifests workflow renews the manifest every week.
     name: Attach Polyfin Desktop's packages to the release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [check, release, desktop-package-test]
+    needs: [tested, release, desktop-package, desktop-package-macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -748,7 +894,7 @@ jobs:
       - name: Sign their manifest
         env:
           POLYFIN_RELEASE_SIGNING_KEY: ${{ secrets.POLYFIN_RELEASE_SIGNING_KEY }}
-          VERSION: ${{ needs.check.outputs.version }}
+          VERSION: ${{ needs.tested.outputs.version }}
         run: |
           ls -l packages
           test "$(find packages -type f | wc -l)" -eq 8

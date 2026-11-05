@@ -1,0 +1,178 @@
+name: Polyfin Desktop package
+
+# One package of Polyfin Desktop, built by scripts/packaging as anyone
+# builds it, kept as the run's artifact, then installed and smoked on its
+# system. The CI workflow calls it for each package, after its
+# desktop-files job, so that each package's test waits for that package
+# only.
+on:
+  workflow_call:
+    inputs:
+      id:
+        description: The package's name in the run's artifacts, after desktop-package-.
+        type: string
+        required: true
+      os:
+        description: The runner that builds the package.
+        type: string
+        required: true
+      test-os:
+        description: The runner that installs and smokes it.
+        type: string
+        required: true
+      script:
+        description: The script of scripts/packaging, then its architecture.
+        type: string
+        required: true
+      no-tray:
+        description: The runner refuses notification icons; the smoke expects the app to run without one.
+        type: boolean
+        default: false
+      version:
+        description: The version the package carries and the app reports.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ inputs.version }}
+      POLYFIN_DESKTOP_FILES: ${{ github.workspace }}/dist/packaging/files
+      # Debian's image, for the packaging tools, as the Dockerfile's.
+      DOCKER_HUB_MIRROR: mirror.gcr.io
+    steps:
+      - &checkout
+        name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          # The steps below keep Go's caches, as in the CI workflow.
+          cache: false
+      - name: Find Go's caches
+        id: go-env
+        run: |
+          {
+            echo "paths<<PATHS"
+            go env GOCACHE GOMODCACHE
+            echo "PATHS"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore Go's caches from main's latest run
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-env.outputs.paths }}
+          key: &go-cache-key go-${{ runner.os }}-${{ runner.arch }}-desktop-package-${{ inputs.id }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ runner.arch }}-desktop-package-${{ inputs.id }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            go-${{ runner.os }}-${{ runner.arch }}-desktop-package-${{ inputs.id }}-
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Set up Buildx
+        if: runner.os == 'Linux'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # PostgreSQL's build image through Google's mirror of Docker Hub,
+          # as in the CI workflow.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+      - name: Fetch the files from the image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-files
+          path: dist/packaging/files
+      - name: Restore PostgreSQL's build for Windows on Arm
+        # postgresql-windows.sh's, kept while the script and the patch it
+        # applies, which pin its inputs, stay the same.
+        if: inputs.id == 'windows-arm64'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/packaging/postgresql-windows-arm64
+          key: postgresql-windows-arm64-${{ hashFiles('scripts/packaging/postgresql-windows.sh', 'scripts/packaging/postgresql-msvc-arm64.patch') }}
+      - name: Build the package
+        env:
+          SCRIPT: ${{ inputs.script }}
+          POLYFIN_PACKAGING_CACHE: ${{ runner.temp }}/downloads
+        run: |
+          read -r script arch <<< "$SCRIPT"
+          "scripts/packaging/$script" ${arch:+"$arch"}
+      - name: Keep the package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-package-${{ inputs.id }}
+          path: dist/packages/*
+          if-no-files-found: error
+          # Already compressed.
+          compression-level: 0
+      - name: Keep Go's caches for the next runs
+        # From main's runs only, as in the CI workflow.
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-env.outputs.paths }}
+          key: *go-cache-key
+
+  test:
+    # The package installed or opened on its system, its layout checked,
+    # and the installed app smoked as the desktop job smokes its build:
+    # behind a proxy that refuses every request for outside, and quit
+    # leaving no process. Then it is uninstalled.
+    name: Install and smoke
+    needs: package
+    runs-on: ${{ inputs.test-os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ inputs.version }}
+      DESKTOP_SMOKE_NO_TRAY: ${{ inputs.no-tray && '1' || '' }}
+    steps:
+      - *checkout
+      - name: Fetch the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-package-${{ inputs.id }}
+          path: dist/packages
+      - name: Install the tools the Linux checks use
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils squashfs-tools fuse3
+      - name: Show whether the session has a notification area
+        # The app's icon needs explorer.exe in its session; the smoke expects
+        # the icon, or the app saying it runs without it, accordingly.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "This session: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId), interactive: $([Environment]::UserInteractive)"
+          $explorer = Get-Process explorer -ErrorAction SilentlyContinue
+          if ($explorer) { $explorer | Format-Table Id, SessionId, StartTime } else { "explorer.exe does not run" }
+      - name: Install, smoke and remove each package
+        run: |
+          for package in dist/packages/*; do
+            echo "== $package"
+            scripts/packaging/test.sh "$package" "$RUNNER_TEMP/test-$(basename "$package")"
+          done
+      - name: Show the app's logs
+        if: failure()
+        run: |
+          for log in "$RUNNER_TEMP"/test-*/smoke/data/log/*.log; do
+            if [ -f "$log" ]; then echo "== $log"; tail -n 100 "$log"; fi
+          done

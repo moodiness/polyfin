@@ -4,7 +4,7 @@ VERSION ?= dev
 # The PostgreSQL image-health starts the image against, on the host.
 IMAGE_DATABASE_URL ?= postgresql://polyfin:polyfin@host.docker.internal:5432/polyfin
 
-.PHONY: web build dev check lint test test-jellyfin test-others bounds compose-check image-check image-health
+.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health
 
 web:
 	$(NPM) --prefix web ci --no-audit --no-fund
@@ -29,22 +29,45 @@ lint:
 	fi
 	$(GO) vet ./...
 
-# Every package's tests under the race detector. CI runs them in two jobs at
-# once: test-jellyfin, by far the longest package, and test-others, which
-# leaves out that package alone (internal/jellyfinimport stays in).
-JELLYFIN := github.com/moodiness/polyfin/internal/jellyfin
+# Every package's tests under the race detector. CI runs them in four jobs
+# at once: internal/jellyfin, by far the longest package, in two halves
+# (test-jellyfin-1 and -2), and the other packages in two shares
+# (test-race-1 and -2), balanced by their times on CI's runners.
+POLYFIN := github.com/moodiness/polyfin/internal
+JELLYFIN := $(POLYFIN)/jellyfin
+
+# go test starts the packages' tests in the order given, 4 at once on CI:
+# the slowest go first, so that none of them starts last and runs alone.
+# test-race-2 takes these, then every package neither list names, so that
+# a new package is tested without being listed.
+RACE_1 := $(addprefix $(POLYFIN)/,playback backup admin library source thumbnails commercials \
+	notifications audiosegments trackers iptv jellyfinimport recordings lyrics)
+RACE_2 := $(addprefix $(POLYFIN)/,localfiles hls accounts database container torrent addons \
+	torrent/utp appimport desktop/cluster)
+RACE_REST = $$($(GO) list ./... | grep -vxF $(addprefix -e ,$(JELLYFIN) $(RACE_1) $(RACE_2)))
+
+# internal/jellyfin's halves, by the first letter after Test of each
+# test's name: tests are run by -run and left out by -skip with the same
+# expression, so that each test runs in one half, a new one too.
+JELLYFIN_1 := ^Test[A-K]
 
 test:
-	$(GO) test -race ./...
+	$(GO) test -race -timeout 18m $(JELLYFIN) $(RACE_1) $(RACE_2) $(RACE_REST)
 
-# Under the race detector this package takes about 9 minutes on CI's
-# runners, near go test's default of 10, so a slower runner timed out with
-# no test failing. Its CI job allows 20 minutes; the run takes 18 of them.
-test-jellyfin:
-	$(GO) test -race -timeout 18m $(JELLYFIN)
+test-race-1:
+	$(GO) test -race $(RACE_1)
 
-test-others:
-	$(GO) test -race $$($(GO) list ./... | grep -vxF $(JELLYFIN))
+test-race-2:
+	$(GO) test -race $(RACE_2) $(RACE_REST)
+
+# Whole, under the race detector, this package took about 9 minutes on
+# CI's runners, near go test's default of 10, so a slower runner timed out
+# with no test failing: each half keeps the larger bound.
+test-jellyfin-1:
+	$(GO) test -race -timeout 18m -run '$(JELLYFIN_1)' $(JELLYFIN)
+
+test-jellyfin-2:
+	$(GO) test -race -timeout 18m -skip '$(JELLYFIN_1)' $(JELLYFIN)
 
 # Time bounds checked without the race detector, which slows the work they
 # time tenfold.
