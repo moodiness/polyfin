@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
@@ -45,6 +46,14 @@ import (
 )
 
 const testServerID = "0123456789abcdef0123456789abcdef"
+
+// The tests hash passwords and derive backup keys at a small cost (see
+// accounts.LowerPasswordCostForTests and backup.LowerKeyCostForTests).
+func TestMain(m *testing.M) {
+	accounts.LowerPasswordCostForTests()
+	backup.LowerKeyCostForTests()
+	m.Run()
+}
 
 type testServer struct {
 	t       *testing.T

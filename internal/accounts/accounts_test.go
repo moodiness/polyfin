@@ -12,6 +12,18 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
+// serverPasswordCost is the hashes' cost the package starts with, the
+// server's, before TestMain lowers it.
+var serverPasswordCost argonCost
+
+// The tests hash passwords at a small cost (see
+// LowerPasswordCostForTests).
+func TestMain(m *testing.M) {
+	serverPasswordCost = passwordCost
+	LowerPasswordCostForTests()
+	m.Run()
+}
+
 func newStore(t *testing.T) *Store {
 	t.Helper()
 	pool := migrated.New(t)
@@ -479,5 +491,28 @@ func TestPasswordHashes(t *testing.T) {
 	}
 	if _, err := verifyPassword("x", "$argon2id$v=19$m=1,t=1,p=1$bad"); err == nil {
 		t.Fatal("malformed hash accepted")
+	}
+}
+
+// The server hashes passwords at OWASP's cost, 19 MiB, two passes and one
+// lane, whatever the tests' cost; hashes at either cost verify, each at
+// its own.
+func TestTheServerHashesAtOWASPsCost(t *testing.T) {
+	t.Parallel()
+	server := hashAt(serverPasswordCost, "correct horse")
+	if !strings.HasPrefix(server, "$argon2id$v=19$m=19456,t=2,p=1$") {
+		t.Errorf("the server's hash: %s", server)
+	}
+	tests := hashPassword("correct horse")
+	if strings.HasPrefix(tests, "$argon2id$v=19$m=19456,t=2,p=1$") {
+		t.Errorf("the tests hash at the server's cost: %s", tests)
+	}
+	for _, hash := range []string{server, tests} {
+		if ok, err := verifyPassword("correct horse", hash); !ok || err != nil {
+			t.Errorf("%s: the right password is refused: %v", hash, err)
+		}
+		if ok, _ := verifyPassword("correct horsf", hash); ok {
+			t.Errorf("%s: a wrong password is accepted", hash)
+		}
 	}
 }
