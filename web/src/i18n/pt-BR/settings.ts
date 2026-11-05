@@ -784,7 +784,7 @@ const settings: typeof en = {
       `Aplicativos Jellyfin sem uso há este número de dias são desconectados e precisam entrar novamente. A verificação ocorre a cada hora. O login nesta página de administração não é afetado. De ${r.min} a ${r.max}.`,
     knownProxies: 'Proxies conhecidos',
     knownProxiesHelp: (r: RangeText) =>
-      `Os proxies reversos na frente do Polyfin, um por linha: um endereço IP, uma rede como 172.18.0.0/16 ou um nome de host como o nome de um contêiner em uma rede Docker (traefik), até ${r.max}. Um nome é resolvido a cada minuto e cada endereço para o qual ele resolve é considerado confiável, então liste apenas nomes que a sua própria rede resolve. Uma solicitação vinda de um deles vem do cliente indicado no cabeçalho X-Forwarded-For ou X-Real-IP: é esse endereço que limita as falhas de login, aparece nos dispositivos e indica a rede local. Cabeçalhos encaminhados de qualquer outro endereço são ignorados. Deixe vazio quando nada estiver na frente do Polyfin.`,
+      `Os proxies reversos na frente do Polyfin, um por linha: um endereço IP, uma rede como 172.18.0.0/16 ou um nome de host como o nome de um contêiner em uma rede Docker (traefik), até ${r.max}. Um nome é resolvido a cada minuto e cada endereço para o qual ele resolve é considerado confiável, então liste apenas nomes que a sua própria rede resolve. Uma solicitação vinda de um deles vem do cliente indicado no cabeçalho X-Forwarded-For ou X-Real-IP: é esse endereço que limita as falhas de login, aparece nos dispositivos e indica a rede local. De qualquer outro endereço, X-Forwarded-For e X-Real-IP são ignorados. Deixe vazio quando nada estiver na frente do Polyfin.`,
     provider: {
       title: 'Provedor de identidade',
       intro:
