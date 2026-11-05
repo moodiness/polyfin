@@ -10,20 +10,23 @@ This page covers the buttons that let viewers skip intros, recaps, credits, prev
 |---|---|---|---|
 | **Skip intro and credits buttons** | **Settings › Content** | On | Gives apps the segments to skip. Off, apps get none, no segment database is asked, no episode's audio is read, and the commercials found in recordings are not given. |
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - Turned off, the server behaves as a Jellyfin server without a segment provider.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Turned off, `/MediaSegments/{id}` lists none.
-- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)). The media source of a recording says it when commercial breaks were found in it (see [Commercials of recordings](#commercials-of-recordings)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
+- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in the audio of local episodes](#intros-and-credits-found-in-the-audio-of-local-episodes)). The media source of a recording says it when commercial breaks were found in it (see [Commercials of recordings](#commercials-of-recordings)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
 - `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
 - `GET /Polyfin/MediaSegments/{id}` lists the same segments, every type, each with its `Type`, `StartTicks` and `EndTicks` and where it comes from, which Jellyfin's segments do not tell: `Found`, `database`, `chapters` or `audio`, absent for the commercials of recordings; `Database`, the database of a `database` segment, as `POLYFIN_SEGMENTS` names it; and `Confidence`, from 0 to 1, the database's own rating of the segment, which only SkipDB gives. Credits split around a scene keep where they come from. [Silo's apps](silo-apps.md#skip-markers) get them this way.
 
+</details>
+
 ## The four databases
 
-The skip buttons come from four community databases: TheIntroDB, IntroDB, PublicMetaDB and SkipDB. Polyfin asks them about a title the first time an app asks for its segments.
+The segments come from four community databases: TheIntroDB, IntroDB, PublicMetaDB and SkipDB. Polyfin asks them about a title the first time an app asks for its segments.
 
 For each kind of segment (intro, recap, credits, preview), the first database that has one gives it. The others fill the gaps.
 
@@ -79,14 +82,23 @@ A version without either has its credits split by its chapters only, until its d
 - A part of the credits shorter than 3 seconds, before or after a scene, is left out, as the web player ignores such segments.
 - The last part of the credits follows the rules above: when it runs to the end, it stops a second before it, or ends at the file's end when the listed runtime is shorter.
 - A chapter right after credits chapters needs no rule of its own: the version's credits chapters give its credits, which end where the next chapter starts.
-- Credits found in local episodes' audio are split too (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)).
+- Credits found in the audio of local episodes are split too (see [Intros and credits found in the audio of local episodes](#intros-and-credits-found-in-the-audio-of-local-episodes)).
 - A version not analyzed yet keeps the databases' credits whole.
 
-**Compared with Jellyfin:** Jellyfin finds no such scene, and its credits run over it. jellyfin-web offers each segment as playback enters it, several `Outro` segments included, and **Skip** seeks to the segment's end (jellyfin-web 12.4, `src/apps/legacy/features/playback/utils/mediaSegmentManager.ts`, lines 37-57 and 123-144).
+**Compared with Jellyfin**
 
-**For app developers:** `/MediaSegments/{id}` lists the credits of such a version as several `Outro` segments, one before each scene and one after the last when they go on after it.
+- Jellyfin finds no such scene, and its credits run over it. jellyfin-web offers each segment as playback enters it, several `Outro` segments included, and **Skip** seeks to the segment's end (jellyfin-web 12.4, `src/apps/legacy/features/playback/utils/mediaSegmentManager.ts`, lines 37-57 and 123-144).
 
-## Intros and credits found in local episodes' audio
+<details>
+<summary>For app developers</summary>
+
+- `/MediaSegments/{id}` lists the credits of such a version as several `Outro` segments, one before each scene and one after the last when they go on after it.
+
+</details>
+
+<a id="intros-and-credits-found-in-local-episodes-audio"></a>
+
+## Intros and credits found in the audio of local episodes
 
 An episode in a local folder whose file names no intro or credits in its chapters, of a series or a season the databases do not know, would have none to skip. Polyfin finds them in the audio instead: an intro is the stretch of audio the episodes of a season share near their start, credits the stretch they share near their end.
 
@@ -139,7 +151,7 @@ A Live TV recording is the channel's stream as it aired, commercials included (s
 - A break runs from the start of the moment before it to the end of the moment after it, so that skipping it lands on the programme.
 - A black scene in silence within a programme is one moment alone: it parts no commercials, and gives none.
 
-**Served:** while **Skip intro and credits buttons** is on, `/MediaSegments/{id}` lists the breaks of a recording as `Commercial` segments, and its media source says `HasSegments: true`. Apps act on them as each user chose in their app's playback settings: jellyfin-web, for instance, skips commercials, asks first, or plays them, by its setting for that segment type. Users get the segments of the recordings they see, as for the recordings themselves.
+**Served:** while **Skip intro and credits buttons** is on, `/MediaSegments/{id}` lists the breaks of a recording as `Commercial` segments, and its media source says `HasSegments: true`. Apps act on them as each user chose in their app's playback settings: the web player, for instance, skips commercials, asks first, or plays them, by its setting for that segment type. Users get the segments of the recordings they see, as for the recordings themselves.
 
 **Kept:** what was found is kept with the recording, by its identifier: it stays when the recording's file is replaced, and is deleted with the recording.
 
@@ -154,7 +166,7 @@ A Live TV recording is the channel's stream as it aired, commercials included (s
 
 By default the databases are preferred in the order TheIntroDB, IntroDB, PublicMetaDB, SkipDB, all on. At the first start, `POLYFIN_SEGMENTS` gives the order and which are on; see [Configuration](configuration.md).
 
-**Skip marker sources**, under **Settings › Content** below the skip buttons, lists the four databases with arrows to move them and a switch to turn each on or off. PublicMetaDB, on without a key, is marked as needing one.
+**Skip marker sources**, under **Settings › Content** below **Skip intro and credits buttons**, lists the four databases with arrows to move them and a switch to turn each on or off. PublicMetaDB, on without a key, is marked as needing one.
 
 A server upgraded from a version without SkipDB gets it last in its order, turned on, unless every other database was turned off: it then stays off too.
 
@@ -162,7 +174,7 @@ The order and the switches apply at once when saved, to the answers already kept
 
 ## PublicMetaDB key
 
-PublicMetaDB is asked only with an API key. Create one on PublicMetaDB under **Settings → API**, then paste it in **PublicMetaDB key** under **Settings › Content**.
+PublicMetaDB is asked only with an API key. Create one on the PublicMetaDB website (Settings, then API), then paste it in **PublicMetaDB key** under **Settings › Content**.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -212,10 +224,12 @@ The key is kept secret, shown and stored like PublicMetaDB's, and applied at onc
 - Polyfin sends the title's runtime, in seconds, when it knows it, as it does to TheIntroDB. For each kind of segment, SkipDB then gives the one timed on the release of the closest duration, moved earlier, never later, when the durations differ by a few seconds.
 - A segment SkipDB matched `out-of-range`, timed on a release whose duration differs too much, is left out: its times may not fit the version played. The next database in the order may give that kind instead.
 - Its intro, recap, outro and preview become Jellyfin's `Intro`, `Recap`, `Outro` and `Preview` segments.
-- SkipDB rates each segment from 0 to 1. Polyfin keeps that rating with the segment and gives it to Silo's apps (see [Silo's apps](silo-apps.md#skip-markers)); a rating outside 0 to 1 is left out. Answers kept before Polyfin read the rating have none until they are asked again.
+- SkipDB rates each segment from 0 to 1. Polyfin keeps that rating with the segment and gives it to Silo's apps (see [Silo's apps](silo-apps.md#skip-markers)); a rating outside 0 to 1 is left out.
 - SkipDB allows 120 requests a minute. Beyond, it answers 429 with a `Retry-After`, which Polyfin waits out (see [Caching](#caching)).
 
-### SkipDB's data license
+<a id="skipdb-s-data-license"></a><a id="skipdbs-data-license"></a>
+
+### SkipDB data license
 
 The skip segments from SkipDB are © SkipDB and its contributors, under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/) with a Service Provider Reciprocity term (see [SkipDB's licenses](https://skipdb.tv/license)). Polyfin credits them here, as the license asks.
 

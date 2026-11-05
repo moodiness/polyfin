@@ -1,11 +1,12 @@
 # Subtitles
 
-This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles and how they are synced to the version played, subtitle files listed with a stream, subtitle files beside local files, subtitle files inside torrents, text tracks inside files, ASS styles and fonts, and image subtitles, which Polyfin can read into text.
+This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles and how they are synced to the version played, subtitle files listed with a stream, subtitle files beside local files, subtitle files inside torrents, text tracks inside files, ASS styles and fonts, and picture subtitles, which Polyfin can read into text.
 
 ## Where subtitles come from
 
-Apps get six kinds of subtitles:
+Apps get seven kinds of subtitles:
 
+- the subtitle files users add to a movie or an episode from their app, for every version of it (see [Subtitle files](jellyfin-compatibility.md#subtitle-files));
 - subtitles from the addons;
 - the subtitle files a stream addon lists with a stream, for that stream's version;
 - the subtitle files beside a local file, for that file's version;
@@ -27,7 +28,7 @@ Addons find subtitles for a title, written for one release of it, not always the
 
 Polyfin compares a subtitle's lines with when the version itself has speech:
 
-- A text track inside the file, in any language, when there is one: its lines are timed for that file. A forced track comes after the others, and a track needs at least 20 lines. It must be read whole: through the file's index (see [Text tracks inside files](#text-tracks-inside-files)), or by a remux that extracted it.
+- A text track inside the file, in any language, when there is one: its lines are timed for that file. A forced track comes after the others, and a track needs at least 20 lines. It must be read whole: through the file's index (see [Text tracks inside files](#text-tracks-inside-files)), or by repackaging that extracted it.
 - Else the version's audio: FFmpeg decodes its first audio track, and Polyfin measures the energy of the voice band, 300 to 3000 Hz, as subtitle aligners do. Speech is where it is loud compared with the quiet of the stretch and rises and falls with syllables, a few times a second, where music and effects hold; it is joined over short pauses. Polyfin listens to three stretches of up to 3 minutes, around a quarter, half and three quarters of the version, joined when the version is too short for them to be apart.
 
 Polyfin finds this once per version, in the background, at the version's first play (when the app reports that a movie or an episode starts), and keeps it in the database:
@@ -72,7 +73,9 @@ Once the version's speech is known, each addon subtitle chosen for it is timed o
 - A subtitle chosen before its version's speech was known comes as it is, and is synced from the next time it is chosen.
 - Subtitles synced against a text track before Polyfin looked for cuts are timed again the next time they are chosen.
 
-**Compared with Jellyfin:** Jellyfin does not sync subtitles: it serves each with the times it has.
+**Compared with Jellyfin**
+
+- Jellyfin does not sync subtitles: it serves each with the times it has.
 
 ## Subtitle files listed with a stream
 
@@ -84,7 +87,9 @@ A stream addon may list subtitle files with each stream, written for that file. 
 - Their links may expire with the stream's. They last as long as the version list (**Keep version lists for (minutes)**, see [Addons and libraries](addons-and-libraries.md#catalog-limits-and-refresh)). A file asked for after that is read from the link the addon gives now: Polyfin uses the addon's answer if a newer one came within that time, else asks the addon again for the title's streams, or for the description that embeds the stream. A file the addon no longer lists, or one of a stream it no longer lists, is not served.
 - They reach only the users the version reaches: parental control, blocked genres and the torrent permission apply to them as to their version.
 
-**Compared with Jellyfin:** Jellyfin has no addons. Polyfin offers these files as Jellyfin offers the subtitle files beside a video: external subtitles of that version alone.
+**Compared with Jellyfin**
+
+- Jellyfin has no addons. Polyfin offers these files as Jellyfin offers the subtitle files beside a video: external subtitles of that version alone.
 
 ## Subtitle files beside local files
 
@@ -94,7 +99,7 @@ A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and We
 - Each app gets them in the format it asks for, as it gets the addons' subtitles: WebVTT, SubRip, ASS or JSON. An ASS file asked as ASS keeps its styles and positions.
 - Files in UTF-8 (with or without a byte order mark) and UTF-16 are read as they are. A file that is not valid UTF-8 is read as Windows-1252, the usual encoding of older subtitles, so that accents survive.
 - Polyfin reads them from the folder or the network share when an app asks for them, and keeps their text for a while. A file that changes is read again after the next scan.
-- Picture subtitle files are listed with the codec Jellyfin gives them, `PGSSUB` or `DVDSUB`. An app that draws PGS, such as jellyfin-web, gets the `.sup` file as it is, read by byte ranges. A VobSub pair is not one file: like Jellyfin 12.4, which gives VobSub as a file only extracted as Matroska, Polyfin burns it into the video, and so it does a PGS file for an app that does not draw PGS (see [Image subtitles](#image-subtitles)). With **Turn picture subtitles into text** on, both are also read into text copies, which play without conversion (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
+- Picture subtitle files are listed with the codec Jellyfin gives them, `PGSSUB` or `DVDSUB`. An app that draws PGS, such as the web player, gets the `.sup` file as it is, read by byte ranges. A VobSub pair is not one file: like Jellyfin 12.4, which gives VobSub as a file only extracted as Matroska, Polyfin burns it into the video, and so it does a PGS file for an app that does not draw PGS (see [Picture subtitles](#picture-subtitles)). With **Turn picture subtitles into text** on, both are also read into text copies, which play without conversion (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
 
 ## Subtitle files inside torrents
 
@@ -111,20 +116,23 @@ What a name tells past the video's name, past the episode it tells, or the whole
 How they are listed, fetched and kept:
 
 - They are subtitles of that version only, listed after its other subtitle files (those listed with its stream), with the version's addon as their source, and the language, title and flags their names tell.
-- They are listed from the version's first play, once its torrent tells its files: in PlaybackInfo, then on the title's page. Before its first play, a torrent version's files are unknown. A torrent version played before Polyfin 0.46 lists them at its next play, which then waits for its torrent's files as its stream would, so that the indexes of its tracks hold for the whole play.
-- The play that lists them chooses its tracks by the user's preferences, whatever tracks the app names: the app named them from the title's page, where the files were not listed yet, and their indexes have moved. jellyfin-web, for one, names no subtitle then ("Off", the page's only choice), and the file in the preferred language is shown all the same. From the next play on, the tracks the app names count, as for any version.
-- jellyfin-web keeps a title's page it showed, with the item it read then: going back to the page of a torrent version played for the first time since it opened still shows no subtitle file, and its **Play** names none. A new load of the page shows them, with the preferred one chosen. The player's subtitle menu lists them in every play.
+- They are listed from the version's first play, once its torrent tells its files: in PlaybackInfo, then on the title's page. Before its first play, a torrent version's files are unknown.
+- The play that lists them chooses its tracks by the user's preferences, whatever tracks the app names: the app named them from the title's page, where the files were not listed yet, and their indexes have moved. The web player, for one, names no subtitle then ("Off", the page's only choice), and the file in the preferred language is shown all the same. From the next play on, the tracks the app names count, as for any version.
+- The web player keeps a title's page it showed, with the item it read then: going back to the page of a torrent version played for the first time since it opened still shows no subtitle file, and its **Play** names none. A new load of the page shows them, with the preferred one chosen. The player's subtitle menu lists them in every play.
 - The file in the user's preferred subtitle language is fetched as the play starts: the one the app shows by default when it is one of them, else the first of them that is not forced. Without a preferred language, only the one the app shows by default is fetched. The others are fetched when a user picks them, and served once fetched. Each costs a whole piece of the torrent (see [Torrents](torrents.md#subtitle-files-inside-the-torrent)).
 - Once fetched, a file is kept in the database with its version, as the tracks read from files are: it stays listed and is served once the torrent stopped, in the player's subtitle menu and on the title's page, and across restarts.
 - A file not fetched yet, picked once the torrent stopped, as after a pause of more than 30 seconds, starts the torrent again to fetch it. With torrents off, or their route down, it is not served: Jellyfin apps get the error Jellyfin gives for a subtitle it cannot serve, and the log tells why (`A subtitle could not be read`).
 - Each app gets them in the format it asks for, as it gets the files beside local files: WebVTT, SubRip, ASS or JSON, and in HLS. An ASS file asked as ASS keeps its styles and positions, and their encodings are read as those of the files beside local files. They come as they are, never synced (see [Torrents](torrents.md#only-while-playing)).
 - They reach only the users the version reaches: parental control, blocked genres and the torrent permission apply to them as to their version, and fetching them follows the torrents' route, as their playback does.
 
-**Compared with Jellyfin:** Jellyfin has no torrents. It reads the subtitle files of a video's own folder whose name begins with the video's, never those of a subtitles folder (`GetExternalFiles` in `MediaBrowser.Providers/MediaInfo/MediaInfoResolver.cs`). Inside torrents, Polyfin also reads the subtitles folder beside the video, where many torrents put their subtitles; its local folders read the video's folder alone, as Jellyfin does.
+**Compared with Jellyfin**
+
+- Jellyfin has no torrents. It reads the subtitle files of a video's own folder whose name begins with the video's, never those of a subtitles folder (`GetExternalFiles` in `MediaBrowser.Providers/MediaInfo/MediaInfoResolver.cs`).
+- Inside torrents, Polyfin also reads the subtitles folder beside the video, where many torrents put their subtitles; its local folders read the video's folder alone, as Jellyfin does.
 
 ## Text tracks inside files
 
-Some apps take subtitles only as files, jellyfin-web first. These apps get the tracks inside a file from the start of playback.
+Some apps take subtitles only as files, the web player first. These apps get the tracks inside a file from the start of playback.
 
 For a Matroska file, Polyfin reads the track whole through the file's index, which tells where every subtitle line sits:
 
@@ -140,27 +148,31 @@ A host that answers one byte range at a time would take a request for nearly eve
 - Before it offers such a track, Polyfin learns whether the host serves several ranges at once, from what it already knows of the host or with one request for two ranges.
 - Polyfin logs the tracks it leaves out.
 
-### Tracks offered after a remux
+<a id="tracks-offered-after-a-remux"></a>
 
-Tracks left out for that reason, and tracks the index does not locate (as in MP4 files), are offered as files once a remux has read them whole. See [Transcoding](transcoding.md).
+### Tracks offered after repackaging
+
+Tracks left out for that reason, and tracks the index does not locate (as in MP4 files), are offered as files once repackaging has read them whole. See [Transcoding](transcoding.md).
 
 ## ASS styles and fonts
 
 ASS tracks keep their styles and positions. The fonts the file carries are listed for apps that render ASS.
 
-Fallback fonts, which apps load when a subtitle's own fonts are missing, come from the folder set by `POLYFIN_FONTS_DIR`. See [Configuration](configuration.md).
+Fallback fonts, which apps load when a subtitle's own fonts are missing, come from the folder `POLYFIN_FONTS_DIR` names (see [Environment variables](configuration.md#environment-variables)).
 
-## Image subtitles
+<a id="image-subtitles"></a>
 
-When an app cannot show image subtitles, Polyfin burns them into the video: an image track inside the file, or a picture subtitle file beside a local file, which FFmpeg reads beside the video. This is a video conversion: it counts toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md). A subtitle file burned in is read from its start; after a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
+## Picture subtitles
+
+When an app cannot show picture subtitles, Polyfin burns them into the video: a picture track inside the file, or a picture subtitle file beside a local file, which FFmpeg reads beside the video. This is a video conversion: it counts toward **Video conversions at once (0 = no limit)** (see [Playback](playback.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md). A subtitle file burned in is read from its start; after a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
 
 With **Turn picture subtitles into text** on, a text copy of the track spares that conversion once it is ready.
 
 ### Picture subtitles read into text
 
-PGS and DVD (VobSub) subtitles are pictures, and many apps take only text: jellyfin-web in Chrome (unless set to draw PGS) and Findroid list text formats alone, and Swiftfin's native player asks PGS and VobSub burned in. Polyfin can read these pictures into text with Tesseract, so that these apps get a text track instead of a conversion.
+PGS and DVD (VobSub) subtitles are pictures, and many apps take only text: the web player in Chrome (unless set to draw PGS) and Findroid list text formats alone, and Swiftfin's native player asks PGS and VobSub burned in. Polyfin can read these pictures into text with Tesseract, so that these apps get a text track instead of a conversion.
 
-Under **Settings › Conversion (transcoding)**, in **Picture subtitles**:
+In **Settings › Conversion (transcoding) › Picture subtitles**:
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -207,4 +219,6 @@ Downloading a language's data:
 
 Known limits: italics, colors and positions are lost, and the copy shows plain lines at the bottom. Stylized fonts and small DVD pictures can give misread letters. This is why the original stays, and the copy is marked.
 
-**Compared with Jellyfin:** Jellyfin never reads picture subtitles into text.
+**Compared with Jellyfin**
+
+- Jellyfin never reads picture subtitles into text.
