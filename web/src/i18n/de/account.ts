@@ -636,6 +636,10 @@ const account: typeof en = {
         `${name} ist auf diesem Server nicht eingerichtet: Ein Administrator muss zuerst die ${name}-App hinzufügen.`,
       appRefused: (name: string) =>
         `${name} hat die App dieses Servers abgelehnt. Ein Administrator muss ihre Zugangsdaten unter Einstellungen › Tracking prüfen.`,
+      traktCodeEnded:
+        'Der Code ist abgelaufen, oder Trakt hat ihn abgelehnt. Falls Trakt deine Anmeldung abgelehnt hat, prüfe zweierlei: Ein Administrator hat deinen Trakt-Benutzernamen unter Members zur Trakt-App dieses Servers hinzugefügt; und bei einem kostenlosen Trakt-Konto ist keine andere App verbunden, da Trakt nur eine erlaubt (trenne sie auf Trakt unter Settings › Connected apps oder nutze Trakt VIP). Fordere dann einen neuen Code an.',
+      traktAppRefused:
+        'Trakt hat diese Anmeldung abgelehnt. Prüfe, ob ein Administrator deinen Trakt-Benutzernamen unter Members zur Trakt-App dieses Servers hinzugefügt hat und ob mit deinem kostenlosen Trakt-Konto keine andere App verbunden ist, da Trakt nur eine erlaubt. Andernfalls muss ein Administrator die Zugangsdaten der App unter Einstellungen › Tracking prüfen.',
       history: {
         toggle: (name: string) => `Meinen ${name}-Verlauf importieren`,
         toggleHelp: (name: string, every: string) =>

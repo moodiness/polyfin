@@ -639,6 +639,10 @@ const account: typeof en = {
         `${name} no está configurado en este servidor: un administrador debe añadir primero la aplicación de ${name}.`,
       appRefused: (name: string) =>
         `${name} ha rechazado la aplicación de este servidor. Un administrador debe comprobar sus credenciales en Ajustes › Seguimiento.`,
+      traktCodeEnded:
+        'El código caducó, o Trakt lo rechazó. Si Trakt rechazó su inicio de sesión, compruebe dos cosas: que un administrador haya añadido su nombre de usuario de Trakt a la aplicación de Trakt de este servidor, en Members; y, con una cuenta gratuita de Trakt, que no haya otra aplicación conectada, ya que Trakt solo permite una (desconéctela en Trakt, en Settings › Connected apps, o use Trakt VIP). Luego obtenga un código nuevo.',
+      traktAppRefused:
+        'Trakt ha rechazado este inicio de sesión. Compruebe que un administrador haya añadido su nombre de usuario de Trakt a la aplicación de Trakt de este servidor, en Members, y que su cuenta gratuita de Trakt no tenga otra aplicación conectada, ya que Trakt solo permite una. Si no es el caso, un administrador debe comprobar las credenciales de la aplicación en Ajustes › Seguimiento.',
       history: {
         toggle: (name: string) => `Importar mi historial de ${name}`,
         toggleHelp: (name: string, every: string) =>

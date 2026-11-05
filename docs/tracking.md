@@ -39,6 +39,8 @@ Polyfin checks an API key or user token with the service before saving it.
 
 Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered only once an administrator has set them up; see [Setting up Trakt, Simkl and Last.fm](#setting-up-trakt-simkl-and-last-fm-administrators).
 
+Trakt lets only the people an administrator added to the server's Trakt app sign in through it, and a free Trakt account connects one community app at a time. When Trakt refuses your sign-in, or the code ends without connecting, **My account › Tracking** names both checks: ask an administrator to add your Trakt username to the app's **Members**, and, on a free account, disconnect the other app on Trakt, under **Settings › Connected apps**, or use Trakt VIP. Trakt's answer does not tell these apart from a wrong app, so the message lists them all.
+
 ## Importing your watch history
 
 Polyfin can also read what you watched elsewhere, in other apps that report to the same services, so that played marks, **Continue Watching** and **Next Up** match. It is off by default. Under **My account › Tracking**, each connected service has:
@@ -226,7 +228,7 @@ MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trak
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Trakt client ID** | **Settings › Tracking** | Empty | Client ID of your Trakt app. |
-| **Trakt client secret** | **Settings › Tracking** | Empty | Client secret of your Trakt app. Shown as dots once saved; administrators can show it again with its eye. |
+| **Trakt client secret** | **Settings › Tracking** | Empty | Optional: only Trakt apps created before October 2026 have one. Shown as dots once saved; administrators can show it again with its eye. |
 | **Simkl client ID** | **Settings › Tracking** | Empty | Client ID of your Simkl app. |
 | **Last.fm API key** | **Settings › Tracking** | Empty | API key of your Last.fm API account. |
 | **Last.fm shared secret** | **Settings › Tracking** | Empty | Shared secret of your Last.fm API account. Shown as dots once saved; administrators can show it again with its eye. |
@@ -237,10 +239,18 @@ MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trak
 
 ### Trakt
 
-1. Create an application in your [Trakt API apps](https://app.trakt.tv/settings/apps), with the redirect URI `urn:ietf:wg:oauth:2.0:oob`.
-2. Paste its **Client ID** and **Client Secret** in **Trakt client ID** and **Trakt client secret**.
+1. Open [My Apps on Trakt's developer portal](https://developer.trakt.tv/apps) and link your GitHub account, which Trakt asks of every developer.
+2. Create an app of the Development type (Trakt keeps Production apps for its paid developer plan), with any name and the redirect URI `http://localhost`.
+3. Under the app's **Members**, add the Trakt username of each Polyfin user who will connect, up to 16. You can always sign in yourself.
+4. Paste its **Client ID** in **Trakt client ID**. Paste its **Client Secret** in **Trakt client secret** only if Trakt shows one: apps created since October 2026 have none, and Trakt is offered with the client ID alone.
 
-The secret is never sent back with the settings. Once saved, it shows as dots, and its eye shows it again on demand (see [Showing a saved key](administration.md#showing-a-saved-key)).
+An app created before October 2026 keeps working as it is, with its client secret and the redirect URI `urn:ietf:wg:oauth:2.0:oob`. Link your GitHub account to it by January 1, 2027, or Trakt stops letting users in.
+
+Free Trakt accounts connect one community app at a time: a user who already connected another one disconnects it on Trakt, under **Settings › Connected apps**, or uses Trakt VIP.
+
+Polyfin signs users in on `auth.trakt.tv`, the host Trakt's API specification names for its OAuth calls (and requires from February 1, 2027), and calls the rest of Trakt's API on `api.trakt.tv`. When it refreshes a user's token, it names the redirect URI the app was registered with, as Trakt's specification asks: `urn:ietf:wg:oauth:2.0:oob` for an app with a client secret, `http://localhost` for one without. Register exactly `http://localhost` on a new app.
+
+The secret is never sent back with the settings. Once saved, it shows as dots, and its eye shows it again on demand (see [Showing a saved key](administration.md#showing-a-saved-key)). A saved secret that `POLYFIN_SECRET_KEY` cannot decrypt keeps Trakt off until the key or the secret is corrected.
 
 ### Simkl
 
@@ -272,7 +282,7 @@ Both secrets are kept as the Trakt client secret is: never sent back with the se
 
 ### When the server's app is refused
 
-When Trakt, Simkl or Last.fm refuses the server's app (a wrong client ID, client secret, API key or shared secret), users connecting are told that an administrator has to check it under **Settings › Tracking**, rather than that the service is down.
+When Trakt, Simkl or Last.fm refuses the server's app (a wrong client ID, client secret, API key or shared secret), users connecting are told that an administrator has to check it under **Settings › Tracking**, rather than that the service is down. Trakt's message also names what users check themselves: being among the app's **Members**, and the one-app limit of a free Trakt account (see [Connecting your accounts](#connecting-your-accounts)).
 
 ## Delivery and retries
 

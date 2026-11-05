@@ -283,23 +283,33 @@ function ServiceRow({
       onConnect={(key) => connect.mutate(key)}
     />
   )
+  // Trakt also refuses users its app's Members omit, and free accounts past their one app: the
+  // answer does not tell these from a wrong app, so its messages name every check.
+  const trakt = service.service === 'trakt'
+  const appRefusedText = trakt ? text.traktAppRefused : text.appRefused(name)
   const appRefused =
     connect.isError && connect.error instanceof ApiError && connect.error.code === 'app_refused'
   const codeError = service.connection !== 'key' && connect.isError && (
     <Notice tone="danger" live action={appRefused ? setUpLink : undefined}>
-      {connectError(t, name, connect.error)}
+      {appRefused ? appRefusedText : connectError(t, name, connect.error)}
     </Notice>
   )
   const ended = (expired || codeEnded) && (
     <Notice tone="warn" live>
-      {paste ? text.pasteEnded : signIn ? text.signInEnded : text.codeEnded}
+      {paste
+        ? text.pasteEnded
+        : signIn
+          ? text.signInEnded
+          : trakt
+            ? text.traktCodeEnded
+            : text.codeEnded}
     </Notice>
   )
   const startAgain = signIn || paste ? text.signInAgain : text.newCode
   // The server's app was refused while the code waited; another attempt clears it.
   const refusedApp = service.problem === 'app_refused' && !connect.isError && (
     <Notice tone="danger" action={setUpLink || undefined}>
-      {text.appRefused(name)}
+      {appRefusedText}
     </Notice>
   )
   const cancelError = !service.connected && disconnect.isError && (

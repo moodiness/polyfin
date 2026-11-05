@@ -633,6 +633,10 @@ const account: typeof en = {
         `${name} non è configurato su questo server: un amministratore deve prima aggiungere l’applicazione ${name}.`,
       appRefused: (name: string) =>
         `${name} ha rifiutato l’applicazione di questo server. Un amministratore deve verificarne le credenziali in Impostazioni › Monitoraggio.`,
+      traktCodeEnded:
+        'Il codice è scaduto, oppure Trakt l’ha rifiutato. Se Trakt ha rifiutato il tuo accesso, verifica due cose: che un amministratore abbia aggiunto il tuo nome utente Trakt all’applicazione Trakt di questo server, nei suoi Members; e, con un account Trakt gratuito, che non sia collegata un’altra app, perché Trakt ne consente una sola (scollegala su Trakt, in Settings › Connected apps, oppure usa Trakt VIP). Poi ottieni un nuovo codice.',
+      traktAppRefused:
+        'Trakt ha rifiutato questo accesso. Verifica che un amministratore abbia aggiunto il tuo nome utente Trakt all’applicazione Trakt di questo server, nei suoi Members, e che al tuo account Trakt gratuito non sia collegata un’altra app, perché Trakt ne consente una sola. Altrimenti, un amministratore deve verificare le credenziali dell’applicazione in Impostazioni › Monitoraggio.',
       history: {
         toggle: (name: string) => `Importa la mia cronologia di ${name}`,
         toggleHelp: (name: string, every: string) =>

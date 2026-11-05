@@ -624,6 +624,10 @@ const account = {
         `${name} is not set up on this server: an administrator has to add the ${name} app first.`,
       appRefused: (name: string) =>
         `${name} refused this server’s app. An administrator has to check its credentials under Settings › Tracking.`,
+      traktCodeEnded:
+        'The code expired, or Trakt refused it. If Trakt refused your sign-in, check two things: an administrator has added your Trakt username to this server’s Trakt app, under Members; and, on a free Trakt account, no other app is connected, as Trakt allows only one (disconnect it on Trakt under Settings › Connected apps, or use Trakt VIP). Then get a new code.',
+      traktAppRefused:
+        'Trakt refused this sign-in. Check that an administrator added your Trakt username to this server’s Trakt app, under Members, and that your free Trakt account has no other app connected, as Trakt allows only one. If neither applies, an administrator has to check the app’s credentials under Settings › Tracking.',
       history: {
         toggle: (name: string) => `Import my ${name} history`,
         toggleHelp: (name: string, every: string) =>

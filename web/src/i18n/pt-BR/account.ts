@@ -636,6 +636,10 @@ const account: typeof en = {
         `${name} não está configurado neste servidor: um administrador precisa primeiro adicionar o aplicativo ${name}.`,
       appRefused: (name: string) =>
         `${name} recusou o aplicativo deste servidor. Um administrador precisa verificar as credenciais em Configurações › Acompanhamento.`,
+      traktCodeEnded:
+        'O código expirou, ou o Trakt o recusou. Se o Trakt recusou seu acesso, verifique duas coisas: se um administrador adicionou seu nome de usuário do Trakt ao aplicativo Trakt deste servidor, em Members; e, com uma conta gratuita do Trakt, se não há outro aplicativo conectado, pois o Trakt só permite um (desconecte-o no Trakt, em Settings › Connected apps, ou use o Trakt VIP). Depois obtenha um novo código.',
+      traktAppRefused:
+        'O Trakt recusou este acesso. Verifique se um administrador adicionou seu nome de usuário do Trakt ao aplicativo Trakt deste servidor, em Members, e se sua conta gratuita do Trakt não tem outro aplicativo conectado, pois o Trakt só permite um. Caso contrário, um administrador precisa verificar as credenciais do aplicativo em Configurações › Acompanhamento.',
       history: {
         toggle: (name: string) => `Importar meu histórico do ${name}`,
         toggleHelp: (name: string, every: string) =>

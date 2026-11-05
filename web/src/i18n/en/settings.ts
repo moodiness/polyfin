@@ -8,13 +8,15 @@ const settings = {
       description:
         'Each user can connect their own Trakt, Simkl, MDBList, PublicMetaDB, AniList and MyAnimeList accounts on their My account page, and Polyfin tells those services what they watch; Last.fm and ListenBrainz hear of the songs they play. Trakt, Simkl, AniList, MyAnimeList and Last.fm first need an app of this server’s, set up here. MDBList, PublicMetaDB and ListenBrainz need nothing.',
       traktSetup:
-        'Create an app on trakt.tv, in Settings, Your API Apps, New application. Give it any name, then copy its client ID and client secret here.',
+        'Create an app on developer.trakt.tv, under My Apps: link your GitHub account, which Trakt asks of every developer, then create a Development app with any name and the redirect URI below. Under its Members, add the Trakt username of each user who will connect, up to 16 (you can always sign in yourself). Then copy its client ID here, and its client secret if Trakt shows one.',
+      traktOlderApps:
+        'Apps created before October 2026 keep working with their client secret and their redirect URI, urn:ietf:wg:oauth:2.0:oob; link your GitHub account to them by January 1, 2027, or Trakt stops letting users in. A free Trakt account connects one community app at a time: a user who already connected another one disconnects it on Trakt, under Settings › Connected apps, or uses Trakt VIP.',
       redirectUri: 'Redirect URI to enter in the app',
       traktClientId: 'Trakt client ID',
       traktClientIdHelp:
-        'Leave empty to turn Trakt off. Users can connect once both the client ID and the client secret are saved.',
+        'Leave empty to turn Trakt off. Users can connect once the client ID is saved.',
       traktClientSecret: 'Trakt client secret',
-      traktClientSecretHelp: 'Shown on the app’s page on trakt.tv, under the client ID.',
+      traktClientSecretHelp: 'Optional: only apps made before October 2026 have one.',
       simklSetup:
         'Create an app on simkl.com, in Settings, Developer, Create new app, of the type “TV, devices & command line” (Simkl’s AUTH V2; it needs no redirect URI, and client IDs of older AUTH V1 apps are refused). Give it any name, then copy its client ID here.',
       simklClientId: 'Simkl client ID',

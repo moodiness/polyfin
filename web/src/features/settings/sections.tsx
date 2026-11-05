@@ -56,8 +56,11 @@ import { EditAsCustom, shownTexts, ThemeCopyPanel } from './WebTheme'
 import WorkFolderRow from './WorkFolders'
 import WordList from './WordList'
 
-/** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
-const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
+/**
+ * The redirect URI of a new Trakt app: Development apps take only localhost addresses, and the
+ * server names this one when it refreshes the tokens of an app without a client secret.
+ */
+const traktRedirectUri = 'http://localhost'
 
 /** The redirect URL of an AniList app whose users paste the code AniList shows them. */
 const aniListPinUri = 'https://anilist.co/api/v2/oauth/pin'
@@ -1445,9 +1448,10 @@ function Tracking({ form, update, error }: SectionFormApi) {
             {s.redirectUri}
             {t.common.colon}{' '}
             <code className="rounded-check bg-s3 px-1.5 py-0.5 font-mono text-micro break-all text-ink select-all">
-              {oobRedirectUri}
+              {traktRedirectUri}
             </code>
           </p>
+          <p className="mt-2 max-w-[60ch] text-ink-3">{s.traktOlderApps}</p>
         </TextRow>
         <FieldRow
           anchor="trakt-client-id"

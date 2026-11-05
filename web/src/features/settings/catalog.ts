@@ -1136,7 +1136,8 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'tracking',
     anchor: 'trakt-client-id',
     label: (t) => tr(t).traktClientId,
-    help: (t) => `${tr(t).traktClientIdHelp} ${tr(t).traktSetup} ${tr(t).redirectUri}`,
+    help: (t) =>
+      `${tr(t).traktClientIdHelp} ${tr(t).traktSetup} ${tr(t).redirectUri} ${tr(t).traktOlderApps}`,
     keywords: ['Trakt'],
     codes: ['invalid_trakt_app'],
   },

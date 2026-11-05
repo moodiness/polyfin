@@ -7,14 +7,16 @@ const settings: typeof en = {
       description:
         'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList, PublicMetaDB, AniList et MyAnimeList depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde ; Last.fm et ListenBrainz reçoivent les morceaux qu’il écoute. Trakt, Simkl, AniList, MyAnimeList et Last.fm ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList, PublicMetaDB et ListenBrainz n’ont besoin de rien.',
       traktSetup:
-        'Créez une application sur trakt.tv, dans Settings, Your API Apps, New application. Donnez-lui le nom de votre choix, puis copiez ici son client ID et son client secret.',
+        'Créez une application sur developer.trakt.tv, dans My Apps : liez votre compte GitHub, que Trakt demande à tout développeur, puis créez une application de type Development, du nom de votre choix, avec l’adresse de redirection ci-dessous. Dans ses Members, ajoutez le nom d’utilisateur Trakt de chaque utilisateur qui s’y connectera, 16 au plus (vous pouvez toujours vous connecter vous-même). Copiez ensuite ici son client ID, et son client secret si Trakt en affiche un.',
+      traktOlderApps:
+        'Les applications créées avant octobre 2026 fonctionnent toujours avec leur client secret et leur adresse de redirection, urn:ietf:wg:oauth:2.0:oob ; liez-leur votre compte GitHub avant le 1er janvier 2027, sinon Trakt ne laissera plus les utilisateurs s’y connecter. Un compte Trakt gratuit ne connecte qu’une application tierce à la fois : un utilisateur qui en a déjà connecté une autre la déconnecte sur Trakt, dans Settings › Connected apps, ou passe à Trakt VIP.',
       redirectUri: 'Adresse de redirection (redirect URI) à saisir dans l’application',
       traktClientId: 'Client ID Trakt',
       traktClientIdHelp:
-        'Laissez vide pour désactiver Trakt. Les utilisateurs peuvent se connecter une fois le client ID et le client secret enregistrés.',
+        'Laissez vide pour désactiver Trakt. Les utilisateurs peuvent se connecter une fois le client ID enregistré.',
       traktClientSecret: 'Client secret Trakt',
       traktClientSecretHelp:
-        'Affiché sur la page de l’application sur trakt.tv, sous le client ID.',
+        'Facultatif : seules les applications créées avant octobre 2026 en ont un.',
       simklSetup:
         'Créez une application sur simkl.com, dans Settings, Developer, Create new app, du type « TV, devices & command line » (l’AUTH V2 de Simkl ; elle n’a pas besoin d’adresse de redirection, et les client ID des anciennes applications AUTH V1 sont refusés). Donnez-lui le nom de votre choix, puis copiez ici son client ID.',
       simklClientId: 'Client ID Simkl',
