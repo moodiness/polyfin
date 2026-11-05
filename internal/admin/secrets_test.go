@@ -96,7 +96,8 @@ func TestOwnTrackingKeysAreRevealedToTheirOwnerOnly(t *testing.T) {
 	api := newTestAPI(t, 10, func(options *Options, deps testDeps) {
 		pool = deps.pool
 		tracker := trackers.New(trackers.Options{DB: deps.pool, Settings: options.Accounts.Settings, Version: "test", Logger: options.Logger,
-			URLs: map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb"}})
+			URLs:     map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb"},
+			AuthURLs: map[string]string{trackers.Trakt: services + "/trakt"}})
 		t.Cleanup(tracker.Close)
 		options.Trackers = tracker
 	})

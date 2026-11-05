@@ -3,6 +3,7 @@ package trackers
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -11,10 +12,10 @@ import (
 func TestTraktCodeConnectsOnceEnteredAndKeepsTheConnectionWhenDenied(t *testing.T) {
 	h := newHarness(t)
 	alice := h.user(t, "alice")
-	h.f.reply("POST", "/trakt/oauth/device/code", http.StatusOK,
+	h.f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusOK,
 		`{"device_code":"device-1","user_code":"ABCD1234","verification_url":"https://trakt.example/activate","expires_in":600,"interval":1}`)
 	var polls atomic.Int32
-	h.f.on("POST", "/trakt/oauth/device/token", func(r request) answer {
+	h.f.on("POST", "/trakt-auth/oauth/device/token", func(r request) answer {
 		// Pending twice, then entered.
 		if polls.Add(1) <= 2 {
 			return answer{status: http.StatusBadRequest, body: `{}`}
@@ -37,7 +38,7 @@ func TestTraktCodeConnectsOnceEnteredAndKeepsTheConnectionWhenDenied(t *testing.
 	if status.Code != nil || status.Account != "alice-on-trakt" || status.Problem != "" || !status.ConnectedAt.Equal(clockStart) {
 		t.Errorf("connected: %+v", status)
 	}
-	poll := h.f.sent("trakt", "/oauth/device/token")[0]
+	poll := h.f.sent("trakt-auth", "/oauth/device/token")[0]
 	sameJSON(t, "poll", poll.body, `{"code":"device-1","client_id":"trakt-client","client_secret":"trakt-secret"}`)
 	if settings := h.f.sent("trakt", "/users/settings")[0]; settings.header.Get("Authorization") != "Bearer trakt-access-1" ||
 		settings.header.Get("trakt-api-key") != "trakt-client" || settings.header.Get("trakt-api-version") != "2" {
@@ -49,7 +50,7 @@ func TestTraktCodeConnectsOnceEnteredAndKeepsTheConnectionWhenDenied(t *testing.
 	}
 
 	// A new code the user denies leaves the connection as it was.
-	h.f.reply("POST", "/trakt/oauth/device/token", 418, `{}`)
+	h.f.reply("POST", "/trakt-auth/oauth/device/token", 418, `{}`)
 	if status, err := h.StartCode(t.Context(), alice, Trakt); err != nil || status.Code == nil || !status.Connected {
 		t.Fatalf("second code: %+v %v", status, err)
 	}
@@ -121,7 +122,7 @@ func TestCodeServicesNeedTheirApp(t *testing.T) {
 	h := newHarness(t)
 	user := h.user(t, "carol")
 	settings := h.store.Settings()
-	settings.TraktClientSecret, settings.SimklClientID = "", ""
+	settings.TraktClientID, settings.SimklClientID = "", ""
 	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
@@ -137,13 +138,74 @@ func TestCodeServicesNeedTheirApp(t *testing.T) {
 		t.Errorf("MDBList: %+v", status)
 	}
 	// A service that does not answer.
-	settings.TraktClientSecret = "trakt-secret"
+	settings.TraktClientID = "trakt-client"
 	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
-	h.f.reply("POST", "/trakt/oauth/device/code", http.StatusServiceUnavailable, `{}`)
+	h.f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusServiceUnavailable, `{}`)
 	if _, err := h.StartCode(t.Context(), user, Trakt); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("unreachable: %v", err)
+	}
+}
+
+// An app created on Trakt since October 2026 has a client ID and no
+// secret: Trakt is offered, its OAuth calls go to the authentication host
+// without a secret, a refresh names the localhost redirect URI such apps
+// are registered with, and the API calls stay on the API host.
+func TestTraktAppWithoutSecret(t *testing.T) {
+	h := newHarness(t)
+	settings := h.store.Settings()
+	settings.TraktClientSecret = ""
+	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	user := h.user(t, "nina")
+	h.f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusOK,
+		`{"device_code":"device-n","user_code":"NINA1234","verification_url":"https://trakt.example/activate","expires_in":600,"interval":1}`)
+	// The token expires within the day, to be refreshed at the first send.
+	h.f.reply("POST", "/trakt-auth/oauth/device/token", http.StatusOK, `{"access_token":"nina-access-1","token_type":"bearer","expires_in":3600,
+		"refresh_token":"nina-refresh-1","scope":"public","created_at":`+strconv.FormatInt(clockStart.Unix(), 10)+`}`)
+	h.f.reply("POST", "/trakt-auth/oauth/token", http.StatusOK, `{"access_token":"nina-access-2","token_type":"bearer","expires_in":604800,
+		"refresh_token":"nina-refresh-2","scope":"public","created_at":`+strconv.FormatInt(clockStart.Unix(), 10)+`}`)
+	h.f.reply("GET", "/trakt/users/settings", http.StatusOK, `{"user":{"username":"nina-on-trakt"}}`)
+	h.f.reply("POST", "/trakt/scrobble/stop", http.StatusCreated, `{"action":"scrobble"}`)
+
+	if status := h.status(t, user, Trakt); !status.Available {
+		t.Fatalf("not offered with a client ID alone: %+v", status)
+	}
+	if _, err := h.StartCode(t.Context(), user, Trakt); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the connection", func() bool { return h.status(t, user, Trakt).Connected })
+	h.Playback(user, play(Stopped, movie, 90, false, false))
+	stop := h.f.wait(t, 1, "trakt", "/scrobble/stop")[0]
+	if stop.header.Get("Authorization") != "Bearer nina-access-2" {
+		t.Errorf("scrobbled with %q", stop.header.Get("Authorization"))
+	}
+	h.idle(t)
+	if err := h.Disconnect(t.Context(), user, Trakt); err != nil {
+		t.Fatal(err)
+	}
+	revoke := h.f.wait(t, 1, "trakt-auth", "/oauth/revoke")[0]
+
+	code := h.f.sent("trakt-auth", "/oauth/device/code")[0]
+	sameJSON(t, "code", code.body, `{"client_id":"trakt-client"}`)
+	if code.header.Get("trakt-api-key") != "trakt-client" || code.header.Get("trakt-api-version") != "2" {
+		t.Errorf("code asked with %v", code.header)
+	}
+	sameJSON(t, "poll", h.f.sent("trakt-auth", "/oauth/device/token")[0].body, `{"code":"device-n","client_id":"trakt-client"}`)
+	sameJSON(t, "refresh", h.f.sent("trakt-auth", "/oauth/token")[0].body, `{"refresh_token":"nina-refresh-1","client_id":"trakt-client",
+		"redirect_uri":"http://localhost","grant_type":"refresh_token"}`)
+	sameJSON(t, "revocation", revoke.body, `{"token":"nina-access-2","client_id":"trakt-client"}`)
+	if account := h.f.sent("trakt", "/users/settings"); len(account) != 1 {
+		t.Errorf("%d account requests on the API host", len(account))
+	}
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	for _, r := range h.f.requests {
+		if r.service == "trakt" && strings.HasPrefix(r.path, "/oauth/") {
+			t.Errorf("%s sent to the API host", r.path)
+		}
 	}
 }
 
@@ -234,7 +296,7 @@ func TestDisconnectingRevokesAndForgets(t *testing.T) {
 	if err := h.Disconnect(t.Context(), user, PublicMetaDB); err != nil {
 		t.Error(err)
 	}
-	revoke := h.f.wait(t, 1, "trakt", "/oauth/revoke")[0]
+	revoke := h.f.wait(t, 1, "trakt-auth", "/oauth/revoke")[0]
 	sameJSON(t, "Trakt revocation", revoke.body, `{"token":"trakt-erin","client_id":"trakt-client","client_secret":"trakt-secret"}`)
 	if revoke := h.f.wait(t, 1, "simkl", "/oauth2/revoke")[0]; revoke.form.Get("token") != "simkl-erin-refresh" || revoke.form.Get("client_id") != "simkl-client" {
 		t.Errorf("Simkl revocation: %v", revoke.form)
@@ -268,7 +330,7 @@ func TestARefusedAppIsNotAnOutage(t *testing.T) {
 	h := newHarness(t)
 	user := h.user(t, "zoe")
 	// Asking for a code with an app Trakt does not know.
-	h.f.reply("POST", "/trakt/oauth/device/code", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"client not found"}`)
+	h.f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"client not found"}`)
 	if _, err := h.StartCode(t.Context(), user, Trakt); !errors.Is(err, ErrAppRefused) {
 		t.Errorf("Trakt: %v", err)
 	}
@@ -276,9 +338,9 @@ func TestARefusedAppIsNotAnOutage(t *testing.T) {
 	// A wrong secret shows only once the user entered the code: the code
 	// ends, and the service shows the app refused, connected or not.
 	h.connected(t, user, Trakt, "trakt-zoe")
-	h.f.reply("POST", "/trakt/oauth/device/code", http.StatusOK,
+	h.f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusOK,
 		`{"device_code":"device-2","user_code":"EFGH5678","verification_url":"https://trakt.example/activate","expires_in":600,"interval":1}`)
-	h.f.reply("POST", "/trakt/oauth/device/token", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"client not found"}`)
+	h.f.reply("POST", "/trakt-auth/oauth/device/token", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"client not found"}`)
 	if _, err := h.StartCode(t.Context(), user, Trakt); err != nil {
 		t.Fatal(err)
 	}

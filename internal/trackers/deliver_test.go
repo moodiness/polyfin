@@ -237,7 +237,7 @@ func TestTraktTokensAreRefreshed(t *testing.T) {
 		t.Fatal(err)
 	}
 	var refreshes atomic.Int32
-	h.f.on("POST", "/trakt/oauth/token", func(r request) answer {
+	h.f.on("POST", "/trakt-auth/oauth/token", func(r request) answer {
 		n := refreshes.Add(1)
 		return answer{status: http.StatusOK, body: `{"access_token":"access-` + string(rune('0'+n)) + `","token_type":"bearer","expires_in":604800,
 			"refresh_token":"refresh-` + string(rune('0'+n)) + `","scope":"public","created_at":` + strconv.FormatInt(clockStart.Unix(), 10) + `}`}
@@ -254,7 +254,7 @@ func TestTraktTokensAreRefreshed(t *testing.T) {
 	if stops[0].header.Get("Authorization") != "Bearer access-1" {
 		t.Errorf("sent with %q", stops[0].header.Get("Authorization"))
 	}
-	refresh := h.f.sent("trakt", "/oauth/token")[0]
+	refresh := h.f.sent("trakt-auth", "/oauth/token")[0]
 	sameJSON(t, "refresh", refresh.body, `{"refresh_token":"old-refresh","client_id":"trakt-client","client_secret":"trakt-secret",
 		"redirect_uri":"urn:ietf:wg:oauth:2.0:oob","grant_type":"refresh_token"}`)
 
@@ -271,7 +271,7 @@ func TestTraktTokensAreRefreshed(t *testing.T) {
 	if stops[1].header.Get("Authorization") != "Bearer access-1" || stops[2].header.Get("Authorization") != "Bearer access-2" {
 		t.Errorf("sent with %q then %q", stops[1].header.Get("Authorization"), stops[2].header.Get("Authorization"))
 	}
-	if second := h.f.sent("trakt", "/oauth/token")[1]; !strings.Contains(mustJSON(second.body), `"refresh_token":"refresh-1"`) {
+	if second := h.f.sent("trakt-auth", "/oauth/token")[1]; !strings.Contains(mustJSON(second.body), `"refresh_token":"refresh-1"`) {
 		t.Errorf("second refresh: %s", mustJSON(second.body))
 	}
 	h.idle(t)
@@ -288,10 +288,10 @@ func TestARefusedTokenAsksTheUserToReconnect(t *testing.T) {
 	h := newHarness(t)
 	user := h.connectAll(t, "frank")
 	h.f.reply("POST", "/trakt/scrobble/stop", http.StatusUnauthorized, `{}`)
-	h.f.reply("POST", "/trakt/oauth/token", http.StatusBadRequest, `{"error":"invalid_grant","error_description":"session not found"}`)
+	h.f.reply("POST", "/trakt-auth/oauth/token", http.StatusBadRequest, `{"error":"invalid_grant","error_description":"session not found"}`)
 	h.f.reply("POST", "/mdblist/scrobble/stop", http.StatusUnauthorized, `{"error":"Invalid API key"}`)
 	h.Playback(user, play(Stopped, movie, 90, false, false))
-	h.f.wait(t, 1, "trakt", "/oauth/token")
+	h.f.wait(t, 1, "trakt-auth", "/oauth/token")
 	eventually(t, "Trakt asking to reconnect", func() bool { return h.status(t, user, Trakt).Problem == ProblemReconnect })
 	eventually(t, "MDBList asking to reconnect", func() bool { return h.status(t, user, MDBList).Problem == ProblemReconnect })
 	if status := h.status(t, user, Simkl); status.Problem != "" {

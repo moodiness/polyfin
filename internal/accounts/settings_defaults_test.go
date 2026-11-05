@@ -62,8 +62,10 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 	// the admin API's list of both.
 	named["knownproxynames"] = true
 	for i := range fields.NumField() {
-		if name := fields.Field(i).Name; !named[strings.ToLower(name)] {
-			t.Errorf("no bounds for %s", name)
+		// Unexported fields are state read with the settings, not
+		// settings.
+		if field := fields.Field(i); field.IsExported() && !named[strings.ToLower(field.Name)] {
+			t.Errorf("no bounds for %s", field.Name)
 		}
 	}
 	try := func(name string, value any) error {

@@ -23,9 +23,49 @@ const maxReply = 1 << 20
 // simklApp is the app name Simkl is told, with Polyfin's version.
 const simklApp = "polyfin"
 
-// traktRedirect is the redirect URI of apps without a web page of their
-// own, which Trakt's token requests name.
-const traktRedirect = "urn:ietf:wg:oauth:2.0:oob"
+// The redirect URIs a Trakt app may be registered with: apps created
+// before October 2026, which have a client secret, were told the
+// out-of-band URI of apps without a web page of their own; the newer
+// Development apps take only localhost addresses, and are told
+// http://localhost.
+const (
+	traktOOBRedirect   = "urn:ietf:wg:oauth:2.0:oob"
+	traktLocalRedirect = "http://localhost"
+)
+
+// traktRedirect is the redirect URI a token refresh names. Trakt's spec
+// requires one, "the URI specified in your app settings", even for the
+// device flow, which never redirects: an app with a secret was registered
+// with the out-of-band URI, one without with http://localhost.
+func traktRedirect(settings accounts.Settings) string {
+	if settings.TraktClientSecret != "" {
+		return traktOOBRedirect
+	}
+	return traktLocalRedirect
+}
+
+// traktApp adds to body the client ID of the Trakt app settings name, and
+// its secret when one is saved: Trakt's spec makes the secret optional,
+// and apps created since October 2026 have none.
+func traktApp(settings accounts.Settings, body map[string]string) map[string]string {
+	body["client_id"] = settings.TraktClientID
+	if settings.TraktClientSecret != "" {
+		body["client_secret"] = settings.TraktClientSecret
+	}
+	return body
+}
+
+// traktAuth posts body as JSON to Trakt's OAuth endpoint path, on the
+// host Trakt's spec names for every /oauth call (auth.trakt.tv, required
+// from February 2027), with its API's headers.
+func (s *Service) traktAuth(ctx context.Context, settings accounts.Settings, path string, body map[string]string) (reply, error) {
+	header := http.Header{}
+	header.Set("trakt-api-key", settings.TraktClientID)
+	header.Set("trakt-api-version", "2")
+	header.Set("Content-Type", "application/json")
+	data, _ := json.Marshal(body)
+	return s.call(ctx, http.MethodPost, s.authURLs[Trakt]+path, header, data)
+}
 
 // reply is a service's answer.
 type reply struct {

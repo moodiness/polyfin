@@ -339,7 +339,7 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 		err error
 	)
 	if service == Trakt {
-		r, err = s.api(ctx, Trakt, "", settings, http.MethodPost, "/oauth/device/code", nil, map[string]string{"client_id": settings.TraktClientID})
+		r, err = s.traktAuth(ctx, settings, "/oauth/device/code", map[string]string{"client_id": settings.TraktClientID})
 	} else {
 		r, err = s.form(ctx, "/oauth2/device", url.Values{"client_id": {settings.SimklClientID}, "scope": {simklScope}})
 	}
@@ -503,8 +503,7 @@ func (s *Service) pollCode(p *pending) (pollState, tokens) {
 		err error
 	)
 	if p.service == Trakt {
-		r, err = s.api(s.ctx, Trakt, "", settings, http.MethodPost, "/oauth/device/token", nil, map[string]string{
-			"code": p.deviceCode, "client_id": settings.TraktClientID, "client_secret": settings.TraktClientSecret})
+		r, err = s.traktAuth(s.ctx, settings, "/oauth/device/token", traktApp(settings, map[string]string{"code": p.deviceCode}))
 	} else {
 		r, err = s.form(s.ctx, "/oauth2/token", url.Values{"grant_type": {"urn:ietf:params:oauth:grant-type:device_code"},
 			"client_id": {settings.SimklClientID}, "device_code": {p.deviceCode}})
@@ -694,8 +693,7 @@ func (s *Service) revoke(service, token, refresh string) {
 	var answer reply
 	var err error
 	if service == Trakt {
-		answer, err = s.api(s.ctx, Trakt, "", settings, http.MethodPost, "/oauth/revoke", nil, map[string]string{
-			"token": token, "client_id": settings.TraktClientID, "client_secret": settings.TraktClientSecret})
+		answer, err = s.traktAuth(s.ctx, settings, "/oauth/revoke", traktApp(settings, map[string]string{"token": token}))
 	} else {
 		// Revoking either token of Simkl revokes both.
 		if refresh != "" {
@@ -771,9 +769,8 @@ func (s *Service) fresh(ctx context.Context, key laneKey, refusedToken string) (
 	var r reply
 	switch key.service {
 	case Trakt:
-		r, err = s.api(ctx, Trakt, "", settings, http.MethodPost, "/oauth/token", nil, map[string]string{
-			"refresh_token": c.refresh, "client_id": settings.TraktClientID, "client_secret": settings.TraktClientSecret,
-			"redirect_uri": traktRedirect, "grant_type": "refresh_token"})
+		r, err = s.traktAuth(ctx, settings, "/oauth/token", traktApp(settings, map[string]string{
+			"refresh_token": c.refresh, "redirect_uri": traktRedirect(settings), "grant_type": "refresh_token"}))
 	case MyAnimeList:
 		r, err = s.oauthForm(ctx, MyAnimeList, url.Values{"grant_type": {"refresh_token"}, "client_id": {settings.MyAnimeListClientID},
 			"client_secret": {settings.MyAnimeListClientSecret}, "refresh_token": {c.refresh}})

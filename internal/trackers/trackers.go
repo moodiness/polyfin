@@ -66,10 +66,13 @@ var publicURLs = map[string]string{
 	ListenBrainz: "https://api.listenbrainz.org",
 }
 
-// authURLs are the base URLs of the OAuth pages and endpoints of the
-// services whose users paste a code: the page users allow Polyfin on is
-// base + "/authorize", tokens are asked of base + "/token".
+// authURLs are the base URLs of the OAuth pages and endpoints of Trakt and
+// of the services whose users paste a code. Trakt's OAuth endpoints are
+// base + "/oauth/...", apart from its API (see traktAuth). For AniList and
+// MyAnimeList, the page users allow Polyfin on is base + "/authorize",
+// and tokens are asked of base + "/token".
 var authURLs = map[string]string{
+	Trakt:       "https://auth.trakt.tv",
 	AniList:     "https://anilist.co/api/v2/oauth",
 	MyAnimeList: "https://myanimelist.net/v1/oauth2",
 }

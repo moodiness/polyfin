@@ -1882,10 +1882,15 @@ type Settings struct {
 	// administrator registered with Trakt, and SimklClientID the one
 	// registered with Simkl, through which users connect their accounts
 	// to have what they watch sent there. Empty by default, which offers
-	// neither service.
+	// neither service. Trakt apps created since October 2026 have no
+	// secret: TraktClientSecret then stays empty.
 	TraktClientID     string
 	TraktClientSecret string
 	SimklClientID     string
+	// traktSecretUnreadable: a Trakt client secret is stored, but the key
+	// cannot open it. It reads as empty, yet the app has one: Trakt is not
+	// offered until the key or the secret is corrected.
+	traktSecretUnreadable bool
 	// LastFMAPIKey and LastFMSecret are the API key and shared secret of
 	// the API account an administrator created on Last.fm, through which
 	// users connect their Last.fm accounts to have the songs they play
@@ -2247,10 +2252,11 @@ func (s Settings) SMTPAvailable() bool {
 	return s.SMTPHost != "" && s.SMTPFrom != ""
 }
 
-// TraktAvailable reports whether users can connect Trakt: its app's ID and
-// secret are saved.
+// TraktAvailable reports whether users can connect Trakt: its app's ID is
+// saved, and its secret, which Trakt's newer apps lack, is readable when
+// one is stored.
 func (s Settings) TraktAvailable() bool {
-	return s.TraktClientID != "" && s.TraktClientSecret != ""
+	return s.TraktClientID != "" && !s.traktSecretUnreadable
 }
 
 // SimklAvailable reports whether users can connect Simkl: its app's ID is
@@ -2478,6 +2484,7 @@ func (s *Store) openSecrets(settings *Settings) {
 		}
 		*secret.value = value
 	}
+	_, settings.traktSecretUnreadable = s.unreadable["traktClientSecret"]
 }
 
 // SecretUnreadable reports whether the secret of the settings named name,
@@ -3023,6 +3030,7 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 			delete(s.unreadable, secret.name)
 		}
 	}
+	_, settings.traktSecretUnreadable = s.unreadable["traktClientSecret"]
 	s.storeSettings(&settings)
 	return settings, nil
 }

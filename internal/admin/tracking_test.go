@@ -72,6 +72,7 @@ func newTrackingAPI(t *testing.T) testAPI {
 		tracker := trackers.New(trackers.Options{DB: deps.pool, Settings: options.Accounts.Settings, Version: "test", Logger: options.Logger,
 			URLs: map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb",
 				trackers.LastFM: services + "/lastfm/2.0/"},
+			AuthURLs: map[string]string{trackers.Trakt: services + "/trakt"},
 			Titles:   library.New(deps.pool, deps.addons, deps.client, options.Logger, options.Accounts.Settings),
 			UserData: userdata.New(deps.pool)})
 		t.Cleanup(tracker.Close)

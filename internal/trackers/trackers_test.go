@@ -45,8 +45,9 @@ type answer struct {
 }
 
 // fakes stands in for every service, each under a path named after it:
-// /trakt, /simkl, /mdblist, /publicmetadb. Unless told otherwise, it
-// accepts every request with an empty object.
+// /trakt, /trakt-auth (Trakt's authentication host), /simkl, /mdblist,
+// /publicmetadb. Unless told otherwise, it accepts every request with an
+// empty object.
 type fakes struct {
 	mu       sync.Mutex
 	requests []request
@@ -242,7 +243,7 @@ func newService(pool *pgxpool.Pool, store *accounts.Store, f *fakes, log io.Writ
 	s := New(Options{DB: pool, Settings: store.Settings, Version: "1.2.3", Logger: logger,
 		URLs: map[string]string{Trakt: f.url + "/trakt", Simkl: f.url + "/simkl", MDBList: f.url + "/mdblist", PublicMetaDB: f.url + "/publicmetadb",
 			LastFM: f.url + "/lastfm/2.0/", ListenBrainz: f.url + "/listenbrainz", AniList: f.url + "/anilist/", MyAnimeList: f.url + "/myanimelist"},
-		AuthURLs: map[string]string{AniList: f.url + "/anilist-auth", MyAnimeList: f.url + "/myanimelist-auth"},
+		AuthURLs: map[string]string{Trakt: f.url + "/trakt-auth", AniList: f.url + "/anilist-auth", MyAnimeList: f.url + "/myanimelist-auth"},
 		Titles:   library.New(pool, addons.New(pool, client), client, logger, store.Settings),
 		UserData: userdata.New(pool)})
 	s.now = func() time.Time { return clockStart }
