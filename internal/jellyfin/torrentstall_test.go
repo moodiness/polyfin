@@ -3,11 +3,13 @@ package jellyfin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,15 +50,30 @@ func (p torrentPlay) playHLS(t *testing.T, picked string) string {
 	return answer.ErrorCode
 }
 
-// playsWaiting counts the goroutines of plays still waiting for their
-// versions.
-func playsWaiting() int {
+// countedGoroutines labels the goroutine of t, and so every goroutine it
+// starts from now on, and those they start in turn, such as its test
+// server's: playsWaiting counts them alone among the goroutines of the
+// test binary.
+func countedGoroutines(t *testing.T) {
+	pprof.SetGoroutineLabels(pprof.WithLabels(t.Context(), pprof.Labels("counted", t.Name())))
+}
+
+// playsWaiting counts the goroutines that t labeled (see
+// countedGoroutines) of plays still waiting for their versions.
+func playsWaiting(t *testing.T) int {
+	// The goroutines are listed by stack and labels, each with its count:
+	// "N @ addresses", then "# labels: {...}" and one "#" line by frame.
+	labels := fmt.Sprintf("%q:%q", "counted", t.Name())
 	var dump strings.Builder
-	_ = pprof.Lookup("goroutine").WriteTo(&dump, 2)
+	_ = pprof.Lookup("goroutine").WriteTo(&dump, 1)
 	n := 0
-	for _, goroutine := range strings.Split(dump.String(), "\n\n") {
-		if strings.Contains(goroutine, "jellyfin.(*Handler).choose") {
-			n++
+	for _, goroutines := range strings.Split(dump.String(), "\n\n") {
+		header, frames, _ := strings.Cut(goroutines, "\n# labels: ")
+		count, _, _ := strings.Cut(header[strings.LastIndex(header, "\n")+1:], " @")
+		label, frames, _ := strings.Cut(frames, "\n")
+		if strings.Contains(label, labels) && strings.Contains(frames, "jellyfin.(*Handler).choose") {
+			counted, _ := strconv.Atoi(count)
+			n += counted
 		}
 	}
 	return n
@@ -106,11 +123,12 @@ func TestATorrentReadAPlayGaveUpOnGoesOnForTheNext(t *testing.T) {
 }
 
 // Plays that gave up waiting for a torrent version leave no goroutine
-// behind them, waiting for its analysis: the analysis goes on alone.
-//
-// It stays sequential: it counts the goroutines of every play in the test
-// binary, which the tests running in parallel would add to.
+// behind them, waiting for its analysis: the analysis goes on alone. The
+// goroutines are those of the test's own server, labeled: the plays of
+// the tests running alongside are not counted.
 func TestPlaysThatGaveUpLeaveNoGoroutineBehind(t *testing.T) {
+	t.Parallel()
+	countedGoroutines(t)
 	ffmpeg, tor := slowTorrent(t)
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
@@ -124,15 +142,24 @@ func TestPlaysThatGaveUpLeaveNoGoroutineBehind(t *testing.T) {
 	for range 2 {
 		go func() { answered <- p.playHLS(t, picked) }()
 	}
+	// The plays are counted while they wait, for the start and a piece's
+	// wait: the count sees the test's goroutines.
+	for playsWaiting(t) == 0 {
+		select {
+		case code := <-answered:
+			t.Fatalf("PlaybackInfo answered %q before its play was counted waiting", code)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 	for range 2 {
 		if code := <-answered; code != "RateLimitExceeded" {
 			t.Fatalf("PlaybackInfo answered %q", code)
 		}
 	}
 	// The analysis still waits for the held pieces for a while.
-	for deadline := time.Now().Add(10 * time.Second); playsWaiting() > 0; time.Sleep(50 * time.Millisecond) {
+	for deadline := time.Now().Add(10 * time.Second); playsWaiting(t) > 0; time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
-			t.Fatalf("%d goroutines of the plays that gave up still wait", playsWaiting())
+			t.Fatalf("%d goroutines of the plays that gave up still wait", playsWaiting(t))
 		}
 	}
 }
