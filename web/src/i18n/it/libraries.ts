@@ -11,7 +11,7 @@ const libraries: typeof en = {
     shownHelpMine:
       'Le librerie compaiono in questo ordine, dopo le librerie del server se le usi. Lascia un nome vuoto per usare il nome del catalogo. Alle librerie con lo stesso nome viene aggiunto il tipo nelle applicazioni, per esempio «Popolari (Film)».',
     defaultHelp:
-      'Quando installi un add-on, i suoi cataloghi di collezioni diventano librerie: ognuna mostra le sue collezioni (per esempio generi o decenni), che si aprono sui rispettivi film e serie TV. Un add-on senza collezioni ottiene come librerie i suoi cataloghi di film, serie TV e TV, fino a 20. È solo un punto di partenza: abilita tutti i cataloghi che vuoi. Ogni libreria aggiunge una riga alla schermata iniziale delle applicazioni Jellyfin, tranne i cataloghi TV, i cui canali compaiono in Diretta TV.',
+      'Quando installi un add-on, i suoi cataloghi di collezioni diventano librerie: ognuna mostra le sue collezioni (per esempio generi o decenni), che si aprono sui rispettivi film e serie TV. Un add-on senza collezioni ottiene come librerie i suoi cataloghi di film, serie TV e TV. Polyfin lo fa solo finché il server non ha 20 librerie in tutto, contando quelle di ogni add-on. È solo un punto di partenza: abilita tutti i cataloghi che vuoi. Ogni libreria aggiunge una riga alla schermata iniziale delle applicazioni Jellyfin, tranne i cataloghi TV, i cui canali compaiono in Diretta TV.',
     manyWarning:
       'Più di 20 librerie possono appesantire la schermata iniziale delle applicazioni Jellyfin.',
     noAddons: 'Aggiungi prima un’origine: i suoi cataloghi verranno elencati qui.',

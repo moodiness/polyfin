@@ -11,7 +11,7 @@ const libraries: typeof en = {
     shownHelpMine:
       'As bibliotecas aparecem nesta ordem, depois das bibliotecas do servidor, se você as usar. Deixe um nome vazio para usar o nome do catálogo. Bibliotecas com o mesmo nome recebem o tipo nos aplicativos, por exemplo “Populares (Filmes)”.',
     defaultHelp:
-      'Quando um complemento é instalado, seus catálogos de coleções se tornam bibliotecas: cada uma exibe suas coleções (por exemplo, gêneros ou décadas), que abrem seus filmes e séries. Um complemento sem coleções tem seus catálogos de filmes, séries e TV transformados em bibliotecas, até 20. Isso é apenas um ponto de partida: ative quantos catálogos quiser. Cada biblioteca adiciona uma linha à tela inicial dos aplicativos Jellyfin, exceto os catálogos de TV, cujos canais aparecem na TV ao Vivo.',
+      'Quando um complemento é instalado, seus catálogos de coleções se tornam bibliotecas: cada uma exibe suas coleções (por exemplo, gêneros ou décadas), que abrem seus filmes e séries. Um complemento sem coleções tem seus catálogos de filmes, séries e TV transformados em bibliotecas. O Polyfin faz isso só até o servidor ter 20 bibliotecas no total, contando as de todos os complementos. Isso é apenas um ponto de partida: ative quantos catálogos quiser. Cada biblioteca adiciona uma linha à tela inicial dos aplicativos Jellyfin, exceto os catálogos de TV, cujos canais aparecem na TV ao Vivo.',
     manyWarning:
       'Mais de 20 bibliotecas podem deixar a tela inicial dos aplicativos Jellyfin pesada.',
     noAddons: 'Adicione uma fonte primeiro: os catálogos dela serão listados aqui.',
