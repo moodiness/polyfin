@@ -3,11 +3,23 @@ package backup
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"io"
 	"slices"
 	"testing"
 )
+
+// serverKeyCost is the key's cost the package starts with, the server's,
+// before TestMain lowers it.
+var serverKeyCost int
+
+// The tests derive their keys at a small cost (see LowerKeyCostForTests).
+func TestMain(m *testing.M) {
+	serverKeyCost = keyCost
+	LowerKeyCostForTests()
+	m.Run()
+}
 
 const testPassphrase = "correct horse battery"
 
@@ -47,6 +59,36 @@ func randomBytes(t *testing.T, n int) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+// sealedAtTheServersCost is a backup of "PGDMP sealed before the test
+// cost\n" that Polyfin sealed with testPassphrase, at its server's cost,
+// before the tests could lower it.
+const sealedAtTheServersCost = "5046424b454e43013af78a2c19670390433ca1688434e1e3171b3f8278f39437" +
+	"aab4329cfe5ade1480e9f804a25817a8316341ec85ff2f40abe6025b352dbe2c" +
+	"b6da7bc58edc47b6750b3c58b54b356ea8026409786a57d197249176e45259dd" +
+	"a7909403014fa64457aa"
+
+// The server derives its keys at the cost the backups it sealed before
+// were sealed at, which the tests' lower cost does not change: a backup
+// sealed then still opens with the cost the package starts with, and
+// not with the tests' one.
+//
+// It stays sequential: it sets the package's key cost.
+func TestTheServerKeepsItsKeyCost(t *testing.T) {
+	sealed, err := hex.DecodeString(sealedAtTheServersCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decryptBytes(sealed, testPassphrase); !errors.Is(err, ErrWrongPassphrase) {
+		t.Errorf("opened at the tests' cost: %v", err)
+	}
+	lowered := keyCost
+	keyCost = serverKeyCost
+	t.Cleanup(func() { keyCost = lowered })
+	if got, err := decryptBytes(sealed, testPassphrase); err != nil || string(got) != "PGDMP sealed before the test cost\n" {
+		t.Fatalf("opened at the server's cost: %q, %v", got, err)
+	}
 }
 
 // A dump encrypted reads back whole: empty, of whole chunks, or ending

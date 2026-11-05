@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"testing"
 
 	"golang.org/x/crypto/scrypt"
 )
@@ -39,7 +40,8 @@ const (
 	headerSize         = len(encryptedMagic) + saltSize + checkSize
 	chunkSize          = 64 << 10
 	// The cost of scrypt: N = 2^17, 128 MiB of memory and a fraction of
-	// a second for each file written or opened.
+	// a second for each file written or opened. A file does not record
+	// it: it opens only with the cost that sealed it.
 	scryptN = 1 << 17
 	scryptR = 8
 	scryptP = 1
@@ -66,9 +68,26 @@ var (
 	ErrDamagedBackup = errors.New("the encrypted backup is damaged: part of it was changed or is missing")
 )
 
+// keyCost is scrypt's N for the key: scryptN, except in the test binaries
+// that lower it (see LowerKeyCostForTests).
+var keyCost = scryptN
+
+// LowerKeyCostForTests derives the keys of the backups sealed and opened
+// by this test binary at a small fraction of scryptN's cost: a key at the
+// server's cost takes seconds under the race detector. Called from a
+// TestMain, before any test runs, so that every backup of the binary
+// uses the same cost. It panics outside a test binary: the server always
+// derives its keys at scryptN.
+func LowerKeyCostForTests() {
+	if !testing.Testing() {
+		panic("backup: LowerKeyCostForTests called outside a test binary")
+	}
+	keyCost = 1 << 10
+}
+
 // newAEAD derives the key of passphrase and salt.
 func newAEAD(passphrase string, salt []byte) (cipher.AEAD, error) {
-	key, err := scrypt.Key([]byte(passphrase), salt, scryptN, scryptR, scryptP, 32)
+	key, err := scrypt.Key([]byte(passphrase), salt, keyCost, scryptR, scryptP, 32)
 	if err != nil {
 		return nil, err
 	}
