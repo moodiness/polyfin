@@ -41,7 +41,7 @@ The admin app asks for the setup code, to create the administrator (see [Getting
 
 ### Firewall prompts
 
-Polyfin listens on port 8096 for apps and the browser, and on UDP port 7359 for Jellyfin apps that look for servers on the local network (see [Local network discovery](administration.md#local-network-discovery)). The first time it does, the system asks whether to let it:
+Polyfin listens on port 8096 for apps and the browser, and on UDP port 7359 for Jellyfin apps that look for servers on the local network (see [Local network discovery](https-and-networking.md#local-network-discovery)). The first time it does, the system asks whether to let it:
 
 - **Windows:** Windows Defender Firewall asks whether to allow Polyfin on private and public networks. Allow it on private networks for the TVs, phones and other computers of your home to reach it.
 - **macOS:** macOS asks whether `polyfin` may accept incoming network connections. Allow it for other devices to reach it. As the app is not signed, macOS may ask again after an update.
@@ -52,9 +52,9 @@ Refused, Polyfin still works on the computer itself, at `localhost`, and other d
 
 On Windows and Linux, Polyfin converts video on an NVIDIA graphics card through NVENC, which the downloaded FFmpeg 9.0 opens with NVIDIA driver 610.00 or newer. With a driver from 570 to 609, such as the R580 drivers that are the last of Maxwell, Pascal and Volta cards (the GeForce GTX 900 and 10 series, the Quadro M and P series), Polyfin downloads at its first need an FFmpeg built for these drivers into the data folder's `tools/nvenc13`, and converts on the card with it.
 
-With a driver older than 570, or until that FFmpeg could be downloaded, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** says why. See [NVIDIA driver](transcoding.md#nvidia-driver).
+With a driver older than 570, or until that FFmpeg could be downloaded, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** says why. See [NVIDIA driver](gpus-and-hdr.md#nvidia-driver).
 
-Polyfin Desktop always runs the FFmpeg it downloads, or the one for these older drivers: another FFmpeg can be given only to `polyfin serve` and Docker. See [Which FFmpeg runs](transcoding.md#which-ffmpeg-runs).
+Polyfin Desktop always runs the FFmpeg it downloads, or the one for these older drivers: another FFmpeg can be given only to `polyfin serve` and Docker. See [Which FFmpeg runs](gpus-and-hdr.md#which-ffmpeg-runs).
 
 ## The menu
 
@@ -118,7 +118,7 @@ The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configurati
 | `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another (see [Backups](backups.md)) |
 | `recordings` | The Live TV recordings, unless **Recordings folder** names another (see [Live TV](live-tv.md)) |
 | `cache` | The work files: segments being played, guides and picture subtitles being read, parts of the files read and relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Data folder](configuration.md#data-folder) and [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
-| `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)) |
+| `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](themes-and-custom-code.md#keeping-a-copy-of-a-theme)) |
 | `updates` | The downloaded update, and while the new version has not answered yet, the copy of the database's folder, `postgresql.previous` (see [Going back to the previous version](#going-back-to-the-previous-version)) |
 | `desktop.json` | The app's choice of Start with the computer |
 | `desktop-update-pending.json`, `desktop-update-rollback.json` | The update whose new version has not answered yet, with what was kept to go back; and the version the app went back from, and why |
@@ -139,7 +139,7 @@ When the key store cannot be read at a start, such as a Linux session without a 
 
 ## Updates
 
-While **Check for new versions** is on, in **Settings › General**, Polyfin looks for new releases, as for the Docker image, and for pre-releases too while **Include pre-releases** is on (see [New versions](administration.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system and the release's signed manifest, checks the manifest (see [Signed manifests](#signed-manifests)), and the menu offers to install it.
+While **Check for new versions** is on, in **Settings › General**, Polyfin looks for new releases, as for the Docker image, and for pre-releases too while **Include pre-releases** is on (see [New versions](updates-and-restarts.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system and the release's signed manifest, checks the manifest (see [Signed manifests](#signed-manifests)), and the menu offers to install it.
 
 Installing it:
 
@@ -156,7 +156,7 @@ When the package cannot be downloaded, checked or installed, the copy of the dat
 
 The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
 
-The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Polyfin Desktop update](administration.md#polyfin-desktop-update)). It does what the menu item does, through the data folder, which is yours alone:
+The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Polyfin Desktop update](updates-and-restarts.md#polyfin-desktop-update)). It does what the menu item does, through the data folder, which is yours alone:
 
 - the app writes the update it offers to `desktop-update.json` while the server runs, with the download's progress and whether the last install failed;
 - the server, asked by an administrator, writes the app's token and the version to `desktop.install`, which the app looks for twice a second.

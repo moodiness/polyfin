@@ -10,6 +10,11 @@
     "build": "vitepress build",
     "preview": "vitepress preview --host 127.0.0.1",
     "check": "node scripts/check-docs.mjs",
+    "anchors:lost": "node scripts/anchors.mjs lost",
+    "anchors:add": "node scripts/anchors.mjs add",
+    "redirects": "node scripts/anchors.mjs redirects",
+    "relink": "node scripts/anchors.mjs relink",
+    "stubs": "node scripts/anchors.mjs stubs",
     "format": "prettier --write .vitepress/config.mts .vitepress/theme scripts index.md",
     "format:check": "prettier --check .vitepress/config.mts .vitepress/theme scripts index.md"
   },
@@ -23,6 +28,7 @@
     "@fontsource-variable/geist-mono": "5.3.0",
     "@fontsource-variable/sora": "5.3.0",
     "@phosphor-icons/core": "2.1.1",
+    "mermaid": "12.3.0",
     "prettier": "3.9.9",
     "vitepress": "1.6.4"
   },

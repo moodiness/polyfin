@@ -14,7 +14,7 @@ Apps get seven kinds of subtitles:
 - the text tracks inside a version's file;
 - the text copies of picture subtitles, with **Turn picture subtitles into text** on (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
 
-All reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)); a user who chose no language gets the server's **Default subtitle language**, under their own mode (see [Default audio and subtitle languages](playback.md#default-audio-and-subtitle-languages)).
+All reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)); a user who chose no language gets the server's **Default subtitle language**, under their own mode (see [Default audio and subtitle languages](audio-and-subtitle-tracks.md#default-audio-and-subtitle-languages)).
 
 ## Addon subtitles synced to the version
 
@@ -93,7 +93,7 @@ A stream addon may list subtitle files with each stream, written for that file. 
 
 ## Subtitle files beside local files
 
-A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and WebVTT files beside it, named after it, such as `Movie (2001).fr.srt` or `Movie (2001).en.sdh.ass`, and its picture subtitle files: PGS files (`.sup`) and VobSub pairs (`.idx` and `.sub`). [Naming files](local-folders.md#subtitle-files) tells how their names give their language and flags.
+A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and WebVTT files beside it, named after it, such as `Movie (2001).fr.srt` or `Movie (2001).en.sdh.ass`, and its picture subtitle files: PGS files (`.sup`) and VobSub pairs (`.idx` and `.sub`). [Naming files](naming-and-matching.md#subtitle-files) tells how their names give their language and flags.
 
 - They are subtitles of that file's version only, listed after the addons' subtitles, with their language, title, and whether they are forced, for the hearing impaired or shown by default.
 - Each app gets them in the format it asks for, as it gets the addons' subtitles: WebVTT, SubRip, ASS or JSON. An ASS file asked as ASS keeps its styles and positions.
@@ -111,7 +111,7 @@ Which files go with the video:
 - In a subtitles folder beside the video (`Subs`, `Sub`, `Subtitles` or `Subtitle`, in any letter case): those whose name begins with the video's; those whose name tells its episode, such as `Show.S01E02.English.srt`; all those of a folder in it named after the video or telling its episode, such as `Subs/Show.S01E02.1080p/2_English.srt`; and, when the video is the only one of its folder, those whose name tells no episode, such as `Subs/English.srt`.
 - In a season's pack, those of the episode played alone: a file whose name or folder tells another episode is left out, and so is a file of a subtitles folder that tells none, beside several videos.
 
-What a name tells past the video's name, past the episode it tells, or the whole name in a subtitles folder, gives the file's language, title and flags, read as the names of the files beside local files are (see [Naming files](local-folders.md#subtitle-files)): `Movie.2001.1080p.fr.srt` is French, `Subs/English.srt` English, `Movie.2001.1080p.en.forced.srt` English and forced. A number before a name, as in `2_English.srt`, is left out.
+What a name tells past the video's name, past the episode it tells, or the whole name in a subtitles folder, gives the file's language, title and flags, read as the names of the files beside local files are (see [Naming files](naming-and-matching.md#subtitle-files)): `Movie.2001.1080p.fr.srt` is French, `Subs/English.srt` English, `Movie.2001.1080p.en.forced.srt` English and forced. A number before a name, as in `2_English.srt`, is left out.
 
 How they are listed, fetched and kept:
 
@@ -138,7 +138,7 @@ For a Matroska file, Polyfin reads the track whole through the file's index, whi
 
 - Polyfin fetches little more than those lines, many in one request when the host allows it.
 - It keeps the track, so it takes seconds the first time and nothing after.
-- With [Prepare playback in advance](playback.md#preparing-playback-in-advance) on, Polyfin finds where the subtitle tracks sit before playback starts.
+- With [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on, Polyfin finds where the subtitle tracks sit before playback starts.
 
 ### Hosts that answer one range at a time
 
@@ -164,7 +164,7 @@ Fallback fonts, which apps load when a subtitle's own fonts are missing, come fr
 
 ## Picture subtitles
 
-When an app cannot show picture subtitles, Polyfin burns them into the video: a picture track inside the file, or a picture subtitle file beside a local file, which FFmpeg reads beside the video. This is a video conversion: it counts toward **Video conversions at once (0 = no limit)** (see [Playback](playback.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md). A subtitle file burned in is read from its start; after a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
+When an app cannot show picture subtitles, Polyfin burns them into the video: a picture track inside the file, or a picture subtitle file beside a local file, which FFmpeg reads beside the video. This is a video conversion: it counts toward **Video conversions at once (0 = no limit)** (see [Playback](transcoding.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md). A subtitle file burned in is read from its start; after a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
 
 With **Turn picture subtitles into text** on, a text copy of the track spares that conversion once it is ready.
 

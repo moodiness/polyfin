@@ -821,6 +821,50 @@
   border-radius: 0 0 16px 16px;
 }
 
+/* Mermaid diagrams (Mermaid.vue): a surface like a code block's, the drawing centered. A drawing
+   too wide to shrink (its text would pass under 13px) scrolls sideways, and a faint lavender edge
+   shows on the side with more to see: the surface-colored covers move with the drawing and hide
+   each edge once its end is in view. */
+.vp-doc .pf-mermaid {
+  margin: 16px 0;
+  padding: 20px;
+  border: 1px solid var(--pf-line);
+  border-radius: 16px;
+  background:
+    linear-gradient(to right, var(--pf-s1) 50%, transparent) left / 40px 100% no-repeat local,
+    linear-gradient(to left, var(--pf-s1) 50%, transparent) right / 40px 100% no-repeat local,
+    linear-gradient(to right, rgb(178 184 255 / 0.16), transparent) left / 20px 100% no-repeat
+      scroll,
+    linear-gradient(to left, rgb(178 184 255 / 0.16), transparent) right / 20px 100% no-repeat
+      scroll,
+    var(--pf-s1);
+  overflow-x: auto;
+}
+
+.vp-doc .pf-mermaid svg {
+  display: block;
+  margin: 0 auto;
+  height: auto;
+}
+
+/* Labels keep the line height Mermaid measured them with, not the page's paragraphs'. */
+.vp-doc .pf-mermaid p {
+  margin: 0;
+  line-height: inherit;
+}
+
+.vp-doc .pf-mermaid-source {
+  text-align: left;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  color: var(--pf-mute);
+}
+
+/* Old anchors of moved sections, kept for GitHub: the website redirects them instead. */
+.vp-doc .moved-sections {
+  display: none;
+}
+
 /* <details> in pages (raw HTML) and ::: details: a surface with a facet that turns. */
 .vp-doc details:not(.custom-block),
 .custom-block.details {
@@ -1188,5 +1232,11 @@ html:has(.pf-theater[open]) {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  /* Mermaid measures a diagram in a container of its own (d + the diagram's id): a transition
+     there, however short, makes it measure the styles before the change and spread the diagram. */
+  [id^='dpf-mermaid-'] * {
+    transition: none !important;
   }
 }

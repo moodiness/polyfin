@@ -1,6 +1,8 @@
 // Checks the documentation against the style guide (CONTRIBUTING.md, "Writing the documentation"):
 // - anchors: every link to a Markdown file's #anchor resolves with GitHub's heading slugs and with
-//   VitePress's, an <a id="..."> alias counting for both;
+//   VitePress's, an <a id="..."> alias counting for both, and none goes to a moved section;
+// - old anchors: every anchor of the baseline resolves, on its page or through the redirect map
+//   (CONTRIBUTING.md, "Old anchors and redirects");
 // - wording: no em or en dashes, never "film", "remux" only in UI or code quotes (RemuxDB aside),
 //   never "debrid", and no `Settings →`;
 // - settings paths: each **Settings › X** names a section of the admin app's settings, unless the
@@ -8,10 +10,15 @@
 // Usage: node docs/scripts/check-docs.mjs (from any folder). Exits 1 when something fails.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import {
+  anchorProblems,
+  anchorsOfLines,
+  blankFences,
+  docsDir,
+  loadState,
+  repoDir,
+} from './anchors-lib.mjs'
 
-const repoDir = resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const docsDir = resolve(repoDir, 'docs')
 const files = [
   resolve(repoDir, 'README.md'),
   resolve(repoDir, 'CONTRIBUTING.md'),
@@ -27,88 +34,24 @@ const report = (file, line, message) =>
 /** A file's lines, with fenced code blocks blanked so that line numbers stay right. */
 const sources = new Map()
 function linesOf(file) {
-  if (!sources.has(file)) {
-    let fence = null
-    const lines = readFileSync(file, 'utf8')
-      .split('\n')
-      .map((line) => {
-        const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
-        if (fence) {
-          if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = null
-          return ''
-        }
-        if (marker) {
-          fence = marker
-          return ''
-        }
-        return line
-      })
-    sources.set(file, lines)
-  }
+  if (!sources.has(file)) sources.set(file, blankFences(readFileSync(file, 'utf8')))
   return sources.get(file)
 }
 
-const entities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' }
-
-/** A heading's text as both renderers see it: no markup, code spans and link texts kept. */
-function headingText(source) {
-  return source
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/<[^>]+>/g, '')
-    .replace(/`([^`]*)`/g, '$1')
-    .replace(/(\*\*|__|\*|\b_|_\b)/g, '')
-    .replace(/&(\w+);/g, (match, name) => entities[name] ?? match)
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .trim()
-}
-
-/** GitHub's heading ids (github-slugger): punctuation and symbols dropped, each space a "-". */
-const githubSlug = (text) =>
-  text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
-    .replace(/ /g, '-')
-
-/** VitePress's heading ids (@mdit-vue/shared slugify): each run of punctuation one "-". */
-const vitepressSlug = (text) =>
-  text
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\u0000-\u001f]/g, '')
-    .replace(/[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'“”‘’<>,.?/]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/^(\d)/, '_$1')
-    .toLowerCase()
-
-/** The anchors of a file in each style, its <a id> aliases in both. */
+/** The anchors of a file in each style, its <a id> aliases in both (moved-section stubs too). */
 const anchorCache = new Map()
 function anchorsOf(file) {
   if (!anchorCache.has(file)) {
-    const github = new Set()
-    const vitepress = new Set()
-    const unique = (set, slug) => {
-      let id = slug
-      for (let n = 1; set.has(id); n++) id = `${slug}-${n}`
-      set.add(id)
-    }
-    for (const line of linesOf(file)) {
-      const heading = /^ {0,3}#{1,6}\s+(.*?)(?:\s+#+)?\s*$/.exec(line)
-      if (heading) {
-        const text = headingText(heading[1])
-        unique(github, githubSlug(text))
-        unique(vitepress, vitepressSlug(text))
-      }
-      for (const alias of line.matchAll(/<a\s[^>]*?\b(?:id|name)="([^"]+)"/g)) {
-        github.add(alias[1])
-        vitepress.add(alias[1])
-      }
-    }
-    anchorCache.set(file, { github, vitepress })
+    const { github, vitepress, stubs } = anchorsOfLines(linesOf(file))
+    anchorCache.set(file, {
+      github: new Set([...github, ...stubs]),
+      vitepress: new Set([...vitepress, ...stubs]),
+    })
   }
   return anchorCache.get(file)
 }
+
+const anchorState = loadState()
 
 /** Which renderers show a file: pages under docs/ are on both, docs/index.md only on the site. */
 function stylesFor(file) {
@@ -143,7 +86,11 @@ function checkLinks(file, lines) {
       if (missing.length > 0) {
         const where = missing.map((style) => styleNames[style]).join(' and ')
         report(file, index + 1, `${target}: no such anchor on ${where}`)
+        continue
       }
+      const page = relative(docsDir, destination).slice(0, -3)
+      const moved = !page.includes('/') && anchorState.redirects[`${page}#${anchor}`]
+      if (moved) report(file, index + 1, `${target}: moved to ${moved}; run npm run relink`)
     }
   })
 }
@@ -203,10 +150,13 @@ for (const file of files) {
   checkLinks(file, lines)
   checkWording(file, lines, sections)
 }
+for (const problem of anchorProblems(anchorState)) problems.push(`old anchor ${problem}`)
 
 if (problems.length > 0) {
   console.error(problems.join('\n'))
   console.error(`\n${problems.length} problems in the documentation. See CONTRIBUTING.md.`)
   process.exit(1)
 }
-console.log(`${files.length} files checked: anchors, wording and settings paths are fine.`)
+console.log(
+  `${files.length} files checked: anchors, old anchors, wording and settings paths are fine.`,
+)

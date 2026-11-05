@@ -1,0 +1,81 @@
+{
+  "splits": {
+    "users": [
+      "users",
+      "user-limits",
+      "moving-to-polyfin",
+      "invite-and-share-links",
+      "sign-in-and-security",
+      "watch-state",
+      "loudness",
+      "themes-and-custom-code",
+      "home-rows",
+      "reverse-proxy",
+      "configuration",
+      "jellyfin-api"
+    ],
+    "addons-and-libraries": [
+      "addons-and-libraries",
+      "addons",
+      "smart-lists-and-search",
+      "music",
+      "collections-people-and-ratings",
+      "artwork-and-editing",
+      "jellyfin-api"
+    ],
+    "local-folders": [
+      "local-folders",
+      "network-shares",
+      "naming-and-matching",
+      "unmatched-files",
+      "episode-numbering",
+      "discs",
+      "music",
+      "jellyfin-compatibility",
+      "jellyfin-api"
+    ],
+    "naming-and-matching": ["naming-and-matching", "unmatched-files", "jellyfin-api"],
+    "playback": [
+      "playback",
+      "versions",
+      "audio-and-subtitle-tracks",
+      "reading-the-sources",
+      "scrubbing-thumbnails",
+      "transcoding",
+      "conversion-quality",
+      "jellyfin-api"
+    ],
+    "transcoding": [
+      "transcoding",
+      "conversion-quality",
+      "gpus-and-hdr",
+      "loudness",
+      "jellyfin-api"
+    ],
+    "web-client": ["web-client", "home-rows", "themes-and-custom-code", "loudness", "jellyfin-api"],
+    "notifications": ["notifications", "webhook-reference", "jellyfin-api"],
+    "jellyfin-compatibility": ["jellyfin-compatibility", "jellyfin-api"],
+    "iptv": [
+      "iptv",
+      "iptv-replay",
+      "iptv-movies-and-series",
+      "hdhomerun",
+      "iptv-streams",
+      "jellyfin-api"
+    ],
+    "administration": [
+      "administration",
+      "https-and-networking",
+      "updates-and-restarts",
+      "metrics-and-api-keys",
+      "health",
+      "sign-in-and-security",
+      "jellyfin-api"
+    ],
+    "installation": ["installation", "hdhomerun"]
+  },
+  "overrides": {
+    "local-folders#limits": "music#limits",
+    "users#home-rows": "home-rows#rows-each-user-turns-off"
+  }
+}

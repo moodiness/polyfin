@@ -11,13 +11,18 @@ const repoDir = resolve(docsDir, '..')
 /**
  * docs/README.md is the documentation's index on GitHub: each of its sections is a sidebar group,
  * and each table row a link, to a page or to a section of one. Each group takes one of the logo's
- * facets (see style.css, "Sidebar groups"); a group missing from `facets` is lavender grey.
+ * facets (see style.css, "Sidebar groups"), following the site's story: where titles come from
+ * (violet, indigo), how they play (periwinkle), the apps (cyan), the server (blue). A group missing
+ * from `facets`, such as Reference, is lavender grey.
  */
 const facets: Record<string, string> = {
   Start: 'indigo',
-  Sources: 'violet',
+  'Addons and libraries': 'violet',
+  'Local files': 'violet',
+  'Live TV': 'indigo',
   Playback: 'periwinkle',
   Apps: 'cyan',
+  Users: 'blue',
   Server: 'blue',
 }
 
@@ -61,6 +66,8 @@ export default defineConfig({
   cleanUrls: true,
   appearance: 'force-dark',
   sitemap: { hostname: site },
+  // The docs' tooling (docs/scripts, its screenshot tool's README included) is no page.
+  srcExclude: ['scripts/**'],
 
   // The landing page stays at the root. The documentation, written to be read on GitHub too,
   // is served under /docs/, with docs/README.md as its home.
@@ -93,6 +100,14 @@ export default defineConfig({
           }
         }
       })
+
+      // Mermaid blocks, which GitHub draws itself, become diagrams (theme/Mermaid.vue).
+      const fence = md.renderer.rules.fence!
+      md.renderer.rules.fence = (tokens, index, options, env, self) => {
+        const token = tokens[index]
+        if (token.info.trim() !== 'mermaid') return fence(tokens, index, options, env, self)
+        return `<PolyfinMermaid code="${encodeURIComponent(token.content)}" />\n`
+      }
     },
   },
 
@@ -139,7 +154,19 @@ export default defineConfig({
     sidebar: { '/docs/': sidebar() },
     outline: 'deep',
     editLink: { pattern: `${repo}/edit/main/docs/:path`, text: 'Edit this page on GitHub' },
-    search: { provider: 'local' },
+    search: {
+      provider: 'local',
+      options: {
+        // The moved-sections stubs are for GitHub only (theme/redirects.ts sends their anchors on).
+        _render(src, env, md) {
+          const html = md.render(
+            src.replace(/<div class="moved-sections">[\s\S]*?<\/div>/g, ''),
+            env,
+          )
+          return env.frontmatter?.search === false ? '' : html
+        },
+      },
+    },
     notFound: {
       quote: 'This page does not exist, or it has moved.',
       linkText: 'Back to Polyfin',

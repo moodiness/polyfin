@@ -6,12 +6,12 @@ Polyfin is a self-hosted server that speaks the Jellyfin API. It turns Stremio a
 
 ## What you get
 
-- **Your addons as libraries:** Stremio catalogs become libraries and collections, and their streams become versions of a title, torrents too once you turn them on. [Addons and libraries](docs/addons-and-libraries.md), [Torrents](docs/torrents.md)
-- **Your own files:** folders on the server, SMB and WebDAV shares, S3 buckets, SFTP servers and rclone remotes. [Local folders](docs/local-folders.md)
-- **Live TV and IPTV:** M3U playlists, Xtream Codes accounts and HDHomeRun tuners, with a programme guide, recordings and Replay. [Live TV](docs/live-tv.md), [IPTV sources](docs/iptv.md)
-- **Music, audiobooks and podcasts:** Eclipse music addons become music and book libraries. [Music addons](docs/addons-and-libraries.md#music-addons)
-- **Real accounts:** each user has their own watch state, limits and parental control, and can bring their history from Jellyfin, Emby or Plex. [Users and permissions](docs/users.md)
-- **Transcoding on your GPU:** direct play when the app can, else repackaging or conversion on an NVIDIA, AMD or Intel GPU or VideoToolbox, HDR tone mapping included. [Transcoding](docs/transcoding.md)
+- **Your addons as libraries:** Stremio catalogs become libraries and collections, and their streams become versions of a title, torrents too once you turn them on. [Addons](docs/addons.md), [Libraries](docs/addons-and-libraries.md), [Torrents](docs/torrents.md)
+- **Your own files:** folders on the server, SMB and WebDAV shares, S3 buckets, SFTP servers and rclone remotes. [Local folders](docs/local-folders.md), [Naming and matching files](docs/naming-and-matching.md)
+- **Live TV and IPTV:** M3U playlists, Xtream Codes accounts and HDHomeRun tuners, with a programme guide, recordings and Replay. [Live TV](docs/live-tv.md), [IPTV sources](docs/iptv.md), [HDHomeRun tuners](docs/hdhomerun.md)
+- **Music, audiobooks and podcasts:** Eclipse music addons become music and book libraries. [Music, audiobooks and podcasts](docs/music.md)
+- **Real accounts:** each user has their own watch state, limits and parental control, and can bring their history from Jellyfin, Emby or Plex. [Users and permissions](docs/users.md), [Moving to Polyfin](docs/moving-to-polyfin.md)
+- **Transcoding on your GPU:** direct play when the app can, else repackaging or conversion on an NVIDIA, AMD or Intel GPU or VideoToolbox, HDR tone mapping included. [Transcoding](docs/transcoding.md), [GPUs and HDR](docs/gpus-and-hdr.md)
 - **Built in:** the web player, the admin app, skip buttons, tracking, DLNA, notifications, statistics and backups. [Documentation](docs/README.md)
 - **Six languages:** the admin app, Polyfin's own names and messages, its additions to the web player and Polyfin Desktop speak English, French, German, Spanish, Italian and Brazilian Portuguese.
 

@@ -38,7 +38,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Check formatting
         run: npm run format:check
-      - name: Check anchors, wording and settings paths
+      - name: Check anchors, old anchors and redirects, wording and settings paths
         run: npm run check
       - name: Build, failing on links to missing pages
         run: npm run build
