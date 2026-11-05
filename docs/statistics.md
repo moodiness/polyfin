@@ -12,7 +12,7 @@ Apps report a playback when it starts, as it goes on (every ten seconds or so fo
 
 The time played counts only while the playback is not paused. Between two reports, at most two minutes count, so that an app put to sleep while playing does not count the hours it slept.
 
-A playback keeps how it reached its app: **Direct play**, the app reads the file as it is; **Remux**, Polyfin repackages it without converting anything; **Conversion**, Polyfin converts the video or the audio. Apps report Polyfin's streams as converted even when Polyfin only remuxes them: while the stream runs, Polyfin tells the two apart from what it actually does. A playback that was converted for a while counts as converted.
+A playback keeps how it reached its app: **Direct play**, the app reads the file as it is; **Remux**, Polyfin repackages it without converting anything; **Conversion**, Polyfin converts the video or the audio. Apps report Polyfin's streams as converted even when Polyfin only repackages them: while the stream runs, Polyfin tells the two apart from what it actually does. A playback that was converted for a while counts as converted.
 
 Movies, episodes, Live TV channels, recordings and Replay programmes are kept in the history. Songs and audiobooks are not: they only send [notifications](notifications.md#playbacks).
 
@@ -46,7 +46,7 @@ The "Clean the playback history" task, under **System › Schedule**, deletes th
 - **Hours watched per user**;
 - the **Most played movies**, **Most played series** and **Most played channels**, ten each, by hours watched (a channel counts its live playbacks and its Replay programmes);
 - the **Apps** and **Devices**;
-- **How videos play**: the share of direct play, remux and conversion;
+- **How videos play**: the share of **Direct play**, **Remux** (repackaged) and **Conversion**;
 - the **Busiest hours**: the hours watched at each hour of the week, each playback spread over the hours it lasted, in the browser's time zone;
 - **Recent playbacks**, the history itself, with the data sent for each.
 
@@ -58,7 +58,15 @@ The same history feeds the [weekly summary](notifications.md#weekly-summary) not
 
 Each user, members too, sees the same figures for their own playbacks under **My account › Statistics**, with their recent playbacks and **Export CSV** for their own history.
 
-## For app developers
+<a id="compared-with-jellyfin"></a>
+
+**Compared with Jellyfin**
+
+- Jellyfin keeps no playback history of its own: a plugin adds one. Polyfin's is built in, and its API is Polyfin's admin API, not Jellyfin's.
+
+<a id="for-app-developers"></a>
+
+<details><summary>For app developers</summary>
 
 The admin API serves the statistics, the history and the CSV, everyone's to administrators and one's own to every user:
 
@@ -73,7 +81,7 @@ The admin API serves the statistics, the history and the CSV, everyone's to admi
   - `users`: `id`, `name`, `plays`, `played`;
   - `buckets`: each day or month with playbacks, `start` as `YYYY-MM-DD`, `played`, and `users` (`id`, `played`);
   - `movies`, `series`, `channels`: `id`, the latest `name`, `plays`, `users` (how many played it), `played`;
-  - `apps` (`name`, `shared`), `devices` (`name`, `app`, `shared`) and `methods` (`method`: `direct_play`, `direct_stream`, `conversion`, or empty when no report told), each with `plays` and `played`; `shared` is true for the app and device of guests' playbacks through share links, which the admin names "Shared link" and "Web browser" in its language;
+  - `apps` (`name`, `shared`), `devices` (`name`, `app`, `shared`) and `methods` (`method`: `direct_play`, `direct_stream`, `conversion`, or empty when no report told), each with `plays` and `played`. `shared` is true for the app and device of guests' playbacks through share links, which the admin app names "Shared link" and "Web browser" in its language;
   - `hours`: 168 numbers, the seconds watched in each hour of the week from Monday 0:00;
   - `historyEnabled` and `historyDays`, the settings.
 
@@ -83,6 +91,4 @@ The admin API serves the statistics, the history and the CSV, everyone's to admi
 - Errors: `invalid_period`, `invalid_user`, `invalid_time_zone`, `invalid_limit` (400). A member asking for everyone's gets 403.
 - `GET /admin/api/settings` answers `playbackHistory` and `playbackHistoryDays`, which `PUT` takes; a number of days out of bounds is `invalid_playback_history_days`.
 
-## Compared with Jellyfin
-
-- Jellyfin keeps no playback history of its own: a plugin adds one. Polyfin's is built in, and its API is Polyfin's admin API, not Jellyfin's.
+</details>

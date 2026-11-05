@@ -15,10 +15,14 @@ Adding a source takes two steps in the admin app: the **Account**, then **What t
 
 An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **User agent** (see [Headers and user agent](#headers-and-user-agent)) and a **Programme guide address (XMLTV, optional)**. For an administrator, they are **Playlist address or file** and **Programme guide address or file (XMLTV, optional)**: each takes a file of the server too (see below).
 
-- A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma. A list without `tvg-chno` may give the number as `channel-number` or `tvg-channel-no`. A decimal number, such as `104.5`, shows as written in apps and orders the channel after 104 and before 105, as Jellyfin keeps it ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L170-L181)); so does an Xtream account's decimal `num`.
+- A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma. A list without `tvg-chno` may give the number as `channel-number` or `tvg-channel-no`. A decimal number, such as `104.5`, shows as written in apps and orders the channel after 104 and before 105; so does an Xtream account's decimal `num`.
 - The header attributes of its `#EXTINF` lines, its `#EXTVLCOPT` and `#EXTHTTP` lines, and the `|` ending an address, give the headers its stream is requested with (see [Headers and user agent](#headers-and-user-agent)).
 - Its `#KODIPROP` lines tell a DASH stream's manifest type, and how it is encrypted (see [DASH channels and encryption](#dash-channels-and-encryption)).
 - A byte order mark, CRLF line ends and `#EXTGRP` lines are accepted.
+
+**Compared with Jellyfin**
+
+- Jellyfin keeps a decimal channel number as Polyfin does ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L170-L181)).
 
 ### Lists and guides that are files of the server
 
@@ -27,7 +31,7 @@ An administrator may give an M3U list, and an XMLTV guide, as a file of the serv
 - The file is read as a list or a guide from an address is: the same parsing, categories, headers and guide matching.
 - A path where there is no file, a folder, or a file Polyfin may not read, is refused when the source or the guide is added, with why. A relative path is refused too: give the whole path.
 - The file is read again at each refresh (see [Refreshing](#refreshing)), and within 5 minutes once it changed: Polyfin looks at its modification time every 5 minutes. A file modified with an older date than its last read waits for the next refresh.
-- A file that is gone, or that Polyfin can no longer read, is told within 5 minutes on the source's row, its page and **System › Health**, its channels or programmes kept. It is read again after 5 minutes, then 15 minutes, then every hour, as a download that failed.
+- A file that is gone, or that Polyfin can no longer read, is told within 5 minutes on the source's row, its page and **System › Health**, its channels or programmes kept. It is read again as a download that failed is (see [When guides are fetched](live-tv.md#when-guides-are-fetched)).
 - Its path is shown whole: a path holds no credential.
 - Only administrators may give one, for the server's sources or their own. A member's source, and a member's guide, are refused any file of the server, whether it exists or not, and a source whose owner is no longer an administrator stops reading its file.
 
@@ -42,7 +46,8 @@ services:
 
 Run `docker compose up -d` for the container to get it, then give `/iptv/custom.m3u`. User 65532 must be able to read the file.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - Jellyfin's M3U tuners and XMLTV guides take a file or an address too: anything that does not start with `http` is opened as a file ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L52-L55), [XmlTvListingsProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/XmlTvListingsProvider.cs#L118-L124)), and a missing file is refused when the tuner or the guide is saved ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L133-L138), [XmlTvListingsProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/XmlTvListingsProvider.cs#L342-L346)).
 - Jellyfin also takes a path relative to its working folder; Polyfin takes absolute paths only, whose meaning does not depend on how it was started.
 - Jellyfin reads a guide file again once its copy is an hour old ([XmlTvListingsProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/XmlTvListingsProvider.cs#L30)); Polyfin reads a list or a guide file again once it changed, and at each refresh.
@@ -69,7 +74,8 @@ The channels, replays, movies and episodes of an M3U playlist or an Xtream Codes
 - A header that the list gives, or the user agent set on the source, is one the stream needs: the stream is then always relayed to apps. The browser's user agent is Polyfin's own: an app that can reach the source itself is still sent there, with its own (see [How a channel plays](live-tv.md#how-a-channel-plays)).
 - An HDHomeRun tuner's channels are requested with Polyfin's own user agent.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - Jellyfin's M3U tuners send their **User agent** setting, else the same browser user agent (Chrome 122), with their channels' streams ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L169-L177)), and download the list with that setting when it is set ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L57-L61)).
 - Jellyfin reads none of a playlist's header lines, nor the header attributes of its `#EXTINF` lines, of which it reads the `tvg-`, `logo`, `group-title` and `channel-id` ones: it skips every line but `#EXTINF` and the addresses ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L72-L114)). Polyfin sends the headers they give, as other players do.
 
@@ -88,19 +94,21 @@ A playlist's `#KODIPROP` lines, before or after the channel's `#EXTINF` line, ar
 
 - `inputstream.adaptive.manifest_type` (`mpd`, `hls`);
 - `inputstream.adaptive.license_type`: `org.w3.clearkey` or `clearkey` for ClearKey; any other type, such as `com.widevine.alpha` or `com.microsoft.playready`, is not supported (see below);
-- `inputstream.adaptive.license_key`: ClearKey keys as `kid:key` pairs, in hexadecimal or base64url, several separated by commas (or a JSON Web Key set), or the address of a ClearKey licence server, optionally followed by `|` and its `Name=value&Name=value` headers;
+- `inputstream.adaptive.license_key`: ClearKey keys as `kid:key` pairs, in hexadecimal or base64url, several separated by commas (or a JSON Web Key set), or the address of a ClearKey license server, optionally followed by `|` and its `Name=value&Name=value` headers;
 - `inputstream.adaptive.manifest_headers` and `inputstream.adaptive.stream_headers`, `Name=value` pairs separated by `&`: Polyfin sends one set of headers with every request of a stream, so both are the channel's headers, after its `#EXTVLCOPT` and `#EXTHTTP` lines and before the `|` pairs of its address.
 
-A ClearKey channel is decrypted by FFmpeg with the keys its list gives, by key ID (the DASH demuxer's `cenc_decryption_keys` option, which its MP4 demuxer applies as `decryption_keys`; FFmpeg decrypts the `cenc`, `cens`, `cbc1` and `cbcs` schemes). With a licence server, Polyfin posts it the W3C ClearKey licence request for the key IDs the manifest names (`cenc:default_KID`), with the channel's headers and the licence's own, and reads the JSON Web Key set it answers ([Encrypted Media Extensions, Clear Key](https://www.w3.org/TR/encrypted-media-2/#clear-key-request-format), [License Format](https://www.w3.org/TR/encrypted-media-2/#clear-key-license-format)), at each start: its keys are kept nowhere.
+A ClearKey channel is decrypted by FFmpeg with the keys its list gives, by key ID (the DASH demuxer's `cenc_decryption_keys` option, which its MP4 demuxer applies as `decryption_keys`; FFmpeg decrypts the `cenc`, `cens`, `cbc1` and `cbcs` schemes). With a license server, Polyfin posts it the W3C ClearKey license request for the key IDs the manifest names (`cenc:default_KID`), with the channel's headers and the license's own. It reads the JSON Web Key set the server answers ([Encrypted Media Extensions, Clear Key](https://www.w3.org/TR/encrypted-media-2/#clear-key-request-format), [License Format](https://www.w3.org/TR/encrypted-media-2/#clear-key-license-format)), at each start: its keys are kept nowhere.
 
-- Keys given by a list are kept with the list's other data and nowhere else. They are never logged nor shown in the admin app; a licence server's address is never shown either. FFmpeg takes them on its command line, the only way it reads them, so the server's other local users can see them while the channel plays.
+- Keys given by a list are kept with the list's other data and nowhere else. They are never logged nor shown in the admin app; a license server's address is never shown either. FFmpeg takes them on its command line, the only way it reads them, so the server's other local users can see them while the channel plays.
 - Keys that do not decrypt the stream (its first 8 pictures do not all decode) fail the stream as **The list's keys do not decrypt it**.
-- Widevine, PlayReady and any other licence type need the provider's content decryption module, which is licensed to browsers and devices, not to servers: such a channel, and an encrypted one whose list gives no ClearKey keys, fails as **Needs a DRM Polyfin does not support**, before its source is asked when its list names the licence. It is not tried again as a network failure would be (see [Stream health](#stream-health)).
+- Widevine, PlayReady and any other license type need the provider's content decryption module, which is licensed to browsers and devices, not to servers. Such a channel, and an encrypted one whose list gives no ClearKey keys, fails as **Needs a DRM Polyfin does not support**, before its source is asked when its list names the license. It is not tried again as a network failure would be (see [Stream health](#stream-health)).
 - The keys apply to DASH channels. The builds of FFmpeg Polyfin ships read DASH; an FFmpeg built without libxml2 has no DASH demuxer, and its DASH channels fail saying so.
 
-Polyfin decrypts a stream only with the keys its list gives, or its list's licence server answers. You remain responsible for having the right to watch what you decrypt with them.
+Polyfin decrypts a stream only with the keys its list gives, or its list's license server answers. You remain responsible for having the right to watch what you decrypt with them.
 
-**Compared with Jellyfin:** Jellyfin 12.4 plays a channel whose address ends in `.mpd` only through FFmpeg, never directly ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L35), [lines 161-167](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L161-L167)), which reads the manifest and its segments itself, and it reads no `#KODIPROP` line ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L72-L114)), so it decrypts nothing. Polyfin plays DASH the same way, through its relay, tells a DASH stream by its content whatever its address, and decrypts ClearKey.
+**Compared with Jellyfin**
+
+- Polyfin plays DASH as Jellyfin 12.4 does, through FFmpeg, but through its relay, tells a DASH stream by its content whatever its address, and decrypts ClearKey. Jellyfin plays a channel whose address ends in `.mpd` only through FFmpeg, never directly, which reads the manifest and its segments itself ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L35), [lines 161-167](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L161-L167)). It reads no `#KODIPROP` line, so it decrypts nothing ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L72-L114)).
 
 ### What is read
 
@@ -109,7 +117,7 @@ Polyfin decrypts a stream only with the keys its list gives, or its list's licen
 - Headings that lists put between channels are skipped: names without a letter or digit, or drawn with a run of three or more decoration characters, such as `##### NAME #####` or `=== NAME ===`.
 - Addresses and logins are stored as manifest addresses are: never shown in full (only the server's scheme and host) and never logged.
 - Requests to a provider's server (its lists, guide, and the details of a title) go one at a time, a second apart; a server that answers "too many requests" is asked again when it says. A list or guide that still fails says the server asked Polyfin to slow down, and is tried again after a few minutes (see [Refreshing](#refreshing)).
-- An Xtream account's connection limit, which its login tells, bounds the channels played at once (see [How a channel plays](live-tv.md#how-a-channel-plays)).
+- An Xtream account's connection limit, which its login tells, bounds the channels played at once (see [Connection limits](live-tv.md#connection-limits)).
 - The archive of past programmes a list tells for a channel (catch-up) is read on every download, and its programmes play from Replay (see [Replay](#replay)).
 
 ## HDHomeRun tuners
@@ -125,6 +133,8 @@ In Docker, the broadcast reaches the local network only with host networking (se
 
 A tuner is added under the name it gives itself, with its Live TV catalog only, and once: the same tuner (its device ID) cannot be added twice, as its tuners would be counted twice.
 
+<a id="a-tuners-channels"></a>
+
 ### A tuner's channels
 
 - Channels are read from the tuner's `lineup.json`, with their number (`GuideNumber`, such as "5.1") and name. Channels the tuner marks protected (`DRM`) are left out, as it does not play them.
@@ -136,7 +146,7 @@ A tuner is added under the name it gives itself, with its Live TV catalog only, 
 
 ### Tuners in use
 
-Each channel watched or recorded takes one of the tuner's tuners, whoever reads it, as a channel's stream is read once for every viewer. With every tuner taken, opening a channel first frees one no one watches any more, then the user's own oldest, as for an account's connection limit; when other users' channels take them all, it is refused at once. A recording takes the tuner of a channel only watched, never another recording's (see [Recordings and tuners](live-tv.md#recordings-and-tuners)).
+Each channel watched or recorded takes one of the tuner's tuners, whoever reads it, as a channel's stream is read once for every viewer. With every tuner taken, a channel opens or is refused as under an account's [connection limit](live-tv.md#connection-limits). A recording takes the tuner of a channel only watched, never another recording's (see [Recordings and tuners](live-tv.md#recordings-and-tuners)).
 
 Streams play as IPTV channels do: as they come when the app takes them, else converted. Terrestrial video is often MPEG-2 and interlaced: a conversion deinterlaces it with **Deinterlacing method** (see [Transcoding](transcoding.md)). The user's **Live TV** permission, quality group and limits apply.
 
@@ -152,7 +162,7 @@ The add flow's second step starts with **What to import**:
 | **Movies** | off | The provider's movies, as a library. |
 | **Series** | off | The provider's series, as a library. |
 
-With **Movies** and **Series** off, a source stays exactly as before they existed: an M3U playlist's movies and episodes then stay channels.
+With **Movies** and **Series** off, an M3U playlist's movies and episodes stay channels.
 
 The step then previews the **Categories to import**, to include or leave out:
 
@@ -184,7 +194,8 @@ When merged, the entries of a category with the same name, once country prefixes
 - A merged channel's details offer one version per turned-on stream, best first.
 - Playing it tries them in order, as many as **Versions tried when one does not work**, past those that fail, among those that fit the user's quality group (see [Playback](playback.md)).
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - Jellyfin's tuner channels each have one source, so apps offer the streams as a version choice.
 
 ## The source page
@@ -195,7 +206,9 @@ Each source has its own page, titled with the source's name and its kind (**M3U 
 
 Counts (including movies and series), and the last and next download. When channels keep their past programmes, a notice counts those apps show, with **See them** to list them under **Channels**.
 
-### Import options
+<a id="import-options-1"></a>
+
+### Import options on the source page
 
 The same choices as when adding the source, including **What to import**, the libraries choice and enrichment, applied to the list already downloaded.
 
@@ -314,7 +327,7 @@ Each folder then lists its channel's programmes within that channel's archive, h
 
 ### Playing a programme
 
-- A programme plays as a movie's file does: analyzed, played as it is, remuxed or converted (see [Playback](playback.md) and [Transcoding](transcoding.md)). As the archive answers an MPEG-TS stream of unknown length, the programme's length stands for it. A file under a tenth of the programme's length is refused, as a short clip standing in for a title is. Its times count from its start, though its packets tell the time of the broadcast, and a seek lands where asked (see [HLS segments](transcoding.md#hls-segments)).
+- A programme plays as a movie's file does: analyzed, played as it is, repackaged or converted (see [Playback](playback.md) and [Transcoding](transcoding.md)). As the archive answers an MPEG-TS stream of unknown length, the programme's length stands for it. A file under a tenth of the programme's length is refused, as a short clip standing in for a title is. Its times count from its start, though its packets tell the time of the broadcast, and a seek lands where asked (see [HLS segments](transcoding.md#hls-segments)).
 - When a seek in a converted programme has FFmpeg start again further back, as its keyframes are far apart, Polyfin keeps that distance for the programme's channel, whose programmes usually come from the same encoder: seeks in its other programmes, by any user and after a restart too, start as far back, each opening the archive once rather than two or three times.
 - Polyfin always relays it: the address holds the account's credentials, and is never shown nor logged.
 - An archive that answers an HLS playlist, as a `default` or `append` template ending in `.m3u8` may, is refused: the app is told no stream suits. Programmes play as files, and Polyfin's HLS path for sources is the live one, which keeps a sliding window of an endless stream and cannot serve a finite playlist to seek in. `xc` and `flussonic` archives are MPEG-TS files.
@@ -322,18 +335,22 @@ Each folder then lists its channel's programmes within that channel's archive, h
 
 ### Connection limits
 
-A programme takes one of the account's connections while it plays, counted with the channels played (see [How a channel plays](live-tv.md#how-a-channel-plays)): from `PlaybackInfo`, through the analysis, the stream or FFmpeg's reads, until 20 seconds after its last request. The requests of the same play share it.
+A programme takes one of the account's connections while it plays, from `PlaybackInfo`, through the analysis, the stream or FFmpeg's reads, until 20 seconds after its last request. The requests of the same play share it.
 
-- When every connection is taken, a stream no one uses any more is closed first, then the user's own oldest channel. A programme playing is never closed for another stream.
-- Otherwise the programme does not start: `PlaybackInfo` tells no stream suits, and a request for its file is refused (503).
+- It counts with the channels played, under the account's [connection limit](live-tv.md#connection-limits). A programme playing is never closed for another stream.
+- When the limit refuses it, the programme does not start: `PlaybackInfo` tells no stream suits, and a request for its file is refused (503).
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - Jellyfin plays no catch-up archive: its past programmes are only those it recorded. Replay is apart from Polyfin's recordings, which stay under Live TV.
 
-**For app developers:**
+<details><summary>For app developers</summary>
+
 - The Replay view is a `CollectionFolder` of `CollectionType` `folders`, with the same identifier on every server, listed in `/UserViews` after Live TV. Apps open it as a folder list; it has no Latest row.
 - Its folders are `Folder` items. Its programmes are `Video` items with `ChannelId`, `StartDate`, `EndDate`, `RunTimeTicks`, and `DateCreated` set to the air time. They play through `PlaybackInfo` and the video stream and HLS routes, as movies do.
 - `/UserItems/Resume` lists them with movies and episodes, as Jellyfin lists its other videos there.
+
+</details>
 
 ## Movies and series libraries
 
@@ -374,7 +391,8 @@ Each movie or episode has one version, the provider's file (`/movie/…` or `/se
 
 An MPEG-TS file has no index to cut it by its keyframes. It plays as it is on apps that take MPEG-TS, and otherwise only converted: cut into a 2-second segment, then one every four seconds over its duration, the encoder placing a keyframe at each segment's start. After a seek, FFmpeg reads it from before the time asked, as it lands on the first keyframe after the time it is given, and what comes before the segment is left out; how far before is kept with the file, for its next playbacks (see [HLS segments](transcoding.md#hls-segments)). A user who may not have video converted is told no stream suits instead. This holds for addons' MPEG-TS files too.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - MPEG-TS files play as Jellyfin plays such files.
 
 ### Ratings and enrichment
@@ -396,7 +414,7 @@ The list is downloaded:
 - when you press **Refresh** on the source's row, or **Download again** in its page's header;
 - for a list that is a file of the server, within 5 minutes once the file changed, or became unreadable (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
 
-A download that fails keeps the previous channels and tells why, and is tried again after 5 minutes, then 15 minutes, then every hour (never later than the setting). After every list refresh and change of options, channels are mapped to the guides again.
+A download that fails keeps the previous channels and tells why, and is tried again as a guide is (see [When guides are fetched](live-tv.md#when-guides-are-fetched)). After every list refresh and change of options, channels are mapped to the guides again.
 
 ## Using Dispatcharr
 
@@ -426,11 +444,11 @@ Add an **Xtream Codes account** with the server `http://nas.lan:9191`, a Dispatc
 
 ### As an HDHomeRun tuner
 
-Add an **HDHomeRun tuner** by address: `http://nas.lan:9191/hdhr`, or `http://nas.lan:9191/hdhr/<channel profile>`. **Find tuners** does not see Dispatcharr, which does not answer HDHomeRun's discovery. Its line-up gives numbers and names only: add the XMLTV guide `http://nas.lan:9191/output/epg` to the tuner's catalog under **Live TV**, whose icons give the channels their logos; the channels have no groups. Its tuner count is the sum of Dispatcharr's account limits, 10 when one has none.
+Add an **HDHomeRun tuner** by address: `http://nas.lan:9191/hdhr`, or `http://nas.lan:9191/hdhr/<channel profile>`. **Find tuners** does not see Dispatcharr, which does not answer HDHomeRun's discovery. Its line-up gives numbers and names only: add the XMLTV guide `http://nas.lan:9191/output/epg` to the tuner's catalog under **Content › Live TV**, whose icons give the channels their logos; the channels have no groups. Its tuner count is the sum of Dispatcharr's account limits, 10 when one has none.
 
 ### Connection limits and failover
 
-Dispatcharr shares one provider connection per channel between Polyfin and its other apps, and keeps within each provider account's limit. When every connection is in use, it refuses a new channel (HTTP 503): Polyfin tells the app no stream suits and the stream shows **Refused by the provider**, but is not left out. On an M3U source Polyfin knows no limit and lets Dispatcharr decide; on an Xtream account Polyfin also keeps within the user's `max_connections`, closing a stream no one watches first.
+Dispatcharr shares one provider connection per channel between Polyfin and its other apps, and keeps within each provider account's limit. When every connection is in use, it refuses a new channel (HTTP 503): Polyfin tells the app no stream suits and the stream shows **Refused by the provider**, but is not left out. On an M3U source Polyfin knows no limit and lets Dispatcharr decide. On an Xtream account Polyfin also keeps within the user's `max_connections` (see [Connection limits](live-tv.md#connection-limits)).
 
 Dispatcharr fails over inside the one channel address: a stream that breaks while playing switches to the next one without Polyfin noticing. Keep **Merge quality variants** off for its sources: Dispatcharr's channels are already merged.
 

@@ -31,15 +31,15 @@ Each user connects their accounts under **My account › Tracking** in the admin
 - **Trakt** and **Simkl** show a code to enter on their site, after **Connect**.
 - **Last.fm** opens its site after **Connect**: sign in there if asked, and allow Polyfin.
 - **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences. It is used for that user's tracking only: titles' ratings come from the server's own key, apart (see [Ratings](addons-and-libraries.md#ratings)).
-- **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from **Settings → API** on its site.
+- **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from the PublicMetaDB website (Settings, then API).
 - For ListenBrainz, the user pastes their token in **ListenBrainz user token**, from the settings of its site.
 - **AniList** opens its site after **Connect**: allow Polyfin there, copy the code AniList shows, and paste it in Polyfin (**AniList code**). **MyAnimeList** opens its site in the same tab: once you allow Polyfin, MyAnimeList sends your browser back to Polyfin, which connects. See [AniList and MyAnimeList](#anilist-and-myanimelist).
 
 Polyfin checks an API key or user token with the service before saving it.
 
-Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered only once an administrator has set them up; see [Setting up Trakt, Simkl and Last.fm](#setting-up-trakt-simkl-and-last-fm-administrators).
+Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered only once an administrator has set them up; see [Setting up the services](#setting-up-the-services-administrators).
 
-Trakt lets only the people an administrator added to the server's Trakt app sign in through it, and a free Trakt account connects one community app at a time. When Trakt refuses your sign-in, or the code ends without connecting, **My account › Tracking** names both checks: ask an administrator to add your Trakt username to the app's **Members**, and, on a free account, disconnect the other app on Trakt, under **Settings › Connected apps**, or use Trakt VIP. Trakt's answer does not tell these apart from a wrong app, so the message lists them all.
+Trakt lets only the people an administrator added to the server's Trakt app sign in through it, and a free Trakt account connects one community app at a time. When Trakt refuses your sign-in, or the code ends without connecting, **My account › Tracking** names both checks: ask an administrator to add your Trakt username to the app's **Members**, and, on a free account, disconnect the other app on the Trakt website (Settings, then Connected apps), or use Trakt VIP. Trakt's answer does not tell these apart from a wrong app, so the message lists them all.
 
 ## Importing your watch history
 
@@ -58,11 +58,13 @@ Importing only adds to your data in Polyfin. It never sends anything to any serv
 | Service | Watched movies and episodes | Resume points |
 |---|---|---|
 | Trakt | Its watch history, a page of 250 plays at a time, read again only when its last activities changed. | Its playback progress. |
-| Simkl | Its watched movies and the watched episodes of its shows and anime, one list status at a time, only what changed since the last import. Anime, which Simkl numbers as AniDB does, is translated to the seasons and episodes of IMDb and TVDB through the [anime mapping](#anime). | Its paused playbacks, anime included. |
-| MDBList | Its watched movies and episodes, 1,000 at a time, only what changed since the last import. Whole shows or seasons marked watched without their episodes are left out. | Its paused playbacks. |
+| Simkl | Its watched movies and the watched episodes of its series and anime, one list status at a time, only what changed since the last import. Anime, which Simkl numbers as AniDB does, is translated to the seasons and episodes of IMDb and TVDB through the [anime mapping](#anime). | Its paused playbacks, anime included. |
+| MDBList | Its watched movies and episodes, 1,000 at a time, only what changed since the last import. Whole series or seasons marked watched without their episodes are left out. | Its paused playbacks. |
 | PublicMetaDB | Its watch history, 500 plays at a time, whole every time. | Its resume points. |
 
 Polyfin finds the titles by their IMDb identifier, the way the usual metadata addons name them: a movie `tt…`, an episode `tt…:<season>:<episode>`. A title that a catalog listed under its TMDB or TVDB identifier is found that way too. A title no catalog listed yet shows in your lists at once, described by the addons. A title known by its TMDB identifier only, or a series by its TVDB one, that no catalog listed, is asked of the server's metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`): it is found by the IMDb, TMDB and, for a series, TVDB identifiers their description gives, as above, and otherwise shows under `tmdb:<id>` or `tvdb:<id>`, with its episodes as the description lists them. Each description is kept a week, so that importing again does not ask again. PublicMetaDB names titles by TMDB only: those no addon describes are looked up by the IMDb identifier PublicMetaDB maps them to, when its contributors agree on one. Simkl's anime are found by the identifiers and numbers the [anime mapping](#anime) gives them. Titles found no way are counted as not found, and the import goes on.
+
+<a id="how-the-history-merges-with-polyfin-s"></a><a id="how-the-history-merges-with-polyfins"></a>
 
 ### How the history merges with Polyfin's
 
@@ -89,7 +91,15 @@ The Watchlist view (named in the server language, such as « À regarder » in F
 - Jellyfin apps have no watchlist button: the view is not edited from them. Change the lists where they live, or use [Silo's apps](silo-apps.md), whose watchlist button puts a title on your Watchlist until you start it, and takes a title off every list holding it; a list read again whole, such as Trakt's watchlist, puts back a title it still holds.
 - Turning the switch off, or disconnecting the service, takes off the Watchlist the titles that list alone held: those another list holds stay.
 
-**For app developers:** the Watchlist view is a `CollectionFolder` without `CollectionType`, as a library of mixed content, with the same identifier on every server, listed in `/UserViews` after the Collections view. `/Items?ParentId=` lists its movies and series, the latest added first, whatever `sortBy` says; `/Items/Latest?ParentId=` gives its home row. `POST /Polyfin/UserItems/{itemId}/Watchlist` puts a movie or a series on the user's watchlist (a season or an episode stands for its series) unless a list holds it already, and `DELETE` takes it off every list, both answering 204, 400 for an item that is neither; `GET /Polyfin/UserItems/Watchlist` answers `{"Items": [{"Id", "AddedAt"}]}`, the titles the user's lists hold, started or not, the latest added first. `GET /admin/api/account/tracking` answers, for each service, `watchlist` (Trakt and Simkl) and `importWatchlist`, and `lastImport.watchlist`, the titles added; `PATCH /admin/api/account/tracking/{service}` takes `importWatchlist`, besides `importHistory`, and answers `not_found` for a service without a watchlist.
+<details><summary>For app developers</summary>
+
+- The Watchlist view is a `CollectionFolder` without `CollectionType`, as a library of mixed content, with the same identifier on every server, listed in `/UserViews` after the Collections view.
+- `/Items?ParentId=` lists its movies and series, the latest added first, whatever `sortBy` says; `/Items/Latest?ParentId=` gives its home row.
+- `POST /Polyfin/UserItems/{itemId}/Watchlist` puts a movie or a series on the user's watchlist (a season or an episode stands for its series) unless a list holds it already, and `DELETE` takes it off every list. Both answer 204, and 400 for an item that is neither.
+- `GET /Polyfin/UserItems/Watchlist` answers `{"Items": [{"Id", "AddedAt"}]}`, the titles the user's lists hold, started or not, the latest added first.
+- `GET /admin/api/account/tracking` answers, for each service, `watchlist` (Trakt and Simkl) and `importWatchlist`, and `lastImport.watchlist`, the titles added. `PATCH /admin/api/account/tracking/{service}` takes `importWatchlist`, besides `importHistory`, and answers `not_found` for a service without a watchlist.
+
+</details>
 
 ### Now available and Still waiting
 
@@ -103,9 +113,11 @@ Polyfin looks for versions of the titles on each user's Watchlist they have not 
 
 Two [home rows](web-client.md#home-rows) list them: **Now available**, the titles that versions were found for, the latest found first, and **Still waiting**, those checked without any, or not out yet, the latest added first. A title not checked yet is in neither. A title whose versions are gone goes back to **Still waiting**, at the check after the one where the addon first answered without them: as a title's page does, a shorter answer is listed with the versions of the list it replaces while Polyfin asks the addon again (see [Title pages](playback.md#title-pages)). With **Also a library in other apps**, each is a library in other apps too, as the Watchlist is. "Versions found" is what the addons listed: a version is only tried when it plays, and may still fail.
 
-The first time versions are found for a title that earlier checks found none for, the user's own targets that chose **Watchlist title available** receive a message, once per title (see [Notifications](notifications.md#watchlist-titles-available)). A title that had versions at its first check had them when it was added: it is not told of. Neither is a title that finds versions again after losing them.
+The first time versions are found for a title that earlier checks found none for, the user's own targets that chose **Watchlist title available** receive a message, once per title: see [Watchlist titles available](notifications.md#watchlist-titles-available).
 
-**Compared with Jellyfin:** Jellyfin has no watchlist and no such check. The rows reach other Jellyfin apps as libraries, through **Also a library in other apps**.
+**Compared with Jellyfin**
+
+- Jellyfin has no watchlist and no such check. The rows reach other Jellyfin apps as libraries, through **Also a library in other apps**.
 
 ### Recommended on Trakt
 
@@ -117,7 +129,9 @@ Trakt recommends movies and series to each of its users from what they watched a
 - A user without a Trakt connection, or whose connection waits for **Connect again**, sees no such row, nor its library in other apps. Disconnecting Trakt, or connecting another account, forgets the recommendations read.
 - With **Also a library in other apps** on, the row is also a library in other apps, as the Watchlist view is.
 
-**Compared with Jellyfin:** Jellyfin has no such row, and its apps cannot be given a new kind of home section. Polyfin's row reaches them as a library.
+**Compared with Jellyfin**
+
+- Jellyfin has no such row, and its apps cannot be given a new kind of home section. Polyfin's row reaches them as a library.
 
 ## Anime
 
@@ -194,9 +208,13 @@ Neither service follows playback: a title counts once Polyfin marks it played (*
 
 **Disconnect** forgets the tokens and stops the imports; what they imported stays. Neither AniList nor MyAnimeList lets an app revoke a token: to cut Polyfin off entirely, also remove the app from your account on the service, in AniList's settings (Apps) or MyAnimeList's account settings (API).
 
+<a id="music-last-fm-and-listenbrainz"></a><a id="music-lastfm-and-listenbrainz"></a>
+
 ## Music: Last.fm and ListenBrainz
 
 The songs users play from music addons go to Last.fm and ListenBrainz: what is playing now, and a scrobble once a song has played long enough. Podcast episodes, which Polyfin serves as songs, go too. Audiobooks do not.
+
+<a id="connecting-last-fm-and-listenbrainz"></a><a id="connecting-lastfm-and-listenbrainz"></a>
 
 ### Connecting Last.fm and ListenBrainz
 
@@ -217,11 +235,21 @@ A connected ListenBrainz token shows as dots, and its owner can show it with its
 - A song is sent with its artist, title, album, album artist (when not the song's artist), place on its album, and length, as its music addon names them. ListenBrainz also gets its ISRC, when the addon gives one, and Polyfin's name and version as the player.
 - A song whose start Polyfin did not see, as after a server restart, counts from its first report.
 
-**Compared with Jellyfin:** Jellyfin sends songs to Last.fm or ListenBrainz only through a plugin installed apart. Polyfin does it itself, for each user who connects an account, from the playback reports apps already send.
+**Compared with Jellyfin**
 
-**For app developers:** there is nothing to add. Polyfin follows the reports apps send for songs: `POST /Sessions/Playing`, `/Sessions/Playing/Progress` and `/Sessions/Playing/Stopped` (and the older `/PlayingItems` ones). Send `PositionTicks` and `IsPaused` as playback goes, every few seconds as Jellyfin's apps do, and a new start for each play of a song, repeats included. The scrobble goes out with the first report past the threshold, or the stop.
+- Jellyfin sends songs to Last.fm or ListenBrainz only through a plugin installed apart. Polyfin does it itself, for each user who connects an account, from the playback reports apps already send.
 
-## Setting up Trakt, Simkl and Last.fm (administrators)
+<details><summary>For app developers</summary>
+
+- There is nothing to add. Polyfin follows the reports apps send for songs: `POST /Sessions/Playing`, `/Sessions/Playing/Progress` and `/Sessions/Playing/Stopped` (and the older `/PlayingItems` ones).
+- Send `PositionTicks` and `IsPaused` as playback goes, every few seconds as Jellyfin's apps do, and a new start for each play of a song, repeats included.
+- The scrobble goes out with the first report past the threshold, or the stop.
+
+</details>
+
+<a id="setting-up-trakt-simkl-and-last-fm-administrators"></a><a id="setting-up-trakt-simkl-and-lastfm-administrators"></a>
+
+## Setting up the services (administrators)
 
 MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered once an administrator has registered an app with them and pasted its credentials under **Settings › Tracking**.
 
@@ -246,7 +274,7 @@ MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trak
 
 An app created before October 2026 keeps working as it is, with its client secret and the redirect URI `urn:ietf:wg:oauth:2.0:oob`. Link your GitHub account to it by January 1, 2027, or Trakt stops letting users in.
 
-Free Trakt accounts connect one community app at a time: a user who already connected another one disconnects it on Trakt, under **Settings › Connected apps**, or uses Trakt VIP.
+Free Trakt accounts connect one community app at a time: a user who already connected another one disconnects it on the Trakt website (Settings, then Connected apps), or uses Trakt VIP.
 
 Polyfin signs users in on `auth.trakt.tv`, the host Trakt's API specification names for its OAuth calls (and requires from February 1, 2027), and calls the rest of Trakt's API on `api.trakt.tv`. When it refreshes a user's token, it names the redirect URI the app was registered with, as Trakt's specification asks: `urn:ietf:wg:oauth:2.0:oob` for an app with a client secret, `http://localhost` for one without. Register exactly `http://localhost` on a new app.
 
@@ -258,6 +286,8 @@ The secret is never sent back with the settings. Once saved, it shows as dots, a
 2. Paste its client ID in **Simkl client ID**.
 
 Client IDs of older AUTH V1 apps are refused.
+
+<a id="last-fm"></a><a id="lastfm"></a>
 
 ### Last.fm
 
@@ -275,10 +305,12 @@ Users connect through Last.fm's desktop authentication: they allow Polyfin on La
 
 ### MyAnimeList
 
-1. Create an app in your [MyAnimeList API settings](https://myanimelist.net/apiconfig), of the **web** type, with as its redirect URL the address **Settings › Tracking** shows under MyAnimeList: the admin app's `/admin/me/account/myanimelist` page at the server's public address (**Settings › General**), or at the address you use the admin app at when there is none. Only users' browsers have to reach it.
+1. Create an app in your [MyAnimeList API settings](https://myanimelist.net/apiconfig), of the **web** type. Its redirect URL is the address **Settings › Tracking** shows under MyAnimeList: the admin app's `/admin/me/account/myanimelist` page at the server's public address (**Settings › Notifications**), or at the address you use the admin app at when there is none. Only users' browsers have to reach it.
 2. Paste its client ID and secret in **MyAnimeList client ID** and **MyAnimeList client secret**.
 
 Both secrets are kept as the Trakt client secret is: never sent back with the settings, shown as dots once saved, and shown again on demand with their eye.
+
+<a id="when-the-server-s-app-is-refused"></a><a id="when-the-servers-app-is-refused"></a>
 
 ### When the server's app is refused
 

@@ -45,13 +45,34 @@ The files of an HLS stream reach FFmpeg, and apps relayed, through Polyfin, whic
 
 Each channel's stream is read through one connection to its source, whoever reads it: the check at its start, FFmpeg, apps relayed, a recording, several users watching it. The connection stays open 20 seconds after the last of them left, so a quick return to the channel starts at once. It keeps the last 6 MB it received. Whoever starts reading an MPEG-TS stream, first or joining, starts at a keyframe, after the tables that describe it, so that it decodes from its first bytes: the oldest keyframe kept within 6 seconds of the latest one, by the stream's own times, else, for a stream whose times are not told, the first one within the last 3 MB, whichever comes first, and always with 1 MB of the 6 left before the connection overwrites it. A reader that falls more than a few seconds behind is dropped rather than holding the others back.
 
+#### Connection limits
+
 An Xtream account tells, at its login, how many streams it plays at once. Polyfin keeps within it: opening a channel closes first a stream no one watches any more, then the user's own oldest one; when other users' channels take every connection, the new channel is refused at once (the app tells it could not play). A stream being closed, as when its 20 seconds end, still counts until its connection is closed: a channel opening meanwhile waits for it, a second at most. Right after closing a stream, a refusal from the provider is tried again for a few seconds, as providers count a connection a little while after it closed.
 
 An HDHomeRun tuner plays as many channels at once as it has tuners, which its `discover.json` tells: each channel watched or recorded takes one, whoever reads it, and Polyfin keeps within them the same way (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)). A tuner whose tuners another app took answers that all are in use: the channel is refused, its stream is refused by the provider for this start only, and the tuner shows no problem under **System › Health**.
 
 #### Starting a channel
 
-Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 20 seconds of the request (and 3 seconds after its answer at least) fails as silent: providers that redirect to the stream take several seconds, and proxies that share a channel between apps send nothing until they buffered it, which a low-bitrate channel can take 10 seconds or more to do. 20 seconds, with the analysis below, stays within what the Android apps' client gives PlaybackInfo (30 seconds in all). While it waits, PlaybackInfo sends its answer's status after 5 seconds, then a space every 5 seconds, which JSON allows before the answer: Swiftfin gives up on an answer after 20 seconds without a byte. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with a second and a half of probing at most, enough for audio that comes a second after the video, as in streams FFmpeg itself muxed, and keeps what it probed as the start of what it writes; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
+Before a channel plays, Polyfin checks the first bytes of its stream.
+
+| The source sends | Result |
+|---|---|
+| An error, a web page, JSON or text, an empty or short body, or bytes of no video container | Fails within a second. The channel's next stream is tried at once. |
+| Nothing within 20 seconds of the request, and at least 3 seconds after its answer | Fails as silent. The next stream is tried. |
+| Video | Polyfin analyzes about a second of it, and keeps what it learned for a week. |
+
+The 20 seconds leave time for providers that redirect to the stream, which take several seconds. They also leave time for proxies that share a channel between apps: these send nothing until they buffered it, which a low-bitrate channel can take 10 seconds or more to do.
+
+The analysis takes at most **Maximum time to analyze a version**, and never more than 8 seconds. Later starts of the channel, even after a restart, skip it for a week. Once the kept analysis is an hour old, Polyfin analyzes the stream again on the way, from the stream already read.
+
+FFmpeg then reads the stream with at most a second and a half of probing. That is enough for audio that comes a second after the video, as in streams FFmpeg itself muxed. FFmpeg keeps what it probed as the start of what it writes. If FFmpeg fails within 10 seconds, the stream is analyzed again in full.
+
+<details><summary>For app developers</summary>
+
+- The 20 seconds, with the analysis, stay within what the Android apps' client gives PlaybackInfo: 30 seconds in all.
+- While it waits, PlaybackInfo sends its answer's status after 5 seconds, then a space every 5 seconds, which JSON allows before the answer. Swiftfin gives up on an answer after 20 seconds without a byte.
+
+</details>
 
 Interlaced channels, such as most TV sports in 1080i50, are converted for the apps that do not take interlaced video, jellyfin-web among them. They are deinterlaced to 25 frames a second by default, which looks jerky in sports: **Double the frame rate** under **Settings › Conversion (transcoding)** makes them 50 frames a second, for about 15% more processor time on a 1080i50 stream (see [Transcoding](transcoding.md)).
 
@@ -59,15 +80,20 @@ A live stream has no end: when its source closes the connection, or sends nothin
 
 How each stream of an IPTV source answered is kept (see [IPTV sources](iptv.md#stream-health)): a stream found dead is left out of its channel for a while, so the next start goes to a stream that works. A stream that failed to play in the last 15 minutes, of an IPTV source, an addon's channel or a live video, is left out of PlaybackInfo meanwhile, and the log says so (`A channel's stream is left out: it failed lately`), with why it failed.
 
-**Compared with Jellyfin:** Jellyfin waits for the segments the app asks for before it answers the first live playlist (`DynamicHlsController.GetLiveHlsStream`, which calls `HlsHelpers.WaitForMinimumSegmentCount`, [lines 325-329](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/DynamicHlsController.cs#L325-L329)). Polyfin waits for them too, and also for its own lead of two segments of 4 seconds, as jellyfin-web asks only one on most systems, which leaves the player right behind FFmpeg.
-
 When a file of an HLS stream, a playlist, a key or a segment, answers no media while the stream is analyzed (an error, a web page, JSON, text or nothing), the failure says which file, by its name only (a name without an extension, which may be a token, is not shown), and what it answered, as in `nothing came from the source in time: …; 1234.ts answered text (HTTP 404, text/plain, 4 bytes)`. When FFmpeg refuses a segment by its name, its own line is kept, the address cut to the file name. The log lines `A channel's stream failed` and `A channel's stream could not be analyzed` name the stream and the channel (`stream`, `channel`).
 
-**Compared with Jellyfin:** Jellyfin 12.4 repackages a channel's HLS stream with FFmpeg's defaults ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L161-L167)), so FFmpeg refuses its segments named oddly, or starting with a picture. Polyfin names the segments it relays, and skips the picture.
+Once a channel plays, converted or repackaged by FFmpeg, the same holds for what its source answers. When FFmpeg fails (`A live encoding failed`), stalls (`A live encoding stalled`), or the stream ends and is read again (`A live stream is read again`), the failure and the log line add two things:
 
-Once a channel plays, converted or repackaged by FFmpeg, the same holds for what its source answers. When FFmpeg fails (`A live encoding failed`), stalls (`A live encoding stalled`), or the stream ends and is read again (`A live stream is read again`), the failure and the log line add the last file of the stream that answered no media since FFmpeg last made a segment, by its name only, as in `FFmpeg made no segment of the live stream for 20s; source unavailable: 1234.ts answered text (HTTP 404, text/plain, 4 bytes)`, and name the channel (`channel`). A file that answered no media before the last segment is not told: FFmpeg read on past it. What FFmpeg writes keeps the names of the files it read, never their addresses, which hold the source's, nor the host and port of Polyfin's relay it reads them through. The lines `A segment could not be served in time` and `A live stream was refused by its source` name the channel too.
+- the last file of the stream that answered no media since FFmpeg last made a segment, by its name only, as in `FFmpeg made no segment of the live stream for 20s; source unavailable: 1234.ts answered text (HTTP 404, text/plain, 4 bytes)`;
+- the channel (`channel`).
 
-**Compared with Jellyfin:** Jellyfin 12.4 writes what FFmpeg writes for each conversion or repackaging to a file of its own in its log folder, such as `FFmpeg.Transcode-…log`, after the version's media source and FFmpeg's command line, addresses included ([TranscodeManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs#L451-L486)), and does not tell what the source answered. Polyfin keeps FFmpeg's last lines in the server's log, without addresses, with what the source answered.
+A file that answered no media before the last segment is not told: FFmpeg read on past it. What FFmpeg writes keeps the names of the files it read, never their addresses, which hold the source's, nor the host and port of Polyfin's relay it reads them through. The lines `A segment could not be served in time` and `A live stream was refused by its source` name the channel too.
+
+**Compared with Jellyfin**
+
+- Polyfin waits for the segments the app asks for before it answers the first live playlist, as Jellyfin does, and also for its own lead of two segments of 4 seconds: jellyfin-web asks only one on most systems, which leaves the player right behind FFmpeg. Jellyfin's `DynamicHlsController.GetLiveHlsStream` calls `HlsHelpers.WaitForMinimumSegmentCount` ([lines 325-329](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/DynamicHlsController.cs#L325-L329)).
+- Polyfin names the segments it relays, and skips a picture in front of one. Jellyfin 12.4 repackages a channel's HLS stream with FFmpeg's defaults, so FFmpeg refuses its segments named oddly, or starting with a picture ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L161-L167)).
+- Polyfin keeps FFmpeg's last lines in the server's log, without addresses, with what the source answered. Jellyfin 12.4 writes what FFmpeg writes for each conversion or repackaging to a file of its own in its log folder, such as `FFmpeg.Transcode-…log`, after the version's media source and FFmpeg's command line, addresses included, and does not tell what the source answered ([TranscodeManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs#L451-L486)).
 
 ### Searching
 
@@ -78,12 +104,15 @@ An app's search finds the user's channels by name, those of TV catalogs and IPTV
 - Selecting a channel found plays it, from either search.
 - Polyfin searches the channels it lists, not the addons' own searches: a channel no TV catalog lists, or one turned off in an IPTV line-up, is not found.
 
-Polyfin adds nothing to the web client for this: jellyfin-web already asks for channels from the home page, and labels them itself. Its search also asks for every video but movies, episodes and channels, which it lists under "Videos". Polyfin leaves programmes out of that answer, so that each programme shows once, under "Programs".
+Polyfin adds nothing to the web player for this: jellyfin-web already asks for channels from the home page, and labels them itself. Its search also asks for every video but movies, episodes and channels, which it lists under "Videos". Polyfin leaves programmes out of that answer, so that each programme shows once, under "Programs".
 
-**For app developers:**
+<details><summary>For app developers</summary>
+
 - `/Items` with `searchTerm` finds channels asked as `TvChannel` or `LiveTvChannel`, and programmes asked as `LiveTvProgram`, `Program` or `TvProgram`, filtered by `isMovie`, `isSeries`, `isNews`, `isKids` and `isSports`. It finds at most `limit` of each.
 - A search that names no type finds channels, and programmes only when it sets one of those five filters. A search that names types finds programmes only when one of them is a programme type.
 - Search hints leave channels and programmes out.
+
+</details>
 
 ## Channels of your titles
 
@@ -115,16 +144,20 @@ The programme airing when a player tunes in plays from where it is: tuned 90 sec
 - When none plays, a black and silent slate airs for a minute at most, and the versions are tried again. A programme shorter than its runtime is followed by the slate until its time ends.
 - The log tells it: `A version of a programme could not air`, `No version of a programme plays: a slate airs instead`.
 
-**Compared with Jellyfin:** Jellyfin has no channels of its own titles. Apps see these channels and their programmes as Jellyfin's `TvChannel` and `Program` items, and play them as live streams.
+**Compared with Jellyfin**
 
-**For app developers:** the admin app's routes, for administrators: `GET` and `POST /admin/api/live-tv/channels`, `GET`, `PUT` and `DELETE /admin/api/live-tv/channels/{id}`, `GET /admin/api/live-tv/channels/choices` for the collections and smart lists, and `GET /admin/api/live-tv/channels/titles?q=` for movies and series. A `PUT` that changes the sources, the blocks or the shuffle, or sets `rebuild`, reads the titles again and starts the schedule again today.
+- Jellyfin has no channels of its own titles. Apps see these channels and their programmes as Jellyfin's `TvChannel` and `Program` items, and play them as live streams.
+
+<details><summary>For app developers</summary>
+
+- The admin app's routes, for administrators: `GET` and `POST /admin/api/live-tv/channels`, `GET`, `PUT` and `DELETE /admin/api/live-tv/channels/{id}`, `GET /admin/api/live-tv/channels/choices` for the collections and smart lists, and `GET /admin/api/live-tv/channels/titles?q=` for movies and series.
+- A `PUT` that changes the sources, the blocks or the shuffle, or sets `rebuild`, reads the titles again and starts the schedule again today.
+
+</details>
 
 ## Programme guide
 
-Without a guide, the programme guide is empty and the channels play all the same. A guide can come from the addon itself (Native EPG) or from XMLTV files you attach to the catalog.
-
-**Compared with Jellyfin:**
-- An empty guide behaves as Jellyfin's does without guide data.
+Without a guide, the programme guide is empty and the channels play all the same, as in Jellyfin without guide data. A guide can come from the addon itself (Native EPG) or from XMLTV files you attach to the catalog.
 
 ### Native EPG
 
@@ -141,9 +174,6 @@ Some IPTV addons publish no Native EPG guide, while their provider publishes one
 - A channel with Native EPG programmes keeps them: the XMLTV guide only fills the channels without.
 - Removing a guide removes its mappings with it.
 
-**Compared with Jellyfin:**
-- Jellyfin's XMLTV guides belong to its tuner setup; Polyfin attaches a guide to a TV catalog.
-
 #### When guides are fetched
 
 Polyfin fetches a guide:
@@ -156,7 +186,7 @@ Polyfin fetches a guide:
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Refresh Live TV lists and guides every (hours)** | **Settings › Live TV** | 12 hours (as before the setting existed); 1 to 168 | How often guides, and IPTV lists, are downloaded again. Failed downloads are tried again sooner. |
+| **Refresh Live TV lists and guides every (hours)** | **Settings › Live TV** | 12 hours; 1 to 168 | How often guides, and IPTV lists, are downloaded again. Failed downloads are tried again sooner. |
 
 The catalog's row then shows when its first guide was last fetched, when it will be fetched next, how many of its channels are mapped to a guide channel, and why the last fetch failed, if it did. The guide page shows the same for each guide, with the channels and programmes it held.
 
@@ -195,7 +225,7 @@ Many guides list the same channel for several countries, so the candidates are r
 
 #### Logos from the guide
 
-A channel whose catalog or line-up gives no logo, such as a tuner's, shows the icon of the guide channel it is mapped to. Jellyfin uses the guide's icon even over the channel's own logo ([ListingsManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/ListingsManager.cs#L303-L305)); Polyfin keeps the logo the source, or the administrator, gives.
+A channel whose catalog or line-up gives no logo, such as a tuner's, shows the icon of the guide channel it is mapped to. Polyfin keeps the logo the source, or the administrator, gives.
 
 #### Remapping and mapping by hand
 
@@ -216,20 +246,41 @@ XMLTV programmes are read from the guide when asked: a guide page reads only its
 
 Recommended programmes airing now are listed by channel number; those to come, by start time.
 
-**For app developers:**
+**Compared with Jellyfin**
+
+- Polyfin attaches a guide to a TV catalog. Jellyfin's XMLTV guides belong to its tuner setup.
+- Polyfin keeps a channel's own logo over the guide's icon. Jellyfin uses the guide's icon even over the channel's own logo ([ListingsManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/ListingsManager.cs#L303-L305)).
+
+<details><summary>For app developers</summary>
+
 - Programmes from either guide give apps their episode title and their season and episode numbers, as Jellyfin's do.
 - XMLTV programmes the guide marks previously shown, and not new, are repeats (`IsRepeat`), as Jellyfin reads XMLTV guides.
 - `/LiveTv/GuideInfo` still answers the seven days Jellyfin's guide spans.
 
+</details>
+
 ## Programme reminders
 
-A user with the **Live TV** permission can be told before a programme starts, without recording it. On the page of a programme that has not started, the web client shows **Remind me** after the record buttons, and its menu **Remind me of every airing**: the programmes of the same title on the same channel at the same time of day, within ten minutes, as a series timer finds them, looked for in the guide when the reminder is set and every half hour. A programme with a reminder shows **Reminder set**, which removes it, or the series reminder that made it. Reminders follow parental control and blocked genres, as scheduled programmes do; a user who loses the permission, is disabled or whose account ends gets none.
+A user with the **Live TV** permission can be told before a programme starts, without recording it. On the page of a programme that has not started, the web player shows **Remind me** after the record buttons, and its menu **Remind me of every airing**. A series reminder covers the programmes of the same title on the same channel at the same time of day, within ten minutes, as a series timer finds them. They are looked for in the guide when the reminder is set and every half hour. A programme with a reminder shows **Reminder set**, which removes it, or the series reminder that made it. Reminders follow parental control and blocked genres, as scheduled programmes do; a user who loses the permission, is disabled or whose account ends gets none.
 
 As long before the programme as **Remind me before** says, under **My account › Notifications**, the user's own targets receive **Programme starting** (see [Programme reminders](notifications.md#programme-reminders)), and their apps too when they chose it. **My account › Reminders** lists the user's reminders and series reminders, with each programme's channel and start, and **Delete**.
 
 A reminder is checked against the guide when it is due. A programme the guide moved within the hour keeps its reminder at its new start, also when it moved earlier: the guide is looked at every few minutes during the hour before a reminder is due. A programme gone from the guide sends nothing. Reminders are kept in the database: a restart neither sends one twice nor forgets one, and one due while Polyfin was off is sent on start only before its programme begins.
 
-**For app developers:** Jellyfin's API has nothing for reminders, and Jellyfin apps show no button for them; reminders set in the web client reach the user wherever their targets are. Polyfin's own routes, under the Live TV permission: `GET /Polyfin/Reminders` lists the user's reminders and series reminders; `GET /Polyfin/Reminders/Programs/{programId}` tells how a programme stands (`Started`, `ReminderId`, `SeriesReminderId`, `Reaches`, `BeforeMinutes`), and answers 204 with nothing, without the permission too, for an item that is no programme of the user's guide or for a user without Live TV, as the web client's script asks it of every page; `POST /Polyfin/Reminders` with `ProgramId`, `Series` and `Language` sets one; `DELETE /Polyfin/Reminders/{id}` deletes a reminder or a series reminder.
+**Compared with Jellyfin**
+
+- Reminders set in the web player reach the user wherever their targets are. Jellyfin's API has nothing for reminders, and Jellyfin apps show no button for them.
+
+<details><summary>For app developers</summary>
+
+Polyfin's own routes, under the Live TV permission:
+
+- `GET /Polyfin/Reminders` lists the user's reminders and series reminders.
+- `GET /Polyfin/Reminders/Programs/{programId}` tells how a programme stands (`Started`, `ReminderId`, `SeriesReminderId`, `Reaches`, `BeforeMinutes`). It answers 204 with nothing, without the permission too, for an item that is no programme of the user's guide or for a user without Live TV, as the web player's script asks it of every page.
+- `POST /Polyfin/Reminders` with `ProgramId`, `Series` and `Language` sets one.
+- `DELETE /Polyfin/Reminders/{id}` deletes a reminder or a series reminder.
+
+</details>
 
 ## Recordings
 
@@ -247,7 +298,8 @@ A recording that finished or failed can be sent to the targets of the user who s
 
 On a user's page under **Users**, **Can record Live TV** at the end of **Playback and access** lets a user schedule, change and cancel recordings and delete them. It is on for administrators and off for other users by default. Seeing recordings needs the **Live TV** permission only. See [Users](users.md).
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - **Can record Live TV** is Jellyfin's `EnableLiveTvManagement`, which apps also read and set in the user's policy.
 - Without it, requests are refused with 403, as Jellyfin answers.
 
@@ -267,8 +319,11 @@ Notes on series timers:
 
 Timers, series timers and recordings are kept in the database.
 
-**For app developers:**
+<details><summary>For app developers</summary>
+
 - Guide programmes show their timers (`TimerId`, `SeriesTimerId`).
+
+</details>
 
 ### Recording settings
 
@@ -280,15 +335,15 @@ Timers, series timers and recordings are kept in the database.
 | **Find commercials in recordings** | **Settings › Recordings** | Off | Reads each recording once it ends, partial ones included, for its commercial breaks, which apps then offer to skip. See [Commercials of recordings](skip-segments.md#commercials-of-recordings). |
 | **Convert finished recordings to HEVC** | **Settings › Recordings** | off | Converts finished recordings to HEVC at night, so that they take less space (see [Smaller recordings](#smaller-recordings)). |
 | **Convert between** | **Settings › Recordings** | 1:00 to 6:00, in the server's time zone | The hours conversions run. A conversion still running at the end stops, and starts over the next night. |
-| **Use the processor when there is no graphics card** | **Settings › Recordings** | off | Converts on the processor, with x265, when no graphics card encodes HEVC. Without a graphics card and with it off, nothing is converted. |
+| **Use the processor when there is no graphics card** | **Settings › Recordings** | off | Converts on the processor, with x265, when no GPU encodes HEVC. Without a GPU and with it off, nothing is converted. |
 
 ### How a recording is made
 
 - FFmpeg copies the channel's stream, read as live playback reads it, with the headers it needs and within its addon's confinement, from the guide of the user who scheduled it.
-- It counts among that user's 4 channels played through FFmpeg at once, and the server's 16. Past the user's 4, it takes the place of their oldest channel watched. A channel watched never takes the place of a recording.
+- It counts among that user's 4 channels played through FFmpeg at once, and the server's 16 (see [Connection limits](#connection-limits) for an IPTV account's own limit). Past the user's 4, it takes the place of their oldest channel watched. A channel watched never takes the place of a recording.
 - A stream that stops before the end is read again 30 seconds later.
 - While it records, the file is written in MPEG-TS, which apps can follow live.
-- Once the programme ends, it becomes one Matroska file in the folder. It plays like a movie's version: as it is, or remuxed into HLS (see [Playback](playback.md)).
+- Once the programme ends, it becomes one Matroska file in the folder. It plays like a movie's version: as it is, or repackaged into HLS (see [Playback](playback.md)).
 - A recording under way when Polyfin stops is kept as a partial recording when Polyfin starts again. The rest of the programme, if it still airs, is recorded as another.
 
 ### Recordings and tuners
@@ -302,20 +357,14 @@ A recording reads its channel's stream from before FFmpeg starts until it ends, 
 
 ### Commercials of recordings
 
-With **Find commercials in recordings** on, a recording is read once it ends, in the background, one recording at a time and with FFmpeg at the lowest priority, for the moments that are both black and silent. The short pieces between them are its commercial breaks, which apps offer to skip while **Skip intro and credits buttons** is on, as each user chose in their app's playback settings.
-
-- A recording longer than 4 hours is not read, and one whose reading takes longer than it lasts gets none.
-- **Find commercials in recordings**, a task under **System › Schedule**, reads the recordings not read yet, such as those made before the setting was turned on. It runs every day, and when started by hand.
-- What was found stays with the recording when its file is replaced, and is deleted with it.
-
-How breaks are told apart from the programme, and how apps get them: see [Commercials of recordings](skip-segments.md#commercials-of-recordings).
+With **Find commercials in recordings** on, Polyfin finds the commercial breaks of recordings, which apps then offer to skip. How it reads them, which recordings it reads, and how apps get the breaks: see [Commercials of recordings](skip-segments.md#commercials-of-recordings).
 
 ### Smaller recordings
 
 A recording copies the channel's stream at the channel's own bitrate. With **Convert finished recordings to HEVC** on, Polyfin converts finished recordings, partial ones included, to HEVC, which takes about half the space of H.264 and less still of MPEG-2:
 
 - One recording at a time, the one that finished first, between the hours of **Convert between**.
-- On the card **Graphics card used to convert** chooses, with the **HEVC quality** and the **Deinterlacing method** of the conversion settings (see [Transcoding](transcoding.md#conversion-settings)). With **HEVC quality** at 0, recordings use 28, Jellyfin's. Without a graphics card that encodes HEVC, recordings are converted on the processor with x265, at its lowest priority, only if **Use the processor when there is no graphics card** is on.
+- On the card **Graphics card used to convert** chooses, with the **HEVC quality** and the **Deinterlacing method** of the conversion settings (see [Transcoding](transcoding.md#conversion-settings)). With **HEVC quality** at 0, recordings use 28, Jellyfin's. Without a GPU that encodes HEVC, recordings are converted on the processor with x265, at its lowest priority, only if **Use the processor when there is no graphics card** is on.
 - The picture keeps its size, deinterlaced when it is interlaced, in 8 bits. The audio and subtitles are copied as they are. The copy's bitrate never goes above the recording's.
 - A conversion counts as one of the **Video conversions at once**, and waits while playbacks fill them. Playbacks started meanwhile count it too.
 - A conversion starts only with free space on the recordings' disk for a copy as large as the recording, and waits for it otherwise.
@@ -336,14 +385,18 @@ Apps that do not decode HEVC get a converted recording converted when they play 
 
 Recordings are listed newest first, and in a **Recordings** folder. They are shown to the users who reach the channel they come from and to the user who scheduled them. Parental control and blocked genres apply to recordings as to titles, and to the programmes users schedule.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
+
 - For parental control, Jellyfin judges recorded videos as "Other" items, and scheduled programmes as "LiveTvProgram".
 - A recording plays through PlaybackInfo only once finished.
 - Jellyfin's keep-until choices are kept, but only **Keep recordings for** and **Keep up to** delete recordings.
 - Jellyfin's `IsPrePaddingRequired` and `IsPostPaddingRequired` are not kept.
 
-**For app developers:**
+<details><summary>For app developers</summary>
+
 - A recording under way can be followed at `/LiveTv/LiveRecordings/{id}/stream`. Unlike Jellyfin, it needs a signed-in user's credentials or play session, like Polyfin's other media.
 - Recordings are listed under `/LiveTv/Recordings`, and the folder at `/LiveTv/Recordings/Folders`.
 - A timer or series timer asked for a programme Polyfin does not know answers 404 (`Timers/Defaults`) or 400 (`SeriesTimers`), where Jellyfin fails with 500.
 - `POST /LiveTv/Timers/{id}` changes the timer the route names, not the one in the body.
+
+</details>
