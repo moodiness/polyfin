@@ -40,7 +40,7 @@ const settings: typeof en = {
       myAnimeListSetup:
         'Erstelle auf myanimelist.net eine App, unter Account Settings, API, Create ID, vom Typ „web“. Gib ihr einen beliebigen Namen und als Weiterleitungs-URL die Adresse unten: MyAnimeList leitet den Browser der Benutzer dorthin zurück, sobald sie Polyfin den Zugriff erlauben. Nur ihr Browser muss sie erreichen können. Kopiere dann ihre Client-ID und ihr Client-Secret hierher.',
       myAnimeListRedirectHelp:
-        'Die öffentliche Adresse dieses Servers unter Einstellungen › Allgemein, sonst die Adresse, die du gerade verwendest.',
+        'Die öffentliche Adresse dieses Servers unter Einstellungen › Benachrichtigungen, sonst die Adresse, die du gerade verwendest.',
       myAnimeListClientId: 'MyAnimeList-Client-ID',
       myAnimeListClientIdHelp:
         'Leer lassen, um MyAnimeList auszuschalten. Benutzer können sich verbinden, sobald Client-ID und Client-Secret gespeichert sind.',
@@ -765,7 +765,7 @@ const settings: typeof en = {
     serverImports:
       'Benutzer dürfen ihren Wiedergabeverlauf von einem anderen Server oder einer App importieren',
     serverImportsHelp:
-      'Unter „Mein Konto“ kann jeder Benutzer seine gesehenen Filme und Folgen, Fortsetzungspunkte und Favoriten von einem Jellyfin- oder Emby-Server oder aus seinem Stremio- oder Nuvio-Konto importieren, indem er sich dort selbst anmeldet. Wenn aus, sind diese Bereiche ausgeblendet. Ein Administrator kann unter „Benutzer“ weiterhin für einen Benutzer importieren.',
+      'Unter „Mein Konto“ kann jeder Benutzer seine gesehenen Filme und Folgen, Fortsetzungspunkte und Favoriten von einem Jellyfin-, Emby- oder Plex-Server oder aus seinem Stremio- oder Nuvio-Konto importieren, indem er sich dort selbst anmeldet, und seine gesehenen Filme aus einem Letterboxd-Export. Wenn aus, sind diese Bereiche ausgeblendet. Ein Administrator kann unter „Benutzer“ weiterhin für einen Benutzer importieren.',
     importEveryMinutes: 'Verbundene Konten importieren alle',
     importEveryMinutesHelp:
       'Wie oft Polyfin die Stremio- und Nuvio-Konten, mit denen Benutzer verbunden bleiben, sowie die Wiedergabeverläufe, die sie aus Tracking-Diensten importieren, erneut importiert. Eine Änderung gilt sofort: Jeder nächste Import erfolgt so lange nach dem letzten. Jeder Import liest das ganze Konto erneut, daher sendet ein kurzes Intervall mehr Anfragen an diese Dienste und verstärkt bei Stremio, dessen Bedingungen automatisierte Extraktion verbieten, diese Grauzone. Standardmäßig 6 Stunden.',

@@ -38,7 +38,7 @@ const settings: typeof en = {
       myAnimeListSetup:
         'Crie um aplicativo em myanimelist.net, em Account Settings, API, Create ID, do tipo “web”. Dê a ele qualquer nome e, como URL de redirecionamento, o endereço abaixo: o MyAnimeList envia o navegador dos usuários de volta para lá depois que eles autorizam o Polyfin. Apenas o navegador deles precisa alcançá-lo. Depois, copie aqui o client ID e o client secret.',
       myAnimeListRedirectHelp:
-        'O endereço público deste servidor em Configurações › Geral, ou então o endereço que você usa agora.',
+        'O endereço público deste servidor em Configurações › Notificações, ou então o endereço que você usa agora.',
       myAnimeListClientId: 'Client ID do MyAnimeList',
       myAnimeListClientIdHelp:
         'Deixe vazio para desativar o MyAnimeList. Os usuários podem se conectar quando o client ID e o client secret estiverem salvos.',
@@ -765,7 +765,7 @@ const settings: typeof en = {
     serverImports:
       'Usuários podem importar o histórico de reprodução de outro servidor ou aplicativo',
     serverImportsHelp:
-      'Em Minha conta, cada usuário pode importar seus filmes e episódios reproduzidos, pontos de retomada e favoritos de um servidor Jellyfin ou Emby, ou da sua conta Stremio ou Nuvio, entrando lá com as próprias credenciais. Quando desativado, essas seções ficam ocultas. Um administrador ainda pode importar para um usuário, em Usuários.',
+      'Em Minha conta, cada usuário pode importar seus filmes e episódios reproduzidos, pontos de retomada e favoritos de um servidor Jellyfin, Emby ou Plex, ou da sua conta Stremio ou Nuvio, entrando lá com as próprias credenciais, e seus filmes assistidos de uma exportação do Letterboxd. Quando desativado, essas seções ficam ocultas. Um administrador ainda pode importar para um usuário, em Usuários.',
     importEveryMinutes: 'Importar contas conectadas a cada',
     importEveryMinutesHelp:
       'Com que frequência o Polyfin importa novamente as contas do Stremio e do Nuvio às quais os usuários continuam conectados, e os históricos de reprodução que eles importam de serviços de acompanhamento. Uma alteração se aplica imediatamente: cada próxima importação ocorre esse intervalo após a última. Cada importação lê a conta inteira novamente, então um intervalo curto envia mais solicitações a esses serviços e, no caso do Stremio, cujos termos proíbem a extração automatizada, torna essa zona cinzenta mais acentuada. 6 horas por padrão.',

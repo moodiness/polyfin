@@ -38,7 +38,7 @@ const settings = {
       myAnimeListSetup:
         'Create an app on myanimelist.net, in Account Settings, API, Create ID, of the type “web”. Give it any name, and as its redirect URL the address below: MyAnimeList sends users’ browsers back there once they allow Polyfin. Only their browsers need to reach it. Then copy its client ID and client secret here.',
       myAnimeListRedirectHelp:
-        'This server’s public address under Settings › General, else the address you use now.',
+        'This server’s public address under Settings › Notifications, else the address you use now.',
       myAnimeListClientId: 'MyAnimeList client ID',
       myAnimeListClientIdHelp:
         'Leave empty to turn MyAnimeList off. Users can connect once both the client ID and the client secret are saved.',
@@ -757,7 +757,7 @@ const settings = {
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
     serverImports: 'Users may import their watch history from another server or app',
     serverImportsHelp:
-      'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin or Emby server, or from their Stremio or Nuvio account, signing in there as themselves. When off, those sections are hidden. An administrator can still import for a user, under Users.',
+      'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin, Emby or Plex server, or from their Stremio or Nuvio account, signing in there as themselves, and their watched movies from a Letterboxd export. When off, those sections are hidden. An administrator can still import for a user, under Users.',
     importEveryMinutes: 'Import connected accounts every',
     importEveryMinutesHelp:
       'How often Polyfin imports again the Stremio and Nuvio accounts users stay connected to, and the watch histories they import from tracking services. A change applies at once: each next import comes this long after the last one. Each import reads the whole account again, so a short interval sends more requests to those services, and, for Stremio, whose terms forbid automated extraction, makes that grey area more pronounced. 6 hours by default.',

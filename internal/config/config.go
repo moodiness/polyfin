@@ -107,7 +107,7 @@ type Retired struct {
 var retiredVariables = []Retired{
 	{"POLYFIN_CACHE_SIZE", "Settings › Playback"},
 	{"POLYFIN_LOG_LEVEL", "Settings › Diagnostics"},
-	{"POLYFIN_VAAPI_DEVICE", "Settings › Conversion"},
+	{"POLYFIN_VAAPI_DEVICE", "Settings › Conversion (transcoding)"},
 	{"POLYFIN_RECORDINGS_DIR", "Settings › Recordings"},
 	{"POLYFIN_BACKUP_DIR", "Settings › Backups"},
 }

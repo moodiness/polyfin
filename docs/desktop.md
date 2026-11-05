@@ -65,7 +65,7 @@ The icon shows whether Polyfin runs: faded while it starts or is stopped. Its me
 | The first line | What Polyfin is doing: starting, downloading FFmpeg or an update, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped. A second line tells about a problem, and opens the log folder, whose `desktop.log` tells why: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
 | Setup code | Shown until the administrator exists: copies the code and opens the admin app |
 | Open the admin app | Opens `http://localhost:8096/admin/` in the browser |
-| Open the web client | Opens jellyfin-web, the web player, at `http://localhost:8096/web/` (see [Web player](web-client.md)) |
+| Open the web player | Opens jellyfin-web, the web player, at `http://localhost:8096/web/` (see [Web player](web-client.md)) |
 | Open the log folder | Opens the folder of the logs in a window of the system's file manager, such as Explorer on Windows or Finder on macOS (see [Folders](#folders)) |
 | Copy the secret key | Copies the secret key from the system's key store to the clipboard, to keep with your backups (see [The secret key](#the-secret-key)) |
 | Stop Polyfin, Start Polyfin | Stops Polyfin, then its database, or starts them again, the app staying open |

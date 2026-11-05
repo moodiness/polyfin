@@ -1156,10 +1156,10 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
   )
 }
 
-/** Episodes as ranges of numbers, such as `E4–E5, E7`. */
+/** Episodes as ranges of numbers, such as `E4-E5, E7`. */
 function episodeRanges(ranges: EpisodeRanges): string {
   return ranges
-    .map(([first, last]) => (first === last ? `E${first}` : `E${first}–E${last}`))
+    .map(([first, last]) => (first === last ? `E${first}` : `E${first}-E${last}`))
     .join(', ')
 }
 

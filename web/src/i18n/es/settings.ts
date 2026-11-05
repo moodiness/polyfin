@@ -40,7 +40,7 @@ const settings: typeof en = {
       myAnimeListSetup:
         'Cree una aplicación en myanimelist.net, en Account Settings, API, Create ID, del tipo «web». Póngale cualquier nombre y, como URL de redirección, la dirección que aparece abajo: MyAnimeList devuelve allí el navegador de los usuarios cuando autorizan a Polyfin. Solo sus navegadores necesitan poder acceder a ella. Después, copie aquí su client ID y su client secret.',
       myAnimeListRedirectHelp:
-        'La dirección pública de este servidor, en Ajustes › General; si no hay, la dirección que utiliza ahora.',
+        'La dirección pública de este servidor, en Ajustes › Notificaciones; si no hay, la dirección que utiliza ahora.',
       myAnimeListClientId: 'Client ID de MyAnimeList',
       myAnimeListClientIdHelp:
         'Déjelo vacío para desactivar MyAnimeList. Los usuarios podrán conectarse cuando se hayan guardado el client ID y el client secret.',
@@ -771,7 +771,7 @@ const settings: typeof en = {
     serverImports:
       'Los usuarios pueden importar su historial de reproducción desde otro servidor o aplicación',
     serverImportsHelp:
-      'En Mi cuenta, cada usuario puede importar sus películas y episodios vistos, puntos de reanudación y favoritos desde un servidor Jellyfin o Emby, o desde su cuenta de Stremio o Nuvio, iniciando sesión allí con sus propias credenciales. Si se desactiva, esas secciones se ocultan. Un administrador puede seguir importando para un usuario, en Usuarios.',
+      'En Mi cuenta, cada usuario puede importar sus películas y episodios vistos, puntos de reanudación y favoritos desde un servidor Jellyfin, Emby o Plex, o desde su cuenta de Stremio o Nuvio, iniciando sesión allí con sus propias credenciales, y sus películas vistas desde una exportación de Letterboxd. Si se desactiva, esas secciones se ocultan. Un administrador puede seguir importando para un usuario, en Usuarios.',
     importEveryMinutes: 'Importar las cuentas conectadas cada',
     importEveryMinutesHelp:
       'Con qué frecuencia Polyfin vuelve a importar las cuentas de Stremio y Nuvio a las que los usuarios siguen conectados, y los historiales de reproducción que importan desde servicios de seguimiento. Un cambio se aplica de inmediato: cada siguiente importación se produce este tiempo después de la anterior. Cada importación vuelve a leer toda la cuenta, así que un intervalo corto envía más solicitudes a esos servicios y, en el caso de Stremio, cuyas condiciones prohíben la extracción automatizada, acentúa esa zona gris. 6 horas de forma predeterminada.',

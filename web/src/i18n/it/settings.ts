@@ -40,7 +40,7 @@ const settings: typeof en = {
       myAnimeListSetup:
         'Crea un’applicazione su myanimelist.net, in Account Settings, API, Create ID, di tipo «web». Dalle un nome qualsiasi e, come redirect URL, l’indirizzo qui sotto: MyAnimeList vi rimanda i browser degli utenti dopo che hanno autorizzato Polyfin. Basta che lo raggiungano i loro browser. Poi copia qui il suo client ID e il suo client secret.',
       myAnimeListRedirectHelp:
-        'L’indirizzo pubblico di questo server in Impostazioni › Generali, altrimenti l’indirizzo che stai usando ora.',
+        'L’indirizzo pubblico di questo server in Impostazioni › Notifiche, altrimenti l’indirizzo che stai usando ora.',
       myAnimeListClientId: 'Client ID MyAnimeList',
       myAnimeListClientIdHelp:
         'Lascia vuoto per disattivare MyAnimeList. Gli utenti possono collegarsi una volta salvati sia il client ID sia il client secret.',
@@ -775,7 +775,7 @@ const settings: typeof en = {
     serverImports:
       'Gli utenti possono importare la cronologia di visione da un altro server o applicazione',
     serverImportsHelp:
-      'In Il mio account, ogni utente può importare i film e gli episodi visti, i punti di ripresa e i preferiti da un server Jellyfin o Emby, o dal proprio account Stremio o Nuvio, accedendovi con le proprie credenziali. Se disattivato, queste sezioni sono nascoste. Un amministratore può comunque importare per conto di un utente, in Utenti.',
+      'In Il mio account, ogni utente può importare i film e gli episodi visti, i punti di ripresa e i preferiti da un server Jellyfin, Emby o Plex, o dal proprio account Stremio o Nuvio, accedendovi con le proprie credenziali, e i film visti da un’esportazione di Letterboxd. Se disattivato, queste sezioni sono nascoste. Un amministratore può comunque importare per conto di un utente, in Utenti.',
     importEveryMinutes: 'Importa gli account collegati ogni',
     importEveryMinutesHelp:
       'Ogni quanto Polyfin importa di nuovo gli account Stremio e Nuvio a cui gli utenti restano collegati e le cronologie di visione che importano dai servizi di tracciamento. Una modifica si applica subito: ogni importazione successiva avviene a questa distanza dall’ultima. Ogni importazione rilegge l’intero account, quindi un intervallo breve invia più richieste a quei servizi e, per Stremio, i cui termini vietano l’estrazione automatizzata, rende più marcata quella zona grigia. 6 ore per impostazione predefinita.',

@@ -174,7 +174,7 @@ Polyfin reads folders from the many storages rclone reaches through an rclone in
     restart: unless-stopped
 ```
 
-Add `RCLONE_RC_PASSWORD=<a password>` to `.env`: `.env.example` does not list it. Publish no port: Polyfin reaches it on the network the services share. Then add the folder in **Content › Sources**, with **Add a source**, **Folder** and **rclone remote**, with `http://rclone:5572` as its rclone address, `polyfin` and that password as its user and password, and pick its remote with **List the remotes**. The storage's own credentials stay in rclone's configuration; give the remote read-only credentials where the storage offers them, since anyone with the remote control's password may write through it.
+Set `RCLONE_RC_PASSWORD=<a password>` in `.env`, where `.env.example` lists it commented out. Publish no port: Polyfin reaches it on the network the services share. Then add the folder in **Content › Sources**, with **Add a source**, **Folder** and **rclone remote**, with `http://rclone:5572` as its rclone address, `polyfin` and that password as its user and password, and pick its remote with **List the remotes**. The storage's own credentials stay in rclone's configuration; give the remote read-only credentials where the storage offers them, since anyone with the remote control's password may write through it.
 
 ### Upgrade from an older Compose file
 
