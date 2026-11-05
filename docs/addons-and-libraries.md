@@ -96,18 +96,36 @@ Each source has its own page, from **Open its page** on its row, with its detail
 
 ### Addons that fail
 
-Polyfin asks an addon at the address it was added with, under the header `User-Agent: Polyfin/<version>`, with an Eclipse addon's settings in the query (see [Music addon settings](#music-addon-settings)). An addon that answers with an error was reached, and the log and **System › Health** tell what it answered:
+Polyfin asks an addon at the address it was added with, under the header `User-Agent: Polyfin/<version>`, with an Eclipse addon's settings in the query (see [Music addon settings](#music-addon-settings)). An address may have a `?` part after `manifest.json`, where some addons keep your token, as in `https://addon.example/manifest.json?token=…`. Polyfin asks for each resource in place of `manifest.json` and keeps that part:
+
+- a Stremio addon gets it after the resource, as Stremio sends it: `https://addon.example/stream/movie/tt1.json?token=…`;
+- an Eclipse addon gets its parameters with its settings and the request's own, as in `https://addon.example/search?token=…&q=…`. A setting replaces a parameter of the address with the same name, and the request's own (`q`, `skip`) replace both.
+
+An addon that answers with an error was reached, and the log and **System › Health** tell what it answered:
 
 | The addon | Health says | The log's error |
 |---|---|---|
-| Answers `401`, `403` or another error but `404` and `429` | refused the request | `addon refused the request: HTTP 403` |
+| Answers `401`, `403` or another error but `404` and `429` | refused the request | `addon refused the request: HTTP 403`, with the addon's reason when it gives one: `addon refused the request: HTTP 403 (Unavailable)` |
 | Answers `429`, or `503` with `Retry-After` | asked to slow down (too many requests) | `addon asked to slow down: HTTP 429`, or `addon asked to wait: HTTP 503, retry after 30s` |
 | Answers `500` or another server error | answered with a server error | `addon failed: HTTP 502` |
 | Does not answer | could not be reached, or did not answer in time | `addon unreachable: ...` |
 
+The reason of a refusal is the `error` or `message` of the addon's JSON answer, or its answer when it is short plain text. Polyfin puts it on one line, cuts it at 120 characters, and replaces with `<redacted>` what looks like an address, a token or a key.
+
 A refusal comes from the addon, or from the site behind it, and Polyfin cannot change it. The token in the addon's address may have expired, or the addon may refuse requests from servers, or from apps other than its own. Check that the same address works in the addon's own app, on the same network as Polyfin, or ask the addon's author.
 
-- A library whose addon fails shows nothing in the apps. The log tells each such request as `Browsing failed`, with the addon's name, the catalog and the error, as in `addon=Songs catalog=top error="addon refused the request: HTTP 403"`.
+Some addons serve only their own app: that app adds to each request an access key its account server gives signed-in users, and other apps cannot get one. Such an addon answers its manifest and refuses everything else, usually with `403`. Polyfin cannot use it, and does not pose as another app.
+
+To test an addon outside Polyfin, ask it for a search or a catalog from the Polyfin machine, with the addon's address up to `/manifest.json` in place of `<address>`, as Polyfin asks:
+
+```
+curl -i -A "Polyfin/<version>" "<address>/search?q=test"
+curl -i -A "Polyfin/<version>" "<address>/catalog/movie/top.json"
+```
+
+The first line is for an Eclipse addon, the second for a Stremio addon, with a type and a catalog its manifest lists. For an address with a `?` part, put that part after the resource, joined with `&` to an Eclipse addon's own parameters. A `200` with results means Polyfin gets them too; a `401` or `403` shows the addon's reason in its body.
+
+- A library whose addon fails shows nothing in the apps. The log tells each such request as `Browsing failed`, with the addon's name, the catalog and the error, as in `addon=Songs catalog=top error="addon refused the request: HTTP 403 (Unavailable)"`.
 - A music addon whose search fails logs `A music addon could not search`, with its name, and the apps get the other addons' results.
 - **Check**, in **System › Health**, asks for the manifest only: an addon that answers its manifest but refuses its catalogs or searches shows as answering until the apps ask it for them again.
 
