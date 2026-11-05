@@ -62,55 +62,42 @@ function onInput(event: Event) {
 .sound {
   display: inline-flex;
   align-items: center;
-  height: var(--sound-size, 36px);
-  border: 1px solid var(--nuit-line-3);
-  border-radius: var(--nuit-radius-field);
-  background: rgb(8 8 14 / 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--nuit-ink);
+  height: 40px;
+  border-radius: 999px;
+  background: rgb(10 11 22 / 0.62);
+  color: var(--pf-ink);
 }
 
 .toggle {
   display: grid;
   place-items: center;
-  width: calc(var(--sound-size, 36px) - 2px);
+  width: 40px;
   height: 100%;
-  border-radius: var(--nuit-radius-field);
+  border-radius: 50%;
   color: inherit;
   cursor: pointer;
-  transition: background-color 160ms var(--nuit-ease);
+  transition: background-color 0.3s var(--pf-ease);
 }
 
 .toggle:hover {
-  background: rgb(255 255 255 / 0.08);
-}
-
-.toggle:focus-visible,
-.level:focus-visible {
-  outline: 2px solid var(--nuit-link);
-  outline-offset: 2px;
+  background: rgb(10 11 22 / 0.85);
 }
 
 .level {
   -webkit-appearance: none;
   appearance: none;
-  width: var(--sound-slider, 72px);
+  width: 64px;
   height: 20px;
-  margin: 0 12px 0 2px;
+  margin: 0 14px 0 0;
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
 }
 
 .level::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
-  background: linear-gradient(
-    to right,
-    var(--nuit-ink) var(--value),
-    var(--nuit-line-3) var(--value)
-  );
+  background: linear-gradient(to right, var(--pf-ink) var(--value), var(--pf-line-3) var(--value));
 }
 
 .level::-webkit-slider-thumb {
@@ -118,21 +105,21 @@ function onInput(event: Event) {
   appearance: none;
   width: 12px;
   height: 12px;
-  margin-top: -4px;
+  margin-top: -4.5px;
   border-radius: 50%;
-  background: var(--nuit-ink);
+  background: var(--pf-ink);
 }
 
 .level::-moz-range-track {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
-  background: var(--nuit-line-3);
+  background: var(--pf-line-3);
 }
 
 .level::-moz-range-progress {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
-  background: var(--nuit-ink);
+  background: var(--pf-ink);
 }
 
 .level::-moz-range-thumb {
@@ -140,6 +127,13 @@ function onInput(event: Event) {
   height: 12px;
   border: 0;
   border-radius: 50%;
-  background: var(--nuit-ink);
+  background: var(--pf-ink);
+}
+
+/* Phones have their own buttons for the level. */
+@media (max-width: 639px) {
+  .level {
+    display: none;
+  }
 }
 </style>

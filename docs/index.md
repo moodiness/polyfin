@@ -7,7 +7,7 @@ head:
   - - link
     - rel: preload
       as: image
-      href: /polyfin/videos/polyfin-ad.jpg
+      href: /polyfin/posters/northwave.jpg
       fetchpriority: high
 ---
 
