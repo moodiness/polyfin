@@ -2,10 +2,12 @@
 
 This page explains how to install Polyfin with Docker Compose or on Unraid. After installing, continue with [Getting started](getting-started.md).
 
-## Docker or the desktop version
+<a id="docker-or-the-desktop-version"></a>
+
+## Docker or Polyfin Desktop
 
 - Docker, below, runs Polyfin as a server, on a NAS or a computer that stays on, beside a PostgreSQL container: the way for a household that watches from TVs and phones at any hour, and for GPUs given to the container.
-- The desktop version, [Polyfin Desktop](desktop.md), runs it on the computer you have, Windows, macOS or Linux, with no Docker and nothing else to install: its package brings its own database, and downloads FFmpeg at its first start. Each release has an installer for Windows, x64 or arm64, a disk image for macOS, and a `.deb` and an AppImage for Linux (see [Install](desktop.md#install)). An icon in the tray, or the menu bar, starts and stops it, and it runs while the computer is on and you are signed in.
+- [Polyfin Desktop](desktop.md) runs it on the computer you have, Windows, macOS or Linux, with no Docker and nothing else to install: its package brings its own database, and downloads FFmpeg at its first start (see [Install](desktop.md#install) for the packages). An icon in the tray, or the menu bar, starts and stops it, and it runs while the computer is on and you are signed in.
 
 Both run the same server, with the same admin app and apps, and a backup moves from one to the other (see [Moving to Docker and back](desktop.md#moving-to-docker-and-back)).
 
@@ -27,7 +29,7 @@ Both run the same server, with the same admin app and apps, and a backup moves f
    ```
 
 2. Set `POSTGRES_PASSWORD` in `.env`. You can generate one with `openssl rand -hex 24`.
-   Optionally but preferably, also set `POLYFIN_SECRET_KEY` to the output of `openssl rand -base64 32`: Polyfin then encrypts the API keys and tracking tokens it stores (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keep a copy with your database backups; with another key or none, those keys have to be entered again.
+   Optionally but preferably, also set `POLYFIN_SECRET_KEY` to the output of `openssl rand -base64 32`: Polyfin then encrypts the secrets it stores. Keep a copy with your backups (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 3. Start Polyfin:
 
    ```sh
@@ -36,7 +38,7 @@ Both run the same server, with the same admin app and apps, and a backup moves f
 
 4. Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its tables on startup.
 
-Everything else is set in the admin app, under **Settings**. See [Configuration](configuration.md).
+Everything else is set in the admin app, in the sections of **Settings**. See [Configuration](configuration.md).
 
 ### Let apps find Polyfin on the local network
 
@@ -110,7 +112,7 @@ Torrent streams, off by default, go through one route alone (see [Torrents](torr
 
 ### Pin a version
 
-Replace the image's `latest` tag in `compose.yaml` with a release, such as `0.22.0`. `latest` follows stable releases.
+Replace the image's `latest` tag in `compose.yaml` with a release: the version you run now, or a later one. `latest` follows stable releases. An older version than the one that last ran refuses the database, whose tables are newer than its own.
 
 ### Restart from the admin app
 
@@ -129,19 +131,7 @@ Updating the image needs Docker itself: pull the new image and recreate the cont
 
 ### Back up the database
 
-Everything Polyfin keeps, from accounts and watch history to settings, addons and IPTV line-ups, is in its PostgreSQL database. To back it up every day, turn **Back up the database every day** on, under **Settings › Backups**. The backups go to Polyfin's data volume. They are safer on another disk than the database's: mount a folder of the server there, in the `polyfin` service of `compose.yaml`:
-
-```yaml
-    volumes:
-      - polyfin_data:/data
-      - ./backups:/data/backups
-```
-
-Create the folder before starting, writable by the container's user (UID 65532):
-
-```sh
-mkdir backups && sudo chown 65532:65532 backups
-```
+Everything Polyfin keeps is in its PostgreSQL database. To back it up every day, turn **Back up the database every day** on, in **Settings › Backups**. The backups go to Polyfin's data volume, on the same disk as the database: to keep them on another disk, mount a folder of the server at `/data/backups`, writable by UID 65532 (see [Turning backups on](backups.md#turning-backups-on)).
 
 See [Backups](backups.md) for the schedule, the number kept, the destinations they are also sent to (S3-compatible storage, SFTP or WebDAV), and how to restore one from the admin app.
 
@@ -184,7 +174,7 @@ Polyfin reads folders from the many storages rclone reaches through an rclone in
     restart: unless-stopped
 ```
 
-Set `RCLONE_RC_PASSWORD` in `.env`. Publish no port: Polyfin reaches it on the network the services share. Then add the folder under **Sources › Add a source › Folder › rclone remote**, with `http://rclone:5572` as its rclone address, `polyfin` and that password as its user and password, and pick its remote with **List the remotes**. The storage's own credentials stay in rclone's configuration; give the remote read-only credentials where the storage offers them, since anyone with the remote control's password may write through it.
+Add `RCLONE_RC_PASSWORD=<a password>` to `.env`: `.env.example` does not list it. Publish no port: Polyfin reaches it on the network the services share. Then add the folder in **Content › Sources**, with **Add a source**, **Folder** and **rclone remote**, with `http://rclone:5572` as its rclone address, `polyfin` and that password as its user and password, and pick its remote with **List the remotes**. The storage's own credentials stay in rclone's configuration; give the remote read-only credentials where the storage offers them, since anyone with the remote control's password may write through it.
 
 ### Upgrade from an older Compose file
 
@@ -216,9 +206,9 @@ To add the template:
    ```
 
 2. Choose **Polyfin** under **Docker › Add Container › Template**.
-3. Optionally but preferably, fill **Secret key** with the output of `openssl rand -base64 32`, run in Unraid's terminal, so that the keys and tokens Polyfin stores are encrypted. Keep a copy with your backups.
+3. Optionally but preferably, fill **Secret key** with the output of `openssl rand -base64 32`, run in Unraid's terminal, so that the secrets Polyfin stores are encrypted. Keep a copy with your backups (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 
-To back up the database every day, set **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, then turn **Back up the database every day** on in the admin app, under **Settings › Backups**. The container's user, UID 65532, must be able to write to the folder: create it first in Unraid's terminal with `mkdir -p /mnt/user/appdata/polyfin/backups && chown 65532:65532 /mnt/user/appdata/polyfin/backups`. See [Backups](backups.md). Live TV recordings work the same way, with **Recordings folder** and **Record Live TV**, under **Settings › Recordings**. Every other option is set in the admin app, under **Settings**.
+To back up the database every day, set **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, created first and writable by UID 65532, then turn **Back up the database every day** on in **Settings › Backups** (see [Turning backups on](backups.md#turning-backups-on)). Live TV recordings work the same way, with **Recordings folder** and **Record Live TV**, in **Settings › Recordings**. Every other option is set in the admin app, in the sections of **Settings**.
 
 To keep the segments being played, the files being read or the cache on another disk, add a `Path` for each, such as `/mnt/user/polyfin-reading` to `/reading`, created with `chown 65532:65532` as above, then name the container's folder in **Folder for files being read**, **Conversion folder** or **Cache folder**, and restart Polyfin (see [Folders for conversion, files being read and the cache](#folders-for-conversion-files-being-read-and-the-cache)). For a memory folder, add `--tmpfs /conversion:size=4g` to the container's extra parameters, in the advanced view of its template.
 

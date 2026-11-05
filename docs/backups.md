@@ -17,7 +17,7 @@ The Docker image includes `pg_dump` and `pg_restore` from PostgreSQL 18. Without
 
 ## What Polyfin does
 
-Every day, at the hour set under **Settings › Backups › Back up every day at** (4:00 by default, in the server's time zone), the **Back up the database** task runs `pg_dump`. It writes a full copy of the database in `pg_dump`'s custom format to a file named after its start time, such as `polyfin-20261005-040000.dump`.
+Every day, at the hour set in **Back up every day at**, in **Settings › Backups** (4:00 by default, in the server's time zone), the **Back up the database** task runs `pg_dump`. It writes a full copy of the database in `pg_dump`'s custom format to a file named after its start time, such as `polyfin-20261005-040000.dump`.
 
 - The file is written under a hidden temporary name and renamed when it is complete, so a file named like a backup is always a whole one.
 - Only its owner, the container's user, and root can read it: it holds password hashes and the keys of addons and services.
@@ -44,7 +44,7 @@ The key is derived from the passphrase with scrypt (N = 2^17, r = 8, p = 1) and 
 
 ## Destinations
 
-Under **Settings › Backups › Destinations**, **Add a destination** offers three kinds, at most 10 destinations in all:
+In **Settings › Backups**, under **Destinations**, **Add a destination** offers three kinds, at most 10 destinations in all:
 
 - **S3-compatible storage**, such as Amazon S3, Backblaze B2, Cloudflare R2, MinIO or Wasabi: its **Endpoint** (such as `https://s3.eu-west-3.amazonaws.com`, without the bucket), the **Bucket**, a **Folder prefix** (empty for the bucket's root), the **Region** (empty for `us-east-1`; Cloudflare R2 takes `auto`), the **Access key** and the **Secret key**. Polyfin addresses the bucket in the path of the endpoint's address, which every such storage answers.
 - **SFTP**: the **Host**, the **Port** (22 by default), the **User**, a **Password** or a **Private key** (OpenSSH or PEM, without a passphrase), and the **Folder** (empty for the user's home). The server's host key is saved at the first connection, by **Test** or by the first upload, and checked at every connection afterwards: a server offering another key is refused, and its last upload fails saying so. When the server's key changed on purpose, open the destination and press **Forget** next to **Host key**: the key it offers at the next connection is saved. Changing the host or the port forgets it too.
@@ -130,4 +130,4 @@ An encrypted backup restores by hand once decrypted: download it decrypted from 
 
 Polyfin comes back as it was at the time of the backup: the same server identity, so apps reconnect without being set up again, and the same accounts, passwords and settings.
 
-Secrets Polyfin encrypts with `POLYFIN_SECRET_KEY` can be read only with the same key: keep that key with your backups, and set it again before starting Polyfin on a restored database (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+Secrets Polyfin encrypts with `POLYFIN_SECRET_KEY` can be read only with the same key: set it again before starting Polyfin on a restored database (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).

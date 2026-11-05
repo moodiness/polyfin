@@ -1,4 +1,6 @@
-# Desktop version
+<a id="desktop-version"></a>
+
+# Polyfin Desktop
 
 Polyfin Desktop runs Polyfin on the computer you have, Windows, macOS or Linux, without Docker. An icon in the system tray, or in the menu bar on macOS, starts Polyfin in the background and stops it. Everything the Docker image brings comes with it or is set up at its first start: a PostgreSQL 18 database of its own, FFmpeg and ffprobe 9.0, pg_dump and pg_restore for backups, jellyfin-web, and the secret key the stored keys and tokens are encrypted with.
 
@@ -63,7 +65,7 @@ The icon shows whether Polyfin runs: faded while it starts or is stopped. Its me
 | The first line | What Polyfin is doing: starting, downloading FFmpeg or an update, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped. A second line tells about a problem, and opens the log folder, whose `desktop.log` tells why: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
 | Setup code | Shown until the administrator exists: copies the code and opens the admin app |
 | Open the admin app | Opens `http://localhost:8096/admin/` in the browser |
-| Open the web client | Opens jellyfin-web, at `http://localhost:8096/web/` (see [Web client](web-client.md)) |
+| Open the web client | Opens jellyfin-web, the web player, at `http://localhost:8096/web/` (see [Web player](web-client.md)) |
 | Open the log folder | Opens the folder of the logs in a window of the system's file manager, such as Explorer on Windows or Finder on macOS (see [Folders](#folders)) |
 | Copy the secret key | Copies the secret key from the system's key store to the clipboard, to keep with your backups (see [The secret key](#the-secret-key)) |
 | Stop Polyfin, Start Polyfin | Stops Polyfin, then its database, or starts them again, the app staying open |
@@ -115,7 +117,7 @@ The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configurati
 | `log` | The logs: `desktop.log`, the app's; `polyfin.log`, the server's, which **System › Logs** shows too; `postgresql.log`, the database's. Each is renamed with `.1` when it passes 10 MB, at a start |
 | `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another (see [Backups](backups.md)) |
 | `recordings` | The Live TV recordings, unless **Recordings folder** names another (see [Live TV](live-tv.md)) |
-| `cache` | The segments being played, and the guides and picture subtitles being read, emptied at each start, the parts of the files read, kept from one start to the next as **Settings › Playback** says (see [Keeping the files read across restarts](playback.md#keeping-the-files-read-across-restarts)), and the relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
+| `cache` | The work files: segments being played, guides and picture subtitles being read, parts of the files read and relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Data folder](configuration.md#data-folder) and [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
 | `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)) |
 | `updates` | The downloaded update, and while the new version has not answered yet, the copy of the database's folder, `postgresql.previous` (see [Going back to the previous version](#going-back-to-the-previous-version)) |
 | `desktop.json` | The app's choice of Start with the computer |
@@ -137,17 +139,29 @@ When the key store cannot be read at a start, such as a Linux session without a 
 
 ## Updates
 
-While **Check for new versions** is on, under **Settings › General**, Polyfin looks for new releases, as for the Docker image, and for pre-releases too while **Include pre-releases** is on (see [New versions](administration.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system and the release's signed manifest, checks the manifest (see [Signed manifests](#signed-manifests)), and the menu offers to install it. Installing it checks again that the manifest has not expired, downloads the package, checks it against the SHA-256 that both GitHub and the manifest give for it, refusing it otherwise, stops Polyfin and its database, keeps a copy of the database's folder and the previous app (see [Going back to the previous version](#going-back-to-the-previous-version)), then:
+While **Check for new versions** is on, in **Settings › General**, Polyfin looks for new releases, as for the Docker image, and for pre-releases too while **Include pre-releases** is on (see [New versions](administration.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system and the release's signed manifest, checks the manifest (see [Signed manifests](#signed-manifests)), and the menu offers to install it.
 
-- **Windows:** copies the install folder to `Polyfin.old` beside it, opens the installer's window, as a download does, and quits: choose Next to replace the app, and its last page offers to start the new version;
-- **macOS:** replaces the app with the one of the disk image, keeping the previous one as `Polyfin.app.old` beside it, and starts it;
-- **Linux:** replaces the AppImage with the new one, keeping the previous one with `.old` after its name, and starts it, or opens the `.deb` in the system's package installer, which keeps nothing.
+Installing it:
+
+1. checks again that the manifest has not expired;
+2. downloads the package, and checks it against the SHA-256 that both GitHub and the manifest give for it, refusing it otherwise;
+3. stops Polyfin and its database;
+4. keeps a copy of the database's folder and the previous app (see [Going back to the previous version](#going-back-to-the-previous-version));
+5. then, on each system:
+   - **Windows:** copies the install folder to `Polyfin.old` beside it, opens the installer's window, as a download does, and quits: choose Next to replace the app, and its last page offers to start the new version;
+   - **macOS:** replaces the app with the one of the disk image, keeping the previous one as `Polyfin.app.old` beside it, and starts it;
+   - **Linux:** replaces the AppImage with the new one, keeping the previous one with `.old` after its name, and starts it, or opens the `.deb` in the system's package installer, which keeps nothing.
 
 When the package cannot be downloaded, checked or installed, the copy of the database cannot be made, or the installer cannot start, Polyfin runs on as it was: the menu's second line says that the update could not be installed, and the menu offers it again. A release whose manifest is refused is not offered: the app's log, `desktop.log`, tells why.
 
 The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
 
-The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Restart and updates](administration.md#polyfin-desktop-s-update)). It does what the menu item does, through the data folder, which is yours alone: the app writes the update it offers to `desktop-update.json` while the server runs, with the download's progress and whether the last install failed, and the server, asked by an administrator, writes the app's token and the version to `desktop.install`, which the app looks for twice a second. A request left by a crash carries another run's token, and installs nothing; one for a version the app does not offer, or while Polyfin is not running, is ignored. The server knows it runs in the app from `POLYFIN_DESKTOP=1`, which the app sets.
+The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Polyfin Desktop update](administration.md#polyfin-desktop-update)). It does what the menu item does, through the data folder, which is yours alone:
+
+- the app writes the update it offers to `desktop-update.json` while the server runs, with the download's progress and whether the last install failed;
+- the server, asked by an administrator, writes the app's token and the version to `desktop.install`, which the app looks for twice a second.
+
+A request left by a crash carries another run's token, and installs nothing; one for a version the app does not offer, or while Polyfin is not running, is ignored. The server knows it runs in the app from `POLYFIN_DESKTOP=1`, which the app sets.
 
 ### Signed manifests
 
@@ -181,16 +195,16 @@ The database is a PostgreSQL 18 database like the Docker image's, and a backup m
    - to the desktop, write Docker's `POLYFIN_SECRET_KEY` in a file, quit Polyfin Desktop, then run `polyfin-desktop -import-secret-key <file>`, which keeps it in the key store in place of the desktop's own, and start the app again. On macOS the program is `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`.
 3. On the destination, restore the backup with **Restore**, in the **Database backups** panel of **System › Schedule**. Before restoring, the admin app counts the keys and tokens the destination's key cannot read, and asks before going ahead.
 
-Paths do not move with the backup: local folders, the recordings folder and the backups folder name folders of the source. Change them on the destination, under **Sources** and **Settings**.
+Paths do not move with the backup: local folders, the recordings folder and the backups folder name folders of the source. Change them on the destination, in **Content › Sources** and in **Settings › Recordings** and **Settings › Backups**.
 
 ## Moving to the arm64 package on Windows on Arm
 
-Before 0.42.1, Polyfin Desktop ran on Windows on Arm from the x64 package, under Windows' emulation. That install keeps working, but stays x64: its updates are the x64 package's. Its data folder should not go to the arm64 package as it is: its database was made by the x64 package's PostgreSQL, another build with another ICU. The database moves with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back), but on the same computer: the secret key and the paths stay the same, and nothing needs to be imported or changed.
+An install of the x64 package on Windows on Arm runs under Windows' emulation. It keeps working, but stays x64: its updates are the x64 package's. Its data folder should not go to the arm64 package as it is: its database was made by the x64 package's PostgreSQL, another build with another ICU. The database moves with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back), but on the same computer: the secret key and the paths stay the same, and nothing needs to be imported or changed.
 
-1. In the admin app, turn **Back up the database every day** on under **Settings › Backups** if it is off, then press **Back up now** in the **Database backups** panel of **System › Schedule**.
+1. In the admin app, turn **Back up the database every day** on in **Settings › Backups** if it is off, then press **Back up now** in the **Database backups** panel of **System › Schedule**.
 2. Quit Polyfin from its menu, then uninstall it under Settings › Apps › Installed apps. The data folder stays.
 3. Rename the data folder, `%LOCALAPPDATA%\Polyfin`, such as to `Polyfin-x64`.
-4. Install the arm64 package. Polyfin makes a new data folder and database, and finds the secret key it kept in Windows Credential Manager for the data folder's path. Create an administrator with the setup code (see [First start](#first-start)), and turn **Back up the database every day** on under **Settings › Backups**, which a restore needs.
+4. Install the arm64 package. Polyfin makes a new data folder and database, and finds the secret key it kept in Windows Credential Manager for the data folder's path. Create an administrator with the setup code (see [First start](#first-start)), and turn **Back up the database every day** on in **Settings › Backups**, which a restore needs.
 5. Restore the backup with **Restore**, in the **Database backups** panel of **System › Schedule**, sending the file from `Polyfin-x64\backups` (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)). The backup brings back its users, settings and libraries.
 
 Then move the `recordings` folder from `Polyfin-x64` into the new data folder if Live TV recorded there, and the older backups of its `backups` folder if you want to keep them: the restored settings name the same folders as before. Nothing else is needed: the arm64 FFmpeg is downloaded at the first start, and the rest is made again. Start with the computer turns on again once the administrator exists: uncheck it in the menu if you had turned it off. Once Polyfin runs as before, remove `Polyfin-x64`.

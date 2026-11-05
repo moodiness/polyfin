@@ -4,31 +4,52 @@ This page covers Polyfin's admin app: its Home, its System pages (Health, Statis
 
 ## The admin app
 
-The admin app is at `/admin/`. From the [web client](web-client.md), the dashboard link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings. Members open it from the **Polyfin** entry the web client shows them instead of **Dashboard**. Either way, a user signed in to the web client arrives signed in, as that user, and the admin app stays signed in only as long as the web client: signing out of the web client, or signing in there as someone else, signs the admin app out too (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
+The admin app is at `/admin/`. From the [web player](web-client.md), the dashboard link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings. Members open it from the **Polyfin** entry the web player shows them instead of **Dashboard**. Either way, a user signed in to the web player arrives signed in, as that user. The admin app stays signed in only as long as the web player: signing out of the web player, or signing in there as someone else, signs the admin app out too (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
 A bar at the top holds the sections, for administrators:
 
 - **Home** (`/admin/`): what plays now and what needs a look;
-- **Content**: **Sources** (`/admin/sources`), **Libraries** (`/admin/libraries`) and **Live TV** (`/admin/live-tv`);
+- **Content**: **Sources** (`/admin/sources`), **Libraries** (`/admin/libraries`), **Live TV** (`/admin/live-tv`) and **Versions** (`/admin/versions`);
 - **Users** (`/admin/users`);
 - **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
 The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these, the web player first.
 
-When the server serves a web client, the bar has a link to it. Opened from the web client, or inside the Jellyfin apps for Android and iOS, it reads **Back to the web player** and opens it in place, and a phone shows it as a back arrow before the logo. In those apps, Android's **Back** button and the iOS app's **Home** tab lead back to it too. Otherwise it reads **Web player** and opens it in a new tab. See [Back to the web client](web-client.md#back-to-the-web-client).
+When the server serves a web player, the bar has a link to it. Opened from the web player, or inside the Jellyfin apps for Android and iOS, it reads **Back to the web player** and opens it in place, and a phone shows it as a back arrow before the logo. In those apps, Android's **Back** button and the iOS app's **Home** tab lead back to it too. Otherwise it reads **Web player** and opens it in a new tab. See [Back to the web player](web-client.md#back-to-the-web-player).
 
 The admin app is in English, French, German, Spanish, Italian and Brazilian Portuguese. It starts in the first of these the browser prefers, any Portuguese in Brazilian Portuguese, else in English; the language list at the top of the sign-in and setup pages, and **Language** in the account menu, change it for this browser.
 
-**My account** has these sections: **Statistics**, the hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)), **Tracking** (see [Tracking services](tracking.md)), **Continue Watching** and **Hidden titles**, **Track choices**, with **Forget my track choices** (see [Track choices](users.md#track-choices)), **Reminders**, the programmes and series you asked to be reminded of from the web client, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)), **Notifications** (see [Notifications](notifications.md)), with **Remind me before** and **Also show reminders on my apps** under the targets, **Devices**, the apps signed in with the account, **Password**, and **Two-step sign-in**, a code from an authenticator app after the password (see [Two-step sign-in](users.md#two-step-sign-in)). Signing out a device asks first.
+**My account** has these sections:
 
-Signing in to the admin app takes the account's name and password, then, for an account with two-step sign-in, the code of its authenticator app or a recovery code. Administrators can require it of administrators under **Settings › Security**, and turn it off for a user who lost their phone (see [For administrators](users.md#for-administrators)).
+| Section | What it holds |
+|---|---|
+| **Statistics** | The hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)) |
+| **Tracking** | Your tracking services (see [Tracking services](tracking.md)) |
+| **Continue Watching**, **Next Up** and **Hidden titles** | What your apps resume and suggest next, and the titles you hid (see [Continue Watching and Next Up](users.md#continue-watching-and-next-up)) |
+| **Home rows** | Your rows of the web player's home (see [Home rows](users.md#home-rows)) |
+| **Track choices** | Your remembered audio and subtitle choices, with **Forget my track choices** (see [Track choices](users.md#track-choices)) |
+| **Taste profile** | What your recommendations follow (see [Taste profile](users.md#taste-profile)) |
+| **Metadata language** | The language of titles' names and overviews in your apps (see [Metadata language](users.md#metadata-language)) |
+| **Web player theme** | The web player's look on every browser you sign in with (see [Web player theme](users.md#web-player-theme)) |
+| **Audio region** | The region of the audio you prefer (see [Audio region](users.md#audio-region)) |
+| **Sound** | Ways to make your videos louder (see [Louder sound](users.md#louder-sound)) |
+| **Shared links** | The share links you made (see [Share links](users.md#share-links)) |
+| **Reminders** | The programmes and series you asked to be reminded of from the web player, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)) |
+| **Import from another server** | Your watch history from a Jellyfin, Emby or Plex server, or Letterboxd (see [Importing your own watch history](users.md#importing-your-own-watch-history)) |
+| **Import from an app** | Your watch history from an app such as Stremio or Nuvio (see [Importing from an app](users.md#importing-from-an-app)) |
+| **Notifications** | Your notification targets, with **Remind me before** and **Also show reminders on my apps** under them (see [Notifications](notifications.md)) |
+| **Devices** | The apps signed in with the account. Signing out a device asks first. |
+| **Password** | **Change password** |
+| **Two-step sign-in** | A code from an authenticator app after the password (see [Two-step sign-in](users.md#two-step-sign-in)) |
+
+Signing in to the admin app takes the account's name and password, then, for an account with two-step sign-in, the code of its authenticator app or a recovery code. Administrators can require it of administrators in **Settings › Security**, and turn it off for a user who lost their phone (see [For administrators](users.md#for-administrators)).
 
 **Search** (⌘K on a Mac, Ctrl K elsewhere, or `/`) finds pages, settings, users and sources by name, with or without accents. Use the arrows and Enter to open one, Escape to close it.
 
 Addresses from before this layout, such as `/admin/health` or `/admin/settings#settings-tracking`, still open the right page.
 
-**Compared with Jellyfin:**
+**Compared with Jellyfin**
 
 - None of the admin app's pages exist in Jellyfin's API. They use Polyfin's admin API only.
 
@@ -38,14 +59,23 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 
 - a notice when a new version of Polyfin is out, with **Release notes**, and **Update now** while an update tool is set (see [New versions](#new-versions)).
 - **Get started**, until each step of a good setup is done or you dismiss it: see [The Get started card](getting-started.md#the-get-started-card).
-- **Now playing**, updated every 3 seconds. A playback whose app reported nothing for five minutes, as a tab closed while it played, leaves it (see [Playbacks at once](users.md#playbacks-at-once)). For each playback you see the user, the device and the app, the title and the position, and **How it plays**: direct play, remux or conversion. **Details** adds Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes. The source it describes is the version played: when the app names only the title, as jellyfin-web does when it plays a title's first version as it is, the version the app's last PlaybackInfo chose for it; once the play went on from another version because its source failed, that one, named under **Switched version** (see [Carrying a play on](playback.md#carrying-a-play-on)). When the video sent is smaller than the source, **Smaller than the source** tells what limited it: the GPU's 4K, the processor's 1080p, HDR converted by the processor, the user's quality group, **Maximum quality of converted video**, or the bitrate allowed by the app or by the user's **Maximum quality**. See [Size of converted video](transcoding.md#size-of-converted-video). A [converted download](transcoding.md#converted-downloads) shows there too, labeled "Downloading", its bar telling how far the copy is made.
+- **Now playing**, updated every 3 seconds. A playback whose app reported nothing for five minutes, as a tab closed while it played, leaves it (see [Playbacks](statistics.md#playbacks)). For each playback you see:
+  - the user, the device and the app, the title and the position;
+  - **How it plays**: **Direct play**, **Remux** (repackaged without conversion) or **Conversion**;
+  - **Details**: Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes.
+
+  The source it describes is the version played. When the app names only the title, as jellyfin-web does when it plays a title's first version as it is, that is the version the app's last PlaybackInfo chose for it. Once the play went on from another version because its source failed, it is that one, named under **Switched version** (see [Carrying a play on](playback.md#carrying-a-play-on)).
+
+  When the video sent is smaller than the source, **Smaller than the source** tells what limited it: the GPU's 4K, the processor's 1080p, HDR converted by the processor, the user's quality group, **Maximum quality of converted video**, or the bitrate allowed by the app or by the user's **Maximum quality**. See [Size of converted video](transcoding.md#size-of-converted-video). A [converted download](transcoding.md#converted-downloads) shows there too, labeled "Downloading", its bar telling how far the copy is made.
 - **To look at**: the problems Health found, with a link to it.
 - **Server state**: version, database, cache and graphics card.
 - **Recent activity**, the activity log, which you can filter by kind and search. Its list scrolls in its own box and loads older events as you reach its end.
 
 In a window 1280 pixels wide or more, **Home** has two columns: on the left, the notice of a new version, **Get started**, **Now playing**, **To look at** and **Server state**; on the right, **Recent activity** from the top, its list as tall as the window lets it be, at least 420 pixels, so that it shows whole as the page opens. In a narrower window, the sections follow one another in one column, in the same order, **Recent activity** last. The greeting, the version, **Restart** and **Update now** stay across the top.
 
-**Compared with Jellyfin:** Jellyfin's dashboard also puts its activity log in a column beside the server's information, its running tasks and its devices, from 900 pixels wide, with alerts and paths in a third column from 1536 pixels ([index.tsx, lines 109 to 132](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/routes/index.tsx#L109-L132)). Polyfin's playbacks need more width than Jellyfin's devices, hence its wider breakpoint.
+**Compared with Jellyfin**
+
+- Jellyfin's dashboard also puts its activity log in a column beside the server's information, its running tasks and its devices, from 900 pixels wide, with alerts and paths in a third column from 1536 pixels ([index.tsx, lines 109 to 132](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/routes/index.tsx#L109-L132)). Polyfin's playbacks need more width than Jellyfin's devices, hence its wider breakpoint.
 
 ### Bandwidth
 
@@ -68,9 +98,17 @@ A recording made by Polyfin has no source to tell.
 
 Beside the title of **Now playing**, Home shows the server's totals, refreshed every 3 seconds: what every play sends to apps, and what Polyfin receives from sources, a version played on several devices counted once. The bytes sent for each playback are kept in its history: see [Statistics](statistics.md#the-history).
 
-**For app developers:** each playback of `GET /admin/api/sessions` has `bandwidth`, with `sent` and `received` in bytes per second, and `redirected`; and `origin`, with `kind` (`addon`, `torrent`, `localFolder`, `networkShare` or `iptv`), `name` and, for a torrent, `peers`, or null when not known. `GET /admin/api/bandwidth`, for administrators, answers the server's totals: `sent` and `received`, in bytes per second.
+**Compared with Jellyfin**
 
-**Compared with Jellyfin:** Jellyfin's sessions tell the bitrate of a conversion ([TranscodingInfo.cs, lines 37 to 40](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Session/TranscodingInfo.cs#L37-L40)), not what a play moves, nor where its file comes from. Polyfin measures both, and the server's totals.
+- Jellyfin's sessions tell the bitrate of a conversion ([TranscodingInfo.cs, lines 37 to 40](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Session/TranscodingInfo.cs#L37-L40)), not what a play moves, nor where its file comes from. Polyfin measures both, and the server's totals.
+
+<details>
+<summary>For app developers</summary>
+
+- Each playback of `GET /admin/api/sessions` has `bandwidth`, with `sent` and `received` in bytes per second, and `redirected`; and `origin`, with `kind` (`addon`, `torrent`, `localFolder`, `networkShare` or `iptv`), `name` and, for a torrent, `peers`, or null when not known.
+- `GET /admin/api/bandwidth`, for administrators, answers the server's totals: `sent` and `received`, in bytes per second.
+
+</details>
 
 ### Stopping a playback or sending a message
 
@@ -78,7 +116,7 @@ An administrator can stop a playback (**Stop**, which asks first), or show a mes
 
 ## Statistics
 
-**System › Statistics** shows how the server is used, for **7 days**, **30 days**, a **Year** or **All** the history, for everyone or one user: hours watched per user and per day, the data sent to the apps, the most played movies, series and channels, the apps and devices, how videos play (direct play, remux or conversion) and the busiest hours of the week, then the recent playbacks, which **Export CSV** downloads. **Settings › Playback** turns the history off or sets how long it is kept. See [Statistics](statistics.md) for how playbacks are counted, the settings and the API.
+**System › Statistics** shows how the server is used: hours watched, data sent, the most played titles, how videos play and the busiest hours, with **Export CSV**. See [The Statistics page](statistics.md#the-statistics-page).
 
 ## Schedule
 
@@ -95,9 +133,9 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 
 **System › Health** puts problems first, under **Needs attention**, followed there by a new version of Polyfin when one is out (see [New versions](#new-versions)). It then shows:
 
-- **Addons**, from the requests made for apps since start: last answer, last failure and response time. **Check** asks an addon for its manifest once, at most once a minute. For a member's own addon, it reaches only public addresses. An addon whose server asked to wait for its catalog pages shows "asked to slow down (too many requests)" until the wait ends, whatever it answered meanwhile (see [Addons that ask to wait](addons-and-libraries.md#addons-that-ask-to-wait)); `GET /admin/api/health` gives the end of the wait as the addon's `catalogsWaitUntil`, `null` when none runs.
+- **Addons**, from the requests made for apps since start: last answer, last failure and response time. **Check** asks an addon for its manifest once, at most once a minute. For a member's own addon, it reaches only public addresses. An addon whose server asked to wait for its catalog pages shows "asked to slow down (too many requests)" until the wait ends, whatever it answered meanwhile (see [Addons that ask to wait](addons-and-libraries.md#addons-that-ask-to-wait)).
 - **IPTV sources** and **Programme guides**.
-- **Network shares**, when there are some: whether each is **Notified** of its changes by its server, **Polled** by listing its folders again every 2 minutes, or **Not watched**, and why (see [Local folders](local-folders.md#watching-for-changes)).
+- **Network shares**, when there are some: whether each is **Notified** of its changes by its server, **Polled** by listing its folders again, every 2 minutes by default (30 for S3 buckets, as each folder's settings ask), **At scans only**, or **Not watched**, and why (see [Local folders](local-folders.md#watching-for-changes)).
 - Under **Server**:
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
@@ -119,7 +157,7 @@ Local network discovery has two warnings, linked to its settings (see [Local net
 
 HTTPS has four, linked to its settings: a port it cannot listen on, certificate files that cannot be served, a failed attempt with Let's Encrypt, and a certificate that expires within 14 days, an error once it expired (see [HTTPS problems](#https-problems)).
 
-A picture subtitle track that could not be read into text, its language having no Tesseract data, is a warning, one per language, naming the language and the `.traineddata` file to put in the folder `POLYFIN_TESSDATA_DIR` names. While that folder is set and Polyfin carries the language's file in its list, the warning has **Download**, which downloads the file there and checks its SHA-256; otherwise it links to **Turn picture subtitles into text**. It goes away once the file is there, and the tracks waiting for it are then read. A download that fails names why: the folder that cannot be written, the download's error, or a file whose SHA-256 differs, which is not kept; the warning then tells why its last download failed, the automatic one included (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)). **For app developers:** `GET /admin/api/health/problems` lists it as `subtitle_ocr_language`, with `name`, `file`, `download` true when it can be downloaded, and `error`. `POST /admin/api/health/languages/{language}/download`, for administrators, with the language's Tesseract code such as `fin`, answers 204 once the file is kept; 404 `tessdata_unknown_language` for a language Polyfin has no file for; 409 `tessdata_no_folder` without `POLYFIN_TESSDATA_DIR`; 500 `tessdata_folder` for a folder that cannot be written and 502 `tessdata_download` for a download that failed, each with the cause in `detail`; and 502 `tessdata_checksum` for a file whose SHA-256 differs. `/admin/api/settings` holds the automatic download as `subtitleOcrDownload`.
+A picture subtitle track that could not be read into text, its language having no Tesseract data, is a warning, one per language, naming the language and the `.traineddata` file to put in the folder `POLYFIN_TESSDATA_DIR` names. While that folder is set and Polyfin carries the language's file in its list, the warning has **Download**, which downloads the file there and checks its SHA-256; otherwise it links to **Turn picture subtitles into text**. It goes away once the file is there, and the tracks waiting for it are then read. A download that fails names why: the folder that cannot be written, the download's error, or a file whose SHA-256 differs, which is not kept. The warning then tells why its last download failed, the automatic one included (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 
 When every metadata addon of the server has a language, a warning names the first one, with a link to its page: they then describe titles in their language for every user, whatever the user's metadata language. Keep **Language of its descriptions** at **None** on that addon, or on one more metadata addon (see [Languages](addons-and-libraries.md#languages)).
 
@@ -133,21 +171,40 @@ A local folder whose files are left unmatched because no addon of the server des
 
 A copy of the web player's **Custom** theme kept in Polyfin that misses some of its files, as after a backup restored on another system or into another data folder, is a warning with how many are missing, linked to the copy under **Settings › Web player**, while the **Custom** theme is chosen and its texts load the copy. Browsers meanwhile load those files from their original addresses, which needs the internet. **Update the copy** downloads them again and clears it; so does choosing another theme (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)).
 
-In Polyfin Desktop, a return to the previous version, after a new version's server ended 3 times before it answered, is a warning naming the version that did not start, the one put back, and why, as the app's log tells it, linked to the server's version under **Process**. It lasts while a version older than the one that did not start runs, and goes once a newer version answers (see [Going back to the previous version](desktop.md#going-back-to-the-previous-version)). **For app developers:** `GET /admin/api/health/problems` lists it as `desktop_rolled_back`, with `name`, the version that did not start, `previous` and `error`.
+In Polyfin Desktop, a return to the previous version, after a new version's server ended 3 times before it answered, is a warning naming the version that did not start, the one put back, and why, as the app's log tells it, linked to the server's version under **Process**. It lasts while a version older than the one that did not start runs, and goes once a newer version answers (see [Going back to the previous version](desktop.md#going-back-to-the-previous-version)).
 
-A **Conversion folder**, **Folder for files being read** or **Cache folder** that Polyfin could not write into when it started, such as a disk not mounted, is a warning naming the folder, with a link to its setting: the data folder's `cache` holds those files until a start finds the folder writable (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)). **For app developers:** `GET /admin/api/health/problems` lists it as `folder_unwritable`, with `folder` (`conversion`, `reading` or `cache`), `path` and `error`; `/admin/api/settings` holds the folders as `conversionFolder`, `readingFolder` and `cacheFolder`, with `cacheFolderDefault`, and a `PUT` with a folder Polyfin cannot write into answers 400 `invalid_conversion_folder`, `invalid_reading_folder` or `invalid_cache_folder`.
+A **Conversion folder**, **Folder for files being read** or **Cache folder** that Polyfin could not write into when it started, such as a disk not mounted, is a warning naming the folder, with a link to its setting: the data folder's `cache` holds those files until a start finds the folder writable (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)).
 
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
-Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, the SOCKS5 proxy not answering or refusing its user, or the WireGuard server not answering the handshake. While torrents play through such an outage, the error says so instead, as "The SOCKS5 proxy 192.168.1.5:1080 does not answer. The torrents playing go on for up to 60 s; new ones cannot start" (see [Kill switch](torrents.md#kill-switch)); with none playing, it says torrent streams do not play. **For app developers:** `GET /admin/api/health/problems` lists it as `torrent_route`, with `failure` and `name`, and `grace`, the seconds the torrents playing go on for, while they ride the outage out. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).
+Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, the SOCKS5 proxy not answering or refusing its user, or the WireGuard server not answering the handshake. While torrents play through such an outage, the error says so instead, as "The SOCKS5 proxy 192.168.1.5:1080 does not answer. The torrents playing go on for up to 60 s; new ones cannot start" (see [Kill switch](torrents.md#kill-switch)); with none playing, it says torrent streams do not play. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).
 
-A torrent that stopped while it played, its route having given no answer, and its peers no byte, for a minute, is a warning for 15 minutes that tells when and why, as "A torrent stopped while playing at 21:04: the SOCKS5 proxy 192.168.1.5:1080 did not answer". It stays apart from a torrent that did not start in time, which tells of its swarm, and does not show while the route still does not answer: the error above tells it then. A short outage the plays went on through is no problem: it shows under **Torrents** (see [Kill switch](torrents.md#kill-switch)). **For app developers:** `GET /admin/api/health/problems` lists it as `torrent_stopped`, with `at`, `failure` (`proxy_unreachable`, `proxy_refused`, `interface_missing`, `interface_down`, `interface_no_address`, `wireguard_endpoint`, `wireguard_down`, `wireguard_handshake`, or `route` for another failure) and `name`, the interface, proxy or WireGuard server; `GET /admin/api/health` lists the outages in `torrents.outages`, oldest first, each with `at` and `seconds`.
+A torrent that stopped while it played, its route having given no answer, and its peers no byte, for a minute, is a warning for 15 minutes that tells when and why, as "A torrent stopped while playing at 21:04: the SOCKS5 proxy 192.168.1.5:1080 did not answer". It stays apart from a torrent that did not start in time, which tells of its swarm, and does not show while the route still does not answer: the error above tells it then. A short outage the plays went on through is no problem: it shows under **Torrents** (see [Kill switch](torrents.md#kill-switch)).
 
 Health sends no request outside the server, but for the SOCKS5 proxy and the WireGuard server of torrents, checked as their kill switch checks them. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
 
+<details>
+<summary>For app developers</summary>
+
+`GET /admin/api/health/problems` lists:
+
+- a picture subtitle language as `subtitle_ocr_language`, with `name`, `file`, `download` true when it can be downloaded, and `error`;
+- a return to the previous version of Polyfin Desktop as `desktop_rolled_back`, with `name`, the version that did not start, `previous` and `error`;
+- an unwritable folder as `folder_unwritable`, with `folder` (`conversion`, `reading` or `cache`), `path` and `error`;
+- torrent streams that cannot play as `torrent_route`, with `failure` and `name`, and `grace`, the seconds the torrents playing go on for, while they ride the outage out;
+- a torrent that stopped while it played as `torrent_stopped`, with `at`, `failure` (`proxy_unreachable`, `proxy_refused`, `interface_missing`, `interface_down`, `interface_no_address`, `wireguard_endpoint`, `wireguard_down`, `wireguard_handshake`, or `route` for another failure) and `name`, the interface, proxy or WireGuard server.
+
+Also:
+
+- `GET /admin/api/health` gives the end of an addon's wait for its catalog pages as the addon's `catalogsWaitUntil`, `null` when none runs, and lists the torrent outages in `torrents.outages`, oldest first, each with `at` and `seconds`.
+- `POST /admin/api/health/languages/{language}/download`, for administrators, with the language's Tesseract code such as `fin`, answers 204 once the file is kept; 404 `tessdata_unknown_language` for a language Polyfin has no file for; 409 `tessdata_no_folder` without `POLYFIN_TESSDATA_DIR`; 500 `tessdata_folder` for a folder that cannot be written and 502 `tessdata_download` for a download that failed, each with the cause in `detail`; and 502 `tessdata_checksum` for a file whose SHA-256 differs.
+- `/admin/api/settings` holds the automatic download of Tesseract data as `subtitleOcrDownload`, and the folders as `conversionFolder`, `readingFolder` and `cacheFolder`, with `cacheFolderDefault`. A `PUT` with a folder Polyfin cannot write into answers 400 `invalid_conversion_folder`, `invalid_reading_folder` or `invalid_cache_folder`.
+
+</details>
+
 ### Artwork and people
 
-**Artwork**, under **Server** in **System › Health**, tells why images stay blank in apps, without **Detailed log**:
+**Artwork**, under **Server** in **System › Health**, tells why images stay blank in apps, without **Detailed log (to diagnose a problem)**:
 
 - the artwork downloads that failed in the last hour, by kind: **Not found** (`404` or `410`), **Asked to slow down** (`429`, or a `503` with `Retry-After`), **Timed out**, **Server errors** (other `5xx`) and **Other failures**;
 - the servers that failed, by host name, the 10 that failed most, first. No address is shown;
@@ -159,7 +216,13 @@ An hour with failures also logs one INFO line, `Artwork downloads failed in the 
 
 With no key saved, **People** lists what a key brings, as Polyfin bundles none: people's photos and biographies, each title's cast and crew from TMDB in billing order with photos (see [Cast and crew from TMDB](addons-and-libraries.md#cast-and-crew-from-tmdb)), person pages listing every library title they are credited in, the titles TMDB knows each person best for, on their page, beyond the libraries (see [Titles a person is known for](addons-and-libraries.md#titles-a-person-is-known-for)), posters for movies and series whose addon gives none, box sets in Silo's apps (see [Box sets](silo-apps.md#box-sets)) and TMDB images in **Edit images**. Its link opens the key's setting under **Settings › Content**. Jellyfin bundles a key; Polyfin asks the administrator for one (see [Edit images](addons-and-libraries.md#edit-images)).
 
-**For app developers:** `GET /admin/api/health` gives them as `artwork`, with `failed`, `kinds` (`not_found`, `rate_limited`, `timeout`, `server_error`, `other`), `hosts` (`host`, `failed`), `waiting` and `spared` (`host`, `until`); and `people`, with `keySaved`, `found`, `notFound`, `failing`, `waiting`, `limitedAt` (`null` for none) and `limitWait` (seconds, `0` for none).
+<details>
+<summary>For app developers</summary>
+
+- `GET /admin/api/health` gives them as `artwork`, with `failed`, `kinds` (`not_found`, `rate_limited`, `timeout`, `server_error`, `other`), `hosts` (`host`, `failed`), `waiting` and `spared` (`host`, `until`);
+- and `people`, with `keySaved`, `found`, `notFound`, `failing`, `waiting`, `limitedAt` (`null` for none) and `limitWait` (seconds, `0` for none).
+
+</details>
 
 ### Clearing the image cache
 
@@ -174,15 +237,23 @@ It empties:
 
 Each image is downloaded, resized or drawn again at its next request, and the posters of the libraries' first pages are warmed again by the next run of "Read the libraries' first pages", within the hour. An image being downloaded or resized as the cache is cleared is kept once it ends.
 
-It leaves alone the scrubbing thumbnails and chapter images, kept in the database within **Space for images (GB)** under **Settings › Thumbnails**; the images uploaded with **Edit images** or chosen for libraries, kept in the database; the artwork files of local folders, which stay beside their files; the copy of the web player's theme kept under **Settings › Web player**; and which titles each generated image shows.
+It leaves alone the scrubbing thumbnails and chapter images, kept in the database within **Space for images (GB)** in **Settings › Thumbnails (trickplay)**; the images uploaded with **Edit images** or chosen for libraries, kept in the database; the artwork files of local folders, which stay beside their files; the copy of the web player's theme kept in **Settings › Web player**; and which titles each generated image shows.
 
-**Compared with Jellyfin:** Jellyfin's "Clean Cache Directory" task (`DeleteCacheFiles`) runs every 24 hours and deletes the files of its cache folder older than 30 days, its resized images included ([DeleteCacheFileTask.cs, lines 71 to 83](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Emby.Server.Implementations/ScheduledTasks/Tasks/DeleteCacheFileTask.cs#L71-L83)). Polyfin's image cache keeps within 1 GB instead, the least recently used going first, and is emptied whole by hand.
+**Compared with Jellyfin**
 
-**For app developers:** `GET /admin/api/health` gives the cache as `images`: `files` and `used` (bytes) on disk, `limit`, `memoryImages` and `memoryBytes`. `POST /admin/api/health/images/clear`, for administrators, empties it and answers what it freed in the same shape.
+- Jellyfin's "Clean Cache Directory" task (`DeleteCacheFiles`) runs every 24 hours and deletes the files of its cache folder older than 30 days, its resized images included ([DeleteCacheFileTask.cs, lines 71 to 83](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Emby.Server.Implementations/ScheduledTasks/Tasks/DeleteCacheFileTask.cs#L71-L83)). Polyfin's image cache keeps within 1 GB instead, the least recently used going first, and is emptied whole by hand.
+
+<details>
+<summary>For app developers</summary>
+
+- `GET /admin/api/health` gives the cache as `images`: `files` and `used` (bytes) on disk, `limit`, `memoryImages` and `memoryBytes`.
+- `POST /admin/api/health/images/clear`, for administrators, empties it and answers what it freed in the same shape.
+
+</details>
 
 ## New versions
 
-While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub for its latest release a minute after it starts, then once a day. This is the one request Polyfin makes to GitHub for itself:
+While **Check for new versions** is on, in **Settings › General**, Polyfin asks GitHub for its latest release a minute after it starts, then once a day. This is the one request Polyfin makes to GitHub for itself:
 
 - it asks `https://api.github.com/repos/moodiness/polyfin/releases/latest`, which leaves out pre-releases and drafts, or, while **Include pre-releases** is on too, `https://api.github.com/repos/moodiness/polyfin/releases?per_page=20`, the 20 latest releases, of which it takes the newest release and the newest pre-release;
 - it sends nothing but Polyfin's version, in its `User-Agent: Polyfin/<version>` header;
@@ -205,7 +276,9 @@ A development build, whose version is `dev`, asks nothing and never shows a new 
 | **Check for new versions** | **Settings › General** | On | Asks GitHub once a day, and a minute after Polyfin starts, for Polyfin's latest release, and tells administrators about a newer one. Off, GitHub is never asked. |
 | **Include pre-releases** | **Settings › General** | Off | The check, and Polyfin Desktop's updates, consider pre-releases too. Pre-releases are for trying what comes next, and may have bugs. |
 
-**Compared with Jellyfin:** Jellyfin 12.4 has no check for its own new versions: `HasUpdateAvailable` of `/System/Info` is marked obsolete, "This should be handled by the package manager" ([SystemInfo.cs, lines 133 to 135](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/System/SystemInfo.cs#L133-L135)), and never set, so it is always false ([SystemManager.cs, lines 56 to 83](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L56-L83)). Polyfin sets it from its own check, following releases alone unless **Include pre-releases** is on.
+**Compared with Jellyfin**
+
+- Jellyfin 12.4 has no check for its own new versions: `HasUpdateAvailable` of `/System/Info` is marked obsolete, "This should be handled by the package manager" ([SystemInfo.cs, lines 133 to 135](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/System/SystemInfo.cs#L133-L135)), and never set, so it is always false ([SystemManager.cs, lines 56 to 83](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L56-L83)). Polyfin sets it from its own check, following releases alone unless **Include pre-releases** is on.
 
 ## Restart and updates
 
@@ -228,15 +301,17 @@ Each action:
 
 The admin app then waits, and reloads once a new Polyfin answers, which apps reconnect to as well. Sessions are kept in the database: nobody signs in again.
 
-A container does not tell the processes in it its restart policy: only the Docker socket does. So Polyfin cannot know whether it will be started again, unless it runs in Polyfin Desktop or an administrator turns on **Polyfin is started again when it stops**, under **Settings › General**. Until then, **Restart** warns that Polyfin may not come back, and asks to choose **Restart anyway**; the API refuses a restart that does not say so. Without a restart policy, Polyfin stays stopped until it is started on the host, and the admin app says so after 2 minutes.
+A container does not tell the processes in it its restart policy: only the Docker socket does. So Polyfin cannot know whether it will be started again, unless it runs in Polyfin Desktop or an administrator turns on **Polyfin is started again when it stops**, in **Settings › General**. Until then, **Restart** warns that Polyfin may not come back, and asks to choose **Restart anyway**; the API refuses a restart that does not say so. Without a restart policy, Polyfin stays stopped until it is started on the host, and the admin app says so after 2 minutes.
 
-### Polyfin Desktop's update
+<a id="polyfin-desktop-s-update"></a><a id="polyfin-desktops-update"></a>
+
+### Polyfin Desktop update
 
 In Polyfin Desktop, the notice of a new version on **Home** offers **Install Polyfin `<version>`** while the app's menu offers it: a release newer than the server, with a package for the system (see [Updates](desktop.md#updates)). It asks the app to do what its menu item does: download the package and check it against the release's signed manifest, stop Polyfin, install the new version and start it, going back to the previous one when the new one does not start (see [Going back to the previous version](desktop.md#going-back-to-the-previous-version)). The notice shows the download's progress, then the admin app waits for the new version to answer. When the install fails, Polyfin runs on as it was, and the admin app says so. Elsewhere than in Polyfin Desktop, this is never offered.
 
 ### Update now
 
-A container cannot update its own image without the Docker socket. An update tool that you run beside Polyfin can, and many offer an HTTP API that updates the containers it watches when asked. Give its address under **Settings › General**, and **Update now** shows at the top of **Home**, and in the notice of a new version when one is out. Polyfin sends this request, and nothing else:
+A container cannot update its own image without the Docker socket. An update tool that you run beside Polyfin can, and many offer an HTTP API that updates the containers it watches when asked. Give its address in **Settings › General**, and **Update now** shows at the top of **Home**, and in the notice of a new version when one is out. Polyfin sends this request, and nothing else:
 
 - method `POST`, with no body;
 - to the address exactly as given, path and query included, such as `http://updater:8080/v1/update`: match it to your tool's update endpoint;
@@ -251,16 +326,19 @@ The admin app shows what the tool answered, its HTTP status and the start of its
 | **Update tool address** | **Settings › General** | Empty | The update API **Update now** sends its request to. Empty hides **Update now**. |
 | **Update tool token** | **Settings › General** | Empty | The bearer token sent with the request, when the tool asks for one. |
 
-### Compared with Jellyfin
+<a id="compared-with-jellyfin"></a>
 
-Jellyfin's dashboard has "Restart" and "Shut down" buttons, through `POST /System/Restart`, allowed to administrators and to any user on the local network ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L114-L122)), and `POST /System/Shutdown`, to administrators ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L130-L138)). Jellyfin restarts within its own process: it stops its host and starts a new one in a loop ([SystemManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L126-L139), [Program.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Program.cs#L145-L163)). Polyfin differs on purpose:
+**Compared with Jellyfin**
 
-- it exits and lets what runs it start it again, which also recovers a server stuck in a way a restart within the process would not;
-- it has no shutdown;
-- its actions are the admin app's, for administrators only, never for a local address, and each asks for the password or a two-step code again;
-- `/System/Restart` and `/System/Shutdown` are not offered to Jellyfin apps.
+- Jellyfin's dashboard has "Restart" and "Shut down" buttons, through `POST /System/Restart`, allowed to administrators and to any user on the local network ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L114-L122)), and `POST /System/Shutdown`, to administrators ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L130-L138)).
+- Jellyfin restarts within its own process: it stops its host and starts a new one in a loop ([SystemManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L126-L139), [Program.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Program.cs#L145-L163)).
+- Like Jellyfin's dashboard, whose **Restart** sits in red with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)), **Home** shows **Restart**, in red, and the version at its top.
+- Polyfin differs on purpose:
 
-Like Jellyfin's dashboard, whose **Restart** sits in red with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)), **Home** shows **Restart**, in red, and the version at its top.
+  - it exits and lets what runs it start it again, which also recovers a server stuck in a way a restart within the process would not;
+  - it has no shutdown;
+  - its actions are the admin app's, for administrators only, never for a local address, and each asks for the password or a two-step code again;
+  - `/System/Restart` and `/System/Shutdown` are not offered to Jellyfin apps.
 
 ## Local network discovery
 
@@ -275,11 +353,18 @@ Both settings apply at once, without a restart. Turned off, Polyfin frees the po
 | **Answer local network discovery** | **Settings › General** | On | Answers the discovery messages Jellyfin and Emby apps broadcast to UDP port 7359. Off, the port is free. |
 | **Address on the local network** | **Settings › General** | Empty | The address announced, such as `http://192.168.1.10:8096`, as Jellyfin's `PublishedServerUrl`. It is also the `LocalAddress` of `/System/Info/Public`. Empty, the address of the interface that reaches the app is announced. |
 
-**For app developers:** `GET /admin/api/health/problems` lists the warning of a port it cannot listen on as `discovery_port`, with `port`, and the warning of a container's address as `discovery_address`, with `address`, the address announced. `/admin/api/settings` holds the settings as `localDiscovery` and `localAddress`; a `PUT` whose address is not an `http` or `https` URL, or has a user, query or fragment, answers 400 `invalid_local_address`. For tests, `POLYFIN_DISCOVERY_PORT` changes the UDP port, which Jellyfin apps never use.
+<details>
+<summary>For app developers</summary>
+
+- `GET /admin/api/health/problems` lists the warning of a port it cannot listen on as `discovery_port`, with `port`, and the warning of a container's address as `discovery_address`, with `address`, the address announced.
+- `/admin/api/settings` holds the settings as `localDiscovery` and `localAddress`. A `PUT` whose address is not an `http` or `https` URL, or has a user, query or fragment, answers 400 `invalid_local_address`.
+- For tests, `POLYFIN_DISCOVERY_PORT` changes the UDP port, which Jellyfin apps never use.
+
+</details>
 
 ## HTTPS
 
-Polyfin can serve HTTPS itself, without a reverse proxy, on a port of its own next to HTTP. It is set under **Settings › Security**, in its **HTTPS** part, and every change applies at once, without a restart. HTTP keeps `POLYFIN_LISTEN` and keeps working whatever happens to HTTPS: a port HTTPS cannot listen on, files it cannot read and renewals that fail are told in **System › Health**, and never stop Polyfin from starting.
+Polyfin can serve HTTPS itself, without a reverse proxy, on a port of its own next to HTTP. It is set in **Settings › Security**, in its **HTTPS** part, and every change applies at once, without a restart. HTTP keeps `POLYFIN_LISTEN` and keeps working whatever happens to HTTPS: a port HTTPS cannot listen on, files it cannot read and renewals that fail are told in **System › Health**, and never stop Polyfin from starting.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -292,13 +377,15 @@ Polyfin can serve HTTPS itself, without a reverse proxy, on a port of its own ne
 | **I agree to Let's Encrypt's terms of service** | **Settings › Security**, with **Let's Encrypt** | Off | Required: Let's Encrypt issues certificates only once its terms, at [letsencrypt.org/repository](https://letsencrypt.org/repository/), are agreed to. |
 | **Challenge** | **Settings › Security**, with **Let's Encrypt** | HTTP-01 | How Let's Encrypt checks that the names point at the server (see [Let's Encrypt](#let-s-encrypt)). |
 
-The container's user, UID 65532, cannot listen below 1024: to reach Polyfin on the usual ports, 443 for HTTPS and 80 for Let's Encrypt's HTTP-01, forward them to Polyfin's ports on the router, or in the container's `ports`. When 443 reaches the HTTPS port, set **Public address**, under **Settings › Notifications**, to `https://your-host`, without a port: [the redirect](#the-redirect) then goes to 443 rather than to the HTTPS port.
+The container's user, UID 65532, cannot listen below 1024: to reach Polyfin on the usual ports, 443 for HTTPS and 80 for Let's Encrypt's HTTP-01, forward them to Polyfin's ports on the router, or in the container's `ports`. When 443 reaches the HTTPS port, set **Public address**, in **Settings › Notifications**, to `https://your-host`, without a port: [the redirect](#the-redirect) then goes to 443 rather than to the HTTPS port.
 
 ### Certificate files
 
 Mount the folder of the files read-only in the container, and give their paths. Saving checks that both can be read, by user 65532, and that the key belongs to the certificate: files that are missing, unreadable or mismatched are refused, and nothing is saved. Saving other settings with the same files checks nothing.
 
 Polyfin looks at the files every minute, and reads them again when they change: a certificate another tool renews, such as Certbot, acme.sh or a reverse proxy's, is served within a minute, without a restart. While a change cannot be read, missing or mismatched, for instance between the writes of the certificate and of its key, the last good certificate stays in use, and **System › Health** warns.
+
+<a id="let-s-encrypt"></a><a id="lets-encrypt"></a>
 
 ### Let's Encrypt
 
@@ -311,13 +398,13 @@ Each name must point at the server from the internet, and one of two ports must 
 
 Names that resolve only on the local network, and wildcards such as `*.example.org`, need the DNS-01 challenge, which Polyfin does not answer: it would issue certificates without any open port, but needs Polyfin to create a TXT record under `_acme-challenge.<name>`, through each DNS host's own API, with credentials stored encrypted, or through RFC 2136 dynamic updates for the DNS servers that accept them. Meanwhile, obtain such a certificate with another tool that answers DNS-01, such as Certbot, acme.sh or lego, and give its files under **Certificate files**.
 
-With **Let's Encrypt**, while **Public address**, under **Settings › Notifications**, is empty, it offers `https://` and the first host name: without a port, as the internet reaches it once 443 is forwarded to the HTTPS port, and with the HTTPS port when it is not 443. Links in notifications then use HTTPS, and the redirect goes to the port of the address chosen.
+With **Let's Encrypt**, while **Public address**, in **Settings › Notifications**, is empty, it offers `https://` and the first host name: without a port, as the internet reaches it once 443 is forwarded to the HTTPS port, and with the HTTPS port when it is not 443. Links in notifications then use HTTPS, and the redirect goes to the port of the address chosen.
 
 **For tests:** `POLYFIN_ACME_DIRECTORY` names another ACME server, such as Let's Encrypt's staging environment, a private ACME server, or a test server such as Pebble, and `POLYFIN_ACME_CA_FILE` the certificate authorities its HTTPS is trusted with (see [Configuration](configuration.md)).
 
 ### The redirect
 
-While **Redirect HTTP to HTTPS** is on and HTTPS is served, a request from the internet that comes over HTTP gets a 308 to the same path and query on `https://`, the host it asked for and the port the internet reaches HTTPS at: a 308 keeps the method and body, so sign-ins follow it too. That port is the one of **Public address**, under **Settings › Notifications**, when it starts with `https://`, 443 when it names none, such as `https://media.example.org`; otherwise it is the HTTPS port. With the router's 443 forwarded to the HTTPS port, 8920, set **Public address** to `https://your-host`: without it, clients would be sent to port 8920, which the router does not open. These are never redirected:
+While **Redirect HTTP to HTTPS** is on and HTTPS is served, a request from the internet that comes over HTTP gets a 308 to the same path and query on `https://`, the host it asked for and the port the internet reaches HTTPS at. A 308 keeps the method and body, so sign-ins follow it too. That port is the one of **Public address**, in **Settings › Notifications**, when it starts with `https://`, 443 when it names none, such as `https://media.example.org`; otherwise it is the HTTPS port. With the router's 443 forwarded to the HTTPS port, 8920, set **Public address** to `https://your-host`: without it, clients would be sent to port 8920, which the router does not open. These are never redirected:
 
 - requests from the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback, as [Local network discovery](#local-network-discovery) reads them, behind a known proxy the client it names;
 - Let's Encrypt's HTTP-01 checks, under `/.well-known/acme-challenge/`;
@@ -333,15 +420,22 @@ Over HTTPS, the stream addresses Polyfin gives apps start with `https://`, and t
 
 **System › Health** warns, with a link to the setting, of a port HTTPS cannot listen on, used by another program or below 1024, of certificate files that are missing, unreadable or do not belong together, of an attempt with Let's Encrypt that failed, with Let's Encrypt's error, and of a certificate that expires within 14 days; an expired certificate is an error. They reach notification targets as health problems (see [Notifications](notifications.md)).
 
-**For app developers:** `/admin/api/settings` holds the settings as `httpsMode` (`off`, `files` or `letsencrypt`), `httpsPort`, `httpsRedirect`, `httpsCertificate`, `httpsPrivateKey`, `acmeHosts`, `acmeEmail`, `acmeTerms` and `acmeChallenge` (`http-01` or `tls-alpn-01`). A `PUT` with files that cannot be served answers 400 `https_certificate_missing`, `https_private_key_missing`, `https_certificate_unreadable`, `https_private_key_unreadable` or `https_files_mismatch`; Let's Encrypt without a host name answers `invalid_acme_hosts`, and without the terms agreed to `acme_terms_required`. `GET /admin/api/health/problems` lists `https_port`, with `port`, `https_files`, with `failure` (`missing`, `unreadable` or `mismatch`) and `file`, `https_renewal`, with `error`, and `https_expiry`, with `expires`.
+<details>
+<summary>For app developers</summary>
+
+- `/admin/api/settings` holds the settings as `httpsMode` (`off`, `files` or `letsencrypt`), `httpsPort`, `httpsRedirect`, `httpsCertificate`, `httpsPrivateKey`, `acmeHosts`, `acmeEmail`, `acmeTerms` and `acmeChallenge` (`http-01` or `tls-alpn-01`).
+- A `PUT` with files that cannot be served answers 400 `https_certificate_missing`, `https_private_key_missing`, `https_certificate_unreadable`, `https_private_key_unreadable` or `https_files_mismatch`. Let's Encrypt without a host name answers `invalid_acme_hosts`, and without the terms agreed to `acme_terms_required`.
+- `GET /admin/api/health/problems` lists `https_port`, with `port`, `https_files`, with `failure` (`missing`, `unreadable` or `mismatch`) and `file`, `https_renewal`, with `error`, and `https_expiry`, with `expires`.
+
+</details>
 
 ## Identity provider
 
-People can sign in to the admin app and to the web client with an OpenID Connect provider, set under **Settings › Security**, in its **Identity provider** part. Changes apply at once, without a restart. Signing in through it is told in [Signing in with an identity provider](users.md#signing-in-with-an-identity-provider).
+People can sign in to the admin app and to the web player with an OpenID Connect provider, set in **Settings › Security**, in its **Identity provider** part. Changes apply at once, without a restart. Signing in through it is told in [Signing in with an identity provider](users.md#signing-in-with-an-identity-provider).
 
 To set it up:
 
-1. Set **Public address**, under **Settings › Notifications**, to the address people open Polyfin at: the sign-in starts and ends there.
+1. Set **Public address**, in **Settings › Notifications**, to the address people open Polyfin at: the sign-in starts and ends there.
 2. At the provider, register Polyfin as a client, confidential or public, with the **Redirect URI** the part shows, `<public address>/admin/api/provider/callback`, exactly, and the authorization code flow.
 3. Fill in **Issuer** and **Client ID**, and **Client secret** for a confidential client, then save. The sign-in pages show their button once the issuer, the client ID and the public address are set.
 
@@ -359,7 +453,13 @@ To set it up:
 
 Polyfin asks for the scopes `openid`, `profile` and `email`, the last two when the provider lists them or lists no scope. A provider that cannot be reached when someone starts to sign in is logged as a warning, with its issuer, and the browser comes back with an error; a refused ID token is logged with the check it failed, never with the token.
 
-**For app developers:** `/admin/api/settings` holds `providerIssuer`, `providerName`, `providerClientId`, `providerClientSecretSet` (the secret itself is only sent, never answered, empty to remove it), `providerUserClaim`, `providerCreateAccounts`, `providerAdminClaim`, `providerAdminValue`, and `providerRedirectUri`, read-only, empty without a public address. Settings refused answer 400 `invalid_provider`.
+<details>
+<summary>For app developers</summary>
+
+- `/admin/api/settings` holds `providerIssuer`, `providerName`, `providerClientId`, `providerClientSecretSet` (the secret itself is only sent, never answered, empty to remove it), `providerUserClaim`, `providerCreateAccounts`, `providerAdminClaim`, `providerAdminValue`, and `providerRedirectUri`, read-only, empty without a public address.
+- Settings refused answer 400 `invalid_provider`.
+
+</details>
 
 ## Logs
 
@@ -373,7 +473,7 @@ A listing of a library or a collection that takes more than 5 seconds logs "A li
 
 ## Metrics
 
-Polyfin can expose its metrics to Prometheus, in its text format, at `/metrics`. Turn **Expose metrics** on under **Settings › General**: Polyfin then makes the **Metrics token**, shown under it as saved keys are (see [Showing a saved key](#showing-a-saved-key)). Prometheus sends the token as a bearer token with every request.
+Polyfin can expose its metrics to Prometheus, in its text format, at `/metrics`. Turn **Expose metrics** on in **Settings › General**: Polyfin then makes the **Metrics token**, shown under it as saved keys are (see [Showing a saved key](#showing-a-saved-key)). Prometheus sends the token as a bearer token with every request.
 
 - Off, the default, `/metrics` answers 404.
 - Without the token, or with another, it answers 401.
@@ -386,13 +486,13 @@ The metrics name no user, title, address, device or token. Their labels take a f
 |---|---|---|---|
 | `polyfin_playbacks` | gauge | `kind`: `video`, `live_tv`, `music`, `audiobook`; `delivery`: `direct_play`, `remux`, `conversion` | Playbacks under way, as **Home** shows them. |
 | `polyfin_conversions` | gauge | `method`: `nvidia`, `vaapi`, `videotoolbox`, `qsv`, `amf`, `processor` | Conversions under way, of files and channels: those that convert the video. |
-| `polyfin_encoding_failures_total` | counter | `method`: as above, or `copy` for a remux | Remuxes and conversions FFmpeg failed. |
+| `polyfin_encoding_failures_total` | counter | `method`: as above, or `copy` for a repackaging | Repackagings and conversions FFmpeg failed. |
 | `polyfin_segments_total` | counter | `method`: as above | HLS segments made of files. |
 | `polyfin_addon_request_duration_seconds` | histogram | `addon`; `resource`: `manifest`, `catalog`, `meta`, `stream`, `subtitles`, `other`; `outcome`: `success`, `failure` | Requests to addons and how long their answers took. An answer, even "not found", is a success, as on **System › Health**. |
 | `polyfin_imports_total` | counter | `service`: the app (`stremio`, `nuvio`), the tracking service (`trakt`, `simkl`, …) or `letterboxd`; `outcome` | Imports of app connections, of watch histories and of Letterboxd exports. One that could not read the account whole counts as a failure. |
 | `polyfin_tracking_sent_total` | counter | `service`; `outcome` | What was sent to tracking services, such as a title watched, each try counted. |
 | `polyfin_notifications_total` | counter | `target`: `webhook`, `discord`, `ntfy`, `email`, `telegram`, `gotify`, `pushover`; `outcome` | Notifications sent, each try counted. |
-| `polyfin_http_request_duration_seconds` | histogram | `api`: `jellyfin`, `admin` (the admin app and its API), `web` (the web client), `other` (`/healthz`, `/readyz`, `/metrics`); `status`: `1xx` to `5xx` | HTTP requests and how long they took, a stream's until it ended. Requests under `/jellyfin` count as at the root: the web client's as `web`, the rest as `jellyfin`, the admin app and monitoring routes included, since they answer at the root only. |
+| `polyfin_http_request_duration_seconds` | histogram | `api`: `jellyfin`, `admin` (the admin app and its API), `web` (the web player), `other` (`/healthz`, `/readyz`, `/metrics`); `status`: `1xx` to `5xx` | HTTP requests and how long they took, a stream's until it ended. Requests under `/jellyfin` count as at the root: the web player's as `web`, the rest as `jellyfin`, the admin app and monitoring routes included, since they answer at the root only. |
 | `polyfin_scans_running` | gauge | | Scans of local folders under way. |
 | `polyfin_scan_duration_seconds` | histogram | | Scans of local folders and how long they took. |
 | `polyfin_database_connections` | gauge | `state`: `in_use`, `idle`, `max` | Connections to PostgreSQL. |
@@ -415,7 +515,13 @@ scrape_configs:
 
 `credentials: <the token>` puts it in the configuration itself instead. `/healthz` and `/readyz` tell whether Polyfin answers and reaches PostgreSQL (see [Health check](installation.md#health-check)).
 
-**For app developers:** `/admin/api/settings` holds the setting as `metrics`, and `metricsTokenSet` tells whether the token was made; no answer holds the token. `POST /admin/api/settings/secrets/metricsToken/reveal` answers it, and `POST /admin/api/settings/metrics-token` makes a new one and answers the settings.
+<details>
+<summary>For app developers</summary>
+
+- `/admin/api/settings` holds the setting as `metrics`, and `metricsTokenSet` tells whether the token was made; no answer holds the token.
+- `POST /admin/api/settings/secrets/metricsToken/reveal` answers it, and `POST /admin/api/settings/metrics-token` makes a new one and answers the settings.
+
+</details>
 
 ## Settings
 
@@ -424,13 +530,13 @@ scrape_configs:
 - secrets are hidden;
 - the database URL shows its host and database only.
 
-The web client's link, **Back to the web player** or **Web player**, appears when the server serves one (see [The admin app](#the-admin-app)). See [configuration](configuration.md) for the variables and [web client](web-client.md) for **Settings › Web player**.
+The web player's link, **Back to the web player** or **Web player**, appears when the server serves one (see [The admin app](#the-admin-app)). See [configuration](configuration.md) for the variables and [Web player](web-client.md) for **Settings › Web player**.
 
 ## Showing a saved key
 
 Fields that hold a key or a secret hide it. While you type one, an eye button (**Show key**, **Hide key**) shows what you typed. Once saved, the key shows as dots, with its own eye:
 
-- Under **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key**, **Trakt client secret**, **Last.fm shared secret** and **Metrics token**.
+- In **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key**, **Trakt client secret**, **Last.fm shared secret** and **Metrics token**.
 - Under **My account › Tracking**, each user can show their own **MDBList** and **PublicMetaDB** API keys and their **ListenBrainz user token**. Trakt, Simkl and Last.fm hold tokens or session keys rather than keys, which are never shown.
 
 The key is fetched from the server when the eye is clicked, and hidden again on a second click, after a minute, or when you leave the page. Each time, the activity log records who showed which key, never the key itself, and the answer is never cached. A key that cannot be decrypted with `POLYFIN_SECRET_KEY` counts as not saved and cannot be shown.
@@ -447,18 +553,26 @@ The key is fetched from the server when the eye is clicked, and hidden again on 
 - Polyfin stores only a hash of each key, with its app name, creation date and last use. The admin app shows a key once.
 - A key cannot open a WebSocket.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Keys are managed through `/Auth/Keys`.
 - Send the key as the token of the `Authorization` header, or as the `ApiKey` query parameter. `api_key` and `X-Emby-Token` work only with legacy authorization.
 - A user is named with `userId` or `/Users/{id}/…`. Without one, `/Users/Me` answers 400, as in Jellyfin.
 - `/Auth/Keys` lists a key made from a Jellyfin app in full only on the next listing, then its identifier. `DELETE /Auth/Keys/{key}` accepts the identifier as well as the key.
 
+</details>
+
 ### Devices
 
-Administrators get Jellyfin's device list, with custom names. Deleting a device signs out every user on it, and the admin app sessions taken from their web client there (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
+Administrators get Jellyfin's device list, with custom names. Deleting a device signs out every user on it, and the admin app sessions taken from their web player there (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
-**For app developers:** devices are at `/Devices`.
+<details>
+<summary>For app developers</summary>
+
+- Devices are at `/Devices`.
+
+</details>
 
 ### Users from jellyfin-web
 
@@ -473,12 +587,15 @@ See [users](users.md).
 
 Jellyfin apps can read and save the server configuration. It answers Polyfin's server name, language, resume thresholds, Quick Connect and legacy authorization, with Jellyfin's defaults for the rest. Saving applies those fields only, and keeps those left out.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Configuration: `/System/Configuration`.
 - Libraries: `/Library/MediaFolders`.
 - Storage: `/System/Info/Storage` lists the cache folder, the conversion folder's segments as the transcoding folder, and, while recording is on, the recordings folder.
 - The authentication providers are available too.
+
+</details>
 
 ### Activity log
 
@@ -500,25 +617,48 @@ It keeps 30 days. Its last entries show on the admin app's [**Home**](#home), an
 
 The server log is kept in memory. Apps can download its last 5 MB as one file, `polyfin.log`. URLs are reduced to their host, and tokens, keys and passwords are replaced. Logs that apps upload go to the server log, redacted the same way, up to 1 MB each.
 
-**For app developers:**
+<details>
+<summary>For app developers</summary>
 
 - Server log: `/System/Logs`.
 - Uploaded app logs: `/ClientLog/Document`, 1 MB at most.
 
+</details>
+
 ### Scheduled tasks
 
-Jellyfin apps see Polyfin's own jobs and can start and stop them:
+Jellyfin apps see every task of **System › Schedule**, and can start and stop them:
 
-- signing out unused devices, hourly;
-- cleaning the activity log, daily;
-- recording ended accounts in the activity log, hourly;
-- recording expired share links in the activity log, every 10 minutes, and deleting the links that ended more than 30 days ago;
-- fetching the IPTV channel lists, then the Live TV guides due under **Settings › Live TV**. Polyfin looks for due ones every 5 minutes; started by hand, the task fetches every list and guide;
-- refreshing ratings, which asks addons and runs only when started.
+| Task | When it runs on its own |
+|---|---|
+| Sign out unused devices | Every hour, for the apps left unused for the days the settings choose |
+| Clean the activity log | Every day: deletes the entries older than 30 days |
+| Refresh Live TV guides | Polyfin looks every 5 minutes for the IPTV lists and guides due under **Settings › Live TV**. Started by hand, it fetches every list and guide. |
+| Read the libraries' first pages | For the libraries older than **Refresh catalogs after (minutes)** |
+| Read every collection | Every day at the hour set in **Settings › Catalogs**; never by default |
+| Refresh ratings | Only when started: it asks the addons again |
+| Record ended accounts | Every hour |
+| Record expired share links | Every 10 minutes, also deleting the links that ended more than 30 days ago |
+| Scan local folders | Each folder at startup, then every number of hours set in **Settings › Catalogs** |
+| Delete old recordings | For the recordings older than the days the settings keep them |
+| Schedule series recordings | For the new programmes of each series recording |
+| Find commercials in recordings | While **Find commercials in recordings** is on, in **Settings › Recordings** |
+| Back up the database | Every day at the hour set in **Settings › Backups**, while backups are on |
+| Build taste profiles | Every hour |
+| Clean the playback history | For the playbacks older than the days to keep set in **Settings › Playback** |
+| Send the weekly summary | At the day and hour set in **Settings › Notifications** |
+| Send the month in review | On the 1st, at the hour of the weekly summary |
+| Send the year in review | On January 1st, at the hour of the weekly summary |
+| Look for versions of watchlist titles | For each title again after the hours set in **Settings › Catalogs** |
 
-Their schedules cannot be changed.
+Jellyfin apps cannot change these schedules. Some follow the hours and days set in Polyfin's settings, as above.
 
-**For app developers:** tasks are at `/ScheduledTasks`; changing a schedule answers 400.
+<details>
+<summary>For app developers</summary>
+
+- Tasks are at `/ScheduledTasks`, every one listed, none hidden. Changing a schedule answers 400.
+
+</details>
 
 ### Forgotten password
 
