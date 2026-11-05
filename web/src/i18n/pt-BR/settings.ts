@@ -92,9 +92,9 @@ const settings: typeof en = {
         'Desativado por padrão. Reproduzir um torrent o baixa de outros peers e compartilha o que foi baixado enquanto o limite de upload permitir: você responde pelo que este servidor baixa e compartilha. Os usuários também precisam de Pode reproduzir streams de torrent, na página deles em Usuários. Requer uma rota.',
       route: 'Rota',
       routeHelp:
-        'Todo socket de torrent, para peers, trackers e a DHT, passa apenas por aqui. Quando ela está fora do ar, as versões torrent são ignoradas, inclusive durante uma reprodução, e Sistema › Integridade informa o motivo.',
+        'Todo socket de torrent, para peers, trackers e a DHT, passa apenas por aqui. Quando ela está fora do ar, as versões torrent continuam listadas, mas não iniciam: uma reprodução passa por cima delas, e um torrent já em reprodução continua durante uma queda breve. Sistema › Integridade informa o motivo.',
       routeHelpNoInterface:
-        'Todo socket de torrent, para peers, trackers e a DHT, passa apenas por aqui. Este sistema não vincula sockets a uma interface de rede, o que apenas o Linux faz, como no Polyfin Desktop para Windows e macOS: um proxy SOCKS5 ou um túnel WireGuard leva os torrents. Quando ela está fora do ar, as versões torrent são ignoradas, inclusive durante uma reprodução, e Sistema › Integridade informa o motivo.',
+        'Todo socket de torrent, para peers, trackers e a DHT, passa apenas por aqui. Este sistema não vincula sockets a uma interface de rede, o que apenas o Linux faz, como no Polyfin Desktop para Windows e macOS: um proxy SOCKS5 ou um túnel WireGuard leva os torrents. Quando ela está fora do ar, as versões torrent continuam listadas, mas não iniciam: uma reprodução passa por cima delas, e um torrent já em reprodução continua durante uma queda breve. Sistema › Integridade informa o motivo.',
       routes: {
         interface: 'Interface de rede',
         proxy: 'Proxy SOCKS5',

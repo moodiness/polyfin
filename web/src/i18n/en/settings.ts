@@ -91,9 +91,9 @@ const settings = {
         'Off by default. Playing a torrent downloads it from other peers, and shares what was downloaded while the upload limit allows: you answer for what this server downloads and shares. Users also need Can play torrent streams, on their page under Users. Needs a route.',
       route: 'Route',
       routeHelp:
-        'Every torrent socket, for peers, trackers and the DHT, goes this way alone. When it is down, torrent versions are skipped, also during a playback, and System › Health says why.',
+        'Every torrent socket, for peers, trackers and the DHT, goes this way alone. When it is down, torrent versions stay listed but do not start: a play passes over them, and a torrent already playing goes on through a short outage. System › Health says why.',
       routeHelpNoInterface:
-        'Every torrent socket, for peers, trackers and the DHT, goes this way alone. This system binds no socket to a network interface, which only Linux does, as on Polyfin Desktop for Windows and macOS: a SOCKS5 proxy or a WireGuard tunnel carries the torrents. When it is down, torrent versions are skipped, also during a playback, and System › Health says why.',
+        'Every torrent socket, for peers, trackers and the DHT, goes this way alone. This system binds no socket to a network interface, which only Linux does, as on Polyfin Desktop for Windows and macOS: a SOCKS5 proxy or a WireGuard tunnel carries the torrents. When it is down, torrent versions stay listed but do not start: a play passes over them, and a torrent already playing goes on through a short outage. System › Health says why.',
       routes: {
         interface: 'Network interface',
         proxy: 'SOCKS5 proxy',

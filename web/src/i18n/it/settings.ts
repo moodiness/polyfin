@@ -94,9 +94,9 @@ const settings: typeof en = {
         'Disattivato per impostazione predefinita. Riprodurre un torrent lo scarica da altri peer e condivide quanto scaricato finché il limite di upload lo consente: sei tu a rispondere di ciò che questo server scarica e condivide. Gli utenti devono anche avere Può riprodurre stream torrent, nella loro pagina in Utenti. Richiede un percorso.',
       route: 'Percorso',
       routeHelp:
-        'Ogni socket dei torrent, per peer, tracker e DHT, passa solo da qui. Quando non è disponibile, le versioni torrent vengono saltate, anche durante una riproduzione, e Sistema › Stato di salute ne indica il motivo.',
+        'Ogni socket dei torrent, per peer, tracker e DHT, passa solo da qui. Quando non è disponibile, le versioni torrent restano elencate ma non partono: una riproduzione le salta, e un torrent già in riproduzione continua durante una breve interruzione. Sistema › Stato di salute ne indica il motivo.',
       routeHelpNoInterface:
-        'Ogni socket dei torrent, per peer, tracker e DHT, passa solo da qui. Questo sistema non vincola socket a un’interfaccia di rete, cosa che fa solo Linux, come in Polyfin Desktop per Windows e macOS: un proxy SOCKS5 o un tunnel WireGuard trasporta i torrent. Quando non è disponibile, le versioni torrent vengono saltate, anche durante una riproduzione, e Sistema › Stato di salute ne indica il motivo.',
+        'Ogni socket dei torrent, per peer, tracker e DHT, passa solo da qui. Questo sistema non vincola socket a un’interfaccia di rete, cosa che fa solo Linux, come in Polyfin Desktop per Windows e macOS: un proxy SOCKS5 o un tunnel WireGuard trasporta i torrent. Quando non è disponibile, le versioni torrent restano elencate ma non partono: una riproduzione le salta, e un torrent già in riproduzione continua durante una breve interruzione. Sistema › Stato di salute ne indica il motivo.',
       routes: {
         interface: 'Interfaccia di rete',
         proxy: 'Proxy SOCKS5',

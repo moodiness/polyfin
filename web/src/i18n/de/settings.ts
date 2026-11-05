@@ -94,9 +94,9 @@ const settings: typeof en = {
         'Standardmäßig aus. Beim Abspielen wird ein Torrent von anderen Peers heruntergeladen, und das Heruntergeladene wird geteilt, soweit das Upload-Limit es erlaubt: Du bist für das verantwortlich, was dieser Server herunterlädt und teilt. Benutzer brauchen außerdem „Darf Torrent-Streams abspielen“ auf ihrer Seite unter Benutzer. Erfordert eine Route.',
       route: 'Route',
       routeHelp:
-        'Jeder Torrent-Socket, für Peers, Tracker und das DHT, läuft ausschließlich über diesen Weg. Ist er nicht verfügbar, werden Torrent-Versionen übersprungen, auch während einer Wiedergabe, und System › Systemzustand nennt den Grund.',
+        'Jeder Torrent-Socket, für Peers, Tracker und das DHT, läuft ausschließlich über diesen Weg. Ist er nicht verfügbar, bleiben Torrent-Versionen aufgeführt, starten aber nicht: Eine Wiedergabe übergeht sie, und ein bereits laufender Torrent spielt über einen kurzen Ausfall hinweg weiter. System › Systemzustand nennt den Grund.',
       routeHelpNoInterface:
-        'Jeder Torrent-Socket, für Peers, Tracker und das DHT, läuft ausschließlich über diesen Weg. Dieses System bindet keinen Socket an eine Netzwerkschnittstelle (das kann nur Linux), so auch Polyfin Desktop für Windows und macOS: Ein SOCKS5-Proxy oder ein WireGuard-Tunnel trägt die Torrents. Ist er nicht verfügbar, werden Torrent-Versionen übersprungen, auch während einer Wiedergabe, und System › Systemzustand nennt den Grund.',
+        'Jeder Torrent-Socket, für Peers, Tracker und das DHT, läuft ausschließlich über diesen Weg. Dieses System bindet keinen Socket an eine Netzwerkschnittstelle (das kann nur Linux), so auch Polyfin Desktop für Windows und macOS: Ein SOCKS5-Proxy oder ein WireGuard-Tunnel trägt die Torrents. Ist er nicht verfügbar, bleiben Torrent-Versionen aufgeführt, starten aber nicht: Eine Wiedergabe übergeht sie, und ein bereits laufender Torrent spielt über einen kurzen Ausfall hinweg weiter. System › Systemzustand nennt den Grund.',
       routes: {
         interface: 'Netzwerkschnittstelle',
         proxy: 'SOCKS5-Proxy',

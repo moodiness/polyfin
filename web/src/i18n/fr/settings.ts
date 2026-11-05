@@ -94,9 +94,9 @@ const settings: typeof en = {
         'Désactivé par défaut. Lire un torrent le télécharge auprès d’autres pairs, et partage ce qui a été téléchargé tant que la limite d’envoi le permet : vous répondez de ce que ce serveur télécharge et partage. Les utilisateurs ont aussi besoin de Peut lire les flux torrent, sur leur page dans Utilisateurs. Demande une route.',
       route: 'Route',
       routeHelp:
-        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Quand elle ne fonctionne pas, les versions torrent sont ignorées, y compris pendant une lecture, et Système › Santé dit pourquoi.',
+        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Quand elle ne fonctionne pas, les versions torrent restent listées mais ne démarrent pas : une lecture les passe, et un torrent déjà en lecture continue pendant une courte coupure. Système › Santé dit pourquoi.',
       routeHelpNoInterface:
-        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS : un proxy SOCKS5 ou un tunnel WireGuard porte les torrents. Quand la route ne fonctionne pas, les versions torrent sont ignorées, y compris pendant une lecture, et Système › Santé dit pourquoi.',
+        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS : un proxy SOCKS5 ou un tunnel WireGuard porte les torrents. Quand la route ne fonctionne pas, les versions torrent restent listées mais ne démarrent pas : une lecture les passe, et un torrent déjà en lecture continue pendant une courte coupure. Système › Santé dit pourquoi.',
       routes: {
         interface: 'Interface réseau',
         proxy: 'Proxy SOCKS5',

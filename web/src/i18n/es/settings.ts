@@ -94,9 +94,9 @@ const settings: typeof en = {
         'Desactivado de forma predeterminada. Reproducir un torrent lo descarga de otros pares y comparte lo descargado mientras el límite de subida lo permita: usted es responsable de lo que este servidor descarga y comparte. Los usuarios también necesitan Puede reproducir transmisiones torrent, en su página de Usuarios. Requiere una ruta.',
       route: 'Ruta',
       routeHelp:
-        'Todos los sockets de torrent, para pares, trackers y la DHT, salen únicamente por aquí. Cuando no está disponible, se omiten las versiones torrent, también durante una reproducción, y Sistema › Estado del sistema indica el motivo.',
+        'Todos los sockets de torrent, para pares, trackers y la DHT, salen únicamente por aquí. Cuando no está disponible, las versiones torrent siguen en la lista pero no se inician: una reproducción las pasa por alto, y un torrent que ya se reproduce continúa durante una interrupción breve. Sistema › Estado del sistema indica el motivo.',
       routeHelpNoInterface:
-        'Todos los sockets de torrent, para pares, trackers y la DHT, salen únicamente por aquí. Este sistema no vincula sockets a una interfaz de red, algo que solo hace Linux, como ocurre en Polyfin Desktop para Windows y macOS: un proxy SOCKS5 o un túnel WireGuard lleva los torrents. Cuando no está disponible, se omiten las versiones torrent, también durante una reproducción, y Sistema › Estado del sistema indica el motivo.',
+        'Todos los sockets de torrent, para pares, trackers y la DHT, salen únicamente por aquí. Este sistema no vincula sockets a una interfaz de red, algo que solo hace Linux, como ocurre en Polyfin Desktop para Windows y macOS: un proxy SOCKS5 o un túnel WireGuard lleva los torrents. Cuando no está disponible, las versiones torrent siguen en la lista pero no se inician: una reproducción las pasa por alto, y un torrent que ya se reproduce continúa durante una interrupción breve. Sistema › Estado del sistema indica el motivo.',
       routes: { interface: 'Interfaz de red', proxy: 'Proxy SOCKS5', wireguard: 'Túnel WireGuard' },
       interface: 'Interfaz de red para torrents',
       interfaceHelp:
