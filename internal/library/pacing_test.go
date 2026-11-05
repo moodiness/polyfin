@@ -343,12 +343,18 @@ func TestFollowUpsWaitBehindOtherBackgroundRequests(t *testing.T) {
 	p := newPacing(clock.Now)
 	p.after = clock.after
 	const host = "addon.example"
-	for range paceRates[paceStreams].most {
+	// The window fills, and paceAtOnce-1 of its requests stay under way:
+	// once the window ends, the pace lets one more go, and the next only
+	// once that one is done. Were both let go at once, which of them
+	// reached order first would be up to their goroutines, not the pace.
+	for i := range paceRates[paceStreams].most {
 		release, err := p.wait(t.Context(), host, paceStreams, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		release()
+		if i >= paceAtOnce-1 {
+			release()
+		}
 	}
 	queued := func() int {
 		p.mu.Lock()
