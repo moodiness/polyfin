@@ -94,8 +94,10 @@ export function SaveBar({
         shown ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-8 opacity-0',
         // A bar along the bottom of a phone.
         'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-[24px] max-md:py-2 max-md:pr-2 max-md:pl-4',
-        // A card under the section list, or at the end of the form.
-        'md:grid md:grid-cols-[1fr_auto] md:gap-x-2 md:gap-y-3.5 md:px-3.5 md:pt-[18px] md:pb-3.5',
+        // A card under the section list, or at the end of the form, where a hidden card leaves
+        // no gap under the form.
+        'md:grid-cols-[1fr_auto] md:gap-x-2 md:gap-y-3.5 md:px-3.5 md:pt-[18px] md:pb-3.5',
+        docked || shown ? 'md:grid' : 'md:hidden',
         docked
           ? 'md:w-full'
           : 'md:sticky md:bottom-7 md:mt-10 md:ml-auto md:w-max md:min-w-[300px]',

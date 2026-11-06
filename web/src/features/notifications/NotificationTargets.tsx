@@ -224,7 +224,7 @@ function TargetRow({
         )}
       </p>
       {problem !== null && (
-        <Notice tone={status.tone === 'danger' ? 'danger' : 'warn'} className="mt-4">
+        <Notice tone={status.tone === 'danger' ? 'danger' : 'warn'} nested className="mt-4">
           {problem}
         </Notice>
       )}

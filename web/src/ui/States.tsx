@@ -178,6 +178,7 @@ export function Notice({
   children,
   action,
   live = false,
+  nested = false,
   className,
 }: {
   tone?: NoticeTone
@@ -186,6 +187,8 @@ export function Notice({
   action?: ReactNode
   /** Announces it when it appears (`role="status"`, or `alert` for danger). */
   live?: boolean
+  /** Inside a tile that has the s1 fill already (a row): one fill step up, so it stands out. */
+  nested?: boolean
   className?: string
 }) {
   const { bubble, icon: Glyph } = noticeTones[tone]
@@ -193,7 +196,8 @@ export function Notice({
     <div
       role={live ? (tone === 'danger' ? 'alert' : 'status') : undefined}
       className={cx(
-        'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-row bg-s1 py-4 pr-4 pl-5 text-body text-ink',
+        'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-row py-4 pr-4 pl-5 text-body text-ink',
+        nested ? 'bg-s2' : 'bg-s1',
         className,
       )}
     >

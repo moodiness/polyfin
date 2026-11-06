@@ -52,6 +52,8 @@ type Common = {
   /** More under the row, always shown: a warning, a note. */
   children?: ReactNode
   disabled?: boolean
+  /** Inside a tile that has the s1 fill already: one fill step up until lit, so it stands out. */
+  nested?: boolean
   className?: string
 }
 
@@ -133,7 +135,17 @@ export type SettingRowProps<T extends string | number = string> = Common &
  * 8 px apart (`grid grid-cols-[minmax(0,1fr)] gap-2`).
  */
 export function SettingRow<T extends string | number = string>(props: SettingRowProps<T>) {
-  const { anchor, label, detail, help, error, children, disabled = false, className } = props
+  const {
+    anchor,
+    label,
+    detail,
+    help,
+    error,
+    children,
+    disabled = false,
+    nested = false,
+    className,
+  } = props
   const { t } = useI18n()
   const id = useId()
   const labelId = `${id}-label`
@@ -261,7 +273,11 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
       className={cx(
         'min-w-0 scroll-mt-32 rounded-row transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit',
         'data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
-        lit ? 'lit lift [--lift:1.012]' : cx('bg-s1', !disabled && 'hover:bg-s2'),
+        lit
+          ? 'lit lift [--lift:1.012]'
+          : nested
+            ? cx('bg-s2', !disabled && 'hover:bg-s4')
+            : cx('bg-s1', !disabled && 'hover:bg-s2'),
         disabled && 'opacity-60',
         className,
       )}

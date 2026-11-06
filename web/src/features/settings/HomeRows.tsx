@@ -260,40 +260,41 @@ function HomeRowEntry({
           ].join(' · ')}
         </span>
       }
+      // Edit, Delete and Move on the right of the row, as other rows keep their actions, rather
+      // than on a line of their own under it.
       trailing={
-        <MoveButtons
-          name={row.name}
-          index={index}
-          count={rowCount}
-          disabled={moving}
-          onMove={onMove}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2 max-md:gap-1">
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            {text.edit}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
+            {text.delete}
+          </Button>
+          <MoveButtons
+            name={row.name}
+            index={index}
+            count={rowCount}
+            disabled={moving}
+            onMove={onMove}
+          />
+          <ConfirmDialog
+            open={confirming}
+            onClose={() => {
+              setConfirming(false)
+              remove.reset()
+            }}
+            onConfirm={() => remove.mutate()}
+            title={text.deleteTitle(row.name)}
+            confirmLabel={text.delete}
+            tone="danger"
+            busy={remove.isPending}
+            error={remove.isError ? errorMessage(t, remove.error) : undefined}
+          >
+            {text.deleteBody}
+          </ConfirmDialog>
+        </div>
       }
-    >
-      <div className="flex flex-wrap gap-2">
-        <Button variant="ghost" onClick={onEdit}>
-          {text.edit}
-        </Button>
-        <Button variant="ghost" onClick={() => setConfirming(true)}>
-          {text.delete}
-        </Button>
-      </div>
-      <ConfirmDialog
-        open={confirming}
-        onClose={() => {
-          setConfirming(false)
-          remove.reset()
-        }}
-        onConfirm={() => remove.mutate()}
-        title={text.deleteTitle(row.name)}
-        confirmLabel={text.delete}
-        tone="danger"
-        busy={remove.isPending}
-        error={remove.isError ? errorMessage(t, remove.error) : undefined}
-      >
-        {text.deleteBody}
-      </ConfirmDialog>
-    </Row>
+    />
   )
 }
 

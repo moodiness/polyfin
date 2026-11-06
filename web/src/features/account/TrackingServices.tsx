@@ -711,6 +711,7 @@ function HistoryImport({
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <SettingRow
           kind="switch"
+          nested
           label={service.ratings ? text.listsToggle(name) : text.toggle(name)}
           help={(service.ratings ? text.listsToggleHelp : text.toggleHelp)(
             name,
@@ -726,6 +727,7 @@ function HistoryImport({
         {service.watchlist && (
           <SettingRow
             kind="switch"
+            nested
             label={text.watchlist.toggle(name, list)}
             help={text.watchlist.toggleHelp(name, list)}
             checked={service.importWatchlist}
@@ -739,6 +741,7 @@ function HistoryImport({
         {service.ratings && (
           <SettingRow
             kind="switch"
+            nested
             label={text.ratings.toggle}
             help={text.ratings.toggleHelp(name)}
             checked={service.syncRatings}

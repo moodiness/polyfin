@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useBlocker } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, queryClient, queryKeys, saveSettings, type Settings } from '@/api'
@@ -67,6 +67,12 @@ export default function SectionForm({
   const [form, setForm] = useState(initial)
   /** The anchors of the number fields left empty. */
   const [empty, setEmpty] = useState<ReadonlySet<string>>(new Set())
+  /**
+   * The number each well held before its first change since the last save: a well left empty
+   * puts it back in the form, so that it counts as one change, not as an empty well and a changed
+   * value.
+   */
+  const before = useRef(new Map<string, number>())
   const changes = changedCount(form, saved, empty)
   const dirty = changes > 0
 
@@ -76,6 +82,7 @@ export default function SectionForm({
       queryClient.setQueryData(queryKeys.settings, result)
       setSaved(result)
       setForm(result)
+      before.current.clear()
       toast(t.settings.saved, { tone: 'ok' })
       // The server name is part of the public status.
       void queryClient.invalidateQueries({ queryKey: queryKeys.status })
@@ -145,14 +152,17 @@ export default function SectionForm({
         number: (anchor, value, set) => ({
           value: empty.has(anchor) ? null : value,
           onChange: (next) => {
+            if (!before.current.has(anchor)) before.current.set(anchor, value)
             setEmpty((current) => {
               const updated = new Set(current)
               if (next === null) updated.add(anchor)
               else updated.delete(anchor)
               return updated
             })
-            if (next === null) mutation.reset()
-            else set(next)
+            if (next === null) {
+              mutation.reset()
+              set(before.current.get(anchor) ?? value)
+            } else set(next)
           },
         }),
         range: (name, scale) => rangeText(form.bounds[name], language, scale),
@@ -177,6 +187,7 @@ export default function SectionForm({
         onDiscard={() => {
           mutation.reset()
           setEmpty(new Set())
+          before.current.clear()
           setForm(saved)
         }}
         error={failedEntry === undefined ? failureText : undefined}
@@ -198,7 +209,7 @@ export default function SectionForm({
 
 /**
  * How many settings the form changes: each setting that differs from the saved one, and each
- * number well left empty (it keeps its last number in the form).
+ * number well left empty (which puts back the number it held before its first change).
  */
 function changedCount(form: Settings, saved: Settings, empty: ReadonlySet<string>): number {
   let count = empty.size

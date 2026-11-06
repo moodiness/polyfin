@@ -177,7 +177,7 @@ function DestinationRow({
         )}
       </p>
       {(destination.unreadable || destination.error !== '' || destination.problem === 'stale') && (
-        <Notice tone={status.tone === 'warn' ? 'warn' : 'danger'} className="mt-4">
+        <Notice tone={status.tone === 'warn' ? 'warn' : 'danger'} nested className="mt-4">
           {destination.unreadable
             ? text.unreadable
             : destination.error !== ''
