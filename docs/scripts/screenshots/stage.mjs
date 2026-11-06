@@ -64,8 +64,17 @@ export function cleanup() {
   })()
   return cleaning
 }
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => cleanup().then(() => process.exit(130)))
+// With --keep, Ctrl-C or SIGTERM is the way out: it stops everything too, and a second signal
+// leaves at once. A closed terminal's SIGHUP stops everything as well.
+for (const [signal, code] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+  ['SIGHUP', 129],
+]) {
+  process.on(signal, () => {
+    if (cleaning) process.exit(code)
+    cleanup().then(() => process.exit(code))
+  })
 }
 
 /** Runs main, then stops everything, with exit code 1 on an error. */
@@ -78,6 +87,12 @@ export async function run(main) {
   } finally {
     await cleanup()
   }
+  // Everything is stopped, so node ends on its own; should a handle still hold it, it ends
+  // anyway, and says what held it.
+  setTimeout(() => {
+    console.error(`exiting, still held by: ${process.getActiveResourcesInfo().join(', ')}`)
+    process.exit()
+  }, 5000).unref()
 }
 
 export function log(message) {
@@ -86,6 +101,16 @@ export function log(message) {
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Waits for promise, but ms at most, and leaves no timer behind. */
+async function within(promise, ms) {
+  let timer
+  try {
+    await Promise.race([promise, new Promise((resolve) => (timer = setTimeout(resolve, ms)))])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** The date some days from now, as `YYYY-MM-DD`. */
@@ -114,6 +139,10 @@ export async function startStage({ polyfin, chrome, databaseUrl, database, logNa
   const browser = await puppeteer.launch({
     executablePath: chrome,
     headless: true,
+    // The signals are this tool's: Puppeteer's own would end node before the database is dropped.
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
     args: [
       '--lang=en-US',
       '--hide-scrollbars',
@@ -122,7 +151,19 @@ export async function startStage({ polyfin, chrome, databaseUrl, database, logNa
       `--ignore-certificate-errors-spki-list=${certificate.spki}`,
     ],
   })
-  cleanups.push(() => browser.close())
+  cleanups.push(async () => {
+    const chromeProcess = browser.process()
+    await within(browser.close(), 10000)
+    // Chrome's helpers can outlive it holding its output, and node would wait on that output
+    // forever: they go with Chrome's process group, and node lets go of the output.
+    try {
+      process.kill(-chromeProcess.pid, 'SIGKILL')
+    } catch {
+      // The group is gone already.
+    }
+    chromeProcess.stdout?.destroy()
+    chromeProcess.stderr?.destroy()
+  })
 
   log('Drawing the generated pictures')
   const images = await drawPictures(browser)
@@ -349,7 +390,7 @@ async function startPolyfin(polyfin, scratch, databaseUrl, logName) {
   cleanups.push(async () => {
     if (child.exitCode === null) {
       child.kill('SIGTERM')
-      await Promise.race([exited, sleep(10000)])
+      await within(exited, 10000)
       if (child.exitCode === null) child.kill('SIGKILL')
     }
   })
