@@ -22,6 +22,19 @@ const stripMax = 12
 /** Up to this many values, a number opens a strip of them instead of a well. */
 const numberStripMax = 33
 
+/** Whether a pointer is down anywhere: a row losing the focus to a press folds on its release. */
+let pressed = false
+let pressesWatched = false
+
+/** Follows presses on the whole page, once for every row. */
+function watchPresses() {
+  if (pressesWatched) return
+  pressesWatched = true
+  document.addEventListener('pointerdown', () => (pressed = true), true)
+  document.addEventListener('pointerup', () => (pressed = false), true)
+  document.addEventListener('pointercancel', () => (pressed = false), true)
+}
+
 type Common = {
   /** The id of the row: the target of its `#anchor`, which a page may flash (`data-flash`). */
   anchor?: string
@@ -130,8 +143,10 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
   const pickerId = `${id}-picker`
   const head = useRef<HTMLButtonElement>(null)
   const picker = useRef<HTMLDivElement>(null)
+  const row = useRef<HTMLDivElement>(null)
   const [focused, setFocused] = useState(false)
   const [open, setOpen] = useState(false)
+  useEffect(watchPresses, [])
   const lit = focused || open
 
   const { display, was, changed } = describe(props, t)
@@ -169,15 +184,20 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
   function onBlur(event: FocusEvent<HTMLDivElement>) {
     const to = event.relatedTarget
     if (to instanceof Node && event.currentTarget.contains(to)) return
-    setFocused(false)
     // Another control took the focus: the picker closes. A list, popover or dialog it opened
     // keeps it.
-    if (
+    const closes =
       to instanceof Element &&
       !to.closest('[popover], [role="listbox"], [role="dialog"], [role="menu"]')
-    ) {
-      setOpen(false)
+    const fold = () => {
+      if (row.current?.contains(document.activeElement)) return
+      setFocused(false)
+      if (closes) setOpen(false)
     }
+    // A press elsewhere (another row) waits for its release: folding now would move the rows
+    // under the pointer, and the click would land on another one.
+    if (pressed) window.addEventListener('pointerup', () => setTimeout(fold), { once: true })
+    else fold()
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -232,6 +252,7 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
 
   return (
     <div
+      ref={row}
       id={anchor}
       data-lit={lit || undefined}
       onFocus={() => setFocused(true)}
@@ -286,9 +307,10 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
         <span
           id={valueId}
           className={cx(
-            'flex min-w-0 items-baseline justify-end gap-3 text-right text-lead text-ink-2 max-md:gap-2 max-md:text-[17px]',
+            // The value wraps before the label does: it takes 55 % of the row at most.
+            'flex max-w-[55%] min-w-0 flex-wrap items-baseline justify-end gap-x-3 text-right text-lead text-ink-2 max-md:gap-x-2 max-md:text-[17px]',
             props.kind === 'path' &&
-              'figures max-md:order-3 max-md:basis-full max-md:justify-start max-md:text-left',
+              'figures max-md:order-3 max-md:max-w-none max-md:basis-full max-md:justify-start max-md:text-left',
             isSwitch && 'sr-only',
           )}
         >
@@ -448,7 +470,7 @@ function describe<T extends string | number>(
           ) : (
             write(props.value)
           ),
-        was: write(props.saved),
+        was: props.saved === null ? t.ui.notSet : write(props.saved),
         changed: props.saved !== undefined && props.saved !== props.value,
       }
     }

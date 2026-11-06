@@ -1,3 +1,4 @@
+import { FilmStripIcon } from '@phosphor-icons/react'
 import {
   createContext,
   use,
@@ -64,6 +65,8 @@ export function ArtTile({
   title,
   titleAs: Title = 'h3',
   poster,
+  fit = 'cover',
+  fallback,
   backdrop,
   top,
   meta,
@@ -78,8 +81,18 @@ export function ArtTile({
   title: ReactNode
   /** Heading level, so pages keep a correct outline. */
   titleAs?: 'h2' | 'h3'
-  /** The poster's address; without it, the tile has no poster column. */
+  /** The poster's address; without it and without `fallback`, the tile has no poster column. */
   poster?: string
+  /**
+   * `cover` fills the poster's frame, cropping it; `contain` shows the whole art on a dark fill,
+   * for channel logos and square art.
+   */
+  fit?: 'cover' | 'contain'
+  /**
+   * What the poster's frame shows when there is no poster or it fails to load: an initial or a
+   * Phosphor icon. A film strip by default when a poster failed.
+   */
+  fallback?: ReactNode
   /** The backdrop's address; the poster by default. */
   backdrop?: string
   /** The line above the title: who watches, on which device. */
@@ -108,7 +121,16 @@ export function ArtTile({
   })
   const lit = shelf?.lit === id
   const wide = shelf === null || lit || (shelf.lit === null && first)
-  const art = backdrop ?? poster
+  // The addresses that failed to load; a new address is tried again.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set())
+  const posterShown = poster !== undefined && !failed.has(poster) ? poster : undefined
+  const backdropSrc = backdrop ?? poster
+  const art = backdropSrc !== undefined && !failed.has(backdropSrc) ? backdropSrc : undefined
+  const frame = poster !== undefined || fallback !== undefined
+  const frameClass = cx(
+    'aspect-[400/560] rounded-[18px] shadow-[0_24px_48px_-16px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-24 max-md:rounded-[14px]',
+    wide ? 'w-[clamp(150px,22vh,204px)]' : 'w-[clamp(108px,15.5vh,140px)]',
+  )
 
   function light() {
     if (lit) return
@@ -152,7 +174,7 @@ export function ArtTile({
           'transition-[scale,box-shadow,outline-color] duration-500 ease-nuit',
           'after:absolute after:inset-0 after:-z-1 after:bg-[linear-gradient(100deg,rgb(22_20_27/0.35)_0%,rgb(22_20_27/0.72)_42%,rgb(22_20_27/0.82)_100%)]',
           'max-md:gap-x-[18px] max-md:gap-y-4 max-md:rounded-[28px] max-md:p-[18px] max-md:outline-offset-4',
-          poster ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
+          frame ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
           lit
             ? 'outline-focus shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] md:scale-[1.015] motion-reduce:scale-100'
             : 'outline-transparent md:hover:scale-[1.008] motion-reduce:hover:scale-100',
@@ -166,20 +188,34 @@ export function ArtTile({
             aria-hidden="true"
             loading="lazy"
             decoding="async"
+            onError={() => setFailed((old) => new Set(old).add(art))}
             className="absolute -inset-[60px] -z-2 size-[calc(100%+120px)] max-w-none scale-110 object-cover brightness-[0.62] saturate-[1.25] blur-[46px]"
           />
         )}
-        {poster && (
+        {posterShown !== undefined ? (
           <img
-            src={poster}
+            src={posterShown}
             alt=""
             loading="lazy"
             decoding="async"
+            onError={() => setFailed((old) => new Set(old).add(posterShown))}
             className={cx(
-              'aspect-[400/560] rounded-[18px] object-cover shadow-[0_24px_48px_-16px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-24 max-md:rounded-[14px]',
-              wide ? 'w-[clamp(150px,22vh,204px)]' : 'w-[clamp(108px,15.5vh,140px)]',
+              frameClass,
+              fit === 'cover' ? 'object-cover' : 'bg-bg object-contain p-[8%]',
             )}
           />
+        ) : (
+          frame && (
+            <div
+              aria-hidden="true"
+              className={cx(
+                frameClass,
+                'grid place-items-center bg-s2 text-[44px] font-bold text-ink-2 max-md:text-[32px]',
+              )}
+            >
+              {fallback ?? <FilmStripIcon size="1em" />}
+            </div>
+          )
         )}
         <div className="flex min-w-0 flex-col">
           {top !== undefined && (

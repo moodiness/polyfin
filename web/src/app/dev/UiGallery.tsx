@@ -172,6 +172,8 @@ function poster(top: string, bottom: string, word: string) {
 
 const amberRoad = poster('#e6a446', '#4a2412', 'AMBER')
 const nightTrain = poster('#2d6f7a', '#0d1d2a', 'NIGHT')
+/** A square channel logo, for the uncropped art of an ArtTile. */
+const channelLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="40" fill="#2f6fd6"/><text x="100" y="128" text-anchor="middle" font-family="sans-serif" font-size="80" font-weight="700" fill="#fff">TV1</text></svg>')}`
 
 /** The settings of the SettingRow demo, as saved. */
 const savedSettings = {
@@ -182,6 +184,8 @@ const savedSettings = {
   timeout: 90,
   folder: '/data/cache/conversion',
   name: 'Polyfin',
+  grouping: 'provider',
+  cacheSize: null as number | null,
 }
 
 /**
@@ -618,6 +622,31 @@ export default function UiGallery() {
                 />
                 <SettingRow
                   kind="choice"
+                  label="Categories"
+                  help="How the channels are grouped in apps. A long value wraps before the label does."
+                  value={form.grouping}
+                  saved={saved.grouping}
+                  options={[
+                    { value: 'provider', label: 'As the provider groups them' },
+                    { value: 'country', label: 'By country' },
+                    { value: 'none', label: 'In one list' },
+                  ]}
+                  onChange={(grouping) => update({ grouping })}
+                />
+                <SettingRow
+                  kind="number"
+                  label="Cache size"
+                  detail="Saved empty: a change says “was Not set”"
+                  help="From 1 to 500 GB. Empty keeps no limit."
+                  value={form.cacheSize}
+                  saved={saved.cacheSize}
+                  min={1}
+                  max={500}
+                  unit="GB"
+                  onChange={(cacheSize) => update({ cacheSize })}
+                />
+                <SettingRow
+                  kind="choice"
                   label="Default category"
                   detail="More than 12 choices: a list with a search"
                   help="Channels without a category go there."
@@ -801,6 +830,27 @@ export default function UiGallery() {
               >
                 <strong className="block text-[21px] font-bold text-ink">Direct play</strong>
                 Jellyfin Android TV 10.11.0
+              </ArtTile>
+            </ArtShelf>
+          </Specimen>
+          <Specimen name="ArtTile: fit contain (a channel logo), and the fallback of a poster that fails">
+            <ArtShelf label="Live TV now" className="w-full">
+              <ArtTile
+                poster={channelLogo}
+                fit="contain"
+                title="Summit"
+                meta="Channel 1 · Nature"
+                footer={<ProgressBar value={0.5} variant="playback" label="Trail Notes" />}
+              >
+                Trail Notes, until 1:00 PM
+              </ArtTile>
+              <ArtTile
+                poster="/admin/missing-poster.jpg"
+                fallback="D"
+                title="Deep Blue"
+                meta="Channel 2 · Nature"
+              >
+                Ocean Life, until 12:30 PM
               </ArtTile>
             </ArtShelf>
           </Specimen>

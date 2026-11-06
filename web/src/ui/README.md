@@ -27,19 +27,19 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 
 ## Rows, tiles and data
 
-| Need                                                                     | Use                                                                               |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed) |
-| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows                                                     |
-| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                         |
-| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`; `ok`, `warn`, `danger`), or `Avatar` for a person   |
-| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with a halo and its tools         |
-| A problem to look at, with its cause and fix                             | `AlertTile`                                                                       |
-| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                              |
-| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)            |
-| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                         |
-| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                               |
-| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                               |
+| Need                                                                     | Use                                                                                                                                      |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed)                                                        |
+| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows                                                                                                            |
+| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                                                                                |
+| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`; `ok`, `warn`, `danger`), or `Avatar` for a person                                                          |
+| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with a halo and its tools; `fit="contain"` for logos, `fallback` when there is no poster |
+| A problem to look at, with its cause and fix                             | `AlertTile`                                                                                                                              |
+| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                                                                                     |
+| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)                                                                   |
+| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                                                                                |
+| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                                                                                      |
+| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                                                                                      |
 
 ### Setting rows
 

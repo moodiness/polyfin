@@ -12,6 +12,8 @@ export type PageLayoutProps = {
   actions?: ReactNode
   /** A link back to the list a detail page belongs to. Such a page shows no sub-area words. */
   back?: { to: string; label: string }
+  /** The title at the display size of a greeting ("Good afternoon, Morgan"), for Home. */
+  greeting?: boolean
   /**
    * A SectionNav: the page becomes a split, with the section list in a 300 px column and the
    * content beside it. The unsaved dock of a SaveBar docks under the list. On a phone the list
@@ -56,6 +58,7 @@ export function PageLayout({
   lede,
   actions,
   back,
+  greeting,
   nav,
   children,
   className,
@@ -73,6 +76,7 @@ export function PageLayout({
       lede={lede}
       actions={actions}
       back={back}
+      greeting={greeting}
       nav={back === undefined ? subArea?.words : undefined}
     />
   )

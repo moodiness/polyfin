@@ -130,6 +130,8 @@ export function SaveBar({
         icon={CheckIcon}
         loading={saving}
         disabled={!shown}
+        // When the bar wraps on a narrow phone, Save stays at the right.
+        className="max-md:ml-auto"
       >
         {saving ? (savingLabel ?? t.common.saving) : (saveLabel ?? t.common.save)}
       </Button>
