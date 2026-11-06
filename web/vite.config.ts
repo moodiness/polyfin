@@ -14,6 +14,8 @@ export default defineConfig({
       '/admin/api': { target: apiTarget, changeOrigin: false },
       '/healthz': { target: apiTarget, changeOrigin: false },
       '/readyz': { target: apiTarget, changeOrigin: false },
+      // Posters and other artwork the pages show, served by the Jellyfin API.
+      '/Items': { target: apiTarget, changeOrigin: false },
     },
   },
   build: { outDir: 'dist', emptyOutDir: true },
