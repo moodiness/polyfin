@@ -635,6 +635,7 @@ const common = {
     changes: (count: number) => (count === 1 ? '1 change' : `${count} changes`),
     was: (value: string) => `was ${value}`,
     notSet: 'Not set',
+    byDefault: 'Default:',
     ofTotal: (total: number | string) => `of ${total}`,
     cause: 'Cause',
     fix: 'Fix',

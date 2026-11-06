@@ -87,6 +87,10 @@ export type TextSetting = {
   value: string
   onChange: (value: string) => void
   saved?: string
+  /**
+   * The value used while the setting is empty (a default folder or address): shown in the empty
+   * well, and dimmed in the closed row, read "Default: …" by screen readers.
+   */
   placeholder?: string
   maxLength?: number
   inputMode?: 'text' | 'url' | 'email' | 'numeric'
@@ -449,13 +453,28 @@ function describe<T extends string | number>(
       }
     }
     case 'text':
-    case 'path':
+    case 'path': {
+      // Empty means the default when the setting has one: its placeholder, dimmed.
+      const fallback = props.placeholder || undefined
+      const empty = (
+        <span className="text-ink-3">
+          {fallback === undefined ? (
+            t.ui.notSet
+          ) : (
+            <>
+              <span className="sr-only">{t.ui.byDefault} </span>
+              {fallback}
+            </>
+          )}
+        </span>
+      )
+      const emptyWas = fallback === undefined ? t.ui.notSet : `${t.ui.byDefault} ${fallback}`
       return {
-        display:
-          props.value === '' ? <span className="text-ink-3">{t.ui.notSet}</span> : props.value,
-        was: props.saved === '' ? t.ui.notSet : (props.saved ?? ''),
+        display: props.value === '' ? empty : props.value,
+        was: props.saved === '' ? emptyWas : (props.saved ?? ''),
         changed: props.saved !== undefined && props.saved !== props.value,
       }
+    }
     case 'secret': {
       const was = props.saved ? t.ui.secret.saved : t.ui.notSet
       const display =

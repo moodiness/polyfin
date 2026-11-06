@@ -658,6 +658,7 @@ const common: typeof en = {
     changes: (count: number) => (count === 1 ? '1 alteração' : `${count} alterações`),
     was: (value: string) => `antes: ${value}`,
     notSet: 'Não definido',
+    byDefault: 'Padrão:',
     ofTotal: (total: number | string) => `de ${total}`,
     cause: 'Causa',
     fix: 'Solução',
