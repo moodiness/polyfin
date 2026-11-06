@@ -644,6 +644,16 @@ const users = {
     filter: 'Show the users of',
     allGroups: 'All groups',
     noneShown: 'No user here.',
+    sourcesTitle: 'Sources',
+    sourcesHelp:
+      'The server’s sources every member gets, whether they follow the group or keep their own settings. Each change is saved at once in the source’s Used by. Members’ own sources are not listed.',
+    noSources: 'No server source yet.',
+    noSourcesHelp:
+      'Add an addon, an IPTV source or a folder: it can then be given to the group here.',
+    sourceEveryone: 'Used by everyone',
+    changeWhoUses: 'Change who uses it on its page',
+    sourceGiven: (name: string) => `The group gets ${name}.`,
+    sourceTaken: (name: string) => `The group no longer gets ${name}.`,
   },
   resetDefaults: {
     button: 'Reset to defaults',

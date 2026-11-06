@@ -665,6 +665,16 @@ const users: typeof en = {
     filter: 'Afficher les utilisateurs de',
     allGroups: 'Tous les groupes',
     noneShown: 'Aucun utilisateur ici.',
+    sourcesTitle: 'Sources',
+    sourcesHelp:
+      'Les sources du serveur que reçoit chaque membre, qu’il suive le groupe ou garde ses propres réglages. Chaque changement est enregistré tout de suite, dans «\u202FUtilisé par\u202F» sur la page de la source. Les sources propres des membres ne sont pas listées.',
+    noSources: 'Aucune source du serveur pour l’instant.',
+    noSourcesHelp:
+      'Ajoutez un addon, une source IPTV ou un dossier\u202F: il pourra ensuite être donné au groupe ici.',
+    sourceEveryone: 'Utilisée par tout le monde',
+    changeWhoUses: 'Changer qui l’utilise sur sa page',
+    sourceGiven: (name: string) => `Le groupe reçoit ${name}.`,
+    sourceTaken: (name: string) => `Le groupe ne reçoit plus ${name}.`,
   },
   resetDefaults: {
     button: 'Rétablir les réglages par défaut',

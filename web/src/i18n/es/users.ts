@@ -658,6 +658,16 @@ const users: typeof en = {
     filter: 'Mostrar los usuarios de',
     allGroups: 'Todos los grupos',
     noneShown: 'No hay ningún usuario aquí.',
+    sourcesTitle: 'Fuentes',
+    sourcesHelp:
+      'Las fuentes del servidor que recibe cada miembro, siga el grupo o mantenga sus propios ajustes. Cada cambio se guarda al instante en «Usada por» de la fuente. Las fuentes propias de los miembros no aparecen.',
+    noSources: 'Todavía no hay ninguna fuente del servidor.',
+    noSourcesHelp:
+      'Añada una extensión, una fuente IPTV o una carpeta: después podrá darla al grupo aquí.',
+    sourceEveryone: 'Usada por todos',
+    changeWhoUses: 'Cambiar quién la usa en su página',
+    sourceGiven: (name: string) => `El grupo recibe ${name}.`,
+    sourceTaken: (name: string) => `El grupo ya no recibe ${name}.`,
   },
   resetDefaults: {
     button: 'Restablecer los valores predeterminados',

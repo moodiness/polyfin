@@ -2945,6 +2945,13 @@ export const deleteGroup = (id: string) => request<void>('DELETE', `/groups/${se
 export const addGroupMembers = (id: string, userIds: string[]) =>
   request<unknown>('POST', `/groups/${seg(id)}/members`, { userIds })
 
+/**
+ * Gives a group a server source (`uses`), or takes it: the group joins or leaves the source's Used
+ * by, the rest of it unchanged. Answers the source; 409 `used_by_everyone` for one used by everyone.
+ */
+export const setGroupSource = (groupId: string, sourceId: string, uses: boolean) =>
+  request<Addon>(uses ? 'PUT' : 'DELETE', `/groups/${seg(groupId)}/sources/${seg(sourceId)}`)
+
 /** The limits Reset to defaults would give a user or a group: a new user's. */
 export const fetchUserDefaults = (id: string, signal?: AbortSignal) =>
   request<GroupLimits>('GET', `/users/${seg(id)}/defaults`, undefined, signal)

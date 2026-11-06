@@ -89,6 +89,7 @@ const common: typeof en = {
     invalid_server_name: 'Il nome del server deve avere da 1 a 64 caratteri.',
     invalid_language: 'Scegli una lingua dall’elenco.',
     invalid_used_by: 'Un gruppo o un utente selezionato non esiste più. Ricarica la pagina.',
+    used_by_everyone: 'Questa origine ora è usata da tutti: cambia chi la usa nella sua pagina.',
     invalid_audio_region: 'Scegli una regione dall’elenco.',
     invalid_interface_size: 'Scegli una dimensione dall’elenco.',
     invalid_catalog_limit:
