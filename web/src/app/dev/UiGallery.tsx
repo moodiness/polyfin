@@ -522,7 +522,7 @@ export default function UiGallery() {
             <div className="flex w-full max-w-[520px] flex-col gap-4">
               <ProgressBar
                 value={0.3677}
-                variant="brand"
+                variant="playback"
                 label="Dune"
                 valueText="57 minutes of 2 hours 35"
               />

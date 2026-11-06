@@ -33,20 +33,22 @@ export function EmptyState({
   return (
     <div
       className={cx(
-        'flex flex-col items-center rounded-panel border border-dashed border-line-2 px-6 py-10 text-center',
+        'flex flex-col items-center rounded-panel bg-s1 px-8 py-14 text-center max-sm:px-5 max-sm:py-10',
         className,
       )}
     >
       {Glyph && (
-        <span className="mb-4 inline-grid size-10 place-items-center rounded-row border border-line-2 bg-s3 text-ink-2">
-          <Glyph size={18} aria-hidden="true" />
+        <span className="mb-5 inline-grid size-14 place-items-center rounded-full bg-s2 text-ink-2">
+          <Glyph size={28} aria-hidden="true" />
         </span>
       )}
-      <p className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</p>
+      <p className="text-[22px] leading-tight font-[650] tracking-[-0.005em] text-ink max-sm:text-[19px]">
+        {title}
+      </p>
       {children !== undefined && (
-        <p className="mt-1.5 max-w-[52ch] text-small text-ink-2">{children}</p>
+        <p className="mt-2 max-w-[56ch] text-small text-ink-2">{children}</p>
       )}
-      {action && <div className="mt-5">{action}</div>}
+      {action && <div className="mt-6">{action}</div>}
     </div>
   )
 }
@@ -59,7 +61,10 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cx('block animate-pulse rounded-md bg-s3 motion-reduce:animate-none', className)}
+      className={cx(
+        'block animate-pulse rounded-[10px] bg-s2 motion-reduce:animate-none',
+        className,
+      )}
     />
   )
 }
@@ -67,17 +72,17 @@ export function Skeleton({ className }: { className?: string }) {
 /** Lines of text loading; the last is shorter. */
 export function SkeletonText({ lines = 2, className }: { lines?: number; className?: string }) {
   return (
-    <span aria-hidden="true" className={cx('flex flex-col gap-2.5', className)}>
+    <span aria-hidden="true" className={cx('flex flex-col gap-3', className)}>
       {Array.from({ length: lines }, (_, index) => (
-        <Skeleton key={index} className={cx('h-3', index === lines - 1 ? 'w-2/5' : 'w-full')} />
+        <Skeleton key={index} className={cx('h-4', index === lines - 1 ? 'w-2/5' : 'w-full')} />
       ))}
     </span>
   )
 }
 
 /**
- * Rows loading, as a RowList draws them: a tile, a title and a meta line. The list is announced
- * as loading with `label`.
+ * Rows loading, as a RowList draws them: a bubble, a title and a meta line, each row its own fill
+ * 8 px apart. The list is announced as loading with `label`.
  */
 export function SkeletonRows({
   rows = 3,
@@ -87,31 +92,26 @@ export function SkeletonRows({
   rows?: number
   /** Read by screen readers: "Loading sources…". Defaults to the shared "Loading…". */
   label?: string
-  /** Inside a panel, like RowList's `boxed`. */
+  /** Each row on its own fill, like RowList's `boxed`; without, the rows sit on the room. */
   boxed?: boolean
 }) {
   const { t } = useI18n()
   return (
-    <div
-      role="status"
-      aria-label={label ?? t.common.loading}
-      className={cx(boxed && 'rounded-panel border border-line-2 bg-s1')}
-    >
+    <div role="status" aria-label={label ?? t.common.loading} className="flex flex-col gap-2">
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}
           className={cx(
-            'flex items-center gap-3.5 py-4',
-            boxed && 'px-[18px]',
-            index > 0 && 'border-t border-line',
+            'flex min-h-20 items-center gap-4 rounded-row py-3.5',
+            boxed ? 'bg-s1 pr-5.5 pl-7 max-sm:px-5' : 'px-2',
           )}
         >
-          <Skeleton className="size-10 rounded-row" />
-          <span className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-3.5 w-1/3" />
-            <Skeleton className="h-3 w-1/2" />
+          <Skeleton className="size-11 rounded-full" />
+          <span className="flex flex-1 flex-col gap-2.5">
+            <Skeleton className="h-5 w-1/3" />
+            <Skeleton className="h-4 w-1/2" />
           </span>
-          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-4 w-16" />
         </div>
       ))}
     </div>
@@ -139,11 +139,16 @@ export function InlineError({
     <div
       role="alert"
       className={cx(
-        'flex flex-wrap items-center gap-3 rounded-row border border-danger/25 bg-danger/8 px-4 py-3 text-control text-ink',
+        'flex flex-wrap items-center gap-4 rounded-row bg-s1 py-4 pr-4 pl-5 text-body text-ink',
         className,
       )}
     >
-      <WarningCircleIcon size={18} aria-hidden="true" className="shrink-0 text-danger" />
+      <span
+        aria-hidden="true"
+        className="inline-grid size-11 shrink-0 place-items-center rounded-full bg-danger/14 text-danger"
+      >
+        <WarningCircleIcon size={22} />
+      </span>
       <p className="min-w-0 flex-1">{children}</p>
       {onRetry && (
         <Button size="sm" onClick={onRetry} loading={retrying}>
@@ -156,15 +161,15 @@ export function InlineError({
 
 export type NoticeTone = 'info' | 'ok' | 'warn' | 'danger'
 
-const noticeTones: Record<NoticeTone, { box: string; icon: Icon; color: string }> = {
-  info: { box: 'border-line-2 bg-s2', icon: InfoIcon, color: 'text-link' },
-  ok: { box: 'border-ok/20 bg-ok/8', icon: CheckCircleIcon, color: 'text-ok' },
-  warn: { box: 'border-warn/18 bg-warn/10', icon: WarningIcon, color: 'text-warn' },
-  danger: { box: 'border-danger/25 bg-danger/8', icon: WarningCircleIcon, color: 'text-danger' },
+const noticeTones: Record<NoticeTone, { bubble: string; icon: Icon }> = {
+  info: { bubble: 'bg-link/14 text-link', icon: InfoIcon },
+  ok: { bubble: 'bg-ok/14 text-ok', icon: CheckCircleIcon },
+  warn: { bubble: 'bg-warn/14 text-warn', icon: WarningIcon },
+  danger: { bubble: 'bg-danger/14 text-danger', icon: WarningCircleIcon },
 }
 
 /**
- * A note inside a page or panel: a problem to look at ("8 channels out of 10 have no guide. Open
+ * A note inside a page or panel, as a fill with the tone's icon on a tinted bubble: a problem to look at ("8 channels out of 10 have no guide. Open
  * the mapping"), a confirmation, a tip. For a failed load use InlineError, for a passing
  * confirmation a Toast.
  */
@@ -183,18 +188,25 @@ export function Notice({
   live?: boolean
   className?: string
 }) {
-  const { box, icon: Glyph, color } = noticeTones[tone]
+  const { bubble, icon: Glyph } = noticeTones[tone]
   return (
     <div
       role={live ? (tone === 'danger' ? 'alert' : 'status') : undefined}
       className={cx(
-        'flex items-start gap-3 rounded-row border px-3.5 py-3 text-control text-ink',
-        box,
+        'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-row bg-s1 py-4 pr-4 pl-5 text-body text-ink',
         className,
       )}
     >
-      <Glyph size={18} aria-hidden="true" className={cx('mt-px shrink-0', color)} />
-      <div className="min-w-0 flex-1">{children}</div>
+      <span
+        aria-hidden="true"
+        className={cx(
+          'inline-grid size-11 shrink-0 place-items-center self-start rounded-full',
+          bubble,
+        )}
+      >
+        <Glyph size={22} />
+      </span>
+      <div className="min-w-0 flex-1 basis-48 self-center">{children}</div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
   )

@@ -1,19 +1,18 @@
 import { useState } from 'react'
 import { cx } from './cx'
 
-export type ProgressVariant = 'accent' | 'brand' | 'neutral' | 'warn' | 'danger'
+export type ProgressVariant = 'accent' | 'playback' | 'neutral' | 'warn' | 'danger'
 
 const fills: Record<ProgressVariant, string> = {
   accent: 'bg-accent',
-  // The brand gradient, with its glow: playback progress only.
-  brand: 'bg-brand shadow-[0_0_12px] shadow-brand-4/45',
+  playback: 'bg-focus',
   neutral: 'bg-ink-2',
   warn: 'bg-warn',
   danger: 'bg-danger',
 }
 
 /**
- * A bar showing how far something is: playback (`brand`, the only place for the gradient), a
+ * A thick, flat bar showing how far something is: playback (`playback`, pale as the lit state), a
  * disk or cache filling (`neutral`, `warn` when nearly full), a task running (`accent`).
  */
 export function ProgressBar({
@@ -32,7 +31,7 @@ export function ProgressBar({
   /** The value in words: "57 minutes of 2 hours 35". Defaults to a percentage. */
   valueText?: string
   variant?: ProgressVariant
-  /** `sm` 3 px (inline figures), `md` 4 px (playback), `lg` 6 px (meters). */
+  /** `sm` 6 px (inline figures), `md` 8 px (playback), `lg` 10 px (meters). */
   size?: 'sm' | 'md' | 'lg'
   /** Moves linearly over a second, for a value updated every second (playback). */
   live?: boolean
@@ -49,8 +48,8 @@ export function ProgressBar({
       aria-valuenow={percent}
       aria-valuetext={valueText}
       className={cx(
-        'relative overflow-hidden rounded-full bg-ink/12',
-        size === 'sm' ? 'h-[3px]' : size === 'md' ? 'h-1' : 'h-1.5',
+        'relative overflow-hidden rounded-full bg-ink/20',
+        size === 'sm' ? 'h-1.5' : size === 'md' ? 'h-2' : 'h-2.5',
         className,
       )}
     >
@@ -69,7 +68,7 @@ export function ProgressBar({
 }
 
 /**
- * A user's profile picture, or their initial in a rounded square when they have none or it fails
+ * A user's profile picture, or their initial on a periwinkle disc when they have none or it fails
  * to load: the account button, a member in a row, who is playing. Decorative by default, as the
  * name is written beside it; give `label` when it stands alone.
  */
@@ -83,8 +82,11 @@ export function Avatar({
   name: string
   /** The address of the profile picture (`userImageUrl`); the initial stands in without one. */
   image?: string
-  /** `sm` 22 px (inline, in rows), `md` 28 px (top bar), `lg` 40 px (a user's page). */
-  size?: 'sm' | 'md' | 'lg'
+  /**
+   * `sm` 32 px (inline, who is playing), `md` 44 px (the account button, a menu), `lg` 56 px (at
+   * the start of a row), `xl` 96 px (a person's page).
+   */
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   label?: string
   className?: string
 }) {
@@ -92,10 +94,11 @@ export function Avatar({
   const [failed, setFailed] = useState<string | undefined>(undefined)
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? '?'
   const box = cx(
-    'shrink-0 border border-line-2',
-    size === 'sm' && 'size-[22px] rounded-[7px] text-[11px]',
-    size === 'md' && 'size-7 rounded-[9px] text-[12.5px]',
-    size === 'lg' && 'size-10 rounded-row text-[15px]',
+    'shrink-0 rounded-full',
+    size === 'sm' && 'size-8 text-[15px]',
+    size === 'md' && 'size-11 text-[19px]',
+    size === 'lg' && 'size-14 text-[23px]',
+    size === 'xl' && 'size-24 text-[40px]',
     className,
   )
   if (image !== undefined && failed !== image) {
@@ -113,7 +116,7 @@ export function Avatar({
       role={label ? 'img' : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      className={cx(box, 'inline-grid place-items-center bg-s4 font-semibold text-ink')}
+      className={cx(box, 'inline-grid place-items-center bg-accent font-bold text-on-accent')}
     >
       {initial}
     </span>

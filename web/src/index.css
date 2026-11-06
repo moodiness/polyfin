@@ -1,96 +1,141 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/geist';
+@import '@fontsource-variable/figtree';
 @import '@fontsource-variable/geist-mono';
 
 /*
- * « Nuit » design tokens. Pages use them through Tailwind classes (`bg-s1`, `text-ink-2`,
- * `border-line-2`, `rounded-panel`, `shadow-pop`, `text-h1`…) and never raw colors.
+ * « Salon » design tokens, under the « Nuit » names. Pages use them through Tailwind classes
+ * (`bg-s1`, `text-ink-2`, `rounded-panel`, `bg-raised`, `text-h1`…) and never raw colors.
  */
 @theme {
-  /* Backgrounds: the brand night, then tinted surfaces. */
-  --color-bg: #08080e;
-  --color-s1: #0d0d15; /* panels */
-  --color-s2: #12121c; /* fields, hovered rows */
-  --color-s3: #191925; /* selected, secondary buttons */
-  --color-s4: #232331; /* pressed, switch off */
+  /* The room: warm graphite. Its glow and grain are drawn on `body` (see the base layer). */
+  --color-bg: #151419;
+  --color-room: #1c1a21;
 
-  /* Hairlines: bluish white at 7, 11 and 17 %. */
-  --color-line: rgb(236 236 255 / 0.07);
-  --color-line-2: rgb(236 236 255 / 0.11);
-  --color-line-3: rgb(236 236 255 / 0.17);
+  /* Surfaces are fills, never boxed: tiles, rows and panels; hovered rows, fields and the current
+     section; quiet buttons; hovered buttons and a switch that is off. `s1-solid` is `s1` over the
+     room, for what must not let anything through (art tiles). */
+  --color-s1: rgb(255 255 255 / 0.055);
+  --color-s1-solid: #29262f;
+  --color-s2: rgb(255 255 255 / 0.09);
+  --color-s3: rgb(255 255 255 / 0.1);
+  --color-s4: rgb(255 255 255 / 0.16);
+  /* The raised glass: menus, the select's list, dialogs, tooltips and toasts (see `raised`). */
+  --color-raised: rgb(48 45 56 / 0.92);
 
-  /* Text, strongest first. All pass AA on every surface. */
-  --color-ink: #ededf5;
-  --color-ink-2: #a6a6ba;
-  --color-ink-3: #80809a;
+  /* Salon draws no hairlines. These soft lines remain only where a split must show: a panel's
+     foot, a table's rows. */
+  --color-line: rgb(255 255 255 / 0.06);
+  --color-line-2: rgb(255 255 255 / 0.08);
+  --color-line-3: rgb(255 255 255 / 0.14);
 
-  /* The only accent (white text on it), its pressed state, and links and the focus ring. */
+  /* Text, strongest first: 15.5, 8.9 and 6.3 to 1 on the room, at least 5.4 on any tile. */
+  --color-ink: #f4f2f7;
+  --color-ink-2: rgb(244 242 247 / 0.74);
+  --color-ink-3: rgb(244 242 247 / 0.6);
+
+  /* The lit state: what is under the keyboard, the mouse or the remote (see `lit`). Text on it,
+     15.1 to 1, and its muted text, 7.5 to 1. */
+  --color-focus: #f1eff8;
+  --color-on-focus: #1c1a21;
+  --color-on-focus-2: #4e4a58;
+
+  /* The periwinkle of the logo, white on it (4.6 to 1), hovered and pressed. */
   --color-accent: #5b63f6;
+  --color-accent-hover: #6970ff;
   --color-accent-press: #4f57ec;
-  --color-link: #9aa0ff;
+  --color-on-accent: #fff;
+  /* Links, the changed-row mark and value; `link-lit` on a lit surface (6.1 to 1). */
+  --color-link: #9ea4ff;
   --color-link-hover: #c3c6ff;
+  --color-link-lit: #4c3fd9;
   /* Behind dialogs and the palette. */
-  --color-scrim: rgb(4 4 10 / 0.62);
+  --color-scrim: rgb(10 9 13 / 0.62);
 
-  /* States: always shown with an icon and a word. */
-  --color-ok: #5cc79d;
-  --color-warn: #e9b86c;
-  --color-danger: #f27d74;
+  /* States: always an icon and a word, over a 14 % tinted bubble (`bg-ok/14`…). The `-lit`
+     variants are for a lit surface, where `lit` swaps them in by itself. */
+  --color-ok: #7fe0b0;
+  --color-warn: #f3c46e;
+  --color-danger: #ff958c;
+  --color-ok-lit: #12663f;
+  --color-warn-lit: #7a5200;
+  --color-danger-lit: #b42d22;
 
-  /* The brand gradient stops: the logo and playback progress only (see `bg-brand`). */
-  --color-brand-1: #6d4aff;
-  --color-brand-2: #4c3fd9;
-  --color-brand-3: #5b63f6;
-  --color-brand-4: #3e8ef7;
-  --color-brand-5: #22d3ee;
-
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Figtree, one family, for everything; a monospace only for code, paths, keys and logs. */
+  --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  /* Type scale: 30 / 22 / 16 / 15 / 14 / 13 / 12, plus 13.5 for controls as in the mockup. */
-  --text-h1: 30px;
-  --text-h1--line-height: 1.15;
-  --text-h1--letter-spacing: -0.025em;
-  --text-h1--font-weight: 600;
-  --text-h2: 22px;
-  --text-h2--line-height: 1.25;
-  --text-h2--letter-spacing: -0.02em;
-  --text-h2--font-weight: 600;
-  --text-h3: 16px;
-  --text-h3--line-height: 1.35;
-  --text-h3--letter-spacing: -0.01em;
+  /* An 8 px grid, in steps of 4. */
+  --spacing: 4px;
+
+  /*
+   * Type. The « Nuit » names hold the Salon steps: `h1` a page title (48), `h2` a shelf title
+   * (27), `h3` a row label (21), `lead` values and ledes (20), `body` (19), `control` buttons and
+   * fields (18), `small` help and secondary text (17), `micro` captions and times (15.5). Salon
+   * adds `display` for greetings (56), `group` for a group of rows (25) and `area` for the top
+   * row's words (24). Phone sizes are set in the base layer.
+   */
+  --text-display: 56px;
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -0.018em;
+  --text-display--font-weight: 650;
+  --text-h1: 48px;
+  --text-h1--line-height: 1.08;
+  --text-h1--letter-spacing: -0.018em;
+  --text-h1--font-weight: 650;
+  --text-h2: 27px;
+  --text-h2--line-height: 1.2;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h2--font-weight: 650;
+  --text-group: 25px;
+  --text-group--line-height: 1.2;
+  --text-group--letter-spacing: -0.01em;
+  --text-group--font-weight: 650;
+  --text-area: 24px;
+  --text-area--line-height: 1.25;
+  --text-area--font-weight: 600;
+  --text-h3: 21px;
+  --text-h3--line-height: 1.3;
+  --text-h3--letter-spacing: -0.003em;
   --text-h3--font-weight: 600;
-  --text-lead: 15px;
-  --text-lead--line-height: 1.55;
-  --text-body: 14px;
-  --text-body--line-height: 1.55;
-  --text-control: 13.5px;
-  --text-control--line-height: 1.4;
-  --text-small: 13px;
-  --text-small--line-height: 1.5;
-  --text-micro: 12px;
+  --text-lead: 20px;
+  --text-lead--line-height: 1.5;
+  --text-body: 19px;
+  --text-body--line-height: 1.45;
+  --text-control: 18px;
+  --text-control--line-height: 1.3;
+  --text-small: 17px;
+  --text-small--line-height: 1.55;
+  --text-micro: 15.5px;
   --text-micro--line-height: 1.45;
 
-  /* Radii: panels, rows and tiles, fields and buttons, checkboxes. */
-  --radius-panel: 16px;
-  --radius-row: 12px;
-  --radius-field: 8px;
-  --radius-check: 5px;
+  /* Radii: containers are softer, controls tighter. Art tiles, panels, rows, buttons, the
+     choices of a picker, the 64 px field wells, checkboxes. */
+  --radius-tile: 34px;
+  --radius-panel: 28px;
+  --radius-row: 24px;
+  --radius-control: 17px;
+  --radius-choice: 18px;
+  --radius-field: 20px;
+  --radius-check: 8px;
 
-  /* Spacing beyond the 4 px grid: between page blocks, and the top bar's height. */
-  --spacing-block: 52px;
-  --spacing-topbar: 60px;
-  --container-page: 1232px;
+  /* Spacing beyond the grid: between page blocks. The top row scrolls away with the page, so
+     nothing is offset under it (`topbar` is 0). */
+  --spacing-block: 64px;
+  --spacing-topbar: 0px;
+  --container-page: 1280px;
 
-  /* The one shadow, for floating surfaces only (menus, palette, dialogs). */
-  --shadow-pop: 0 28px 70px -20px rgb(3 3 14 / 0.9), 0 0 0 1px var(--color-line-2);
+  /* Floating surfaces (with `raised`), and the lift of a lit item, tinted to the room. Nothing
+     else casts a shadow. */
+  --shadow-pop: 0 30px 70px -20px rgb(0 0 0 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  --shadow-lift: 0 34px 70px -30px rgb(8 6 12 / 0.85);
 
-  --ease-nuit: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* The one spring, on transform, background and color only. */
+  --ease-nuit: cubic-bezier(0.32, 0.72, 0, 1);
 
   --animate-rise: rise 420ms var(--ease-nuit) both;
-  --animate-pop: pop 220ms var(--ease-nuit) both;
+  --animate-pop: pop 260ms var(--ease-nuit) both;
   --animate-fade: fade 160ms var(--ease-nuit) both;
-  --animate-modal: modal 220ms var(--ease-nuit) both;
+  --animate-modal: modal 320ms var(--ease-nuit) both;
 
   @keyframes rise {
     from {
@@ -101,13 +146,13 @@
   @keyframes pop {
     from {
       opacity: 0;
-      transform: scale(0.98) translateY(-4px);
+      transform: scale(0.97) translateY(-6px);
     }
   }
   @keyframes modal {
     from {
       opacity: 0;
-      transform: translateY(8px) scale(0.98);
+      transform: translateY(12px) scale(0.97);
     }
   }
   @keyframes fade {
@@ -117,23 +162,143 @@
   }
 }
 
-/* The brand gradient. Only the logo and playback progress bars wear it. */
-@utility bg-brand {
-  background-image: linear-gradient(
-    90deg,
-    var(--color-brand-1) 0%,
-    var(--color-brand-2) 22%,
-    var(--color-brand-3) 48%,
-    var(--color-brand-4) 74%,
-    var(--color-brand-5) 100%
-  );
+/*
+ * The lit state: the pale lavender-white with dark text that marks what is under the keyboard,
+ * the mouse or the remote. Inside it the text and state colors switch to their lit variants, and
+ * the surfaces to dark tints, so a row's value, its status word and a picker's choices read on it
+ * without a class of their own. Never the only cue: keep `aria-current`, `aria-checked`…
+ */
+@utility lit {
+  background-color: var(--color-focus);
+  color: var(--color-on-focus);
+  --color-ink: var(--color-on-focus);
+  --color-ink-2: var(--color-on-focus-2);
+  --color-ink-3: var(--color-on-focus-2);
+  --color-s1: rgb(28 26 33 / 0.07);
+  --color-s2: rgb(28 26 33 / 0.1);
+  --color-s3: rgb(28 26 33 / 0.1);
+  --color-s4: rgb(28 26 33 / 0.16);
+  --color-line: rgb(28 26 33 / 0.1);
+  --color-line-2: rgb(28 26 33 / 0.14);
+  --color-line-3: rgb(28 26 33 / 0.22);
+  --color-accent: var(--color-link-lit);
+  --color-link: var(--color-link-lit);
+  --color-link-hover: var(--color-on-focus);
+  --color-ok: var(--color-ok-lit);
+  --color-warn: var(--color-warn-lit);
+  --color-danger: var(--color-danger-lit);
 }
 
-/* Figures that are compared: server figures, IPTV counts, log times, IPs, versions. */
+/*
+ * The lit state on what is already lit (a button in a lit row, the eye in a well being typed in):
+ * the dark chip, as the current choice of a picker.
+ */
+@utility lit-inverse {
+  background-color: var(--color-on-focus);
+  color: var(--color-focus);
+  --color-ink: var(--color-focus);
+  --color-ink-2: rgb(241 239 248 / 0.8);
+  --color-ink-3: rgb(241 239 248 / 0.8);
+  --color-link: var(--color-focus);
+  --color-danger: #ff958c;
+}
+
+/*
+ * The lit item rises over its soft shadow. `--lift` sets how far (1.012 for a row, 1.05 for a
+ * button); `prefers-reduced-motion` keeps it in place.
+ */
+@utility lift {
+  scale: var(--lift, 1.03);
+  box-shadow: var(--shadow-lift);
+  @media (prefers-reduced-motion: reduce) {
+    scale: none;
+  }
+}
+
+/*
+ * A control's keyboard focus: lit and lifted, in place of an outline ring, and still lit when the
+ * mouse is over it too; on what is already lit, it is the dark chip. Every control of `@/ui` wears
+ * it; hover lights a control one surface step instead (`hover:bg-s2`…).
+ */
+@utility focus-lit {
+  transition-property: scale, background-color, color, box-shadow;
+  transition-duration: 350ms;
+  transition-timing-function: var(--ease-nuit);
+  &:focus-visible,
+  &:focus-visible:hover {
+    outline: none;
+    @apply lit lift;
+  }
+  :where(.lit, [data-lit], .well:focus-within) &:focus-visible,
+  :where(.lit, [data-lit], .well:focus-within) &:focus-visible:hover {
+    @apply lit-inverse;
+  }
+}
+
+/*
+ * A field's well: a big soft fill that lights up while you type in it or its list is open (a text
+ * field, a select's button). An invalid one has a red edge. Inside a lit row (`lit` or `data-lit`), where lit on lit
+ * would not show, the well being typed in takes a dark ring instead. `--well-radius` tightens the
+ * corners of a compact well.
+ */
+@utility well {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  border-radius: var(--well-radius, var(--radius-field));
+  background-color: var(--color-s2);
+  color: var(--color-ink);
+  transition-property: scale, background-color, color, box-shadow;
+  transition-duration: 300ms;
+  transition-timing-function: var(--ease-nuit);
+  @media (hover: hover) {
+    &:hover {
+      background-color: var(--color-s4);
+    }
+  }
+  &:has([aria-invalid]) {
+    box-shadow: inset 0 0 0 2px var(--color-danger);
+  }
+  &:focus-within,
+  &:has([aria-expanded='true']) {
+    --lift: 1.02;
+    @apply lit lift;
+  }
+  &:has([aria-invalid]):focus-within {
+    box-shadow:
+      var(--shadow-lift),
+      inset 0 0 0 2px var(--color-danger);
+  }
+  :where(.lit, [data-lit]) &:focus-within {
+    background-color: var(--color-s1);
+    scale: none;
+    box-shadow: inset 0 0 0 2px var(--color-on-focus);
+  }
+  :where(.lit, [data-lit]) &:has([aria-invalid]):focus-within {
+    box-shadow: inset 0 0 0 2px var(--color-danger);
+  }
+  &:has(:disabled) {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  @media (max-width: 760px) {
+    &:focus-within {
+      scale: none;
+    }
+  }
+}
+
+/* The raised glass of what floats over the page: menus, lists, dialogs, tooltips, toasts. */
+@utility raised {
+  background-color: var(--color-raised);
+  backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: var(--shadow-pop);
+}
+
+/* Figures that are compared: counts, times, IPs, versions. Figtree's tabular figures. */
 @utility figures {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
 }
 
 /*
@@ -206,13 +371,36 @@
 }
 
 @layer base {
+  /* Phone and narrow steps of the type scale, and of the top row's words. */
+  :root {
+    @media (max-width: 1400px) {
+      --text-area: 22px;
+    }
+    @media (max-width: 1100px) {
+      --text-area: 20px;
+    }
+    @media (max-width: 760px) {
+      --text-display: 36px;
+      --text-h1: 34px;
+      --text-h2: 23px;
+      --text-group: 21px;
+      --text-h3: 18px;
+      --text-lead: 17.5px;
+      --text-body: 17px;
+      --text-control: 16.5px;
+      --text-small: 16px;
+      --text-micro: 15px;
+      --spacing-block: 44px;
+    }
+  }
+
   html {
     color-scheme: dark;
     background-color: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-size: 14px;
-    line-height: 1.55;
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-text-size-adjust: 100%;
@@ -221,8 +409,32 @@
     scrollbar-color: var(--color-s4) transparent;
   }
 
+  /*
+   * The room: a soft indigo glow top left and a 3.5 % grain over the warm graphite. Both are
+   * fixed layers drawn once behind the page, so scrolling repaints nothing.
+   */
   body {
+    position: relative;
+    isolation: isolate;
     min-height: 100dvh;
+  }
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+  body::before {
+    background:
+      radial-gradient(1100px 620px at 8% -12%, rgb(76 63 217 / 0.2), transparent 62%),
+      radial-gradient(900px 700px at 96% 4%, rgb(255 255 255 / 0.035), transparent 60%),
+      linear-gradient(180deg, var(--color-room) 0%, var(--color-bg) 100%);
+  }
+  body::after {
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
   h1,
@@ -235,13 +447,17 @@
     text-wrap: pretty;
   }
 
+  /*
+   * What has no lit state of its own (a link in a sentence, a tile) gets a thick pale halo. The
+   * controls of `@/ui` replace it with `focus-lit`.
+   */
   :focus-visible {
-    outline: 2px solid var(--color-link);
-    outline-offset: 2px;
+    outline: 3px solid var(--color-focus);
+    outline-offset: 3px;
   }
 
   ::selection {
-    background-color: rgb(91 99 246 / 0.45);
+    background-color: rgb(91 99 246 / 0.5);
     color: var(--color-ink);
   }
 
@@ -265,11 +481,11 @@
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background-color: #2e2e3f;
+    background-color: rgb(255 255 255 / 0.24);
   }
 
+  /* The monospace is for code, paths, keys and logs only; `Kbd` stays in Figtree. */
   code,
-  kbd,
   samp,
   pre {
     font-family: var(--font-mono);

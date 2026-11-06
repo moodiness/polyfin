@@ -4,8 +4,8 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Button, IconButton } from './Button'
 import { cx } from './cx'
-import { describedBy, FieldError } from './Field'
-import { fieldBox } from './Input'
+import { describedBy, FieldError, fieldLabel } from './Field'
+import { fieldBox, wellSizes, type WellSize } from './Input'
 
 /** How long a revealed secret stays shown before it hides again. */
 const revealedFor = 60_000
@@ -15,6 +15,11 @@ export type SecretFieldProps = {
   label: string
   /** What the key is for, under the label. */
   help?: ReactNode
+  /**
+   * Hides the label and the help visually (both stay for screen readers), where a settings row
+   * already shows them.
+   */
+  hideLabel?: boolean
   /** Whether the server holds a saved secret. The server never sends it with the settings. */
   saved: boolean
   /**
@@ -44,6 +49,8 @@ export type SecretFieldProps = {
   placeholder?: string
   /** Buttons after the field, such as "Check and save". */
   actions?: ReactNode
+  /** The well's size; see WellSize. Defaults to the 64 px `md`; its buttons follow it. */
+  size?: WellSize
 }
 
 /**
@@ -57,6 +64,7 @@ export type SecretFieldProps = {
 export function SecretField({
   label,
   help,
+  hideLabel = false,
   saved,
   value,
   onValue,
@@ -67,11 +75,14 @@ export function SecretField({
   error,
   placeholder,
   actions,
+  size = 'md',
 }: SecretFieldProps) {
   const { t } = useI18n()
   const text = t.ui.secret
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
+  const well = wellSizes[size]
+  const buttonSize = size === 'md' ? 'md' : 'sm'
   const removing = saved && value === ''
   const [replacing, setReplacing] = useState(false)
   const typing = !saved || replacing || (value !== undefined && value !== '')
@@ -149,21 +160,24 @@ export function SecretField({
     )
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2.5">
       <label
         htmlFor={typing && !removing ? id : `${id}-saved`}
-        className="text-control font-medium text-ink"
+        className={cx(fieldLabel, hideLabel && 'sr-only')}
       >
         {label}
       </label>
       {help && (
-        <p id={helpId} className="-mt-1 max-w-[60ch] text-small text-ink-3">
+        <p
+          id={helpId}
+          className={cx('-mt-1 max-w-[66ch] text-small text-ink-2', hideLabel && 'sr-only')}
+        >
           {help}
         </p>
       )}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {removing || !typing ? (
-          <div className={cx(fieldBox, 'h-10 flex-1', removing && 'opacity-50')}>
+          <div className={cx(fieldBox, well.box, 'flex-1', removing && 'opacity-50')}>
             <output
               id={`${id}-saved`}
               tabIndex={-1}
@@ -171,9 +185,10 @@ export function SecretField({
               aria-live="polite"
               aria-describedby={described}
               className={cx(
-                'min-w-0 flex-1 truncate px-3 font-mono',
+                'min-w-0 flex-1 truncate font-mono',
+                size === 'md' ? 'px-5.5' : size === 'sm' ? 'px-4.5' : 'px-3.5',
                 revealed === null
-                  ? 'text-small tracking-[0.3em] text-ink-2'
+                  ? 'text-small tracking-[0.25em] text-ink-2'
                   : 'text-small text-ink select-all',
               )}
             >
@@ -187,12 +202,13 @@ export function SecretField({
                 loading={revealing}
                 aria-controls={`${id}-saved`}
                 onClick={() => void toggleRevealed()}
-                className="mr-[3px] size-8 rounded-md"
+                size={well.button}
+                className={size === 'md' ? 'mr-2.5' : 'mr-1'}
               />
             )}
           </div>
         ) : (
-          <div className={cx(fieldBox, 'h-10 flex-1')}>
+          <div className={cx(fieldBox, well.box, 'flex-1')}>
             <input
               ref={input}
               id={id}
@@ -210,7 +226,14 @@ export function SecretField({
               }
               aria-invalid={error ? true : undefined}
               aria-describedby={described}
-              className="h-full min-w-0 flex-1 bg-transparent px-3 font-mono text-small text-ink outline-none placeholder:font-sans placeholder:text-body placeholder:text-ink-3 focus-visible:outline-none"
+              className={cx(
+                'h-full min-w-0 flex-1 bg-transparent font-mono text-ink outline-none placeholder:font-sans placeholder:text-ink-3 focus-visible:outline-none',
+                size === 'md'
+                  ? 'px-5.5 text-small placeholder:text-[21px] placeholder:font-medium max-sm:placeholder:text-[19px]'
+                  : size === 'sm'
+                    ? 'px-4.5 text-small placeholder:text-control'
+                    : 'px-3.5 text-micro placeholder:text-small',
+              )}
             />
             <IconButton
               label={typedShown ? text.hide : text.show}
@@ -218,15 +241,19 @@ export function SecretField({
               pressed={typedShown}
               aria-controls={id}
               onClick={() => setTypedShown(!typedShown)}
-              className="mr-[3px] size-8 rounded-md"
+              size={well.button}
+              className={size === 'md' ? 'mr-2.5' : 'mr-1'}
             />
           </div>
         )}
         <div className="flex shrink-0 items-center gap-2">
           {removing ? (
-            <Button onClick={() => onValue?.(undefined)}>{text.keep}</Button>
+            <Button size={buttonSize} onClick={() => onValue?.(undefined)}>
+              {text.keep}
+            </Button>
           ) : saved && typing ? (
             <Button
+              size={buttonSize}
               variant="ghost"
               onClick={() => {
                 setReplacing(false)
@@ -238,9 +265,13 @@ export function SecretField({
           ) : (
             saved && (
               <>
-                {replaceable && <Button onClick={startReplacing}>{text.replace}</Button>}
+                {replaceable && (
+                  <Button size={buttonSize} onClick={startReplacing}>
+                    {text.replace}
+                  </Button>
+                )}
                 {removable && (
-                  <Button variant="danger" onClick={() => onValue?.('')}>
+                  <Button size={buttonSize} variant="danger" onClick={() => onValue?.('')}>
                     {text.remove}
                   </Button>
                 )}
@@ -272,10 +303,10 @@ function StatusLine({
 }) {
   const Glyph = tone === 'ok' ? CheckCircleIcon : InfoIcon
   return (
-    <p id={id} className="flex items-center gap-2 text-small text-ink-3">
+    <p id={id} className="flex items-center gap-2 text-small text-ink-2">
       {tone && (
         <Glyph
-          size={16}
+          size={20}
           aria-hidden="true"
           className={cx('shrink-0', tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : '')}
         />

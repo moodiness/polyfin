@@ -66,7 +66,7 @@ export function Field({
   const helpId = help ? `${id}-help` : undefined
   const errorId = error ? `${id}-error` : undefined
   const helpText = help && (
-    <p id={helpId} className={cx('max-w-[60ch] text-small text-ink-3', helpFirst && '-mt-1')}>
+    <p id={helpId} className={cx('max-w-[66ch] text-small text-ink-2', helpFirst && '-mt-1')}>
       {help}
     </p>
   )
@@ -74,9 +74,9 @@ export function Field({
     <FieldContext
       value={{ id, describedBy: describedBy(helpId, errorId), invalid: Boolean(error) }}
     >
-      <div className={cx('flex min-w-0 flex-col gap-2', className)}>
+      <div className={cx('flex min-w-0 flex-col gap-2.5', className)}>
         <div className={cx('flex items-center justify-between gap-3', hideLabel && 'sr-only')}>
-          <label htmlFor={id} className="text-control font-medium text-ink">
+          <label htmlFor={id} className={fieldLabel}>
             {label}
           </label>
           {aside}
@@ -90,11 +90,14 @@ export function Field({
   )
 }
 
+/** The look of a control's label: 17 px, semibold, softer than the value typed under it. */
+export const fieldLabel = 'text-small font-semibold text-ink-2'
+
 /** An error under a control, with its icon. Field draws it; use it alone only outside a Field. */
 export function FieldError({ id, children }: { id?: string; children: ReactNode }) {
   return (
-    <p id={id} role="alert" className="flex items-start gap-1.5 text-small text-danger">
-      <WarningCircleIcon size={16} aria-hidden="true" className="mt-px shrink-0" />
+    <p id={id} role="alert" className="flex items-start gap-2 text-small font-medium text-danger">
+      <WarningCircleIcon size={20} aria-hidden="true" className="mt-px shrink-0" />
       <span>{children}</span>
     </p>
   )

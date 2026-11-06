@@ -22,8 +22,9 @@ export type CheckboxProps = {
 }
 
 /**
- * A native checkbox drawn in the « Nuit » style, for choosing items of a list (categories,
- * libraries, permissions). For a setting that turns something on, prefer Switch.
+ * A native checkbox drawn in the « Salon » style, for choosing items of a list (categories,
+ * libraries, permissions): a 26 px soft box, periwinkle when checked. Under the keyboard the whole
+ * row lights up. For a setting that turns something on, prefer Switch.
  */
 export function Checkbox({
   checked,
@@ -45,12 +46,12 @@ export function Checkbox({
   return (
     <label
       className={cx(
-        'group flex min-w-0 cursor-pointer items-start gap-3 text-body text-ink',
+        'group -mx-3 flex min-w-0 cursor-pointer items-start gap-3.5 rounded-choice px-3 py-2 text-body text-ink transition-[background-color,color,scale] duration-300 ease-nuit hover:bg-s1 has-[:focus-visible]:lit',
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
     >
-      <span className="relative mt-0.5 inline-grid size-[18px] shrink-0 place-items-center">
+      <span className="relative inline-grid size-6.5 shrink-0 place-items-center">
         <input
           ref={input}
           type="checkbox"
@@ -58,16 +59,16 @@ export function Checkbox({
           disabled={disabled}
           aria-describedby={help ? `${id}-help` : undefined}
           onChange={(event) => onChange(event.target.checked)}
-          className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-check border border-line-3 bg-s2 transition-[background-color,border-color] duration-160 ease-nuit group-hover:border-ink-3 checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent disabled:cursor-not-allowed"
+          className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-check bg-s4 transition-[background-color] duration-300 ease-nuit focus-visible:outline-none checked:bg-accent indeterminate:bg-accent disabled:cursor-not-allowed"
         />
         <Mark
-          size={12}
+          size={16}
           weight="bold"
           aria-hidden="true"
-          className="pointer-events-none relative text-white opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-100"
+          className="pointer-events-none relative text-on-accent opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-100"
         />
       </span>
-      <span className={cx('min-w-0 flex-1', hideLabel && 'sr-only')}>
+      <span className={cx('min-w-0 flex-1 pt-px', hideLabel && 'sr-only')}>
         <span className="block">{label}</span>
         {help && (
           <span id={`${id}-help`} className="mt-0.5 block text-small text-ink-3">

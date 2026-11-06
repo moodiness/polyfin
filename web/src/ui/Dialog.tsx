@@ -88,14 +88,14 @@ export function ConfirmDialog({
       ref={dialog}
       aria-labelledby={titleId}
       aria-describedby={children ? bodyId : undefined}
-      className="m-auto w-[min(440px,calc(100vw-24px))] rounded-panel bg-s1 p-0 text-ink shadow-pop backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
+      className="m-auto w-[min(520px,calc(100vw-24px))] rounded-panel p-0 text-ink raised backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
     >
-      <div className="p-6">
-        <h2 id={titleId} className="text-h3 text-ink">
+      <div className="px-8 pt-8 pb-6 max-sm:px-5 max-sm:pt-6">
+        <h2 id={titleId} className="text-group text-ink">
           {title}
         </h2>
         {children && (
-          <div id={bodyId} className="mt-2 text-control text-ink-2">
+          <div id={bodyId} className="mt-3 text-body text-ink-2">
             {children}
           </div>
         )}
@@ -105,13 +105,13 @@ export function ConfirmDialog({
           </div>
         )}
       </div>
-      <div className="flex justify-end gap-2 border-t border-line bg-bg/40 px-6 py-3.5">
+      <div className="flex flex-wrap justify-end gap-3 px-8 pt-2 pb-8 max-sm:px-5 max-sm:pb-5">
         <Button variant="ghost" onClick={onClose} autoFocus>
           {cancelLabel ?? t.common.cancel}
         </Button>
         <Button
           variant={tone === 'danger' ? 'danger' : 'primary'}
-          className={tone === 'danger' ? 'border border-danger/40 bg-danger/10' : undefined}
+          className={tone === 'danger' ? 'bg-danger/14' : undefined}
           loading={busy}
           onClick={onConfirm}
         >
@@ -160,19 +160,19 @@ export function Modal({
       aria-labelledby={titleId}
       style={{ width: `min(${width}px, calc(100vw - 24px))` }}
       className={cx(
-        'm-auto max-h-[min(85dvh,calc(100dvh-24px))] max-w-none flex-col overflow-hidden rounded-panel bg-s1 p-0 text-ink shadow-pop open:flex open:animate-modal',
+        'm-auto max-h-[min(85dvh,calc(100dvh-24px))] max-w-none flex-col overflow-hidden rounded-panel p-0 text-ink raised open:flex open:animate-modal',
         'backdrop:bg-scrim backdrop:backdrop-blur-[6px]',
       )}
     >
-      <div className="flex h-topbar shrink-0 items-center justify-between gap-3 border-b border-line px-5">
-        <h2 id={titleId} className={cx('text-h3 text-ink', hideTitle && 'sr-only')}>
+      <div className="flex h-20 shrink-0 items-center justify-between gap-3 pr-4 pl-8 max-sm:h-16 max-sm:pl-5">
+        <h2 id={titleId} className={cx('text-group text-ink', hideTitle && 'sr-only')}>
           {title}
         </h2>
         <IconButton label={t.ui.close} icon={XIcon} onClick={onClose} className="ml-auto" />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
       {footer && (
-        <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-bg/40 px-5 py-3.5">
+        <div className="flex shrink-0 flex-wrap justify-end gap-3 px-8 py-5 shadow-[inset_0_1px_0_var(--color-line-2)] max-sm:px-5">
           {footer}
         </div>
       )}

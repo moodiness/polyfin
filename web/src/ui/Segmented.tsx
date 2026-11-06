@@ -18,14 +18,27 @@ export type SegmentedProps<T extends string> = {
   options: readonly SegmentedOption<T>[]
   value: T
   onChange: (value: T) => void
-  /** `sm` (26 px buttons) for menus and toolbars; `md` (32 px) in pages. */
-  size?: 'sm' | 'md'
+  /**
+   * `md` (60 px choices) in pages, the default; `sm` (52 px) for toolbars; `compact` (44 px, 17 px
+   * text) for compact rows, table cells and dense filter bars.
+   */
+  size?: 'md' | 'sm' | 'compact'
   className?: string
 }
 
+const sizes = {
+  md: 'h-15 min-w-15 rounded-choice px-4.5 text-[21px] max-sm:h-13 max-sm:min-w-13 max-sm:px-3.5 max-sm:text-[19px]',
+  sm: 'h-13 min-w-13 rounded-[16px] px-4 text-control',
+  compact: 'h-11 min-w-11 rounded-[14px] px-3.5 text-small',
+}
+
+const iconSizes = { md: 22, sm: 20, compact: 18 }
+
 /**
- * Two to four exclusive choices shown side by side (a list's filter, a view mode). Each
- * is a button with `aria-pressed`. For more choices, use Select; for navigation, use Tabs.
+ * Two to four exclusive choices shown side by side as a strip of big choices (a list's filter, a
+ * view mode), the current one in periwinkle. Each is a button with `aria-pressed` that lights up
+ * under the keyboard. The strip wraps rather than overflow a phone. For more choices, use Select;
+ * for navigation, use Tabs.
  */
 export function Segmented<T extends string>({
   label,
@@ -40,7 +53,8 @@ export function Segmented<T extends string>({
       role="group"
       aria-label={label}
       className={cx(
-        'inline-flex shrink-0 rounded-field border border-line-2 bg-bg p-0.5',
+        'inline-flex max-w-full flex-wrap',
+        size === 'compact' ? 'gap-1.5' : 'gap-2',
         className,
       )}
     >
@@ -53,12 +67,12 @@ export function Segmented<T extends string>({
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
           className={cx(
-            'inline-flex cursor-pointer items-center gap-1.5 rounded-md font-medium text-ink-3 transition-[background-color,color] duration-160 ease-nuit hover:text-ink',
-            'aria-pressed:bg-s4 aria-pressed:text-ink',
-            size === 'sm' ? 'h-[26px] px-2.5 text-[12.5px]' : 'h-8 px-3 text-control',
+            'inline-flex cursor-pointer items-center justify-center gap-2 bg-s1 font-[620] text-ink-2 figures focus-lit [--lift:1.06] hover:bg-s2 hover:text-ink',
+            'aria-pressed:bg-accent aria-pressed:text-on-accent',
+            sizes[size],
           )}
         >
-          {option.icon && <option.icon size={16} aria-hidden="true" />}
+          {option.icon && <option.icon size={iconSizes[size]} aria-hidden="true" />}
           {option.label}
         </button>
       ))}

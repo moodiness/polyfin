@@ -348,7 +348,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           <div className="mt-4 max-w-[520px]">
             {!isChannel && runtime > 0 && (
               <ProgressBar
-                variant="brand"
+                variant="playback"
                 live={!session.paused}
                 value={position / runtime}
                 label={session.download ? live.downloadProgress(title) : live.progress(title)}

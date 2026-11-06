@@ -48,7 +48,7 @@ export function Menu({
   label,
   trigger,
   align = 'start',
-  width = 240,
+  width = 320,
   children,
   className,
 }: {
@@ -153,7 +153,7 @@ export function Menu({
           style={{ width }}
           className={cx(
             // Above the SaveBar (z-20), under the TopBar (z-30).
-            'absolute top-[calc(100%+6px)] z-25 rounded-row bg-s2 p-1.5 shadow-pop animate-fade',
+            'absolute top-[calc(100%+12px)] z-25 max-w-[calc(100vw-24px)] rounded-panel p-2.5 raised animate-pop',
             align === 'end' ? 'right-0' : 'left-0',
           )}
         >
@@ -164,8 +164,9 @@ export function Menu({
   )
 }
 
+// A big row of the raised panel; the arrows light it like any other control.
 const itemClass =
-  'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-field px-2.5 text-left text-control text-ink-2 outline-none transition-[background-color,color] duration-160 ease-nuit hover:bg-s3 hover:text-ink focus-visible:bg-s3 focus-visible:text-ink focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-45'
+  'flex min-h-[54px] w-full cursor-pointer items-center gap-3.5 rounded-choice px-4 text-left text-[18.5px] leading-snug outline-none transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 focus-visible:lit focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-45'
 
 /**
  * One entry of a Menu: a link with `to` (or `href` for outside the app), or an action with
@@ -179,6 +180,7 @@ export function MenuItem({
   onSelect,
   danger = false,
   disabled = false,
+  end,
   children,
 }: {
   icon?: Icon
@@ -192,19 +194,25 @@ export function MenuItem({
   /** Red, for removing. */
   danger?: boolean
   disabled?: boolean
+  /** A quiet value at the right end of the row, such as the current language. */
+  end?: ReactNode
   children: ReactNode
 }) {
   const { close } = use(MenuContext)
   const content = (
     <>
-      {Glyph && <Glyph size={16} aria-hidden="true" className="shrink-0" />}
+      {Glyph && (
+        <Glyph
+          size={22}
+          aria-hidden="true"
+          className={cx('shrink-0', danger ? 'text-danger' : 'text-ink-2')}
+        />
+      )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
+      {end !== undefined && <span className="shrink-0 text-[16px] text-ink-3">{end}</span>}
     </>
   )
-  const className = cx(
-    itemClass,
-    danger && 'text-danger hover:text-danger focus-visible:text-danger',
-  )
+  const className = cx(itemClass, danger ? 'text-danger' : 'text-ink')
   if (to !== undefined) {
     return (
       <Link
@@ -271,18 +279,18 @@ export function MenuChoice<T extends string>({
   const id = useId()
   const chosen = options.find((option) => option.value === value)
   return (
-    <div role="group" aria-labelledby={id} className="flex flex-col gap-1.5 px-2.5 pt-1.5 pb-2">
+    <div role="group" aria-labelledby={id} className="flex flex-col gap-2.5 px-4 pt-2.5 pb-3">
       <span className="flex items-baseline justify-between gap-3">
-        <span id={id} className="text-control text-ink-2">
+        <span id={id} className="text-[18.5px] text-ink">
           {label}
         </span>
         {chosen?.title && (
-          <span lang={chosen.lang} className="truncate text-[12.5px] text-ink-3" aria-hidden="true">
+          <span lang={chosen.lang} className="truncate text-[16px] text-ink-3" aria-hidden="true">
             {chosen.title}
           </span>
         )}
       </span>
-      <span className="flex rounded-field border border-line-2 bg-bg p-0.5">
+      <span className="flex gap-1.5">
         {options.map((option) => (
           <button
             key={option.value}
@@ -294,7 +302,7 @@ export function MenuChoice<T extends string>({
             aria-label={option.title}
             aria-checked={option.value === value}
             onClick={() => onChange(option.value)}
-            className="h-[26px] min-w-0 flex-1 cursor-pointer rounded-md px-1 text-[12.5px] font-medium text-ink-3 transition-[background-color,color] duration-160 hover:text-ink focus-visible:outline-offset-0 aria-checked:bg-s4 aria-checked:text-ink"
+            className="h-11 min-w-0 flex-1 cursor-pointer rounded-[14px] bg-s1 px-1 text-[16px] font-semibold text-ink-2 transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 hover:text-ink focus-visible:lit focus-visible:outline-none aria-checked:bg-s4 aria-checked:text-ink"
           >
             {option.label}
           </button>
@@ -304,12 +312,12 @@ export function MenuChoice<T extends string>({
   )
 }
 
-/** A hairline between groups of a Menu. */
+/** A soft line between groups of a Menu. */
 export function MenuSeparator() {
-  return <hr role="separator" className="mx-1 my-1.5 border-0 border-t border-line" />
+  return <hr role="separator" className="mx-3.5 my-2 h-px border-0 bg-line-2" />
 }
 
 /** The top of a Menu: who is signed in. Not focusable. */
 export function MenuHeader({ children }: { children: ReactNode }) {
-  return <div className="flex items-center gap-2.5 px-2.5 pt-2.5 pb-3">{children}</div>
+  return <div className="flex items-center gap-3.5 px-3.5 pt-3 pb-4 text-[20px]">{children}</div>
 }

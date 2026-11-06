@@ -11,46 +11,52 @@ import { cx } from './cx'
 export type BadgeTone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger'
 
 const badgeTones: Record<BadgeTone, string> = {
-  neutral: 'bg-ink/6 text-ink-2',
-  accent: 'bg-accent/15 text-link',
-  ok: 'bg-ok/12 text-ok',
-  warn: 'bg-warn/12 text-warn',
-  danger: 'bg-danger/12 text-danger',
+  neutral: 'bg-ink/10 text-ink-2',
+  accent: 'bg-link/14 text-link',
+  ok: 'bg-ok/14 text-ok',
+  warn: 'bg-warn/14 text-warn',
+  danger: 'bg-danger/14 text-danger',
 }
 
 /**
- * A small tag beside a name: a kind ("Stremio", "Xtream"), a role ("Administrator"), a flag
- * ("Default"). Not for states: those use StatusPill, which carries an icon.
+ * A tag beside a name: a kind ("Stremio", "Xtream"), a role ("Administrator"), a flag
+ * ("Default"), as a word on a tinted bubble, with an icon if it helps. Not for states: those use
+ * StatusPill.
  */
 export function Badge({
   tone = 'neutral',
+  icon: Glyph,
   children,
   className,
 }: {
   /** Color; `neutral` by default. Colored tones still need words that say the meaning. */
   tone?: BadgeTone
+  /** A Phosphor icon before the word. */
+  icon?: Icon
   children: ReactNode
   className?: string
 }) {
   return (
     <span
       className={cx(
-        'inline-flex h-5 shrink-0 items-center rounded-check px-1.5 text-[11.5px] leading-none font-medium tracking-[0.01em] whitespace-nowrap',
+        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-micro leading-none font-semibold whitespace-nowrap',
+        Glyph && 'pl-2.5',
         badgeTones[tone],
         className,
       )}
     >
+      {Glyph && <Glyph size={17} aria-hidden="true" className="shrink-0" />}
       {children}
     </span>
   )
 }
 
-/** A count beside a heading ("Now playing 2"), in mono. */
+/** A count beside a heading ("Now playing 2"), in tabular figures. */
 export function Count({ children, label }: { children: ReactNode; label?: string }) {
   return (
     <span
       aria-label={label}
-      className="inline-flex h-5 items-center rounded-md border border-line-2 bg-s3 px-[7px] font-mono text-micro font-medium text-ink-2 tabular-nums"
+      className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-s2 px-2.5 text-micro font-semibold text-ink-2 figures"
     >
       {children}
     </span>
@@ -59,16 +65,20 @@ export function Count({ children, label }: { children: ReactNode; label?: string
 
 export type StatusTone = 'ok' | 'warn' | 'danger' | 'muted' | 'live'
 
-const statusTones: Record<Exclude<StatusTone, 'live'>, { color: string; icon: Icon }> = {
-  ok: { color: 'text-ok', icon: CheckCircleIcon },
-  warn: { color: 'text-warn', icon: WarningIcon },
-  danger: { color: 'text-danger', icon: WarningCircleIcon },
-  muted: { color: 'text-ink-3', icon: InfoIcon },
+const statusTones: Record<
+  Exclude<StatusTone, 'live'>,
+  { color: string; bubble: string; icon: Icon }
+> = {
+  ok: { color: 'text-ok', bubble: 'bg-ok/14', icon: CheckCircleIcon },
+  warn: { color: 'text-warn', bubble: 'bg-warn/14', icon: WarningIcon },
+  danger: { color: 'text-danger', bubble: 'bg-danger/14', icon: WarningCircleIcon },
+  muted: { color: 'text-ink-2', bubble: 'bg-ink/10', icon: InfoIcon },
 }
 
 /**
- * A state, always as an icon and a word: "Active", "Incomplete guide", "Not configured". `live`
- * is a green dot for something happening now ("Playing").
+ * A state, always as an icon and a word: "Active", "Incomplete guide", "Not configured". The icon
+ * sits on a 14 % tinted bubble; on a lit row the colors darken by themselves. `live` is a green
+ * dot for something happening now ("Playing").
  */
 export function StatusPill({
   tone,
@@ -88,26 +98,31 @@ export function StatusPill({
     return (
       <span
         className={cx(
-          'inline-flex items-center gap-2 text-small font-medium whitespace-nowrap text-ink',
+          'inline-flex items-center gap-2.5 text-small font-semibold whitespace-nowrap text-ink',
           className,
         )}
       >
-        <span aria-hidden="true" className="size-[7px] rounded-full bg-ok ring-3 ring-ok/18" />
+        <span aria-hidden="true" className="size-2.5 rounded-full bg-ok ring-4 ring-ok/20" />
         {children}
       </span>
     )
   }
-  const { color, icon: ToneIcon } = statusTones[tone]
+  const { color, bubble, icon: ToneIcon } = statusTones[tone]
   const Glyph = icon ?? ToneIcon
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 text-small font-medium whitespace-nowrap',
+        'inline-flex items-center gap-2 text-small font-semibold whitespace-nowrap',
         color,
         className,
       )}
     >
-      <Glyph size={15} aria-hidden="true" className="shrink-0" />
+      <span
+        aria-hidden="true"
+        className={cx('inline-grid size-7 shrink-0 place-items-center rounded-full', bubble)}
+      >
+        <Glyph size={17} />
+      </span>
       {children}
     </span>
   )
