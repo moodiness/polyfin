@@ -23,7 +23,7 @@ const maxShareResults = 20
 // library's.
 type Sharing interface {
 	Shareable(ctx context.Context, user accounts.User, id accounts.ID) (library.Item, error)
-	Search(ctx context.Context, user accounts.User, term string, kinds []library.Kind, limit int) ([]library.Item, error)
+	ShareTitles(ctx context.Context, user accounts.User, term string, limit int) ([]library.Item, error)
 	Episodes(ctx context.Context, user accounts.User, seriesID accounts.ID, seasonID *accounts.ID) ([]library.Item, error)
 	HiddenTitles(ctx context.Context, user accounts.User) (library.HiddenTitles, error)
 }
@@ -219,10 +219,12 @@ func (h *handler) userShareLinks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.shareLinksJSON(links))
 }
 
-// shareTitles searches the libraries the user signed in sees for movies
-// and series to share, up to maxShareResults: a series is shared one
-// episode at a time (see shareEpisodes). Parental control, blocked genres
-// and the titles they hid apply.
+// shareTitles finds movies and series to share among the titles of the
+// libraries the user signed in sees, up to maxShareResults: those their
+// addons' searches find, then those Polyfin already knows (see
+// library.Service.ShareTitles). A series is shared one episode at a time
+// (see shareEpisodes). Parental control, blocked genres, the addons they
+// do not use and the titles they hid apply.
 func (h *handler) shareTitles(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
 	if !h.mayShare(user) {
@@ -234,7 +236,7 @@ func (h *handler) shareTitles(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []*liveItemJSON{})
 		return
 	}
-	items, err := h.Sharing.Search(r.Context(), user, term, []library.Kind{library.KindMovie, library.KindSeries}, maxShareResults)
+	items, err := h.Sharing.ShareTitles(r.Context(), user, term, maxShareResults)
 	if err != nil {
 		h.internalError(w, r, err)
 		return

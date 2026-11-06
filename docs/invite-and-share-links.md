@@ -72,9 +72,12 @@ A user loses their links at once on losing **Can share titles**, being disabled 
 
 Under **My account › Shared links**, **Share a title** searches the libraries the user sees.
 
+- It finds what the search catalogs of the user's sources find (see [Catalog pages](addons-and-libraries.md#catalog-pages)), then the titles Polyfin already knows from their catalogs, whose name holds the words typed.
+- Those known titles are the ones a library, a home row or a search listed before, for any user. So a catalog without a search, such as an addon's catalog that takes no `search` property, is found too. Polyfin asks no source for them.
+- A title of such a catalog that no one listed yet is not found until its page is opened, and neither is one found by its name in another language only.
 - A movie is shared as is; a series opens its episodes, and one episode is shared.
 - A series, channel or recording is never shared.
-- Parental control, blocked genres and hidden titles apply: a title the user may not see cannot be shared.
+- Parental control, blocked genres and hidden titles apply: a title the user may not see cannot be shared. So does **Used by**: a title known only from a source the user does not use is not found.
 - In the web player, **Share** on a movie or episode page opens the same form with the title chosen (see [Web player](web-client.md)).
 
 | Field | Choices | Default |
