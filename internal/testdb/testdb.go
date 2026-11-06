@@ -85,9 +85,14 @@ func New(t testing.TB) *pgxpool.Pool {
 // them.
 const templatePrefix = "polyfin_template_"
 
+// copyPrefix starts the names of the databases Copy makes; a random
+// suffix ends them.
+const copyPrefix = "polyfin_test_"
+
 // templateLife is how long a template database of another key is kept: a
 // branch whose tests have not used theirs for that long most likely has
-// none to run any more. One still running makes it again.
+// none to run any more. One still running makes it again. A copy a
+// stopped test binary left behind is kept as long.
 const templateLife = 24 * time.Hour
 
 // templates holds, by name, the template databases this test binary found
@@ -109,13 +114,16 @@ func Copy(t testing.TB, key string, prepare func(context.Context, *pgxpool.Pool)
 	url := URL(t)
 	ctx := t.Context()
 	source := templatePrefix + key
-	name := "polyfin_test_" + random()
-	create := "CREATE DATABASE " + pgx.Identifier{name}.Sanitize() + " TEMPLATE " + pgx.Identifier{source}.Sanitize()
+	name := copyPrefix + random()
+	ident := pgx.Identifier{name}.Sanitize()
+	create := "CREATE DATABASE " + ident + " TEMPLATE " + pgx.Identifier{source}.Sanitize()
 	for attempt := 1; ; attempt++ {
 		if err := makeTemplate(ctx, url, source, prepare); err != nil {
 			t.Fatalf("make the template database: %v", err)
 		}
-		err := exec(ctx, url, create)
+		// The date lets buildTemplate drop it, should a test binary
+		// stopped before its cleanup leave it behind.
+		err := exec(ctx, url, create, dated(ident, time.Now()))
 		if err == nil {
 			break
 		}
@@ -125,14 +133,22 @@ func Copy(t testing.TB, key string, prepare func(context.Context, *pgxpool.Pool)
 			forget(source)
 			continue
 		}
+		// The copy may exist undated, and would then never be dropped.
+		_ = exec(context.Background(), url, "DROP DATABASE IF EXISTS "+ident+" WITH (FORCE)")
 		t.Fatalf("copy the template database: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := exec(context.Background(), url, "DROP DATABASE "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)"); err != nil {
+		if err := exec(context.Background(), url, "DROP DATABASE "+ident+" WITH (FORCE)"); err != nil {
 			t.Errorf("drop test database: %v", err)
 		}
 	})
 	return open(t, url, func(config *pgxpool.Config) { config.ConnConfig.Database = name })
+}
+
+// dated returns the statement dating the database ident at, in the
+// comment buildTemplate reads.
+func dated(ident string, at time.Time) string {
+	return "COMMENT ON DATABASE " + ident + " IS '" + at.UTC().Format(time.RFC3339) + "'"
 }
 
 // makeTemplate makes sure the template database name exists, making it
@@ -170,7 +186,8 @@ func makeTemplate(ctx context.Context, url, name string, prepare func(context.Co
 
 // buildTemplate makes the template database name under another name, so
 // that it exists under its own only once prepared and dated, then drops the
-// templates of other keys made more than templateLife ago.
+// templates of other keys made more than templateLife ago, and the copies
+// made as long ago that no connection uses.
 func buildTemplate(ctx context.Context, conn *pgx.Conn, url, name string, prepare func(context.Context, *pgxpool.Pool) error) error {
 	building := pgx.Identifier{name + "_building"}.Sanitize()
 	// A test binary stopped while making it may have left it.
@@ -205,7 +222,7 @@ func buildTemplate(ctx context.Context, conn *pgx.Conn, url, name string, prepar
 	// counts as old, and the test binaries making others at the same time
 	// would drop it.
 	for _, statement := range []string{
-		"COMMENT ON DATABASE " + building + " IS '" + now.Format(time.RFC3339) + "'",
+		dated(building, now),
 		"ALTER DATABASE " + building + " WITH ALLOW_CONNECTIONS false",
 		"ALTER DATABASE " + building + " RENAME TO " + ident,
 	} {
@@ -224,6 +241,32 @@ func buildTemplate(ctx context.Context, conn *pgx.Conn, url, name string, prepar
 	for _, other := range old {
 		if _, err := conn.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{other}.Sanitize()); err != nil {
 			return fmt.Errorf("drop the old template database %s: %w", other, err)
+		}
+	}
+	return sweepCopies(ctx, conn, now.Add(-templateLife))
+}
+
+// sweepCopies drops the copies a test binary stopped before its cleanup
+// left behind: those dated before cutoff that no connection uses. A copy
+// without a date, made before copies were dated, is kept.
+func sweepCopies(ctx context.Context, conn *pgx.Conn, cutoff time.Time) error {
+	rows, _ := conn.Query(ctx, `SELECT datname FROM pg_database d
+		WHERE starts_with(datname, $1) AND shobj_description(oid, 'pg_database') < $2
+		AND NOT EXISTS (SELECT FROM pg_stat_activity a WHERE a.datname = d.datname)`,
+		copyPrefix, cutoff.UTC().Format(time.RFC3339))
+	old, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+	for _, copied := range old {
+		// Without FORCE, the drop fails on a copy a connection reached
+		// meanwhile, which is kept.
+		_, err := conn.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{copied}.Sanitize())
+		if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code == "55006" {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("drop the old test database %s: %w", copied, err)
 		}
 	}
 	return nil
@@ -272,16 +315,20 @@ func open(t testing.TB, url string, configure func(*pgxpool.Config)) *pgxpool.Po
 	return pool
 }
 
-// exec runs statement on a connection of its own, closed at once: the test
-// keeps only its pool's.
-func exec(ctx context.Context, url, statement string) error {
+// exec runs statements in turn on a connection of its own, closed at once:
+// the test keeps only its pool's.
+func exec(ctx context.Context, url string, statements ...string) error {
 	conn, err := pgx.Connect(ctx, url)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close(context.Background()) }()
-	_, err = conn.Exec(ctx, statement)
-	return err
+	for _, statement := range statements {
+		if _, err := conn.Exec(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // random returns 16 random hexadecimal digits.

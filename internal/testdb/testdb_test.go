@@ -2,8 +2,10 @@ package testdb
 
 import (
 	"context"
+	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -106,5 +108,70 @@ func TestAFailedPreparationIsTriedAgain(t *testing.T) {
 	}
 	if n := rows(t, Copy(t, key, prepare)); n != 1 || runs.Load() != 2 {
 		t.Errorf("after a failed preparation: %d rows, prepared %d times", n, runs.Load())
+	}
+}
+
+// Making a template drops the copies stopped test binaries left behind,
+// once dated more than templateLife ago and used by no connection. A copy
+// without a date, from before copies were dated, is kept.
+func TestOldCopiesAreSwept(t *testing.T) {
+	t.Parallel()
+	url := URL(t)
+	now := time.Now()
+	old := now.Add(-templateLife - time.Hour)
+	made := func(at time.Time) string {
+		name := copyPrefix + random()
+		ident := pgx.Identifier{name}.Sanitize()
+		statements := []string{"CREATE DATABASE " + ident}
+		if !at.IsZero() {
+			statements = append(statements, dated(ident, at))
+		}
+		if err := exec(t.Context(), url, statements...); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := exec(context.Background(), url, "DROP DATABASE IF EXISTS "+ident+" WITH (FORCE)"); err != nil {
+				t.Errorf("drop %s: %v", name, err)
+			}
+		})
+		return name
+	}
+	stale := made(old)
+	recent := made(now.Add(-time.Hour))
+	used := made(old)
+	undated := made(time.Time{})
+	config, err := pgx.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Database = used
+	conn, err := pgx.ConnectConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+
+	key, prepare, _ := counted(t)
+	pool := Copy(t, key, prepare)
+	var date string
+	if err := pool.QueryRow(t.Context(), "SELECT coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = current_database()").Scan(&date); err != nil {
+		t.Fatal(err)
+	}
+	if at, err := time.Parse(time.RFC3339, date); err != nil || at.Before(now.Add(-time.Minute)) || at.After(time.Now().Add(time.Minute)) {
+		t.Errorf("the copy is dated %q, not when it was made: %v", date, err)
+	}
+
+	found, _ := conn.Query(t.Context(), "SELECT datname FROM pg_database WHERE datname = ANY($1)", []string{stale, recent, used, undated})
+	left, err := pgx.CollectRows(found, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(left, stale) {
+		t.Error("an old copy no connection uses was kept")
+	}
+	for name, which := range map[string]string{recent: "a recent copy", used: "an old copy in use", undated: "a copy without a date"} {
+		if !slices.Contains(left, name) {
+			t.Errorf("%s was dropped", which)
+		}
 	}
 }
