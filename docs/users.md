@@ -10,6 +10,8 @@ Create a user with **Create a user**, at the top of **Users**. Each user is a ro
 
 **Last activity** is the user's last request from a Jellyfin app, a [Silo app](silo-apps.md) or the admin app, to the minute. It reads **Never** for a user not seen yet, such as one imported from another server. A Jellyfin app signs in once and keeps its sign-in for months, so every request counts, not only sign-ins. Share-link guests, API keys and DLNA devices don't count as the user's activity. Jellyfin apps get the same time as the user's last activity date, as on Jellyfin.
 
+The app the last activity came from follows the time, as in "Last activity: 3 minutes ago · Jellyfin Android TV": the name a Jellyfin or Silo app gives itself, or **Admin app**. It tells a user who watches every night on the TV from one who opened the admin app once. It changes only with the time, so a request that leaves the time as it was leaves the app too. After the upgrade that brings it, users already active show the app of their most recently active device, or none when they have no device left. The admin API gives it as `lastActivityApp`, `Polyfin admin` for the admin app and empty when unknown; Jellyfin apps don't get it.
+
 | Section | What it sets | Saved |
 |---|---|---|
 | **Name and password** | Name, password | Name: with **Save**. Password: **Reset password**, in its own dialog |
