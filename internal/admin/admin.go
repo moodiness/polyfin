@@ -334,6 +334,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/account/audio-region", h.signedIn(h.setOwnAudioRegion))
 	mux.Handle("GET /admin/api/account/sound", h.signedIn(h.ownSound))
 	mux.Handle("PUT /admin/api/account/sound", h.signedIn(h.setOwnSound))
+	mux.Handle("PUT /admin/api/account/interface-size", h.signedIn(h.setOwnInterfaceSize))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
@@ -823,6 +824,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidChannelRule, http.StatusBadRequest, "invalid_live_tv_channels"},
 		{accounts.ErrInvalidMetadataLanguage, http.StatusBadRequest, "invalid_language"},
 		{accounts.ErrInvalidAudioRegion, http.StatusBadRequest, "invalid_audio_region"},
+		{accounts.ErrInvalidInterfaceSize, http.StatusBadRequest, "invalid_interface_size"},
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},
