@@ -176,6 +176,10 @@ type User struct {
 	// the video copied where it plays as it is: every app then plays it
 	// louder, at the cost of direct play. Both are off until chosen.
 	ConvertSound bool
+	// InterfaceSize is the size of the admin app for the user, one of
+	// InterfaceSizes: InterfaceCompact, the default, or InterfaceLarge.
+	// The user's own choice; the admin app applies it on every browser.
+	InterfaceSize string
 }
 
 // NewUser describes an account to create.
@@ -269,6 +273,8 @@ type UserChanges struct {
 	NextUpWithResume *bool
 	// BoostVolume and ConvertSound, see User.
 	BoostVolume, ConvertSound *bool
+	// InterfaceSize, see User: one of InterfaceSizes.
+	InterfaceSize *string
 }
 
 // Store is the accounts repository.
@@ -362,7 +368,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
 	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
 	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume, " +
-	"boost_volume, convert_sound"
+	"boost_volume, convert_sound, interface_size"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -376,7 +382,7 @@ func (user *User) fields() []any {
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
 		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
 		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
-		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound}
+		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -707,6 +713,9 @@ func (changes UserChanges) prepare() (userUpdate, error) {
 	if changes.AudioRegion != nil && *changes.AudioRegion != "" && !localization.AudioVariantOffered(*changes.AudioRegion) {
 		return u, ErrInvalidAudioRegion
 	}
+	if changes.InterfaceSize != nil && !slices.Contains(InterfaceSizes, *changes.InterfaceSize) {
+		return u, ErrInvalidInterfaceSize
+	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
@@ -831,7 +840,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			local_first = coalesce($40, local_first),
 			next_up_with_resume = coalesce($41, next_up_with_resume),
 			boost_volume = coalesce($42, boost_volume),
-			convert_sound = coalesce($43, convert_sound)
+			convert_sound = coalesce($43, convert_sound),
+			interface_size = coalesce($44, interface_size)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -842,7 +852,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
 		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
 		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess, u.channels, changes.LocalFirst,
-		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound))
+		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound, changes.InterfaceSize))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}
