@@ -816,10 +816,7 @@ function Secrets({ health }: { health: Health }) {
             value: secrets.encrypted ? (
               <StatusPill tone="ok">{text.encrypted}</StatusPill>
             ) : (
-              <StatusPill
-                tone={secrets.plaintext > 0 ? 'warn' : 'muted'}
-                className="whitespace-normal"
-              >
+              <StatusPill tone={secrets.plaintext > 0 ? 'warn' : 'muted'}>
                 {text.notEncrypted}
               </StatusPill>
             ),
@@ -831,7 +828,7 @@ function Secrets({ health }: { health: Health }) {
               secrets.unreadable.length === 0 ? (
                 text.noneUnreadable
               ) : (
-                <StatusPill tone="danger" className="whitespace-normal">
+                <StatusPill tone="danger">
                   {secrets.unreadable.map((secret) => unreadableName(t, secret)).join(', ')}
                 </StatusPill>
               ),

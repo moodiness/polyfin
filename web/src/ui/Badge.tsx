@@ -78,7 +78,8 @@ const statusTones: Record<
 /**
  * A state, always as an icon and a word: "Active", "Incomplete guide", "Not configured". The icon
  * sits on a 14 % tinted bubble; on a lit row the colors darken by themselves. `live` is a green
- * dot for something happening now ("Playing").
+ * dot for something happening now ("Playing"). It keeps to one line, and wraps its word only
+ * where its row is narrower than it, as a long German state on a phone.
  */
 export function StatusPill({
   tone,
@@ -98,12 +99,15 @@ export function StatusPill({
     return (
       <span
         className={cx(
-          'inline-flex items-center gap-2.5 text-small font-semibold whitespace-nowrap text-ink',
+          'inline-flex max-w-full shrink-0 items-center gap-2.5 text-small font-semibold text-ink',
           className,
         )}
       >
-        <span aria-hidden="true" className="size-2.5 rounded-full bg-ok ring-4 ring-ok/20" />
-        {children}
+        <span
+          aria-hidden="true"
+          className="size-2.5 shrink-0 rounded-full bg-ok ring-4 ring-ok/20"
+        />
+        <span className="min-w-0 break-words">{children}</span>
       </span>
     )
   }
@@ -112,7 +116,7 @@ export function StatusPill({
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-2 text-small font-semibold whitespace-nowrap',
+        'inline-flex max-w-full shrink-0 items-center gap-2 text-small font-semibold',
         color,
         className,
       )}
@@ -123,7 +127,7 @@ export function StatusPill({
       >
         <Glyph size="1.0625rem" />
       </span>
-      {children}
+      <span className="min-w-0 break-words">{children}</span>
     </span>
   )
 }
