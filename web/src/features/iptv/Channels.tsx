@@ -25,6 +25,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
+  Block,
   Button,
   Checkbox,
   cx,
@@ -149,7 +150,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12 max-md:space-y-10">
       {keywordOpen && (
         <KeywordBulk
           scope={scope}
@@ -158,22 +159,11 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           onClose={() => setKeywordOpen(false)}
         />
       )}
-      <Panel
-        title={text.title}
-        description={reorder ? text.reorderHelp : text.help}
-        flush
-        actions={
-          <Button
-            size="sm"
-            className="max-sm:hidden"
-            aria-expanded={keywordOpen}
-            onClick={() => setKeywordOpen((open) => !open)}
-          >
-            {t.lineup.keyword.title}
-          </Button>
-        }
-      >
-        <div className="px-4 pt-4 sm:hidden">
+      <Block title={text.title} count={channels.data?.total}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <p className="max-w-[66ch] text-small text-ink-2">
+            {reorder ? text.reorderHelp : text.help}
+          </p>
           <Button
             size="sm"
             aria-expanded={keywordOpen}
@@ -182,20 +172,20 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
             {t.lineup.keyword.title}
           </Button>
         </div>
-        <div className="grid gap-3 px-6 pt-5 pb-4 max-sm:px-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_repeat(4,minmax(0,0.8fr))]">
-          <Field label={text.search}>
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label={text.search} className="min-w-56 flex-[2_1_14rem]">
             <TextInput
               type="search"
-              size="sm"
+              size="compact"
               icon={MagnifyingGlassIcon}
               value={search}
               autoComplete="off"
               onValue={(value) => refilter(() => setSearch(value))}
             />
           </Field>
-          <Field label={text.category}>
+          <Field label={text.category} className="min-w-48 flex-[1_1_12rem]">
             <Select
-              className="h-9"
+              size="compact"
               value={category}
               options={[
                 { value: '', label: text.allCategories },
@@ -209,45 +199,43 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               }
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:col-span-2 xl:col-span-4">
-            <TristateSelect
-              label={text.enabledFilter}
-              value={enabled}
-              yes={text.on}
-              no={text.off}
-              onChange={(value) => refilter(() => setEnabled(value))}
-            />
-            <TristateSelect
-              label={text.shownFilter}
-              value={shown}
-              yes={text.shown}
-              no={text.hidden}
-              onChange={(value) => refilter(() => setShown(value))}
-            />
-            <TristateSelect
-              label={text.mappedFilter}
-              value={mapped}
-              yes={text.mapped}
-              no={text.unmapped}
-              onChange={(value) => refilter(() => setMapped(value))}
-            />
-            <TristateSelect
-              label={text.archiveFilter}
-              value={archive}
-              yes={text.archived}
-              no={text.notArchived}
-              onChange={(value) => refilter(() => setArchive(value))}
-            />
-          </div>
+          <TristateSelect
+            label={text.enabledFilter}
+            value={enabled}
+            yes={text.on}
+            no={text.off}
+            onChange={(value) => refilter(() => setEnabled(value))}
+          />
+          <TristateSelect
+            label={text.shownFilter}
+            value={shown}
+            yes={text.shown}
+            no={text.hidden}
+            onChange={(value) => refilter(() => setShown(value))}
+          />
+          <TristateSelect
+            label={text.mappedFilter}
+            value={mapped}
+            yes={text.mapped}
+            no={text.unmapped}
+            onChange={(value) => refilter(() => setMapped(value))}
+          />
+          <TristateSelect
+            label={text.archiveFilter}
+            value={archive}
+            yes={text.archived}
+            no={text.notArchived}
+            onChange={(value) => refilter(() => setArchive(value))}
+          />
         </div>
 
-        <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 border-y border-line bg-bg/40 px-6 py-2 max-sm:px-4">
+        <div className="mt-5 mb-2 flex min-h-11 flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-4">
           <Checkbox
             checked={allSelected}
             indeterminate={someSelected}
             disabled={items.length === 0}
             label={text.selectPage}
-            className="text-control"
+            className="w-auto"
             onChange={(checked) =>
               setSelected((current) => {
                 const next = new Set(current)
@@ -262,8 +250,8 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           {selected.size === 0 ? (
             pager
           ) : (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-control text-ink tabular-nums">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="figures mr-1 text-control text-ink">
                 {text.selected(selected.size)}
               </span>
               <Button size="sm" disabled={bulk.isPending} onClick={() => bulk.mutate(true)}>
@@ -282,34 +270,30 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           {announcement}
         </p>
         {(move.isError || bulk.isError) && (
-          <div className="px-6 pt-3 max-sm:px-4">
+          <div className="mb-3">
             <FieldError>{errorMessage(t, move.error ?? bulk.error)}</FieldError>
           </div>
         )}
 
         {channels.isPending ? (
-          <SkeletonRows rows={8} boxed={false} />
+          <SkeletonRows rows={8} />
         ) : channels.isError ? (
-          <div className="p-6 max-sm:p-4">
-            <InlineError onRetry={() => void channels.refetch()} retrying={channels.isFetching}>
-              {errorMessage(t, channels.error)}
-            </InlineError>
-          </div>
+          <InlineError onRetry={() => void channels.refetch()} retrying={channels.isFetching}>
+            {errorMessage(t, channels.error)}
+          </InlineError>
         ) : items.length === 0 ? (
-          <div className="p-6 max-sm:p-4">
-            <EmptyState
-              icon={TelevisionSimpleIcon}
-              title={unfiltered ? t.lineup.channelsEmpty : text.noMatch}
-            >
-              {unfiltered ? t.lineup.channelsEmptyHelp : undefined}
-            </EmptyState>
-          </div>
+          <EmptyState
+            icon={TelevisionSimpleIcon}
+            title={unfiltered ? t.lineup.channelsEmpty : text.noMatch}
+          >
+            {unfiltered ? t.lineup.channelsEmptyHelp : undefined}
+          </EmptyState>
         ) : (
           <ul
             aria-label={text.title}
             aria-busy={channels.isFetching}
             className={cx(
-              'transition-opacity duration-160',
+              'grid grid-cols-[minmax(0,1fr)] gap-1.5 transition-opacity duration-160',
               channels.isPlaceholderData && 'opacity-60',
             )}
           >
@@ -349,9 +333,9 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           </ul>
         )}
         {channels.data !== undefined && channels.data.total > 0 && (
-          <div className="border-t border-line px-6 py-3 max-sm:px-4">{pager}</div>
+          <div className="mt-4 pl-4">{pager}</div>
         )}
-      </Panel>
+      </Block>
       <Modal
         open={editing !== null}
         onClose={() => setEditing(null)}
@@ -379,9 +363,9 @@ function TristateSelect({
 }) {
   const { t } = useI18n()
   return (
-    <Field label={label}>
+    <Field label={label} className="min-w-36 flex-1 basis-36 max-sm:basis-[40%]">
       <Select
-        className="h-9"
+        size="compact"
         value={value}
         options={[
           { value: 'any', label: t.lineup.channels.any },
@@ -457,9 +441,9 @@ function ChannelRow({
         onDrop()
       }}
       className={cx(
-        'flex min-h-16 items-center gap-3 px-6 py-2.5 not-first:border-t not-first:border-line transition-colors duration-160 max-sm:gap-2.5 max-sm:px-4',
+        'flex min-h-14 min-w-0 items-center gap-3 rounded-[18px] py-1.5 pr-3 pl-4 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_3.5rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-2',
         dragging && 'opacity-40',
-        selected ? 'bg-accent/8' : 'hover:bg-s2/60',
+        selected ? 'bg-accent/14' : 'bg-s1 hover:bg-s2',
       )}
     >
       <Checkbox
@@ -470,48 +454,21 @@ function ChannelRow({
         className="w-auto flex-none"
       />
       {reorder && <DragGrip name={channel.name} />}
-      <span className="figures hidden w-12 shrink-0 text-right text-[12.5px] text-ink-3 sm:inline">
+      <span className="figures hidden w-10 shrink-0 text-right text-small text-ink-3 sm:inline">
         {channel.number ?? '–'}
       </span>
       <ChannelLogo id={channel.id} logo={channel.logo} name={channel.name} />
       <div className="min-w-0 flex-1">
-        <p className="flex min-w-0 items-center gap-2">
-          <span
-            className={cx(
-              'truncate text-[14px] font-medium',
-              channel.enabled ? 'text-ink' : 'text-ink-2',
-            )}
-            title={channel.name}
-          >
-            {channel.name}
-          </span>
-          <span className="hidden shrink-0 gap-1 md:flex">
-            {channel.enabled && !channel.shown && (
-              <Tooltip content={text.hiddenHelp}>
-                <span tabIndex={0} className="rounded-full">
-                  <Badge tone="warn">{text.hidden}</Badge>
-                </span>
-              </Tooltip>
-            )}
-            {noGuide && <Badge>{text.unmapped}</Badge>}
-            {channel.mapping?.manual && <Badge tone="accent">{text.manual}</Badge>}
-            {channel.archiveDays > 0 && (
-              <Tooltip content={text.archiveHelp}>
-                <span tabIndex={0} className="rounded-full">
-                  <Badge>
-                    <span className="tabular-nums">{text.archiveDays(channel.archiveDays)}</span>
-                  </Badge>
-                </span>
-              </Tooltip>
-            )}
-            {channel.streams.length > 1 && (
-              <Badge>
-                <span className="tabular-nums">{text.streamCount(channel.streams.length)}</span>
-              </Badge>
-            )}
-          </span>
+        <p
+          className={cx(
+            'truncate text-control font-semibold',
+            channel.enabled ? 'text-ink' : 'text-ink-2',
+          )}
+          title={channel.name}
+        >
+          {channel.name}
         </p>
-        <p className="truncate text-[12.5px] text-ink-3" title={channel.providerName}>
+        <p className="truncate text-micro text-ink-3" title={channel.providerName}>
           {channel.number !== null && (
             <span className="sm:hidden">
               <span className="figures">{channel.number}</span> ·{' '}
@@ -528,11 +485,37 @@ function ChannelRow({
           )}
         </p>
       </div>
+      <span className="hidden max-w-[45%] shrink-0 flex-wrap justify-end gap-1.5 md:flex">
+        {channel.enabled && !channel.shown && (
+          <Tooltip content={text.hiddenHelp}>
+            <span tabIndex={0} className="rounded-full focus-lit">
+              <Badge tone="warn">{text.hidden}</Badge>
+            </span>
+          </Tooltip>
+        )}
+        {noGuide && <Badge>{text.unmapped}</Badge>}
+        {channel.mapping?.manual && <Badge tone="accent">{text.manual}</Badge>}
+        {channel.archiveDays > 0 && (
+          <Tooltip content={text.archiveHelp}>
+            <span tabIndex={0} className="rounded-full focus-lit">
+              <Badge>
+                <span className="figures">{text.archiveDays(channel.archiveDays)}</span>
+              </Badge>
+            </span>
+          </Tooltip>
+        )}
+        {channel.streams.length > 1 && (
+          <Badge>
+            <span className="figures">{text.streamCount(channel.streams.length)}</span>
+          </Badge>
+        )}
+      </span>
       <Switch
         label={text.enabledLabel(channel.name)}
         checked={channel.enabled}
         disabled={toggle.isPending}
         onChange={(on) => toggle.mutate(on)}
+        className="max-sm:p-1 max-sm:[&>span:first-child]:hidden"
       />
       {reorder && (
         <span className="hidden sm:flex">
@@ -602,9 +585,14 @@ function KeywordBulk({
       description={text.help}
       actions={<IconButton icon={XIcon} label={t.lineup.close} onClick={onClose} />}
     >
-      <form onSubmit={submit} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <Field label={text.label} help={text.hint} className="flex-1">
+      <form onSubmit={submit} noValidate className="flex flex-wrap items-start gap-x-2.5 gap-y-3">
+        <Field
+          label={text.label}
+          help={text.hint}
+          className="min-w-48 flex-1 max-sm:basis-full sm:max-w-xl"
+        >
           <TextInput
+            size="sm"
             value={keyword}
             autoComplete="off"
             autoFocus
@@ -617,7 +605,7 @@ function KeywordBulk({
         </Field>
         <Button
           type="submit"
-          className="h-10 sm:mt-[30px]"
+          className="mt-[34px] max-sm:mt-0"
           loading={count.isPending}
           disabled={tooShort}
         >
@@ -626,7 +614,7 @@ function KeywordBulk({
       </form>
       {category !== '' && (
         <Checkbox
-          className="mt-4"
+          className="mt-3"
           checked={inCategory}
           label={text.inCategory}
           onChange={(checked) => {
@@ -640,8 +628,8 @@ function KeywordBulk({
         {apply.isError && <FieldError>{errorMessage(t, apply.error)}</FieldError>}
         {apply.isSuccess && <p className="text-small text-ok">{text.done(apply.data.changed)}</p>}
         {count.isSuccess && (
-          <div className="flex flex-wrap items-center gap-3 rounded-row border border-line-2 bg-bg px-4 py-3">
-            <p className="mr-auto text-control text-ink tabular-nums">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <p className="figures mr-auto text-lead text-ink">
               {text.matched(number(count.data.matched))}
             </p>
             {count.data.matched > 0 && (

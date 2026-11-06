@@ -1,4 +1,4 @@
-import { MagnifyingGlassIcon, TelevisionSimpleIcon } from '@phosphor-icons/react'
+import { MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { useId, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
@@ -11,7 +11,7 @@ import {
 } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, cx, EmptyState, Field, InlineError, Select, SkeletonRows, TextInput } from '@/ui'
+import { Button, cx, Field, InlineError, Select, SkeletonRows, TextInput } from '@/ui'
 import { Pager, useDebounced } from './shared'
 
 const pageSize = 50
@@ -55,23 +55,20 @@ export default function GuidePicker({
   const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
 
   return (
-    <section
-      aria-labelledby={titleId}
-      className="mt-3 space-y-4 rounded-row border border-accent/35 bg-bg p-4 max-sm:p-3"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h3 id={titleId} className="min-w-0 truncate text-[14px] font-semibold text-ink">
+    <section aria-labelledby={titleId} className="mt-2 mb-3 min-w-0 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 id={titleId} className="min-w-0 text-control font-semibold break-words text-ink">
           {text.title(channelName)}
         </h3>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t.common.cancel}
         </Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Field label={text.search} hideLabel>
+      <div className="flex flex-wrap gap-2.5">
+        <Field label={text.search} hideLabel className="min-w-48 flex-[2_1_16rem]">
           <TextInput
             type="search"
-            size="sm"
+            size="compact"
             icon={MagnifyingGlassIcon}
             value={search}
             autoFocus
@@ -83,9 +80,9 @@ export default function GuidePicker({
             }}
           />
         </Field>
-        <Field label={text.guide} hideLabel>
+        <Field label={text.guide} hideLabel className="min-w-48 flex-[1_1_12rem]">
           <Select
-            className="h-9"
+            size="compact"
             value={guide}
             options={[
               { value: '', label: text.allGuides },
@@ -102,20 +99,21 @@ export default function GuidePicker({
         </Field>
       </div>
       {channels.isPending ? (
-        <SkeletonRows rows={3} />
+        <SkeletonRows rows={3} boxed={false} />
       ) : channels.isError ? (
         <InlineError onRetry={() => void channels.refetch()} retrying={channels.isFetching}>
           {errorMessage(t, channels.error)}
         </InlineError>
       ) : channels.data.items.length === 0 ? (
-        <EmptyState icon={TelevisionSimpleIcon} title={text.empty}>
-          {guides.data?.guides.length === 0 ? text.noGuides : undefined}
-        </EmptyState>
+        <p className="py-4 text-small text-ink-2">
+          {text.empty}
+          {guides.data?.guides.length === 0 && ` ${text.noGuides}`}
+        </p>
       ) : (
         <ul
           aria-busy={channels.isFetching}
           className={cx(
-            'max-h-[50dvh] overflow-y-auto rounded-row border border-line-2 bg-s1 transition-opacity',
+            '-mx-3 grid max-h-[50dvh] grid-cols-[minmax(0,1fr)] gap-1 overflow-y-auto overscroll-contain transition-opacity',
             channels.isPlaceholderData && 'opacity-60',
           )}
         >
@@ -124,18 +122,20 @@ export default function GuidePicker({
             return (
               <li
                 key={`${channel.guideId}:${channel.id}`}
-                className="flex items-start gap-3 px-3.5 py-3 not-first:border-t not-first:border-line"
+                className="flex min-w-0 items-start gap-3 rounded-[16px] px-3 py-2.5 transition-colors duration-300 ease-nuit hover:bg-s2"
               >
                 <GuideIcon icon={channel.icon} name={channel.name} />
-                <div className="min-w-0 flex-1 text-small">
-                  <p className="text-[14px] font-medium break-words text-ink">{channel.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-control font-semibold break-words text-ink">{channel.name}</p>
                   {others.length > 0 && (
-                    <p className="break-words text-ink-3">{text.alsoNamed(others.join(' · '))}</p>
+                    <p className="text-micro break-words text-ink-3">
+                      {text.alsoNamed(others.join(' · '))}
+                    </p>
                   )}
-                  <p className="figures break-all text-ink-3">
+                  <p className="figures text-micro break-all text-ink-3">
                     {channel.id} · {text.guideN(channel.guidePosition)}
                   </p>
-                  <p className="text-ink-2">
+                  <p className="mt-0.5 text-small text-ink-2">
                     {channel.now
                       ? text.now(
                           channel.now.title,
@@ -173,12 +173,12 @@ export default function GuidePicker({
 
 function GuideIcon({ icon, name }: { icon: string | null; name: string }) {
   const [failed, setFailed] = useState(false)
-  const frame = 'size-10 shrink-0 overflow-hidden rounded-field border border-line bg-s3'
+  const frame = 'size-9 shrink-0 overflow-hidden rounded-[12px] bg-s2'
   if (!icon || failed) {
     return (
       <span
         aria-hidden="true"
-        className={cx(frame, 'inline-grid place-items-center text-small font-semibold text-ink-3')}
+        className={cx(frame, 'inline-grid place-items-center text-small font-bold text-ink')}
       >
         {name.slice(0, 1).toUpperCase()}
       </span>
@@ -191,7 +191,7 @@ function GuideIcon({ icon, name }: { icon: string | null; name: string }) {
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className={cx(frame, 'object-contain p-0.5')}
+      className={cx(frame, 'object-contain p-1')}
     />
   )
 }

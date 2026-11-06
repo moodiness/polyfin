@@ -1,15 +1,11 @@
 import {
-  ArrowDownIcon,
-  ArrowRightIcon,
-  ArrowUpIcon,
   ArrowsClockwiseIcon,
   DotsThreeIcon,
-  GearSixIcon,
   LinkSimpleIcon,
   PencilSimpleIcon,
   TrashIcon,
 } from '@phosphor-icons/react'
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   deleteAddon,
@@ -18,32 +14,30 @@ import {
   refreshAddon,
   updateAddon,
   type Addon,
-  type IptvSource,
   type Scope,
 } from '@/api'
+import { IptvSource } from '@/features/iptv/IptvSource'
 import { errorMessage, languageOptions, stremioLabel } from '@/format'
 import { useI18n } from '@/i18n'
 import {
+  AlertTile,
   Avatar,
   Badge,
   Button,
-  ButtonLink,
   ConfirmDialog,
-  cx,
   Field,
   FieldError,
   IconButton,
   Menu,
   MenuItem,
   MenuSeparator,
+  Modal,
+  MoveButtons,
   Notice,
-  Select,
-  Panel,
-  PanelSection,
-  Switch,
+  RelativeTime,
+  SettingRow,
   TextInput,
   useToast,
-  RelativeTime,
 } from '@/ui'
 import { AddonSettings, MusicBadge } from './AddonSettings'
 import { IptvEditForm } from './IptvForms'
@@ -55,15 +49,8 @@ import {
   useFolderScanFollowed,
   useServerSystem,
 } from './LocalFolders'
-import {
-  invalidateScope,
-  isIptv,
-  lastTime,
-  replaceCachedAddon,
-  sourcePath,
-  type Entry,
-} from './model'
-import { SourceStatus, SourceTile } from './parts'
+import { invalidateScope, isIptv, lastTime, replaceCachedAddon, type Entry } from './model'
+import { Fact, Facts, Group, SourceMark, SourceStatus } from './parts'
 import { SourceUsedBy } from './UsedBy'
 
 /** The tag of a source's kind, as in the list. */
@@ -77,7 +64,7 @@ export function OwnerLabel({ entry, selfId }: { entry: Entry; selfId: string }) 
   const { t } = useI18n()
   if (entry.owner === null) return null
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 text-ink-2">
+    <span className="inline-flex shrink-0 items-center gap-1.5">
       <Avatar name={entry.owner.name} size="sm" />
       <span>
         {entry.owner.id === selfId ? t.sources.yours : t.sources.ownedBy(entry.owner.name)}
@@ -86,31 +73,32 @@ export function OwnerLabel({ entry, selfId }: { entry: Entry; selfId: string }) 
   )
 }
 
-type Editor = 'none' | 'edit' | 'settings'
-
 /**
- * Everything about one source and every action on it: turn it on or off, move it, refresh it,
- * replace its address or edit its account, its music settings, scan a local folder and link its
- * unmatched files, remove it. `mode="panel"` is the detail beside the list; `mode="page"` is the
- * source's own page, with the settings and the unmatched files always open. Another user's source
- * (`entry.scope === null`) is shown without actions.
+ * One source's page, beside the list of sources: its head (mark, name, kind, state, Refresh and
+ * the other actions), then, for an IPTV source, its six parts; for an addon or a folder, who uses
+ * it and where it stands in the order, the language of its descriptions, its settings, its files
+ * and its details. Another user's source (`entry.scope === null`) is shown without actions.
  */
 export function SourceDetail({
   entry,
   selfId,
-  mode,
   index,
   count,
+  section,
   onMove,
+  moveError,
   onRemoved,
 }: {
   entry: Entry
   selfId: string
-  mode: 'panel' | 'page'
   /** Its place among the sources of its scope, which `onMove` changes. */
   index: number
   count: number
+  /** The part of an IPTV source's page the address names; its Summary without one. */
+  section?: string
   onMove?: (to: number) => void
+  /** The failure of the last move, shown under Order. */
+  moveError?: string
   onRemoved?: () => void
 }) {
   const { language, t } = useI18n()
@@ -121,9 +109,8 @@ export function SourceDetail({
   const folder = addon.folder
   useFolderScanFollowed(addon)
   const system = useServerSystem()
-  const [editor, setEditor] = useState<Editor>('none')
+  const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
-  const editorId = useId()
 
   const fallbackScope: Scope = scope ?? 'shared'
   const toggle = useMutation({
@@ -135,13 +122,19 @@ export function SourceDetail({
     mutationFn: () => refreshAddon(fallbackScope, addon.id),
     onSuccess: (updated) => {
       replaceCachedAddon(fallbackScope, updated)
-      toast(
-        folder !== null
-          ? t.localFolders.scanStarted(updated.name)
-          : iptv
-            ? text.refreshedList(updated.name)
-            : text.refreshed(updated.name),
-      )
+      // An IPTV source answers with its state: a failed download is told by its error code.
+      const failed = updated.source?.error ?? ''
+      if (failed !== '') {
+        toast(t.iptv.errors[failed] ?? t.errors.generic, { tone: 'danger' })
+      } else {
+        toast(
+          folder !== null
+            ? t.localFolders.scanStarted(updated.name)
+            : iptv
+              ? t.lineup.summary.refreshed
+              : text.refreshed(updated.name),
+        )
+      }
     },
     onSettled: () => invalidateScope(fallbackScope),
   })
@@ -158,11 +151,6 @@ export function SourceDetail({
     onSettled: () => invalidateScope(fallbackScope),
   })
 
-  function resetFeedback() {
-    toggle.reset()
-    refresh.reset()
-  }
-
   const kindLine = [
     folder !== null && folder.share !== ''
       ? t.localFolders.locations[folder.share]
@@ -173,349 +161,325 @@ export function SourceDetail({
     .filter(Boolean)
     .join(' · ')
   const when = lastTime(addon)
+  const editLabel = folder !== null ? t.localFolders.edit : iptv ? text.edit : text.replace
+  const refreshLabel =
+    folder !== null ? t.localFolders.scan : iptv ? t.lineup.summary.refresh : text.refresh
 
-  const actions =
-    scope === null ? undefined : (
-      <>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={ArrowsClockwiseIcon}
-          loading={refresh.isPending || (folder?.scanning ?? false)}
-          aria-label={
-            folder !== null ? t.localFolders.scanLabel(addon.name) : text.refreshLabel(addon.name)
-          }
-          onClick={() => {
-            resetFeedback()
-            refresh.mutate()
+  const actions = scope !== null && (
+    <div className="flex shrink-0 items-center gap-2 max-md:w-full">
+      <Button
+        icon={ArrowsClockwiseIcon}
+        loading={refresh.isPending || (folder?.scanning ?? false)}
+        title={iptv ? t.lineup.summary.refreshHelp : undefined}
+        aria-label={
+          folder !== null
+            ? t.localFolders.scanLabel(addon.name)
+            : iptv
+              ? undefined
+              : text.refreshLabel(addon.name)
+        }
+        onClick={() => {
+          toggle.reset()
+          refresh.reset()
+          refresh.mutate()
+        }}
+      >
+        {iptv && refresh.isPending ? t.lineup.summary.refreshing : refreshLabel}
+      </Button>
+      <Menu
+        label={text.moreActions(addon.name)}
+        align="end"
+        trigger={(props) => (
+          <IconButton {...props} label={text.moreActions(addon.name)} icon={DotsThreeIcon} />
+        )}
+      >
+        <MenuItem
+          icon={iptv || folder !== null ? PencilSimpleIcon : LinkSimpleIcon}
+          onSelect={() => setEditing(true)}
+        >
+          {editLabel}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem icon={TrashIcon} danger onSelect={() => setConfirming(true)}>
+          {text.remove}
+        </MenuItem>
+      </Menu>
+    </div>
+  )
+
+  // Who uses it and where it stands: the rows an IPTV source's Summary shows too.
+  const forWhom = scope !== null && (
+    <Group title={text.forWhom}>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <SettingRow
+          kind="switch"
+          label={text.enabled}
+          help={text.enabledHelp}
+          checked={toggle.isPending ? (toggle.variables ?? addon.enabled) : addon.enabled}
+          disabled={toggle.isPending}
+          error={toggle.isError ? errorMessage(t, toggle.error) : undefined}
+          onChange={(enabled) => {
+            toggle.reset()
+            refresh.reset()
+            toggle.mutate(enabled)
           }}
-        >
-          <span className="max-sm:sr-only">
-            {folder !== null ? t.localFolders.scan : text.refresh}
-          </span>
-        </Button>
-        <Menu
-          label={text.moreActions(addon.name)}
-          align="end"
-          trigger={(props) => (
-            <IconButton {...props} label={text.moreActions(addon.name)} icon={DotsThreeIcon} />
-          )}
-        >
-          {mode === 'panel' && (
-            <MenuItem icon={ArrowRightIcon} to={sourcePath(scope, addon.id)}>
-              {folder !== null ? t.localFolders.openPage : iptv ? text.openSource : text.openPage}
-            </MenuItem>
-          )}
-          <MenuItem
-            icon={iptv || folder !== null ? PencilSimpleIcon : LinkSimpleIcon}
-            onSelect={() => setEditor(editor === 'edit' ? 'none' : 'edit')}
-          >
-            {folder !== null ? t.localFolders.edit : iptv ? text.edit : text.replace}
-          </MenuItem>
-          {addon.music !== null && mode === 'panel' && (
-            <MenuItem icon={GearSixIcon} onSelect={() => setEditor('settings')}>
-              {text.settings}
-            </MenuItem>
-          )}
-          <MenuSeparator />
-          <MenuItem icon={TrashIcon} danger onSelect={() => setConfirming(true)}>
-            {text.remove}
-          </MenuItem>
-        </Menu>
-      </>
-    )
+        />
+        {scope === 'shared' && <SourceUsedBy key={addon.id} addon={addon} />}
+        {onMove && count > 1 && (
+          <OrderRow
+            name={addon.name}
+            index={index}
+            count={count}
+            onMove={onMove}
+            error={moveError}
+          />
+        )}
+      </div>
+    </Group>
+  )
+
+  const failure = refresh.isError && (
+    <div className="mt-4">
+      <FieldError>{errorMessage(t, refresh.error)}</FieldError>
+    </div>
+  )
 
   return (
-    <Panel
-      as="section"
-      flush
-      title={addon.name}
-      titleAside={
-        <>
-          <KindBadge addon={addon} />
-          {addon.music !== null && <MusicBadge music={addon.music} />}
-        </>
-      }
-      description={
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>{kindLine}</span>
-          <SourceStatus addon={addon} />
-          {when !== null && (
-            <span className="text-ink-3">
-              <RelativeTime iso={when} />
-            </span>
-          )}
-        </span>
-      }
-      media={<SourceTile addon={addon} />}
-      actions={actions}
-    >
-      {scope === null ? (
-        <PanelSection>
-          <Notice>{text.readOnly(entry.owner?.name ?? '')}</Notice>
-        </PanelSection>
+    <article aria-labelledby={`source-${addon.id}`} className="min-w-0">
+      <header className="flex items-start gap-[22px] max-md:flex-wrap max-md:gap-3.5">
+        <SourceMark addon={addon} />
+        <div className="min-w-0 flex-1">
+          <h2
+            id={`source-${addon.id}`}
+            className="text-[44px] leading-[1.05] font-[680] tracking-[-0.02em] break-words text-ink max-md:text-[32px]"
+          >
+            {addon.name}
+          </h2>
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-control text-ink-2 max-md:text-[16.5px]">
+            <span>{kindLine}</span>
+            {addon.music !== null && <MusicBadge music={addon.music} />}
+            <SourceStatus addon={addon} />
+            {when !== null && (
+              <span className="text-ink-3">
+                <RelativeTime iso={when} />
+              </span>
+            )}
+          </p>
+        </div>
+        {actions}
+      </header>
+      {failure}
+
+      {iptv && scope !== null ? (
+        <IptvSource
+          scope={scope}
+          addon={addon}
+          section={section}
+          forWhom={forWhom}
+          retry={
+            <Button
+              icon={ArrowsClockwiseIcon}
+              loading={refresh.isPending}
+              onClick={() => {
+                toggle.reset()
+                refresh.reset()
+                refresh.mutate()
+              }}
+            >
+              {refresh.isPending ? t.lineup.summary.refreshing : t.lineup.summary.refresh}
+            </Button>
+          }
+        />
       ) : (
-        <PanelSection>
-          <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
-            <div className="flex min-w-0 flex-1 basis-[280px] items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p id={`${editorId}-on`} className="text-control font-medium text-ink">
-                  {text.enabled}
-                </p>
-                <p id={`${editorId}-on-help`} className="mt-1 text-small text-ink-3">
-                  {text.enabledHelp}
-                </p>
-              </div>
-              <Switch
-                checked={addon.enabled}
-                labelledBy={`${editorId}-on`}
-                describedById={`${editorId}-on-help`}
-                stateText={[text.active, text.off]}
-                disabled={toggle.isPending}
-                onChange={(enabled) => {
-                  resetFeedback()
-                  toggle.mutate(enabled)
+        <>
+          {scope === null && (
+            <Notice className="mt-8">{text.readOnly(entry.owner?.name ?? '')}</Notice>
+          )}
+          {addon.source !== null && addon.source.error !== '' && (
+            <AlertTile
+              tone="danger"
+              title={t.iptv.errors[addon.source.error] ?? t.errors.generic}
+              className="mt-8"
+            />
+          )}
+          {forWhom}
+          {scope === 'shared' && (addon.kind === 'stremio' || addon.language !== '') && (
+            <Group title={text.descriptions}>
+              <AddonLanguage addon={addon} />
+            </Group>
+          )}
+          {scope !== null && addon.music !== null && (
+            <AddonSettings key={addon.id} scope={scope} addon={addon} music={addon.music} />
+          )}
+          {folder !== null && <LocalFolderFigures folder={folder} />}
+          {scope !== null && folder !== null && folder.kind !== 'homevideos' && (
+            <UnmatchedFiles addon={addon} folder={folder} />
+          )}
+          <Group title={text.details}>
+            <Facts>
+              {entry.owner !== null && (
+                <Fact label={text.owner}>
+                  <OwnerLabel entry={entry} selfId={selfId} />
+                </Fact>
+              )}
+              {!iptv && folder === null && addon.description !== '' && (
+                <Fact label={text.description} wide>
+                  {addon.description}
+                </Fact>
+              )}
+              <Fact
+                wide
+                label={
+                  folder !== null
+                    ? folder.share === ''
+                      ? t.localFolders.path[computer(system)]
+                      : t.localFolders.address
+                    : iptv
+                      ? text.address
+                      : text.manifestUrl
+                }
+              >
+                <span className="font-mono text-body break-all">{addon.manifestUrl}</span>
+              </Fact>
+              {folder !== null && folder.share === 's3' && (
+                <Fact label={t.localFolders.endpoint} wide>
+                  <span className="font-mono text-body break-all">{folder.endpoint}</span>
+                </Fact>
+              )}
+              {folder !== null && folder.share === 'rclone' && (
+                <Fact label={t.localFolders.rcloneRemote} wide>
+                  <span className="font-mono text-body break-all">{folder.rcloneRemote}</span>
+                </Fact>
+              )}
+              {folder !== null && folder.share !== '' && folder.user !== '' && (
+                <Fact
+                  label={folder.share === 's3' ? t.localFolders.accessKey : t.localFolders.user}
+                >
+                  <span className="break-all">{folder.user}</span>
+                </Fact>
+              )}
+              {!iptv && folder === null && addon.version !== '' && (
+                <Fact label={text.version}>{addon.version}</Fact>
+              )}
+              {!iptv && folder === null && addon.resources.length > 0 && (
+                <Fact label={text.provides}>
+                  <span className="flex flex-wrap justify-end gap-1.5">
+                    {addon.resources.map((resource) => (
+                      <Badge key={resource}>{stremioLabel(t.stremioResources, resource)}</Badge>
+                    ))}
+                  </span>
+                </Fact>
+              )}
+              {!iptv && folder === null && addon.types.length > 0 && (
+                <Fact label={text.types}>
+                  <span className="flex flex-wrap justify-end gap-1.5">
+                    {addon.types.map((type) => (
+                      <Badge key={type} tone="accent">
+                        {stremioLabel(t.stremioTypes, type)}
+                      </Badge>
+                    ))}
+                  </span>
+                </Fact>
+              )}
+              {!iptv && folder === null && (
+                <>
+                  <Fact label={text.catalogs}>{text.catalogCount(addon.catalogCount)}</Fact>
+                  <Fact label={text.lastRefresh}>
+                    <RelativeTime iso={addon.refreshedAt} />
+                  </Fact>
+                </>
+              )}
+              {folder !== null && (
+                <>
+                  <Fact label={t.localFolders.holds}>{t.localFolders.kinds[folder.kind]}</Fact>
+                  <Fact label={t.localFolders.lastScan}>
+                    {folder.scannedAt === null ? (
+                      t.localFolders.never
+                    ) : (
+                      <RelativeTime iso={folder.scannedAt} />
+                    )}
+                  </Fact>
+                  {folder.error !== '' && folder.checkedAt !== null && (
+                    <Fact label={t.localFolders.lastAttempt}>
+                      <RelativeTime iso={folder.checkedAt} />
+                    </Fact>
+                  )}
+                </>
+              )}
+              {addon.source !== null && (
+                <>
+                  <Fact label={text.channels}>
+                    {addon.source.options.liveTv
+                      ? text.shownOf(
+                          addon.source.lineup.shownChannels.toLocaleString(language),
+                          addon.source.lineup.channels.toLocaleString(language),
+                        )
+                      : text.notImported}
+                  </Fact>
+                  {(addon.source.options.movies || addon.source.options.series) && (
+                    <Fact label={text.vod}>
+                      {text.vodShort(
+                        addon.source.vod.shownMovies.toLocaleString(language),
+                        addon.source.vod.shownSeries.toLocaleString(language),
+                      )}
+                    </Fact>
+                  )}
+                  <Fact label={text.lastFetch}>
+                    {addon.source.fetchedAt === null ? (
+                      text.never
+                    ) : (
+                      <RelativeTime iso={addon.source.fetchedAt} />
+                    )}
+                  </Fact>
+                  {addon.source.nextAt !== null && (
+                    <Fact label={text.nextFetch}>
+                      <RelativeTime iso={addon.source.nextAt} />
+                    </Fact>
+                  )}
+                </>
+              )}
+            </Facts>
+          </Group>
+        </>
+      )}
+
+      {scope !== null && (
+        <Modal open={editing} onClose={() => setEditing(false)} title={editLabel} width={640}>
+          <div className="p-5">
+            {folder !== null ? (
+              <LocalFolderEditForm
+                addon={addon}
+                folder={folder}
+                onSaved={(updated) => {
+                  replaceCachedAddon(scope, updated)
+                  setEditing(false)
+                  toast(t.localFolders.saved)
+                }}
+                onCancel={() => setEditing(false)}
+              />
+            ) : iptv ? (
+              <IptvEditForm
+                scope={scope}
+                addon={addon}
+                onSaved={(updated) => {
+                  replaceCachedAddon(scope, updated)
+                  setEditing(false)
+                  toast(text.saved)
+                }}
+                onCancel={() => setEditing(false)}
+              />
+            ) : (
+              <ReplaceForm
+                scope={scope}
+                addon={addon}
+                onDone={(replaced) => {
+                  setEditing(false)
+                  if (replaced) toast(text.replaced)
                 }}
               />
-            </div>
-            {onMove && count > 1 && (
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-control font-medium text-ink">{text.order}</p>
-                  <p className="mt-1 text-small text-ink-3">
-                    <span className="figures">{text.position(index + 1, count)}</span>
-                  </p>
-                </div>
-                <div className="flex gap-1">
-                  <IconButton
-                    label={text.moveUp(addon.name)}
-                    icon={ArrowUpIcon}
-                    size="sm"
-                    disabled={index === 0}
-                    onClick={() => onMove(index - 1)}
-                  />
-                  <IconButton
-                    label={text.moveDown(addon.name)}
-                    icon={ArrowDownIcon}
-                    size="sm"
-                    disabled={index === count - 1}
-                    onClick={() => onMove(index + 1)}
-                  />
-                </div>
-              </div>
             )}
           </div>
-          {(toggle.isError || refresh.isError) && (
-            <div className="mt-4 flex flex-col gap-2">
-              {toggle.isError && <FieldError>{errorMessage(t, toggle.error)}</FieldError>}
-              {refresh.isError && <FieldError>{errorMessage(t, refresh.error)}</FieldError>}
-            </div>
-          )}
-        </PanelSection>
-      )}
-
-      {scope === 'shared' && (addon.kind === 'stremio' || addon.language !== '') && (
-        <PanelSection>
-          <AddonLanguage addon={addon} />
-        </PanelSection>
-      )}
-
-      {scope === 'shared' && (
-        <PanelSection>
-          <SourceUsedBy key={addon.id} addon={addon} />
-        </PanelSection>
-      )}
-
-      {scope !== null && editor === 'edit' && (
-        <PanelSection
-          title={folder !== null ? t.localFolders.edit : iptv ? text.edit : text.replace}
-        >
-          {folder !== null ? (
-            <LocalFolderEditForm
-              addon={addon}
-              folder={folder}
-              onSaved={(updated) => {
-                replaceCachedAddon(scope, updated)
-                setEditor('none')
-                toast(t.localFolders.saved)
-              }}
-              onCancel={() => setEditor('none')}
-            />
-          ) : iptv ? (
-            <IptvEditForm
-              scope={scope}
-              addon={addon}
-              onSaved={(updated) => {
-                replaceCachedAddon(scope, updated)
-                setEditor('none')
-                toast(text.saved)
-              }}
-              onCancel={() => setEditor('none')}
-            />
-          ) : (
-            <ReplaceForm
-              scope={scope}
-              addon={addon}
-              onDone={(replaced) => {
-                setEditor('none')
-                if (replaced) toast(text.replaced)
-              }}
-            />
-          )}
-        </PanelSection>
-      )}
-
-      {scope !== null && addon.music !== null && (mode === 'page' || editor === 'settings') && (
-        <PanelSection>
-          <AddonSettings
-            key={addon.id}
-            scope={scope}
-            addon={addon}
-            music={addon.music}
-            onClose={mode === 'panel' ? () => setEditor('none') : undefined}
-          />
-        </PanelSection>
-      )}
-
-      {addon.source !== null && <IptvFigures source={addon.source} />}
-      {folder !== null && <LocalFolderFigures folder={folder} />}
-
-      <PanelSection title={text.details}>
-        <dl className="grid gap-x-6 gap-y-3 text-control sm:grid-cols-[minmax(140px,auto)_1fr]">
-          {entry.owner !== null && (
-            <Fact label={text.owner}>
-              <OwnerLabel entry={entry} selfId={selfId} />
-            </Fact>
-          )}
-          {!iptv && folder === null && addon.description !== '' && (
-            <Fact label={text.description}>
-              <span className="text-ink-2">{addon.description}</span>
-            </Fact>
-          )}
-          <Fact
-            label={
-              folder !== null
-                ? folder.share === ''
-                  ? t.localFolders.path[computer(system)]
-                  : t.localFolders.address
-                : iptv
-                  ? text.address
-                  : text.manifestUrl
-            }
-          >
-            <span className="font-mono text-small break-all text-ink-2">{addon.manifestUrl}</span>
-          </Fact>
-          {folder !== null && folder.share === 's3' && (
-            <Fact label={t.localFolders.endpoint}>
-              <span className="font-mono text-small break-all text-ink-2">{folder.endpoint}</span>
-            </Fact>
-          )}
-          {folder !== null && folder.share === 'rclone' && (
-            <Fact label={t.localFolders.rcloneRemote}>
-              <span className="font-mono text-small break-all text-ink-2">
-                {folder.rcloneRemote}
-              </span>
-            </Fact>
-          )}
-          {folder !== null && folder.share !== '' && folder.user !== '' && (
-            <Fact label={folder.share === 's3' ? t.localFolders.accessKey : t.localFolders.user}>
-              <span className="break-all text-ink-2">{folder.user}</span>
-            </Fact>
-          )}
-          {!iptv && folder === null && addon.version !== '' && (
-            <Fact label={text.version}>
-              <span className="figures">{addon.version}</span>
-            </Fact>
-          )}
-          {!iptv && folder === null && addon.resources.length > 0 && (
-            <Fact label={text.provides}>
-              <span className="flex flex-wrap gap-1">
-                {addon.resources.map((resource) => (
-                  <Badge key={resource}>{stremioLabel(t.stremioResources, resource)}</Badge>
-                ))}
-              </span>
-            </Fact>
-          )}
-          {!iptv && folder === null && addon.types.length > 0 && (
-            <Fact label={text.types}>
-              <span className="flex flex-wrap gap-1">
-                {addon.types.map((type) => (
-                  <Badge key={type} tone="accent">
-                    {stremioLabel(t.stremioTypes, type)}
-                  </Badge>
-                ))}
-              </span>
-            </Fact>
-          )}
-          {!iptv && folder === null && (
-            <>
-              <Fact label={text.catalogs}>{text.catalogCount(addon.catalogCount)}</Fact>
-              <Fact label={text.lastRefresh}>
-                <RelativeTime iso={addon.refreshedAt} />
-              </Fact>
-            </>
-          )}
-          {folder !== null && (
-            <>
-              <Fact label={t.localFolders.holds}>{t.localFolders.kinds[folder.kind]}</Fact>
-              <Fact label={t.localFolders.lastScan}>
-                {folder.scannedAt === null ? (
-                  t.localFolders.never
-                ) : (
-                  <RelativeTime iso={folder.scannedAt} />
-                )}
-              </Fact>
-              {folder.error !== '' && folder.checkedAt !== null && (
-                <Fact label={t.localFolders.lastAttempt}>
-                  <RelativeTime iso={folder.checkedAt} />
-                </Fact>
-              )}
-            </>
-          )}
-          {addon.source !== null && (
-            <>
-              <Fact label={text.channels}>
-                {addon.source.options.liveTv
-                  ? text.shownOf(
-                      addon.source.lineup.shownChannels.toLocaleString(language),
-                      addon.source.lineup.channels.toLocaleString(language),
-                    )
-                  : text.notImported}
-              </Fact>
-              {(addon.source.options.movies || addon.source.options.series) && (
-                <Fact label={text.vod}>
-                  {text.vodShort(
-                    addon.source.vod.shownMovies.toLocaleString(language),
-                    addon.source.vod.shownSeries.toLocaleString(language),
-                  )}
-                </Fact>
-              )}
-              <Fact label={text.lastFetch}>
-                {addon.source.fetchedAt === null ? (
-                  text.never
-                ) : (
-                  <RelativeTime iso={addon.source.fetchedAt} />
-                )}
-              </Fact>
-              {addon.source.nextAt !== null && (
-                <Fact label={text.nextFetch}>
-                  <RelativeTime iso={addon.source.nextAt} />
-                </Fact>
-              )}
-            </>
-          )}
-        </dl>
-        {scope !== null && (iptv || folder !== null) && mode === 'panel' && (
-          <div className="mt-5">
-            <ButtonLink to={sourcePath(scope, addon.id)} variant="primary" iconEnd={ArrowRightIcon}>
-              {folder !== null ? t.localFolders.openPage : text.openSource}
-            </ButtonLink>
-          </div>
-        )}
-      </PanelSection>
-
-      {scope !== null && folder !== null && mode === 'page' && folder.kind !== 'homevideos' && (
-        <UnmatchedFiles addon={addon} folder={folder} />
+        </Modal>
       )}
 
       {scope !== null && (
@@ -534,16 +498,40 @@ export function SourceDetail({
           {scope === 'shared' ? text.removeShared : text.removeMine}
         </ConfirmDialog>
       )}
-    </Panel>
+    </article>
   )
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+/** Where a source stands among its scope's sources, "2 of 3", with the buttons that move it. */
+function OrderRow({
+  name,
+  index,
+  count,
+  onMove,
+  error,
+}: {
+  name: string
+  index: number
+  count: number
+  onMove: (to: number) => void
+  error?: ReactNode
+}) {
+  const { t } = useI18n()
   return (
-    <>
-      <dt className="text-ink-3">{label}</dt>
-      <dd className="min-w-0 text-ink">{children}</dd>
-    </>
+    <div className="rounded-row bg-s1">
+      <div className="flex min-h-[82px] items-center gap-4 py-3.5 pr-3.5 pl-[30px] max-md:min-h-[68px] max-md:gap-2.5 max-md:pr-2 max-md:pl-5">
+        <span className="min-w-0 flex-1 text-h3 text-ink">{t.sources.order}</span>
+        <span className="figures text-lead text-ink-2 max-md:text-[17px]">
+          {t.sources.position(index + 1, count)}
+        </span>
+        <MoveButtons name={name} index={index} count={count} onMove={onMove} />
+      </div>
+      {error !== undefined && (
+        <div className="px-[30px] pb-5 max-md:px-5 max-md:pb-4">
+          <FieldError>{error}</FieldError>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -574,68 +562,16 @@ function AddonLanguage({ addon }: { addon: Addon }) {
       ? descriptionLanguages
       : [...descriptionLanguages, addon.language]
   return (
-    <Field
+    <SettingRow
+      kind="choice"
       label={text.language}
       help={text.languageHelp}
+      value={save.isPending ? (save.variables ?? addon.language) : addon.language}
+      options={[{ value: '', label: text.languageNone }, ...languageOptions(codes, language)]}
+      onChange={(chosen) => save.mutate(chosen)}
+      disabled={save.isPending}
       error={save.isError ? errorMessage(t, save.error) : undefined}
-    >
-      <Select
-        value={addon.language}
-        options={[{ value: '', label: text.languageNone }, ...languageOptions(codes, language)]}
-        onValue={(chosen) => save.mutate(chosen)}
-        disabled={save.isPending}
-        className="max-w-xs"
-      />
-    </Field>
-  )
-}
-
-/** An IPTV source's counts, side by side, and the error of its last download. */
-function IptvFigures({ source }: { source: IptvSource }) {
-  const { language, t } = useI18n()
-  const text = t.sources
-  const figures = [
-    { label: text.figures.entries, value: source.channels, warn: false },
-    { label: text.figures.shown, value: source.lineup.shownChannels, warn: false },
-    { label: text.figures.mapped, value: source.lineup.mapped, warn: false },
-    {
-      label: text.figures.unmapped,
-      value: source.lineup.unmapped,
-      warn: source.lineup.unmapped > 0,
-    },
-  ]
-  return (
-    <PanelSection>
-      <dl className="grid grid-cols-4 gap-y-4 max-sm:grid-cols-2">
-        {figures.map((figure, i) => (
-          <div
-            key={figure.label}
-            className={cx(
-              'min-w-0 px-4 first:pl-0',
-              i > 0 && 'border-l border-line',
-              'max-sm:[&:nth-child(3)]:border-l-0 max-sm:[&:nth-child(3)]:pl-0',
-            )}
-          >
-            <dt className="text-small text-ink-3">{figure.label}</dt>
-            <dd
-              className={cx(
-                'figures mt-1.5 text-[19px] font-medium',
-                figure.warn ? 'text-warn' : 'text-ink',
-              )}
-            >
-              {figure.value.toLocaleString(language)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {source.error !== '' && (
-        <Notice tone="danger" className="mt-5">
-          {Object.hasOwn(t.iptv.errors, source.error)
-            ? t.iptv.errors[source.error]
-            : t.errors.generic}
-        </Notice>
-      )}
-    </PanelSection>
+    />
   )
 }
 

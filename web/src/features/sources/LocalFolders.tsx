@@ -12,7 +12,7 @@ import {
   TerminalWindowIcon,
   VideoCameraIcon,
 } from '@phosphor-icons/react'
-import { Fragment, useId, useState, type FormEvent } from 'react'
+import { Fragment, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   addLocalFolder,
@@ -48,6 +48,7 @@ import {
 import { dateTime, errorMessage, formatBytes } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
+  AlertTile,
   Badge,
   Button,
   Checkbox,
@@ -55,11 +56,11 @@ import {
   cx,
   Field,
   FieldError,
+  FigureTile,
   IconButton,
   InlineError,
   Notice,
   NumberInput,
-  PanelSection,
   SecretField,
   Segmented,
   Select,
@@ -71,7 +72,29 @@ import {
   useToast,
 } from '@/ui'
 import { folderFailure, invalidateScope, replaceCachedAddon } from './model'
+import { Group } from './parts'
 import TitleSearch from './TitleSearch'
+
+/** A part of a folder's page: a group with its title and help, or the figures without one. */
+function FolderSection({
+  title,
+  description,
+  children,
+}: {
+  title?: ReactNode
+  description?: ReactNode
+  children: ReactNode
+}) {
+  if (title === undefined) return <div className="mt-13 max-md:mt-10">{children}</div>
+  return (
+    <Group title={title}>
+      {description !== undefined && (
+        <p className="mb-5 max-w-[66ch] text-small text-ink-2">{description}</p>
+      )}
+      {children}
+    </Group>
+  )
+}
 
 /** The ways files are matched, in the order a folder's figures tell them. */
 const matchMethods: MatchMethod[] = [
@@ -913,39 +936,35 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
     .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
   const errors = folder.share === '' ? text.errors : text.shareErrors
   const failure = folderFailure(folder)
-  // Figures wrap onto rows: only those after the first of their row are set apart.
-  const columns = figures.length === 4 ? 4 : 3
   return (
-    <PanelSection>
-      <dl className={cx('grid gap-y-4', columns === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
-        {figures.map((figure, i) => (
-          <div
-            key={figure.label}
-            className={cx('min-w-0 px-4', i % columns === 0 ? 'pl-0' : 'border-l border-line')}
-          >
-            <dt className="text-small text-ink-3">{figure.label}</dt>
-            <dd
-              className={cx(
-                'figures mt-1.5 text-[19px] font-medium',
-                figure.warn ? 'text-warn' : 'text-ink',
-              )}
-            >
-              {figure.value.toLocaleString(language)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {methods.length > 0 && (
-        <p className="mt-4 text-small text-ink-3">{text.matchedBy(methods)}</p>
-      )}
+    <FolderSection>
       {failure !== '' && (
-        <Notice tone="danger" className="mt-5">
-          <strong className="font-medium">
-            {folder.share === '' ? text.errorTitle : text.errorTitleShare}.
-          </strong>{' '}
+        <AlertTile
+          tone="danger"
+          title={folder.share === '' ? text.errorTitle : text.errorTitleShare}
+          className="mb-5"
+        >
           {Object.hasOwn(errors, failure) ? errors[failure] : t.errors.generic}{' '}
           {folder.files > 0 && text.keptNote}
-        </Notice>
+        </AlertTile>
+      )}
+      <div
+        className={cx(
+          'grid gap-2.5 max-md:grid-cols-2',
+          figures.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
+        )}
+      >
+        {figures.map((figure) => (
+          <FigureTile
+            key={figure.label}
+            value={figure.value.toLocaleString(language)}
+            label={figure.label}
+            tone={figure.warn ? 'warn' : undefined}
+          />
+        ))}
+      </div>
+      {methods.length > 0 && (
+        <p className="mt-4 px-2 text-small text-ink-3">{text.matchedBy(methods)}</p>
       )}
       {folder.searchFailed > 0 && (
         <Notice tone="warn" className="mt-5">
@@ -1002,7 +1021,7 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           {text.absoluteHelp}
         </Notice>
       )}
-    </PanelSection>
+    </FolderSection>
   )
 }
 
@@ -1051,7 +1070,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
 
   return (
     <>
-      <PanelSection
+      <FolderSection
         title={folder.kind === 'music' ? text.leftOutTitle : text.unmatchedTitle}
         description={folder.kind === 'music' ? text.leftOutHelp : text.unmatchedHelp}
       >
@@ -1067,7 +1086,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
           </p>
         ) : (
           <>
-            <ul className="flex flex-col divide-y divide-line">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
               {unmatched.data.files.map((file, i, files) => {
                 const disc = file.discTitle?.discPath
                 return (
@@ -1094,7 +1113,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
             )}
           </>
         )}
-      </PanelSection>
+      </FolderSection>
       {folder.kind === 'shows' && folder.unlistedEpisodes > 0 && (
         <UnlistedEpisodes addon={addon} folder={folder} />
       )}
@@ -1103,10 +1122,13 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
       )}
       <LooserMatches addon={addon} folder={folder} />
       {(folder.links.length > 0 || folder.episodes.length > 0) && (
-        <PanelSection title={text.linksTitle}>
-          <ul className="flex flex-col divide-y divide-line">
+        <FolderSection title={text.linksTitle}>
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
             {folder.links.map((link) => (
-              <li key={link.unit} className="flex items-center justify-between gap-4 py-2">
+              <li
+                key={link.unit}
+                className="flex items-center justify-between gap-4 rounded-row bg-s1 px-6 py-4 max-md:px-5"
+              >
                 <span className="min-w-0">
                   <span className="block font-mono text-small break-all text-ink-2">
                     {unitName(link.unit, folder, text.discTitle)}
@@ -1132,7 +1154,10 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
             {folder.episodes.map((given) => {
               const name = titleName(given.disc, given.discPath, given.number, folder, text)
               return (
-                <li key={given.path} className="flex items-center justify-between gap-4 py-2">
+                <li
+                  key={given.path}
+                  className="flex items-center justify-between gap-4 rounded-row bg-s1 px-6 py-4 max-md:px-5"
+                >
                   <span className="min-w-0">
                     <span className="block font-mono text-small break-all text-ink-2">{name}</span>
                     <Badge tone="accent">{given.episode}</Badge>
@@ -1150,7 +1175,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
           </ul>
           {unlink.isError && <FieldError>{errorMessage(t, unlink.error)}</FieldError>}
           {removeEpisode.isError && <FieldError>{errorMessage(t, removeEpisode.error)}</FieldError>}
-        </PanelSection>
+        </FolderSection>
       )}
     </>
   )
@@ -1184,7 +1209,7 @@ function UnlistedEpisodes({ addon, folder }: { addon: Addon; folder: LocalFolder
   })
 
   return (
-    <PanelSection title={text.unlistedListTitle} description={text.unlistedListHelp}>
+    <FolderSection title={text.unlistedListTitle} description={text.unlistedListHelp}>
       {unlisted.isPending ? (
         <Skeleton className="h-24 rounded-panel" />
       ) : unlisted.isError ? (
@@ -1192,13 +1217,13 @@ function UnlistedEpisodes({ addon, folder }: { addon: Addon; folder: LocalFolder
           {errorMessage(t, unlisted.error)}
         </InlineError>
       ) : (
-        <ul className="flex flex-col divide-y divide-line">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {unlisted.data.shows.map((show) => (
             <UnlistedShowRow key={show.imdbId} addon={addon} show={show} folder={folder} />
           ))}
         </ul>
       )}
-    </PanelSection>
+    </FolderSection>
   )
 }
 
@@ -1219,7 +1244,7 @@ function UnlistedShowRow({
       ? text.unlistedCatalogRange(episodeCode(show.catalogFirst), episodeCode(show.catalogLast))
       : text.unlistedCatalogEmpty
   return (
-    <li className="py-3">
+    <li className="rounded-row bg-s1 px-6 py-4 max-md:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-control text-ink">
@@ -1271,7 +1296,7 @@ function ShowNumberings({ addon, folder }: { addon: Addon; folder: LocalFolder }
   })
 
   return (
-    <PanelSection title={text.numberingTitle} description={text.numberingHelp}>
+    <FolderSection title={text.numberingTitle} description={text.numberingHelp}>
       {shows.isPending ? (
         <Skeleton className="h-24 rounded-panel" />
       ) : shows.isError ? (
@@ -1279,13 +1304,13 @@ function ShowNumberings({ addon, folder }: { addon: Addon; folder: LocalFolder }
           {errorMessage(t, shows.error)}
         </InlineError>
       ) : (
-        <ul className="flex flex-col divide-y divide-line">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {shows.data.shows.map((show) => (
             <ShowNumberingRow key={show.imdbId} addon={addon} show={show} folder={folder} />
           ))}
         </ul>
       )}
-    </PanelSection>
+    </FolderSection>
   )
 }
 
@@ -1302,7 +1327,7 @@ function ShowNumberingRow({
   const { t } = useI18n()
   const text = t.localFolders
   return (
-    <li className="py-3">
+    <li className="rounded-row bg-s1 px-6 py-4 max-md:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-control text-ink">
@@ -1473,7 +1498,7 @@ function LooserMatches({ addon, folder }: { addon: Addon; folder: LocalFolder })
   if (count === 0) return null
 
   return (
-    <PanelSection title={text.looserTitle} description={text.looserHelp}>
+    <FolderSection title={text.looserTitle} description={text.looserHelp}>
       {looser.isPending ? (
         <Skeleton className="h-24 rounded-panel" />
       ) : looser.isError ? (
@@ -1482,14 +1507,17 @@ function LooserMatches({ addon, folder }: { addon: Addon; folder: LocalFolder })
         </InlineError>
       ) : (
         <>
-          <ul className="flex flex-col divide-y divide-line">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
             {looser.data.units.map((match) => {
               const name = unitName(match.unit, folder, text.discTitle)
               const read = match.year === null ? match.title : `${match.title} (${match.year})`
               const title =
                 match.titleYear === null ? match.name : `${match.name} (${match.titleYear})`
               return (
-                <li key={match.unit} className="flex items-center justify-between gap-4 py-3">
+                <li
+                  key={match.unit}
+                  className="flex items-center justify-between gap-4 rounded-row bg-s1 px-6 py-4 max-md:px-5"
+                >
                   <div className="min-w-0">
                     <p className="font-mono text-small break-all text-ink">{name}</p>
                     <p className="mt-1 text-small text-ink-3">
@@ -1528,7 +1556,7 @@ function LooserMatches({ addon, folder }: { addon: Addon; folder: LocalFolder })
         </>
       )}
       {unlink.isError && <FieldError>{errorMessage(t, unlink.error)}</FieldError>}
-    </PanelSection>
+    </FolderSection>
   )
 }
 
@@ -1571,7 +1599,7 @@ function UnmatchedRow({
   }
 
   return (
-    <li className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 py-3">
+    <li className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 rounded-row bg-s1 px-6 py-4 max-md:px-5">
       <div className="min-w-0 flex-1 basis-[260px]">
         <p className="font-mono text-small break-all text-ink">{file.path}</p>
         <p className="mt-1 text-small text-ink-3">
@@ -1751,7 +1779,7 @@ function DiscSuggestion({
     ? text.disc[first.disc](unitName(first.discTitle.discPath, folder, text.discTitle))
     : first.discTitle.discPath
   return (
-    <li className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
+    <li className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-row bg-s1 px-6 py-4 max-md:px-5">
       <div className="min-w-0 flex-1 basis-[260px]">
         <p className="text-small text-ink-2">
           {text.suggestion(disc, suggested[0].episode, suggested[suggested.length - 1].episode)}

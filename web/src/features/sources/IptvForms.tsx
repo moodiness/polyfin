@@ -210,8 +210,8 @@ export function IptvAddFlow({
             key={id}
             aria-current={step === id ? 'step' : undefined}
             className={cx(
-              'inline-flex h-7 items-center gap-2 rounded-field border px-2.5 text-small font-medium',
-              step === id ? 'border-accent/55 bg-s3 text-ink' : 'border-line-2 text-ink-3',
+              'inline-flex min-h-10 items-center gap-2.5 rounded-[14px] px-3.5 text-control font-semibold',
+              step === id ? 'bg-s2 text-ink' : 'text-ink-3',
             )}
           >
             <span className="figures">{index + 1}</span>

@@ -38,15 +38,15 @@ export function Pager({
   const number = useNumber()
   if (total === 0) return null
   return (
-    <nav aria-label={t.lineup.pager.label} className="flex flex-wrap items-center gap-3">
-      <p aria-live="polite" className="text-small text-ink-3 tabular-nums">
+    <nav aria-label={t.lineup.pager.label} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <p aria-live="polite" className="figures text-small text-ink-2">
         {t.lineup.pager.range(
           number(offset + 1),
           number(Math.min(offset + limit, total)),
           number(total),
         )}
       </p>
-      <div className="ml-auto flex gap-1.5">
+      <div className="ml-auto flex gap-2">
         <Button
           size="sm"
           icon={CaretLeftIcon}
@@ -75,16 +75,17 @@ export function DragGrip({ name }: { name: string }) {
     <span
       aria-hidden="true"
       title={t.lineup.dragHandle(name)}
-      className="hidden shrink-0 cursor-grab text-ink-3 sm:inline"
+      className="hidden shrink-0 cursor-grab text-ink-3 active:cursor-grabbing sm:inline"
     >
-      <DotsSixVerticalIcon size={16} />
+      <DotsSixVerticalIcon size={20} />
     </span>
   )
 }
 
 /**
- * A channel's logo, through Polyfin as Jellyfin apps get it, in a fixed box; its initial when it has
- * none or it fails to load. `logo` only tells whether there is one, and refreshes it when it changes.
+ * A channel's logo, through Polyfin as Jellyfin apps get it, on a soft round tile; its initial when
+ * it has none or it fails to load. `logo` only tells whether there is one, and refreshes it when it
+ * changes. 36 px in a compact row, 56 px (`large`) at the head of its editor.
  */
 export function ChannelLogo({
   id,
@@ -99,14 +100,18 @@ export function ChannelLogo({
 }) {
   const [failed, setFailed] = useState<string | null>(null)
   const frame = cx(
-    'shrink-0 overflow-hidden rounded-field border border-line bg-s3',
-    large ? 'size-14' : 'size-9',
+    'shrink-0 overflow-hidden bg-s2',
+    large ? 'size-14 rounded-[18px]' : 'size-9 rounded-[12px]',
   )
   if (!logo || failed === logo) {
     return (
       <span
         aria-hidden="true"
-        className={cx(frame, 'inline-grid place-items-center text-small font-semibold text-ink-3')}
+        className={cx(
+          frame,
+          'inline-grid place-items-center font-bold text-ink',
+          large ? 'text-lead' : 'text-small',
+        )}
       >
         {name.slice(0, 1).toUpperCase()}
       </span>
@@ -118,12 +123,12 @@ export function ChannelLogo({
       alt=""
       loading="lazy"
       onError={() => setFailed(logo)}
-      className={cx(frame, 'object-contain p-0.5')}
+      className={cx(frame, 'object-contain p-1')}
     />
   )
 }
 
-/** One figure of a row of figures: a label, a mono value, a detail; a link when `to` is given. */
+/** One figure of a row of figures: a label, a value, a detail; a link when `to` is given. */
 export type Figure = {
   label: string
   value: string
@@ -133,55 +138,48 @@ export type Figure = {
 }
 
 /**
- * A row of figures split by hairlines, without cards (the mockup's IPTV summary). Two columns on a
- * phone.
+ * Figures side by side as Salon tiles: a big value, what it counts, and a detail under it. A tile
+ * with `to` is a link as a whole, lit under the keyboard. Two columns on a phone.
  */
 export function Figures({ items, label }: { items: readonly Figure[]; label?: string }) {
   return (
-    <dl
-      aria-label={label}
-      className="grid grid-cols-2 gap-y-6 border-y border-line py-5 md:grid-cols-4"
-    >
-      {items.map((item, index) => {
-        const value = (
+    <dl aria-label={label} className="grid grid-cols-4 gap-2.5 max-md:grid-cols-2">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className={cx(
+            'relative flex min-w-0 flex-col rounded-row bg-s1 px-6 pt-[22px] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
+            item.to &&
+              'transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit hover:bg-s2 has-[a:focus-visible]:lit has-[a:focus-visible]:lift [--lift:1.03]',
+          )}
+        >
+          <dt className="order-2 mt-2.5 text-small text-ink-2">
+            {item.to ? (
+              // The link covers the whole tile.
+              <Link
+                to={item.to}
+                className="after:absolute after:inset-0 after:rounded-row focus-visible:outline-none"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              item.label
+            )}
+          </dt>
           <dd
             className={cx(
-              'figures mt-2 text-[24px] leading-tight font-medium tracking-[-0.02em]',
-              item.tone === 'warn' ? 'text-warn' : 'text-ink',
+              'figures order-1 text-[44px] leading-none font-[650] tracking-[-0.02em] max-md:text-[36px]',
+              item.tone === 'warn' && 'text-warn',
+              item.tone === 'ok' && 'text-ok',
             )}
           >
             {item.value}
           </dd>
-        )
-        return (
-          <div
-            key={item.label}
-            className={cx(
-              'min-w-0 px-5 max-md:px-4',
-              'border-line',
-              index % 2 === 0 ? 'max-md:pl-0' : 'border-l',
-              'md:not-first:border-l md:first:pl-0',
-            )}
-          >
-            <dt className="text-[12.5px] text-ink-3">
-              {item.to ? (
-                <Link
-                  to={item.to}
-                  className="rounded-sm underline decoration-line-3 underline-offset-4 transition-colors duration-160 hover:text-ink hover:decoration-link"
-                >
-                  {item.label}
-                </Link>
-              ) : (
-                item.label
-              )}
-            </dt>
-            {value}
-            {item.detail !== undefined && (
-              <dd className="mt-1.5 truncate text-small text-ink-3">{item.detail}</dd>
-            )}
-          </div>
-        )
-      })}
+          {item.detail !== undefined && (
+            <dd className="order-3 mt-1 min-w-0 truncate text-micro text-ink-3">{item.detail}</dd>
+          )}
+        </div>
+      ))}
     </dl>
   )
 }

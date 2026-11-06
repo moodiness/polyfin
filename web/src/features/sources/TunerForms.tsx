@@ -87,7 +87,7 @@ export function TunerAddFlow({
           setFavoritesOnly(checked)
         }}
       />
-      <section className="flex flex-col gap-4 border-t border-line pt-5">
+      <section className="mt-3 flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-control font-medium text-ink">{text.foundTitle}</h3>
@@ -159,7 +159,7 @@ export function TunerAddFlow({
           ))}
         {failed?.found === true && <FieldError>{addError(t, add.error)}</FieldError>}
       </section>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-5 border-t border-line pt-5">
+      <form onSubmit={submit} noValidate className="mt-3 flex flex-col gap-5">
         <Field
           label={text.tunerAddress}
           help={text.tunerAddressHint}

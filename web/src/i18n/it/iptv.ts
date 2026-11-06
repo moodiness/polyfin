@@ -34,17 +34,12 @@ const iptv: typeof en = {
   },
   lineup: {
     open: 'Apri l’origine',
-    title: (name: string) => `${name}: origine IPTV`,
     titleLoading: 'Origine IPTV',
     description:
       'Cosa importa questa origine e come lo mostrano le applicazioni Jellyfin: i suoi canali di Diretta TV, con ordine, nomi e guide dei programmi, e i suoi film e serie TV.',
-    notFound: 'Questa origine IPTV non esiste, oppure non puoi gestirla.',
-    backShared: 'Torna alle origini',
     backMine: 'Torna alle mie origini',
     notFoundTitle: 'Origine non trovata',
     reset: 'Ripristina',
-    unsaved: 'Modifiche non salvate',
-    upToDate: 'Nessuna modifica non salvata',
     unmappedNotice: (count: string) => `${count} canali non hanno una guida.`,
     openMapping: 'Apri l’abbinamento',
     archivedNotice: (count: number, formatted: string) =>
@@ -91,13 +86,10 @@ const iptv: typeof en = {
     },
     summary: {
       categories: 'Categorie attive',
-      ofTotal: (total: string) => `di ${total}`,
       shown: 'Canali mostrati',
-      enabledOf: (enabled: string, total: string) => `${enabled} attivi, di ${total}`,
       mappedOf: (mapped: string, total: string) => `${mapped} di ${total} con una guida`,
       shownOf: (shown: string, total: string) => `${shown} mostrati di ${total}`,
       mapped: 'Con una guida',
-      unmapped: (count: string) => `${count} senza`,
       entries: 'Voci in diretta',
       listTitle: 'Elenchi',
       refreshHelp:
@@ -108,11 +100,12 @@ const iptv: typeof en = {
       vodTitle: 'Film e serie TV',
       movies: 'Film importati',
       series: 'Serie TV importate',
-      titlesOf: (total: string, categories: string) => `di ${total}, in ${categories} categorie`,
       episodes: 'Episodi noti',
-      episodesHelp: 'Xtream: letti all’apertura delle serie',
       vodShort: (movies: string, series: string) => `${movies} film e ${series} serie TV importati`,
       lastAttempt: 'Ultimo tentativo',
+      allChannels: (count: string) => `Tutti i ${count} canali`,
+      hidden: 'Nascosto',
+      noGuide: 'Senza guida',
     },
     tuner: {
       title: 'Tuner',

@@ -34,17 +34,12 @@ const iptv: typeof en = {
   },
   lineup: {
     open: 'Abrir a fonte',
-    title: (name: string) => `${name}: fonte IPTV`,
     titleLoading: 'Fonte IPTV',
     description:
       'O que esta fonte importa e como os aplicativos Jellyfin a exibem: seus canais de TV ao Vivo, com ordem, nomes e guias de programação, e seus filmes e séries.',
-    notFound: 'Esta fonte IPTV não existe ou não é uma que você possa gerenciar.',
-    backShared: 'Voltar para as fontes',
     backMine: 'Voltar para minhas fontes',
     notFoundTitle: 'Fonte não encontrada',
     reset: 'Redefinir',
-    unsaved: 'Alterações não salvas',
-    upToDate: 'Nenhuma alteração não salva',
     unmappedNotice: (count: string) => `${count} canais não têm guia.`,
     openMapping: 'Abrir o mapeamento',
     archivedNotice: (count: number, formatted: string) =>
@@ -90,13 +85,10 @@ const iptv: typeof en = {
     },
     summary: {
       categories: 'Categorias ativadas',
-      ofTotal: (total: string) => `de ${total}`,
       shown: 'Canais exibidos',
-      enabledOf: (enabled: string, total: string) => `${enabled} ativados, de ${total}`,
       mappedOf: (mapped: string, total: string) => `${mapped} de ${total} com guia`,
       shownOf: (shown: string, total: string) => `${shown} exibidos de ${total}`,
       mapped: 'Com guia',
-      unmapped: (count: string) => `${count} sem guia`,
       entries: 'Entradas ao vivo',
       listTitle: 'Listas',
       refreshHelp:
@@ -107,12 +99,13 @@ const iptv: typeof en = {
       vodTitle: 'Filmes e séries',
       movies: 'Filmes importados',
       series: 'Séries importadas',
-      titlesOf: (total: string, categories: string) => `de ${total}, em ${categories} categorias`,
       episodes: 'Episódios conhecidos',
-      episodesHelp: 'Xtream: lidos à medida que as séries são abertas',
       vodShort: (movies: string, series: string) =>
         `${movies} filmes e ${series} séries importados`,
       lastAttempt: 'Última tentativa',
+      allChannels: (count: string) => `Todos os ${count} canais`,
+      hidden: 'Oculto',
+      noGuide: 'Sem guia',
     },
     tuner: {
       title: 'Sintonizador',

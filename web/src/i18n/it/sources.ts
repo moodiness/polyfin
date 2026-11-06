@@ -3,7 +3,6 @@ import type en from '../en/sources'
 const sources: typeof en = {
   sources: {
     title: 'Origini',
-    lede: 'Add-on Stremio, add-on Eclipse, origini IPTV e cartelle locali in un unico elenco. Le origini del server servono tutti gli utenti; quelle personali di un membro servono solo lui.',
     add: 'Aggiungi un’origine',
     listLabel: 'Origini',
     listNote: 'Le origini personali dei membri servono solo il loro proprietario.',
@@ -48,14 +47,13 @@ const sources: typeof en = {
     channelsShown: (count: string) => `${count} canali mostrati`,
     notDownloaded: 'Non ancora scaricata',
     moreActions: (name: string) => `Altre azioni per ${name}`,
-    openPage: 'Apri la sua pagina',
     enabled: 'Abilitata',
+    forWhom: 'Per chi',
+    descriptions: 'Descrizioni',
     enabledHelp:
       'Disattivare un’origine nasconde le sue librerie nelle applicazioni Jellyfin senza perderle.',
     order: 'Ordine',
     position: (position: number, count: number) => `${position} di ${count}`,
-    moveUp: (name: string) => `Sposta su ${name}`,
-    moveDown: (name: string) => `Sposta giù ${name}`,
     moved: (name: string, position: number, count: number) =>
       `${name} spostata alla posizione ${position} di ${count}.`,
     description: 'Descrizione',
@@ -76,12 +74,6 @@ const sources: typeof en = {
     lastFetch: 'Ultimo download',
     nextFetch: 'Prossimo download',
     never: 'Mai',
-    figures: {
-      entries: 'Voci nell’origine',
-      shown: 'Canali mostrati',
-      mapped: 'Con guida',
-      unmapped: 'Senza guida',
-    },
     openSource: 'Apri l’origine',
     iptvHint:
       'Cosa importare, categorie, canali, numeri e guide si impostano nella pagina dell’origine.',
@@ -102,7 +94,6 @@ const sources: typeof en = {
     languageSaved: (name: string) => `${name}: lingua delle descrizioni salvata.`,
     edit: 'Modifica l’account',
     saved: 'Origine salvata.',
-    settings: 'Impostazioni',
     remove: 'Rimuovi',
     removeTitle: (name: string) => `Rimuovere ${name}?`,
     removeShared:
@@ -635,11 +626,9 @@ const sources: typeof en = {
     looserUnlinkLabel: (unit: string) => `Scollega ${unit} dal suo titolo`,
     looserUnlinked: (unit: string) =>
       `${unit} è stato scollegato: viene abbinato solo in base al nome e all’anno esatti.`,
-    openPage: 'Apri la pagina della cartella',
   },
   mySources: {
     lede: 'Aggiungi le tue origini Stremio, Eclipse e IPTV e scegli quali dei loro cataloghi compaiono come librerie nelle tue applicazioni Jellyfin.',
-    preferenceTitle: 'Le origini del server',
     useShared: 'Usa le origini del server',
     useSharedHelp:
       'Attivo: ricevi le origini e le librerie del server, seguite dalle tue. Disattivato: ricevi solo le tue origini e librerie.',
@@ -648,7 +637,6 @@ const sources: typeof en = {
       'Il controllo parentale si applica al tuo account: le tue applicazioni Jellyfin mostrano solo le origini e le librerie del server, perché forniscono le classificazioni su cui si basa. Le tue origini vengono conservate ma non usate.',
     personalAddonsOff:
       'Un amministratore ha disattivato le tue origini: le tue applicazioni Jellyfin mostrano solo le origini e le librerie del server. Le tue origini vengono conservate ma non usate.',
-    listTitle: 'Le tue origini',
   },
   usedBy: {
     title: 'Usata da',

@@ -51,10 +51,7 @@ export default function TitleSearch({
   }
 
   return (
-    <section
-      aria-label={text.searchLabel(path)}
-      className="mt-3 rounded-field border border-line bg-s1 p-3"
-    >
+    <section aria-label={text.searchLabel(path)} className="mt-3 rounded-row bg-s2 p-5 max-md:p-4">
       <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-2">
         <Field label={text.searchQuery} className="min-w-[180px] flex-1">
           <TextInput
@@ -151,7 +148,7 @@ function TitleChoice({
       ) : (
         <span
           aria-hidden="true"
-          className="grid aspect-[2/3] w-8 shrink-0 place-items-center rounded-check border border-line-2 bg-s2 text-ink-3"
+          className="grid aspect-[2/3] w-8 shrink-0 place-items-center rounded-check bg-s2 text-ink-3"
         >
           <KindIcon size={14} />
         </span>

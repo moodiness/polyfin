@@ -32,17 +32,12 @@ const iptv = {
   },
   lineup: {
     open: 'Open the source',
-    title: (name: string) => `${name}: IPTV source`,
     titleLoading: 'IPTV source',
     description:
       'What this source imports and how Jellyfin apps show it: its Live TV channels, with their order, names and programme guides, and its movies and series.',
-    notFound: 'This IPTV source does not exist, or is not one you can manage.',
-    backShared: 'Back to sources',
     backMine: 'Back to my sources',
     notFoundTitle: 'Source not found',
     reset: 'Reset',
-    unsaved: 'Unsaved changes',
-    upToDate: 'No unsaved changes',
     unmappedNotice: (count: string) => `${count} channels have no guide.`,
     openMapping: 'Open the mapping',
     archivedNotice: (count: number, formatted: string) =>
@@ -87,13 +82,10 @@ const iptv = {
     },
     summary: {
       categories: 'Categories on',
-      ofTotal: (total: string) => `of ${total}`,
       shown: 'Channels shown',
-      enabledOf: (enabled: string, total: string) => `${enabled} on, of ${total}`,
       mappedOf: (mapped: string, total: string) => `${mapped} of ${total} with a guide`,
       shownOf: (shown: string, total: string) => `${shown} shown of ${total}`,
       mapped: 'With a guide',
-      unmapped: (count: string) => `${count} without`,
       entries: 'Live entries',
       listTitle: 'Lists',
       refreshHelp:
@@ -104,12 +96,13 @@ const iptv = {
       vodTitle: 'Movies and series',
       movies: 'Movies imported',
       series: 'Series imported',
-      titlesOf: (total: string, categories: string) => `of ${total}, in ${categories} categories`,
       episodes: 'Episodes known',
-      episodesHelp: 'Xtream: read as series open',
       vodShort: (movies: string, series: string) =>
         `${movies} movies and ${series} series imported`,
       lastAttempt: 'Last attempt',
+      allChannels: (count: string) => `All ${count} channels`,
+      hidden: 'Hidden',
+      noGuide: 'No guide',
     },
     tuner: {
       title: 'Tuner',

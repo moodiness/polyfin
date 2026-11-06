@@ -178,14 +178,15 @@ With **Merge quality variants**, entries of a category with the same name become
 
 ## The source page
 
-Each source has its own page, titled with the source's name and kind: **M3U playlist** or **Xtream Codes account**. Open it with **Open the source** on its row in **Content › Sources** or **My sources**.
+Each source has its own page, titled with the source's name and kind: **M3U playlist** or **Xtream Codes account**. Select its row in **Content › Sources** or **My sources**: the page opens beside the list.
 
 ![An M3U playlist source's page on Summary, with Download again and its six sections as tabs](images/iptv-source.webp)
 
-- The header holds **Download again**, on every section.
-- The page has six sections: **Summary**, **Import options**, **Categories**, **Channels**, **Guides** and **Guide mapping**.
+- The header holds **Download again**, on every section, and the more-actions menu with **Edit the account** and **Remove**.
+- The page has six sections, as words under its name: **Summary**, **Import options**, **Categories**, **Channels**, **Guides** and **Guide mapping**.
+- **Summary** shows a failed download first, with **Download again**, then the Live TV figures, the first channels, **Enabled**, **Used by**, the order, and the lists' downloads.
 - While **Live TV channels** is off, the four Live TV sections are hidden: **Categories**, **Channels**, **Guides** and **Guide mapping**.
-- **Content › Live TV** also lists each IPTV source's channel counts, with **Line-up and guides** to open its page.
+- **Content › Live TV** also lists each IPTV source's channel counts; its row opens the source's **Channels**.
 
 ### Summary
 

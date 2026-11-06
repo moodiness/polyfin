@@ -3,7 +3,6 @@ import type en from '../en/sources'
 const sources: typeof en = {
   sources: {
     title: 'Quellen',
-    lede: 'Stremio-Add-ons, Eclipse-Add-ons, IPTV-Quellen und lokale Ordner in einer Liste. Die Quellen des Servers stehen allen Benutzern zur Verfügung; die eigenen Quellen eines Mitglieds nur diesem.',
     add: 'Quelle hinzufügen',
     listLabel: 'Quellen',
     listNote: 'Eigene Quellen von Mitgliedern stehen nur ihrem Besitzer zur Verfügung.',
@@ -48,14 +47,13 @@ const sources: typeof en = {
     channelsShown: (count: string) => `${count} Kanäle angezeigt`,
     notDownloaded: 'Noch nicht heruntergeladen',
     moreActions: (name: string) => `Weitere Aktionen für ${name}`,
-    openPage: 'Seite öffnen',
     enabled: 'Aktiviert',
+    forWhom: 'Für wen',
+    descriptions: 'Beschreibungen',
     enabledHelp:
       'Wenn du eine Quelle deaktivierst, werden ihre Bibliotheken in Jellyfin-Apps ausgeblendet, ohne verloren zu gehen.',
     order: 'Reihenfolge',
     position: (position: number, count: number) => `${position} von ${count}`,
-    moveUp: (name: string) => `${name} nach oben verschieben`,
-    moveDown: (name: string) => `${name} nach unten verschieben`,
     moved: (name: string, position: number, count: number) =>
       `${name} wurde auf Position ${position} von ${count} verschoben.`,
     description: 'Beschreibung',
@@ -76,12 +74,6 @@ const sources: typeof en = {
     lastFetch: 'Letzter Download',
     nextFetch: 'Nächster Download',
     never: 'Nie',
-    figures: {
-      entries: 'Einträge in der Quelle',
-      shown: 'Angezeigte Kanäle',
-      mapped: 'Mit Fernsehprogramm',
-      unmapped: 'Ohne Fernsehprogramm',
-    },
     openSource: 'Quelle öffnen',
     iptvHint:
       'Was importiert wird, Kategorien, Kanäle, Nummern und Fernsehprogramme legst du auf der Seite der Quelle fest.',
@@ -102,7 +94,6 @@ const sources: typeof en = {
     languageSaved: (name: string) => `${name}: Die Sprache der Beschreibungen wurde gespeichert.`,
     edit: 'Konto bearbeiten',
     saved: 'Quelle gespeichert.',
-    settings: 'Einstellungen',
     remove: 'Entfernen',
     removeTitle: (name: string) => `${name} entfernen?`,
     removeShared:
@@ -637,11 +628,9 @@ const sources: typeof en = {
     looserUnlinkLabel: (unit: string) => `Zuordnung von ${unit} aufheben`,
     looserUnlinked: (unit: string) =>
       `Die Zuordnung von ${unit} wurde aufgehoben: Sie erfolgt nur noch nach genauem Namen und Jahr.`,
-    openPage: 'Seite des Ordners öffnen',
   },
   mySources: {
     lede: 'Füge deine eigenen Stremio-, Eclipse- und IPTV-Quellen hinzu und wähle aus, welche ihrer Kataloge als Bibliotheken in deinen Jellyfin-Apps erscheinen.',
-    preferenceTitle: 'Die Quellen des Servers',
     useShared: 'Quellen des Servers verwenden',
     useSharedHelp:
       'Ein: Du erhältst die Quellen und Bibliotheken des Servers, gefolgt von deinen eigenen. Aus: Du erhältst nur deine eigenen Quellen und Bibliotheken.',
@@ -650,7 +639,6 @@ const sources: typeof en = {
       'Für dein Konto gilt die Kindersicherung: Deine Jellyfin-Apps zeigen nur die Quellen und Bibliotheken des Servers, da diese die Altersfreigaben liefern, auf die sie sich stützt. Deine eigenen Quellen bleiben erhalten, werden aber nicht verwendet.',
     personalAddonsOff:
       'Ein Administrator hat deine eigenen Quellen deaktiviert: Deine Jellyfin-Apps zeigen nur die Quellen und Bibliotheken des Servers. Deine eigenen Quellen bleiben erhalten, werden aber nicht verwendet.',
-    listTitle: 'Deine Quellen',
   },
   usedBy: {
     title: 'Verwendet von',

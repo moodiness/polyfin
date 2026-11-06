@@ -66,25 +66,30 @@ export function AddSourceModal({
 
   return (
     <Modal open={open} onClose={onClose} title={text.title} width={720}>
-      <div key={round} className="flex flex-col gap-6 p-5">
-        <Segmented<AddKind>
-          label={text.kind}
-          value={kind}
-          onChange={setKind}
-          options={[
-            { value: 'stremio', label: text.kinds.stremio, icon: PuzzlePieceIcon },
-            { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
-            { value: 'iptv', label: text.kinds.iptv, icon: BroadcastIcon },
-            // Tuners and local folders are the server's: a member's own sources have none.
-            ...(scope === 'shared'
-              ? [
-                  { value: 'tuner' as const, label: text.kinds.tuner, icon: CellTowerIcon },
-                  { value: 'local' as const, label: text.kinds.local, icon: FolderIcon },
-                ]
-              : []),
-          ]}
-          className="self-start max-sm:self-stretch"
-        />
+      <div key={round} className="flex flex-col gap-7 p-5">
+        <div className="flex flex-col gap-3">
+          <p aria-hidden="true" className="text-h3 text-ink">
+            {text.kind}
+          </p>
+          <Segmented<AddKind>
+            label={text.kind}
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: 'stremio', label: text.kinds.stremio, icon: PuzzlePieceIcon },
+              { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
+              { value: 'iptv', label: text.kinds.iptv, icon: BroadcastIcon },
+              // Tuners and local folders are the server's: a member's own sources have none.
+              ...(scope === 'shared'
+                ? [
+                    { value: 'tuner' as const, label: text.kinds.tuner, icon: CellTowerIcon },
+                    { value: 'local' as const, label: text.kinds.local, icon: FolderIcon },
+                  ]
+                : []),
+            ]}
+            className="self-start max-sm:self-stretch"
+          />
+        </div>
         {scope === 'shared' && <UsedByPicker value={usedBy} onChange={setUsedBy} />}
         {kind === 'local' ? (
           <LocalFolderAddForm

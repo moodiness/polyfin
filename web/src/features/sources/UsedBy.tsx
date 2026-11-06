@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   fetchGroups,
@@ -13,7 +13,7 @@ import {
 import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, Checkbox, Field, FieldError, Notice, Segmented, useToast } from '@/ui'
+import { Button, Checkbox, FieldError, Notice, SettingRow, useToast } from '@/ui'
 import { invalidateScope, replaceCachedAddon } from './model'
 
 /** A server source used by everyone: the default of a new one. */
@@ -55,17 +55,22 @@ export function usedByNames(usedBy: UsedBy, groups: GroupSummary[], users: User[
 }
 
 /**
- * Who uses a server source: Everyone, or only the groups and users ticked. It warns when the
- * signed-in administrator is left out, and when no one is ticked.
+ * Who uses a server source, as a setting row: Everyone, or only the groups and users ticked, in a
+ * tile under the row. It warns when the signed-in administrator is left out, and when no one is
+ * ticked. `saved` marks the row changed from it; `footer` goes at the end (the Save buttons).
  */
 export function UsedByPicker({
   value,
   onChange,
   disabled = false,
+  saved,
+  footer,
 }: {
   value: UsedBy
   onChange: (value: UsedBy) => void
   disabled?: boolean
+  saved?: UsedBy['mode']
+  footer?: ReactNode
 }) {
   const { t } = useI18n()
   const text = t.usedBy
@@ -78,22 +83,25 @@ export function UsedByPicker({
       [list]: checked ? [...value[list], id] : value[list].filter((other) => other !== id),
     })
   return (
-    <div className="flex flex-col gap-4">
-      <Segmented<UsedBy['mode']>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+      <SettingRow<UsedBy['mode']>
+        kind="choice"
         label={text.title}
+        help={text.help}
         value={value.mode}
+        saved={saved}
+        disabled={disabled}
         onChange={(mode) => onChange({ ...value, mode })}
         options={[
           { value: 'everyone', label: text.everyone },
           { value: 'listed', label: text.listed },
         ]}
-        className="self-start max-sm:self-stretch"
       />
       {value.mode === 'listed' && (
-        <>
+        <div className="flex flex-col gap-6 rounded-row bg-s1 px-[30px] py-6 max-md:px-5 max-md:py-5">
           <div className="grid gap-6 sm:grid-cols-2">
             <fieldset className="flex min-w-0 flex-col gap-2" disabled={disabled}>
-              <legend className="mb-2 text-small font-medium text-ink-2">{text.groups}</legend>
+              <legend className="mb-3 text-h3 text-ink">{text.groups}</legend>
               {groups.length === 0 && <p className="text-small text-ink-3">{text.noGroups}</p>}
               {groups.map((group) => (
                 <Checkbox
@@ -107,7 +115,7 @@ export function UsedByPicker({
               ))}
             </fieldset>
             <fieldset className="flex min-w-0 flex-col gap-2" disabled={disabled}>
-              <legend className="mb-2 text-small font-medium text-ink-2">{text.users}</legend>
+              <legend className="mb-3 text-h3 text-ink">{text.users}</legend>
               {users.map((user) => (
                 <Checkbox
                   key={user.id}
@@ -130,9 +138,10 @@ export function UsedByPicker({
             me !== undefined &&
             !usesSource(value, me) && <Notice tone="warn">{text.selfLeftOut}</Notice>
           )}
-          <p className="text-small text-ink-3">{text.ownAddons}</p>
-        </>
+          <p className="max-w-[66ch] text-small text-ink-3">{text.ownAddons}</p>
+        </div>
       )}
+      {footer}
     </div>
   )
 }
@@ -157,33 +166,40 @@ export function SourceUsedBy({ addon }: { addon: Addon }) {
   })
   const changed = !sameUsedBy(draft, addon.usedBy)
   return (
-    <Field label={text.title} help={text.help}>
-      <div className="flex flex-col gap-4">
-        <UsedByPicker
-          value={draft}
-          onChange={(value) => {
-            save.reset()
-            setDraft(value)
-          }}
-          disabled={save.isPending}
-        />
-        {save.isError && <FieldError>{errorMessage(t, save.error)}</FieldError>}
-        {changed && (
-          <div className="flex gap-2">
-            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(draft)}>
-              {text.save}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={save.isPending}
-              onClick={() => setDraft(addon.usedBy)}
-            >
-              {text.cancel}
-            </Button>
+    <UsedByPicker
+      value={draft}
+      saved={addon.usedBy.mode}
+      onChange={(value) => {
+        save.reset()
+        setDraft(value)
+      }}
+      disabled={save.isPending}
+      footer={
+        (changed || save.isError) && (
+          <div className="flex flex-col gap-3 px-2 pt-2">
+            {save.isError && <FieldError>{errorMessage(t, save.error)}</FieldError>}
+            {changed && (
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="primary"
+                  loading={save.isPending}
+                  onClick={() => save.mutate(draft)}
+                >
+                  {text.save}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={save.isPending}
+                  onClick={() => setDraft(addon.usedBy)}
+                >
+                  {text.cancel}
+                </Button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </Field>
+        )
+      }
+    />
   )
 }
 
@@ -194,7 +210,7 @@ export function UsedByChip({ usedBy }: { usedBy: UsedBy }) {
   if (usedBy.mode === 'everyone') return null
   const names = usedByNames(usedBy, groups, users)
   return (
-    <span className="truncate text-small text-ink-3">
+    <span className="truncate">
       {names.length === 0 ? t.usedBy.chipNone : t.usedBy.chip(names.join(', '))}
     </span>
   )

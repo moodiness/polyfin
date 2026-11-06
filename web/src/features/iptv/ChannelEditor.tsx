@@ -22,6 +22,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  cx,
   Field,
   FieldError,
   IconButton,
@@ -38,6 +39,9 @@ import {
 } from '@/ui'
 import { MappingControls, mappingWords, MappingText } from './MappingControls'
 import { ChannelLogo } from './shared'
+
+/** The padding of the editor's parts, lined up with the dialog's title. */
+const pad = 'px-8 max-sm:px-5'
 
 /** Edits one channel: its name, logo, description, category, number, streams and guide. */
 export default function ChannelEditor({
@@ -61,15 +65,15 @@ export default function ChannelEditor({
   }
   if (channel.isPending) {
     return (
-      <div role="status" aria-label={t.common.loading} className="space-y-6 p-5">
-        <div className="flex items-center gap-3">
-          <Skeleton className="size-14 rounded-field" />
+      <div role="status" aria-label={t.common.loading} className={cx(pad, 'space-y-7 pb-8')}>
+        <div className="flex items-center gap-4">
+          <Skeleton className="size-14 rounded-[18px]" />
           <SkeletonText className="flex-1" />
         </div>
         {Array.from({ length: 4 }, (_, index) => (
-          <span key={index} className="block space-y-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-10 w-full" />
+          <span key={index} className="block space-y-2.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-16 w-full rounded-field" />
           </span>
         ))}
       </div>
@@ -77,7 +81,7 @@ export default function ChannelEditor({
   }
   if (channel.isError) {
     return (
-      <div className="p-5">
+      <div className={cx(pad, 'pb-8')}>
         <InlineError onRetry={() => void channel.refetch()} retrying={channel.isFetching}>
           {errorMessage(t, channel.error)}
         </InlineError>
@@ -85,7 +89,7 @@ export default function ChannelEditor({
     )
   }
   return (
-    <div className="divide-y divide-line">
+    <div className="space-y-12 pb-8 max-sm:space-y-10 max-sm:pb-6">
       <Details scope={scope} id={id} channel={channel.data} onSaved={show} />
       <Streams scope={scope} id={id} channel={channel.data} onSaved={show} />
       <Guide scope={scope} id={id} channel={channel.data} />
@@ -150,17 +154,17 @@ function Details({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-5 p-5">
-      <div className="flex items-center gap-3.5">
+    <form onSubmit={submit} noValidate className={cx(pad, 'space-y-6')}>
+      <div className="flex items-center gap-4">
         <ChannelLogo id={channel.id} logo={channel.logo} name={channel.name} large />
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-semibold text-ink">{channel.name}</p>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-small text-ink-3">
+          <p className="text-h3 break-words text-ink">{channel.name}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-2">
             <StatusPill tone={channel.shown ? 'ok' : 'muted'}>
               {channel.shown ? text.shownInApps : text.notShownInApps}
             </StatusPill>
             {channel.number !== null && (
-              <span className="tabular-nums">{text.numberNow(channel.number)}</span>
+              <span className="figures">{text.numberNow(channel.number)}</span>
             )}
           </p>
         </div>
@@ -242,7 +246,7 @@ function Details({
           step={1}
           value={number}
           onValue={setNumber}
-          className="max-w-40"
+          className="max-w-48"
         />
       </Field>
       {save.isError && <FieldError>{errorMessage(t, save.error)}</FieldError>}
@@ -328,20 +332,20 @@ function Streams({
   }
 
   return (
-    <section aria-labelledby={titleId} className="space-y-4 p-5">
+    <section aria-labelledby={titleId} className={cx(pad, 'space-y-5')}>
       <div>
-        <h3 id={titleId} className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
+        <h3 id={titleId} className="text-group text-ink">
           {text.title}
         </h3>
-        <p className="mt-1 text-small text-ink-3">{text.help}</p>
+        <p className="mt-1 text-small text-ink-2">{text.help}</p>
       </div>
-      <ol className="rounded-row border border-line-2 bg-bg">
+      <ol className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         {streams.map((stream, index) => (
           <li
             key={stream.id}
-            className="flex flex-wrap items-center gap-3 px-3.5 py-3 not-first:border-t not-first:border-line"
+            className="flex min-h-14 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-[18px] bg-s1 py-1.5 pr-2 pl-4"
           >
-            <span className="figures w-4 text-right text-[12.5px] text-ink-3">{index + 1}</span>
+            <span className="figures w-5 text-right text-small text-ink-3">{index + 1}</span>
             <div className="min-w-0 flex-1 basis-40">
               <Checkbox
                 label={stream.label || text.unnamed}
@@ -362,7 +366,7 @@ function Streams({
             </div>
             {stream.custom && <Badge tone="accent">{text.custom}</Badge>}
             {stream.health.failure !== '' && stream.health.failedAt && (
-              <span className="basis-full pl-7 text-small text-ink-3">
+              <span className="basis-full pb-1.5 pl-8 text-micro text-ink-3">
                 <StatusPill tone={stream.health.hiddenUntil ? 'danger' : 'warn'}>
                   {text.failures[stream.health.failure]}
                 </StatusPill>{' '}
@@ -425,9 +429,9 @@ function Streams({
           if (url.trim() !== '') add.mutate()
         }}
         noValidate
-        className="space-y-4 rounded-row border border-line-2 bg-s2/50 p-4"
+        className="space-y-5 pt-4"
       >
-        <h4 className="text-control font-semibold text-ink">{text.addTitle}</h4>
+        <h4 className="text-h3 text-ink">{text.addTitle}</h4>
         <Field
           label={text.url}
           help={text.urlHint}
@@ -476,16 +480,16 @@ function Guide({ scope, id, channel }: { scope: Scope; id: string; channel: Line
   const [changed, setChanged] = useState<string | null>(null)
   const key = [...queryKeys.lineup(scope, id), 'channel', channel.id]
   return (
-    <section aria-labelledby={titleId} className="space-y-4 p-5">
-      <h3 id={titleId} className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
+    <section aria-labelledby={titleId} className={cx(pad, 'space-y-5')}>
+      <h3 id={titleId} className="text-group text-ink">
         {text.guideTitle}
       </h3>
-      <dl className="grid gap-x-4 gap-y-2 text-control sm:grid-cols-[auto_1fr]">
-        <dt className="text-ink-3">{text.providerGuideId}</dt>
+      <dl className="grid gap-x-6 gap-y-2 text-body sm:grid-cols-[auto_minmax(0,1fr)]">
+        <dt className="text-ink-2">{text.providerGuideId}</dt>
         <dd className="figures text-small break-all text-ink sm:self-center">
           {channel.guideId || '–'}
         </dd>
-        <dt className="text-ink-3">{text.mappedTo}</dt>
+        <dt className="text-ink-2">{text.mappedTo}</dt>
         <dd>
           <MappingText mapping={channel.mapping} />
         </dd>

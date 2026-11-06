@@ -6,7 +6,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   bulkLineupCategories,
@@ -25,6 +25,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
+  Block,
   Button,
   ButtonLink,
   ConfirmDialog,
@@ -34,7 +35,6 @@ import {
   FieldError,
   IconButton,
   InlineError,
-  Panel,
   SkeletonRows,
   Switch,
   TextInput,
@@ -99,13 +99,16 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12 max-md:space-y-10">
       <CreateForm scope={scope} id={id} />
-      <Panel title={text.title} description={filtering ? text.reorderOff : text.help} flush>
-        <div className="flex flex-wrap items-center gap-3 px-6 pt-5 pb-4 max-sm:px-4">
+      <Block title={text.title} count={categories.data ? items.length : undefined}>
+        <p className="mb-5 max-w-[66ch] text-small text-ink-2">
+          {filtering ? text.reorderOff : text.help}
+        </p>
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
           <TextInput
             type="search"
-            size="sm"
+            size="compact"
             icon={MagnifyingGlassIcon}
             value={search}
             onValue={setSearch}
@@ -114,7 +117,7 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
             autoComplete="off"
             className="min-w-48 flex-1 sm:max-w-80"
           />
-          <div className="ml-auto flex flex-wrap gap-1.5">
+          <div className="ml-auto flex flex-wrap gap-2">
             <Button
               size="sm"
               disabled={bulk.isPending || items.length === 0}
@@ -135,33 +138,24 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
           {announcement}
         </p>
         {(order.isError || bulk.isError) && (
-          <div className="px-6 pb-4 max-sm:px-4">
+          <div className="mb-4">
             <FieldError>{errorMessage(t, order.error ?? bulk.error)}</FieldError>
           </div>
         )}
         {categories.isPending ? (
-          <div className="border-t border-line">
-            <SkeletonRows rows={6} boxed={false} />
-          </div>
+          <SkeletonRows rows={6} />
         ) : categories.isError ? (
-          <div className="px-6 pb-6 max-sm:px-4">
-            <InlineError onRetry={() => void categories.refetch()} retrying={categories.isFetching}>
-              {errorMessage(t, categories.error)}
-            </InlineError>
-          </div>
+          <InlineError onRetry={() => void categories.refetch()} retrying={categories.isFetching}>
+            {errorMessage(t, categories.error)}
+          </InlineError>
         ) : listed.length === 0 ? (
-          <div className="px-6 pb-6 max-sm:px-4">
-            <EmptyState
-              icon={ListBulletsIcon}
-              title={items.length === 0 ? text.empty : text.noMatch}
-            >
-              {items.length === 0 ? t.lineup.channelsEmptyHelp : undefined}
-            </EmptyState>
-          </div>
+          <EmptyState icon={ListBulletsIcon} title={items.length === 0 ? text.empty : text.noMatch}>
+            {items.length === 0 ? t.lineup.channelsEmptyHelp : undefined}
+          </EmptyState>
         ) : (
           <ol
             aria-label={text.title}
-            className="border-t border-line"
+            className="grid grid-cols-[minmax(0,1fr)] gap-1.5"
             onDragLeave={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 setDropBefore(null)
@@ -202,7 +196,7 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
             })}
           </ol>
         )}
-      </Panel>
+      </Block>
     </div>
   )
 }
@@ -211,6 +205,7 @@ function CreateForm({ scope, id }: { scope: Scope; id: string }) {
   const { t } = useI18n()
   const toast = useToast()
   const text = t.lineup.categories
+  const titleId = useId()
   const [name, setName] = useState('')
   const create = useMutation({
     mutationFn: () => createLineupCategory(scope, id, name.trim()),
@@ -225,15 +220,23 @@ function CreateForm({ scope, id }: { scope: Scope; id: string }) {
     if (name.trim() !== '') create.mutate()
   }
   return (
-    <Panel title={text.createTitle} description={text.createHelp}>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-start">
+    <section
+      aria-labelledby={titleId}
+      className="rounded-row bg-s1 px-[30px] pt-6 pb-7 max-md:px-5 max-md:pt-5 max-md:pb-5"
+    >
+      <h2 id={titleId} className="text-h3 text-ink">
+        {text.createTitle}
+      </h2>
+      <p className="mt-1 text-small text-ink-2">{text.createHelp}</p>
+      <form onSubmit={submit} noValidate className="mt-4 flex flex-wrap items-start gap-2.5">
         <Field
           label={text.createLabel}
           hideLabel
           error={create.isError ? errorMessage(t, create.error) : undefined}
-          className="flex-1"
+          className="min-w-48 flex-1 sm:max-w-xl"
         >
           <TextInput
+            size="sm"
             value={name}
             maxLength={64}
             autoComplete="off"
@@ -248,14 +251,13 @@ function CreateForm({ scope, id }: { scope: Scope; id: string }) {
           type="submit"
           variant="primary"
           icon={PlusIcon}
-          className="h-10"
           loading={create.isPending}
           disabled={name.trim() === ''}
         >
           {text.create}
         </Button>
       </form>
-    </Panel>
+    </section>
   )
 }
 
@@ -343,32 +345,32 @@ function CategoryRow({
         onDrop()
       }}
       className={cx(
-        'relative px-5 py-3 not-first:border-t not-first:border-line [contain-intrinsic-size:auto_4rem] [content-visibility:auto] max-sm:px-4',
+        'relative min-w-0 rounded-[18px] bg-s1 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3.5rem] [content-visibility:auto]',
         dragging && 'opacity-40',
       )}
     >
       {dropAbove && (
-        <span aria-hidden="true" className="absolute inset-x-0 -top-px h-0.5 bg-accent" />
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-4 -top-1 h-0.5 rounded-full bg-accent"
+        />
       )}
       {dropBelow && (
-        <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 bg-accent" />
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-4 -bottom-1 h-0.5 rounded-full bg-accent"
+        />
       )}
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
+      <div className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pr-3 pl-5 max-sm:pl-4">
         {reorder && <DragGrip name={shown} />}
-        <span className="figures w-8 shrink-0 text-right text-[12.5px] text-ink-3">
+        <span className="figures w-7 shrink-0 text-right text-micro text-ink-3">
           {category.position}
         </span>
-        <Switch
-          label={text.enabledLabel(shown)}
-          checked={category.enabled}
-          disabled={update.isPending}
-          onChange={(enabled) => update.mutate({ enabled })}
-        />
-        <div className="min-w-0 flex-1 basis-48">
+        <div className="min-w-0 flex-1 basis-32">
           {renaming ? (
-            <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
+            <form onSubmit={submit} className="flex flex-wrap items-center gap-2 py-1">
               <TextInput
-                size="sm"
+                size="compact"
                 value={name}
                 maxLength={64}
                 autoFocus
@@ -376,7 +378,7 @@ function CategoryRow({
                 aria-label={text.renameLabel(shown)}
                 onValue={setName}
                 onKeyDown={(event) => event.key === 'Escape' && setRenaming(false)}
-                className="max-w-xs flex-1"
+                className="min-w-40 flex-1 sm:max-w-xs"
               />
               <Button type="submit" size="sm" variant="primary" loading={update.isPending}>
                 {t.common.save}
@@ -386,28 +388,30 @@ function CategoryRow({
               </Button>
             </form>
           ) : (
-            <p className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5">
               <span
                 className={cx(
-                  'truncate text-[14px] font-medium',
+                  'min-w-0 truncate text-control font-semibold',
                   category.enabled ? 'text-ink' : 'text-ink-2',
                 )}
               >
                 {shown}
               </span>
               {category.custom && <Badge tone="accent">{text.custom}</Badge>}
-              {renamed && (
-                <span className="text-small text-ink-3">
-                  {text.providerName(category.providerName)}
-                </span>
-              )}
             </p>
           )}
-          <p className="mt-0.5 text-[12.5px] text-ink-3 tabular-nums">
-            {text.channelCounts(number(category.enabledChannels), number(category.channels))}
+          <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-micro text-ink-3">
+            <span className="figures">
+              {text.channelCounts(number(category.enabledChannels), number(category.channels))}
+            </span>
+            {renamed && !renaming && (
+              <span className="min-w-0 break-words">
+                · {text.providerName(category.providerName)}
+              </span>
+            )}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-0.5 max-sm:w-full max-sm:justify-end">
+        <div className="flex items-center gap-0.5 max-sm:order-last max-sm:w-full max-sm:flex-wrap max-sm:justify-end max-sm:pb-1">
           <ButtonLink
             size="sm"
             variant="ghost"
@@ -451,9 +455,16 @@ function CategoryRow({
           )}
           {reorder && <MoveButtons name={shown} index={index} count={count} onMove={onMove} />}
         </div>
+        <Switch
+          label={text.enabledLabel(shown)}
+          checked={category.enabled}
+          disabled={update.isPending}
+          onChange={(enabled) => update.mutate({ enabled })}
+          className="max-sm:p-1 max-sm:[&>span:first-child]:hidden"
+        />
       </div>
       {update.isError && (
-        <div className="mt-2">
+        <div className="px-5 pb-3 max-sm:px-4">
           <FieldError>{errorMessage(t, update.error)}</FieldError>
         </div>
       )}

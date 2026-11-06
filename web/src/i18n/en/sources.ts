@@ -2,7 +2,6 @@
 const sources = {
   sources: {
     title: 'Sources',
-    lede: 'Stremio addons, Eclipse addons, IPTV sources and local folders in one list. The server’s sources serve every user; a member’s own sources serve only them.',
     add: 'Add a source',
     listLabel: 'Sources',
     listNote: 'Members’ own sources only serve their owner.',
@@ -47,13 +46,12 @@ const sources = {
     channelsShown: (count: string) => `${count} channels shown`,
     notDownloaded: 'Not downloaded yet',
     moreActions: (name: string) => `More actions for ${name}`,
-    openPage: 'Open its page',
     enabled: 'Enabled',
+    forWhom: 'For whom',
+    descriptions: 'Descriptions',
     enabledHelp: 'Turning a source off hides its libraries in Jellyfin apps without losing them.',
     order: 'Order',
     position: (position: number, count: number) => `${position} of ${count}`,
-    moveUp: (name: string) => `Move ${name} up`,
-    moveDown: (name: string) => `Move ${name} down`,
     moved: (name: string, position: number, count: number) =>
       `${name} moved to position ${position} of ${count}.`,
     description: 'Description',
@@ -74,12 +72,6 @@ const sources = {
     lastFetch: 'Last download',
     nextFetch: 'Next download',
     never: 'Never',
-    figures: {
-      entries: 'Entries in the source',
-      shown: 'Channels shown',
-      mapped: 'With a guide',
-      unmapped: 'Without a guide',
-    },
     openSource: 'Open the source',
     iptvHint:
       'What to import, categories, channels, numbers and guides are set on the source page.',
@@ -100,7 +92,6 @@ const sources = {
     languageSaved: (name: string) => `${name}: the language of its descriptions was saved.`,
     edit: 'Edit the account',
     saved: 'Source saved.',
-    settings: 'Settings',
     remove: 'Remove',
     removeTitle: (name: string) => `Remove ${name}?`,
     removeShared:
@@ -609,11 +600,9 @@ const sources = {
     looserUnlinkLabel: (unit: string) => `Unlink ${unit} from its title`,
     looserUnlinked: (unit: string) =>
       `${unit} was unlinked: it is matched by its exact name and year only.`,
-    openPage: 'Open the folder’s page',
   },
   mySources: {
     lede: 'Add your own Stremio, Eclipse and IPTV sources and choose which of their catalogs appear as libraries in your Jellyfin apps.',
-    preferenceTitle: 'The server’s sources',
     useShared: 'Use the server’s sources',
     useSharedHelp:
       'On: you get the server’s sources and libraries, followed by your own. Off: you only get your own sources and libraries.',
@@ -622,7 +611,6 @@ const sources = {
       'Parental control applies to your account: your Jellyfin apps show the server’s sources and libraries only, as they give the ratings it relies on. Your own sources are kept but not used.',
     personalAddonsOff:
       'An administrator turned your own sources off: your Jellyfin apps show the server’s sources and libraries only. Your own sources are kept but not used.',
-    listTitle: 'Your sources',
   },
   usedBy: {
     title: 'Used by',

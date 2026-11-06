@@ -3,7 +3,6 @@ import type en from '../en/sources'
 const sources: typeof en = {
   sources: {
     title: 'Fontes',
-    lede: 'Complementos Stremio, complementos Eclipse, fontes IPTV e pastas locais em uma única lista. As fontes do servidor atendem todos os usuários; as fontes próprias de um membro atendem apenas ele.',
     add: 'Adicionar uma fonte',
     listLabel: 'Fontes',
     listNote: 'As fontes próprias dos membros atendem apenas o respectivo dono.',
@@ -48,14 +47,13 @@ const sources: typeof en = {
     channelsShown: (count: string) => `${count} canais exibidos`,
     notDownloaded: 'Ainda não baixada',
     moreActions: (name: string) => `Mais ações para ${name}`,
-    openPage: 'Abrir a página',
     enabled: 'Ativada',
+    forWhom: 'Para quem',
+    descriptions: 'Descrições',
     enabledHelp:
       'Desativar uma fonte oculta as bibliotecas dela nos aplicativos Jellyfin sem perdê-las.',
     order: 'Ordem',
     position: (position: number, count: number) => `${position} de ${count}`,
-    moveUp: (name: string) => `Mover ${name} para cima`,
-    moveDown: (name: string) => `Mover ${name} para baixo`,
     moved: (name: string, position: number, count: number) =>
       `${name} movido para a posição ${position} de ${count}.`,
     description: 'Descrição',
@@ -76,12 +74,6 @@ const sources: typeof en = {
     lastFetch: 'Último download',
     nextFetch: 'Próximo download',
     never: 'Nunca',
-    figures: {
-      entries: 'Entradas na fonte',
-      shown: 'Canais exibidos',
-      mapped: 'Com guia',
-      unmapped: 'Sem guia',
-    },
     openSource: 'Abrir a fonte',
     iptvHint:
       'O que importar, categorias, canais, números e guias são definidos na página da fonte.',
@@ -102,7 +94,6 @@ const sources: typeof en = {
     languageSaved: (name: string) => `${name}: o idioma das descrições foi salvo.`,
     edit: 'Editar a conta',
     saved: 'Fonte salva.',
-    settings: 'Configurações',
     remove: 'Remover',
     removeTitle: (name: string) => `Remover ${name}?`,
     removeShared:
@@ -632,11 +623,9 @@ const sources: typeof en = {
     looserUnlinkLabel: (unit: string) => `Desvincular ${unit} do título`,
     looserUnlinked: (unit: string) =>
       `${unit} foi desvinculado: ele passa a ser identificado só pelo nome e ano exatos.`,
-    openPage: 'Abrir a página da pasta',
   },
   mySources: {
     lede: 'Adicione suas próprias fontes Stremio, Eclipse e IPTV e escolha quais dos catálogos delas aparecem como bibliotecas nos seus aplicativos Jellyfin.',
-    preferenceTitle: 'As fontes do servidor',
     useShared: 'Usar as fontes do servidor',
     useSharedHelp:
       'Ativado: você recebe as fontes e bibliotecas do servidor, seguidas das suas. Desativado: você recebe apenas suas próprias fontes e bibliotecas.',
@@ -645,7 +634,6 @@ const sources: typeof en = {
       'O controle parental se aplica à sua conta: seus aplicativos Jellyfin mostram apenas as fontes e bibliotecas do servidor, pois elas fornecem as classificações etárias em que ele se baseia. Suas próprias fontes são mantidas, mas não são usadas.',
     personalAddonsOff:
       'Um administrador desativou suas próprias fontes: seus aplicativos Jellyfin mostram apenas as fontes e bibliotecas do servidor. Suas próprias fontes são mantidas, mas não são usadas.',
-    listTitle: 'Suas fontes',
   },
   usedBy: {
     title: 'Usada por',

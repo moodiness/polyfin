@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   queryClient,
@@ -12,7 +12,8 @@ import {
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
-import { Badge, Button, Field, FieldError, Select, Switch, TextInput, useToast } from '@/ui'
+import { Badge, Button, SaveBar, SettingRow, useToast } from '@/ui'
+import { Group } from './parts'
 
 /** The badge of an Eclipse addon: what its tracks are. */
 export function MusicBadge({ music }: { music: AddonMusic }) {
@@ -82,32 +83,19 @@ export type AddonSettingsProps = {
   addon: Addon
   /** The addon's `music`: its declared settings and the values chosen. */
   music: AddonMusic
-  /** Shows a Close button that calls it, for settings opened from a list. */
-  onClose?: () => void
-  /** Heading level of the "Addon settings" title, so the page keeps a correct outline. */
-  titleAs?: 'h2' | 'h3'
   className?: string
 }
 
 /**
- * The settings an Eclipse addon declares, edited and saved as a whole. It has no frame: put it in
- * a Panel (or a PanelSection of one). Saving updates the scope's cached addons and confirms with a
- * toast; errors are shown under their field, and the server's under the buttons.
+ * The settings an Eclipse addon declares, as setting rows saved as a whole through the unsaved
+ * dock. Saving updates the scope's cached addons and confirms with a toast; errors are shown under
+ * their row, and the server's in the dock.
  */
-export function AddonSettings({
-  scope,
-  addon,
-  music,
-  onClose,
-  titleAs: Title = 'h3',
-  className,
-}: AddonSettingsProps) {
+export function AddonSettings({ scope, addon, music, className }: AddonSettingsProps) {
   const { language, t } = useI18n()
   const toast = useToast()
-  const titleId = useId()
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(music.settings.map((s) => [s.key, currentValue(music, s)])),
-  )
+  const saved = Object.fromEntries(music.settings.map((s) => [s.key, currentValue(music, s)]))
+  const [values, setValues] = useState<Record<string, string>>(saved)
   const [touched, setTouched] = useState(false)
   const save = useMutation({
     mutationFn: (next: Record<string, string>) => saveAddonSettings(scope, addon.id, next),
@@ -118,6 +106,11 @@ export function AddonSettings({
       // Libraries follow the addon's catalogs, which its settings may change.
       void queryClient.invalidateQueries({ queryKey: queryKeys.scope(scope) })
       setTouched(false)
+      // The server writes values back in its own form: the rows follow it, unchanged.
+      const next = updated.music
+      if (next !== null) {
+        setValues(Object.fromEntries(next.settings.map((s) => [s.key, currentValue(next, s)])))
+      }
       toast(t.music.saved)
     },
   })
@@ -125,6 +118,7 @@ export function AddonSettings({
     music.settings.map((s) => [s.key, problem(t, language, s, values[s.key] ?? '')]),
   )
   const valid = Object.values(problems).every((p) => p === null)
+  const changes = music.settings.filter((s) => (values[s.key] ?? '') !== saved[s.key]).length
 
   function set(key: string, value: string) {
     save.reset()
@@ -148,29 +142,25 @@ export function AddonSettings({
   }
 
   return (
-    <section aria-labelledby={titleId} className={className}>
-      <Title id={titleId} className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
-        {t.music.settingsTitle}
-      </Title>
-      <p className="mt-1 max-w-[70ch] text-small text-ink-3">{t.music.settingsHelp}</p>
+    <Group title={t.music.settingsTitle} className={className}>
+      <p className="mb-6 max-w-[66ch] text-small text-ink-2">{t.music.settingsHelp}</p>
       {music.settings.length === 0 ? (
-        <p className="mt-4 text-control text-ink-2">{t.music.noSettings}</p>
+        <p className="text-lead text-ink-2">{t.music.noSettings}</p>
       ) : (
-        <form onSubmit={submit} noValidate className="mt-5 flex flex-col gap-5">
-          {music.settings.map((setting) => (
-            <SettingField
-              key={setting.key}
-              setting={setting}
-              value={values[setting.key] ?? ''}
-              error={touched ? (problems[setting.key] ?? undefined) : undefined}
-              onValue={(value) => set(setting.key, value)}
-            />
-          ))}
-          {save.isError && <FieldError>{errorMessage(t, save.error)}</FieldError>}
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="primary" loading={save.isPending}>
-              {t.common.save}
-            </Button>
+        <form onSubmit={submit} noValidate>
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+            {music.settings.map((setting) => (
+              <SettingField
+                key={setting.key}
+                setting={setting}
+                value={values[setting.key] ?? ''}
+                saved={saved[setting.key]}
+                error={touched ? (problems[setting.key] ?? undefined) : undefined}
+                onValue={(value) => set(setting.key, value)}
+              />
+            ))}
+          </div>
+          <div className="mt-5">
             <Button
               variant="secondary"
               onClick={() => {
@@ -181,67 +171,67 @@ export function AddonSettings({
             >
               {t.music.resetDefaults}
             </Button>
-            {onClose && (
-              <Button variant="ghost" onClick={onClose}>
-                {t.ui.close}
-              </Button>
-            )}
           </div>
+          <SaveBar
+            dirty={changes > 0}
+            changes={changes}
+            saving={save.isPending}
+            onDiscard={() => {
+              save.reset()
+              setTouched(false)
+              setValues(saved)
+            }}
+            error={save.isError ? errorMessage(t, save.error) : undefined}
+          />
         </form>
       )}
-    </section>
+    </Group>
   )
 }
 
 function SettingField({
   setting,
   value,
+  saved,
   error,
   onValue,
 }: {
   setting: AddonSetting
   value: string
+  saved: string
   error: string | undefined
   onValue: (value: string) => void
 }) {
   const { language, t } = useI18n()
-  const id = useId()
   const label = setting.label || setting.key
   const defaults = defaultText(t, setting)
 
   if (setting.type === 'toggle') {
     return (
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p id={`${id}-label`} className="text-control font-medium text-ink">
-            {label}
-          </p>
-          <p id={`${id}-help`} className="mt-1 text-small text-ink-3">
-            {[setting.help, defaults].filter(Boolean).join(' ')}
-          </p>
-        </div>
-        <Switch
-          checked={value === 'true'}
-          onChange={(checked) => onValue(String(checked))}
-          labelledBy={`${id}-label`}
-          describedById={`${id}-help`}
-          stateText
-        />
-      </div>
+      <SettingRow
+        kind="switch"
+        label={label}
+        help={[setting.help, defaults].filter(Boolean).join(' ') || undefined}
+        checked={value === 'true'}
+        saved={saved === 'true'}
+        onChange={(checked) => onValue(String(checked))}
+      />
     )
   }
   if (setting.type === 'select') {
     return (
-      <Field label={label} help={[setting.help, defaults].filter(Boolean).join(' ')}>
-        <Select
-          value={value}
-          options={setting.options.map((option) => ({
-            value: option.value,
-            label: option.label || option.value,
-          }))}
-          onValue={onValue}
-        />
-      </Field>
+      <SettingRow
+        kind="choice"
+        label={label}
+        help={[setting.help, defaults].filter(Boolean).join(' ') || undefined}
+        value={value}
+        saved={saved}
+        options={setting.options.map((option) => ({
+          value: option.value,
+          label: option.label || option.value,
+        }))}
+        onChange={onValue}
+      />
     )
   }
   const limit = setting.maxLength > 0 ? setting.maxLength : undefined
@@ -256,30 +246,19 @@ function SettingField({
   ]
     .filter(Boolean)
     .join(' ')
-  if (setting.type === 'number') {
-    // The text is kept as typed, so an invalid entry stays visible with its error.
-    return (
-      <Field label={label} help={help} error={error}>
-        <TextInput
-          value={value}
-          onValue={onValue}
-          inputMode="decimal"
-          placeholder={setting.placeholder || undefined}
-          mono
-          className="max-w-[200px]"
-        />
-      </Field>
-    )
-  }
+  // A number is kept as typed, so an invalid entry stays visible with its error.
   return (
-    <Field label={label} help={help} error={error}>
-      <TextInput
-        value={value}
-        onValue={onValue}
-        placeholder={setting.placeholder || undefined}
-        maxLength={limit}
-        autoComplete="off"
-      />
-    </Field>
+    <SettingRow
+      kind="text"
+      label={label}
+      help={help || undefined}
+      error={error}
+      value={value}
+      saved={saved}
+      onChange={onValue}
+      placeholder={setting.placeholder || undefined}
+      maxLength={limit}
+      mono={setting.type === 'number'}
+    />
   )
 }

@@ -27,8 +27,10 @@ export function MappingText({ mapping }: { mapping: GuideMapping | null }) {
   }
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="text-ink">{mapping.guideChannelName ?? mapping.guideChannelId}</span>
-      <span className="figures text-small break-all text-ink-3">{mapping.guideChannelId}</span>
+      <span className="font-semibold text-ink">
+        {mapping.guideChannelName ?? mapping.guideChannelId}
+      </span>
+      <span className="figures text-micro break-all text-ink-3">{mapping.guideChannelId}</span>
       <Badge tone={mapping.manual ? 'accent' : 'neutral'}>
         {mapping.manual ? text.manual : text.automatic}
       </Badge>
@@ -73,7 +75,7 @@ export function MappingControls({
   const busy = set.isPending || clear.isPending
   return (
     <>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1.5">
         <Button
           size="sm"
           aria-expanded={picking}

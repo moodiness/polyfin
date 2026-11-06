@@ -1,11 +1,5 @@
-import {
-  FilmSlateIcon,
-  MagnifyingGlassIcon,
-  MonitorPlayIcon,
-  TelevisionIcon,
-  type Icon,
-} from '@phosphor-icons/react'
-import { useId, useState } from 'react'
+import { MagnifyingGlassIcon } from '@phosphor-icons/react'
+import { useId, useState, type ReactNode } from 'react'
 import { useQuery, type QueryKey } from '@tanstack/react-query'
 import { excludedKeysLimit, type IptvOptions, type Preview, type PreviewBy } from '@/api'
 import { errorMessage } from '@/format'
@@ -13,15 +7,12 @@ import { useI18n, type Messages } from '@/i18n'
 import {
   Button,
   Checkbox,
-  Field,
   FieldError,
-  IconTile,
   InlineError,
   Notice,
   Segmented,
-  Select,
+  SettingRow,
   Skeleton,
-  Switch,
   TextInput,
 } from '@/ui'
 import { useNumber } from './shared'
@@ -30,8 +21,9 @@ type Patch = (patch: Partial<IptvOptions>) => void
 
 /**
  * Everything a source imports and how, in the order an administrator decides it: what to import,
- * then the Live TV options and the movies and series options of what is on. `load` reads a preview.
- * Used by the source page and by the add-a-source flow. A tuner has live channels only.
+ * then the Live TV options and the movies and series options of what is on, each a group of setting
+ * rows. `load` reads a preview. Used by the source page, which saves it as a whole with its dock,
+ * and by the add-a-source flow. A tuner has live channels only.
  */
 export function SourceOptions({
   value,
@@ -45,7 +37,10 @@ export function SourceOptions({
   onChange: Patch
   queryKey: QueryKey
   load: (by: PreviewBy, signal: AbortSignal) => Promise<Preview>
-  /** The options saved, for a source already added: warns before Live TV is turned off. */
+  /**
+   * The options saved, for a source already added: its changed rows keep a dot and "was …", and
+   * it warns before Live TV is turned off.
+   */
   saved?: IptvOptions
   tuner?: boolean
 }) {
@@ -55,12 +50,12 @@ export function SourceOptions({
     type === 'movie' ? value.movies : value.series,
   )
   return (
-    <div className="space-y-10">
-      {!tuner && <ContentFields value={value} onChange={onChange} />}
+    <div className="space-y-14 max-md:space-y-11">
+      {!tuner && <ContentFields value={value} saved={saved} onChange={onChange} />}
       {saved?.liveTv && !value.liveTv && <Notice tone="danger">{text.liveOffWarning}</Notice>}
       {value.liveTv && (
-        <section className="space-y-7 border-t border-line pt-8">
-          <h3 className="text-h3 text-ink">{text.liveTitle}</h3>
+        <OptionsGroup title={text.liveTitle}>
+          <OptionsFields value={value} saved={saved} onChange={onChange} />
           <ExclusionPicker
             mode="live"
             queryKey={queryKey}
@@ -68,12 +63,11 @@ export function SourceOptions({
             excluded={value.excluded}
             onChange={(excluded) => onChange({ excluded })}
           />
-          <OptionsFields value={value} onChange={onChange} />
-        </section>
+        </OptionsGroup>
       )}
       {vodTypes.length > 0 && (
-        <section className="space-y-7 border-t border-line pt-8">
-          <h3 className="text-h3 text-ink">{text.vodTitle}</h3>
+        <OptionsGroup title={text.vodTitle}>
+          <VodFields value={value} saved={saved} onChange={onChange} />
           <ExclusionPicker
             mode="vod"
             types={vodTypes}
@@ -82,8 +76,7 @@ export function SourceOptions({
             excluded={value.vodExcluded}
             onChange={(vodExcluded) => onChange({ vodExcluded })}
           />
-          <VodFields value={value} onChange={onChange} />
-        </section>
+        </OptionsGroup>
       )}
     </div>
   )
@@ -98,150 +91,185 @@ export function optionsValid(value: IptvOptions): boolean {
   )
 }
 
-/** What a source imports: its live channels, its movies, its series, each a row with a switch. */
-function ContentFields({ value, onChange }: { value: IptvOptions; onChange: Patch }) {
-  const { t } = useI18n()
-  const text = t.lineup.content
-  const none = !value.liveTv && !value.movies && !value.series
-  const rows: { key: 'liveTv' | 'movies' | 'series'; icon: Icon; label: string; help: string }[] = [
-    { key: 'liveTv', icon: TelevisionIcon, label: text.liveTv, help: text.liveTvHelp },
-    { key: 'movies', icon: FilmSlateIcon, label: text.movies, help: text.moviesHelp },
-    { key: 'series', icon: MonitorPlayIcon, label: text.series, help: text.seriesHelp },
-  ]
+/**
+ * How many options differ from those saved, for the dock's "2 changes": each setting row, and each
+ * list of categories left out as one.
+ */
+export function optionsChanges(value: IptvOptions, saved: IptvOptions): number {
+  const sameKeys = (a: readonly string[], b: readonly string[]) => {
+    const set = new Set(a)
+    return a.length === b.length && b.every((key) => set.has(key))
+  }
+  return (Object.keys(value) as (keyof IptvOptions)[]).filter((key) => {
+    const now = value[key]
+    const before = saved[key]
+    return Array.isArray(now) && Array.isArray(before) ? !sameKeys(now, before) : now !== before
+  }).length
+}
+
+/** A group of options under its title: the setting rows, then what they leave out. */
+function OptionsGroup({
+  title,
+  help,
+  children,
+}: {
+  title: string
+  help?: string
+  children: ReactNode
+}) {
+  const titleId = useId()
   return (
-    <fieldset>
-      <legend className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
-        {text.title}
-      </legend>
-      <p className="mt-1 text-small text-ink-3">{text.help}</p>
-      <ul className="mt-4 overflow-hidden rounded-row border border-line-2 bg-bg">
-        {rows.map((row) => (
-          <ContentRow
-            key={row.key}
-            icon={row.icon}
-            label={row.label}
-            help={row.help}
-            checked={value[row.key]}
-            onChange={(on) => onChange({ [row.key]: on })}
-          />
-        ))}
-      </ul>
-      {none && (
-        <div className="mt-3">
-          <FieldError>{text.none}</FieldError>
-        </div>
-      )}
-    </fieldset>
+    <section aria-labelledby={titleId} className="min-w-0">
+      <h3 id={titleId} className="text-group text-ink">
+        {title}
+      </h3>
+      {help !== undefined && <p className="mt-1 max-w-[66ch] text-small text-ink-2">{help}</p>}
+      <div className="mt-5 space-y-10 max-md:mt-4 max-md:space-y-8">{children}</div>
+    </section>
   )
 }
 
-function ContentRow({
-  icon,
-  label,
-  help,
-  checked,
+/** Setting rows 8 px apart. */
+const rows = 'grid grid-cols-[minmax(0,1fr)] gap-2'
+
+/** What a source imports: its live channels, its movies, its series, each a row with a switch. */
+function ContentFields({
+  value,
+  saved,
   onChange,
 }: {
-  icon: Icon
-  label: string
-  help: string
-  checked: boolean
-  onChange: (checked: boolean) => void
+  value: IptvOptions
+  saved?: IptvOptions
+  onChange: Patch
 }) {
-  const ids = { label: useId(), help: useId() }
+  const { t } = useI18n()
+  const text = t.lineup.content
+  const none = !value.liveTv && !value.movies && !value.series
+  const kinds: { key: 'liveTv' | 'movies' | 'series'; label: string; help: string }[] = [
+    { key: 'liveTv', label: text.liveTv, help: text.liveTvHelp },
+    { key: 'movies', label: text.movies, help: text.moviesHelp },
+    { key: 'series', label: text.series, help: text.seriesHelp },
+  ]
   return (
-    <li className="flex items-center gap-3.5 px-4 py-3.5 not-first:border-t not-first:border-line">
-      <IconTile icon={icon} />
-      <div className="min-w-0 flex-1">
-        <p id={ids.label} className={checked ? 'font-medium text-ink' : 'font-medium text-ink-2'}>
-          {label}
-        </p>
-        <p id={ids.help} className="text-small text-ink-3">
-          {help}
-        </p>
+    <OptionsGroup title={text.title} help={text.help}>
+      <div className={rows}>
+        {kinds.map((kind) => (
+          <SettingRow
+            key={kind.key}
+            kind="switch"
+            label={kind.label}
+            help={kind.help}
+            checked={value[kind.key]}
+            saved={saved?.[kind.key]}
+            onChange={(on) => onChange({ [kind.key]: on })}
+          />
+        ))}
+        {none && (
+          <div className="px-[30px] pt-2 max-md:px-5">
+            <FieldError>{text.none}</FieldError>
+          </div>
+        )}
       </div>
-      <Switch
-        checked={checked}
-        onChange={onChange}
-        labelledBy={ids.label}
-        describedById={ids.help}
-      />
-    </li>
+    </OptionsGroup>
   )
 }
 
 /** How movies and series become libraries, and whether they are described by metadata addons. */
-function VodFields({ value, onChange }: { value: IptvOptions; onChange: Patch }) {
+function VodFields({
+  value,
+  saved,
+  onChange,
+}: {
+  value: IptvOptions
+  saved?: IptvOptions
+  onChange: Patch
+}) {
   const { t } = useI18n()
   const text = t.lineup.vod
   return (
-    <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
-      <Field label={text.libraries} help={text.librariesHelp}>
-        <Select
-          value={value.vodLibraries}
-          options={[
-            { value: 'type', label: text.librariesType },
-            { value: 'category', label: text.librariesCategory },
-          ]}
-          onValue={(vodLibraries) => onChange({ vodLibraries })}
-        />
-      </Field>
-      <div className="md:pt-7">
-        <Checkbox
-          label={text.enrichment}
-          help={text.enrichmentHelp}
-          checked={value.enrichment}
-          onChange={(enrichment) => onChange({ enrichment })}
-        />
-      </div>
+    <div className={rows}>
+      <SettingRow
+        kind="choice"
+        label={text.libraries}
+        help={text.librariesHelp}
+        value={value.vodLibraries}
+        saved={saved?.vodLibraries}
+        options={[
+          { value: 'type', label: text.librariesType },
+          { value: 'category', label: text.librariesCategory },
+        ]}
+        onChange={(vodLibraries) => onChange({ vodLibraries })}
+      />
+      <SettingRow
+        kind="switch"
+        label={text.enrichment}
+        help={text.enrichmentHelp}
+        checked={value.enrichment}
+        saved={saved?.enrichment}
+        onChange={(enrichment) => onChange({ enrichment })}
+      />
     </div>
   )
 }
 
 /** How the live list becomes a line-up: the options besides the exclusions. */
-function OptionsFields({ value, onChange }: { value: IptvOptions; onChange: Patch }) {
+function OptionsFields({
+  value,
+  saved,
+  onChange,
+}: {
+  value: IptvOptions
+  saved?: IptvOptions
+  onChange: Patch
+}) {
   const { t } = useI18n()
   const text = t.lineup.options
   return (
-    <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
-      <Field label={text.categoriesMode} help={text.categoriesModeHelp}>
-        <Select
-          value={value.categories}
-          options={[
-            { value: 'original', label: text.categoriesOriginal },
-            { value: 'country', label: text.categoriesCountry },
-          ]}
-          onValue={(categories) => onChange({ categories })}
-        />
-      </Field>
-      <Field label={text.channelsMode} help={text.channelsModeHelp}>
-        <Select
-          value={value.channels}
-          options={[
-            { value: 'original', label: text.channelsOriginal },
-            { value: 'merged', label: text.channelsMerged },
-          ]}
-          onValue={(channels) => onChange({ channels })}
-        />
-      </Field>
-      <Field label={text.numbering} help={text.numberingHelp}>
-        <Select
-          value={value.numbering}
-          options={[
-            { value: 'provider', label: text.numberingProvider },
-            { value: 'sequential', label: text.numberingSequential },
-          ]}
-          onValue={(numbering) => onChange({ numbering })}
-        />
-      </Field>
-      <div className="md:pt-7">
-        <Checkbox
-          label={text.newChannels}
-          help={text.newChannelsHelp}
-          checked={value.newChannels}
-          onChange={(newChannels) => onChange({ newChannels })}
-        />
-      </div>
+    <div className={rows}>
+      <SettingRow
+        kind="choice"
+        label={text.categoriesMode}
+        help={text.categoriesModeHelp}
+        value={value.categories}
+        saved={saved?.categories}
+        options={[
+          { value: 'original', label: text.categoriesOriginal },
+          { value: 'country', label: text.categoriesCountry },
+        ]}
+        onChange={(categories) => onChange({ categories })}
+      />
+      <SettingRow
+        kind="choice"
+        label={text.channelsMode}
+        help={text.channelsModeHelp}
+        value={value.channels}
+        saved={saved?.channels}
+        options={[
+          { value: 'original', label: text.channelsOriginal },
+          { value: 'merged', label: text.channelsMerged },
+        ]}
+        onChange={(channels) => onChange({ channels })}
+      />
+      <SettingRow
+        kind="choice"
+        label={text.numbering}
+        help={text.numberingHelp}
+        value={value.numbering}
+        saved={saved?.numbering}
+        options={[
+          { value: 'provider', label: text.numberingProvider },
+          { value: 'sequential', label: text.numberingSequential },
+        ]}
+        onChange={(numbering) => onChange({ numbering })}
+      />
+      <SettingRow
+        kind="switch"
+        label={text.newChannels}
+        help={text.newChannelsHelp}
+        checked={value.newChannels}
+        saved={saved?.newChannels}
+        onChange={(newChannels) => onChange({ newChannels })}
+      />
     </div>
   )
 }
@@ -325,37 +353,32 @@ function ExclusionPicker({
 
   return (
     <fieldset className="min-w-0">
-      <legend className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
-        {text.title}
-      </legend>
-      <p className="mt-1 text-small text-ink-3">{text.help}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <legend className="text-h3 text-ink">{text.title}</legend>
+      <p className="mt-1 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {views.length > 1 && (
-          <Segmented
-            label={text.by}
-            value={by}
-            options={views}
-            onChange={setBy}
-            size="sm"
-            className="scrollbar-none max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap"
-          />
+          <Segmented label={text.by} value={by} options={views} onChange={setBy} size="compact" />
         )}
         <TextInput
           type="search"
-          size="sm"
+          size="compact"
           icon={MagnifyingGlassIcon}
           value={search}
           onValue={setSearch}
           placeholder={text.search}
           aria-label={text.search}
           autoComplete="off"
-          className="min-w-48 flex-1 sm:max-w-72 sm:ml-auto"
+          className="min-w-48 flex-1 sm:ml-auto sm:max-w-80"
         />
       </div>
       {preview.isPending ? (
-        <div role="status" aria-label={t.common.loading} className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div
+          role="status"
+          aria-label={t.common.loading}
+          className="mt-4 grid gap-4 rounded-row bg-s1 p-5 sm:grid-cols-2"
+        >
           {Array.from({ length: 8 }, (_, index) => (
-            <Skeleton key={index} className="h-5" />
+            <Skeleton key={index} className="h-6" />
           ))}
         </div>
       ) : preview.isError ? (
@@ -369,11 +392,11 @@ function ExclusionPicker({
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <p aria-live="polite" className="text-small text-ink-2 tabular-nums">
+            <p aria-live="polite" className="figures text-small text-ink-2">
               {text.keptInView(number(kept), number(preview.data.total))}
               {summary !== '' && ` · ${summary}`}
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               <Button
                 size="sm"
                 variant="ghost"
@@ -406,15 +429,15 @@ function ExclusionPicker({
             </div>
           )}
           {listed.length === 0 ? (
-            <p className="mt-3 rounded-row border border-dashed border-line-2 px-3 py-6 text-center text-small text-ink-3">
+            <p className="mt-3 rounded-row bg-s1 px-5 py-8 text-center text-small text-ink-2">
               {text.noMatch}
             </p>
           ) : (
-            <ul className="mt-3 grid max-h-[26rem] gap-x-8 overflow-y-auto rounded-row border border-line-2 bg-bg px-4 py-1.5 sm:grid-cols-2">
+            <ul className="mt-3 grid max-h-[30rem] gap-x-8 gap-y-0.5 overflow-y-auto overscroll-contain rounded-row bg-s1 px-5 py-3 max-md:px-4 sm:grid-cols-2">
               {listed.map((category) => (
                 <li
                   key={category.key}
-                  className="py-2 [contain-intrinsic-size:auto_2.25rem] [content-visibility:auto]"
+                  className="min-w-0 [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]"
                 >
                   <Checkbox
                     checked={!set.has(category.key)}
@@ -425,7 +448,7 @@ function ExclusionPicker({
                       </span>
                     }
                     aside={
-                      <span className="tabular-nums">
+                      <span className="figures">
                         {mode === 'live'
                           ? live.channelCount(category.channels)
                           : vod.titleCount(category.channels)}

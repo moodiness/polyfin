@@ -5,7 +5,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   automapCatalog,
@@ -24,6 +24,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
+  Block,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -31,8 +32,7 @@ import {
   FieldError,
   IconButton,
   InlineError,
-  Panel,
-  PanelFooter,
+  SaveBar,
   Skeleton,
   SkeletonRows,
   StatusPill,
@@ -72,13 +72,10 @@ export default function CatalogGuides({
   })
   if (guides.isPending) {
     return (
-      <div role="status" aria-label={t.common.loading} className="space-y-8">
-        <div className="grid grid-cols-2 gap-6 border-y border-line py-5 md:grid-cols-4">
+      <div role="status" aria-label={t.common.loading} className="space-y-12">
+        <div className="grid grid-cols-4 gap-2.5 max-md:grid-cols-2">
           {Array.from({ length: 4 }, (_, index) => (
-            <span key={index} className="space-y-2.5">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-6 w-16" />
-            </span>
+            <Skeleton key={index} className="h-[124px] rounded-row" />
           ))}
         </div>
         <SkeletonRows rows={2} />
@@ -93,7 +90,7 @@ export default function CatalogGuides({
     )
   }
   return (
-    <div className="space-y-10">
+    <div className="space-y-12 max-md:space-y-10">
       <Counts guides={guides.data} mappingPath={mappingPath} />
       <GuideList scope={scope} target={target} guides={guides.data} onChanged={onChanged} />
       <Automap scope={scope} target={target} onChanged={onChanged} />
@@ -176,8 +173,7 @@ function GuideList({
   const busy = save.isPending || refresh.isPending
   const full = entries.length >= maxGuides
 
-  function add(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function add() {
     if (url.trim() === '' || full) return
     save.reset()
     setEntries((current) => [...current, { kind: 'new', url: url.trim(), key: `new-${counter}` }])
@@ -195,72 +191,58 @@ function GuideList({
     })
   }
 
-  const refreshButton = (className: string) =>
-    guides.guides.length > 0 && (
-      <Button
-        icon={ArrowsClockwiseIcon}
-        className={className}
-        loading={refresh.isPending}
-        disabled={busy || dirty}
-        title={dirty ? text.saveFirst : undefined}
-        onClick={() => {
-          save.reset()
-          refresh.mutate()
-        }}
-      >
-        {refresh.isPending ? text.refreshing : text.refresh}
-      </Button>
-    )
-
   return (
-    <Panel
-      title={text.title}
-      description={text.help}
-      flush
-      actions={refreshButton('max-sm:hidden') || undefined}
-      footer={
-        <PanelFooter note={dirty ? t.lineup.unsaved : t.lineup.upToDate}>
-          <Button variant="ghost" disabled={!dirty || busy} onClick={() => setEntries(initial)}>
-            {t.lineup.reset}
-          </Button>
-          <Button
-            variant="primary"
-            loading={save.isPending}
-            disabled={!dirty || busy}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? text.saving : text.save}
-          </Button>
-        </PanelFooter>
-      }
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (dirty && !busy) save.mutate()
+      }}
+      noValidate
     >
-      <div className="space-y-5 p-6 max-sm:p-4">
-        <div className="empty:hidden sm:hidden">{refreshButton('')}</div>
+      <Block title={text.title} count={entries.length}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <p className="max-w-[66ch] text-small text-ink-2">{text.help}</p>
+          {guides.guides.length > 0 && (
+            <Button
+              size="sm"
+              icon={ArrowsClockwiseIcon}
+              loading={refresh.isPending}
+              disabled={busy || dirty}
+              title={dirty ? text.saveFirst : undefined}
+              onClick={() => {
+                save.reset()
+                refresh.mutate()
+              }}
+            >
+              {refresh.isPending ? text.refreshing : text.refresh}
+            </Button>
+          )}
+        </div>
         {entries.length === 0 ? (
           <EmptyState icon={CalendarBlankIcon} title={text.none}>
             {t.lineup.guidesNoneHelp}
           </EmptyState>
         ) : (
-          <ol aria-label={text.title} className="rounded-row border border-line-2 bg-bg">
+          <ol aria-label={text.title} className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
             {entries.map((entry, index) => {
               const label = entry.kind === 'kept' ? entry.guide.url : entry.url
               return (
                 <li
                   key={entry.kind === 'kept' ? entry.guide.id : entry.key}
-                  className="flex flex-wrap items-start gap-x-3.5 gap-y-2 px-4 py-3.5 not-first:border-t not-first:border-line"
+                  className="flex min-h-14 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-[18px] bg-s1 py-2 pr-2 pl-5 max-sm:pl-4"
                 >
-                  <span className="figures mt-0.5 w-5 text-right text-[12.5px] text-ink-3">
+                  <span className="figures w-5 shrink-0 text-right text-small text-ink-3">
                     {index + 1}
                   </span>
-                  <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-                    <p className="figures text-small break-all text-ink">{label}</p>
+                  <div className="min-w-0 flex-1 basis-56 space-y-1">
+                    <p className="figures text-small font-semibold break-all text-ink">{label}</p>
                     {entry.kind === 'new' ? (
                       <Badge tone="warn">{text.notSaved}</Badge>
                     ) : (
                       <GuideStatus guide={entry.guide} />
                     )}
                   </div>
-                  <span className="flex items-center">
+                  <span className="ml-auto flex items-center">
                     <MoveButtons
                       name={label}
                       index={index}
@@ -283,38 +265,59 @@ function GuideList({
             })}
           </ol>
         )}
-        <form onSubmit={add} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="mt-6 flex flex-wrap items-start gap-x-2.5 gap-y-3">
           <Field
             label={files ? text.addressOrFile : text.address}
             help={full ? text.tooMany : files ? text.addressOrFileHint : text.addressHint}
-            className="flex-1"
+            className="min-w-56 flex-1 max-sm:basis-full"
           >
             <TextInput
               type={files ? 'text' : 'url'}
               inputMode="url"
+              size="sm"
               mono
               value={url}
               autoComplete="off"
               spellCheck={false}
               placeholder="https://…/guide.xml.gz"
               onValue={setUrl}
+              // Enter adds the address; the dock saves the list.
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                add()
+              }}
             />
           </Field>
           <Button
-            type="submit"
             icon={PlusIcon}
-            className="h-10 sm:mt-[30px]"
+            className="mt-[34px] max-sm:mt-0"
             disabled={url.trim() === '' || full}
+            onClick={add}
           >
             {text.add}
           </Button>
-        </form>
-        <div aria-live="polite" className="space-y-2 empty:hidden">
-          {save.isError && <FieldError>{errorMessage(t, save.error)}</FieldError>}
-          {refresh.isError && <FieldError>{errorMessage(t, refresh.error)}</FieldError>}
         </div>
-      </div>
-    </Panel>
+        {refresh.isError && (
+          <div aria-live="polite" className="mt-4">
+            <FieldError>{errorMessage(t, refresh.error)}</FieldError>
+          </div>
+        )}
+      </Block>
+      {(dirty || save.isPending || save.isError) && (
+        <SaveBar
+          dirty={dirty}
+          saving={save.isPending}
+          onDiscard={() => {
+            save.reset()
+            setEntries(initial)
+          }}
+          error={save.isError ? errorMessage(t, save.error) : undefined}
+          saveLabel={text.save}
+          savingLabel={text.saving}
+        />
+      )}
+    </form>
   )
 }
 
@@ -324,7 +327,7 @@ export function GuideStatus({ guide }: { guide: CatalogGuide }) {
   const number = useNumber()
   const text = t.lineup.guides
   return (
-    <div className="space-y-1 text-small">
+    <div className="space-y-1 text-micro">
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-3">
         {guide.error !== '' ? (
           <StatusPill tone="warn">{text.failing}</StatusPill>
@@ -336,7 +339,7 @@ export function GuideStatus({ guide }: { guide: CatalogGuide }) {
         {guide.fetchedAt && (
           <span>
             {text.fetched} <RelativeTime iso={guide.fetchedAt} /> ·{' '}
-            <span className="tabular-nums">
+            <span className="figures">
               {text.contents(number(guide.channels), number(guide.programmes))}
             </span>
           </span>
@@ -378,8 +381,9 @@ function Automap({
     },
   })
   return (
-    <Panel title={text.title} description={text.help}>
-      <div className="flex flex-wrap gap-2">
+    <Block title={text.title}>
+      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <div className="flex flex-wrap gap-2.5">
         <Button
           variant="primary"
           icon={MagicWandIcon}
@@ -400,10 +404,10 @@ function Automap({
           {text.remap}
         </Button>
       </div>
-      <div aria-live="polite" className="mt-3 empty:hidden">
+      <div aria-live="polite" className="mt-4 empty:hidden">
         {run.isError && !confirming && <FieldError>{errorMessage(t, run.error)}</FieldError>}
         {run.isSuccess && (
-          <p className="text-small text-ink-2 tabular-nums">
+          <p className="figures text-small text-ink-2">
             {text.done(
               number(run.data.changed),
               number(run.data.mapped),
@@ -421,6 +425,6 @@ function Automap({
         busy={run.isPending}
         error={run.isError ? errorMessage(t, run.error) : undefined}
       />
-    </Panel>
+    </Block>
   )
 }

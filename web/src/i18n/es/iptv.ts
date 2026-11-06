@@ -34,17 +34,12 @@ const iptv: typeof en = {
   },
   lineup: {
     open: 'Abrir la fuente',
-    title: (name: string) => `${name}: fuente IPTV`,
     titleLoading: 'Fuente IPTV',
     description:
       'Lo que esta fuente importa y cómo la muestran las aplicaciones de Jellyfin: sus canales de televisión en vivo, con su orden, nombres y guías de programación, y sus películas y series.',
-    notFound: 'Esta fuente IPTV no existe o no tiene permiso para gestionarla.',
-    backShared: 'Volver a las fuentes',
     backMine: 'Volver a mis fuentes',
     notFoundTitle: 'Fuente no encontrada',
     reset: 'Restablecer',
-    unsaved: 'Cambios sin guardar',
-    upToDate: 'No hay cambios sin guardar',
     unmappedNotice: (count: string) => `${count} canales no tienen guía.`,
     openMapping: 'Abrir la asignación',
     archivedNotice: (count: number, formatted: string) =>
@@ -91,13 +86,10 @@ const iptv: typeof en = {
     },
     summary: {
       categories: 'Categorías activadas',
-      ofTotal: (total: string) => `de ${total}`,
       shown: 'Canales mostrados',
-      enabledOf: (enabled: string, total: string) => `${enabled} activados de ${total}`,
       mappedOf: (mapped: string, total: string) => `${mapped} de ${total} con guía`,
       shownOf: (shown: string, total: string) => `${shown} mostrados de ${total}`,
       mapped: 'Con guía',
-      unmapped: (count: string) => `${count} sin guía`,
       entries: 'Entradas en directo',
       listTitle: 'Listas',
       refreshHelp:
@@ -108,12 +100,13 @@ const iptv: typeof en = {
       vodTitle: 'Películas y series',
       movies: 'Películas importadas',
       series: 'Series importadas',
-      titlesOf: (total: string, categories: string) => `de ${total}, en ${categories} categorías`,
       episodes: 'Episodios conocidos',
-      episodesHelp: 'Xtream: se leen al abrir las series',
       vodShort: (movies: string, series: string) =>
         `${movies} películas y ${series} series importadas`,
       lastAttempt: 'Último intento',
+      allChannels: (count: string) => `Los ${count} canales`,
+      hidden: 'Oculto',
+      noGuide: 'Sin guía',
     },
     tuner: {
       title: 'Sintonizador',
