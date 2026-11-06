@@ -87,7 +87,7 @@ func (c *signIns) touched(hash string, at time.Time, remoteAddress string) {
 		return
 	}
 	entry.device.LastActivityAt, entry.device.RemoteAddress = latest(entry.device.LastActivityAt, at), remoteAddress
-	entry.user.LastActivityAt = laterActivity(entry.user.LastActivityAt, at)
+	entry.user.active(at, entry.device.Client)
 	c.devices[hash] = entry
 }
 
@@ -99,13 +99,14 @@ func latest(a, b time.Time) time.Time {
 	return a
 }
 
-// laterActivity returns a user's last activity once activity at a time is
-// written: activity times never move backwards.
-func laterActivity(last *time.Time, at time.Time) *time.Time {
-	if last != nil && !at.After(*last) {
-		return last
+// active records activity of the user at a time from app, once it is
+// written: activity times never move backwards, and the app moves with
+// the time only.
+func (user *User) active(at time.Time, app string) {
+	if user.LastActivityAt != nil && !at.After(*user.LastActivityAt) {
+		return
 	}
-	return &at
+	user.LastActivityAt, user.LastActivityApp = &at, app
 }
 
 // key returns what the API key of hash resolved to, if it is recent.

@@ -20,6 +20,18 @@ const AdminSessionLifetime = 30 * 24 * time.Hour
 // that every request does not rewrite the session row and the cookie.
 const renewAfter = 24 * time.Hour
 
+// AdminApp is the app of the admin interface, which sends no app name and
+// no device: the app of its sign-ins and of its users' activity.
+const AdminApp = "Polyfin admin"
+
+// recordSignIn records the sign-in of user $1 from app $2 as their last
+// sign-in and activity. Activity times never move backwards, whichever
+// clock wrote them, and the app moves with the time only.
+const recordSignIn = `UPDATE users SET last_login_at = now(),
+	last_activity_app = CASE WHEN last_activity_at IS NULL OR last_activity_at < now() THEN $2 ELSE last_activity_app END,
+	last_activity_at = greatest(last_activity_at, now())
+	WHERE id = $1`
+
 // AdminSession is a signed-in browser of the admin interface.
 type AdminSession struct {
 	User User
@@ -75,8 +87,7 @@ func (s *Store) createAdminSession(ctx context.Context, user ID, device *ID) (st
 			HashAdminToken(token), user, expires, device); err != nil {
 			return err
 		}
-		// Activity times never move backwards, whichever clock wrote them.
-		_, err := tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = greatest(last_activity_at, now()) WHERE id = $1", user)
+		_, err := tx.Exec(ctx, recordSignIn, user, AdminApp)
 		return err
 	})
 	return token, expires, err
@@ -112,13 +123,13 @@ func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, e
 	// their devices were last active before the user, so over a minute
 	// ago, and their next request writes the activity again.
 	if now := s.now(); user.LastActivityAt == nil || now.Sub(*user.LastActivityAt) >= activityResolution {
-		written, err := s.db.Exec(ctx, `UPDATE users SET last_activity_at = $2
-			WHERE id = $1 AND NOT is_disabled AND (last_activity_at IS NULL OR last_activity_at < $2)`, user.ID, now)
+		written, err := s.db.Exec(ctx, `UPDATE users SET last_activity_at = $2, last_activity_app = $3
+			WHERE id = $1 AND NOT is_disabled AND (last_activity_at IS NULL OR last_activity_at < $2)`, user.ID, now, AdminApp)
 		if err != nil {
 			return AdminSession{}, err
 		}
 		if written.RowsAffected() > 0 {
-			user.LastActivityAt = &now
+			user.LastActivityAt, user.LastActivityApp = &now, AdminApp
 		}
 	}
 	return session, nil

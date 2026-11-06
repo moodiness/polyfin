@@ -123,8 +123,7 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 			return err
 		}
 		device.Unfamiliar = first && others
-		// Activity times never move backwards, whichever clock wrote them.
-		_, err = tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = greatest(last_activity_at, now()) WHERE id = $1", user)
+		_, err = tx.Exec(ctx, recordSignIn, user, info.Client)
 		return err
 	})
 	if err != nil {
@@ -158,16 +157,18 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 		return Device{}, User{}, ErrNotFound
 	}
 	if now.Sub(entry.device.LastActivityAt) >= activityResolution || entry.device.RemoteAddress != remoteAddress {
+		// The user's app moves with the time only.
 		_, err := s.db.Exec(ctx, `WITH touched AS (
-				UPDATE devices SET last_activity_at = greatest(last_activity_at, $3), remote_address = $2 WHERE id = $1 RETURNING user_id
-			) UPDATE users SET last_activity_at = greatest(last_activity_at, $3) WHERE id = (SELECT user_id FROM touched)`,
+				UPDATE devices SET last_activity_at = greatest(last_activity_at, $3), remote_address = $2 WHERE id = $1 RETURNING user_id, client
+			) UPDATE users u SET last_activity_at = $3, last_activity_app = t.client FROM touched t
+			WHERE u.id = t.user_id AND (u.last_activity_at IS NULL OR u.last_activity_at < $3)`,
 			entry.device.ID, remoteAddress, now)
 		if err != nil {
 			return Device{}, User{}, err
 		}
 		s.signIns.touched(hash, now, remoteAddress)
 		entry.device.LastActivityAt, entry.device.RemoteAddress = latest(entry.device.LastActivityAt, now), remoteAddress
-		entry.user.LastActivityAt = laterActivity(entry.user.LastActivityAt, now)
+		entry.user.active(now, entry.device.Client)
 	}
 	return entry.device, entry.user, nil
 }

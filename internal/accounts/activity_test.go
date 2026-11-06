@@ -178,3 +178,152 @@ func TestRefusedAdminSessionsRecordNothing(t *testing.T) {
 		}
 	}
 }
+
+// lastActivityApp returns the app of the user's last activity as stored.
+func lastActivityApp(t *testing.T, store *Store, user ID) string {
+	t.Helper()
+	var app string
+	if err := store.db.QueryRow(t.Context(), "SELECT last_activity_app FROM users WHERE id = $1", user).Scan(&app); err != nil {
+		t.Fatal(err)
+	}
+	return app
+}
+
+func TestActivityIsWrittenWithItsApp(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	now := time.Now()
+	store.now = func() time.Time { return now }
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	if got := lastActivityApp(t, store, alice.ID); got != "" {
+		t.Errorf("app of a user never active: %q", got)
+	}
+
+	// A device's sign-in, then its use a minute later, answered from the
+	// token remembered.
+	tv := device("tv")
+	tv.Client = "Jellyfin Android TV"
+	tvToken, _, err := store.SignInDevice(ctx, alice.ID, tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := lastActivityApp(t, store, alice.ID); got != "Jellyfin Android TV" {
+		t.Errorf("app after the device's sign-in: %q", got)
+	}
+	if _, err := store.db.Exec(ctx, "UPDATE users SET last_activity_app = 'stale', last_activity_at = now() - interval '1 hour' WHERE id = $1", alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	now = time.Now().Add(activityResolution + time.Second)
+	_, user, err := store.DeviceByToken(ctx, tvToken, "192.0.2.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := lastActivityApp(t, store, alice.ID); got != "Jellyfin Android TV" {
+		t.Errorf("app after the device's use: %q", got)
+	}
+	if user.LastActivityApp != "Jellyfin Android TV" || user.LastActivityAt == nil || !user.LastActivityAt.Equal(now) {
+		t.Errorf("activity answered: %v from %q", user.LastActivityAt, user.LastActivityApp)
+	}
+	// The token remembered answers the same, and so after a write it made.
+	now = now.Add(time.Second)
+	if _, user, err = store.DeviceByToken(ctx, tvToken, "198.51.100.7"); err != nil {
+		t.Fatal(err)
+	}
+	if user.LastActivityApp != "Jellyfin Android TV" || user.LastActivityAt == nil || !user.LastActivityAt.Equal(now) {
+		t.Errorf("remembered activity: %v from %q", user.LastActivityAt, user.LastActivityApp)
+	}
+	if _, user, err = store.DeviceByToken(ctx, tvToken, "198.51.100.7"); err != nil {
+		t.Fatal(err)
+	}
+	if user.LastActivityApp != "Jellyfin Android TV" || user.LastActivityAt == nil || !user.LastActivityAt.Equal(now) {
+		t.Errorf("remembered activity again: %v from %q", user.LastActivityAt, user.LastActivityApp)
+	}
+}
+
+func TestAdminAppActivityIsTheAdminApps(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	now := time.Now()
+	store.now = func() time.Time { return now }
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	token, _, err := store.CreateAdminSession(ctx, alice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := lastActivityApp(t, store, alice.ID); got != AdminApp {
+		t.Errorf("app after the admin app's sign-in: %q", got)
+	}
+	if _, err := store.db.Exec(ctx, "UPDATE users SET last_activity_app = 'Jellyfin Web', last_activity_at = now() - interval '1 hour' WHERE id = $1", alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	session, err := store.AdminSession(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := lastActivityApp(t, store, alice.ID); got != AdminApp {
+		t.Errorf("app after the admin app's use: %q", got)
+	}
+	if session.User.LastActivityApp != AdminApp {
+		t.Errorf("app answered: %q", session.User.LastActivityApp)
+	}
+	if AdminApp != "Polyfin admin" {
+		t.Errorf("the admin app is named %q", AdminApp)
+	}
+}
+
+func TestActivityAppNeverMovesWithoutTheTime(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	store.now = time.Now
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	ahead := func() time.Time {
+		t.Helper()
+		var at time.Time
+		if err := store.db.QueryRow(ctx, `UPDATE users SET last_activity_at = date_trunc('second', now()) + interval '1 hour',
+			last_activity_app = 'Jellyfin Web' WHERE id = $1 RETURNING last_activity_at`, alice.ID).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	stays := func(what string, future time.Time) {
+		t.Helper()
+		if got, app := lastActivity(t, store, alice.ID), lastActivityApp(t, store, alice.ID); got == nil || !got.Equal(future) || app != "Jellyfin Web" {
+			t.Errorf("%s moved the activity from %v in Jellyfin Web to %v in %q", what, future, got, app)
+		}
+	}
+
+	future := ahead()
+	sessionToken, _, err := store.CreateAdminSession(ctx, alice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stays("the admin app's sign-in", future)
+	future = ahead()
+	tv := device("tv")
+	tv.Client = "Jellyfin Android TV"
+	deviceToken, _, err := store.SignInDevice(ctx, alice.ID, tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stays("the device's sign-in", future)
+
+	// Requests on a clock behind the database's, the device's with a new
+	// address that writes the device.
+	store.now = func() time.Time { return time.Now().Add(-time.Hour) }
+	_, user, err := store.DeviceByToken(ctx, deviceToken, "198.51.100.7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stays("the device's request", future)
+	if user.LastActivityApp != "Jellyfin Web" || user.LastActivityAt == nil || !user.LastActivityAt.Equal(future) {
+		t.Errorf("activity answered: %v from %q", user.LastActivityAt, user.LastActivityApp)
+	}
+	session, err := store.AdminSession(ctx, sessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stays("the admin app's request", future)
+	if session.User.LastActivityApp != "Jellyfin Web" {
+		t.Errorf("admin app answered %q", session.User.LastActivityApp)
+	}
+}
