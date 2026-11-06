@@ -203,8 +203,8 @@ export const sources = [
   {
     slug: 'family-sundays',
     name: 'Family Sundays',
-    logo: 'round',
-    color: '#F59E0B',
+    logo: 'light',
+    color: '#FFFFFF',
     catalogs: 1,
   },
   {
