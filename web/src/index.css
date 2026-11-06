@@ -60,6 +60,14 @@
   --color-warn-lit: #7a5200;
   --color-danger-lit: #b42d22;
 
+  /* A chart's series (users, play methods), in order: hues apart from the states, so a user never
+     reads as one, each 3 to 1 or more on a tile. A legend always names them. */
+  --color-series-1: #9ea4ff;
+  --color-series-2: #5cc8ee;
+  --color-series-3: #e68fd8;
+  --color-series-4: #4fcdb6;
+  --color-series-5: #c3a3ff;
+
   /* Figtree, one family, for everything; a monospace only for code, paths, keys and logs. */
   --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;

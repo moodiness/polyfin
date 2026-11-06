@@ -5,11 +5,17 @@ import { useI18n } from '@/i18n'
 import { useScrollFade } from '@/ui'
 
 /**
- * The colors of a chart's series (users, play methods), in order. They are hues apart from the
- * state colors (green, amber, red), so that a user never reads as a state, and each has 3:1 or more
- * against a tile; a legend always names them. Past them, the others share the quiet ink.
+ * The colors of a chart's series (users, play methods), in order: the `series` tokens, hues apart
+ * from the state colors (green, amber, red), so that a user never reads as a state, each with 3:1 or
+ * more against a tile; a legend always names them. Past them, the others share the quiet ink.
  */
-const seriesColors = ['#9ea4ff', '#5cc8ee', '#e68fd8', '#4fcdb6', '#c3a3ff']
+const seriesColors = [
+  'var(--color-series-1)',
+  'var(--color-series-2)',
+  'var(--color-series-3)',
+  'var(--color-series-4)',
+  'var(--color-series-5)',
+]
 const otherColor = 'var(--color-ink-3)'
 
 /** The color of the series at `index`, as a CSS color. */
