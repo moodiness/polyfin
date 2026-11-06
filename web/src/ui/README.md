@@ -1,28 +1,60 @@
-# `src/ui`: the « Nuit » design system
+# `src/ui`: the « Salon » design system
 
-Import everything from `@/ui`. Each component documents its props in its file; `/admin/dev/ui` (development builds only) shows them all in their states. Colors, radii and type come from the tokens in `src/index.css` (`bg-s1`, `text-ink-2`, `border-line-2`, `rounded-panel`, `text-h1`, `shadow-pop`, `figures`…): never write a raw color. Icons come from `@phosphor-icons/react`, regular weight, 16/18/20 px.
+The admin app with the calm of a TV interface: big type, few things per screen, soft rounded tiles with no borders, and one strong, friendly focus. What is under the keyboard, the mouse or the remote is **lit**: it turns pale lavender-white with dark words, or gets a thick white halo (art tiles). Values sit on the right with a chevron, and help shows for the lit row only.
+
+Import everything from `@/ui`. Each component documents its props in its file; `/admin/dev/ui` (development builds only) shows them all in their states. Colors, radii and type come from the tokens in `src/index.css`, under the « Nuit » names with Salon values (`bg-s1`, `text-ink-2`, `rounded-row`, `text-h1`, `shadow-lift`…): never write a raw color. Icons come from `@phosphor-icons/react`, regular weight.
+
+## The look
+
+- **Surfaces are fills, never boxes:** `bg-s1` for tiles, rows and panels, `bg-s2` for hover, fields and the current section. No hairlines, and no card inside a card: rows, figures, tables and panels inside a `Panel` drop their own fill.
+- **Radii:** art tiles `rounded-tile` (34), panels `rounded-panel` (28), rows `rounded-row` (24), buttons `rounded-control` (17), choices `rounded-choice` (18), wells `rounded-field` (20).
+- **Type, Figtree:** `text-display` 56 (a greeting), `text-h1` 48 (a page title), `text-h2` 27 (a shelf title), `text-group` 25 (a group of rows), `text-h3` 21 (a row label), `text-lead` 20 (values, ledes), `text-body` 19, `text-control` 18, `text-small` 17 (help), `text-micro` 15.5 (captions, times). `figures` gives tabular figures.
+- **The lit state:** the `lit` utility (inside it, ink, surfaces and state colors switch to their lit variants by themselves), `lift` (the rise over a soft shadow, `--lift` sets how far) and `focus-lit` (both on `:focus-visible`, in place of an outline ring). Every control of `@/ui` wears it. It is never the only cue: keep `aria-current`, `aria-checked`, `aria-selected`, `aria-expanded`.
+- **Motion:** one spring, `ease-nuit`, on transform, background and color only; `prefers-reduced-motion` removes the motion and the lift.
+- **Floating surfaces** (menus, lists, dialogs, tooltips, toasts, the unsaved dock) are `raised`: a glass over the page with `shadow-pop`.
 
 ## Page structure
 
-| Need                                                                    | Use                                                           |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------- |
-| The frame of a page: title, lede, actions, blocks 52 px apart           | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader` |
-| A page split with a list of sections on the left (Settings, My account) | `PageLayout` with `nav={<SectionNav … />}`                    |
-| A titled part of a page, with a count or a link on the right            | `Block` (+ `Count`, `TextLink`)                               |
-| Content that needs an edge: a detail beside a list, a form              | `Panel`, split by `PanelSection`, closed by `PanelFooter`     |
-| Navigation between sibling pages, or sections of a detail               | `Tabs` (`pill` above a page, `underline` inside a panel)      |
+| Need                                                                          | Use                                                                       |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| The frame of a page: title, lede, actions, sub-area words, blocks 64 px apart | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader`             |
+| A greeting at the top of Home                                                 | `PageHeader` with `greeting`                                              |
+| A page split with a list of sections on the left (Settings, a user)           | `PageLayout` with `nav={<SectionNav … />}`; the dock docks under the list |
+| A shelf of a page, with a count or a link on the right                        | `Block` (+ `Count`, `TextLink`)                                           |
+| Content that needs a ground of its own: a detail, a figure with its rows      | `Panel`, split by `PanelSection`, closed by `PanelFooter`                 |
+| The sub-area words under a page title (Sources · Libraries · Live TV)         | `Tabs` with links (`words`, the default), passed as PageHeader's `nav`    |
+| Sections inside a page part (a source's Summary, Categories…)                 | `Tabs` with `variant="underline"`                                         |
 
-## Lists and data
+## Rows, tiles and data
 
-| Need                                                                  | Use                                                                         |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Things with a name, a meta line and a state (sources, devices, users) | `RowList` + `Row` (`boxed`, `plain` for a feed, `separate` beside a detail) |
-| The icon or letters at the start of a row                             | `IconTile`, or `Avatar` for a person                                        |
-| Columns of comparable values                                          | `Table` (scrolls inside itself on a phone)                                  |
-| Figures that are compared (counts, times, IPs, versions)              | the `figures` class                                                         |
-| How far something is                                                  | `ProgressBar` (`brand` only for playback)                                   |
-| A time ("18 min ago"), with the full date on hover                    | `RelativeTime` (`className` for its color and size)                         |
-| Reordering an item of a list from the keyboard                        | `MoveButtons` (focus follows the item after a move)                         |
+| Need                                                                     | Use                                                                               |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed) |
+| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows                                                     |
+| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                         |
+| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`; `ok`, `warn`, `danger`), or `Avatar` for a person   |
+| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with a halo and its tools         |
+| A problem to look at, with its cause and fix                             | `AlertTile`                                                                       |
+| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                              |
+| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)            |
+| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                         |
+| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                               |
+| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                               |
+
+### Setting rows
+
+`SettingRow` is the label on the left, the value and a chevron on the right, and the help shown only while the row is lit (always in `aria-describedby`). Enter, Space or a click opens its control inside the row; Escape closes it and returns to the row; ↑ ↓ move between rows without trapping Tab.
+
+| `kind`   | Opens                                                                           | Its own props                                             |
+| -------- | ------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `switch` | Nothing: the row is the `role="switch"`, with the toggle and its word           | `checked`, `onChange`, `stateText`                        |
+| `choice` | A strip of big choices (`role="radiogroup"`, ← →), or a searchable list past 12 | `value`, `options`, `onChange`                            |
+| `number` | A strip of values up to 33 of them, else a number well with its unit            | `value`, `min`, `max`, `step`, `unit`, `format`, `picker` |
+| `text`   | A text well; Enter closes it                                                    | `value`, `onChange`, `placeholder`, `maxLength`, `mono`   |
+| `path`   | The same well; the value goes under the label on a phone                        | as `text`                                                 |
+| `secret` | The `SecretField` (masked typing, reveal, replace, remove)                      | the SecretField's own                                     |
+
+Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and its value in the link color. A row without `saved` (settings that apply at once) keeps no mark. `anchor` gives it the id of its `#anchor`, `error` shows under it, and `children` add a note under it.
 
 ## States
 
@@ -38,18 +70,20 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 
 ## Forms
 
-| Need                                      | Use                                                    |
-| ----------------------------------------- | ------------------------------------------------------ |
-| Any labelled control, with help and error | `Field` around the control                             |
-| Text, a filter, a password                | `TextInput` (`icon`, `suffix`, `revealable`)           |
-| A number with a unit                      | `NumberInput`                                          |
-| One choice among many                     | `Select`; two to four side by side: `Segmented`        |
-| Free text with suggestions (a genre)      | `SuggestInput`                                         |
-| Several lines                             | `Textarea` (`mono` for code)                           |
-| A setting that turns something on         | `Switch` (`stateText` to write On / Off beside it)     |
-| Picking items of a list                   | `Checkbox`                                             |
-| An API key, a client secret               | `SecretField` (masked typing, reveal, replace, remove) |
-| Saving a whole page of settings           | `SaveBar`, inside the `<form>`, once per page          |
+| Need                                      | Use                                                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| Any labelled control, with help and error | `Field` around the control                                                 |
+| Text, a filter, a password                | `TextInput` (`icon`, `suffix`, `revealable`; `size` `md`, `sm`, `compact`) |
+| A number with a unit                      | `NumberInput`                                                              |
+| One choice among many                     | `Select`; two to four side by side: `Segmented`                            |
+| Free text with suggestions (a genre)      | `SuggestInput`                                                             |
+| Several lines                             | `Textarea` (`mono` for code)                                               |
+| Something that turns on or off            | `Switch` (the word of its state beside it), or a `switch` SettingRow       |
+| Picking items of a list                   | `Checkbox`                                                                 |
+| An API key, a client secret               | `SecretField` (masked typing, reveal, replace, remove)                     |
+| Saving a whole page of settings           | `SaveBar`, inside the `<form>`, once per page: the unsaved dock            |
+
+`SaveBar` is the unsaved dock: "2 changes" (pass `changes`), Discard changes and Save. It shows only while there are changes. On a split page it docks under the section list (`DockSlotContext`, which `PageLayout` provides), elsewhere it sticks to the end of the form, and on a phone it is a bar along the bottom with room kept under the last row: it never covers a row for good. Its Save button submits its form, even from the dock.
 
 ## Actions
 
@@ -63,13 +97,14 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | A form or editor too large for its row, phone menu  | `Modal`: a centered floating panel, `width` per use (480 to 640)   |
 | A hint on hover or focus                            | `Tooltip` (never the only copy of something needed)                |
 | A keyboard shortcut                                 | `Kbd` (`modKey` is ⌘ or Ctrl)                                      |
+| A quiet link with a chevron ("Open Health ›")       | `TextLink`                                                         |
 
 ## Rules
 
 - Copy goes through `useI18n()`; the components' own words are in `t.ui`.
 - No browser-drawn list: `Select` and `SuggestInput` draw their own popover listbox, portaled out of tables, scroll boxes and dialogs, with the keyboard of a native list (arrows, Home, End, Enter, Escape, Tab, typing a letter). A `Select` with more than 12 options starts with a search, accents and case ignored. Never use `<select>` or `<datalist>`.
-- Nothing that floats over the page covers the top bar: the list of a `Select` or `SuggestInput` stays under the element marked `data-top-bar` and closes when its field scrolls out of view under it; a `Menu` scrolls beneath it.
-- Nothing is wider than a phone: a row of actions wraps, and a row that scrolls sideways shows it with the `scroll-fade` class and `useScrollFade` on that row, which fade the edge it scrolls past (`Tabs` and `SectionNav` already do).
-- Every control has a label; toggles set `aria-pressed` or `aria-checked`, disclosures `aria-expanded`.
-- Motion comes from the tokens (`duration-160`/`220`, `ease-nuit`, `animate-rise`, `stagger`) and stops under `prefers-reduced-motion`.
+- Nothing that floats over the page covers the top row: the list of a `Select` or `SuggestInput` stays under the element marked `data-top-bar` and closes when its field scrolls out of view under it; a `Menu` scrolls beneath it.
+- Nothing is wider than a phone (390 px, in English and German): a row of actions wraps, labels wrap before values do, and a row that scrolls sideways shows it with the `scroll-fade` class and `useScrollFade`, which fade the edge it scrolls past (`Tabs` and `SectionNav` already do).
+- Every control has a label; toggles set `aria-pressed` or `aria-checked`, disclosures `aria-expanded`. Arrows may move within a list, never trap Tab.
+- Posters and art load lazily (`loading="lazy"`); nothing heavy on every page.
 - Add a component here only when two areas need it; otherwise keep it in `src/features/<area>/`.
