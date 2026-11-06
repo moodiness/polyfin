@@ -164,12 +164,17 @@ func TestMissingLanguagesAreDownloadedOnceWithTheSetting(t *testing.T) {
 	fetcher := &fakeFetcher{dir: tessdata, started: make(chan struct{}), hold: make(chan struct{})}
 	p.FetchLanguagesWith(fetcher)
 	version := library.Version{ID: accounts.ID{1}, URL: p.base + "video.mkv"}
-	// Off, nothing is downloaded.
+	// Off, nothing is downloaded. A download starts in the background once
+	// the read ends, too late for counting the calls, but the read decides
+	// it in the step that ends it: it would count as being downloaded.
 	off := finnishFiles(t, p, "off.sup")
 	p.queueTracks(t.Context(), version, videoAnalysis, off, -1)
 	p.waitReads(t)
-	if calls := fetcher.count(); calls != 0 {
-		t.Fatalf("%d downloads with the setting off", calls)
+	p.pictures.mu.Lock()
+	fetching := len(p.pictures.fetching)
+	p.pictures.mu.Unlock()
+	if fetching != 0 {
+		t.Fatalf("%d downloads with the setting off", fetching)
 	}
 	p.set(func(s *accounts.Settings) { s.SubtitleOCRDownload = true })
 	// Two tracks in Finnish are both left unread while the one download
