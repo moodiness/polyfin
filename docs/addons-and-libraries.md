@@ -8,7 +8,7 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 The rest of the old "Addons and libraries" page is now on:
 
-- [Addons](addons.md): adding addons, who uses them, identifiers, failures, request limits and languages;
+- [Addons](addons.md): adding addons, who uses them (from the source's page or a group's), identifiers, failures, request limits and languages;
 - [Smart lists and search](smart-lists-and-search.md): smart lists, searches in plain words and movies waiting for their digital release;
 - [Music, audiobooks and podcasts](music.md): music addons and music folders;
 - [Collections, people and ratings](collections-people-and-ratings.md): collections, people, ratings and the TMDB key;
