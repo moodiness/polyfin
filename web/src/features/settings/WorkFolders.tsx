@@ -1,8 +1,7 @@
 import type { Settings } from '@/api'
 import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import { useI18n } from '@/i18n'
-import { TextInput } from '@/ui'
-import { FieldRow } from './parts'
+import { SettingRow } from '@/ui'
 import type { SectionFormApi } from './SectionForm'
 
 /** The settings that choose a folder for the files Polyfin works on. */
@@ -22,31 +21,30 @@ export const workFolderAnchors: Record<WorkFolder, string> = {
 export default function WorkFolderRow({
   folder,
   form,
+  saved,
   update,
   error,
   limits,
-}: Pick<SectionFormApi, 'form' | 'update' | 'error' | 'limits'> & { folder: WorkFolder }) {
+}: Pick<SectionFormApi, 'form' | 'saved' | 'update' | 'error' | 'limits'> & {
+  folder: WorkFolder
+}) {
   const { t } = useI18n()
   const s = t.settings.workFolders
   const host = computer(useServerSystem())
   const anchor = workFolderAnchors[folder]
   return (
-    <FieldRow
+    <SettingRow
+      kind="path"
       anchor={anchor}
       label={s[folder]}
       help={`${s[`${folder}Help`]} ${s.where[host]}`}
       error={error(anchor)}
-    >
-      <TextInput
-        value={form[folder]}
-        onValue={(value) => update({ [folder]: value } as Pick<Settings, WorkFolder>)}
-        placeholder={form.cacheFolderDefault}
-        maxLength={limits(folder).max}
-        autoComplete="off"
-        spellCheck={false}
-        mono
-        className="max-w-md"
-      />
-    </FieldRow>
+      value={form[folder]}
+      saved={saved[folder]}
+      onChange={(value) => update({ [folder]: value } as Pick<Settings, WorkFolder>)}
+      placeholder={form.cacheFolderDefault}
+      maxLength={limits(folder).max}
+      mono
+    />
   )
 }

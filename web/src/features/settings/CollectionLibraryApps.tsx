@@ -4,7 +4,7 @@ import { fetchSettings, fetchSettingsApps, queryKeys } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Checkbox, FieldError } from '@/ui'
-import { SettingRow } from './parts'
+import { PlainRow } from './parts'
 
 /** Whether two app names are the same whatever their letter case, as the server compares them. */
 const sameApp = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
@@ -44,12 +44,10 @@ export default function CollectionLibraryApps({
   }
   apps.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
   return (
-    <SettingRow anchor="collection-library-apps">
+    <PlainRow anchor="collection-library-apps">
       <fieldset aria-describedby={`${id}-help`}>
-        <legend className="text-[15px] font-medium tracking-[-0.01em] text-ink">
-          {s.collectionLibraryApps}
-        </legend>
-        <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
+        <legend className="text-h3 text-ink max-md:text-[18px]">{s.collectionLibraryApps}</legend>
+        <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">
           {s.collectionLibraryAppsHelp}
         </p>
         {apps.length > 0 ? (
@@ -78,6 +76,6 @@ export default function CollectionLibraryApps({
           </div>
         )}
       </fieldset>
-    </SettingRow>
+    </PlainRow>
   )
 }

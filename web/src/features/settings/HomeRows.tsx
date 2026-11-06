@@ -251,7 +251,7 @@ function HomeRowEntry({
         ) : undefined
       }
       meta={
-        <span className="truncate">
+        <span className="min-w-0 break-words">
           {[
             source,
             text.places[row.place],
@@ -261,38 +261,39 @@ function HomeRowEntry({
         </span>
       }
       trailing={
-        <div className="flex items-center gap-1.5">
-          <MoveButtons
-            name={row.name}
-            index={index}
-            count={rowCount}
-            disabled={moving}
-            onMove={onMove}
-          />
-          <Button variant="ghost" size="sm" onClick={onEdit}>
-            {text.edit}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
-            {text.delete}
-          </Button>
-          <ConfirmDialog
-            open={confirming}
-            onClose={() => {
-              setConfirming(false)
-              remove.reset()
-            }}
-            onConfirm={() => remove.mutate()}
-            title={text.deleteTitle(row.name)}
-            confirmLabel={text.delete}
-            tone="danger"
-            busy={remove.isPending}
-            error={remove.isError ? errorMessage(t, remove.error) : undefined}
-          >
-            {text.deleteBody}
-          </ConfirmDialog>
-        </div>
+        <MoveButtons
+          name={row.name}
+          index={index}
+          count={rowCount}
+          disabled={moving}
+          onMove={onMove}
+        />
       }
-    />
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" onClick={onEdit}>
+          {text.edit}
+        </Button>
+        <Button variant="ghost" onClick={() => setConfirming(true)}>
+          {text.delete}
+        </Button>
+      </div>
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => {
+          setConfirming(false)
+          remove.reset()
+        }}
+        onConfirm={() => remove.mutate()}
+        title={text.deleteTitle(row.name)}
+        confirmLabel={text.delete}
+        tone="danger"
+        busy={remove.isPending}
+        error={remove.isError ? errorMessage(t, remove.error) : undefined}
+      >
+        {text.deleteBody}
+      </ConfirmDialog>
+    </Row>
   )
 }
 
@@ -523,7 +524,7 @@ function HomeRowModal({
           </div>
           <Switch checked={library} onChange={setLibrary} labelledBy={`${formId}-library`} />
         </div>
-        <fieldset className="space-y-4 border-t border-line pt-5">
+        <fieldset className="space-y-4 pt-3">
           <legend className="sr-only">{text.schedule}</legend>
           <div>
             <p className="text-control font-medium text-ink" aria-hidden="true">
@@ -688,8 +689,8 @@ function HomeRowPreviewModal({ users, onClose }: { users: User[]; onClose: () =>
                 {rows
                   .filter((row) => row.place === place)
                   .map((row) => (
-                    <div key={row.id} className="space-y-2">
-                      <p className="text-control font-medium text-ink">{row.name}</p>
+                    <div key={row.id} className="space-y-3">
+                      <p className="text-body font-semibold text-ink">{row.name}</p>
                       <ul className="flex gap-3 overflow-x-auto pb-2">
                         {row.titles.map((title) => (
                           <li key={title.id} className="w-24 shrink-0">
@@ -719,7 +720,7 @@ function PreviewPoster({ title }: { title: HomeRowPreviewTitle }) {
     return (
       <span
         aria-hidden="true"
-        className="grid aspect-[2/3] w-full place-items-center rounded-check border border-line-2 bg-s2 text-ink-3"
+        className="grid aspect-[2/3] w-full place-items-center rounded-check bg-s2 text-ink-3"
       >
         <KindIcon size={20} />
       </span>
@@ -731,7 +732,7 @@ function PreviewPoster({ title }: { title: HomeRowPreviewTitle }) {
       alt=""
       loading="lazy"
       onError={() => setFailed(true)}
-      className="aspect-[2/3] w-full rounded-check object-cover ring-1 ring-ink/8"
+      className="aspect-[2/3] w-full rounded-check bg-s2 object-cover"
     />
   )
 }

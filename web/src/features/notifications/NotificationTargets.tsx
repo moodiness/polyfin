@@ -30,10 +30,13 @@ import {
   InlineError,
   Modal,
   Notice,
+  Row,
+  RowList,
   SecretField,
   Select,
   SkeletonRows,
   StatusPill,
+  Table,
   TextInput,
   useToast,
   type StatusTone,
@@ -79,7 +82,7 @@ export default function NotificationTargets({ scope }: { scope: NotificationScop
           {text.emptyHint[scope]}
         </EmptyState>
       ) : (
-        <ul className="overflow-hidden rounded-panel border border-line-2 bg-s1">
+        <RowList aria-label={text.title}>
           {targets.map((target) => (
             <TargetRow
               key={target.id}
@@ -88,7 +91,7 @@ export default function NotificationTargets({ scope }: { scope: NotificationScop
               onEdit={() => setEditing(target)}
             />
           ))}
-        </ul>
+        </RowList>
       )}
       <div>
         <Button icon={PlusIcon} onClick={() => setEditing('new')}>
@@ -184,21 +187,12 @@ function TargetRow({
           : text.problem[target.problem]
   // What the target is: its address, or a Telegram target's chat; a Pushover target shows none.
   const detail = target.kind === 'telegram' ? target.chat : target.address
-  const headingId = useId()
   return (
-    <li
-      aria-labelledby={headingId}
-      className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-x-4 px-[22px] py-5 max-sm:grid-cols-[40px_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4 [&+&]:border-t [&+&]:border-line"
-    >
-      <IconTile letters={monograms[target.kind]} />
-      <div className="min-w-0">
-        <h3
-          id={headingId}
-          className="flex h-10 items-center text-[15px] font-semibold tracking-[-0.01em] text-ink"
-        >
-          {target.name}
-        </h3>
-        <p className="-mt-1.5 text-control break-words text-ink-2">
+    <Row
+      leading={<IconTile letters={monograms[target.kind]} />}
+      title={target.name}
+      meta={
+        <span className="min-w-0 break-words">
           {text.kinds[target.kind]}
           {detail !== '' && (
             <>
@@ -207,30 +201,34 @@ function TargetRow({
             </>
           )}
           {target.topic !== '' && <span className="font-mono">/{target.topic}</span>}
-        </p>
-        <p className="mt-1 text-small text-ink-3">
-          {target.events.length === 0
-            ? text.noEvents
-            : target.events.map((event) => text.eventNames[event]).join(', ')}
-          {target.perMinute !== null && ` · ${text.capped(target.perMinute)}`}
-          {target.groupMinutes !== null && ` · ${text.grouped(target.groupMinutes)}`}
-          {' · '}
-          {target.lastSentAt === null ? (
-            text.nothingSent
-          ) : (
-            <>
-              {text.lastSent}
-              <time dateTime={target.lastSentAt} title={dateTime(target.lastSentAt, language)}>
-                {relativeTime(target.lastSentAt, language, t.time.justNow)}
-              </time>
-            </>
-          )}
-        </p>
-      </div>
-      <div className="flex h-10 items-center justify-end gap-1.5 max-sm:col-span-full max-sm:mt-3 max-sm:h-auto max-sm:flex-wrap">
-        <StatusPill tone={status.tone} className="max-sm:mr-auto">
-          {status.label}
-        </StatusPill>
+        </span>
+      }
+      trailing={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
+    >
+      <p className="text-small break-words text-ink-2">
+        {target.events.length === 0
+          ? text.noEvents
+          : target.events.map((event) => text.eventNames[event]).join(', ')}
+        {target.perMinute !== null && ` · ${text.capped(target.perMinute)}`}
+        {target.groupMinutes !== null && ` · ${text.grouped(target.groupMinutes)}`}
+        {' · '}
+        {target.lastSentAt === null ? (
+          text.nothingSent
+        ) : (
+          <>
+            {text.lastSent}
+            <time dateTime={target.lastSentAt} title={dateTime(target.lastSentAt, language)}>
+              {relativeTime(target.lastSentAt, language, t.time.justNow)}
+            </time>
+          </>
+        )}
+      </p>
+      {problem !== null && (
+        <Notice tone={status.tone === 'danger' ? 'danger' : 'warn'} className="mt-4">
+          {problem}
+        </Notice>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
         <Button
           variant="secondary"
           loading={test.isPending}
@@ -249,11 +247,6 @@ function TargetRow({
           {text.delete}
         </Button>
       </div>
-      {problem !== null && (
-        <div className="col-start-2 -col-end-1 mt-4 max-sm:col-span-full">
-          <Notice tone={status.tone === 'danger' ? 'danger' : 'warn'}>{problem}</Notice>
-        </div>
-      )}
       <ConfirmDialog
         open={confirming}
         onClose={() => {
@@ -270,7 +263,7 @@ function TargetRow({
         {text.deleteBody}
       </ConfirmDialog>
       {logOpen && <Deliveries scope={scope} target={target} onClose={() => setLogOpen(false)} />}
-    </li>
+    </Row>
   )
 }
 
@@ -490,7 +483,7 @@ function TargetModal({
             <Notice tone="info">{text.discordAsWebhook}</Notice>
           )}
         <fieldset className="space-y-3">
-          <legend className="mb-1 text-[15px] font-medium text-ink">{text.events}</legend>
+          <legend className="mb-1 text-body font-semibold text-ink">{text.events}</legend>
           <p className="text-small text-ink-3">{text.eventsHelp[scope]}</p>
           {events.map((event) => (
             <Checkbox
@@ -779,27 +772,27 @@ function Deliveries({
         ) : deliveries.data.length === 0 ? (
           <p className="text-control text-ink-2">{text.empty}</p>
         ) : (
-          <table className="w-full text-left text-control">
-            <thead className="text-small text-ink-3">
+          <Table label={text.title(target.name)} minWidth={480} compact>
+            <thead>
               <tr>
-                <th className="py-2 pr-3 font-medium">{text.when}</th>
-                <th className="py-2 pr-3 font-medium">{text.event}</th>
-                <th className="py-2 font-medium">{text.outcome}</th>
+                <th scope="col">{text.when}</th>
+                <th scope="col">{text.event}</th>
+                <th scope="col">{text.outcome}</th>
               </tr>
             </thead>
             <tbody>
               {deliveries.data.map((d) => (
-                <tr key={d.id} className="border-t border-line align-top">
-                  <td className="py-2 pr-3 whitespace-nowrap text-ink-2">
+                <tr key={d.id}>
+                  <td className="whitespace-nowrap">
                     <time dateTime={d.at}>{dateTime(d.at, language)}</time>
                   </td>
-                  <td className="py-2 pr-3 break-words text-ink">
+                  <td className="break-words">
                     {d.type === 'test' ? text.test : d.title}
                     {d.events > 1 && (
                       <span className="block text-small text-ink-3">{text.grouped(d.events)}</span>
                     )}
                   </td>
-                  <td className="py-2">
+                  <td>
                     <StatusPill tone={outcomeTones[d.outcome]}>
                       {text.outcomes[d.outcome]}
                     </StatusPill>
@@ -818,7 +811,7 @@ function Deliveries({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         )}
       </div>
     </Modal>

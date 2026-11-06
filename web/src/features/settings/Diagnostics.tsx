@@ -5,7 +5,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Badge, EmptyState, InlineError, SkeletonRows, TextLink } from '@/ui'
 import { variableAnchor } from './catalog'
-import { SettingRow, SettingsGroup } from './parts'
+import { PlainRow, SettingsGroup } from './parts'
 
 /** How the last backup went, refreshed every 10 seconds. */
 export function LastBackup() {
@@ -16,10 +16,8 @@ export function LastBackup() {
     refetchInterval: 10_000,
   })
   return (
-    <SettingRow anchor="last-backup">
-      <h4 className="mb-3 text-[15px] font-medium tracking-[-0.01em] text-ink">
-        {t.settings.lastBackup}
-      </h4>
+    <PlainRow anchor="last-backup">
+      <h4 className="mb-3 text-h3 text-ink">{t.settings.lastBackup}</h4>
       {backup.isPending ? (
         <SkeletonRows rows={1} label={t.common.loading} />
       ) : backup.isError ? (
@@ -34,7 +32,7 @@ export function LastBackup() {
           {t.system.health.backup.runHint}
         </TextLink>
       </p>
-    </SettingRow>
+    </PlainRow>
   )
 }
 
@@ -49,8 +47,8 @@ export function Variables() {
   })
   return (
     <SettingsGroup title={text.sections.variables}>
-      <SettingRow anchor="environment-variables">
-        <p className="max-w-[60ch] text-small text-ink-3">{text.variablesHelp}</p>
+      <PlainRow anchor="environment-variables">
+        <p className="max-w-[60ch] text-small text-ink-2">{text.variablesHelp}</p>
         <div className="mt-4">
           {variables.isPending ? (
             <SkeletonRows rows={5} label={t.common.loading} boxed />
@@ -61,15 +59,12 @@ export function Variables() {
           ) : variables.data.length === 0 ? (
             <EmptyState title={text.variablesEmpty}>{text.variablesEmptyHelp}</EmptyState>
           ) : (
-            <ul
-              aria-label={text.sections.variables}
-              className="rounded-row border border-line-2 bg-s1"
-            >
+            <ul aria-label={text.sections.variables} className="grid gap-2">
               {variables.data.map((variable) => (
                 <li
                   key={variable.name}
                   id={variableAnchor(variable.name)}
-                  className="flex scroll-mt-32 flex-col gap-1.5 px-4 py-3 transition-colors duration-700 not-first:border-t not-first:border-line data-[flash]:bg-accent/8 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                  className="flex scroll-mt-32 flex-col gap-1.5 rounded-row bg-s2 px-4 py-3 transition-colors duration-700 data-[flash]:bg-accent/8 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
                 >
                   <code className="font-mono text-small break-all text-ink">{variable.name}</code>
                   <span className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -92,7 +87,7 @@ export function Variables() {
             </ul>
           )}
         </div>
-      </SettingRow>
+      </PlainRow>
     </SettingsGroup>
   )
 }

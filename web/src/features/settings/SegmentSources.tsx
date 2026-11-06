@@ -45,22 +45,22 @@ export default function SegmentSources({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
         {text.label}
       </p>
-      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
+      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">
         {text.help}
       </p>
       <p className="sr-only" role="status">
         {announcement}
       </p>
-      <ol className="mt-3.5 rounded-row border border-line-2 bg-s1">
+      <ol className="mt-3.5 grid gap-2">
         {order.map((source, index) => {
           const on = !off.includes(source)
           return (
             <li
               key={source}
-              className="flex min-h-[52px] items-center gap-3.5 py-1.5 pr-2.5 pl-3.5 not-first:border-t not-first:border-line"
+              className="flex min-h-[52px] flex-wrap items-center gap-x-3.5 gap-y-1 rounded-row bg-s2 py-1.5 pr-2.5 pl-3.5"
             >
               <span aria-hidden="true" className="figures w-4 text-right text-micro text-ink-3">
                 {index + 1}
@@ -76,14 +76,14 @@ export default function SegmentSources({
                 }
               />
               <span
-                className={`min-w-0 flex-1 truncate text-body font-medium ${on ? 'text-ink' : 'text-ink-3'}`}
+                className={`min-w-[8rem] flex-1 truncate text-body font-medium ${on ? 'text-ink' : 'text-ink-3'}`}
               >
                 {sourceNames[source]}
               </span>
               {on && source === 'publicmetadb' && !publicMetaDbKey && (
                 <StatusPill tone="warn">{text.needsKey}</StatusPill>
               )}
-              <span className="flex">
+              <span className="ml-auto flex">
                 <IconButton
                   size="sm"
                   icon={ArrowUpIcon}

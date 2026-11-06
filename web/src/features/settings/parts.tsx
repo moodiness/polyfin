@@ -1,26 +1,33 @@
 import { useId, type ReactNode } from 'react'
-import { cx, Field, Switch } from '@/ui'
+import { cx, Field } from '@/ui'
 
-/** A titled group of settings in a section, like « Passer l'intro et le générique ». */
+/**
+ * A titled group of settings in a section, like « Passer l'intro et le générique »: its rows,
+ * `SettingRow`s of `@/ui` or `PlainRow`s, go 8 px apart.
+ */
 export function SettingsGroup({ title, children }: { title?: string; children: ReactNode }) {
   const id = useId()
   return (
-    <section aria-labelledby={title === undefined ? undefined : id} className="mt-11 first:mt-8">
+    <section
+      aria-labelledby={title === undefined ? undefined : id}
+      className="mt-[52px] first:mt-10 max-md:mt-9 max-md:first:mt-7"
+    >
       {title !== undefined && (
-        <h3 id={id} className="border-b border-line-2 pb-2.5 text-small font-medium text-ink-3">
+        <h3 id={id} className="mb-4 text-group text-ink max-md:mb-3 max-md:text-[21px]">
           {title}
         </h3>
       )}
-      <div className="[&>*+*]:border-t [&>*+*]:border-line">{children}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">{children}</div>
     </section>
   )
 }
 
 /**
- * The row of one setting: the target of its `#anchor`, which scrolls to it and highlights it
- * for a moment (`data-flash`).
+ * What is not one setting (a list, an editor, a group of checkboxes, a setup step) as a tile of
+ * its own beside the setting rows: the target of its `#anchor`, which scrolls to it and
+ * highlights it for a moment (`data-flash`).
  */
-export function SettingRow({
+export function PlainRow({
   anchor,
   className,
   children,
@@ -33,7 +40,8 @@ export function SettingRow({
     <div
       id={anchor}
       className={cx(
-        'scroll-mt-32 py-5 data-[flash]:rounded-row transition-[background-color,box-shadow] duration-700 ease-nuit data-[flash]:bg-accent/8 data-[flash]:shadow-[0_0_0_10px] data-[flash]:shadow-accent/8',
+        'min-w-0 scroll-mt-32 rounded-row bg-s1 px-[30px] py-6 max-md:px-5 max-md:py-5',
+        'transition-[box-shadow] duration-350 ease-nuit data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
         className,
       )}
     >
@@ -42,57 +50,35 @@ export function SettingRow({
   )
 }
 
-/** A setting turned on or off: its title and help on the left, the switch on the right. */
-export function SwitchRow({
+/**
+ * A list that draws its own rows (Home rows, notification targets, backup destinations): its
+ * help, then the rows straight in the group, with no tile around them. The target of its
+ * `#anchor`.
+ */
+export function ListRows({
   anchor,
-  label,
   help,
-  checked,
-  onChange,
-  stateText = true,
-  disabled,
   children,
 }: {
   anchor: string
-  label: string
   help: ReactNode
-  checked: boolean
-  onChange: (checked: boolean) => void
-  /** The words beside the switch; On / Off by default. */
-  stateText?: true | readonly [on: string, off: string]
-  disabled?: boolean
-  /** More under the help, such as a warning. */
-  children?: ReactNode
+  children: ReactNode
 }) {
-  const id = useId()
   return (
-    <SettingRow
-      anchor={anchor}
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 gap-y-4"
+    <div
+      id={anchor}
+      className="min-w-0 scroll-mt-32 rounded-row transition-[box-shadow] duration-350 ease-nuit data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45"
     >
-      <div className="min-w-0">
-        <p id={`${id}-label`} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
-          {label}
-        </p>
-        <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
-          {help}
-        </p>
-      </div>
-      <Switch
-        checked={checked}
-        onChange={onChange}
-        labelledBy={`${id}-label`}
-        describedById={`${id}-help`}
-        stateText={stateText}
-        disabled={disabled}
-        className="mt-0.5"
-      />
-      {children !== undefined && <div className="col-span-full">{children}</div>}
-    </SettingRow>
+      <p className="mb-4 max-w-[66ch] text-body text-ink-2 max-md:text-[16.5px]">{help}</p>
+      {children}
+    </div>
   )
 }
 
-/** A setting typed or chosen in a field: label, help, the control, and its error under it. */
+/**
+ * A setting whose control has no `SettingRow` kind (several checkboxes, a list, an editor):
+ * label, help, the control, and its error under it, in a plain tile.
+ */
 export function FieldRow({
   anchor,
   label,
@@ -109,26 +95,26 @@ export function FieldRow({
   children: ReactNode
 }) {
   return (
-    <SettingRow anchor={anchor}>
+    <PlainRow anchor={anchor}>
       <Field
         label={label}
         help={help}
         error={error}
         aside={aside}
         helpFirst
-        className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        className="[&_label]:text-h3 [&_label]:text-ink max-md:[&_label]:text-[18px]"
       >
         {children}
       </Field>
-    </SettingRow>
+    </PlainRow>
   )
 }
 
-/** Plain text in a row (a setup step), outside any control. */
+/** Plain text in a tile (a setup step), outside any control. */
 export function TextRow({ anchor, children }: { anchor: string; children: ReactNode }) {
   return (
-    <SettingRow anchor={anchor} className="text-small text-ink-2">
+    <PlainRow anchor={anchor} className="text-body text-ink-2 max-md:text-[16.5px]">
       {children}
-    </SettingRow>
+    </PlainRow>
   )
 }

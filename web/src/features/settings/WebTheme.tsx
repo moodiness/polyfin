@@ -144,9 +144,9 @@ export function ThemeCopyPanel({
   const failed = keep.error
   const busy = keep.isPending || remove.isPending
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-[15px] font-medium tracking-[-0.01em] text-ink">{s.themeCopy}</p>
-      <p className="-mt-2 max-w-[60ch] text-small text-ink-3">
+    <div className="flex flex-col gap-4">
+      <p className="text-h3 text-ink max-md:text-[18px]">{s.themeCopy}</p>
+      <p className="-mt-2.5 max-w-[66ch] text-small text-ink-2">
         {s.themeCopyHelp(
           data.limits.depth,
           formatBytes(data.limits.fileBytes, language),
@@ -201,7 +201,7 @@ export function ThemeCopyPanel({
         </Notice>
       )}
       {copy === null && data.outside.length === 0 && (
-        <p className="text-small text-ink-3">{s.themeCopyNothing}</p>
+        <p className="text-small text-ink-2">{s.themeCopyNothing}</p>
       )}
       {failed !== null && (
         <Notice tone="danger" live>

@@ -27,6 +27,8 @@ import {
   Modal,
   Notice,
   NumberInput,
+  Row,
+  RowList,
   SecretField,
   Select,
   SkeletonRows,
@@ -70,7 +72,7 @@ export default function BackupDestinations() {
           {text.emptyHint}
         </EmptyState>
       ) : (
-        <ul className="overflow-hidden rounded-panel border border-line-2 bg-s1">
+        <RowList aria-label={text.title}>
           {destinations.data.destinations.map((destination) => (
             <DestinationRow
               key={destination.id}
@@ -78,7 +80,7 @@ export default function BackupDestinations() {
               onEdit={() => setEditing(destination)}
             />
           ))}
-        </ul>
+        </RowList>
       )}
       <div>
         <Button icon={PlusIcon} onClick={() => setEditing('new')}>
@@ -147,44 +149,43 @@ function DestinationRow({
     },
   })
   const status = destinationStatus(t, destination)
-  const headingId = useId()
   return (
-    <li
-      aria-labelledby={headingId}
-      className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-x-4 px-[22px] py-5 max-sm:grid-cols-[40px_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4 [&+&]:border-t [&+&]:border-line"
-    >
-      <IconTile letters={monograms[destination.kind]} />
-      <div className="min-w-0">
-        <h3
-          id={headingId}
-          className="flex h-10 items-center font-mono text-[15px] font-semibold tracking-[-0.01em] break-all text-ink"
-        >
-          {destination.name}
-        </h3>
-        <p className="-mt-1.5 text-control text-ink-2">
+    <Row
+      leading={<IconTile letters={monograms[destination.kind]} />}
+      title={<span className="font-mono break-all">{destination.name}</span>}
+      meta={
+        <span>
           {text.kinds[destination.kind]} · {text.keeps(destination.kept)}
-        </p>
-        <p className="mt-1 text-small text-ink-3">
-          {text.lastUpload}{' '}
-          {destination.ranAt === null ? (
-            text.none
-          ) : (
-            <time dateTime={destination.ranAt} title={dateTime(destination.ranAt, language)}>
-              {relativeTime(destination.ranAt, language, t.time.justNow)}
-            </time>
-          )}
-          {destination.newestFile !== '' && (
-            <>
-              {' · '}
-              {text.newest} <code className="font-mono">{destination.newestFile}</code>
-            </>
-          )}
-        </p>
-      </div>
-      <div className="flex h-10 items-center justify-end gap-1.5 max-sm:col-span-full max-sm:mt-3 max-sm:h-auto max-sm:flex-wrap">
-        <StatusPill tone={status.tone} className="max-sm:mr-auto">
-          {status.label}
-        </StatusPill>
+        </span>
+      }
+      trailing={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
+    >
+      <p className="text-small break-words text-ink-2">
+        {text.lastUpload}{' '}
+        {destination.ranAt === null ? (
+          text.none
+        ) : (
+          <time dateTime={destination.ranAt} title={dateTime(destination.ranAt, language)}>
+            {relativeTime(destination.ranAt, language, t.time.justNow)}
+          </time>
+        )}
+        {destination.newestFile !== '' && (
+          <>
+            {' · '}
+            {text.newest} <code className="font-mono break-all">{destination.newestFile}</code>
+          </>
+        )}
+      </p>
+      {(destination.unreadable || destination.error !== '' || destination.problem === 'stale') && (
+        <Notice tone={status.tone === 'warn' ? 'warn' : 'danger'} className="mt-4">
+          {destination.unreadable
+            ? text.unreadable
+            : destination.error !== ''
+              ? destination.error
+              : text.staleHelp}
+        </Notice>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
         <Button
           variant="secondary"
           loading={test.isPending}
@@ -201,17 +202,6 @@ function DestinationRow({
           {text.delete}
         </Button>
       </div>
-      {(destination.unreadable || destination.error !== '' || destination.problem === 'stale') && (
-        <div className="col-start-2 -col-end-1 mt-4 max-sm:col-span-full">
-          <Notice tone={status.tone === 'warn' ? 'warn' : 'danger'}>
-            {destination.unreadable
-              ? text.unreadable
-              : destination.error !== ''
-                ? destination.error
-                : text.staleHelp}
-          </Notice>
-        </div>
-      )}
       <ConfirmDialog
         open={confirming}
         onClose={() => {
@@ -227,7 +217,7 @@ function DestinationRow({
       >
         {text.deleteBody}
       </ConfirmDialog>
-    </li>
+    </Row>
   )
 }
 

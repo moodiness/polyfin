@@ -64,7 +64,9 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
     target
-      .querySelector<HTMLElement>('input, textarea, [role="combobox"], button[role="switch"]')
+      .querySelector<HTMLElement>(
+        '[data-setting-head], input, textarea, [role="combobox"], button[role="switch"]',
+      )
       ?.focus({ preventScroll: true })
     target.dataset.flash = ''
     const timer = setTimeout(() => delete target.dataset.flash, flashFor)
@@ -87,7 +89,6 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
           items={settingsSections.map((item) => ({
             id: item.id,
             label: t.nav.settingsSections[item.key],
-            icon: item.icon,
             to: settingsPath(item.id),
           }))}
           search={{
@@ -104,19 +105,20 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
       )}
       <div hidden={search.trim() !== ''}>
         <header className="max-md:pt-6">
-          <h2 className="text-h2 text-ink">{t.nav.settingsSections[current.key]}</h2>
+          <h2 className="text-h1 text-ink max-md:text-[34px] max-md:leading-tight">
+            {t.nav.settingsSections[current.key]}
+          </h2>
           {lede !== undefined && (
-            <p className="mt-1.5 max-w-[68ch] text-[14.5px] text-ink-2">{lede}</p>
+            <p className="mt-4 max-w-[60ch] text-[21px] leading-normal text-ink-2 max-md:text-[17.5px]">
+              {lede}
+            </p>
           )}
         </header>
         {settings.isPending ? (
-          <div aria-busy="true" aria-label={t.common.loading} className="mt-8 space-y-8">
-            {[0, 1, 2].map((index) => (
-              <div key={index} className="space-y-3">
-                <Skeleton className="h-4 w-56" />
-                <SkeletonText lines={2} />
-                <Skeleton className="h-10 w-full max-w-sm" />
-              </div>
+          <div aria-busy="true" aria-label={t.common.loading} className="mt-10 space-y-2">
+            <SkeletonText lines={1} className="mb-4 w-56" />
+            {[0, 1, 2, 3].map((index) => (
+              <Skeleton key={index} className="h-[82px] w-full rounded-row" />
             ))}
           </div>
         ) : settings.isError ? (

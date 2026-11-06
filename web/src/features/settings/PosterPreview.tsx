@@ -29,9 +29,9 @@ function Poster({
         alt=""
         loading="lazy"
         style={{ width: displayWidth }}
-        className="aspect-[2/3] rounded-field border border-line-2 bg-s2 object-cover"
+        className="aspect-[2/3] max-w-full rounded-field bg-s2 object-cover"
       />
-      <figcaption className="text-small text-ink-3">{caption}</figcaption>
+      <figcaption className="text-small text-ink-2">{caption}</figcaption>
     </figure>
   )
 }
@@ -58,12 +58,12 @@ export default function PosterPreviewPanel({ size }: { size: PosterBadgeSize }) 
     )
   }
   const titles = previews.data
-  if (titles.length === 0) return <p className="text-small text-ink-3">{text.none}</p>
+  if (titles.length === 0) return <p className="text-small text-ink-2">{text.none}</p>
   const title = titles[index % titles.length]
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="text-[15px] font-medium text-ink">{title.name}</p>
+        <p className="text-body font-semibold text-ink">{title.name}</p>
         {titles.length > 1 && (
           <Button
             size="sm"
@@ -87,7 +87,7 @@ export default function PosterPreviewPanel({ size }: { size: PosterBadgeSize }) 
           displayWidth={120}
         />
       </div>
-      {title.badgedTag === title.tag && <p className="text-small text-ink-3">{text.nothing}</p>}
+      {title.badgedTag === title.tag && <p className="text-small text-ink-2">{text.nothing}</p>}
     </div>
   )
 }

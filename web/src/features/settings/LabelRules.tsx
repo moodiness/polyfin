@@ -37,20 +37,20 @@ export default function LabelRules({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
         {text.label}
       </p>
-      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
+      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">
         {text.help(String(max))}
       </p>
       {rules.length === 0 ? (
         <p className="mt-3.5 text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-3.5 rounded-row border border-line-2 bg-s1">
+        <ol className="mt-3.5 grid gap-2">
           {rules.map((rule, index) => (
             <li
               key={index}
-              className="flex flex-wrap items-center gap-3 py-2 pr-2.5 pl-3.5 not-first:border-t not-first:border-line"
+              className="flex rounded-row bg-s2 flex-wrap items-center gap-3 py-2 pr-2.5 pl-3.5"
             >
               <TextInput
                 aria-label={text.text(index + 1)}

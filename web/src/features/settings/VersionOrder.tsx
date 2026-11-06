@@ -48,25 +48,25 @@ export default function VersionOrder({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
         {text.label}
       </p>
-      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
+      <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
         {text.help}
       </p>
       <p className="sr-only" role="status">
         {announcement}
       </p>
       {order.length === 0 ? (
-        <p className="mt-3.5 text-small text-ink-2">{text.none}</p>
+        <p className="mt-4 text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-3.5 rounded-row border border-line-2 bg-s1">
+        <ol className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {order.map((criterion, index) => (
             <li
               key={kind(criterion)}
-              className="flex min-h-[52px] items-center gap-3.5 py-1.5 pr-2.5 pl-3.5 not-first:border-t not-first:border-line"
+              className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] bg-s2 py-2 pr-2.5 pl-4"
             >
-              <span aria-hidden="true" className="figures w-4 text-right text-micro text-ink-3">
+              <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
                 {index + 1}
               </span>
               <Select
@@ -78,7 +78,7 @@ export default function VersionOrder({
                 onValue={(chosen: VersionCriterion) =>
                   onChange(order.map((other, at) => (at === index ? chosen : other)))
                 }
-                className="min-w-0 flex-1"
+                className="min-w-0 flex-1 basis-48"
                 wrap
               />
               <MoveButtons
@@ -104,8 +104,7 @@ export default function VersionOrder({
         </p>
       )}
       <Button
-        className="mt-3"
-        size="sm"
+        className="mt-4"
         icon={PlusIcon}
         disabled={order.length >= maxCriteria || unused.length === 0}
         onClick={() => onChange([...order, unused[0]])}
@@ -193,25 +192,25 @@ function FixedOrder<T extends string>({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
         {text.label}
       </p>
-      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
+      <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
         {text.help}
       </p>
       <p className="sr-only" role="status">
         {announcement}
       </p>
-      <ol className="mt-3.5 max-w-md rounded-row border border-line-2 bg-s1">
+      <ol className="mt-4 grid max-w-md grid-cols-[minmax(0,1fr)] gap-1.5">
         {order.map((codec, index) => (
           <li
             key={codec}
-            className="flex min-h-[44px] items-center gap-3.5 py-1 pr-2.5 pl-3.5 not-first:border-t not-first:border-line"
+            className="flex min-h-14 items-center gap-3 rounded-[18px] bg-s2 py-2 pr-2.5 pl-4"
           >
-            <span aria-hidden="true" className="figures w-4 text-right text-micro text-ink-3">
+            <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
               {index + 1}
             </span>
-            <span className="min-w-0 flex-1 truncate text-body text-ink">{names[codec]}</span>
+            <span className="min-w-0 flex-1 break-words text-body text-ink">{names[codec]}</span>
             <MoveButtons
               name={names[codec]}
               index={index}
@@ -268,19 +267,19 @@ export function SourceOrder({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
         {text.label}
       </p>
-      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-3">
+      <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
         {text.help}
       </p>
       <p className="sr-only" role="status">
         {announcement}
       </p>
       {shown.length === 0 ? (
-        <p className="mt-3.5 text-small text-ink-2">{text.none}</p>
+        <p className="mt-4 text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-3.5 max-w-md rounded-row border border-line-2 bg-s1">
+        <ol className="mt-4 grid max-w-md grid-cols-[minmax(0,1fr)] gap-1.5">
           {shown.map((source, index) => (
             <li
               key={source.id}
@@ -298,7 +297,7 @@ export function SourceOrder({
                 setDragged(null)
               }}
               className={cx(
-                'flex min-h-[44px] items-center gap-3.5 py-1 pr-2.5 pl-3.5 not-first:border-t not-first:border-line',
+                'flex min-h-14 items-center gap-3 rounded-[18px] bg-s2 py-2 pr-2.5 pl-4',
                 dragged === index && 'opacity-40',
               )}
             >
@@ -309,10 +308,10 @@ export function SourceOrder({
               >
                 <DotsSixVerticalIcon size={16} />
               </span>
-              <span aria-hidden="true" className="figures w-4 text-right text-micro text-ink-3">
+              <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
                 {index + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-body text-ink">{source.name}</span>
+              <span className="min-w-0 flex-1 break-words text-body text-ink">{source.name}</span>
               <MoveButtons
                 name={source.name}
                 index={index}

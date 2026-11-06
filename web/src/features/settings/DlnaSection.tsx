@@ -32,13 +32,13 @@ import {
   Modal,
   RelativeTime,
   Select,
+  SettingRow,
   SkeletonRows,
   StatusPill,
-  TextInput,
   useToast,
 } from '@/ui'
 import CodeEditor from './CodeEditor'
-import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
+import { PlainRow, SettingsGroup } from './parts'
 import type { SectionFormApi } from './SectionForm'
 
 /** The largest profile the server takes, in bytes. */
@@ -56,68 +56,67 @@ function userOptions(t: Messages, users: readonly User[]) {
  * Settings › DLNA: sharing the libraries with the devices of the local network, the devices seen
  * with the user each shows, and the profiles they play with.
  */
-export default function DlnaSection({ form, update, error, limits }: SectionFormApi) {
+export default function DlnaSection({ form, saved, update, error, limits }: SectionFormApi) {
   const { t } = useI18n()
   const text = t.settings.dlna
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
   return (
     <>
       <SettingsGroup>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="dlna"
           label={text.share}
           help={text.shareHelp}
           checked={form.dlna}
+          saved={saved.dlna}
           onChange={(dlna) => update({ dlna })}
         />
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="dlna-name"
           label={text.name}
           help={text.nameHelp}
           error={error('dlna-name')}
-        >
-          <TextInput
-            value={form.dlnaName}
-            onValue={(dlnaName) => update({ dlnaName })}
-            placeholder={form.serverName}
-            maxLength={limits('dlnaName').max}
-            autoComplete="off"
-            className="max-w-sm"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.dlnaName}
+          saved={saved.dlnaName}
+          onChange={(dlnaName) => update({ dlnaName })}
+          placeholder={form.serverName}
+          maxLength={limits('dlnaName').max}
+        />
+        <SettingRow
+          kind="choice"
           anchor="dlna-new-devices-user"
           label={text.newDevicesUser}
           help={text.newDevicesUserHelp}
           error={error('dlna-new-devices-user')}
-        >
-          <Select
-            value={form.dlnaNewDevicesUser ?? ''}
-            options={userOptions(t, users.data ?? [])}
-            onValue={(id) => update({ dlnaNewDevicesUser: id === '' ? null : id })}
-            disabled={users.isPending}
-            className="max-w-xs"
-          />
-        </FieldRow>
-        <SwitchRow
+          value={form.dlnaNewDevicesUser ?? ''}
+          saved={saved.dlnaNewDevicesUser ?? ''}
+          options={userOptions(t, users.data ?? [])}
+          onChange={(id) => update({ dlnaNewDevicesUser: id === '' ? null : id })}
+          disabled={users.isPending}
+        />
+        <SettingRow
+          kind="switch"
           anchor="dlna-mark-played"
           label={text.markPlayed}
           help={text.markPlayedHelp}
           checked={form.dlnaMarkPlayed}
+          saved={saved.dlnaMarkPlayed}
           onChange={(dlnaMarkPlayed) => update({ dlnaMarkPlayed })}
         />
       </SettingsGroup>
       <SettingsGroup title={text.devices}>
-        <SettingRow anchor="dlna-devices">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{text.devicesHelp}</p>
+        <PlainRow anchor="dlna-devices">
+          <p className="mb-4 max-w-[60ch] text-small text-ink-2">{text.devicesHelp}</p>
           <Devices />
-        </SettingRow>
+        </PlainRow>
       </SettingsGroup>
       <SettingsGroup title={text.profiles}>
-        <SettingRow anchor="dlna-profiles">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{text.profilesHelp}</p>
+        <PlainRow anchor="dlna-profiles">
+          <p className="mb-4 max-w-[60ch] text-small text-ink-2">{text.profilesHelp}</p>
           <Profiles />
-        </SettingRow>
+        </PlainRow>
       </SettingsGroup>
     </>
   )
@@ -151,10 +150,7 @@ function Devices() {
     return <EmptyState icon={TelevisionIcon} title={text.devicesEmpty} />
   }
   return (
-    <ul
-      aria-label={text.devicesLabel}
-      className="overflow-hidden rounded-panel border border-line-2 bg-s1"
-    >
+    <ul aria-label={text.devicesLabel} className="grid gap-2">
       {devices.data.map((device) => (
         <DeviceRow key={device.id} device={device} profiles={profiles.data} users={users.data} />
       ))}
@@ -211,7 +207,7 @@ function DeviceRow({
   return (
     <li
       aria-labelledby={headingId}
-      className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-x-4 px-[22px] py-5 max-sm:grid-cols-[40px_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4 [&+&]:border-t [&+&]:border-line"
+      className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-x-4 rounded-row bg-s2 px-[22px] py-5 max-sm:grid-cols-[40px_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4"
     >
       <IconTile icon={TelevisionIcon} />
       <div className="min-w-0">
@@ -325,10 +321,7 @@ function Profiles() {
   }
   return (
     <div className="flex flex-col gap-4">
-      <ul
-        aria-label={text.profilesLabel}
-        className="overflow-hidden rounded-panel border border-line-2 bg-s1"
-      >
+      <ul aria-label={text.profilesLabel} className="grid gap-2">
         {profiles.data.map((profile) => (
           <ProfileRow
             key={profile.id}
@@ -375,7 +368,7 @@ function ProfileRow({ profile, onView }: { profile: DlnaProfile; onView: () => v
     },
   })
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-[22px] py-3.5 max-sm:px-4 [&+&]:border-t [&+&]:border-line">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-row bg-s2 px-[22px] py-3.5 max-sm:px-4">
       <div className="min-w-0 flex-1">
         <p className="text-[14.5px] font-medium break-words text-ink">{profile.name}</p>
         {profile.createdAt !== undefined && (

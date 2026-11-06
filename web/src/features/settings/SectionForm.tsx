@@ -13,18 +13,21 @@ import { settingEntries } from './catalog'
 /** What a section page draws its fields from. */
 export type SectionFormApi = {
   form: Settings
+  /** The settings as saved: a changed row shows "was …" from them. */
+  saved: Settings
   update: (patch: Partial<Settings>) => void
   /** The error about the setting at this anchor, shown under it: an empty number, or the save's. */
   error: (anchor: string) => string | undefined
   /**
-   * The value and change handler of the number field at this anchor. An empty field keeps the
-   * last number in `form`, shows "Enter a number" under it and blocks the save until it is filled.
+   * The value and change handler of the number row at this anchor (`SettingRow` kind `number`).
+   * An empty well keeps the last number in `form`, shows "Enter a number" under it and blocks
+   * the save until it is filled.
    */
   number: (
     anchor: string,
     value: number,
     set: (value: number) => void,
-  ) => { value: number | null; onValue: (value: number | null) => void }
+  ) => { value: number | null; onChange: (value: number | null) => void }
   /**
    * The bounds and default of a setting, by its name in Settings, as its help text shows them;
    * `scale` converts the server's unit to the field's.
@@ -32,6 +35,10 @@ export type SectionFormApi = {
   range: (name: keyof Settings, scale?: number) => RangeText
   /** The smallest and largest values of a setting's number field, from the server's bounds. */
   limits: (name: keyof Settings, scale?: number) => { min?: number; max?: number }
+  /**
+   * The same for a number row, which needs both ends: 0 and no top when the server gives none.
+   */
+  minMax: (name: keyof Settings, scale?: number) => { min: number; max: number }
   /** Whether the form holds changes not saved yet. */
   dirty: boolean
   /**
@@ -60,7 +67,8 @@ export default function SectionForm({
   const [form, setForm] = useState(initial)
   /** The anchors of the number fields left empty. */
   const [empty, setEmpty] = useState<ReadonlySet<string>>(new Set())
-  const dirty = empty.size > 0 || JSON.stringify(form) !== JSON.stringify(saved)
+  const changes = changedCount(form, saved, empty)
+  const dirty = changes > 0
 
   const mutation = useMutation({
     mutationFn: saveSettings,
@@ -126,6 +134,7 @@ export default function SectionForm({
     <form onSubmit={submit} noValidate>
       {children({
         form,
+        saved,
         update,
         error: (anchor) =>
           empty.has(anchor)
@@ -135,7 +144,7 @@ export default function SectionForm({
               : undefined,
         number: (anchor, value, set) => ({
           value: empty.has(anchor) ? null : value,
-          onValue: (next) => {
+          onChange: (next) => {
             setEmpty((current) => {
               const updated = new Set(current)
               if (next === null) updated.add(anchor)
@@ -148,6 +157,10 @@ export default function SectionForm({
         }),
         range: (name, scale) => rangeText(form.bounds[name], language, scale),
         limits: (name, scale) => numberLimits(form.bounds[name], scale),
+        minMax: (name, scale) => {
+          const { min, max } = numberLimits(form.bounds[name], scale)
+          return { min: min ?? 0, max: max ?? Number.MAX_SAFE_INTEGER }
+        },
         dirty,
         adopt: (patch) => {
           setSaved((current) => ({ ...current, ...patch }))
@@ -159,6 +172,7 @@ export default function SectionForm({
       })}
       <SaveBar
         dirty={dirty}
+        changes={changes}
         saving={mutation.isPending}
         onDiscard={() => {
           mutation.reset()
@@ -180,4 +194,16 @@ export default function SectionForm({
       </ConfirmDialog>
     </form>
   )
+}
+
+/**
+ * How many settings the form changes: each setting that differs from the saved one, and each
+ * number well left empty (it keeps its last number in the form).
+ */
+function changedCount(form: Settings, saved: Settings, empty: ReadonlySet<string>): number {
+  let count = empty.size
+  for (const key of Object.keys(form) as (keyof Settings)[]) {
+    if (JSON.stringify(form[key]) !== JSON.stringify(saved[key])) count++
+  }
+  return count
 }

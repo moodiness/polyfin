@@ -1,6 +1,6 @@
 import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useId, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   fetchServerActions,
   fetchStatus,
@@ -27,11 +27,8 @@ import {
   ExternalButtonLink,
   FieldError,
   Notice,
-  NumberInput,
-  SecretField,
-  Select,
+  SettingRow,
   Textarea,
-  TextInput,
 } from '@/ui'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import SummaryPreview from '@/features/notifications/SummaryPreview'
@@ -46,7 +43,7 @@ import { LastBackup, Variables } from './Diagnostics'
 import DlnaSection from './DlnaSection'
 import TorrentsSection from './TorrentsSection'
 import MetricsToken from './MetricsToken'
-import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
+import { FieldRow, ListRows, PlainRow, SettingsGroup, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
 import LabelRules from './LabelRules'
@@ -114,7 +111,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   diagnostics: (api) => <DiagnosticsFields {...api} />,
 }
 
-function General({ form, update, error, range, limits }: SectionFormApi) {
+function General({ form, update, error, range, limits, saved }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   // Polyfin Desktop starts Polyfin again itself: nothing to confirm.
@@ -125,152 +122,153 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
     }).data?.restart === 'desktop'
   return (
     <SettingsGroup>
-      <FieldRow
+      <SettingRow
+        kind="text"
         anchor="server-name"
         label={s.serverName}
         help={s.serverNameHelp(range('serverName'))}
         error={error('server-name')}
-      >
-        <TextInput
-          value={form.serverName}
-          onValue={(serverName) => update({ serverName })}
-          maxLength={limits('serverName').max}
-          required
-          className="max-w-sm"
-        />
-      </FieldRow>
-      <FieldRow
+        value={form.serverName}
+        onChange={(serverName) => update({ serverName })}
+        maxLength={limits('serverName').max}
+        saved={saved.serverName}
+      />
+      <SettingRow
+        kind="choice"
         anchor="language"
         label={s.language}
         help={s.languageHelp}
         error={error('language')}
-      >
-        <Select
-          value={form.language}
-          options={languages.map((code) => ({ value: code, label: t.language[code].name }))}
-          onValue={(language: Language) => update({ language })}
-          className="max-w-xs"
-        />
-      </FieldRow>
-      <SwitchRow
+        value={form.language}
+        options={languages.map((code) => ({ value: code, label: t.language[code].name }))}
+        onChange={(language: Language) => update({ language })}
+        saved={saved.language}
+      />
+      <SettingRow
+        kind="switch"
         anchor="quick-connect"
         label={s.quickConnect}
         help={s.quickConnectHelp}
         checked={form.quickConnectEnabled}
         onChange={(quickConnectEnabled) => update({ quickConnectEnabled })}
+        saved={saved.quickConnectEnabled}
       />
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="legacy-authorization"
         label={s.legacyAuthorization}
         help={s.legacyAuthorizationHelp}
         checked={form.legacyAuthorization}
         onChange={(legacyAuthorization) => update({ legacyAuthorization })}
+        saved={saved.legacyAuthorization}
       >
         <Notice tone="warn">
           <strong className="font-medium">{s.legacyWarningTitle}.</strong> {s.legacyWarning}
         </Notice>
-      </SwitchRow>
-      <SwitchRow
+      </SettingRow>
+      <SettingRow
+        kind="switch"
         anchor="silo-apps"
         label={s.siloApps}
         help={s.siloAppsHelp}
         checked={form.siloApps}
         onChange={(siloApps) => update({ siloApps })}
+        saved={saved.siloApps}
       />
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="update-check"
         label={s.updateCheck}
         help={s.updateCheckHelp}
         checked={form.updateCheck}
         onChange={(updateCheck) => update({ updateCheck })}
+        saved={saved.updateCheck}
       />
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="include-prereleases"
         label={s.includePrereleases}
         help={s.includePrereleasesHelp}
         checked={form.includePrereleases}
         disabled={!form.updateCheck}
         onChange={(includePrereleases) => update({ includePrereleases })}
+        saved={saved.includePrereleases}
       />
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="local-discovery"
         label={s.localDiscovery}
         help={s.localDiscoveryHelp}
         checked={form.localDiscovery}
         onChange={(localDiscovery) => update({ localDiscovery })}
+        saved={saved.localDiscovery}
       />
-      <FieldRow
+      <SettingRow
+        kind="text"
         anchor="local-address"
         label={s.localAddress}
         help={s.localAddressHelp}
         error={error('local-address')}
-      >
-        <TextInput
-          value={form.localAddress}
-          onValue={(localAddress) => update({ localAddress })}
-          placeholder="http://192.168.1.10:8096"
-          maxLength={limits('localAddress').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          className="max-w-md"
-        />
-      </FieldRow>
-      <SwitchRow
+        value={form.localAddress}
+        onChange={(localAddress) => update({ localAddress })}
+        placeholder="http://192.168.1.10:8096"
+        maxLength={limits('localAddress').max}
+        mono
+        saved={saved.localAddress}
+      />
+      <SettingRow
+        kind="switch"
         anchor="metrics"
         label={s.metrics}
         help={s.metricsHelp}
         checked={form.metrics}
         onChange={(metrics) => update({ metrics })}
+        saved={saved.metrics}
       />
       {form.metrics && (
-        <SettingRow anchor="metrics-token">
+        <PlainRow anchor="metrics-token">
           <MetricsToken saved={form.metricsTokenSet} />
-        </SettingRow>
+        </PlainRow>
       )}
       {!desktop && (
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="restart-confirmed"
           label={s.restartConfirmed}
           help={s.restartConfirmedHelp}
           checked={form.restartConfirmed}
           onChange={(restartConfirmed) => update({ restartConfirmed })}
+          saved={saved.restartConfirmed}
         />
       )}
-      <FieldRow
+      <SettingRow
+        kind="text"
         anchor="update-tool-url"
         label={s.updateToolUrl}
         help={s.updateToolUrlHelp}
         error={error('update-tool-url')}
-      >
-        <TextInput
-          value={form.updateToolUrl}
-          onValue={(updateToolUrl) => update({ updateToolUrl })}
-          placeholder="http://updater:8080/v1/update"
-          maxLength={limits('updateToolUrl').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          className="max-w-md"
-        />
-      </FieldRow>
+        value={form.updateToolUrl}
+        onChange={(updateToolUrl) => update({ updateToolUrl })}
+        placeholder="http://updater:8080/v1/update"
+        maxLength={limits('updateToolUrl').max}
+        mono
+        saved={saved.updateToolUrl}
+      />
       <SettingRow
+        kind="secret"
         anchor="update-tool-token"
-        className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-      >
-        <SecretField
-          label={s.updateToolToken}
-          help={s.updateToolTokenHelp}
-          saved={form.updateToolTokenSet}
-          value={form.updateToolToken}
-          onValue={(updateToolToken) => update({ updateToolToken })}
-          reveal={() => revealServerSecret('updateToolToken')}
-          error={error('update-tool-token')}
-        />
-      </SettingRow>
+        label={s.updateToolToken}
+        help={s.updateToolTokenHelp}
+        saved={form.updateToolTokenSet}
+        value={form.updateToolToken}
+        onValue={(updateToolToken) => update({ updateToolToken })}
+        reveal={() => revealServerSecret('updateToolToken')}
+        error={error('update-tool-token')}
+      />
       <WorkFolderRow
         folder="cacheFolder"
         form={form}
+        saved={saved}
         update={update}
         error={error}
         limits={limits}
@@ -279,96 +277,102 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
   )
 }
 
-function Playback({ form, update, error, number, range, limits }: SectionFormApi) {
+function Playback({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
     <>
       <SettingsGroup>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="prepare-ahead"
           label={s.prepareAhead}
           help={s.prepareAheadHelp}
           checked={form.prepareAhead}
           onChange={(prepareAhead) => update({ prepareAhead })}
+          saved={saved.prepareAhead}
         />
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="prefer-direct-play"
           label={s.preferDirectPlay}
           help={s.preferDirectPlayHelp}
           checked={form.preferDirectPlay}
           onChange={(preferDirectPlay) => update({ preferDirectPlay })}
+          saved={saved.preferDirectPlay}
         />
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="name-how-versions-play"
           label={s.nameHowVersionsPlay}
           help={s.nameHowVersionsPlayHelp}
           checked={form.nameHowVersionsPlay}
           onChange={(nameHowVersionsPlay) => update({ nameHowVersionsPlay })}
+          saved={saved.nameHowVersionsPlay}
         />
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="sync-addon-subtitles"
           label={s.syncAddonSubtitles}
           help={s.syncAddonSubtitlesHelp}
           checked={form.syncAddonSubtitles}
           onChange={(syncAddonSubtitles) => update({ syncAddonSubtitles })}
+          saved={saved.syncAddonSubtitles}
         />
-        <FieldRow
+        <SettingRow
+          kind="number"
           anchor="analysis-timeout"
           label={s.analysisTimeout}
           help={s.analysisTimeoutHelp(range('analysisTimeout'))}
           error={error('analysis-timeout')}
-        >
-          <NumberInput
-            {...limits('analysisTimeout')}
-            step={1}
-            {...number('analysis-timeout', form.analysisTimeout, (value) =>
-              update({ analysisTimeout: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <FieldRow
+          {...minMax('analysisTimeout')}
+          step={1}
+          {...number('analysis-timeout', form.analysisTimeout, (value) =>
+            update({ analysisTimeout: Math.trunc(value) }),
+          )}
+          saved={saved.analysisTimeout}
+        />
+        <SettingRow
+          kind="number"
           anchor="version-attempts"
           label={s.versionAttempts}
           help={s.versionAttemptsHelp(range('versionAttempts'))}
           error={error('version-attempts')}
-        >
-          <NumberInput
-            {...limits('versionAttempts')}
-            step={1}
-            {...number('version-attempts', form.versionAttempts, (value) =>
-              update({ versionAttempts: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <SwitchRow
+          {...minMax('versionAttempts')}
+          step={1}
+          {...number('version-attempts', form.versionAttempts, (value) =>
+            update({ versionAttempts: Math.trunc(value) }),
+          )}
+          saved={saved.versionAttempts}
+        />
+        <SettingRow
+          kind="switch"
           anchor="remuxdb"
           label={s.remuxDb}
           help={s.remuxDbHelp}
           checked={form.remuxDb}
           onChange={(remuxDb) => update({ remuxDb })}
+          saved={saved.remuxDb}
         />
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="remuxdb-url"
           label={s.remuxDbUrl}
           help={s.remuxDbUrlHelp}
           error={error('remuxdb-url')}
-        >
-          <TextInput
-            inputMode="url"
-            value={form.remuxDbUrl}
-            onValue={(remuxDbUrl) => update({ remuxDbUrl })}
-            disabled={!form.remuxDb}
-            maxLength={limits('remuxDbUrl').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-md"
-          />
-        </FieldRow>
+          inputMode="url"
+          value={form.remuxDbUrl}
+          onChange={(remuxDbUrl) => update({ remuxDbUrl })}
+          disabled={!form.remuxDb}
+          maxLength={limits('remuxDbUrl').max}
+          mono
+          saved={saved.remuxDbUrl}
+        />
       </SettingsGroup>
       <SourceCache
         form={form}
+        saved={saved}
+        minMax={minMax}
         update={update}
         error={error}
         number={number}
@@ -376,70 +380,66 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
         limits={limits}
       />
       <SettingsGroup title={s.versionOrderGroup}>
-        <SettingRow anchor="version-order">
+        <PlainRow anchor="version-order">
           <VersionOrder
             order={form.versionOrder}
             choices={(form.bounds.versionOrder?.choices ?? []) as VersionCriterion[]}
             onChange={(versionOrder) => update({ versionOrder })}
             error={error('version-order')}
           />
-        </SettingRow>
-        <SettingRow anchor="version-codec-order">
+        </PlainRow>
+        <PlainRow anchor="version-codec-order">
           <CodecOrder
             order={form.versionCodecOrder}
             onChange={(versionCodecOrder) => update({ versionCodecOrder })}
             error={error('version-codec-order')}
           />
-        </SettingRow>
-        <SettingRow anchor="version-source-order">
+        </PlainRow>
+        <PlainRow anchor="version-source-order">
           <SourceOrder
             order={form.versionSourceOrder}
             sources={form.versionSources}
             onChange={(versionSourceOrder) => update({ versionSourceOrder })}
             error={error('version-source-order')}
           />
-        </SettingRow>
-        <SettingRow anchor="version-edition-order">
+        </PlainRow>
+        <PlainRow anchor="version-edition-order">
           <EditionOrder
             order={form.versionEditionOrder}
             onChange={(versionEditionOrder) => update({ versionEditionOrder })}
             error={error('version-edition-order')}
           />
-        </SettingRow>
-        <FieldRow
+        </PlainRow>
+        <SettingRow
+          kind="number"
           anchor="version-mb-per-minute"
           label={s.versionMbPerMinute}
           help={s.versionMbPerMinuteHelp(range('versionMbPerMinute'))}
           error={error('version-mb-per-minute')}
-        >
-          <NumberInput
-            {...limits('versionMbPerMinute')}
-            step={1}
-            {...number('version-mb-per-minute', form.versionMbPerMinute, (value) =>
-              update({ versionMbPerMinute: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <FieldRow
+          {...minMax('versionMbPerMinute')}
+          step={1}
+          {...number('version-mb-per-minute', form.versionMbPerMinute, (value) =>
+            update({ versionMbPerMinute: Math.trunc(value) }),
+          )}
+          saved={saved.versionMbPerMinute}
+        />
+        <SettingRow
+          kind="number"
           anchor="hide-versions-larger"
           label={s.hideVersionsLarger}
           help={s.hideVersionsLargerHelp(range('hideVersionsLargerGb'))}
           error={error('hide-versions-larger')}
-        >
-          <NumberInput
-            {...limits('hideVersionsLargerGb')}
-            step={1}
-            {...number('hide-versions-larger', form.hideVersionsLargerGb, (value) =>
-              update({ hideVersionsLargerGb: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <SettingRow anchor="hidden-version-codecs">
+          {...minMax('hideVersionsLargerGb')}
+          step={1}
+          {...number('hide-versions-larger', form.hideVersionsLargerGb, (value) =>
+            update({ hideVersionsLargerGb: Math.trunc(value) }),
+          )}
+          saved={saved.hideVersionsLargerGb}
+        />
+        <PlainRow anchor="hidden-version-codecs">
           <fieldset aria-describedby="hidden-version-codecs-help">
-            <legend className="text-[15px] font-medium tracking-[-0.01em] text-ink">
-              {s.hiddenVersionCodecs}
-            </legend>
-            <p id="hidden-version-codecs-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
+            <legend className="text-h3 text-ink max-md:text-[18px]">{s.hiddenVersionCodecs}</legend>
+            <p id="hidden-version-codecs-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
               {s.hiddenVersionCodecsHelp}
             </p>
             <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -466,7 +466,7 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
               </div>
             )}
           </fieldset>
-        </SettingRow>
+        </PlainRow>
         <FieldRow
           anchor="hidden-version-words"
           label={s.hiddenVersionWords}
@@ -478,12 +478,10 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
             onValue={(hiddenVersionWords) => update({ hiddenVersionWords })}
           />
         </FieldRow>
-        <SettingRow anchor="hidden-releases">
+        <PlainRow anchor="hidden-releases">
           <fieldset aria-describedby="hidden-releases-help">
-            <legend className="text-[15px] font-medium tracking-[-0.01em] text-ink">
-              {s.hiddenReleases}
-            </legend>
-            <p id="hidden-releases-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
+            <legend className="text-h3 text-ink max-md:text-[18px]">{s.hiddenReleases}</legend>
+            <p id="hidden-releases-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
               {s.hiddenReleasesHelp}
             </p>
             <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
@@ -510,66 +508,63 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
               </div>
             )}
           </fieldset>
-        </SettingRow>
-        <SettingRow anchor="version-label-rules">
+        </PlainRow>
+        <PlainRow anchor="version-label-rules">
           <LabelRules
             rules={form.versionLabelRules}
             max={limits('versionLabelRules').max ?? 0}
             onChange={(versionLabelRules) => update({ versionLabelRules })}
             error={error('version-label-rules')}
           />
-        </SettingRow>
+        </PlainRow>
       </SettingsGroup>
       <SettingsGroup title={s.playbackHistoryGroup}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="playback-history"
           label={s.playbackHistory}
           help={s.playbackHistoryHelp}
           checked={form.playbackHistory}
           onChange={(playbackHistory) => update({ playbackHistory })}
+          saved={saved.playbackHistory}
         />
-        <FieldRow
+        <SettingRow
+          kind="number"
           anchor="playback-history-days"
           label={s.playbackHistoryDays}
           help={s.playbackHistoryDaysHelp(range('playbackHistoryDays'))}
           error={error('playback-history-days')}
-        >
-          <NumberInput
-            {...limits('playbackHistoryDays')}
-            step={1}
-            {...number('playback-history-days', form.playbackHistoryDays, (value) =>
-              update({ playbackHistoryDays: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
+          {...minMax('playbackHistoryDays')}
+          step={1}
+          {...number('playback-history-days', form.playbackHistoryDays, (value) =>
+            update({ playbackHistoryDays: Math.trunc(value) }),
+          )}
+          saved={saved.playbackHistoryDays}
+        />
       </SettingsGroup>
       <SettingsGroup title={s.defaultLanguagesGroup}>
-        <FieldRow
+        <SettingRow
+          kind="choice"
           anchor="default-audio-language"
           label={s.defaultAudioLanguage}
           help={s.defaultAudioLanguageHelp}
           error={error('default-audio-language')}
-        >
-          <Select
-            value={form.defaultAudioLanguage}
-            options={trackLanguageOptions(form.trackLanguages, s.noDefaultLanguage)}
-            onValue={(defaultAudioLanguage) => update({ defaultAudioLanguage })}
-            className="max-w-xs"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.defaultAudioLanguage}
+          options={trackLanguageOptions(form.trackLanguages, s.noDefaultLanguage)}
+          onChange={(defaultAudioLanguage) => update({ defaultAudioLanguage })}
+          saved={saved.defaultAudioLanguage}
+        />
+        <SettingRow
+          kind="choice"
           anchor="default-subtitle-language"
           label={s.defaultSubtitleLanguage}
           help={s.defaultSubtitleLanguageHelp}
           error={error('default-subtitle-language')}
-        >
-          <Select
-            value={form.defaultSubtitleLanguage}
-            options={trackLanguageOptions(form.trackLanguages, s.noDefaultLanguage)}
-            onValue={(defaultSubtitleLanguage) => update({ defaultSubtitleLanguage })}
-            className="max-w-xs"
-          />
-        </FieldRow>
+          value={form.defaultSubtitleLanguage}
+          options={trackLanguageOptions(form.trackLanguages, s.noDefaultLanguage)}
+          onChange={(defaultSubtitleLanguage) => update({ defaultSubtitleLanguage })}
+          saved={saved.defaultSubtitleLanguage}
+        />
       </SettingsGroup>
     </>
   )
@@ -583,21 +578,23 @@ function trackLanguageOptions(languages: TrackLanguage[], none: string) {
   ]
 }
 
-function Content({ form, update, error, number, range, limits }: SectionFormApi) {
+function Content({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const groups = t.settingsPage.groups
   return (
     <>
       <SettingsGroup title={groups.skip}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="skip-buttons"
           label={s.skipButtons}
           help={s.skipButtonsHelp}
           checked={form.skipButtons}
           onChange={(skipButtons) => update({ skipButtons })}
+          saved={saved.skipButtons}
         />
-        <SettingRow anchor="segment-order">
+        <PlainRow anchor="segment-order">
           <SegmentSources
             order={form.segmentOrder}
             off={form.segmentSourcesOff}
@@ -611,508 +608,494 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
             }
             error={error('segment-order')}
           />
-        </SettingRow>
+        </PlainRow>
         <SettingRow
+          kind="secret"
           anchor="publicmetadb-key"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.publicMetaDbKey}
-            help={s.publicMetaDbKeyHelp}
-            saved={form.publicMetaDbKeySet}
-            value={form.publicMetaDbKey}
-            onValue={(publicMetaDbKey) => update({ publicMetaDbKey })}
-            error={error('publicmetadb-key')}
-            reveal={() => revealServerSecret('publicMetaDbKey')}
-          />
-        </SettingRow>
+          label={s.publicMetaDbKey}
+          help={s.publicMetaDbKeyHelp}
+          saved={form.publicMetaDbKeySet}
+          value={form.publicMetaDbKey}
+          onValue={(publicMetaDbKey) => update({ publicMetaDbKey })}
+          error={error('publicmetadb-key')}
+          reveal={() => revealServerSecret('publicMetaDbKey')}
+        />
         <SettingRow
+          kind="secret"
           anchor="theintrodb-key"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.theIntroDbKey}
-            help={s.theIntroDbKeyHelp}
-            saved={form.theIntroDbKeySet}
-            value={form.theIntroDbKey}
-            onValue={(theIntroDbKey) => update({ theIntroDbKey })}
-            error={error('theintrodb-key')}
-            reveal={() => revealServerSecret('theIntroDbKey')}
-          />
-        </SettingRow>
-        <SwitchRow
+          label={s.theIntroDbKey}
+          help={s.theIntroDbKeyHelp}
+          saved={form.theIntroDbKeySet}
+          value={form.theIntroDbKey}
+          onValue={(theIntroDbKey) => update({ theIntroDbKey })}
+          error={error('theintrodb-key')}
+          reveal={() => revealServerSecret('theIntroDbKey')}
+        />
+        <SettingRow
+          kind="switch"
           anchor="audio-intros"
           label={s.audioIntros}
           help={s.audioIntrosHelp}
           checked={form.audioIntros}
           onChange={(audioIntros) => update({ audioIntros })}
           disabled={!form.skipButtons}
+          saved={saved.audioIntros}
         />
       </SettingsGroup>
       <SettingsGroup title={groups.titlePages}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="similar-titles"
           label={s.similarTitles}
           help={s.similarTitlesHelp}
           checked={form.similarTitles}
           onChange={(similarTitles) => update({ similarTitles })}
+          saved={saved.similarTitles}
         />
       </SettingsGroup>
       <SettingsGroup title={groups.images}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="generate-images"
           label={s.generateImages}
           help={s.generateImagesHelp}
           checked={form.generateImages}
           onChange={(generateImages) => update({ generateImages })}
+          saved={saved.generateImages}
         />
         <SettingRow
+          kind="secret"
           anchor="tmdb-key"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.tmdbKey}
-            help={s.tmdbKeyHelp}
-            saved={form.tmdbKeySet}
-            value={form.tmdbKey}
-            onValue={(tmdbKey) => update({ tmdbKey })}
-            error={error('tmdb-key')}
-            reveal={() => revealServerSecret('tmdbKey')}
-          />
-        </SettingRow>
+          label={s.tmdbKey}
+          help={s.tmdbKeyHelp}
+          saved={form.tmdbKeySet}
+          value={form.tmdbKey}
+          onValue={(tmdbKey) => update({ tmdbKey })}
+          error={error('tmdb-key')}
+          reveal={() => revealServerSecret('tmdbKey')}
+        />
       </SettingsGroup>
       <SettingsGroup title={groups.releases}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="wait-digital-release"
           label={s.waitDigitalRelease}
           help={s.waitDigitalReleaseHelp}
           checked={form.waitDigitalRelease}
           onChange={(waitDigitalRelease) => update({ waitDigitalRelease })}
           disabled={!form.tmdbKeySet && !form.tmdbKey}
+          saved={saved.waitDigitalRelease}
         />
       </SettingsGroup>
       <SettingsGroup title={groups.ratings}>
         <SettingRow
+          kind="secret"
           anchor="mdblist-ratings-key"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.mdblistRatingsKey}
-            help={s.mdblistRatingsKeyHelp}
-            saved={form.mdblistRatingsKeySet}
-            value={form.mdblistRatingsKey}
-            onValue={(mdblistRatingsKey) => update({ mdblistRatingsKey })}
-            error={error('mdblist-ratings-key')}
-            reveal={() => revealServerSecret('mdblistRatingsKey')}
-          />
-        </SettingRow>
-        <FieldRow
+          label={s.mdblistRatingsKey}
+          help={s.mdblistRatingsKeyHelp}
+          saved={form.mdblistRatingsKeySet}
+          value={form.mdblistRatingsKey}
+          onValue={(mdblistRatingsKey) => update({ mdblistRatingsKey })}
+          error={error('mdblist-ratings-key')}
+          reveal={() => revealServerSecret('mdblistRatingsKey')}
+        />
+        <SettingRow
+          kind="choice"
           anchor="critic-rating-shows"
           label={s.criticRatingShows}
           help={s.criticRatingShowsHelp}
           error={error('critic-rating-shows')}
-        >
-          <Select
-            value={form.criticRatingShows}
-            options={(['critics', 'audience'] as const).map((value) => ({
-              value,
-              label: s.criticRatingChoices[value],
-            }))}
-            onValue={(criticRatingShows) => update({ criticRatingShows })}
-            className="max-w-xs"
-          />
-        </FieldRow>
+          value={form.criticRatingShows}
+          options={(['critics', 'audience'] as const).map((value) => ({
+            value,
+            label: s.criticRatingChoices[value],
+          }))}
+          onChange={(criticRatingShows) => update({ criticRatingShows })}
+          saved={saved.criticRatingShows}
+        />
       </SettingsGroup>
       <SettingsGroup title={groups.posters}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="poster-badges"
           label={s.posterBadges}
           help={s.posterBadgesHelp}
           checked={form.posterBadges}
           onChange={(posterBadges) => update({ posterBadges })}
+          saved={saved.posterBadges}
         />
-        <FieldRow
+        <SettingRow
+          kind="choice"
           anchor="poster-badge-size"
           label={s.posterBadgeSize}
           help={s.posterBadgeSizeHelp}
           error={error('poster-badge-size')}
-        >
-          <Select
-            value={form.posterBadgeSize}
-            options={posterBadgeSizes.map((value) => ({
-              value,
-              label: s.posterBadgeSizeChoices[value],
-            }))}
-            onValue={(posterBadgeSize) => update({ posterBadgeSize })}
-            className="max-w-xs"
-          />
-        </FieldRow>
-        <SettingRow anchor="poster-preview">
-          <p className="text-[15px] font-medium tracking-[-0.01em] text-ink">
-            {s.posterPreview.title}
-          </p>
-          <p className="mt-1 mb-4 max-w-[60ch] text-small text-ink-3">{s.posterPreview.help}</p>
+          value={form.posterBadgeSize}
+          options={posterBadgeSizes.map((value) => ({
+            value,
+            label: s.posterBadgeSizeChoices[value],
+          }))}
+          onChange={(posterBadgeSize) => update({ posterBadgeSize })}
+          saved={saved.posterBadgeSize}
+        />
+        <PlainRow anchor="poster-preview">
+          <p className="text-h3 text-ink max-md:text-[18px]">{s.posterPreview.title}</p>
+          <p className="mt-2 mb-5 max-w-[66ch] text-small text-ink-2">{s.posterPreview.help}</p>
           <PosterPreviewPanel size={form.posterBadgeSize} />
-        </SettingRow>
-        <FieldRow
+        </PlainRow>
+        <SettingRow
+          kind="text"
           anchor="poster-template"
           label={s.posterTemplate}
           help={s.posterTemplateHelp}
           error={error('poster-template')}
-        >
-          <TextInput
-            value={form.posterTemplate}
-            onValue={(posterTemplate) => update({ posterTemplate })}
-            placeholder="https://posters.example/{type}/{imdb_id}.jpg"
-            maxLength={limits('posterTemplate').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-xl"
-          />
-        </FieldRow>
+          value={form.posterTemplate}
+          onChange={(posterTemplate) => update({ posterTemplate })}
+          placeholder="https://posters.example/{type}/{imdb_id}.jpg"
+          maxLength={limits('posterTemplate').max}
+          mono
+          saved={saved.posterTemplate}
+        />
       </SettingsGroup>
       <SettingsGroup title={groups.music}>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="lyrics"
           label={s.lyrics}
           help={s.lyricsHelp}
           checked={form.lyrics}
           onChange={(lyrics) => update({ lyrics })}
+          saved={saved.lyrics}
         />
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="even-volume"
           label={s.evenVolume}
           help={s.evenVolumeHelp}
           checked={form.evenVolume}
           onChange={(evenVolume) => update({ evenVolume })}
+          saved={saved.evenVolume}
         />
-        <FieldRow
+        <SettingRow
+          kind="choice"
           anchor="measure-loudness"
           label={s.measureLoudness}
           help={s.measureLoudnessHelp}
           error={error('measure-loudness')}
-        >
-          <Select
-            value={form.measureLoudness}
-            options={(['off', 'local', 'all'] as const).map((value) => ({
-              value,
-              label: s.measureLoudnessChoices[value],
-            }))}
-            onValue={(measureLoudness) => update({ measureLoudness })}
-            disabled={!form.evenVolume}
-            className="max-w-xs"
-          />
-        </FieldRow>
+          value={form.measureLoudness}
+          options={(['off', 'local', 'all'] as const).map((value) => ({
+            value,
+            label: s.measureLoudnessChoices[value],
+          }))}
+          onChange={(measureLoudness) => update({ measureLoudness })}
+          disabled={!form.evenVolume}
+          saved={saved.measureLoudness}
+        />
       </SettingsGroup>
       <SettingsGroup title={groups.thresholds}>
         <div className="grid gap-x-8 sm:grid-cols-2">
-          <FieldRow
+          <SettingRow
+            kind="number"
             anchor="played-percent"
             label={s.playedPercent}
             help={s.playedPercentHelp(range('playedPercent'))}
             error={error('played-percent')}
-          >
-            <NumberInput
-              {...limits('playedPercent')}
-              step={1}
-              suffix="%"
-              {...number('played-percent', form.playedPercent, (value) =>
-                update({ playedPercent: Math.trunc(value) }),
-              )}
-            />
-          </FieldRow>
-          <FieldRow
+            {...minMax('playedPercent')}
+            step={1}
+            unit="%"
+            {...number('played-percent', form.playedPercent, (value) =>
+              update({ playedPercent: Math.trunc(value) }),
+            )}
+            saved={saved.playedPercent}
+          />
+          <SettingRow
+            kind="number"
             anchor="resume-percent"
             label={s.resumePercent}
             help={s.resumePercentHelp(range('resumePercent'))}
             error={error('resume-percent')}
-          >
-            <NumberInput
-              {...limits('resumePercent')}
-              step={1}
-              suffix="%"
-              // 0 is a valid threshold: it is shown, not left blank.
-              {...number('resume-percent', form.resumePercent, (value) =>
-                update({ resumePercent: Math.trunc(value) }),
-              )}
-            />
-          </FieldRow>
+            {...minMax('resumePercent')}
+            step={1}
+            unit="%"
+            // 0 is a valid threshold: it is shown, not left blank.
+            {...number('resume-percent', form.resumePercent, (value) =>
+              update({ resumePercent: Math.trunc(value) }),
+            )}
+            saved={saved.resumePercent}
+          />
         </div>
       </SettingsGroup>
     </>
   )
 }
 
-function Catalogs({ form, update, error, number, range, limits }: SectionFormApi) {
+function Catalogs({ form, update, error, number, range, saved, minMax }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
   const host = computer(useServerSystem())
   return (
     <SettingsGroup>
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="catalog-limit"
         label={s.catalogLimit}
         help={s.catalogLimitHelp(range('catalogLimit'))}
         error={error('catalog-limit')}
-      >
-        <NumberInput
-          {...limits('catalogLimit')}
-          step={1}
-          {...number('catalog-limit', form.catalogLimit, (value) =>
-            update({ catalogLimit: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <FieldRow
+        {...minMax('catalogLimit')}
+        step={1}
+        {...number('catalog-limit', form.catalogLimit, (value) =>
+          update({ catalogLimit: Math.trunc(value) }),
+        )}
+        saved={saved.catalogLimit}
+      />
+      <SettingRow
+        kind="number"
         anchor="channel-limit"
         label={s.channelLimit}
         help={s.channelLimitHelp(range('channelLimit'))}
         error={error('channel-limit')}
-      >
-        <NumberInput
-          {...limits('channelLimit')}
-          step={1}
-          {...number('channel-limit', form.channelLimit, (value) =>
-            update({ channelLimit: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <FieldRow
+        {...minMax('channelLimit')}
+        step={1}
+        {...number('channel-limit', form.channelLimit, (value) =>
+          update({ channelLimit: Math.trunc(value) }),
+        )}
+        saved={saved.channelLimit}
+      />
+      <SettingRow
+        kind="number"
         anchor="version-list-minutes"
         label={s.versionListMinutes}
         help={s.versionListMinutesHelp(range('versionListMinutes'))}
         error={error('version-list-minutes')}
-      >
-        <NumberInput
-          {...limits('versionListMinutes')}
-          step={1}
-          {...number('version-list-minutes', form.versionListMinutes, (value) =>
-            update({ versionListMinutes: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <FieldRow
+        {...minMax('versionListMinutes')}
+        step={1}
+        {...number('version-list-minutes', form.versionListMinutes, (value) =>
+          update({ versionListMinutes: Math.trunc(value) }),
+        )}
+        saved={saved.versionListMinutes}
+      />
+      <SettingRow
+        kind="number"
         anchor="catalog-refresh-minutes"
         label={s.catalogRefreshMinutes}
         help={s.catalogRefreshMinutesHelp(range('catalogRefreshMinutes'))}
         error={error('catalog-refresh-minutes')}
-      >
-        <NumberInput
-          {...limits('catalogRefreshMinutes')}
-          step={1}
-          {...number('catalog-refresh-minutes', form.catalogRefreshMinutes, (value) =>
-            update({ catalogRefreshMinutes: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <FieldRow
+        {...minMax('catalogRefreshMinutes')}
+        step={1}
+        {...number('catalog-refresh-minutes', form.catalogRefreshMinutes, (value) =>
+          update({ catalogRefreshMinutes: Math.trunc(value) }),
+        )}
+        saved={saved.catalogRefreshMinutes}
+      />
+      <SettingRow
+        kind="choice"
         anchor="collection-read-hour"
         label={s.collectionReadHour}
         help={s.collectionReadHourHelp}
         error={error('collection-read-hour')}
-      >
-        <Select
-          value={form.collectionReadHour}
-          options={[
-            { value: -1, label: s.collectionReadHourNever },
-            ...Array.from({ length: 24 }, (_, hour) => ({
-              value: hour,
-              label: formatHour(hour, language),
-            })),
-          ]}
-          onValue={(collectionReadHour) => update({ collectionReadHour })}
-          className="max-w-[10rem]"
-        />
-      </FieldRow>
+        value={form.collectionReadHour}
+        options={[
+          { value: -1, label: s.collectionReadHourNever },
+          ...Array.from({ length: 24 }, (_, hour) => ({
+            value: hour,
+            label: formatHour(hour, language),
+          })),
+        ]}
+        onChange={(collectionReadHour) => update({ collectionReadHour })}
+        saved={saved.collectionReadHour}
+      />
       <CollectionLibraryApps
         chosen={form.collectionLibraryApps}
         onChange={(collectionLibraryApps) => update({ collectionLibraryApps })}
         error={error('collection-library-apps')}
       />
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="watchlist-check-hours"
         label={s.watchlistCheckHours}
         help={s.watchlistCheckHoursHelp(range('watchlistCheckHours'))}
         error={error('watchlist-check-hours')}
-      >
-        <NumberInput
-          {...limits('watchlistCheckHours')}
-          step={1}
-          {...number('watchlist-check-hours', form.watchlistCheckHours, (value) =>
-            update({ watchlistCheckHours: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <FieldRow
+        {...minMax('watchlistCheckHours')}
+        step={1}
+        {...number('watchlist-check-hours', form.watchlistCheckHours, (value) =>
+          update({ watchlistCheckHours: Math.trunc(value) }),
+        )}
+        saved={saved.watchlistCheckHours}
+      />
+      <SettingRow
+        kind="number"
         anchor="local-scan-hours"
         label={s.localScanHours}
         help={s.localScanHoursHelp(range('localScanHours'))}
         error={error('local-scan-hours')}
-      >
-        <NumberInput
-          {...limits('localScanHours')}
-          step={1}
-          {...number('local-scan-hours', form.localScanHours, (value) =>
-            update({ localScanHours: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <SwitchRow
+        {...minMax('localScanHours')}
+        step={1}
+        {...number('local-scan-hours', form.localScanHours, (value) =>
+          update({ localScanHours: Math.trunc(value) }),
+        )}
+        saved={saved.localScanHours}
+      />
+      <SettingRow
+        kind="switch"
         anchor="watch-local-folders"
         label={s.watchLocalFolders}
         help={`${s.watchLocalFoldersHelp[host]} ${s.watchSharesHelp}`}
         checked={form.watchLocalFolders}
         onChange={(watchLocalFolders) => update({ watchLocalFolders })}
+        saved={saved.watchLocalFolders}
       />
     </SettingsGroup>
   )
 }
 
-function Thumbnails({ form, update, error, number, range, limits }: SectionFormApi) {
+function Thumbnails({ form, update, error, number, range, saved, minMax }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
     <SettingsGroup>
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="trickplay"
         label={s.trickplay}
         help={s.trickplayHelp}
         checked={form.trickplay}
         onChange={(trickplay) => update({ trickplay })}
+        saved={saved.trickplay}
       />
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="trickplay-interval"
         label={s.trickplayInterval}
         help={s.trickplayIntervalHelp(range('trickplayInterval'))}
         error={error('trickplay-interval')}
-      >
-        <NumberInput
-          {...limits('trickplayInterval')}
-          step={1}
-          {...number('trickplay-interval', form.trickplayInterval, (value) =>
-            update({ trickplayInterval: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <FieldRow
+        {...minMax('trickplayInterval')}
+        step={1}
+        {...number('trickplay-interval', form.trickplayInterval, (value) =>
+          update({ trickplayInterval: Math.trunc(value) }),
+        )}
+        saved={saved.trickplayInterval}
+      />
+      <SettingRow
+        kind="choice"
         anchor="trickplay-width"
         label={s.trickplayWidth}
         help={s.trickplayWidthHelp}
         error={error('trickplay-width')}
-      >
-        <Select
-          value={form.trickplayWidth}
-          options={((form.bounds.trickplayWidth?.choices ?? []) as number[]).map((width) => ({
-            value: width,
-            label: s.pixels(width),
-          }))}
-          onValue={(trickplayWidth) => update({ trickplayWidth })}
-          className="max-w-xs"
-        />
-      </FieldRow>
-      <SwitchRow
+        value={form.trickplayWidth}
+        options={((form.bounds.trickplayWidth?.choices ?? []) as number[]).map((width) => ({
+          value: width,
+          label: s.pixels(width),
+        }))}
+        onChange={(trickplayWidth) => update({ trickplayWidth })}
+        saved={saved.trickplayWidth}
+      />
+      <SettingRow
+        kind="switch"
         anchor="chapter-images"
         label={s.chapterImages}
         help={s.chapterImagesHelp}
         checked={form.chapterImages}
         onChange={(chapterImages) => update({ chapterImages })}
+        saved={saved.chapterImages}
       />
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="thumbnail-storage"
         label={s.thumbnailStorage}
         help={s.thumbnailStorageHelp(range('thumbnailStorageGB'))}
         error={error('thumbnail-storage')}
-      >
-        <NumberInput
-          {...limits('thumbnailStorageGB')}
-          step={1}
-          {...number('thumbnail-storage', form.thumbnailStorageGB, (value) =>
-            update({ thumbnailStorageGB: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
+        {...minMax('thumbnailStorageGB')}
+        step={1}
+        {...number('thumbnail-storage', form.thumbnailStorageGB, (value) =>
+          update({ thumbnailStorageGB: Math.trunc(value) }),
+        )}
+        saved={saved.thumbnailStorageGB}
+      />
     </SettingsGroup>
   )
 }
 
-function Security({ form, update, error, number, range, limits }: SectionFormApi) {
+function Security({ form, update, error, number, range, saved, minMax }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
     <SettingsGroup>
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="personal-addons"
         label={s.personalAddons}
         help={s.personalAddonsHelp}
         checked={form.personalAddons}
         onChange={(personalAddons) => update({ personalAddons })}
+        saved={saved.personalAddons}
       />
-      <SwitchRow
+      <SettingRow
+        kind="switch"
         anchor="server-imports"
         label={s.serverImports}
         help={s.serverImportsHelp}
         checked={form.serverImports}
         onChange={(serverImports) => update({ serverImports })}
+        saved={saved.serverImports}
       />
-      <FieldRow
+      <SettingRow
+        kind="choice"
         anchor="import-every"
         label={s.importEveryMinutes}
         help={s.importEveryMinutesHelp}
         error={error('import-every')}
-      >
-        <Select
-          value={form.importEveryMinutes}
-          options={((form.bounds.importEveryMinutes?.choices ?? []) as number[]).map((minutes) => ({
-            value: minutes,
-            label: s.importEveryChoice(minutes),
-          }))}
-          onValue={(importEveryMinutes) => update({ importEveryMinutes })}
-          className="max-w-xs"
-        />
-      </FieldRow>
-      <SwitchRow
+        value={form.importEveryMinutes}
+        options={((form.bounds.importEveryMinutes?.choices ?? []) as number[]).map((minutes) => ({
+          value: minutes,
+          label: s.importEveryChoice(minutes),
+        }))}
+        onChange={(importEveryMinutes) => update({ importEveryMinutes })}
+        saved={saved.importEveryMinutes}
+      />
+      <SettingRow
+        kind="switch"
         anchor="share-links"
         label={s.shareLinks}
         help={s.shareLinksHelp}
         checked={form.shareLinks}
         onChange={(shareLinks) => update({ shareLinks })}
+        saved={saved.shareLinks}
       />
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="login-attempts"
         label={s.loginAttempts}
         help={s.loginAttemptsHelp(range('loginAttempts'))}
         error={error('login-attempts')}
-      >
-        <NumberInput
-          {...limits('loginAttempts')}
-          step={1}
-          {...number('login-attempts', form.loginAttempts, (value) =>
-            update({ loginAttempts: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
-      <SwitchRow
+        {...minMax('loginAttempts')}
+        step={1}
+        {...number('login-attempts', form.loginAttempts, (value) =>
+          update({ loginAttempts: Math.trunc(value) }),
+        )}
+        saved={saved.loginAttempts}
+      />
+      <SettingRow
+        kind="switch"
         anchor="two-step-administrators"
         label={s.twoStepAdministrators}
         help={s.twoStepAdministratorsHelp}
         checked={form.twoStepAdministrators}
         onChange={(twoStepAdministrators) => update({ twoStepAdministrators })}
+        saved={saved.twoStepAdministrators}
       />
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="inactive-device-days"
         label={s.inactiveDeviceDays}
         help={s.inactiveDeviceDaysHelp(range('inactiveDeviceDays'))}
         error={error('inactive-device-days')}
-      >
-        <NumberInput
-          {...limits('inactiveDeviceDays')}
-          step={1}
-          {...number('inactive-device-days', form.inactiveDeviceDays, (value) =>
-            update({ inactiveDeviceDays: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
+        {...minMax('inactiveDeviceDays')}
+        step={1}
+        {...number('inactive-device-days', form.inactiveDeviceDays, (value) =>
+          update({ inactiveDeviceDays: Math.trunc(value) }),
+        )}
+        saved={saved.inactiveDeviceDays}
+      />
       <FieldRow
         anchor="known-proxies"
         label={s.knownProxies}
@@ -1129,7 +1112,7 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
  * Settings › Security › Identity provider: an OpenID Connect provider people sign in with, in this
  * app and in the web player, and the redirect URI to register at it, built from the public address.
  */
-function IdentityProvider({ form, update, error, limits }: SectionFormApi) {
+function IdentityProvider({ form, update, error, limits, saved }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings.provider
   return (
@@ -1147,97 +1130,92 @@ function IdentityProvider({ form, update, error, limits }: SectionFormApi) {
           </>
         )}
       </TextRow>
-      <FieldRow
+      <SettingRow
+        kind="text"
         anchor="provider-issuer"
         label={s.issuer}
         help={s.issuerHelp}
         error={error('provider-issuer')}
-      >
-        <TextInput
-          type="url"
-          value={form.providerIssuer}
-          onValue={(providerIssuer) => update({ providerIssuer })}
-          placeholder="https://id.example.org"
-          maxLength={limits('providerIssuer').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          className="max-w-md"
-        />
-      </FieldRow>
-      <FieldRow anchor="provider-name" label={s.name} help={s.nameHelp}>
-        <TextInput
-          value={form.providerName}
-          onValue={(providerName) => update({ providerName })}
-          maxLength={limits('providerName').max}
-          autoComplete="off"
-          className="max-w-sm"
-        />
-      </FieldRow>
-      <FieldRow anchor="provider-client-id" label={s.clientId} help={s.clientIdHelp}>
-        <TextInput
-          value={form.providerClientId}
-          onValue={(providerClientId) => update({ providerClientId })}
-          maxLength={limits('providerClientId').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          className="max-w-md"
-        />
-      </FieldRow>
+        inputMode="url"
+        value={form.providerIssuer}
+        onChange={(providerIssuer) => update({ providerIssuer })}
+        placeholder="https://id.example.org"
+        maxLength={limits('providerIssuer').max}
+        mono
+        saved={saved.providerIssuer}
+      />
       <SettingRow
+        kind="text"
+        anchor="provider-name"
+        label={s.name}
+        help={s.nameHelp}
+        value={form.providerName}
+        onChange={(providerName) => update({ providerName })}
+        maxLength={limits('providerName').max}
+        saved={saved.providerName}
+      />
+      <SettingRow
+        kind="text"
+        anchor="provider-client-id"
+        label={s.clientId}
+        help={s.clientIdHelp}
+        value={form.providerClientId}
+        onChange={(providerClientId) => update({ providerClientId })}
+        maxLength={limits('providerClientId').max}
+        mono
+        saved={saved.providerClientId}
+      />
+      <SettingRow
+        kind="secret"
         anchor="provider-client-secret"
-        className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-      >
-        <SecretField
-          label={s.clientSecret}
-          help={s.clientSecretHelp}
-          saved={form.providerClientSecretSet}
-          value={form.providerClientSecret}
-          onValue={(providerClientSecret) => update({ providerClientSecret })}
-        />
-      </SettingRow>
-      <FieldRow anchor="provider-user-claim" label={s.userClaim} help={s.userClaimHelp}>
-        <TextInput
-          value={form.providerUserClaim}
-          onValue={(providerUserClaim) => update({ providerUserClaim })}
-          maxLength={limits('providerUserClaim').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          required
-          className="max-w-xs"
-        />
-      </FieldRow>
-      <SwitchRow
+        label={s.clientSecret}
+        help={s.clientSecretHelp}
+        saved={form.providerClientSecretSet}
+        value={form.providerClientSecret}
+        onValue={(providerClientSecret) => update({ providerClientSecret })}
+      />
+      <SettingRow
+        kind="text"
+        anchor="provider-user-claim"
+        label={s.userClaim}
+        help={s.userClaimHelp}
+        value={form.providerUserClaim}
+        onChange={(providerUserClaim) => update({ providerUserClaim })}
+        maxLength={limits('providerUserClaim').max}
+        mono
+        saved={saved.providerUserClaim}
+      />
+      <SettingRow
+        kind="switch"
         anchor="provider-create-accounts"
         label={s.createAccounts}
         help={s.createAccountsHelp}
         checked={form.providerCreateAccounts}
         onChange={(providerCreateAccounts) => update({ providerCreateAccounts })}
+        saved={saved.providerCreateAccounts}
       />
-      <FieldRow anchor="provider-admin-claim" label={s.adminClaim} help={s.adminClaimHelp}>
-        <TextInput
-          value={form.providerAdminClaim}
-          onValue={(providerAdminClaim) => update({ providerAdminClaim })}
-          placeholder="groups"
-          maxLength={limits('providerAdminClaim').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          className="max-w-xs"
-        />
-      </FieldRow>
-      <FieldRow anchor="provider-admin-value" label={s.adminValue} help={s.adminValueHelp}>
-        <TextInput
-          value={form.providerAdminValue}
-          onValue={(providerAdminValue) => update({ providerAdminValue })}
-          maxLength={limits('providerAdminValue').max}
-          autoComplete="off"
-          spellCheck={false}
-          className="max-w-xs"
-        />
-      </FieldRow>
+      <SettingRow
+        kind="text"
+        anchor="provider-admin-claim"
+        label={s.adminClaim}
+        help={s.adminClaimHelp}
+        value={form.providerAdminClaim}
+        onChange={(providerAdminClaim) => update({ providerAdminClaim })}
+        placeholder="groups"
+        maxLength={limits('providerAdminClaim').max}
+        mono
+        saved={saved.providerAdminClaim}
+      />
+      <SettingRow
+        kind="text"
+        anchor="provider-admin-value"
+        label={s.adminValue}
+        help={s.adminValueHelp}
+        value={form.providerAdminValue}
+        onChange={(providerAdminValue) => update({ providerAdminValue })}
+        maxLength={limits('providerAdminValue').max}
+        saved={saved.providerAdminValue}
+      />
     </SettingsGroup>
   )
 }
@@ -1255,87 +1233,78 @@ function letsEncryptAddresses(form: Settings): string[] {
 }
 
 /** Settings › Security › HTTPS: how Polyfin serves HTTPS itself, next to HTTP. */
-function Https({ form, update, error, number, range, limits }: SectionFormApi) {
+function Https({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings.https
   const modes: HttpsMode[] = ['off', 'files', 'letsencrypt']
   const challenges: AcmeChallenge[] = ['http-01', 'tls-alpn-01']
   return (
     <SettingsGroup title={s.title}>
-      <FieldRow
+      <SettingRow
+        kind="choice"
         anchor="https"
         label={s.mode}
         help={`${s.intro} ${s.modeHelp}`}
         error={error('https')}
-      >
-        <Select
-          value={form.httpsMode}
-          options={modes.map((mode) => ({ value: mode, label: s.modes[mode] }))}
-          onValue={(httpsMode: HttpsMode) => update({ httpsMode })}
-          className="max-w-xs"
-        />
-      </FieldRow>
+        value={form.httpsMode}
+        options={modes.map((mode) => ({ value: mode, label: s.modes[mode] }))}
+        onChange={(httpsMode: HttpsMode) => update({ httpsMode })}
+        saved={saved.httpsMode}
+      />
       {form.httpsMode !== 'off' && (
         <>
-          <FieldRow
+          <SettingRow
+            kind="number"
             anchor="https-port"
             label={s.port}
             help={s.portHelp(range('httpsPort'))}
             error={error('https-port')}
-          >
-            <NumberInput
-              {...limits('httpsPort')}
-              step={1}
-              {...number('https-port', form.httpsPort, (value) =>
-                update({ httpsPort: Math.trunc(value) }),
-              )}
-            />
-          </FieldRow>
-          <SwitchRow
+            {...minMax('httpsPort')}
+            step={1}
+            {...number('https-port', form.httpsPort, (value) =>
+              update({ httpsPort: Math.trunc(value) }),
+            )}
+            saved={saved.httpsPort}
+          />
+          <SettingRow
+            kind="switch"
             anchor="https-redirect"
             label={s.redirect}
             help={s.redirectHelp}
             checked={form.httpsRedirect}
             onChange={(httpsRedirect) => update({ httpsRedirect })}
+            saved={saved.httpsRedirect}
           />
         </>
       )}
       {form.httpsMode === 'files' && (
         <>
-          <FieldRow
+          <SettingRow
+            kind="text"
             anchor="https-certificate"
             label={s.certificate}
             help={s.certificateHelp}
             error={error('https-certificate')}
-          >
-            <TextInput
-              value={form.httpsCertificate}
-              onValue={(httpsCertificate) => update({ httpsCertificate })}
-              placeholder="/certs/fullchain.pem"
-              maxLength={limits('httpsCertificate').max}
-              autoComplete="off"
-              spellCheck={false}
-              mono
-              className="max-w-md"
-            />
-          </FieldRow>
-          <FieldRow
+            value={form.httpsCertificate}
+            onChange={(httpsCertificate) => update({ httpsCertificate })}
+            placeholder="/certs/fullchain.pem"
+            maxLength={limits('httpsCertificate').max}
+            mono
+            saved={saved.httpsCertificate}
+          />
+          <SettingRow
+            kind="text"
             anchor="https-private-key"
             label={s.privateKey}
             help={s.privateKeyHelp}
             error={error('https-private-key')}
-          >
-            <TextInput
-              value={form.httpsPrivateKey}
-              onValue={(httpsPrivateKey) => update({ httpsPrivateKey })}
-              placeholder="/certs/privkey.pem"
-              maxLength={limits('httpsPrivateKey').max}
-              autoComplete="off"
-              spellCheck={false}
-              mono
-              className="max-w-md"
-            />
-          </FieldRow>
+            value={form.httpsPrivateKey}
+            onChange={(httpsPrivateKey) => update({ httpsPrivateKey })}
+            placeholder="/certs/privkey.pem"
+            maxLength={limits('httpsPrivateKey').max}
+            mono
+            saved={saved.httpsPrivateKey}
+          />
         </>
       )}
       {form.httpsMode === 'letsencrypt' && (
@@ -1352,48 +1321,44 @@ function Https({ form, update, error, number, range, limits }: SectionFormApi) {
               placeholder="media.example.org"
             />
           </FieldRow>
-          <FieldRow
+          <SettingRow
+            kind="text"
             anchor="acme-email"
             label={s.email}
             help={s.emailHelp}
             error={error('acme-email')}
-          >
-            <TextInput
-              type="email"
-              value={form.acmeEmail}
-              onValue={(acmeEmail) => update({ acmeEmail })}
-              placeholder="admin@example.org"
-              maxLength={limits('acmeEmail').max}
-              autoComplete="off"
-              spellCheck={false}
-              className="max-w-md"
-            />
-          </FieldRow>
-          <SwitchRow
+            inputMode="email"
+            value={form.acmeEmail}
+            onChange={(acmeEmail) => update({ acmeEmail })}
+            placeholder="admin@example.org"
+            maxLength={limits('acmeEmail').max}
+            saved={saved.acmeEmail}
+          />
+          <SettingRow
+            kind="switch"
             anchor="acme-terms"
             label={s.terms}
             help={s.termsHelp}
             checked={form.acmeTerms}
             onChange={(acmeTerms) => update({ acmeTerms })}
+            saved={saved.acmeTerms}
           >
             {error('acme-terms') && <FieldError>{error('acme-terms')}</FieldError>}
-          </SwitchRow>
-          <FieldRow
+          </SettingRow>
+          <SettingRow
+            kind="choice"
             anchor="acme-challenge"
             label={s.challenge}
             help={s.challengeHelp}
             error={error('acme-challenge')}
-          >
-            <Select
-              value={form.acmeChallenge}
-              options={challenges.map((challenge) => ({
-                value: challenge,
-                label: s.challenges[challenge],
-              }))}
-              onValue={(acmeChallenge: AcmeChallenge) => update({ acmeChallenge })}
-              className="max-w-sm"
-            />
-          </FieldRow>
+            value={form.acmeChallenge}
+            options={challenges.map((challenge) => ({
+              value: challenge,
+              label: s.challenges[challenge],
+            }))}
+            onChange={(acmeChallenge: AcmeChallenge) => update({ acmeChallenge })}
+            saved={saved.acmeChallenge}
+          />
         </>
       )}
     </SettingsGroup>
@@ -1436,7 +1401,7 @@ function ProxyList({
   )
 }
 
-function Tracking({ form, update, error }: SectionFormApi) {
+function Tracking({ form, update, error, saved }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings.tracking
   return (
@@ -1453,85 +1418,70 @@ function Tracking({ form, update, error }: SectionFormApi) {
           </p>
           <p className="mt-2 max-w-[60ch] text-ink-3">{s.traktOlderApps}</p>
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="trakt-client-id"
           label={s.traktClientId}
           help={s.traktClientIdHelp}
           error={error('trakt-client-id')}
-        >
-          <TextInput
-            value={form.traktClientId}
-            onValue={(traktClientId) => update({ traktClientId })}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-          />
-        </FieldRow>
+          value={form.traktClientId}
+          onChange={(traktClientId) => update({ traktClientId })}
+          mono
+          saved={saved.traktClientId}
+        />
         <SettingRow
+          kind="secret"
           anchor="trakt-client-secret"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.traktClientSecret}
-            help={s.traktClientSecretHelp}
-            saved={form.traktClientSecretSet}
-            value={form.traktClientSecret}
-            onValue={(traktClientSecret) => update({ traktClientSecret })}
-            reveal={() => revealServerSecret('traktClientSecret')}
-          />
-        </SettingRow>
+          label={s.traktClientSecret}
+          help={s.traktClientSecretHelp}
+          saved={form.traktClientSecretSet}
+          value={form.traktClientSecret}
+          onValue={(traktClientSecret) => update({ traktClientSecret })}
+          reveal={() => revealServerSecret('traktClientSecret')}
+        />
       </SettingsGroup>
       <SettingsGroup title="Simkl">
         <TextRow anchor="simkl-setup">
           <p className="max-w-[60ch]">{s.simklSetup}</p>
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="simkl-client-id"
           label={s.simklClientId}
           help={s.simklClientIdHelp}
           error={error('simkl-client-id')}
-        >
-          <TextInput
-            value={form.simklClientId}
-            onValue={(simklClientId) => update({ simklClientId })}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-          />
-        </FieldRow>
+          value={form.simklClientId}
+          onChange={(simklClientId) => update({ simklClientId })}
+          mono
+          saved={saved.simklClientId}
+        />
       </SettingsGroup>
       <SettingsGroup title="AniList">
         <TextRow anchor="anilist-setup">
           <p className="max-w-[60ch]">{s.aniListSetup}</p>
           <Address label={s.redirectUri} value={aniListPinUri} />
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="anilist-client-id"
           label={s.aniListClientId}
           help={s.aniListClientIdHelp}
           error={error('anilist-client-id')}
-        >
-          <TextInput
-            value={form.aniListClientId}
-            onValue={(aniListClientId) => update({ aniListClientId })}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-          />
-        </FieldRow>
+          value={form.aniListClientId}
+          onChange={(aniListClientId) => update({ aniListClientId })}
+          mono
+          saved={saved.aniListClientId}
+        />
         <SettingRow
+          kind="secret"
           anchor="anilist-client-secret"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.aniListClientSecret}
-            help={s.aniListClientSecretHelp}
-            saved={form.aniListClientSecretSet}
-            value={form.aniListClientSecret}
-            onValue={(aniListClientSecret) => update({ aniListClientSecret })}
-            reveal={() => revealServerSecret('aniListClientSecret')}
-          />
-        </SettingRow>
+          label={s.aniListClientSecret}
+          help={s.aniListClientSecretHelp}
+          saved={form.aniListClientSecretSet}
+          value={form.aniListClientSecret}
+          onValue={(aniListClientSecret) => update({ aniListClientSecret })}
+          reveal={() => revealServerSecret('aniListClientSecret')}
+        />
       </SettingsGroup>
       <SettingsGroup title="MyAnimeList">
         <TextRow anchor="myanimelist-setup">
@@ -1539,98 +1489,84 @@ function Tracking({ form, update, error }: SectionFormApi) {
           <Address label={s.redirectUri} value={myAnimeListRedirect(form.publicAddress)} />
           <p className="mt-1 text-small text-ink-3">{s.myAnimeListRedirectHelp}</p>
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="myanimelist-client-id"
           label={s.myAnimeListClientId}
           help={s.myAnimeListClientIdHelp}
           error={error('myanimelist-client-id')}
-        >
-          <TextInput
-            value={form.myAnimeListClientId}
-            onValue={(myAnimeListClientId) => update({ myAnimeListClientId })}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-          />
-        </FieldRow>
+          value={form.myAnimeListClientId}
+          onChange={(myAnimeListClientId) => update({ myAnimeListClientId })}
+          mono
+          saved={saved.myAnimeListClientId}
+        />
         <SettingRow
+          kind="secret"
           anchor="myanimelist-client-secret"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.myAnimeListClientSecret}
-            help={s.myAnimeListClientSecretHelp}
-            saved={form.myAnimeListClientSecretSet}
-            value={form.myAnimeListClientSecret}
-            onValue={(myAnimeListClientSecret) => update({ myAnimeListClientSecret })}
-            reveal={() => revealServerSecret('myAnimeListClientSecret')}
-          />
-        </SettingRow>
+          label={s.myAnimeListClientSecret}
+          help={s.myAnimeListClientSecretHelp}
+          saved={form.myAnimeListClientSecretSet}
+          value={form.myAnimeListClientSecret}
+          onValue={(myAnimeListClientSecret) => update({ myAnimeListClientSecret })}
+          reveal={() => revealServerSecret('myAnimeListClientSecret')}
+        />
       </SettingsGroup>
       <SettingsGroup title="Last.fm">
         <TextRow anchor="lastfm-setup">
           <p className="max-w-[60ch]">{s.lastFmSetup}</p>
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="lastfm-api-key"
           label={s.lastFmApiKey}
           help={s.lastFmApiKeyHelp}
           error={error('lastfm-api-key')}
-        >
-          <TextInput
-            value={form.lastFmApiKey}
-            onValue={(lastFmApiKey) => update({ lastFmApiKey })}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-          />
-        </FieldRow>
+          value={form.lastFmApiKey}
+          onChange={(lastFmApiKey) => update({ lastFmApiKey })}
+          mono
+          saved={saved.lastFmApiKey}
+        />
         <SettingRow
+          kind="secret"
           anchor="lastfm-secret"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.lastFmSecret}
-            help={s.lastFmSecretHelp}
-            saved={form.lastFmSecretSet}
-            value={form.lastFmSecret}
-            onValue={(lastFmSecret) => update({ lastFmSecret })}
-            reveal={() => revealServerSecret('lastFmSecret')}
-          />
-        </SettingRow>
+          label={s.lastFmSecret}
+          help={s.lastFmSecretHelp}
+          saved={form.lastFmSecretSet}
+          value={form.lastFmSecret}
+          onValue={(lastFmSecret) => update({ lastFmSecret })}
+          reveal={() => revealServerSecret('lastFmSecret')}
+        />
       </SettingsGroup>
     </>
   )
 }
 
-function LiveTv({ form, update, error, number, range, limits }: SectionFormApi) {
+function LiveTv({ form, update, error, number, range, saved, minMax }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
     <SettingsGroup>
-      <FieldRow
+      <SettingRow
+        kind="number"
         anchor="live-tv-refresh-hours"
         label={s.liveTvRefreshHours}
         help={s.liveTvRefreshHoursHelp(range('liveTvRefreshHours'))}
         error={error('live-tv-refresh-hours')}
-      >
-        <NumberInput
-          {...limits('liveTvRefreshHours')}
-          step={1}
-          {...number('live-tv-refresh-hours', form.liveTvRefreshHours, (value) =>
-            update({ liveTvRefreshHours: Math.trunc(value) }),
-          )}
-        />
-      </FieldRow>
+        {...minMax('liveTvRefreshHours')}
+        step={1}
+        {...number('live-tv-refresh-hours', form.liveTvRefreshHours, (value) =>
+          update({ liveTvRefreshHours: Math.trunc(value) }),
+        )}
+        saved={saved.liveTvRefreshHours}
+      />
     </SettingsGroup>
   )
 }
 
-function Recordings({ form, update, error, number, range, limits }: SectionFormApi) {
+function Recordings({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
   const host = computer(useServerSystem())
-  const untilId = useId()
   const hours = Array.from({ length: 24 }, (_, hour) => ({
     value: hour,
     label: formatHour(hour, language),
@@ -1638,232 +1574,219 @@ function Recordings({ form, update, error, number, range, limits }: SectionFormA
   return (
     <>
       <SettingsGroup>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="recording"
           label={s.recording}
           help={s.recordingHelp}
           checked={form.recording}
           onChange={(recording) => update({ recording })}
+          saved={saved.recording}
         />
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="recordings-folder"
           label={s.recordingsFolderLabel}
           help={s.recordingsFolderHelp[host]}
           error={error('recordings-folder')}
-        >
-          <TextInput
-            value={form.recordingsFolder}
-            onValue={(recordingsFolder) => update({ recordingsFolder })}
-            placeholder={form.recordingsFolderDefault}
-            disabled={!form.recording}
-            maxLength={limits('recordingsFolder').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-md"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.recordingsFolder}
+          onChange={(recordingsFolder) => update({ recordingsFolder })}
+          placeholder={form.recordingsFolderDefault}
+          disabled={!form.recording}
+          maxLength={limits('recordingsFolder').max}
+          mono
+          saved={saved.recordingsFolder}
+        />
+        <SettingRow
+          kind="number"
           anchor="recording-pre-padding"
           label={s.recordingPrePadding}
           help={s.recordingPrePaddingHelp(range('recordingPrePadding', 1 / 60))}
           error={error('recording-pre-padding')}
-        >
-          <NumberInput
-            {...limits('recordingPrePadding', 1 / 60)}
-            step={1}
-            {...number(
-              'recording-pre-padding',
-              Math.round(form.recordingPrePadding / 60),
-              (value) => update({ recordingPrePadding: Math.trunc(value) * 60 }),
-            )}
-          />
-        </FieldRow>
-        <FieldRow
+          {...minMax('recordingPrePadding', 1 / 60)}
+          step={1}
+          {...number('recording-pre-padding', Math.round(form.recordingPrePadding / 60), (value) =>
+            update({ recordingPrePadding: Math.trunc(value) * 60 }),
+          )}
+          saved={saved.recordingPrePadding}
+        />
+        <SettingRow
+          kind="number"
           anchor="recording-post-padding"
           label={s.recordingPostPadding}
           help={s.recordingPostPaddingHelp(range('recordingPostPadding', 1 / 60))}
           error={error('recording-post-padding')}
-        >
-          <NumberInput
-            {...limits('recordingPostPadding', 1 / 60)}
-            step={1}
-            {...number(
-              'recording-post-padding',
-              Math.round(form.recordingPostPadding / 60),
-              (value) => update({ recordingPostPadding: Math.trunc(value) * 60 }),
-            )}
-          />
-        </FieldRow>
-        <FieldRow
+          {...minMax('recordingPostPadding', 1 / 60)}
+          step={1}
+          {...number(
+            'recording-post-padding',
+            Math.round(form.recordingPostPadding / 60),
+            (value) => update({ recordingPostPadding: Math.trunc(value) * 60 }),
+          )}
+          saved={saved.recordingPostPadding}
+        />
+        <SettingRow
+          kind="number"
           anchor="recording-retention-days"
           label={s.recordingRetentionDays}
           help={s.recordingRetentionDaysHelp(range('recordingRetentionDays'))}
           error={error('recording-retention-days')}
-        >
-          <NumberInput
-            {...limits('recordingRetentionDays')}
-            step={1}
-            {...number('recording-retention-days', form.recordingRetentionDays, (value) =>
-              update({ recordingRetentionDays: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <SwitchRow
+          {...minMax('recordingRetentionDays')}
+          step={1}
+          {...number('recording-retention-days', form.recordingRetentionDays, (value) =>
+            update({ recordingRetentionDays: Math.trunc(value) }),
+          )}
+          saved={saved.recordingRetentionDays}
+        />
+        <SettingRow
+          kind="switch"
           anchor="recording-commercials"
           label={s.recordingCommercials}
           help={s.recordingCommercialsHelp}
           checked={form.recordingCommercials}
           onChange={(recordingCommercials) => update({ recordingCommercials })}
+          saved={saved.recordingCommercials}
         />
       </SettingsGroup>
       <SettingsGroup>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="convert-recordings"
           label={s.convertRecordings}
           help={s.convertRecordingsHelp}
           checked={form.convertRecordings}
           onChange={(convertRecordings) => update({ convertRecordings })}
+          saved={saved.convertRecordings}
         />
-        <FieldRow
+        <SettingRow
+          kind="choice"
           anchor="convert-recordings-between"
-          label={s.convertRecordingsBetween}
+          label={s.convertRecordingsFrom}
+          detail={s.convertRecordingsBetween}
           help={s.convertRecordingsBetweenHelp(
             formatHour(Number(form.bounds.convertRecordingsFrom?.default), language),
             formatHour(Number(form.bounds.convertRecordingsUntil?.default), language),
           )}
           error={error('convert-recordings-between')}
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <Select
-              value={form.convertRecordingsFrom}
-              options={hours}
-              onValue={(convertRecordingsFrom) => update({ convertRecordingsFrom })}
-              disabled={!form.convertRecordings}
-              aria-label={s.convertRecordingsFrom}
-              className="max-w-[10rem]"
-            />
-            <span className="text-small text-ink-2">{s.convertRecordingsAnd}</span>
-            <Select
-              id={untilId}
-              value={form.convertRecordingsUntil}
-              options={hours}
-              onValue={(convertRecordingsUntil) => update({ convertRecordingsUntil })}
-              disabled={!form.convertRecordings}
-              aria-label={s.convertRecordingsUntil}
-              className="max-w-[10rem]"
-            />
-          </div>
-        </FieldRow>
-        <SwitchRow
+          value={form.convertRecordingsFrom}
+          options={hours}
+          onChange={(convertRecordingsFrom) => update({ convertRecordingsFrom })}
+          disabled={!form.convertRecordings}
+          saved={saved.convertRecordingsFrom}
+        />
+        <SettingRow
+          kind="choice"
+          label={s.convertRecordingsUntil}
+          detail={s.convertRecordingsBetween}
+          value={form.convertRecordingsUntil}
+          options={hours}
+          onChange={(convertRecordingsUntil) => update({ convertRecordingsUntil })}
+          disabled={!form.convertRecordings}
+          saved={saved.convertRecordingsUntil}
+        />
+        <SettingRow
+          kind="switch"
           anchor="convert-recordings-on-processor"
           label={s.convertRecordingsOnProcessor}
           help={s.convertRecordingsOnProcessorHelp}
           checked={form.convertRecordingsOnProcessor}
           onChange={(convertRecordingsOnProcessor) => update({ convertRecordingsOnProcessor })}
           disabled={!form.convertRecordings}
+          saved={saved.convertRecordingsOnProcessor}
         />
       </SettingsGroup>
     </>
   )
 }
 
-function Backups({ form, update, error, number, range, limits }: SectionFormApi) {
+function Backups({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
   const host = computer(useServerSystem())
   return (
     <>
       <SettingsGroup>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="backups"
           label={s.backups}
           help={s.backupsHelp}
           checked={form.backups}
           onChange={(backups) => update({ backups })}
+          saved={saved.backups}
         />
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="backup-folder"
           label={s.backupFolderLabel}
           help={s.backupFolderHelp[host]}
           error={error('backup-folder')}
-        >
-          <TextInput
-            value={form.backupFolder}
-            onValue={(backupFolder) => update({ backupFolder })}
-            placeholder={form.backupFolderDefault}
-            disabled={!form.backups}
-            maxLength={limits('backupFolder').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-md"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.backupFolder}
+          onChange={(backupFolder) => update({ backupFolder })}
+          placeholder={form.backupFolderDefault}
+          disabled={!form.backups}
+          maxLength={limits('backupFolder').max}
+          mono
+          saved={saved.backupFolder}
+        />
+        <SettingRow
+          kind="choice"
           anchor="backup-hour"
           label={s.backupHour}
           help={s.backupHourHelp(formatHour(Number(form.bounds.backupHour?.default), language))}
           error={error('backup-hour')}
-        >
-          <Select
-            value={form.backupHour}
-            options={Array.from({ length: 24 }, (_, hour) => ({
-              value: hour,
-              label: formatHour(hour, language),
-            }))}
-            onValue={(backupHour) => update({ backupHour })}
-            className="max-w-[10rem]"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.backupHour}
+          options={Array.from({ length: 24 }, (_, hour) => ({
+            value: hour,
+            label: formatHour(hour, language),
+          }))}
+          onChange={(backupHour) => update({ backupHour })}
+          saved={saved.backupHour}
+        />
+        <SettingRow
+          kind="number"
           anchor="backups-kept"
           label={s.backupsKept}
           help={s.backupsKeptHelp(range('backupsKept'))}
           error={error('backups-kept')}
-        >
-          <NumberInput
-            {...limits('backupsKept')}
-            step={1}
-            {...number('backups-kept', form.backupsKept, (value) =>
-              update({ backupsKept: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
+          {...minMax('backupsKept')}
+          step={1}
+          {...number('backups-kept', form.backupsKept, (value) =>
+            update({ backupsKept: Math.trunc(value) }),
+          )}
+          saved={saved.backupsKept}
+        />
         <SettingRow
+          kind="secret"
           anchor="backup-passphrase"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+          label={s.backupPassphrase}
+          help={s.backupPassphraseHelp(form.bounds.backupPassphrase?.min ?? 12)}
+          error={error('backup-passphrase')}
+          saved={form.backupPassphraseSet}
+          value={form.backupPassphrase}
+          onValue={(backupPassphrase) => update({ backupPassphrase })}
         >
-          <SecretField
-            label={s.backupPassphrase}
-            help={s.backupPassphraseHelp(form.bounds.backupPassphrase?.min ?? 12)}
-            saved={form.backupPassphraseSet}
-            value={form.backupPassphrase}
-            onValue={(backupPassphrase) => update({ backupPassphrase })}
-            error={error('backup-passphrase')}
-          />
           {form.backupPassphrase !== undefined && form.backupPassphrase !== '' && (
-            <Notice tone="warn" className="mt-3 max-w-[60ch]">
+            <Notice tone="warn" className="max-w-[60ch]">
               {s.backupPassphraseNew}
             </Notice>
           )}
           {form.backupPassphraseSet && form.backupPassphrase === '' && (
-            <Notice className="mt-3 max-w-[60ch]">{s.backupPassphraseRemoved}</Notice>
+            <Notice className="max-w-[60ch]">{s.backupPassphraseRemoved}</Notice>
           )}
         </SettingRow>
         {form.backups && <LastBackup />}
       </SettingsGroup>
       <SettingsGroup title={s.backupDestinations}>
-        <SettingRow anchor="backup-destinations">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{s.backupDestinationsHelp}</p>
+        <ListRows anchor="backup-destinations" help={s.backupDestinationsHelp}>
           <BackupDestinations />
-        </SettingRow>
+        </ListRows>
       </SettingsGroup>
     </>
   )
 }
 
-function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi) {
+function WebPlayer({ form, update, error, limits, dirty, adopt, saved }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const status = useQuery({
@@ -1877,7 +1800,7 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
     <>
       <SettingsGroup>
         {status.data?.webClient === true && (
-          <SettingRow anchor="open-web-player">
+          <PlainRow anchor="open-web-player">
             {/* A preview in a new tab, which keeps this page, but in place in a Jellyfin app: Android
                 hands a new tab to the system browser. */}
             <ExternalButtonLink
@@ -1887,24 +1810,27 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
             >
               {s.openWebPlayer}
             </ExternalButtonLink>
-          </SettingRow>
+          </PlainRow>
         )}
-        <FieldRow
+        <SettingRow
+          kind="choice"
           anchor="web-theme"
           label={s.webTheme}
           help={s.webThemeHelp}
           error={error('web-theme')}
-          aside={form.webTheme === 'lumaaglaass' && <EditAsCustom form={form} update={update} />}
+          value={form.webTheme}
+          options={webThemes.map((value) => ({ value, label: s.webThemeChoices[value] }))}
+          onChange={(webTheme: WebTheme) => update({ webTheme })}
+          saved={saved.webTheme}
         >
-          <Select
-            value={form.webTheme}
-            options={webThemes.map((value) => ({ value, label: s.webThemeChoices[value] }))}
-            onValue={(webTheme: WebTheme) => update({ webTheme })}
-            className="max-w-xs"
-          />
-          <p className="mt-2 max-w-[60ch] text-small text-ink-3">{s.webThemeReload}</p>
-        </FieldRow>
-        <SettingRow anchor="custom-css">
+          <p className="max-w-[60ch]">{s.webThemeReload}</p>
+          {form.webTheme === 'lumaaglaass' && (
+            <div className="mt-3">
+              <EditAsCustom form={form} update={update} />
+            </div>
+          )}
+        </SettingRow>
+        <PlainRow anchor="custom-css">
           <CodeEditor
             label={s.customCss}
             help={form.webTheme === 'custom' ? s.customCssHelp : s.webThemeTexts[form.webTheme]}
@@ -1914,8 +1840,8 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
             readOnly={!custom}
             error={error('custom-css')}
           />
-        </SettingRow>
-        <SettingRow anchor="custom-js">
+        </PlainRow>
+        <PlainRow anchor="custom-js">
           <CodeEditor
             label={s.customJs}
             help={form.webTheme === 'custom' ? s.customJsHelp : s.webThemeTexts[form.webTheme]}
@@ -1932,13 +1858,13 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
               </Notice>
             )}
           </CodeEditor>
-        </SettingRow>
+        </PlainRow>
         {custom && (
-          <SettingRow anchor="theme-copy">
+          <PlainRow anchor="theme-copy">
             <ThemeCopyPanel dirty={dirty} adopt={adopt} />
-          </SettingRow>
+          </PlainRow>
         )}
-        <SettingRow anchor="login-disclaimer">
+        <PlainRow anchor="login-disclaimer">
           <CodeEditor
             label={s.loginDisclaimer}
             help={s.loginDisclaimerHelp}
@@ -1948,44 +1874,49 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
             rows={4}
             error={error('login-disclaimer')}
           />
-        </SettingRow>
-        <SwitchRow
+        </PlainRow>
+        <SettingRow
+          kind="switch"
           anchor="add-versions-to-open-page"
           label={s.addVersionsToOpenPage}
           help={s.addVersionsToOpenPageHelp}
           checked={form.addVersionsToOpenPage}
           onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
+          saved={saved.addVersionsToOpenPage}
         />
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="poster-ratings"
           label={s.posterRatings}
           help={s.posterRatingsHelp}
           checked={form.posterRatings}
           onChange={(posterRatings) => update({ posterRatings })}
+          saved={saved.posterRatings}
         />
       </SettingsGroup>
       <SettingsGroup title={s.homeRows}>
-        <SettingRow anchor="home-rows">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{s.homeRowsHelp}</p>
+        <ListRows anchor="home-rows" help={s.homeRowsHelp}>
           <HomeRows />
-        </SettingRow>
+        </ListRows>
       </SettingsGroup>
     </>
   )
 }
 
-function DiagnosticsFields({ form, update }: SectionFormApi) {
+function DiagnosticsFields({ form, update, saved }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
     <>
       <SettingsGroup>
-        <SwitchRow
+        <SettingRow
+          kind="switch"
           anchor="detailed-log"
           label={s.detailedLog}
           help={s.detailedLogHelp}
           checked={form.detailedLog}
           onChange={(detailedLog) => update({ detailedLog })}
+          saved={saved.detailedLog}
         />
       </SettingsGroup>
       <Variables />
@@ -1993,7 +1924,7 @@ function DiagnosticsFields({ form, update }: SectionFormApi) {
   )
 }
 
-function Notifications({ form, update, error, number, limits }: SectionFormApi) {
+function Notifications({ form, update, error, number, limits, saved, minMax }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
   // With Let's Encrypt, the addresses it serves HTTPS at are offered while none is set.
@@ -2007,191 +1938,162 @@ function Notifications({ form, update, error, number, limits }: SectionFormApi) 
   return (
     <>
       <SettingsGroup>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="public-address"
           label={s.publicAddress}
           help={s.publicAddressHelp}
           error={error('public-address')}
+          value={form.publicAddress}
+          onChange={(publicAddress) => update({ publicAddress })}
+          placeholder={offered[0] ?? 'https://media.example.org'}
+          maxLength={limits('publicAddress').max}
+          mono
+          saved={saved.publicAddress}
         >
-          <TextInput
-            value={form.publicAddress}
-            onValue={(publicAddress) => update({ publicAddress })}
-            placeholder={offered[0] ?? 'https://media.example.org'}
-            maxLength={limits('publicAddress').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-md"
-          />
           {offered.length > 0 && form.publicAddress === '' && (
-            <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {offered.map((address) => (
                 <Button key={address} size="sm" onClick={() => update({ publicAddress: address })}>
                   {s.https.useAddress(address)}
                 </Button>
               ))}
-              <span className="text-small text-ink-3">{s.https.offeredAddress}</span>
+              <span className="text-small text-ink-2">{s.https.offeredAddress}</span>
             </div>
           )}
-        </FieldRow>
+        </SettingRow>
       </SettingsGroup>
       <SettingsGroup title={s.weeklySummary}>
         <TextRow anchor="weekly-summary">
           <p className="max-w-[60ch]">{s.weeklySummaryHelp}</p>
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="choice"
           anchor="weekly-summary-day"
           label={s.weeklySummaryDay}
           help={s.weeklySummaryDayHelp(weekday(Number(form.bounds.weeklySummaryDay?.default)))}
           error={error('weekly-summary-day')}
-        >
-          <Select
-            value={form.weeklySummaryDay}
-            options={[1, 2, 3, 4, 5, 6, 0].map((day) => ({ value: day, label: weekday(day) }))}
-            onValue={(weeklySummaryDay) => update({ weeklySummaryDay })}
-            className="max-w-[12rem]"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.weeklySummaryDay}
+          options={[1, 2, 3, 4, 5, 6, 0].map((day) => ({ value: day, label: weekday(day) }))}
+          onChange={(weeklySummaryDay) => update({ weeklySummaryDay })}
+          saved={saved.weeklySummaryDay}
+        />
+        <SettingRow
+          kind="choice"
           anchor="weekly-summary-hour"
           label={s.weeklySummaryHour}
           help={s.weeklySummaryHourHelp(
             formatHour(Number(form.bounds.weeklySummaryHour?.default), language),
           )}
           error={error('weekly-summary-hour')}
-        >
-          <Select
-            value={form.weeklySummaryHour}
-            options={Array.from({ length: 24 }, (_, hour) => ({
-              value: hour,
-              label: formatHour(hour, language),
-            }))}
-            onValue={(weeklySummaryHour) => update({ weeklySummaryHour })}
-            className="max-w-[10rem]"
-          />
-        </FieldRow>
-        <SettingRow anchor="summary-preview">
-          <h3 className="mb-2 text-[15px] font-medium text-ink">{text.preview.title}</h3>
+          value={form.weeklySummaryHour}
+          options={Array.from({ length: 24 }, (_, hour) => ({
+            value: hour,
+            label: formatHour(hour, language),
+          }))}
+          onChange={(weeklySummaryHour) => update({ weeklySummaryHour })}
+          saved={saved.weeklySummaryHour}
+        />
+        <PlainRow anchor="summary-preview">
+          <h3 className="mb-3 text-h3 text-ink max-md:text-[18px]">{text.preview.title}</h3>
           <SummaryPreview />
-        </SettingRow>
+        </PlainRow>
       </SettingsGroup>
       <SettingsGroup title={s.email}>
         <TextRow anchor="email-setup">
           <p className="max-w-[60ch]">{s.emailHelp}</p>
         </TextRow>
-        <FieldRow
+        <SettingRow
+          kind="text"
           anchor="smtp-host"
           label={s.smtpHost}
           help={s.smtpHostHelp}
           error={error('smtp-host')}
-        >
-          <TextInput
-            value={form.smtpHost}
-            onValue={(smtpHost) => update({ smtpHost })}
-            placeholder="smtp.example.org"
-            maxLength={limits('smtpHost').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-md"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.smtpHost}
+          onChange={(smtpHost) => update({ smtpHost })}
+          placeholder="smtp.example.org"
+          maxLength={limits('smtpHost').max}
+          mono
+          saved={saved.smtpHost}
+        />
+        <SettingRow
+          kind="number"
           anchor="smtp-port"
           label={s.smtpPort}
           help={s.smtpPortHelp}
           error={error('smtp-port')}
-        >
-          <NumberInput
-            {...limits('smtpPort')}
-            step={1}
-            {...number('smtp-port', form.smtpPort, (value) =>
-              update({ smtpPort: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <FieldRow
+          {...minMax('smtpPort')}
+          step={1}
+          {...number('smtp-port', form.smtpPort, (value) =>
+            update({ smtpPort: Math.trunc(value) }),
+          )}
+          saved={saved.smtpPort}
+        />
+        <SettingRow
+          kind="choice"
           anchor="smtp-security"
           label={s.smtpSecurity}
           help={s.smtpSecurityHelp}
           error={error('smtp-security')}
-        >
-          <Select
-            value={form.smtpSecurity}
-            options={(['starttls', 'tls', 'none'] as const).map((value) => ({
-              value,
-              label: s.smtpSecurities[value],
-            }))}
-            onValue={(smtpSecurity) => update({ smtpSecurity })}
-            className="max-w-xs"
-          />
-        </FieldRow>
-        <FieldRow
+          value={form.smtpSecurity}
+          options={(['starttls', 'tls', 'none'] as const).map((value) => ({
+            value,
+            label: s.smtpSecurities[value],
+          }))}
+          onChange={(smtpSecurity) => update({ smtpSecurity })}
+          saved={saved.smtpSecurity}
+        />
+        <SettingRow
+          kind="text"
           anchor="smtp-user"
           label={s.smtpUser}
           help={s.smtpUserHelp}
           error={error('smtp-user')}
-        >
-          <TextInput
-            value={form.smtpUser}
-            onValue={(smtpUser) => update({ smtpUser })}
-            maxLength={limits('smtpUser').max}
-            autoComplete="off"
-            spellCheck={false}
-            className="max-w-md"
-          />
-        </FieldRow>
+          value={form.smtpUser}
+          onChange={(smtpUser) => update({ smtpUser })}
+          maxLength={limits('smtpUser').max}
+          saved={saved.smtpUser}
+        />
         <SettingRow
+          kind="secret"
           anchor="smtp-password"
-          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
-        >
-          <SecretField
-            label={s.smtpPassword}
-            help={s.smtpPasswordHelp}
-            saved={form.smtpPasswordSet}
-            value={form.smtpPassword}
-            onValue={(smtpPassword) => update({ smtpPassword })}
-          />
-        </SettingRow>
-        <FieldRow
+          label={s.smtpPassword}
+          help={s.smtpPasswordHelp}
+          saved={form.smtpPasswordSet}
+          value={form.smtpPassword}
+          onValue={(smtpPassword) => update({ smtpPassword })}
+        />
+        <SettingRow
+          kind="text"
           anchor="smtp-from"
           label={s.smtpFrom}
           help={s.smtpFromHelp}
           error={error('smtp-from')}
-        >
-          <TextInput
-            type="email"
-            value={form.smtpFrom}
-            onValue={(smtpFrom) => update({ smtpFrom })}
-            placeholder="polyfin@example.org"
-            maxLength={limits('smtpFrom').max}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-            className="max-w-md"
-          />
-        </FieldRow>
-        <FieldRow
+          inputMode="email"
+          value={form.smtpFrom}
+          onChange={(smtpFrom) => update({ smtpFrom })}
+          placeholder="polyfin@example.org"
+          maxLength={limits('smtpFrom').max}
+          mono
+          saved={saved.smtpFrom}
+        />
+        <SettingRow
+          kind="text"
           anchor="smtp-from-name"
           label={s.smtpFromName}
           help={s.smtpFromNameHelp}
           error={error('smtp-from-name')}
-        >
-          <TextInput
-            value={form.smtpFromName}
-            onValue={(smtpFromName) => update({ smtpFromName })}
-            placeholder={form.serverName}
-            maxLength={limits('smtpFromName').max}
-            autoComplete="off"
-            className="max-w-md"
-          />
-        </FieldRow>
+          value={form.smtpFromName}
+          onChange={(smtpFromName) => update({ smtpFromName })}
+          placeholder={form.serverName}
+          maxLength={limits('smtpFromName').max}
+          saved={saved.smtpFromName}
+        />
       </SettingsGroup>
       <SettingsGroup title={text.serverTargets}>
-        <SettingRow anchor="notification-targets">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{text.serverTargetsHelp}</p>
+        <ListRows anchor="notification-targets" help={text.serverTargetsHelp}>
           <NotificationTargets scope="server" />
-        </SettingRow>
+        </ListRows>
       </SettingsGroup>
     </>
   )

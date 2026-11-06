@@ -68,28 +68,26 @@ export default function CodeEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+    <div className="flex flex-col gap-3">
+      <label htmlFor={id} className="text-h3 text-ink max-md:text-[18px]">
         {label}
       </label>
-      <p id={`${id}-help`} className="-mt-1 max-w-[60ch] text-small text-ink-3">
+      <p id={`${id}-help`} className="-mt-1.5 max-w-[66ch] text-small text-ink-2">
         {help}
       </p>
       {children}
       <div
         // Line height 20px, 20px of padding, 12px for a horizontal scrollbar.
         style={{ height: rows * 20 + 32 }}
-        className={cx(
-          'flex min-h-24 resize-y overflow-hidden rounded-field border bg-s2 font-mono text-small leading-5 transition-colors duration-160 ease-nuit has-[textarea:focus-visible]:border-link',
-          error || tooLarge ? 'border-danger' : 'border-line-2',
-        )}
+        // The well (in index.css) lights it while typing and draws the red edge of aria-invalid.
+        className="well min-h-24 resize-y items-stretch overflow-hidden font-mono text-small leading-5"
       >
         <pre
           ref={gutter}
           aria-hidden="true"
           // Its bottom padding outlasts the text area's horizontal scrollbar, so the last numbers
           // can scroll as far as the last lines.
-          className="figures m-0 shrink-0 overflow-hidden border-r border-line px-2 pt-2.5 pb-8 text-right text-ink-3 select-none"
+          className="figures m-0 shrink-0 overflow-hidden py-2.5 pr-1 pb-8 pl-4 text-right text-ink-3 select-none"
         >
           {lines}
         </pre>
@@ -109,14 +107,14 @@ export default function CodeEditor({
           aria-describedby={`${id}-help ${id}-size${error ? ` ${id}-error` : ''}`}
           aria-invalid={tooLarge || error ? true : undefined}
           className={cx(
-            'block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2.5 outline-none scrollbar-thin',
+            'block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent py-2.5 pr-4 pl-3 outline-none scrollbar-thin',
             readOnly ? 'text-ink-3' : 'text-ink',
           )}
         />
       </div>
       <p
         id={`${id}-size`}
-        className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-micro text-ink-3"
+        className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-micro text-ink-2"
       >
         <span>{t.settings.codeKeys}</span>
         <span className={cx('figures', tooLarge && 'text-danger')}>
