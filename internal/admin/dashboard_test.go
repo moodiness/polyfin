@@ -82,7 +82,6 @@ func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
 	anonymous := api.browser()
 	id := randomID().String()
 	for _, route := range []struct{ method, path string }{
-		{http.MethodGet, "/sessions"},
 		{http.MethodPost, "/sessions/" + id + "/stop"},
 		{http.MethodPost, "/sessions/" + id + "/message"},
 		{http.MethodGet, "/bandwidth"},
@@ -104,6 +103,82 @@ func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
 		if status := anonymous.raw(route.method, route.path, `{"text":"hi"}`, nil); status != http.StatusUnauthorized {
 			t.Errorf("anonymous %s %s: %d", route.method, route.path, status)
 		}
+	}
+	// Members read their own playbacks (see TestLiveSessionsShowAMemberOnlyTheirOwn).
+	if status := anonymous.raw(http.MethodGet, "/sessions", "", nil); status != http.StatusUnauthorized {
+		t.Errorf("anonymous GET /sessions: %d", status)
+	}
+}
+
+// A member reads their own playbacks only: never another user's, nor a
+// guest's through one of their share links, whose device is the guest's.
+// Stopping and messaging stay the administrators'. An administrator reads
+// every playback, as before.
+func TestLiveSessionsShowAMemberOnlyTheirOwn(t *testing.T) {
+	t.Parallel()
+	sessions := &fakeSessions{}
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.Sessions = sessions })
+	admin := api.signedIn("root", true)
+	member := api.signedIn("sam", false)
+	users, err := api.store.Users(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := slices.IndexFunc(users, func(u accounts.User) bool { return u.Name == "sam" })
+	if index < 0 {
+		t.Fatal("sam not found")
+	}
+	sam := users[index]
+	played := playback.NowPlaying{PlayState: playback.PlayState{PlayMethod: "DirectPlay"}}
+	others := jellyfin.LiveSession{
+		User:    accounts.User{ID: randomID(), Name: "robin"},
+		Device:  accounts.Device{ID: randomID(), DeviceInfo: accounts.DeviceInfo{DeviceName: "Robin's phone", RemoteAddress: "192.0.2.20"}},
+		Playing: played, Controllable: true,
+	}
+	own := jellyfin.LiveSession{
+		User:    sam,
+		Device:  accounts.Device{ID: randomID(), DeviceInfo: accounts.DeviceInfo{DeviceName: "Living room TV", RemoteAddress: "192.0.2.30"}},
+		Playing: played, Controllable: true,
+	}
+	guest := jellyfin.LiveSession{
+		User:    sam,
+		Device:  accounts.Device{ID: randomID(), DeviceInfo: accounts.DeviceInfo{DeviceName: "Guest's laptop", RemoteAddress: "198.51.100.7"}},
+		Playing: played, Shared: true,
+	}
+	sessions.sessions = []jellyfin.LiveSession{others, own, guest}
+
+	var mine []liveSessionJSON
+	if status := member.raw(http.MethodGet, "/sessions", "", &mine); status != http.StatusOK {
+		t.Fatalf("member's sessions: %d", status)
+	}
+	if len(mine) != 1 || mine[0].ID != own.Device.ID.String() || mine[0].User.ID != sam.ID.String() ||
+		mine[0].Device.Name != "Living room TV" {
+		t.Errorf("member's sessions: %+v", mine)
+	}
+	for _, s := range mine {
+		if s.User.ID != sam.ID.String() || s.Shared || s.Device.Address == others.Device.RemoteAddress || s.Device.Address == guest.Device.RemoteAddress {
+			t.Errorf("a member sees a playback not theirs: %+v", s)
+		}
+	}
+
+	var all []liveSessionJSON
+	if status := admin.raw(http.MethodGet, "/sessions", "", &all); status != http.StatusOK || len(all) != 3 ||
+		all[0].ID != others.Device.ID.String() || all[1].ID != own.Device.ID.String() || all[2].ID != guest.Device.ID.String() ||
+		all[0].Device.Address != "192.0.2.20" || !all[2].Shared {
+		t.Errorf("administrator's sessions: %d %+v", status, all)
+	}
+
+	target := "/sessions/" + own.Device.ID.String()
+	if status := member.raw(http.MethodPost, target+"/stop", "", nil); status != http.StatusForbidden {
+		t.Errorf("member stops their own playback: %d", status)
+	}
+	if status := member.raw(http.MethodPost, target+"/message", `{"text":"hi"}`, nil); status != http.StatusForbidden {
+		t.Errorf("member messages their own playback: %d", status)
+	}
+	sessions.mu.Lock()
+	defer sessions.mu.Unlock()
+	if len(sessions.stopped) != 0 || len(sessions.messages) != 0 {
+		t.Errorf("commands sent for a member: %v %v", sessions.stopped, sessions.messages)
 	}
 }
 

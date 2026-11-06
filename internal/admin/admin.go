@@ -437,7 +437,8 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/api-keys", h.administrator(h.createAPIKey))
 	mux.Handle("DELETE /admin/api/api-keys/{id}", h.administrator(h.revokeAPIKey))
 	mux.Handle("GET /admin/api/activity", h.administrator(h.recentActivity))
-	mux.Handle("GET /admin/api/sessions", h.administrator(h.liveSessions))
+	// A member reads their own playbacks only (see liveSessions).
+	mux.Handle("GET /admin/api/sessions", h.signedIn(h.liveSessions))
 	mux.Handle("POST /admin/api/sessions/{id}/stop", h.administrator(h.stopSession))
 	mux.Handle("POST /admin/api/sessions/{id}/message", h.administrator(h.messageSession))
 	mux.Handle("GET /admin/api/bandwidth", h.administrator(h.bandwidth))

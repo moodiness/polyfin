@@ -939,6 +939,7 @@ The admin app reads and saves the settings at `/admin/api/settings`, and the hea
 ### Playback bandwidth in the admin API
 
 - Each playback of `GET /admin/api/sessions` has `bandwidth`, with `sent` and `received` in bytes per second, and `redirected`; and `origin`, with `kind` (`addon`, `torrent`, `localFolder`, `networkShare` or `iptv`), `name` and, for a torrent, `peers`, or null when not known.
+- `GET /admin/api/sessions` answers an administrator every playback, and a member only their own, without the guests playing through their share links. Stopping a playback and sending it a message stay the administrators'.
 - `GET /admin/api/bandwidth`, for administrators, answers the server's totals: `sent` and `received`, in bytes per second.
 
 ### Health problems in the admin API

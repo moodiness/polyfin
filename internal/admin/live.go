@@ -181,7 +181,11 @@ type audioConversionJSON struct {
 	Bitrate  int64  `json:"bitrate"`
 }
 
-// liveSessions lists the playbacks under way.
+// liveSessions lists the playbacks under way: every one to an
+// administrator, and to a member only their own. A guest playing through a
+// member's share link shows under the member, but its device is the
+// guest's: it is left out too. Stopping and messaging stay the
+// administrators' (stopSession, messageSession).
 func (h *handler) liveSessions(w http.ResponseWriter, r *http.Request) {
 	result := []liveSessionJSON{}
 	if h.Sessions == nil {
@@ -193,7 +197,11 @@ func (h *handler) liveSessions(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	user := sessionFrom(r.Context()).User
 	for _, s := range sessions {
+		if !user.IsAdministrator && (s.User.ID != user.ID || s.Shared) {
+			continue
+		}
 		result = append(result, newLiveSessionJSON(s))
 	}
 	writeJSON(w, http.StatusOK, result)
