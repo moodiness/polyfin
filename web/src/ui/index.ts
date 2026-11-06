@@ -47,6 +47,7 @@ export {
   type SuggestInputProps,
 } from './Select'
 export { SecretField, type SecretFieldProps } from './SecretField'
+export { useScrollFade } from './scroll'
 export { SectionNav, type SectionNavItem, type SectionNavProps } from './SectionNav'
 export { Segmented, type SegmentedOption, type SegmentedProps } from './Segmented'
 export { Spinner } from './Spinner'

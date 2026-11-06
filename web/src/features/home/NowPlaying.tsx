@@ -311,17 +311,28 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           </span>
         )}
 
-        <div className="min-w-0 xl:col-span-2">
-          <p className="flex min-w-0 items-center gap-2 text-[13px] text-ink-2">
-            <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />
-            <b className="truncate font-medium text-ink">{session.user.name}</b>
-            <span aria-hidden="true" className="size-[3px] shrink-0 rounded-full bg-ink-3" />
-            <span className="truncate">
-              {session.shared
-                ? live.sharedLink
-                : session.download
-                  ? live.downloadOn(app, session.device.name)
-                  : live.appOn(app, session.device.name)}
+        <div className="@container min-w-0 xl:col-span-2">
+          {/*
+            On a narrow card the device goes to a line of its own, without the dot, so the name
+            shows whole; from 28rem they share the line, the dot between them.
+          */}
+          <p className="flex min-w-0 flex-col items-start gap-y-1 text-[13px] text-ink-2 @md:flex-row @md:items-center @md:gap-x-2">
+            <span className="flex max-w-full min-w-0 items-center gap-2 @md:max-w-[50%] @md:shrink-0">
+              <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />
+              <b className="truncate font-medium text-ink">{session.user.name}</b>
+            </span>
+            <span className="flex max-w-full min-w-0 items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="hidden size-[3px] shrink-0 rounded-full bg-ink-3 @md:block"
+              />
+              <span className="truncate">
+                {session.shared
+                  ? live.sharedLink
+                  : session.download
+                    ? live.downloadOn(app, session.device.name)
+                    : live.appOn(app, session.device.name)}
+              </span>
             </span>
           </p>
           <h3 className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[21px] leading-tight font-semibold tracking-[-0.02em] text-ink max-sm:text-[18px]">

@@ -38,6 +38,7 @@ import {
   StatusPill,
   TextInput,
   TextLink,
+  useScrollFade,
 } from '@/ui'
 
 const pageSize = 25
@@ -151,8 +152,10 @@ export function RecentActivity() {
   const boxRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const footRef = useRef<HTMLParagraphElement>(null)
+  const filterRef = useRef<HTMLDivElement>(null)
+  useScrollFade(filterRef)
   const listed = !activity.isPending && !activity.isError && shown.length > 0
-  const height = useWindowFill(boxRef, footRef, listed)
+  const height = useListHeight(boxRef, footRef, listed)
   // The next page loads by itself once the end of the box comes near. Observing again after
   // each page makes a sentinel that is still in view (a short or filtered list) load the next.
   useEffect(() => {
@@ -177,7 +180,10 @@ export function RecentActivity() {
     >
       {/* From xl, in Home's right column, the filters and the search stack. */}
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between xl:flex-col xl:items-stretch">
-        <div className="-mx-5 overflow-x-auto px-5 scrollbar-none md:mx-0 md:px-0">
+        <div
+          ref={filterRef}
+          className="-mx-5 scroll-fade overflow-x-auto px-5 scrollbar-none md:mx-0 md:px-0"
+        >
           <Segmented
             size="sm"
             className="[&>button]:shrink-0 [&>button]:whitespace-nowrap"
@@ -269,18 +275,24 @@ export function RecentActivity() {
 
 /** Tailwind's xl, from which Home shows Recent activity in a column of its own. */
 const columnQuery = '(min-width: 80rem)'
+/** Tailwind's sm, from which the list may be taller below xl. */
+const wideQuery = '(min-width: 40rem)'
+/** The most the list shows below xl, on a phone and from sm (its classes before measuring). */
+const phoneMax = 420
+const wideMax = 520
 /** The space left under the block when its list fills the window. */
 const bottomGap = 24
 /** The list is never shorter than on narrower screens. */
 const minHeight = 420
 
 /**
- * From xl, the list's height, so that the block ends at the bottom of the window as the page
- * opens: Recent activity shows whole beside the rest of Home, scrolling in its own box. Measured
- * again when the window or the page changes size; undefined below xl, where the list keeps its
- * maximum height.
+ * The list's height. From xl, the block ends at the bottom of the window as the page opens:
+ * Recent activity shows whole beside the rest of Home, scrolling in its own box. Below xl, the
+ * list keeps its maximum height. Either way, a list taller than that ends after its last whole
+ * row, never in the middle of one. Measured again when the window, the page or the list changes
+ * size; undefined while the list fits below xl.
  */
-function useWindowFill(
+function useListHeight(
   box: RefObject<HTMLElement | null>,
   foot: RefObject<HTMLElement | null>,
   listed: boolean,
@@ -289,27 +301,44 @@ function useWindowFill(
   useEffect(() => {
     const element = box.current
     if (!listed || !element) return
-    const media = window.matchMedia(columnQuery)
+    const column = window.matchMedia(columnQuery)
+    const wide = window.matchMedia(wideQuery)
     const measure = () => {
-      if (!media.matches) {
-        setHeight(undefined)
+      const place = element.getBoundingClientRect()
+      let limit = wide.matches ? wideMax : phoneMax
+      if (column.matches) {
+        // What follows the list in the block (the count), whatever the list's height.
+        const below = foot.current ? foot.current.getBoundingClientRect().bottom - place.bottom : 0
+        const top = place.top + window.scrollY
+        limit = Math.max(minHeight, Math.floor(window.innerHeight - top - below - bottomGap))
+      }
+      if (element.scrollHeight <= limit) {
+        setHeight(column.matches ? limit : undefined)
         return
       }
-      const place = element.getBoundingClientRect()
-      // What follows the list in the block (the count), whatever the list's height.
-      const below = foot.current ? foot.current.getBoundingClientRect().bottom - place.bottom : 0
-      const top = place.top + window.scrollY
-      setHeight(Math.max(minHeight, Math.floor(window.innerHeight - top - below - bottomGap)))
+      // The bottom of the last row that shows whole within the limit.
+      const contentTop = place.top - element.scrollTop
+      let whole = 0
+      for (const row of element.querySelectorAll(':scope > ol > li')) {
+        const bottom = Math.ceil(row.getBoundingClientRect().bottom - contentTop)
+        if (bottom > limit) break
+        whole = bottom
+      }
+      setHeight(whole > 0 ? whole : limit)
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(document.body)
+    const list = element.firstElementChild
+    if (list) observer.observe(list)
     window.addEventListener('resize', measure)
-    media.addEventListener('change', measure)
+    column.addEventListener('change', measure)
+    wide.addEventListener('change', measure)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measure)
-      media.removeEventListener('change', measure)
+      column.removeEventListener('change', measure)
+      wide.removeEventListener('change', measure)
     }
   }, [box, foot, listed])
   return height

@@ -57,7 +57,10 @@ export function PageHeader({
             <p className="mt-2 max-w-[62ch] text-lead text-ink-2 max-md:text-body">{lede}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        {/* No wider than the page, so that a long row of actions wraps on a phone. */}
+        {actions && (
+          <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        )}
       </div>
     </header>
   )

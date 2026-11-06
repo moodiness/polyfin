@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { NavLink } from 'react-router'
 import { cx } from './cx'
-import { keepCurrentInView } from './scroll'
+import { keepCurrentInView, useScrollFade } from './scroll'
 
 export type TabItem = {
   /** A stable key; for buttons, the value `onChange` receives. */
@@ -54,13 +54,15 @@ const railStyles = {
 /**
  * A row of tabs. With `to` on items it is navigation (links with `aria-current="page"`); without,
  * it is a `tablist` of buttons driven by `value` and `onChange`, moved through with the arrows.
- * On a phone the row scrolls sideways and keeps the current tab in view.
+ * On a phone the row scrolls sideways, fades the edge it scrolls past, and keeps the current tab
+ * in view.
  */
 export function Tabs({ label, items, variant = 'pill', value, onChange, className }: TabsProps) {
   const rail = useRef<HTMLDivElement>(null)
   const navigation = items.some((item) => item.to !== undefined)
   // The current tab stays in view when the row scrolls.
   useEffect(() => keepCurrentInView(rail.current))
+  useScrollFade(rail)
 
   const count = (item: TabItem) =>
     item.count !== undefined && (
@@ -70,7 +72,10 @@ export function Tabs({ label, items, variant = 'pill', value, onChange, classNam
   if (navigation) {
     return (
       <nav aria-label={label} className={cx('max-w-full', className)}>
-        <div ref={rail} className={cx(railStyles[variant], 'scrollbar-none overflow-x-auto')}>
+        <div
+          ref={rail}
+          className={cx(railStyles[variant], 'scroll-fade scrollbar-none overflow-x-auto')}
+        >
           {items.map((item) => (
             <NavLink key={item.id} to={item.to ?? ''} end={item.end} className={tabStyles[variant]}>
               {item.label}
@@ -108,7 +113,7 @@ export function Tabs({ label, items, variant = 'pill', value, onChange, classNam
       role="tablist"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cx(railStyles[variant], 'scrollbar-none overflow-x-auto', className)}
+      className={cx(railStyles[variant], 'scroll-fade scrollbar-none overflow-x-auto', className)}
     >
       {items.map((item) => (
         <button

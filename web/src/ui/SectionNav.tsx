@@ -3,7 +3,7 @@ import { useEffect, useId, useRef } from 'react'
 import { NavLink } from 'react-router'
 import { cx } from './cx'
 import { TextInput } from './Input'
-import { keepCurrentInView } from './scroll'
+import { keepCurrentInView, useScrollFade } from './scroll'
 
 export type SectionNavItem = {
   id: string
@@ -33,10 +33,12 @@ export type SectionNavProps = {
   className?: string
 }
 
+// A long label ("Konvertierung (Transkodierung)") wraps inside its highlight in the column; on a
+// phone, where the list is a row of tabs, it stays on one line.
 const linkClass = cx(
-  'flex h-9 shrink-0 items-center gap-3 rounded-field px-2.5 text-body font-[450] whitespace-nowrap text-ink-2 transition-[background-color,color] duration-160 ease-nuit hover:bg-s2 hover:text-ink',
+  'flex min-h-9 shrink-0 items-center gap-3 rounded-field px-2.5 py-1.5 text-body leading-snug font-[450] text-ink-2 transition-[background-color,color] duration-160 ease-nuit hover:bg-s2 hover:text-ink',
   'aria-[current]:bg-s3 aria-[current]:text-ink aria-[current]:shadow-[inset_0_0_0_1px] aria-[current]:shadow-line',
-  'max-md:h-[34px] max-md:border max-md:border-line-2 max-md:px-3.5',
+  'max-md:h-[34px] max-md:min-h-0 max-md:border max-md:border-line-2 max-md:px-3.5 max-md:py-0 max-md:whitespace-nowrap',
 )
 
 /**
@@ -48,6 +50,7 @@ export function SectionNav({ label, items, current, search, className }: Section
   const row = useRef<HTMLDivElement>(null)
   const hintId = useId()
   useEffect(() => keepCurrentInView(row.current))
+  useScrollFade(row)
 
   return (
     // On a phone the wrapper steps aside (`contents`), so that the row sticks along the whole page.
@@ -83,7 +86,7 @@ export function SectionNav({ label, items, current, search, className }: Section
       >
         <div
           ref={row}
-          className="flex flex-col gap-0.5 max-md:scrollbar-none max-md:flex-row max-md:gap-1.5 max-md:overflow-x-auto max-md:px-5 max-md:py-2.5"
+          className="flex flex-col gap-0.5 max-md:scroll-fade max-md:scrollbar-none max-md:flex-row max-md:gap-1.5 max-md:overflow-x-auto max-md:px-5 max-md:py-2.5"
         >
           {items.map((item) => {
             const content = (
