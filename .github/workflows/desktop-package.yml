@@ -3,8 +3,8 @@ name: Polyfin Desktop package
 # One package of Polyfin Desktop, built by scripts/packaging as anyone
 # builds it, kept as the run's artifact, then installed and smoked on its
 # system. The CI workflow calls it for each package, after its
-# desktop-files job, so that each package's test waits for that package
-# only.
+# desktop-files and desktop-admin-app jobs, so that each package's test
+# waits for that package only.
 on:
   workflow_call:
     inputs:
@@ -47,6 +47,8 @@ jobs:
     env:
       VERSION: ${{ inputs.version }}
       POLYFIN_DESKTOP_FILES: ${{ github.workspace }}/dist/packaging/files
+      # The admin app of the desktop-admin-app job, in web/dist.
+      SKIP_WEB: "1"
       # Debian's image, for the packaging tools, as the Dockerfile's.
       DOCKER_HUB_MIRROR: mirror.gcr.io
     steps:
@@ -77,12 +79,6 @@ jobs:
           restore-keys: |
             go-${{ runner.os }}-${{ runner.arch }}-desktop-package-${{ inputs.id }}-${{ hashFiles('go.mod', 'go.sum') }}-
             go-${{ runner.os }}-${{ runner.arch }}-desktop-package-${{ inputs.id }}-
-      - name: Set up Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
       - name: Set up Buildx
         if: runner.os == 'Linux'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -97,6 +93,11 @@ jobs:
         with:
           name: desktop-files
           path: dist/packaging/files
+      - name: Fetch the admin app
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-admin-app
+          path: web/dist
       - name: Restore PostgreSQL's build for Windows on Arm
         # postgresql-windows.sh's, kept while the script and the patch it
         # applies, which pin its inputs, stay the same.
@@ -143,6 +144,8 @@ jobs:
     env:
       VERSION: ${{ inputs.version }}
       DESKTOP_SMOKE_NO_TRAY: ${{ inputs.no-tray && '1' || '' }}
+      # The smoke's lines as they come, so that the log's times are theirs.
+      PYTHONUNBUFFERED: "1"
     steps:
       - *checkout
       - name: Fetch the package

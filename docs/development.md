@@ -128,7 +128,7 @@ Jellyfin API responses are checked against the JSON structure of a real Jellyfin
 - **Pushes to a pull request:** a push cancels the run of the push before.
 - **Documentation only:** a pull request that changes only documentation runs nothing more. Documentation means `docs/`, the Markdown files at the top of the repository, the issue, discussion and pull request templates, and the website's workflow. The website's workflow checks and builds the changes to `docs/`, `README.md` and `CONTRIBUTING.md` (see [Website](#website)).
 - **macOS:** pull requests skip the macOS jobs. GitHub has few macOS runners, and a job that waits 15 minutes for one fails. They run on pushes to `main`, on release tags, each night and when CI is run by hand.
-- **Nightly:** each night at 03:17 UTC, a full run tests `main`, the macOS jobs included.
+- **Nightly:** each night at 03:17 UTC, a full run tests `main`, the macOS jobs included. GitHub may start a scheduled run hours late, or drop it when Actions is busy. Running CI by hand on `main` runs the same jobs.
 
 A push to `main` runs nothing more when its pull request's last run tested its tree, and passed.
 
@@ -139,10 +139,11 @@ A push to `main` runs nothing more when its pull request's last run tested its t
 
 How the jobs are set up:
 
-- **Go caches:** Go's build and module caches are restored from `main`'s latest run. Only runs on `main` save them, each under a key of its own, so that the next runs start from the latest build.
+- **Go caches:** Go's build and module caches are restored from `main`'s latest run. Only runs on `main` save them, each under a key of its own, so that the next runs start from the latest build. A job's leg with no cache of its own, such as a new leg of a split job, starts from another leg's on the same system.
 - **PostgreSQL:** in the Linux test jobs, the tests' PostgreSQL keeps its data in memory.
 - **Image tools:** in the Linux test jobs, `pg_dump` and `pg_restore` are the image's, from the Dockerfile's `postgresql-client` stage. Their FFmpeg comes from its `ffmpeg` stage.
-- **Polyfin Desktop's packages:** `.github/workflows/desktop-package.yml` builds each package, then installs and smokes it. The CI workflow calls it for each package, so that each test waits for its own package only.
+- **Windows:** the Windows tests run in two jobs, balanced by the packages' times on the Windows runner. `internal/playback` and the smaller packages run in one, `internal/localfiles` and `internal/hls` in the other.
+- **Polyfin Desktop's packages:** `.github/workflows/desktop-package.yml` builds each package, then installs and smokes it. The CI workflow calls it for each package, so that each test waits for its own package only. Every package embeds the admin app one Linux job builds, through the scripts' `SKIP_WEB=1`: `npm ci` alone takes about a minute and a half on Windows on Arm.
 
 ## Following Silo
 
