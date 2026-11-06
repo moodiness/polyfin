@@ -232,6 +232,8 @@ const users = {
     qualityGroupOriginal: 'Original (no limit)',
     member: 'Member',
     lastActivityLabel: 'Last activity:',
+    /** The app of a last activity in this admin app. */
+    adminApp: 'Admin app',
     active: 'Active',
     pinRequested: 'PIN requested',
     emptyHelp:
