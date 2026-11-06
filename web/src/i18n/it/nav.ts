@@ -55,6 +55,9 @@ const nav: typeof en = {
     signOut: 'Esci',
     signingOut: 'Disconnessione…',
     menu: 'Menu',
+    closeMenu: 'Chiudi il menu',
+    toLookAt: (count: number) =>
+      count === 1 ? '1 cosa da controllare' : `${count} cose da controllare`,
     skipToContent: 'Vai al contenuto',
   },
   palette: {

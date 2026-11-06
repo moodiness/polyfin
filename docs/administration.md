@@ -21,22 +21,22 @@ A user signed in to the web player arrives signed in, as that user. The admin ap
 
 ### The top bar
 
-A bar at the top holds the sections, for administrators:
+A row of big words at the top of every page holds the areas, for administrators:
 
 - **Home** (`/admin/`): what plays now and what needs a look;
 - **Content**: **Sources** (`/admin/sources`), **Libraries** (`/admin/libraries`), **Live TV** (`/admin/live-tv`) and **Versions** (`/admin/versions`);
 - **Users** (`/admin/users`);
-- **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
+- **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`), with a red count beside it while Health finds problems;
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
-The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language, a link to Polyfin's source code on GitHub, and **Sign out**.
+The pages of Content and System show as smaller words under the page's title. The account, on the right after **Search** and the web player, opens a panel with **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language, a link to Polyfin's source code on GitHub, and **Sign out**.
 
 ![The admin app's top bar with the account menu open, numbered 1 to 3](images/top-bar-account-menu.webp)
 
-1: the sections. 2: **Search**, with the web player link beside it. 3: the account menu.
+1: the areas. 2: **Search**, with the web player link beside it. 3: the account panel.
 
-- **Members** see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them.
-- On a phone, the bar keeps the logo, the search and a menu button. The menu opens all of these, the web player first.
+- **Members** see shorter words: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them.
+- On a phone, the row keeps the logo, search, the account and a menu button. The menu fills the screen: the account, search, the areas with their pages, then the account's pages, the web player, the language and **Sign out**.
 
 ### The web player link
 

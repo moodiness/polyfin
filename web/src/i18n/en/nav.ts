@@ -55,6 +55,10 @@ const nav = {
     signOut: 'Sign out',
     signingOut: 'Signing out…',
     menu: 'Menu',
+    closeMenu: 'Close the menu',
+    /** Beside System in the top row: how many things Health asks to look at. */
+    toLookAt: (count: number) =>
+      count === 1 ? '1 thing to look at' : `${count} things to look at`,
     skipToContent: 'Skip to content',
   },
   palette: {

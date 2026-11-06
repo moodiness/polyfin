@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 import type { SessionUser } from '@/api'
 import { useI18n } from '@/i18n'
+import { cx } from '@/ui'
 import { Brand, LanguageSwitch } from './Brand'
 import { CommandPaletteProvider } from './palette/CommandPalette'
 import { SessionContext } from './session'
+import { pageFrame } from './shellParts'
 import { TopBar } from './TopBar'
 
 function SkipLink() {
@@ -11,7 +13,7 @@ function SkipLink() {
   return (
     <a
       href="#main"
-      className="fixed top-[-48px] left-4 z-[70] rounded-field bg-accent px-3 py-2 text-control font-medium text-white transition-[top] duration-160 focus:top-3"
+      className="lit fixed top-[-80px] left-4 z-[70] rounded-[14px] px-[18px] py-3 font-[650] transition-[top] duration-160 focus:top-4 focus-visible:outline-none"
     >
       {t.nav.skipToContent}
     </a>
@@ -19,7 +21,7 @@ function SkipLink() {
 }
 
 /**
- * The signed-in frame: the TopBar, the page in a 1232 px column, and the command palette. It
+ * The signed-in frame: the top row, the page in the 1280 px column, and the command palette. It
  * provides the session to `useSessionUser`.
  */
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
@@ -31,7 +33,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         <main
           id="main"
           tabIndex={-1}
-          className="mx-auto w-full max-w-page px-14 pt-11 pb-24 outline-none max-xl:px-8 max-md:px-5 max-md:pt-7 max-md:pb-16"
+          className={cx(pageFrame, 'pt-[30px] pb-[120px] outline-none max-md:pt-4 max-md:pb-20')}
         >
           {children}
         </main>
@@ -40,21 +42,24 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   )
 }
 
-/** The frame without a session (setup, sign-in, loading): the logo, the language, one column. */
+/** The frame without a session (setup, sign-in, loading): the logo and name, the language. */
 export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <SkipLink />
-      <header className="border-b border-line">
-        <div className="mx-auto flex h-topbar w-full max-w-page items-center justify-between gap-4 px-14 max-xl:px-8 max-md:px-5">
-          <Brand link={false} />
-          <LanguageSwitch />
-        </div>
+      <header
+        className={cx(
+          pageFrame,
+          'flex h-[100px] items-center justify-between gap-4 pt-[22px] max-md:h-[76px] max-md:pt-3',
+        )}
+      >
+        <Brand link={false} />
+        <LanguageSwitch />
       </header>
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-[880px] flex-1 animate-rise px-5 py-12 outline-none max-md:py-8"
+        className="mx-auto w-full max-w-[880px] flex-1 animate-rise px-5 pt-5 pb-20 outline-none max-md:pt-7"
       >
         {children}
       </main>

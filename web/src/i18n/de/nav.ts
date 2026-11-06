@@ -55,6 +55,8 @@ const nav: typeof en = {
     signOut: 'Abmelden',
     signingOut: 'Wird abgemeldet…',
     menu: 'Menü',
+    closeMenu: 'Menü schließen',
+    toLookAt: (count: number) => (count === 1 ? '1 Punkt zu prüfen' : `${count} Punkte zu prüfen`),
     skipToContent: 'Zum Inhalt springen',
   },
   palette: {

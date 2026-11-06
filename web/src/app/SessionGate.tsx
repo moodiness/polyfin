@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, HouseIcon } from '@phosphor-icons/react'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, ScrollRestoration } from 'react-router'
 import { fetchSession, fetchStatus, queryKeys } from '@/api'
@@ -8,15 +8,18 @@ import { ServerStatus } from '@/features/home/ServerStatus'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { webPlayerInPlace, webPlayerLink } from '@/jellyfinApps'
-import { ButtonLink, InlineError, Spinner } from '@/ui'
-import { PageLayout } from './PageLayout'
+import { InlineError, Spinner } from '@/ui'
+import { DeadEnd } from './DeadEnd'
 import { useSessionUser } from './session'
 import { AppShell, PublicShell } from './Shell'
 
 function Loading() {
   const { t } = useI18n()
   return (
-    <p role="status" className="flex items-center gap-2.5 text-control text-ink-3">
+    <p
+      role="status"
+      className="flex items-center justify-center gap-3 py-16 text-control text-ink-2"
+    >
       <Spinner />
       {t.common.loading}
     </p>
@@ -75,12 +78,12 @@ export function SessionGate() {
       <PublicShell>
         <LoginRoute />
         {status.data.webClient === true && webPlayerInPlace() && (
-          <p className="mt-6 text-center">
+          <p className="mt-8 text-center">
             <a
               {...webPlayerLink(true)}
-              className="inline-flex items-center gap-1.5 text-control text-link hover:text-link-hover"
+              className="focus-lit inline-flex h-13 items-center gap-2.5 rounded-control px-5.5 text-control font-[620] text-ink-2 [--lift:1.05] hover:bg-s1 hover:text-ink"
             >
-              <ArrowLeftIcon size={16} aria-hidden="true" />
+              <ArrowLeftIcon size={21} aria-hidden="true" />
               {t.nav.backToWebPlayer}
             </a>
           </p>
@@ -102,13 +105,11 @@ export function AdminOnly() {
   const user = useSessionUser()
   if (!user.isAdministrator) {
     return (
-      <PageLayout title={t.forbidden.title} lede={t.forbidden.description}>
-        <div>
-          <ButtonLink to="/" icon={HouseIcon}>
-            {t.forbidden.home}
-          </ButtonLink>
-        </div>
-      </PageLayout>
+      <DeadEnd
+        title={t.forbidden.title}
+        description={t.forbidden.description}
+        home={t.forbidden.home}
+      />
     )
   }
   return <Outlet />
