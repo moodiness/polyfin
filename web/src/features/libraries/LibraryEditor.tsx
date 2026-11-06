@@ -42,7 +42,7 @@ import {
   isIptv,
   isTvCatalog,
 } from '@/features/livetv/catalogs'
-import { errorMessage, stremioLabel } from '@/format'
+import { catalogTypeLabel, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
@@ -621,7 +621,7 @@ function LibraryForm({
                       </p>
                       <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-3 max-md:text-micro">
                         <span className="break-words">
-                          {library.addonName} · {stremioLabel(t.stremioTypes, library.catalogType)}
+                          {library.addonName} · {catalogTypeLabel(t, library.catalogType)}
                         </span>
                         {(appName ?? name) !== library.catalogName && (
                           <span className="break-words">
@@ -880,7 +880,7 @@ function LibraryForm({
                     { value: '', label: t.libraries.allTypes },
                     ...types.map((value) => ({
                       value,
-                      label: stremioLabel(t.stremioTypes, value),
+                      label: catalogTypeLabel(t, value),
                     })),
                   ]}
                 />
@@ -1084,7 +1084,7 @@ function AvailableRow({
       titleAside={<MusicKind content={content} />}
       meta={
         <span className="break-words">
-          {stremioLabel(t.stremioTypes, library.catalogType)}
+          {catalogTypeLabel(t, library.catalogType)}
           {!library.browsable && ` · ${t.libraries.notBrowsableHelp}`}
         </span>
       }

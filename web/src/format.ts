@@ -24,6 +24,19 @@ export function stremioLabel(labels: Readonly<Record<string, string>>, value: st
   return Object.hasOwn(labels, value) ? labels[value] : value
 }
 
+/** The type of a home-videos folder's catalog, which Polyfin names, not Stremio. */
+const homeVideoType = 'polyfin.homevideo'
+
+/**
+ * Localized name of a catalog's type: a Stremio type, or a home-videos folder's, named as the
+ * folder's kind is; others are shown as sent.
+ */
+export function catalogTypeLabel(t: Messages, type: string): string {
+  return type === homeVideoType
+    ? t.localFolders.kinds.homevideos
+    : stremioLabel(t.stremioTypes, type)
+}
+
 /**
  * Language codes ("de", "pt-BR") as choices named in the reader's language ("Allemand",
  * "Portugais (Brésil)"), sorted by name, so that a language's variants follow it; a code Intl
