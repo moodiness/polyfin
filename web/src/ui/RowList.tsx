@@ -135,7 +135,7 @@ export function Row({
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <span
             className={cx(
-              'min-w-0 break-words',
+              'min-w-0 hyphenate',
               compact ? 'text-control font-semibold' : 'text-h3',
               muted ? 'text-ink-2' : 'text-ink',
             )}

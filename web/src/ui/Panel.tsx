@@ -76,13 +76,13 @@ export function Panel({
               {title !== undefined &&
                 (titleAside ? (
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                    <Title id={titleId} className="min-w-0 text-group break-words text-ink">
+                    <Title id={titleId} className="min-w-0 text-group hyphenate text-ink">
                       {title}
                     </Title>
                     {titleAside}
                   </div>
                 ) : (
-                  <Title id={titleId} className="text-group break-words text-ink">
+                  <Title id={titleId} className="text-group hyphenate text-ink">
                     {title}
                   </Title>
                 ))}
