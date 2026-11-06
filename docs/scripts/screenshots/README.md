@@ -72,7 +72,7 @@ The plain demo is what the shots show. The rich demo, which the sweep runs and `
 - **Devices,** _rich:_ 45 Jellyfin apps are signed in, 23 of them Riley's, with names and apps as long as a real server's.
 - **Addon:** `demo.mjs` serves "Demo Catalog", a Stremio addon of the website's fictional titles, with the posters of `docs/public/posters/`. The browser draws Wild Atlas's poster, which the website lacks.
 - **More sources,** _rich:_ Demo Catalog's logo, and nine more Stremio addons, enough for the list to scroll:
-  - **Logos:** most have one served over https, with transparent parts: round, a wide wordmark, a dark one, a square one and an SVG. The admin app only shows `https` logos, so the tool serves them over TLS, with a certificate of its own that its Chrome is told to accept; Night Owl Picks has one over http, which the admin app does not try, and Festival Reels none.
+  - **Logos:** most have one served over https, with transparent parts: round, a wide wordmark, a dark one, a white one, a square one and an SVG. The admin app only shows `https` logos, so the tool serves them over TLS, with a certificate of its own that its Chrome is told to accept; Night Owl Picks has one over http, which the admin app does not try, and Festival Reels none.
   - **Shapes:** Archive Shelf has 161 catalogs, a description of 318 characters and an address of 207, as the largest seen. One name is too long for a row, and Kinoklassikersammlungsarchiv has no space.
   - **Failures:** Harbor Classics' server fails once it is added, a Health problem. Night Owl Picks also has a Live TV catalog.
   - **Own source:** Morgan has Festival Reels as their own. A member's own source may not be on the local network, as the demo's are.

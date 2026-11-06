@@ -29,7 +29,13 @@ function useLogo(addon: Addon): SourceLogo {
   }
 }
 
-/** The logo image, laid over its bubble and hidden until it loads. The bubble's fill shows through. */
+/**
+ * The logo image, laid over its bubble and hidden until it loads. The bubble's fill shows through
+ * its transparent parts, so the logo wears a thin edge of the ink color that follows its own
+ * shape: light on a dark bubble, dark in a lit row, where the ink turns dark. A dark logo stays
+ * readable on the dark bubble and a white one in a lit row; on a colored logo the edge is a
+ * hairline. Logos are third-party images without CORS, so their colors cannot be read to choose.
+ */
 function Logo({ logo, className }: { logo: SourceLogo; className: string }) {
   if (logo.src === null) return null
   return (
@@ -44,6 +50,7 @@ function Logo({ logo, className }: { logo: SourceLogo; className: string }) {
       onError={() => logo.set('failed')}
       className={cx(
         'absolute inset-0 object-contain',
+        '[filter:drop-shadow(0_0_0.5px_color-mix(in_srgb,var(--color-ink)_90%,transparent))_drop-shadow(0_0_0.5px_color-mix(in_srgb,var(--color-ink)_90%,transparent))]',
         className,
         logo.loaded ? 'opacity-100' : 'opacity-0',
       )}

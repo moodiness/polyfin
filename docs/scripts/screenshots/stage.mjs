@@ -213,7 +213,8 @@ function makeCertificate(scratch) {
 /**
  * Wild Atlas's poster, which the website lacks, the channels' logos and the sources' logos, drawn
  * by the browser. The logos have transparent parts, as most have: round ones, a wide wordmark, a
- * dark one that the dark theme hardly shows, and a square one without any.
+ * dark one that the dark theme hardly shows, a white one that a lit row hardly shows, and a
+ * square one without any.
  */
 async function drawPictures(browser) {
   const images = new Map()
@@ -296,6 +297,16 @@ async function drawPictures(browser) {
             256,
             256,
             `<svg width="256" height="256" viewBox="0 0 16 16"><path d="M8 1 L15 5 L1 5 Z M2 6 H14 V7 H2 Z M3 8 H5 V13 H3 Z M7 8 H9 V13 H7 Z M11 8 H13 V13 H11 Z M1 14 H15 V15 H1 Z" fill="${source.color}"/></svg>`,
+          ),
+        )
+        break
+      case 'light':
+        images.set(
+          name,
+          await draw(
+            256,
+            256,
+            `<svg width="256" height="256" viewBox="0 0 16 16"><path d="M8 2 L14 7 H12 V14 H9 V10 H7 V14 H4 V7 H2 Z" fill="${source.color}"/></svg>`,
           ),
         )
         break
