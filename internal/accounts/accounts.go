@@ -56,6 +56,9 @@ type User struct {
 	CreatedAt      time.Time
 	LastLoginAt    *time.Time
 	LastActivityAt *time.Time
+	// LastActivityApp is the app of the last activity, written with
+	// LastActivityAt: a device's Client, or AdminApp. Empty when unknown.
+	LastActivityApp string
 	// Parental limits the titles the user reaches by their rating.
 	Parental ParentalControl
 	// VideoTranscoding and AudioTranscoding let the user's apps have the
@@ -361,7 +364,7 @@ func Open(ctx context.Context, db *pgxpool.Pool, options ...Option) (*Store, err
 	return store, nil
 }
 
-const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
+const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, last_activity_app, " +
 	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading, " +
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
@@ -373,7 +376,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
 	return []any{&user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
-		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt,
+		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt, &user.LastActivityApp,
 		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated,
 		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading,
 		&user.PersonalAddons, &user.UseSharedAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,

@@ -10,7 +10,6 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
-	"github.com/moodiness/polyfin/internal/notifications"
 )
 
 type sessionUser struct {
@@ -228,7 +227,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	}
 	var blocked *accounts.BlockError
 	if errors.As(err, &blocked) && h.Notifications != nil {
-		h.Notifications.AccountBlocked(blocked.User, accounts.DeviceInfo{Client: notifications.AdminApp, RemoteAddress: key})
+		h.Notifications.AccountBlocked(blocked.User, accounts.DeviceInfo{Client: accounts.AdminApp, RemoteAddress: key})
 	}
 	if errors.Is(err, accounts.ErrInvalidCredentials) || errors.Is(err, accounts.ErrDisabled) {
 		h.Activity.SignInFailed(r.Context(), body.Name, forwarded.Client(r))

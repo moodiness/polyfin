@@ -7,14 +7,10 @@ import (
 	"github.com/moodiness/polyfin/internal/i18n"
 )
 
-// AdminApp is the app of a sign-in through the admin app, which sends no
-// app name and no device.
-const AdminApp = "Polyfin admin"
-
 // SignInJSON is a sign-in, or the attempt that blocked an account: the
 // client's address as Polyfin resolves it, the app and its version, and
 // the device's name and identifier as the app sent them, empty when it
-// sent none. The admin app is AdminApp, with no device.
+// sent none. The admin app is accounts.AdminApp, with no device.
 type SignInJSON struct {
 	Address    string `json:"address"`
 	App        string `json:"app"`
@@ -96,7 +92,7 @@ func (s *Service) accountBlockedEvent(user accounts.User, attempt accounts.Devic
 // Chrome", or the admin app.
 func (s *Service) appText(info accounts.DeviceInfo) string {
 	switch {
-	case info.Client == AdminApp:
+	case info.Client == accounts.AdminApp:
 		return s.phrase(i18n.Text{"the admin app", "l’appli d’administration", "der Admin-App", "la aplicación de administración", "l’applicazione di amministrazione", "o aplicativo de administração"})
 	case info.Client == "":
 		return s.phrase(i18n.Text{"an unnamed app", "une appli sans nom", "einer unbenannten App", "una aplicación sin nombre", "un’applicazione senza nome", "um aplicativo sem nome"})
