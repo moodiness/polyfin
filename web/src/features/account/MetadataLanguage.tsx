@@ -7,13 +7,27 @@ import {
   type MetadataLanguage,
 } from '@/api'
 import { errorMessage, languageOptions } from '@/format'
-import { useI18n } from '@/i18n'
-import { Field, InlineError, Notice, Select, SkeletonRows, useToast } from '@/ui'
+import { useI18n, type Language, type Messages } from '@/i18n'
+import { InlineError, Notice, Select, SettingRow, SkeletonRows, useToast } from '@/ui'
 
 /**
- * A choice of metadata language: The server's, then the languages the server's addons were given,
- * by name. A language no addon has any more stays listed while it is the one chosen.
+ * The choices of metadata language: The server's, then the languages the server's addons were
+ * given, by name. A language no addon has any more stays listed while it is the one chosen.
  */
+function metadataLanguageOptions(
+  value: string,
+  languages: readonly string[],
+  t: Messages,
+  language: Language,
+) {
+  const codes = value === '' || languages.includes(value) ? languages : [...languages, value]
+  return [
+    { value: '', label: t.account.metadataLanguage.server },
+    ...languageOptions(codes, language),
+  ]
+}
+
+/** A choice of metadata language, as a list (a user's page). */
 export function MetadataLanguageSelect({
   value,
   languages,
@@ -26,14 +40,10 @@ export function MetadataLanguageSelect({
   disabled: boolean
 }) {
   const { language, t } = useI18n()
-  const codes = value === '' || languages.includes(value) ? languages : [...languages, value]
   return (
     <Select
       value={value}
-      options={[
-        { value: '', label: t.account.metadataLanguage.server },
-        ...languageOptions(codes, language),
-      ]}
+      options={metadataLanguageOptions(value, languages, t, language)}
       onValue={onValue}
       disabled={disabled}
       className="max-w-xs"
@@ -42,11 +52,12 @@ export function MetadataLanguageSelect({
 }
 
 /**
- * My account › Metadata language: the language the user's titles are described in, saved as it
- * changes. Without a language given to any server addon it says where an administrator gives one.
+ * My account › Metadata language: the language the user's titles are described in, a setting row
+ * saved as it changes. Without a language given to any server addon it says where an
+ * administrator gives one.
  */
 export function OwnMetadataLanguage() {
-  const { t } = useI18n()
+  const { language: uiLanguage, t } = useI18n()
   const text = t.account.metadataLanguage
   const toast = useToast()
   const current = useQuery({
@@ -71,20 +82,17 @@ export function OwnMetadataLanguage() {
   }
   const { language, languages } = current.data
   return (
-    <div className="space-y-4">
-      <Field
-        label={text.label}
-        hideLabel
-        error={save.isError ? errorMessage(t, save.error) : undefined}
-      >
-        <MetadataLanguageSelect
-          value={language}
-          languages={languages}
-          onValue={(chosen) => save.mutate(chosen)}
-          disabled={save.isPending}
-        />
-      </Field>
-      {languages.length === 0 && language === '' && <Notice>{text.noLanguage}</Notice>}
-    </div>
+    <SettingRow
+      kind="choice"
+      label={text.label}
+      help={text.help}
+      value={language}
+      options={metadataLanguageOptions(language, languages, t, uiLanguage)}
+      onChange={(chosen) => save.mutate(chosen)}
+      disabled={save.isPending}
+      error={save.isError ? errorMessage(t, save.error) : undefined}
+    >
+      {languages.length === 0 && language === '' ? <Notice>{text.noLanguage}</Notice> : undefined}
+    </SettingRow>
   )
 }

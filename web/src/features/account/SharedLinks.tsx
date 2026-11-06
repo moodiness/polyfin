@@ -291,7 +291,7 @@ function ShareTitleModal({
         ) : (
           <div className="flex flex-col gap-2">
             <p className="text-control font-medium text-ink">{text.chosen}</p>
-            <div className="flex items-center gap-3 rounded-field border border-line-2 bg-s1 p-2">
+            <div className="flex items-center gap-3 rounded-field bg-s2 p-2">
               <TitlePoster title={title} />
               <span className="min-w-0 flex-1 truncate text-control text-ink">
                 {titleName(title)}
@@ -387,7 +387,7 @@ function TitlePicker({ onPick }: { onPick: (title: AccountTitle) => void }) {
         ) : episodes.data.length === 0 ? (
           <p className="text-small text-ink-3">{text.noEpisodes}</p>
         ) : (
-          <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-field border border-line bg-s1 p-1">
+          <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-field bg-s2 p-1">
             {episodes.data.map((episode) => (
               <li key={episode.id}>
                 <button
@@ -522,7 +522,7 @@ function NewLink({ link, onClose }: { link: NewShareLink; onClose: () => void })
         <Notice tone="warn" live>
           {text.createdNotice(link.item.name)}
         </Notice>
-        <code className="block rounded-field border border-line-2 bg-bg px-3.5 py-2.5 font-mono text-control break-all text-ink select-all">
+        <code className="block rounded-field bg-s2 px-5 py-3.5 font-mono text-control break-all text-ink select-all">
           {address}
         </code>
         <div aria-live="polite">

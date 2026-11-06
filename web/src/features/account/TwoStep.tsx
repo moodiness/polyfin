@@ -50,7 +50,7 @@ function QrCode({ rows, label }: { rows: string[]; label: string }) {
       aria-label={label}
       viewBox={`0 0 ${size} ${size}`}
       shapeRendering="crispEdges"
-      className="size-48 shrink-0 rounded-md"
+      className="size-52 shrink-0 rounded-[18px] max-sm:size-44"
     >
       <rect width={size} height={size} fill="white" />
       <path d={path} fill="black" />
@@ -66,19 +66,19 @@ export function SetupKey({ setup }: { setup: TwoStepSetup }) {
   const { t } = useI18n()
   const text = t.account.twoStep
   return (
-    <div className="flex flex-wrap items-start gap-5">
+    <div className="flex flex-wrap items-start gap-6">
       <QrCode rows={setup.qr} label={text.qrLabel} />
       <div className="min-w-0 flex-1 basis-56 space-y-3">
-        <p className="max-w-[60ch] text-small text-ink-2">{text.scan}</p>
-        <div>
-          <p className="text-small text-ink-3">{text.key}</p>
-          <code className="figures block font-mono text-control tracking-wider break-all text-ink select-all">
+        <p className="max-w-[60ch] text-body text-ink-2">{text.scan}</p>
+        <div className="rounded-field bg-s2 px-5 py-3.5">
+          <p className="text-small text-ink-2">{text.key}</p>
+          <code className="figures block font-mono text-lead tracking-wider break-all text-ink select-all">
             {setup.secret.match(/.{1,4}/g)?.join(' ')}
           </code>
         </div>
         <a
           href={setup.uri}
-          className="block text-small font-medium text-link transition-colors duration-160 hover:text-link-hover"
+          className="block text-body font-medium text-link transition-colors duration-160 hover:text-link-hover"
         >
           {text.openInApp}
         </a>
@@ -115,7 +115,7 @@ export function RecoveryCodes({
     <div className="space-y-4">
       <Notice tone="warn">{text.recoveryHelp}</Notice>
       {/* Two columns where a code fits whole in each, one on a narrow screen. */}
-      <ul className="figures grid max-w-md grid-cols-[repeat(auto-fit,minmax(19ch,1fr))] gap-x-6 gap-y-1.5 rounded-field border border-line-2 bg-bg px-4 py-3 font-mono text-control whitespace-nowrap text-ink select-all">
+      <ul className="figures grid max-w-lg grid-cols-[repeat(auto-fit,minmax(19ch,1fr))] gap-x-6 gap-y-2 rounded-field bg-s2 px-5 py-4 font-mono text-lead whitespace-nowrap text-ink select-all">
         {codes.map((code) => (
           <li key={code}>{code}</li>
         ))}
@@ -177,7 +177,7 @@ export default function TwoStep() {
   if (codes !== null) {
     return (
       <div className="space-y-3">
-        <h3 className="text-lead font-semibold text-ink">{text.recoveryTitle}</h3>
+        <h3 className="text-h3 text-ink">{text.recoveryTitle}</h3>
         <RecoveryCodes codes={codes} onDone={() => setCodes(null)} doneLabel={text.saved} />
       </div>
     )
@@ -236,7 +236,7 @@ export default function TwoStep() {
         ) : (
           <StatusPill tone="muted">{text.off}</StatusPill>
         )}
-        <span className="text-small text-ink-2">
+        <span className="text-body text-ink-2">
           {current.on ? text.onText : text.offText}
           {current.on && ` ${text.codesLeft(current.recoveryCodes)}.`}
         </span>

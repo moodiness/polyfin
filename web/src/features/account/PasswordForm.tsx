@@ -42,7 +42,7 @@ export default function PasswordForm() {
   const formError = currentError === undefined && newError === undefined ? failure : undefined
 
   return (
-    <form onSubmit={submit} noValidate className="flex max-w-[360px] flex-col gap-5">
+    <form onSubmit={submit} noValidate className="flex max-w-[520px] flex-col gap-[22px]">
       <Field label={text.currentPassword} error={currentError}>
         <TextInput
           type="password"

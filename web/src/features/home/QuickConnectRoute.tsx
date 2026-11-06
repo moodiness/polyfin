@@ -70,14 +70,14 @@ export default function QuickConnectRoute() {
 
   return (
     <PageLayout title={text.title} lede={text.description}>
-      <div className="grid max-w-[784px] gap-5">
+      <div className="grid max-w-[880px] gap-6">
         {approvedDevice !== null ? (
           <Panel as="div">
-            <div className="flex flex-col items-start gap-5">
+            <div className="flex flex-col items-start gap-6">
               <Notice tone="ok" live>
                 {text.approved(approvedDevice, user.name)}
               </Notice>
-              <Button icon={PlusIcon} onClick={reset}>
+              <Button variant="primary" icon={PlusIcon} onClick={reset}>
                 {text.another}
               </Button>
             </div>
@@ -85,53 +85,55 @@ export default function QuickConnectRoute() {
         ) : (
           <>
             <Panel as="div">
-              <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <Field label={text.code} help={text.codeHint}>
-                  <TextInput
-                    value={code}
-                    onValue={(value) => {
-                      approve.reset()
-                      setCode(value.replace(/\D/g, '').slice(0, longLength))
-                    }}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]{6}([0-9]{2})?"
-                    maxLength={longLength}
-                    placeholder="000000"
-                    autoFocus
-                    mono
-                    className="h-14 text-[24px] tracking-[0.4em] [&_input]:text-[24px] [&_input]:tracking-[0.4em]"
-                  />
-                </Field>
-                <div>
-                  <p className="text-control font-medium text-ink">{text.stepsLabel}</p>
-                  <ol className="mt-3 flex flex-col gap-2.5 text-small text-ink-2">
-                    {text.steps.map((step, index) => (
-                      <li key={step} className="flex gap-3">
-                        <span
-                          aria-hidden="true"
-                          className="figures grid size-5 shrink-0 place-items-center rounded-md border border-line-2 bg-s2 text-micro text-ink-2"
-                        >
-                          {index + 1}
-                        </span>
-                        {step}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </div>
+              {/* The code in one big well, its figures spaced like the device shows them. */}
+              <Field label={text.code} help={text.codeHint} className="max-w-[440px]">
+                <TextInput
+                  value={code}
+                  onValue={(value) => {
+                    approve.reset()
+                    setCode(value.replace(/\D/g, '').slice(0, longLength))
+                  }}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}([0-9]{2})?"
+                  maxLength={longLength}
+                  placeholder="000000"
+                  autoFocus
+                  mono
+                  className="h-[88px] max-sm:h-[76px] [&_input]:figures [&_input]:text-[38px] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[30px] max-sm:[&_input]:tracking-[0.24em]"
+                />
+              </Field>
+              <ol
+                aria-label={text.stepsLabel}
+                className="mt-8 grid gap-3 md:grid-cols-3 max-md:mt-6"
+              >
+                {text.steps.map((step, index) => (
+                  <li
+                    key={step}
+                    className="rounded-[22px] bg-s1 px-5 pt-5 pb-[22px] text-small text-ink-2"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="figures mb-3 grid size-[34px] place-items-center rounded-full bg-s3 text-[16px] font-bold text-ink"
+                    >
+                      {index + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
             </Panel>
 
             {complete && lookup.isPending && (
               <div
                 role="status"
                 aria-label={text.lookingUp}
-                className="flex items-center gap-4 rounded-panel border border-line-2 bg-s1 p-6"
+                className="flex items-center gap-5 rounded-panel bg-s1 p-7"
               >
-                <Skeleton className="size-10 rounded-row" />
-                <span className="flex flex-1 flex-col gap-2">
-                  <Skeleton className="h-3.5 w-40" />
-                  <Skeleton className="h-3 w-56" />
+                <Skeleton className="size-14 rounded-row" />
+                <span className="flex flex-1 flex-col gap-2.5">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-4 w-64" />
                 </span>
               </div>
             )}
@@ -143,7 +145,7 @@ export default function QuickConnectRoute() {
             {complete && lookup.data && (
               <Panel
                 title={text.requestTitle}
-                media={<IconTile icon={DeviceMobileIcon} />}
+                media={<IconTile icon={DeviceMobileIcon} size="lg" />}
                 footer={
                   <PanelFooter>
                     <Button
@@ -157,7 +159,7 @@ export default function QuickConnectRoute() {
                   </PanelFooter>
                 }
               >
-                <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-control">
+                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-3 text-body">
                   <dt className="text-ink-3">{text.device}</dt>
                   <dd className="font-medium text-ink">{lookup.data.deviceName}</dd>
                   <dt className="text-ink-3">{text.app}</dt>

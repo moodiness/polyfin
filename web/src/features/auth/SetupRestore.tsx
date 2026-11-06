@@ -21,6 +21,7 @@ import {
   UnreadableKeys,
   useRestartWatch,
 } from '@/features/system/RestoreBackup'
+import { authForm, wideButton } from './AuthFrame'
 
 /**
  * "Restore a backup instead" on the setup page: the setup code and a backup file, the passphrase
@@ -86,7 +87,7 @@ export default function SetupRestore({
   const wrong = unlock.error instanceof ApiError && unlock.error.code === 'wrong_passphrase'
   const error = [send, unlock, start].find((mutation) => mutation.isError)?.error
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <form onSubmit={submit} noValidate className={authForm}>
       <Field label={text.setupCode} help={text.setupCodeHint}>
         <TextInput
           value={setupCode}
@@ -102,7 +103,7 @@ export default function SetupRestore({
         />
       </Field>
       <Field label={text.restoreFile} help={text.restoreFileHelp}>
-        <div className="flex flex-wrap items-center gap-3">
+        <div>
           <input
             ref={input}
             type="file"
@@ -118,19 +119,25 @@ export default function SetupRestore({
               }
             }}
           />
-          <Button
-            variant="secondary"
-            icon={UploadSimpleIcon}
+          {/* A well like the fields: the file chosen, or the words to choose one. */}
+          <button
+            type="button"
             disabled={plan !== null || send.isPending}
             onClick={() => input.current?.click()}
+            className="flex min-h-16 w-full cursor-pointer items-center gap-4 rounded-field bg-s2 px-5 py-3 text-start focus-lit [--lift:1.02] hover:bg-s3 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {text.restoreChoose}
-          </Button>
-          {file !== null && (
-            <span className="min-w-0 text-small break-all text-ink-2">
-              <code className="font-mono">{file.name}</code> · {formatBytes(file.size, language)}
-            </span>
-          )}
+            <UploadSimpleIcon size={24} aria-hidden="true" className="shrink-0 text-ink-2" />
+            {file === null ? (
+              <span className="text-lead font-medium text-ink">{text.restoreChoose}</span>
+            ) : (
+              <span className="min-w-0 flex-1">
+                <span className="block font-mono text-control break-all text-ink">{file.name}</span>
+                <span className="block text-small text-ink-2">
+                  {formatBytes(file.size, language)} · {text.restoreChoose}
+                </span>
+              </span>
+            )}
+          </button>
         </div>
       </Field>
       {plan?.locked && (
@@ -169,7 +176,7 @@ export default function SetupRestore({
           icon={UploadSimpleIcon}
           loading={send.isPending}
           disabled={file === null || code === ''}
-          className="w-full"
+          className={wideButton}
         >
           {send.isPending ? text.restoreSending : text.restoreSend}
         </Button>
@@ -180,7 +187,7 @@ export default function SetupRestore({
           icon={LockKeyIcon}
           loading={unlock.isPending}
           disabled={passphrase === ''}
-          className="w-full"
+          className={wideButton}
         >
           {unlock.isPending ? t.backups.restore.unlocking : t.backups.restore.unlock}
         </Button>
@@ -190,7 +197,7 @@ export default function SetupRestore({
           variant="danger"
           icon={ClockCounterClockwiseIcon}
           loading={start.isPending}
-          className="w-full"
+          className={wideButton}
         >
           {unreadableKinds(t, plan).length > 0 ? t.backups.restore.anyway : text.restoreStart}
         </Button>

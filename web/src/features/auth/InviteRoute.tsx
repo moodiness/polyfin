@@ -15,7 +15,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Button, Field, InlineError, Notice, Spinner, TextInput } from '@/ui'
 import { signInToWebClient } from '@/webClientSession'
-import { AuthFrame } from './AuthFrame'
+import { AuthFrame, authForm, wideButton } from './AuthFrame'
 
 /** The codes of a link that can no longer create an account, each with a page of its own. */
 const goneCodes = ['invite_unknown', 'invite_used_up', 'invite_expired', 'invite_revoked'] as const
@@ -88,7 +88,10 @@ export default function InviteRoute() {
   }
   if (invite.isPending || status.isPending) {
     return (
-      <p role="status" className="flex items-center gap-2.5 text-control text-ink-3">
+      <p
+        role="status"
+        className="mx-auto flex w-full max-w-[520px] items-center gap-3 pt-[min(9vh,96px)] text-lead text-ink-2"
+      >
         <Spinner />
         {t.common.loading}
       </p>
@@ -97,9 +100,11 @@ export default function InviteRoute() {
   if (invite.isError || status.isError) {
     const failed = invite.isError ? invite : status
     return (
-      <InlineError onRetry={() => void failed.refetch()} retrying={failed.isFetching}>
-        {errorMessage(t, failed.error)}
-      </InlineError>
+      <div className="mx-auto w-full max-w-[520px] pt-[min(9vh,96px)]">
+        <InlineError onRetry={() => void failed.refetch()} retrying={failed.isFetching}>
+          {errorMessage(t, failed.error)}
+        </InlineError>
+      </div>
     )
   }
 
@@ -118,7 +123,7 @@ export default function InviteRoute() {
 
   return (
     <AuthFrame title={t.invite.title(invite.data.serverName)} lede={t.invite.description}>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form onSubmit={submit} noValidate className={authForm}>
         <Field label={t.invite.name} help={t.common.nameRule} error={nameError}>
           <TextInput
             value={name}
@@ -170,7 +175,7 @@ export default function InviteRoute() {
           variant="primary"
           icon={UserPlusIcon}
           loading={mutation.isPending || mutation.isSuccess}
-          className="w-full"
+          className={wideButton}
         >
           {mutation.isPending || mutation.isSuccess ? t.invite.submitting : t.invite.submit}
         </Button>

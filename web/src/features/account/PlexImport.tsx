@@ -90,7 +90,7 @@ export function PlexSignInWaiting({ link }: { link: PlexSignIn }) {
   const { t } = useI18n()
   const text = t.account.plexImport
   return (
-    <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
+    <div className="flex flex-col gap-4 rounded-row bg-s2 px-6 py-5 max-sm:px-4">
       <p className="text-control text-ink">{text.approve}</p>
       <ExternalButtonLink
         variant="primary"

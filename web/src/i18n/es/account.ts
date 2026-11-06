@@ -4,6 +4,7 @@ const account: typeof en = {
   account: {
     title: 'Mi cuenta',
     signedInAs: 'Sesión iniciada como ',
+    roles: { administrator: 'Administrador', member: 'Miembro' },
     sectionsLabel: 'Secciones de la cuenta',
     sections: {
       statistics: 'Estadísticas',
@@ -102,7 +103,6 @@ const account: typeof en = {
       empty: 'Ninguna fila de inicio',
       emptyHelp:
         'El administrador no ha añadido ninguna fila para usted a la página de inicio del reproductor web.',
-      shown: (name: string) => `Mostrar ${name} en su página de inicio`,
       on: (name: string) => `${name} vuelve a estar en su página de inicio.`,
       off: (name: string) => `${name} se ha quitado de su página de inicio.`,
     },

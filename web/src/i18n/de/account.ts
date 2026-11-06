@@ -4,6 +4,7 @@ const account: typeof en = {
   account: {
     title: 'Mein Konto',
     signedInAs: 'Angemeldet als ',
+    roles: { administrator: 'Administrator', member: 'Mitglied' },
     sectionsLabel: 'Kontobereiche',
     sections: {
       statistics: 'Statistiken',
@@ -102,7 +103,6 @@ const account: typeof en = {
       empty: 'Keine Startseitenzeile',
       emptyHelp:
         'Der Administrator hat für dich keine Zeile zur Startseite des Web-Players hinzugefügt.',
-      shown: (name: string) => `${name} auf deiner Startseite anzeigen`,
       on: (name: string) => `${name} ist wieder auf deiner Startseite.`,
       off: (name: string) => `${name} ist nicht mehr auf deiner Startseite.`,
     },

@@ -44,8 +44,9 @@ export default function OwnTrackChoices() {
   }
   const { titles } = current.data
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      <p className="text-sm text-ink-2">{titles === 0 ? text.none : text.kept(titles)}</p>
+    // One row: what is kept on the left, Forget on the right; the button wraps under it on a phone.
+    <div className="flex min-h-20 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-row bg-s1 py-3.5 pr-4 pl-6 max-md:pl-5">
+      <p className="min-w-0 text-h3 text-ink">{titles === 0 ? text.none : text.kept(titles)}</p>
       <Button
         variant="secondary"
         icon={EraserIcon}

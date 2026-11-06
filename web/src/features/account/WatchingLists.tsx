@@ -9,7 +9,7 @@ import {
   XIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import {
   fetchOwnHidden,
   fetchOwnHomeRows,
@@ -36,8 +36,8 @@ import {
   RelativeTime,
   Row,
   RowList,
+  SettingRow,
   SkeletonRows,
-  Switch,
   useToast,
 } from '@/ui'
 
@@ -53,7 +53,7 @@ export function TitlePoster({ title }: { title: Pick<AccountTitle, 'kind' | 'pos
     return (
       <span
         aria-hidden="true"
-        className="grid aspect-[2/3] w-8 shrink-0 place-items-center rounded-check border border-line-2 bg-s2 text-ink-3"
+        className="grid aspect-[2/3] w-8 shrink-0 place-items-center rounded-check bg-s3 text-ink-2"
       >
         <KindIcon size={14} />
       </span>
@@ -65,7 +65,7 @@ export function TitlePoster({ title }: { title: Pick<AccountTitle, 'kind' | 'pos
       alt=""
       loading="lazy"
       onError={() => setFailed(true)}
-      className="aspect-[2/3] w-8 shrink-0 rounded-check object-cover ring-1 ring-ink/8"
+      className="aspect-[2/3] w-8 shrink-0 rounded-check bg-s2 object-cover"
     />
   )
 }
@@ -162,8 +162,6 @@ export function NextUpList() {
   const { t } = useI18n()
   const text = t.account.watching
   const toast = useToast()
-  const labelId = useId()
-  const helpId = useId()
   const nextUp = useQuery({
     queryKey: queryKeys.ownNextUp,
     queryFn: ({ signal }) => fetchOwnNextUp(signal),
@@ -258,24 +256,15 @@ export function NextUpList() {
           </RowList>
         </>
       )}
-      <div className="flex max-w-xl items-start justify-between gap-6 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:gap-4 max-sm:p-3.5">
-        <div className="min-w-0">
-          <p id={labelId} className="text-control font-medium text-ink">
-            {text.withResume}
-          </p>
-          <p id={helpId} className="mt-0.5 text-small text-ink-3">
-            {text.withResumeHelp}
-          </p>
-        </div>
-        <Switch
-          checked={nextUp.data.withResume}
-          disabled={withResume.isPending}
-          labelledBy={labelId}
-          describedById={helpId}
-          onChange={(on) => withResume.mutate(on)}
-          className="mt-0.5"
-        />
-      </div>
+      <SettingRow
+        kind="switch"
+        label={text.withResume}
+        help={text.withResumeHelp}
+        checked={nextUp.data.withResume}
+        disabled={withResume.isPending}
+        onChange={(on) => withResume.mutate(on)}
+        className="mt-6"
+      />
     </div>
   )
 }
@@ -383,28 +372,19 @@ export function HomeRowList() {
           {text.emptyHelp}
         </EmptyState>
       ) : (
-        <RowList aria-label={t.account.sections.homeRows}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {rows.data.rows.map((row) => (
-            <Row
+            <SettingRow
               key={row.id}
-              title={row.name}
-              muted={row.off}
-              meta={
-                <span className="truncate">
-                  {kinds[row.kind]} · {places[row.place]}
-                </span>
-              }
-              trailing={
-                <Switch
-                  checked={!row.off}
-                  label={text.shown(row.name)}
-                  disabled={change.isPending && change.variables.id === row.id}
-                  onChange={() => change.mutate(row)}
-                />
-              }
+              kind="switch"
+              label={row.name}
+              detail={`${kinds[row.kind]} · ${places[row.place]}`}
+              checked={!row.off}
+              disabled={change.isPending && change.variables.id === row.id}
+              onChange={() => change.mutate(row)}
             />
           ))}
-        </RowList>
+        </div>
       )}
     </div>
   )

@@ -1,6 +1,5 @@
 import { SparkleIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useId } from 'react'
 import {
   fetchOwnTaste,
   queryClient,
@@ -18,8 +17,8 @@ import {
   Notice,
   ProgressBar,
   RelativeTime,
+  SettingRow,
   SkeletonRows,
-  Switch,
   useToast,
 } from '@/ui'
 
@@ -32,8 +31,6 @@ export default function TasteProfile() {
   const { language, t } = useI18n()
   const text = t.account.taste
   const toast = useToast()
-  const labelId = useId()
-  const helpId = useId()
   const profile = useQuery({
     queryKey: queryKeys.ownTaste,
     queryFn: ({ signal }) => fetchOwnTaste(signal),
@@ -63,11 +60,11 @@ export default function TasteProfile() {
           {text.notBuiltHelp}
         </EmptyState>
       ) : (
-        <div className="space-y-5">
-          <div className="max-w-md space-y-2">
-            <div className="flex items-baseline justify-between gap-4 text-small">
+        <div className="space-y-6">
+          <div className="max-w-lg space-y-2.5">
+            <div className="flex items-baseline justify-between gap-4 text-body">
               <span className="text-ink">{text.certainty}</span>
-              <span className="font-mono text-ink-2 tabular-nums">
+              <span className="figures text-lead font-semibold text-ink">
                 {new Intl.NumberFormat(language, {
                   style: 'percent',
                   maximumFractionDigits: 0,
@@ -80,16 +77,16 @@ export default function TasteProfile() {
               size="lg"
               variant={taste.confident ? 'accent' : 'neutral'}
             />
-            <p className="text-small text-ink-3">
+            <p className="text-small text-ink-2">
               {text.builtFrom(taste.titles)} <RelativeTime iso={taste.built} />
             </p>
           </div>
           {!taste.confident && <Notice>{text.belowGate}</Notice>}
           {facets.length > 0 && (
-            <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+            <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
               {facets.map((facet) => (
                 <div key={facet.facet} className="min-w-0">
-                  <dt className="text-small font-medium text-ink">{text.facets[facet.facet]}</dt>
+                  <dt className="text-h3 text-ink">{text.facets[facet.facet]}</dt>
                   <dd className="mt-2 space-y-2">
                     {facet.liked.length > 0 && (
                       <Leanings label={text.liked} leanings={facet.liked} />
@@ -104,24 +101,14 @@ export default function TasteProfile() {
           )}
         </div>
       )}
-      <div className="flex max-w-xl items-start justify-between gap-6 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:gap-4 max-sm:p-3.5">
-        <div className="min-w-0">
-          <p id={labelId} className="text-control font-medium text-ink">
-            {text.taglines}
-          </p>
-          <p id={helpId} className="mt-0.5 text-small text-ink-3">
-            {text.taglinesHelp}
-          </p>
-        </div>
-        <Switch
-          checked={taste.taglines}
-          disabled={save.isPending}
-          labelledBy={labelId}
-          describedById={helpId}
-          onChange={(on) => save.mutate(on)}
-          className="mt-0.5"
-        />
-      </div>
+      <SettingRow
+        kind="switch"
+        label={text.taglines}
+        help={text.taglinesHelp}
+        checked={taste.taglines}
+        disabled={save.isPending}
+        onChange={(on) => save.mutate(on)}
+      />
       {save.isError && <Notice tone="danger">{errorMessage(t, save.error)}</Notice>}
     </div>
   )

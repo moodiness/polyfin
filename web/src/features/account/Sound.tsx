@@ -1,9 +1,8 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { fetchOwnSound, queryClient, queryKeys, saveOwnSound, type OwnSound } from '@/api'
-import { SwitchRow } from '@/features/users/shared'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { InlineError, Notice, SkeletonRows, useToast } from '@/ui'
+import { InlineError, Notice, SettingRow, SkeletonRows, useToast } from '@/ui'
 
 /**
  * My account › Sound: Boost the volume in the web player and Convert the sound, saved as they
@@ -39,16 +38,18 @@ export function OwnSoundOptions() {
   const disabled = followsGroup || save.isPending
   return (
     <div className="space-y-4">
-      <div>
-        <SwitchRow
-          title={text.boostVolume}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <SettingRow
+          kind="switch"
+          label={text.boostVolume}
           help={text.boostVolumeHelp}
           checked={boostVolume}
           onChange={(on) => save.mutate({ boostVolume: on })}
           disabled={disabled}
         />
-        <SwitchRow
-          title={text.convertSound}
+        <SettingRow
+          kind="switch"
+          label={text.convertSound}
           help={text.convertSoundHelp}
           checked={convertSound}
           onChange={(on) => save.mutate({ convertSound: on })}

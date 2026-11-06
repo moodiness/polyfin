@@ -572,12 +572,12 @@ function StremioLinkForm({
         {link === null ? (
           <p className="text-small text-ink-3">{text.linkHelp}</p>
         ) : (
-          <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
+          <div className="flex flex-col gap-4 rounded-row bg-s2 px-6 py-5 max-sm:px-4">
             <p className="text-control text-ink">{text.approve}</p>
             <div className="flex flex-wrap items-center gap-3">
               <p
                 aria-label={text.codeLabel}
-                className="rounded-field border border-accent/50 bg-s2 px-5 py-2 font-mono text-[26px] font-semibold tracking-[0.2em] text-ink select-all"
+                className="rounded-field bg-s3 px-5 py-2 font-mono text-[26px] font-semibold tracking-[0.2em] text-ink select-all"
               >
                 {link.code}
               </p>
@@ -927,7 +927,7 @@ export function AppConnections({
       description={text.help(t.account.importEvery(importEveryMinutes))}
       flush
     >
-      <ul>
+      <ul className="flex flex-col gap-2">
         {connections.map((connection) => (
           <AppConnectionRow
             key={connection.app}
@@ -981,15 +981,15 @@ function AppConnectionRow({
         : { tone: 'ok', label: text.status.connected }
 
   return (
-    <li className="flex flex-col gap-3 px-6 py-5 max-sm:px-4 [&+&]:border-t [&+&]:border-line">
+    <li className="flex flex-col gap-3 px-6 py-5 max-sm:px-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{name}</h4>
+          <h4 className="text-h3 font-semibold text-ink">{name}</h4>
           <p className="text-control text-ink-2">
             {connection.account !== null ? (
               <>
                 {text.connectedAs}
-                <span className="font-mono text-ink">{connection.account}</span>
+                <span className="font-semibold text-ink">{connection.account}</span>
               </>
             ) : (
               text.connected
@@ -1005,7 +1005,7 @@ function AppConnectionRow({
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-4 rounded-row border border-line bg-bg px-[18px] py-3 max-sm:flex-col max-sm:items-start max-sm:p-3.5">
+      <div className="flex items-center justify-between gap-4 rounded-row bg-s2 px-6 py-5 max-sm:flex-col max-sm:items-start max-sm:px-4">
         <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
           <ClockCounterClockwiseIcon
             size={16}

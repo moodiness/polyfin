@@ -4,6 +4,7 @@ const account: typeof en = {
   account: {
     title: 'Minha conta',
     signedInAs: 'Conectado como ',
+    roles: { administrator: 'Administrador', member: 'Membro' },
     sectionsLabel: 'Seções da conta',
     sections: {
       statistics: 'Estatísticas',
@@ -102,7 +103,6 @@ const account: typeof en = {
       empty: 'Nenhuma fileira do início',
       emptyHelp:
         'O administrador não adicionou nenhuma fileira para você à página inicial do player web.',
-      shown: (name: string) => `Mostrar ${name} na sua página inicial`,
       on: (name: string) => `${name} voltou à sua página inicial.`,
       off: (name: string) => `${name} foi removida da sua página inicial.`,
     },

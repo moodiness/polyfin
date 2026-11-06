@@ -6,7 +6,7 @@ import { errorMessage } from '@/format'
 import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import { useI18n } from '@/i18n'
 import { Button, Field, Notice, TextInput } from '@/ui'
-import { AuthFrame } from './AuthFrame'
+import { AuthFrame, authForm, wideButton } from './AuthFrame'
 import SetupRestore from './SetupRestore'
 
 /**
@@ -46,8 +46,8 @@ export default function SetupRoute() {
 
   if (restoring) {
     return (
-      <AuthFrame title={t.setup.restoreTitle} lede={t.setup.restoreLede} wide>
-        <Notice className="mb-6">{t.setup.codeHelp[host]}</Notice>
+      <AuthFrame title={t.setup.restoreTitle} lede={t.setup.restoreLede}>
+        <Notice className="mb-8">{t.setup.codeHelp[host]}</Notice>
         <SetupRestore
           setupCode={setupCode}
           onSetupCode={setSetupCode}
@@ -58,9 +58,9 @@ export default function SetupRoute() {
   }
 
   return (
-    <AuthFrame title={t.setup.title} lede={t.setup.description} wide>
-      <Notice className="mb-6">{t.setup.codeHelp[host]}</Notice>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <AuthFrame title={t.setup.title} lede={t.setup.description}>
+      <Notice className="mb-8">{t.setup.codeHelp[host]}</Notice>
+      <form onSubmit={submit} noValidate className={authForm}>
         <Field label={t.setup.setupCode} help={t.setup.setupCodeHint}>
           <TextInput
             value={setupCode}
@@ -116,7 +116,7 @@ export default function SetupRoute() {
           variant="primary"
           icon={UserPlusIcon}
           loading={mutation.isPending}
-          className="w-full"
+          className={wideButton}
         >
           {mutation.isPending ? t.setup.submitting : t.setup.submit}
         </Button>

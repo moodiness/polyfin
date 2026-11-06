@@ -16,7 +16,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import type en from '@/i18n/en/auth'
 import { Button, ExternalButtonLink, Field, Notice, TextInput } from '@/ui'
-import { AuthFrame } from './AuthFrame'
+import { AuthFrame, authForm, wideButton } from './AuthFrame'
 
 /** What the identity provider's sign-in can come back with, as the server names it. */
 type ProviderOutcome = keyof typeof en.login.providerOutcomes
@@ -137,7 +137,7 @@ export default function LoginRoute() {
       >
         <form
           noValidate
-          className="flex flex-col gap-5"
+          className={authForm}
           onSubmit={(event: FormEvent<HTMLFormElement>) => {
             event.preventDefault()
             second.mutate(code.trim())
@@ -170,7 +170,7 @@ export default function LoginRoute() {
             icon={SignInIcon}
             loading={second.isPending}
             disabled={code.trim() === ''}
-            className="w-full"
+            className={wideButton}
           >
             {second.isPending ? text.verifying : text.verify}
           </Button>
@@ -189,7 +189,7 @@ export default function LoginRoute() {
 
   return (
     <AuthFrame title={text.title} lede={text.description}>
-      <form onSubmit={submit} className="flex flex-col gap-5">
+      <form onSubmit={submit} className={authForm}>
         <Field label={text.name}>
           <TextInput
             value={name}
@@ -226,7 +226,7 @@ export default function LoginRoute() {
           variant="primary"
           icon={SignInIcon}
           loading={mutation.isPending}
-          className="w-full"
+          className={wideButton}
         >
           {mutation.isPending ? text.submitting : text.submit}
         </Button>

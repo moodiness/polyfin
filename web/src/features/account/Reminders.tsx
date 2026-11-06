@@ -14,14 +14,12 @@ import { dateTime, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Button,
-  Checkbox,
   EmptyState,
-  Field,
   InlineError,
   Notice,
   Row,
   RowList,
-  Select,
+  SettingRow,
   SkeletonRows,
   useToast,
 } from '@/ui'
@@ -78,7 +76,7 @@ export function ReminderList() {
           {single.map((reminder) => (
             <Row
               key={reminder.id}
-              leading={<AlarmIcon size={18} aria-hidden="true" className="shrink-0 text-ink-3" />}
+              leading={AlarmIcon}
               title={reminder.name}
               meta={
                 <span className="truncate">
@@ -91,7 +89,7 @@ export function ReminderList() {
           {series.map((reminder) => (
             <Row
               key={reminder.id}
-              leading={<RepeatIcon size={18} aria-hidden="true" className="shrink-0 text-ink-3" />}
+              leading={RepeatIcon}
               title={reminder.name}
               meta={
                 <span className="truncate">
@@ -155,26 +153,27 @@ export function ReminderSettingsForm() {
       (target) => target.enabled && target.events.includes('programme_reminder'),
     )
   return (
-    <div className="space-y-4 rounded-panel border border-line-2 bg-s1 px-[22px] py-5 max-sm:px-4">
-      <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
-        {text.settingsTitle}
-      </h3>
-      <Field label={text.before} help={text.beforeHelp}>
-        <Select
+    <div className="space-y-4">
+      <h3 className="text-h3 text-ink">{text.settingsTitle}</h3>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <SettingRow<number>
+          kind="choice"
+          label={text.before}
+          help={text.beforeHelp}
           value={beforeMinutes}
           options={choices.map((minutes) => ({ value: minutes, label: text.minutes(minutes) }))}
-          onValue={(minutes) => saving.mutate({ beforeMinutes: minutes, onApps })}
+          onChange={(minutes) => saving.mutate({ beforeMinutes: minutes, onApps })}
           disabled={saving.isPending}
-          className="max-w-xs"
         />
-      </Field>
-      <Checkbox
-        label={text.onApps}
-        help={text.onAppsHelp}
-        checked={onApps}
-        disabled={saving.isPending}
-        onChange={(checked) => saving.mutate({ beforeMinutes, onApps: checked })}
-      />
+        <SettingRow
+          kind="switch"
+          label={text.onApps}
+          help={text.onAppsHelp}
+          checked={onApps}
+          disabled={saving.isPending}
+          onChange={(checked) => saving.mutate({ beforeMinutes, onApps: checked })}
+        />
+      </div>
       {!reaches && <Notice tone="warn">{text.noTarget}</Notice>}
       {saving.isError && <Notice tone="danger">{errorMessage(t, saving.error)}</Notice>}
     </div>

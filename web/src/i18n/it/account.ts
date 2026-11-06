@@ -4,6 +4,7 @@ const account: typeof en = {
   account: {
     title: 'Il mio account',
     signedInAs: 'Accesso effettuato come ',
+    roles: { administrator: 'Amministratore', member: 'Membro' },
     sectionsLabel: 'Sezioni dell’account',
     sections: {
       statistics: 'Statistiche',
@@ -101,7 +102,6 @@ const account: typeof en = {
       empty: 'Nessuna riga della Home',
       emptyHelp:
         'L’amministratore non ha aggiunto alcuna riga per te alla pagina Home del player web.',
-      shown: (name: string) => `Mostra ${name} nella tua pagina Home`,
       on: (name: string) => `${name} è di nuovo nella tua pagina Home.`,
       off: (name: string) => `${name} è stata rimossa dalla tua pagina Home.`,
     },

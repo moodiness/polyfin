@@ -4,6 +4,7 @@ const account: typeof en = {
   account: {
     title: 'Mon compte',
     signedInAs: 'Connecté avec le compte ',
+    roles: { administrator: 'Administrateur', member: 'Membre' },
     sectionsLabel: 'Sections du compte',
     sections: {
       statistics: 'Statistiques',
@@ -102,7 +103,6 @@ const account: typeof en = {
       empty: 'Aucune rangée d’accueil',
       emptyHelp:
         'L’administrateur n’a ajouté aucune rangée pour vous à la page d’accueil du lecteur web.',
-      shown: (name: string) => `Afficher ${name} sur votre page d’accueil`,
       on: (name: string) => `${name} est de retour sur votre page d’accueil.`,
       off: (name: string) => `${name} est retirée de votre page d’accueil.`,
     },

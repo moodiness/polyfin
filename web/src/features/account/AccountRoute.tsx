@@ -1,24 +1,3 @@
-import {
-  AlarmIcon,
-  ArrowSquareInIcon,
-  BellIcon,
-  ChartBarIcon,
-  ClockCounterClockwiseIcon,
-  DeviceMobileIcon,
-  DevicesIcon,
-  EyeSlashIcon,
-  ListChecksIcon,
-  ListPlusIcon,
-  PaletteIcon,
-  PasswordIcon,
-  RowsIcon,
-  ShareNetworkIcon,
-  ShieldCheckIcon,
-  SpeakerHighIcon,
-  SpeakerSimpleHighIcon,
-  SparkleIcon,
-  TranslateIcon,
-} from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
@@ -34,15 +13,16 @@ import {
   queryKeys,
   signOutMyDevice,
   startOwnAppImport,
+  userImageUrl,
   type OwnAppImport,
+  type SessionUser,
 } from '@/api'
-import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import DeviceList from '@/features/users/DeviceList'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import StatisticsView from '@/features/statistics/StatisticsView'
 import { useI18n } from '@/i18n'
-import { SectionNav } from '@/ui'
+import { Avatar, SectionNav, type SectionNavItem } from '@/ui'
 import AppImport, { AppConnections } from './AppImport'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
@@ -86,12 +66,19 @@ type SectionId = (typeof sectionIds)[number]
 /** How often the user's own import is read while it runs. */
 const ownImportPollMs = 2000
 
+/** A section's anchor stays clear of the top row, and on a phone of the strip of sections too. */
+const anchorMargin =
+  'scroll-mt-[calc(var(--spacing-topbar)+32px)] max-md:scroll-mt-[calc(var(--spacing-topbar)+72px)]'
+
 /**
- * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, the
- * taste profile, track choices, the metadata language, the web player theme, the audio region,
- * shared links (while the user may share or has links), programme reminders (with the Live TV
+ * `/me/account`, in the frame of a user's page: a band with the person (avatar, name, role) and
+ * Reset my preferences, then the sections as words on the left and their content beside them:
+ * statistics, tracking services, Continue Watching, hidden titles, home rows, the taste profile,
+ * track choices, the metadata language, the web player theme, the audio region, sound, shared
+ * links (while the user may share or has links), programme reminders (with the Live TV
  * permission), importing from another server and from an app (unless the server turns it off),
- * notifications, devices, password and two-step sign-in, with a list of sections beside them.
+ * notifications, devices, password and two-step sign-in. Every setting saves as it changes, so
+ * the page has no unsaved dock.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -135,6 +122,7 @@ export default function AccountRoute() {
     queryFn: ({ signal }) => fetchOwnReminders(signal),
   })
   const reminding = reminders.data?.available === true
+  const appImportShown = importingFromApps || appConnections.length > 0
   const { hash } = useLocation()
 
   // Sections drawn once their answer comes: a #section address scrolls once it is there.
@@ -142,282 +130,227 @@ export default function AccountRoute() {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
   }, [hash, sharing, reminding])
 
+  const shown: Record<SectionId, boolean> = {
+    statistics: true,
+    tracking: true,
+    resume: true,
+    'next-up': true,
+    hidden: true,
+    'home-rows': true,
+    taste: true,
+    'track-choices': true,
+    'metadata-language': true,
+    'web-theme': true,
+    'audio-region': true,
+    sound: true,
+    'shared-links': sharing,
+    reminders: reminding,
+    import: importing,
+    'app-import': appImportShown,
+    notifications: true,
+    devices: true,
+    password: true,
+    'two-step': true,
+  }
+  const labels: Record<SectionId, string> = {
+    statistics: text.sections.statistics,
+    tracking: text.sections.tracking,
+    resume: text.sections.resume,
+    'next-up': text.sections.nextUp,
+    hidden: text.sections.hidden,
+    'home-rows': text.sections.homeRows,
+    taste: text.sections.taste,
+    'track-choices': text.sections.trackChoices,
+    'metadata-language': text.sections.metadataLanguage,
+    'web-theme': text.sections.webTheme,
+    'audio-region': text.sections.audioRegion,
+    sound: text.sections.sound,
+    'shared-links': text.sections.sharedLinks,
+    reminders: text.sections.reminders,
+    import: text.sections.import,
+    'app-import': text.sections.appImport,
+    notifications: text.sections.notifications,
+    devices: text.sections.devices,
+    password: text.sections.password,
+    'two-step': text.sections.twoStep,
+  }
+  // Words only, as on a user's page.
+  const items: SectionNavItem[] = sectionIds
+    .filter((id) => shown[id])
+    .map((id) => ({ id, label: labels[id], to: `#${id}` }))
+
   return (
-    <PageLayout
-      title={text.title}
-      lede={
-        <>
-          {text.signedInAs}
-          <span className="font-mono text-ink">{user.name}</span>.
-        </>
-      }
-      actions={<ResetPreferences />}
-      nav={
-        <SectionNav
-          label={text.sectionsLabel}
-          current={current}
-          items={[
-            {
-              id: 'statistics',
-              label: text.sections.statistics,
-              icon: ChartBarIcon,
-              to: '#statistics',
-            },
-            {
-              id: 'tracking',
-              label: text.sections.tracking,
-              icon: ListChecksIcon,
-              to: '#tracking',
-            },
-            {
-              id: 'resume',
-              label: text.sections.resume,
-              icon: ClockCounterClockwiseIcon,
-              to: '#resume',
-            },
-            {
-              id: 'next-up',
-              label: text.sections.nextUp,
-              icon: ListPlusIcon,
-              to: '#next-up',
-            },
-            { id: 'hidden', label: text.sections.hidden, icon: EyeSlashIcon, to: '#hidden' },
-            {
-              id: 'home-rows',
-              label: text.sections.homeRows,
-              icon: RowsIcon,
-              to: '#home-rows',
-            },
-            {
-              id: 'taste',
-              label: text.sections.taste,
-              icon: SparkleIcon,
-              to: '#taste',
-            },
-            {
-              id: 'track-choices',
-              label: text.sections.trackChoices,
-              icon: SpeakerHighIcon,
-              to: '#track-choices',
-            },
-            {
-              id: 'metadata-language',
-              label: text.sections.metadataLanguage,
-              icon: TranslateIcon,
-              to: '#metadata-language',
-            },
-            {
-              id: 'web-theme',
-              label: text.sections.webTheme,
-              icon: PaletteIcon,
-              to: '#web-theme',
-            },
-            {
-              id: 'audio-region',
-              label: text.sections.audioRegion,
-              icon: SpeakerHighIcon,
-              to: '#audio-region',
-            },
-            {
-              id: 'sound',
-              label: text.sections.sound,
-              icon: SpeakerSimpleHighIcon,
-              to: '#sound',
-            },
-            ...(sharing
-              ? [
-                  {
-                    id: 'shared-links' as const,
-                    label: text.sections.sharedLinks,
-                    icon: ShareNetworkIcon,
-                    to: '#shared-links',
-                  },
-                ]
-              : []),
-            ...(reminding
-              ? [
-                  {
-                    id: 'reminders' as const,
-                    label: text.sections.reminders,
-                    icon: AlarmIcon,
-                    to: '#reminders',
-                  },
-                ]
-              : []),
-            ...(importing
-              ? [
-                  {
-                    id: 'import' as const,
-                    label: text.sections.import,
-                    icon: ArrowSquareInIcon,
-                    to: '#import',
-                  },
-                ]
-              : []),
-            ...(importingFromApps || appConnections.length > 0
-              ? [
-                  {
-                    id: 'app-import' as const,
-                    label: text.sections.appImport,
-                    icon: DeviceMobileIcon,
-                    to: '#app-import',
-                  },
-                ]
-              : []),
-            {
-              id: 'notifications',
-              label: text.sections.notifications,
-              icon: BellIcon,
-              to: '#notifications',
-            },
-            { id: 'devices', label: text.sections.devices, icon: DevicesIcon, to: '#devices' },
-            { id: 'password', label: text.sections.password, icon: PasswordIcon, to: '#password' },
-            {
-              id: 'two-step',
-              label: text.sections.twoStep,
-              icon: ShieldCheckIcon,
-              to: '#two-step',
-            },
-          ]}
-        />
-      }
-    >
-      <AccountSection id="statistics" title={text.sections.statistics} help={text.statisticsHelp}>
-        <div className="space-y-10">
-          <StatisticsView scope="own" />
+    <div className="stagger">
+      <PersonBand user={user} />
+      {/* The split of a user's page: the sections in a 300 px column, sticky beside the content;
+          on a phone, a strip of words that scrolls sideways above it. */}
+      <div className="grid items-start gap-[72px] md:grid-cols-[300px_minmax(0,1fr)] max-xl:gap-12 max-lg:gap-8 max-lg:md:grid-cols-[232px_minmax(0,1fr)] max-md:block">
+        <div className="self-stretch max-md:contents">
+          <SectionNav label={text.sectionsLabel} current={current} items={items} />
         </div>
-      </AccountSection>
-      <AccountSection id="tracking" title={text.sections.tracking} help={text.tracking.description}>
-        <TrackingServices />
-      </AccountSection>
-      <AccountSection id="resume" title={text.sections.resume} help={text.watching.resumeHelp}>
-        <ResumeList />
-      </AccountSection>
-      <AccountSection id="next-up" title={text.sections.nextUp} help={text.watching.nextUpHelp}>
-        <NextUpList />
-      </AccountSection>
-      <AccountSection id="hidden" title={text.sections.hidden} help={text.watching.hiddenHelp}>
-        <HiddenList />
-      </AccountSection>
-      <AccountSection id="home-rows" title={text.sections.homeRows} help={text.homeRows.help}>
-        <HomeRowList />
-      </AccountSection>
-      <AccountSection id="taste" title={text.sections.taste} help={text.taste.help}>
-        <TasteProfile />
-      </AccountSection>
-      <AccountSection
-        id="track-choices"
-        title={text.sections.trackChoices}
-        help={text.trackChoices.help}
-      >
-        <OwnTrackChoices />
-      </AccountSection>
-      <AccountSection
-        id="metadata-language"
-        title={text.sections.metadataLanguage}
-        help={text.metadataLanguage.help}
-      >
-        <OwnMetadataLanguage />
-      </AccountSection>
-      <AccountSection id="web-theme" title={text.sections.webTheme} help={text.webTheme.help}>
-        <OwnWebTheme />
-      </AccountSection>
-      <AccountSection
-        id="audio-region"
-        title={text.sections.audioRegion}
-        help={text.audioRegion.help}
-      >
-        <OwnAudioRegion />
-      </AccountSection>
-      <AccountSection id="sound" title={text.sections.sound} help={text.sound.help}>
-        <OwnSoundOptions />
-      </AccountSection>
-      {sharing && (
-        <AccountSection
-          id="shared-links"
-          title={text.sections.sharedLinks}
-          help={text.sharedLinksHelp}
-        >
-          <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
-        </AccountSection>
-      )}
-      {reminding && (
-        <AccountSection id="reminders" title={text.sections.reminders} help={text.reminders.help}>
-          <ReminderList />
-        </AccountSection>
-      )}
-      {ownImport.data !== undefined && importing && (
-        <AccountSection
-          id="import"
-          title={text.sections.import}
-          help={text.serverImport.description}
-        >
-          <ServerImport own={ownImport.data} />
-        </AccountSection>
-      )}
-      {ownAppImport.data !== undefined && (importingFromApps || appConnections.length > 0) && (
-        <AccountSection
-          id="app-import"
-          title={text.sections.appImport}
-          help={text.appImport.description}
-        >
-          <div className="flex flex-col gap-6">
-            <AppConnections
-              connections={appConnections}
-              actions={ownAppConnections}
-              onChanged={() =>
-                void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
-              }
-              own
-              importEveryMinutes={ownAppImport.data.importEveryMinutes}
-            />
-            {importingFromApps && (
-              <AppImport
-                current={ownAppImport.data.import}
-                addonsAllowed={ownAppImport.data.addonsAllowed}
-                readers={ownAppReaders}
-                start={startOwnAppImport}
-                onStarted={(started) =>
-                  queryClient.setQueryData<OwnAppImport>(
-                    queryKeys.ownAppImport,
-                    (data) => data && { ...data, import: started },
-                  )
-                }
-                own
-                importEveryMinutes={ownAppImport.data.importEveryMinutes}
-              />
-            )}
+        <div className="min-w-0 [&>*+*]:mt-block max-md:pt-6">
+          <AccountSection id="statistics" title={labels.statistics} help={text.statisticsHelp}>
+            <div className="space-y-10">
+              <StatisticsView scope="own" />
+            </div>
+          </AccountSection>
+          <AccountSection id="tracking" title={labels.tracking} help={text.tracking.description}>
+            <TrackingServices />
+          </AccountSection>
+          <AccountSection id="resume" title={labels.resume} help={text.watching.resumeHelp}>
+            <ResumeList />
+          </AccountSection>
+          <AccountSection id="next-up" title={labels['next-up']} help={text.watching.nextUpHelp}>
+            <NextUpList />
+          </AccountSection>
+          <AccountSection id="hidden" title={labels.hidden} help={text.watching.hiddenHelp}>
+            <HiddenList />
+          </AccountSection>
+          <AccountSection id="home-rows" title={labels['home-rows']} help={text.homeRows.help}>
+            <HomeRowList />
+          </AccountSection>
+          <AccountSection id="taste" title={labels.taste} help={text.taste.help}>
+            <TasteProfile />
+          </AccountSection>
+          <AccountSection
+            id="track-choices"
+            title={labels['track-choices']}
+            help={text.trackChoices.help}
+          >
+            <OwnTrackChoices />
+          </AccountSection>
+          {/* Three settings of one row each: the row is the section, its label the heading's
+              words, its help shown while it is lit. */}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+            <div id="metadata-language" className={anchorMargin}>
+              <OwnMetadataLanguage />
+            </div>
+            <div id="web-theme" className={anchorMargin}>
+              <OwnWebTheme />
+            </div>
+            <div id="audio-region" className={anchorMargin}>
+              <OwnAudioRegion />
+            </div>
           </div>
-        </AccountSection>
-      )}
-      <AccountSection
-        id="notifications"
-        title={text.sections.notifications}
-        help={text.notificationsHelp}
-      >
-        <div className="flex flex-col gap-6">
-          <NotificationTargets scope="own" />
-          <ReminderSettingsForm />
+          <AccountSection id="sound" title={labels.sound} help={text.sound.help}>
+            <OwnSoundOptions />
+          </AccountSection>
+          {sharing && (
+            <AccountSection
+              id="shared-links"
+              title={labels['shared-links']}
+              help={text.sharedLinksHelp}
+            >
+              <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
+            </AccountSection>
+          )}
+          {reminding && (
+            <AccountSection id="reminders" title={labels.reminders} help={text.reminders.help}>
+              <ReminderList />
+            </AccountSection>
+          )}
+          {ownImport.data !== undefined && importing && (
+            <AccountSection id="import" title={labels.import} help={text.serverImport.description}>
+              <ServerImport own={ownImport.data} />
+            </AccountSection>
+          )}
+          {ownAppImport.data !== undefined && appImportShown && (
+            <AccountSection
+              id="app-import"
+              title={labels['app-import']}
+              help={text.appImport.description}
+            >
+              <div className="flex flex-col gap-6">
+                <AppConnections
+                  connections={appConnections}
+                  actions={ownAppConnections}
+                  onChanged={() =>
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
+                  }
+                  own
+                  importEveryMinutes={ownAppImport.data.importEveryMinutes}
+                />
+                {importingFromApps && (
+                  <AppImport
+                    current={ownAppImport.data.import}
+                    addonsAllowed={ownAppImport.data.addonsAllowed}
+                    readers={ownAppReaders}
+                    start={startOwnAppImport}
+                    onStarted={(started) =>
+                      queryClient.setQueryData<OwnAppImport>(
+                        queryKeys.ownAppImport,
+                        (data) => data && { ...data, import: started },
+                      )
+                    }
+                    own
+                    importEveryMinutes={ownAppImport.data.importEveryMinutes}
+                  />
+                )}
+              </div>
+            </AccountSection>
+          )}
+          <AccountSection
+            id="notifications"
+            title={labels.notifications}
+            help={text.notificationsHelp}
+          >
+            <div className="flex flex-col gap-10">
+              <NotificationTargets scope="own" />
+              <ReminderSettingsForm />
+            </div>
+          </AccountSection>
+          <AccountSection id="devices" title={labels.devices} help={text.devicesHelp}>
+            <DeviceList
+              queryKey={queryKeys.myDevices}
+              load={fetchMyDevices}
+              signOut={signOutMyDevice}
+            />
+          </AccountSection>
+          <AccountSection id="password" title={labels.password} help={text.passwordHelp}>
+            <PasswordForm />
+          </AccountSection>
+          <AccountSection id="two-step" title={labels['two-step']} help={text.twoStep.help}>
+            <TwoStep />
+          </AccountSection>
         </div>
-      </AccountSection>
-      <AccountSection id="devices" title={text.sections.devices} help={text.devicesHelp}>
-        <DeviceList
-          queryKey={queryKeys.myDevices}
-          load={fetchMyDevices}
-          signOut={signOutMyDevice}
-        />
-      </AccountSection>
-      <AccountSection id="password" title={text.sections.password} help={text.passwordHelp}>
-        <PasswordForm />
-      </AccountSection>
-      <AccountSection id="two-step" title={text.sections.twoStep} help={text.twoStep.help}>
-        <TwoStep />
-      </AccountSection>
-    </PageLayout>
+      </div>
+    </div>
   )
 }
 
-/** A section of the page: an anchor for the list of sections, a heading and what it is for. */
+/**
+ * The band at the top, as on a user's page: the avatar, the page's title, who is signed in and
+ * their role, and Reset my preferences.
+ */
+function PersonBand({ user }: { user: SessionUser }) {
+  const { t } = useI18n()
+  const text = t.account
+  return (
+    <header className="mb-14 flex flex-wrap items-center gap-x-8 gap-y-5 rounded-panel bg-s1 px-8 py-7 max-md:mb-6 max-md:gap-x-5 max-md:rounded-[24px] max-md:px-5 max-md:py-5">
+      <Avatar
+        name={user.name}
+        image={userImageUrl(user)}
+        size="xl"
+        className="max-md:size-16 max-md:text-[28px]"
+      />
+      <div className="min-w-0 flex-1 basis-60 max-md:basis-40">
+        <h1 className="text-h1 break-words text-ink max-md:text-[36px]">{text.title}</h1>
+        <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-lead text-ink-2 max-md:text-[17.5px]">
+          <span className="min-w-0 break-words">
+            {text.signedInAs}
+            <span className="font-semibold text-ink">{user.name}</span>
+          </span>
+          <span>{user.isAdministrator ? text.roles.administrator : text.roles.member}</span>
+        </p>
+      </div>
+      <div className="flex max-w-full flex-wrap gap-3">
+        <ResetPreferences />
+      </div>
+    </header>
+  )
+}
+
+/** A section of the page: an anchor for the list of sections, its group title and what it is for. */
 function AccountSection({
   id,
   title,
@@ -431,16 +364,12 @@ function AccountSection({
 }) {
   const headingId = useId()
   return (
-    <section
-      id={id}
-      aria-labelledby={headingId}
-      className="scroll-mt-[calc(var(--spacing-topbar)+32px)] max-md:scroll-mt-[calc(var(--spacing-topbar)+72px)] max-md:first:pt-6"
-    >
-      <h2 id={headingId} className="text-h3 text-ink">
+    <section id={id} aria-labelledby={headingId} className={anchorMargin}>
+      <h2 id={headingId} className="text-group text-ink">
         {title}
       </h2>
-      <p className="mt-1.5 max-w-[60ch] text-small text-ink-2">{help}</p>
-      <div className="mt-5">{children}</div>
+      <p className="mt-2 max-w-[66ch] text-small text-ink-2">{help}</p>
+      <div className="mt-6 max-md:mt-5">{children}</div>
     </section>
   )
 }
