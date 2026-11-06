@@ -36,7 +36,7 @@ export function PageHeader({
   className?: string
 }) {
   const titleClass = cx(
-    'min-w-0 break-words text-ink',
+    'min-w-0 hyphenate text-ink',
     greeting ? 'text-display max-md:text-[2.25rem]' : 'text-h1 max-md:text-[2.25rem]',
   )
   return (

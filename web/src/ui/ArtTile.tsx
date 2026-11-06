@@ -235,7 +235,7 @@ export function ArtTile({
           <Title
             id={titleId}
             className={cx(
-              'mt-3 leading-[1.05] font-bold tracking-[-0.02em] break-words text-ink max-md:mt-2 max-md:text-[1.625rem]',
+              'mt-3 leading-[1.05] font-bold tracking-[-0.02em] hyphenate text-ink max-md:mt-2 max-md:text-[1.625rem]',
               wide ? 'text-[2.625rem]' : 'text-[2.125rem]',
             )}
           >

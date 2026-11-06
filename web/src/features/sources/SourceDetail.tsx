@@ -245,7 +245,7 @@ export function SourceDetail({
         <div className="min-w-0 flex-1">
           <h2
             id={`source-${addon.id}`}
-            className="text-[2.75rem] leading-[1.05] font-[680] tracking-[-0.02em] break-words text-ink max-md:text-[2rem]"
+            className="text-[2.75rem] leading-[1.05] font-[680] tracking-[-0.02em] hyphenate text-ink max-md:text-[2rem]"
           >
             {addon.name}
           </h2>

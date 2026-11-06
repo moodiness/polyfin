@@ -313,6 +313,19 @@
 }
 
 /*
+ * A name or title that may hold a word too long for its line, as a German compound: the word
+ * breaks with a hyphen where the page's language allows (`<html lang>` follows the chosen
+ * language), and anywhere as a last resort, so it never overflows. Only words of 14 letters or
+ * more are hyphenated, 6 at least on each side, so common words, such as "Einstellungen" or
+ * "Bibliothèques", wrap whole.
+ */
+@utility hyphenate {
+  overflow-wrap: break-word;
+  hyphens: auto;
+  hyphenate-limit-chars: 14 6 6;
+}
+
+/*
  * Entrance: the block rises 6 px with a fade. On a container, `stagger` does it for each child,
  * 50 ms apart (up to the eighth; later ones start with it).
  */
