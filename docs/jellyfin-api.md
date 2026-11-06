@@ -1051,6 +1051,7 @@ Administrators add addons to the server's scope, and users to their own, under `
 ### Used by in the admin API
 
 - An addon's JSON, from `GET /admin/api/scopes/{scope}/addons` and every answer about an addon, has `usedBy`: `mode`, `everyone` or `listed`, with `groups` and `users`, the identifiers listed, empty for everyone and for a user's own addon. `PATCH /admin/api/scopes/shared/addons/{id}` takes `usedBy`; `POST /admin/api/scopes/shared/addons`, `POST /admin/api/scopes/shared/iptv` and `POST /admin/api/scopes/shared/folders` take it too, everyone when left out. Lists given with `everyone` are not kept. 400 `invalid_used_by` answers an unknown mode or identifier, a group or a user that does not exist, and any `usedBy` for a user's own addon (`scopes/me`). Only administrators reach the server's scope.
+- `PUT /admin/api/groups/{id}/sources/{source}` lists the group in the server source's `usedBy`, and `DELETE` on the same path takes it off; the rest of the list stays, so changes made at once all count. Both answer the source, the same again when nothing changed, and only a change goes to the activity log. 409 `used_by_everyone` answers a source used by everyone, left unchanged; 404 `not_found` a group, or a server source, that does not exist. Only administrators may call them.
 
 ### Library description refresh for apps
 
