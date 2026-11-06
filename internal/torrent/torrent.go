@@ -823,10 +823,10 @@ func (t *torrent) cancelOthers(in *inflightPiece, b block) {
 // a peer dropped more than maxReasks times is not asked of it again: it
 // may not have it, and the others may. A peer is given up, as one that
 // sends nothing is after idleTimeout, only when it sent no block asked
-// for idleTimeout, keep-alives aside; it stays known, so it is not dialed
-// again. A request cancelled is no longer counted as asked, so the
-// endgame's duplicates, of the blocks reads wait for, stay within
-// maxDuplicates.
+// for idleTimeout, keep-alives aside; it stays known, and is dialed again
+// only after maxRedialWait (see leave). A request cancelled is no longer
+// counted as asked, so the endgame's duplicates, of the blocks reads wait
+// for, stay within maxDuplicates.
 func (t *torrent) reask() {
 	t.mu.Lock()
 	defer t.mu.Unlock()

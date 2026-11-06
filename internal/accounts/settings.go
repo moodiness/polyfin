@@ -1613,8 +1613,11 @@ type Settings struct {
 	InactiveDeviceDays int
 	// KnownProxies are the addresses and networks of the reverse proxies
 	// whose forwarded headers tell the client of their requests (see
-	// forwarded.Resolve). Empty by default: no forwarded header is
-	// trusted.
+	// forwarded.Resolve). Empty by default: X-Forwarded-For and X-Real-IP
+	// are trusted from no address, so the client is the connection's.
+	// Where the code does not ask forwarded.ViaProxy, X-Forwarded-Proto
+	// and X-Forwarded-Host are read from any address: for the admin app's
+	// cookies, and for the addresses PlaybackInfo gives.
 	KnownProxies []netip.Prefix
 	// KnownProxyNames are the host names of reverse proxies, in lower
 	// case, trusted at the addresses they resolve to (see
