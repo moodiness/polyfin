@@ -201,7 +201,7 @@ func TestConvertedDownloads(t *testing.T) {
 		for name, values := range header {
 			request.Header[name] = values
 		}
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -268,7 +268,7 @@ func TestConvertedDownloads(t *testing.T) {
 		// An app resuming asks for a range; it gets the whole file.
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, s.url+target, nil)
 		request.Header.Set("Range", "bytes=100-")
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			done <- download{err: err}
 			return

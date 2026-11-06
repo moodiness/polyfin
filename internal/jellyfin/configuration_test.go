@@ -148,7 +148,7 @@ func TestInvalidConfigurationsAreRefused(t *testing.T) {
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, s.url+"/Users/Configuration", strings.NewReader(body))
 		request.Header.Set("Authorization", app("tv", token))
 		request.Header.Set("Content-Type", contentType)
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}

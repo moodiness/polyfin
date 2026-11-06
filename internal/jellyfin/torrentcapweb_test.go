@@ -30,7 +30,7 @@ func (p capTitles) streamOpen(t *testing.T, token, name string) func() {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if response, err := http.DefaultClient.Do(request); err == nil {
+		if response, err := testClient.Do(request); err == nil {
 			_, _ = io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 		}

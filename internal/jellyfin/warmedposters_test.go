@@ -206,7 +206,7 @@ func servedFromCache(t *testing.T, s testServer, art *posterHost, token string, 
 		for size, width := range cardSizes {
 			request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 				s.url+"/Items/"+item.Id+"/Images/Primary?"+size+"&tag="+item.ImageTags["Primary"], nil)
-			response, err := http.DefaultClient.Do(request)
+			response, err := testClient.Do(request)
 			if err != nil {
 				t.Fatal(err)
 			}

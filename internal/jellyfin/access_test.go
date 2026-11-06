@@ -151,7 +151,7 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 		t.Helper()
 		request, _ := http.NewRequest(http.MethodGet, p.url+target, nil)
 		request.Header.Set("Range", "bytes=0-3")
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}

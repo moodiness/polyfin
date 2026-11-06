@@ -223,7 +223,7 @@ func TestBrowsersDrawingPGSGetItsRawFile(t *testing.T) {
 	}
 	request, _ := http.NewRequest(http.MethodGet, s.url+pgs.DeliveryUrl, nil)
 	request.Header.Set("Range", "bytes=13-24")
-	response2, err := http.DefaultClient.Do(request)
+	response2, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

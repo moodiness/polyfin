@@ -239,7 +239,7 @@ func TestEclipseAddonPlaysInJellyfinMusicApps(t *testing.T) {
 		!strings.Contains(info.MediaSources[0].TranscodingUrl, "AudioCodec=mp3") {
 		t.Fatalf("conversion: %d %s", status, body)
 	}
-	response, err := http.Get(s.url + info.MediaSources[0].TranscodingUrl)
+	response, err := testClient.Get(s.url + info.MediaSources[0].TranscodingUrl)
 	if err != nil {
 		t.Fatal(err)
 	}

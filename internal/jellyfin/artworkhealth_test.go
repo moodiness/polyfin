@@ -315,7 +315,7 @@ func TestDeadArtworkIsNotAdvertised(t *testing.T) {
 	}
 	image := func(path string) int {
 		t.Helper()
-		response, err := http.Get(s.url + path)
+		response, err := testClient.Get(s.url + path)
 		if err != nil {
 			t.Fatal(err)
 		}

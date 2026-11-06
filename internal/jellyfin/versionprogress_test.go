@@ -196,7 +196,7 @@ func (h heldSetup) askPlaybackInfo(t *testing.T, source string) <-chan heldAnswe
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, h.url+"/Items/"+h.movie+"/PlaybackInfo", bytes.NewReader(body))
 		request.Header.Set("Authorization", app("tv", h.token))
 		request.Header.Set("Content-Type", "application/json")
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			answered <- heldAnswer{err: err}
 			return

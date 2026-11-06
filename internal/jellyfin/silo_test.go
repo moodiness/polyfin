@@ -77,7 +77,7 @@ func (a siloApps) do(t *testing.T, method, path, token, profile string, body any
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

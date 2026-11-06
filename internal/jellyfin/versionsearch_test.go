@@ -24,7 +24,7 @@ func (h heldSetup) search(t *testing.T, id, token string) searchAnswer {
 	if token != "" {
 		request.Header.Set("Authorization", app("tv", token))
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

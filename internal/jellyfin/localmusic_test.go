@@ -316,7 +316,7 @@ func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
 		bytes.NewReader([]byte("[00:00.50]Uploaded words\n")))
 	request.Header.Set("Authorization", admin)
 	request.Header.Set("Content-Type", "text/plain")
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

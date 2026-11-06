@@ -104,7 +104,7 @@ func TestIPTVSourcesListAndPlayChannels(t *testing.T) {
 	if !source.IsInfiniteStream || !source.SupportsDirectPlay {
 		t.Fatalf("a live source played as it is: %+v", source)
 	}
-	response, err := http.Get(source.Path)
+	response, err := testClient.Get(source.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestIPTVSourcesListAndPlayChannels(t *testing.T) {
 	if segment == "" {
 		t.Fatalf("relayed playlist: %d %s", response.StatusCode, playlist)
 	}
-	response, err = http.Get(segment)
+	response, err = testClient.Get(segment)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestIPTVChannelsAreRequestedAsABrowser(t *testing.T) {
 	source := livePlaybackInfo(t, s, token, channels.Items[0].Id, "jellyfin-web-chrome")
 	get := func(address string) (int, string) {
 		t.Helper()
-		response, err := http.Get(address)
+		response, err := testClient.Get(address)
 		if err != nil {
 			t.Fatal(err)
 		}

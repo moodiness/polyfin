@@ -42,7 +42,7 @@ func (s testServer) send(method, path, authorization, contentType, body string) 
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		s.t.Fatal(err)
 	}

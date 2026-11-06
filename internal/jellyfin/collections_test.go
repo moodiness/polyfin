@@ -405,7 +405,7 @@ func TestCollectionsShowEachUserTheTitlesTheyMaySee(t *testing.T) {
 
 	poster := func(tag string) string {
 		t.Helper()
-		response, err := http.Get(s.url + "/Items/" + id + "/Images/Primary?tag=" + tag)
+		response, err := testClient.Get(s.url + "/Items/" + id + "/Images/Primary?tag=" + tag)
 		if err != nil {
 			t.Fatal(err)
 		}

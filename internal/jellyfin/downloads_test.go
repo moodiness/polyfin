@@ -41,7 +41,7 @@ func fetchURL(t *testing.T, target string, header http.Header) (*http.Response, 
 	for name, values := range header {
 		request.Header[name] = values
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

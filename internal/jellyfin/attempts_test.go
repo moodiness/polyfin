@@ -30,7 +30,7 @@ func TestWrongPasswordsAtOnceAreCountedBeforeTheyAreChecked(t *testing.T) {
 			request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, s.url+"/Users/AuthenticateByName", bytes.NewReader(encoded))
 			request.Header.Set("Authorization", app("tv", ""))
 			request.Header.Set("Content-Type", "application/json")
-			response, err := http.DefaultClient.Do(request)
+			response, err := testClient.Do(request)
 			if err != nil {
 				t.Error(err)
 				answers <- 0

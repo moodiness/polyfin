@@ -100,7 +100,7 @@ func (s dlnaSetup) browse(t *testing.T, object, flag string, start, count int) b
 	request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, s.site+"/dlna/control/ContentDirectory", strings.NewReader(body))
 	request.Header.Set("SOAPAction", `"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"`)
 	request.Header.Set("User-Agent", "TestTV DLNADOC/1.50")
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func fetch(t *testing.T, address string, headers map[string]string) (*http.Respo
 	for name, value := range headers {
 		request.Header.Set(name, value)
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -592,7 +592,7 @@ func TestDLNASearchesFromHugeIndexes(t *testing.T) {
 			`<SearchCriteria>dc:title contains "Rated"</SearchCriteria><Filter>*</Filter><StartingIndex>%d</StartingIndex>`+
 			`<RequestedCount>10</RequestedCount><SortCriteria></SortCriteria></u:Search></s:Body></s:Envelope>`, start)
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, s.site+"/dlna/control/ContentDirectory", strings.NewReader(body))
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Fatalf("a search from %d: %v", start, err)
 		}

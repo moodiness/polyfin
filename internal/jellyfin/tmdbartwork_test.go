@@ -231,7 +231,7 @@ func (e posterlessEnv) list(t *testing.T) map[string]BaseItemDto {
 // the body.
 func (e posterlessEnv) image(t *testing.T, item BaseItemDto, imageType, tag string) (int, []byte) {
 	t.Helper()
-	response, err := http.Get(e.url + "/Items/" + item.Id + "/Images/" + imageType + "?tag=" + tag)
+	response, err := testClient.Get(e.url + "/Items/" + item.Id + "/Images/" + imageType + "?tag=" + tag)
 	if err != nil {
 		t.Fatal(err)
 	}

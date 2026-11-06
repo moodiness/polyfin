@@ -523,7 +523,7 @@ func (l *lyricsServer) uploadLyrics(t *testing.T, token, id, fileName string, bo
 	request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, l.url+path, bytes.NewReader(body))
 	request.Header.Set("Authorization", app("web", token))
 	request.Header.Set("Content-Type", "text/plain")
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

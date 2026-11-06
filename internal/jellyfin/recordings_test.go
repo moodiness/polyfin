@@ -613,7 +613,7 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	}
 	request, _ := http.NewRequest(http.MethodGet, s.url+"/Items/"+recording.Id+"/Download", nil)
 	request.Header.Set("Authorization", app("tv", token))
-	if response, err := http.DefaultClient.Do(request); err != nil || response.StatusCode != http.StatusOK ||
+	if response, err := testClient.Do(request); err != nil || response.StatusCode != http.StatusOK ||
 		!strings.Contains(response.Header.Get("Content-Disposition"), ".mkv") {
 		t.Errorf("the recording downloaded: %v %v", response, err)
 	} else {

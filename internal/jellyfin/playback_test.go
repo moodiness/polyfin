@@ -341,7 +341,7 @@ func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
 	// URL's.
 	get := func(target string) (int, http.Header, string) {
 		t.Helper()
-		response, err := http.Get(p.url + target)
+		response, err := testClient.Get(p.url + target)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -552,7 +552,7 @@ func mustID(t *testing.T, s string) accounts.ID {
 // players do.
 func fetchText(t *testing.T, target string) (int, http.Header, string) {
 	t.Helper()
-	response, err := http.Get(target)
+	response, err := testClient.Get(target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ func TestStreamsNeedAGrant(t *testing.T) {
 		t.Helper()
 		request, _ := http.NewRequest(http.MethodGet, target, nil)
 		request.Header.Set("Range", "bytes=0-3")
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -711,7 +711,7 @@ func TestSubtitlesNeedNoCredentials(t *testing.T) {
 		"srt": "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n",
 		"js":  `{"TrackEvents":[{"Id":"1","Text":"Bonjour","StartPositionTicks":10000000,"EndPositionTicks":40000000}]}`,
 	} {
-		response, err := http.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/0/0/Stream." + format)
+		response, err := testClient.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/0/0/Stream." + format)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -721,7 +721,7 @@ func TestSubtitlesNeedNoCredentials(t *testing.T) {
 			t.Errorf("%s: %d %q", format, response.StatusCode, body)
 		}
 	}
-	if response, _ := http.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/5/Stream.vtt"); response.StatusCode != http.StatusInternalServerError {
+	if response, _ := testClient.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/5/Stream.vtt"); response.StatusCode != http.StatusInternalServerError {
 		t.Errorf("a subtitle that does not exist: %d", response.StatusCode)
 	}
 }

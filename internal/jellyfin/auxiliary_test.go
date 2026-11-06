@@ -79,7 +79,7 @@ func (s auxiliaryServer) call(method, path, authorization, body string) (int, []
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		s.t.Fatal(err)
 	}
