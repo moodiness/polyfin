@@ -142,6 +142,7 @@ How the jobs are set up:
 - **Go caches:** Go's build and module caches are restored from `main`'s latest run. Only runs on `main` save them, each under a key of its own, so that the next runs start from the latest build. A job's leg with no cache of its own, such as a new leg of a split job, starts from another leg's on the same system.
 - **PostgreSQL:** in the Linux test jobs, the tests' PostgreSQL keeps its data in memory.
 - **Image tools:** in the Linux test jobs, `pg_dump` and `pg_restore` are the image's, from the Dockerfile's `postgresql-client` stage. Their FFmpeg comes from its `ffmpeg` stage.
+- **Tesseract:** the race jobs keep the Tesseract packages apt fetches in a cache, keyed by their checksums, as Ubuntu's mirror sometimes sends them at a few kB/s. A cached package without the checksum apt expects is fetched again, and a cached set that fails to install is fetched in full.
 - **Windows:** the Windows tests run in two jobs, balanced by the packages' times on the Windows runner. `internal/playback` and the smaller packages run in one, `internal/localfiles` and `internal/hls` in the other.
 - **Polyfin Desktop's packages:** `.github/workflows/desktop-package.yml` builds each package, then installs and smokes it. The CI workflow calls it for each package, so that each test waits for its own package only. Every package embeds the admin app one Linux job builds, through the scripts' `SKIP_WEB=1`: `npm ci` alone takes about a minute and a half on Windows on Arm.
 

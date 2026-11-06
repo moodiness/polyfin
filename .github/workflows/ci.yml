@@ -354,11 +354,87 @@ jobs:
           done
           echo "POLYFIN_TEST_PG_DUMP=$client/pg_dump" >> "$GITHUB_ENV"
           echo "POLYFIN_TEST_PG_RESTORE=$client/pg_restore" >> "$GITHUB_ENV"
-      - name: Install Tesseract with English and French data for the OCR tests
+      - name: List the Tesseract packages apt would fetch
+        # apt's index comes from the mirror in a second or two, but its
+        # packages have taken 4 to 8 minutes in about one run in six, at 16
+        # to 40 kB/s. The packages this runner lacks, with the checksums the
+        # index gives them, key a cache of them, which the next step fills
+        # apt's archive from.
+        id: tesseract
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra
+          uris="$RUNNER_TEMP/tesseract.uris"
+          sudo apt-get install --print-uris -qq --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra | tee "$uris"
+          if [ -s "$uris" ]; then
+            prefix="apt-tesseract-$ImageOS-$RUNNER_ARCH-"
+            {
+              echo "prefix=$prefix"
+              echo "key=$prefix$(sha256sum < "$uris" | cut -c1-16)"
+            } >> "$GITHUB_OUTPUT"
+          fi
+      - name: Restore the Tesseract packages
+        id: tesseract-cache
+        if: steps.tesseract.outputs.key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: &tesseract-debs ${{ runner.temp }}/tesseract-debs/*.deb
+          key: ${{ steps.tesseract.outputs.key }}
+          # An older set still holds most of them: apt fetches the rest.
+          restore-keys: ${{ steps.tesseract.outputs.prefix }}
+      - name: Install Tesseract with English and French data for the OCR tests
+        id: tesseract-install
+        run: |
+          debs="$RUNNER_TEMP/tesseract-debs"
+          mkdir -p "$debs/partial"
+          # Only the cached packages apt would fetch, with the checksum it
+          # expects, stay; it fetches any other.
+          declare -A wanted=()
+          while read -r _ file _ checksum; do
+            wanted[$file]=1
+            # apt prints one checksum of the index, MD5Sum on Ubuntu 24.04.
+            case "$checksum" in
+              SHA512:*) sum=sha512sum ;;
+              SHA256:*) sum=sha256sum ;;
+              SHA1:*) sum=sha1sum ;;
+              MD5Sum:*) sum=md5sum ;;
+              *) sum="" ;;
+            esac
+            if [ -f "$debs/$file" ] && { [ -z "$sum" ] || [ "$("$sum" < "$debs/$file" | cut -d' ' -f1)" != "${checksum#*:}" ]; }; then
+              echo "Not the package apt expects: $file"
+              rm -f "$debs/$file"
+            fi
+          done < "$RUNNER_TEMP/tesseract.uris"
+          for deb in "$debs"/*.deb; do
+            if [ -f "$deb" ] && [ -z "${wanted[$(basename "$deb")]:-}" ]; then rm -f "$deb"; fi
+          done
+          apt_install() {
+            sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$debs/" \
+              -o APT::Keep-Downloaded-Packages=true "$@"
+          }
+          packages=(tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra)
+          # A cached set that fails to install is fetched again, once what it
+          # left half installed is mended: a stale cache never fails the run.
+          if ! apt_install "${packages[@]}"; then
+            echo "::warning::Tesseract did not install from the cached packages: fetching them again"
+            sudo rm -f "$debs"/*.deb
+            apt_install --fix-broken
+            apt_install "${packages[@]}"
+            # The folder then lacks what was installed before the failure.
+            echo "fell-back=true" >> "$GITHUB_OUTPUT"
+          fi
           echo "POLYFIN_TEST_TESSERACT=/usr/bin/tesseract" >> "$GITHUB_ENV"
+      - name: Keep the Tesseract packages for the next runs
+        # From any run that missed them, a pull request's too: they are
+        # about 9 MB. Main's serve every pull request, a pull request's
+        # its own next runs. Before the tests, so that a failing test does
+        # not lose them.
+        if: >-
+          steps.tesseract.outputs.key != '' && steps.tesseract-cache.outputs.cache-hit != 'true'
+          && steps.tesseract-install.outputs.fell-back != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: *tesseract-debs
+          key: ${{ steps.tesseract.outputs.key }}
       - name: Test
         env:
           PART: ${{ matrix.part }}
