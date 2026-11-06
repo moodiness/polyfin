@@ -18,6 +18,7 @@ const account: typeof en = {
       metadataLanguage: 'Langue des métadonnées',
       webTheme: 'Thème du lecteur web',
       audioRegion: 'Région audio',
+      interfaceSize: 'Taille de l’interface',
       sound: 'Son',
       sharedLinks: 'Liens partagés',
       reminders: 'Rappels',
@@ -61,6 +62,13 @@ const account: typeof en = {
         'pt-BR': 'Portugais (Brésil)',
         'pt-PT': 'Portugais (Portugal)',
       },
+    },
+    interfaceSize: {
+      help: 'La taille des textes et des commandes de cette appli d’administration, sur chaque navigateur où vous vous connectez. Compacte montre plus d’une page sur un ordinateur, Grande se lit mieux sur un téléviseur, une tablette ou de loin. Un téléphone montre les deux de la même façon. Déconnecté, un navigateur garde la dernière taille qu’il a montrée.',
+      label: 'Taille de l’interface',
+      compact: 'Compacte',
+      large: 'Grande',
+      saved: 'Taille de l’interface enregistrée.',
     },
     sound: {
       help: 'Deux façons de rendre vos vidéos plus fortes et plus égales que vos applications ne les lisent, chacune avec son prix. Elles s’appliquent à votre prochaine lecture.',

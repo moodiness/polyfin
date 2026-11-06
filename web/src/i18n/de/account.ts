@@ -18,6 +18,7 @@ const account: typeof en = {
       metadataLanguage: 'Metadatensprache',
       webTheme: 'Theme des Web-Players',
       audioRegion: 'Audioregion',
+      interfaceSize: 'Größe der Oberfläche',
       sound: 'Ton',
       sharedLinks: 'Freigabelinks',
       reminders: 'Erinnerungen',
@@ -61,6 +62,13 @@ const account: typeof en = {
         'pt-BR': 'Portugiesisch (Brasilien)',
         'pt-PT': 'Portugiesisch (Portugal)',
       },
+    },
+    interfaceSize: {
+      help: 'Die Größe der Texte und Bedienelemente dieser Admin-App in jedem Browser, in dem du dich anmeldest. Kompakt zeigt auf einem Computer mehr von einer Seite, Groß ist auf einem Fernseher, einem Tablet oder aus der Ferne besser lesbar. Auf einem Smartphone sehen beide gleich aus. Abgemeldet behält ein Browser die Größe, die er zuletzt gezeigt hat.',
+      label: 'Größe der Oberfläche',
+      compact: 'Kompakt',
+      large: 'Groß',
+      saved: 'Größe der Oberfläche gespeichert.',
     },
     sound: {
       help: 'Zwei Wege, Ihre Videos lauter und gleichmäßiger zu machen, als Ihre Apps sie abspielen, jeder mit seinem Preis. Sie gelten ab Ihrer nächsten Wiedergabe.',

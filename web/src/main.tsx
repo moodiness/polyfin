@@ -6,9 +6,12 @@ import { queryClient } from '@/api'
 import { router } from '@/app/router'
 import { answerAppNavigation } from '@/appNavigation'
 import { LanguageProvider } from '@/i18n'
+import { showKeptInterfaceSize } from '@/interfaceSize'
 import { ToastProvider } from '@/ui'
 import '@/index.css'
 
+// Before anything is drawn, so that the first frame has the size the session then confirms.
+showKeptInterfaceSize()
 answerAppNavigation((delta) => router.navigate(delta))
 
 const root = document.getElementById('root')

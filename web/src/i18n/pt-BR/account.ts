@@ -18,6 +18,7 @@ const account: typeof en = {
       metadataLanguage: 'Idioma dos metadados',
       webTheme: 'Tema do player web',
       audioRegion: 'Região do áudio',
+      interfaceSize: 'Tamanho da interface',
       sound: 'Som',
       sharedLinks: 'Links compartilhados',
       reminders: 'Lembretes',
@@ -61,6 +62,13 @@ const account: typeof en = {
         'pt-BR': 'Português (Brasil)',
         'pt-PT': 'Português (Portugal)',
       },
+    },
+    interfaceSize: {
+      help: 'O tamanho dos textos e controles deste aplicativo de administração em cada navegador em que você entra. Compacto mostra mais de uma página em um computador; Grande é mais fácil de ler em uma TV, um tablet ou de longe. Um celular mostra os dois do mesmo jeito. Sem sessão, um navegador mantém o último tamanho que mostrou.',
+      label: 'Tamanho da interface',
+      compact: 'Compacto',
+      large: 'Grande',
+      saved: 'Tamanho da interface salvo.',
     },
     sound: {
       help: 'Duas formas de deixar seus vídeos mais altos e mais uniformes do que seus aplicativos os reproduzem, cada uma com seu custo. Elas valem a partir da sua próxima reprodução.',

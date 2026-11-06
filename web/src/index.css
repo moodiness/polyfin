@@ -408,12 +408,17 @@
   /*
    * The density: every size is in rem, so this one knob sets them all. A phone keeps 16 px to the
    * rem (fields stay at 16 px or more, so iOS does not zoom on focus); from 48rem up the app is
-   * 15 % denser, while the page keeps its 1280 px width.
+   * 15 % denser, while the page keeps its 1280 px width. That is the Compact interface size; Large,
+   * a choice of My account, keeps 16 px on every screen (`data-interface-size`, see
+   * interfaceSize.ts).
    */
   html {
     font-size: 100%;
     @media (width >= 48rem) {
       font-size: 85%;
+      &[data-interface-size='large'] {
+        font-size: 100%;
+      }
     }
     color-scheme: dark;
     background-color: var(--color-bg);

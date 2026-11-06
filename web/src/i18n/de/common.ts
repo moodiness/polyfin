@@ -93,6 +93,7 @@ const common: typeof en = {
     invalid_used_by:
       'Eine angehakte Gruppe oder ein angehakter Benutzer existiert nicht mehr. Lade die Seite neu.',
     invalid_audio_region: 'Wähle eine Region aus der Liste.',
+    invalid_interface_size: 'Wähle eine Größe aus der Liste.',
     invalid_catalog_limit:
       'Die pro Katalog gelesenen Titel müssen eine ganze Zahl von 100 bis 20.000 sein.',
     invalid_channel_limit:

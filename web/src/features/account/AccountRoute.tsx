@@ -34,6 +34,7 @@ import { ReminderList, ReminderSettingsForm } from './Reminders'
 import { OwnMetadataLanguage } from './MetadataLanguage'
 import { OwnWebTheme } from './WebTheme'
 import { OwnAudioRegion } from './AudioRegion'
+import { OwnInterfaceSize } from './InterfaceSize'
 import { OwnSoundOptions } from './Sound'
 import ResetPreferences from './ResetPreferences'
 import TasteProfile from './TasteProfile'
@@ -53,6 +54,7 @@ const sectionIds = [
   'metadata-language',
   'web-theme',
   'audio-region',
+  'interface-size',
   'sound',
   'shared-links',
   'reminders',
@@ -76,11 +78,11 @@ const anchorMargin =
  * `/me/account`, in the frame of a user's page: a band with the person (avatar, name, role) and
  * Reset my preferences, then the sections as words on the left and their content beside them:
  * statistics, tracking services, Continue Watching, hidden titles, home rows, the taste profile,
- * track choices, the metadata language, the web player theme, the audio region, sound, shared
- * links (while the user may share or has links), programme reminders (with the Live TV
- * permission), importing from another server and from an app (unless the server turns it off),
- * notifications, devices, password and two-step sign-in. Every setting saves as it changes, so
- * the page has no unsaved dock.
+ * track choices, the metadata language, the web player theme, the audio region, the interface
+ * size, sound, shared links (while the user may share or has links), programme reminders (with
+ * the Live TV permission), importing from another server and from an app (unless the server
+ * turns it off), notifications, devices, password and two-step sign-in. Every setting saves as it
+ * changes, so the page has no unsaved dock.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -144,6 +146,7 @@ export default function AccountRoute() {
     'metadata-language': true,
     'web-theme': true,
     'audio-region': true,
+    'interface-size': true,
     sound: true,
     'shared-links': sharing,
     reminders: reminding,
@@ -166,6 +169,7 @@ export default function AccountRoute() {
     'metadata-language': text.sections.metadataLanguage,
     'web-theme': text.sections.webTheme,
     'audio-region': text.sections.audioRegion,
+    'interface-size': text.sections.interfaceSize,
     sound: text.sections.sound,
     'shared-links': text.sections.sharedLinks,
     reminders: text.sections.reminders,
@@ -216,7 +220,7 @@ export default function AccountRoute() {
       >
         <OwnTrackChoices />
       </AccountSection>
-      {/* Three settings of one row each: the row is the section, its label the heading's
+      {/* Four settings of one row each: the row is the section, its label the heading's
               words, its help shown while it is lit. */}
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div id="metadata-language" className={anchorMargin}>
@@ -227,6 +231,9 @@ export default function AccountRoute() {
         </div>
         <div id="audio-region" className={anchorMargin}>
           <OwnAudioRegion />
+        </div>
+        <div id="interface-size" className={anchorMargin}>
+          <OwnInterfaceSize />
         </div>
       </div>
       <AccountSection id="sound" title={labels.sound} help={text.sound.help}>

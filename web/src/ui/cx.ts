@@ -5,7 +5,8 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 
 /**
  * A length in pixels as rem, for sizes set from code (icons, inline styles): they then follow the
- * root's density, as the classes do (16 px to the rem on a phone, 13.6 on a desktop).
+ * root's density, as the classes do (16 px to the rem on a phone, 13.6 on a desktop in the Compact
+ * interface size).
  */
 export function rem(px: number): string {
   return `${px / 16}rem`
@@ -13,7 +14,7 @@ export function rem(px: number): string {
 
 /**
  * A length in pixels at the root's density, for code that places or measures in pixels what the
- * classes size in rem: `scaledPx(16)` is 16 on a phone and 13.6 on a desktop.
+ * classes size in rem: `scaledPx(16)` is 16 on a phone and 13.6 on a desktop in Compact.
  */
 export function scaledPx(px: number): number {
   return (px * parseFloat(getComputedStyle(document.documentElement).fontSize)) / 16

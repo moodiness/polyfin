@@ -90,6 +90,7 @@ const common: typeof en = {
     invalid_language: 'Scegli una lingua dall’elenco.',
     invalid_used_by: 'Un gruppo o un utente selezionato non esiste più. Ricarica la pagina.',
     invalid_audio_region: 'Scegli una regione dall’elenco.',
+    invalid_interface_size: 'Scegli una dimensione dall’elenco.',
     invalid_catalog_limit:
       'I titoli letti per catalogo devono essere un numero intero da 100 a 20.000.',
     invalid_channel_limit:
