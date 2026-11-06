@@ -150,17 +150,18 @@ shared_files() {
 }
 
 # install_shared DEST: jellyfin-web, the fonts and the licenses, into the
-# install folder DEST, with Polyfin's own license, and those of hls.js and
-# LumaaGlaass, which the server embeds.
+# install folder DEST, with Polyfin's own license, and those of hls.js,
+# LumaaGlaass and Figtree, which the server embeds.
 install_shared() {
 	local files
 	files="$(shared_files)"
-	mkdir -p "$1/licenses/polyfin" "$1/licenses/hls.js" "$1/licenses/lumaaglaass"
+	mkdir -p "$1/licenses/polyfin" "$1/licenses/hls.js" "$1/licenses/lumaaglaass" "$1/licenses/figtree"
 	cp -R "$files/jellyfin-web" "$files/fonts" "$1/"
 	cp -R "$files/licenses/." "$1/licenses/"
 	cp "$ROOT/LICENSE" "$1/licenses/polyfin/"
 	cp "$ROOT/third_party/hls.js/LICENSE" "$ROOT/third_party/hls.js/NOTICE" "$1/licenses/hls.js/"
 	cp "$ROOT/third_party/lumaaglaass/LICENSE" "$ROOT/third_party/lumaaglaass/NOTICE" "$1/licenses/lumaaglaass/"
+	cp "$ROOT/third_party/figtree/LICENSE" "$ROOT/third_party/figtree/NOTICE" "$1/licenses/figtree/"
 }
 
 # check_install DIR EXE: DIR holds the install layout of docs/desktop.md,
@@ -170,7 +171,7 @@ check_install() {
 	for want in "polyfin$2" "postgresql/bin/postgres$2" "postgresql/bin/initdb$2" "postgresql/bin/pg_ctl$2" \
 		"postgresql/bin/pg_dump$2" "postgresql/bin/pg_restore$2" \
 		jellyfin-web/index.html fonts/truetype/dejavu/DejaVuSans.ttf licenses/jellyfin-web/LICENSE \
-		licenses/jellyfin-web/NOTICE licenses/postgresql licenses/polyfin/LICENSE; do
+		licenses/jellyfin-web/NOTICE licenses/postgresql licenses/polyfin/LICENSE licenses/figtree/LICENSE; do
 		if [ ! -e "$1/$want" ]; then
 			echo "the install folder $1 lacks $want" >&2
 			missing=1

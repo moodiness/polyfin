@@ -1,0 +1,17 @@
+Figtree 5.3.0 (the @fontsource-variable/figtree package), by The Figtree
+Project Authors (Erik Kennedy).
+Licensed under the SIL Open Font License, version 1.1: see LICENSE.
+
+Polyfin distributes Figtree, unmodified, in two places:
+
+- The admin app, at /admin/: its build takes the package from npm
+  (web/package.json) and embeds its font files in Polyfin, served with
+  the app's other assets.
+- The page of share links, at /share/{token}: Polyfin embeds two files of
+  the package, files/figtree-latin-wght-normal.woff2 and
+  files/figtree-latin-ext-wght-normal.woff2, at
+  internal/jellyfin/share/assets/, and serves them at /share/assets/.
+
+Neither loads anything from elsewhere.
+
+Source: https://github.com/erikdkennedy/figtree

@@ -96,7 +96,9 @@ The link opens `/share/…`, a page needing no account. Its language is the firs
 - There is no library, search or other title.
 - An expired, revoked, turned off or unknown link says so.
 
-The page plays HTTP Live Streaming natively where it can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, served by Polyfin: nothing loads from elsewhere.
+The page plays HTTP Live Streaming natively where it can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, served by Polyfin. Its words are in [Figtree](https://github.com/erikdkennedy/figtree), the admin app's font, served by Polyfin too: nothing loads from elsewhere.
+
+Figtree is under the SIL Open Font License 1.1. Its license and a notice are in `/usr/share/doc/figtree` in the image (from [`third_party/figtree`](../third_party/figtree)), and in `licenses/figtree` with Polyfin Desktop.
 
 The page remembers where the guest stopped, in their browser only:
 

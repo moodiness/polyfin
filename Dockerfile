@@ -194,6 +194,9 @@ COPY third_party/hls.js/LICENSE third_party/hls.js/NOTICE /usr/share/doc/hls.js/
 # LumaaGlaass, the default web player theme, embedded in Polyfin (MIT): its
 # license and a notice.
 COPY third_party/lumaaglaass/LICENSE third_party/lumaaglaass/NOTICE /usr/share/doc/lumaaglaass/
+# Figtree, the font of the admin app and of the page of share links,
+# embedded in Polyfin (OFL-1.1): its license and a notice.
+COPY third_party/figtree/LICENSE third_party/figtree/NOTICE /usr/share/doc/figtree/
 COPY --from=build /polyfin /polyfin
 # Polyfin's files: the parts of the files being read, which it empties
 # when it starts, and by default the Live TV recordings and the database
