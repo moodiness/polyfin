@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"io/fs"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -281,6 +284,47 @@ async function run(scenario) {
 	for _, name := range slices.Sorted(maps.Keys(scenarios)) {
 		if got, want := results[name], scenarios[name].Want; !slices.Equal(got, want) {
 			t.Errorf("%s:\n got  %q\n want %q", name, got, want)
+		}
+	}
+}
+
+// Every file the page and its style link to is served from
+// /share/assets/: the logo and the style, and the font and hls.js, which
+// are kept for a day while the page's own files are checked at each load.
+func TestSharePageAssetsAreServed(t *testing.T) {
+	t.Parallel()
+	page, err := fs.ReadFile(shareFiles, "share/page.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	style, err := fs.ReadFile(shareFiles, "share/assets/share.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, match := range regexp.MustCompile(`/share/assets/([\w.-]+)`).FindAllStringSubmatch(string(page), -1) {
+		names = append(names, match[1])
+	}
+	for _, match := range regexp.MustCompile(`url\('([\w.-]+)'\)`).FindAllStringSubmatch(string(style), -1) {
+		names = append(names, match[1])
+	}
+	for _, want := range []string{"share.css", "share.js", "hls.min.js", "polyfin.svg",
+		"figtree-latin-wght-normal.woff2", "figtree-latin-ext-wght-normal.woff2"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("%s is not linked: %q", want, names)
+		}
+	}
+	handler := http.StripPrefix("/share/assets/", shareAssetsHandler())
+	for _, name := range names {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/share/assets/"+name, nil))
+		kept := strings.HasPrefix(name, "hls") || strings.HasPrefix(name, "figtree")
+		cache := recorder.Header().Get("Cache-Control")
+		if recorder.Code != http.StatusOK || kept != (cache == "public, max-age=86400") {
+			t.Errorf("%s: %d, Cache-Control %q", name, recorder.Code, cache)
+		}
+		if strings.HasSuffix(name, ".woff2") && recorder.Header().Get("Content-Type") != "font/woff2" {
+			t.Errorf("%s: Content-Type %q", name, recorder.Header().Get("Content-Type"))
 		}
 	}
 }

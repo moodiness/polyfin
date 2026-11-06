@@ -83,10 +83,16 @@
     poster.hidden = false
   })
   poster.src = base + '/image/primary'
-  // The backdrop is the player's poster, when the title has one.
+  // The backdrop is the player's poster, when the title has one, and
+  // tints the top of the page, blurred far.
+  var room = document.querySelector('.room img')
   var backdrop = new Image()
   backdrop.addEventListener('load', function () {
     if (!video.currentTime) video.poster = backdrop.src
+    if (room) {
+      room.src = backdrop.src
+      room.classList.add('on')
+    }
   })
   backdrop.src = base + '/image/backdrop'
 

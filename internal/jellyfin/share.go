@@ -41,8 +41,9 @@ import (
 //	                                       text subtitles;
 //	POST /share/{token}/play/{session}/progress, …/stop
 //	                                       its position, and its end;
-//	GET  /share/assets/{file}              the page's script, style and
-//	                                       hls.js, the same for every link.
+//	GET  /share/assets/{file}              the page's script, style, logo,
+//	                                       font and hls.js, the same for
+//	                                       every link.
 //
 // A guest plays through Polyfin, never from the source, as stream
 // addresses can hold keys, and over HLS only, nothing to download. The
@@ -84,8 +85,9 @@ var shareFiles embed.FS
 
 var sharePage = template.Must(template.ParseFS(shareFiles, "share/page.html"))
 
-// shareAssets are the files of /share/assets/: the page's script and
-// style, and hls.js, vendored (see third_party/hls.js).
+// shareAssets are the files of /share/assets/: the page's script, style
+// and logo, and, vendored, hls.js (see third_party/hls.js) and the
+// Figtree font (see third_party/figtree).
 var shareAssets = func() fs.FS {
 	sub, err := fs.Sub(shareFiles, "share/assets")
 	if err != nil {
@@ -286,13 +288,13 @@ func (h *Handler) Share() http.Handler {
 	})
 }
 
-// shareAssetsHandler serves the files of /share/assets/: hls.js, which
-// never changes under its name, kept for a day, the page's own files
-// checked again at each load.
+// shareAssetsHandler serves the files of /share/assets/: hls.js and the
+// font, which never change under their names, kept for a day, the page's
+// own files checked again at each load.
 func shareAssetsHandler() http.Handler {
 	files := http.FileServerFS(shareAssets)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "hls") {
+		if strings.HasPrefix(r.URL.Path, "hls") || strings.HasPrefix(r.URL.Path, "figtree") {
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
@@ -431,8 +433,9 @@ func (h *Handler) sharePage(w http.ResponseWriter, r *http.Request) {
 	header.Set("Content-Type", "text/html; charset=utf-8")
 	header.Set("Cache-Control", "no-store")
 	// hls.js runs its worker from a blob: address, and plays from blob:
-	// addresses through Media Source Extensions.
-	header.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; "+
+	// addresses through Media Source Extensions. The page's font is its
+	// own, among its assets.
+	header.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; media-src 'self' blob:; "+
 		"connect-src 'self'; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 	w.WriteHeader(status)
 	if err := sharePage.Execute(w, data); err != nil && r.Context().Err() == nil {
