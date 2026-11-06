@@ -119,19 +119,24 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
                 <h3 className="mb-4 text-group text-ink max-md:mb-3">{category}</h3>
                 <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
                   {list.map((task) => (
+                    // Below 640 px a task is a compact row: its name and Run now side by side,
+                    // then its last and next runs across the row, and its description left to
+                    // screen readers.
                     <li
                       key={task.id}
-                      className="grid gap-x-10 gap-y-4 rounded-row bg-s1 py-5 pr-[22px] pl-7 max-md:px-5 max-md:py-4 lg:grid-cols-[minmax(0,1fr)_minmax(11rem,auto)_auto] lg:items-center"
+                      className="grid gap-x-10 gap-y-4 rounded-row bg-s1 py-5 pr-[22px] pl-7 max-md:px-5 max-md:py-4 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-3 max-sm:gap-y-2 max-sm:py-3.5 max-sm:pr-3.5 max-sm:pl-4 lg:grid-cols-[minmax(0,1fr)_minmax(11rem,auto)_auto] lg:items-center"
                     >
-                      <div className="min-w-0">
-                        <p className="text-h3 text-ink max-md:text-[18px]">{task.name}</p>
-                        <p className="mt-1 max-w-[66ch] text-small text-ink-2 max-md:text-[16px]">
+                      <div className="min-w-0 max-sm:contents">
+                        <p className="text-h3 break-words hyphens-auto text-ink max-md:text-[18px] max-sm:col-start-1 max-sm:row-start-1 max-sm:self-center">
+                          {task.name}
+                        </p>
+                        <p className="mt-1 max-w-[66ch] text-small text-ink-2 max-md:text-[16px] max-sm:sr-only">
                           {task.description}
                         </p>
                         <LastRun task={task} />
                       </div>
                       <NextRun task={task} />
-                      <div className="flex lg:justify-end">
+                      <div className="flex max-sm:col-start-2 max-sm:row-start-1 max-sm:self-start lg:justify-end">
                         <TaskButton task={task} act={act} />
                       </div>
                     </li>
@@ -179,14 +184,14 @@ function NextRun({ task }: { task: Task }) {
   const { language, t } = useI18n()
   const text = t.system.schedule
   return (
-    <div className="text-small text-ink-2 figures lg:text-right">
+    <div className="text-small text-ink-2 figures max-sm:col-span-full max-sm:flex max-sm:flex-wrap max-sm:gap-x-2 lg:text-right">
       <p>{text.nextRun}</p>
       {task.next !== null ? (
-        <p className="text-lead text-ink max-md:text-[18px]">
+        <p className="text-lead text-ink max-md:text-[18px] max-sm:text-small">
           <RelativeTime iso={task.next} />
         </p>
       ) : (
-        <p className="text-lead text-ink max-md:text-[18px]">{text.byHandOnly}</p>
+        <p className="text-lead text-ink max-md:text-[18px] max-sm:text-small">{text.byHandOnly}</p>
       )}
       {task.interval > 0 && <p>{text.every(formatSpan(task.interval, language))}</p>}
       {task.daily !== null && <p>{text.daily(formatHour(task.daily, language))}</p>}
@@ -201,7 +206,7 @@ function LastRun({ task }: { task: Task }) {
   const label = <span className="text-ink-2">{text.lastRun}</span>
   if (task.state !== 'Idle') {
     return (
-      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-small">
+      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-small max-sm:col-span-full max-sm:mt-0">
         {label}
         <StatusPill tone="live">
           <span className="motion-safe:animate-pulse">
@@ -213,7 +218,7 @@ function LastRun({ task }: { task: Task }) {
   }
   if (task.last === null) {
     return (
-      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-small">
+      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-small max-sm:col-span-full max-sm:mt-0">
         {label}
         <span className="text-ink">{text.notRunYet}</span>
       </p>
@@ -222,7 +227,7 @@ function LastRun({ task }: { task: Task }) {
   const last = task.last
   const tone = last.status === 'Completed' ? 'ok' : last.status === 'Failed' ? 'danger' : 'muted'
   return (
-    <div className="mt-3 text-small">
+    <div className="mt-3 text-small max-sm:col-span-full max-sm:mt-0">
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {label}
         <StatusPill tone={tone}>{text.results[last.status] ?? last.status}</StatusPill>
