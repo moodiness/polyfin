@@ -20,10 +20,15 @@ type sessionUser struct {
 	// ImageTag identifies the user's profile picture, served at /UserImage,
 	// null without one: the admin app shows it on the account button.
 	ImageTag *string `json:"imageTag"`
+	// InterfaceSize is the size the admin app shows in, one of
+	// accounts.InterfaceSizes: the admin app keeps a copy on the browser,
+	// so that the next page, even signed out, opens at it.
+	InterfaceSize string `json:"interfaceSize"`
 }
 
 func newSessionUser(user accounts.User) sessionUser {
-	return sessionUser{ID: user.ID.String(), Name: user.Name, IsAdministrator: user.IsAdministrator, ImageTag: imageTag(user)}
+	return sessionUser{ID: user.ID.String(), Name: user.Name, IsAdministrator: user.IsAdministrator, ImageTag: imageTag(user),
+		InterfaceSize: user.InterfaceSize}
 }
 
 type sessionKey struct{}
