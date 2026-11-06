@@ -36,6 +36,7 @@ import os
 import re
 import signal
 import socket
+import shutil
 import subprocess
 import sys
 import threading
@@ -44,6 +45,10 @@ import urllib.request
 import zipfile
 
 WINDOWS = os.name == "nt"
+
+# PowerShell 7 when it is there: Windows PowerShell takes about 20 s a
+# call on the Windows on Arm runners, where the smoke calls it 7 times.
+POWERSHELL = shutil.which("pwsh") or "powershell"
 
 
 # DESKTOP_SMOKE_PORTS, such as 19000-19009, keeps the ports in a range on
@@ -129,7 +134,7 @@ def processes_of(folder):
     if WINDOWS:
         script = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*%s*' } "
                   "| ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }") % folder.replace("'", "''")
-        out = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True).stdout
+        out = subprocess.run([POWERSHELL, "-NoProfile", "-Command", script], capture_output=True, text=True).stdout
     else:
         out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
         out = "\n".join(line for line in out.splitlines() if folder in line)
@@ -168,7 +173,7 @@ def shell_sessions():
     """This process's session, and those explorer.exe runs in."""
     session = ctypes.c_ulong()
     ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session))
-    out = subprocess.run(["powershell", "-NoProfile", "-Command",
+    out = subprocess.run([POWERSHELL, "-NoProfile", "-Command",
                           "Get-Process explorer -ErrorAction SilentlyContinue | ForEach-Object { $_.SessionId }"],
                          capture_output=True, text=True).stdout
     return session.value, sorted({int(s) for s in out.split()})

@@ -155,10 +155,13 @@ print("DLLs from %s: %s" % (system, ", ".join(sorted(from_system))))' "$(cygpath
 # description DESCRIPTION, the product version VERSION and the file
 # version its numbers.
 check_version_info() {
-	local got want
+	local got want powershell
+	# PowerShell 7 when it is there: Windows PowerShell takes about 20 s a
+	# call on the Windows on Arm runners.
+	powershell="$(command -v pwsh || echo powershell)"
 	# PowerShell's variables, which bash leaves as they are.
 	# shellcheck disable=SC2016
-	got="$(EXE="$(cygpath -w "$1")" powershell -NoProfile -Command \
+	got="$(EXE="$(cygpath -w "$1")" "$powershell" -NoProfile -Command \
 		'$i = (Get-Item -LiteralPath $env:EXE).VersionInfo; "$($i.ProductName)|$($i.FileDescription)|$($i.ProductVersion)|$($i.FileVersion)"' |
 		tr -d '\r')"
 	want="Polyfin|$2|$3|$(VERSION="$3" numeric_version)"
