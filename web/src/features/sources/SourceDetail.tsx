@@ -17,7 +17,7 @@ import {
   type Scope,
 } from '@/api'
 import { IptvSource } from '@/features/iptv/IptvSource'
-import { errorMessage, languageOptions, stremioLabel } from '@/format'
+import { catalogTypeLabel, errorMessage, languageOptions, stremioLabel } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   AlertTile,
@@ -369,7 +369,7 @@ export function SourceDetail({
                   <span className="flex flex-wrap justify-end gap-1.5">
                     {addon.types.map((type) => (
                       <Badge key={type} tone="accent">
-                        {stremioLabel(t.stremioTypes, type)}
+                        {catalogTypeLabel(t, type)}
                       </Badge>
                     ))}
                   </span>

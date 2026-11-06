@@ -29,7 +29,7 @@ import {
   type SmartSort,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
-import { errorMessage, stremioLabel } from '@/format'
+import { catalogTypeLabel, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
@@ -576,7 +576,7 @@ function CatalogPicker({
               checked={keys.has(catalogKey(ref))}
               onChange={(on) => toggle(ref, on)}
               label={c.catalogName || c.catalogId}
-              help={`${c.addonName} · ${stremioLabel(t.stremioTypes, c.catalogType)}`}
+              help={`${c.addonName} · ${catalogTypeLabel(t, c.catalogType)}`}
               aside={mine && c.shared ? <Badge>{t.smartLists.serverBadge}</Badge> : undefined}
             />
           )
