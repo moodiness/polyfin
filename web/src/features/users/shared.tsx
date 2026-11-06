@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ApiError,
@@ -16,7 +16,7 @@ import {
 import { SubAreaContext } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
-import { StatusPill, Switch, Tabs } from '@/ui'
+import { StatusPill, Tabs } from '@/ui'
 
 /** PageLayout claims the words; there is nothing to show above a page in their place. */
 const noClaim = () => () => {}
@@ -190,49 +190,6 @@ export function useRestrictions(user: User): string[] {
   if (!user.personalAddons) words.push(t.users.noPersonalAddons)
   if (user.qualityGroup !== 0) words.push(qualityGroupName(user.qualityGroup))
   return words
-}
-
-/**
- * One setting of a panel: its title and help on the left, a switch on the right (like the
- * settings rows of the mockup).
- */
-export function SwitchRow({
-  title,
-  help,
-  checked,
-  onChange,
-  disabled,
-}: {
-  title: string
-  help?: ReactNode
-  checked: boolean
-  onChange: (checked: boolean) => void
-  disabled?: boolean
-}) {
-  const titleId = useId()
-  const helpId = useId()
-  return (
-    <div className="flex items-start justify-between gap-6 py-4 not-first:border-t not-first:border-line">
-      <div className="min-w-0">
-        <p id={titleId} className="text-control font-medium text-ink">
-          {title}
-        </p>
-        {help !== undefined && (
-          <p id={helpId} className="mt-1 text-small text-ink-3">
-            {help}
-          </p>
-        )}
-      </div>
-      <Switch
-        checked={checked}
-        onChange={onChange}
-        labelledBy={titleId}
-        describedById={help !== undefined ? helpId : undefined}
-        disabled={disabled}
-        className="mt-0.5"
-      />
-    </div>
-  )
 }
 
 /**

@@ -9,15 +9,14 @@ import {
   queryKeys,
   saveAddonPreferences,
 } from '@/api'
+import { PageLayout } from '@/app/PageLayout'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Block,
-  cx,
   Field,
   InlineError,
   Notice,
-  PageHeader,
   Panel,
   Row,
   RowList,
@@ -57,31 +56,24 @@ export function MemberHome({ name }: { name: string }) {
   return (
     <>
       <RoomLight posters={posters} lit={lit?.item?.posterId || null} />
-      <div className="stagger">
-        <PageHeader
-          greeting
-          title={t.dashboard.overview.greeting(new Date().getHours(), name)}
-          lede={
-            playing.length === 1 && lit && !lit.download
-              ? text.watching(titleOf(lit, t), lit.device.name)
-              : text.lede
-          }
-          className="mb-10 max-md:mb-8"
-        />
+      <PageLayout
+        greeting
+        title={t.dashboard.overview.greeting(new Date().getHours(), name)}
+        lede={
+          playing.length === 1 && lit && !lit.download
+            ? text.watching(titleOf(lit, t), lit.device.name)
+            : text.lede
+        }
+      >
         <MyPlayback onLight={setLitId} />
-        <div
-          className={cx(
-            'grid items-start gap-14 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-md:gap-11',
-            playing.length > 0 && 'mt-[72px] max-md:mt-11',
-          )}
-        >
+        <div className="grid items-start gap-14 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-md:gap-11">
           <QuickConnect />
           <div className="flex flex-col gap-16 max-md:gap-11">
             <MySources />
             <MyAccount />
           </div>
         </div>
-      </div>
+      </PageLayout>
     </>
   )
 }

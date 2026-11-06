@@ -49,6 +49,7 @@ export {
   type SelectProps,
   type SuggestInputProps,
 } from './Select'
+export { OpenRow } from './OpenRow'
 export { SecretField, type SecretFieldProps } from './SecretField'
 export { useScrollFade } from './scroll'
 export { SectionNav, type SectionNavItem, type SectionNavProps } from './SectionNav'

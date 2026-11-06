@@ -8,7 +8,7 @@ import {
 } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
-import { InlineError, Select, SettingRow, SkeletonRows, useToast } from '@/ui'
+import { InlineError, SettingRow, SkeletonRows, useToast } from '@/ui'
 
 /** The choices of audio region: None, then the regions offered, by name, in the server's order. */
 function audioRegionOptions(regions: readonly string[], t: Messages) {
@@ -17,30 +17,6 @@ function audioRegionOptions(regions: readonly string[], t: Messages) {
     { value: '', label: text.none },
     ...regions.map((region) => ({ value: region, label: text.regions[region] ?? region })),
   ]
-}
-
-/** A choice of audio region, as a list (a user's page). */
-export function AudioRegionSelect({
-  value,
-  regions,
-  onValue,
-  disabled,
-}: {
-  value: string
-  regions: readonly string[]
-  onValue: (region: string) => void
-  disabled: boolean
-}) {
-  const { t } = useI18n()
-  return (
-    <Select
-      value={value}
-      options={audioRegionOptions(regions, t)}
-      onValue={onValue}
-      disabled={disabled}
-      className="max-w-xs"
-    />
-  )
 }
 
 /** My account › Audio region: the regional dub the user prefers, a setting row saved as it changes. */

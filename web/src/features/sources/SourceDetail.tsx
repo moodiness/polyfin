@@ -53,12 +53,6 @@ import { invalidateScope, isIptv, lastTime, replaceCachedAddon, type Entry } fro
 import { Fact, Facts, Group, SourceMark, SourceStatus } from './parts'
 import { SourceUsedBy } from './UsedBy'
 
-/** The tag of a source's kind, as in the list. */
-export function KindBadge({ addon }: { addon: Addon }) {
-  const { t } = useI18n()
-  return <Badge>{t.sources.tag[addon.kind]}</Badge>
-}
-
 /** Who owns a source of the list: nothing for the server's, else the owner's initial and name. */
 export function OwnerLabel({ entry, selfId }: { entry: Entry; selfId: string }) {
   const { t } = useI18n()

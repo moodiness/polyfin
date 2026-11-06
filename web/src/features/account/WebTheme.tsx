@@ -10,7 +10,7 @@ import {
 } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
-import { InlineError, Notice, Select, SettingRow, SkeletonRows, useToast } from '@/ui'
+import { InlineError, Notice, SettingRow, SkeletonRows, useToast } from '@/ui'
 
 /**
  * The choices of web player theme: The server's, naming it, then the themes offered. A theme no
@@ -25,33 +25,6 @@ function webThemeOptions(value: UserWebTheme, themes: WebThemes, t: Messages) {
     { value: '' as const, label: text.server(text.choices[themes.serverTheme]) },
     ...offered.map((theme) => ({ value: theme, label: text.choices[theme] })),
   ]
-}
-
-/** A choice of web player theme, as a list (a user's page). */
-export function WebThemeSelect({
-  value,
-  themes,
-  onValue,
-  disabled,
-  'aria-describedby': describedBy,
-}: {
-  value: UserWebTheme
-  themes: WebThemes
-  onValue: (theme: UserWebTheme) => void
-  disabled: boolean
-  'aria-describedby'?: string
-}) {
-  const { t } = useI18n()
-  return (
-    <Select<UserWebTheme>
-      value={value}
-      options={webThemeOptions(value, themes, t)}
-      onValue={onValue}
-      disabled={disabled}
-      aria-describedby={describedBy}
-      className="max-w-xs"
-    />
-  )
 }
 
 /**

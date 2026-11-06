@@ -1,9 +1,22 @@
 import { createContext, use, useLayoutEffect, useState, type ReactNode } from 'react'
 import { cx, DockSlotContext, PageHeader } from '@/ui'
 
-export type PageLayoutProps = {
-  /** The h1: the same words as the page's area word, sub-area word or menu entry. */
-  title: ReactNode
+export type PageLayoutProps = (
+  | {
+      /** The h1: the same words as the page's area word, sub-area word or menu entry. */
+      title: ReactNode
+      head?: never
+    }
+  | {
+      /**
+       * The page's own head instead of the title row: the band of a person's or a group's page,
+       * which holds the h1, the link back and the actions. Used with `nav`; the props of the title
+       * row (`titleAside`, `lede`, `actions`, `back`, `greeting`) are then left out.
+       */
+      head: ReactNode
+      title?: never
+    }
+) & {
   /** Badges beside the title, outside the h1 (a source's kind). */
   titleAside?: ReactNode
   /** One or two sentences under the title. */
@@ -54,6 +67,7 @@ const blockSpacing = '[&>*+*]:mt-block'
  */
 export function PageLayout({
   title,
+  head,
   titleAside,
   lede,
   actions,
@@ -69,7 +83,7 @@ export function PageLayout({
   useLayoutEffect(() => claim?.(), [claim])
   const [dock, setDock] = useState<HTMLElement | null>(null)
 
-  const header = (
+  const header = head ?? (
     <PageHeader
       title={title}
       titleAside={titleAside}
@@ -93,7 +107,10 @@ export function PageLayout({
                 {nav}
                 <div ref={setDock} className="sticky bottom-7 mt-auto max-md:hidden" />
               </div>
-              <div className={cx('min-w-0', blockSpacing)}>{children}</div>
+              {/* A band has no space under it for the strip of a phone: the content keeps 24 px. */}
+              <div className={cx('min-w-0', blockSpacing, head !== undefined && 'max-md:mt-6')}>
+                {children}
+              </div>
             </div>
           </div>
         </DockSlotContext>

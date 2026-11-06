@@ -3,6 +3,7 @@ import { ArrowSquareOutIcon, CaretRightIcon, CheckCircleIcon } from '@phosphor-i
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { fetchStatus, queryKeys, type Health, type HealthProblem, type ServerActions } from '@/api'
+import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { problemText, useHealth, useHealthProblems } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
@@ -14,7 +15,6 @@ import {
   EmptyState,
   ExternalButtonLink,
   InlineError,
-  PageHeader,
   ProgressBar,
   Row,
   RowList,
@@ -72,19 +72,17 @@ function Overview({ name }: { name: string }) {
   return (
     <>
       <RoomLight posters={posters} lit={lit?.item?.posterId || null} />
-      <div className="stagger">
-        <PageHeader
-          greeting
-          title={text.greeting(new Date().getHours(), name)}
-          lede={
-            sessions.data !== undefined && problems.data !== undefined
-              ? text.summary(sessions.data.length, problems.data.length)
-              : text.description
-          }
-          className="mb-10 max-md:mb-8"
-        />
+      <PageLayout
+        greeting
+        title={text.greeting(new Date().getHours(), name)}
+        lede={
+          sessions.data !== undefined && problems.data !== undefined
+            ? text.summary(sessions.data.length, problems.data.length)
+            : text.description
+        }
+      >
         <PlayingNow onLight={setLitId} />
-        <div className="mt-[72px] grid items-start gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-lg:gap-16 max-md:mt-11 max-md:gap-11">
+        <div className="grid items-start gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-lg:gap-16 max-md:mt-11 max-md:gap-11">
           <div className="flex flex-col gap-16 max-lg:contents max-md:gap-11">
             <ToLookAt
               health={health.data}
@@ -110,10 +108,10 @@ function Overview({ name }: { name: string }) {
             <ServerState actions={actions.data} onOpen={setOpen} />
           </div>
         </div>
-        {open !== null && actions.data && (
-          <ActionDialog action={open} actions={actions.data} onClose={() => setOpen(null)} />
-        )}
-      </div>
+      </PageLayout>
+      {open !== null && actions.data && (
+        <ActionDialog action={open} actions={actions.data} onClose={() => setOpen(null)} />
+      )}
     </>
   )
 }

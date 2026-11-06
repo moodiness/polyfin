@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import {
   ArrowsClockwiseIcon,
@@ -1173,23 +1172,6 @@ function Process({ health }: { health: Health }) {
         </ExternalButtonLink>
       </div>
     </div>
-  )
-}
-
-/** A link inside Health that opens one of its parts over the page, as `#anchor`. */
-export function DetailLink({
-  id,
-  className,
-  children,
-}: {
-  id: DetailId
-  className?: string
-  children: ReactNode
-}) {
-  return (
-    <Link to={{ hash: id }} state={detailOpened} preventScrollReset className={className}>
-      {children}
-    </Link>
   )
 }
 

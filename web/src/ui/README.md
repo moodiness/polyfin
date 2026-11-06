@@ -18,8 +18,9 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | Need                                                                          | Use                                                                       |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | The frame of a page: title, lede, actions, sub-area words, blocks 64 px apart | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader`             |
-| A greeting at the top of Home                                                 | `PageHeader` with `greeting`                                              |
+| A greeting at the top of Home                                                 | `PageLayout` with `greeting`                                              |
 | A page split with a list of sections on the left (Settings, a user)           | `PageLayout` with `nav={<SectionNav … />}`; the dock docks under the list |
+| A split page opening on a band (a user, a group, My account)                  | `PageLayout` with `head={<Band … />}` and `nav`                           |
 | A shelf of a page, with a count or a link on the right                        | `Block` (+ `Count`, `TextLink`)                                           |
 | Content that needs a ground of its own: a detail, a figure with its rows      | `Panel`, split by `PanelSection`, closed by `PanelFooter`                 |
 | The sub-area words under a page title (Sources · Libraries · Live TV)         | `Tabs` with links (`words`, the default), passed as PageHeader's `nav`    |
@@ -32,7 +33,7 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed)                                                        |
 | Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows                                                                                                            |
 | A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                                                                                |
-| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`; `ok`, `warn`, `danger`), or `Avatar` for a person                                                          |
+| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`, `xl` for a band; `ok`, `warn`, `danger`), or `Avatar` for a person                                         |
 | What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with a halo and its tools; `fit="contain"` for logos, `fallback` when there is no poster |
 | A problem to look at, with its cause and fix                             | `AlertTile`                                                                                                                              |
 | A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                                                                                     |
@@ -55,6 +56,8 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | `secret` | The `SecretField` (masked typing, reveal, replace, remove)                      | the SecretField's own                                     |
 
 Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and its value in the link color. A row without `saved` (settings that apply at once) keeps no mark. `anchor` gives it the id of its `#anchor`, `error` shows under it, and `children` add a note under it.
+
+`OpenRow` draws the same head and lit state for a row that no `kind` covers: with `children`, Enter, Space or a click opens them inside the row (a date with its buttons, a list to choose from) and Escape closes them; with `onClick`, the row is a button for an action shown elsewhere (a dialog).
 
 ## States
 

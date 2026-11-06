@@ -32,6 +32,7 @@ import {
   Checkbox,
   ConfirmDialog,
   EmptyState,
+  IconTile,
   InlineError,
   Modal,
   Notice,
@@ -44,7 +45,7 @@ import {
   useToast,
 } from '@/ui'
 import { DraftForm, useDraftPart } from './draft'
-import { Band, PageSection, SplitFrame } from './rows'
+import { Band, PageSection } from './rows'
 import { groupSaved, refreshGroupIfGone, useSectionInView, UserState } from './shared'
 import {
   AllowedHoursSection,
@@ -170,14 +171,7 @@ function GroupPage({ group }: { group: Group }) {
   const head = (
     <Band
       back={{ to: '/users/groups', label: t.groups.title }}
-      leading={
-        <span
-          aria-hidden="true"
-          className="grid size-24 shrink-0 place-items-center rounded-full bg-s2 text-ink-2 max-md:size-16"
-        >
-          <UsersThreeIcon size={44} className="max-md:size-8" />
-        </span>
-      }
+      leading={<IconTile icon={UsersThreeIcon} size="xl" />}
       title={group.name}
       facts={
         <>
@@ -211,7 +205,7 @@ function GroupPage({ group }: { group: Group }) {
 
   return (
     <>
-      <SplitFrame head={head} nav={nav}>
+      <PageLayout head={head} nav={nav}>
         <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
           {({ nameError }) => (
             <>
@@ -231,7 +225,7 @@ function GroupPage({ group }: { group: Group }) {
             </>
           )}
         </DraftForm>
-      </SplitFrame>
+      </PageLayout>
       <ConfirmDialog
         open={deleting}
         onClose={() => setDeleting(false)}

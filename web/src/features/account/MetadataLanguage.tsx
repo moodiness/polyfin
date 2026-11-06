@@ -8,7 +8,7 @@ import {
 } from '@/api'
 import { errorMessage, languageOptions } from '@/format'
 import { useI18n, type Language, type Messages } from '@/i18n'
-import { InlineError, Notice, Select, SettingRow, SkeletonRows, useToast } from '@/ui'
+import { InlineError, Notice, SettingRow, SkeletonRows, useToast } from '@/ui'
 
 /**
  * The choices of metadata language: The server's, then the languages the server's addons were
@@ -25,30 +25,6 @@ function metadataLanguageOptions(
     { value: '', label: t.account.metadataLanguage.server },
     ...languageOptions(codes, language),
   ]
-}
-
-/** A choice of metadata language, as a list (a user's page). */
-export function MetadataLanguageSelect({
-  value,
-  languages,
-  onValue,
-  disabled,
-}: {
-  value: string
-  languages: readonly string[]
-  onValue: (language: string) => void
-  disabled: boolean
-}) {
-  const { language, t } = useI18n()
-  return (
-    <Select
-      value={value}
-      options={metadataLanguageOptions(value, languages, t, language)}
-      onValue={onValue}
-      disabled={disabled}
-      className="max-w-xs"
-    />
-  )
 }
 
 /**

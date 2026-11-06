@@ -8,12 +8,11 @@ import {
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import {
   ApiError,
   deleteUser,
   fetchGroups,
-  fetchLiveSessions,
   fetchMetadataLanguages,
   fetchUserDevices,
   fetchUserShareLinks,
@@ -26,14 +25,13 @@ import {
   turnOffUserTwoStep,
   unblockUser,
   userImageUrl,
-  type LiveSession,
   type User,
   type UserWebTheme,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
-import { errorMessage, formatClock, formatDate, languageOptions } from '@/format'
+import { errorMessage, formatDate, languageOptions } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Avatar,
@@ -46,6 +44,7 @@ import {
   InlineError,
   Modal,
   Notice,
+  OpenRow,
   RelativeTime,
   SectionNav,
   Select,
@@ -57,7 +56,7 @@ import {
 } from '@/ui'
 import DeviceList from './DeviceList'
 import { DraftForm, useDraftPart } from './draft'
-import { Band, OpenRow, PageSection, SplitFrame } from './rows'
+import { Band, PageSection, posterUrl, useWatching, WatchingLink } from './rows'
 import {
   clockTime,
   refreshIfGone,
@@ -136,28 +135,6 @@ export default function UserDetail({ id }: { id: string }) {
 }
 
 /** The address of a title's poster, as Now playing loads it. */
-function posterUrl(posterId: string, height: number) {
-  return `/Items/${encodeURIComponent(posterId)}/Images/Primary?maxHeight=${height}&quality=85`
-}
-
-/**
- * What the user plays now, from the playbacks Home's Now playing reads: the first that is theirs,
- * leaving out downloads being converted and guests of their share links.
- */
-function useWatching(userId: string): LiveSession | null {
-  const sessions = useQuery({
-    queryKey: queryKeys.liveSessions,
-    queryFn: ({ signal }) => fetchLiveSessions(signal),
-    refetchInterval: 10_000,
-  })
-  return (
-    sessions.data?.find(
-      (session) =>
-        session.user.id === userId && session.item !== null && !session.download && !session.shared,
-    ) ?? null
-  )
-}
-
 function UserPage({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
@@ -255,42 +232,8 @@ function UserPage({ user }: { user: User }) {
         </>
       }
       extra={
-        watching !== null &&
-        item !== null && (
-          <Link
-            to="/"
-            className="focus-lit mt-[18px] flex w-fit max-w-full items-center gap-3.5 rounded-[20px] bg-ink/8 py-2 pr-[18px] pl-2 text-[17.5px] text-ink hover:bg-ink/13 max-md:text-[16px]"
-          >
-            {art !== null && (
-              <img
-                src={posterUrl(art, 112)}
-                alt=""
-                loading="lazy"
-                onError={() => setArtFailed(art)}
-                className="h-14 w-10 shrink-0 rounded-[10px] bg-s2 object-cover"
-              />
-            )}
-            <span className="min-w-0">
-              <b className="block font-[650] break-words">
-                {(watching.paused ? t.users.pausedOn : t.users.watching)(
-                  item.kind === 'episode' && item.seriesName ? item.seriesName : item.name,
-                )}
-              </b>
-              <small className="block text-micro text-ink-3">
-                {[
-                  watching.device.name,
-                  item.runtime > 0
-                    ? t.users.positionOf(
-                        formatClock(Math.min(watching.position, item.runtime)),
-                        formatClock(item.runtime),
-                      )
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </small>
-            </span>
-          </Link>
+        watching !== null && (
+          <WatchingLink session={watching} art={art} onArtError={() => setArtFailed(art)} />
         )
       }
       actions={
@@ -322,7 +265,7 @@ function UserPage({ user }: { user: User }) {
 
   return (
     <>
-      <SplitFrame head={head} nav={nav}>
+      <PageLayout head={head} nav={nav}>
         <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
           {({ nameError }) => (
             <>
@@ -352,7 +295,7 @@ function UserPage({ user }: { user: User }) {
             </>
           )}
         </DraftForm>
-      </SplitFrame>
+      </PageLayout>
       <ConfirmDialog
         open={deleting}
         onClose={() => setDeleting(false)}

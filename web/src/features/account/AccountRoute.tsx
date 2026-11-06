@@ -17,8 +17,10 @@ import {
   type OwnAppImport,
   type SessionUser,
 } from '@/api'
+import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import DeviceList from '@/features/users/DeviceList'
+import { useWatching, WatchingLink } from '@/features/users/rows'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import StatisticsView from '@/features/statistics/StatisticsView'
 import { useI18n } from '@/i18n'
@@ -180,151 +182,144 @@ export default function AccountRoute() {
     .map((id) => ({ id, label: labels[id], to: `#${id}` }))
 
   return (
-    <div className="stagger">
-      <PersonBand user={user} />
-      {/* The split of a user's page: the sections in a 300 px column, sticky beside the content;
-          on a phone, a strip of words that scrolls sideways above it. */}
-      <div className="grid items-start gap-[72px] md:grid-cols-[300px_minmax(0,1fr)] max-xl:gap-12 max-lg:gap-8 max-lg:md:grid-cols-[232px_minmax(0,1fr)] max-md:block">
-        <div className="self-stretch max-md:contents">
-          <SectionNav label={text.sectionsLabel} current={current} items={items} />
+    <PageLayout
+      head={<PersonBand user={user} />}
+      nav={<SectionNav label={text.sectionsLabel} current={current} items={items} />}
+    >
+      <AccountSection id="statistics" title={labels.statistics} help={text.statisticsHelp}>
+        <div className="space-y-10">
+          <StatisticsView scope="own" />
         </div>
-        <div className="min-w-0 [&>*+*]:mt-block max-md:pt-6">
-          <AccountSection id="statistics" title={labels.statistics} help={text.statisticsHelp}>
-            <div className="space-y-10">
-              <StatisticsView scope="own" />
-            </div>
-          </AccountSection>
-          <AccountSection id="tracking" title={labels.tracking} help={text.tracking.description}>
-            <TrackingServices />
-          </AccountSection>
-          <AccountSection id="resume" title={labels.resume} help={text.watching.resumeHelp}>
-            <ResumeList />
-          </AccountSection>
-          <AccountSection id="next-up" title={labels['next-up']} help={text.watching.nextUpHelp}>
-            <NextUpList />
-          </AccountSection>
-          <AccountSection id="hidden" title={labels.hidden} help={text.watching.hiddenHelp}>
-            <HiddenList />
-          </AccountSection>
-          <AccountSection id="home-rows" title={labels['home-rows']} help={text.homeRows.help}>
-            <HomeRowList />
-          </AccountSection>
-          <AccountSection id="taste" title={labels.taste} help={text.taste.help}>
-            <TasteProfile />
-          </AccountSection>
-          <AccountSection
-            id="track-choices"
-            title={labels['track-choices']}
-            help={text.trackChoices.help}
-          >
-            <OwnTrackChoices />
-          </AccountSection>
-          {/* Three settings of one row each: the row is the section, its label the heading's
+      </AccountSection>
+      <AccountSection id="tracking" title={labels.tracking} help={text.tracking.description}>
+        <TrackingServices />
+      </AccountSection>
+      <AccountSection id="resume" title={labels.resume} help={text.watching.resumeHelp}>
+        <ResumeList />
+      </AccountSection>
+      <AccountSection id="next-up" title={labels['next-up']} help={text.watching.nextUpHelp}>
+        <NextUpList />
+      </AccountSection>
+      <AccountSection id="hidden" title={labels.hidden} help={text.watching.hiddenHelp}>
+        <HiddenList />
+      </AccountSection>
+      <AccountSection id="home-rows" title={labels['home-rows']} help={text.homeRows.help}>
+        <HomeRowList />
+      </AccountSection>
+      <AccountSection id="taste" title={labels.taste} help={text.taste.help}>
+        <TasteProfile />
+      </AccountSection>
+      <AccountSection
+        id="track-choices"
+        title={labels['track-choices']}
+        help={text.trackChoices.help}
+      >
+        <OwnTrackChoices />
+      </AccountSection>
+      {/* Three settings of one row each: the row is the section, its label the heading's
               words, its help shown while it is lit. */}
-          <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
-            <div id="metadata-language" className={anchorMargin}>
-              <OwnMetadataLanguage />
-            </div>
-            <div id="web-theme" className={anchorMargin}>
-              <OwnWebTheme />
-            </div>
-            <div id="audio-region" className={anchorMargin}>
-              <OwnAudioRegion />
-            </div>
-          </div>
-          <AccountSection id="sound" title={labels.sound} help={text.sound.help}>
-            <OwnSoundOptions />
-          </AccountSection>
-          {sharing && (
-            <AccountSection
-              id="shared-links"
-              title={labels['shared-links']}
-              help={text.sharedLinksHelp}
-            >
-              <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
-            </AccountSection>
-          )}
-          {reminding && (
-            <AccountSection id="reminders" title={labels.reminders} help={text.reminders.help}>
-              <ReminderList />
-            </AccountSection>
-          )}
-          {ownImport.data !== undefined && importing && (
-            <AccountSection id="import" title={labels.import} help={text.serverImport.description}>
-              <ServerImport own={ownImport.data} />
-            </AccountSection>
-          )}
-          {ownAppImport.data !== undefined && appImportShown && (
-            <AccountSection
-              id="app-import"
-              title={labels['app-import']}
-              help={text.appImport.description}
-            >
-              <div className="flex flex-col gap-6">
-                <AppConnections
-                  connections={appConnections}
-                  actions={ownAppConnections}
-                  onChanged={() =>
-                    void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
-                  }
-                  own
-                  importEveryMinutes={ownAppImport.data.importEveryMinutes}
-                />
-                {importingFromApps && (
-                  <AppImport
-                    current={ownAppImport.data.import}
-                    addonsAllowed={ownAppImport.data.addonsAllowed}
-                    readers={ownAppReaders}
-                    start={startOwnAppImport}
-                    onStarted={(started) =>
-                      queryClient.setQueryData<OwnAppImport>(
-                        queryKeys.ownAppImport,
-                        (data) => data && { ...data, import: started },
-                      )
-                    }
-                    own
-                    importEveryMinutes={ownAppImport.data.importEveryMinutes}
-                  />
-                )}
-              </div>
-            </AccountSection>
-          )}
-          <AccountSection
-            id="notifications"
-            title={labels.notifications}
-            help={text.notificationsHelp}
-          >
-            <div className="flex flex-col gap-10">
-              <NotificationTargets scope="own" />
-              <ReminderSettingsForm />
-            </div>
-          </AccountSection>
-          <AccountSection id="devices" title={labels.devices} help={text.devicesHelp}>
-            <DeviceList
-              queryKey={queryKeys.myDevices}
-              load={fetchMyDevices}
-              signOut={signOutMyDevice}
-            />
-          </AccountSection>
-          <AccountSection id="password" title={labels.password} help={text.passwordHelp}>
-            <PasswordForm />
-          </AccountSection>
-          <AccountSection id="two-step" title={labels['two-step']} help={text.twoStep.help}>
-            <TwoStep />
-          </AccountSection>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <div id="metadata-language" className={anchorMargin}>
+          <OwnMetadataLanguage />
+        </div>
+        <div id="web-theme" className={anchorMargin}>
+          <OwnWebTheme />
+        </div>
+        <div id="audio-region" className={anchorMargin}>
+          <OwnAudioRegion />
         </div>
       </div>
-    </div>
+      <AccountSection id="sound" title={labels.sound} help={text.sound.help}>
+        <OwnSoundOptions />
+      </AccountSection>
+      {sharing && (
+        <AccountSection
+          id="shared-links"
+          title={labels['shared-links']}
+          help={text.sharedLinksHelp}
+        >
+          <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
+        </AccountSection>
+      )}
+      {reminding && (
+        <AccountSection id="reminders" title={labels.reminders} help={text.reminders.help}>
+          <ReminderList />
+        </AccountSection>
+      )}
+      {ownImport.data !== undefined && importing && (
+        <AccountSection id="import" title={labels.import} help={text.serverImport.description}>
+          <ServerImport own={ownImport.data} />
+        </AccountSection>
+      )}
+      {ownAppImport.data !== undefined && appImportShown && (
+        <AccountSection
+          id="app-import"
+          title={labels['app-import']}
+          help={text.appImport.description}
+        >
+          <div className="flex flex-col gap-6">
+            <AppConnections
+              connections={appConnections}
+              actions={ownAppConnections}
+              onChanged={() =>
+                void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
+              }
+              own
+              importEveryMinutes={ownAppImport.data.importEveryMinutes}
+            />
+            {importingFromApps && (
+              <AppImport
+                current={ownAppImport.data.import}
+                addonsAllowed={ownAppImport.data.addonsAllowed}
+                readers={ownAppReaders}
+                start={startOwnAppImport}
+                onStarted={(started) =>
+                  queryClient.setQueryData<OwnAppImport>(
+                    queryKeys.ownAppImport,
+                    (data) => data && { ...data, import: started },
+                  )
+                }
+                own
+                importEveryMinutes={ownAppImport.data.importEveryMinutes}
+              />
+            )}
+          </div>
+        </AccountSection>
+      )}
+      <AccountSection id="notifications" title={labels.notifications} help={text.notificationsHelp}>
+        <div className="flex flex-col gap-10">
+          <NotificationTargets scope="own" />
+          <ReminderSettingsForm />
+        </div>
+      </AccountSection>
+      <AccountSection id="devices" title={labels.devices} help={text.devicesHelp}>
+        <DeviceList
+          queryKey={queryKeys.myDevices}
+          load={fetchMyDevices}
+          signOut={signOutMyDevice}
+        />
+      </AccountSection>
+      <AccountSection id="password" title={labels.password} help={text.passwordHelp}>
+        <PasswordForm />
+      </AccountSection>
+      <AccountSection id="two-step" title={labels['two-step']} help={text.twoStep.help}>
+        <TwoStep />
+      </AccountSection>
+    </PageLayout>
   )
 }
 
 /**
  * The band at the top, as on a user's page: the avatar, the page's title, who is signed in and
- * their role, and Reset my preferences.
+ * their role, what they watch now, and Reset my preferences.
  */
 function PersonBand({ user }: { user: SessionUser }) {
   const { t } = useI18n()
   const text = t.account
+  const watching = useWatching(user.id)
+  const [artFailed, setArtFailed] = useState<string | null>(null)
+  const posterId = watching?.item?.posterId
+  const art = posterId && artFailed !== posterId ? posterId : null
   return (
     <header className="mb-14 flex flex-wrap items-center gap-x-8 gap-y-5 rounded-panel bg-s1 px-8 py-7 max-md:mb-6 max-md:gap-x-5 max-md:rounded-[24px] max-md:px-5 max-md:py-5">
       <Avatar
@@ -342,6 +337,9 @@ function PersonBand({ user }: { user: SessionUser }) {
           </span>
           <span>{user.isAdministrator ? text.roles.administrator : text.roles.member}</span>
         </p>
+        {watching !== null && (
+          <WatchingLink session={watching} art={art} onArtError={() => setArtFailed(art)} />
+        )}
       </div>
       <div className="flex max-w-full flex-wrap gap-3">
         <ResetPreferences />

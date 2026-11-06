@@ -219,8 +219,9 @@ export function Row({
 
 /**
  * The round bubble holding a row's icon (kind of source, device, activity) or letters (a tracking
- * service's monogram): 44 px (`md`), 36 (`sm`) or 56 (`lg`, an alert). A tone tints it at 14 %
- * with the state's color; the state still needs its word beside it.
+ * service's monogram): 44 px (`md`), 36 (`sm`), 56 (`lg`, an alert) or 96 (`xl`, 64 on a phone: the
+ * band of a group's page). A tone tints it at 14 % with the state's color; the state still needs
+ * its word beside it.
  */
 export function IconTile({
   icon: Glyph,
@@ -232,7 +233,7 @@ export function IconTile({
   icon?: Icon
   /** One or two letters instead of an icon. */
   letters?: string
-  size?: 'lg' | 'md' | 'sm'
+  size?: 'xl' | 'lg' | 'md' | 'sm'
   /** Colors the icon with the link color, for the selected subject. */
   selected?: boolean
   /** Tints the bubble with a state's color: `warn` for a problem, `danger` for an error. */
@@ -243,6 +244,7 @@ export function IconTile({
       aria-hidden="true"
       className={cx(
         'inline-grid shrink-0 place-items-center rounded-full font-bold',
+        size === 'xl' && 'size-24 text-[34px] max-md:size-16 max-md:text-[24px]',
         size === 'lg' && 'size-14 text-[20px]',
         size === 'md' && 'size-11 text-[17px]',
         size === 'sm' && 'size-9 text-[15px]',
@@ -253,7 +255,14 @@ export function IconTile({
         tone === 'danger' && 'bg-danger/14 text-danger',
       )}
     >
-      {Glyph ? <Glyph size={size === 'lg' ? 28 : size === 'md' ? 22 : 19} /> : letters}
+      {Glyph ? (
+        <Glyph
+          size={size === 'xl' ? 44 : size === 'lg' ? 28 : size === 'md' ? 22 : 19}
+          className={size === 'xl' ? 'max-md:size-8' : undefined}
+        />
+      ) : (
+        letters
+      )}
     </span>
   )
 }

@@ -1,180 +1,10 @@
-import { ArrowLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type FocusEvent,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
+import { useQuery } from '@tanstack/react-query'
+import { useId, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { cx, describedBy, DockSlotContext, FieldError } from '@/ui'
-
-/**
- * A row of a user's or a group's page that opens something other than a SettingRow's picker: the
- * label on the left, the value and a chevron on the right, the help shown while the row is lit
- * (always in `aria-describedby`), as a SettingRow draws them.
- * - With `children`, Enter, Space or a click opens them inside the row (a date with its buttons, a
- *   list to choose from); Escape closes them and returns to the row.
- * - With `onClick`, the row is a button for an action shown elsewhere (a dialog).
- * ↑ ↓ on the row move to the next row, SettingRows included, without trapping Tab.
- */
-export function OpenRow({
-  anchor,
-  label,
-  value,
-  help,
-  error,
-  note,
-  disabled = false,
-  onClick,
-  children,
-}: {
-  anchor?: string
-  label: string
-  /** What is set now, on the right. */
-  value?: ReactNode
-  /** What the row does: shown only while it is lit, always read by screen readers. */
-  help?: ReactNode
-  /** An error under the row. */
-  error?: ReactNode
-  /** More under the row, always shown. */
-  note?: ReactNode
-  disabled?: boolean
-  onClick?: () => void
-  /** What opens inside the row. */
-  children?: ReactNode
-}) {
-  const id = useId()
-  const labelId = `${id}-label`
-  const valueId = `${id}-value`
-  const helpId = help !== undefined ? `${id}-help` : undefined
-  const errorId = error ? `${id}-error` : undefined
-  const panelId = `${id}-panel`
-  const head = useRef<HTMLButtonElement>(null)
-  const panel = useRef<HTMLDivElement>(null)
-  const [focused, setFocused] = useState(false)
-  const [open, setOpen] = useState(false)
-  const opens = children !== undefined && onClick === undefined
-  const lit = focused || open
-
-  // Opening moves the keyboard into what opened: its first field or button.
-  useEffect(() => {
-    if (open) {
-      panel.current
-        ?.querySelector<HTMLElement>('input, button:not([disabled]), [tabindex="0"]')
-        ?.focus()
-    }
-  }, [open])
-
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    const to = event.relatedTarget
-    if (to instanceof Node && event.currentTarget.contains(to)) return
-    setFocused(false)
-    // A list, popover or dialog opened from the row keeps it open.
-    if (
-      to instanceof Element &&
-      !to.closest('[popover], [role="listbox"], [role="dialog"], [role="menu"]')
-    ) {
-      setOpen(false)
-    }
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.defaultPrevented) return
-    if (event.key === 'Escape' && open) {
-      event.preventDefault()
-      event.stopPropagation()
-      setOpen(false)
-      head.current?.focus()
-      return
-    }
-    if (event.target !== head.current || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) {
-      return
-    }
-    const scope = head.current.closest('form') ?? document
-    const heads = [...scope.querySelectorAll<HTMLElement>('[data-setting-head]')]
-    const next = heads[heads.indexOf(head.current) + (event.key === 'ArrowDown' ? 1 : -1)]
-    if (!next) return
-    event.preventDefault()
-    next.focus()
-  }
-
-  return (
-    <div
-      id={anchor}
-      data-lit={lit || undefined}
-      onFocus={() => setFocused(true)}
-      onBlur={onBlur}
-      onKeyDown={onKeyDown}
-      className={cx(
-        'min-w-0 scroll-mt-32 rounded-row transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit',
-        lit ? 'lit lift [--lift:1.012]' : cx('bg-s1', !disabled && 'hover:bg-s2'),
-        disabled && 'opacity-60',
-      )}
-    >
-      <button
-        ref={head}
-        type="button"
-        data-setting-head
-        disabled={disabled}
-        aria-expanded={opens ? open : undefined}
-        aria-controls={opens && open ? panelId : undefined}
-        aria-labelledby={`${labelId} ${valueId}`}
-        aria-describedby={describedBy(helpId, errorId)}
-        onClick={() => (onClick ? onClick() : setOpen(!open))}
-        className={cx(
-          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[22px] pl-[30px] text-left focus-visible:outline-none disabled:cursor-not-allowed',
-          'min-h-[82px] max-md:min-h-[68px] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
-        )}
-      >
-        <span id={labelId} className="min-w-0 flex-1 text-h3 text-ink">
-          {label}
-        </span>
-        <span
-          id={valueId}
-          className="min-w-0 text-right text-lead break-words text-ink-2 max-md:text-[17px]"
-        >
-          {value}
-        </span>
-        <CaretRightIcon
-          size={24}
-          aria-hidden="true"
-          className={cx(
-            'shrink-0 text-ink-3 transition-transform duration-500 ease-nuit',
-            open && 'rotate-90',
-          )}
-        />
-      </button>
-      {error && (
-        <div className="px-[30px] pb-5 max-md:px-5 max-md:pb-4">
-          <FieldError id={errorId}>{error}</FieldError>
-        </div>
-      )}
-      {note !== undefined && (
-        <div className="px-[30px] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">{note}</div>
-      )}
-      {(help !== undefined || open) && (
-        <div className={lit ? 'px-[30px] pb-[30px] max-md:px-5 max-md:pb-[22px]' : 'sr-only'}>
-          {help !== undefined && (
-            <p
-              id={helpId}
-              className="max-w-[66ch] text-[17.5px] leading-[1.58] text-ink-2 max-md:text-[16px]"
-            >
-              {help}
-            </p>
-          )}
-          {open && (
-            <div ref={panel} id={panelId} className={cx(help !== undefined && 'mt-6 max-md:mt-4')}>
-              {children}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+import { fetchLiveSessions, queryKeys, type LiveSession } from '@/api'
+import { formatClock } from '@/format'
+import { useI18n } from '@/i18n'
 
 /**
  * One section of a user's or a group's page: its title (25 px), an optional line under it, then
@@ -210,38 +40,6 @@ export function PageSection({
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2">{children}</div>
     </section>
-  )
-}
-
-/**
- * The frame of a user's or a group's page: its head (the band), then the section list on the left
- * with the unsaved dock under it, and the sections on the right; on a phone the list is a strip
- * and the dock a bar along the bottom. It is PageLayout's split, with the band for a head.
- */
-export function SplitFrame({
-  head,
-  nav,
-  children,
-}: {
-  head: ReactNode
-  nav: ReactNode
-  children: ReactNode
-}) {
-  const [dock, setDock] = useState<HTMLElement | null>(null)
-  return (
-    <DockSlotContext value={dock}>
-      <div className="stagger">
-        {head}
-        <div className="grid items-start gap-[72px] md:grid-cols-[300px_minmax(0,1fr)] max-xl:gap-12 max-lg:gap-8 max-lg:md:grid-cols-[232px_minmax(0,1fr)] max-md:block">
-          {/* As tall as the sections: the list stays in view, the dock at the foot of the column. */}
-          <div className="flex flex-col self-stretch max-md:contents">
-            {nav}
-            <div ref={setDock} className="sticky bottom-7 mt-auto max-md:hidden" />
-          </div>
-          <div className="min-w-0 max-md:mt-6">{children}</div>
-        </div>
-      </div>
-    </DockSlotContext>
   )
 }
 
@@ -316,5 +114,83 @@ export function Band({
         )}
       </section>
     </header>
+  )
+}
+
+/** A poster through Polyfin, as apps load it, at a height in pixels. */
+export function posterUrl(posterId: string, height: number) {
+  return `/Items/${encodeURIComponent(posterId)}/Images/Primary?maxHeight=${height}&quality=85`
+}
+
+/**
+ * What the user plays now, from the playbacks Home's Now playing reads: the first that is theirs,
+ * leaving out downloads being converted and guests of their share links. A member is answered
+ * their own playbacks only.
+ */
+export function useWatching(userId: string): LiveSession | null {
+  const sessions = useQuery({
+    queryKey: queryKeys.liveSessions,
+    queryFn: ({ signal }) => fetchLiveSessions(signal),
+    refetchInterval: 10_000,
+  })
+  return (
+    sessions.data?.find(
+      (session) =>
+        session.user.id === userId && session.item !== null && !session.download && !session.shared,
+    ) ?? null
+  )
+}
+
+/**
+ * What a person watches now, in their band: the poster, "Watching …" or "Paused on …", the device
+ * and the position, as a link to Home's Now playing. `art` is the poster's id, null without one.
+ */
+export function WatchingLink({
+  session,
+  art,
+  onArtError,
+}: {
+  session: LiveSession
+  art: string | null
+  onArtError: () => void
+}) {
+  const { t } = useI18n()
+  const item = session.item
+  if (item === null) return null
+  return (
+    <Link
+      to="/"
+      className="focus-lit mt-[18px] flex w-fit max-w-full items-center gap-3.5 rounded-[20px] bg-ink/8 py-2 pr-[18px] pl-2 text-[17.5px] text-ink hover:bg-ink/13 max-md:text-[16px]"
+    >
+      {art !== null && (
+        <img
+          src={posterUrl(art, 112)}
+          alt=""
+          loading="lazy"
+          onError={onArtError}
+          className="h-14 w-10 shrink-0 rounded-[10px] bg-s2 object-cover"
+        />
+      )}
+      <span className="min-w-0">
+        <b className="block font-[650] break-words">
+          {(session.paused ? t.users.pausedOn : t.users.watching)(
+            item.kind === 'episode' && item.seriesName ? item.seriesName : item.name,
+          )}
+        </b>
+        <small className="block text-micro text-ink-3">
+          {[
+            session.device.name,
+            item.runtime > 0
+              ? t.users.positionOf(
+                  formatClock(Math.min(session.position, item.runtime)),
+                  formatClock(item.runtime),
+                )
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </small>
+      </span>
+    </Link>
   )
 }
