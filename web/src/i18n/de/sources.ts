@@ -639,6 +639,7 @@ const sources: typeof en = {
       'Für dein Konto gilt die Kindersicherung: Deine Jellyfin-Apps zeigen nur die Quellen und Bibliotheken des Servers, da diese die Altersfreigaben liefern, auf die sie sich stützt. Deine eigenen Quellen bleiben erhalten, werden aber nicht verwendet.',
     personalAddonsOff:
       'Ein Administrator hat deine eigenen Quellen deaktiviert: Deine Jellyfin-Apps zeigen nur die Quellen und Bibliotheken des Servers. Deine eigenen Quellen bleiben erhalten, werden aber nicht verwendet.',
+    listTitle: 'Deine Quellen',
   },
   usedBy: {
     title: 'Verwendet von',

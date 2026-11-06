@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   BooksIcon,
   BroadcastIcon,
+  CaretDownIcon,
+  CaretUpIcon,
   CheckIcon,
   DatabaseIcon,
   GlobeIcon,
@@ -29,7 +31,7 @@ import {
 import { settingsPath } from '@/app/navigation'
 import { useHealth, useHealthProblems } from '@/features/system/problems'
 import { useI18n } from '@/i18n'
-import { Block, Button, IconTile, Row, RowList, StatusPill } from '@/ui'
+import { Block, Button, cx, IconTile, Panel, Row, RowList, StatusPill } from '@/ui'
 
 /** The steps of a good setup, in the order the card lists them. */
 type StepId = 'metadata' | 'library' | 'users' | 'backups' | 'secretKey' | 'address' | 'discovery'
@@ -129,8 +131,9 @@ function readDismissed(): boolean {
 }
 
 /**
- * Home's Get started card: the steps of a good setup, each done or not and linking to its page.
- * It shows once every signal is read, and goes away once every step is done, or once dismissed.
+ * Home's Get started panel: how many steps of a good setup are done, the next one to do, and all
+ * of them, each done or not and linking to its page, on demand. It shows once every signal is
+ * read, and goes away once every step is done, or once dismissed.
  */
 export function GetStarted() {
   const [dismissed, setDismissed] = useState(readDismissed)
@@ -151,6 +154,9 @@ export function GetStarted() {
 
 function Steps({ onDismiss }: { onDismiss: () => void }) {
   const { t } = useI18n()
+  const text = t.dashboard.getStarted
+  const [all, setAll] = useState(false)
+  const listId = useId()
   const health = useHealth()
   const problems = useHealthProblems()
   const [settings, addons, libraries, users, invites] = useQueries({
@@ -189,39 +195,78 @@ function Steps({ onDismiss }: { onDismiss: () => void }) {
     users: users.data,
     invites: invites.data,
   })
-  const open = steps.filter((step) => !step.done).length
-  if (open === 0) return null
-  const text = t.dashboard.getStarted
-
+  const open = steps.filter((step) => !step.done)
+  if (open.length === 0) return null
+  const next = open[0]!
   return (
     <Block
       title={text.title}
-      count={open}
+      count={open.length}
       aside={
         <Button variant="ghost" size="sm" onClick={onDismiss}>
           {text.dismiss}
         </Button>
       }
     >
-      <p className="mb-4 text-small text-ink-2">{text.lede(steps.length - open, steps.length)}</p>
-      <RowList aria-label={text.title}>
-        {steps.map((step) => (
+      <Panel as="div">
+        <p className="text-[21px] font-[650] text-ink max-md:text-[18px]">
+          {text.progress(steps.length - open.length, steps.length)}
+        </p>
+        <div aria-hidden="true" className="mt-4 grid grid-flow-col gap-1.5">
+          {steps.map((step) => (
+            <i key={step.id} className={cx('h-2 rounded-full', step.done ? 'bg-focus' : 'bg-s3')} />
+          ))}
+        </div>
+        {/* The next step is a tile of its own, inside the panel's padding. */}
+        <RowList aria-label={text.next} className="mx-0! mt-5">
           <Row
-            key={step.id}
-            to={step.to}
-            leading={<IconTile icon={step.done ? CheckIcon : icons[step.id]} />}
-            // The steps' words wrap, rather than being cut, on a phone.
-            title={<span className="whitespace-normal">{text.steps[step.id].title}</span>}
-            meta={<span className="min-w-0 whitespace-normal">{text.steps[step.id].help}</span>}
-            muted={step.done}
-            trailing={
-              <StatusPill tone={step.done ? 'ok' : 'muted'}>
-                {step.done ? text.done : text.todo}
-              </StatusPill>
+            to={next.to}
+            leading={<IconTile icon={icons[next.id]} />}
+            title={
+              <span className="block whitespace-normal">
+                <small className="block text-micro font-normal text-ink-3">{text.next}</small>
+                {text.steps[next.id].title}
+              </span>
             }
+            meta={<span className="min-w-0 whitespace-normal">{text.steps[next.id].help}</span>}
+            className="bg-s2"
           />
-        ))}
-      </RowList>
+        </RowList>
+        <div className="mt-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={all ? CaretUpIcon : CaretDownIcon}
+            aria-expanded={all}
+            aria-controls={listId}
+            onClick={() => setAll(!all)}
+            className="-ml-3"
+          >
+            {all ? text.hideSteps : text.showSteps(steps.length)}
+          </Button>
+        </div>
+        {all && (
+          <div id={listId} className="mt-3">
+            <RowList compact aria-label={text.title}>
+              {steps.map((step) => (
+                <Row
+                  key={step.id}
+                  to={step.to}
+                  leading={<IconTile icon={step.done ? CheckIcon : icons[step.id]} size="sm" />}
+                  // The steps' words wrap, rather than being cut, on a phone.
+                  title={<span className="whitespace-normal">{text.steps[step.id].title}</span>}
+                  muted={step.done}
+                  trailing={
+                    <StatusPill tone={step.done ? 'ok' : 'muted'}>
+                      {step.done ? text.done : text.todo}
+                    </StatusPill>
+                  }
+                />
+              ))}
+            </RowList>
+          </div>
+        )}
+      </Panel>
     </Block>
   )
 }

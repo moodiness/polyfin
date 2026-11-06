@@ -1,4 +1,4 @@
-import { ArrowClockwiseIcon, CloudArrowDownIcon, DownloadSimpleIcon } from '@phosphor-icons/react'
+import { CloudArrowDownIcon, DownloadSimpleIcon, PowerIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
@@ -36,8 +36,8 @@ export function useServerActions() {
 export type ServerAction = 'restart' | 'install' | 'update'
 
 /**
- * At the top of Home: the version Polyfin runs, Restart, in red as on Jellyfin's dashboard, and
- * Update now while an update tool is set. Each opens its confirmation through `onOpen`.
+ * At the foot of Home's Server state: Restart, and Update now while an update tool is set. Each
+ * opens its confirmation through `onOpen`.
  */
 export function ServerActionButtons({
   actions,
@@ -50,33 +50,19 @@ export function ServerActionButtons({
   const text = t.dashboard.server
   return (
     <>
-      <span className="mr-2 text-small text-ink-3">
-        {t.dashboard.overview.version}{' '}
-        <span className="font-mono text-ink-2">{actions.version}</span>
-      </span>
-      <Button
-        size="sm"
-        variant="danger"
-        icon={ArrowClockwiseIcon}
-        onClick={() => onOpen('restart')}
-      >
-        {text.restart}
-      </Button>
       {actions.updateTool && (
-        <Button
-          size="sm"
-          variant="secondary"
-          icon={CloudArrowDownIcon}
-          onClick={() => onOpen('update')}
-        >
+        <Button size="sm" icon={CloudArrowDownIcon} onClick={() => onOpen('update')}>
           {text.updateNow}
         </Button>
       )}
+      <Button size="sm" icon={PowerIcon} onClick={() => onOpen('restart')}>
+        {text.restart}
+      </Button>
     </>
   )
 }
 
-/** Update now in the notice of a new version, beside its release notes, while an update tool is set. */
+/** Update now in the tile of a new version, beside its release notes, while an update tool is set. */
 export function NoticeUpdateButton({ onOpen }: { onOpen: (action: ServerAction) => void }) {
   const { t } = useI18n()
   return (

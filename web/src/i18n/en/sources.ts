@@ -611,6 +611,7 @@ const sources = {
       'Parental control applies to your account: your Jellyfin apps show the server’s sources and libraries only, as they give the ratings it relies on. Your own sources are kept but not used.',
     personalAddonsOff:
       'An administrator turned your own sources off: your Jellyfin apps show the server’s sources and libraries only. Your own sources are kept but not used.',
+    listTitle: 'Your sources',
   },
   usedBy: {
     title: 'Used by',

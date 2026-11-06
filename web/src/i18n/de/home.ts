@@ -54,15 +54,15 @@ const home: typeof en = {
       conversionsOf: (count: number, limit: number) =>
         limit > 0 ? `${count} von ${limit}` : `${count}, ohne Limit`,
       bandwidth: 'Bandbreite',
-      bandwidthSent: (rate: string) => `${rate} an Apps gesendet`,
-      bandwidthReceived: (rate: string) => `${rate} von Quellen empfangen`,
+      sentToApps: 'an Apps gesendet',
+      receivedFromSources: 'von Quellen empfangen',
       uptime: 'Läuft seit',
       problems: 'Zu prüfen',
       problemsEmpty: 'Nichts zu prüfen',
       problemsEmptyHelp:
         'Polyfin überwacht seine Datenträger, Quellen, Fernsehprogramme, Backups und Aufgaben. Alles, was deine Aufmerksamkeit braucht, erscheint hier.',
-      problemError: 'Problem',
-      problemWarning: 'Prüfen',
+      /** The kind word of the tile of a new version, in To look at. */
+      updateKind: 'Neue Version',
       update: (version: string, running: string) =>
         `Polyfin ${version} ist verfügbar. Auf diesem Server läuft Version ${running}.`,
       releaseNotes: 'Versionshinweise',
@@ -84,8 +84,10 @@ const home: typeof en = {
     },
     getStarted: {
       title: 'Erste Schritte',
-      lede: (done: number, total: number) =>
-        `${done} von ${total} Schritten erledigt. Jeder öffnet die Seite, auf der er eingestellt wird.`,
+      progress: (done: number, total: number) => `${done} von ${total} Schritten erledigt`,
+      next: 'Als Nächstes',
+      showSteps: (count: number) => `Alle ${count} Schritte`,
+      hideSteps: 'Schritte ausblenden',
       dismiss: 'Ausblenden',
       done: 'Erledigt',
       todo: 'Offen',
@@ -189,6 +191,8 @@ const home: typeof en = {
       liveChannel: 'Live',
       progress: (title: string) => `Wiedergabeposition von ${title}`,
       remaining: (time: string) => `noch ${time}`,
+      /** After the position: "of 1:44:00". */
+      ofRuntime: (time: string) => `von ${time}`,
       startedAt: (time: string) => `Gestartet ${time}`,
       appOn: (app: string, device: string) => (app ? `${app} auf ${device}` : device),
       sharedLink: 'Freigabelink',
@@ -301,6 +305,16 @@ const home: typeof en = {
       VideoRangeTypeNotSupported: 'HDR nicht unterstützt',
       StreamCountExceedsLimit: 'Zu viele Spuren',
     } as Record<string, string>,
+    /** A member's Home. */
+    member: {
+      /** The member in their own playback's tile. */
+      you: 'Du',
+      /** The lede while the member plays one title. */
+      watching: (title: string, device: string) => `Du schaust ${title} auf ${device}.`,
+      lede: 'Melde ein Gerät mit Quick Connect an, wähle deine Quellen und richte dein Konto ein.',
+      sourceCount: (count: number) =>
+        count === 0 ? 'Noch keine' : count === 1 ? '1 Quelle' : `${count} Quellen`,
+    },
     activity: {
       title: 'Letzte Aktivitäten',
       openLog: 'Protokoll öffnen',

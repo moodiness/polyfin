@@ -52,17 +52,17 @@ const home = {
       conversions: 'Video conversions',
       conversionsOf: (count: number, limit: number) =>
         limit > 0 ? `${count} of ${limit}` : `${count}, no limit`,
-      /** The server's bandwidth across every play, beside Now playing. */
+      /** The Bandwidth panel: what every play moves now, and the video conversions. */
       bandwidth: 'Bandwidth',
-      bandwidthSent: (rate: string) => `${rate} sent to apps`,
-      bandwidthReceived: (rate: string) => `${rate} received from sources`,
+      sentToApps: 'sent to apps',
+      receivedFromSources: 'received from sources',
       uptime: 'Running for',
       problems: 'To look at',
       problemsEmpty: 'Nothing to look at',
       problemsEmptyHelp:
         'Polyfin checks its disks, sources, guides, backups and tasks. Anything that needs you shows up here.',
-      problemError: 'Problem',
-      problemWarning: 'To check',
+      /** The kind word of the tile of a new version, in To look at. */
+      updateKind: 'New version',
       update: (version: string, running: string) =>
         `Polyfin ${version} is available. This server runs version ${running}.`,
       releaseNotes: 'Release notes',
@@ -85,8 +85,10 @@ const home = {
     /** Home's Get started card: the steps of a good setup, each done or not. */
     getStarted: {
       title: 'Get started',
-      lede: (done: number, total: number) =>
-        `${done} of ${total} steps done. Each one opens the page where it is set.`,
+      progress: (done: number, total: number) => `${done} of ${total} steps done`,
+      next: 'Next',
+      showSteps: (count: number) => `All ${count} steps`,
+      hideSteps: 'Hide the steps',
       dismiss: 'Dismiss',
       done: 'Done',
       todo: 'To do',
@@ -190,6 +192,8 @@ const home = {
       liveChannel: 'Live',
       progress: (title: string) => `Playback position of ${title}`,
       remaining: (time: string) => `${time} left`,
+      /** After the position: "of 1:44:00". */
+      ofRuntime: (time: string) => `of ${time}`,
       startedAt: (time: string) => `Started ${time}`,
       appOn: (app: string, device: string) => (app ? `${app} on ${device}` : device),
       /** A guest's playback through a share link, in place of its app and device. */
@@ -307,6 +311,16 @@ const home = {
       VideoRangeTypeNotSupported: 'HDR not supported',
       StreamCountExceedsLimit: 'Too many tracks',
     } as Record<string, string>,
+    /** A member's Home. */
+    member: {
+      /** The member in their own playback's tile. */
+      you: 'You',
+      /** The lede while the member plays one title. */
+      watching: (title: string, device: string) => `You are watching ${title} on ${device}.`,
+      lede: 'Approve a device with Quick Connect, choose your sources and set up your account.',
+      sourceCount: (count: number) =>
+        count === 0 ? 'None yet' : count === 1 ? '1 source' : `${count} sources`,
+    },
     activity: {
       title: 'Recent activity',
       openLog: 'Open the log',

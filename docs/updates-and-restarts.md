@@ -13,7 +13,7 @@ Polyfin tells administrators when a new version is out, while **Check for new ve
 
 When the release is newer than the running version, in semantic version order:
 
-- **Home** shows a notice, and **System › Health** an item under **Needs attention**, with the new version and **Release notes**, which opens them on GitHub;
+- **Home** shows a tile under **To look at**, and **System › Health** an item under **Needs attention**, with the new version and **Release notes**, which opens them on GitHub;
 - Jellyfin apps see `HasUpdateAvailable` true in `/System/Info`;
 - the **New version** notification is sent once per version, to the server's targets and administrators' own (see [Notifications](notifications.md#new-versions)).
 
@@ -50,7 +50,7 @@ A pre-release is a release GitHub marks as one, or whose tag is one, such as `v1
 
 ## Restart and updates
 
-Administrators restart Polyfin, and start its update, from the top of **Home**, without opening the host or Docker. **Search** finds both, as "Restart Polyfin" and "Update now". Each opens **Home** with the action's confirmation.
+Administrators restart Polyfin, and start its update, from the foot of **Server state** on **Home**, without opening the host or Docker. **Search** finds both, as "Restart Polyfin" and "Update now". Each opens **Home** with the action's confirmation.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -101,7 +101,7 @@ Until then, **Restart** warns that Polyfin may not come back, and asks to choose
 
 ### Polyfin Desktop update
 
-In Polyfin Desktop, the notice of a new version on **Home** offers **Install Polyfin `<version>`**. It shows while the app's menu offers it: a release newer than the server, with a package for the system (see [Updates](desktop.md#updates)). Elsewhere than in Polyfin Desktop, it is never offered.
+In Polyfin Desktop, the tile of a new version on **Home** offers **Install Polyfin `<version>`**. It shows while the app's menu offers it: a release newer than the server, with a package for the system (see [Updates](desktop.md#updates)). Elsewhere than in Polyfin Desktop, it is never offered.
 
 It asks the app to do what its menu item does:
 
@@ -113,7 +113,7 @@ The notice shows the download's progress, then the admin app waits for the new v
 
 ### Update now
 
-A container cannot update its own image without the Docker socket. An update tool you run beside Polyfin can: many offer an HTTP API that updates the containers they watch. Give its address in **Update tool address**, in **Settings › General**. **Update now** then shows at the top of **Home**, and in the notice of a new version when one is out.
+A container cannot update its own image without the Docker socket. An update tool you run beside Polyfin can: many offer an HTTP API that updates the containers they watch. Give its address in **Update tool address**, in **Settings › General**. **Update now** then shows at the foot of **Server state** on **Home**, and in the tile of a new version when one is out.
 
 Polyfin sends this request, and nothing else:
 
@@ -132,7 +132,7 @@ The token is stored encrypted, as the other secrets. It is never sent back to th
 
 - Jellyfin's dashboard has "Restart" and "Shut down" buttons, through `POST /System/Restart`, allowed to administrators and to any user on the local network ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L114-L122)), and `POST /System/Shutdown`, to administrators ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L130-L138)).
 - Jellyfin restarts within its own process: it stops its host and starts a new one in a loop ([SystemManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L126-L139), [Program.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Program.cs#L145-L163)).
-- Like Jellyfin's dashboard, whose **Restart** sits in red with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)), **Home** shows **Restart**, in red, and the version at its top.
+- Jellyfin's dashboard puts **Restart**, in red, with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)). **Home** puts **Restart** with the version, at the foot of **Server state**.
 - Polyfin differs on purpose:
   - it exits and lets what runs it start it again, which also recovers a server stuck in a way a restart within the process would not;
   - it has no shutdown;

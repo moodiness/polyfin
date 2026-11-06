@@ -188,6 +188,8 @@ async function main() {
   await shot('get-started', async () => {
     await open(page, server.url, '/')
     const card = await waitForSection(page, 'Get started')
+    await clickText(page, 'button', 'All 7 steps')
+    await sleep(300)
     return clipAround(page, [card], 24)
   })
 
@@ -218,7 +220,7 @@ async function main() {
     )
     // The bandwidth is an average of the last 10 seconds.
     await sleep(Math.max(0, seeded.playingSince + 12000 - Date.now()))
-    await clickText(page, 'article button', 'Details')
+    await page.click('article button[aria-label="Details"]')
     await sleep(3500)
     const header = await page.$('main header')
     return clipAround(page, [header, playing], 24)

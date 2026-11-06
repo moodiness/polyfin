@@ -31,6 +31,7 @@ import {
   Block,
   cx,
   EmptyState,
+  IconTile,
   InlineError,
   Segmented,
   Skeleton,
@@ -151,11 +152,10 @@ export function RecentActivity() {
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = activity
   const boxRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const footRef = useRef<HTMLParagraphElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
   useScrollFade(filterRef)
   const listed = !activity.isPending && !activity.isError && shown.length > 0
-  const height = useListHeight(boxRef, footRef, listed)
+  const height = useListHeight(boxRef, listed)
   // The next page loads by itself once the end of the box comes near. Observing again after
   // each page makes a sentinel that is still in view (a short or filtered list) load the next.
   useEffect(() => {
@@ -178,8 +178,7 @@ export function RecentActivity() {
       aside={<TextLink to="/system/logs">{text.openLog}</TextLink>}
       className="scroll-mt-24"
     >
-      {/* From xl, in Home's right column, the filters and the search stack. */}
-      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between xl:flex-col xl:items-stretch">
+      <div className="mb-4 flex flex-col gap-3">
         <div
           ref={filterRef}
           className="-mx-5 scroll-fade overflow-x-auto px-5 scrollbar-none md:mx-0 md:px-0"
@@ -204,19 +203,18 @@ export function RecentActivity() {
           onValue={setSearch}
           aria-label={text.search}
           placeholder={text.search}
-          className="lg:w-72 xl:w-full"
         />
       </div>
       {activity.isPending ? (
-        <div role="status" aria-label={t.common.loading}>
+        <div role="status" aria-label={t.common.loading} className="flex flex-col gap-1">
           {[0, 1, 2, 3].map((row) => (
             <div
               key={row}
-              className="grid grid-cols-[76px_32px_minmax(0,1fr)] items-center gap-3 border-line py-3 not-first:border-t max-sm:grid-cols-[32px_minmax(0,1fr)]"
+              className="grid min-h-16 grid-cols-[84px_36px_minmax(0,1fr)] items-center gap-4 px-4 max-sm:grid-cols-[36px_minmax(0,1fr)] max-sm:px-0"
             >
-              <Skeleton className="h-3 w-11 max-sm:hidden" />
-              <Skeleton className="size-[30px] rounded-[9px]" />
-              <Skeleton className="h-3.5 w-2/3" />
+              <Skeleton className="h-4 w-14 max-sm:hidden" />
+              <Skeleton className="size-9 rounded-full" />
+              <Skeleton className="h-4 w-2/3" />
             </div>
           ))}
         </div>
@@ -243,11 +241,11 @@ export function RecentActivity() {
           aria-busy={isFetchingNextPage}
           style={height === undefined ? undefined : { height }}
           className={cx(
-            '-mx-2 overflow-y-auto overscroll-contain rounded-[10px] px-2 scrollbar-thin',
-            height === undefined && 'max-h-[420px] sm:max-h-[520px]',
+            'overflow-y-auto overscroll-contain rounded-row scrollbar-thin focus-lit [--lift:1]',
+            height === undefined && 'max-h-[460px] sm:max-h-[600px]',
           )}
         >
-          <ol>
+          <ol className="flex flex-col gap-1">
             {shown.map((entry) => (
               <ActivityRow key={entry.id} entry={entry} />
             ))}
@@ -265,7 +263,7 @@ export function RecentActivity() {
         </div>
       )}
       {activity.data !== undefined && (
-        <p ref={footRef} className="mt-3 border-t border-line pt-3 text-small text-ink-3">
+        <p className="mt-4 text-small text-ink-3">
           {text.count(entries.length, total)} {text.autoRefresh}
         </p>
       )}
@@ -273,51 +271,31 @@ export function RecentActivity() {
   )
 }
 
-/** Tailwind's xl, from which Home shows Recent activity in a column of its own. */
-const columnQuery = '(min-width: 80rem)'
-/** Tailwind's sm, from which the list may be taller below xl. */
+/** Tailwind's sm, from which the list may be taller. */
 const wideQuery = '(min-width: 40rem)'
-/** The most the list shows below xl, on a phone and from sm (its classes before measuring). */
-const phoneMax = 420
-const wideMax = 520
-/** The space left under the block when its list fills the window. */
-const bottomGap = 24
-/** The list is never shorter than on narrower screens. */
-const minHeight = 420
+/** The most the list shows, on a phone and from sm (its classes before measuring). */
+const phoneMax = 460
+const wideMax = 600
 
 /**
- * The list's height. From xl, the block ends at the bottom of the window as the page opens:
- * Recent activity shows whole beside the rest of Home, scrolling in its own box. Below xl, the
- * list keeps its maximum height. Either way, a list taller than that ends after its last whole
- * row, never in the middle of one. Measured again when the window, the page or the list changes
- * size; undefined while the list fits below xl.
+ * The list's height: a list taller than its maximum ends after its last whole row, never in the
+ * middle of one. Measured again when the window or the list changes size; undefined while the
+ * list fits.
  */
-function useListHeight(
-  box: RefObject<HTMLElement | null>,
-  foot: RefObject<HTMLElement | null>,
-  listed: boolean,
-): number | undefined {
+function useListHeight(box: RefObject<HTMLElement | null>, listed: boolean): number | undefined {
   const [height, setHeight] = useState<number>()
   useEffect(() => {
     const element = box.current
     if (!listed || !element) return
-    const column = window.matchMedia(columnQuery)
     const wide = window.matchMedia(wideQuery)
     const measure = () => {
-      const place = element.getBoundingClientRect()
-      let limit = wide.matches ? wideMax : phoneMax
-      if (column.matches) {
-        // What follows the list in the block (the count), whatever the list's height.
-        const below = foot.current ? foot.current.getBoundingClientRect().bottom - place.bottom : 0
-        const top = place.top + window.scrollY
-        limit = Math.max(minHeight, Math.floor(window.innerHeight - top - below - bottomGap))
-      }
+      const limit = wide.matches ? wideMax : phoneMax
       if (element.scrollHeight <= limit) {
-        setHeight(column.matches ? limit : undefined)
+        setHeight(undefined)
         return
       }
       // The bottom of the last row that shows whole within the limit.
-      const contentTop = place.top - element.scrollTop
+      const contentTop = element.getBoundingClientRect().top - element.scrollTop
       let whole = 0
       for (const row of element.querySelectorAll(':scope > ol > li')) {
         const bottom = Math.ceil(row.getBoundingClientRect().bottom - contentTop)
@@ -328,19 +306,16 @@ function useListHeight(
     }
     measure()
     const observer = new ResizeObserver(measure)
-    observer.observe(document.body)
     const list = element.firstElementChild
     if (list) observer.observe(list)
     window.addEventListener('resize', measure)
-    column.addEventListener('change', measure)
     wide.addEventListener('change', measure)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measure)
-      column.removeEventListener('change', measure)
       wide.removeEventListener('change', measure)
     }
-  }, [box, foot, listed])
+  }, [box, listed])
   return height
 }
 
@@ -357,35 +332,31 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         ? WarningIcon
         : (typeIcons[entry.type] ?? InfoIcon)
   return (
-    <li className="grid grid-cols-[76px_32px_minmax(0,1fr)_auto] items-center gap-3 border-line py-3 text-[14px] not-first:border-t max-sm:grid-cols-[32px_minmax(0,1fr)] max-sm:items-start">
+    <li className="grid min-h-16 grid-cols-[84px_36px_minmax(0,1fr)_auto] items-center gap-4 rounded-[22px] px-4 py-2.5 text-[18px] max-sm:grid-cols-[36px_minmax(0,1fr)] max-sm:items-start max-sm:gap-3 max-sm:px-0 max-sm:text-[16.5px]">
       <time
         dateTime={entry.date}
         title={dateTime(entry.date, language)}
-        className="figures text-[12.5px] text-ink-3 max-sm:hidden"
+        className="figures text-right text-micro text-ink-3 max-sm:hidden"
       >
         {today
           ? new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(date)
           : relativeTime(entry.date, language, t.time.justNow)}
       </time>
-      <span
-        aria-hidden="true"
-        className={cx(
-          'grid size-[30px] place-items-center rounded-[9px] border',
-          entry.severity === 'Error'
-            ? 'border-danger/25 bg-danger/8 text-danger'
-            : entry.severity === 'Warning'
-              ? 'border-warn/20 bg-warn/10 text-warn'
-              : 'border-line bg-s2 text-ink-2',
-        )}
-      >
-        <Glyph size={16} />
-      </span>
+      <IconTile
+        icon={Glyph}
+        size="sm"
+        tone={
+          entry.severity === 'Error' ? 'danger' : entry.severity === 'Warning' ? 'warn' : 'neutral'
+        }
+      />
       <div className="min-w-0">
         <p className="break-words text-ink">{entry.name}</p>
         {entry.shortOverview !== null && (
-          <p className="mt-0.5 break-words text-[13px] text-ink-3">{entry.shortOverview}</p>
+          <p className="mt-0.5 break-words text-[16px] text-ink-3 max-sm:text-micro">
+            {entry.shortOverview}
+          </p>
         )}
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12.5px] text-ink-3 sm:hidden">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-micro text-ink-3 sm:hidden">
           <time dateTime={entry.date} title={dateTime(entry.date, language)} className="figures">
             {relativeTime(entry.date, language, t.time.justNow)}
           </time>

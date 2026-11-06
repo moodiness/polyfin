@@ -637,6 +637,7 @@ const sources: typeof en = {
       'Il controllo parentale si applica al tuo account: le tue applicazioni Jellyfin mostrano solo le origini e le librerie del server, perché forniscono le classificazioni su cui si basa. Le tue origini vengono conservate ma non usate.',
     personalAddonsOff:
       'Un amministratore ha disattivato le tue origini: le tue applicazioni Jellyfin mostrano solo le origini e le librerie del server. Le tue origini vengono conservate ma non usate.',
+    listTitle: 'Le tue origini',
   },
   usedBy: {
     title: 'Usata da',

@@ -642,6 +642,7 @@ const sources: typeof en = {
       'El control parental se aplica a su cuenta: sus aplicaciones de Jellyfin solo muestran las fuentes y bibliotecas del servidor, ya que proporcionan las clasificaciones en las que se basa. Sus propias fuentes se conservan, pero no se usan.',
     personalAddonsOff:
       'Un administrador ha desactivado sus propias fuentes: sus aplicaciones de Jellyfin solo muestran las fuentes y bibliotecas del servidor. Sus propias fuentes se conservan, pero no se usan.',
+    listTitle: 'Sus fuentes',
   },
   usedBy: {
     title: 'Usada por',

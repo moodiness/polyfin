@@ -55,15 +55,15 @@ const home: typeof en = {
       conversionsOf: (count: number, limit: number) =>
         limit > 0 ? `${count} sur ${limit}` : `${count}, sans limite`,
       bandwidth: 'Bande passante',
-      bandwidthSent: (rate: string) => `${rate} envoyés aux applis`,
-      bandwidthReceived: (rate: string) => `${rate} reçus des sources`,
+      sentToApps: 'envoyés aux applis',
+      receivedFromSources: 'reçus des sources',
       uptime: 'En marche depuis',
       problems: 'À regarder',
       problemsEmpty: 'Rien à regarder',
       problemsEmptyHelp:
         'Polyfin surveille ses disques, sources, guides, sauvegardes et tâches. Ce qui demande votre attention apparaît ici.',
-      problemError: 'Problème',
-      problemWarning: 'À vérifier',
+      /** The kind word of the tile of a new version, in To look at. */
+      updateKind: 'Nouvelle version',
       update: (version: string, running: string) =>
         `Polyfin ${version} est disponible. Ce serveur est en version ${running}.`,
       releaseNotes: 'Notes de version',
@@ -85,8 +85,11 @@ const home: typeof en = {
     },
     getStarted: {
       title: 'Bien démarrer',
-      lede: (done: number, total: number) =>
-        `${done} étape${done > 1 ? 's' : ''} sur ${total} faite${done > 1 ? 's' : ''}. Chacune ouvre la page où elle se règle.`,
+      progress: (done: number, total: number) =>
+        `${done} étape${done > 1 ? 's' : ''} sur ${total} faite${done > 1 ? 's' : ''}`,
+      next: 'Ensuite',
+      showSteps: (count: number) => `Les ${count} étapes`,
+      hideSteps: 'Masquer les étapes',
       dismiss: 'Masquer',
       done: 'Fait',
       todo: 'À faire',
@@ -190,6 +193,8 @@ const home: typeof en = {
       liveChannel: 'Direct',
       progress: (title: string) => `Position de lecture de ${title}`,
       remaining: (time: string) => `reste ${time}`,
+      /** After the position: "of 1:44:00". */
+      ofRuntime: (time: string) => `sur ${time}`,
       startedAt: (time: string) => `Commencé ${time}`,
       appOn: (app: string, device: string) => (app ? `${app} sur ${device}` : device),
       sharedLink: 'Lien partagé',
@@ -303,6 +308,16 @@ const home: typeof en = {
       DirectPlayError: 'Échec de la lecture directe',
       VideoRangeTypeNotSupported: 'HDR non pris en charge',
       StreamCountExceedsLimit: 'Trop de pistes',
+    },
+    /** A member's Home. */
+    member: {
+      /** The member in their own playback's tile. */
+      you: 'Vous',
+      /** The lede while the member plays one title. */
+      watching: (title: string, device: string) => `Vous regardez ${title} sur ${device}.`,
+      lede: 'Approuvez un appareil avec Quick Connect, choisissez vos sources et réglez votre compte.',
+      sourceCount: (count: number) =>
+        count === 0 ? 'Aucune pour l’instant' : count === 1 ? '1 source' : `${count} sources`,
     },
     activity: {
       title: 'Activité récente',

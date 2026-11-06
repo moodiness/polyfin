@@ -1,36 +1,32 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import {
-  ArrowRightIcon,
-  ArrowSquareOutIcon,
-  CheckCircleIcon,
-  CpuIcon,
-  WarningCircleIcon,
-  WarningIcon,
-} from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
+import { ArrowSquareOutIcon, CaretRightIcon, CheckCircleIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router'
-import { fetchStatus, queryKeys, type HealthProblem } from '@/api'
-import { PageLayout } from '@/app/PageLayout'
+import { useSearchParams } from 'react-router'
+import { fetchStatus, queryKeys, type Health, type HealthProblem, type ServerActions } from '@/api'
 import { useSessionUser } from '@/app/session'
 import { problemText, useHealth, useHealthProblems } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import {
+  AlertTile,
   Block,
   ButtonLink,
-  cx,
   EmptyState,
   ExternalButtonLink,
   InlineError,
-  Notice,
+  PageHeader,
   ProgressBar,
-  Skeleton,
+  Row,
+  RowList,
+  SkeletonRows,
   StatusPill,
   TextLink,
 } from '@/ui'
 import { GetStarted } from './GetStarted'
-import { NowPlaying, ServerBandwidth, useLiveSessions } from './NowPlaying'
+import { MemberHome } from './MemberHome'
+import { Bandwidth, PlayingNow, useLiveSessions } from './NowPlaying'
 import { RecentActivity } from './RecentActivity'
+import { RoomLight } from './RoomLight'
 import {
   ActionDialog,
   DesktopInstall,
@@ -39,24 +35,20 @@ import {
   useServerActions,
   type ServerAction,
 } from './ServerActions'
-import { ServerStatus } from './ServerStatus'
 
-/** `/`: the administrator overview, or a member's view of the server's status. */
+/** `/`: the administrator overview, or a member's own Home. */
 export default function HomeRoute() {
-  const { t } = useI18n()
   const user = useSessionUser()
-  if (!user.isAdministrator) {
-    return (
-      <PageLayout title={t.status.title} lede={t.status.description}>
-        <div className="max-w-[784px]">
-          <ServerStatus />
-        </div>
-      </PageLayout>
-    )
-  }
+  if (!user.isAdministrator) return <MemberHome name={user.name} />
   return <Overview name={user.name} />
 }
 
+/**
+ * The administrator's Home: the greeting and its summary, Playing now as art tiles whose lit one
+ * tints the top of the page, then two columns: To look at and Recent activity on the left;
+ * Bandwidth, Get started and Server state on the right. In one column below lg, Recent activity
+ * comes last.
+ */
 function Overview({ name }: { name: string }) {
   const { t } = useI18n()
   const text = t.dashboard.overview
@@ -64,94 +56,65 @@ function Overview({ name }: { name: string }) {
   const health = useHealth()
   const problems = useHealthProblems()
   const transcoder = health.data?.transcoder
-  const update = health.data?.update
   const actions = useServerActions()
   const [open, setOpen] = useState<ServerAction | null>(null)
   useActionFromAddress(actions.data?.updateTool, setOpen)
+  // The lit tile's poster tints the room; before any tile is lit, the first one's does.
+  const [litId, setLitId] = useState<string | null>(null)
+  const playing = sessions.data ?? []
+  const lit = playing.find((session) => session.id === litId) ?? playing[0]
+  const posters = [
+    ...new Set(
+      playing.flatMap((session) => (session.item?.posterId ? [session.item.posterId] : [])),
+    ),
+  ]
 
   return (
-    <PageLayout
-      title={text.greeting(new Date().getHours(), name)}
-      lede={
-        sessions.data !== undefined && problems.data !== undefined
-          ? text.summary(sessions.data.length, problems.data.length)
-          : text.description
-      }
-      actions={
-        actions.data && (
-          <>
-            <ServerActionButtons actions={actions.data} onOpen={setOpen} />
-            {open !== null && (
-              <ActionDialog action={open} actions={actions.data} onClose={() => setOpen(null)} />
-            )}
-          </>
-        )
-      }
-    >
-      {/*
-        From xl, two columns, as Jellyfin's dashboard has: the server's state on the left, Recent
-        activity on the right from the top. Narrower, one column in the same order, as before.
-      */}
-      <div className="xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start xl:gap-x-10">
-        <div className="[&>*+*]:mt-block max-md:[&>*+*]:mt-11">
-          {update && health.data && (
-            <Notice
-              action={
-                // On a phone the buttons stack, so that the notice's words keep their width.
-                <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch">
-                  {actions.data?.desktopUpdate && (
-                    <DesktopInstall actions={actions.data} update={actions.data.desktopUpdate} />
-                  )}
-                  {actions.data?.updateTool && <NoticeUpdateButton onOpen={setOpen} />}
-                  <ExternalButtonLink
-                    href={update.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    size="sm"
-                    iconEnd={ArrowSquareOutIcon}
-                  >
-                    {text.releaseNotes}
-                  </ExternalButtonLink>
-                </div>
+    <>
+      <RoomLight posters={posters} lit={lit?.item?.posterId || null} />
+      <div className="stagger">
+        <PageHeader
+          greeting
+          title={text.greeting(new Date().getHours(), name)}
+          lede={
+            sessions.data !== undefined && problems.data !== undefined
+              ? text.summary(sessions.data.length, problems.data.length)
+              : text.description
+          }
+          className="mb-10 max-md:mb-8"
+        />
+        <PlayingNow onLight={setLitId} />
+        <div className="mt-[72px] grid items-start gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-lg:gap-16 max-md:mt-11 max-md:gap-11">
+          <div className="flex flex-col gap-16 max-lg:contents max-md:gap-11">
+            <ToLookAt
+              health={health.data}
+              problems={problems.data ?? []}
+              loading={problems.isPending}
+              error={problems.error}
+              retrying={problems.isFetching}
+              onRetry={() => void problems.refetch()}
+              actions={actions.data}
+              onOpen={setOpen}
+            />
+            <div className="max-lg:order-last">
+              <RecentActivity />
+            </div>
+          </div>
+          <div className="flex flex-col gap-16 max-lg:contents max-md:gap-11">
+            <Bandwidth
+              conversions={
+                transcoder ? { count: transcoder.conversions, limit: transcoder.limit } : undefined
               }
-            >
-              {text.update(update.version, health.data.process.version)}
-            </Notice>
-          )}
-          <GetStarted />
-          <NowPlaying
-            aside={
-              <>
-                <ServerBandwidth />
-                {transcoder && (
-                  <Link
-                    to="/system/health#transcoder"
-                    className="flex items-center gap-2 rounded-md transition-colors duration-160 hover:text-ink"
-                  >
-                    <CpuIcon size={16} aria-hidden="true" />
-                    {text.conversions}
-                    <span className="figures text-ink-2">
-                      {text.conversionsOf(transcoder.conversions, transcoder.limit)}
-                    </span>
-                  </Link>
-                )}
-              </>
-            }
-          />
-          <Problems
-            problems={problems.data ?? []}
-            loading={problems.isPending}
-            error={problems.error}
-            retrying={problems.isFetching}
-            onRetry={() => void problems.refetch()}
-          />
-          <ServerFigures />
+            />
+            <GetStarted />
+            <ServerState actions={actions.data} onOpen={setOpen} />
+          </div>
         </div>
-        <div className="max-xl:mt-block max-md:mt-11">
-          <RecentActivity />
-        </div>
+        {open !== null && actions.data && (
+          <ActionDialog action={open} actions={actions.data} onClose={() => setOpen(null)} />
+        )}
       </div>
-    </PageLayout>
+    </>
   )
 }
 
@@ -179,76 +142,85 @@ function useActionFromAddress(
   }, [asked, updateTool, open, setParams])
 }
 
-function Problems({
+/**
+ * To look at: a new version of Polyfin, then each problem Health finds, as alert tiles with the
+ * app's own words and a way to the page that fixes it.
+ */
+function ToLookAt({
+  health,
   problems,
   loading,
   error,
   retrying,
   onRetry,
+  actions,
+  onOpen,
 }: {
+  health: Health | undefined
   problems: HealthProblem[]
   loading: boolean
   error: Error | null
   retrying: boolean
   onRetry: () => void
+  actions: ServerActions | undefined
+  onOpen: (action: ServerAction) => void
 }) {
   const { language, t } = useI18n()
   const text = t.dashboard.overview
+  const update = health?.update
   return (
     <Block title={text.problems} count={loading ? undefined : problems.length}>
       {loading ? (
-        <div
-          role="status"
-          aria-label={t.common.loading}
-          className="flex items-center gap-5 rounded-panel border border-line-2 bg-s1 px-5 py-[18px]"
-        >
-          <Skeleton className="size-10 rounded-row" />
-          <Skeleton className="h-3.5 w-1/2" />
+        <div role="status" aria-label={t.common.loading}>
+          <SkeletonRows rows={1} />
         </div>
       ) : error !== null && problems.length === 0 ? (
         <InlineError onRetry={onRetry} retrying={retrying}>
           {errorMessage(t, error)}
         </InlineError>
-      ) : problems.length === 0 ? (
+      ) : problems.length === 0 && !update ? (
         <EmptyState icon={CheckCircleIcon} title={text.problemsEmpty}>
           {text.problemsEmptyHelp}
         </EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
+          {update && health && (
+            <li>
+              <AlertTile
+                tone="info"
+                kind={text.updateKind}
+                title={text.update(update.version, health.process.version)}
+                actions={
+                  <>
+                    {actions?.desktopUpdate && (
+                      <DesktopInstall actions={actions} update={actions.desktopUpdate} />
+                    )}
+                    {actions?.updateTool && <NoticeUpdateButton onOpen={onOpen} />}
+                    <ExternalButtonLink
+                      href={update.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="sm"
+                      iconEnd={ArrowSquareOutIcon}
+                    >
+                      {text.releaseNotes}
+                    </ExternalButtonLink>
+                  </>
+                }
+              />
+            </li>
+          )}
           {problems.map((problem) => (
-            <li
-              key={problem.key}
-              className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-panel border border-line-2 bg-s1 px-5 py-[18px] max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-4 max-sm:p-4"
-            >
-              <span
-                aria-hidden="true"
-                className={cx(
-                  'grid size-10 place-items-center rounded-row',
-                  problem.tone === 'error' ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn',
-                )}
-              >
-                {problem.tone === 'error' ? (
-                  <WarningCircleIcon size={18} />
-                ) : (
-                  <WarningIcon size={18} />
-                )}
-              </span>
-              <div className="min-w-0">
-                <StatusPill tone={problem.tone === 'error' ? 'danger' : 'warn'}>
-                  {problem.tone === 'error' ? text.problemError : text.problemWarning}
-                </StatusPill>
-                <p className="mt-1 text-[15px] font-medium tracking-[-0.01em] text-ink">
-                  {problemText(t, language, problem)}
-                </p>
-              </div>
-              <ButtonLink
-                to={problem.to}
-                size="sm"
-                iconEnd={ArrowRightIcon}
-                className="max-sm:col-span-full max-sm:justify-self-start"
-              >
-                {text.open}
-              </ButtonLink>
+            <li key={problem.key}>
+              <AlertTile
+                tone={problem.tone === 'error' ? 'danger' : 'warn'}
+                title={problemText(t, language, problem)}
+                actions={
+                  <ButtonLink to={problem.to} size="sm" iconEnd={CaretRightIcon}>
+                    {text.open}
+                  </ButtonLink>
+                }
+              />
             </li>
           ))}
         </ul>
@@ -257,8 +229,17 @@ function Problems({
   )
 }
 
-/** The server in a row of figures between hairlines, as Health tells it in full. */
-function ServerFigures() {
+/**
+ * Server state: the graphics card, the cache and the database as rows that open Health, then how
+ * long Polyfin has run, its version and ID, with Restart (and Update now) at its foot.
+ */
+function ServerState({
+  actions,
+  onOpen,
+}: {
+  actions: ServerActions | undefined
+  onOpen: (action: ServerAction) => void
+}) {
   const { language, t } = useI18n()
   const text = t.dashboard.overview
   const health = useHealth()
@@ -279,145 +260,116 @@ function ServerFigures() {
         <InlineError onRetry={() => void health.refetch()} retrying={health.isFetching}>
           {errorMessage(t, health.error)}
         </InlineError>
+      ) : data === undefined ? (
+        <div role="status" aria-label={t.common.loading}>
+          <SkeletonRows rows={3} />
+        </div>
       ) : (
-        <>
-          {/* Three a row in Home's left column from xl, as below lg. */}
-          <dl className="grid grid-cols-5 border-t border-line pt-[22px] pb-1 max-lg:grid-cols-3 max-lg:gap-y-6 max-sm:grid-cols-2 xl:grid-cols-3 xl:gap-y-6">
-            <Figure label={text.graphics} loading={data === undefined}>
-              {data &&
-                (data.transcoder?.hardware ? (
-                  <>
-                    <dd className="mt-2 text-[24px] leading-tight font-medium tracking-[-0.02em] text-ink">
-                      {t.dashboard.live.gpuMethod(data.transcoder.hardware.method)}
-                    </dd>
-                    <dd className="mt-1.5 text-[13px] text-ink-2">
-                      {[
-                        data.transcoder.hardware.encoders.join(', '),
-                        data.transcoder.hardware.toneMapping ? text.toneMapping : '',
-                      ]
-                        .filter(Boolean)
-                        .join(', ')}
-                    </dd>
-                  </>
-                ) : (
-                  <>
-                    <dd className="mt-2 text-[24px] leading-tight font-medium tracking-[-0.02em] text-ink">
-                      {text.graphicsNone}
-                    </dd>
-                    <dd className="mt-1.5 text-[13px] text-ink-2">{text.graphicsCpu}</dd>
-                  </>
-                ))}
-            </Figure>
-            <Figure label={text.cache} loading={data === undefined}>
-              {data &&
-                (data.cache === null ? (
-                  <FigureValue>{text.cacheOff}</FigureValue>
-                ) : (
-                  <>
-                    <FigureValue mono>{formatBytes(data.cache.used, language)}</FigureValue>
-                    <dd className="mt-1.5 flex items-center gap-2.5 text-[13px] text-ink-2">
-                      {data.cache.limit > 0
-                        ? text.cacheOf(formatBytes(data.cache.limit, language))
-                        : text.cacheNoLimit}
-                      {data.cache.limit > 0 && (
-                        <ProgressBar
-                          size="sm"
-                          variant={data.cache.used / data.cache.limit > 0.9 ? 'warn' : 'neutral'}
-                          value={data.cache.used / data.cache.limit}
-                          label={text.cacheUnit}
-                          className="w-14"
-                        />
-                      )}
-                    </dd>
-                  </>
-                ))}
-            </Figure>
-            <Figure label={text.database} loading={data === undefined}>
-              {data && (
+        <RowList aria-label={text.serverTitle}>
+          <Row
+            to="/system/health#transcoder"
+            title={text.graphics}
+            trailing={
+              data.transcoder?.hardware ? (
                 <>
-                  <dd className="mt-2">
-                    <StatusPill
-                      tone={data.database.reachable ? 'ok' : 'danger'}
-                      className="text-[15px]"
-                    >
-                      {data.database.reachable
-                        ? t.status.databaseReady
-                        : t.status.databaseUnavailable}
-                    </StatusPill>
-                  </dd>
-                  {data.database.size !== null && (
-                    <dd className="figures mt-1.5 text-[13px] text-ink-2">
-                      {text.databaseSize(formatBytes(data.database.size, language))}
-                    </dd>
+                  <span className="text-ink">
+                    {t.dashboard.live.gpuMethod(data.transcoder.hardware.method)}
+                  </span>
+                  <span className="max-w-[15rem] text-micro break-words text-ink-3 max-md:max-w-full">
+                    {[
+                      data.transcoder.hardware.encoders.join(', '),
+                      data.transcoder.hardware.toneMapping ? text.toneMapping : '',
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-ink">{text.graphicsNone}</span>
+                  <span className="max-w-[15rem] text-micro text-ink-3 max-md:max-w-full">
+                    {text.graphicsCpu}
+                  </span>
+                </>
+              )
+            }
+          />
+          <Row
+            to="/system/health#cache"
+            title={text.cache}
+            trailing={
+              data.cache === null ? (
+                <span>{text.cacheOff}</span>
+              ) : (
+                <>
+                  <span className="figures">
+                    {formatBytes(data.cache.used, language)}{' '}
+                    {data.cache.limit > 0
+                      ? text.cacheOf(formatBytes(data.cache.limit, language))
+                      : `· ${text.cacheNoLimit}`}
+                  </span>
+                  {data.cache.limit > 0 && (
+                    <ProgressBar
+                      size="sm"
+                      variant={data.cache.used / data.cache.limit > 0.9 ? 'warn' : 'neutral'}
+                      value={data.cache.used / data.cache.limit}
+                      label={text.cacheUnit}
+                      className="w-[120px] max-md:w-[90px]"
+                    />
                   )}
                 </>
+              )
+            }
+          />
+          <Row
+            to="/system/health#database"
+            title={text.database}
+            trailing={
+              <>
+                <StatusPill tone={data.database.reachable ? 'ok' : 'danger'}>
+                  {data.database.reachable ? t.status.databaseReady : t.status.databaseUnavailable}
+                </StatusPill>
+                {data.database.size !== null && (
+                  <span className="figures text-micro text-ink-3">
+                    {text.databaseSize(formatBytes(data.database.size, language))}
+                  </span>
+                )}
+              </>
+            }
+          />
+        </RowList>
+      )}
+      <div className="mt-[18px] flex flex-wrap items-center justify-between gap-x-4 gap-y-3 pl-[26px] max-md:flex-col max-md:items-stretch max-md:pl-0">
+        <div className="min-w-0 flex-1 basis-[14rem] text-[18px] text-ink-3 max-md:basis-auto max-md:text-[16px]">
+          {data !== undefined && (
+            <p className="figures">
+              {text.uptime}{' '}
+              {formatSpan(
+                (Date.parse(data.checkedAt) - Date.parse(data.process.startedAt)) / 1000,
+                language,
               )}
-            </Figure>
-            <Figure label={text.uptime} loading={data === undefined}>
-              {data && (
-                <FigureValue mono>
-                  {formatSpan(
-                    (Date.parse(data.checkedAt) - Date.parse(data.process.startedAt)) / 1000,
-                    language,
-                  )}
-                </FigureValue>
-              )}
-            </Figure>
-            <Figure label={text.version} loading={data === undefined}>
-              {data && <FigureValue mono>{data.process.version}</FigureValue>}
-            </Figure>
-          </dl>
-          {status.data !== undefined && (
-            <p className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1 text-small text-ink-3">
-              <span>
-                {t.status.serverId}
-                {t.common.colon}{' '}
-                <code className="font-mono break-all text-ink-2 select-all">
-                  {status.data.serverId}
-                </code>
-              </span>
-              <span>{t.status.updatedAt(timeFormat.format(status.dataUpdatedAt))}</span>
+              {' · '}
+              {text.version} {data.process.version}
             </p>
           )}
-        </>
-      )}
+          {status.data !== undefined && (
+            <p className="mt-1 text-micro">
+              {t.status.serverId}
+              {t.common.colon}{' '}
+              <code className="font-mono break-all text-ink-2 select-all">
+                {status.data.serverId}
+              </code>
+              {' · '}
+              {t.status.updatedAt(timeFormat.format(status.dataUpdatedAt))}
+            </p>
+          )}
+        </div>
+        {actions && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ServerActionButtons actions={actions} onOpen={onOpen} />
+          </div>
+        )}
+      </div>
     </Block>
-  )
-}
-
-function Figure({
-  label,
-  loading,
-  children,
-}: {
-  label: string
-  loading: boolean
-  children: ReactNode
-}) {
-  return (
-    <div className="min-w-0 border-line px-6 first:border-l-0 first:pl-0 not-first:border-l max-lg:[&:nth-child(3n+1)]:border-l-0 max-lg:[&:nth-child(3n+1)]:pl-0 max-sm:px-4 max-sm:[&:nth-child(odd)]:border-l-0 max-sm:[&:nth-child(odd)]:pl-0 max-sm:[&:nth-child(even)]:border-l max-sm:[&:nth-child(even)]:pl-4 xl:[&:nth-child(3n+1)]:border-l-0 xl:[&:nth-child(3n+1)]:pl-0">
-      <dt className="text-[12.5px] text-ink-3">{label}</dt>
-      {loading ? (
-        <dd className="mt-2.5 flex flex-col gap-2.5">
-          <Skeleton className="h-6 w-20" />
-          <Skeleton className="h-3 w-24" />
-        </dd>
-      ) : (
-        children
-      )}
-    </div>
-  )
-}
-
-function FigureValue({ mono = false, children }: { mono?: boolean; children: ReactNode }) {
-  return (
-    <dd
-      className={cx(
-        'mt-2 text-[24px] leading-tight font-medium tracking-[-0.02em] text-ink max-sm:text-[20px]',
-        mono && 'font-mono',
-      )}
-    >
-      {children}
-    </dd>
   )
 }
