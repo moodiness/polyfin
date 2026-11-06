@@ -17,6 +17,9 @@ const libraries: typeof en = {
     noAddons: 'Ajoutez d’abord une source : ses catalogues s’afficheront ici.',
     shownEmpty: 'Aucune bibliothèque : les applications Jellyfin n’affichent rien de ces addons.',
     name: 'Nom dans les applications',
+    nameHelp: 'Laissez-le vide pour utiliser le nom du catalogue.',
+    options: 'Options',
+    optionsLabel: (name: string) => `Options de ${name}`,
     appName: (name: string) => `Affichée dans les applications sous le nom « ${name} ».`,
     liveTv: 'Ses chaînes apparaissent dans la TV en direct des applications Jellyfin.',
     iptvVod: 'D’une source IPTV.',
@@ -116,7 +119,6 @@ const libraries: typeof en = {
     guideNever: 'Pas encore récupéré.',
     loading: 'Chargement des bibliothèques…',
     listLabel: 'Bibliothèques, dans l’ordre des applications',
-    columnCatalog: 'Catalogue',
     shownEmptyTitle: 'Aucune bibliothèque pour l’instant',
     shownEmptyHow:
       'Ajoutez des catalogues depuis la liste ci-dessous : chacun devient une bibliothèque.',
@@ -185,15 +187,10 @@ const libraries: typeof en = {
       close: (name: string) => `Fermer l’image de ${name}`,
     },
     narrow: {
-      title: 'Genre et maximum',
-      edit: (name: string) => `Genre et maximum de ${name}`,
-      close: (name: string) => `Fermer le genre et le maximum de ${name}`,
-      staged: 'Enregistrés avec le bouton Enregistrer, comme les noms.',
       genre: 'Genre',
       allGenres: 'Tous les genres',
       genreHelp: 'Affiche seulement les titres de ce genre.',
       maxItems: 'Nombre maximum de titres',
-      noMax: 'Aucun maximum',
       maxHelp: (max: string, where: string) =>
         `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite des catalogues dans ${where}. De 1 à ${max}. Vide : cette limite s’applique.`,
       maxHelpMine: (max: string) =>
@@ -323,7 +320,6 @@ const libraries: typeof en = {
     maxHelp: (max: string) => `De 1 à ${max}. Vide : pas de maximum.`,
     noMax: 'Pas de maximum',
     create: 'Créer la liste',
-    save: 'Enregistrer',
     created: 'Liste intelligente créée.',
     saved: 'Liste intelligente enregistrée.',
     delete: 'Supprimer',

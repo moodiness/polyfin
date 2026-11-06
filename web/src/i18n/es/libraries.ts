@@ -18,6 +18,9 @@ const libraries: typeof en = {
     shownEmpty:
       'Ninguna biblioteca: las aplicaciones de Jellyfin no muestran nada de estas extensiones.',
     name: 'Nombre en las aplicaciones',
+    nameHelp: 'Déjelo vacío para usar el nombre del catálogo.',
+    options: 'Opciones',
+    optionsLabel: (name: string) => `Opciones de ${name}`,
     appName: (name: string) => `Se muestra en las aplicaciones como «${name}».`,
     liveTv: 'Sus canales aparecen en Televisión en vivo en las aplicaciones de Jellyfin.',
     iptvVod: 'De una fuente IPTV.',
@@ -115,7 +118,6 @@ const libraries: typeof en = {
     guideNever: 'Aún no se ha obtenido.',
     loading: 'Cargando bibliotecas…',
     listLabel: 'Bibliotecas, en el orden en que las muestran las aplicaciones',
-    columnCatalog: 'Catálogo',
     shownEmptyTitle: 'Aún no hay bibliotecas',
     shownEmptyHow:
       'Añada catálogos desde la lista de abajo: cada uno se convierte en una biblioteca.',
@@ -183,15 +185,10 @@ const libraries: typeof en = {
       close: (name: string) => `Cerrar la imagen de ${name}`,
     },
     narrow: {
-      title: 'Género y máximo',
-      edit: (name: string) => `Género y máximo de ${name}`,
-      close: (name: string) => `Cerrar el género y el máximo de ${name}`,
-      staged: 'Se guarda con el botón «Guardar», como los nombres.',
       genre: 'Género',
       allGenres: 'Todos los géneros',
       genreHelp: 'Muestra solo los títulos de este género.',
       maxItems: 'Máximo de títulos',
-      noMax: 'Sin máximo',
       maxHelp: (max: string, where: string) =>
         `Muestra como máximo este número de títulos en la biblioteca, y otros tantos en cada una de sus colecciones, en lugar del límite del catálogo en ${where}. De 1 a ${max}. Vacío: se aplica ese límite.`,
       maxHelpMine: (max: string) =>
@@ -321,7 +318,6 @@ const libraries: typeof en = {
     maxHelp: (max: string) => `De 1 a ${max}. Vacío: sin máximo.`,
     noMax: 'Sin máximo',
     create: 'Crear la lista',
-    save: 'Guardar',
     created: 'Lista inteligente creada.',
     saved: 'Lista inteligente guardada.',
     delete: 'Borrar',

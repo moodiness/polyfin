@@ -87,7 +87,7 @@ export default function SmartLists({ scope }: { scope: Scope }) {
       count={lists.data?.length}
       aside={lists.data && lists.data.length > 0 ? add : undefined}
     >
-      <p className="mb-4 max-w-[70ch] text-small text-ink-3">
+      <p className="mb-5 max-w-[66ch] text-small text-ink-2">
         {scope === 'shared' ? t.smartLists.help : t.smartLists.helpMine}
       </p>
       {body}

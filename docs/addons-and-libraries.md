@@ -198,7 +198,7 @@ A video, or an episode of a series, may carry its own streams in the title's det
 
 ## Genre and maximum
 
-The funnel button at the end of a library's row, under **Content › Libraries**, opens its **Genre and maximum**. Both are saved with the list's **Save**. The row shows a library's genre and maximum at a glance. Users set the same for their own libraries under **My sources**.
+**Options**, on a library's row under **Content › Libraries**, opens its settings under the row, **Genre** and **Maximum titles** among them. They are saved with the list's **Save**, in the bar of unsaved changes. The row shows a library's genre and maximum at a glance. Users set the same for their own libraries under **My sources**.
 
 They apply to catalogs of titles and of collections. Live TV catalogs and music libraries have neither.
 

@@ -69,11 +69,11 @@ function Picture({
     return (
       <span
         className={cx(
-          'grid aspect-video place-items-center rounded-field border border-dashed border-line-3 bg-s2 text-ink-3',
+          'grid aspect-video place-items-center rounded-[14px] bg-s3 text-ink-3',
           className,
         )}
       >
-        <ImageIcon size={18} aria-hidden="true" />
+        <ImageIcon size={22} aria-hidden="true" />
       </span>
     )
   }
@@ -83,16 +83,13 @@ function Picture({
       alt=""
       loading="lazy"
       onError={() => setFailed(url)}
-      className={cx(
-        'aspect-video rounded-field border border-line-2 bg-s2 object-cover',
-        className,
-      )}
+      className={cx('aspect-video rounded-[14px] bg-s3 object-cover', className)}
     />
   )
 }
 
 /** The size of the thumbnail at the start of a library's row. */
-const thumbSize = 'w-14 sm:w-[72px]'
+const thumbSize = 'w-16 md:w-24'
 
 /**
  * The small 16:9 image at the start of a library's row: a button that opens or closes the
@@ -131,17 +128,17 @@ export function LibraryThumb({
       title={text.edit(name, state)}
       onClick={onToggle}
       className={cx(
-        'group relative mt-0.5 shrink-0 cursor-pointer rounded-field transition-[box-shadow] duration-160 ease-nuit',
-        open && 'shadow-[0_0_0_2px] shadow-accent/70',
+        'group focus-lit relative shrink-0 cursor-pointer rounded-[14px] transition-[box-shadow,scale] duration-300 ease-nuit',
+        open && 'shadow-[0_0_0_3px] shadow-ink',
         thumbSize,
       )}
     >
       <Picture library={library} width={160} className="w-full" />
       <span
         aria-hidden="true"
-        className="absolute inset-0 grid place-items-center rounded-field bg-bg/60 text-ink opacity-0 transition-opacity duration-160 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
+        className="absolute inset-0 grid place-items-center rounded-[14px] bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
       >
-        <PencilSimpleIcon size={16} />
+        <PencilSimpleIcon size={20} />
       </span>
     </button>
   )
@@ -153,11 +150,11 @@ export function LiveTvThumb() {
     <span
       aria-hidden="true"
       className={cx(
-        'mt-0.5 grid aspect-video shrink-0 place-items-center rounded-field border border-line bg-s2 text-ink-3',
+        'grid aspect-video shrink-0 place-items-center rounded-[14px] bg-s3 text-ink-3',
         thumbSize,
       )}
     >
-      <TelevisionSimpleIcon size={16} />
+      <TelevisionSimpleIcon size={22} />
     </span>
   )
 }
@@ -298,24 +295,24 @@ export function LibraryImageEditor({
       ref={section}
       id={id}
       aria-labelledby={labelId}
-      className="animate-rise rounded-row border border-line-2 bg-s2/50 p-4 max-sm:p-3.5"
+      className="animate-rise rounded-row bg-s1 py-6 pr-[22px] pl-7 max-md:py-5 max-md:pr-4 max-md:pl-5"
     >
-      <div className="flex gap-5 max-sm:flex-col max-sm:gap-4">
-        <Picture library={library} width={480} className="w-44 shrink-0 self-start sm:w-[208px]" />
+      <div className="flex gap-6 max-sm:flex-col max-sm:gap-4">
+        <Picture library={library} width={480} className="w-48 shrink-0 self-start sm:w-[240px]" />
         <div className="min-w-0 sm:flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 id={labelId} className="text-control font-medium text-ink">
+              <h3 id={labelId} className="text-h3 text-ink">
                 {text.label}
               </h3>
-              <p className="mt-0.5 text-small text-ink-3">{text.atOnce}</p>
+              <p className="mt-0.5 text-small text-ink-2">{text.atOnce}</p>
             </div>
             <IconButton size="sm" icon={XIcon} label={text.close(name)} onClick={onClose} />
           </div>
           {library.itemId === null ? (
             <Notice className="mt-4">{text.afterSave}</Notice>
           ) : (
-            <div className="mt-4 space-y-4">
+            <div className="mt-5 space-y-5">
               <div aria-busy={save.isPending && !uploading && !downloading ? true : undefined}>
                 <Segmented
                   label={text.label}
@@ -326,11 +323,11 @@ export function LibraryImageEditor({
                     label: text.choices[value],
                   }))}
                 />
-                <p className="mt-2 max-w-[64ch] text-small text-ink-3">{help}</p>
+                <p className="mt-3 max-w-[64ch] text-small text-ink-2">{help}</p>
                 {(choice === 'automatic' || choice === 'generated') &&
                   library.image === choice &&
                   library.imageTag === null && (
-                    <p className="mt-1.5 max-w-[64ch] text-small text-warn">
+                    <p className="mt-2 max-w-[64ch] text-small text-warn">
                       {text.notFound[choice]}
                     </p>
                   )}

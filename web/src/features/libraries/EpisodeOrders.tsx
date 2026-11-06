@@ -102,14 +102,14 @@ export default function EpisodeOrders() {
 
   return (
     <Block title={e.title} count={orders.data?.length}>
-      <p className="mb-4 max-w-[70ch] text-small text-ink-3">{e.help}</p>
+      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{e.help}</p>
       {list}
       <form
         onSubmit={submit}
         noValidate
-        className="mt-5 flex max-w-[60ch] flex-wrap items-end gap-2"
+        className="mt-6 flex max-w-[720px] flex-wrap items-end gap-3"
       >
-        <Field label={e.search} className="min-w-[220px] flex-1">
+        <Field label={e.search} className="min-w-0 flex-[1_1_240px]">
           <TextInput
             icon={MagnifyingGlassIcon}
             value={query}
@@ -122,7 +122,7 @@ export default function EpisodeOrders() {
         </Button>
       </form>
       {asked !== '' && (
-        <div className="mt-3 max-w-[60ch]">
+        <div className="mt-4 max-w-[720px]">
           {found.isPending ? (
             <SkeletonRows rows={2} label={e.searching} />
           ) : found.isError ? (
@@ -130,7 +130,7 @@ export default function EpisodeOrders() {
               {errorMessage(t, found.error)}
             </InlineError>
           ) : found.data.length === 0 ? (
-            <p className="text-small text-ink-3">{e.noSeries}</p>
+            <p className="text-small text-ink-2">{e.noSeries}</p>
           ) : (
             <RowList variant="boxed" aria-label={e.results}>
               {found.data.map((series) => (

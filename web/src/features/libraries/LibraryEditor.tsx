@@ -1,10 +1,11 @@
 import {
   ArrowsClockwiseIcon,
+  CaretDownIcon,
   CaretRightIcon,
+  CaretUpIcon,
   DotsSixVerticalIcon,
   DotsThreeIcon,
   FilmStripIcon,
-  FunnelSimpleIcon,
   MagnifyingGlassIcon,
   MusicNoteIcon,
   PlusIcon,
@@ -48,7 +49,6 @@ import {
   Block,
   Button,
   ButtonLink,
-  Checkbox,
   cx,
   EmptyState,
   Field,
@@ -58,8 +58,8 @@ import {
   RowList,
   SaveBar,
   Select,
-  Skeleton,
-  NumberInput,
+  SettingRow,
+  SkeletonRows,
   StatusPill,
   TextInput,
   IconButton,
@@ -96,6 +96,9 @@ type Entry = {
   showAs: LibraryShowAs | null
 }
 
+/** The options of an entry the list saves, each counted as one change. */
+const entryOptions = ['name', 'genre', 'maxItems', 'hideInMenus', 'skipLocal', 'showAs'] as const
+
 /** Whether the server takes this maximum: none, or a whole number from 1 to MAX_LIBRARY_ITEMS. */
 function validMax(maxItems: number | null): boolean {
   return (
@@ -113,39 +116,48 @@ function sameEntries(a: Entry[], b: Entry[]): boolean {
     a.length === b.length &&
     a.every(
       (entry, i) =>
-        entry.key === b[i].key &&
-        entry.name === b[i].name &&
-        entry.genre === b[i].genre &&
-        entry.maxItems === b[i].maxItems &&
-        entry.hideInMenus === b[i].hideInMenus &&
-        entry.skipLocal === b[i].skipLocal &&
-        entry.showAs === b[i].showAs,
+        entry.key === b[i].key && entryOptions.every((option) => entry[option] === b[i][option]),
     )
   )
 }
 
-/** 52 px between the blocks of the editor (44 on a phone), as PageLayout spaces a page's. */
+/**
+ * How many changes the dock counts between the list and the saved one: each library added or
+ * removed, each option changed, and the order once when it changed.
+ */
+function countChanges(entries: Entry[], saved: Entry[]): number {
+  const before = new Map(saved.map((entry) => [entry.key, entry]))
+  const keys = new Set(entries.map((entry) => entry.key))
+  let count = saved.filter((entry) => !keys.has(entry.key)).length
+  for (const entry of entries) {
+    const was = before.get(entry.key)
+    if (was === undefined) count += 1
+    else count += entryOptions.filter((option) => entry[option] !== was[option]).length
+  }
+  const order = entries.filter((entry) => before.has(entry.key))
+  const savedOrder = saved.filter((entry) => keys.has(entry.key))
+  if (order.some((entry, i) => entry.key !== savedOrder[i].key)) count += 1
+  return Math.max(count, 1)
+}
+
+/** 64 px between the blocks of the editor (44 on a phone), as PageLayout spaces a page's. */
 const blockSpacing = '[&>*+*]:mt-block max-md:[&>*+*]:mt-11'
 
-/** The columns of a library row: grip and position, image and catalog, name in apps, buttons. */
-const rowGrid =
-  'grid grid-cols-[46px_minmax(0,1fr)_auto] gap-x-4 md:grid-cols-[46px_minmax(0,1fr)_minmax(0,300px)_auto]'
-
 /**
- * A list too long for the page scrolls in its own box, about 480 px tall, with a thin scrollbar,
- * so the blocks below and the save bar stay close.
+ * A list too long for the page scrolls in its own box, with a thin scrollbar, so the blocks below
+ * and the dock stay close.
  */
 const scrollBox =
-  'max-h-[480px] overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2'
+  'max-h-[640px] overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2'
 
-/** Above this many libraries, the list of those shown scrolls in its box. */
-const boxedLibraries = 10
+/** Above this many catalogs available, their list scrolls in its box. */
+const boxedCatalogs = 12
 
 /**
  * Chooses which catalogs of a scope's addons are libraries in Jellyfin apps, in which order and
- * under which name. Edits stay local until saved with the save bar at the bottom.
+ * under which name. Edits stay local until saved with the dock.
  *
- * It renders blocks (the libraries, the available catalogs, the save bar) inside one form, so place
+ * It renders blocks (the libraries, the available catalogs, the dock) inside one form, so place
  * it in a PageLayout or among a page's blocks: `<LibraryEditor scope="me" />`.
  */
 export default function LibraryEditor({ scope }: { scope: Scope }) {
@@ -166,7 +178,7 @@ export default function LibraryEditor({ scope }: { scope: Scope }) {
   if (libraries.isPending) {
     return (
       <Block title={t.libraries.shownTitle}>
-        <LibrariesSkeleton />
+        <SkeletonRows rows={3} label={t.libraries.loading} />
       </Block>
     )
   }
@@ -199,11 +211,11 @@ function RefreshStatus({ refresh, name }: { refresh: LibraryRefresh | null; name
     case 'running':
       return (
         <div className="mt-1.5 max-w-[320px]">
-          <p className="text-small text-ink-3 tabular-nums">
+          <p className="figures text-small text-ink-3">
             {text.running(figure(refresh.done + refresh.failed), figure(refresh.titles))}
           </p>
           <ProgressBar
-            className="mt-1"
+            className="mt-1.5"
             size="sm"
             label={text.progress(name)}
             value={refresh.titles === 0 ? 0 : (refresh.done + refresh.failed) / refresh.titles}
@@ -212,52 +224,19 @@ function RefreshStatus({ refresh, name }: { refresh: LibraryRefresh | null; name
       )
     case 'done':
       return (
-        <p className="mt-1.5 text-small text-ink-3 tabular-nums">
+        <p className="figures mt-1.5 text-small text-ink-3">
           {text.done(figure(refresh.done), refresh.failed, figure(refresh.failed))}
         </p>
       )
     case 'stopped':
       return (
-        <p className="mt-1.5 text-small text-ink-3 tabular-nums">
+        <p className="figures mt-1.5 text-small text-ink-3">
           {text.stopped(figure(refresh.done + refresh.failed), figure(refresh.titles))}
         </p>
       )
     case 'failed':
       return <p className="mt-1.5 text-small text-danger">{text.failed}</p>
   }
-}
-
-function LibrariesSkeleton() {
-  const { t } = useI18n()
-  return (
-    <div
-      role="status"
-      aria-label={t.libraries.loading}
-      className="rounded-panel border border-line-2 bg-s1"
-    >
-      {Array.from({ length: 4 }, (_, index) => (
-        <div
-          key={index}
-          className={cx(
-            rowGrid,
-            'items-center px-[18px] py-4',
-            index > 0 && 'border-t border-line',
-          )}
-        >
-          <Skeleton className="h-3 w-3" />
-          <span className="flex gap-3.5">
-            <Skeleton className="aspect-video w-14 shrink-0 sm:w-[72px]" />
-            <span className="flex flex-1 flex-col gap-2 pt-1">
-              <Skeleton className="h-3.5 w-2/5" />
-              <Skeleton className="h-3 w-1/4" />
-            </span>
-          </span>
-          <Skeleton className="hidden h-[34px] w-full md:block" />
-          <Skeleton className="h-7 w-24" />
-        </div>
-      ))}
-    </div>
-  )
 }
 
 function LibraryForm({
@@ -278,11 +257,11 @@ function LibraryForm({
   const [announcement, setAnnouncement] = useState('')
   // The entry whose image editor is open, below its row.
   const [imageOpen, setImageOpen] = useState<string | null>(null)
-  // The entry whose genre and maximum editor is open, below its row; never with its image editor.
-  const [narrowOpen, setNarrowOpen] = useState<string | null>(null)
+  // The entry whose options are open, below its row; never with its image editor.
+  const [optionsOpen, setOptionsOpen] = useState<string | null>(null)
   // Element ids to try, in order, once the next render is committed (the focused row may be gone).
   const focusAfterRender = useRef<string[]>([])
-  // The row to bring into view in its box once the next render is committed, after a move.
+  // The row to bring into view once the next render is committed, after a move.
   const scrollAfterRender = useRef<string | null>(null)
   // The box of available catalogs, back at its top when the filter changes.
   const availableBox = useRef<HTMLDivElement>(null)
@@ -306,9 +285,7 @@ function LibraryForm({
     for (const id of candidates) {
       const element = document.getElementById(id)
       if (element !== null) {
-        // The filter's id is on its field, whose label names the input inside.
-        const target = element instanceof HTMLDivElement ? element.querySelector('input') : element
-        target?.focus()
+        focusIn(element)
         return
       }
     }
@@ -373,9 +350,9 @@ function LibraryForm({
       skipLocal: library.skipLocal,
       showAs: library.showAs,
     }))
+  const savedByKey = new Map(serverEntries.map((entry) => [entry.key, entry]))
   const entries = draft ?? serverEntries
   const dirty = draft !== null
-  const anyFilterable = entries.some((entry) => (byKey.get(entry.key) ?? entry.library).filterable)
   const shownKeys = new Set(entries.map((entry) => entry.key))
   const offAddons = new Set(addons.filter((addon) => !addon.enabled).map((addon) => addon.id))
   const iptvAddons = new Set(addons.filter((addon) => isIptv(addon)).map((addon) => addon.id))
@@ -409,8 +386,8 @@ function LibraryForm({
     row: (key: string) => `${baseId}-row-${key}`,
     image: (key: string) => `${baseId}-image-${key}`,
     thumb: (key: string) => `${baseId}-thumb-${key}`,
-    narrow: (key: string) => `${baseId}-narrow-${key}`,
-    narrowButton: (key: string) => `${baseId}-narrow-button-${key}`,
+    options: (key: string) => `${baseId}-options-${key}`,
+    optionsButton: (key: string) => `${baseId}-options-button-${key}`,
     maxItems: (key: string) => `${baseId}-max-items-${key}`,
     filter: `${baseId}-filter`,
   }
@@ -434,37 +411,21 @@ function LibraryForm({
     setAnnouncement(t.common.moved(displayName(moved), to + 1, next.length))
   }
 
-  function rename(index: number, name: string) {
-    edit(entries.map((entry, i) => (i === index ? { ...entry, name } : entry)))
+  function change(index: number, patch: Partial<Omit<Entry, 'key' | 'library'>>) {
+    edit(entries.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)))
   }
 
-  function narrow(index: number, change: Partial<Pick<Entry, 'genre' | 'maxItems'>>) {
-    edit(entries.map((entry, i) => (i === index ? { ...entry, ...change } : entry)))
-  }
-
-  function hideInMenus(index: number, hidden: boolean) {
-    edit(entries.map((entry, i) => (i === index ? { ...entry, hideInMenus: hidden } : entry)))
-  }
-
-  function skipLocal(index: number, skip: boolean) {
-    edit(entries.map((entry, i) => (i === index ? { ...entry, skipLocal: skip } : entry)))
-  }
-
-  function showAs(index: number, shown: LibraryShowAs) {
-    edit(entries.map((entry, i) => (i === index ? { ...entry, showAs: shown } : entry)))
-  }
-
-  /** Opens the genre and maximum editor of `key`, or closes it with null, and the image editor. */
-  function openNarrow(key: string | null) {
+  /** Opens the options of `key` below its row, or closes them with null, and the image editor. */
+  function openOptions(key: string | null) {
     setImageOpen(null)
-    setNarrowOpen(key)
+    setOptionsOpen(key)
   }
 
   function remove(index: number) {
     const removed = entries[index]
     const next = entries.filter((_, i) => i !== index)
     if (imageOpen === removed.key) setImageOpen(null)
-    if (narrowOpen === removed.key) setNarrowOpen(null)
+    if (optionsOpen === removed.key) setOptionsOpen(null)
     focusAfterRender.current = [
       ...(index < next.length ? [ids.remove(next[index].key)] : []),
       ...(index > 0 ? [ids.remove(next[index - 1].key)] : []),
@@ -529,14 +490,15 @@ function LibraryForm({
       className={blockSpacing}
       onSubmit={(event) => {
         event.preventDefault()
-        // A maximum the server refuses: show it in its row's editor rather than save.
+        // A maximum the server refuses: show it in its row's options rather than save.
         const invalid = entries.find((entry) => !validMax(entry.maxItems))
         if (invalid !== undefined) {
-          focusAfterRender.current = [ids.maxItems(invalid.key)]
-          if (narrowOpen === invalid.key) {
-            document.getElementById(ids.maxItems(invalid.key))?.querySelector('input')?.focus()
+          const field = document.getElementById(ids.maxItems(invalid.key))
+          if (optionsOpen === invalid.key && field !== null) {
+            focusIn(field)
           } else {
-            openNarrow(invalid.key)
+            focusAfterRender.current = [ids.maxItems(invalid.key)]
+            openOptions(invalid.key)
           }
           return
         }
@@ -547,7 +509,7 @@ function LibraryForm({
         <p className="sr-only" role="status">
           {announcement}
         </p>
-        <p className="mb-5 max-w-[72ch] text-small text-ink-2">
+        <p className="mb-5 max-w-[66ch] text-small text-ink-2">
           {scope === 'shared' ? t.libraries.shownHelp : t.libraries.shownHelpMine}
         </p>
         {entries.length > recommendedLibraries && (
@@ -560,120 +522,119 @@ function LibraryForm({
             {t.libraries.shownEmpty} {t.libraries.shownEmptyHow}
           </EmptyState>
         ) : (
-          <div className="overflow-hidden rounded-panel border border-line-2 bg-s1">
-            <div
-              aria-hidden="true"
-              className={cx(
-                rowGrid,
-                'border-b border-line px-[18px] py-2.5 text-micro font-medium text-ink-3 max-md:hidden',
-              )}
-            >
-              <span className="pl-[26px]">#</span>
-              <span>{t.libraries.columnCatalog}</span>
-              <span>{t.libraries.name}</span>
-              <span />
-            </div>
-            <ol
-              ref={shownList}
-              aria-label={t.libraries.listLabel}
-              className={cx(entries.length > boxedLibraries && scrollBox)}
-            >
-              {entries.map((entry, index) => {
-                const library = byKey.get(entry.key) ?? entry.library
-                const missing = !(byKey.get(entry.key)?.browsable ?? false)
-                const name = displayName(entry)
-                const titleId = `${baseId}-title-${entry.key}`
-                const inputId = `${baseId}-name-${entry.key}`
-                const appNameId = `${baseId}-app-name-${entry.key}`
-                // The server names saved libraries only: edits may change what apps show.
-                const appName = dirty ? null : library.appName
-                const renamed = appName !== null && appName !== name
-                const music = musicContent.get(library.addonId)
-                const iptv = iptvAddons.has(library.addonId)
-                const tv = isTvCatalog(library)
-                // How it shows its titles: its choice, else its catalog's default, the first.
-                const shown = entry.showAs ?? library.showAsChoices[0]
-                const otherVideos = library.showAsChoices.includes('home_videos')
-                const imageShown = !tv && imageOpen === entry.key
-                const narrowShown = library.filterable && narrowOpen === entry.key
-                const dragged = rowDrag.dragged === index
-                return (
-                  <li
-                    key={entry.key}
-                    id={ids.row(entry.key)}
+          <ol
+            ref={shownList}
+            aria-label={t.libraries.listLabel}
+            className="grid grid-cols-[minmax(0,1fr)] gap-2"
+          >
+            {entries.map((entry, index) => {
+              const library = byKey.get(entry.key) ?? entry.library
+              const saved = savedByKey.get(entry.key)
+              const missing = !(byKey.get(entry.key)?.browsable ?? false)
+              const name = displayName(entry)
+              // The server names saved libraries only: edits may change what apps show.
+              const appName = dirty ? null : library.appName
+              const renamed = appName !== null && appName !== name
+              const music = musicContent.get(library.addonId)
+              const iptv = iptvAddons.has(library.addonId)
+              const tv = isTvCatalog(library)
+              // How it shows its titles: its choice, else its catalog's default, the first.
+              const shown = entry.showAs ?? library.showAsChoices[0]
+              const otherVideos = library.showAsChoices.includes('home_videos')
+              const hasOptions = !tv || library.filterable
+              const imageShown = !tv && imageOpen === entry.key
+              const optionsShown = hasOptions && optionsOpen === entry.key
+              const dragged = rowDrag.dragged === index
+              return (
+                <li
+                  key={entry.key}
+                  id={ids.row(entry.key)}
+                  className={cx('relative min-w-0', dragged && 'opacity-40')}
+                >
+                  {/* The drop place, in the gap above or below the row. */}
+                  {rowDrag.dropBefore === index && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-4 -top-[5px] h-0.5 rounded-full bg-accent"
+                    />
+                  )}
+                  {rowDrag.dropBefore === entries.length && index === entries.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-4 -bottom-[5px] h-0.5 rounded-full bg-accent"
+                    />
+                  )}
+                  <div
                     className={cx(
-                      rowGrid,
-                      'relative items-start gap-y-3 px-[18px] py-3.5 not-first:border-t not-first:border-line max-sm:px-4',
-                      dragged && 'opacity-40',
+                      'grid min-h-20 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 rounded-row py-3.5 pr-[22px] pl-3',
+                      'max-md:min-h-[68px] max-md:grid-cols-[auto_auto_minmax(0,1fr)] max-md:gap-x-3 max-md:py-3 max-md:pr-4 max-md:pl-2',
+                      optionsShown || imageShown ? 'bg-s2' : 'bg-s1',
                     )}
                   >
-                    {/* The drop place, inside the row so the list's rounded box never clips it. */}
-                    {rowDrag.dropBefore === index && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute inset-x-0 top-0 h-0.5 bg-accent"
-                      />
-                    )}
-                    {rowDrag.dropBefore === entries.length && index === entries.length - 1 && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute inset-x-0 bottom-0 h-0.5 bg-accent"
-                      />
-                    )}
-                    <span className="flex items-start gap-0.5">
+                    <span className="flex items-center gap-0.5">
                       {/* Mouse, pen and touch only: keyboards and screen readers use the arrows. */}
                       <span
                         aria-hidden="true"
                         title={t.libraries.dragHandle(name)}
                         className={cx(
-                          '-ml-1 flex h-6 w-6 shrink-0 touch-none items-center justify-center rounded-md text-ink-3 select-none [-webkit-touch-callout:none] hover:text-ink',
+                          'flex h-10 w-7 shrink-0 touch-none items-center justify-center rounded-control text-ink-3 select-none [-webkit-touch-callout:none] hover:text-ink',
                           dragged ? 'cursor-grabbing' : 'cursor-grab',
                         )}
                         {...rowDrag.grip(index)}
                       >
-                        <DotsSixVerticalIcon size={16} />
+                        <DotsSixVerticalIcon size={20} />
                       </span>
                       <span
                         aria-hidden="true"
-                        className="pt-[3px] font-mono text-small text-ink-3 tabular-nums"
+                        className="figures min-w-[1.4em] text-micro text-ink-3"
                       >
                         {index + 1}
                       </span>
                     </span>
-                    <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
-                      {tv ? (
-                        <LiveTvThumb />
-                      ) : (
-                        <LibraryThumb
-                          id={ids.thumb(entry.key)}
-                          library={library}
-                          name={name}
-                          open={imageShown}
-                          controls={ids.image(entry.key)}
-                          onToggle={() => {
-                            setNarrowOpen(null)
-                            setImageOpen(imageShown ? null : entry.key)
-                          }}
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p id={titleId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="text-[14.5px] font-medium break-words text-ink">
-                            {library.catalogName}
-                          </span>
-                          <Badge tone="accent">
-                            {stremioLabel(t.stremioTypes, library.catalogType)}
+                    {tv ? (
+                      <LiveTvThumb />
+                    ) : (
+                      <LibraryThumb
+                        id={ids.thumb(entry.key)}
+                        library={library}
+                        name={name}
+                        open={imageShown}
+                        controls={ids.image(entry.key)}
+                        onToggle={() => {
+                          setOptionsOpen(null)
+                          setImageOpen(imageShown ? null : entry.key)
+                        }}
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="min-w-0 text-h3 break-words text-ink">
+                          {library.catalogName}
+                        </span>
+                        <MusicKind content={music} />
+                        {entry.genre !== null && <Badge>{entry.genre}</Badge>}
+                        {entry.maxItems !== null && (
+                          <Badge tone={validMax(entry.maxItems) ? 'neutral' : 'danger'}>
+                            {t.libraries.narrow.maxBadge(entry.maxItems.toLocaleString(language))}
                           </Badge>
-                          <MusicKind content={music} />
-                          {entry.genre !== null && <Badge>{entry.genre}</Badge>}
-                          {entry.maxItems !== null && (
-                            <Badge tone={validMax(entry.maxItems) ? 'neutral' : 'danger'}>
-                              {t.libraries.narrow.maxBadge(entry.maxItems.toLocaleString(language))}
-                            </Badge>
-                          )}
-                        </p>
-                        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-3">
-                          <span className="break-words">{library.addonName}</span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-3 max-md:text-micro">
+                        <span className="break-words">
+                          {library.addonName} · {stremioLabel(t.stremioTypes, library.catalogType)}
+                        </span>
+                        {(appName ?? name) !== library.catalogName && (
+                          <span className="break-words">
+                            · {t.libraries.appName(appName ?? name)}
+                          </span>
+                        )}
+                      </p>
+                      {(offAddons.has(library.addonId) ||
+                        missing ||
+                        (!tv && entry.hideInMenus) ||
+                        (library.skippable && entry.skipLocal) ||
+                        (!tv && shown !== undefined && (otherVideos || shown !== 'listed'))) && (
+                        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                           {offAddons.has(library.addonId) && (
                             <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
                           )}
@@ -684,116 +645,31 @@ function LibraryForm({
                           {library.skippable && entry.skipLocal && (
                             <StatusPill tone="muted">{t.libraries.skippedLocal}</StatusPill>
                           )}
-                          {shown !== undefined && (otherVideos || shown !== 'listed') && (
+                          {!tv && shown !== undefined && (otherVideos || shown !== 'listed') && (
                             <StatusPill tone="muted">{t.libraries.showAs.pill[shown]}</StatusPill>
                           )}
                         </p>
-                        {library.refreshable && (
-                          <RefreshStatus refresh={library.refresh} name={name} />
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-span-2 col-start-2 row-start-2 min-w-0 md:col-span-1 md:col-start-3 md:row-start-1">
-                      {tv ? (
-                        <TvSummary scope={scope} library={library} name={name} iptv={iptv} />
-                      ) : (
-                        <>
-                          <label
-                            htmlFor={inputId}
-                            className="mb-1.5 block text-small font-medium text-ink-2 md:sr-only"
-                          >
-                            {t.libraries.name}
-                          </label>
-                          <TextInput
-                            id={inputId}
-                            size="sm"
-                            value={entry.name}
-                            onValue={(value) => rename(index, value)}
-                            placeholder={appName ?? library.catalogName}
-                            aria-describedby={renamed ? `${titleId} ${appNameId}` : titleId}
-                            maxLength={nameMaxLength}
-                            autoComplete="off"
-                          />
-                          {renamed && (
-                            <p id={appNameId} className="mt-1.5 text-small text-ink-3">
-                              {t.libraries.appName(appName)}
-                            </p>
-                          )}
-                          {music !== undefined && (
-                            <p className="mt-1.5 text-small text-ink-3">
-                              {t.libraries.music.help[music] ?? t.libraries.music.help.music}
-                            </p>
-                          )}
-                          {iptv && (
-                            <p className="mt-1.5 text-small text-ink-3">
-                              {t.libraries.iptvVod}{' '}
-                              <Link
-                                to={lineupPath(scope, library.addonId, 'options')}
-                                className="rounded-sm font-medium text-link underline decoration-link/40 underline-offset-4 hover:decoration-link"
-                              >
-                                {t.libraries.iptvVodLink}
-                              </Link>
-                            </p>
-                          )}
-                          <Checkbox
-                            className="mt-3"
-                            checked={entry.hideInMenus}
-                            onChange={(hidden) => hideInMenus(index, hidden)}
-                            label={t.libraries.hideInMenus}
-                            help={entry.hideInMenus ? t.libraries.hideInMenusHelp : undefined}
-                          />
-                          {library.skippable && (
-                            <Checkbox
-                              className="mt-2"
-                              checked={entry.skipLocal}
-                              onChange={(skip) => skipLocal(index, skip)}
-                              label={t.libraries.skipLocal}
-                              help={entry.skipLocal ? t.libraries.skipLocalHelp : undefined}
-                            />
-                          )}
-                          {shown !== undefined && (
-                            <Field
-                              className="mt-3"
-                              label={t.libraries.showAs.label}
-                              help={
-                                (shown === 'movies_and_shows'
-                                  ? otherVideos
-                                    ? t.libraries.showAs.help.titles
-                                    : t.libraries.showAs.help.mixed
-                                  : t.libraries.showAs.help[shown]) +
-                                (otherVideos && entry.showAs === null
-                                  ? ' ' + t.libraries.showAs.undecided
-                                  : '')
-                              }
-                            >
-                              <Select
-                                value={shown}
-                                onValue={(value) => showAs(index, value)}
-                                options={library.showAsChoices.map((value) => ({
-                                  value,
-                                  label: t.libraries.showAs.choices[value],
-                                }))}
-                              />
-                            </Field>
-                          )}
-                        </>
+                      )}
+                      {tv && <TvSummary scope={scope} library={library} name={name} iptv={iptv} />}
+                      {library.refreshable && (
+                        <RefreshStatus refresh={library.refresh} name={name} />
                       )}
                     </div>
-                    <div className="col-start-3 row-start-1 flex items-center gap-1 md:col-start-4">
-                      {library.filterable ? (
-                        <IconButton
-                          id={ids.narrowButton(entry.key)}
+                    <div className="flex flex-wrap items-center justify-end gap-1 max-md:col-span-full">
+                      {hasOptions && (
+                        <Button
+                          id={ids.optionsButton(entry.key)}
                           size="sm"
-                          icon={FunnelSimpleIcon}
-                          label={t.libraries.narrow.edit(name)}
-                          aria-expanded={narrowShown}
-                          aria-controls={narrowShown ? ids.narrow(entry.key) : undefined}
-                          className={cx(narrowShown && 'bg-ink/8 text-ink')}
-                          onClick={() => openNarrow(narrowShown ? null : entry.key)}
-                        />
-                      ) : (
-                        // Keeps the name column as wide as in the rows that have the button.
-                        anyFilterable && <span aria-hidden="true" className="size-7 shrink-0" />
+                          variant="ghost"
+                          iconEnd={optionsShown ? CaretUpIcon : CaretDownIcon}
+                          aria-label={t.libraries.optionsLabel(name)}
+                          aria-expanded={optionsShown}
+                          aria-controls={optionsShown ? ids.options(entry.key) : undefined}
+                          onClick={() => openOptions(optionsShown ? null : entry.key)}
+                          className="max-md:mr-auto"
+                        >
+                          {t.libraries.options}
+                        </Button>
                       )}
                       <MoveButtons
                         name={name}
@@ -840,68 +716,150 @@ function LibraryForm({
                         onClick={() => remove(index)}
                       />
                     </div>
-                    {imageShown && (
-                      <div className="col-span-full row-start-3 min-w-0 md:col-span-3 md:col-start-2 md:row-start-2">
-                        <LibraryImageEditor
-                          id={ids.image(entry.key)}
-                          scope={scope}
-                          library={library}
-                          name={name}
-                          onClose={() => {
-                            setImageOpen(null)
-                            focusAfterRender.current = [ids.thumb(entry.key)]
-                          }}
-                        />
-                      </div>
-                    )}
-                    {narrowShown && (
-                      <div className="col-span-full row-start-3 min-w-0 md:col-span-3 md:col-start-2 md:row-start-2">
-                        <NarrowEditor
-                          id={ids.narrow(entry.key)}
+                  </div>
+                  {imageShown && (
+                    <div className="mt-2 pl-12 max-md:pl-0">
+                      <LibraryImageEditor
+                        id={ids.image(entry.key)}
+                        scope={scope}
+                        library={library}
+                        name={name}
+                        onClose={() => {
+                          setImageOpen(null)
+                          focusAfterRender.current = [ids.thumb(entry.key)]
+                        }}
+                      />
+                    </div>
+                  )}
+                  {optionsShown && (
+                    <section
+                      id={ids.options(entry.key)}
+                      aria-label={t.libraries.optionsLabel(name)}
+                      className="mt-2 grid animate-rise grid-cols-[minmax(0,1fr)] gap-2 pl-12 max-md:pl-0"
+                    >
+                      {!tv && (
+                        <>
+                          <SettingRow
+                            kind="text"
+                            label={t.libraries.name}
+                            detail={renamed ? t.libraries.appName(appName) : undefined}
+                            help={t.libraries.nameHelp}
+                            value={entry.name}
+                            saved={saved?.name}
+                            onChange={(value) => change(index, { name: value })}
+                            placeholder={appName ?? library.catalogName}
+                            maxLength={nameMaxLength}
+                          />
+                          <SettingRow
+                            kind="switch"
+                            label={t.libraries.hideInMenus}
+                            help={t.libraries.hideInMenusHelp}
+                            checked={entry.hideInMenus}
+                            saved={saved?.hideInMenus}
+                            onChange={(hidden) => change(index, { hideInMenus: hidden })}
+                          />
+                          {library.skippable && (
+                            <SettingRow
+                              kind="switch"
+                              label={t.libraries.skipLocal}
+                              help={t.libraries.skipLocalHelp}
+                              checked={entry.skipLocal}
+                              saved={saved?.skipLocal}
+                              onChange={(skip) => change(index, { skipLocal: skip })}
+                            />
+                          )}
+                          {shown !== undefined && (
+                            <SettingRow
+                              kind="choice"
+                              label={t.libraries.showAs.label}
+                              help={
+                                (shown === 'movies_and_shows'
+                                  ? otherVideos
+                                    ? t.libraries.showAs.help.titles
+                                    : t.libraries.showAs.help.mixed
+                                  : t.libraries.showAs.help[shown]) +
+                                (otherVideos && entry.showAs === null
+                                  ? ' ' + t.libraries.showAs.undecided
+                                  : '')
+                              }
+                              value={shown}
+                              saved={
+                                saved === undefined
+                                  ? undefined
+                                  : (saved.showAs ?? library.showAsChoices[0])
+                              }
+                              options={library.showAsChoices.map((value) => ({
+                                value,
+                                label: t.libraries.showAs.choices[value],
+                              }))}
+                              onChange={(value) => change(index, { showAs: value })}
+                            />
+                          )}
+                        </>
+                      )}
+                      {library.filterable && (
+                        <NarrowRows
                           maxItemsId={ids.maxItems(entry.key)}
                           scope={scope}
                           library={library}
                           entry={entry}
-                          name={name}
-                          onChange={(change) => narrow(index, change)}
-                          onClose={() => {
-                            setNarrowOpen(null)
-                            focusAfterRender.current = [ids.narrowButton(entry.key)]
-                          }}
+                          saved={saved}
+                          onChange={(patch) => change(index, patch)}
                         />
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
+                      )}
+                      {!tv && (music !== undefined || iptv) && (
+                        <div className="px-[30px] pt-1 text-small text-ink-2 max-md:px-5">
+                          {music !== undefined && (
+                            <p>{t.libraries.music.help[music] ?? t.libraries.music.help.music}</p>
+                          )}
+                          {iptv && (
+                            <p className={cx(music !== undefined && 'mt-1.5')}>
+                              {t.libraries.iptvVod}{' '}
+                              <Link
+                                to={lineupPath(scope, library.addonId, 'options')}
+                                className="focus-lit rounded-control font-medium text-link underline decoration-link/40 underline-offset-4 hover:decoration-link"
+                              >
+                                {t.libraries.iptvVodLink}
+                              </Link>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
         )}
         {scope === 'shared' && <UserLibraryOrders dirty={dirty} />}
-        <details className="group mt-5">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md text-control font-medium text-ink-2 transition-colors duration-160 hover:text-ink [&::-webkit-details-marker]:hidden">
+        <details className="group mt-6">
+          <summary className="focus-lit inline-flex cursor-pointer list-none items-center gap-2 rounded-control px-2 py-1.5 text-control font-medium text-ink-2 transition-colors duration-300 ease-nuit hover:text-ink max-md:-mx-2 [&::-webkit-details-marker]:hidden">
             <CaretRightIcon
-              size={14}
+              size={18}
               aria-hidden="true"
-              className="transition-transform duration-160 ease-nuit group-open:rotate-90"
+              className="shrink-0 transition-transform duration-300 ease-nuit group-open:rotate-90"
             />
             {t.libraries.defaultTitle}
           </summary>
-          <p className="mt-2 max-w-[72ch] pl-5 text-small text-ink-3">{t.libraries.defaultHelp}</p>
+          <p className="mt-2 max-w-[66ch] pl-9 text-small text-ink-2 max-md:pl-6">
+            {t.libraries.defaultHelp}
+          </p>
         </details>
       </Block>
 
       <Block title={t.libraries.availableTitle} count={notShown.length}>
-        <p className="mb-5 max-w-[72ch] text-small text-ink-2">{t.libraries.availableHelp}</p>
+        <p className="mb-5 max-w-[66ch] text-small text-ink-2">{t.libraries.availableHelp}</p>
         {notShown.length === 0 ? (
           <EmptyState icon={SquaresFourIcon} title={t.libraries.availableEmpty} />
         ) : (
           <>
-            <div className="mb-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <div id={ids.filter}>
+            <div className="mb-5 flex flex-wrap items-end gap-3">
+              <div id={ids.filter} className="min-w-0 flex-[1_1_260px] md:max-w-[440px]">
                 <Field label={t.libraries.filter}>
                   <TextInput
                     type="search"
+                    size="sm"
                     icon={MagnifyingGlassIcon}
                     value={query}
                     onValue={(value) => filterBy(() => setQuery(value))}
@@ -910,8 +868,9 @@ function LibraryForm({
                   />
                 </Field>
               </div>
-              <Field label={t.libraries.type}>
+              <Field label={t.libraries.type} className="min-w-0 flex-[1_1_200px] md:max-w-[280px]">
                 <Select
+                  size="sm"
                   value={type}
                   onValue={(value) => filterBy(() => setType(value))}
                   options={[
@@ -925,36 +884,31 @@ function LibraryForm({
               </Field>
             </div>
             {groups.size === 0 ? (
-              <p role="status" className="text-small text-ink-3">
+              <p role="status" className="text-small text-ink-2">
                 {t.libraries.noMatch}
               </p>
             ) : (
               <div
                 ref={availableBox}
-                className={cx('scroll-pt-12 rounded-panel border border-line-2 bg-s1', scrollBox)}
+                className={cx(
+                  'grid grid-cols-[minmax(0,1fr)] gap-6',
+                  notShown.length > boxedCatalogs && cx(scrollBox, 'pr-1'),
+                )}
               >
                 {[...groups].map(([addonId, items]) => {
                   const headingId = `${baseId}-addon-${addonId}`
                   return (
-                    <section
-                      key={addonId}
-                      aria-labelledby={headingId}
-                      className="not-first:border-t not-first:border-line-2"
-                    >
+                    <section key={addonId} aria-labelledby={headingId} className="min-w-0">
                       <h3
                         id={headingId}
-                        className="sticky top-0 z-[1] flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-s1/95 px-[18px] py-2.5 text-control font-semibold text-ink backdrop-blur-[14px] max-sm:px-4"
+                        className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-group text-ink"
                       >
-                        <span className="break-words">{items[0].addonName}</span>
+                        <span className="min-w-0 break-words">{items[0].addonName}</span>
                         {offAddons.has(addonId) && (
                           <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
                         )}
                       </h3>
-                      <RowList
-                        variant="plain"
-                        className="px-[18px] max-sm:px-4"
-                        aria-label={t.libraries.availableLabel(items[0].addonName)}
-                      >
+                      <RowList compact aria-label={t.libraries.availableLabel(items[0].addonName)}>
                         {items.map((library) => (
                           <AvailableRow
                             key={catalogKey(library)}
@@ -976,6 +930,7 @@ function LibraryForm({
 
       <SaveBar
         dirty={dirty}
+        changes={dirty ? countChanges(entries, serverEntries) : undefined}
         saving={save.isPending}
         onDiscard={() => {
           save.reset()
@@ -987,34 +942,37 @@ function LibraryForm({
   )
 }
 
+/** Focuses the control an element holds: a field's input, or a setting row's head. */
+function focusIn(element: HTMLElement) {
+  const target = element.matches('input, button')
+    ? element
+    : element.querySelector<HTMLElement>('input, [data-setting-head]')
+  target?.focus()
+}
+
 /**
- * The genre and maximum of a library, below its row: staged like its name and saved with the
- * list. The genre shows only when the catalog offers genres.
+ * The genre and maximum of a library, among its options: staged like its name and saved with
+ * the list. The genre shows only when the catalog offers genres.
  */
-function NarrowEditor({
-  id,
+function NarrowRows({
   maxItemsId,
   scope,
   library,
   entry,
-  name,
+  saved,
   onChange,
-  onClose,
 }: {
-  id: string
-  /** The id of the box around the maximum's field, to focus it. */
+  /** The id of the maximum's row, to focus it. */
   maxItemsId: string
   scope: Scope
   library: Library
   entry: Entry
-  /** The library's name, for the close button's label. */
-  name: string
+  /** The entry as saved; undefined for a library added since. */
+  saved: Entry | undefined
   onChange: (change: Partial<Pick<Entry, 'genre' | 'maxItems'>>) => void
-  onClose: () => void
 }) {
   const { t, language } = useI18n()
   const text = t.libraries.narrow
-  const labelId = `${id}-label`
   const max = MAX_LIBRARY_ITEMS.toLocaleString(language)
   // A genre the catalog no longer offers stays listed, so the choice shows; saving reports it.
   const genres =
@@ -1022,57 +980,41 @@ function NarrowEditor({
       ? library.genres
       : [entry.genre, ...library.genres]
   return (
-    <section
-      id={id}
-      aria-labelledby={labelId}
-      className="animate-rise rounded-row border border-line-2 bg-s2/50 p-4 max-sm:p-3.5"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 id={labelId} className="text-control font-medium text-ink">
-            {text.title}
-          </h3>
-          <p className="mt-0.5 text-small text-ink-3">{text.staged}</p>
-        </div>
-        <IconButton size="sm" icon={XIcon} label={text.close(name)} onClick={onClose} />
-      </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {genres.length > 0 && (
-          <Field label={text.genre} help={text.genreHelp}>
-            <Select
-              value={entry.genre ?? ''}
-              onValue={(value) => onChange({ genre: value === '' ? null : value })}
-              options={[
-                { value: '', label: text.allGenres },
-                ...genres.map((genre) => ({ value: genre, label: genre })),
-              ]}
-            />
-          </Field>
-        )}
-        <div id={maxItemsId}>
-          <Field
-            label={text.maxItems}
-            help={
-              scope === 'shared'
-                ? text.maxHelp(max, t.nav.trail(t.nav.settings, t.nav.settingsSections.catalogs))
-                : text.maxHelpMine(max)
-            }
-            error={validMax(entry.maxItems) ? undefined : text.maxRange(max)}
-          >
-            <NumberInput
-              value={entry.maxItems}
-              onValue={(value) => onChange({ maxItems: value })}
-              min={1}
-              max={MAX_LIBRARY_ITEMS}
-              step={1}
-              inputMode="numeric"
-              placeholder={text.noMax}
-              className="w-[160px]"
-            />
-          </Field>
-        </div>
-      </div>
-    </section>
+    <>
+      {genres.length > 0 && (
+        <SettingRow
+          kind="choice"
+          label={text.genre}
+          help={text.genreHelp}
+          value={entry.genre ?? ''}
+          saved={saved === undefined ? undefined : (saved.genre ?? '')}
+          options={[
+            { value: '', label: text.allGenres },
+            ...genres.map((genre) => ({ value: genre, label: genre })),
+          ]}
+          onChange={(value) => onChange({ genre: value === '' ? null : value })}
+        />
+      )}
+      <SettingRow
+        anchor={maxItemsId}
+        kind="number"
+        picker="well"
+        label={text.maxItems}
+        help={
+          scope === 'shared'
+            ? text.maxHelp(max, t.nav.trail(t.nav.settings, t.nav.settingsSections.catalogs))
+            : text.maxHelpMine(max)
+        }
+        error={validMax(entry.maxItems) ? undefined : text.maxRange(max)}
+        value={entry.maxItems}
+        saved={saved?.maxItems}
+        min={1}
+        max={MAX_LIBRARY_ITEMS}
+        step={1}
+        format={(value) => value.toLocaleString(language)}
+        onChange={(value) => onChange({ maxItems: value })}
+      />
+    </>
   )
 }
 
@@ -1091,7 +1033,7 @@ function TvSummary({
   const { language, t } = useI18n()
   if (library.guides === null) {
     return (
-      <div className="text-small text-ink-3">
+      <div className="mt-1.5 text-small text-ink-2">
         <p>{t.libraries.liveTv}</p>
         <p className="mt-1">{t.libraries.guideAfterSave}</p>
       </div>
@@ -1099,20 +1041,21 @@ function TvSummary({
   }
   const failing = failingGuides(library).length
   return (
-    <div className="text-small">
-      <p className="text-ink-2">{guideSummary(t, language, library)}</p>
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-small">
+      <span className="text-ink-2">{guideSummary(t, language, library)}</span>
       {failing > 0 && (
-        <p className="mt-1 flex items-center gap-1.5 text-warn">
-          <WarningIcon size={14} aria-hidden="true" className="shrink-0" />
+        <span className="flex items-center gap-1.5 text-warn">
+          <WarningIcon size={18} aria-hidden="true" className="shrink-0" />
           {t.livetv.failing(failing)}
-        </p>
+        </span>
       )}
       <Link
         to={guidesLink(scope, library, iptv)}
         aria-label={iptv ? t.livetv.lineupLabel(name) : t.livetv.manageLabel(name)}
-        className="mt-1 inline-flex items-center gap-1 rounded-md font-medium text-link transition-colors duration-160 hover:text-link-hover"
+        className="focus-lit rounded-control font-medium text-link transition-colors duration-300 ease-nuit hover:text-link-hover"
       >
         {iptv ? t.livetv.lineup : t.livetv.manage}
+        <CaretRightIcon size={16} aria-hidden="true" className="ml-1 inline align-[-2px]" />
       </Link>
     </div>
   )
@@ -1135,13 +1078,13 @@ function AvailableRow({
     <Row
       title={library.catalogName}
       muted={!library.browsable}
-      titleAside={
-        <>
-          <Badge tone="accent">{stremioLabel(t.stremioTypes, library.catalogType)}</Badge>
-          <MusicKind content={content} />
-        </>
+      titleAside={<MusicKind content={content} />}
+      meta={
+        <span className="break-words">
+          {stremioLabel(t.stremioTypes, library.catalogType)}
+          {!library.browsable && ` · ${t.libraries.notBrowsableHelp}`}
+        </span>
       }
-      meta={library.browsable ? undefined : t.libraries.notBrowsableHelp}
       trailing={
         library.browsable ? (
           <Button
@@ -1167,7 +1110,7 @@ function MusicKind({ content }: { content: MusicContent | undefined }) {
   if (content === undefined) return null
   return (
     <Badge className="gap-1">
-      <MusicNoteIcon size={12} aria-hidden="true" />
+      <MusicNoteIcon size={14} aria-hidden="true" />
       {t.libraries.music.library[content] ?? t.libraries.music.library.music}
     </Badge>
   )

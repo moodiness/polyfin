@@ -33,20 +33,21 @@ export default function UserLibraryOrders({ dirty }: { dirty: boolean }) {
   })
   const users = count.data?.users
   return (
-    <div className="mt-5 max-w-[72ch]">
-      <p className="text-small text-ink-2">{u.help}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button
-          onClick={() => {
-            apply.reset()
-            setConfirming(true)
-          }}
-          disabled={dirty}
-        >
-          {u.apply}
-        </Button>
-        {dirty && <span className="text-small text-ink-3">{u.saveFirst}</span>}
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-row bg-s1 py-5 pr-[22px] pl-7 max-md:pr-4 max-md:pl-5">
+      <div className="max-w-[66ch] min-w-0 flex-[1_1_320px] text-small text-ink-2">
+        <p>{u.help}</p>
+        {dirty && <p className="mt-1.5 text-ink-3">{u.saveFirst}</p>}
       </div>
+      <Button
+        onClick={() => {
+          apply.reset()
+          setConfirming(true)
+        }}
+        disabled={dirty}
+        className="max-md:w-full"
+      >
+        {u.apply}
+      </Button>
       <ConfirmDialog
         open={confirming}
         onClose={() => setConfirming(false)}
