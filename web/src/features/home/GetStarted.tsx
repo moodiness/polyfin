@@ -212,9 +212,16 @@ function Steps({ onDismiss }: { onDismiss: () => void }) {
         <p className="text-[21px] font-[650] text-ink max-md:text-[18px]">
           {text.progress(steps.length - open.length, steps.length)}
         </p>
+        {/* A count filling from the left, as the words above say it ("4 of 7 steps done"). */}
         <div aria-hidden="true" className="mt-4 grid grid-flow-col gap-1.5">
-          {steps.map((step) => (
-            <i key={step.id} className={cx('h-2 rounded-full', step.done ? 'bg-focus' : 'bg-s3')} />
+          {steps.map((step, index) => (
+            <i
+              key={step.id}
+              className={cx(
+                'h-2 rounded-full',
+                index < steps.length - open.length ? 'bg-focus' : 'bg-s3',
+              )}
+            />
           ))}
         </div>
         {/* The next step is a tile of its own, inside the panel's padding. */}

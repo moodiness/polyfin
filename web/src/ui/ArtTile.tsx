@@ -39,7 +39,11 @@ export function ArtShelf({
     <ShelfContext value={{ lit, light: setLit }}>
       <ul
         aria-label={label}
-        className={cx('flex flex-wrap gap-6 max-md:flex-col max-md:gap-4', className)}
+        // Tiles keep their own height: one whose details open does not stretch its neighbour.
+        className={cx(
+          'flex flex-wrap items-start gap-6 max-md:flex-col max-md:items-stretch max-md:gap-4',
+          className,
+        )}
       >
         {children}
       </ul>
@@ -176,8 +180,8 @@ export function ArtTile({
           'max-md:gap-x-[18px] max-md:gap-y-4 max-md:rounded-[28px] max-md:p-[18px] max-md:outline-offset-4',
           frame ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
           lit
-            ? 'outline-focus shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] md:scale-[1.015] motion-reduce:scale-100'
-            : 'outline-transparent md:hover:scale-[1.008] motion-reduce:hover:scale-100',
+            ? 'outline-focus shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] md:motion-safe:scale-[1.015]'
+            : 'outline-transparent md:motion-safe:hover:scale-[1.008]',
           className,
         )}
       >

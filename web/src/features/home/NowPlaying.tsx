@@ -6,6 +6,7 @@ import {
   CpuIcon,
   DeviceMobileIcon,
   DownloadSimpleIcon,
+  FilmStripIcon,
   InfoIcon,
   PackageIcon,
   PauseIcon,
@@ -287,24 +288,12 @@ function SessionTile({
       ? session.position
       : Math.min(session.position + elapsed, runtime || Number.POSITIVE_INFINITY)
   const isChannel = item?.kind === 'channel'
-  const [artFailed, setArtFailed] = useState(false)
-  const art = item?.posterId && !artFailed ? item.posterId : null
+  const art = item?.posterId || null
   const [confirming, setConfirming] = useState(false)
   const [messaging, setMessaging] = useState(false)
   const [details, setDetails] = useState(false)
   const detailsId = useId()
   const formId = useId()
-
-  // A poster that fails to load leaves the tile without one, as without art.
-  useEffect(() => {
-    if (art === null) return
-    const probe = new Image()
-    probe.onerror = () => setArtFailed(true)
-    probe.src = posterUrl(art, 64)
-    return () => {
-      probe.onerror = null
-    }
-  }, [art])
 
   const stop = useMutation({
     mutationFn: () => stopLiveSession(session.id),
@@ -345,8 +334,11 @@ function SessionTile({
   return (
     <ArtTile
       title={title}
-      // A channel's logo is no poster: it only lights the backdrop.
-      poster={art !== null && !isChannel ? posterUrl(art, 600) : undefined}
+      // A channel's logo is shown whole on a dark fill; a missing or broken poster gives the
+      // frame the icon of its kind.
+      poster={art !== null ? posterUrl(art, 600) : undefined}
+      fit={isChannel ? 'contain' : 'cover'}
+      fallback={isChannel ? <TelevisionSimpleIcon size="1em" /> : <FilmStripIcon size="1em" />}
       backdrop={art !== null ? posterUrl(art, 64) : undefined}
       onLight={onLight}
       top={
