@@ -119,9 +119,14 @@ type Reader struct {
 	timing  timing
 }
 
-// New returns a reader with options.
+// New returns a reader with options. Its transport is its own, a clone of
+// the default one: whoever closes the idle connections of
+// http.DefaultTransport, as httptest.Server.Close does, cannot break a
+// request whose answer without a body has just put its connection back
+// among the idle ones (#958).
 func New(options Options) *Reader {
-	return &Reader{anime: options.Anime, version: options.Version, client: &http.Client{}, timing: defaultTiming}
+	return &Reader{anime: options.Anime, version: options.Version, client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		timing: defaultTiming}
 }
 
 // ParseBackend reads the address of a Nuvio backend as a user types it:
