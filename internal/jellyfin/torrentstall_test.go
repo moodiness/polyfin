@@ -90,7 +90,7 @@ func (p torrentPlay) playHLSLeaving(t *testing.T, picked string, wait time.Durat
 		strings.NewReader(`{"DeviceProfile":`+hlsOnlyProfile+`}`))
 	request.Header.Set("Authorization", app("web", p.token))
 	request.Header.Set("Content-Type", "application/json")
-	if response, err := http.DefaultClient.Do(request); err == nil {
+	if response, err := testClient.Do(request); err == nil {
 		response.Body.Close()
 		t.Fatalf("PlaybackInfo answered %d before the app gave up", response.StatusCode)
 	}

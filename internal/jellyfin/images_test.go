@@ -275,7 +275,7 @@ func TestRememberedArtworkFailuresLogTheirCause(t *testing.T) {
 	}
 	// The addon's artwork server does not have the backdrop.
 	for range 2 {
-		response, err := http.Get(s.url + "/Items/" + movie.Id + "/Images/Backdrop/0?tag=" + movie.BackdropImageTags[0])
+		response, err := testClient.Get(s.url + "/Items/" + movie.Id + "/Images/Backdrop/0?tag=" + movie.BackdropImageTags[0])
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -301,6 +301,15 @@ func app(device, token string) string {
 	return header
 }
 
+// testTransport is the tests' own, and testClient its client:
+// httptest.Server.Close closes the idle connections of
+// http.DefaultTransport, which the connection of a parallel test's answer
+// without a body may have just joined (#958).
+var (
+	testTransport = http.DefaultTransport.(*http.Transport).Clone()
+	testClient    = &http.Client{Transport: testTransport}
+)
+
 // call sends a request and returns the status and body.
 func (s testServer) call(method, path, authorization string, body any) (int, []byte) {
 	s.t.Helper()
@@ -316,7 +325,7 @@ func (s testServer) call(method, path, authorization string, body any) (int, []b
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		s.t.Fatal(err)
 	}

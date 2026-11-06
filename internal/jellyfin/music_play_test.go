@@ -21,7 +21,7 @@ func (s testServer) fetch(t *testing.T, target string) (*http.Response, []byte) 
 	if strings.HasPrefix(target, "/") {
 		target = s.url + target
 	}
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: testTransport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Get(target)
 	if err != nil {
 		t.Fatal(err)

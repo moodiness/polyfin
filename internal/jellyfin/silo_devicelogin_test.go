@@ -67,7 +67,7 @@ func (a siloApps) tvCall(t *testing.T, method, path string, body any) (int, []by
 		request.Header.Set(name, value)
 	}
 	request.Header.Set("Content-Type", "application/json")
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

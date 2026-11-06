@@ -208,7 +208,7 @@ func TestATitlesActorOpensAsAPersonWithTheirPhoto(t *testing.T) {
 	if status := p.get(t, "/Persons/Nobody", p.token, nil); status != http.StatusNotFound {
 		t.Errorf("unknown name: %d", status)
 	}
-	response, err := http.Get(p.url + "/Items/" + ann.Id + "/Images/Primary?tag=" + ann.PrimaryImageTag)
+	response, err := testClient.Get(p.url + "/Items/" + ann.Id + "/Images/Primary?tag=" + ann.PrimaryImageTag)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -681,7 +681,7 @@ func TestPeoplePagesOpenedAtOnceAllOpen(t *testing.T) {
 			wg.Go(func() {
 				request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, s.url+path(i, r), nil)
 				request.Header.Set("Authorization", app("tv", r.token))
-				response, err := http.DefaultClient.Do(request)
+				response, err := testClient.Do(request)
 				if err != nil {
 					t.Error(err)
 					return

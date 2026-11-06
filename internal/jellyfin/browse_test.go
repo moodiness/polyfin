@@ -500,7 +500,7 @@ func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
 	if movie.ImageTags["Primary"] == "" {
 		t.Fatalf("no Primary image tag: %+v", movie.ImageTags)
 	}
-	response, err := http.Get(s.url + "/Items/" + movie.Id + "/Images/Primary?tag=" + movie.ImageTags["Primary"])
+	response, err := testClient.Get(s.url + "/Items/" + movie.Id + "/Images/Primary?tag=" + movie.ImageTags["Primary"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,11 +512,11 @@ func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
 	}
 	request, _ := http.NewRequest(http.MethodGet, s.url+"/Items/"+movie.Id+"/Images/Primary", nil)
 	request.Header.Set("If-None-Match", response.Header.Get("ETag"))
-	if cached, err := http.DefaultClient.Do(request); err != nil || cached.StatusCode != http.StatusNotModified {
+	if cached, err := testClient.Do(request); err != nil || cached.StatusCode != http.StatusNotModified {
 		t.Errorf("revalidation: %v %v", cached.StatusCode, err)
 	}
 	for _, path := range []string{"/Images/Logo", "/Images/Primary/1"} {
-		if response, _ := http.Get(s.url + "/Items/" + movie.Id + path); response.StatusCode != http.StatusNotFound {
+		if response, _ := testClient.Get(s.url + "/Items/" + movie.Id + path); response.StatusCode != http.StatusNotFound {
 			t.Errorf("%s: %d", path, response.StatusCode)
 		}
 	}
@@ -525,7 +525,7 @@ func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
 	if len(movie.BackdropImageTags) == 0 {
 		t.Fatalf("no backdrop: %+v", movie.BackdropImageTags)
 	}
-	if response, _ := http.Get(s.url + "/Items/" + movie.Id + "/Images/Backdrop/0?tag=" + movie.BackdropImageTags[0]); response.StatusCode != http.StatusNotFound {
+	if response, _ := testClient.Get(s.url + "/Items/" + movie.Id + "/Images/Backdrop/0?tag=" + movie.BackdropImageTags[0]); response.StatusCode != http.StatusNotFound {
 		t.Errorf("a backdrop the artwork server does not have: %d", response.StatusCode)
 	}
 }
@@ -541,7 +541,7 @@ func TestCreditedPeopleHavePhotosAndPages(t *testing.T) {
 		t.Fatalf("people: %+v", movie.People)
 	}
 	actor := (*movie.People)[0]
-	response, err := http.Get(s.url + "/Items/" + actor.Id + "/Images/Primary?tag=" + actor.PrimaryImageTag)
+	response, err := testClient.Get(s.url + "/Items/" + actor.Id + "/Images/Primary?tag=" + actor.PrimaryImageTag)
 	if err != nil {
 		t.Fatal(err)
 	}

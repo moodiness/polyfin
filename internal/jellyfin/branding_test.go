@@ -25,7 +25,7 @@ func (s testServer) css(path, authorization, cookie string) (int, string, string
 	if cookie != "" {
 		request.Header.Set("Cookie", cookie)
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		s.t.Fatal(err)
 	}

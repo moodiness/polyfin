@@ -64,7 +64,7 @@ func (a syncPlayApp) send(t *testing.T, s testServer, method, path string, body 
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

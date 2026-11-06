@@ -130,7 +130,7 @@ func TestEpisodeFramesBeingMadeAreWaitedFor(t *testing.T) {
 	ask := func() <-chan answer {
 		answered := make(chan answer, 1)
 		go func() {
-			response, err := http.Get(frame)
+			response, err := testClient.Get(frame)
 			if err != nil {
 				answered <- answer{err: err}
 				return

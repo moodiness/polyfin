@@ -233,7 +233,7 @@ func TestReplaysPlayFromTheArchive(t *testing.T) {
 		t.Fatalf("PlaybackInfo: %d %s", status, data)
 	}
 	source := info.MediaSources[0]
-	response, err := http.Get(s.url + "/Videos/" + latest.Id + "/stream?static=true&mediaSourceId=" + source.Id + "&ApiKey=" + token)
+	response, err := testClient.Get(s.url + "/Videos/" + latest.Id + "/stream?static=true&mediaSourceId=" + source.Id + "&ApiKey=" + token)
 	if err != nil {
 		t.Fatal(err)
 	}

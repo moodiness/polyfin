@@ -458,7 +458,7 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 	}
 	// The test addon is on a local address: the playlist is relayed, its
 	// segments named through Polyfin.
-	response, err := http.Get(source.Path)
+	response, err := testClient.Get(source.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 			segment = strings.TrimSpace(line)
 		}
 	}
-	response, err = http.Get(segment)
+	response, err = testClient.Get(segment)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +485,7 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 	// Parts of a file, as EXT-X-BYTERANGE asks them, are relayed as parts.
 	request, _ := http.NewRequest(http.MethodGet, segment, nil)
 	request.Header.Set("Range", "bytes=0-6")
-	if response, err := http.DefaultClient.Do(request); err != nil {
+	if response, err := testClient.Do(request); err != nil {
 		t.Error(err)
 	} else {
 		part, _ := io.ReadAll(response.Body)
@@ -496,7 +496,7 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 	}
 	// A link Polyfin did not sign relays nothing.
 	forged := strings.Replace(segment, "target=", "target=aHR0cDovL2V4YW1wbGUuY29tLw", 1)
-	if response, err := http.Get(forged); err != nil || response.StatusCode != http.StatusUnauthorized {
+	if response, err := testClient.Get(forged); err != nil || response.StatusCode != http.StatusUnauthorized {
 		t.Errorf("forged link: %v %v", response, err)
 	}
 
@@ -519,7 +519,7 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 	if status, _ := s.call(http.MethodPost, "/Items/"+channel+"/PlaybackInfo", app("tv", token), map[string]any{}); status != http.StatusNotFound {
 		t.Errorf("PlaybackInfo of a channel whose catalog was removed: %d", status)
 	}
-	if response, err := http.Get(segment); err != nil || response.StatusCode != http.StatusNotFound {
+	if response, err := testClient.Get(segment); err != nil || response.StatusCode != http.StatusNotFound {
 		t.Errorf("a segment of a channel whose catalog was removed: %v %v", response, err)
 	}
 }

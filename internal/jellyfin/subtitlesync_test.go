@@ -114,7 +114,7 @@ func TestAddonSubtitlesComeSyncedAfterAFirstPlay(t *testing.T) {
 			t.Errorf("subtitle %d: %q delivered %s", i, stream.DisplayTitle, stream.DeliveryMethod)
 			continue
 		}
-		response, err := http.Get(s.url + stream.DeliveryUrl)
+		response, err := testClient.Get(s.url + stream.DeliveryUrl)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -200,7 +200,7 @@ func TestLineupsShowAndPlayAsArranged(t *testing.T) {
 	// The logos of channels apps do not list, listed before or never,
 	// still show in the admin app.
 	for _, id := range []accounts.ID{zeb.ID, lumo.ID} {
-		response, err := http.Get(s.url + "/Items/" + id.String() + "/Images/Primary")
+		response, err := testClient.Get(s.url + "/Items/" + id.String() + "/Images/Primary")
 		if err != nil {
 			t.Fatal(err)
 		}

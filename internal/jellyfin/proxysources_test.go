@@ -152,7 +152,7 @@ func TestChannelsWithoutALogoShowTheirGuideIcon(t *testing.T) {
 			t.Errorf("%s: no image", name)
 			continue
 		}
-		response, err := http.Get(s.url + "/Items/" + c.Id + "/Images/Primary")
+		response, err := testClient.Get(s.url + "/Items/" + c.Id + "/Images/Primary")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,7 +224,7 @@ func TestASlowChannelKeepsPlaybackInfoWaiting(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	answered := make(chan *http.Response, 1)
 	go func() {
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Error(err)
 			close(answered)

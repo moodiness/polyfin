@@ -338,7 +338,7 @@ func TestVersionsTellWhetherTheWebPlayerAddsThem(t *testing.T) {
 	}
 	request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, h.url+"/Polyfin/Items/"+h.movie+"/Versions/Search", nil)
 	request.Header.Set("Authorization", app("tv", h.token))
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

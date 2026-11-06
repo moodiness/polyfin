@@ -63,7 +63,7 @@ func (s shareSetup) link(t *testing.T, viewers int) (string, accounts.ID) {
 
 // noRedirects is a client that reports a redirect rather than following
 // it: no guest route ever sends one, to a source least of all.
-var noRedirects = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+var noRedirects = &http.Client{Transport: testTransport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 // guest sends a request as a guest's browser does, without credentials.
 func (s shareSetup) guest(t *testing.T, method, path string, body any) (int, string) {

@@ -98,7 +98,7 @@ func (s testServer) postRaw(path, authorization, body string) (int, []byte) {
 	request, _ := http.NewRequestWithContext(s.t.Context(), http.MethodPost, s.url+path, strings.NewReader(body))
 	request.Header.Set("Authorization", authorization)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := http.DefaultClient.Do(request)
+	response, err := testClient.Do(request)
 	if err != nil {
 		s.t.Fatal(err)
 	}

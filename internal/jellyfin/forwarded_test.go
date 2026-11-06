@@ -36,7 +36,7 @@ func behindProxy(t *testing.T, s testServer) func(client, method, path, authoriz
 		if body != nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
-		response, err := http.DefaultClient.Do(request)
+		response, err := testClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
