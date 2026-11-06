@@ -44,16 +44,16 @@ node docs/scripts/screenshots/sweep.mjs \
 - **Disk:** the demo video takes about 280 MB in the system's temporary folder while it runs.
 - **Log:** Polyfin's log is left in the temporary folder, as `polyfin-screenshots.log`, or `polyfin-sweep.log` for the sweep. It tells why a step failed.
 
-| Option           | Default                               | What it does                                                                                                                             |
-| ---------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `--database-url` | `SCREENSHOTS_DATABASE_URL`            | A PostgreSQL address whose user may create databases. The tool connects to it to create the scratch database.                            |
-| `--database`     | `polyfin_screenshots`                 | The scratch database. The tool drops it first if it exists, and again at the end.                                                        |
-| `--polyfin`      | `bin/polyfin`, or `POLYFIN_BIN`       | The Polyfin executable.                                                                                                                  |
-| `--chrome`       | `CHROME_PATH`, else the usual install | The Chrome or Chromium executable.                                                                                                       |
-| `--out`          | `docs/images`                         | The folder the shots go to.                                                                                                              |
-| `--only`         | every shot                            | The shots to retake, by name, separated by commas, such as `--only user-page,iptv-source`. The others stay as they are.                  |
-| `--keep`         | off                                   | Keeps the demo running after the shots, until Ctrl-C, to look at it in a browser. It prints the address, the user name and the password. |
-| `--rich`         | off                                   | Fills the demo as the sweep does, in a real server's shapes. The shots are then not those of the documentation: use it with `--keep`.    |
+| Option           | Default                               | What it does                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--database-url` | `SCREENSHOTS_DATABASE_URL`            | A PostgreSQL address whose user may create databases. The tool connects to it to create the scratch database.                                                                                                             |
+| `--database`     | `polyfin_screenshots`                 | The scratch database. The tool drops it first if it exists, and again at the end.                                                                                                                                         |
+| `--polyfin`      | `bin/polyfin`, or `POLYFIN_BIN`       | The Polyfin executable.                                                                                                                                                                                                   |
+| `--chrome`       | `CHROME_PATH`, else the usual install | The Chrome or Chromium executable.                                                                                                                                                                                        |
+| `--out`          | `docs/images`                         | The folder the shots go to.                                                                                                                                                                                               |
+| `--only`         | every shot                            | The shots to retake, by name, separated by commas, such as `--only user-page,iptv-source`. The others stay as they are.                                                                                                   |
+| `--keep`         | off                                   | Keeps the demo running after the shots, until Ctrl-C or SIGTERM, to look at it in a browser. It prints the address, the user name and the password. Either signal stops everything and drops the database, as at the end. |
+| `--rich`         | off                                   | Fills the demo as the sweep does, in a real server's shapes. The shots are then not those of the documentation: use it with `--keep`.                                                                                     |
 
 The sweep takes `--database-url`, `--polyfin` and `--chrome` as well, `--database` with `polyfin_sweep` by default, and:
 
