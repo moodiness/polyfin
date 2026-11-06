@@ -430,7 +430,7 @@ function HomeRowModal({
               setKind(value)
               follow(value, catalog, collection)
             }}
-            className="max-w-xs"
+            className="max-w-[23.75rem]"
           />
         </Field>
         {kind === 'catalog' &&
@@ -485,7 +485,7 @@ function HomeRowModal({
             value={place}
             options={places.map((value) => ({ value, label: text.places[value] }))}
             onValue={setPlace}
-            className="max-w-xs"
+            className="max-w-[23.75rem]"
           />
         </Field>
         <Field label={text.shownTo} error={missingUser ? text.noUser : undefined}>
@@ -666,7 +666,7 @@ function HomeRowPreviewModal({ users, onClose }: { users: User[]; onClose: () =>
               ...users.map((user) => ({ value: user.id, label: user.name })),
             ]}
             onValue={setUserId}
-            className="max-w-xs"
+            className="max-w-[23.75rem]"
           />
         </Field>
         {userId === '' ? (
@@ -723,7 +723,7 @@ function PreviewPoster({ title }: { title: HomeRowPreviewTitle }) {
         aria-hidden="true"
         className="grid aspect-[2/3] w-full place-items-center rounded-check bg-s2 text-ink-3"
       >
-        <KindIcon size={20} />
+        <KindIcon size="1.25rem" />
       </span>
     )
   }

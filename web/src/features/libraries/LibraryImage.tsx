@@ -69,11 +69,11 @@ function Picture({
     return (
       <span
         className={cx(
-          'grid aspect-video place-items-center rounded-[14px] bg-s3 text-ink-3',
+          'grid aspect-video place-items-center rounded-[0.875rem] bg-s3 text-ink-3',
           className,
         )}
       >
-        <ImageIcon size={22} aria-hidden="true" />
+        <ImageIcon size="1.375rem" aria-hidden="true" />
       </span>
     )
   }
@@ -83,7 +83,7 @@ function Picture({
       alt=""
       loading="lazy"
       onError={() => setFailed(url)}
-      className={cx('aspect-video rounded-[14px] bg-s3 object-cover', className)}
+      className={cx('aspect-video rounded-[0.875rem] bg-s3 object-cover', className)}
     />
   )
 }
@@ -128,7 +128,7 @@ export function LibraryThumb({
       title={text.edit(name, state)}
       onClick={onToggle}
       className={cx(
-        'group focus-lit relative shrink-0 cursor-pointer rounded-[14px] transition-[box-shadow,scale] duration-300 ease-nuit',
+        'group focus-lit relative shrink-0 cursor-pointer rounded-[0.875rem] transition-[box-shadow,scale] duration-300 ease-nuit',
         open && 'shadow-[0_0_0_3px] shadow-ink',
         thumbSize,
       )}
@@ -136,9 +136,9 @@ export function LibraryThumb({
       <Picture library={library} width={160} className="w-full" />
       <span
         aria-hidden="true"
-        className="absolute inset-0 grid place-items-center rounded-[14px] bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
+        className="absolute inset-0 grid place-items-center rounded-[0.875rem] bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
       >
-        <PencilSimpleIcon size={20} />
+        <PencilSimpleIcon size="1.25rem" />
       </span>
     </button>
   )
@@ -150,11 +150,11 @@ export function LiveTvThumb() {
     <span
       aria-hidden="true"
       className={cx(
-        'grid aspect-video shrink-0 place-items-center rounded-[14px] bg-s3 text-ink-3',
+        'grid aspect-video shrink-0 place-items-center rounded-[0.875rem] bg-s3 text-ink-3',
         thumbSize,
       )}
     >
-      <TelevisionSimpleIcon size={22} />
+      <TelevisionSimpleIcon size="1.375rem" />
     </span>
   )
 }
@@ -295,10 +295,10 @@ export function LibraryImageEditor({
       ref={section}
       id={id}
       aria-labelledby={labelId}
-      className="animate-rise rounded-row bg-s1 py-6 pr-[22px] pl-7 max-md:py-5 max-md:pr-4 max-md:pl-5"
+      className="animate-rise rounded-row bg-s1 py-6 pr-[1.375rem] pl-7 max-md:py-5 max-md:pr-4 max-md:pl-5"
     >
       <div className="flex gap-6 max-sm:flex-col max-sm:gap-4">
-        <Picture library={library} width={480} className="w-48 shrink-0 self-start sm:w-[240px]" />
+        <Picture library={library} width={480} className="w-48 shrink-0 self-start sm:w-[15rem]" />
         <div className="min-w-0 sm:flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

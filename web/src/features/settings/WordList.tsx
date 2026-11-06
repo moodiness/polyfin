@@ -28,7 +28,7 @@ export default function WordList({
       value={text}
       autoComplete="off"
       spellCheck={false}
-      className="max-w-md"
+      className="max-w-[33.25rem]"
       onValue={(next) => {
         setText(next)
         onValue(words(next))

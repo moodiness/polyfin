@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 import { useInPanel } from './Panel'
 
 /**
@@ -46,7 +46,7 @@ export function Table({
       )}
     >
       <table
-        style={{ minWidth }}
+        style={{ minWidth: rem(minWidth) }}
         className={cx(
           'w-full border-separate text-left',
           compact ? 'border-spacing-y-1.5 text-body' : 'border-spacing-y-2 text-lead',
@@ -56,7 +56,7 @@ export function Table({
             : '[&_td]:h-20 [&_td]:py-3.5 [&_td]:pr-5 [&_td]:pl-5',
           '[&_td]:align-middle [&_td]:text-ink-2 [&_td:first-child]:pl-7 [&_td:first-child]:font-semibold [&_td:first-child]:text-ink',
           compact
-            ? '[&_td:first-child]:rounded-l-[18px] [&_td:last-child]:rounded-r-[18px]'
+            ? '[&_td:first-child]:rounded-l-[1.125rem] [&_td:last-child]:rounded-r-[1.125rem]'
             : '[&_td:first-child]:rounded-l-row [&_td:last-child]:rounded-r-row',
           !inPanel && '[&_tbody_td]:bg-s1',
           '[&_tbody_tr:hover_td]:bg-s2 [&_tbody_td]:transition-colors [&_tbody_td]:duration-300 [&_tbody_td]:ease-nuit',

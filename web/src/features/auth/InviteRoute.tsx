@@ -90,7 +90,7 @@ export default function InviteRoute() {
     return (
       <p
         role="status"
-        className="mx-auto flex w-full max-w-[520px] items-center gap-3 pt-[min(9vh,96px)] text-lead text-ink-2"
+        className="mx-auto flex w-full max-w-[32.5rem] items-center gap-3 pt-[min(9vh,6rem)] text-lead text-ink-2"
       >
         <Spinner />
         {t.common.loading}
@@ -100,7 +100,7 @@ export default function InviteRoute() {
   if (invite.isError || status.isError) {
     const failed = invite.isError ? invite : status
     return (
-      <div className="mx-auto w-full max-w-[520px] pt-[min(9vh,96px)]">
+      <div className="mx-auto w-full max-w-[32.5rem] pt-[min(9vh,6rem)]">
         <InlineError onRetry={() => void failed.refetch()} retrying={failed.isFetching}>
           {errorMessage(t, failed.error)}
         </InlineError>

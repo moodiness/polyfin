@@ -124,13 +124,13 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
                     // screen readers.
                     <li
                       key={task.id}
-                      className="grid gap-x-10 gap-y-4 rounded-row bg-s1 py-5 pr-[22px] pl-7 max-md:px-5 max-md:py-4 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-3 max-sm:gap-y-2 max-sm:py-3.5 max-sm:pr-3.5 max-sm:pl-4 lg:grid-cols-[minmax(0,1fr)_minmax(11rem,auto)_auto] lg:items-center"
+                      className="grid gap-x-10 gap-y-4 rounded-row bg-s1 py-5 pr-[1.375rem] pl-7 max-md:px-5 max-md:py-4 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-3 max-sm:gap-y-2 max-sm:py-3.5 max-sm:pr-3.5 max-sm:pl-4 lg:grid-cols-[minmax(0,1fr)_minmax(13.0625rem,auto)_auto] lg:items-center"
                     >
                       <div className="min-w-0 max-sm:contents">
-                        <p className="text-h3 break-words hyphens-auto text-ink max-md:text-[18px] max-sm:col-start-1 max-sm:row-start-1 max-sm:self-center">
+                        <p className="text-h3 break-words hyphens-auto text-ink max-md:text-[1.125rem] max-sm:col-start-1 max-sm:row-start-1 max-sm:self-center">
                           {task.name}
                         </p>
-                        <p className="mt-1 max-w-[66ch] text-small text-ink-2 max-md:text-[16px] max-sm:sr-only">
+                        <p className="mt-1 max-w-[66ch] text-small text-ink-2 max-md:text-[1rem] max-sm:sr-only">
                           {task.description}
                         </p>
                         <LastRun task={task} />
@@ -187,11 +187,13 @@ function NextRun({ task }: { task: Task }) {
     <div className="text-small text-ink-2 figures max-sm:col-span-full max-sm:flex max-sm:flex-wrap max-sm:gap-x-2 lg:text-right">
       <p>{text.nextRun}</p>
       {task.next !== null ? (
-        <p className="text-lead text-ink max-md:text-[18px] max-sm:text-small">
+        <p className="text-lead text-ink max-md:text-[1.125rem] max-sm:text-small">
           <RelativeTime iso={task.next} />
         </p>
       ) : (
-        <p className="text-lead text-ink max-md:text-[18px] max-sm:text-small">{text.byHandOnly}</p>
+        <p className="text-lead text-ink max-md:text-[1.125rem] max-sm:text-small">
+          {text.byHandOnly}
+        </p>
       )}
       {task.interval > 0 && <p>{text.every(formatSpan(task.interval, language))}</p>}
       {task.daily !== null && <p>{text.daily(formatHour(task.daily, language))}</p>}

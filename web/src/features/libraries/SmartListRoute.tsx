@@ -554,11 +554,11 @@ function CatalogPicker({
             placeholder={t.smartLists.catalogFilterPlaceholder}
             onValue={setFilter}
             autoComplete="off"
-            className="max-w-[420px]"
+            className="max-w-[26.25rem]"
           />
         </Field>
       )}
-      <div className="grid max-h-[420px] gap-x-8 gap-y-4 overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] sm:grid-cols-2">
+      <div className="grid max-h-[26.25rem] gap-x-8 gap-y-4 overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] sm:grid-cols-2">
         {missing.map((c) => (
           <Checkbox
             key={catalogKey(c)}
@@ -643,7 +643,7 @@ function GroupEditor({
           <Select
             aria-label={t.smartLists.negation}
             size="sm"
-            className="w-[140px]"
+            className="w-[8.75rem]"
             value={group.not ? 'not' : 'is'}
             onValue={(value) => onChange({ ...group, not: value === 'not' })}
             options={[
@@ -747,7 +747,7 @@ function RuleEditor({
           suggestions={genres}
           onValue={(text) => onChange({ ...rule, value: text })}
           onPick={(text) => onChange({ ...rule, value: text })}
-          className="w-[220px]"
+          className="w-[13.75rem]"
         />
       )
       break
@@ -765,7 +765,7 @@ function RuleEditor({
             value={rule.min ?? null}
             min={0}
             step={step}
-            className="w-[120px]"
+            className="w-[7.5rem]"
             onValue={(n) => bound('min', n)}
           />
           <NumberInput
@@ -775,7 +775,7 @@ function RuleEditor({
             value={rule.max ?? null}
             min={0}
             step={step}
-            className="w-[120px]"
+            className="w-[7.5rem]"
             onValue={(n) => bound('max', n)}
           />
           {rule.field === 'runtime' && t.smartLists.minutes}
@@ -798,7 +798,7 @@ function RuleEditor({
           <Select
             size="sm"
             aria-label={t.smartLists.releasedWhen}
-            className="w-[160px]"
+            className="w-[10rem]"
             value={next ? 'next' : 'last'}
             onValue={(when) => set(when === 'next', days)}
             options={(['last', 'next'] as const).map((v) => ({
@@ -813,7 +813,7 @@ function RuleEditor({
             min={1}
             max={36500}
             step={1}
-            className="w-[120px]"
+            className="w-[7.5rem]"
             onValue={(n) => set(next, n)}
           />
           {t.smartLists.days}
@@ -827,7 +827,7 @@ function RuleEditor({
           <Select
             size="sm"
             aria-label={t.smartLists.releasedWhen}
-            className="w-[200px]"
+            className="w-[12.5rem]"
             value={rule.value ?? 'upcoming'}
             onValue={(when) => onChange({ ...rule, value: when })}
             options={(['released', 'upcoming', 'both'] as const).map((v) => ({
@@ -842,7 +842,7 @@ function RuleEditor({
             min={1}
             max={36500}
             step={1}
-            className="w-[120px]"
+            className="w-[7.5rem]"
             onValue={(n) => bound('max', n)}
           />
           {t.smartLists.days}
@@ -856,7 +856,7 @@ function RuleEditor({
           <Select
             size="sm"
             aria-label={t.smartLists.fields.contentRating}
-            className="w-[160px]"
+            className="w-[10rem]"
             value={rule.value ?? 'PG-13'}
             onValue={(rating) => onChange({ ...rule, value: rating })}
             options={contentRatings.map((v) => ({ value: v, label: v }))}
@@ -874,7 +874,7 @@ function RuleEditor({
           value={rule.value ?? ''}
           maxLength={100}
           onValue={(text) => onChange({ ...rule, value: text })}
-          className="w-[220px]"
+          className="w-[13.75rem]"
         />
       )
       break
@@ -883,7 +883,7 @@ function RuleEditor({
         <Select
           size="sm"
           aria-label={t.smartLists.language}
-          className="w-[220px]"
+          className="w-[13.75rem]"
           value={rule.value ?? ''}
           onValue={(code) => onChange({ ...rule, value: code })}
           options={languages}
@@ -895,7 +895,7 @@ function RuleEditor({
         <Select
           size="sm"
           aria-label={t.smartLists.fields.type}
-          className="w-[160px]"
+          className="w-[10rem]"
           value={rule.value ?? 'movie'}
           onValue={(kind) => onChange({ ...rule, value: kind })}
           options={['movie', 'series'].map((v) => ({ value: v, label: t.smartLists.types[v] }))}
@@ -913,7 +913,7 @@ function RuleEditor({
             min={1}
             max={MAX_LIBRARY_ITEMS}
             step={1}
-            className="w-[120px]"
+            className="w-[7.5rem]"
             onValue={(n) => bound('max', n)}
           />
         </span>
@@ -924,7 +924,7 @@ function RuleEditor({
         <Select
           size="sm"
           aria-label={t.smartLists.fields.state}
-          className="w-[200px]"
+          className="w-[12.5rem]"
           value={rule.value ?? 'unplayed'}
           onValue={(state) => onChange({ ...rule, value: state })}
           options={states.map((v) => ({ value: v, label: t.smartLists.states[v] }))}
@@ -936,7 +936,7 @@ function RuleEditor({
       <Select
         size="sm"
         aria-label={t.smartLists.field}
-        className="w-[200px]"
+        className="w-[12.5rem]"
         value={rule.field}
         onValue={(field) =>
           onChange({ ...newRule(field as (typeof fields)[number]), not: rule.not })
@@ -946,7 +946,7 @@ function RuleEditor({
       <Select
         size="sm"
         aria-label={t.smartLists.negation}
-        className="w-[120px]"
+        className="w-[7.5rem]"
         value={rule.not ? 'not' : 'is'}
         onValue={(v) => onChange({ ...rule, not: v === 'not' })}
         options={[

@@ -90,7 +90,7 @@ export function LetterboxdForm({
 
   return (
     <form onSubmit={submit} noValidate>
-      <div className="flex max-w-lg flex-col gap-5 px-6 py-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-5 px-6 py-6 max-sm:px-4">
         {header}
         <p className="text-small text-ink-2">{text.help}</p>
         {!searchable && <Notice tone="warn">{text.noSearch}</Notice>}
@@ -284,7 +284,7 @@ export function LetterboxdProgress({
                           className="inline-flex items-center gap-1 text-small text-link hover:text-link-hover"
                         >
                           {text.onLetterboxd}
-                          <ArrowSquareOutIcon size={14} aria-hidden="true" />
+                          <ArrowSquareOutIcon size="0.875rem" aria-hidden="true" />
                         </a>
                       )}
                     </td>

@@ -77,7 +77,7 @@ export function DragGrip({ name }: { name: string }) {
       title={t.lineup.dragHandle(name)}
       className="hidden shrink-0 cursor-grab text-ink-3 active:cursor-grabbing sm:inline"
     >
-      <DotsSixVerticalIcon size={20} />
+      <DotsSixVerticalIcon size="1.25rem" />
     </span>
   )
 }
@@ -101,7 +101,7 @@ export function ChannelLogo({
   const [failed, setFailed] = useState<string | null>(null)
   const frame = cx(
     'shrink-0 overflow-hidden bg-s2',
-    large ? 'size-14 rounded-[18px]' : 'size-9 rounded-[12px]',
+    large ? 'size-14 rounded-[1.125rem]' : 'size-9 rounded-[0.75rem]',
   )
   if (!logo || failed === logo) {
     return (
@@ -148,7 +148,7 @@ export function Figures({ items, label }: { items: readonly Figure[]; label?: st
         <div
           key={item.label}
           className={cx(
-            'relative flex min-w-0 flex-col rounded-row bg-s1 px-6 pt-[22px] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
+            'relative flex min-w-0 flex-col rounded-row bg-s1 px-6 pt-[1.375rem] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
             item.to &&
               'transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit hover:bg-s2 has-[a:focus-visible]:lit has-[a:focus-visible]:lift [--lift:1.03]',
           )}
@@ -168,7 +168,7 @@ export function Figures({ items, label }: { items: readonly Figure[]; label?: st
           </dt>
           <dd
             className={cx(
-              'figures order-1 text-[44px] leading-none font-[650] tracking-[-0.02em] max-md:text-[36px]',
+              'figures order-1 text-[2.75rem] leading-none font-[650] tracking-[-0.02em] max-md:text-[2.25rem]',
               item.tone === 'warn' && 'text-warn',
               item.tone === 'ok' && 'text-ok',
             )}

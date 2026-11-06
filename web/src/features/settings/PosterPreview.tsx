@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { fetchPosterPreviews, queryKeys, type PosterBadgeSize, type PosterPreview } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, InlineError, Skeleton } from '@/ui'
+import { Button, InlineError, rem, Skeleton } from '@/ui'
 
 /** A poster through Polyfin, as apps load it, at a width asked of the server. */
 function posterUrl(title: PosterPreview, tag: string, width: number) {
@@ -28,7 +28,7 @@ function Poster({
         src={src}
         alt=""
         loading="lazy"
-        style={{ width: displayWidth }}
+        style={{ width: rem(displayWidth) }}
         className="aspect-[2/3] max-w-full rounded-field bg-s2 object-cover"
       />
       <figcaption className="text-small text-ink-2">{caption}</figcaption>
@@ -49,7 +49,7 @@ export default function PosterPreviewPanel({ size }: { size: PosterBadgeSize }) 
     queryKey: queryKeys.posterPreviews(size),
     queryFn: ({ signal }) => fetchPosterPreviews(size, signal),
   })
-  if (previews.isPending) return <Skeleton className="h-72 w-full max-w-xl" />
+  if (previews.isPending) return <Skeleton className="h-72 w-full max-w-[42.75rem]" />
   if (previews.isError) {
     return (
       <InlineError onRetry={() => void previews.refetch()} retrying={previews.isFetching}>

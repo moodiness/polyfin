@@ -1,5 +1,5 @@
 import type { Icon } from '@phosphor-icons/react'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 
 export type SegmentedOption<T extends string> = {
   value: T
@@ -27,9 +27,9 @@ export type SegmentedProps<T extends string> = {
 }
 
 const sizes = {
-  md: 'h-15 min-w-15 rounded-choice px-4.5 text-[21px] max-sm:h-13 max-sm:min-w-13 max-sm:px-3.5 max-sm:text-[19px]',
-  sm: 'h-13 min-w-13 rounded-[16px] px-4 text-control',
-  compact: 'h-11 min-w-11 rounded-[14px] px-3.5 text-small',
+  md: 'h-15 min-w-15 rounded-choice px-4.5 text-[1.3125rem] max-sm:h-13 max-sm:min-w-13 max-sm:px-3.5 max-sm:text-[1.1875rem]',
+  sm: 'h-13 min-w-13 rounded-[1rem] px-4 text-control',
+  compact: 'h-11 min-w-11 rounded-[0.875rem] px-3.5 text-small',
 }
 
 const iconSizes = { md: 22, sm: 20, compact: 18 }
@@ -72,7 +72,7 @@ export function Segmented<T extends string>({
             sizes[size],
           )}
         >
-          {option.icon && <option.icon size={iconSizes[size]} aria-hidden="true" />}
+          {option.icon && <option.icon size={rem(iconSizes[size])} aria-hidden="true" />}
           {option.label}
         </button>
       ))}

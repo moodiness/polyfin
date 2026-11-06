@@ -174,7 +174,7 @@ export default function LogsRoute() {
               }))}
             />
           </Field>
-          <Field label={text.search} className="md:max-w-sm md:flex-1">
+          <Field label={text.search} className="md:max-w-[28.5rem] md:flex-1">
             <TextInput
               type="search"
               icon={MagnifyingGlassIcon}
@@ -198,7 +198,7 @@ export default function LogsRoute() {
           </InlineError>
         )}
         {/* The tile, and inside it the lines scrolling, faded where they pass its edges. */}
-        <div className="rounded-panel bg-s1 p-2 max-md:rounded-[24px]">
+        <div className="rounded-panel bg-s1 p-2 max-md:rounded-[1.5rem]">
           <div
             ref={view}
             role="log"
@@ -211,14 +211,14 @@ export default function LogsRoute() {
               atBottom.current =
                 element.scrollHeight - element.scrollTop - element.clientHeight < 24
             }}
-            className="focus-lit h-[65dvh] min-h-80 overflow-auto rounded-[20px] [mask-image:linear-gradient(to_bottom,transparent,#000_14px,#000_calc(100%-14px),transparent)] [--lift:1] max-md:rounded-[16px]"
+            className="focus-lit h-[65dvh] min-h-80 overflow-auto rounded-[1.25rem] [mask-image:linear-gradient(to_bottom,transparent,#000_0.875rem,#000_calc(100%-0.875rem),transparent)] [--lift:1] max-md:rounded-[1rem]"
           >
             {!loaded && error === null ? (
               <div aria-hidden="true" className="space-y-5 px-4 py-4">
                 {[70, 55, 82, 64, 48, 76, 60].map((width, index) => (
                   <span
                     key={index}
-                    className="block h-4 animate-pulse rounded-md bg-s3 motion-reduce:animate-none"
+                    className="block h-4 animate-pulse rounded-[0.445312rem] bg-s3 motion-reduce:animate-none"
                     style={{ width: `${width}%` }}
                   />
                 ))}
@@ -236,7 +236,7 @@ export default function LogsRoute() {
                 {drawn.map((line) => (
                   <li
                     key={line.seq}
-                    className="grid min-h-14 grid-cols-[5.5rem_7rem_minmax(0,1fr)] items-center gap-x-4 rounded-[18px] px-4 py-2 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1.5 max-md:px-3 max-md:py-3"
+                    className="grid min-h-14 grid-cols-[6.53125rem_8.3125rem_minmax(0,1fr)] items-center gap-x-4 rounded-[1.125rem] px-4 py-2 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1.5 max-md:px-3 max-md:py-3"
                   >
                     <span className="text-small text-ink-2 figures">{line.time}</span>
                     <StatusPill
@@ -245,7 +245,7 @@ export default function LogsRoute() {
                     >
                       {line.level}
                     </StatusPill>
-                    <span className="min-w-0 font-mono text-[15px] leading-6 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2 max-md:text-[14px]">
+                    <span className="min-w-0 font-mono text-[0.9375rem] leading-6 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2 max-md:text-[0.875rem]">
                       {line.text}
                     </span>
                   </li>

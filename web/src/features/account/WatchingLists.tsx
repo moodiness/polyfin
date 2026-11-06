@@ -55,7 +55,7 @@ export function TitlePoster({ title }: { title: Pick<AccountTitle, 'kind' | 'pos
         aria-hidden="true"
         className="grid aspect-[2/3] w-8 shrink-0 place-items-center rounded-check bg-s3 text-ink-2"
       >
-        <KindIcon size={14} />
+        <KindIcon size="0.875rem" />
       </span>
     )
   }

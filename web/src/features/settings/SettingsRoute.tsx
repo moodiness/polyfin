@@ -105,11 +105,11 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
       )}
       <div hidden={search.trim() !== ''}>
         <header className="max-md:pt-6">
-          <h2 className="text-h1 text-ink max-md:text-[34px] max-md:leading-tight">
+          <h2 className="text-h1 text-ink max-md:text-[2.125rem] max-md:leading-tight">
             {t.nav.settingsSections[current.key]}
           </h2>
           {lede !== undefined && (
-            <p className="mt-4 max-w-[60ch] text-[21px] leading-normal text-ink-2 max-md:text-[17.5px]">
+            <p className="mt-4 max-w-[60ch] text-[1.3125rem] leading-normal text-ink-2 max-md:text-[1.09375rem]">
               {lede}
             </p>
           )}
@@ -118,7 +118,7 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
           <div aria-busy="true" aria-label={t.common.loading} className="mt-10 space-y-2">
             <SkeletonText lines={1} className="mb-4 w-56" />
             {[0, 1, 2, 3].map((index) => (
-              <Skeleton key={index} className="h-[82px] w-full rounded-row" />
+              <Skeleton key={index} className="h-[5.125rem] w-full rounded-row" />
             ))}
           </div>
         ) : settings.isError ? (

@@ -97,7 +97,7 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
-      className="raised mx-auto mt-[14vh] w-[680px] max-w-[calc(100vw-24px)] overflow-hidden rounded-panel p-0 text-ink backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-pop max-md:mt-3"
+      className="raised mx-auto mt-[14vh] w-[42.5rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-panel p-0 text-ink backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-pop max-md:mt-3"
     >
       {open && <PaletteBody onClose={onClose} />}
     </dialog>
@@ -180,7 +180,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="m-3 flex h-16 items-center gap-3.5 rounded-field bg-s2 px-5">
-        <MagnifyingGlassIcon size={22} aria-hidden="true" className="shrink-0 text-ink-2" />
+        <MagnifyingGlassIcon size="1.375rem" aria-hidden="true" className="shrink-0 text-ink-2" />
         <input
           autoFocus
           type="text"
@@ -208,7 +208,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         id={`${id}-list`}
         role="listbox"
         aria-label={t.palette.label}
-        className="max-h-[min(460px,60dvh)] overflow-y-auto px-3 pb-3"
+        className="max-h-[min(28.75rem,60dvh)] overflow-y-auto px-3 pb-3"
       >
         {flat.length === 0 ? (
           <p className="px-4 py-10 text-center text-body text-ink-2">
@@ -242,7 +242,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
                       isSelected ? 'lit' : 'text-ink',
                     )}
                   >
-                    <entry.icon size={22} aria-hidden="true" className="shrink-0 text-ink-2" />
+                    <entry.icon
+                      size="1.375rem"
+                      aria-hidden="true"
+                      className="shrink-0 text-ink-2"
+                    />
                     <span className="min-w-0 flex-1 truncate text-body font-semibold">
                       {entry.label}
                     </span>
@@ -251,7 +255,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
                         {entry.hint}
                       </span>
                     )}
-                    <CaretRightIcon size={20} aria-hidden="true" className="shrink-0 text-ink-3" />
+                    <CaretRightIcon
+                      size="1.25rem"
+                      aria-hidden="true"
+                      className="shrink-0 text-ink-3"
+                    />
                   </div>
                 )
               })}

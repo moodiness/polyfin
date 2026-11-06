@@ -229,7 +229,7 @@ export function SecretField({
               className={cx(
                 'h-full min-w-0 flex-1 bg-transparent font-mono text-ink outline-none placeholder:font-sans placeholder:text-ink-3 focus-visible:outline-none',
                 size === 'md'
-                  ? 'px-5.5 text-small placeholder:text-[21px] placeholder:font-medium max-sm:placeholder:text-[19px]'
+                  ? 'px-5.5 text-small placeholder:text-[1.3125rem] placeholder:font-medium max-sm:placeholder:text-[1.1875rem]'
                   : size === 'sm'
                     ? 'px-4.5 text-small placeholder:text-control'
                     : 'px-3.5 text-micro placeholder:text-small',
@@ -306,7 +306,7 @@ function StatusLine({
     <p id={id} className="flex items-center gap-2 text-small text-ink-2">
       {tone && (
         <Glyph
-          size={20}
+          size="1.25rem"
           aria-hidden="true"
           className={cx('shrink-0', tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : '')}
         />

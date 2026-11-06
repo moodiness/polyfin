@@ -377,7 +377,7 @@ function DestinationModal({
               value={kind}
               options={kinds.map((value) => ({ value, label: text.kinds[value] }))}
               onValue={change(setKind)}
-              className="max-w-xs"
+              className="max-w-[23.75rem]"
             />
           </Field>
         )}

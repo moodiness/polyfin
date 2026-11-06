@@ -35,13 +35,13 @@ export function FigureTile({
     <div
       className={cx(
         'min-w-0',
-        !inPanel && 'rounded-row bg-s1 px-6 pt-[22px] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
+        !inPanel && 'rounded-row bg-s1 px-6 pt-[1.375rem] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
         className,
       )}
     >
       <p
         className={cx(
-          'figures text-[44px] leading-none font-[650] tracking-[-0.02em] max-md:text-[36px]',
+          'figures text-[2.75rem] leading-none font-[650] tracking-[-0.02em] max-md:text-[2.25rem]',
           tone === 'ok' && 'text-ok',
           tone === 'warn' && 'text-warn',
           tone === 'danger' && 'text-danger',
@@ -49,12 +49,12 @@ export function FigureTile({
       >
         {value}
         {after !== undefined && (
-          <span className="ml-1.5 text-[19px] font-medium tracking-normal text-ink-3 max-md:text-[17px]">
+          <span className="ml-1.5 text-[1.1875rem] font-medium tracking-normal text-ink-3 max-md:text-[1.0625rem]">
             {after}
           </span>
         )}
       </p>
-      <p className="mt-2.5 text-[17px] text-ink-2 max-md:text-[16px]">{label}</p>
+      <p className="mt-2.5 text-[1.0625rem] text-ink-2 max-md:text-[1rem]">{label}</p>
     </div>
   )
 }

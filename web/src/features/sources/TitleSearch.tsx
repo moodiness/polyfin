@@ -53,7 +53,7 @@ export default function TitleSearch({
   return (
     <section aria-label={text.searchLabel(path)} className="mt-3 rounded-row bg-s2 p-5 max-md:p-4">
       <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-2">
-        <Field label={text.searchQuery} className="min-w-[180px] flex-1">
+        <Field label={text.searchQuery} className="min-w-[11.25rem] flex-1">
           <TextInput
             value={query}
             onValue={setQuery}
@@ -69,7 +69,7 @@ export default function TitleSearch({
             inputMode="numeric"
             autoComplete="off"
             size="sm"
-            className="w-[80px]"
+            className="w-[5rem]"
           />
         </Field>
         <Button
@@ -150,7 +150,7 @@ function TitleChoice({
           aria-hidden="true"
           className="grid aspect-[2/3] w-8 shrink-0 place-items-center rounded-check bg-s2 text-ink-3"
         >
-          <KindIcon size={14} />
+          <KindIcon size="0.875rem" />
         </span>
       )}
       <span className="min-w-0">

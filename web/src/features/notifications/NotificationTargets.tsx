@@ -437,7 +437,7 @@ function TargetModal({
                 setKind(value)
                 setSwitched(false)
               })}
-              className="max-w-xs"
+              className="max-w-[23.75rem]"
             />
           </Field>
         )}
@@ -510,7 +510,7 @@ function TargetModal({
             onValue={change(setPerMinute)}
             inputMode="numeric"
             maxLength={2}
-            className="max-w-[8rem]"
+            className="max-w-[9.5rem]"
           />
         </Field>
         <Field
@@ -523,7 +523,7 @@ function TargetModal({
             onValue={change(setGroupMinutes)}
             inputMode="numeric"
             maxLength={4}
-            className="max-w-[8rem]"
+            className="max-w-[9.5rem]"
           />
         </Field>
         <Checkbox label={text.enabled} checked={enabled} onChange={change(setEnabled)} />

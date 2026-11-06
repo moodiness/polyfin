@@ -33,10 +33,10 @@ import { ProblemCount, topControl } from './shellParts'
 
 /** The rows of the menu's foot: the account's pages, the web player, the language, signing out. */
 const rowClass =
-  'focus-lit flex min-h-14 w-full cursor-pointer items-center gap-3.5 rounded-choice px-3 text-left text-[19px] text-ink hover:bg-s1 [--lift:1.012] disabled:cursor-not-allowed disabled:opacity-45'
+  'focus-lit flex min-h-14 w-full cursor-pointer items-center gap-3.5 rounded-choice px-3 text-left text-[1.1875rem] text-ink hover:bg-s1 [--lift:1.012] disabled:cursor-not-allowed disabled:opacity-45'
 
 function RowIcon({ icon: Glyph }: { icon: Icon }) {
-  return <Glyph size={22} aria-hidden="true" className="shrink-0 text-ink-2" />
+  return <Glyph size="1.375rem" aria-hidden="true" className="shrink-0 text-ink-2" />
 }
 
 /** The pages under an area, as the menu lists them: Content's and System's, Settings' sections. */
@@ -104,7 +104,7 @@ export function MobileMenu({
         onClick={() => setOpen(true)}
         className={cx(topControl, 'size-12 justify-center')}
       >
-        <ListIcon size={22} aria-hidden="true" />
+        <ListIcon size="1.375rem" aria-hidden="true" />
       </button>
       <dialog
         ref={dialog}
@@ -120,12 +120,12 @@ export function MobileMenu({
         className="m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto overscroll-contain bg-bg bg-[radial-gradient(600px_400px_at_0%_0%,rgb(76_63_217/0.22),transparent_70%)] p-0 text-ink backdrop:bg-bg open:animate-fade"
       >
         {open && (
-          <div className="px-5 pt-[18px] pb-10">
-            <div className="mb-4 flex h-[60px] items-center justify-between gap-3">
+          <div className="px-5 pt-[1.125rem] pb-10">
+            <div className="mb-4 flex h-[3.75rem] items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3.5">
                 <Avatar name={user.name} image={userImageUrl(user)} size="md" />
                 <div className="min-w-0">
-                  <p className="truncate text-[19px] font-semibold">{user.name}</p>
+                  <p className="truncate text-[1.1875rem] font-semibold">{user.name}</p>
                   <p className="text-micro text-ink-3">
                     {user.isAdministrator ? t.nav.administrator : t.nav.member}
                   </p>
@@ -138,7 +138,7 @@ export function MobileMenu({
                 onClick={() => setOpen(false)}
                 className={cx(topControl, 'size-12 justify-center')}
               >
-                <XIcon size={22} aria-hidden="true" />
+                <XIcon size="1.375rem" aria-hidden="true" />
               </button>
             </div>
             <button
@@ -149,10 +149,14 @@ export function MobileMenu({
               }}
               className={cx(
                 topControl,
-                'mb-3.5 h-[52px] w-full gap-3 px-5 text-control text-ink-3 [--lift:1.02]',
+                'mb-3.5 h-[3.25rem] w-full gap-3 px-5 text-control text-ink-3 [--lift:1.02]',
               )}
             >
-              <MagnifyingGlassIcon size={22} aria-hidden="true" className="shrink-0 text-ink-2" />
+              <MagnifyingGlassIcon
+                size="1.375rem"
+                aria-hidden="true"
+                className="shrink-0 text-ink-2"
+              />
               <span className="truncate">{t.palette.placeholder}</span>
               <span className="sr-only">{t.nav.search}</span>
             </button>
@@ -167,7 +171,7 @@ export function MobileMenu({
                 />
               ))}
             </nav>
-            <div className="mt-[18px] flex flex-col pt-[18px] shadow-[inset_0_1px_0] shadow-line-2">
+            <div className="mt-[1.125rem] flex flex-col pt-[1.125rem] shadow-[inset_0_1px_0] shadow-line-2">
               {user.isAdministrator &&
                 accountPages.map((page: NavPage) => (
                   <Link
@@ -193,7 +197,7 @@ export function MobileMenu({
                       {t.nav.webPlayer}
                       <span className="sr-only">{t.nav.webPlayerHint}</span>
                       <ArrowSquareOutIcon
-                        size={18}
+                        size="1.125rem"
                         aria-hidden="true"
                         className="ml-auto shrink-0 text-ink-3"
                       />
@@ -201,16 +205,16 @@ export function MobileMenu({
                   )}
                 </a>
               )}
-              <div className="flex min-h-14 flex-wrap items-center gap-x-3.5 gap-y-2 px-3 py-1.5 text-[19px]">
+              <div className="flex min-h-14 flex-wrap items-center gap-x-3.5 gap-y-2 px-3 py-1.5 text-[1.1875rem]">
                 <RowIcon icon={GlobeIcon} />
                 <span className="mr-auto">{t.nav.language}</span>
-                <LanguageSwitch className="w-[184px]" />
+                <LanguageSwitch className="w-[11.5rem]" />
               </div>
               <a href={repositoryUrl} target="_blank" rel="noopener" className={rowClass}>
                 <RowIcon icon={GithubLogoIcon} />
                 GitHub
                 <ArrowSquareOutIcon
-                  size={18}
+                  size="1.125rem"
                   aria-hidden="true"
                   className="ml-auto shrink-0 text-ink-3"
                 />
@@ -251,11 +255,11 @@ function Area({
         to={section.to}
         data-area
         aria-current={current ? 'page' : undefined}
-        className="focus-lit -mx-1.5 flex min-h-[60px] items-center justify-between gap-3 rounded-[20px] px-[18px] text-[32px] leading-tight font-[650] tracking-[-0.01em] text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.02] aria-[current=page]:lit"
+        className="focus-lit -mx-1.5 flex min-h-[3.75rem] items-center justify-between gap-3 rounded-[1.25rem] px-[1.125rem] text-[2rem] leading-tight font-[650] tracking-[-0.01em] text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.02] aria-[current=page]:lit"
       >
         <span className="min-w-0 break-words">{section.label(t)}</span>
         {section.id === 'system' && (
-          <ProblemCount className="ml-0 h-auto rounded-xl px-2.5 py-1 text-[16px]" />
+          <ProblemCount className="ml-0 h-auto rounded-[0.890625rem] px-2.5 py-1 text-[1rem]" />
         )}
       </Link>
       {pages.length > 0 && (
@@ -265,7 +269,7 @@ function Area({
               key={page.to}
               to={page.to}
               aria-current={isCurrentPage(page, pathname) ? 'page' : undefined}
-              className="focus-lit rounded-[14px] px-3 py-2 text-[18px] text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.04] aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:underline aria-[current=page]:decoration-[3px] aria-[current=page]:underline-offset-[7px]"
+              className="focus-lit rounded-[0.875rem] px-3 py-2 text-[1.125rem] text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.04] aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:underline aria-[current=page]:decoration-[3px] aria-[current=page]:underline-offset-[0.4375rem]"
             >
               {page.label}
             </Link>

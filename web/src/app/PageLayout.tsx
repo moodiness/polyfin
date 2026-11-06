@@ -100,7 +100,7 @@ export function PageLayout({
         <DockSlotContext value={dock}>
           <div className={cx('stagger', className)}>
             {header}
-            <div className="grid items-start gap-[72px] md:grid-cols-[300px_minmax(0,1fr)] max-xl:gap-12 max-lg:md:grid-cols-[232px_minmax(0,1fr)] max-lg:gap-8 max-md:block">
+            <div className="grid items-start gap-[4.5rem] md:grid-cols-[18.75rem_minmax(0,1fr)] max-xl:gap-12 max-lg:md:grid-cols-[14.5rem_minmax(0,1fr)] max-lg:gap-8 max-md:block">
               {/* As tall as the content beside it: the list stays in view while scrolling, and
                   the dock sits at the foot of the column, over the bottom of the screen. */}
               <div className="flex flex-col self-stretch max-md:contents">

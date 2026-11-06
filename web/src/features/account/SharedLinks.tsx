@@ -426,7 +426,7 @@ function TitlePicker({ onPick }: { onPick: (title: AccountTitle) => void }) {
         </Field>
         <Button
           type="submit"
-          className="mt-[26px]"
+          className="mt-[1.625rem]"
           loading={search.isFetching}
           disabled={term.trim() === ''}
         >

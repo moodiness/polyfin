@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/i18n'
-import { cx, searchable } from './cx'
+import { cx, rem, scaledPx, searchable } from './cx'
 import { useField } from './Field'
 import {
   control,
@@ -83,16 +83,20 @@ function ListPopover({
       const viewport = document.documentElement
       const width = viewport.clientWidth
       const height = viewport.clientHeight
-      list.style.minWidth = `${Math.min(box.width, width - 2 * edge)}px`
-      list.style.maxWidth = `${Math.min(width - 2 * edge, Math.max(box.width, 420))}px`
-      list.style.maxHeight = `${maxListHeight}px`
-      const below = height - box.bottom - gap - edge
-      const above = box.top - gap - top - edge
+      // The sizes below follow the density, as the list's classes do.
+      const [listHeight, listGap, listEdge, listWidth] = [maxListHeight, gap, edge, 420].map(
+        scaledPx,
+      )
+      list.style.minWidth = `${Math.min(box.width, width - 2 * listEdge)}px`
+      list.style.maxWidth = `${Math.min(width - 2 * listEdge, Math.max(box.width, listWidth))}px`
+      list.style.maxHeight = `${listHeight}px`
+      const below = height - box.bottom - listGap - listEdge
+      const above = box.top - listGap - top - listEdge
       const up = list.offsetHeight > below && above > below
-      list.style.maxHeight = `${Math.max(0, Math.min(maxListHeight, up ? above : below))}px`
-      list.style.top = up ? 'auto' : `${box.bottom + gap}px`
-      list.style.bottom = up ? `${height - box.top + gap}px` : 'auto'
-      list.style.left = `${Math.max(edge, Math.min(box.left, width - edge - list.offsetWidth))}px`
+      list.style.maxHeight = `${Math.max(0, Math.min(listHeight, up ? above : below))}px`
+      list.style.top = up ? 'auto' : `${box.bottom + listGap}px`
+      list.style.bottom = up ? `${height - box.top + listGap}px` : 'auto'
+      list.style.left = `${Math.max(listEdge, Math.min(box.left, width - listEdge - list.offsetWidth))}px`
     }
     place()
     const resized = new ResizeObserver(place)
@@ -135,9 +139,10 @@ function useActiveInView(list: RefObject<HTMLElement | null>, activeId: string |
     const scroller = list.current
     const item = activeId === undefined ? null : document.getElementById(activeId)
     if (!scroller || !item) return
-    if (item.offsetTop < scroller.scrollTop) scroller.scrollTop = item.offsetTop - gap
+    if (item.offsetTop < scroller.scrollTop) scroller.scrollTop = item.offsetTop - scaledPx(gap)
     else if (item.offsetTop + item.offsetHeight > scroller.scrollTop + scroller.clientHeight) {
-      scroller.scrollTop = item.offsetTop + item.offsetHeight - scroller.clientHeight + gap
+      scroller.scrollTop =
+        item.offsetTop + item.offsetHeight - scroller.clientHeight + scaledPx(gap)
     }
   }, [list, activeId])
 }
@@ -188,8 +193,8 @@ function ListOption({
       className={cx(
         'flex cursor-pointer items-center gap-3 text-ink transition-[background-color,color] duration-300 ease-nuit select-none',
         compact
-          ? 'min-h-11 rounded-[14px] px-3.5 py-1.5 text-small'
-          : 'min-h-[54px] rounded-choice px-4 py-2 text-[18.5px]',
+          ? 'min-h-11 rounded-[0.875rem] px-3.5 py-1.5 text-small'
+          : 'min-h-[3.375rem] rounded-choice px-4 py-2 text-[1.15625rem]',
         'data-active:lit',
         checked && 'font-semibold',
         disabled && 'cursor-not-allowed opacity-45 active:bg-transparent',
@@ -197,7 +202,11 @@ function ListOption({
     >
       <span className="min-w-0 flex-1 break-words">{children}</span>
       {checked && (
-        <CheckIcon size={compact ? 18 : 22} aria-hidden="true" className="shrink-0 text-link" />
+        <CheckIcon
+          size={rem(compact ? 18 : 22)}
+          aria-hidden="true"
+          className="shrink-0 text-link"
+        />
       )}
     </div>
   )
@@ -461,7 +470,7 @@ export function Select<T extends string | number>({
         </span>
       </button>
       <CaretDownIcon
-        size={size === 'compact' ? 16 : 20}
+        size={rem(size === 'compact' ? 16 : 20)}
         aria-hidden="true"
         className={cx(
           'pointer-events-none absolute text-ink-2 transition-transform duration-300 ease-nuit',
@@ -475,7 +484,7 @@ export function Select<T extends string | number>({
             <div className={size === 'compact' ? 'px-1.5 pt-1.5' : 'px-2.5 pt-2.5'}>
               <div className={cx(fieldBox, wellSizes[searchSize].box)}>
                 <MagnifyingGlassIcon
-                  size={wellSizes[searchSize].icon}
+                  size={rem(wellSizes[searchSize].icon)}
                   aria-hidden="true"
                   className={cx('shrink-0 text-ink-2', wellSizes[searchSize].lead)}
                 />

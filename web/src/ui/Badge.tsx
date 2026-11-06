@@ -45,7 +45,7 @@ export function Badge({
         className,
       )}
     >
-      {Glyph && <Glyph size={17} aria-hidden="true" className="shrink-0" />}
+      {Glyph && <Glyph size="1.0625rem" aria-hidden="true" className="shrink-0" />}
       {children}
     </span>
   )
@@ -121,7 +121,7 @@ export function StatusPill({
         aria-hidden="true"
         className={cx('inline-grid size-7 shrink-0 place-items-center rounded-full', bubble)}
       >
-        <Glyph size={17} />
+        <Glyph size="1.0625rem" />
       </span>
       {children}
     </span>

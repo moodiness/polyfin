@@ -141,7 +141,7 @@ export function Bandwidth({
               unit={sent.unit}
               label={
                 <span className="flex items-center gap-1.5">
-                  <ArrowUpIcon size={19} aria-hidden="true" className="shrink-0" />
+                  <ArrowUpIcon size="1.1875rem" aria-hidden="true" className="shrink-0" />
                   {text.sentToApps}
                 </span>
               }
@@ -151,7 +151,7 @@ export function Bandwidth({
               unit={received.unit}
               label={
                 <span className="flex items-center gap-1.5">
-                  <ArrowDownIcon size={19} aria-hidden="true" className="shrink-0" />
+                  <ArrowDownIcon size="1.1875rem" aria-hidden="true" className="shrink-0" />
                   {text.receivedFromSources}
                 </span>
               }
@@ -213,9 +213,9 @@ export function PlayingNow({ onLight }: { onLight: (sessionId: string) => void }
               <div
                 key={grow}
                 style={{ flexGrow: grow }}
-                className="flex basis-0 gap-[30px] rounded-tile bg-s1 px-8 pt-[26px] pb-6 max-md:rounded-[28px] max-md:p-[18px]"
+                className="flex basis-0 gap-[1.875rem] rounded-tile bg-s1 px-8 pt-[1.625rem] pb-6 max-md:rounded-[1.75rem] max-md:p-[1.125rem]"
               >
-                <Skeleton className="aspect-[400/560] w-[clamp(108px,15.5vh,140px)] rounded-[18px] max-md:w-24" />
+                <Skeleton className="aspect-[400/560] w-[clamp(6.75rem,15.5vh,8.75rem)] rounded-[1.125rem] max-md:w-24" />
                 <span className="flex flex-1 flex-col gap-3 pt-2">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-9 w-56 max-w-full" />
@@ -393,7 +393,7 @@ function SessionTile({
       }
       detail={
         mine ? (
-          <dl className="figures mt-1 grid max-w-[440px] grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 rounded-[22px] bg-s1 px-5 py-4 max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:px-4 max-md:[&_dd]:mb-1.5 max-md:[&_dd]:text-left">
+          <dl className="figures mt-1 grid max-w-[27.5rem] grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 rounded-[1.375rem] bg-s1 px-5 py-4 max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:px-4 max-md:[&_dd]:mb-1.5 max-md:[&_dd]:text-left">
             {origin && (
               <>
                 <dt className="text-ink-3">{live.source}</dt>
@@ -437,7 +437,7 @@ function SessionTile({
           )}
           <div
             className={cx(
-              'flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[17px] text-ink-2 max-md:text-micro',
+              'flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[1.0625rem] text-ink-2 max-md:text-micro',
               timed && 'mt-3',
             )}
           >
@@ -459,18 +459,18 @@ function SessionTile({
               <span>{live.remaining(formatSpan(runtime - position, language))}</span>
             ) : null}
           </div>
-          <p className="figures mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[16.5px] text-ink-2 max-md:text-micro">
+          <p className="figures mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[1.03125rem] text-ink-2 max-md:text-micro">
             {session.bandwidth.redirected ? (
               <span>{live.bandwidth.redirected}</span>
             ) : (
               <span className="flex items-center gap-1.5">
-                <ArrowUpIcon size={17} aria-hidden="true" className="shrink-0" />
+                <ArrowUpIcon size="1.0625rem" aria-hidden="true" className="shrink-0" />
                 {live.bandwidth.sent(rateText(session.bandwidth.sent, language))}
               </span>
             )}
             {(session.origin !== null || session.bandwidth.received > 0) && (
               <span className="flex items-center gap-1.5">
-                <ArrowDownIcon size={17} aria-hidden="true" className="shrink-0" />
+                <ArrowDownIcon size="1.0625rem" aria-hidden="true" className="shrink-0" />
                 {live.bandwidth.received(rateText(session.bandwidth.received, language))}
               </span>
             )}
@@ -512,8 +512,8 @@ function SessionTile({
       }
     >
       <p className="flex flex-col gap-0.5">
-        <strong className="flex items-center gap-2 text-[19px] font-semibold text-ink max-md:text-[16.5px]">
-          <DeliveryIcon size={19} aria-hidden="true" className="shrink-0" />
+        <strong className="flex items-center gap-2 text-[1.1875rem] font-semibold text-ink max-md:text-[1.03125rem]">
+          <DeliveryIcon size="1.1875rem" aria-hidden="true" className="shrink-0" />
           {live.delivery[session.delivery] ?? session.delivery}
         </strong>
         <span className="max-w-[46ch]">
@@ -524,7 +524,7 @@ function SessionTile({
       </p>
       {app && !mine && !session.shared && !session.download && (
         <p className="mt-2 flex min-w-0 items-center gap-2">
-          <DeviceMobileIcon size={18} aria-hidden="true" className="shrink-0" />
+          <DeviceMobileIcon size="1.125rem" aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 truncate">{app}</span>
         </p>
       )}
@@ -652,7 +652,7 @@ function HowItPlays({ session }: { session: LiveSession }) {
   ]
 
   return (
-    <div className="rounded-[22px] bg-bg/55 px-5 py-4 text-[16.5px] max-md:px-4 max-md:text-micro">
+    <div className="rounded-[1.375rem] bg-bg/55 px-5 py-4 text-[1.03125rem] max-md:px-4 max-md:text-micro">
       {/* The tile tells this help already when it shows no streams in its place. */}
       {session.delivery !== 'directPlay' && session.sent !== null && (
         <p className="mb-3 text-ink-2">{live.deliveryHelp[session.delivery]}</p>
@@ -710,7 +710,10 @@ function MessageForm({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4 rounded-[22px] bg-bg/55 p-5 max-md:p-4">
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-4 rounded-[1.375rem] bg-bg/55 p-5 max-md:p-4"
+    >
       <Field
         label={live.messageLabel(session.device.name)}
         help={live.messageHint}

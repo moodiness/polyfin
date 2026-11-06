@@ -125,8 +125,8 @@ export function OpenRow({
         aria-describedby={describedBy(helpId, errorId)}
         onClick={() => (onClick ? onClick() : setOpen(!open))}
         className={cx(
-          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[22px] pl-[30px] text-left focus-visible:outline-none disabled:cursor-not-allowed',
-          'min-h-[82px] max-md:min-h-[68px] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
+          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[1.375rem] pl-[1.875rem] text-left focus-visible:outline-none disabled:cursor-not-allowed',
+          'min-h-[5.125rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
         )}
       >
         <span id={labelId} className="min-w-0 flex-1 text-h3 text-ink">
@@ -134,12 +134,12 @@ export function OpenRow({
         </span>
         <span
           id={valueId}
-          className="min-w-0 text-right text-lead break-words text-ink-2 max-md:text-[17px]"
+          className="min-w-0 text-right text-lead break-words text-ink-2 max-md:text-[1.0625rem]"
         >
           {value}
         </span>
         <CaretRightIcon
-          size={24}
+          size="1.5rem"
           aria-hidden="true"
           className={cx(
             'shrink-0 text-ink-3 transition-transform duration-500 ease-nuit',
@@ -148,19 +148,25 @@ export function OpenRow({
         />
       </button>
       {error && (
-        <div className="px-[30px] pb-5 max-md:px-5 max-md:pb-4">
+        <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       )}
       {note !== undefined && (
-        <div className="px-[30px] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">{note}</div>
+        <div className="px-[1.875rem] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">
+          {note}
+        </div>
       )}
       {(help !== undefined || open) && (
-        <div className={lit ? 'px-[30px] pb-[30px] max-md:px-5 max-md:pb-[22px]' : 'sr-only'}>
+        <div
+          className={
+            lit ? 'px-[1.875rem] pb-[1.875rem] max-md:px-5 max-md:pb-[1.375rem]' : 'sr-only'
+          }
+        >
           {help !== undefined && (
             <p
               id={helpId}
-              className="max-w-[66ch] text-[17.5px] leading-[1.58] text-ink-2 max-md:text-[16px]"
+              className="max-w-[66ch] text-[1.09375rem] leading-[1.58] text-ink-2 max-md:text-[1rem]"
             >
               {help}
             </p>

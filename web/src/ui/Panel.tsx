@@ -58,14 +58,14 @@ export function Panel({
   const hasHead = title !== undefined || actions !== undefined || media !== undefined
   const titleId = useId()
   // Inside another panel it keeps its parts and spacing, without a second ground.
-  const pad = nested ? '' : 'px-[30px] max-md:px-5'
+  const pad = nested ? '' : 'px-[1.875rem] max-md:px-5'
   return (
     <PanelContext value>
       <Tag
         aria-labelledby={Tag === 'section' && title !== undefined ? titleId : undefined}
         className={cx(
           'min-w-0',
-          !nested && 'rounded-panel bg-s1 py-7 max-md:rounded-[24px] max-md:py-[22px]',
+          !nested && 'rounded-panel bg-s1 py-7 max-md:rounded-[1.5rem] max-md:py-[1.375rem]',
           className,
         )}
       >
@@ -122,7 +122,7 @@ export function PanelSection({
   return (
     <section
       className={cx(
-        'px-[30px] py-7 first:pt-0 last:pb-0 max-md:px-5 max-md:py-[22px] max-md:first:pt-0 max-md:last:pb-0',
+        'px-[1.875rem] py-7 first:pt-0 last:pb-0 max-md:px-5 max-md:py-[1.375rem] max-md:first:pt-0 max-md:last:pb-0',
         className,
       )}
     >
@@ -148,7 +148,7 @@ export function PanelSection({
  */
 export function PanelFooter({ note, children }: { note?: ReactNode; children: ReactNode }) {
   return (
-    <div className="mt-7 flex flex-wrap items-center gap-3 px-[30px] pt-5 shadow-[inset_0_1px_0] shadow-line-2 max-md:mt-5 max-md:px-5">
+    <div className="mt-7 flex flex-wrap items-center gap-3 px-[1.875rem] pt-5 shadow-[inset_0_1px_0] shadow-line-2 max-md:mt-5 max-md:px-5">
       {note !== undefined && <p className="mr-auto text-small text-ink-2">{note}</p>}
       <div className="ml-auto flex flex-wrap items-center gap-3">{children}</div>
     </div>

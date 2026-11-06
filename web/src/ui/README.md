@@ -6,6 +6,7 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 
 ## The look
 
+- **Sizes are in rem, with one density knob.** The root is 16 px on a phone and 85 % of that from 48rem (768 px) up, so the whole app is 15 % denser on a desktop. The page's frame stays 1440 px at most, margins included (`max-w-page`, in px), so a denser desktop shows more of the page. Every size the file quotes is in design pixels at 16 px to the rem: a phone shows it as is, a desktop at 85 % (a 64 px well is about 54 px there, the 64 px between blocks too). Write classes in rem (`h-16`, `text-[1.3125rem]`, `rounded-[1.5rem]`); keep px for the page's frame, hairlines of 2 px or less, shadows, blurs and the breakpoints of media queries. Sizes set from code go through `rem(px)` (an icon's `size`, an inline style), and code that places or measures in pixels uses `scaledPx(px)`.
 - **Surfaces are fills, never boxes:** `bg-s1` for tiles, rows and panels, `bg-s2` for hover, fields and the current section. No hairlines, and no card inside a card: rows, figures, tables and panels inside a `Panel` drop their own fill.
 - **Radii:** art tiles `rounded-tile` (34), panels `rounded-panel` (28), rows `rounded-row` (24), buttons `rounded-control` (17), choices `rounded-choice` (18), wells `rounded-field` (20).
 - **Type, Figtree:** `text-display` 56 (a greeting), `text-h1` 48 (a page title), `text-h2` 27 (a shelf title), `text-group` 25 (a group of rows), `text-h3` 21 (a row label), `text-lead` 20 (values, ledes), `text-body` 19, `text-control` 18, `text-small` 17 (help), `text-micro` 15.5 (captions, times). `figures` gives tabular figures.
@@ -15,23 +16,23 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 
 ## Page structure
 
-| Need                                                                          | Use                                                                       |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| The frame of a page: title, lede, actions, sub-area words, blocks 64 px apart | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader`             |
-| A greeting at the top of Home                                                 | `PageLayout` with `greeting`                                              |
-| A page split with a list of sections on the left (Settings, a user)           | `PageLayout` with `nav={<SectionNav … />}`; the dock docks under the list |
-| A split page opening on a band (a user, a group, My account)                  | `PageLayout` with `head={<Band … />}` and `nav`                           |
-| A shelf of a page, with a count or a link on the right                        | `Block` (+ `Count`, `TextLink`)                                           |
-| Content that needs a ground of its own: a detail, a figure with its rows      | `Panel`, split by `PanelSection`, closed by `PanelFooter`                 |
-| The sub-area words under a page title (Sources · Libraries · Live TV)         | `Tabs` with links (`words`, the default), passed as PageHeader's `nav`    |
-| Sections inside a page part (a source's Summary, Categories…)                 | `Tabs` with `variant="underline"`                                         |
+| Need                                                                                            | Use                                                                       |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| The frame of a page: title, lede, actions, sub-area words, blocks 64 px apart (54 on a desktop) | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader`             |
+| A greeting at the top of Home                                                                   | `PageLayout` with `greeting`                                              |
+| A page split with a list of sections on the left (Settings, a user)                             | `PageLayout` with `nav={<SectionNav … />}`; the dock docks under the list |
+| A split page opening on a band (a user, a group, My account)                                    | `PageLayout` with `head={<Band … />}` and `nav`                           |
+| A shelf of a page, with a count or a link on the right                                          | `Block` (+ `Count`, `TextLink`)                                           |
+| Content that needs a ground of its own: a detail, a figure with its rows                        | `Panel`, split by `PanelSection`, closed by `PanelFooter`                 |
+| The sub-area words under a page title (Sources · Libraries · Live TV)                           | `Tabs` with links (`words`, the default), passed as PageHeader's `nav`    |
+| Sections inside a page part (a source's Summary, Categories…)                                   | `Tabs` with `variant="underline"`                                         |
 
 ## Rows, tiles and data
 
 | Need                                                                     | Use                                                                                                                                      |
 | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed)                                                        |
-| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows                                                                                                            |
+| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows (48 on a desktop)                                                                                          |
 | A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                                                                                |
 | The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`, `xl` for a band; `ok`, `warn`, `danger`), or `Avatar` for a person                                         |
 | What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with a halo and its tools; `fit="contain"` for logos, `fallback` when there is no poster |

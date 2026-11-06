@@ -491,7 +491,7 @@ export default function UiGallery() {
             <Switch label="Similar titles" checked={off} onChange={setOff} stateText={false} />
           </Specimen>
           <Specimen name="Checkbox: checked, unchecked, indeterminate, disabled, with help and aside">
-            <div className="grid w-full max-w-[640px] grid-cols-2 gap-x-4 gap-y-3 max-md:grid-cols-1">
+            <div className="grid w-full max-w-[40rem] grid-cols-2 gap-x-4 gap-y-3 max-md:grid-cols-1">
               <Checkbox
                 label="France"
                 aside={<span className="figures">1 204</span>}
@@ -565,7 +565,7 @@ export default function UiGallery() {
               toast(t.ui.allSaved)
             }, 900)
           }}
-          className="grid items-start gap-12 md:grid-cols-[300px_minmax(0,1fr)] max-lg:md:grid-cols-[232px_minmax(0,1fr)] max-md:block"
+          className="grid items-start gap-12 md:grid-cols-[18.75rem_minmax(0,1fr)] max-lg:md:grid-cols-[14.5rem_minmax(0,1fr)] max-md:block"
         >
           <DockSlotContext value={dock}>
             <div className="flex flex-col self-stretch max-md:contents">
@@ -710,7 +710,7 @@ export default function UiGallery() {
                   onChange={() => {}}
                 />
               </div>
-              <h3 className="mt-[52px] mb-4 text-group">Access</h3>
+              <h3 className="mt-[3.25rem] mb-4 text-group">Access</h3>
               <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
                 <SettingRow
                   kind="switch"
@@ -738,7 +738,7 @@ export default function UiGallery() {
       </Block>
 
       <Block title="SecretField">
-        <div className="flex max-w-[640px] flex-col gap-8">
+        <div className="flex max-w-[40rem] flex-col gap-8">
           <SecretField
             label="TheIntroDB key (optional)"
             help="Raises TheIntroDB's daily limit. Playback works without it."
@@ -802,7 +802,7 @@ export default function UiGallery() {
                   />
                 }
               >
-                <strong className="block text-[21px] font-bold text-ink">Remux</strong>
+                <strong className="block text-[1.3125rem] font-bold text-ink">Remux</strong>
                 Jellyfin iOS 10.11.0
               </ArtTile>
               <ArtTile
@@ -828,7 +828,7 @@ export default function UiGallery() {
                   />
                 }
               >
-                <strong className="block text-[21px] font-bold text-ink">Direct play</strong>
+                <strong className="block text-[1.3125rem] font-bold text-ink">Direct play</strong>
                 Jellyfin Android TV 10.11.0
               </ArtTile>
             </ArtShelf>
@@ -888,7 +888,7 @@ export default function UiGallery() {
               <FigureTile value={12} unit="Mbps" label="Sent to apps" />
               <FigureTile value={3} tone="warn" label="Without a guide" />
             </div>
-            <Panel title="Bandwidth" className="w-full max-w-[560px]">
+            <Panel title="Bandwidth" className="w-full max-w-[35rem]">
               <div className="grid grid-cols-2 gap-6">
                 <FigureTile value={12} unit="Mbps" label="Sent to apps" />
                 <FigureTile value={54} unit="Mbps" label="Received from sources" />
@@ -948,7 +948,7 @@ export default function UiGallery() {
           <Specimen name="Skeleton, SkeletonText, SkeletonRows">
             <div className="flex w-full flex-col gap-4">
               <Skeleton className="h-6 w-48" />
-              <SkeletonText lines={3} className="max-w-md" />
+              <SkeletonText lines={3} className="max-w-[33.25rem]" />
               <SkeletonRows rows={2} />
             </div>
           </Specimen>
@@ -958,7 +958,7 @@ export default function UiGallery() {
       <Block title="Progress, avatars, keys, tooltip">
         <div className="flex flex-col gap-5">
           <Specimen name="ProgressBar: playback, accent, neutral, warn, sizes">
-            <div className="flex w-full max-w-[520px] flex-col gap-4">
+            <div className="flex w-full max-w-[32.5rem] flex-col gap-4">
               <ProgressBar
                 value={0.3677}
                 variant="playback"
@@ -992,7 +992,7 @@ export default function UiGallery() {
       </Block>
 
       <Block title="Rows" count={3} aside={<TextLink to="/system/logs">Open the log</TextLink>}>
-        <div className="grid grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-8 max-lg:grid-cols-1">
+        <div className="grid grid-cols-[minmax(0,26.25rem)_minmax(0,1fr)] gap-8 max-lg:grid-cols-1">
           <Specimen name="RowList separate: buttons, the open one lit (aria-current)">
             <RowList variant="separate" aria-label="Sources" className="w-full">
               <Row

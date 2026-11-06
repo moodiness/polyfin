@@ -29,7 +29,8 @@ const methodIndex: Record<PlayMethod, number> = {
 }
 
 /** A chart's ground: a tile with no border. */
-const tile = 'rounded-panel bg-s1 px-[30px] py-7 max-md:rounded-[24px] max-md:px-5 max-md:py-[22px]'
+const tile =
+  'rounded-panel bg-s1 px-[1.875rem] py-7 max-md:rounded-[1.5rem] max-md:px-5 max-md:py-[1.375rem]'
 
 export type BarItem = { key: string; label: string; detail: string; value: number }
 
@@ -73,7 +74,7 @@ export function TimeChart({ columns, label }: { columns: readonly TimeColumn[]; 
     columns.length > 1 ? [0, Math.floor((columns.length - 1) / 2), columns.length - 1] : [0]
   return (
     <figure aria-label={label} className={tile}>
-      <div className="flex h-48 items-end gap-[3px] max-md:h-40 max-md:gap-px" role="list">
+      <div className="flex h-48 items-end gap-[0.1875rem] max-md:h-40 max-md:gap-px" role="list">
         {columns.map((column) => {
           const text = t.statistics.bar(column.label, formatSpan(column.played, language))
           return (
@@ -82,7 +83,7 @@ export function TimeChart({ columns, label }: { columns: readonly TimeColumn[]; 
               role="listitem"
               title={text}
               aria-label={text}
-              className="flex h-full min-w-0 flex-1 flex-col-reverse overflow-hidden rounded-t-[4px] hover:bg-s2"
+              className="flex h-full min-w-0 flex-1 flex-col-reverse overflow-hidden rounded-t-[0.25rem] hover:bg-s2"
             >
               {column.parts.map((part) => (
                 <div
@@ -122,7 +123,7 @@ export function MethodShare({
   const percent = new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 })
   return (
     <div className={tile}>
-      <div className="flex h-4 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
+      <div className="flex h-4 gap-[0.1875rem] overflow-hidden rounded-full" aria-hidden="true">
         {methods.map((m) => (
           <div
             key={m.method}
@@ -170,8 +171,8 @@ export function HourGrid({ hours, label }: { hours: readonly number[]; label: st
     <figure aria-label={label} className={tile}>
       <div ref={scroller} className="scroll-fade overflow-x-auto">
         <div
-          className="grid min-w-[620px] gap-1"
-          style={{ gridTemplateColumns: '3.5rem repeat(24, minmax(0, 1fr))' }}
+          className="grid min-w-[38.75rem] gap-1"
+          style={{ gridTemplateColumns: '4.15625rem repeat(24, minmax(0, 1fr))' }}
         >
           {days.map((day, row) => (
             <div key={day} className="contents">
@@ -189,7 +190,7 @@ export function HourGrid({ hours, label }: { hours: readonly number[]; label: st
                     title={text}
                     aria-label={text}
                     role="img"
-                    className="h-5 rounded-[5px] bg-s3"
+                    className="h-5 rounded-[0.3125rem] bg-s3"
                     style={
                       played > 0
                         ? {

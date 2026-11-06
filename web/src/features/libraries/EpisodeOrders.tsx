@@ -107,9 +107,9 @@ export default function EpisodeOrders() {
       <form
         onSubmit={submit}
         noValidate
-        className="mt-6 flex max-w-[720px] flex-wrap items-end gap-3"
+        className="mt-6 flex max-w-[45rem] flex-wrap items-end gap-3"
       >
-        <Field label={e.search} className="min-w-0 flex-[1_1_240px]">
+        <Field label={e.search} className="min-w-0 flex-[1_1_15rem]">
           <TextInput
             icon={MagnifyingGlassIcon}
             value={query}
@@ -122,7 +122,7 @@ export default function EpisodeOrders() {
         </Button>
       </form>
       {asked !== '' && (
-        <div className="mt-4 max-w-[720px]">
+        <div className="mt-4 max-w-[45rem]">
           {found.isPending ? (
             <SkeletonRows rows={2} label={e.searching} />
           ) : found.isError ? (

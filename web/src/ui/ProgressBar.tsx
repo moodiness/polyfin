@@ -95,10 +95,10 @@ export function Avatar({
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? '?'
   const box = cx(
     'shrink-0 rounded-full',
-    size === 'sm' && 'size-8 text-[15px]',
-    size === 'md' && 'size-11 text-[19px]',
-    size === 'lg' && 'size-14 text-[23px]',
-    size === 'xl' && 'size-24 text-[40px]',
+    size === 'sm' && 'size-8 text-[0.9375rem]',
+    size === 'md' && 'size-11 text-[1.1875rem]',
+    size === 'lg' && 'size-14 text-[1.4375rem]',
+    size === 'xl' && 'size-24 text-[2.5rem]',
     className,
   )
   if (image !== undefined && failed !== image) {

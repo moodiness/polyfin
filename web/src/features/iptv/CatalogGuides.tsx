@@ -75,7 +75,7 @@ export default function CatalogGuides({
       <div role="status" aria-label={t.common.loading} className="space-y-12">
         <div className="grid grid-cols-4 gap-2.5 max-md:grid-cols-2">
           {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-[124px] rounded-row" />
+            <Skeleton key={index} className="h-[7.75rem] rounded-row" />
           ))}
         </div>
         <SkeletonRows rows={2} />
@@ -229,7 +229,7 @@ function GuideList({
               return (
                 <li
                   key={entry.kind === 'kept' ? entry.guide.id : entry.key}
-                  className="flex min-h-14 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-[18px] bg-s1 py-2 pr-2 pl-5 max-sm:pl-4"
+                  className="flex min-h-14 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-[1.125rem] bg-s1 py-2 pr-2 pl-5 max-sm:pl-4"
                 >
                   <span className="figures w-5 shrink-0 text-right text-small text-ink-3">
                     {index + 1}
@@ -291,7 +291,7 @@ function GuideList({
           </Field>
           <Button
             icon={PlusIcon}
-            className="mt-[34px] max-sm:mt-0"
+            className="mt-[2.125rem] max-sm:mt-0"
             disabled={url.trim() === '' || full}
             onClick={add}
           >

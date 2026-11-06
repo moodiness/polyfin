@@ -37,7 +37,7 @@ export function PageHeader({
 }) {
   const titleClass = cx(
     'min-w-0 break-words text-ink',
-    greeting ? 'text-display max-md:text-[36px]' : 'text-h1 max-md:text-[36px]',
+    greeting ? 'text-display max-md:text-[2.25rem]' : 'text-h1 max-md:text-[2.25rem]',
   )
   return (
     <header className={cx('mb-12 max-md:mb-8', className)}>
@@ -47,7 +47,7 @@ export function PageHeader({
           className="group focus-lit mb-3 -ml-3 inline-flex items-center gap-2 rounded-control px-3 py-1.5 text-small font-medium text-ink-2 hover:bg-s1 hover:text-ink"
         >
           <ArrowLeftIcon
-            size={18}
+            size="1.125rem"
             aria-hidden="true"
             className="transition-transform duration-300 ease-nuit group-hover:-translate-x-0.5"
           />
@@ -67,8 +67,10 @@ export function PageHeader({
           {lede !== undefined && (
             <p
               className={cx(
-                'max-w-[62ch] text-ink-2 max-md:text-[17.5px]',
-                greeting ? 'mt-2 text-[23px] max-md:text-[19px]' : 'mt-2.5 text-lead',
+                'max-w-[62ch] text-ink-2',
+                greeting
+                  ? 'mt-2 text-[1.4375rem] max-md:text-[1.1875rem]'
+                  : 'mt-2.5 text-lead max-md:text-[1.09375rem]',
               )}
             >
               {lede}
@@ -80,7 +82,7 @@ export function PageHeader({
           <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">{actions}</div>
         )}
       </div>
-      {nav !== undefined && <div className="mt-[18px] max-md:mt-3.5">{nav}</div>}
+      {nav !== undefined && <div className="mt-[1.125rem] max-md:mt-3.5">{nav}</div>}
     </header>
   )
 }
@@ -107,7 +109,7 @@ export function Block({
   const id = useId()
   return (
     <section aria-labelledby={id} className={className}>
-      <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 max-md:mb-3.5">
+      <div className="mb-[1.125rem] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 max-md:mb-3.5">
         <h2 id={id} className="flex items-center gap-3 text-h2 text-ink">
           {title}
           {count !== undefined && <Count>{count}</Count>}
@@ -141,14 +143,14 @@ export function TextLink({
     <Link
       to={to}
       className={cx(
-        'group focus-lit inline-flex items-center gap-1.5 rounded-[12px] px-3 py-1.5 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
+        'group focus-lit inline-flex items-center gap-1.5 rounded-[0.75rem] px-3 py-1.5 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
         className,
       )}
     >
       {children}
       {arrow && (
         <CaretRightIcon
-          size={18}
+          size="1.125rem"
           aria-hidden="true"
           className="transition-transform duration-300 ease-nuit group-hover:translate-x-0.5"
         />

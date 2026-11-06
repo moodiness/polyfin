@@ -195,7 +195,7 @@ export default function ConversionSection(api: SectionFormApi) {
             />
           )}
         <PlainRow anchor="detected-hardware">
-          <h4 className="text-h3 text-ink max-md:text-[18px]">{c.detected}</h4>
+          <h4 className="text-h3 text-ink max-md:text-[1.125rem]">{c.detected}</h4>
           <dl className="mt-3.5 grid gap-1.5 text-small">
             {gpu === null ? (
               <div className="rounded-row bg-s2 px-4 py-3 text-ink-2">{c.noGpu}</div>
@@ -250,7 +250,9 @@ export default function ConversionSection(api: SectionFormApi) {
         </PlainRow>
         <PlainRow anchor="hardware-decoding">
           <fieldset aria-describedby="hardware-decoding-help">
-            <legend className="text-h3 text-ink max-md:text-[18px]">{c.hardwareDecoding}</legend>
+            <legend className="text-h3 text-ink max-md:text-[1.125rem]">
+              {c.hardwareDecoding}
+            </legend>
             <p id="hardware-decoding-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
               {gpu === null ? c.hardwareDecodingNoGpu : c.hardwareDecodingHelp}
             </p>

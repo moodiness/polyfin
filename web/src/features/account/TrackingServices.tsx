@@ -387,7 +387,7 @@ function ServiceRow({
               <div className="flex flex-wrap items-center gap-3">
                 <p
                   aria-label={text.codeLabel}
-                  className="rounded-field bg-s3 px-5 py-2 font-mono text-[26px] font-semibold tracking-[0.2em] text-ink select-all"
+                  className="rounded-field bg-s3 px-5 py-2 font-mono text-[1.625rem] font-semibold tracking-[0.2em] text-ink select-all"
                 >
                   {code.userCode}
                 </p>
@@ -503,8 +503,8 @@ function ServiceRow({
     <li
       aria-labelledby={headingId}
       className={cx(
-        'grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-x-4 rounded-row bg-s1 px-6 py-5',
-        'max-sm:grid-cols-[40px_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4 max-sm:py-[18px]',
+        'grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-4 rounded-row bg-s1 px-6 py-5',
+        'max-sm:grid-cols-[2.5rem_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4 max-sm:py-[1.125rem]',
       )}
     >
       {service.available ? (
@@ -512,7 +512,7 @@ function ServiceRow({
       ) : (
         <span
           aria-hidden="true"
-          className="inline-grid size-10 place-items-center rounded-[14px] bg-s3 text-small font-semibold text-ink-3"
+          className="inline-grid size-10 place-items-center rounded-[0.875rem] bg-s3 text-small font-semibold text-ink-3"
         >
           {monograms[service.service]}
         </span>
@@ -757,7 +757,7 @@ function HistoryImport({
         <div className="flex items-center justify-between gap-4 rounded-row bg-s2 px-6 py-5 max-sm:flex-col max-sm:items-start max-sm:px-4">
           <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
             <ClockCounterClockwiseIcon
-              size={16}
+              size="1rem"
               aria-hidden="true"
               className="mt-0.5 shrink-0 text-ink-3"
             />

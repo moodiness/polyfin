@@ -1,7 +1,7 @@
 import type { Icon } from '@phosphor-icons/react'
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 import { Spinner } from './Spinner'
 
 /**
@@ -64,9 +64,13 @@ function Content({
   const glyph = size === 'sm' ? 18 : 21
   return (
     <>
-      {loading ? <Spinner size={glyph} /> : Before && <Before size={glyph} aria-hidden="true" />}
+      {loading ? (
+        <Spinner size={glyph} />
+      ) : (
+        Before && <Before size={rem(glyph)} aria-hidden="true" />
+      )}
       {children}
-      {After && <After size={glyph} aria-hidden="true" />}
+      {After && <After size={rem(glyph)} aria-hidden="true" />}
     </>
   )
 }
@@ -197,7 +201,7 @@ export function IconButton({
       className={cx(
         'inline-grid shrink-0 cursor-pointer place-items-center text-ink-2 focus-lit [--lift:1.06]',
         'hover:bg-s2 hover:text-ink aria-pressed:text-link disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-2',
-        size === 'md' ? 'size-11 rounded-control' : 'size-9 rounded-[14px]',
+        size === 'md' ? 'size-11 rounded-control' : 'size-9 rounded-[0.875rem]',
         danger && 'hover:bg-danger/14 hover:text-danger',
         className,
       )}
@@ -206,7 +210,7 @@ export function IconButton({
       {loading ? (
         <Spinner size={size === 'md' ? 22 : 19} />
       ) : (
-        <Glyph size={size === 'md' ? 22 : 19} aria-hidden="true" />
+        <Glyph size={rem(size === 'md' ? 22 : 19)} aria-hidden="true" />
       )}
     </button>
   )

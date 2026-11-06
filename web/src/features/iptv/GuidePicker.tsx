@@ -65,7 +65,7 @@ export default function GuidePicker({
         </Button>
       </div>
       <div className="flex flex-wrap gap-2.5">
-        <Field label={text.search} hideLabel className="min-w-48 flex-[2_1_16rem]">
+        <Field label={text.search} hideLabel className="min-w-48 flex-[2_1_19rem]">
           <TextInput
             type="search"
             size="compact"
@@ -80,7 +80,7 @@ export default function GuidePicker({
             }}
           />
         </Field>
-        <Field label={text.guide} hideLabel className="min-w-48 flex-[1_1_12rem]">
+        <Field label={text.guide} hideLabel className="min-w-48 flex-[1_1_14.25rem]">
           <Select
             size="compact"
             value={guide}
@@ -122,7 +122,7 @@ export default function GuidePicker({
             return (
               <li
                 key={`${channel.guideId}:${channel.id}`}
-                className="flex min-w-0 items-start gap-3 rounded-[16px] px-3 py-2.5 transition-colors duration-300 ease-nuit hover:bg-s2"
+                className="flex min-w-0 items-start gap-3 rounded-[1rem] px-3 py-2.5 transition-colors duration-300 ease-nuit hover:bg-s2"
               >
                 <GuideIcon icon={channel.icon} name={channel.name} />
                 <div className="min-w-0 flex-1">
@@ -173,7 +173,7 @@ export default function GuidePicker({
 
 function GuideIcon({ icon, name }: { icon: string | null; name: string }) {
   const [failed, setFailed] = useState(false)
-  const frame = 'size-9 shrink-0 overflow-hidden rounded-[12px] bg-s2'
+  const frame = 'size-9 shrink-0 overflow-hidden rounded-[0.75rem] bg-s2'
   if (!icon || failed) {
     return (
       <span

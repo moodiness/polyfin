@@ -23,7 +23,7 @@ export function DeadEnd({
           to="/"
           className="lit focus-lit inline-flex h-13 items-center gap-2.5 rounded-control px-5.5 text-control font-[620] whitespace-nowrap [--lift:1.05] hover:lift"
         >
-          <HouseIcon size={21} aria-hidden="true" />
+          <HouseIcon size="1.3125rem" aria-hidden="true" />
           {home}
         </Link>
       </div>

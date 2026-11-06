@@ -7,7 +7,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import { useI18n } from '@/i18n'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 import { describedBy, useField } from './Field'
 import { IconButton } from './Button'
 
@@ -45,7 +45,7 @@ export const wellSizes: Record<
   md: {
     box: 'h-16 max-sm:h-15',
     min: 'min-h-16 max-sm:min-h-15',
-    text: 'px-5.5 text-[21px] font-medium max-sm:text-[19px]',
+    text: 'px-5.5 text-[1.3125rem] font-medium max-sm:text-[1.1875rem]',
     mono: 'px-5 font-mono text-lead',
     lead: 'ml-5',
     icon: 22,
@@ -63,8 +63,8 @@ export const wellSizes: Record<
     button: 'sm',
   },
   compact: {
-    box: 'h-11 [--well-radius:14px]',
-    min: 'min-h-11 [--well-radius:14px]',
+    box: 'h-11 [--well-radius:0.875rem]',
+    min: 'min-h-11 [--well-radius:0.875rem]',
     text: 'px-3.5 text-small',
     mono: 'px-3.5 font-mono text-micro',
     lead: 'ml-3.5',
@@ -143,7 +143,7 @@ export function TextInput({
     <div className={cx(fieldBox, well.box, className)}>
       {Lead && (
         <Lead
-          size={well.icon}
+          size={rem(well.icon)}
           aria-hidden="true"
           className={cx('shrink-0 text-ink-2', well.lead)}
         />

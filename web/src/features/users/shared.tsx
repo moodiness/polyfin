@@ -16,7 +16,7 @@ import {
 import { SubAreaContext } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
-import { StatusPill, Tabs } from '@/ui'
+import { scaledPx, StatusPill, Tabs } from '@/ui'
 
 /** PageLayout claims the words; there is nothing to show above a page in their place. */
 const noClaim = () => () => {}
@@ -207,7 +207,7 @@ export function useSectionInView(ids: readonly string[], ready: boolean) {
       const sections = ids
         .map((id) => document.getElementById(id))
         .filter((el): el is HTMLElement => el !== null)
-      const line = 140
+      const line = scaledPx(140)
       let found = sections[0]?.id
       for (const section of sections) {
         if (section.getBoundingClientRect().top <= line) found = section.id

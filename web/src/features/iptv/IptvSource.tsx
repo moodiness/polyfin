@@ -111,13 +111,13 @@ export function IptvSource({
 
   return (
     <>
-      <p className="mt-[18px] max-w-[64ch] text-[18.5px] text-ink-2 max-md:text-[16.5px]">
+      <p className="mt-[1.125rem] max-w-[64ch] text-[1.15625rem] text-ink-2 max-md:text-[1.03125rem]">
         {t.lineup.description}
       </p>
       <Tabs
         variant="underline"
         label={t.lineup.sectionsLabel}
-        className="mt-[18px]"
+        className="mt-[1.125rem]"
         items={lineupSections
           .filter((name) => liveTv || !liveSections.has(name))
           .map((name) => ({

@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '@/i18n'
-import { cx, FieldError } from '@/ui'
+import { cx, FieldError, rem } from '@/ui'
 
 const encoder = new TextEncoder()
 
@@ -69,7 +69,7 @@ export default function CodeEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor={id} className="text-h3 text-ink max-md:text-[18px]">
+      <label htmlFor={id} className="text-h3 text-ink max-md:text-[1.125rem]">
         {label}
       </label>
       <p id={`${id}-help`} className="-mt-1.5 max-w-[66ch] text-small text-ink-2">
@@ -77,8 +77,8 @@ export default function CodeEditor({
       </p>
       {children}
       <div
-        // Line height 20px, 20px of padding, 12px for a horizontal scrollbar.
-        style={{ height: rows * 20 + 32 }}
+        // Line height 20px, 20px of padding, 12px for a horizontal scrollbar, in rem.
+        style={{ height: rem(rows * 20 + 32) }}
         // The well (in index.css) lights it while typing and draws the red edge of aria-invalid.
         className="well min-h-24 resize-y items-stretch overflow-hidden font-mono text-small leading-5"
       >

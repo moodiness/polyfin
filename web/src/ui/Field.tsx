@@ -97,7 +97,7 @@ export const fieldLabel = 'text-small font-semibold text-ink-2'
 export function FieldError({ id, children }: { id?: string; children: ReactNode }) {
   return (
     <p id={id} role="alert" className="flex items-start gap-2 text-small font-medium text-danger">
-      <WarningCircleIcon size={20} aria-hidden="true" className="mt-px shrink-0" />
+      <WarningCircleIcon size="1.25rem" aria-hidden="true" className="mt-px shrink-0" />
       <span>{children}</span>
     </p>
   )

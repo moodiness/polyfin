@@ -36,20 +36,20 @@ export type TabsProps = {
 }
 
 const tabStyles = {
-  words: 'px-3.5 pt-2 pb-2.5 text-lead font-semibold max-md:px-2.5 max-md:text-[18px]',
+  words: 'px-3.5 pt-2 pb-2.5 text-lead font-semibold max-md:px-2.5 max-md:text-[1.125rem]',
   underline: 'px-3 pt-1.5 pb-2.5 text-control font-semibold',
 }
 
 // The current word is ink with a bar under it; the others ink-3 until hovered. Focus lights it.
 const tabBase = cx(
-  'relative flex shrink-0 items-center gap-2 rounded-[15px] whitespace-nowrap text-ink-3 focus-lit [--lift:1.04] hover:bg-s1 hover:text-ink',
-  'after:absolute after:inset-x-3.5 after:bottom-0.5 after:h-[3px] after:scale-x-0 after:rounded-full after:bg-current after:transition-transform after:duration-300 after:ease-nuit max-md:after:inset-x-2.5',
+  'relative flex shrink-0 items-center gap-2 rounded-[0.9375rem] whitespace-nowrap text-ink-3 focus-lit [--lift:1.04] hover:bg-s1 hover:text-ink',
+  'after:absolute after:inset-x-3.5 after:bottom-0.5 after:h-[0.1875rem] after:scale-x-0 after:rounded-full after:bg-current after:transition-transform after:duration-300 after:ease-nuit max-md:after:inset-x-2.5',
   'aria-[current=page]:text-ink aria-[current=page]:after:scale-x-100 aria-selected:text-ink aria-selected:after:scale-x-100',
 )
 
 // The words' text lines up with the title above; the padding keeps a lit word's lift in view.
 const railStyles = {
-  words: '-mx-3.5 px-0.5 max-md:-mx-5 max-md:px-[10px]',
+  words: '-mx-3.5 px-0.5 max-md:-mx-5 max-md:px-[0.625rem]',
   underline: '-mx-3',
 }
 

@@ -68,7 +68,7 @@ export function TopBar({ user }: { user: SessionUser }) {
       <div
         className={cx(
           pageFrame,
-          'flex h-[100px] items-center gap-7 pt-[26px] max-[1400px]:gap-5 max-[1180px]:h-[72px] max-[1180px]:gap-2.5 max-[1180px]:pt-3.5',
+          'flex h-[6.25rem] items-center gap-7 pt-[1.625rem] max-[1400px]:gap-5 max-[1180px]:h-[4.5rem] max-[1180px]:gap-2.5 max-[1180px]:pt-3.5',
         )}
       >
         {webClient && inPlace && (
@@ -78,7 +78,7 @@ export function TopBar({ user }: { user: SessionUser }) {
             title={t.nav.backToWebPlayer}
             className={cx(topControl, 'size-12 justify-center bg-transparent min-[1180px]:hidden')}
           >
-            <ArrowLeftIcon size={22} aria-hidden="true" />
+            <ArrowLeftIcon size="1.375rem" aria-hidden="true" />
           </a>
         )}
         <Brand />
@@ -99,11 +99,15 @@ export function TopBar({ user }: { user: SessionUser }) {
             aria-keyshortcuts="Meta+K Control+K /"
             className={cx(
               topControl,
-              'h-[52px] w-[260px] gap-3 px-5 text-control text-ink-3 focus-visible:[--lift:1.03] max-[1400px]:w-[210px]',
-              'max-xl:w-[52px] max-xl:justify-center max-xl:px-0 max-[1180px]:size-12',
+              'h-[3.25rem] w-[16.25rem] gap-3 px-5 text-control text-ink-3 focus-visible:[--lift:1.03] max-[1400px]:w-[13.125rem]',
+              'max-xl:w-[3.25rem] max-xl:justify-center max-xl:px-0 max-[1180px]:size-12',
             )}
           >
-            <MagnifyingGlassIcon size={22} aria-hidden="true" className="shrink-0 text-ink-2" />
+            <MagnifyingGlassIcon
+              size="1.375rem"
+              aria-hidden="true"
+              className="shrink-0 text-ink-2"
+            />
             <span className="max-xl:hidden">{t.nav.search}</span>
             <Kbd className="ml-auto max-xl:hidden">{modKey === '⌘' ? '⌘K' : 'Ctrl K'}</Kbd>
           </button>
@@ -114,12 +118,12 @@ export function TopBar({ user }: { user: SessionUser }) {
                 inPlace ? t.nav.backToWebPlayer : `${t.nav.webPlayer}: ${t.nav.webPlayerHint}`
               }
               title={inPlace ? t.nav.backToWebPlayer : t.nav.webPlayer}
-              className={cx(topControl, 'size-[52px] justify-center max-[1180px]:hidden')}
+              className={cx(topControl, 'size-[3.25rem] justify-center max-[1180px]:hidden')}
             >
               {inPlace ? (
-                <ArrowLeftIcon size={24} aria-hidden="true" />
+                <ArrowLeftIcon size="1.5rem" aria-hidden="true" />
               ) : (
-                <MonitorPlayIcon size={24} aria-hidden="true" />
+                <MonitorPlayIcon size="1.5rem" aria-hidden="true" />
               )}
             </a>
           )}
@@ -143,7 +147,7 @@ function AreaWord({ section, current }: { section: NavSection; current: boolean 
       className={cx(
         'focus-lit group relative flex items-center rounded-choice px-5 pt-2.5 pb-3 text-area whitespace-nowrap text-ink-3 hover:bg-s1 hover:text-ink [--lift:1.05]',
         'max-[1400px]:px-4 max-[1100px]:px-3 max-[1100px]:pt-2 max-[1100px]:pb-2.5',
-        'aria-[current=page]:text-ink aria-[current=page]:after:absolute aria-[current=page]:after:bottom-0.5 aria-[current=page]:after:left-1/2 aria-[current=page]:after:h-1 aria-[current=page]:after:w-[22px] aria-[current=page]:after:-translate-x-1/2 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-current',
+        'aria-[current=page]:text-ink aria-[current=page]:after:absolute aria-[current=page]:after:bottom-0.5 aria-[current=page]:after:left-1/2 aria-[current=page]:after:h-1 aria-[current=page]:after:w-[1.375rem] aria-[current=page]:after:-translate-x-1/2 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-current',
       )}
     >
       {section.label(t)}
@@ -170,7 +174,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
         <button
           {...props}
           aria-label={t.nav.accountOf(user.name)}
-          className="focus-lit flex max-w-[240px] min-w-0 cursor-pointer items-center gap-3 rounded-full py-1 pr-[18px] pl-1 text-[19px] font-semibold text-ink hover:bg-s1 aria-expanded:bg-s1 [--lift:1.04] max-xl:p-1 max-[1180px]:p-0.5"
+          className="focus-lit flex max-w-[15rem] min-w-0 cursor-pointer items-center gap-3 rounded-full py-1 pr-[1.125rem] pl-1 text-[1.1875rem] font-semibold text-ink hover:bg-s1 aria-expanded:bg-s1 [--lift:1.04] max-xl:p-1 max-[1180px]:p-0.5"
         >
           <Avatar name={user.name} image={userImageUrl(user)} size="md" />
           <span className="min-w-0 truncate max-xl:hidden">{user.name}</span>
@@ -180,7 +184,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
       <MenuHeader>
         <Avatar name={user.name} image={userImageUrl(user)} size="md" />
         <div className="min-w-0">
-          <p className="truncate text-[20px] font-semibold text-ink">{user.name}</p>
+          <p className="truncate text-[1.25rem] font-semibold text-ink">{user.name}</p>
           <p className="text-small text-ink-3">
             {user.isAdministrator ? t.nav.administrator : t.nav.member}
           </p>

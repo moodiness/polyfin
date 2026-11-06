@@ -70,7 +70,7 @@ export default function QuickConnectRoute() {
 
   return (
     <PageLayout title={text.title} lede={text.description}>
-      <div className="grid max-w-[880px] gap-6">
+      <div className="grid max-w-[55rem] gap-6">
         {approvedDevice !== null ? (
           <Panel as="div">
             <div className="flex flex-col items-start gap-6">
@@ -86,7 +86,7 @@ export default function QuickConnectRoute() {
           <>
             <Panel as="div">
               {/* The code in one big well, its figures spaced like the device shows them. */}
-              <Field label={text.code} help={text.codeHint} className="max-w-[440px]">
+              <Field label={text.code} help={text.codeHint} className="max-w-[27.5rem]">
                 <TextInput
                   value={code}
                   onValue={(value) => {
@@ -100,7 +100,7 @@ export default function QuickConnectRoute() {
                   placeholder="000000"
                   autoFocus
                   mono
-                  className="h-[88px] max-sm:h-[76px] [&_input]:figures [&_input]:text-[38px] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[30px] max-sm:[&_input]:tracking-[0.24em]"
+                  className="h-[5.5rem] max-sm:h-[4.75rem] [&_input]:figures [&_input]:text-[2.375rem] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[1.875rem] max-sm:[&_input]:tracking-[0.24em]"
                 />
               </Field>
               <ol
@@ -110,11 +110,11 @@ export default function QuickConnectRoute() {
                 {text.steps.map((step, index) => (
                   <li
                     key={step}
-                    className="rounded-[22px] bg-s1 px-5 pt-5 pb-[22px] text-small text-ink-2"
+                    className="rounded-[1.375rem] bg-s1 px-5 pt-5 pb-[1.375rem] text-small text-ink-2"
                   >
                     <span
                       aria-hidden="true"
-                      className="figures mb-3 grid size-[34px] place-items-center rounded-full bg-s3 text-[16px] font-bold text-ink"
+                      className="figures mb-3 grid size-[2.125rem] place-items-center rounded-full bg-s3 text-[1rem] font-bold text-ink"
                     >
                       {index + 1}
                     </span>

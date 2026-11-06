@@ -45,7 +45,7 @@ export default function SegmentSources({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
         {text.label}
       </p>
       <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">
@@ -60,7 +60,7 @@ export default function SegmentSources({
           return (
             <li
               key={source}
-              className="flex min-h-[52px] flex-wrap items-center gap-x-3.5 gap-y-1 rounded-row bg-s2 py-1.5 pr-2.5 pl-3.5"
+              className="flex min-h-[3.25rem] flex-wrap items-center gap-x-3.5 gap-y-1 rounded-row bg-s2 py-1.5 pr-2.5 pl-3.5"
             >
               <span aria-hidden="true" className="figures w-4 text-right text-micro text-ink-3">
                 {index + 1}
@@ -76,7 +76,7 @@ export default function SegmentSources({
                 }
               />
               <span
-                className={`min-w-[8rem] flex-1 truncate text-body font-medium ${on ? 'text-ink' : 'text-ink-3'}`}
+                className={`min-w-[9.5rem] flex-1 truncate text-body font-medium ${on ? 'text-ink' : 'text-ink-3'}`}
               >
                 {sourceNames[source]}
               </span>

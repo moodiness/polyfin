@@ -210,7 +210,7 @@ export function RecentActivity() {
           {[0, 1, 2, 3].map((row) => (
             <div
               key={row}
-              className="grid min-h-16 grid-cols-[84px_36px_minmax(0,1fr)] items-center gap-4 px-4 max-sm:grid-cols-[36px_minmax(0,1fr)] max-sm:px-0"
+              className="grid min-h-16 grid-cols-[5.25rem_2.25rem_minmax(0,1fr)] items-center gap-4 px-4 max-sm:grid-cols-[2.25rem_minmax(0,1fr)] max-sm:px-0"
             >
               <Skeleton className="h-4 w-14 max-sm:hidden" />
               <Skeleton className="size-9 rounded-full" />
@@ -242,7 +242,7 @@ export function RecentActivity() {
           style={height === undefined ? undefined : { height }}
           className={cx(
             'overflow-y-auto overscroll-contain rounded-row scrollbar-thin focus-lit [--lift:1]',
-            height === undefined && 'max-h-[460px] sm:max-h-[600px]',
+            height === undefined && 'max-h-[28.75rem] sm:max-h-[37.5rem]',
           )}
         >
           <ol className="flex flex-col gap-1">
@@ -332,7 +332,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         ? WarningIcon
         : (typeIcons[entry.type] ?? InfoIcon)
   return (
-    <li className="grid min-h-16 grid-cols-[84px_36px_minmax(0,1fr)_auto] items-center gap-4 rounded-[22px] px-4 py-2.5 text-[18px] max-sm:grid-cols-[36px_minmax(0,1fr)] max-sm:items-start max-sm:gap-3 max-sm:px-0 max-sm:text-[16.5px]">
+    <li className="grid min-h-16 grid-cols-[5.25rem_2.25rem_minmax(0,1fr)_auto] items-center gap-4 rounded-[1.375rem] px-4 py-2.5 text-[1.125rem] max-sm:grid-cols-[2.25rem_minmax(0,1fr)] max-sm:items-start max-sm:gap-3 max-sm:px-0 max-sm:text-[1.03125rem]">
       <time
         dateTime={entry.date}
         title={dateTime(entry.date, language)}
@@ -352,7 +352,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       <div className="min-w-0">
         <p className="break-words text-ink">{entry.name}</p>
         {entry.shortOverview !== null && (
-          <p className="mt-0.5 break-words text-[16px] text-ink-3 max-sm:text-micro">
+          <p className="mt-0.5 break-words text-[1rem] text-ink-3 max-sm:text-micro">
             {entry.shortOverview}
           </p>
         )}

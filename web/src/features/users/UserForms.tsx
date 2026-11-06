@@ -121,7 +121,7 @@ function LimitsSection({
 }
 
 /** A tile for what is more than a row (chips, lists to tick), as wide as the rows. */
-const tile = 'min-w-0 rounded-row bg-s1 px-[30px] py-6 max-md:px-5 max-md:py-5'
+const tile = 'min-w-0 rounded-row bg-s1 px-[1.875rem] py-6 max-md:px-5 max-md:py-5'
 
 /** A chip of a list (a genre, a channel) with its button taking it out. */
 function Chip({
@@ -331,7 +331,7 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
           {errorMessage(t, ratings.error)}
         </InlineError>
       ) : ratings.isPending ? (
-        <Skeleton className="h-[82px] rounded-row max-md:h-[68px]" />
+        <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
       ) : (
         <SettingRow<number>
           kind="choice"
@@ -398,7 +398,7 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
       description={t.users.visibleLibrariesHelp}
     >
       {choices.isPending ? (
-        <Skeleton className="h-[82px] rounded-row max-md:h-[68px]" />
+        <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
       ) : choices.isError ? (
         <InlineError onRetry={() => void choices.refetch()} retrying={choices.isFetching}>
           {errorMessage(t, choices.error)}
@@ -471,7 +471,11 @@ export function BlockedGenresSection({ target, id }: { target: LimitsTarget; id:
         )}
         {!readOnly && (
           <div className="flex flex-wrap items-start gap-3">
-            <Field label={t.users.genre} help={t.users.genreHint} className="w-full sm:max-w-sm">
+            <Field
+              label={t.users.genre}
+              help={t.users.genreHint}
+              className="w-full sm:max-w-[28.5rem]"
+            >
               <SuggestInput
                 size="sm"
                 value={typed}
@@ -490,7 +494,7 @@ export function BlockedGenresSection({ target, id }: { target: LimitsTarget; id:
                 }}
               />
             </Field>
-            <Button icon={PlusIcon} className="sm:mt-[30px]" onClick={() => add()}>
+            <Button icon={PlusIcon} className="sm:mt-[1.875rem]" onClick={() => add()}>
               {t.users.addGenre}
             </Button>
           </div>
@@ -644,7 +648,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
                 value={groupFilter}
                 onValue={setGroupFilter}
                 onKeyDown={holdEnter}
-                className="sm:max-w-sm"
+                className="sm:max-w-[28.5rem]"
               />
               <div className="grid max-h-96 gap-x-4 gap-y-1 overflow-y-auto sm:grid-cols-2">
                 {filtered.slice(0, listedChannelGroups).map((group) => (
@@ -714,7 +718,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
                 value={search}
                 onValue={setSearch}
                 onKeyDown={holdEnter}
-                className="sm:max-w-sm"
+                className="sm:max-w-[28.5rem]"
               />
               <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
                 {choices.data.channels.map((channel) => (
@@ -791,7 +795,7 @@ export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: 
             {schedules.map((schedule, index) => (
               // Rows have no identity of their own; they are edited in place.
               <li key={index} className={cx(tile, 'flex flex-wrap items-end gap-3 py-5')}>
-                <Field label={t.users.day} className="min-w-[200px] flex-1">
+                <Field label={t.users.day} className="min-w-[12.5rem] flex-1">
                   <Select<ScheduleDay>
                     size="sm"
                     value={schedule.day}
@@ -803,7 +807,7 @@ export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: 
                   <Field
                     key={field}
                     label={field === 'startHour' ? t.users.from : t.users.to}
-                    className="w-[128px]"
+                    className="w-[8rem]"
                   >
                     <Select
                       size="sm"

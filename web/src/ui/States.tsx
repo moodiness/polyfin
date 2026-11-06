@@ -39,10 +39,10 @@ export function EmptyState({
     >
       {Glyph && (
         <span className="mb-5 inline-grid size-14 place-items-center rounded-full bg-s2 text-ink-2">
-          <Glyph size={28} aria-hidden="true" />
+          <Glyph size="1.75rem" aria-hidden="true" />
         </span>
       )}
-      <p className="text-[22px] leading-tight font-[650] tracking-[-0.005em] text-ink max-sm:text-[19px]">
+      <p className="text-[1.375rem] leading-tight font-[650] tracking-[-0.005em] text-ink max-sm:text-[1.1875rem]">
         {title}
       </p>
       {children !== undefined && (
@@ -62,7 +62,7 @@ export function Skeleton({ className }: { className?: string }) {
     <span
       aria-hidden="true"
       className={cx(
-        'block animate-pulse rounded-[10px] bg-s2 motion-reduce:animate-none',
+        'block animate-pulse rounded-[0.625rem] bg-s2 motion-reduce:animate-none',
         className,
       )}
     />
@@ -147,7 +147,7 @@ export function InlineError({
         aria-hidden="true"
         className="inline-grid size-11 shrink-0 place-items-center rounded-full bg-danger/14 text-danger"
       >
-        <WarningCircleIcon size={22} />
+        <WarningCircleIcon size="1.375rem" />
       </span>
       <p className="min-w-0 flex-1">{children}</p>
       {onRetry && (
@@ -208,7 +208,7 @@ export function Notice({
           bubble,
         )}
       >
-        <Glyph size={22} />
+        <Glyph size="1.375rem" />
       </span>
       <div className="min-w-0 flex-1 basis-48 self-center">{children}</div>
       {action && <div className="shrink-0">{action}</div>}

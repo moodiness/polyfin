@@ -108,7 +108,7 @@ function QuickConnect() {
 
   return (
     <Panel title={text.title} description={text.description} className="lg:px-1.5">
-      <form onSubmit={submit} className="max-w-[360px]">
+      <form onSubmit={submit} className="max-w-[22.5rem]">
         <Field label={text.code} help={text.codeHint}>
           <TextInput
             value={code}
@@ -119,7 +119,7 @@ function QuickConnect() {
             maxLength={longLength}
             placeholder="000000"
             mono
-            className="[&_input]:text-[26px] [&_input]:tracking-[0.32em] max-md:[&_input]:text-[22px]"
+            className="[&_input]:text-[1.625rem] [&_input]:tracking-[0.32em] max-md:[&_input]:text-[1.375rem]"
           />
         </Field>
       </form>
@@ -130,11 +130,11 @@ function QuickConnect() {
         {text.steps.map((step, index) => (
           <li
             key={step}
-            className="min-w-0 rounded-[22px] bg-s1 px-5 pt-5 pb-[22px] text-[17px] text-ink-2 max-md:flex max-md:items-start max-md:gap-3.5 max-md:py-4 max-md:text-[16px]"
+            className="min-w-0 rounded-[1.375rem] bg-s1 px-5 pt-5 pb-[1.375rem] text-[1.0625rem] text-ink-2 max-md:flex max-md:items-start max-md:gap-3.5 max-md:py-4 max-md:text-[1rem]"
           >
             <span
               aria-hidden="true"
-              className="figures mb-3 grid size-[34px] shrink-0 place-items-center rounded-full bg-s2 text-[16px] font-bold text-ink max-md:mb-0"
+              className="figures mb-3 grid size-[2.125rem] shrink-0 place-items-center rounded-full bg-s2 text-[1rem] font-bold text-ink max-md:mb-0"
             >
               {index + 1}
             </span>
@@ -271,7 +271,7 @@ function StatusLine() {
   }
   const ready = status.data.database === 'ready'
   return (
-    <p className="figures mt-[18px] flex flex-wrap items-center gap-x-[22px] gap-y-1.5 px-1.5 text-[16.5px] text-ink-3">
+    <p className="figures mt-[1.125rem] flex flex-wrap items-center gap-x-[1.375rem] gap-y-1.5 px-1.5 text-[1.03125rem] text-ink-3">
       <span className="flex items-center gap-2">
         {t.status.title}
         {t.common.colon}

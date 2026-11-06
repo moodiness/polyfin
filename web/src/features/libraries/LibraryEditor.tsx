@@ -148,7 +148,7 @@ const blockSpacing = '[&>*+*]:mt-block max-md:[&>*+*]:mt-11'
  * and the dock stay close.
  */
 const scrollBox =
-  'max-h-[640px] overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2'
+  'max-h-[40rem] overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2'
 
 /** Above this many catalogs available, their list scrolls in its box. */
 const boxedCatalogs = 12
@@ -210,7 +210,7 @@ function RefreshStatus({ refresh, name }: { refresh: LibraryRefresh | null; name
       return <p className="mt-1.5 text-small text-ink-3">{text.queued}</p>
     case 'running':
       return (
-        <div className="mt-1.5 max-w-[320px]">
+        <div className="mt-1.5 max-w-[20rem]">
           <p className="figures text-small text-ink-3">
             {text.running(figure(refresh.done + refresh.failed), figure(refresh.titles))}
           </p>
@@ -555,19 +555,19 @@ function LibraryForm({
                   {rowDrag.dropBefore === index && (
                     <span
                       aria-hidden="true"
-                      className="absolute inset-x-4 -top-[5px] h-0.5 rounded-full bg-accent"
+                      className="absolute inset-x-4 -top-[0.3125rem] h-0.5 rounded-full bg-accent"
                     />
                   )}
                   {rowDrag.dropBefore === entries.length && index === entries.length - 1 && (
                     <span
                       aria-hidden="true"
-                      className="absolute inset-x-4 -bottom-[5px] h-0.5 rounded-full bg-accent"
+                      className="absolute inset-x-4 -bottom-[0.3125rem] h-0.5 rounded-full bg-accent"
                     />
                   )}
                   <div
                     className={cx(
-                      'grid min-h-20 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 rounded-row py-3.5 pr-[22px] pl-3',
-                      'max-md:min-h-[68px] max-md:grid-cols-[auto_auto_minmax(0,1fr)] max-md:gap-x-3 max-md:py-3 max-md:pr-4 max-md:pl-2',
+                      'grid min-h-20 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 rounded-row py-3.5 pr-[1.375rem] pl-3',
+                      'max-md:min-h-[4.25rem] max-md:grid-cols-[auto_auto_minmax(0,1fr)] max-md:gap-x-3 max-md:py-3 max-md:pr-4 max-md:pl-2',
                       optionsShown || imageShown ? 'bg-s2' : 'bg-s1',
                     )}
                   >
@@ -582,7 +582,7 @@ function LibraryForm({
                         )}
                         {...rowDrag.grip(index)}
                       >
-                        <DotsSixVerticalIcon size={20} />
+                        <DotsSixVerticalIcon size="1.25rem" />
                       </span>
                       <span
                         aria-hidden="true"
@@ -808,7 +808,7 @@ function LibraryForm({
                         />
                       )}
                       {!tv && (music !== undefined || iptv) && (
-                        <div className="px-[30px] pt-1 text-small text-ink-2 max-md:px-5">
+                        <div className="px-[1.875rem] pt-1 text-small text-ink-2 max-md:px-5">
                           {music !== undefined && (
                             <p>{t.libraries.music.help[music] ?? t.libraries.music.help.music}</p>
                           )}
@@ -836,7 +836,7 @@ function LibraryForm({
         <details className="group mt-6">
           <summary className="focus-lit inline-flex cursor-pointer list-none items-center gap-2 rounded-control px-2 py-1.5 text-control font-medium text-ink-2 transition-colors duration-300 ease-nuit hover:text-ink max-md:-mx-2 [&::-webkit-details-marker]:hidden">
             <CaretRightIcon
-              size={18}
+              size="1.125rem"
               aria-hidden="true"
               className="shrink-0 transition-transform duration-300 ease-nuit group-open:rotate-90"
             />
@@ -855,7 +855,7 @@ function LibraryForm({
         ) : (
           <>
             <div className="mb-5 flex flex-wrap items-end gap-3">
-              <div id={ids.filter} className="min-w-0 flex-[1_1_260px] md:max-w-[440px]">
+              <div id={ids.filter} className="min-w-0 flex-[1_1_16.25rem] md:max-w-[27.5rem]">
                 <Field label={t.libraries.filter}>
                   <TextInput
                     type="search"
@@ -868,7 +868,10 @@ function LibraryForm({
                   />
                 </Field>
               </div>
-              <Field label={t.libraries.type} className="min-w-0 flex-[1_1_200px] md:max-w-[280px]">
+              <Field
+                label={t.libraries.type}
+                className="min-w-0 flex-[1_1_12.5rem] md:max-w-[17.5rem]"
+              >
                 <Select
                   size="sm"
                   value={type}
@@ -1045,7 +1048,7 @@ function TvSummary({
       <span className="text-ink-2">{guideSummary(t, language, library)}</span>
       {failing > 0 && (
         <span className="flex items-center gap-1.5 text-warn">
-          <WarningIcon size={18} aria-hidden="true" className="shrink-0" />
+          <WarningIcon size="1.125rem" aria-hidden="true" className="shrink-0" />
           {t.livetv.failing(failing)}
         </span>
       )}
@@ -1055,7 +1058,7 @@ function TvSummary({
         className="focus-lit rounded-control font-medium text-link transition-colors duration-300 ease-nuit hover:text-link-hover"
       >
         {iptv ? t.livetv.lineup : t.livetv.manage}
-        <CaretRightIcon size={16} aria-hidden="true" className="ml-1 inline align-[-2px]" />
+        <CaretRightIcon size="1rem" aria-hidden="true" className="ml-1 inline align-[-2px]" />
       </Link>
     </div>
   )
@@ -1110,7 +1113,7 @@ function MusicKind({ content }: { content: MusicContent | undefined }) {
   if (content === undefined) return null
   return (
     <Badge className="gap-1">
-      <MusicNoteIcon size={14} aria-hidden="true" />
+      <MusicNoteIcon size="0.875rem" aria-hidden="true" />
       {t.libraries.music.library[content] ?? t.libraries.music.library.music}
     </Badge>
   )

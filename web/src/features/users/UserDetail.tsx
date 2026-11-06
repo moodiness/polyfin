@@ -204,7 +204,7 @@ function UserPage({ user }: { user: User }) {
           name={user.name}
           image={userImageUrl(user)}
           size="xl"
-          className="max-md:size-16 max-md:text-[28px]"
+          className="max-md:size-16 max-md:text-[1.75rem]"
         />
       }
       title={user.name}
@@ -321,7 +321,7 @@ function UserPage({ user }: { user: User }) {
 function SavedAtOnce({ children }: { children: ReactNode }) {
   return (
     <span className="flex items-start gap-2.5">
-      <CheckCircleIcon size={20} aria-hidden="true" className="mt-0.5 shrink-0 text-ink-3" />
+      <CheckCircleIcon size="1.25rem" aria-hidden="true" className="mt-0.5 shrink-0 text-ink-3" />
       <span>{children}</span>
     </span>
   )
@@ -720,7 +720,7 @@ function GroupRow({
           onChoose(id === '' ? null : { id, name })
         }}
         aria-label={t.groups.group}
-        className="max-w-[420px]"
+        className="max-w-[26.25rem]"
       />
     </OpenRow>
   )
@@ -795,7 +795,7 @@ function MetadataLanguageSection({ user }: { user: User }) {
   return (
     <PageSection id="metadata-language" title={t.users.metadataLanguageTitle}>
       {languages.isPending ? (
-        <Skeleton className="h-[82px] rounded-row max-md:h-[68px]" />
+        <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
       ) : languages.isError ? (
         <InlineError onRetry={() => void languages.refetch()} retrying={languages.isFetching}>
           {errorMessage(t, languages.error)}
@@ -819,7 +819,7 @@ function MetadataLanguageSection({ user }: { user: User }) {
             }
             disabled={patch.isPending}
             aria-label={t.users.metadataLanguageRow}
-            className="max-w-[420px]"
+            className="max-w-[26.25rem]"
           />
         </OpenRow>
       )}
@@ -846,7 +846,7 @@ function WebThemeSection({ user }: { user: User }) {
   }
 
   let rows
-  if (themes.isPending) rows = <Skeleton className="h-[82px] rounded-row max-md:h-[68px]" />
+  if (themes.isPending) rows = <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
   else if (themes.isError)
     rows = (
       <InlineError onRetry={() => void themes.refetch()} retrying={themes.isFetching}>
@@ -879,7 +879,7 @@ function WebThemeSection({ user }: { user: User }) {
             onValue={(webTheme) => save({ webTheme })}
             disabled={patch.isPending}
             aria-label={t.users.webThemeRow}
-            className="max-w-[420px]"
+            className="max-w-[26.25rem]"
           />
         </OpenRow>
         <SettingRow
@@ -931,7 +931,7 @@ function AudioRegionSection({ user }: { user: User }) {
           }
           disabled={patch.isPending}
           aria-label={t.users.audioRegionRow}
-          className="max-w-[420px]"
+          className="max-w-[26.25rem]"
         />
       </OpenRow>
     </PageSection>

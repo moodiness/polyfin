@@ -69,7 +69,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={toast.id}
-              className="pointer-events-auto flex max-w-[min(560px,100%)] animate-rise items-center gap-3.5 rounded-row py-2.5 pr-2.5 pl-3 text-body text-ink raised"
+              className="pointer-events-auto flex max-w-[min(35rem,100%)] animate-rise items-center gap-3.5 rounded-row py-2.5 pr-2.5 pl-3 text-body text-ink raised"
             >
               <span
                 aria-hidden="true"
@@ -78,7 +78,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   bubbles[toast.tone],
                 )}
               >
-                <Glyph size={22} />
+                <Glyph size="1.375rem" />
               </span>
               <span className="min-w-0 flex-1">{toast.message}</span>
               <button
@@ -86,9 +86,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 aria-label={t.ui.dismiss}
                 title={t.ui.dismiss}
                 onClick={() => dismiss(toast.id)}
-                className="inline-grid size-11 shrink-0 cursor-pointer place-items-center rounded-[14px] text-ink-2 focus-lit hover:bg-s2 hover:text-ink"
+                className="inline-grid size-11 shrink-0 cursor-pointer place-items-center rounded-[0.875rem] text-ink-2 focus-lit hover:bg-s2 hover:text-ink"
               >
-                <XIcon size={20} aria-hidden="true" />
+                <XIcon size="1.25rem" aria-hidden="true" />
               </button>
             </div>
           )

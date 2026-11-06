@@ -115,7 +115,7 @@ export default function StatisticsView({ scope }: { scope: StatisticsScope }) {
       {statistics.isPending ? (
         <div role="status" aria-label={t.common.loading} className="grid gap-2.5 sm:grid-cols-3">
           {[0, 1, 2].map((index) => (
-            <Skeleton key={index} className="h-[118px] rounded-row" />
+            <Skeleton key={index} className="h-[7.375rem] rounded-row" />
           ))}
         </div>
       ) : statistics.isError ? (

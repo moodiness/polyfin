@@ -61,7 +61,7 @@ export default function TasteProfile() {
         </EmptyState>
       ) : (
         <div className="space-y-6">
-          <div className="max-w-lg space-y-2.5">
+          <div className="max-w-[38rem] space-y-2.5">
             <div className="flex items-baseline justify-between gap-4 text-body">
               <span className="text-ink">{text.certainty}</span>
               <span className="figures text-lead font-semibold text-ink">

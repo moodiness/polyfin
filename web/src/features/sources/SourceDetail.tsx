@@ -240,16 +240,16 @@ export function SourceDetail({
 
   return (
     <article aria-labelledby={`source-${addon.id}`} className="min-w-0">
-      <header className="flex items-start gap-[22px] max-md:flex-wrap max-md:gap-3.5">
+      <header className="flex items-start gap-[1.375rem] max-md:flex-wrap max-md:gap-3.5">
         <SourceMark addon={addon} />
         <div className="min-w-0 flex-1">
           <h2
             id={`source-${addon.id}`}
-            className="text-[44px] leading-[1.05] font-[680] tracking-[-0.02em] break-words text-ink max-md:text-[32px]"
+            className="text-[2.75rem] leading-[1.05] font-[680] tracking-[-0.02em] break-words text-ink max-md:text-[2rem]"
           >
             {addon.name}
           </h2>
-          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-control text-ink-2 max-md:text-[16.5px]">
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-control text-ink-2 max-md:text-[1.03125rem]">
             <span>{kindLine}</span>
             {addon.music !== null && <MusicBadge music={addon.music} />}
             <SourceStatus addon={addon} />
@@ -513,15 +513,15 @@ function OrderRow({
   const { t } = useI18n()
   return (
     <div className="rounded-row bg-s1">
-      <div className="flex min-h-[82px] items-center gap-4 py-3.5 pr-3.5 pl-[30px] max-md:min-h-[68px] max-md:gap-2.5 max-md:pr-2 max-md:pl-5">
+      <div className="flex min-h-[5.125rem] items-center gap-4 py-3.5 pr-3.5 pl-[1.875rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:pr-2 max-md:pl-5">
         <span className="min-w-0 flex-1 text-h3 text-ink">{t.sources.order}</span>
-        <span className="figures text-lead text-ink-2 max-md:text-[17px]">
+        <span className="figures text-lead text-ink-2 max-md:text-[1.0625rem]">
           {t.sources.position(index + 1, count)}
         </span>
         <MoveButtons name={name} index={index} count={count} onMove={onMove} />
       </div>
       {error !== undefined && (
-        <div className="px-[30px] pb-5 max-md:px-5 max-md:pb-4">
+        <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
           <FieldError>{error}</FieldError>
         </div>
       )}

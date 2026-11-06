@@ -10,10 +10,10 @@ export function SettingsGroup({ title, children }: { title?: string; children: R
   return (
     <section
       aria-labelledby={title === undefined ? undefined : id}
-      className="mt-[52px] first:mt-10 max-md:mt-9 max-md:first:mt-7"
+      className="mt-[3.25rem] first:mt-10 max-md:mt-9 max-md:first:mt-7"
     >
       {title !== undefined && (
-        <h3 id={id} className="mb-4 text-group text-ink max-md:mb-3 max-md:text-[21px]">
+        <h3 id={id} className="mb-4 text-group text-ink max-md:mb-3 max-md:text-[1.3125rem]">
           {title}
         </h3>
       )}
@@ -40,7 +40,7 @@ export function PlainRow({
     <div
       id={anchor}
       className={cx(
-        'min-w-0 scroll-mt-32 rounded-row bg-s1 px-[30px] py-6 max-md:px-5 max-md:py-5',
+        'min-w-0 scroll-mt-32 rounded-row bg-s1 px-[1.875rem] py-6 max-md:px-5 max-md:py-5',
         'transition-[box-shadow] duration-350 ease-nuit data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
         className,
       )}
@@ -69,7 +69,7 @@ export function ListRows({
       id={anchor}
       className="min-w-0 scroll-mt-32 rounded-row transition-[box-shadow] duration-350 ease-nuit data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45"
     >
-      <p className="mb-4 max-w-[66ch] text-body text-ink-2 max-md:text-[16.5px]">{help}</p>
+      <p className="mb-4 max-w-[66ch] text-body text-ink-2 max-md:text-[1.03125rem]">{help}</p>
       {children}
     </div>
   )
@@ -102,7 +102,7 @@ export function FieldRow({
         error={error}
         aside={aside}
         helpFirst
-        className="[&_label]:text-h3 [&_label]:text-ink max-md:[&_label]:text-[18px]"
+        className="[&_label]:text-h3 [&_label]:text-ink max-md:[&_label]:text-[1.125rem]"
       >
         {children}
       </Field>
@@ -113,7 +113,7 @@ export function FieldRow({
 /** Plain text in a tile (a setup step), outside any control. */
 export function TextRow({ anchor, children }: { anchor: string; children: ReactNode }) {
   return (
-    <PlainRow anchor={anchor} className="text-body text-ink-2 max-md:text-[16.5px]">
+    <PlainRow anchor={anchor} className="text-body text-ink-2 max-md:text-[1.03125rem]">
       {children}
     </PlainRow>
   )

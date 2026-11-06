@@ -173,7 +173,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           </Button>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <Field label={text.search} className="min-w-56 flex-[2_1_14rem]">
+          <Field label={text.search} className="min-w-56 flex-[2_1_16.625rem]">
             <TextInput
               type="search"
               size="compact"
@@ -183,7 +183,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               onValue={(value) => refilter(() => setSearch(value))}
             />
           </Field>
-          <Field label={text.category} className="min-w-48 flex-[1_1_12rem]">
+          <Field label={text.category} className="min-w-48 flex-[1_1_14.25rem]">
             <Select
               size="compact"
               value={category}
@@ -441,7 +441,7 @@ function ChannelRow({
         onDrop()
       }}
       className={cx(
-        'flex min-h-14 min-w-0 items-center gap-3 rounded-[18px] py-1.5 pr-3 pl-4 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_3.5rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-2',
+        'flex min-h-14 min-w-0 items-center gap-3 rounded-[1.125rem] py-1.5 pr-3 pl-4 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_4.15625rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-2',
         dragging && 'opacity-40',
         selected ? 'bg-accent/14' : 'bg-s1 hover:bg-s2',
       )}
@@ -589,7 +589,7 @@ function KeywordBulk({
         <Field
           label={text.label}
           help={text.hint}
-          className="min-w-48 flex-1 max-sm:basis-full sm:max-w-xl"
+          className="min-w-48 flex-1 max-sm:basis-full sm:max-w-[42.75rem]"
         >
           <TextInput
             size="sm"
@@ -605,7 +605,7 @@ function KeywordBulk({
         </Field>
         <Button
           type="submit"
-          className="mt-[34px] max-sm:mt-0"
+          className="mt-[2.125rem] max-sm:mt-0"
           loading={count.isPending}
           disabled={tooShort}
         >

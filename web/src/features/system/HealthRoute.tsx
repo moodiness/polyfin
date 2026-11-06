@@ -161,7 +161,7 @@ function HealthSkeleton() {
         <Skeleton className="mb-5 h-7 w-32" />
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((index) => (
-            <div key={index} className="min-h-[210px] rounded-panel bg-s1 px-[26px] py-6">
+            <div key={index} className="min-h-[13.125rem] rounded-panel bg-s1 px-[1.625rem] py-6">
               <Skeleton className="mb-8 size-9 rounded-full" />
               <SkeletonText lines={3} />
             </div>

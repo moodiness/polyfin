@@ -209,7 +209,7 @@ function Steps({ onDismiss }: { onDismiss: () => void }) {
       }
     >
       <Panel as="div">
-        <p className="text-[21px] font-[650] text-ink max-md:text-[18px]">
+        <p className="text-[1.3125rem] font-[650] text-ink max-md:text-[1.125rem]">
           {text.progress(steps.length - open.length, steps.length)}
         </p>
         {/* A count filling from the left, as the words above say it ("4 of 7 steps done"). */}

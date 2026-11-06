@@ -165,7 +165,7 @@ function ContentFields({
           />
         ))}
         {none && (
-          <div className="px-[30px] pt-2 max-md:px-5">
+          <div className="px-[1.875rem] pt-2 max-md:px-5">
             <FieldError>{text.none}</FieldError>
           </div>
         )}
@@ -433,11 +433,11 @@ function ExclusionPicker({
               {text.noMatch}
             </p>
           ) : (
-            <ul className="mt-3 grid max-h-[30rem] gap-x-8 gap-y-0.5 overflow-y-auto overscroll-contain rounded-row bg-s1 px-5 py-3 max-md:px-4 sm:grid-cols-2">
+            <ul className="mt-3 grid max-h-[35.625rem] gap-x-8 gap-y-0.5 overflow-y-auto overscroll-contain rounded-row bg-s1 px-5 py-3 max-md:px-4 sm:grid-cols-2">
               {listed.map((category) => (
                 <li
                   key={category.key}
-                  className="min-w-0 [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto]"
+                  className="min-w-0 [contain-intrinsic-size:auto_3.265625rem] [content-visibility:auto]"
                 >
                   <Checkbox
                     checked={!set.has(category.key)}

@@ -298,8 +298,8 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
           else setOpen(!open)
         }}
         className={cx(
-          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[22px] pl-[30px] text-left focus-visible:outline-none disabled:cursor-not-allowed',
-          'min-h-[82px] max-md:min-h-[68px] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
+          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[1.375rem] pl-[1.875rem] text-left focus-visible:outline-none disabled:cursor-not-allowed',
+          'min-h-[5.125rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
           props.kind === 'path' && 'max-md:flex-wrap max-md:gap-y-0.5',
         )}
       >
@@ -310,12 +310,12 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
           id={labelId}
           className={cx(
             'min-w-0 flex-1 text-h3 text-ink',
-            props.kind === 'path' && 'max-md:basis-[calc(100%-40px)]',
+            props.kind === 'path' && 'max-md:basis-[calc(100%-2.5rem)]',
           )}
         >
           {label}
           {detail !== undefined && (
-            <span className="mt-0.5 block text-[16.5px] font-[450] tracking-normal text-ink-3 max-md:text-micro">
+            <span className="mt-0.5 block text-[1.03125rem] font-[450] tracking-normal text-ink-3 max-md:text-micro">
               {detail}
             </span>
           )}
@@ -324,14 +324,14 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
           id={valueId}
           className={cx(
             // The value wraps before the label does: it takes 55 % of the row at most.
-            'flex max-w-[55%] min-w-0 flex-wrap items-baseline justify-end gap-x-3 text-right text-lead text-ink-2 max-md:gap-x-2 max-md:text-[17px]',
+            'flex max-w-[55%] min-w-0 flex-wrap items-baseline justify-end gap-x-3 text-right text-lead text-ink-2 max-md:gap-x-2 max-md:text-[1.0625rem]',
             props.kind === 'path' &&
               'figures max-md:order-3 max-md:max-w-none max-md:basis-full max-md:justify-start max-md:text-left',
             isSwitch && 'sr-only',
           )}
         >
           {changed && (
-            <span id={wasId} className="text-[16px] font-medium text-ink-3 max-md:text-[15px]">
+            <span id={wasId} className="text-[1rem] font-medium text-ink-3 max-md:text-[0.9375rem]">
               {t.ui.was(was)}
             </span>
           )}
@@ -348,7 +348,7 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
           </>
         ) : (
           <CaretRightIcon
-            size={24}
+            size="1.5rem"
             aria-hidden="true"
             className={cx(
               'shrink-0 text-ink-3 transition-transform duration-500 ease-nuit',
@@ -359,21 +359,25 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
         )}
       </button>
       {error && (
-        <div className="px-[30px] pb-5 max-md:px-5 max-md:pb-4">
+        <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       )}
       {children !== undefined && (
-        <div className="px-[30px] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">
+        <div className="px-[1.875rem] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">
           {children}
         </div>
       )}
       {(help !== undefined || open) && (
-        <div className={lit ? 'px-[30px] pb-[30px] max-md:px-5 max-md:pb-[22px]' : 'sr-only'}>
+        <div
+          className={
+            lit ? 'px-[1.875rem] pb-[1.875rem] max-md:px-5 max-md:pb-[1.375rem]' : 'sr-only'
+          }
+        >
           {help !== undefined && (
             <p
               id={helpId}
-              className="max-w-[66ch] text-[17.5px] leading-[1.58] text-ink-2 max-md:text-[16px]"
+              className="max-w-[66ch] text-[1.09375rem] leading-[1.58] text-ink-2 max-md:text-[1rem]"
             >
               {help}
             </p>
@@ -389,7 +393,7 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
                   role="radiogroup"
                   aria-labelledby={labelId}
                   onKeyDown={onStripKey}
-                  className="relative -mx-[30px] flex scroll-px-[30px] gap-2 overflow-x-auto px-[30px] pt-2 pb-2.5 scrollbar-none [mask-image:linear-gradient(90deg,transparent_0,#000_30px,#000_calc(100%-90px),transparent)] max-md:-mx-5 max-md:px-5"
+                  className="relative -mx-[1.875rem] flex scroll-px-[1.875rem] gap-2 overflow-x-auto px-[1.875rem] pt-2 pb-2.5 scrollbar-none [mask-image:linear-gradient(90deg,transparent_0,#000_1.875rem,#000_calc(100%-5.625rem),transparent)] max-md:-mx-5 max-md:px-5"
                 >
                   {strip.map((choice) => (
                     <button
@@ -402,11 +406,11 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
                       disabled={choice.disabled}
                       onClick={choice.choose}
                       className={cx(
-                        'figures h-[60px] min-w-[60px] shrink-0 cursor-pointer rounded-choice bg-s1 px-[18px] text-[21px] font-[620] whitespace-nowrap text-ink',
+                        'figures h-[3.75rem] min-w-[3.75rem] shrink-0 cursor-pointer rounded-choice bg-s1 px-[1.125rem] text-[1.3125rem] font-[620] whitespace-nowrap text-ink',
                         'transition-[scale,background-color,color,box-shadow] duration-450 ease-nuit hover:bg-s2 disabled:cursor-not-allowed disabled:opacity-45',
                         'focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid',
                         'aria-checked:scale-[1.08] aria-checked:bg-on-focus aria-checked:text-focus aria-checked:shadow-[0_14px_26px_-14px_rgb(28_26_33/0.9)] motion-reduce:aria-checked:scale-100',
-                        'max-md:h-[52px] max-md:min-w-[52px] max-md:px-3.5 max-md:text-[19px]',
+                        'max-md:h-[3.25rem] max-md:min-w-[3.25rem] max-md:px-3.5 max-md:text-[1.1875rem]',
                       )}
                     >
                       {choice.label}
@@ -581,7 +585,7 @@ function Control<T extends string | number>({
           aria-label={props.label}
           aria-describedby={describedById}
           invalid={invalid}
-          className="max-w-[420px]"
+          className="max-w-[26.25rem]"
         />
       )
     case 'number':
@@ -597,7 +601,7 @@ function Control<T extends string | number>({
           aria-labelledby={labelId}
           aria-describedby={describedById}
           invalid={invalid}
-          className="w-[220px] max-w-full"
+          className="w-[13.75rem] max-w-full"
         />
       )
     case 'text':
@@ -616,7 +620,7 @@ function Control<T extends string | number>({
           aria-labelledby={labelId}
           aria-describedby={describedById}
           invalid={invalid}
-          className="max-w-[560px]"
+          className="max-w-[35rem]"
         />
       )
     case 'secret':

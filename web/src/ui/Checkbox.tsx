@@ -62,7 +62,7 @@ export function Checkbox({
           className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-check bg-s4 transition-[background-color] duration-300 ease-nuit focus-visible:outline-none checked:bg-accent indeterminate:bg-accent disabled:cursor-not-allowed"
         />
         <Mark
-          size={16}
+          size="1rem"
           weight="bold"
           aria-hidden="true"
           className="pointer-events-none relative text-on-accent opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-100"

@@ -173,7 +173,7 @@ export function PlexImportForm({
 
   return (
     <>
-      <div className="flex max-w-lg flex-col gap-5 px-6 py-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-5 px-6 py-6 max-sm:px-4">
         {header}
         {account === null && link === null && <p className="text-small text-ink-3">{text.help}</p>}
         {link !== null && <PlexSignInWaiting link={link} />}

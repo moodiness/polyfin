@@ -37,7 +37,7 @@ export default function LabelRules({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
         {text.label}
       </p>
       <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">

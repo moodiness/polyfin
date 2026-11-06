@@ -13,7 +13,7 @@ function SkipLink() {
   return (
     <a
       href="#main"
-      className="lit fixed top-[-80px] left-4 z-[70] rounded-[14px] px-[18px] py-3 font-[650] transition-[top] duration-160 focus:top-4 focus-visible:outline-none"
+      className="lit fixed top-[-5rem] left-4 z-[70] rounded-[0.875rem] px-[1.125rem] py-3 font-[650] transition-[top] duration-160 focus:top-4 focus-visible:outline-none"
     >
       {t.nav.skipToContent}
     </a>
@@ -33,7 +33,10 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         <main
           id="main"
           tabIndex={-1}
-          className={cx(pageFrame, 'pt-[30px] pb-[120px] outline-none max-md:pt-4 max-md:pb-20')}
+          className={cx(
+            pageFrame,
+            'pt-[1.875rem] pb-[7.5rem] outline-none max-md:pt-4 max-md:pb-20',
+          )}
         >
           {children}
         </main>
@@ -50,7 +53,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
       <header
         className={cx(
           pageFrame,
-          'flex h-[100px] items-center justify-between gap-4 pt-[22px] max-md:h-[76px] max-md:pt-3',
+          'flex h-[6.25rem] items-center justify-between gap-4 pt-[1.375rem] max-md:h-[4.75rem] max-md:pt-3',
         )}
       >
         <Brand link={false} />
@@ -59,7 +62,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-[880px] flex-1 animate-rise px-5 pt-5 pb-20 outline-none max-md:pt-7"
+        className="mx-auto w-full max-w-[55rem] flex-1 animate-rise px-5 pt-5 pb-20 outline-none max-md:pt-7"
       >
         {children}
       </main>

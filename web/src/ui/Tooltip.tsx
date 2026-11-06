@@ -64,7 +64,7 @@ export function Tooltip({
         role="tooltip"
         id={id}
         className={cx(
-          'pointer-events-none absolute left-1/2 z-50 w-max max-w-[min(16rem,calc(100vw-32px))] -translate-x-1/2 rounded-[14px] px-3.5 py-2 text-micro text-ink raised transition-opacity duration-160 ease-nuit',
+          'pointer-events-none absolute left-1/2 z-50 w-max max-w-[min(19rem,calc(100vw-2rem))] -translate-x-1/2 rounded-[0.875rem] px-3.5 py-2 text-micro text-ink raised transition-opacity duration-160 ease-nuit',
           side === 'top' ? 'bottom-full mb-3' : 'top-full mt-3',
           open ? 'opacity-100' : 'invisible opacity-0',
         )}

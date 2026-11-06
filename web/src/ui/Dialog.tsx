@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/i18n'
 import { Button, IconButton } from './Button'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 import { FieldError } from './Field'
 
 /**
@@ -88,7 +88,7 @@ export function ConfirmDialog({
       ref={dialog}
       aria-labelledby={titleId}
       aria-describedby={children ? bodyId : undefined}
-      className="m-auto w-[min(520px,calc(100vw-24px))] rounded-panel p-0 text-ink raised backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
+      className="m-auto w-[min(32.5rem,calc(100vw-1.5rem))] rounded-panel p-0 text-ink raised backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
     >
       <div className="px-8 pt-8 pb-6 max-sm:px-5 max-sm:pt-6">
         <h2 id={titleId} className="text-group text-ink">
@@ -158,9 +158,9 @@ export function Modal({
     <dialog
       ref={dialog}
       aria-labelledby={titleId}
-      style={{ width: `min(${width}px, calc(100vw - 24px))` }}
+      style={{ width: `min(${rem(width)}, calc(100vw - 1.5rem))` }}
       className={cx(
-        'm-auto max-h-[min(85dvh,calc(100dvh-24px))] max-w-none flex-col overflow-hidden rounded-panel p-0 text-ink raised open:flex open:animate-modal',
+        'm-auto max-h-[min(85dvh,calc(100dvh-1.5rem))] max-w-none flex-col overflow-hidden rounded-panel p-0 text-ink raised open:flex open:animate-modal',
         'backdrop:bg-scrim backdrop:backdrop-blur-[6px]',
       )}
     >

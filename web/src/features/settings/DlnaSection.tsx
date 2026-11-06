@@ -207,13 +207,13 @@ function DeviceRow({
   return (
     <li
       aria-labelledby={headingId}
-      className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-x-4 rounded-row bg-s2 px-[22px] py-5 max-sm:grid-cols-[40px_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4"
+      className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-4 rounded-row bg-s2 px-[1.375rem] py-5 max-sm:grid-cols-[2.5rem_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4"
     >
       <IconTile icon={TelevisionIcon} />
       <div className="min-w-0">
         <h4
           id={headingId}
-          className="flex min-h-10 flex-wrap items-center gap-x-2.5 text-[15px] font-semibold tracking-[-0.01em] break-all text-ink"
+          className="flex min-h-10 flex-wrap items-center gap-x-2.5 text-[0.9375rem] font-semibold tracking-[-0.01em] break-all text-ink"
         >
           {title}
           {device.blocked && <StatusPill tone="danger">{text.blocked}</StatusPill>}
@@ -368,9 +368,9 @@ function ProfileRow({ profile, onView }: { profile: DlnaProfile; onView: () => v
     },
   })
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-row bg-s2 px-[22px] py-3.5 max-sm:px-4">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-row bg-s2 px-[1.375rem] py-3.5 max-sm:px-4">
       <div className="min-w-0 flex-1">
-        <p className="text-[14.5px] font-medium break-words text-ink">{profile.name}</p>
+        <p className="text-[0.90625rem] font-medium break-words text-ink">{profile.name}</p>
         {profile.createdAt !== undefined && (
           <p className="text-small text-ink-3">
             {text.added} <RelativeTime iso={profile.createdAt} />

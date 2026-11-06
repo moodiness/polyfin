@@ -139,7 +139,7 @@ export default function Mappings({
           {mappings.data.items.map((item) => (
             <li
               key={item.channelId}
-              className="min-w-0 rounded-[18px] bg-s1 py-1.5 pr-3 pl-5 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3.5rem] [content-visibility:auto] max-sm:pl-4"
+              className="min-w-0 rounded-[1.125rem] bg-s1 py-1.5 pr-3 pl-5 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_4.15625rem] [content-visibility:auto] max-sm:pl-4"
             >
               <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5">
                 <span className="figures w-9 shrink-0 text-right text-small text-ink-3">
@@ -153,7 +153,7 @@ export default function Mappings({
                     {item.guideId !== '' && item.guideId !== item.mapping?.guideChannelId && (
                       <>
                         <span className="figures break-all">{item.guideId}</span>
-                        <ArrowRightIcon size={14} aria-hidden="true" className="shrink-0" />
+                        <ArrowRightIcon size="0.875rem" aria-hidden="true" className="shrink-0" />
                       </>
                     )}
                     <MappingText mapping={item.mapping} />

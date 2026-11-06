@@ -222,7 +222,7 @@ function CreateForm({ scope, id }: { scope: Scope; id: string }) {
   return (
     <section
       aria-labelledby={titleId}
-      className="rounded-row bg-s1 px-[30px] pt-6 pb-7 max-md:px-5 max-md:pt-5 max-md:pb-5"
+      className="rounded-row bg-s1 px-[1.875rem] pt-6 pb-7 max-md:px-5 max-md:pt-5 max-md:pb-5"
     >
       <h2 id={titleId} className="text-h3 text-ink">
         {text.createTitle}
@@ -233,7 +233,7 @@ function CreateForm({ scope, id }: { scope: Scope; id: string }) {
           label={text.createLabel}
           hideLabel
           error={create.isError ? errorMessage(t, create.error) : undefined}
-          className="min-w-48 flex-1 sm:max-w-xl"
+          className="min-w-48 flex-1 sm:max-w-[42.75rem]"
         >
           <TextInput
             size="sm"
@@ -345,7 +345,7 @@ function CategoryRow({
         onDrop()
       }}
       className={cx(
-        'relative min-w-0 rounded-[18px] bg-s1 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3.5rem] [content-visibility:auto]',
+        'relative min-w-0 rounded-[1.125rem] bg-s1 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_4.15625rem] [content-visibility:auto]',
         dragging && 'opacity-40',
       )}
     >
@@ -378,7 +378,7 @@ function CategoryRow({
                 aria-label={text.renameLabel(shown)}
                 onValue={setName}
                 onKeyDown={(event) => event.key === 'Escape' && setRenaming(false)}
-                className="min-w-40 flex-1 sm:max-w-xs"
+                className="min-w-40 flex-1 sm:max-w-[23.75rem]"
               />
               <Button type="submit" size="sm" variant="primary" loading={update.isPending}>
                 {t.common.save}

@@ -50,7 +50,7 @@ function QrCode({ rows, label }: { rows: string[]; label: string }) {
       aria-label={label}
       viewBox={`0 0 ${size} ${size}`}
       shapeRendering="crispEdges"
-      className="size-52 shrink-0 rounded-[18px] max-sm:size-44"
+      className="size-52 shrink-0 rounded-[1.125rem] max-sm:size-44"
     >
       <rect width={size} height={size} fill="white" />
       <path d={path} fill="black" />
@@ -115,7 +115,7 @@ export function RecoveryCodes({
     <div className="space-y-4">
       <Notice tone="warn">{text.recoveryHelp}</Notice>
       {/* Two columns where a code fits whole in each, one on a narrow screen. */}
-      <ul className="figures grid max-w-lg grid-cols-[repeat(auto-fit,minmax(19ch,1fr))] gap-x-6 gap-y-2 rounded-field bg-s2 px-5 py-4 font-mono text-lead whitespace-nowrap text-ink select-all">
+      <ul className="figures grid max-w-[38rem] grid-cols-[repeat(auto-fit,minmax(19ch,1fr))] gap-x-6 gap-y-2 rounded-field bg-s2 px-5 py-4 font-mono text-lead whitespace-nowrap text-ink select-all">
         {codes.map((code) => (
           <li key={code}>{code}</li>
         ))}
@@ -195,7 +195,12 @@ export default function TwoStep() {
         }}
       >
         <SetupKey setup={start.data} />
-        <Field label={text.code} help={text.codeHelp} error={codeError} className="max-w-xs">
+        <Field
+          label={text.code}
+          help={text.codeHelp}
+          error={codeError}
+          className="max-w-[23.75rem]"
+        >
           <TextInput
             value={code}
             onValue={(value) => {

@@ -27,7 +27,7 @@ export default function SummaryPreview() {
             value={event}
             options={summaries.map((value) => ({ value, label: text.summaries[value] }))}
             onValue={setEvent}
-            className="max-w-[14rem]"
+            className="max-w-[16.625rem]"
           />
         </Field>
         <Field label={text.of}>
@@ -38,7 +38,7 @@ export default function SummaryPreview() {
               ...(users.data ?? []).map((u) => ({ value: u.id, label: u.name })),
             ]}
             onValue={setUser}
-            className="max-w-[14rem]"
+            className="max-w-[16.625rem]"
           />
         </Field>
         <Button onClick={() => setShown({ event, user })}>{text.show}</Button>

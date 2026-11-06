@@ -341,7 +341,7 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
               </p>
               {source.error !== '' && (
                 <p className="flex items-start gap-1.5 text-warn">
-                  <WarningIcon size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
+                  <WarningIcon size="1.125rem" aria-hidden="true" className="mt-0.5 shrink-0" />
                   {t.iptv.errors[source.error] ?? source.error}
                 </p>
               )}
@@ -414,7 +414,7 @@ function Guides({ sources }: { sources: Sources | undefined }) {
               </p>
               {failing.map((guide) => (
                 <p key={guide.id || guide.url} className="flex items-start gap-1.5 text-warn">
-                  <WarningIcon size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
+                  <WarningIcon size="1.125rem" aria-hidden="true" className="mt-0.5 shrink-0" />
                   <span>
                     {t.lineup.picker.guideN(guide.position)}
                     {t.common.colon} {t.lineup.guideErrors[guide.error] ?? guide.error}
@@ -779,7 +779,7 @@ function Disks({ health }: { health: Health }) {
             <Meter
               label={
                 <span className="inline-flex items-center gap-1.5">
-                  {low && <WarningIcon size={18} aria-hidden="true" className="text-warn" />}
+                  {low && <WarningIcon size="1.125rem" aria-hidden="true" className="text-warn" />}
                   {text.folderTitle[disk.folder]}
                 </span>
               }
@@ -916,7 +916,7 @@ function Thumbnails({ health }: { health: Health }) {
             {thumbnails.pausedHosts.map((paused) => (
               <li key={paused.host} className="flex flex-wrap justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-small break-all text-warn">
-                  <WarningIcon size={18} aria-hidden="true" />
+                  <WarningIcon size="1.125rem" aria-hidden="true" />
                   {paused.host}
                 </span>
                 <span className="text-small text-ink-2 figures">
@@ -1046,7 +1046,7 @@ function Artwork({ health }: { health: Health }) {
                 className="flex flex-wrap justify-between gap-2"
               >
                 <span className="inline-flex items-center gap-1.5 text-small break-all text-warn">
-                  <WarningIcon size={18} aria-hidden="true" />
+                  <WarningIcon size="1.125rem" aria-hidden="true" />
                   {host.host}
                 </span>
                 <span className="text-small text-ink-2 figures">

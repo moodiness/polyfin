@@ -273,7 +273,7 @@ function ServerState({
                   <span className="text-ink">
                     {t.dashboard.live.gpuMethod(data.transcoder.hardware.method)}
                   </span>
-                  <span className="max-w-[15rem] text-micro break-words text-ink-3 max-md:max-w-full">
+                  <span className="max-w-[17.8125rem] text-micro break-words text-ink-3 max-md:max-w-full">
                     {[
                       data.transcoder.hardware.encoders.join(', '),
                       data.transcoder.hardware.toneMapping ? text.toneMapping : '',
@@ -285,7 +285,7 @@ function ServerState({
               ) : (
                 <>
                   <span className="text-ink">{text.graphicsNone}</span>
-                  <span className="max-w-[15rem] text-micro text-ink-3 max-md:max-w-full">
+                  <span className="max-w-[17.8125rem] text-micro text-ink-3 max-md:max-w-full">
                     {text.graphicsCpu}
                   </span>
                 </>
@@ -312,7 +312,7 @@ function ServerState({
                       variant={data.cache.used / data.cache.limit > 0.9 ? 'warn' : 'neutral'}
                       value={data.cache.used / data.cache.limit}
                       label={text.cacheUnit}
-                      className="w-[120px] max-md:w-[90px]"
+                      className="w-[7.5rem] max-md:w-[5.625rem]"
                     />
                   )}
                 </>
@@ -337,8 +337,8 @@ function ServerState({
           />
         </RowList>
       )}
-      <div className="mt-[18px] flex flex-wrap items-center justify-between gap-x-4 gap-y-3 pl-[26px] max-md:flex-col max-md:items-stretch max-md:pl-0">
-        <div className="min-w-0 flex-1 basis-[14rem] text-[18px] text-ink-3 max-md:basis-auto max-md:text-[16px]">
+      <div className="mt-[1.125rem] flex flex-wrap items-center justify-between gap-x-4 gap-y-3 pl-[1.625rem] max-md:flex-col max-md:items-stretch max-md:pl-0">
+        <div className="min-w-0 flex-1 basis-[16.625rem] text-[1.125rem] text-ink-3 max-md:basis-auto max-md:text-[1rem]">
           {data !== undefined && (
             <p className="figures">
               {text.uptime}{' '}

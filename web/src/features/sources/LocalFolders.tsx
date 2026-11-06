@@ -697,7 +697,7 @@ function RcloneRemote({
           spellCheck={false}
           required
           mono
-          className="max-w-xs"
+          className="max-w-[23.75rem]"
         />
         <Button
           size="sm"
@@ -1256,7 +1256,7 @@ function UnlistedShowRow({
         </div>
         <NumberingChoice addon={addon} show={show} />
       </div>
-      <dl className="mt-2 grid grid-cols-[9rem_minmax(0,1fr)_minmax(0,1.5fr)] gap-x-6 gap-y-1 text-small">
+      <dl className="mt-2 grid grid-cols-[10.6875rem_minmax(0,1fr)_minmax(0,1.5fr)] gap-x-6 gap-y-1 text-small">
         {show.seasons.map((season) => (
           <Fragment key={season.season}>
             <dt className="text-ink-2">{text.unlistedSeason(season.season)}</dt>
@@ -1412,7 +1412,7 @@ function NumberingChoice({
 
   let order = null
   if (chosen === 'order') {
-    if (groups.isPending) order = <Skeleton className="h-9 w-[260px] rounded-control" />
+    if (groups.isPending) order = <Skeleton className="h-9 w-[16.25rem] rounded-control" />
     else if (groups.isError)
       order = (
         <InlineError onRetry={() => void groups.refetch()} retrying={groups.isRefetching}>
@@ -1442,21 +1442,21 @@ function NumberingChoice({
               })),
             ]}
             disabled={save.isPending}
-            className="w-[260px]"
+            className="w-[16.25rem]"
           />
         </Field>
       )
   }
 
   return (
-    <div className="flex w-[260px] max-w-full flex-col gap-2">
+    <div className="flex w-[16.25rem] max-w-full flex-col gap-2">
       <Field label={text.numberingLabel(show.name)} hideLabel>
         <Select
           value={chosen}
           onValue={choose}
           options={numberings.map((value) => ({ value, label: text.numberings[value] }))}
           disabled={save.isPending}
-          className="w-[260px]"
+          className="w-[16.25rem]"
         />
       </Field>
       {order}
@@ -1600,7 +1600,7 @@ function UnmatchedRow({
 
   return (
     <li className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 rounded-row bg-s1 px-6 py-4 max-md:px-5">
-      <div className="min-w-0 flex-1 basis-[260px]">
+      <div className="min-w-0 flex-1 basis-[16.25rem]">
         <p className="font-mono text-small break-all text-ink">{file.path}</p>
         <p className="mt-1 text-small text-ink-3">
           {[
@@ -1641,7 +1641,7 @@ function UnmatchedRow({
               spellCheck={false}
               size="sm"
               mono
-              className="w-[150px]"
+              className="w-[9.375rem]"
             />
           </Field>
           <Button type="submit" size="sm" loading={link.isPending} disabled={imdbId.trim() === ''}>
@@ -1731,7 +1731,7 @@ function EpisodeForm({
             spellCheck={false}
             size="sm"
             mono
-            className="w-[150px]"
+            className="w-[9.375rem]"
           />
         </Field>
         <Button type="submit" size="sm" loading={give.isPending} disabled={episode.trim() === ''}>
@@ -1780,7 +1780,7 @@ function DiscSuggestion({
     : first.discTitle.discPath
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-row bg-s1 px-6 py-4 max-md:px-5">
-      <div className="min-w-0 flex-1 basis-[260px]">
+      <div className="min-w-0 flex-1 basis-[16.25rem]">
         <p className="text-small text-ink-2">
           {text.suggestion(disc, suggested[0].episode, suggested[suggested.length - 1].episode)}
         </p>

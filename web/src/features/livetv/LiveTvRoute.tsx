@@ -95,7 +95,7 @@ export default function LiveTvRoute() {
         {addons.isPending ? (
           <div role="status" aria-label={t.livetv.iptvLoading} className="space-y-2.5">
             <Skeleton className="h-20 w-full rounded-row" />
-            <Skeleton className="h-[120px] w-full rounded-row" />
+            <Skeleton className="h-[7.5rem] w-full rounded-row" />
           </div>
         ) : addons.isError ? (
           <InlineError onRetry={() => void addons.refetch()} retrying={addons.isFetching}>
@@ -196,7 +196,11 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
                 )}
                 {failing.map((guide) => (
                   <p key={guide.id} className="flex items-start gap-2 text-danger">
-                    <WarningCircleIcon size={20} aria-hidden="true" className="mt-px shrink-0" />
+                    <WarningCircleIcon
+                      size="1.25rem"
+                      aria-hidden="true"
+                      className="mt-px shrink-0"
+                    />
                     {t.livetv.guideLine(
                       guide.position,
                       t.lineup.guideErrors[guide.error] ?? t.errors.generic,

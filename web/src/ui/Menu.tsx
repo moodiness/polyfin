@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { Link } from 'react-router'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 
 type MenuContextValue = { close: (returnFocus?: boolean) => void }
 
@@ -150,10 +150,10 @@ export function Menu({
           aria-label={label}
           hidden={!open}
           onKeyDown={onListKeyDown}
-          style={{ width }}
+          style={{ width: rem(width) }}
           className={cx(
             // Above the SaveBar (z-20), under the TopBar (z-30).
-            'absolute top-[calc(100%+12px)] z-25 max-w-[calc(100vw-24px)] rounded-panel p-2.5 raised animate-pop',
+            'absolute top-[calc(100%+0.75rem)] z-25 max-w-[calc(100vw-1.5rem)] rounded-panel p-2.5 raised animate-pop',
             align === 'end' ? 'right-0' : 'left-0',
           )}
         >
@@ -166,7 +166,7 @@ export function Menu({
 
 // A big row of the raised panel; the arrows light it like any other control.
 const itemClass =
-  'flex min-h-[54px] w-full cursor-pointer items-center gap-3.5 rounded-choice px-4 text-left text-[18.5px] leading-snug outline-none transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 focus-visible:lit focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-45'
+  'flex min-h-[3.375rem] w-full cursor-pointer items-center gap-3.5 rounded-choice px-4 text-left text-[1.15625rem] leading-snug outline-none transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 focus-visible:lit focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-45'
 
 /**
  * One entry of a Menu: a link with `to` (or `href` for outside the app), or an action with
@@ -203,13 +203,13 @@ export function MenuItem({
     <>
       {Glyph && (
         <Glyph
-          size={22}
+          size="1.375rem"
           aria-hidden="true"
           className={cx('shrink-0', danger ? 'text-danger' : 'text-ink-2')}
         />
       )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {end !== undefined && <span className="shrink-0 text-[16px] text-ink-3">{end}</span>}
+      {end !== undefined && <span className="shrink-0 text-[1rem] text-ink-3">{end}</span>}
     </>
   )
   const className = cx(itemClass, danger ? 'text-danger' : 'text-ink')
@@ -281,11 +281,11 @@ export function MenuChoice<T extends string>({
   return (
     <div role="group" aria-labelledby={id} className="flex flex-col gap-2.5 px-4 pt-2.5 pb-3">
       <span className="flex items-baseline justify-between gap-3">
-        <span id={id} className="text-[18.5px] text-ink">
+        <span id={id} className="text-[1.15625rem] text-ink">
           {label}
         </span>
         {chosen?.title && (
-          <span lang={chosen.lang} className="truncate text-[16px] text-ink-3" aria-hidden="true">
+          <span lang={chosen.lang} className="truncate text-[1rem] text-ink-3" aria-hidden="true">
             {chosen.title}
           </span>
         )}
@@ -302,7 +302,7 @@ export function MenuChoice<T extends string>({
             aria-label={option.title}
             aria-checked={option.value === value}
             onClick={() => onChange(option.value)}
-            className="h-11 min-w-0 flex-1 cursor-pointer rounded-[14px] bg-s1 px-1 text-[16px] font-semibold text-ink-2 transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 hover:text-ink focus-visible:lit focus-visible:outline-none aria-checked:bg-s4 aria-checked:text-ink"
+            className="h-11 min-w-0 flex-1 cursor-pointer rounded-[0.875rem] bg-s1 px-1 text-[1rem] font-semibold text-ink-2 transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 hover:text-ink focus-visible:lit focus-visible:outline-none aria-checked:bg-s4 aria-checked:text-ink"
           >
             {option.label}
           </button>
@@ -319,5 +319,5 @@ export function MenuSeparator() {
 
 /** The top of a Menu: who is signed in. Not focusable. */
 export function MenuHeader({ children }: { children: ReactNode }) {
-  return <div className="flex items-center gap-3.5 px-3.5 pt-3 pb-4 text-[20px]">{children}</div>
+  return <div className="flex items-center gap-3.5 px-3.5 pt-3 pb-4 text-[1.25rem]">{children}</div>
 }

@@ -379,7 +379,7 @@ function Editor({
                         size="sm"
                         value={clock(block.start)}
                         onValue={(value) => set({ start: minutesOf(value, false) })}
-                        className="w-[160px]"
+                        className="w-[10rem]"
                       />
                     </Field>
                     <Field label={t.ownChannels.until}>
@@ -388,7 +388,7 @@ function Editor({
                         size="sm"
                         value={clock(block.end === 24 * 60 ? 0 : block.end)}
                         onValue={(value) => set({ end: minutesOf(value, true) })}
-                        className="w-[160px]"
+                        className="w-[10rem]"
                       />
                     </Field>
                     <Button
@@ -517,7 +517,7 @@ function Editor({
 }
 
 /** The start and end of a programme at the start of its row. */
-const airingTime = 'figures w-[124px] shrink-0 text-micro text-ink-3 max-md:w-[96px]'
+const airingTime = 'figures w-[7.75rem] shrink-0 text-micro text-ink-3 max-md:w-[6rem]'
 /** Settings rows, 8 px apart. */
 const rows = 'grid grid-cols-[minmax(0,1fr)] gap-2'
 /** The help under a block's title. */
@@ -551,7 +551,7 @@ function SourcePicker({
       />
       {(source.kind === 'collection' || source.kind === 'smartlist') &&
         (listed.length === 0 ? (
-          <p className="px-[30px] py-2 text-small text-ink-2 max-md:px-5">
+          <p className="px-[1.875rem] py-2 text-small text-ink-2 max-md:px-5">
             {source.kind === 'collection'
               ? t.ownChannels.noCollections
               : t.ownChannels.noSmartLists}
@@ -615,7 +615,7 @@ function TitlePicker({
       <div className="flex flex-wrap items-end gap-2">
         <Field
           label={series ? t.ownChannels.searchSeries : t.ownChannels.searchTitles}
-          className="min-w-[200px] flex-1"
+          className="min-w-[12.5rem] flex-1"
         >
           <TextInput
             value={query}
@@ -636,7 +636,7 @@ function TitlePicker({
         <p className="text-small text-ink-3">{t.ownChannels.noResults}</p>
       )}
       {results.length > 0 && (
-        <div className="max-h-[320px] overflow-y-auto rounded-row">
+        <div className="max-h-[20rem] overflow-y-auto rounded-row">
           <RowList compact aria-label={t.ownChannels.searchTitles}>
             {results.map((title) => (
               <Row

@@ -84,7 +84,10 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
 
   if (series !== null) {
     return (
-      <section aria-label={text.episodesOf(series.name)} className="flex max-w-3xl flex-col gap-3">
+      <section
+        aria-label={text.episodesOf(series.name)}
+        className="flex max-w-[57rem] flex-col gap-3"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="min-w-0 text-h3 break-words text-ink">{text.episodesOf(series.name)}</h3>
           <Button size="sm" variant="ghost" icon={ArrowLeftIcon} onClick={() => setSeries(null)}>
@@ -101,14 +104,14 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
           <p className="text-small text-ink-3">{text.noEpisodes}</p>
         ) : (
           // Long seasons scroll inside, with room for the lit row's rise.
-          <div className="-mx-2 max-h-[560px] overflow-y-auto px-2 py-1">
+          <div className="-mx-2 max-h-[35rem] overflow-y-auto px-2 py-1">
             <RowList compact aria-label={text.episodesOf(series.name)}>
               {episodes.data.map((episode) => (
                 <Row
                   key={episode.id}
                   onClick={() => onPick(episode)}
                   leading={
-                    <span className="figures w-[88px] shrink-0 text-micro whitespace-nowrap text-ink-3">
+                    <span className="figures w-[5.5rem] shrink-0 text-micro whitespace-nowrap text-ink-3">
                       {formatEpisode(episode.season, episode.episode)}
                     </span>
                   }
@@ -123,7 +126,7 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
+    <div className="flex max-w-[57rem] flex-col gap-5">
       <form onSubmit={submit} noValidate>
         <Field label={text.search} help={text.searchHelp}>
           <TextInput

@@ -48,7 +48,7 @@ export default function VersionOrder({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
         {text.label}
       </p>
       <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
@@ -64,7 +64,7 @@ export default function VersionOrder({
           {order.map((criterion, index) => (
             <li
               key={kind(criterion)}
-              className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] bg-s2 py-2 pr-2.5 pl-4"
+              className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-[1.125rem] bg-s2 py-2 pr-2.5 pl-4"
             >
               <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
                 {index + 1}
@@ -192,7 +192,7 @@ function FixedOrder<T extends string>({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
         {text.label}
       </p>
       <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
@@ -201,11 +201,11 @@ function FixedOrder<T extends string>({
       <p className="sr-only" role="status">
         {announcement}
       </p>
-      <ol className="mt-4 grid max-w-md grid-cols-[minmax(0,1fr)] gap-1.5">
+      <ol className="mt-4 grid max-w-[33.25rem] grid-cols-[minmax(0,1fr)] gap-1.5">
         {order.map((codec, index) => (
           <li
             key={codec}
-            className="flex min-h-14 items-center gap-3 rounded-[18px] bg-s2 py-2 pr-2.5 pl-4"
+            className="flex min-h-14 items-center gap-3 rounded-[1.125rem] bg-s2 py-2 pr-2.5 pl-4"
           >
             <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
               {index + 1}
@@ -267,7 +267,7 @@ export function SourceOrder({
 
   return (
     <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[18px]">
+      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
         {text.label}
       </p>
       <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
@@ -279,7 +279,7 @@ export function SourceOrder({
       {shown.length === 0 ? (
         <p className="mt-4 text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-4 grid max-w-md grid-cols-[minmax(0,1fr)] gap-1.5">
+        <ol className="mt-4 grid max-w-[33.25rem] grid-cols-[minmax(0,1fr)] gap-1.5">
           {shown.map((source, index) => (
             <li
               key={source.id}
@@ -297,7 +297,7 @@ export function SourceOrder({
                 setDragged(null)
               }}
               className={cx(
-                'flex min-h-14 items-center gap-3 rounded-[18px] bg-s2 py-2 pr-2.5 pl-4',
+                'flex min-h-14 items-center gap-3 rounded-[1.125rem] bg-s2 py-2 pr-2.5 pl-4',
                 dragged === index && 'opacity-40',
               )}
             >
@@ -306,7 +306,7 @@ export function SourceOrder({
                 title={text.dragHandle(source.name)}
                 className="hidden shrink-0 cursor-grab text-ink-3 sm:inline"
               >
-                <DotsSixVerticalIcon size={16} />
+                <DotsSixVerticalIcon size="1rem" />
               </span>
               <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
                 {index + 1}

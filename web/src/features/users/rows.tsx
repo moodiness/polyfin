@@ -27,7 +27,7 @@ export function PageSection({
 }) {
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-8 max-md:scroll-mt-20">
-      <div className="mb-[18px] flex flex-wrap items-end justify-between gap-x-4 gap-y-3 max-md:mb-3.5">
+      <div className="mb-[1.125rem] flex flex-wrap items-end justify-between gap-x-4 gap-y-3 max-md:mb-3.5">
         <div className="min-w-0">
           <h2 id={`${id}-title`} className="text-group break-words text-ink">
             {title}
@@ -73,7 +73,7 @@ export function Band({
         className="group focus-lit mb-3 -ml-3 inline-flex items-center gap-2 rounded-control px-3 py-1.5 text-small font-medium text-ink-2 hover:bg-s1 hover:text-ink"
       >
         <ArrowLeftIcon
-          size={18}
+          size="1.125rem"
           aria-hidden="true"
           className="transition-transform duration-300 ease-nuit group-hover:-translate-x-0.5"
         />
@@ -81,7 +81,7 @@ export function Band({
       </Link>
       <section
         aria-labelledby={titleId}
-        className="relative isolate grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-7 overflow-hidden rounded-tile bg-s1 px-8 py-[30px] max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-x-[18px] max-md:gap-y-4 max-md:rounded-panel max-md:px-5 max-md:py-[22px]"
+        className="relative isolate grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-7 overflow-hidden rounded-tile bg-s1 px-8 py-[1.875rem] max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-x-[1.125rem] max-md:gap-y-4 max-md:rounded-panel max-md:px-5 max-md:py-[1.375rem]"
       >
         {art && (
           <>
@@ -99,10 +99,10 @@ export function Band({
         )}
         {leading}
         <div className="min-w-0">
-          <h1 id={titleId} className="text-h1 break-words text-ink max-md:text-[34px]">
+          <h1 id={titleId} className="text-h1 break-words text-ink max-md:text-[2.125rem]">
             {title}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-[18px] gap-y-1.5 text-[18px] text-ink-2 max-md:text-[16px]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-[1.125rem] gap-y-1.5 text-[1.125rem] text-ink-2 max-md:text-[1rem]">
             {facts}
           </div>
           {extra}
@@ -160,7 +160,7 @@ export function WatchingLink({
   return (
     <Link
       to="/"
-      className="focus-lit mt-[18px] flex w-fit max-w-full items-center gap-3.5 rounded-[20px] bg-ink/8 py-2 pr-[18px] pl-2 text-[17.5px] text-ink hover:bg-ink/13 max-md:text-[16px]"
+      className="focus-lit mt-[1.125rem] flex w-fit max-w-full items-center gap-3.5 rounded-[1.25rem] bg-ink/8 py-2 pr-[1.125rem] pl-2 text-[1.09375rem] text-ink hover:bg-ink/13 max-md:text-[1rem]"
     >
       {art !== null && (
         <img
@@ -168,7 +168,7 @@ export function WatchingLink({
           alt=""
           loading="lazy"
           onError={onArtError}
-          className="h-14 w-10 shrink-0 rounded-[10px] bg-s2 object-cover"
+          className="h-14 w-10 shrink-0 rounded-[0.625rem] bg-s2 object-cover"
         />
       )}
       <span className="min-w-0">

@@ -50,9 +50,9 @@ export function SourceMark({ addon }: { addon: Addon }) {
   return (
     <span
       aria-hidden="true"
-      className="relative grid size-[72px] shrink-0 place-items-center rounded-row bg-s2 text-ink-2 max-md:size-14 max-md:rounded-[18px]"
+      className="relative grid size-[4.5rem] shrink-0 place-items-center rounded-row bg-s2 text-ink-2 max-md:size-14 max-md:rounded-[1.125rem]"
     >
-      <Glyph size={34} className="max-md:size-7" />
+      <Glyph size="2.125rem" className="max-md:size-7" />
       <Logo addon={addon} className="size-full rounded-[inherit] p-2" />
     </span>
   )
@@ -155,16 +155,16 @@ export function Fact({
   return (
     <div
       className={cx(
-        'flex min-h-[72px] min-w-0 rounded-row bg-s1 px-7 py-4 max-md:min-h-16 max-md:basis-full max-md:px-5 max-md:py-3',
+        'flex min-h-[4.5rem] min-w-0 rounded-row bg-s1 px-7 py-4 max-md:min-h-16 max-md:basis-full max-md:px-5 max-md:py-3',
         wide
           ? 'basis-full flex-col justify-center gap-1'
-          : 'grow basis-[calc(50%-5px)] flex-wrap items-center justify-between gap-x-6 gap-y-1',
+          : 'grow basis-[calc(50%-0.3125rem)] flex-wrap items-center justify-between gap-x-6 gap-y-1',
       )}
     >
-      <dt className="text-h3 text-ink max-md:text-[18px]">{label}</dt>
+      <dt className="text-h3 text-ink max-md:text-[1.125rem]">{label}</dt>
       <dd
         className={cx(
-          'min-w-0 text-lead break-words text-ink-2 max-md:text-[17px]',
+          'min-w-0 text-lead break-words text-ink-2 max-md:text-[1.0625rem]',
           !wide && 'text-right',
         )}
       >

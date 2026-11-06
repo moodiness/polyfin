@@ -83,7 +83,7 @@ export function SessionGate() {
               {...webPlayerLink(true)}
               className="focus-lit inline-flex h-13 items-center gap-2.5 rounded-control px-5.5 text-control font-[620] text-ink-2 [--lift:1.05] hover:bg-s1 hover:text-ink"
             >
-              <ArrowLeftIcon size={21} aria-hidden="true" />
+              <ArrowLeftIcon size="1.3125rem" aria-hidden="true" />
               {t.nav.backToWebPlayer}
             </a>
           </p>

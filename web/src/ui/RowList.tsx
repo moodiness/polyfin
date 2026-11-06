@@ -1,7 +1,7 @@
 import { CaretRightIcon, type Icon } from '@phosphor-icons/react'
 import { createContext, isValidElement, use, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { cx } from './cx'
+import { cx, rem } from './cx'
 import { useInPanel } from './Panel'
 
 /**
@@ -148,7 +148,7 @@ export function Row({
           <div
             className={cx(
               'mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-ink-3',
-              compact ? 'text-micro' : 'text-[16.5px] max-md:text-micro',
+              compact ? 'text-micro' : 'text-[1.03125rem] max-md:text-micro',
             )}
           >
             {meta}
@@ -159,7 +159,7 @@ export function Row({
         <div
           className={cx(
             'flex shrink-0 flex-col items-end gap-1 text-right text-ink-2 max-md:max-w-[50%]',
-            compact ? 'text-body' : 'text-lead max-md:text-[17px]',
+            compact ? 'text-body' : 'text-lead max-md:text-[1.0625rem]',
           )}
         >
           {trailing}
@@ -167,7 +167,7 @@ export function Row({
       )}
       {showChevron && (
         <CaretRightIcon
-          size={compact ? 20 : 24}
+          size={rem(compact ? 20 : 24)}
           aria-hidden="true"
           className="-mr-1 shrink-0 text-ink-3"
         />
@@ -177,16 +177,16 @@ export function Row({
   const rowClass = cx(
     'flex w-full items-center text-left',
     compact
-      ? 'min-h-14 gap-3 rounded-[18px] py-2 pr-4 pl-5'
-      : 'min-h-20 gap-4 rounded-row py-3.5 pr-[22px] pl-7 max-md:min-h-[68px] max-md:gap-3 max-md:py-3 max-md:pr-4 max-md:pl-5',
-    variant === 'plain' && !compact && 'rounded-[22px]',
+      ? 'min-h-14 gap-3 rounded-[1.125rem] py-2 pr-4 pl-5'
+      : 'min-h-20 gap-4 rounded-row py-3.5 pr-[1.375rem] pl-7 max-md:min-h-[4.25rem] max-md:gap-3 max-md:py-3 max-md:pr-4 max-md:pl-5',
+    variant === 'plain' && !compact && 'rounded-[1.375rem]',
     interactive &&
       'focus-lit cursor-pointer [--lift:1.012] not-aria-[current]:hover:bg-s1 aria-[current]:lit',
     selected && !interactive && 'lit',
     className,
   )
   return (
-    <li className={cx('min-w-0 rounded-row', compact && 'rounded-[18px]', tileStyles[variant])}>
+    <li className={cx('min-w-0 rounded-row', compact && 'rounded-[1.125rem]', tileStyles[variant])}>
       {to !== undefined ? (
         <Link to={to} aria-current={selected || undefined} className={rowClass}>
           {body}
@@ -206,7 +206,7 @@ export function Row({
       {children !== undefined && (
         <div
           className={cx(
-            'pr-[22px] pb-6 max-md:pr-4 max-md:pb-5',
+            'pr-[1.375rem] pb-6 max-md:pr-4 max-md:pb-5',
             compact ? 'pl-5' : 'pl-7 max-md:pl-5',
           )}
         >
@@ -244,10 +244,10 @@ export function IconTile({
       aria-hidden="true"
       className={cx(
         'inline-grid shrink-0 place-items-center rounded-full font-bold',
-        size === 'xl' && 'size-24 text-[34px] max-md:size-16 max-md:text-[24px]',
-        size === 'lg' && 'size-14 text-[20px]',
-        size === 'md' && 'size-11 text-[17px]',
-        size === 'sm' && 'size-9 text-[15px]',
+        size === 'xl' && 'size-24 text-[2.125rem] max-md:size-16 max-md:text-[1.5rem]',
+        size === 'lg' && 'size-14 text-[1.25rem]',
+        size === 'md' && 'size-11 text-[1.0625rem]',
+        size === 'sm' && 'size-9 text-[0.9375rem]',
         tone === 'neutral' &&
           cx('bg-s2', selected ? 'text-link' : letters ? 'text-ink' : 'text-ink-2'),
         tone === 'ok' && 'bg-ok/14 text-ok',
@@ -257,7 +257,7 @@ export function IconTile({
     >
       {Glyph ? (
         <Glyph
-          size={size === 'xl' ? 44 : size === 'lg' ? 28 : size === 'md' ? 22 : 19}
+          size={rem(size === 'xl' ? 44 : size === 'lg' ? 28 : size === 'md' ? 22 : 19)}
           className={size === 'xl' ? 'max-md:size-8' : undefined}
         />
       ) : (

@@ -302,8 +302,8 @@ export function SourcesPage({
   const scopeEntries = (scope: Entry['scope']) => entries.filter((e) => e.scope === scope)
   const detail = loading ? (
     <div aria-busy="true">
-      <Skeleton className="h-[72px] w-80 rounded-row" />
-      <Skeleton className="mt-10 h-[420px] rounded-panel" />
+      <Skeleton className="h-[4.5rem] w-80 rounded-row" />
+      <Skeleton className="mt-10 h-[26.25rem] rounded-panel" />
     </div>
   ) : missing ? (
     <EmptyState
@@ -355,12 +355,12 @@ export function SourcesPage({
             aria-pressed={filters.kind === value}
             onClick={() => setFilters({ kind: value })}
             className={cx(
-              'focus-lit inline-flex items-baseline gap-2 rounded-[14px] px-3 py-2 text-control font-semibold transition-colors duration-300 ease-nuit',
+              'focus-lit inline-flex items-baseline gap-2 rounded-[0.875rem] px-3 py-2 text-control font-semibold transition-colors duration-300 ease-nuit',
               filters.kind === value ? 'bg-s2 text-ink' : 'text-ink-3 hover:text-ink',
             )}
           >
             {value === 'all' ? text.all : text.kinds[value]}
-            <span className="figures text-[16px] font-semibold text-ink-3">{counts[value]}</span>
+            <span className="figures text-[1rem] font-semibold text-ink-3">{counts[value]}</span>
           </button>
         ))}
       </div>
@@ -415,7 +415,7 @@ export function SourcesPage({
             return (
               <Row
                 key={entry.key}
-                className="py-[18px]"
+                className="py-[1.125rem]"
                 leading={<SourceTile addon={entry.addon} selected={entry === chosen} />}
                 title={entry.addon.name}
                 muted={!entry.addon.enabled}
@@ -433,7 +433,7 @@ export function SourcesPage({
                       </span>
                     )}
                     <span className="mt-2 flex basis-full flex-wrap items-center gap-x-3 gap-y-1">
-                      <SourceStatus addon={entry.addon} className="text-[16.5px]" />
+                      <SourceStatus addon={entry.addon} className="text-[1.03125rem]" />
                       {when !== null && (
                         <RelativeTime iso={when} className="text-micro text-ink-3" />
                       )}
@@ -452,7 +452,9 @@ export function SourcesPage({
           })}
         </RowList>
       )}
-      {content && <p className="mt-[18px] px-1.5 text-[16.5px] text-ink-3">{text.listNote}</p>}
+      {content && (
+        <p className="mt-[1.125rem] px-1.5 text-[1.03125rem] text-ink-3">{text.listNote}</p>
+      )}
     </section>
   )
 
@@ -468,7 +470,7 @@ export function SourcesPage({
     )
   } else if (loading && !narrowPage) {
     body = (
-      <div className="grid items-start gap-14 lg:grid-cols-[420px_minmax(0,1fr)] max-[1180px]:gap-10 max-[1180px]:lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid items-start gap-14 lg:grid-cols-[26.25rem_minmax(0,1fr)] max-[1180px]:gap-10 max-[1180px]:lg:grid-cols-[21.25rem_minmax(0,1fr)]">
         <div>
           <Skeleton className="mb-3.5 h-10 w-64" />
           <SkeletonRows rows={3} label={text.loading} />
@@ -494,9 +496,9 @@ export function SourcesPage({
     body = detail
   } else {
     body = (
-      <div className="grid items-start gap-14 lg:grid-cols-[420px_minmax(0,1fr)] max-[1180px]:gap-10 max-[1180px]:lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid items-start gap-14 lg:grid-cols-[26.25rem_minmax(0,1fr)] max-[1180px]:gap-10 max-[1180px]:lg:grid-cols-[21.25rem_minmax(0,1fr)]">
         {/* The list stays in view beside a long page; a list taller than the screen scrolls. */}
-        <div className="min-w-0 lg:sticky lg:top-6 lg:-m-3 lg:max-h-[calc(100dvh-48px)] lg:overflow-y-auto lg:p-3">
+        <div className="min-w-0 lg:sticky lg:top-6 lg:-m-3 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:p-3">
           {list}
         </div>
         {wide ? (

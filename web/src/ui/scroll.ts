@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react'
+import { scaledPx } from './cx'
 
 /**
  * Scrolls a sideways row (tabs on a phone) so that its current item shows, without ever scrolling
@@ -9,7 +10,7 @@ export function keepCurrentInView(row: HTMLElement | null) {
   if (!row || !current || row.scrollWidth <= row.clientWidth) return
   const bounds = row.getBoundingClientRect()
   const item = current.getBoundingClientRect()
-  const margin = 16
+  const margin = scaledPx(16)
   if (item.left < bounds.left) row.scrollLeft -= bounds.left - item.left + margin
   else if (item.right > bounds.right) row.scrollLeft += item.right - bounds.right + margin
 }

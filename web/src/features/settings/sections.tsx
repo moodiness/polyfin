@@ -438,7 +438,9 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
         />
         <PlainRow anchor="hidden-version-codecs">
           <fieldset aria-describedby="hidden-version-codecs-help">
-            <legend className="text-h3 text-ink max-md:text-[18px]">{s.hiddenVersionCodecs}</legend>
+            <legend className="text-h3 text-ink max-md:text-[1.125rem]">
+              {s.hiddenVersionCodecs}
+            </legend>
             <p id="hidden-version-codecs-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
               {s.hiddenVersionCodecsHelp}
             </p>
@@ -480,7 +482,7 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
         </FieldRow>
         <PlainRow anchor="hidden-releases">
           <fieldset aria-describedby="hidden-releases-help">
-            <legend className="text-h3 text-ink max-md:text-[18px]">{s.hiddenReleases}</legend>
+            <legend className="text-h3 text-ink max-md:text-[1.125rem]">{s.hiddenReleases}</legend>
             <p id="hidden-releases-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
               {s.hiddenReleasesHelp}
             </p>
@@ -739,7 +741,7 @@ function Content({ form, update, error, number, range, limits, saved, minMax }: 
           saved={saved.posterBadgeSize}
         />
         <PlainRow anchor="poster-preview">
-          <p className="text-h3 text-ink max-md:text-[18px]">{s.posterPreview.title}</p>
+          <p className="text-h3 text-ink max-md:text-[1.125rem]">{s.posterPreview.title}</p>
           <p className="mt-2 mb-5 max-w-[66ch] text-small text-ink-2">{s.posterPreview.help}</p>
           <PosterPreviewPanel size={form.posterBadgeSize} />
         </PlainRow>
@@ -1995,7 +1997,7 @@ function Notifications({ form, update, error, number, limits, saved, minMax }: S
           saved={saved.weeklySummaryHour}
         />
         <PlainRow anchor="summary-preview">
-          <h3 className="mb-3 text-h3 text-ink max-md:text-[18px]">{text.preview.title}</h3>
+          <h3 className="mb-3 text-h3 text-ink max-md:text-[1.125rem]">{text.preview.title}</h3>
           <SummaryPreview />
         </PlainRow>
       </SettingsGroup>

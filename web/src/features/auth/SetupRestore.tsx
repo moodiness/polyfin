@@ -126,7 +126,7 @@ export default function SetupRestore({
             onClick={() => input.current?.click()}
             className="flex min-h-16 w-full cursor-pointer items-center gap-4 rounded-field bg-s2 px-5 py-3 text-start focus-lit [--lift:1.02] hover:bg-s3 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <UploadSimpleIcon size={24} aria-hidden="true" className="shrink-0 text-ink-2" />
+            <UploadSimpleIcon size="1.5rem" aria-hidden="true" className="shrink-0 text-ink-2" />
             {file === null ? (
               <span className="text-lead font-medium text-ink">{text.restoreChoose}</span>
             ) : (

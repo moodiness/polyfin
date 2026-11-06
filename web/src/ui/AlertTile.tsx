@@ -71,9 +71,9 @@ export function AlertTile({
   return (
     <div
       className={cx(
-        'grid grid-cols-[56px_minmax(0,1fr)] gap-[22px] max-md:grid-cols-[minmax(0,1fr)] max-md:gap-3.5',
+        'grid grid-cols-[3.5rem_minmax(0,1fr)] gap-[1.375rem] max-md:grid-cols-[minmax(0,1fr)] max-md:gap-3.5',
         !inPanel &&
-          'rounded-panel bg-s1 py-7 pr-[30px] pl-7 max-md:rounded-[24px] max-md:px-5 max-md:py-[22px]',
+          'rounded-panel bg-s1 py-7 pr-[1.875rem] pl-7 max-md:rounded-[1.5rem] max-md:px-5 max-md:py-[1.375rem]',
         className,
       )}
     >
@@ -84,19 +84,19 @@ export function AlertTile({
         <IconTile icon={icon ?? look.icon} size="md" tone={look.bubble} />
       </span>
       <div className="min-w-0">
-        <p className={cx('mb-1 text-[16px] font-semibold', look.kind)}>
+        <p className={cx('mb-1 text-[1rem] font-semibold', look.kind)}>
           {kind ?? t.ui.alertKind[tone]}
         </p>
-        <Title className="text-[22px] leading-[1.3] font-semibold tracking-[-0.005em] text-ink max-md:text-[19px]">
+        <Title className="text-[1.375rem] leading-[1.3] font-semibold tracking-[-0.005em] text-ink max-md:text-[1.1875rem]">
           {title}
         </Title>
         {children !== undefined && (
-          <div className="mt-2 max-w-[60ch] text-[18px] text-ink-2 max-md:text-[16.5px]">
+          <div className="mt-2 max-w-[60ch] text-[1.125rem] text-ink-2 max-md:text-[1.03125rem]">
             {children}
           </div>
         )}
         {facts.length > 0 && (
-          <dl className="mt-3.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-[18px] gap-y-1.5 text-[18px] max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:text-[16.5px]">
+          <dl className="mt-3.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-[1.125rem] gap-y-1.5 text-[1.125rem] max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:text-[1.03125rem]">
             {facts.map(([term, value], index) => (
               <div key={term} className="contents">
                 <dt className={cx('text-ink-3', index > 0 && 'max-md:mt-2')}>{term}</dt>
@@ -105,7 +105,7 @@ export function AlertTile({
             ))}
           </dl>
         )}
-        {actions && <div className="mt-[22px] flex flex-wrap gap-3">{actions}</div>}
+        {actions && <div className="mt-[1.375rem] flex flex-wrap gap-3">{actions}</div>}
       </div>
     </div>
   )

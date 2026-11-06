@@ -70,7 +70,7 @@ const ownImportPollMs = 2000
 
 /** A section's anchor stays clear of the top row, and on a phone of the strip of sections too. */
 const anchorMargin =
-  'scroll-mt-[calc(var(--spacing-topbar)+32px)] max-md:scroll-mt-[calc(var(--spacing-topbar)+72px)]'
+  'scroll-mt-[calc(var(--spacing-topbar)+2rem)] max-md:scroll-mt-[calc(var(--spacing-topbar)+4.5rem)]'
 
 /**
  * `/me/account`, in the frame of a user's page: a band with the person (avatar, name, role) and
@@ -321,16 +321,16 @@ function PersonBand({ user }: { user: SessionUser }) {
   const posterId = watching?.item?.posterId
   const art = posterId && artFailed !== posterId ? posterId : null
   return (
-    <header className="mb-14 flex flex-wrap items-center gap-x-8 gap-y-5 rounded-panel bg-s1 px-8 py-7 max-md:mb-6 max-md:gap-x-5 max-md:rounded-[24px] max-md:px-5 max-md:py-5">
+    <header className="mb-14 flex flex-wrap items-center gap-x-8 gap-y-5 rounded-panel bg-s1 px-8 py-7 max-md:mb-6 max-md:gap-x-5 max-md:rounded-[1.5rem] max-md:px-5 max-md:py-5">
       <Avatar
         name={user.name}
         image={userImageUrl(user)}
         size="xl"
-        className="max-md:size-16 max-md:text-[28px]"
+        className="max-md:size-16 max-md:text-[1.75rem]"
       />
       <div className="min-w-0 flex-1 basis-60 max-md:basis-40">
-        <h1 className="text-h1 break-words text-ink max-md:text-[36px]">{text.title}</h1>
-        <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-lead text-ink-2 max-md:text-[17.5px]">
+        <h1 className="text-h1 break-words text-ink max-md:text-[2.25rem]">{text.title}</h1>
+        <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-lead text-ink-2 max-md:text-[1.09375rem]">
           <span className="min-w-0 break-words">
             {text.signedInAs}
             <span className="font-semibold text-ink">{user.name}</span>

@@ -463,7 +463,7 @@ function ConnectForm({
   return (
     <Panel title={text.connectTitle(product)} description={text.connectHelp} flush>
       <form onSubmit={submit} noValidate>
-        <div className="flex max-w-lg flex-col gap-5 px-6 pb-6 max-sm:px-4">
+        <div className="flex max-w-[38rem] flex-col gap-5 px-6 pb-6 max-sm:px-4">
           <div className="flex flex-col gap-2">
             <span aria-hidden className="text-control font-medium text-ink">
               {text.serverKind}
@@ -891,7 +891,7 @@ function ChoiceRow({
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label={text.importAs} className="max-w-sm">
+        <Field label={text.importAs} className="max-w-[28.5rem]">
           <Select
             value={choice.target}
             options={options}
@@ -957,7 +957,7 @@ function ChoiceRow({
                   ? error.message
                   : undefined
               }
-              className="max-w-sm"
+              className="max-w-[28.5rem]"
             >
               <TextInput
                 type="password"
@@ -982,7 +982,7 @@ function ChoiceRow({
             label={text.plexOwner.pinLabel}
             help={text.plexOwner.pinHelp(user.name)}
             error={error?.field === 'plexPin' ? error.message : undefined}
-            className="max-w-sm"
+            className="max-w-[28.5rem]"
           >
             <TextInput
               type="password"

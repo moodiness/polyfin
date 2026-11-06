@@ -151,7 +151,7 @@ function CreateApiKey() {
   return (
     <Panel title={text.createTitle} as="section" flush>
       <form onSubmit={submit} noValidate>
-        <div className="max-w-xl px-[30px] max-md:px-5">
+        <div className="max-w-[42.75rem] px-[1.875rem] max-md:px-5">
           <Field
             label={text.app}
             help={text.appHint}

@@ -132,8 +132,8 @@ export function ArtTile({
   const art = backdropSrc !== undefined && !failed.has(backdropSrc) ? backdropSrc : undefined
   const frame = poster !== undefined || fallback !== undefined
   const frameClass = cx(
-    'aspect-[400/560] rounded-[18px] shadow-[0_24px_48px_-16px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-24 max-md:rounded-[14px]',
-    wide ? 'w-[clamp(150px,22vh,204px)]' : 'w-[clamp(108px,15.5vh,140px)]',
+    'aspect-[400/560] rounded-[1.125rem] shadow-[0_24px_48px_-16px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-24 max-md:rounded-[0.875rem]',
+    wide ? 'w-[clamp(9.375rem,22vh,12.75rem)]' : 'w-[clamp(6.75rem,15.5vh,8.75rem)]',
   )
 
   function light() {
@@ -159,7 +159,7 @@ export function ArtTile({
     <li
       ref={item}
       className={cx(
-        'min-w-[min(100%,380px)] transition-[flex-grow] duration-700 ease-nuit motion-reduce:transition-none max-md:min-w-0',
+        'min-w-[min(100%,23.75rem)] transition-[flex-grow] duration-700 ease-nuit motion-reduce:transition-none max-md:min-w-0',
         wide ? 'grow-7 basis-0' : 'grow-5 basis-0',
       )}
     >
@@ -173,11 +173,11 @@ export function ArtTile({
         }}
         onKeyDown={onKeyDown}
         className={cx(
-          'group/art relative isolate grid h-full cursor-default grid-rows-[1fr_auto] gap-x-[30px] gap-y-5 overflow-hidden rounded-tile bg-s1-solid px-8 pt-[26px] pb-6',
+          'group/art relative isolate grid h-full cursor-default grid-rows-[1fr_auto] gap-x-[1.875rem] gap-y-5 overflow-hidden rounded-tile bg-s1-solid px-8 pt-[1.625rem] pb-6',
           'outline-4 outline-offset-[6px] outline-solid',
           'transition-[scale,box-shadow,outline-color] duration-500 ease-nuit',
           'after:absolute after:inset-0 after:-z-1 after:bg-[linear-gradient(100deg,rgb(22_20_27/0.35)_0%,rgb(22_20_27/0.72)_42%,rgb(22_20_27/0.82)_100%)]',
-          'max-md:gap-x-[18px] max-md:gap-y-4 max-md:rounded-[28px] max-md:p-[18px] max-md:outline-offset-4',
+          'max-md:gap-x-[1.125rem] max-md:gap-y-4 max-md:rounded-[1.75rem] max-md:p-[1.125rem] max-md:outline-offset-4',
           frame ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
           lit
             ? 'outline-focus shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] md:motion-safe:scale-[1.015]'
@@ -214,7 +214,7 @@ export function ArtTile({
               aria-hidden="true"
               className={cx(
                 frameClass,
-                'grid place-items-center bg-s2 text-[44px] font-bold text-ink-2 max-md:text-[32px]',
+                'grid place-items-center bg-s2 text-[2.75rem] font-bold text-ink-2 max-md:text-[2rem]',
               )}
             >
               {fallback ?? <FilmStripIcon size="1em" />}
@@ -225,7 +225,7 @@ export function ArtTile({
           {top !== undefined && (
             <div
               className={cx(
-                'flex min-w-0 items-center gap-2.5 text-[18px] text-ink-2 max-md:text-micro',
+                'flex min-w-0 items-center gap-2.5 text-[1.125rem] text-ink-2 max-md:text-micro',
                 tools !== undefined && wide && 'md:pr-40',
               )}
             >
@@ -235,29 +235,29 @@ export function ArtTile({
           <Title
             id={titleId}
             className={cx(
-              'mt-3 leading-[1.05] font-bold tracking-[-0.02em] break-words text-ink max-md:mt-2 max-md:text-[26px]',
-              wide ? 'text-[42px]' : 'text-[34px]',
+              'mt-3 leading-[1.05] font-bold tracking-[-0.02em] break-words text-ink max-md:mt-2 max-md:text-[1.625rem]',
+              wide ? 'text-[2.625rem]' : 'text-[2.125rem]',
             )}
           >
             {title}
           </Title>
           {meta !== undefined && (
-            <p className="mt-1.5 text-[18px] text-ink-2 max-md:text-micro">{meta}</p>
+            <p className="mt-1.5 text-[1.125rem] text-ink-2 max-md:text-micro">{meta}</p>
           )}
           {children !== undefined && (
-            <div className="mt-4 text-[17px] text-ink-2 max-md:mt-2.5 max-md:text-micro">
+            <div className="mt-4 text-[1.0625rem] text-ink-2 max-md:mt-2.5 max-md:text-micro">
               {children}
             </div>
           )}
           {detail !== undefined && wide && (
-            <div className="mt-3 text-[17px] text-ink-2 max-md:text-micro">{detail}</div>
+            <div className="mt-3 text-[1.0625rem] text-ink-2 max-md:text-micro">{detail}</div>
           )}
         </div>
         {footer !== undefined && <div className="col-span-full min-w-0">{footer}</div>}
         {tools !== undefined && (
           <div
             className={cx(
-              'flex gap-2 transition-opacity duration-300 ease-nuit md:absolute md:top-[22px] md:right-[22px] max-md:col-span-full max-md:opacity-100',
+              'flex gap-2 transition-opacity duration-300 ease-nuit md:absolute md:top-[1.375rem] md:right-[1.375rem] max-md:col-span-full max-md:opacity-100',
               lit ? 'opacity-100' : 'opacity-0 group-focus-within/art:opacity-100',
             )}
           >
