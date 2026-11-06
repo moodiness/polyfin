@@ -215,15 +215,18 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 	// While the tunnel's server does not answer, Health still answers,
 	// its route check given up at its own deadline, before the check
 	// waited long enough to know the handshake failed. The check goes on
-	// in the background: the requests that follow answer at once and tell
-	// the same failure, rather than each waiting out the deadline, 2
-	// seconds, for a check of its own. The admin app asks for Health and
-	// the problems every few seconds.
+	// in the background, and the requests that follow tell the same
+	// failure. That they tell it at once, rather than each waiting out
+	// the deadline for a check of its own, is asserted by the engine's
+	// TestWireGuardHealthTellsTheLastCheckAtOnce, which holds the check
+	// and tells a request that waited by its deadline, not by a clock. A
+	// time bound on these requests would count their database queries
+	// too, which the race detector on a busy machine slows to a second
+	// each.
 	status, body, _ = administrator.call(http.MethodGet, "/health", nil)
 	if torrents, _ := body["torrents"].(map[string]any); status != http.StatusOK || torrents["route"] != "wireguard" {
 		t.Fatalf("Health while the tunnel does not answer: %d %v", status, body)
 	}
-	asked := time.Now()
 	for range 3 {
 		_, body, _ = administrator.call(http.MethodGet, "/health/problems?language=en", nil)
 		found, _ := body["problems"].([]any)
@@ -239,9 +242,6 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 		if torrents["route"] != "wireguard" || torrents["lastHandshake"] != nil || !reflect.DeepEqual(torrents["addresses"], []any{"10.64.0.2/32"}) {
 			t.Fatalf("Health's torrents: %v", torrents)
 		}
-	}
-	if took := time.Since(asked); took > 3*readyWait {
-		t.Errorf("3 requests for the problems and 3 for Health took %v while the tunnel does not answer, each waiting for a check", took)
 	}
 
 	// With the right key, Health tells the last handshake.
