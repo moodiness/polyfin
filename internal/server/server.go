@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/basepath"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/webtheme"
 )
@@ -116,7 +117,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		target := adminPrefix
 		if options.Web != nil && setUp(r.Context(), options.SetupRequired) {
-			target = basePath(r) + webPrefix
+			target = basepath.Of(r) + webPrefix
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
@@ -146,12 +147,12 @@ func New(options Options) http.Handler {
 			options.Jellyfin, options.Logger))
 		// Permanently, as Jellyfin does; the mux's own redirect is a 307.
 		mux.HandleFunc("/web", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, basePath(r)+webPrefix, http.StatusMovedPermanently)
+			http.Redirect(w, r, basepath.Of(r)+webPrefix, http.StatusMovedPermanently)
 		})
 		// Jellyfin sends robots.txt to the web client's, which keeps search
 		// engines away.
 		mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, basePath(r)+webPrefix+"robots.txt", http.StatusFound)
+			http.Redirect(w, r, basepath.Of(r)+webPrefix+"robots.txt", http.StatusFound)
 		})
 	}
 	mux.Handle("/", options.Jellyfin)
@@ -166,12 +167,10 @@ func New(options Options) http.Handler {
 	return underJellyfinBase(handler)
 }
 
-type baseKey struct{}
-
 // underJellyfinBase serves a request whose path starts with jellyfinBase,
 // matched without regard to case, as the same request without it, before
 // anything else sees the path: jellyfinBase alone stands for the root.
-// basePath tells the routes the base the app wrote.
+// basepath.Of tells the routes the base the app wrote.
 func underJellyfinBase(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rest, ok := cutBase(r.URL.Path)
@@ -180,7 +179,7 @@ func underJellyfinBase(next http.Handler) http.Handler {
 			return
 		}
 		base := r.URL.Path[:len(jellyfinBase)]
-		stripped := r.WithContext(context.WithValue(r.Context(), baseKey{}, base))
+		stripped := r.WithContext(basepath.With(r.Context(), base))
 		stripped.URL = new(url.URL)
 		*stripped.URL = *r.URL
 		stripped.URL.Path = rest
@@ -207,18 +206,11 @@ func cutBase(p string) (string, bool) {
 	return "", false
 }
 
-// basePath returns the jellyfinBase a request came under, as the app wrote
-// it, or "" for the root, for the addresses Polyfin sends back.
-func basePath(r *http.Request) string {
-	base, _ := r.Context().Value(baseKey{}).(string)
-	return base
-}
-
 // rootOnly serves requests with h at the root only: under jellyfinBase,
 // other answers them, as a Jellyfin server at /jellyfin would.
 func rootOnly(h, other http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if basePath(r) != "" {
+		if basepath.Of(r) != "" {
 			other.ServeHTTP(w, r)
 			return
 		}
@@ -319,7 +311,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		header := w.Header()
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("Referrer-Policy", "no-referrer")
-		if basePath(r) == "" && (r.URL.Path == "/admin" || strings.HasPrefix(r.URL.Path, adminPrefix)) {
+		if basepath.Of(r) == "" && (r.URL.Path == "/admin" || strings.HasPrefix(r.URL.Path, adminPrefix)) {
 			header.Set("Content-Security-Policy", adminPolicy)
 		}
 		next.ServeHTTP(w, r)

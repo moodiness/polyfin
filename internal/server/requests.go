@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/basepath"
 	"github.com/moodiness/polyfin/internal/metrics"
 )
 
@@ -29,7 +30,7 @@ func countRequests(next http.Handler) http.Handler {
 // API included, and Polyfin's own monitoring routes; and the Jellyfin
 // API, which serves every other path.
 func apiOf(r *http.Request) string {
-	path, root := r.URL.Path, basePath(r) == ""
+	path, root := r.URL.Path, basepath.Of(r) == ""
 	switch {
 	case path == "/web" || strings.HasPrefix(path, webPrefix):
 		return metrics.APIWeb

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/moodiness/polyfin/internal/basepath"
 )
 
 type database struct{ err error }
@@ -147,6 +149,7 @@ func TestJellyfinBaseAnswersAsTheRoot(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		w.Header().Set("Base", basepath.Of(r))
 		_, _ = io.WriteString(w, "jellyfin "+r.URL.Path)
 	})
 	h := New(Options{
@@ -178,6 +181,15 @@ func TestJellyfinBaseAnswersAsTheRoot(t *testing.T) {
 		}
 		if response.Header().Get("Content-Security-Policy") != "" && strings.HasPrefix(want, "jellyfin") {
 			t.Errorf("%s: the admin app's Content-Security-Policy", target)
+		}
+		// The routes learn the base as the app wrote it, for the addresses
+		// they send back (see basepath).
+		wantBase := ""
+		if strings.HasPrefix(strings.ToLower(target), jellyfinBase+"/") {
+			wantBase = target[:len(jellyfinBase)]
+		}
+		if base := response.Header().Get("Base"); strings.HasPrefix(want, "jellyfin") && base != wantBase {
+			t.Errorf("%s: the API saw the base %q, want %q", target, base, wantBase)
 		}
 	}
 

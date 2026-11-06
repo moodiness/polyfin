@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/basepath"
 	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/webtheme"
 )
@@ -326,7 +327,7 @@ func serveTheme(w http.ResponseWriter, r *http.Request, rest string, logger *slo
 	}
 	header := w.Header()
 	if version != webtheme.Version {
-		target := basePath(r) + webPrefix + webtheme.Address(name)
+		target := basepath.Of(r) + webPrefix + webtheme.Address(name)
 		if r.URL.RawQuery != "" {
 			target += "?" + r.URL.RawQuery
 		}
