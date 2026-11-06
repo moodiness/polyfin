@@ -17,7 +17,6 @@ const versions: typeof en = {
     searching: 'Suche läuft…',
     noTitles: 'Kein Film und keine Serie gefunden.',
     titlesFound: (term: string) => `Gefundene Titel für „${term}“`,
-    pickTitle: (name: string, details: string) => `${name}, ${details}`,
     episodesOf: (name: string) => `Folgen von ${name}`,
     noEpisodes: 'Keine Folge.',
     back: 'Zurück',

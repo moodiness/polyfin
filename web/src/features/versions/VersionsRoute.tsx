@@ -18,14 +18,12 @@ import { useI18n } from '@/i18n'
 import {
   Block,
   Button,
-  cx,
   EmptyState,
   Field,
   InlineError,
   RelativeTime,
   Row,
   RowList,
-  Skeleton,
   SkeletonRows,
   TextInput,
   useToast,
@@ -43,7 +41,7 @@ export default function VersionsRoute() {
   return (
     <PageLayout title={t.versions.title} lede={t.versions.description}>
       <Block title={t.versions.find}>
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-7">
           <UserPicker user={user} onUser={setUser} />
           <TitleFinder
             key={user}
@@ -84,22 +82,17 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
     else setAsked(next)
   }
 
-  const pickButton =
-    'flex w-full cursor-pointer items-center gap-3 rounded-field p-1.5 text-left transition-colors duration-160 hover:bg-s3 focus-visible:bg-s3'
-
   if (series !== null) {
     return (
-      <section aria-label={text.episodesOf(series.name)} className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="truncate text-control font-medium text-ink">
-            {text.episodesOf(series.name)}
-          </p>
+      <section aria-label={text.episodesOf(series.name)} className="flex max-w-3xl flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="min-w-0 text-h3 break-words text-ink">{text.episodesOf(series.name)}</h3>
           <Button size="sm" variant="ghost" icon={ArrowLeftIcon} onClick={() => setSeries(null)}>
             {text.back}
           </Button>
         </div>
         {episodes.isPending ? (
-          <Skeleton className="h-24 rounded-field" />
+          <SkeletonRows rows={3} />
         ) : episodes.isError ? (
           <InlineError onRetry={() => void episodes.refetch()} retrying={episodes.isFetching}>
             {errorMessage(t, episodes.error)}
@@ -107,54 +100,55 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
         ) : episodes.data.length === 0 ? (
           <p className="text-small text-ink-3">{text.noEpisodes}</p>
         ) : (
-          <ul className="flex max-h-96 flex-col gap-0.5 overflow-y-auto rounded-field border border-line bg-s1 p-1">
-            {episodes.data.map((episode) => (
-              <li key={episode.id}>
-                <button
-                  type="button"
+          // Long seasons scroll inside, with room for the lit row's rise.
+          <div className="-mx-2 max-h-[560px] overflow-y-auto px-2 py-1">
+            <RowList compact aria-label={text.episodesOf(series.name)}>
+              {episodes.data.map((episode) => (
+                <Row
+                  key={episode.id}
                   onClick={() => onPick(episode)}
-                  className={cx(pickButton, 'items-baseline px-2.5 py-2')}
-                >
-                  <span className="figures shrink-0 text-small text-ink-3">
-                    {formatEpisode(episode.season, episode.episode)}
-                  </span>
-                  <span className="min-w-0 truncate text-control text-ink">{episode.name}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                  leading={
+                    <span className="figures w-[88px] shrink-0 text-micro whitespace-nowrap text-ink-3">
+                      {formatEpisode(episode.season, episode.episode)}
+                    </span>
+                  }
+                  title={episode.name}
+                />
+              ))}
+            </RowList>
+          </div>
         )}
       </section>
     )
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <form onSubmit={submit} noValidate className="flex max-w-xl items-start gap-2">
-        <Field label={text.search} help={text.searchHelp} className="flex-1">
+    <div className="flex max-w-3xl flex-col gap-5">
+      <form onSubmit={submit} noValidate>
+        <Field label={text.search} help={text.searchHelp}>
           <TextInput
             value={term}
             onValue={setTerm}
             icon={MagnifyingGlassIcon}
             autoComplete="off"
             spellCheck={false}
+            end={
+              <Button
+                type="submit"
+                size="sm"
+                className="mr-2.5"
+                loading={search.isFetching}
+                disabled={term.trim() === ''}
+              >
+                {text.searchButton}
+              </Button>
+            }
           />
         </Field>
-        <Button
-          type="submit"
-          className="mt-[26px]"
-          loading={search.isFetching}
-          disabled={term.trim() === ''}
-        >
-          {text.searchButton}
-        </Button>
       </form>
       <div aria-live="polite" className="empty:hidden">
         {asked === null ? null : search.isPending ? (
-          <div className="flex flex-col gap-2" aria-label={text.searching}>
-            <Skeleton className="h-12 rounded-field" />
-            <Skeleton className="h-12 rounded-field" />
-          </div>
+          <SkeletonRows rows={2} label={text.searching} />
         ) : search.isError ? (
           <InlineError onRetry={() => void search.refetch()} retrying={search.isRefetching}>
             {errorMessage(t, search.error)}
@@ -162,29 +156,24 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
         ) : search.data.length === 0 ? (
           <p className="text-small text-ink-3">{text.noTitles}</p>
         ) : (
-          <ul className="flex max-w-xl flex-col gap-1" aria-label={text.titlesFound(asked)}>
-            {search.data.map((found) => {
-              const details = [kinds[found.kind] ?? found.kind, found.year > 0 ? found.year : '']
-                .filter(Boolean)
-                .join(' · ')
-              return (
-                <li key={found.id}>
-                  <button
-                    type="button"
-                    onClick={() => (found.kind === 'series' ? setSeries(found) : onPick(found))}
-                    aria-label={text.pickTitle(found.name, details)}
-                    className={pickButton}
-                  >
+          <RowList aria-label={text.titlesFound(asked)}>
+            {search.data.map((found) => (
+              <Row
+                key={found.id}
+                onClick={() => (found.kind === 'series' ? setSeries(found) : onPick(found))}
+                leading={
+                  // The poster, a little larger than its 32 px.
+                  <span className="flex shrink-0 [&>*]:w-10">
                     <TitlePoster title={found} />
-                    <span className="min-w-0">
-                      <span className="block truncate text-control text-ink">{found.name}</span>
-                      <span className="block text-small text-ink-3">{details}</span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+                  </span>
+                }
+                title={found.name}
+                meta={[kinds[found.kind] ?? found.kind, found.year > 0 ? found.year : '']
+                  .filter(Boolean)
+                  .join(' · ')}
+              />
+            ))}
+          </RowList>
         )}
       </div>
     </div>
@@ -210,7 +199,7 @@ function BlockedEverywhere() {
   })
   return (
     <Block title={text.everywhere} count={blocks.data?.length}>
-      <p className="mb-4 max-w-2xl text-small text-ink-3">{text.everywhereHelp}</p>
+      <p className="mb-5 max-w-[72ch] text-small text-ink-2">{text.everywhereHelp}</p>
       {blocks.isPending ? (
         <SkeletonRows rows={2} />
       ) : blocks.isError ? (
@@ -220,32 +209,33 @@ function BlockedEverywhere() {
       ) : blocks.data.length === 0 ? (
         <EmptyState title={text.noBlocks} />
       ) : (
-        <RowList>
+        <RowList compact aria-label={text.everywhere}>
           {blocks.data.map((block) => (
-            <li key={block.id}>
-              <Row
-                title={<span className="break-all">{block.name}</span>}
-                meta={
-                  <>
+            <Row
+              key={block.id}
+              title={<span className="break-all">{block.name}</span>}
+              meta={
+                <span className="flex min-w-0 flex-col break-words">
+                  <span>
                     {[block.filename, block.size > 0 ? formatBytes(block.size, language) : '']
                       .filter(Boolean)
                       .join(' · ')}
-                    <span className="block">
-                      {text.blockedBy(block.by, block.reason)} · <RelativeTime iso={block.at} />
-                    </span>
-                  </>
-                }
-                trailing={
-                  <Button
-                    size="sm"
-                    loading={unblock.isPending && unblock.variables === block.id}
-                    onClick={() => unblock.mutate(block.id)}
-                  >
-                    {text.unblock}
-                  </Button>
-                }
-              />
-            </li>
+                  </span>
+                  <span>
+                    {text.blockedBy(block.by, block.reason)} · <RelativeTime iso={block.at} />
+                  </span>
+                </span>
+              }
+              trailing={
+                <Button
+                  size="sm"
+                  loading={unblock.isPending && unblock.variables === block.id}
+                  onClick={() => unblock.mutate(block.id)}
+                >
+                  {text.unblock}
+                </Button>
+              }
+            />
           ))}
         </RowList>
       )}

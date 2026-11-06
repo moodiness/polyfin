@@ -1,6 +1,6 @@
 import { ArrowsClockwiseIcon, ProhibitIcon, PushPinIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router'
 import {
   analyzeVersion,
@@ -142,7 +142,7 @@ function Explained({
   return (
     <div className="flex flex-col gap-block max-md:gap-11">
       <Block title={text.order}>
-        <div className="flex flex-col gap-2 text-control text-ink-2">
+        <div className="flex max-w-[72ch] flex-col gap-2 text-body text-ink-2">
           <p>{criteria === '' ? text.orderNone : text.orderBy(criteria)}</p>
           {explained.qualityGroup > 0 && <p>{text.group(explained.qualityGroup)}</p>}
           {explained.keptAll && <Notice tone="info">{text.keptAll}</Notice>}
@@ -194,31 +194,31 @@ function PinBlock({ id, explained }: { id: string; explained: TitleVersions }) {
   return (
     <Block title={text.pin}>
       {pin === null ? (
-        <p className="max-w-2xl text-small text-ink-3">{text.noPin}</p>
+        <p className="max-w-[72ch] text-small text-ink-2">{text.noPin}</p>
       ) : (
-        <RowList>
-          <li>
-            <Row
-              leading={PushPinIcon}
-              title={<span className="break-all">{pin.name}</span>}
-              titleAside={pin.missing ? <Badge tone="warn">{text.pinMissing}</Badge> : undefined}
-              meta={
-                <span className="flex min-w-0 flex-col whitespace-normal break-words">
+        <RowList compact aria-label={text.pin}>
+          <Row
+            leading={PushPinIcon}
+            title={<span className="break-all">{pin.name}</span>}
+            titleAside={pin.missing ? <Badge tone="warn">{text.pinMissing}</Badge> : undefined}
+            meta={
+              <span className="flex min-w-0 flex-col break-words">
+                <span>
                   {[pin.filename, pin.size > 0 ? formatBytes(pin.size, language) : '']
                     .filter(Boolean)
                     .join(' · ')}
-                  <span className="block">
-                    {text.pinnedBy(pin.by)} · <RelativeTime iso={pin.at} />
-                  </span>
                 </span>
-              }
-              trailing={
-                <Button size="sm" loading={unpin.isPending} onClick={() => unpin.mutate()}>
-                  {text.unpin}
-                </Button>
-              }
-            />
-          </li>
+                <span>
+                  {text.pinnedBy(pin.by)} · <RelativeTime iso={pin.at} />
+                </span>
+              </span>
+            }
+            trailing={
+              <Button size="sm" loading={unpin.isPending} onClick={() => unpin.mutate()}>
+                {text.unpin}
+              </Button>
+            }
+          />
         </RowList>
       )}
     </Block>
@@ -330,6 +330,8 @@ function SourceStreams({
   const text = t.versions
   const toast = useToast()
   const [blocking, setBlocking] = useState<VersionStream | null>(null)
+  // The Block button that opened the dialog, which gets the focus back when it closes.
+  const opener = useRef<HTMLElement | null>(null)
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['title-versions', id] })
     void queryClient.invalidateQueries({ queryKey: queryKeys.versionBlocks })
@@ -368,45 +370,41 @@ function SourceStreams({
   }
   return (
     <section aria-label={source.name} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <h3 className="text-control font-medium text-ink">{source.name}</h3>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h3 className="text-group text-ink">{source.name}</h3>
         {source.embedded && <Badge>{text.embedded}</Badge>}
         <StatusPill tone={state[source.state]}>{text.sourceStates[source.state]}</StatusPill>
       </div>
       {source.streams.length === 0 ? (
         <p className="text-small text-ink-3">{text.noStreams}</p>
       ) : (
-        <RowList aria-label={source.name}>
+        <RowList compact aria-label={source.name}>
           {source.streams.map((stream, index) => {
             const explanation = why(t, stream)
             const labels = tags(stream.labels, t)
             const known = tags(stream.facts, t)
             const isVersion =
               stream.version !== '' && !['duplicate', 'mirror', 'blocked'].includes(stream.step)
+            const blocked = stream.step === 'blocked' ? stream.block : null
             return (
-              <li key={`${index}-${stream.version}`}>
-                <Row
-                  title={<span className="break-words">{stream.name || stream.filename}</span>}
-                  titleAside={
-                    <>
-                      {stream.step === 'offered' ? (
-                        <Badge tone="accent">{text.steps.offered(stream.place)}</Badge>
-                      ) : (
-                        <StatusPill tone={stepTones[stream.step] ?? 'muted'}>
-                          {text.steps[stream.step]}
-                        </StatusPill>
-                      )}
+              <Row
+                key={`${index}-${stream.version}`}
+                title={<span className="break-words">{stream.name || stream.filename}</span>}
+                titleAside={
+                  stream.pinned || stream.analyzed ? (
+                    <span className="flex flex-wrap gap-1.5">
                       {stream.pinned && (
-                        <Badge tone="ok">
-                          <PushPinIcon size={12} aria-hidden="true" className="mr-1" />
+                        <Badge tone="ok" icon={PushPinIcon}>
                           {text.pinned}
                         </Badge>
                       )}
                       {stream.analyzed && <Badge>{text.analyzed}</Badge>}
-                    </>
-                  }
-                  meta={
-                    <span className="flex min-w-0 flex-col whitespace-normal break-words">
+                    </span>
+                  ) : undefined
+                }
+                meta={
+                  <span className="flex min-w-0 flex-col break-words">
+                    <span>
                       {[
                         stream.filename,
                         stream.size > 0 ? formatBytes(stream.size, language) : '',
@@ -414,72 +412,79 @@ function SourceStreams({
                       ]
                         .filter(Boolean)
                         .join(' · ')}
-                      {labels.length > 0 && (
-                        <span className="block">
-                          {text.labelsAsRead} {labels.join(' · ')}
-                        </span>
-                      )}
-                      {stream.analyzed && known.length > 0 && known.join() !== labels.join() && (
-                        <span className="block">
-                          {text.facts} {known.join(' · ')}
-                        </span>
-                      )}
-                      {stream.facts.labelRules.length > 0 && (
-                        <span className="block">
-                          {text.labelRules(stream.facts.labelRules, stream.facts.score)}
-                        </span>
-                      )}
-                      {explanation !== '' && (
-                        <span className="block text-ink-2">{explanation}</span>
-                      )}
-                      {stream.unstarted && (
-                        <span className="block text-ink-2">{text.unstarted}</span>
-                      )}
                     </span>
-                  }
-                  trailing={
-                    stream.step === 'blocked' && stream.block !== null ? (
+                    {labels.length > 0 && (
+                      <span>
+                        {text.labelsAsRead} {labels.join(' · ')}
+                      </span>
+                    )}
+                    {stream.analyzed && known.length > 0 && known.join() !== labels.join() && (
+                      <span>
+                        {text.facts} {known.join(' · ')}
+                      </span>
+                    )}
+                    {stream.facts.labelRules.length > 0 && (
+                      <span>{text.labelRules(stream.facts.labelRules, stream.facts.score)}</span>
+                    )}
+                    {explanation !== '' && <span className="text-ink-2">{explanation}</span>}
+                    {stream.unstarted && <span className="text-ink-2">{text.unstarted}</span>}
+                  </span>
+                }
+                trailing={
+                  stream.step === 'offered' ? (
+                    <Badge tone="accent">{text.steps.offered(stream.place)}</Badge>
+                  ) : (
+                    <StatusPill tone={stepTones[stream.step] ?? 'muted'}>
+                      {text.steps[stream.step]}
+                    </StatusPill>
+                  )
+                }
+              >
+                {blocked !== null ? (
+                  <div className="-mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      loading={unblock.isPending && unblock.variables === blocked.id}
+                      onClick={() => unblock.mutate(blocked.id)}
+                    >
+                      {text.unblock}
+                    </Button>
+                  </div>
+                ) : isVersion ? (
+                  <div className="-mt-3 flex flex-wrap gap-2">
+                    {stream.step === 'offered' && !stream.pinned && (
                       <Button
                         size="sm"
-                        loading={unblock.isPending && unblock.variables === stream.block.id}
-                        onClick={() => stream.block !== null && unblock.mutate(stream.block.id)}
+                        icon={PushPinIcon}
+                        loading={pin.isPending && pin.variables === stream.version}
+                        onClick={() => pin.mutate(stream.version)}
                       >
-                        {text.unblock}
+                        {text.pinAction}
                       </Button>
-                    ) : isVersion ? (
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {stream.step === 'offered' && !stream.pinned && (
-                          <Button
-                            size="sm"
-                            icon={PushPinIcon}
-                            loading={pin.isPending && pin.variables === stream.version}
-                            onClick={() => pin.mutate(stream.version)}
-                          >
-                            {text.pinAction}
-                          </Button>
-                        )}
-                        {!stream.torrent && (
-                          <Button
-                            size="sm"
-                            loading={analyze.isPending && analyze.variables === stream.version}
-                            onClick={() => analyze.mutate(stream.version)}
-                          >
-                            {text.analyze}
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={ProhibitIcon}
-                          onClick={() => setBlocking(stream)}
-                        >
-                          {text.block}
-                        </Button>
-                      </div>
-                    ) : undefined
-                  }
-                />
-              </li>
+                    )}
+                    {!stream.torrent && (
+                      <Button
+                        size="sm"
+                        loading={analyze.isPending && analyze.variables === stream.version}
+                        onClick={() => analyze.mutate(stream.version)}
+                      >
+                        {text.analyze}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={ProhibitIcon}
+                      onClick={(event) => {
+                        opener.current = event.currentTarget
+                        setBlocking(stream)
+                      }}
+                    >
+                      {text.block}
+                    </Button>
+                  </div>
+                ) : undefined}
+              </Row>
             )
           })}
         </RowList>
@@ -489,7 +494,11 @@ function SourceStreams({
           id={id}
           user={user}
           stream={blocking}
-          onClose={() => setBlocking(null)}
+          onClose={() => {
+            setBlocking(null)
+            // Once the dialog is gone: the page under it takes no focus while it is open.
+            requestAnimationFrame(() => opener.current?.focus())
+          }}
           onBlocked={refresh}
         />
       )}
@@ -556,8 +565,8 @@ function BlockModal({
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-5 p-5">
-        <p className="text-control break-words text-ink">{stream.name || stream.filename}</p>
+      <form id={formId} onSubmit={submit} noValidate className="space-y-6 px-8 pb-6 max-sm:px-5">
+        <p className="text-body break-words text-ink">{stream.name || stream.filename}</p>
         <Field label={text.blockScope} help={text.scopeHelp}>
           <Segmented
             label={text.blockScope}
@@ -599,35 +608,36 @@ function TitleBlocks({ id, user, blocks }: { id: string; user: string; blocks: V
   return (
     <Block title={text.titleBlocks} count={blocks.length}>
       {blocks.length === 0 ? (
-        <p className="text-small text-ink-3">{text.noTitleBlocks}</p>
+        <p className="text-small text-ink-2">{text.noTitleBlocks}</p>
       ) : (
-        <RowList>
+        <RowList compact aria-label={text.titleBlocks}>
           {blocks.map((block) => (
-            <li key={block.id}>
-              <Row
-                leading={ProhibitIcon}
-                title={<span className="break-all">{block.name}</span>}
-                meta={
-                  <span className="flex min-w-0 flex-col whitespace-normal break-words">
+            <Row
+              key={block.id}
+              leading={ProhibitIcon}
+              title={<span className="break-all">{block.name}</span>}
+              meta={
+                <span className="flex min-w-0 flex-col break-words">
+                  <span>
                     {[block.filename, block.size > 0 ? formatBytes(block.size, language) : '']
                       .filter(Boolean)
                       .join(' · ')}
-                    <span className="block">
-                      {text.blockedBy(block.by, block.reason)} · <RelativeTime iso={block.at} />
-                    </span>
                   </span>
-                }
-                trailing={
-                  <Button
-                    size="sm"
-                    loading={unblock.isPending && unblock.variables === block.id}
-                    onClick={() => unblock.mutate(block.id)}
-                  >
-                    {text.unblock}
-                  </Button>
-                }
-              />
-            </li>
+                  <span>
+                    {text.blockedBy(block.by, block.reason)} · <RelativeTime iso={block.at} />
+                  </span>
+                </span>
+              }
+              trailing={
+                <Button
+                  size="sm"
+                  loading={unblock.isPending && unblock.variables === block.id}
+                  onClick={() => unblock.mutate(block.id)}
+                >
+                  {text.unblock}
+                </Button>
+              }
+            />
           ))}
         </RowList>
       )}
@@ -641,15 +651,13 @@ function Decisions({ explained }: { explained: TitleVersions }) {
   const text = t.versions
   return (
     <Block title={text.decisions} count={explained.decisions.length}>
-      <p className="mb-4 max-w-2xl text-small text-ink-3">{text.decisionsHelp}</p>
+      <p className="mb-5 max-w-[72ch] text-small text-ink-2">{text.decisionsHelp}</p>
       {explained.decisions.length === 0 ? (
         <EmptyState title={text.noDecisions} />
       ) : (
-        <RowList>
+        <RowList compact aria-label={text.decisions}>
           {explained.decisions.map((decision, index) => (
-            <li key={`${decision.at}-${index}`}>
-              <Decision decision={decision} />
-            </li>
+            <Decision key={`${decision.at}-${index}`} decision={decision} />
           ))}
         </RowList>
       )}
@@ -672,13 +680,13 @@ function Decision({ decision }: { decision: PlayDecision }) {
       }
       titleAside={decision.picked ? <Badge>{text.picked}</Badge> : undefined}
       meta={
-        <span className="flex min-w-0 flex-col whitespace-normal break-words">
+        <span className="min-w-0 break-words">
           {text.decisionBy(decision.user, decision.device, decision.app)} ·{' '}
           <RelativeTime iso={decision.at} />
         </span>
       }
     >
-      <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5 text-small text-ink-2">
+      <ol className="-mt-2 flex list-decimal flex-col gap-1 pl-5 text-small text-ink-2">
         {decision.tries.map((tried, index) => (
           <li key={`${tried.version}-${index}`}>
             <span className="break-words text-ink">{tried.name}</span>:{' '}

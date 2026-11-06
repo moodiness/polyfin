@@ -15,7 +15,6 @@ const versions = {
     searching: 'Searching…',
     noTitles: 'No movie or series found.',
     titlesFound: (term: string) => `Titles found for “${term}”`,
-    pickTitle: (name: string, details: string) => `${name}, ${details}`,
     episodesOf: (name: string) => `Episodes of ${name}`,
     noEpisodes: 'No episode.',
     back: 'Back',
