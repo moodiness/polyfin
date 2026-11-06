@@ -628,6 +628,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
 		{addons.ErrInvalidUsedBy, http.StatusBadRequest, "invalid_used_by"},
 		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
+		{addons.ErrUsedByEveryone, http.StatusConflict, "used_by_everyone"},
 		{addons.ErrKindChanged, http.StatusUnprocessableEntity, "addon_kind_changed"},
 		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
 		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
@@ -845,6 +846,37 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 // same.
 func sameUsedBy(a, b addons.UsedBy) bool {
 	return a.Listed == b.Listed && slices.Equal(a.Groups, b.Groups) && slices.Equal(a.Users, b.Users)
+}
+
+// groupSource answers PUT (uses) or DELETE on a group's server source:
+// the group is listed in, or taken off, the source's Used by, the rest of
+// the setting as it is, and the answer is the source. A source used by
+// everyone is left unchanged: 409 used_by_everyone, as its Used by lists
+// no group to change.
+func (h *handler) groupSource(uses bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		group, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		id, ok := pathID(w, r, "source")
+		if !ok {
+			return
+		}
+		_, err := h.Accounts.Group(r.Context(), group)
+		if accountError(w, err) {
+			return
+		}
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		addon, changed, err := h.Addons.SetGroupUse(r.Context(), id, group, uses)
+		if err == nil && changed {
+			h.usedByChanged(r.Context(), addon)
+		}
+		h.answerAddon(w, r, addons.Shared(), http.StatusOK, addon, err)
+	}
 }
 
 func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {

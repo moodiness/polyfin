@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -130,5 +131,125 @@ func TestServerAddonsAreUsedByTheGroupsAndUsersListed(t *testing.T) {
 	}
 	if status, body, _ := admin.call(http.MethodPatch, "/scopes/me/addons/"+own["id"].(string), limit); status != http.StatusBadRequest || body["error"] != "invalid_used_by" {
 		t.Errorf("limiting an own addon: %d %v", status, body)
+	}
+}
+
+// A group's page gives the group a server source, or takes it, one at a
+// time: the group joins or leaves the source's Used by, the rest of it
+// unchanged, so that changes made at once all stay. A source used by
+// everyone is left as it is, members are refused, and only a change is
+// in the activity log.
+func TestAGroupIsGivenAServerSourceAlone(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	admin := api.signedIn("alex", true)
+	member := api.signedIn("member", false)
+	sam, err := api.store.CreateUser(t.Context(), accounts.NewUser{Name: "sam", Password: "correct horse"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := make([]accounts.Group, 6)
+	for i := range groups {
+		if groups[i], err = api.store.CreateGroup(t.Context(), "Group "+string(rune('A'+i)), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	family := groups[0].ID.String()
+
+	status, addon, _ := admin.call(http.MethodPost, "/scopes/shared/addons", map[string]string{"manifestUrl": localAddon(t)})
+	if status != http.StatusCreated {
+		t.Fatalf("installing: %d %v", status, addon)
+	}
+	id := addon["id"].(string)
+	source := func(group string) string { return "/groups/" + group + "/sources/" + id }
+	usedBy := func() (string, []string, []string) {
+		t.Helper()
+		var listed []map[string]any
+		admin.raw(http.MethodGet, "/scopes/shared/addons", "", &listed)
+		if len(listed) != 1 {
+			t.Fatalf("addons: %v", listed)
+		}
+		return usedByOf(t, listed[0])
+	}
+
+	// Used by everyone, it lists no group to change.
+	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+		if status, body, _ := admin.call(method, source(family), nil); status != http.StatusConflict || body["error"] != "used_by_everyone" {
+			t.Errorf("%s on a source used by everyone: %d %v", method, status, body)
+		}
+	}
+	if mode, groups, users := usedBy(); mode != "everyone" || len(groups)+len(users) != 0 {
+		t.Errorf("the source used by everyone after the refusals: %s %v %v", mode, groups, users)
+	}
+
+	admin.call(http.MethodPatch, "/scopes/shared/addons/"+id, map[string]any{"usedBy": map[string]any{"mode": "listed", "users": []string{sam.ID.String()}}})
+	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+		if status, body, _ := member.call(method, source(family), nil); status != http.StatusForbidden {
+			t.Errorf("a member's %s: %d %v", method, status, body)
+		}
+	}
+	missing := accounts.ID{1}.String()
+	for _, path := range []string{source(missing), "/groups/" + family + "/sources/" + missing, "/groups/" + family + "/sources/not-an-id"} {
+		if status, body, _ := admin.call(http.MethodPut, path, nil); status != http.StatusNotFound || body["error"] != "not_found" {
+			t.Errorf("PUT %s: %d %v", path, status, body)
+		}
+	}
+
+	status, body, _ := admin.call(http.MethodPut, source(family), nil)
+	if mode, listed, users := usedByOf(t, body); status != http.StatusOK || mode != "listed" ||
+		!slices.Equal(listed, []string{family}) || !slices.Equal(users, []string{sam.ID.String()}) {
+		t.Fatalf("giving the source: %d %v", status, body)
+	}
+	// Given again, it is as it was, and the log has it once.
+	if status, body, _ := admin.call(http.MethodPut, source(family), nil); status != http.StatusOK {
+		t.Errorf("giving it again: %d %v", status, body)
+	}
+	if names := activityNames(t, admin, "AddonUsedByChanged"); len(names) != 2 || names[0] != "alex limited the addon Local to Group A, sam" {
+		t.Errorf("activity after giving the source: %q", names)
+	}
+
+	// The others given at once, and the first taken, all stay.
+	var wg sync.WaitGroup
+	statuses := make([]int, len(groups))
+	for i, group := range groups {
+		method := http.MethodPut
+		if i == 0 {
+			method = http.MethodDelete
+		}
+		wg.Go(func() { statuses[i], _, _ = admin.call(method, source(group.ID.String()), nil) })
+	}
+	wg.Wait()
+	want := []string{}
+	for i, group := range groups {
+		if statuses[i] != http.StatusOK {
+			t.Errorf("the change for %s: %d", group.Name, statuses[i])
+		}
+		if i > 0 {
+			want = append(want, group.ID.String())
+		}
+	}
+	slices.Sort(want)
+	if mode, listed, users := usedBy(); mode != "listed" || !slices.Equal(listed, want) || !slices.Equal(users, []string{sam.ID.String()}) {
+		t.Errorf("after the changes made at once: %s %v %v, want %v", mode, listed, users, want)
+	}
+
+	// Taken, it is out of the list; taken again, nothing changes.
+	for range 2 {
+		status, body, _ = admin.call(http.MethodDelete, source(groups[1].ID.String()), nil)
+		if _, listed, _ := usedByOf(t, body); status != http.StatusOK || slices.Contains(listed, groups[1].ID.String()) || len(listed) != len(want)-1 {
+			t.Errorf("taking the source: %d %v", status, body)
+		}
+	}
+	if names := activityNames(t, admin, "AddonUsedByChanged"); len(names) != 3+len(groups) {
+		t.Errorf("activity after the changes: %d %q", len(names), names)
+	}
+
+	// A user's own addon is not the server's.
+	status, own, _ := admin.call(http.MethodPost, "/scopes/me/addons", map[string]string{"manifestUrl": localAddon(t)})
+	if status != http.StatusCreated {
+		t.Fatalf("installing an own addon: %d %v", status, own)
+	}
+	if status, body, _ := admin.call(http.MethodPut, "/groups/"+family+"/sources/"+own["id"].(string), nil); status != http.StatusNotFound {
+		t.Errorf("giving an own addon: %d %v", status, body)
 	}
 }

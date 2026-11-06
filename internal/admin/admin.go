@@ -405,6 +405,8 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/groups/{id}", h.administrator(h.deleteGroup))
 	mux.Handle("GET /admin/api/groups/{id}/members", h.administrator(h.groupMembers))
 	mux.Handle("POST /admin/api/groups/{id}/members", h.administrator(h.addGroupMembers))
+	mux.Handle("PUT /admin/api/groups/{id}/sources/{source}", h.administrator(h.groupSource(true)))
+	mux.Handle("DELETE /admin/api/groups/{id}/sources/{source}", h.administrator(h.groupSource(false)))
 	mux.Handle("GET /admin/api/users/{id}/defaults", h.administrator(h.userDefaults))
 	mux.Handle("POST /admin/api/users/{id}/reset", h.administrator(h.resetUser))
 	mux.Handle("GET /admin/api/groups/{id}/defaults", h.administrator(h.groupDefaults))

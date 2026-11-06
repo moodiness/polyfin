@@ -65,6 +65,9 @@ var (
 	// ErrInvalidUsedBy reports a Used by setting given to a user's own
 	// addon, or naming a group or a user that does not exist.
 	ErrInvalidUsedBy = errors.New("invalid Used by setting")
+	// ErrUsedByEveryone reports a group given to, or taken from, a server
+	// addon used by everyone, whose Used by lists no one (see SetGroupUse).
+	ErrUsedByEveryone = errors.New("the addon is used by everyone")
 )
 
 // Scope owns addons: the server (no owner) or one user.
@@ -787,6 +790,52 @@ func (s *Store) SetUsedBy(ctx context.Context, id accounts.ID, usedBy UsedBy) (A
 		return err
 	})
 	return addon, err
+}
+
+// SetGroupUse lists the group among those who use the server addon id,
+// or takes it off the list, leaving the rest of its Used by as it is:
+// two changes made at once, to one addon or to two, both stay. It
+// reports whether the list changed, and answers ErrNotFound for an addon
+// that is not the server's, ErrUsedByEveryone, changing nothing, for one
+// used by everyone, and ErrInvalidUsedBy for a group that does not
+// exist.
+func (s *Store) SetGroupUse(ctx context.Context, id, group accounts.ID, uses bool) (Addon, bool, error) {
+	defer s.changed()
+	var addon Addon
+	var changed bool
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		// The addon's row is locked first, as WriteUsedBy's update does:
+		// a change of its whole setting waits, or is waited for.
+		var listed bool
+		err := tx.QueryRow(ctx, "SELECT used_by = 'listed' FROM addons WHERE id = $1 AND owner_id IS NULL FOR UPDATE", id).Scan(&listed)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if !listed {
+			return ErrUsedByEveryone
+		}
+		var tag pgconn.CommandTag
+		if uses {
+			tag, err = tx.Exec(ctx, `INSERT INTO addon_users (addon_id, group_id) VALUES ($1, $2)
+				ON CONFLICT (addon_id, group_id) WHERE group_id IS NOT NULL DO NOTHING`, id, group)
+		} else {
+			tag, err = tx.Exec(ctx, "DELETE FROM addon_users WHERE addon_id = $1 AND group_id = $2", id, group)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return ErrInvalidUsedBy
+		}
+		if err != nil {
+			return err
+		}
+		changed = tag.RowsAffected() > 0
+		addon, err = s.addon(ctx, tx, Shared(), id)
+		return err
+	})
+	return addon, changed, err
 }
 
 // Create adds an IPTV source or a local folder of kind at the end of the
