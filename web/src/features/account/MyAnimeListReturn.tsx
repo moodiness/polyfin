@@ -10,7 +10,8 @@ const name = 'MyAnimeList'
 
 /**
  * The page MyAnimeList sends the browser back to once the user allowed Polyfin there: it connects
- * the account with the code the address brings, then opens My account.
+ * the account with the code the address brings, then opens My account. An address without a
+ * code, opened by hand or from the history, is told as a code refused, without asking the server.
  */
 export default function MyAnimeListReturn() {
   const { t } = useI18n()
@@ -19,10 +20,12 @@ export default function MyAnimeListReturn() {
   const toast = useToast()
   const [failure, setFailure] = useState<unknown>(null)
   const started = useRef(false)
+  // The code comes in the query, or in the fragment, as the server reads either.
+  const codeless = !/[?#&]code=/.test(window.location.href)
 
   useEffect(() => {
     // The code works once: a second render must not send it again.
-    if (started.current) return
+    if (started.current || codeless) return
     started.current = true
     exchangeTrackingCode('myanimelist', window.location.href)
       .then(() => {
@@ -31,10 +34,10 @@ export default function MyAnimeListReturn() {
       })
       .catch((error: unknown) => setFailure(error))
       .finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.tracking }))
-  }, [navigate, text, toast])
+  }, [codeless, navigate, text, toast])
 
   const message =
-    failure instanceof ApiError && failure.code === 'invalid_code'
+    codeless || (failure instanceof ApiError && failure.code === 'invalid_code')
       ? text.invalidCode(name)
       : failure instanceof ApiError && failure.code === 'app_refused'
         ? text.appRefused(name)
@@ -43,7 +46,7 @@ export default function MyAnimeListReturn() {
           : failure !== null && errorMessage(t, failure)
   return (
     <PageLayout title={text.title}>
-      {failure === null ? (
+      {failure === null && !codeless ? (
         <p role="status" className="flex items-center gap-2 text-control text-ink-2">
           <Spinner />
           {text.returning(name)}
