@@ -111,6 +111,11 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 	return testAPI{t: t, url: server.URL, store: store, quickConnect: quickConnect, clock: clock}
 }
 
+// testTransport is the tests' own: httptest.Server.Close closes the idle
+// connections of http.DefaultTransport, which the connection of a
+// parallel test's answer without a body may have just joined (#958).
+var testTransport = http.DefaultTransport.(*http.Transport).Clone()
+
 // browser is a client with its own cookie jar.
 type browser struct {
 	api    testAPI
@@ -119,7 +124,7 @@ type browser struct {
 
 func (api testAPI) browser() browser {
 	jar, _ := cookiejar.New(nil)
-	return browser{api: api, client: &http.Client{Jar: jar}}
+	return browser{api: api, client: &http.Client{Jar: jar, Transport: testTransport}}
 }
 
 func (b browser) call(method, path string, body any, header ...string) (int, map[string]any, *http.Response) {

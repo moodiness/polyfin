@@ -75,7 +75,7 @@ func TestEpisodeOrderSeriesCarryTheirPoster(t *testing.T) {
 		}
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 			images.URL+"/Items/"+id+"/Images/Primary?maxHeight=96&quality=85", nil)
-		response, err := http.DefaultClient.Do(request)
+		response, err := (&http.Client{Transport: testTransport}).Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
