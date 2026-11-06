@@ -232,7 +232,25 @@ Traefik passes WebSockets, and sets `X-Forwarded-For`, `X-Forwarded-Proto`, `X-F
 
 In apps, the server's address is `https://media.example.org`.
 
-- Polyfin also answers apps under `https://media.example.org/jellyfin`, as at the root. A proxy that already serves Jellyfin at `/jellyfin` can forward that path to Polyfin as it is (see [Compatible apps](jellyfin-compatibility.md#compatible-apps)).
+- Polyfin also answers apps under `https://media.example.org/jellyfin`, as at the root. A proxy that already serves Jellyfin at `/jellyfin` can forward that path to Polyfin as it is (see [Under /jellyfin](#under-jellyfin)).
 - The admin app stays at the root only.
 
 Traefik routes to Polyfin only once its container is healthy, which it becomes within seconds of starting (see [Behind Traefik](installation.md#behind-traefik)).
+
+## Under /jellyfin
+
+Polyfin answers apps under `/jellyfin` as at the root, as a Jellyfin server whose base URL is `/jellyfin` does. Some apps given an address without a path try it there first (see [Compatible apps](jellyfin-compatibility.md#compatible-apps)).
+
+A proxy can forward only `/jellyfin` and what is under it to Polyfin, the path kept, and serve something else at the root:
+
+- The addresses Polyfin gives an app that came under `/jellyfin` keep it: the stream addresses of its media sources, its live TV playlists' entries, the images it lists for editing, and `LocalAddress` in `/System/Info/Public`. Their requests reach the proxy under `/jellyfin` too.
+- Its other addresses, such as `TranscodingUrl`, subtitle addresses and the entries of its HLS playlists, are relative to the server's address or to the playlist, which already ends in `/jellyfin`.
+- Polyfin reads the base from the path only. It ignores `X-Forwarded-Prefix`: a proxy that removes `/jellyfin` before forwarding makes Polyfin answer as at the root, with addresses without it.
+- The admin app, `/healthz`, `/readyz` and `/metrics` stay at the root, so they are out of reach through such a proxy.
+
+**Compared with Jellyfin**
+
+- Jellyfin with the base URL `/jellyfin` answers only under it, and redirects other paths to its web client there ([Startup.cs, lines 173 to 177](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Startup.cs#L173-L177), [BaseUrlRedirectionMiddleware.cs, lines 43 to 76](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Middleware/BaseUrlRedirectionMiddleware.cs#L43-L76)). Polyfin answers under `/jellyfin` and at the root alike, with no setting.
+- Jellyfin's absolute addresses carry its base URL ([ApplicationHost.cs, lines 988 to 1008](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/ApplicationHost.cs#L988-L1008)): `LocalAddress` ([SystemManager.cs, line 77](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L77)) and the addresses of its own live streams ([SharedHttpStream.cs, line 66](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/SharedHttpStream.cs#L66)). Polyfin's carry the base the request came under.
+- Jellyfin's `TranscodingUrl` is relative ([MediaInfoHelper.cs, lines 310 to 326](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L310-L326), [StreamInfo.cs, lines 877 to 898](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamInfo.cs#L877-L898)), and so are its master playlist's entries ([DynamicHlsHelper.cs, line 188](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/DynamicHlsHelper.cs#L188)), as Polyfin's.
+- Jellyfin reads no `X-Forwarded-Prefix` either: from a known proxy, it takes `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` only ([ApiServiceCollectionExtensions.cs, lines 166 to 188](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Extensions/ApiServiceCollectionExtensions.cs#L166-L188)).
