@@ -51,7 +51,7 @@ Interlaced channels, such as most TV sports in 1080i50, are converted for apps t
 
 - They are deinterlaced to 25 frames a second by default, which looks jerky in sports.
 - **Double the frame rate**, under **Settings › Conversion (transcoding) › Interlaced video**, makes them 50 frames a second (see [Transcoding](transcoding.md)).
-- It costs about 15% more processor time on a 1080i50 stream.
+- It costs 55 to 65% more processor time on a 1080i50 stream converted to H.264 on the processor, with either deinterlacer, as the encoder gets twice the frames. The deinterlacer alone costs about 55% more with Yadif, the default, and 10 to 15% more with Bwdif.
 
 When FFmpeg makes the HLS stream, it starts this way:
 

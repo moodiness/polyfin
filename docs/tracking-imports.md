@@ -48,7 +48,7 @@ Polyfin finds each title of the history this way:
 | A Simkl anime | By the identifiers and numbers the [anime mapping](tracking.md#anime) gives it |
 | Found no way | Counted as not found. The import goes on. |
 
-A title no catalog listed yet shows in your lists at once, described by the addons. Each description is kept a week, so that importing again does not ask again.
+A title no catalog listed yet shows in your lists at once, described by the addons. Each description is kept a week, in memory and in the database, as every title's description is (see [Addons and libraries](addons-and-libraries.md)). Importing again within 6 hours asks the addons nothing. Later, the import uses the description kept, and the addon is asked again in the background.
 
 <a id="how-the-history-merges-with-polyfin-s"></a><a id="how-the-history-merges-with-polyfins"></a>
 

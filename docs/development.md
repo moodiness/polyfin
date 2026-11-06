@@ -7,7 +7,7 @@ This page is for contributors who change Polyfin's code or its documentation. It
 - Go 1.27.1.
 - Node.js 24.
 - A PostgreSQL 18 server.
-- FFmpeg 9.0 or later (`ffmpeg` and `ffprobe`), to play titles.
+- FFmpeg 9.0 (`ffmpeg` and `ffprobe`), to play titles: the version the image ships and the tests run with.
 
 With `POSTGRES_PASSWORD` set in `.env`, this starts a PostgreSQL server on `127.0.0.1:5432`:
 

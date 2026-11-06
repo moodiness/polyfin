@@ -241,8 +241,8 @@ What the restore needs from PostgreSQL:
 - It runs inside Polyfin's own database, rather than in a new database swapped in for it.
 - It needs no other privilege than owning Polyfin's tables, which every setup grants, since Polyfin creates them.
 - It does not need the database user to create or rename databases.
-- The transaction drops and creates every table and index at once, which takes about 1,500 of the server's locks. PostgreSQL's defaults allow 6,400.
-- A server set with a much smaller `max_connections` or `max_locks_per_transaction` may refuse it. The restore then fails without changing anything.
+- The transaction drops and creates every table and index at once. Measured on Polyfin's database at its current migrations, it holds about 6,150 locks at its end, nearly all in PostgreSQL's shared lock table: one for each table, index and sequence dropped and created, and for the objects that depend on them. A migration takes only the locks of the tables it changes.
+- PostgreSQL's shared lock table holds `max_locks_per_transaction` (64) for each of its server processes: about 8,700 with PostgreSQL 18's defaults, 100 connections and the background processes. A server set with a smaller `max_connections` or `max_locks_per_transaction` may refuse the restore, with "out of shared memory". The restore then fails without changing anything. Raise `max_locks_per_transaction` to 128 to keep a margin.
 - The restore leaves out the backup's `GRANT` statements. Privileges granted to other database users on Polyfin's tables must be granted again.
 
 Jellyfin apps restore a backup of the folder the same way, through `/Backup/Restore` (see [Jellyfin compatibility](jellyfin-compatibility.md#backups)).

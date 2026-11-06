@@ -79,7 +79,7 @@ Polyfin keeps no maximum of versions, and ignores seeders, source, size and lang
 - its place, or the step that left it out: nothing to play, torrents off, same file listed before, mirror, blocked, failed lately with why (no address), the hide rule and what it matched, or the quality group;
 - a torrent that did not start lately, marked so: still listed, skipped by plays that pick no version;
 - the ordering: **Order versions by** criteria, quality group, and whether hide rules would hide every version, so none is hidden;
-- the title's last 5 plays by any user, kept in memory for 24 hours after its last play and lost at a restart: user, device, app, whether the app picked from its version menu, the version chosen and how it plays, and each version tried with its result: plays, could not be read, did not start, torrent or conversion limit, conversion not allowed, not analyzed before.
+- the title's last 5 plays by any user, kept in memory for 24 hours after its last play and lost at a restart: user, device, app, whether the app picked from its version menu, the version chosen and how it plays, and each version tried with its result: plays, could not be read, did not start, torrent or conversion limit, conversion not allowed, not analyzed before, or still being read when the play went on with another.
 
 Actions:
 

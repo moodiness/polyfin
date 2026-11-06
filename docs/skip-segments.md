@@ -46,7 +46,7 @@ The segments come from four community databases: TheIntroDB, IntroDB, PublicMeta
 |---|---|---|
 | TheIntroDB | Optional (see [TheIntroDB key](#theintrodb-key)) | Intros, recaps, credits and previews |
 | IntroDB | None | Intros, recaps and credits |
-| PublicMetaDB | Required: without one it is not asked (see [PublicMetaDB key](#publicmetadb-key)) | Intros and credits, and also recap and preview markers on episodes |
+| PublicMetaDB | Required: without one it is not asked (see [PublicMetaDB key](#publicmetadb-key)) | Intros, recaps, credits and previews, of movies and episodes |
 | SkipDB | None (see [SkipDB](#skipdb)) | Intros, recaps, credits and previews |
 
 ## Segments of each version

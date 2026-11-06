@@ -390,7 +390,7 @@ Downloading a language's data:
 - They are named in the answer to **Download**, logged at Warn, and told in the Health warning, which keeps its button.
 - After a failure, the automatic download is tried again an hour later at the soonest, when a track next needs the language.
 - A language outside the list, such as a code Tesseract has no data for, is refused: add its file by hand.
-- The files weigh a few megabytes each, 12 MB at most.
+- The files weigh a few megabytes each, 12.4 MB at most (Sanskrit's).
 - `POLYFIN_TESSDATA_URL` names another address to download them from, such as a mirror (see [Configuration](configuration.md)). Their SHA-256 is checked all the same.
 - `scripts/tessdata-list.sh` builds the list from the pinned commit, which changes only with Polyfin's versions.
 

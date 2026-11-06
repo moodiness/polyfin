@@ -44,14 +44,15 @@ Programs Polyfin runs:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0 or later). |
-| `POLYFIN_FFMPEG` | `ffmpeg` | FFmpeg executable (9.0 or later). |
-| `POLYFIN_TESSERACT` | `tesseract`; `/usr/bin/tesseract` in the Docker image | Tesseract executable (5 or later), which reads picture subtitles into text while **Turn picture subtitles into text** is on. |
+| `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0, see below). |
+| `POLYFIN_FFMPEG` | `ffmpeg` | FFmpeg executable (9.0, see below). |
+| `POLYFIN_TESSERACT` | `tesseract`; `/usr/bin/tesseract` in the Docker image | Tesseract executable (5, see below), which reads picture subtitles into text while **Turn picture subtitles into text** is on. |
 | `POLYFIN_TESSDATA_DIR` | (unset); `/data/tessdata` in the Docker image | Folder of Tesseract `.traineddata` files for languages Tesseract's own data lacks, such as `jpn.traineddata` for Japanese. |
 | `POLYFIN_TESSDATA_URL` | `https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/<commit>/`: Tesseract's own data, at the commit Polyfin pins | Address the `.traineddata` files are downloaded from into `POLYFIN_TESSDATA_DIR`, followed by their name, such as `fin.traineddata`. |
 
 - **Executables:** each is a path, or a name looked up in `PATH`. The Docker image includes all three.
-- **Tesseract in the image:** version 5.5, with the data of English, French, German, Spanish, Italian, Portuguese and Dutch.
+- **FFmpeg's version:** 9.0 is the version the Docker image and Polyfin Desktop ship, and the one the tests run with. Older versions are not tested, and Polyfin does not check the version (see [GPUs and HDR](gpus-and-hdr.md)).
+- **Tesseract in the image:** version 5.5, with the data of English, French, German, Spanish, Italian, Portuguese and Dutch. Tesseract 5 is the version tested. The data Polyfin downloads, `tessdata_fast`, holds LSTM models, which Tesseract reads from version 4 on.
 - **Without Tesseract:** picture subtitles are not read. While the setting is on, the log says so at start.
 - **The data folder for Tesseract:** it is read besides Tesseract's own data.
   - **System › Health** names the language and the file a track needs, and offers to download it.
@@ -249,7 +250,7 @@ Polyfin never creates one of these folders. It is where a disk or a memory folde
 The Compose file reads `POSTGRES_PASSWORD` and `POLYFIN_SECRET_KEY` from `.env` (see [`.env.example`](../.env.example)).
 
 - **`POSTGRES_PASSWORD`:** Compose places it inside a PostgreSQL URL, so keep it URL-safe. Make one with `openssl rand -hex 24`.
-- **`RCLONE_RC_PASSWORD`:** only with the optional rclone service, the password of rclone's remote control, which Polyfin signs in to as `polyfin` (see [An rclone container](installation.md#an-rclone-container)).
+- **`RCLONE_RC_PASSWORD`:** only with the optional rclone service, the password of rclone's remote control. Compose gives it to rclone with the user `polyfin`, and the rclone source in Polyfin signs in with that user and password, as entered in **Content › Sources** (see [An rclone container](installation.md#an-rclone-container)). Polyfin itself does not read the variable.
 - **Another port:** to publish Polyfin on another port, change the first `8096` of `ports` in `compose.yaml`.
 - **A pinned release:** replace the image's `latest` tag with the version you run now (see [Pin a version](installation.md#pin-a-version)).
 
