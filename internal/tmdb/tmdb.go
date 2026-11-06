@@ -135,7 +135,11 @@ func New(api, images, version string, settings func() accounts.Settings) *Client
 	return newClient(api, images, version, settings, time.Now)
 }
 
-// newClient is New, keeping answers by the clock now.
+// newClient is New, keeping answers by the clock now. Its transport is
+// its own, a clone of the default one with its timeouts: whoever closes
+// the idle connections of http.DefaultTransport, as httptest.Server.Close
+// does, cannot break a request to TMDB whose answer without a body has
+// just put its connection back among the idle ones (#958).
 func newClient(api, images, version string, settings func() accounts.Settings, now func() time.Time) *Client {
 	return &Client{
 		now:       now,
@@ -143,7 +147,7 @@ func newClient(api, images, version string, settings func() accounts.Settings, n
 		images:    images,
 		userAgent: "Polyfin/" + version,
 		key:       func() string { return settings().TMDBKey },
-		http:      &http.Client{Timeout: requestTimeout},
+		http:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: requestTimeout},
 		slots:     make(chan struct{}, maxRequests),
 		answers: cache.NewLasting[string, answer](maxAnswers, func() time.Duration { return answerLife }, now).Sized(64<<20, func(a answer) int {
 			return len(a.body) + 64
