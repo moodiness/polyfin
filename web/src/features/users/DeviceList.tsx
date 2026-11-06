@@ -76,7 +76,7 @@ export default function DeviceList({ queryKey, load, signOut }: DeviceListProps)
           {t.users.devicesEmptyHelp}
         </EmptyState>
       ) : (
-        <RowList aria-label={t.users.devicesTitle}>
+        <RowList compact aria-label={t.users.devicesTitle}>
           {devices.data.map((device) => (
             <Row
               key={device.id}

@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
-import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
   fetchGroupDefaults,
   fetchLineupChannelChoices,
@@ -14,13 +14,10 @@ import {
   resetGroup,
   resetUser,
   scheduleDays,
-  updateGroup,
-  updateUser,
   type AccessSchedule,
   type ChannelRule,
   type Group,
   type GroupLimits,
-  type GroupPatch,
   type QualityGroup,
   type ScheduleDay,
   type SyncPlayAccess,
@@ -36,22 +33,22 @@ import {
   Button,
   Checkbox,
   ConfirmDialog,
+  cx,
   EmptyState,
   Field,
   IconButton,
   InlineError,
   Notice,
-  NumberInput,
-  Panel,
-  PanelFooter,
-  Segmented,
   Select,
+  SettingRow,
   Skeleton,
   SuggestInput,
   TextInput,
   TextLink,
   useToast,
 } from '@/ui'
+import { changedFields, countChanged, setDifference, useDraftPart } from './draft'
+import { PageSection } from './rows'
 import {
   groupRatings,
   groupSaved,
@@ -59,7 +56,6 @@ import {
   refreshGroupIfGone,
   refreshIfGone,
   selectedGroup,
-  SwitchRow,
   useParentalRatings,
   userSaved,
 } from './shared'
@@ -92,92 +88,74 @@ export function FollowedNotice({ group }: { group: { id: string; name: string } 
   )
 }
 
+/** Whether the section shows a group's values, read only, on the page of a member following it. */
+function isReadOnly(target: LimitsTarget) {
+  return target.kind === 'user' && followedGroup(target.user) !== null
+}
+
 /**
- * A section of a user's or a group's page: a panel holding one form, its error and its save
- * button at the foot. Saving shows a toast. On the page of a member following their group, the
- * form shows the group's values, read only, without its button.
+ * A section of limits on a user's or a group's page: its title, its rows, and on the page of a
+ * member following their group, the notice saying the values are the group's. Its changes go to
+ * the page's dock.
  */
-function SectionForm({
+function LimitsSection({
   id,
   title,
   description,
-  onSubmit,
-  error,
-  saving,
-  saveLabel,
-  disabled = false,
   target,
   children,
 }: {
   id: string
   title: string
   description?: ReactNode
-  onSubmit: () => void
-  error: string | null
-  saving: boolean
-  saveLabel: string
-  disabled?: boolean
   target: LimitsTarget
   children: ReactNode
 }) {
-  const { t } = useI18n()
   const followed = target.kind === 'user' ? followedGroup(target.user) : null
   return (
-    <form
-      id={id}
-      noValidate
-      className="scroll-mt-[calc(var(--spacing-topbar)+32px)] max-md:scroll-mt-[calc(var(--spacing-topbar)+64px)]"
-      onSubmit={(event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault()
-        if (followed === null) onSubmit()
-      }}
-    >
-      <Panel
-        title={title}
-        description={description}
-        footer={
-          followed === null && (
-            <PanelFooter>
-              <Button variant="secondary" type="submit" loading={saving} disabled={disabled}>
-                {saving ? t.common.saving : saveLabel}
-              </Button>
-            </PanelFooter>
-          )
-        }
-      >
-        <div className="space-y-5">
-          {followed !== null && <FollowedNotice group={followed} />}
-          {/* A disabled fieldset turns off every control in it, for the values a member follows. */}
-          <fieldset disabled={followed !== null} className="min-w-0 space-y-5">
-            {children}
-          </fieldset>
-          {error !== null && <Notice tone="danger">{error}</Notice>}
-        </div>
-      </Panel>
-    </form>
+    <PageSection id={id} title={title} description={description}>
+      {followed !== null && <FollowedNotice group={followed} />}
+      {children}
+    </PageSection>
   )
 }
 
-/** A patch for one section of a user or a group, with its toast and inline error. */
-function useSectionSave(target: LimitsTarget) {
-  const { t } = useI18n()
-  const toast = useToast()
-  const self = useSessionUser()
-  const save = useMutation({
-    mutationFn: async (patch: GroupPatch) => {
-      if (target.kind === 'group') groupSaved(await updateGroup(target.group.id, patch))
-      else userSaved(await updateUser(target.user.id, patch), self.id)
-    },
-    onError: target.kind === 'group' ? refreshGroupIfGone : refreshIfGone,
-  })
-  return {
-    save,
-    error: save.isError ? errorMessage(t, save.error) : null,
-    submit: (patch: GroupPatch) =>
-      save.mutate(patch, {
-        onSuccess: () => toast(target.kind === 'group' ? t.groups.updated : t.users.updated),
-      }),
-  }
+/** A tile for what is more than a row (chips, lists to tick), as wide as the rows. */
+const tile = 'min-w-0 rounded-row bg-s1 px-[30px] py-6 max-md:px-5 max-md:py-5'
+
+/** A chip of a list (a genre, a channel) with its button taking it out. */
+function Chip({
+  label,
+  title,
+  removeLabel,
+  onClick,
+}: {
+  label: string
+  title?: string
+  removeLabel: string
+  onClick?: () => void
+}) {
+  return (
+    <li
+      title={title}
+      className="flex min-h-11 max-w-full items-center gap-1 rounded-full bg-s2 py-1 pr-1.5 pl-4 text-control text-ink"
+    >
+      <span className="min-w-0 break-words">{label}</span>
+      <IconButton
+        size="sm"
+        icon={XIcon}
+        danger
+        label={removeLabel}
+        className="rounded-full"
+        onClick={onClick}
+      />
+    </li>
+  )
+}
+
+/** Keeps Enter in a filter or search field from saving the page. */
+function holdEnter(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.key === 'Enter') event.preventDefault()
 }
 
 /** The values a section shows: the user's own, or the group's. */
@@ -195,257 +173,232 @@ const bitrateChoices = [
   { value: 2_000_000, label: 'bitrate480' },
 ] as const
 
-export function PlaybackAccessForm({ target, id }: { target: LimitsTarget; id: string }) {
-  const { t, language } = useI18n()
-  const { save, error, submit } = useSectionSave(target)
-  const limits = limitsOf(target)
-  const [form, setForm] = useState({
+function playbackOf(limits: GroupLimits) {
+  return {
     maxPlaybacks: limits.maxPlaybacks,
     maxBitrate: limits.maxBitrate,
-    liveTv: limits.liveTv,
+    qualityGroup: limits.qualityGroup,
     syncPlay: limits.syncPlay,
+    liveTv: limits.liveTv,
     remoteControl: limits.remoteControl,
     liveTvManagement: limits.liveTvManagement,
-    qualityGroup: limits.qualityGroup,
     localFirst: limits.localFirst,
     boostVolume: limits.boostVolume,
     convertSound: limits.convertSound,
-  })
+  }
+}
+
+export function PlaybackAccessSection({ target, id }: { target: LimitsTarget; id: string }) {
+  const { t, language } = useI18n()
+  const readOnly = isReadOnly(target)
+  const saved = playbackOf(limitsOf(target))
+  const [form, setForm] = useState(saved)
+  useDraftPart(id, readOnly ? 0 : countChanged(form, saved), () => changedFields(form, saved))
+  // The saved values give each changed row its "was …"; a member following a group changes none.
+  const was = readOnly ? undefined : saved
 
   function update(change: Partial<typeof form>) {
-    save.reset()
     setForm((current) => ({ ...current, ...change }))
   }
 
   // A limit set from a Jellyfin app may match none of the choices: it is shown as it is.
-  const custom = bitrateChoices.some((choice) => choice.value === form.maxBitrate)
-    ? null
-    : (form.maxBitrate / 1_000_000).toLocaleString(language, { maximumFractionDigits: 2 })
+  const bitrates: { value: number; label: string }[] = bitrateChoices.map((choice) => ({
+    value: choice.value,
+    label: t.users[choice.label],
+  }))
+  for (const value of new Set([saved.maxBitrate, form.maxBitrate])) {
+    if (!bitrates.some((choice) => choice.value === value)) {
+      const mbits = (value / 1_000_000).toLocaleString(language, { maximumFractionDigits: 2 })
+      bitrates.push({ value, label: t.users.bitrateOther(mbits) })
+    }
+  }
+
+  const switches = [
+    ['liveTv', t.users.liveTv, t.users.liveTvHelp],
+    ['remoteControl', t.users.remoteControl, t.users.remoteControlHelp],
+    ['liveTvManagement', t.users.liveTvManagement, t.users.liveTvManagementHelp],
+    ['localFirst', t.users.localFirst, t.users.localFirstHelp],
+    ['boostVolume', t.users.boostVolume, t.users.boostVolumeHelp],
+    ['convertSound', t.users.convertSound, t.users.convertSoundHelp],
+  ] as const
 
   return (
-    <SectionForm
-      id={id}
-      target={target}
-      title={t.users.playbackAccessTitle}
-      onSubmit={() => submit(form)}
-      error={error}
-      saving={save.isPending}
-      saveLabel={t.users.savePlaybackAccess}
-    >
-      <Field label={t.users.maxPlaybacks} help={t.users.maxPlaybacksHelp}>
-        <NumberInput
-          inputMode="numeric"
-          min={maxPlaybacksRange.min}
-          max={maxPlaybacksRange.max}
-          step={1}
-          value={form.maxPlaybacks}
-          onValue={(value) => update({ maxPlaybacks: Math.trunc(value ?? 0) })}
+    <LimitsSection id={id} target={target} title={t.users.playbackAccessTitle}>
+      <SettingRow
+        kind="number"
+        label={t.users.maxPlaybacks}
+        help={t.users.maxPlaybacksHelp}
+        value={form.maxPlaybacks}
+        saved={was?.maxPlaybacks}
+        min={maxPlaybacksRange.min}
+        max={maxPlaybacksRange.max}
+        format={(value) => (value === 0 ? t.users.noLimit : String(value))}
+        disabled={readOnly}
+        onChange={(value) => update({ maxPlaybacks: Math.trunc(value ?? 0) })}
+      />
+      <SettingRow<number>
+        kind="choice"
+        label={t.users.maxBitrate}
+        help={t.users.maxBitrateHelp}
+        value={form.maxBitrate}
+        saved={was?.maxBitrate}
+        options={bitrates}
+        disabled={readOnly}
+        onChange={(maxBitrate) => update({ maxBitrate })}
+      />
+      <SettingRow<number>
+        kind="choice"
+        label={t.users.qualityGroup}
+        help={t.users.qualityGroupHelp}
+        value={form.qualityGroup}
+        saved={was?.qualityGroup}
+        options={qualityGroups.map((group) => ({
+          value: group as number,
+          label: group === 0 ? t.users.qualityGroupOriginal : qualityGroupName(group),
+        }))}
+        disabled={readOnly}
+        onChange={(qualityGroup) => update({ qualityGroup: qualityGroup as QualityGroup })}
+      />
+      <SettingRow<SyncPlayAccess>
+        kind="choice"
+        label={t.users.syncPlay}
+        help={t.users.syncPlayHelp}
+        value={form.syncPlay}
+        saved={was?.syncPlay}
+        options={[
+          { value: 'CreateAndJoinGroups', label: t.users.syncPlayCreateAndJoin },
+          { value: 'JoinGroups', label: t.users.syncPlayJoin },
+          { value: 'None', label: t.users.syncPlayNone },
+        ]}
+        disabled={readOnly}
+        onChange={(syncPlay) => update({ syncPlay })}
+      />
+      {switches.map(([field, label, help]) => (
+        <SettingRow
+          key={field}
+          kind="switch"
+          label={label}
+          help={help}
+          checked={form[field]}
+          saved={was?.[field]}
+          disabled={readOnly}
+          onChange={(checked) => update({ [field]: checked })}
         />
-      </Field>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label={t.users.maxBitrate} help={t.users.maxBitrateHelp}>
-          <Select
-            value={form.maxBitrate}
-            onValue={(maxBitrate) => update({ maxBitrate })}
-            options={[
-              ...bitrateChoices.map((choice) => ({
-                value: choice.value as number,
-                label: t.users[choice.label],
-              })),
-              ...(custom === null
-                ? []
-                : [{ value: form.maxBitrate, label: t.users.bitrateOther(custom) }]),
-            ]}
-          />
-        </Field>
-        <Field label={t.users.qualityGroup} help={t.users.qualityGroupHelp}>
-          <Select
-            value={form.qualityGroup}
-            onValue={(qualityGroup) => update({ qualityGroup: qualityGroup as QualityGroup })}
-            options={qualityGroups.map((group) => ({
-              value: group as number,
-              label: group === 0 ? t.users.qualityGroupOriginal : qualityGroupName(group),
-            }))}
-          />
-        </Field>
-      </div>
-      <Field label={t.users.syncPlay} help={t.users.syncPlayHelp}>
-        <Select<SyncPlayAccess>
-          value={form.syncPlay}
-          onValue={(syncPlay) => update({ syncPlay })}
-          className="sm:max-w-sm"
-          options={[
-            { value: 'CreateAndJoinGroups', label: t.users.syncPlayCreateAndJoin },
-            { value: 'JoinGroups', label: t.users.syncPlayJoin },
-            { value: 'None', label: t.users.syncPlayNone },
-          ]}
-        />
-      </Field>
-      <div>
-        <SwitchRow
-          title={t.users.liveTv}
-          help={t.users.liveTvHelp}
-          checked={form.liveTv}
-          onChange={(liveTv) => update({ liveTv })}
-        />
-        <SwitchRow
-          title={t.users.remoteControl}
-          help={t.users.remoteControlHelp}
-          checked={form.remoteControl}
-          onChange={(remoteControl) => update({ remoteControl })}
-        />
-        <SwitchRow
-          title={t.users.liveTvManagement}
-          help={t.users.liveTvManagementHelp}
-          checked={form.liveTvManagement}
-          onChange={(liveTvManagement) => update({ liveTvManagement })}
-        />
-        <SwitchRow
-          title={t.users.localFirst}
-          help={t.users.localFirstHelp}
-          checked={form.localFirst}
-          onChange={(localFirst) => update({ localFirst })}
-        />
-        <SwitchRow
-          title={t.users.boostVolume}
-          help={t.users.boostVolumeHelp}
-          checked={form.boostVolume}
-          onChange={(boostVolume) => update({ boostVolume })}
-        />
-        <SwitchRow
-          title={t.users.convertSound}
-          help={t.users.convertSoundHelp}
-          checked={form.convertSound}
-          onChange={(convertSound) => update({ convertSound })}
-        />
-      </div>
-    </SectionForm>
+      ))}
+    </LimitsSection>
   )
 }
 
 const unratedMovie = 'Movie'
 const unratedSeries = 'Series'
 
-export function ParentalControlForm({ target, id }: { target: LimitsTarget; id: string }) {
+export function ParentalControlSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
   const ratings = useParentalRatings()
-  const { save, error, submit } = useSectionSave(target)
+  const readOnly = isReadOnly(target)
   const initial = limitsOf(target).parentalControl
+  const savedMovies = initial.blockUnrated.includes(unratedMovie)
+  const savedShows = initial.blockUnrated.includes(unratedSeries)
   const [limit, setLimit] = useState<{ maxRating: number | null; maxSubRating: number | null }>({
     maxRating: initial.maxRating,
     maxSubRating: initial.maxSubRating,
   })
-  const [blockMovies, setBlockMovies] = useState(initial.blockUnrated.includes(unratedMovie))
-  const [blockShows, setBlockShows] = useState(initial.blockUnrated.includes(unratedSeries))
+  const [blockMovies, setBlockMovies] = useState(savedMovies)
+  const [blockShows, setBlockShows] = useState(savedShows)
 
   const groups = ratings.data === undefined ? [] : groupRatings(ratings.data)
   const selected = selectedGroup(groups, { ...limit, blockUnrated: [] })
+  const savedSelected = selectedGroup(groups, initial)
 
-  function onSubmit() {
-    // Keep values set by Jellyfin apps (live TV, books...) that this form does not show.
+  const changes =
+    Number(limit.maxRating !== initial.maxRating || limit.maxSubRating !== initial.maxSubRating) +
+    Number(blockMovies !== savedMovies) +
+    Number(blockShows !== savedShows)
+  useDraftPart(id, readOnly ? 0 : changes, () => {
+    // Keep values set by Jellyfin apps (live TV, books...) that this section does not show.
     const blockUnrated = initial.blockUnrated.filter(
       (item) => item !== unratedMovie && item !== unratedSeries,
     )
     if (blockMovies) blockUnrated.push(unratedMovie)
     if (blockShows) blockUnrated.push(unratedSeries)
-    submit({ parentalControl: { ...limit, blockUnrated } })
-  }
+    return { parentalControl: { ...limit, blockUnrated } }
+  })
 
   return (
-    <SectionForm
-      id={id}
-      target={target}
-      title={t.users.parentalTitle}
-      onSubmit={onSubmit}
-      error={error}
-      saving={save.isPending}
-      saveLabel={t.users.saveParental}
-      disabled={ratings.isPending}
-    >
+    <LimitsSection id={id} target={target} title={t.users.parentalTitle}>
       {ratings.isError ? (
         <InlineError onRetry={() => void ratings.refetch()} retrying={ratings.isFetching}>
           {errorMessage(t, ratings.error)}
         </InlineError>
+      ) : ratings.isPending ? (
+        <Skeleton className="h-[82px] rounded-row max-md:h-[68px]" />
       ) : (
-        <Field label={t.users.maxRating} help={t.users.maxRatingHelp}>
-          {ratings.isPending ? (
-            <Skeleton className="h-10 sm:max-w-sm" />
-          ) : (
-            <Select
-              value={selected}
-              className="sm:max-w-sm"
-              onValue={(index) => {
-                save.reset()
-                const group = groups[index]
-                setLimit(
-                  group === undefined
-                    ? { maxRating: null, maxSubRating: null }
-                    : { maxRating: group.score, maxSubRating: group.subScore },
-                )
-              }}
-              options={[
-                { value: -1, label: t.users.noLimit },
-                ...groups.map((group, index) => ({ value: index, label: group.name })),
-              ]}
-            />
-          )}
-        </Field>
+        <SettingRow<number>
+          kind="choice"
+          label={t.users.maxRating}
+          help={t.users.maxRatingHelp}
+          value={selected}
+          saved={readOnly ? undefined : savedSelected}
+          options={[
+            { value: -1, label: t.users.noLimit },
+            ...groups.map((group, index) => ({ value: index, label: group.name })),
+          ]}
+          disabled={readOnly}
+          onChange={(index) => {
+            const group = groups[index]
+            setLimit(
+              group === undefined
+                ? { maxRating: null, maxSubRating: null }
+                : { maxRating: group.score, maxSubRating: group.subScore },
+            )
+          }}
+        />
       )}
-      <div className="space-y-3">
-        <Checkbox
-          label={t.users.blockUnratedMovies}
-          checked={blockMovies}
-          onChange={(checked) => {
-            save.reset()
-            setBlockMovies(checked)
-          }}
-        />
-        <Checkbox
-          label={t.users.blockUnratedShows}
-          checked={blockShows}
-          onChange={(checked) => {
-            save.reset()
-            setBlockShows(checked)
-          }}
-        />
-      </div>
-    </SectionForm>
+      <SettingRow
+        kind="switch"
+        label={t.users.blockUnratedMovies}
+        checked={blockMovies}
+        saved={readOnly ? undefined : savedMovies}
+        disabled={readOnly}
+        onChange={setBlockMovies}
+      />
+      <SettingRow
+        kind="switch"
+        label={t.users.blockUnratedShows}
+        checked={blockShows}
+        saved={readOnly ? undefined : savedShows}
+        disabled={readOnly}
+        onChange={setBlockShows}
+      />
+    </LimitsSection>
   )
 }
 
-export function VisibleLibrariesForm({ target, id }: { target: LimitsTarget; id: string }) {
+export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
+  const readOnly = isReadOnly(target)
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
   })
-  const { save, error, submit } = useSectionSave(target)
-  const [hidden, setHidden] = useState(limitsOf(target).hiddenLibraries)
-
-  function onSubmit() {
-    const libraries = choices.data?.libraries ?? []
+  const savedHidden = limitsOf(target).hiddenLibraries
+  const [hidden, setHidden] = useState(savedHidden)
+  useDraftPart(id, readOnly ? 0 : setDifference(hidden, savedHidden), () => {
+    if (!choices.isSuccess) return null
     // Libraries removed from the server since are dropped.
-    submit({ hiddenLibraries: hidden.filter((id) => libraries.some((l) => l.id === id)) })
-  }
+    const libraries = choices.data.libraries
+    return { hiddenLibraries: hidden.filter((id) => libraries.some((l) => l.id === id)) }
+  })
 
   return (
-    <SectionForm
+    <LimitsSection
       id={id}
       target={target}
       title={t.users.visibleLibrariesTitle}
       description={t.users.visibleLibrariesHelp}
-      onSubmit={onSubmit}
-      error={error}
-      saving={save.isPending}
-      saveLabel={t.users.saveVisibleLibraries}
-      disabled={!choices.isSuccess}
     >
       {choices.isPending ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-5 w-40" />
-          ))}
-        </div>
+        <Skeleton className="h-[82px] rounded-row max-md:h-[68px]" />
       ) : choices.isError ? (
         <InlineError onRetry={() => void choices.refetch()} retrying={choices.isFetching}>
           {errorMessage(t, choices.error)}
@@ -453,39 +406,41 @@ export function VisibleLibrariesForm({ target, id }: { target: LimitsTarget; id:
       ) : choices.data.libraries.length === 0 ? (
         <EmptyState title={t.users.noServerLibraries}>{t.users.noServerLibrariesHelp}</EmptyState>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {choices.data.libraries.map((library) => (
-            <Checkbox
-              key={library.id}
-              label={library.name}
-              checked={!hidden.includes(library.id)}
-              onChange={(shown) => {
-                save.reset()
-                setHidden(
-                  shown ? hidden.filter((id) => id !== library.id) : [...hidden, library.id],
-                )
-              }}
-            />
-          ))}
-        </div>
+        choices.data.libraries.map((library) => (
+          <SettingRow
+            key={library.id}
+            kind="switch"
+            label={library.name}
+            checked={!hidden.includes(library.id)}
+            saved={readOnly ? undefined : !savedHidden.includes(library.id)}
+            stateText={[t.users.libraryShown, t.users.libraryHidden]}
+            disabled={readOnly}
+            onChange={(shown) =>
+              setHidden(shown ? hidden.filter((id) => id !== library.id) : [...hidden, library.id])
+            }
+          />
+        ))
       )}
-    </SectionForm>
+    </LimitsSection>
   )
 }
 
-export function BlockedGenresForm({ target, id }: { target: LimitsTarget; id: string }) {
+export function BlockedGenresSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
+  const readOnly = isReadOnly(target)
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
   })
-  const { save, error, submit } = useSectionSave(target)
-  const [genres, setGenres] = useState(limitsOf(target).blockedGenres)
+  const savedGenres = limitsOf(target).blockedGenres
+  const [genres, setGenres] = useState(savedGenres)
   const [typed, setTyped] = useState('')
+  useDraftPart(id, readOnly ? 0 : setDifference(genres, savedGenres), () => ({
+    blockedGenres: genres,
+  }))
 
   function add(value = typed) {
     const genre = value.trim()
-    save.reset()
     setTyped('')
     if (genre !== '' && !genres.some((g) => g.toLowerCase() === genre.toLowerCase())) {
       setGenres([...genres, genre])
@@ -493,65 +448,55 @@ export function BlockedGenresForm({ target, id }: { target: LimitsTarget; id: st
   }
 
   return (
-    <SectionForm
+    <LimitsSection
       id={id}
       target={target}
       title={t.users.blockedGenresTitle}
       description={t.users.blockedGenresHelp}
-      onSubmit={() => submit({ blockedGenres: genres })}
-      error={error}
-      saving={save.isPending}
-      saveLabel={t.users.saveBlockedGenres}
     >
-      {genres.length === 0 ? (
-        <p className="text-small text-ink-3">{t.users.noBlockedGenres}</p>
-      ) : (
-        <ul className="flex flex-wrap gap-2" aria-label={t.users.blockedGenresTitle}>
-          {genres.map((genre) => (
-            <li
-              key={genre}
-              className="flex h-8 items-center gap-1 rounded-full border border-line-2 bg-s2 pr-1 pl-3 text-control text-ink"
-            >
-              {genre}
-              <IconButton
+      <fieldset disabled={readOnly} className={cx(tile, 'space-y-5')}>
+        {genres.length === 0 ? (
+          <p className="text-body text-ink-2">{t.users.noBlockedGenres}</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2" aria-label={t.users.blockedGenresTitle}>
+            {genres.map((genre) => (
+              <Chip
+                key={genre}
+                label={genre}
+                removeLabel={t.users.removeGenre(genre)}
+                onClick={() => setGenres(genres.filter((g) => g !== genre))}
+              />
+            ))}
+          </ul>
+        )}
+        {!readOnly && (
+          <div className="flex flex-wrap items-start gap-3">
+            <Field label={t.users.genre} help={t.users.genreHint} className="w-full sm:max-w-sm">
+              <SuggestInput
                 size="sm"
-                icon={XIcon}
-                danger
-                label={t.users.removeGenre(genre)}
-                className="size-6 rounded-full"
-                onClick={() => {
-                  save.reset()
-                  setGenres(genres.filter((g) => g !== genre))
+                value={typed}
+                onValue={setTyped}
+                suggestions={(choices.data?.genres ?? []).filter(
+                  (genre) => !genres.some((g) => g.toLowerCase() === genre.toLowerCase()),
+                )}
+                onPick={add}
+                maxLength={100}
+                onKeyDown={(event) => {
+                  // Enter adds the genre rather than saving the page.
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    add()
+                  }
                 }}
               />
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-wrap items-start gap-2">
-        <Field label={t.users.genre} help={t.users.genreHint} className="w-full sm:max-w-xs">
-          <SuggestInput
-            value={typed}
-            onValue={setTyped}
-            suggestions={(choices.data?.genres ?? []).filter(
-              (genre) => !genres.some((g) => g.toLowerCase() === genre.toLowerCase()),
-            )}
-            onPick={add}
-            maxLength={100}
-            onKeyDown={(event) => {
-              // Enter adds the genre rather than saving the list.
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                add()
-              }
-            }}
-          />
-        </Field>
-        <Button icon={PlusIcon} className="sm:mt-[26px]" onClick={() => add()}>
-          {t.users.addGenre}
-        </Button>
-      </div>
-    </SectionForm>
+            </Field>
+            <Button icon={PlusIcon} className="sm:mt-[30px]" onClick={() => add()}>
+              {t.users.addGenre}
+            </Button>
+          </div>
+        )}
+      </fieldset>
+    </LimitsSection>
   )
 }
 
@@ -559,9 +504,9 @@ export function BlockedGenresForm({ target, id }: { target: LimitsTarget; id: st
 const listedChannelGroups = 200
 const listedChannels = 50
 
-export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: string }) {
+export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const { save, error, submit } = useSectionSave(target)
+  const readOnly = isReadOnly(target)
   const initial = limitsOf(target).liveTvChannels
   const [mode, setMode] = useState<ChannelRule['mode']>(initial.mode)
   const [groups, setGroups] = useState(initial.groups)
@@ -602,21 +547,16 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
   )
   const tickedNames = new Map((ticked.data?.channels ?? []).map((c) => [c.key, c]))
 
-  function tickGroup(key: string, on: boolean) {
-    save.reset()
-    if (added(key) && !groups.includes(key)) {
-      setReleased(on ? released.filter((k) => k !== key) : [...released, key])
-      return
-    }
-    setGroups(on ? [...groups, key] : groups.filter((k) => k !== key))
-  }
-
-  function tickChannel(key: string, on: boolean) {
-    save.reset()
-    setChannels(on ? [...channels, key] : channels.filter((k) => k !== key))
-  }
-
-  function onSubmit() {
+  const changes =
+    Number(mode !== initial.mode) +
+    (mode === 'all'
+      ? 0
+      : setDifference(groups, initial.groups) +
+        setDifference(channels, initial.channels) +
+        released.length +
+        Number(mode === 'except' && hideNew !== initial.hideNewGroups))
+  useDraftPart(id, readOnly ? 0 : changes, () => {
+    if (mode !== 'all' && !choices.isSuccess) return null
     const kept =
       mode === 'except'
         ? [
@@ -626,7 +566,7 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
               .filter((key) => added(key) && !released.includes(key) && !groups.includes(key)),
           ]
         : groups
-    submit({
+    return {
       liveTvChannels: {
         mode,
         groups: mode === 'all' ? [] : kept,
@@ -634,22 +574,30 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
         hideNewGroups: mode === 'except' && hideNew,
         knownGroups: initial.knownGroups,
       },
-    })
+    }
+  })
+
+  function tickGroup(key: string, on: boolean) {
+    if (added(key) && !groups.includes(key)) {
+      setReleased(on ? released.filter((k) => k !== key) : [...released, key])
+      return
+    }
+    setGroups(on ? [...groups, key] : groups.filter((k) => k !== key))
+  }
+
+  function tickChannel(key: string, on: boolean) {
+    setChannels(on ? [...channels, key] : channels.filter((k) => k !== key))
   }
 
   return (
-    <SectionForm
+    <LimitsSection
       id={id}
       target={target}
       title={t.users.liveTvChannelsTitle}
       description={t.users.liveTvChannelsHelp}
-      onSubmit={onSubmit}
-      error={error}
-      saving={save.isPending}
-      saveLabel={t.users.saveLiveTvChannels}
-      disabled={mode !== 'all' && !choices.isSuccess}
     >
-      <Field
+      <SettingRow<ChannelRule['mode']>
+        kind="choice"
         label={t.users.channelsMode}
         help={
           mode === 'only'
@@ -658,53 +606,47 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
               ? t.users.channelsExceptHelp
               : undefined
         }
-      >
-        <Segmented
-          label={t.users.channelsMode}
-          value={mode}
-          onChange={(value) => {
-            save.reset()
-            setMode(value)
-          }}
-          options={[
-            { value: 'all', label: t.users.channelsAll },
-            { value: 'only', label: t.users.channelsOnly },
-            { value: 'except', label: t.users.channelsExcept },
-          ]}
-        />
-      </Field>
+        value={mode}
+        saved={readOnly ? undefined : initial.mode}
+        options={[
+          { value: 'all', label: t.users.channelsAll },
+          { value: 'only', label: t.users.channelsOnly },
+          { value: 'except', label: t.users.channelsExcept },
+        ]}
+        disabled={readOnly}
+        onChange={setMode}
+      />
       {mode !== 'all' &&
         (choices.isError ? (
           <InlineError onRetry={() => void choices.refetch()} retrying={choices.isFetching}>
             {errorMessage(t, choices.error)}
           </InlineError>
         ) : choices.isPending ? (
-          <Skeleton className="h-40" />
+          <Skeleton className="h-40 rounded-row" />
         ) : allGroups.length === 0 ? (
           <EmptyState title={t.users.noChannelGroups} />
         ) : (
-          <>
+          <fieldset disabled={readOnly} className={cx(tile, 'space-y-8')}>
             {mode === 'except' && (
               <Checkbox
                 label={t.users.hideNewChannelGroups}
                 help={t.users.hideNewChannelGroupsHelp}
                 checked={hideNew}
-                onChange={(checked) => {
-                  save.reset()
-                  setHideNew(checked)
-                }}
+                onChange={setHideNew}
               />
             )}
             <div className="space-y-3">
-              <p className="font-medium text-ink">{t.users.channelGroups}</p>
+              <h3 className="text-h3 text-ink">{t.users.channelGroups}</h3>
               <TextInput
+                size="sm"
                 aria-label={t.users.filterChannelGroups}
                 placeholder={t.users.filterChannelGroups}
                 value={groupFilter}
                 onValue={setGroupFilter}
+                onKeyDown={holdEnter}
                 className="sm:max-w-sm"
               />
-              <div className="grid max-h-80 gap-3 overflow-y-auto sm:grid-cols-2">
+              <div className="grid max-h-96 gap-x-4 gap-y-1 overflow-y-auto sm:grid-cols-2">
                 {filtered.slice(0, listedChannelGroups).map((group) => (
                   <Checkbox
                     key={group.key}
@@ -725,15 +667,15 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
                 ))}
               </div>
               {filtered.length > listedChannelGroups && (
-                <p className="text-small text-ink-3">
+                <p className="text-small text-ink-2">
                   {t.users.moreChannelGroups(filtered.length - listedChannelGroups)}
                 </p>
               )}
             </div>
             <div className="space-y-3">
-              <p className="font-medium text-ink">{t.users.tickedChannels}</p>
+              <h3 className="text-h3 text-ink">{t.users.tickedChannels}</h3>
               {channels.length === 0 ? (
-                <p className="text-small text-ink-3">{t.users.noTickedChannels}</p>
+                <p className="text-body text-ink-2">{t.users.noTickedChannels}</p>
               ) : (
                 <ul className="flex flex-wrap gap-2" aria-label={t.users.tickedChannels}>
                   {tickedKeys.map((key) => {
@@ -745,42 +687,36 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
                           : '…'
                         : `${channel.number} ${channel.name}`
                     return (
-                      <li
+                      <Chip
                         key={key}
                         title={key}
-                        className="flex h-8 items-center gap-1 rounded-full border border-line-2 bg-s2 pr-1 pl-3 text-control text-ink"
-                      >
-                        {name}
-                        <IconButton
-                          size="sm"
-                          icon={XIcon}
-                          danger
-                          label={t.users.removeChannel(name)}
-                          className="size-6 rounded-full"
-                          onClick={() => tickChannel(key, false)}
-                        />
-                      </li>
+                        label={name}
+                        removeLabel={t.users.removeChannel(name)}
+                        onClick={() => tickChannel(key, false)}
+                      />
                     )
                   })}
                 </ul>
               )}
               {channels.length > listedChannels && (
-                <p className="text-small text-ink-3">
+                <p className="text-small text-ink-2">
                   {t.users.moreChannels(channels.length - listedChannels)}
                 </p>
               )}
             </div>
             <div className="space-y-3">
-              <p className="font-medium text-ink">{t.users.singleChannels}</p>
+              <h3 className="text-h3 text-ink">{t.users.singleChannels}</h3>
               <TextInput
                 type="search"
+                size="sm"
                 aria-label={t.users.searchChannels}
                 placeholder={t.users.searchChannels}
                 value={search}
                 onValue={setSearch}
+                onKeyDown={holdEnter}
                 className="sm:max-w-sm"
               />
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
                 {choices.data.channels.map((channel) => (
                   <Checkbox
                     key={channel.key}
@@ -792,14 +728,14 @@ export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: s
                 ))}
               </div>
               {choices.data.total > choices.data.channels.length && (
-                <p className="text-small text-ink-3">
+                <p className="text-small text-ink-2">
                   {t.users.moreChannels(choices.data.total - choices.data.channels.length)}
                 </p>
               )}
             </div>
-          </>
+          </fieldset>
         ))}
-    </SectionForm>
+    </LimitsSection>
   )
 }
 
@@ -812,90 +748,103 @@ function hourLabel(hour: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
-export function AllowedHoursForm({ target, id }: { target: LimitsTarget; id: string }) {
+/** How many hours rows differ from the saved ones, counting those added or removed. */
+function changedSchedules(a: readonly AccessSchedule[], b: readonly AccessSchedule[]) {
+  let count = Math.abs(a.length - b.length)
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const x = a[i]
+    const y = b[i]
+    if (x.day !== y.day || x.startHour !== y.startHour || x.endHour !== y.endHour) count++
+  }
+  return count
+}
+
+export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const { save, error, submit } = useSectionSave(target)
-  const [schedules, setSchedules] = useState<AccessSchedule[]>(limitsOf(target).accessSchedules)
+  const readOnly = isReadOnly(target)
+  const saved = limitsOf(target).accessSchedules
+  const [schedules, setSchedules] = useState<AccessSchedule[]>(saved)
   const misordered = schedules.some((s) => s.startHour >= s.endHour)
+  useDraftPart(id, readOnly ? 0 : changedSchedules(schedules, saved), () =>
+    misordered ? null : { accessSchedules: schedules },
+  )
 
   function change(index: number, changed: Partial<AccessSchedule>) {
-    save.reset()
     setSchedules(schedules.map((s, i) => (i === index ? { ...s, ...changed } : s)))
   }
 
   return (
-    <SectionForm
+    <LimitsSection
       id={id}
       target={target}
       title={t.users.allowedHoursTitle}
       description={t.users.allowedHoursHelp}
-      onSubmit={() => {
-        if (!misordered) submit({ accessSchedules: schedules })
-      }}
-      error={error}
-      saving={save.isPending}
-      saveLabel={t.users.saveAllowedHours}
-      disabled={misordered}
     >
-      {schedules.length === 0 ? (
-        <p className="text-small text-ink-3">{t.users.noAllowedHours}</p>
-      ) : (
-        <ul className="space-y-3">
-          {schedules.map((schedule, index) => (
-            // Rows have no identity of their own; they are edited in place.
-            <li
-              key={index}
-              className="flex flex-wrap items-end gap-3 rounded-row border border-line bg-bg/40 p-3"
-            >
-              <Field label={t.users.day} className="min-w-[200px] flex-1">
-                <Select<ScheduleDay>
-                  value={schedule.day}
-                  onValue={(day) => change(index, { day })}
-                  options={scheduleDays.map((day) => ({ value: day, label: t.users.days[day] }))}
-                />
-              </Field>
-              {(['startHour', 'endHour'] as const).map((field) => (
-                <Field
-                  key={field}
-                  label={field === 'startHour' ? t.users.from : t.users.to}
-                  className="w-[112px]"
-                >
-                  <Select
-                    value={schedule[field]}
-                    invalid={misordered && schedule.startHour >= schedule.endHour}
-                    onValue={(hour) => change(index, { [field]: hour })}
-                    options={(halfHours.includes(schedule[field])
-                      ? halfHours
-                      : [...halfHours, schedule[field]].sort((a, b) => a - b)
-                    ).map((hour) => ({ value: hour, label: hourLabel(hour) }))}
+      <fieldset disabled={readOnly} className="contents">
+        {schedules.length === 0 ? (
+          <p className={cx(tile, 'text-body text-ink-2')}>{t.users.noAllowedHours}</p>
+        ) : (
+          <ul
+            className="grid grid-cols-[minmax(0,1fr)] gap-2"
+            aria-label={t.users.allowedHoursTitle}
+          >
+            {schedules.map((schedule, index) => (
+              // Rows have no identity of their own; they are edited in place.
+              <li key={index} className={cx(tile, 'flex flex-wrap items-end gap-3 py-5')}>
+                <Field label={t.users.day} className="min-w-[200px] flex-1">
+                  <Select<ScheduleDay>
+                    size="sm"
+                    value={schedule.day}
+                    onValue={(day) => change(index, { day })}
+                    options={scheduleDays.map((day) => ({ value: day, label: t.users.days[day] }))}
                   />
                 </Field>
-              ))}
-              <Button
-                variant="ghost"
-                icon={TrashIcon}
-                onClick={() => {
-                  save.reset()
-                  setSchedules(schedules.filter((_, i) => i !== index))
-                }}
-              >
-                {t.users.removeHours}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <Button
-        icon={PlusIcon}
-        onClick={() => {
-          save.reset()
-          setSchedules([...schedules, { day: 'Everyday', startHour: 8, endHour: 20 }])
-        }}
-      >
-        {t.users.addHours}
-      </Button>
-      {misordered && <Notice tone="danger">{t.users.hoursOrder}</Notice>}
-    </SectionForm>
+                {(['startHour', 'endHour'] as const).map((field) => (
+                  <Field
+                    key={field}
+                    label={field === 'startHour' ? t.users.from : t.users.to}
+                    className="w-[128px]"
+                  >
+                    <Select
+                      size="sm"
+                      value={schedule[field]}
+                      invalid={misordered && schedule.startHour >= schedule.endHour}
+                      onValue={(hour) => change(index, { [field]: hour })}
+                      options={(halfHours.includes(schedule[field])
+                        ? halfHours
+                        : [...halfHours, schedule[field]].sort((a, b) => a - b)
+                      ).map((hour) => ({ value: hour, label: hourLabel(hour) }))}
+                    />
+                  </Field>
+                ))}
+                {!readOnly && (
+                  <Button
+                    variant="ghost"
+                    icon={TrashIcon}
+                    onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
+                  >
+                    {t.users.removeHours}
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {misordered && <Notice tone="danger">{t.users.hoursOrder}</Notice>}
+        {!readOnly && (
+          <div>
+            <Button
+              icon={PlusIcon}
+              onClick={() =>
+                setSchedules([...schedules, { day: 'Everyday', startHour: 8, endHour: 20 }])
+              }
+            >
+              {t.users.addHours}
+            </Button>
+          </div>
+        )}
+      </fieldset>
+    </LimitsSection>
   )
 }
 
@@ -913,9 +862,9 @@ export type Permissions = Pick<
 >
 
 /**
- * The switches of the permissions in Access, on a user's page and on a group's. Remote access off
- * warns when Health sees a reverse proxy missing from Known proxies: everyone coming through it
- * looks local, so the limit does not hold for them.
+ * The switches of the permissions in Access, on a user's page and on a group's, each saved as it
+ * changes. Remote access off warns when Health sees a reverse proxy missing from Known proxies:
+ * everyone coming through it looks local, so the limit does not hold for them.
  */
 export function PermissionRows({
   values,
@@ -939,29 +888,34 @@ export function PermissionRows({
     ['subtitleManagement', t.users.canManageSubtitles, t.users.canManageSubtitlesHelp],
     ['canShare', t.users.canShare, t.users.canShareHelp],
   ] as const
-  return rows.map(([field, title, help]) => (
-    <Fragment key={field}>
-      <SwitchRow
-        title={title}
+  return rows.map(([field, title, help]) =>
+    field === 'remoteAccess' && !values.remoteAccess && unknownProxy ? (
+      <SettingRow
+        key={field}
+        kind="switch"
+        label={title}
+        help={help}
+        checked={values[field]}
+        disabled={disabled}
+        onChange={(checked) => onChange({ [field]: checked })}
+      >
+        <p className="text-warn">{t.users.remoteAccessUnknownProxy}</p>
+        <TextLink to="/settings/security#known-proxies" className="mt-2 -ml-3">
+          {t.users.openKnownProxies}
+        </TextLink>
+      </SettingRow>
+    ) : (
+      <SettingRow
+        key={field}
+        kind="switch"
+        label={title}
         help={help}
         checked={values[field]}
         disabled={disabled}
         onChange={(checked) => onChange({ [field]: checked })}
       />
-      {field === 'remoteAccess' && !values.remoteAccess && unknownProxy && (
-        <div className="pb-4">
-          <Notice
-            tone="warn"
-            action={
-              <TextLink to="/settings/security#known-proxies">{t.users.openKnownProxies}</TextLink>
-            }
-          >
-            {t.users.remoteAccessUnknownProxy}
-          </Notice>
-        </div>
-      )}
-    </Fragment>
-  ))
+    ),
+  )
 }
 
 /** Whether a and b hold the same values, in any order. */

@@ -129,7 +129,7 @@ API details: [Remote access](jellyfin-api.md#remote-access-for-apps).
 
 ## Playback and access limits
 
-The **Playback and access** section of a user's page holds five more limits, saved with **Save playback and access**. Administrators' Jellyfin apps also set them. A followed group sets them, with the **Quality group**; an app changing one detaches the member (see [User groups](users.md#user-groups)).
+The **Playback and access** section of a user's page holds five more limits, saved with the page's **Save** (see [Users and permissions](users.md#accounts-and-permissions-overview)). Administrators' Jellyfin apps also set them. A followed group sets them, with the **Quality group**; an app changing one detaches the member (see [User groups](users.md#user-groups)).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -186,7 +186,7 @@ API details: [Live TV access](jellyfin-api.md#live-tv-access-for-apps).
 
 ### Live TV channels
 
-**Live TV channels** chooses which channels of the server's Live TV sources the user sees while **Live TV** is on. It is its own section of a user's or group's page, saved with **Save Live TV channels**.
+**Live TV channels** chooses which channels of the server's Live TV sources the user sees while **Live TV** is on. It is its own section of a user's or group's page, saved with the page's **Save**.
 
 | Choice | Channels shown |
 |---|---|

@@ -23,8 +23,6 @@ const users: typeof en = {
     created: (name: string) => `${name} foi criado.`,
     edit: 'Editar',
     close: 'Fechar',
-    rename: 'Renomear',
-    renamed: 'Nome alterado.',
     resetPassword: 'Redefinir senha',
     newPassword: 'Nova senha',
     resetPasswordHelp: 'Alterar a senha desconecta todos os dispositivos Jellyfin deste usuário.',
@@ -91,7 +89,6 @@ const users: typeof en = {
     blockUnratedMovies: 'Bloquear filmes sem classificação',
     blockUnratedShows: 'Bloquear séries sem classificação',
     ratingLimit: (rating: string) => `Até ${rating}`,
-    saveParental: 'Salvar controle parental',
     devicesTitle: 'Dispositivos',
     delete: 'Excluir usuário',
     deleteConfirm: (name: string) =>
@@ -153,12 +150,10 @@ const users: typeof en = {
     convertSound: 'Converter o som para equalizá-lo',
     convertSoundHelp:
       'O servidor converte o áudio dos vídeos e canais deste usuário e o equaliza em -16 LUFS, com a imagem copiada, para que todo aplicativo o reproduza mais alto e uniforme. O custo: nada é reproduzido diretamente, cada reprodução usa um pouco do processador do servidor, e o som surround chega a um receiver convertido em vez de como a faixa original.',
-    savePlaybackAccess: 'Salvar reprodução e acesso',
     visibleLibrariesTitle: 'Bibliotecas visíveis',
     visibleLibrariesHelp:
       'As bibliotecas do servidor que os aplicativos deste usuário mostram. Bibliotecas adicionadas depois são mostradas. Isso apenas escolhe as bibliotecas mostradas: os títulos continuam acessíveis por outras bibliotecas, pela pesquisa ou por links. Para bloquear títulos, use o controle parental ou os gêneros bloqueados.',
     noServerLibraries: 'O servidor ainda não tem nenhuma biblioteca.',
-    saveVisibleLibraries: 'Salvar bibliotecas visíveis',
     blockedGenresTitle: 'Gêneros bloqueados',
     blockedGenresHelp:
       'Títulos de qualquer um destes gêneros ficam ocultos para este usuário em todos os lugares, como os títulos acima do limite do controle parental dele.',
@@ -167,7 +162,6 @@ const users: typeof en = {
     addGenre: 'Adicionar',
     removeGenre: (genre: string) => `Remover ${genre}`,
     noBlockedGenres: 'Nenhum gênero está bloqueado.',
-    saveBlockedGenres: 'Salvar gêneros bloqueados',
     liveTvChannelsTitle: 'Canais da TV ao Vivo',
     liveTvChannelsHelp:
       'Os canais das fontes de TV ao Vivo do servidor que este usuário vê, escolhidos por grupo e por canal. Canais ocultos ficam fora da lista de canais, do guia, das buscas, do Replay, das gravações, dos agendamentos e dos lembretes, e não são reproduzidos. As fontes próprias do usuário não são limitadas.',
@@ -192,7 +186,6 @@ const users: typeof en = {
     hideNewChannelGroups: 'Ocultar os canais de grupos adicionados depois',
     hideNewChannelGroupsHelp:
       'Os grupos que uma fonte adicionar depois de salvar ficam ocultos. Eles aparecem aqui marcados, como Novo, até salvar de novo.',
-    saveLiveTvChannels: 'Salvar canais da TV ao Vivo',
     allowedHoursTitle: 'Horários permitidos',
     allowedHoursHelp:
       'Quando há horários definidos, este usuário só pode entrar e usar o servidor durante eles, no fuso horário do servidor. Fora deles, os aplicativos dele são recusados.',
@@ -203,7 +196,6 @@ const users: typeof en = {
     addHours: 'Adicionar horário',
     removeHours: 'Remover',
     hoursOrder: 'Cada horário de término deve ser posterior ao horário de início.',
-    saveAllowedHours: 'Salvar horários permitidos',
     days: {
       Sunday: 'Domingo',
       Monday: 'Segunda-feira',
@@ -257,7 +249,20 @@ const users: typeof en = {
     accessHelp: 'Cada alteração é salva imediatamente.',
     noServerLibrariesHelp:
       'Adicione uma biblioteca em Conteúdo › Bibliotecas e, em seguida, escolha aqui quais este usuário vê.',
+    moreTitle: 'Importações e downloads',
+    turnOffDownloadsSummary:
+      'Todos os usuários e grupos perdem a permissão de baixar, assim que você confirmar.',
+    libraryShown: 'Visível',
+    libraryHidden: 'Oculta',
+    draftInvalid: 'Uma seção tem um erro a corrigir antes de salvar.',
+    watching: (title: string) => `Assistindo ${title}`,
+    pausedOn: (title: string) => `Pausado: ${title}`,
+    positionOf: (position: string, total: string) => `${position} de ${total}`,
+    metadataLanguageRow: 'Idioma dos títulos',
+    webThemeRow: 'Tema',
+    audioRegionRow: 'Região da dublagem',
     jellyfinImport: {
+      summary: 'Contas e dados de exibição de um servidor Jellyfin, Emby ou Plex.',
       open: 'Importar de outro servidor',
       title: 'Importar de outro servidor',
       description:
@@ -493,6 +498,8 @@ const users: typeof en = {
       more: (count: number) => (count === 1 ? 'E mais 1.' : `E mais ${count}.`),
     },
     appImport: {
+      summary:
+        'Os dados de exibição de um usuário a partir da conta dele num app baseado em addons.',
       open: 'Importar de um aplicativo',
       title: 'Importar de um aplicativo',
       description:
@@ -502,6 +509,7 @@ const users: typeof en = {
         'O usuário do Polyfin a cujos dados de visualização e complementos a importação será adicionada.',
     },
     letterboxdImport: {
+      summary: 'Os filmes de um usuário a partir do arquivo de exportação do Letterboxd.',
       open: 'Importar do Letterboxd',
       title: 'Importar do Letterboxd',
       description:
@@ -587,9 +595,7 @@ const users: typeof en = {
     notFoundHelp: 'Ele pode ter sido excluído.',
     backToGroups: 'Voltar aos grupos',
     sectionsLabel: 'Seções do grupo',
-    pageHelp: 'Cada seção é salva separadamente e chega na hora aos membros que seguem o grupo.',
-    rename: 'Renomear',
-    renamed: 'O grupo foi renomeado.',
+    pageHelp: 'As mudanças salvas chegam na hora aos membros que seguem o grupo.',
     updated: 'O grupo foi atualizado.',
     accessHelp:
       'As permissões que os membros recebem do grupo. A função, a tela de login, “Desativado” e a data de encerramento continuam na página de cada um.',

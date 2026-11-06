@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ApiError,
@@ -13,23 +13,51 @@ import {
   type User,
   type UserPatch,
 } from '@/api'
+import { SubAreaContext } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
-import { Switch, Tabs } from '@/ui'
+import { StatusPill, Switch, Tabs } from '@/ui'
 
-/** Users › Users and Users › Groups, above the two lists. */
-export function UsersTabs() {
+/** PageLayout claims the words; there is nothing to show above a page in their place. */
+const noClaim = () => () => {}
+
+/**
+ * The pages of Users › Users and Users › Groups: their PageLayout shows the sub-area words Users ·
+ * Groups under its title, as Content's and System's pages show theirs.
+ */
+export function UsersArea({ children }: { children: ReactNode }) {
   const { t } = useI18n()
-  return (
-    <Tabs
-      label={t.groups.tabsLabel}
-      items={[
-        { id: 'users', label: t.users.title, to: '/users', end: true },
-        { id: 'groups', label: t.groups.title, to: '/users/groups', end: true },
-      ]}
-      className="mb-8 max-md:mb-6"
-    />
+  const subArea = useMemo(
+    () => ({
+      words: (
+        <Tabs
+          label={t.groups.tabsLabel}
+          items={[
+            { id: 'users', label: t.users.title, to: '/users', end: true },
+            { id: 'groups', label: t.groups.title, to: '/users/groups', end: true },
+          ]}
+        />
+      ),
+      claim: noClaim,
+    }),
+    [t],
   )
+  return <SubAreaContext value={subArea}>{children}</SubAreaContext>
+}
+
+/** The state of an account, as an icon and a word: Active, Disabled, Ended or Blocked until… */
+export function UserState({ user }: { user: User }) {
+  const { t, language } = useI18n()
+  if (user.isDisabled) return <StatusPill tone="muted">{t.users.disabled}</StatusPill>
+  if (user.ended) return <StatusPill tone="muted">{t.users.ended}</StatusPill>
+  if (user.blockedUntil !== null) {
+    return (
+      <StatusPill tone="warn">
+        {t.users.blockedUntil(clockTime(user.blockedUntil, language))}
+      </StatusPill>
+    )
+  }
+  return <StatusPill tone="ok">{t.users.active}</StatusPill>
 }
 
 /** Puts a user returned by the server into the cached list. */
@@ -216,11 +244,12 @@ export function useSectionInView(ids: readonly string[], ready: boolean) {
   const key = ids.join(' ')
   useEffect(() => {
     if (!ready) return
-    const sections = key
-      .split(' ')
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el !== null)
+    const ids = key.split(' ')
     function update() {
+      // Looked up each time: a section drawn again (after a save or a reset) is a new element.
+      const sections = ids
+        .map((id) => document.getElementById(id))
+        .filter((el): el is HTMLElement => el !== null)
       const line = 140
       let found = sections[0]?.id
       for (const section of sections) {

@@ -22,8 +22,6 @@ const users = {
     created: (name: string) => `${name} has been created.`,
     edit: 'Edit',
     close: 'Close',
-    rename: 'Rename',
-    renamed: 'The name has been changed.',
     resetPassword: 'Reset password',
     newPassword: 'New password',
     resetPasswordHelp: 'Changing the password signs out all of this user’s Jellyfin devices.',
@@ -88,7 +86,6 @@ const users = {
     blockUnratedMovies: 'Block unrated movies',
     blockUnratedShows: 'Block unrated shows',
     ratingLimit: (rating: string) => `Up to ${rating}`,
-    saveParental: 'Save parental control',
     devicesTitle: 'Devices',
     delete: 'Delete user',
     deleteConfirm: (name: string) =>
@@ -149,12 +146,10 @@ const users = {
     convertSound: 'Convert the sound to even it',
     convertSoundHelp:
       'The server converts the audio of this user’s videos and channels and evens it at -16 LUFS, the picture copied, so that every app plays it louder and evenly. The cost: nothing plays directly, each play takes a little of the server’s processor, and surround sound reaches a receiver converted rather than as the original track.',
-    savePlaybackAccess: 'Save playback and access',
     visibleLibrariesTitle: 'Visible libraries',
     visibleLibrariesHelp:
       'The server’s libraries this user’s apps show. Libraries added later are shown. This only chooses the libraries shown: titles stay reachable through other libraries, search or links. To block titles, use parental control or blocked genres.',
     noServerLibraries: 'The server has no library yet.',
-    saveVisibleLibraries: 'Save visible libraries',
     blockedGenresTitle: 'Blocked genres',
     blockedGenresHelp:
       'Titles of any of these genres are hidden from this user everywhere, like titles above their parental control limit.',
@@ -163,7 +158,6 @@ const users = {
     addGenre: 'Add',
     removeGenre: (genre: string) => `Remove ${genre}`,
     noBlockedGenres: 'No genre is blocked.',
-    saveBlockedGenres: 'Save blocked genres',
     liveTvChannelsTitle: 'Live TV channels',
     liveTvChannelsHelp:
       'The channels of the server’s Live TV sources this user sees, chosen by group and by channel. Hidden channels are left out of the channel list, the guide, searches, Replay, recordings, timers and reminders, and do not play. The user’s own sources are not limited.',
@@ -188,7 +182,6 @@ const users = {
     hideNewChannelGroups: 'Hide channels from groups added later',
     hideNewChannelGroupsHelp:
       'Groups a source adds after this is saved are hidden. They show here ticked, marked New, until saved again.',
-    saveLiveTvChannels: 'Save Live TV channels',
     allowedHoursTitle: 'Allowed hours',
     allowedHoursHelp:
       'When hours are set, this user can only sign in and use the server during them, in the server’s time zone. Outside them, their apps are refused.',
@@ -199,7 +192,6 @@ const users = {
     addHours: 'Add hours',
     removeHours: 'Remove',
     hoursOrder: 'Each end time must come after its start time.',
-    saveAllowedHours: 'Save allowed hours',
     days: {
       Sunday: 'Sunday',
       Monday: 'Monday',
@@ -253,7 +245,20 @@ const users = {
     accessHelp: 'Each change is saved at once.',
     noServerLibrariesHelp:
       'Add a library in Content › Libraries, then choose here which ones this user sees.',
+    moreTitle: 'Imports and downloads',
+    turnOffDownloadsSummary:
+      'Every user and group loses the permission to download, once you confirm.',
+    libraryShown: 'Shown',
+    libraryHidden: 'Hidden',
+    draftInvalid: 'A section has an error to fix before saving.',
+    watching: (title: string) => `Watching ${title}`,
+    pausedOn: (title: string) => `Paused on ${title}`,
+    positionOf: (position: string, total: string) => `${position} of ${total}`,
+    metadataLanguageRow: 'Language of titles',
+    webThemeRow: 'Theme',
+    audioRegionRow: 'Dub region',
     jellyfinImport: {
+      summary: 'Accounts and watch data from a Jellyfin, Emby or Plex server.',
       open: 'Import from another server',
       title: 'Import from another server',
       description:
@@ -490,6 +495,7 @@ const users = {
       more: (count: number) => `And ${count} more.`,
     },
     appImport: {
+      summary: 'A user’s watch data from their account on an app built on addons.',
       open: 'Import from an app',
       title: 'Import from an app',
       description:
@@ -498,6 +504,7 @@ const users = {
       userHelp: 'The Polyfin user whose watch data and addons the import adds to.',
     },
     letterboxdImport: {
+      summary: 'A user’s movies from their Letterboxd export file.',
       open: 'Import from Letterboxd',
       title: 'Import from Letterboxd',
       description:
@@ -579,9 +586,7 @@ const users = {
     notFoundHelp: 'It may have been deleted.',
     backToGroups: 'Back to groups',
     sectionsLabel: 'Sections of the group',
-    pageHelp: 'Each section saves on its own and reaches the members who follow the group at once.',
-    rename: 'Rename',
-    renamed: 'The group has been renamed.',
+    pageHelp: 'Saved changes reach the members who follow the group at once.',
     updated: 'The group has been updated.',
     accessHelp:
       'The permissions members take from the group. Their role, sign-in screen, Disabled and end date stay on their own page.',

@@ -12,7 +12,7 @@ import { PageLayout } from '@/app/PageLayout'
 import { LetterboxdForm, LetterboxdProgress } from '@/features/account/LetterboxdImport'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Field, InlineError, Panel, Select, SkeletonRows } from '@/ui'
+import { InlineError, Panel, SettingRow, SkeletonRows } from '@/ui'
 
 /** How often the import is read while it runs. */
 const importPollMs = 2000
@@ -48,18 +48,15 @@ export default function LetterboxdImportRoute() {
           {errorMessage(t, users.error)}
         </InlineError>
       ) : (
-        <div className="flex flex-col gap-6">
-          <Panel as="div">
-            <div className="max-w-lg">
-              <Field label={text.user} help={text.userHelp}>
-                <Select
-                  value={userId}
-                  options={users.data.map((user) => ({ value: user.id, label: user.name }))}
-                  onValue={setChosen}
-                />
-              </Field>
-            </div>
-          </Panel>
+        <div className="flex flex-col gap-8">
+          <SettingRow
+            kind="choice"
+            label={text.user}
+            help={text.userHelp}
+            value={userId}
+            options={users.data.map((user) => ({ value: user.id, label: user.name }))}
+            onChange={setChosen}
+          />
           {status.isError ? (
             <InlineError onRetry={() => void status.refetch()} retrying={status.isFetching}>
               {errorMessage(t, status.error)}

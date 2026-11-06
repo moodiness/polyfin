@@ -24,8 +24,6 @@ const users: typeof en = {
     created: (name: string) => `Se ha creado ${name}.`,
     edit: 'Editar',
     close: 'Cerrar',
-    rename: 'Cambiar nombre',
-    renamed: 'Se ha cambiado el nombre.',
     resetPassword: 'Restablecer contraseña',
     newPassword: 'Nueva contraseña',
     resetPasswordHelp:
@@ -94,7 +92,6 @@ const users: typeof en = {
     blockUnratedMovies: 'Bloquear películas sin clasificar',
     blockUnratedShows: 'Bloquear series sin clasificar',
     ratingLimit: (rating: string) => `Hasta ${rating}`,
-    saveParental: 'Guardar control parental',
     devicesTitle: 'Dispositivos',
     delete: 'Borrar usuario',
     deleteConfirm: (name: string) =>
@@ -157,12 +154,10 @@ const users: typeof en = {
     convertSound: 'Convertir el sonido para igualarlo',
     convertSoundHelp:
       'El servidor convierte el audio de los vídeos y canales de este usuario y lo iguala a -16 LUFS, con la imagen copiada, para que todas las aplicaciones lo reproduzcan más fuerte y parejo. El coste: nada se reproduce directamente, cada reproducción usa un poco del procesador del servidor, y el sonido envolvente llega a un receptor convertido en lugar de como la pista original.',
-    savePlaybackAccess: 'Guardar reproducción y acceso',
     visibleLibrariesTitle: 'Bibliotecas visibles',
     visibleLibrariesHelp:
       'Las bibliotecas del servidor que muestran las aplicaciones de este usuario. Las bibliotecas añadidas más adelante se muestran. Esto solo elige las bibliotecas que se muestran: los títulos siguen siendo accesibles desde otras bibliotecas, la búsqueda o enlaces. Para bloquear títulos, use el control parental o los géneros bloqueados.',
     noServerLibraries: 'El servidor aún no tiene ninguna biblioteca.',
-    saveVisibleLibraries: 'Guardar bibliotecas visibles',
     blockedGenresTitle: 'Géneros bloqueados',
     blockedGenresHelp:
       'Los títulos de cualquiera de estos géneros se ocultan a este usuario en todas partes, como los títulos que superan su límite de control parental.',
@@ -171,7 +166,6 @@ const users: typeof en = {
     addGenre: 'Añadir',
     removeGenre: (genre: string) => `Eliminar ${genre}`,
     noBlockedGenres: 'No hay ningún género bloqueado.',
-    saveBlockedGenres: 'Guardar géneros bloqueados',
     liveTvChannelsTitle: 'Canales de televisión en vivo',
     liveTvChannelsHelp:
       'Los canales de las fuentes de televisión en vivo del servidor que ve este usuario, elegidos por grupo y por canal. Los canales ocultos no aparecen en la lista de canales, la guía, las búsquedas, Replay, las grabaciones, los temporizadores ni los recordatorios, y no se reproducen. Las fuentes propias del usuario no se limitan.',
@@ -196,7 +190,6 @@ const users: typeof en = {
     hideNewChannelGroups: 'Ocultar los canales de los grupos añadidos más tarde',
     hideNewChannelGroupsHelp:
       'Los grupos que una fuente añada después de guardar se ocultan. Aparecen aquí marcados, como Nuevo, hasta que se guarde de nuevo.',
-    saveLiveTvChannels: 'Guardar canales de televisión en vivo',
     allowedHoursTitle: 'Horario permitido',
     allowedHoursHelp:
       'Si se define un horario, este usuario solo puede iniciar sesión y usar el servidor dentro de él, según la zona horaria del servidor. Fuera de ese horario, se rechazan sus aplicaciones.',
@@ -207,7 +200,6 @@ const users: typeof en = {
     addHours: 'Añadir horario',
     removeHours: 'Eliminar',
     hoursOrder: 'Cada hora de fin debe ser posterior a su hora de inicio.',
-    saveAllowedHours: 'Guardar horario permitido',
     days: {
       Sunday: 'Domingo',
       Monday: 'Lunes',
@@ -262,7 +254,20 @@ const users: typeof en = {
     accessHelp: 'Cada cambio se guarda al instante.',
     noServerLibrariesHelp:
       'Añada una biblioteca en Contenido › Bibliotecas y, a continuación, elija aquí cuáles ve este usuario.',
+    moreTitle: 'Importaciones y descargas',
+    turnOffDownloadsSummary:
+      'Todos los usuarios y grupos pierden el permiso de descargar, una vez que confirmes.',
+    libraryShown: 'Visible',
+    libraryHidden: 'Oculta',
+    draftInvalid: 'Una sección tiene un error que corregir antes de guardar.',
+    watching: (title: string) => `Viendo ${title}`,
+    pausedOn: (title: string) => `En pausa: ${title}`,
+    positionOf: (position: string, total: string) => `${position} de ${total}`,
+    metadataLanguageRow: 'Idioma de los títulos',
+    webThemeRow: 'Tema',
+    audioRegionRow: 'Región del doblaje',
     jellyfinImport: {
+      summary: 'Cuentas y datos de visionado de un servidor Jellyfin, Emby o Plex.',
       open: 'Importar desde otro servidor',
       title: 'Importar desde otro servidor',
       description:
@@ -498,6 +503,7 @@ const users: typeof en = {
       more: (count: number) => (count === 1 ? 'Y 1 más.' : `Y ${count} más.`),
     },
     appImport: {
+      summary: 'Los datos de visionado de un usuario desde su cuenta en una app basada en addons.',
       open: 'Importar desde una aplicación',
       title: 'Importar desde una aplicación',
       description:
@@ -507,6 +513,7 @@ const users: typeof en = {
         'El usuario de Polyfin a cuyos datos de visionado y extensiones se añade la importación.',
     },
     letterboxdImport: {
+      summary: 'Las películas de un usuario desde su archivo de exportación de Letterboxd.',
       open: 'Importar desde Letterboxd',
       title: 'Importar desde Letterboxd',
       description:
@@ -592,10 +599,7 @@ const users: typeof en = {
     notFoundHelp: 'Es posible que se haya borrado.',
     backToGroups: 'Volver a los grupos',
     sectionsLabel: 'Secciones del grupo',
-    pageHelp:
-      'Cada sección se guarda por separado y llega de inmediato a los miembros que siguen el grupo.',
-    rename: 'Cambiar nombre',
-    renamed: 'Se ha cambiado el nombre del grupo.',
+    pageHelp: 'Los cambios guardados llegan de inmediato a los miembros que siguen el grupo.',
     updated: 'Se ha actualizado el grupo.',
     accessHelp:
       'Los permisos que los miembros reciben del grupo. Su rol, la pantalla de inicio de sesión, «Desactivado» y la fecha de fin se mantienen en su propia página.',

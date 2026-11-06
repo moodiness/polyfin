@@ -23,8 +23,6 @@ const users: typeof en = {
     created: (name: string) => `${name} wurde erstellt.`,
     edit: 'Bearbeiten',
     close: 'Schließen',
-    rename: 'Umbenennen',
-    renamed: 'Der Name wurde geändert.',
     resetPassword: 'Passwort zurücksetzen',
     newPassword: 'Neues Passwort',
     resetPasswordHelp:
@@ -94,7 +92,6 @@ const users: typeof en = {
     blockUnratedMovies: 'Filme ohne Altersfreigabe sperren',
     blockUnratedShows: 'Serien ohne Altersfreigabe sperren',
     ratingLimit: (rating: string) => `Bis ${rating}`,
-    saveParental: 'Kindersicherung speichern',
     devicesTitle: 'Geräte',
     delete: 'Benutzer löschen',
     deleteConfirm: (name: string) =>
@@ -156,12 +153,10 @@ const users: typeof en = {
     convertSound: 'Ton konvertieren und angleichen',
     convertSoundHelp:
       'Der Server konvertiert den Ton der Videos und Sender dieses Benutzers und gleicht ihn auf -16 LUFS an, das Bild wird kopiert, sodass jede App ihn lauter und gleichmäßig abspielt. Der Preis: Nichts wird direkt abgespielt, jede Wiedergabe beansprucht etwas vom Prozessor des Servers, und Surround-Ton erreicht einen Receiver konvertiert statt als Originalspur.',
-    savePlaybackAccess: 'Wiedergabe und Zugriff speichern',
     visibleLibrariesTitle: 'Sichtbare Bibliotheken',
     visibleLibrariesHelp:
       'Die Bibliotheken des Servers, die die Apps dieses Benutzers anzeigen. Später hinzugefügte Bibliotheken werden angezeigt. Damit wird nur festgelegt, welche Bibliotheken angezeigt werden: Titel bleiben über andere Bibliotheken, die Suche oder Links erreichbar. Um Titel zu sperren, nutze die Kindersicherung oder gesperrte Genres.',
     noServerLibraries: 'Der Server hat noch keine Bibliothek.',
-    saveVisibleLibraries: 'Sichtbare Bibliotheken speichern',
     blockedGenresTitle: 'Gesperrte Genres',
     blockedGenresHelp:
       'Titel eines dieser Genres werden für diesen Benutzer überall ausgeblendet, wie Titel oberhalb seiner Altersfreigabe-Grenze der Kindersicherung.',
@@ -170,7 +165,6 @@ const users: typeof en = {
     addGenre: 'Hinzufügen',
     removeGenre: (genre: string) => `${genre} entfernen`,
     noBlockedGenres: 'Kein Genre ist gesperrt.',
-    saveBlockedGenres: 'Gesperrte Genres speichern',
     liveTvChannelsTitle: 'Live-TV-Sender',
     liveTvChannelsHelp:
       'Die Sender der Live-TV-Quellen des Servers, die dieser Benutzer sieht, nach Gruppe und nach Sender gewählt. Ausgeblendete Sender fehlen in der Senderliste, im Programmführer, in Suchen, in Replay, bei Aufnahmen, Timern und Erinnerungen und lassen sich nicht abspielen. Eigene Quellen des Benutzers sind nicht eingeschränkt.',
@@ -195,7 +189,6 @@ const users: typeof en = {
     hideNewChannelGroups: 'Sender aus später hinzugefügten Gruppen ausblenden',
     hideNewChannelGroupsHelp:
       'Gruppen, die eine Quelle nach dem Speichern hinzufügt, werden ausgeblendet. Sie erscheinen hier angehakt und als Neu markiert, bis erneut gespeichert wird.',
-    saveLiveTvChannels: 'Live-TV-Sender speichern',
     allowedHoursTitle: 'Erlaubte Zeiten',
     allowedHoursHelp:
       'Wenn Zeiten festgelegt sind, kann sich dieser Benutzer nur während dieser Zeiten anmelden und den Server nutzen, in der Zeitzone des Servers. Außerhalb davon werden seine Apps abgewiesen.',
@@ -206,7 +199,6 @@ const users: typeof en = {
     addHours: 'Zeiten hinzufügen',
     removeHours: 'Entfernen',
     hoursOrder: 'Jede Endzeit muss nach der zugehörigen Startzeit liegen.',
-    saveAllowedHours: 'Erlaubte Zeiten speichern',
     days: {
       Sunday: 'Sonntag',
       Monday: 'Montag',
@@ -261,7 +253,20 @@ const users: typeof en = {
     accessHelp: 'Jede Änderung wird sofort gespeichert.',
     noServerLibrariesHelp:
       'Füge unter Inhalte › Bibliotheken eine Bibliothek hinzu und wähle dann hier, welche dieser Benutzer sieht.',
+    moreTitle: 'Importe und Downloads',
+    turnOffDownloadsSummary:
+      'Alle Benutzer und Gruppen verlieren nach deiner Bestätigung das Recht zum Herunterladen.',
+    libraryShown: 'Sichtbar',
+    libraryHidden: 'Ausgeblendet',
+    draftInvalid: 'Ein Bereich enthält einen Fehler, der vor dem Speichern zu beheben ist.',
+    watching: (title: string) => `Schaut ${title}`,
+    pausedOn: (title: string) => `${title} pausiert`,
+    positionOf: (position: string, total: string) => `${position} von ${total}`,
+    metadataLanguageRow: 'Sprache der Titel',
+    webThemeRow: 'Design',
+    audioRegionRow: 'Region der Synchronfassung',
     jellyfinImport: {
+      summary: 'Konten und Wiedergabedaten von einem Jellyfin-, Emby- oder Plex-Server.',
       open: 'Von einem anderen Server importieren',
       title: 'Von einem anderen Server importieren',
       description:
@@ -495,6 +500,8 @@ const users: typeof en = {
       more: (count: number) => (count === 1 ? 'Und 1 weiterer.' : `Und ${count} weitere.`),
     },
     appImport: {
+      summary:
+        'Die Wiedergabedaten eines Benutzers aus seinem Konto in einer App, die auf Addons aufbaut.',
       open: 'Aus einer App importieren',
       title: 'Aus einer App importieren',
       description:
@@ -503,6 +510,7 @@ const users: typeof en = {
       userHelp: 'Der Polyfin-Benutzer, dessen Wiedergabedaten und Add-ons der Import ergänzt.',
     },
     letterboxdImport: {
+      summary: 'Die Filme eines Benutzers aus seiner Letterboxd-Exportdatei.',
       open: 'Aus Letterboxd importieren',
       title: 'Aus Letterboxd importieren',
       description:
@@ -586,10 +594,7 @@ const users: typeof en = {
     notFoundHelp: 'Sie wurde möglicherweise gelöscht.',
     backToGroups: 'Zurück zu den Gruppen',
     sectionsLabel: 'Bereiche der Gruppe',
-    pageHelp:
-      'Jeder Bereich wird einzeln gespeichert und gilt sofort für die Mitglieder, die der Gruppe folgen.',
-    rename: 'Umbenennen',
-    renamed: 'Die Gruppe wurde umbenannt.',
+    pageHelp: 'Gespeicherte Änderungen gelten sofort für die Mitglieder, die der Gruppe folgen.',
     updated: 'Die Gruppe wurde aktualisiert.',
     accessHelp:
       'Die Berechtigungen, die Mitglieder von der Gruppe übernehmen. Ihre Rolle, der Anmeldebildschirm, „Deaktiviert“ und das Enddatum bleiben auf ihrer eigenen Seite.',

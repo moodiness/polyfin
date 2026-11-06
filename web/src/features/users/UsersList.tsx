@@ -1,6 +1,5 @@
 import {
   ArrowSquareInIcon,
-  CaretRightIcon,
   DeviceMobileIcon,
   DownloadSimpleIcon,
   FileZipIcon,
@@ -28,7 +27,6 @@ import {
   Badge,
   Block,
   Button,
-  ButtonLink,
   ConfirmDialog,
   EmptyState,
   InlineError,
@@ -36,22 +34,21 @@ import {
   RowList,
   Select,
   SkeletonRows,
-  StatusPill,
   RelativeTime,
   useToast,
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
 import { CreateInviteModal, InviteLinks } from './InviteLinks'
-import { clockTime, useRestrictions, UsersTabs } from './shared'
+import { UserState, useRestrictions, UsersArea } from './shared'
 
 /** The users the list shows: every one, those in no group, or the members of one group. */
 const allUsers = 'all'
 const noGroup = 'none'
 
 /**
- * `/users`: every account, each opening its page, the button to create one, the ones importing
- * accounts from a Jellyfin server and a user's watch data from an app, the one turning downloads
- * off for everyone, and the invite links, with the button to create one.
+ * `/users`: every account as a big row opening its page, with the buttons creating a user and an
+ * invite link; then the invite links; then the imports of accounts and watch data from another
+ * server, an app or Letterboxd, and the one turning downloads off for everyone.
  */
 export default function UsersList() {
   const { t } = useI18n()
@@ -87,36 +84,18 @@ export default function UsersList() {
       {t.users.createTitle}
     </Button>
   )
+  // Two actions in the head, which wrap on a phone; the imports and downloads have their rows.
   const actions = (
-    <span className="flex flex-wrap gap-2">
-      <Button
-        icon={DownloadSimpleIcon}
-        onClick={() => {
-          downloadsOff.reset()
-          setStoppingDownloads(true)
-        }}
-      >
-        {t.users.turnOffDownloads}
-      </Button>
-      <ButtonLink to="/users/jellyfin-import" icon={ArrowSquareInIcon}>
-        {t.users.jellyfinImport.open}
-      </ButtonLink>
-      <ButtonLink to="/users/app-import" icon={DeviceMobileIcon}>
-        {t.users.appImport.open}
-      </ButtonLink>
-      <ButtonLink to="/users/letterboxd-import" icon={FileZipIcon}>
-        {t.users.letterboxdImport.open}
-      </ButtonLink>
+    <>
       <Button icon={LinkIcon} onClick={() => setInviting(true)}>
         {t.invites.create}
       </Button>
       {create}
-    </span>
+    </>
   )
 
   return (
-    <>
-      <UsersTabs />
+    <UsersArea>
       <PageLayout title={t.users.title} lede={t.users.description} actions={actions}>
         <Block
           title={t.users.listTitle}
@@ -124,10 +103,11 @@ export default function UsersList() {
           aside={
             (groups.data?.length ?? 0) > 0 && (
               <Select
+                size="sm"
                 value={shownGroup}
                 onValue={setShownGroup}
                 aria-label={t.groups.filter}
-                className="w-48"
+                className="w-56 max-w-full"
                 options={[
                   { value: allUsers, label: t.groups.allGroups },
                   { value: noGroup, label: t.groups.noGroup },
@@ -158,6 +138,37 @@ export default function UsersList() {
           )}
         </Block>
         <InviteLinks onCreate={() => setInviting(true)} />
+        <Block title={t.users.moreTitle}>
+          <RowList aria-label={t.users.moreTitle}>
+            <Row
+              to="/users/jellyfin-import"
+              leading={ArrowSquareInIcon}
+              title={t.users.jellyfinImport.open}
+              meta={t.users.jellyfinImport.summary}
+            />
+            <Row
+              to="/users/app-import"
+              leading={DeviceMobileIcon}
+              title={t.users.appImport.open}
+              meta={t.users.appImport.summary}
+            />
+            <Row
+              to="/users/letterboxd-import"
+              leading={FileZipIcon}
+              title={t.users.letterboxdImport.open}
+              meta={t.users.letterboxdImport.summary}
+            />
+            <Row
+              onClick={() => {
+                downloadsOff.reset()
+                setStoppingDownloads(true)
+              }}
+              leading={DownloadSimpleIcon}
+              title={t.users.turnOffDownloads}
+              meta={t.users.turnOffDownloadsSummary}
+            />
+          </RowList>
+        </Block>
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the panel down. */}
       <CreateUserModal
@@ -184,10 +195,11 @@ export default function UsersList() {
       >
         {t.users.turnOffDownloadsConfirm}
       </ConfirmDialog>
-    </>
+    </UsersArea>
   )
 }
 
+/** A user as a big row: the avatar, the name with its tags, the last sign-in, and the state. */
 function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
@@ -215,7 +227,11 @@ function UserRow({ user }: { user: User }) {
         </>
       }
       meta={
-        <span className="truncate">
+        <span className="min-w-0">
+          {/* On a phone the state goes on this line, leaving the name its width. */}
+          <span className="mb-1 block sm:hidden">
+            <UserState user={user} />
+          </span>
           {t.users.lastSignInLabel} {lastSignIn}
           {user.endsOn !== null && (
             <span>
@@ -227,19 +243,8 @@ function UserRow({ user }: { user: User }) {
         </span>
       }
       trailing={
-        <span className="flex items-center gap-3">
-          {user.isDisabled ? (
-            <StatusPill tone="muted">{t.users.disabled}</StatusPill>
-          ) : user.ended ? (
-            <StatusPill tone="muted">{t.users.ended}</StatusPill>
-          ) : user.blockedUntil !== null ? (
-            <StatusPill tone="warn">
-              {t.users.blockedUntil(clockTime(user.blockedUntil, language))}
-            </StatusPill>
-          ) : (
-            <StatusPill tone="ok">{t.users.active}</StatusPill>
-          )}
-          <CaretRightIcon size={16} aria-hidden="true" className="text-ink-3 max-sm:hidden" />
+        <span className="max-sm:hidden">
+          <UserState user={user} />
         </span>
       }
     />

@@ -24,8 +24,6 @@ const users: typeof en = {
     created: (name: string) => `${name} a été créé.`,
     edit: 'Modifier',
     close: 'Fermer',
-    rename: 'Renommer',
-    renamed: 'Le nom a été modifié.',
     resetPassword: 'Réinitialiser le mot de passe',
     newPassword: 'Nouveau mot de passe',
     resetPasswordHelp:
@@ -94,7 +92,6 @@ const users: typeof en = {
     blockUnratedMovies: 'Bloquer les films non classés',
     blockUnratedShows: 'Bloquer les séries non classées',
     ratingLimit: (rating: string) => `Jusqu’à ${rating}`,
-    saveParental: 'Enregistrer le contrôle parental',
     devicesTitle: 'Appareils',
     delete: 'Supprimer l’utilisateur',
     deleteConfirm: (name: string) =>
@@ -156,12 +153,10 @@ const users: typeof en = {
     convertSound: 'Convertir le son pour l’égaliser',
     convertSoundHelp:
       'Le serveur convertit le son des vidéos et des chaînes de cet utilisateur et l’égalise à -16 LUFS, l’image copiée, pour que chaque application le lise plus fort et de façon égale. Le prix : rien n’est lu directement, chaque lecture prend un peu du processeur du serveur, et le son multicanal arrive à un ampli converti plutôt que dans sa piste d’origine.',
-    savePlaybackAccess: 'Enregistrer la lecture et l’accès',
     visibleLibrariesTitle: 'Bibliothèques visibles',
     visibleLibrariesHelp:
       'Les bibliothèques du serveur que les applications de cet utilisateur affichent. Les bibliothèques ajoutées plus tard sont affichées. Ce choix ne bloque aucun titre : on peut toujours les trouver dans d’autres bibliothèques, par la recherche ou par un lien. Pour bloquer des titres, utilisez le contrôle parental ou les genres bloqués.',
     noServerLibraries: 'Le serveur n’a pas encore de bibliothèque.',
-    saveVisibleLibraries: 'Enregistrer les bibliothèques visibles',
     blockedGenresTitle: 'Genres bloqués',
     blockedGenresHelp:
       'Les titres de l’un de ces genres sont masqués partout pour cet utilisateur, comme ceux qui dépassent la limite du contrôle parental.',
@@ -170,7 +165,6 @@ const users: typeof en = {
     addGenre: 'Ajouter',
     removeGenre: (genre: string) => `Retirer ${genre}`,
     noBlockedGenres: 'Aucun genre n’est bloqué.',
-    saveBlockedGenres: 'Enregistrer les genres bloqués',
     liveTvChannelsTitle: 'Chaînes de TV en direct',
     liveTvChannelsHelp:
       'Les chaînes des sources de TV en direct du serveur que cet utilisateur voit, choisies par groupe et par chaîne. Les chaînes masquées n’apparaissent ni dans la liste des chaînes, ni dans le guide, les recherches, le Replay, les enregistrements, les programmations ou les rappels, et ne se lisent pas. Les sources propres de l’utilisateur ne sont pas limitées.',
@@ -195,7 +189,6 @@ const users: typeof en = {
     hideNewChannelGroups: 'Masquer les chaînes des groupes ajoutés plus tard',
     hideNewChannelGroupsHelp:
       'Les groupes qu’une source ajoute après l’enregistrement sont masqués. Ils apparaissent ici cochés, marqués « Nouveau », jusqu’au prochain enregistrement.',
-    saveLiveTvChannels: 'Enregistrer les chaînes de TV en direct',
     allowedHoursTitle: 'Horaires autorisés',
     allowedHoursHelp:
       'Si des horaires sont définis, cet utilisateur ne peut se connecter et utiliser le serveur que pendant ces horaires, à l’heure du serveur. En dehors, ses applications sont refusées.',
@@ -206,7 +199,6 @@ const users: typeof en = {
     addHours: 'Ajouter un horaire',
     removeHours: 'Retirer',
     hoursOrder: 'Chaque heure de fin doit venir après son heure de début.',
-    saveAllowedHours: 'Enregistrer les horaires autorisés',
     days: {
       Sunday: 'Dimanche',
       Monday: 'Lundi',
@@ -262,7 +254,20 @@ const users: typeof en = {
     accessHelp: 'Chaque changement est enregistré tout de suite.',
     noServerLibrariesHelp:
       'Ajoutez une bibliothèque dans Contenu › Bibliothèques, puis choisissez ici celles que cet utilisateur voit.',
+    moreTitle: 'Imports et téléchargements',
+    turnOffDownloadsSummary:
+      'Chaque utilisateur et chaque groupe perd le droit de télécharger, une fois confirmé.',
+    libraryShown: 'Affichée',
+    libraryHidden: 'Masquée',
+    draftInvalid: 'Une section a une erreur à corriger avant d’enregistrer.',
+    watching: (title: string) => `Regarde ${title}`,
+    pausedOn: (title: string) => `En pause : ${title}`,
+    positionOf: (position: string, total: string) => `${position} sur ${total}`,
+    metadataLanguageRow: 'Langue des titres',
+    webThemeRow: 'Thème',
+    audioRegionRow: 'Région du doublage',
     jellyfinImport: {
+      summary: 'Les comptes et les données de visionnage d’un serveur Jellyfin, Emby ou Plex.',
       open: 'Importer depuis un autre serveur',
       title: 'Importer depuis un autre serveur',
       description:
@@ -501,6 +506,8 @@ const users: typeof en = {
       more: (count: number) => (count <= 1 ? `Et ${count} autre.` : `Et ${count} autres.`),
     },
     appImport: {
+      summary:
+        'Les données de visionnage d’un utilisateur, depuis son compte sur une app bâtie sur des addons.',
       open: 'Importer depuis une appli',
       title: 'Importer depuis une appli',
       description:
@@ -510,6 +517,7 @@ const users: typeof en = {
         'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',
     },
     letterboxdImport: {
+      summary: 'Les films d’un utilisateur, depuis son fichier d’export Letterboxd.',
       open: 'Importer depuis Letterboxd',
       title: 'Importer depuis Letterboxd',
       description:
@@ -597,10 +605,7 @@ const users: typeof en = {
     notFoundHelp: 'Il a peut-être été supprimé.',
     backToGroups: 'Retour aux groupes',
     sectionsLabel: 'Sections du groupe',
-    pageHelp:
-      'Chaque section s’enregistre à part et atteint aussitôt les membres qui suivent le groupe.',
-    rename: 'Renommer',
-    renamed: 'Le groupe a été renommé.',
+    pageHelp: 'Les changements enregistrés atteignent aussitôt les membres qui suivent le groupe.',
     updated: 'Le groupe a été mis à jour.',
     accessHelp:
       'Les autorisations que les membres reçoivent du groupe. Leur rôle, l’écran de connexion, « Désactivé » et la date de fin restent sur leur propre page.',

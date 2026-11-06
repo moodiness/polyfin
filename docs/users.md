@@ -6,19 +6,21 @@ This page is for administrators. It covers user accounts, groups, and the limits
 
 Each user has their own account, and signs in with a password or Quick Connect, as on Jellyfin. Polyfin keeps watch state, favorites, resume points and Next Up for each user. Each user can be limited to titles up to a rating.
 
-Create a user with **Create a user**, at the top of **Users**. Open a user from the list to set their limits.
+Create a user with **Create a user**, at the top of **Users**. Each user is a row with their last sign-in and state; open one to set their limits. A user's page starts with their role, state, last sign-in and, while they play something, what they watch, then lists its sections on the left.
 
 | Section | What it sets | Saved |
 |---|---|---|
-| **Name and password** | Name, password | Its own save button |
+| **Name and password** | Name, password | Name: with **Save**. Password: **Reset password**, in its own dialog |
 | **Access** | Administrator, disabled, end date, permissions | Switches: at once. **Ends on**: **Save date** (see [Ending an account](#ending-an-account)) |
-| **Metadata language** · **Web player theme** · **Audio region** | Per-user choices (see [Metadata language](watch-state.md#metadata-language), [Web player theme](themes-and-custom-code.md#theme-per-user), [Audio region](watch-state.md#audio-region)) | Its own save button |
-| **Playback and access** | Playbacks at once, maximum quality, conversion, torrents and more | **Save playback and access** |
-| **Parental control** | Highest rating allowed | **Save parental control** |
-| **Visible libraries** · **Blocked genres** · **Allowed hours** | What the user sees, and when | **Save visible libraries**, **Save blocked genres**, **Save allowed hours** |
-| **Live TV channels** | The channels the user sees | **Save Live TV channels** |
+| **Metadata language** · **Web player theme** · **Audio region** | Per-user choices (see [Metadata language](watch-state.md#metadata-language), [Web player theme](themes-and-custom-code.md#theme-per-user), [Audio region](watch-state.md#audio-region)) | At once, as chosen |
+| **Playback and access** | Playbacks at once, maximum quality, conversion, torrents and more | With **Save** |
+| **Parental control** | Highest rating allowed | With **Save** |
+| **Visible libraries** · **Blocked genres** · **Allowed hours** | What the user sees, and when | With **Save** |
+| **Live TV channels** | The channels the user sees | With **Save** |
 | **Shared links** | The share links the user made (see [Share links](invite-and-share-links.md#share-links)) | |
 | **Devices** | Signed-in devices | Signing out a device asks first |
+
+The sections saved with **Save** keep their changes until then: a changed row shows its saved value as "was …", and a dock under the section list counts the changes, with **Discard changes** and **Save**, which saves them all together. On a phone, the dock is a bar along the bottom. A section with an error, such as allowed hours that end before they start, keeps the page from saving until it is fixed.
 
 ![A member's page in Users, with its sections listed on the left and Name and password open](images/user-page.webp)
 
@@ -27,7 +29,7 @@ Administrators can set most of these from a Jellyfin app too. Each section below
 - **Groups** give several accounts the same limits at once (see [User groups](#user-groups)).
 - **Reset to defaults**, at the top of the page, puts the limits back to a new user's (see [Resetting settings to their defaults](#resetting-settings-to-their-defaults)).
 
-Other ways to bring users and their history in:
+Other ways to bring users and their history in, listed under **Imports and downloads** on **Users** with **Turn off downloads for everyone**:
 
 - **Import from another server** brings the accounts of a Jellyfin, Emby or Plex server over, with what each user watched (see [Moving to Polyfin](moving-to-polyfin.md)).
 - Users can import their own watch history too (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history)).
@@ -61,13 +63,13 @@ A group gives several accounts, such as a family's children, the same limits. A 
 
 **Users › Groups** lists the groups and their member counts. **Create a group** asks for a **Name** and **Settings of**: a new user, as with **Create a user**, or a user whose settings the group copies at creation.
 
-A group's page holds the limit sections of a user's page, each saved on its own:
+A group's page holds the limit sections of a user's page:
 
 - **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
 - **Playback and access**, with the **Quality group** and the two options of [Louder sound](loudness.md#louder-sound);
-- **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**.
+- **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**.
 
-It also lists the **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
+As on a user's page, the **Access** switches save at once, and the group's name and the other sections with the dock's **Save**. It also lists the **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
 
 ### Members
 

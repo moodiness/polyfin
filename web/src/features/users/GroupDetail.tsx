@@ -1,15 +1,6 @@
 import {
   ArrowCounterClockwiseIcon,
-  BooksIcon,
-  CaretRightIcon,
-  ClockIcon,
-  FilmSlateIcon,
-  IdentificationCardIcon,
-  PlayCircleIcon,
-  ProhibitIcon,
-  ShieldCheckIcon,
   TrashIcon,
-  TelevisionSimpleIcon,
   UserPlusIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
@@ -41,29 +32,29 @@ import {
   Checkbox,
   ConfirmDialog,
   EmptyState,
-  Field,
   InlineError,
   Modal,
   Notice,
-  Panel,
   Row,
   RowList,
   SectionNav,
+  SettingRow,
   Skeleton,
   SkeletonRows,
-  TextInput,
   useToast,
 } from '@/ui'
-import { groupSaved, refreshGroupIfGone, useSectionInView } from './shared'
+import { DraftForm, useDraftPart } from './draft'
+import { Band, PageSection, SplitFrame } from './rows'
+import { groupSaved, refreshGroupIfGone, useSectionInView, UserState } from './shared'
 import {
-  AllowedHoursForm,
-  BlockedGenresForm,
-  LiveTvChannelsForm,
-  ParentalControlForm,
+  AllowedHoursSection,
+  BlockedGenresSection,
+  LiveTvChannelsSection,
+  ParentalControlSection,
   PermissionRows,
-  PlaybackAccessForm,
+  PlaybackAccessSection,
   ResetDefaultsDialog,
-  VisibleLibrariesForm,
+  VisibleLibrariesSection,
   type LimitsTarget,
 } from './UserForms'
 
@@ -75,11 +66,9 @@ const sectionIds = [
   'libraries',
   'genres',
   'hours',
+  'channels',
   'members',
 ] as const
-
-const sectionClass =
-  'scroll-mt-[calc(var(--spacing-topbar)+32px)] max-md:scroll-mt-[calc(var(--spacing-topbar)+64px)]'
 
 /** `/users/groups/:id`: one group's page, with the sections its members follow and its members. */
 export default function GroupDetail({ id }: { id: string }) {
@@ -137,8 +126,8 @@ function GroupPage({ group }: { group: Group }) {
   const current = useSectionInView(sectionIds, true)
   const [deleting, setDeleting] = useState(false)
   const [resetting, setResetting] = useState(false)
-  // The forms keep what is typed until saved: each reset draws them again from the new values.
-  const [resets, setResets] = useState(0)
+  // Each save, discard or reset draws the sections again from the saved values.
+  const [version, setVersion] = useState(0)
   const target: LimitsTarget = { kind: 'group', group }
 
   // The content arrives after the first render: a #section address scrolls once it is drawn.
@@ -159,79 +148,90 @@ function GroupPage({ group }: { group: Group }) {
     onError: refreshGroupIfGone,
   })
 
+  const sections: [string, string][] = [
+    ['name', t.groups.name],
+    ['access', t.users.accessTitle],
+    ['playback', t.users.playbackAccessTitle],
+    ['parental', t.users.parentalTitle],
+    ['libraries', t.users.visibleLibrariesTitle],
+    ['genres', t.users.blockedGenresTitle],
+    ['hours', t.users.allowedHoursTitle],
+    ['channels', t.users.liveTvChannelsTitle],
+    ['members', t.groups.membersTitle],
+  ]
   const nav = (
     <SectionNav
       label={t.groups.sectionsLabel}
       current={current}
-      items={[
-        { id: 'name', label: t.groups.name, icon: IdentificationCardIcon, to: '#name' },
-        { id: 'access', label: t.users.accessTitle, icon: ShieldCheckIcon, to: '#access' },
-        {
-          id: 'playback',
-          label: t.users.playbackAccessTitle,
-          icon: PlayCircleIcon,
-          to: '#playback',
-        },
-        { id: 'parental', label: t.users.parentalTitle, icon: FilmSlateIcon, to: '#parental' },
-        {
-          id: 'libraries',
-          label: t.users.visibleLibrariesTitle,
-          icon: BooksIcon,
-          to: '#libraries',
-        },
-        { id: 'genres', label: t.users.blockedGenresTitle, icon: ProhibitIcon, to: '#genres' },
-        { id: 'hours', label: t.users.allowedHoursTitle, icon: ClockIcon, to: '#hours' },
-        {
-          id: 'channels',
-          label: t.users.liveTvChannelsTitle,
-          icon: TelevisionSimpleIcon,
-          to: '#channels',
-        },
-        { id: 'members', label: t.groups.membersTitle, icon: UsersThreeIcon, to: '#members' },
-      ]}
+      items={sections.map(([id, label]) => ({ id, label, to: `#${id}` }))}
+    />
+  )
+
+  const head = (
+    <Band
+      back={{ to: '/users/groups', label: t.groups.title }}
+      leading={
+        <span
+          aria-hidden="true"
+          className="grid size-24 shrink-0 place-items-center rounded-full bg-s2 text-ink-2 max-md:size-16"
+        >
+          <UsersThreeIcon size={44} className="max-md:size-8" />
+        </span>
+      }
+      title={group.name}
+      facts={
+        <>
+          <span>{t.groups.memberCount(group.memberCount)}</span>
+          <span>{t.groups.pageHelp}</span>
+        </>
+      }
+      actions={
+        <>
+          <Button
+            variant="secondary"
+            icon={ArrowCounterClockwiseIcon}
+            onClick={() => setResetting(true)}
+          >
+            {t.resetDefaults.button}
+          </Button>
+          <Button
+            variant="danger"
+            icon={TrashIcon}
+            onClick={() => {
+              remove.reset()
+              setDeleting(true)
+            }}
+          >
+            {t.groups.delete}
+          </Button>
+        </>
+      }
     />
   )
 
   return (
     <>
-      <PageLayout
-        title={group.name}
-        lede={`${t.groups.memberCount(group.memberCount)} · ${t.groups.pageHelp}`}
-        back={{ to: '/users/groups', label: t.groups.title }}
-        nav={nav}
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              icon={ArrowCounterClockwiseIcon}
-              onClick={() => setResetting(true)}
-            >
-              {t.resetDefaults.button}
-            </Button>
-            <Button
-              variant="danger"
-              icon={TrashIcon}
-              onClick={() => {
-                remove.reset()
-                setDeleting(true)
-              }}
-            >
-              {t.groups.delete}
-            </Button>
-          </>
-        }
-      >
-        <NamePanel group={group} />
-        <AccessPanel group={group} />
-        <PlaybackAccessForm key={`playback:${resets}`} id="playback" target={target} />
-        <ParentalControlForm key={`parental:${resets}`} id="parental" target={target} />
-        <VisibleLibrariesForm key={`libraries:${resets}`} id="libraries" target={target} />
-        <BlockedGenresForm key={`genres:${resets}`} id="genres" target={target} />
-        <AllowedHoursForm key={`hours:${resets}`} id="hours" target={target} />
-        <LiveTvChannelsForm key={`channels:${resets}`} id="channels" target={target} />
-        <MembersSection group={group} />
-      </PageLayout>
-      {/* Outside the layout, whose block spacing would push the dialog down. */}
+      <SplitFrame head={head} nav={nav}>
+        <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
+          {({ nameError }) => (
+            <>
+              <NameSection key={`name:${version}`} group={group} nameError={nameError} />
+              <AccessSection group={group} />
+              <PlaybackAccessSection key={`playback:${version}`} id="playback" target={target} />
+              <ParentalControlSection key={`parental:${version}`} id="parental" target={target} />
+              <VisibleLibrariesSection
+                key={`libraries:${version}`}
+                id="libraries"
+                target={target}
+              />
+              <BlockedGenresSection key={`genres:${version}`} id="genres" target={target} />
+              <AllowedHoursSection key={`hours:${version}`} id="hours" target={target} />
+              <LiveTvChannelsSection key={`channels:${version}`} id="channels" target={target} />
+              <MembersSection group={group} />
+            </>
+          )}
+        </DraftForm>
+      </SplitFrame>
       <ConfirmDialog
         open={deleting}
         onClose={() => setDeleting(false)}
@@ -247,64 +247,30 @@ function GroupPage({ group }: { group: Group }) {
         target={target}
         open={resetting}
         onClose={() => setResetting(false)}
-        onReset={() => setResets((count) => count + 1)}
+        onReset={() => setVersion((count) => count + 1)}
       />
     </>
   )
 }
 
-/** The group's name, changed with Rename. */
-function NamePanel({ group }: { group: Group }) {
+/** The group's name, saved with the dock. */
+function NameSection({ group, nameError }: { group: Group; nameError: string | undefined }) {
   const { t } = useI18n()
-  const toast = useToast()
   const [name, setName] = useState(group.name)
-  const rename = useGroupPatch(group)
-  const code = rename.error instanceof ApiError ? rename.error.code : null
-  // The shared name codes speak of a user and of the user name rule: a group's name has its own.
-  const nameError =
-    code === 'name_taken'
-      ? t.groups.nameTaken
-      : code === 'invalid_name'
-        ? t.groups.nameRule
-        : rename.isError
-          ? errorMessage(t, rename.error)
-          : undefined
-
+  useDraftPart('name', Number(name !== group.name), () => ({ name: name.trim() }))
   return (
-    <div id="name" className={sectionClass}>
-      <Panel title={t.groups.name}>
-        <form
-          noValidate
-          className="flex flex-wrap items-start gap-3"
-          onSubmit={(event: FormEvent<HTMLFormElement>) => {
-            event.preventDefault()
-            rename.mutate({ name: name.trim() }, { onSuccess: () => toast(t.groups.renamed) })
-          }}
-        >
-          <Field
-            label={t.groups.name}
-            help={t.groups.nameRule}
-            error={nameError}
-            className="min-w-0 flex-1 basis-64"
-          >
-            <TextInput
-              value={name}
-              onValue={(value) => {
-                rename.reset()
-                setName(value)
-              }}
-              autoComplete="off"
-              maxLength={64}
-              required
-              invalid={nameError !== undefined}
-            />
-          </Field>
-          <Button type="submit" className="sm:mt-[26px]" loading={rename.isPending}>
-            {rename.isPending ? t.common.saving : t.groups.rename}
-          </Button>
-        </form>
-      </Panel>
-    </div>
+    <PageSection id="name" title={t.groups.name}>
+      <SettingRow
+        kind="text"
+        label={t.groups.name}
+        help={t.groups.nameRule}
+        value={name}
+        saved={group.name}
+        maxLength={64}
+        error={nameError}
+        onChange={setName}
+      />
+    </PageSection>
   )
 }
 
@@ -312,30 +278,29 @@ function NamePanel({ group }: { group: Group }) {
  * The permissions of Access the group gives its members, each saved as it changes. A member's
  * role, sign-in screen, Disabled and end date stay on their own page.
  */
-function AccessPanel({ group }: { group: Group }) {
+function AccessSection({ group }: { group: Group }) {
   const { t } = useI18n()
   const toast = useToast()
   const access = useGroupPatch(group)
 
   return (
-    <div id="access" className={sectionClass}>
-      <Panel title={t.users.accessTitle} description={t.groups.accessHelp}>
-        {access.isError && (
-          <div className="mb-2">
-            <Notice tone="danger" live>
-              {errorMessage(t, access.error)}
-            </Notice>
-          </div>
-        )}
-        <div className="-my-4">
-          <PermissionRows
-            values={group}
-            disabled={access.isPending}
-            onChange={(patch) => access.mutate(patch, { onSuccess: () => toast(t.groups.updated) })}
-          />
-        </div>
-      </Panel>
-    </div>
+    <PageSection id="access" title={t.users.accessTitle} description={t.groups.accessHelp}>
+      {access.isError && (
+        <Notice tone="danger" live>
+          {errorMessage(t, access.error)}
+        </Notice>
+      )}
+      <PermissionRows
+        values={group}
+        disabled={false}
+        onChange={(patch) => {
+          // A change waits for the one before it.
+          if (!access.isPending) {
+            access.mutate(patch, { onSuccess: () => toast(t.groups.updated) })
+          }
+        }}
+      />
+    </PageSection>
   )
 }
 
@@ -353,16 +318,12 @@ function MembersSection({ group }: { group: Group }) {
   )
 
   return (
-    <section id="members" aria-labelledby="members-title" className={sectionClass}>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 id="members-title" className="text-h3 text-ink">
-            {t.groups.membersTitle}
-          </h2>
-          <p className="mt-1.5 max-w-[60ch] text-small text-ink-2">{t.groups.membersHelp}</p>
-        </div>
-        {add}
-      </div>
+    <PageSection
+      id="members"
+      title={t.groups.membersTitle}
+      description={t.groups.membersHelp}
+      aside={members.length > 0 && add}
+    >
       {users.isPending ? (
         <SkeletonRows rows={2} boxed label={t.common.loading} />
       ) : users.isError ? (
@@ -383,9 +344,7 @@ function MembersSection({ group }: { group: Group }) {
               title={member.name}
               titleAside={!member.followGroup && <Badge tone="warn">{t.groups.ownSettings}</Badge>}
               meta={member.followGroup ? t.groups.followsHelp : t.groups.ownSettingsHelp}
-              trailing={
-                <CaretRightIcon size={16} aria-hidden="true" className="text-ink-3 max-sm:hidden" />
-              }
+              trailing={<UserState user={member} />}
             />
           ))}
         </RowList>
@@ -396,7 +355,7 @@ function MembersSection({ group }: { group: Group }) {
         group={group}
         users={users.data ?? []}
       />
-    </section>
+    </PageSection>
   )
 }
 
