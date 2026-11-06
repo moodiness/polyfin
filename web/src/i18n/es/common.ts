@@ -91,6 +91,7 @@ const common: typeof en = {
     invalid_language: 'Elija un idioma de la lista.',
     invalid_used_by: 'Un grupo o un usuario marcado ya no existe. Vuelva a cargar la página.',
     invalid_audio_region: 'Elija una región de la lista.',
+    invalid_interface_size: 'Elija un tamaño de la lista.',
     invalid_catalog_limit:
       'Los títulos leídos por catálogo deben ser un número entero entre 100 y 20.000.',
     invalid_channel_limit:

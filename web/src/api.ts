@@ -1,5 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import type { Language } from '@/i18n'
+import type { InterfaceSize } from '@/interfaceSize'
 import {
   arrivedAsAnotherUser,
   takeWebClientToken,
@@ -32,6 +33,8 @@ export type SessionUser = {
   isAdministrator: boolean
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
+  /** The size the admin app shows in, kept on the browser too (see interfaceSize.ts). */
+  interfaceSize: InterfaceSize
 }
 
 /** The address of a user's profile picture, undefined without one. */
@@ -2242,6 +2245,9 @@ export const signOut = () => request<void>('DELETE', '/session')
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
   request<void>('PUT', '/account/password', body)
+
+export const saveOwnInterfaceSize = (interfaceSize: InterfaceSize) =>
+  request<{ interfaceSize: InterfaceSize }>('PUT', '/account/interface-size', { interfaceSize })
 
 /** The signed-in user's metadata language ('' for the server's) and the ones they may choose. */
 export type MetadataLanguage = { language: string; languages: string[] }

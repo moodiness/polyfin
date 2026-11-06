@@ -18,6 +18,7 @@ const account: typeof en = {
       metadataLanguage: 'Idioma de los metadatos',
       webTheme: 'Tema del reproductor web',
       audioRegion: 'Región de audio',
+      interfaceSize: 'Tamaño de la interfaz',
       sound: 'Sonido',
       sharedLinks: 'Enlaces compartidos',
       reminders: 'Recordatorios',
@@ -61,6 +62,13 @@ const account: typeof en = {
         'pt-BR': 'Portugués (Brasil)',
         'pt-PT': 'Portugués (Portugal)',
       },
+    },
+    interfaceSize: {
+      help: 'El tamaño de los textos y controles de esta aplicación de administración en cada navegador en el que inicie sesión. Compacto muestra más de una página en un ordenador; Grande se lee mejor en un televisor, una tableta o desde lejos. Un teléfono muestra ambos igual. Sin sesión, un navegador conserva el último tamaño que mostró.',
+      label: 'Tamaño de la interfaz',
+      compact: 'Compacto',
+      large: 'Grande',
+      saved: 'Tamaño de la interfaz guardado.',
     },
     sound: {
       help: 'Dos formas de que sus vídeos suenen más fuerte y más parejos de lo que los reproducen sus aplicaciones, cada una con su coste. Se aplican desde su próxima reproducción.',

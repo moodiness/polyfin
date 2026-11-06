@@ -18,6 +18,7 @@ const account: typeof en = {
       metadataLanguage: 'Lingua dei metadati',
       webTheme: 'Tema del lettore web',
       audioRegion: 'Regione audio',
+      interfaceSize: 'Dimensione dell’interfaccia',
       sound: 'Audio',
       sharedLinks: 'Link condivisi',
       reminders: 'Promemoria',
@@ -61,6 +62,13 @@ const account: typeof en = {
         'pt-BR': 'Portoghese (Brasile)',
         'pt-PT': 'Portoghese (Portogallo)',
       },
+    },
+    interfaceSize: {
+      help: 'La dimensione dei testi e dei comandi di questa applicazione di amministrazione in ogni browser in cui accedi. Compatta mostra più di una pagina su un computer; Grande si legge meglio su un televisore, un tablet o da lontano. Un telefono mostra entrambe allo stesso modo. Senza accesso, un browser mantiene l’ultima dimensione che ha mostrato.',
+      label: 'Dimensione dell’interfaccia',
+      compact: 'Compatta',
+      large: 'Grande',
+      saved: 'Dimensione dell’interfaccia salvata.',
     },
     sound: {
       help: 'Due modi per rendere i tuoi video più forti e più uniformi di come li riproducono le tue app, ciascuno con il suo costo. Valgono dalla tua prossima riproduzione.',

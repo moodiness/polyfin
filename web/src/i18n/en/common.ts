@@ -88,6 +88,7 @@ const common = {
     invalid_language: 'Choose a language from the list.',
     invalid_used_by: 'A group or a user ticked no longer exists. Reload the page.',
     invalid_audio_region: 'Choose a region from the list.',
+    invalid_interface_size: 'Choose a size from the list.',
     invalid_catalog_limit: 'Titles read per catalog must be a whole number from 100 to 20,000.',
     invalid_channel_limit:
       'Channels read per Live TV catalog must be a whole number from 100 to 50,000.',

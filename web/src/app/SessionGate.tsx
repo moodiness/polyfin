@@ -1,5 +1,6 @@
 import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
+import { useLayoutEffect } from 'react'
 import { Outlet, ScrollRestoration } from 'react-router'
 import { fetchSession, fetchStatus, queryKeys } from '@/api'
 import LoginRoute from '@/features/auth/LoginRoute'
@@ -7,6 +8,7 @@ import SetupRoute from '@/features/auth/SetupRoute'
 import { ServerStatus } from '@/features/home/ServerStatus'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import { keepInterfaceSize } from '@/interfaceSize'
 import { webPlayerInPlace, webPlayerLink } from '@/jellyfinApps'
 import { InlineError, Spinner } from '@/ui'
 import { DeadEnd } from './DeadEnd'
@@ -49,6 +51,12 @@ export function SessionGate() {
     // app shows on the account button.
     staleTime: 30_000,
   })
+  // The account's interface size, once the session says it, before the frame that shows it; signed
+  // out, the page keeps the last one this browser used.
+  const interfaceSize = session.data?.interfaceSize
+  useLayoutEffect(() => {
+    if (interfaceSize !== undefined) keepInterfaceSize(interfaceSize)
+  }, [interfaceSize])
 
   if (status.data === undefined) {
     return <PublicShell>{status.error === null ? <Loading /> : <ServerStatus />}</PublicShell>

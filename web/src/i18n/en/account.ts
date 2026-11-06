@@ -17,6 +17,7 @@ const account = {
       metadataLanguage: 'Metadata language',
       webTheme: 'Web player theme',
       audioRegion: 'Audio region',
+      interfaceSize: 'Interface size',
       sound: 'Sound',
       sharedLinks: 'Shared links',
       reminders: 'Reminders',
@@ -59,6 +60,14 @@ const account = {
         'pt-BR': 'Portuguese (Brazil)',
         'pt-PT': 'Portuguese (Portugal)',
       } as Record<string, string>,
+    },
+    /** My account › Interface size: the size the admin app shows in. */
+    interfaceSize: {
+      help: 'The size of this admin app’s text and controls, on every browser you sign in with. Compact shows more of a page on a computer; Large is easier to read on a TV, a tablet or from across a room. A phone shows both alike. Signed out, a browser keeps the last size it showed.',
+      label: 'Interface size',
+      compact: 'Compact',
+      large: 'Large',
+      saved: 'Interface size saved.',
     },
     /** My account › Sound. */
     sound: {
