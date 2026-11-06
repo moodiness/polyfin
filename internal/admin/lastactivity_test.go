@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 func TestAdminAppUseIsTheUsersLastActivity(t *testing.T) {
@@ -27,6 +29,9 @@ func TestAdminAppUseIsTheUsersLastActivity(t *testing.T) {
 		active, err := time.Parse(time.RFC3339Nano, at)
 		if err != nil || active.Before(recent) {
 			t.Errorf("%s last active at %q", user["name"], at)
+		}
+		if app := user["lastActivityApp"]; app != accounts.AdminApp {
+			t.Errorf("%s last active in %v", user["name"], app)
 		}
 	}
 }

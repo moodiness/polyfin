@@ -31,6 +31,9 @@ type userJSON struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 	LastLoginAt     *time.Time `json:"lastLoginAt"`
 	LastActivityAt  *time.Time `json:"lastActivityAt"`
+	// LastActivityApp is the app of the last activity: the name a Jellyfin
+	// or Silo app sends, or accounts.AdminApp. Empty when unknown.
+	LastActivityApp string `json:"lastActivityApp"`
 	// The settings a group holds; a member who follows their group has its
 	// values.
 	limitsJSON
@@ -326,6 +329,7 @@ func newUserJSON(user accounts.User) userJSON {
 		CreatedAt:        user.CreatedAt,
 		LastLoginAt:      user.LastLoginAt,
 		LastActivityAt:   user.LastActivityAt,
+		LastActivityApp:  user.LastActivityApp,
 		limitsJSON:       newLimitsJSON(user.Limits()),
 		BlockedUntil:     blockedUntil(user),
 		ImageTag:         imageTag(user),
