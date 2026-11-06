@@ -86,18 +86,20 @@ export default function BackupStatus({ backup }: { backup: Backup }) {
         ]}
       />
       {backup.error !== '' && (
-        <p className="rounded-row border border-danger/25 bg-danger/8 px-3.5 py-3 text-small break-words text-ink">
+        <p className="rounded-row bg-danger/10 px-5 py-4 text-small break-words text-ink">
           {backup.error}
         </p>
       )}
       {backup.destinations.length > 0 && (
         <div>
-          <h4 className="mb-2 text-[14px] font-medium text-ink">{t.backups.destinations.title}</h4>
-          <ul className="overflow-hidden rounded-row border border-line-2">
+          <h4 className="mb-3 text-control font-semibold text-ink">
+            {t.backups.destinations.title}
+          </h4>
+          <ul className="space-y-4">
             {backup.destinations.map((destination) => {
               const status = destinationStatus(t, destination)
               return (
-                <li key={destination.id} className="px-3.5 py-2.5 [&+&]:border-t [&+&]:border-line">
+                <li key={destination.id}>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <code className="min-w-0 flex-1 font-mono text-small break-all text-ink">
                       {destination.name}

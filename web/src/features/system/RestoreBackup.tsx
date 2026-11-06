@@ -224,32 +224,19 @@ function FileList({
   else if (files.length === 0) body = <p className="text-small text-ink-3">{text.none}</p>
   else {
     body = (
-      <ul className="overflow-hidden rounded-row border border-line-2 bg-s1">
+      <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         {files.map((file) => (
           <li
             key={file.name}
-            className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 [&+&]:border-t [&+&]:border-line"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-row bg-s1 py-3.5 pr-4 pl-5"
           >
             <span className="min-w-0 flex-1">
               <code className="font-mono text-small break-all text-ink">{file.name}</code>
-              <span className="block text-small text-ink-3">
+              <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-2">
                 {dateTime(file.madeAt, language)} ·{' '}
                 {file.size < 0 ? '–' : formatBytes(file.size, language)}
-                {file.encrypted && (
-                  <>
-                    {' '}
-                    <Badge>
-                      <LockKeyIcon size={12} aria-hidden="true" className="mr-1 inline" />
-                      {text.encrypted}
-                    </Badge>
-                  </>
-                )}
-                {file.beforeRestore && (
-                  <>
-                    {' '}
-                    <Badge>{text.beforeRestore}</Badge>
-                  </>
-                )}
+                {file.encrypted && <Badge icon={LockKeyIcon}>{text.encrypted}</Badge>}
+                {file.beforeRestore && <Badge>{text.beforeRestore}</Badge>}
               </span>
             </span>
             {onDecrypted && (
@@ -283,7 +270,7 @@ function FileList({
   }
   return (
     <section>
-      <h3 className={cx('mb-2 text-[14px] font-medium break-all text-ink', mono && 'font-mono')}>
+      <h3 className={cx('mb-3 text-control font-semibold break-all text-ink', mono && 'font-mono')}>
         {title}
       </h3>
       {body}
@@ -461,7 +448,7 @@ function Upload({ disabled, onFile }: { disabled: boolean; onFile: (file: File) 
   const text = t.backups.restore
   const input = useRef<HTMLInputElement>(null)
   return (
-    <div className="border-t border-line pt-4">
+    <div className="pt-2">
       <input
         ref={input}
         type="file"

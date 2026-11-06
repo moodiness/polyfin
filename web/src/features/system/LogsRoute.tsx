@@ -1,15 +1,31 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  BugIcon,
   DownloadSimpleIcon,
   EraserIcon,
+  InfoIcon,
   MagnifyingGlassIcon,
   PauseIcon,
   PlayIcon,
   ScrollIcon,
+  WarningCircleIcon,
+  WarningIcon,
+  type Icon,
 } from '@phosphor-icons/react'
 import { ApiError, fetchLogLines, logDownloadUrl, sessionEnded } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
-import { Button, buttonClass, cx, EmptyState, Field, InlineError, Select, TextInput } from '@/ui'
+import {
+  Button,
+  ExternalButtonLink,
+  cx,
+  EmptyState,
+  Field,
+  InlineError,
+  Select,
+  StatusPill,
+  TextInput,
+  type StatusTone,
+} from '@/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 
@@ -27,11 +43,12 @@ type Filter = keyof typeof filters
 
 type Line = { seq: number; time: string; level: Level; text: string }
 
-const levelStyles: Record<Level, string> = {
-  DEBUG: 'text-ink-3',
-  INFO: 'text-link',
-  WARN: 'text-warn',
-  ERROR: 'text-danger',
+/** Each level as a state: an icon and the word, in the color of a warning or an error. */
+const levelLooks: Record<Level, { tone: StatusTone; icon: Icon }> = {
+  DEBUG: { tone: 'muted', icon: BugIcon },
+  INFO: { tone: 'muted', icon: InfoIcon },
+  WARN: { tone: 'warn', icon: WarningIcon },
+  ERROR: { tone: 'danger', icon: WarningCircleIcon },
 }
 
 /** Splits a line of Polyfin's text log into its time, its level and the rest. */
@@ -131,14 +148,13 @@ export default function LogsRoute() {
           >
             {following ? text.pause : text.follow}
           </Button>
-          <a
+          <ExternalButtonLink
             href={logDownloadUrl}
             download="polyfin.log"
-            className={buttonClass('secondary', 'md')}
+            icon={DownloadSimpleIcon}
           >
-            <DownloadSimpleIcon size={16} aria-hidden="true" />
             {text.download}
-          </a>
+          </ExternalButtonLink>
         </>
       }
     >
@@ -181,66 +197,75 @@ export default function LogsRoute() {
             {errorMessage(t, error)}
           </InlineError>
         )}
-        <div
-          ref={view}
-          role="log"
-          aria-label={text.region}
-          aria-live="off"
-          aria-busy={!loaded}
-          tabIndex={0}
-          onScroll={(event) => {
-            const element = event.currentTarget
-            atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
-          }}
-          className="h-[65dvh] min-h-80 overflow-auto rounded-panel border border-line-2 bg-s1 py-2 font-mono text-[12.5px] leading-relaxed"
-        >
-          {!loaded && error === null ? (
-            <div aria-hidden="true" className="space-y-2.5 px-4 py-2">
-              {[70, 55, 82, 64, 48, 76, 60].map((width, index) => (
-                <span
-                  key={index}
-                  className="block h-3 animate-pulse rounded-md bg-s3 motion-reduce:animate-none"
-                  style={{ width: `${width}%` }}
-                />
-              ))}
-            </div>
-          ) : drawn.length === 0 ? (
-            <EmptyState
-              icon={ScrollIcon}
-              title={lines.length === 0 ? text.empty : text.noMatch}
-              className="m-4 border-none font-sans"
-            >
-              {lines.length === 0 ? text.emptyHint : text.noMatchHint}
-            </EmptyState>
-          ) : (
-            <ol>
-              {drawn.map((line) => (
-                <li
-                  key={line.seq}
-                  className="grid grid-cols-[4.5rem_3.25rem_1fr] gap-x-3 px-4 py-px hover:bg-s2 max-sm:grid-cols-[4rem_3rem_1fr] max-sm:gap-x-2 max-sm:px-3"
-                >
-                  <span className="text-ink-3 tabular-nums">{line.time}</span>
-                  <span className={cx('font-semibold', levelStyles[line.level])}>{line.level}</span>
-                  <span className="min-w-0 whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">
-                    {line.text}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+        {/* The tile, and inside it the lines scrolling, faded where they pass its edges. */}
+        <div className="rounded-panel bg-s1 p-2 max-md:rounded-[24px]">
+          <div
+            ref={view}
+            role="log"
+            aria-label={text.region}
+            aria-live="off"
+            aria-busy={!loaded}
+            tabIndex={0}
+            onScroll={(event) => {
+              const element = event.currentTarget
+              atBottom.current =
+                element.scrollHeight - element.scrollTop - element.clientHeight < 24
+            }}
+            className="focus-lit h-[65dvh] min-h-80 overflow-auto rounded-[20px] [mask-image:linear-gradient(to_bottom,transparent,#000_14px,#000_calc(100%-14px),transparent)] [--lift:1] max-md:rounded-[16px]"
+          >
+            {!loaded && error === null ? (
+              <div aria-hidden="true" className="space-y-5 px-4 py-4">
+                {[70, 55, 82, 64, 48, 76, 60].map((width, index) => (
+                  <span
+                    key={index}
+                    className="block h-4 animate-pulse rounded-md bg-s3 motion-reduce:animate-none"
+                    style={{ width: `${width}%` }}
+                  />
+                ))}
+              </div>
+            ) : drawn.length === 0 ? (
+              <EmptyState
+                icon={ScrollIcon}
+                title={lines.length === 0 ? text.empty : text.noMatch}
+                className="bg-transparent"
+              >
+                {lines.length === 0 ? text.emptyHint : text.noMatchHint}
+              </EmptyState>
+            ) : (
+              <ol className="grid grid-cols-[minmax(0,1fr)] gap-0.5 py-3">
+                {drawn.map((line) => (
+                  <li
+                    key={line.seq}
+                    className="grid min-h-14 grid-cols-[5.5rem_7rem_minmax(0,1fr)] items-center gap-x-4 rounded-[18px] px-4 py-2 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1.5 max-md:px-3 max-md:py-3"
+                  >
+                    <span className="text-small text-ink-2 figures">{line.time}</span>
+                    <StatusPill
+                      tone={levelLooks[line.level].tone}
+                      icon={levelLooks[line.level].icon}
+                    >
+                      {line.level}
+                    </StatusPill>
+                    <span className="min-w-0 font-mono text-[15px] leading-6 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2 max-md:text-[14px]">
+                      {line.text}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
-        <div className="mt-2.5 flex flex-wrap justify-between gap-2 text-small text-ink-3">
+        <div className="mt-3 flex flex-wrap justify-between gap-x-6 gap-y-2 text-small text-ink-2">
           <p aria-live="polite" className="inline-flex items-center gap-2">
             <span
               aria-hidden="true"
               className={cx(
-                'size-[7px] rounded-full',
-                following ? 'bg-ok ring-3 ring-ok/18' : 'bg-ink-3',
+                'size-2 shrink-0 rounded-full',
+                following ? 'bg-ok ring-4 ring-ok/14' : 'bg-ink-3',
               )}
             />
             {following ? text.following : text.paused}
           </p>
-          <p className="tabular-nums">
+          <p className="figures">
             {text.shown(drawn.length, lines.length)} {filter === 'all' ? text.detailedHint : ''}
           </p>
         </div>

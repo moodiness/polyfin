@@ -1,47 +1,43 @@
-import { useEffect } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useState, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  ArchiveIcon,
   ArrowCircleUpIcon,
   ArrowSquareOutIcon,
-  ArrowsClockwiseIcon,
   CalendarDotsIcon,
+  CaretRightIcon,
+  CpuIcon,
+  DatabaseIcon,
   DownloadSimpleIcon,
   HardDrivesIcon,
+  KeyIcon,
   PuzzlePieceIcon,
   TelevisionSimpleIcon,
-  TrashIcon,
-  WarningCircleIcon,
-  WarningIcon,
 } from '@phosphor-icons/react'
 import {
   ApiError,
-  checkAddon,
-  clearImageCache,
   downloadLanguage,
   fetchSources,
-  goroutinesDownloadUrl,
   queryClient,
   queryKeys,
-  type AddonHealth,
   type Health,
   type HealthProblem,
-  type ShareHealth,
   type Sources,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { settingsPath } from '@/app/navigation'
 import {
-  Badge,
+  AlertTile,
   Block,
   Button,
-  buttonClass,
-  EmptyState,
+  ButtonLink,
   ExternalButtonLink,
-  IconTile,
   InlineError,
+  Modal,
   Notice,
-  Panel,
+  ProgressBar,
+  RelativeTime,
   Row,
   RowList,
   Skeleton,
@@ -49,29 +45,39 @@ import {
   SkeletonText,
   StatusPill,
   type StatusTone,
-  RelativeTime,
-  TextLink,
-  useToast,
 } from '@/ui'
-import { lineupPath } from '@/features/iptv/lineup'
 import { hdrPathText } from '@/features/settings/hdrPath'
+import { destinationStatus } from './BackupStatus'
 import {
   ocrLanguageName,
   problemText,
-  unreadableName,
   useHealth,
   useHealthProblems,
 } from '@/features/system/problems'
-import { dateTime, errorMessage, formatBytes, formatSpan, relativeTime } from '@/format'
+import { errorMessage, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
-import BackupStatus from './BackupStatus'
-import OwnerChip from './OwnerChip'
-import { Anchor, Facts, Meter } from './parts'
+import { CheckTile } from './CheckTile'
+import {
+  addonTone,
+  DetailBody,
+  detailOpened,
+  detailTitle,
+  hitRatio,
+  isDetailId,
+  latest,
+  shareState,
+  uptime,
+  type DetailId,
+} from './healthDetails'
 
-/** `/system/health`: problems first, then the state of each part of the server. */
+/**
+ * `/system/health`: what to look at first, as alert tiles; then the checks, as tiles; then the
+ * other parts, as rows. A tile or a row opens its part over the page, as `#anchor`, the address
+ * the server's problems and notifications link to.
+ */
 export default function HealthRoute() {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const text = t.system.health
   const health = useHealth()
   // The server's addons, IPTV sources and guides, then each user's own.
@@ -81,17 +87,45 @@ export default function HealthRoute() {
     refetchInterval: 30_000,
   })
   const location = useLocation()
-  const loaded = health.data !== undefined
+  const navigate = useNavigate()
+  const anchor = location.hash.slice(1)
+  const open = isDetailId(anchor) ? anchor : null
+  // The part last opened stays drawn while its dialog closes.
+  const [shown, setShown] = useState<DetailId | null>(open)
+  if (open !== null && open !== shown) setShown(open)
 
-  // A link to a section of this page scrolls to it once the page has drawn it.
-  useEffect(() => {
-    if (loaded && location.hash) {
-      document.getElementById(location.hash.slice(1))?.scrollIntoView()
-    }
-  }, [loaded, location.hash])
+  function close() {
+    // Opened from the page: going back closes it. Reached by a link: the address drops its anchor.
+    if ((location.state as typeof detailOpened | null)?.healthDetail) void navigate(-1)
+    else void navigate({ hash: '' }, { replace: true, preventScrollReset: true })
+  }
+
+  const checked =
+    health.data &&
+    text.checkedAt(
+      new Intl.DateTimeFormat(language, { timeStyle: 'medium' }).format(
+        new Date(health.data.checkedAt),
+      ),
+    )
 
   return (
-    <PageLayout title={text.title} lede={text.description}>
+    <PageLayout
+      title={text.title}
+      lede={
+        <>
+          {text.description}
+          {checked && (
+            <span className="mt-3.5 flex items-center gap-2.5 text-small text-ink-3 figures">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-ok ring-4 ring-ok/14"
+              />
+              {checked}
+            </span>
+          )}
+        </>
+      }
+    >
       {health.isPending ? (
         <HealthSkeleton />
       ) : health.isError ? (
@@ -101,31 +135,16 @@ export default function HealthRoute() {
       ) : (
         <>
           <Problems health={health.data} />
-          <Addons health={health.data} sources={sources.data} />
-          <div className="grid gap-x-8 gap-y-block xl:grid-cols-2">
-            <Iptv sources={sources.data} />
-            <Guides sources={sources.data} />
-          </div>
-          <Shares health={health.data} />
-          <Block title={text.serverTitle}>
-            <div className="grid items-start gap-5 lg:grid-cols-2">
-              <Transcoder health={health.data} />
-              <Database health={health.data} />
-              <Cache health={health.data} />
-              <ImageCache health={health.data} />
-              <Torrents health={health.data} />
-              <Disks health={health.data} />
-              <Backups health={health.data} />
-              <Thumbnails health={health.data} />
-              <Ratings health={health.data} />
-              <Artwork health={health.data} />
-              <People health={health.data} />
-              <Process health={health.data} />
-              <Secrets health={health.data} />
-              <ProxyNames health={health.data} />
-            </div>
-          </Block>
+          <Checks health={health.data} sources={sources.data} />
+          <More health={health.data} />
         </>
+      )}
+      {health.data && shown !== null && (
+        <Modal open={open !== null} onClose={close} title={detailTitle(t, shown)} width={680}>
+          <div className="px-8 pb-8 max-sm:px-5 max-sm:pb-6">
+            <DetailBody id={shown} health={health.data} sources={sources.data} />
+          </div>
+        </Modal>
       )}
     </PageLayout>
   )
@@ -135,23 +154,46 @@ function HealthSkeleton() {
   return (
     <>
       <div>
-        <Skeleton className="mb-4 h-4 w-40" />
-        <SkeletonRows rows={2} />
+        <Skeleton className="mb-5 h-7 w-40" />
+        <SkeletonRows rows={1} />
       </div>
       <div>
-        <Skeleton className="mb-4 h-4 w-28" />
-        <SkeletonRows rows={3} />
-      </div>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {[0, 1, 2, 3].map((index) => (
-          <div key={index} className="rounded-panel border border-line-2 bg-s1 p-6">
-            <Skeleton className="mb-5 h-4 w-32" />
-            <SkeletonText lines={3} />
-          </div>
-        ))}
+        <Skeleton className="mb-5 h-7 w-32" />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((index) => (
+            <div key={index} className="min-h-[210px] rounded-panel bg-s1 px-[26px] py-6">
+              <Skeleton className="mb-8 size-9 rounded-full" />
+              <SkeletonText lines={3} />
+            </div>
+          ))}
+        </div>
       </div>
     </>
   )
+}
+
+/** Where a problem's link leads, in words for its button; null for none. */
+function problemLink(t: Messages, to: string): string | null {
+  const words = t.system.health.problemAction
+  const [path, anchor = ''] = to.split('#')
+  if (to === '' || (path === '/system/health' && anchor === '')) return null
+  if (path === '/system/health') return words.details
+  if (path.startsWith('/settings')) return words.settings
+  if (path === '/sources') return words.sources
+  if (path.startsWith('/sources/')) return words.source
+  if (path.startsWith('/users/')) return words.user
+  if (path === '/system/schedule') return words.schedule
+  return words.open
+}
+
+/** The first sentence of a problem, as its title, and the rest. */
+function splitSentence(language: string, said: string): [string, string] {
+  const first = new Intl.Segmenter(language, { granularity: 'sentence' })
+    .segment(said)
+    [Symbol.iterator]()
+    .next().value?.segment
+  if (first === undefined) return [said, '']
+  return [first.trim(), said.slice(first.length).trim()]
 }
 
 function Problems({ health }: { health: Health }) {
@@ -166,60 +208,39 @@ function Problems({ health }: { health: Health }) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.healthProblems(language) }),
   })
   const items = problems.length + (health.update ? 1 : 0)
-  const checked = text.checkedAt(
-    new Intl.DateTimeFormat(language, { timeStyle: 'medium' }).format(new Date(health.checkedAt)),
-  )
   return (
-    <Block
-      title={text.problemsTitle}
-      count={items > 0 ? items : undefined}
-      aside={<span className="tabular-nums">{checked}</span>}
-    >
+    <Block title={text.problemsTitle} count={items > 0 ? items : undefined}>
       {query.isPending ? (
         <SkeletonRows rows={1} />
       ) : query.isError ? (
         <InlineError onRetry={() => void query.refetch()} retrying={query.isFetching}>
           {errorMessage(t, query.error)}
         </InlineError>
-      ) : problems.length === 0 && !health.update ? (
+      ) : items === 0 ? (
         <Notice tone="ok">{text.allGood}</Notice>
       ) : (
         <>
           {download.isError && (
             <InlineError className="mb-3">{downloadError(t, download.error)}</InlineError>
           )}
-          <RowList aria-label={text.problemsTitle}>
+          <ul
+            aria-label={text.problemsTitle}
+            className="grid gap-3 lg:grid-cols-2 lg:[&>li:last-child:nth-child(odd)]:col-span-2"
+          >
             {problems.map((problem) => {
-              const pill =
-                problem.tone === 'error' ? (
-                  <StatusPill tone="danger">{text.error}</StatusPill>
-                ) : (
-                  <StatusPill tone="warn">{text.warning}</StatusPill>
-                )
+              const [title, rest] = splitSentence(language, problemText(t, language, problem))
               const missing = downloadable(problem, language)
               const downloading = download.isPending && download.variables === missing?.code
+              const link = problemLink(t, problem.to)
+              const [path, anchor] = problem.to.split('#')
               return (
-                <Row
-                  key={problem.key}
-                  // A row with a button is not a link (see Row).
-                  to={missing === null ? problem.to : undefined}
-                  leading={
-                    <IconTile
-                      icon={problem.tone === 'error' ? WarningCircleIcon : WarningIcon}
-                      tone="warn"
-                    />
-                  }
-                  title={
-                    <span className="whitespace-normal">{problemText(t, language, problem)}</span>
-                  }
-                  trailing={
-                    missing === null ? (
-                      pill
-                    ) : (
-                      <>
-                        {pill}
+                <li key={problem.key} className="grid">
+                  <AlertTile
+                    tone={problem.tone === 'error' ? 'danger' : 'warn'}
+                    title={title}
+                    actions={
+                      missing !== null ? (
                         <Button
-                          size="sm"
                           icon={DownloadSimpleIcon}
                           aria-label={text.downloadLanguageLabel(missing.name)}
                           loading={downloading}
@@ -228,32 +249,52 @@ function Problems({ health }: { health: Health }) {
                         >
                           {downloading ? text.downloadingLanguage : text.downloadLanguage}
                         </Button>
-                      </>
-                    )
-                  }
-                  className="[&_.truncate]:whitespace-normal"
-                />
+                      ) : link !== null ? (
+                        path === '/system/health' ? (
+                          <ButtonLink
+                            to={{ hash: anchor }}
+                            state={detailOpened}
+                            preventScrollReset
+                            iconEnd={CaretRightIcon}
+                          >
+                            {link}
+                          </ButtonLink>
+                        ) : (
+                          <ButtonLink to={problem.to} iconEnd={CaretRightIcon}>
+                            {link}
+                          </ButtonLink>
+                        )
+                      ) : undefined
+                    }
+                  >
+                    {rest === '' ? undefined : rest}
+                  </AlertTile>
+                </li>
               )
             })}
             {health.update && (
-              <Row
-                leading={ArrowCircleUpIcon}
-                title={text.update(health.update.version)}
-                meta={text.updateRunning(health.process.version)}
-                trailing={
-                  <ExternalButtonLink
-                    href={health.update.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    size="sm"
-                    iconEnd={ArrowSquareOutIcon}
-                  >
-                    {text.releaseNotes}
-                  </ExternalButtonLink>
-                }
-              />
+              <li className="grid">
+                <AlertTile
+                  tone="info"
+                  icon={ArrowCircleUpIcon}
+                  kind={text.updateKind}
+                  title={text.update(health.update.version)}
+                  actions={
+                    <ExternalButtonLink
+                      href={health.update.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      iconEnd={ArrowSquareOutIcon}
+                    >
+                      {text.releaseNotes}
+                    </ExternalButtonLink>
+                  }
+                >
+                  {text.updateRunning(health.process.version)}
+                </AlertTile>
+              </li>
             )}
-          </RowList>
+          </ul>
         </>
       )}
     </Block>
@@ -281,1083 +322,500 @@ function downloadError(t: Messages, error: unknown): string {
   return error instanceof ApiError && error.detail ? `${message} ${error.detail}` : message
 }
 
-function addonTone(
-  addon: AddonHealth,
-): [StatusTone, keyof Messages['system']['health']['addonStatus']] {
-  if (!addon.enabled) return ['muted', 'off']
-  if (addon.requests === 0) return ['muted', 'unknown']
-  return addon.failure === '' ? ['ok', 'ok'] : ['warn', 'failing']
+type CheckState = { tone: Exclude<StatusTone, 'live'>; word: string }
+
+type Check = {
+  id: string
+  to: Parameters<typeof CheckTile>[0]['to']
+  state: CheckState
+  icon: Parameters<typeof CheckTile>[0]['icon']
+  kind: string
+  title: ReactNode
+  body?: ReactNode
+  foot: ReactNode
 }
 
-function Addons({ health, sources }: { health: Health; sources: Sources | undefined }) {
+/** A label and its value, as one line: "Last answer: 3 minutes ago". */
+function Said({ label, children }: { label: string; children: ReactNode }) {
   const { t } = useI18n()
-  const text = t.system.health
-  const check = useMutation({
-    mutationFn: checkAddon,
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.health }),
-  })
-  // Eclipse addons' answers are recorded like the others': their row carries the kind's badge.
-  const eclipse = new Set(
-    (sources?.addons ?? []).filter((addon) => addon.music !== null).map((addon) => addon.id),
-  )
-
   return (
-    <Anchor id="addons">
-      <Block title={text.addonsTitle} count={health.addons.length}>
-        <p className="-mt-2 mb-4 max-w-[70ch] text-small text-ink-3">{text.addonsHelp}</p>
-        {check.isError && (
-          <InlineError className="mb-3">{errorMessage(t, check.error)}</InlineError>
-        )}
-        {health.addons.length === 0 ? (
-          <EmptyState icon={PuzzlePieceIcon} title={text.noAddons}>
-            {text.noAddonsHint}
-          </EmptyState>
-        ) : (
-          <RowList aria-label={text.addonsTitle}>
-            {health.addons.map((addon) => {
-              const [tone, status] = addonTone(addon)
-              const isEclipse = eclipse.has(addon.id)
-              const checking = check.isPending && check.variables === addon.id
-              return (
-                <Row
-                  key={addon.id}
-                  leading={PuzzlePieceIcon}
-                  muted={!addon.enabled}
-                  title={addon.name}
-                  titleAside={
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      {isEclipse && <Badge tone="accent">{t.sources.tag.eclipse}</Badge>}
-                      <OwnerChip owner={addon.owner} />
-                    </span>
-                  }
-                  meta={
-                    <span className="truncate">
-                      <StatusPill tone={tone} className="align-middle">
-                        {text.addonStatus[status]}
-                      </StatusPill>
-                      {addon.failure !== '' && addon.enabled && (
-                        <span> · {text.failures[addon.failure] ?? addon.failure}</span>
-                      )}
-                    </span>
-                  }
-                  trailing={
-                    <Button
-                      size="sm"
-                      icon={ArrowsClockwiseIcon}
-                      aria-label={text.checkLabel(addon.name)}
-                      disabled={!addon.enabled}
-                      loading={checking}
-                      onClick={() => check.mutate(addon.id)}
-                    >
-                      {checking ? text.checking : text.check}
-                    </Button>
-                  }
-                >
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-small tabular-nums sm:grid-cols-4">
-                    <SmallFact label={text.lastSuccess}>
-                      {addon.lastSuccessAt ? <RelativeTime iso={addon.lastSuccessAt} /> : '–'}
-                    </SmallFact>
-                    <SmallFact label={text.lastFailure}>
-                      {addon.lastFailureAt ? <RelativeTime iso={addon.lastFailureAt} /> : '–'}
-                    </SmallFact>
-                    <SmallFact label={text.responseTime}>
-                      {addon.requests > 0 && addon.lastSuccessAt ? `${addon.responseTime} ms` : '–'}
-                    </SmallFact>
-                    <p className="col-span-full text-ink-3 sm:col-span-1 sm:self-end">
-                      {text.requests(addon.requests, addon.failures)}
-                    </p>
-                  </dl>
-                </Row>
-              )
-            })}
-          </RowList>
-        )}
-      </Block>
-    </Anchor>
+    <>
+      {label}
+      {t.common.colon} {children}
+    </>
   )
 }
 
-function SmallFact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-ink-3">{label}</dt>
-      <dd className="text-ink">{children}</dd>
-    </div>
-  )
-}
-
-function Iptv({ sources: all }: { sources: Sources | undefined }) {
+/** The checks of the server's parts, as tiles. */
+function Checks({ health, sources }: { health: Health; sources: Sources | undefined }) {
   const { language, t } = useI18n()
   const text = t.system.health
-  const sources = (all?.addons ?? []).filter((addon) => addon.source !== null)
-  return (
-    <Anchor id="iptv">
-      <Block title={text.iptvTitle} count={all ? sources.length : undefined}>
-        {all === undefined ? (
-          <SkeletonRows rows={1} />
-        ) : sources.length === 0 ? (
-          <EmptyState icon={TelevisionSimpleIcon} title={text.noIptv}>
-            {text.noIptvHint}
-          </EmptyState>
-        ) : (
-          <RowList aria-label={text.iptvTitle}>
-            {sources.map((addon) => {
-              const source = addon.source!
-              const vod = source.options.movies || source.options.series
-              return (
-                <Row
-                  key={addon.id}
-                  leading={TelevisionSimpleIcon}
-                  muted={!addon.enabled}
-                  title={addon.name}
-                  titleAside={<OwnerChip owner={addon.owner} />}
-                  trailing={
-                    !addon.enabled ? (
-                      <StatusPill tone="muted">{text.addonStatus.off}</StatusPill>
-                    ) : source.error !== '' ? (
-                      <StatusPill tone="warn">{text.addonStatus.failing}</StatusPill>
-                    ) : source.fetchedAt ? (
-                      <StatusPill tone="ok">{text.ok}</StatusPill>
-                    ) : (
-                      <StatusPill tone="muted">{t.system.schedule.notYet}</StatusPill>
-                    )
-                  }
-                >
-                  <div className="space-y-1 text-small text-ink-3">
-                    {(source.options.liveTv || vod) && (
-                      <p className="tabular-nums">
-                        {source.options.liveTv && (
-                          <>
-                            {t.lineup.summary.shownOf(
-                              source.lineup.shownChannels.toLocaleString(language),
-                              source.lineup.channels.toLocaleString(language),
-                            )}
-                            {' · '}
-                            {t.lineup.summary.mappedOf(
-                              source.lineup.mapped.toLocaleString(language),
-                              source.lineup.channels.toLocaleString(language),
-                            )}
-                          </>
-                        )}
-                        {source.options.liveTv && vod && ' · '}
-                        {vod &&
-                          t.lineup.summary.vodShort(
-                            source.vod.shownMovies.toLocaleString(language),
-                            source.vod.shownSeries.toLocaleString(language),
-                          )}
-                      </p>
-                    )}
-                    <p>
-                      {t.iptv.lastFetch}
-                      {t.common.colon}{' '}
-                      {source.fetchedAt ? <RelativeTime iso={source.fetchedAt} /> : t.iptv.never}
-                      {source.nextAt && (
-                        <>
-                          {' · '}
-                          {t.iptv.nextFetch}
-                          {t.common.colon} <RelativeTime iso={source.nextAt} />
-                        </>
-                      )}
-                    </p>
-                    {source.error !== '' && (
-                      <p className="flex items-start gap-1.5 text-warn">
-                        <WarningIcon size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
-                        {t.iptv.errors[source.error] ?? source.error}
-                      </p>
-                    )}
-                    {addon.owner === null && (
-                      <p>
-                        <Link
-                          to={lineupPath('shared', addon.id)}
-                          className="rounded-md font-medium text-link hover:text-link-hover"
-                        >
-                          {t.lineup.open}
-                        </Link>
-                      </p>
-                    )}
-                  </div>
-                </Row>
-              )
-            })}
-          </RowList>
-        )}
-      </Block>
-    </Anchor>
-  )
-}
+  const words = text.checks
+  const number = (value: number) => value.toLocaleString(language)
+  const checks: Check[] = []
 
-function Guides({ sources }: { sources: Sources | undefined }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const catalogs = (sources?.guides ?? []).filter((library) => (library.guides ?? []).length > 0)
-  return (
-    <Anchor id="guides">
-      <Block title={text.guidesTitle} count={sources ? catalogs.length : undefined}>
-        {sources === undefined ? (
-          <SkeletonRows rows={1} />
-        ) : catalogs.length === 0 ? (
-          <EmptyState icon={CalendarDotsIcon} title={text.noGuides}>
-            {text.noGuidesHint}
-          </EmptyState>
-        ) : (
-          <RowList aria-label={text.guidesTitle}>
-            {catalogs.map((library) => {
-              const guides = library.guides ?? []
-              const failing = guides.filter((guide) => guide.error !== '')
-              const fetched = guides
-                .map((guide) => guide.fetchedAt)
-                .filter((at) => at !== null)
-                .sort()
-                .at(-1)
-              return (
-                <Row
-                  key={`${library.addonId}-${library.catalogType}-${library.catalogId}`}
-                  leading={CalendarDotsIcon}
-                  title={library.name ?? library.catalogName}
-                  titleAside={<OwnerChip owner={library.owner} />}
-                  meta={
-                    <span className="truncate">
-                      {library.addonName} · {t.lineup.library.guides(guides.length)}
-                    </span>
-                  }
-                  trailing={
-                    failing.length > 0 ? (
-                      <StatusPill tone="warn">{text.addonStatus.failing}</StatusPill>
-                    ) : fetched ? (
-                      <StatusPill tone="ok">{text.ok}</StatusPill>
-                    ) : (
-                      <StatusPill tone="muted">{t.system.schedule.notYet}</StatusPill>
-                    )
-                  }
-                >
-                  <div className="space-y-1 text-small text-ink-3">
-                    <p className="tabular-nums">
-                      {t.libraries.guideFetched}
-                      {t.common.colon}{' '}
-                      {fetched ? <RelativeTime iso={fetched} /> : t.libraries.guideNever}
-                      {library.guide !== null && library.guide.channels > 0 && (
-                        <>
-                          {' · '}
-                          {t.lineup.library.mapped(
-                            library.guide.matched.toLocaleString(language),
-                            library.guide.channels.toLocaleString(language),
-                          )}
-                        </>
-                      )}
-                    </p>
-                    {failing.map((guide) => (
-                      <p key={guide.id || guide.url} className="flex items-start gap-1.5 text-warn">
-                        <WarningIcon size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
-                        <span>
-                          {t.lineup.picker.guideN(guide.position)}
-                          {t.common.colon} {t.lineup.guideErrors[guide.error] ?? guide.error}
-                        </span>
-                      </p>
-                    ))}
-                  </div>
-                </Row>
-              )
-            })}
-          </RowList>
-        )}
-      </Block>
-    </Anchor>
-  )
-}
-
-function shareState(
-  health: Health,
-  share: ShareHealth,
-  text: Messages['system']['health'],
-): [StatusTone, string, string] {
-  const status = text.shareStatus
-  if (!health.watchFolders) return ['muted', status.unwatched, text.sharesOff]
-  if (share.pollMinutes === 0) return ['muted', status.scans, text.shareScansOnly]
-  if (share.unwatched !== '') {
-    return [
-      'warn',
-      status.unwatched,
-      text.shareUnwatched[share.unwatched] ?? text.shareUnwatched.failed,
-    ]
-  }
-  if (share.watch === 'notified') {
-    return [
-      'ok',
-      status.notified,
-      share.polled === 'partial' ? text.sharePartial : text.shareNotified,
-    ]
-  }
-  if (share.pollMinutes !== null && share.polled === share.share) {
-    return ['muted', status.polled, text.sharePolledEvery(share.share, share.pollMinutes)]
-  }
-  const why = text.sharePolled[share.polled || 'starting'] ?? text.sharePolled.failed
-  const tone = share.polled === 'silent' || share.polled === 'failed' ? 'warn' : 'muted'
-  return [tone, status.polled, why]
-}
-
-function Shares({ health }: { health: Health }) {
-  const { t } = useI18n()
-  const text = t.system.health
-  if (health.shares.length === 0) return null
-  return (
-    <Anchor id="shares">
-      <Block title={text.sharesTitle} count={health.shares.length}>
-        <RowList aria-label={text.sharesTitle}>
-          {health.shares.map((share) => {
-            const [tone, status, why] = shareState(health, share, text)
-            return (
-              <Row
-                key={share.id}
-                to={`/sources/shared/${share.id}`}
-                leading={HardDrivesIcon}
-                title={share.name}
-                titleAside={<Badge>{text.shareKinds[share.share] ?? share.share}</Badge>}
-                meta={<span className="whitespace-normal">{why}</span>}
-                trailing={<StatusPill tone={tone}>{status}</StatusPill>}
-                className="[&_.truncate]:whitespace-normal"
-              />
-            )
-          })}
-        </RowList>
-      </Block>
-    </Anchor>
-  )
-}
-
-function Transcoder({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const transcoder = health.transcoder
-  if (transcoder === null) return null
-  const hardware = transcoder.hardware
-  const full = transcoder.limit > 0 && transcoder.conversions >= transcoder.limit
-  const hdrMessages = t.settings.conversion.hdrPath
-  const hdr = hardware?.hdr ? hdrPathText(hardware.hdr, hdrMessages, language) : null
-  return (
-    <Anchor id="transcoder">
-      <Panel title={text.transcoderTitle} titleAs="h3">
-        <div className="space-y-5">
-          {!transcoder.enabled && <Notice tone="danger">{text.transcodingOff}</Notice>}
-          <Meter
-            label={text.conversions}
-            figure={`${transcoder.conversions} / ${transcoder.limit > 0 ? transcoder.limit : text.noLimit}`}
-            value={transcoder.conversions}
-            max={transcoder.limit}
-            variant={full ? 'warn' : 'accent'}
-            hideBar={transcoder.limit <= 0}
-          />
-          <Facts
-            items={[
-              {
-                label: text.gpu,
-                value: hardware ? (
-                  <span>
-                    <StatusPill tone="ok">{t.dashboard.live.gpu(hardware.method)}</StatusPill>
-                    {hardware.device && (
-                      <span className="ml-1.5 text-small text-ink-3">{hardware.device}</span>
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-ink-3">{text.noGpu}</span>
-                ),
-              },
-              ...(hardware
-                ? [
-                    { label: t.dashboard.live.encoder, value: hardware.encoders.join(', ') },
-                    {
-                      label: text.toneMapping,
-                      value: hardware.toneMapping ? '✓' : '–',
-                    },
-                  ]
-                : []),
-              ...(hdr
-                ? [
-                    {
-                      label: hdrMessages.term,
-                      value: (
-                        <span>
-                          {hdr.where}
-                          <span className="block text-small text-ink-3">{hdr.why}</span>
-                        </span>
-                      ),
-                    },
-                  ]
-                : []),
-              {
-                label: text.cpuEncoders,
-                value: (
-                  <span className="font-mono text-small">
-                    {transcoder.encoders.join(', ') || '–'}
-                  </span>
-                ),
-              },
-              {
-                label: text.ffmpeg,
-                value: hardware?.olderDrivers
-                  ? text.ffmpegOlderDrivers
-                  : transcoder.olderDriverFFmpeg?.state === 'downloading'
-                    ? text.ffmpegOlderDownloading
-                    : text.ffmpegShipped,
-              },
-              { label: text.remuxes, value: transcoder.remuxes },
-              {
-                label: text.maxHeight,
-                value:
-                  transcoder.maxHeight > 0 ? `${transcoder.maxHeight}p` : t.dashboard.live.original,
-              },
-            ]}
-          />
-        </div>
-      </Panel>
-    </Anchor>
-  )
-}
-
-function Database({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  return (
-    <Anchor id="database">
-      <Panel title={text.databaseTitle} titleAs="h3">
-        <Facts
-          items={[
-            {
-              label: text.databaseTitle,
-              value: health.database.reachable ? (
-                <StatusPill tone="ok">{text.reachable}</StatusPill>
-              ) : (
-                <StatusPill tone="danger">{text.unreachable}</StatusPill>
-              ),
-            },
-            {
-              label: text.size,
-              value:
-                health.database.size !== null ? formatBytes(health.database.size, language) : '–',
-            },
-          ]}
-        />
-      </Panel>
-    </Anchor>
-  )
-}
-
-/**
- * The source cache against its limit, the files it reads and keeps, how long it keeps them, and its
- * hit ratio: the share of the bytes read since the start that were on disk when asked for.
- */
-function Cache({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const cache = health.cache
-  if (cache === null) return null
-  const read = cache.hits + cache.misses
-  const ratio = read > 0 ? cache.hits / read : 0
-  return (
-    <Anchor id="cache">
-      <Panel title={text.cacheTitle} titleAs="h3" description={text.cacheHelp}>
-        <div className="space-y-4">
-          <Meter
-            label={text.cacheTitle}
-            figure={text.cacheUse(
-              formatBytes(cache.used, language),
-              formatBytes(cache.limit, language),
-            )}
-            value={cache.used}
-            max={cache.limit}
-          />
-          <p className="text-small text-ink-3">{text.keptFor(cache.days)}</p>
-          <p className="text-small text-ink-3 tabular-nums">
-            {text.sourcesOpen}
-            {t.common.colon} <span className="text-ink">{cache.sources}</span>
-          </p>
-          <p className="text-small text-ink-3 tabular-nums">
-            {text.sourcesKept}
-            {t.common.colon} <span className="text-ink">{cache.kept}</span>
-          </p>
-          {read > 0 && (
-            <p className="text-small text-ink-3 tabular-nums">
-              {text.hitRatio}
-              {t.common.colon}{' '}
-              <span className="text-ink">
-                {text.hitRatioValue(
-                  ratio.toLocaleString(language, { style: 'percent', maximumFractionDigits: 1 }),
-                  formatBytes(read, language),
-                )}
-              </span>
-            </p>
+  const addons = health.addons
+  const addonTones = addons.map((addon) => addonTone(addon)[0])
+  const one = addons.length === 1 ? addons[0] : undefined
+  const answered = latest(addons.map((addon) => addon.lastSuccessAt))
+  checks.push({
+    id: 'addons',
+    to: { hash: 'addons' },
+    icon: PuzzlePieceIcon,
+    kind: text.addonsTitle,
+    state:
+      addons.length === 0
+        ? { tone: 'muted', word: words.none }
+        : addonTones.includes('warn')
+          ? { tone: 'warn', word: text.addonStatus.failing }
+          : addonTones.includes('ok')
+            ? { tone: 'ok', word: text.addonStatus.ok }
+            : addons.every((addon) => !addon.enabled)
+              ? { tone: 'muted', word: text.addonStatus.off }
+              : { tone: 'muted', word: text.addonStatus.unknown },
+    title: one ? one.name : addons.length === 0 ? words.none : words.addons(addons.length),
+    body:
+      addons.length === 0 ? (
+        text.noAddonsHint
+      ) : (
+        <>
+          {text.requests(
+            addons.reduce((sum, addon) => sum + addon.requests, 0),
+            addons.reduce((sum, addon) => sum + addon.failures, 0),
           )}
-          {health.torrents !== null && (
-            <p className="text-small text-ink-3 tabular-nums">
-              {text.torrentPieces}
-              {t.common.colon}{' '}
-              <span className="text-ink">{formatBytes(cache.torrents, language)}</span>
-            </p>
-          )}
-        </div>
-      </Panel>
-    </Anchor>
-  )
-}
-
-/**
- * The image cache, against its limit, and in memory; clearing it tells what it freed and shows the
- * cache empty at once.
- */
-function ImageCache({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const toast = useToast()
-  const clear = useMutation({
-    mutationFn: clearImageCache,
-    onSuccess: (freed) => {
-      toast(
-        text.imagesCleared(freed.files.toLocaleString(language), formatBytes(freed.used, language)),
-        { tone: 'ok' },
-      )
-      queryClient.setQueryData<Health>(queryKeys.health, (current) =>
-        current === undefined
-          ? current
-          : {
-              ...current,
-              images: { files: 0, used: 0, limit: freed.limit, memoryImages: 0, memoryBytes: 0 },
-            },
-      )
-      void queryClient.invalidateQueries({ queryKey: queryKeys.health })
-    },
-  })
-  const images = health.images
-  if (images === null) return null
-  return (
-    <Anchor id="images">
-      <Panel title={text.imagesTitle} titleAs="h3" description={text.imagesHelp}>
-        <div className="space-y-4">
-          <Meter
-            label={text.imagesTitle}
-            figure={text.cacheUse(
-              formatBytes(images.used, language),
-              formatBytes(images.limit, language),
-            )}
-            value={images.used}
-            max={images.limit}
-          />
-          <p className="text-small text-ink-3 tabular-nums">
-            {text.imagesFiles}
-            {t.common.colon}{' '}
-            <span className="text-ink">{images.files.toLocaleString(language)}</span>
-          </p>
-          <p className="text-small text-ink-3 tabular-nums">
-            {text.imagesMemory}
-            {t.common.colon}{' '}
-            <span className="text-ink">
-              {images.memoryImages.toLocaleString(language)} ·{' '}
-              {formatBytes(images.memoryBytes, language)}
-            </span>
-          </p>
-          {clear.isError && <InlineError>{errorMessage(t, clear.error)}</InlineError>}
-          <Button
-            size="sm"
-            icon={TrashIcon}
-            loading={clear.isPending}
-            disabled={images.files === 0 && images.memoryImages === 0}
-            onClick={() => clear.mutate()}
-          >
-            {text.clearImages}
-          </Button>
-        </div>
-      </Panel>
-    </Anchor>
-  )
-}
-
-/**
- * How torrent streams play: their route, a WireGuard tunnel's addresses and last handshake, the
- * torrents playing, their peers and those reached over uTP, what was shared, and the outages of
- * the route the plays went on through lately.
- */
-function Torrents({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const torrents = health.torrents
-  if (torrents === null) return null
-  const tunnel: (readonly [string, string])[] =
-    torrents.route === 'wireguard'
-      ? [
-          [text.torrentAddresses, (torrents.addresses ?? []).join(', ')],
-          [
-            text.torrentHandshake,
-            torrents.lastHandshake === undefined
-              ? text.torrentNoHandshake
-              : relativeTime(torrents.lastHandshake, language, t.time.justNow),
-          ],
-        ]
-      : []
-  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
-  const outages = (torrents.outages ?? []).map(
-    (outage) =>
-      [
-        text.torrentOutageAt(time.format(new Date(outage.at))),
-        text.torrentOutage[torrents.route](formatSpan(outage.seconds, language)),
-      ] as const,
-  )
-  const rows = [
-    [text.torrentRoute[torrents.route], torrents.name],
-    ...tunnel,
-    [
-      text.torrentsPlaying,
-      torrents.atOnce > 0
-        ? text.torrentsPlayingOf(torrents.playing, torrents.atOnce)
-        : String(torrents.playing),
-    ],
-    [text.torrentPeers, String(torrents.peers)],
-    [text.torrentUTPPeers, String(torrents.utpPeers)],
-    [text.torrentsShared, formatBytes(torrents.uploaded, language)],
-    ...outages,
-  ] as const
-  return (
-    <Anchor id="torrents">
-      <Panel title={text.torrentsTitle} titleAs="h3" description={text.torrentsHelp}>
-        <ul className="space-y-1.5">
-          {rows.map(([label, value], index) => (
-            <li key={`${index}-${label}`} className="text-small text-ink-3 tabular-nums">
-              {label}
-              {value !== '' && (
-                <>
-                  {t.common.colon} <span className="text-ink">{value}</span>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    </Anchor>
-  )
-}
-
-function Disks({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  return (
-    <Anchor id="disks">
-      <Panel title={text.disksTitle} titleAs="h3">
-        <ul className="space-y-5">
-          {health.disks.map((disk) => {
-            const total = disk.free + disk.used
-            const low = disk.low
-            const name = text.folderTitle[disk.folder]
-            return (
-              <li key={disk.folder} className="space-y-1.5">
-                <Meter
-                  label={
-                    <span className="inline-flex items-center gap-1.5">
-                      {low && <WarningIcon size={14} aria-hidden="true" className="text-warn" />}
-                      {name}
-                    </span>
-                  }
-                  figure={
-                    <span className={low ? 'text-warn' : undefined}>
-                      {disk.free >= 0
-                        ? text.free(formatBytes(disk.free, language))
-                        : text.notMeasured}
-                    </span>
-                  }
-                  value={disk.used}
-                  max={total}
-                  variant={low ? 'warn' : 'accent'}
-                  hideBar={disk.free < 0}
-                />
-                <p className="truncate font-mono text-micro text-ink-3" title={disk.path}>
-                  {disk.path}
-                </p>
-              </li>
-            )
-          })}
-        </ul>
-      </Panel>
-    </Anchor>
-  )
-}
-
-function Secrets({ health }: { health: Health }) {
-  const { t } = useI18n()
-  const text = t.system.health
-  const secrets = health.secrets
-  if (secrets === null) return null
-  return (
-    <Anchor id="secrets">
-      <Panel title={text.secretsTitle} titleAs="h3" description={text.secretsHelp}>
-        <Facts
-          items={[
-            {
-              label: text.encryption,
-              value: secrets.encrypted ? (
-                <StatusPill tone="ok">{text.encrypted}</StatusPill>
-              ) : (
-                <StatusPill tone={secrets.plaintext > 0 ? 'warn' : 'muted'}>
-                  {text.notEncrypted}
-                </StatusPill>
-              ),
-            },
-            { label: text.storedPlain, value: secrets.plaintext },
-            {
-              label: text.unreadable,
-              value:
-                secrets.unreadable.length === 0 ? (
-                  text.noneUnreadable
-                ) : (
-                  <StatusPill tone="danger" className="whitespace-normal">
-                    {secrets.unreadable.map((secret) => unreadableName(t, secret)).join(', ')}
-                  </StatusPill>
-                ),
-            },
-          ]}
-        />
-      </Panel>
-    </Anchor>
-  )
-}
-
-/** What each host name of Known proxies resolves to, while some are listed. */
-function ProxyNames({ health }: { health: Health }) {
-  const { t } = useI18n()
-  const text = t.system.health
-  if (health.proxyNames.length === 0) return null
-  return (
-    <Anchor id="proxies">
-      <Panel title={text.proxiesTitle} titleAs="h3" description={text.proxiesHelp}>
-        <Facts
-          items={health.proxyNames.map((proxy) => ({
-            label: proxy.name,
-            value:
-              proxy.addresses.length === 0 ? (
-                <StatusPill tone="warn">{text.resolvesToNothing}</StatusPill>
-              ) : (
-                <span className="font-mono text-small">{proxy.addresses.join(', ')}</span>
-              ),
-          }))}
-        />
-      </Panel>
-    </Anchor>
-  )
-}
-
-function Backups({ health }: { health: Health }) {
-  const { t } = useI18n()
-  const text = t.system.health
-  return (
-    <Anchor id="backups">
-      <Panel title={text.backupTitle} titleAs="h3">
-        {health.backup === null ? (
-          <p className="text-small text-ink-2">{text.backupOff}</p>
-        ) : (
-          <BackupStatus backup={health.backup} />
-        )}
-      </Panel>
-    </Anchor>
-  )
-}
-
-function Thumbnails({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const thumbnails = health.thumbnails
-  if (thumbnails === null) return null
-  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
-  return (
-    <Anchor id="thumbnails">
-      <Panel title={text.thumbnailsTitle} titleAs="h3">
-        {!thumbnails.enabled ? (
-          <p className="text-small text-ink-2">{text.thumbnailsOff}</p>
-        ) : (
-          <div className="space-y-5">
-            <Meter
-              label={
-                <StatusPill tone={thumbnails.working ? 'live' : 'muted'}>
-                  {thumbnails.working ? text.working : text.idle}
-                </StatusPill>
-              }
-              figure={text.waiting(thumbnails.waiting, thumbnails.queueLength)}
-              value={thumbnails.waiting}
-              max={thumbnails.queueLength}
-            />
-            <div>
-              <h4 className="text-small text-ink-3">{text.pausedHosts}</h4>
-              {thumbnails.pausedHosts.length === 0 ? (
-                <p className="mt-1 text-body text-ink">{text.noPausedHosts}</p>
-              ) : (
-                <ul className="mt-1.5 space-y-1.5">
-                  {thumbnails.pausedHosts.map((paused) => (
-                    <li key={paused.host} className="flex flex-wrap justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 font-mono text-small text-warn">
-                        <WarningIcon size={14} aria-hidden="true" />
-                        {paused.host}
-                      </span>
-                      <span className="text-small text-ink-3 tabular-nums">
-                        {text.until(time.format(new Date(paused.until)))}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-      </Panel>
-    </Anchor>
-  )
-}
-
-/** The lookups of titles' ratings on MDBList, while the server has a key for them. */
-function Ratings({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const ratings = health.ratings
-  if (ratings === null) return null
-  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
-  const number = new Intl.NumberFormat(language)
-  return (
-    <Anchor id="ratings">
-      <Panel title={text.ratingsTitle} titleAs="h3" description={text.ratingsHelp}>
-        <Facts
-          items={[
-            {
-              label: text.requestsLeft,
-              value:
-                ratings.remaining !== null && ratings.limit !== null ? (
-                  <span className="tabular-nums">
-                    {text.requestsLeftOf(
-                      number.format(ratings.remaining),
-                      number.format(ratings.limit),
-                    )}
-                  </span>
-                ) : (
-                  text.notToldYet
-                ),
-            },
-            ...(ratings.resetsAt !== null
-              ? [{ label: text.resets, value: time.format(new Date(ratings.resetsAt)) }]
-              : []),
-            {
-              label: text.ratingsHeld,
-              value:
-                ratings.heldUntil !== null ? (
-                  <StatusPill tone={ratings.held === 'refused' ? 'danger' : 'warn'}>
-                    {`${text.heldReasons[ratings.held] ?? ''} ${text.until(time.format(new Date(ratings.heldUntil)))}`.trim()}
-                  </StatusPill>
-                ) : (
-                  text.notHeld
-                ),
-            },
-            { label: text.titlesWaiting, value: number.format(ratings.waiting) },
-            { label: text.titlesKept, value: number.format(ratings.kept) },
-          ]}
-        />
-      </Panel>
-    </Anchor>
-  )
-}
-
-/** The kinds of artwork download failures, in the order the server tells them. */
-const artworkKinds = ['not_found', 'rate_limited', 'timeout', 'server_error', 'other'] as const
-
-/**
- * How artwork downloads fared in the last hour: those that failed, by kind and by server, and the
- * servers waited for. Only host names are shown, never an address.
- */
-function Artwork({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const artwork = health.artwork
-  if (artwork === null) return null
-  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
-  const number = new Intl.NumberFormat(language)
-  const held = [
-    ...artwork.waiting.map((host) => ({
-      ...host,
-      kind: 'waiting',
-      label: text.artworkWaitingUntil,
-    })),
-    ...artwork.spared.map((host) => ({ ...host, kind: 'spared', label: text.artworkSparedUntil })),
-  ]
-  return (
-    <Anchor id="artwork">
-      <Panel title={text.artworkTitle} titleAs="h3" description={text.artworkHelp}>
-        <div className="space-y-5">
-          {artwork.failed === 0 ? (
-            <p className="text-body text-ink">{text.artworkNoFailures}</p>
-          ) : (
+          {one && one.requests > 0 && one.lastSuccessAt && (
             <>
-              <Facts
-                items={[
-                  { label: text.artworkFailed, value: number.format(artwork.failed) },
-                  ...artworkKinds
-                    .filter((kind) => (artwork.kinds[kind] ?? 0) > 0)
-                    .map((kind) => ({
-                      label: text.artworkKinds[kind] ?? kind,
-                      value: number.format(artwork.kinds[kind] ?? 0),
-                    })),
-                ]}
-              />
-              <div>
-                <h4 className="text-small text-ink-3">{text.artworkHosts}</h4>
-                <ul className="mt-1.5 space-y-1.5">
-                  {artwork.hosts.map((host) => (
-                    <li key={host.host} className="flex flex-wrap justify-between gap-2">
-                      <span className="font-mono text-small text-ink">{host.host}</span>
-                      <span className="text-small text-ink-3 tabular-nums">
-                        {number.format(host.failed)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {' · '}
+              <Said label={text.responseTime}>{`${one.responseTime} ms`}</Said>
             </>
           )}
-          <div>
-            <h4 className="text-small text-ink-3">{text.artworkWaiting}</h4>
-            {held.length === 0 ? (
-              <p className="mt-1 text-body text-ink">{text.artworkNoWaiting}</p>
-            ) : (
-              <ul className="mt-1.5 space-y-1.5">
-                {held.map((host) => (
-                  <li
-                    key={`${host.kind} ${host.host}`}
-                    className="flex flex-wrap justify-between gap-2"
-                  >
-                    <span className="inline-flex items-center gap-1.5 font-mono text-small text-warn">
-                      <WarningIcon size={14} aria-hidden="true" />
-                      {host.host}
-                    </span>
-                    <span className="text-small text-ink-3 tabular-nums">
-                      {host.label(time.format(new Date(host.until)))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+        </>
+      ),
+    foot: <Said label={text.lastSuccess}>{answered ? <RelativeTime iso={answered} /> : '–'}</Said>,
+  })
+
+  if (sources !== undefined) {
+    const iptv = sources.addons.filter((addon) => addon.source !== null)
+    const on = iptv.filter((addon) => addon.enabled)
+    const live = on.filter((addon) => addon.source!.options.liveTv)
+    const lineups = live.map((addon) => addon.source!.lineup)
+    const channels = lineups.reduce((sum, lineup) => sum + lineup.channels, 0)
+    const next = on
+      .map((addon) => addon.source!.nextAt)
+      .filter((at): at is string => typeof at === 'string')
+      .sort()[0]
+    checks.push({
+      id: 'iptv',
+      to: { hash: 'iptv' },
+      icon: TelevisionSimpleIcon,
+      kind: text.iptvTitle,
+      state:
+        iptv.length === 0
+          ? { tone: 'muted', word: words.none }
+          : on.length === 0
+            ? { tone: 'muted', word: text.addonStatus.off }
+            : on.some((addon) => addon.source!.error !== '')
+              ? { tone: 'warn', word: text.addonStatus.failing }
+              : on.some((addon) => addon.source!.fetchedAt)
+                ? { tone: 'ok', word: text.ok }
+                : { tone: 'muted', word: t.system.schedule.notYet },
+      title:
+        iptv.length === 1 ? iptv[0].name : iptv.length === 0 ? words.none : words.iptv(iptv.length),
+      body:
+        iptv.length === 0 ? (
+          text.noIptvHint
+        ) : live.length > 0 ? (
+          <>
+            {t.lineup.summary.shownOf(
+              number(lineups.reduce((sum, lineup) => sum + lineup.shownChannels, 0)),
+              number(channels),
             )}
-          </div>
-        </div>
-      </Panel>
-    </Anchor>
-  )
-}
+            {' · '}
+            {t.lineup.summary.mappedOf(
+              number(lineups.reduce((sum, lineup) => sum + lineup.mapped, 0)),
+              number(channels),
+            )}
+          </>
+        ) : undefined,
+      foot: next ? (
+        <Said label={t.iptv.nextFetch}>
+          <RelativeTime iso={next} />
+        </Said>
+      ) : (
+        words.details
+      ),
+    })
 
-/** How people's lookups on TMDB stand: their photos and biographies, while a TMDB key is saved. */
-function People({ health }: { health: Health }) {
-  const { language, t } = useI18n()
-  const text = t.system.health
-  const people = health.people
-  if (people === null) return null
-  const time = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' })
-  const number = new Intl.NumberFormat(language)
-  return (
-    <Anchor id="people">
-      <Panel title={text.peopleTitle} titleAs="h3" description={text.peopleHelp}>
-        {!people.keySaved ? (
-          <div className="space-y-2 text-small text-ink-2">
-            <p>{text.peopleNoKey}</p>
-            <ul className="list-disc space-y-1 pl-5">
-              {text.peopleNoKeyBrings.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <p>
-              <TextLink to={settingsPath('content', 'tmdb-key')} arrow>
-                {text.peopleNoKeyLink}
-              </TextLink>
-            </p>
-          </div>
-        ) : (
-          <Facts
-            items={[
-              {
-                label: text.tmdbKey,
-                value: <StatusPill tone="live">{text.tmdbKeySaved}</StatusPill>,
-              },
-              { label: text.peopleFound, value: number.format(people.found) },
-              { label: text.peopleNotFound, value: number.format(people.notFound) },
-              {
-                label: text.peopleFailing,
-                value:
-                  people.failing > 0 ? (
-                    <StatusPill tone="warn">{number.format(people.failing)}</StatusPill>
-                  ) : (
-                    number.format(0)
-                  ),
-              },
-              { label: text.peopleWaiting, value: number.format(people.waiting) },
-              {
-                label: text.tmdbLimited,
-                value:
-                  people.limitedAt !== null
-                    ? text.tmdbLimitedAt(
-                        time.format(new Date(people.limitedAt)),
-                        people.limitWait > 0 ? formatSpan(people.limitWait, language) : '',
-                      )
-                    : text.tmdbNeverLimited,
-              },
-            ]}
+    const catalogs = sources.guides.filter((library) => (library.guides ?? []).length > 0)
+    const guides = catalogs.flatMap((library) => library.guides ?? [])
+    const mapped = catalogs.flatMap((library) =>
+      library.guide !== null && library.guide.channels > 0 ? [library.guide] : [],
+    )
+    const fetched = latest(guides.map((guide) => guide.fetchedAt))
+    checks.push({
+      id: 'guides',
+      to: { hash: 'guides' },
+      icon: CalendarDotsIcon,
+      kind: text.guidesTitle,
+      state:
+        catalogs.length === 0
+          ? { tone: 'muted', word: words.none }
+          : guides.some((guide) => guide.error !== '')
+            ? { tone: 'warn', word: text.addonStatus.failing }
+            : fetched
+              ? { tone: 'ok', word: text.ok }
+              : { tone: 'muted', word: t.system.schedule.notYet },
+      title:
+        catalogs.length === 1
+          ? (catalogs[0].name ?? catalogs[0].catalogName)
+          : catalogs.length === 0
+            ? words.none
+            : words.guides(catalogs.length),
+      body:
+        catalogs.length === 0
+          ? text.noGuidesHint
+          : mapped.length > 0
+            ? t.lineup.library.mapped(
+                number(mapped.reduce((sum, guide) => sum + guide.matched, 0)),
+                number(mapped.reduce((sum, guide) => sum + guide.channels, 0)),
+              )
+            : t.lineup.library.guides(guides.length),
+      foot: (
+        <Said label={t.libraries.guideFetched}>
+          {fetched ? <RelativeTime iso={fetched} /> : t.libraries.guideNever}
+        </Said>
+      ),
+    })
+  }
+
+  checks.push({
+    id: 'database',
+    to: { hash: 'database' },
+    icon: DatabaseIcon,
+    kind: text.databaseTitle,
+    state: health.database.reachable
+      ? { tone: 'ok', word: text.reachable }
+      : { tone: 'danger', word: text.unreachable },
+    title: health.database.size !== null ? formatBytes(health.database.size, language) : '–',
+    body: words.databaseSize,
+    foot: words.details,
+  })
+
+  const transcoder = health.transcoder
+  if (transcoder !== null) {
+    const hardware = transcoder.hardware
+    const hdr = hardware?.hdr
+      ? hdrPathText(hardware.hdr, t.settings.conversion.hdrPath, language)
+      : null
+    checks.push({
+      id: 'transcoder',
+      to: { hash: 'transcoder' },
+      icon: CpuIcon,
+      kind: text.transcoderTitle,
+      state: !transcoder.enabled
+        ? { tone: 'muted', word: words.off }
+        : transcoder.limit > 0 && transcoder.conversions >= transcoder.limit
+          ? { tone: 'warn', word: words.full }
+          : { tone: 'ok', word: words.ready },
+      title: hardware ? t.dashboard.live.gpu(hardware.method) : words.processor,
+      body: hardware ? (
+        <>
+          {hardware.encoders.join(', ')}
+          {hdr && <span className="block">{hdr.why}</span>}
+        </>
+      ) : (
+        text.noGpu
+      ),
+      foot: (
+        <Said label={text.conversions}>
+          {`${transcoder.conversions} / ${transcoder.limit > 0 ? transcoder.limit : text.noLimit}`}
+        </Said>
+      ),
+    })
+  }
+
+  const backup = health.backup
+  if (backup === null) {
+    checks.push({
+      id: 'backups',
+      to: settingsPath('backups'),
+      icon: ArchiveIcon,
+      kind: text.backupTitle,
+      state: { tone: 'muted', word: words.off },
+      title: words.off,
+      body: text.backupOff,
+      foot: words.openSettings,
+    })
+  } else {
+    const problem = backup.destinations
+      .map((destination) => destinationStatus(t, destination))
+      .find((status) => status.tone === 'danger' || status.tone === 'warn')
+    checks.push({
+      id: 'backups',
+      to: { hash: 'backups' },
+      icon: ArchiveIcon,
+      kind: text.backupTitle,
+      state:
+        backup.error !== ''
+          ? { tone: 'danger', word: text.backup.failed }
+          : problem
+            ? { tone: problem.tone === 'danger' ? 'danger' : 'warn', word: problem.label }
+            : backup.ranAt === null
+              ? { tone: 'muted', word: text.backup.none }
+              : { tone: 'ok', word: text.backup.succeeded },
+      title: backup.madeAt ? <RelativeTime iso={backup.madeAt} /> : text.backup.none,
+      body: backup.madeAt ? text.backup.made : undefined,
+      foot: backup.next ? (
+        <Said label={text.backup.next}>
+          <RelativeTime iso={backup.next} />
+        </Said>
+      ) : (
+        words.details
+      ),
+    })
+  }
+
+  const cache = health.cache
+  if (cache !== null) {
+    checks.push({
+      id: 'cache',
+      to: { hash: 'cache' },
+      icon: HardDrivesIcon,
+      kind: text.cacheTitle,
+      state: { tone: 'ok', word: words.fine },
+      title: text.cacheUse(formatBytes(cache.used, language), formatBytes(cache.limit, language)),
+      body: (
+        <>
+          {text.keptFor(cache.days)}
+          <ProgressBar
+            value={cache.limit > 0 ? cache.used / cache.limit : 0}
+            label={text.cacheTitle}
+            variant="neutral"
+            size="md"
+            className="mt-3"
           />
-        )}
-      </Panel>
-    </Anchor>
+        </>
+      ),
+      foot:
+        cache.hits + cache.misses > 0 ? (
+          <Said label={text.hitRatio}>{hitRatio(text, cache, language)}</Said>
+        ) : (
+          words.details
+        ),
+    })
+  }
+
+  const secrets = health.secrets
+  if (secrets !== null) {
+    checks.push({
+      id: 'secrets',
+      to: { hash: 'secrets' },
+      icon: KeyIcon,
+      kind: text.secretsTitle,
+      state:
+        secrets.unreadable.length > 0
+          ? { tone: 'danger', word: text.unreadable }
+          : secrets.encrypted
+            ? { tone: 'ok', word: words.encrypted }
+            : { tone: secrets.plaintext > 0 ? 'warn' : 'muted', word: words.notEncrypted },
+      title: secrets.encrypted ? words.keySet : words.keyNotSet,
+      body: <Said label={text.storedPlain}>{number(secrets.plaintext)}</Said>,
+      foot: (
+        <Said label={text.unreadable}>
+          {secrets.unreadable.length === 0
+            ? text.noneUnreadable
+            : number(secrets.unreadable.length)}
+        </Said>
+      ),
+    })
+  }
+
+  // Three columns: one wide tile first, or a wide one first and last, so that no row ends with a
+  // hole (see CheckTile for two columns).
+  const holes = (3 - (checks.length % 3)) % 3
+  const fine = checks.filter((check) => check.state.tone === 'ok').length
+  const failing = checks.filter(
+    (check) => check.state.tone === 'warn' || check.state.tone === 'danger',
+  ).length
+  const quiet = checks.length - fine - failing
+  return (
+    <Block
+      title={text.checksTitle}
+      aside={
+        <span className="mr-3 figures">
+          {words.summary(
+            checks.length,
+            [
+              fine > 0 ? words.fineCount(fine) : '',
+              failing > 0 ? words.failingCount(failing) : '',
+              quiet > 0 ? words.quietCount(quiet) : '',
+            ].filter((part) => part !== ''),
+          )}
+        </span>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {checks.map((check, index) => (
+          <CheckTile
+            key={check.id}
+            to={check.to}
+            wide={(holes >= 1 && index === 0) || (holes === 2 && index === checks.length - 1)}
+            icon={check.icon}
+            kind={check.kind}
+            title={check.title}
+            state={<StatusPill tone={check.state.tone}>{check.state.word}</StatusPill>}
+            foot={check.foot}
+          >
+            {check.body}
+          </CheckTile>
+        ))}
+      </div>
+    </Block>
   )
 }
 
-function Process({ health }: { health: Health }) {
+/** The other parts of the server, as rows that open them. */
+function More({ health }: { health: Health }) {
   const { language, t } = useI18n()
   const text = t.system.health
-  const process = health.process
+  const words = text.checks
+  const navigate = useNavigate()
+  const number = new Intl.NumberFormat(language)
+  const rows: { id: DetailId; meta?: ReactNode; value: ReactNode }[] = []
+
+  const images = health.images
+  if (images !== null) {
+    rows.push({
+      id: 'images',
+      value: text.cacheUse(formatBytes(images.used, language), formatBytes(images.limit, language)),
+    })
+  }
+  // The disk shortest of room first.
+  const disk = [...health.disks].sort(
+    (a, b) => Number(b.low) - Number(a.low) || (a.free < 0 ? 1 : b.free < 0 ? -1 : a.free - b.free),
+  )[0]
+  if (disk !== undefined) {
+    const free = disk.free >= 0 ? text.free(formatBytes(disk.free, language)) : text.notMeasured
+    rows.push({
+      id: 'disks',
+      meta:
+        health.disks.length > 1
+          ? words.moreFolders(text.folderTitle[disk.folder], health.disks.length - 1)
+          : text.folderTitle[disk.folder],
+      value: disk.low ? <StatusPill tone="warn">{free}</StatusPill> : free,
+    })
+  }
+  const thumbnails = health.thumbnails
+  if (thumbnails !== null) {
+    rows.push({
+      id: 'thumbnails',
+      value: !thumbnails.enabled ? (
+        words.off
+      ) : thumbnails.pausedHosts.length > 0 ? (
+        <StatusPill tone="warn">{text.pausedHosts}</StatusPill>
+      ) : thumbnails.working ? (
+        text.working
+      ) : (
+        text.idle
+      ),
+    })
+  }
+  if (health.shares.length > 0) {
+    const warn = health.shares.some((share) => shareState(health, share, text)[0] === 'warn')
+    rows.push({
+      id: 'shares',
+      value: warn ? (
+        <StatusPill tone="warn">{text.shareStatus.unwatched}</StatusPill>
+      ) : (
+        number.format(health.shares.length)
+      ),
+    })
+  }
+  const torrents = health.torrents
+  if (torrents !== null) {
+    rows.push({
+      id: 'torrents',
+      meta: text.torrentsPlaying,
+      value:
+        torrents.atOnce > 0
+          ? text.torrentsPlayingOf(torrents.playing, torrents.atOnce)
+          : number.format(torrents.playing),
+    })
+  }
+  const ratings = health.ratings
+  if (ratings !== null) {
+    rows.push({
+      id: 'ratings',
+      meta: text.requestsLeft,
+      value:
+        ratings.heldUntil !== null ? (
+          <StatusPill tone={ratings.held === 'refused' ? 'danger' : 'warn'}>
+            {text.heldReasons[ratings.held] || words.held}
+          </StatusPill>
+        ) : ratings.remaining !== null && ratings.limit !== null ? (
+          text.requestsLeftOf(number.format(ratings.remaining), number.format(ratings.limit))
+        ) : (
+          '–'
+        ),
+    })
+  }
+  const artwork = health.artwork
+  if (artwork !== null) {
+    rows.push({
+      id: 'artwork',
+      meta: text.artworkFailed,
+      value:
+        artwork.failed > 0 ? (
+          <StatusPill tone="warn">{number.format(artwork.failed)}</StatusPill>
+        ) : (
+          number.format(0)
+        ),
+    })
+  }
+  const people = health.people
+  if (people !== null) {
+    rows.push({
+      id: 'people',
+      meta: people.keySaved ? text.peopleFound : undefined,
+      value: people.keySaved ? number.format(people.found) : words.noKey,
+    })
+  }
+  if (health.proxyNames.length > 0) {
+    rows.push({
+      id: 'proxies',
+      value: health.proxyNames.some((proxy) => proxy.addresses.length === 0) ? (
+        <StatusPill tone="warn">{text.resolvesToNothing}</StatusPill>
+      ) : (
+        number.format(health.proxyNames.length)
+      ),
+    })
+  }
+  rows.push({
+    id: 'process',
+    meta:
+      health.process.lastCrash !== null ? (
+        <Said label={text.lastCrash}>
+          <RelativeTime iso={health.process.lastCrash.at} />
+        </Said>
+      ) : undefined,
+    value: words.versionUptime(health.process.version, uptime(health, language)),
+  })
+
   return (
-    <Anchor id="process">
-      <Panel title={text.processTitle} titleAs="h3">
-        <Facts
-          items={[
-            { label: text.version, value: <span className="font-mono">{process.version}</span> },
-            {
-              label: text.uptime,
-              value: formatSpan(
-                (Date.parse(health.checkedAt) - Date.parse(process.startedAt)) / 1000,
-                language,
-              ),
-            },
-            { label: text.memory, value: formatBytes(process.memory, language) },
-            { label: text.heap, value: formatBytes(process.heap, language) },
-            { label: text.goroutines, value: process.goroutines },
-            {
-              label: 'Go',
-              value: <span className="font-mono">{process.goVersion.replace(/^go/, '')}</span>,
-            },
-            {
-              label: text.lastCrash,
-              value:
-                process.lastCrash === null ? (
-                  text.noCrash
-                ) : (
-                  <time dateTime={process.lastCrash.at}>
-                    {dateTime(process.lastCrash.at, language)}
-                  </time>
-                ),
-            },
-          ]}
-        />
-        {process.lastCrash !== null && (
-          <div className="mt-4">
-            <p className="max-w-[70ch] text-small text-ink-3">{text.lastCrashHelp}</p>
-            <pre className="mt-2 max-h-64 overflow-auto rounded-panel border border-line-2 bg-s1 p-3 font-mono text-small whitespace-pre-wrap text-ink-2">
-              {process.lastCrash.trace}
-            </pre>
-          </div>
-        )}
-        <p className="mt-4 max-w-[70ch] text-small text-ink-3">{text.goroutinesHelp}</p>
-        <a
-          href={goroutinesDownloadUrl}
-          download
-          className={`${buttonClass('secondary', 'md')} mt-3`}
-        >
-          <DownloadSimpleIcon size={16} aria-hidden="true" />
-          {text.goroutinesDownload}
-        </a>
-      </Panel>
-    </Anchor>
+    <Block title={text.moreTitle}>
+      <RowList aria-label={text.moreTitle} className="lg:grid-cols-2">
+        {rows.map((row) => (
+          <Row
+            key={row.id}
+            title={detailTitle(t, row.id)}
+            meta={row.meta}
+            trailing={<span className="figures">{row.value}</span>}
+            onClick={() =>
+              void navigate({ hash: row.id }, { state: detailOpened, preventScrollReset: true })
+            }
+          />
+        ))}
+      </RowList>
+    </Block>
   )
 }
