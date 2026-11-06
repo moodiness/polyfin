@@ -908,8 +908,9 @@ jobs:
 
   desktop-admin-app:
     # The admin app every package of Polyfin Desktop embeds, built once, as
-    # the check job builds it, for the packages' SKIP_WEB: npm ci alone
-    # takes about 1.5 minutes on Windows on Arm, a few seconds here.
+    # the check job builds it, for the packages' SKIP_WEB and the sweep job:
+    # npm ci alone takes about 1.5 minutes on Windows on Arm, a few seconds
+    # here.
     name: Polyfin Desktop's admin app
     needs: tested
     if: needs.tested.outputs.run == 'true'
@@ -928,6 +929,66 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 1
+
+  sweep:
+    # The admin app on the screenshots' demo server, filled with a real
+    # server's shapes: every route of its router as an administrator, as a
+    # member and signed out, 1440 and 390 pixels wide, in English and
+    # German. It fails on a page that scrolls sideways, an element past its
+    # edge, text out of its box, or a console error but the expected 401
+    # and 404 (docs/scripts/screenshots/README.md). Polyfin embeds the
+    # admin app desktop-admin-app built.
+    name: Sweep the admin app on the demo server
+    needs: [tested, desktop-admin-app]
+    if: needs.tested.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The PostgreSQL the demo creates its database on.
+    services: *test-services
+    steps:
+      - *checkout
+      - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
+      - name: Fetch the admin app
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-admin-app
+          path: web/dist
+      - name: Build Polyfin with it
+        run: CGO_ENABLED=0 go build -tags production -trimpath -o bin/polyfin ./cmd/polyfin
+      - *setup-buildx
+      - name: Install the image's FFmpeg for the demo's video
+        run: |
+          # The Dockerfile's FFmpeg stage, as the tests take it; ffmpeg makes
+          # the demo's video, and Polyfin reads it with ffprobe.
+          docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
+          echo "$RUNNER_TEMP/ffmpeg/bin" >> "$GITHUB_PATH"
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: docs/scripts/screenshots/package-lock.json
+      - name: Let Chrome start its sandbox
+        # Ubuntu 24.04 keeps programs from making the user namespaces Chrome
+        # sandboxes its pages in, unless AppArmor lets each one.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Sweep every route of the admin app
+        run: |
+          npm --prefix docs/scripts/screenshots ci
+          node docs/scripts/screenshots/sweep.mjs \
+            --database-url postgresql://polyfin:polyfin@127.0.0.1:5432/postgres \
+            --shots "$RUNNER_TEMP/sweep"
+      - name: Keep the pages of the findings
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sweep-findings
+          path: ${{ runner.temp }}/sweep
+          if-no-files-found: ignore
+          retention-days: 7
+      - *save-go-caches
 
   desktop-package:
     # Each package of Polyfin Desktop, built by scripts/packaging as anyone
