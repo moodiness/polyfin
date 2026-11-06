@@ -116,7 +116,13 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 	return o, server
 }
 
+// client opens the tests' requests on a transport of its own:
+// httptest.Server.Close closes the idle connections of
+// http.DefaultTransport, which an answer without a body of a parallel
+// test has just joined (#958).
 type client struct{}
+
+var clientHTTP = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}
 
 func (client) Open(ctx context.Context, method, target string, header http.Header, _ bool) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, method, target, nil)
@@ -124,7 +130,7 @@ func (client) Open(ctx context.Context, method, target string, header http.Heade
 		return nil, err
 	}
 	request.Header = header
-	return http.DefaultClient.Do(request)
+	return clientHTTP.Do(request)
 }
 
 func newCache(t *testing.T, limit int64) *Cache {
