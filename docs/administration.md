@@ -71,6 +71,7 @@ The admin app is in English, French, German, Spanish, Italian and Brazilian Port
 | **Metadata language** | The language of titles' names and overviews in your apps (see [Metadata language](watch-state.md#metadata-language)) |
 | **Web player theme** | The web player's look on every browser you sign in with (see [Web player theme](themes-and-custom-code.md#theme-per-user)) |
 | **Audio region** | The region of the audio you prefer (see [Audio region](watch-state.md#audio-region)) |
+| **Interface size** | The admin app's size on every browser you sign in with: **Compact**, the default, or **Large**, which keeps a phone's sizes on a computer, a tablet or a TV, easier to read from across a room. A phone shows both alike, and a browser signed out keeps the last size it showed. |
 | **Sound** | Ways to make your videos louder (see [Louder sound](loudness.md#louder-sound)) |
 | **Shared links** | The share links you made (see [Share links](invite-and-share-links.md#share-links)) |
 | **Reminders** | The programmes and series you asked to be reminded of from the web player, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)) |
