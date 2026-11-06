@@ -92,6 +92,8 @@ const common: typeof en = {
     invalid_language: 'Wähle eine Sprache aus der Liste.',
     invalid_used_by:
       'Eine angehakte Gruppe oder ein angehakter Benutzer existiert nicht mehr. Lade die Seite neu.',
+    used_by_everyone:
+      'Diese Quelle wird jetzt von allen verwendet: Ändere auf ihrer Seite, wer sie verwendet.',
     invalid_audio_region: 'Wähle eine Region aus der Liste.',
     invalid_interface_size: 'Wähle eine Größe aus der Liste.',
     invalid_catalog_limit:

@@ -1,5 +1,6 @@
 import {
   ArrowCounterClockwiseIcon,
+  PuzzlePieceIcon,
   TrashIcon,
   UserPlusIcon,
   UsersThreeIcon,
@@ -11,17 +12,21 @@ import {
   addGroupMembers,
   ApiError,
   deleteGroup,
+  fetchAddons,
   fetchGroup,
   fetchUsers,
   queryClient,
   queryKeys,
+  setGroupSource,
   updateGroup,
   userImageUrl,
+  type Addon,
   type Group,
   type GroupPatch,
   type User,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
+import { invalidateScope, replaceCachedAddon, sourcePath } from '@/features/sources/model'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -42,6 +47,7 @@ import {
   SettingRow,
   Skeleton,
   SkeletonRows,
+  TextLink,
   useToast,
 } from '@/ui'
 import { DraftForm, useDraftPart } from './draft'
@@ -68,6 +74,7 @@ const sectionIds = [
   'genres',
   'hours',
   'channels',
+  'sources',
   'members',
 ] as const
 
@@ -158,6 +165,7 @@ function GroupPage({ group }: { group: Group }) {
     ['genres', t.users.blockedGenresTitle],
     ['hours', t.users.allowedHoursTitle],
     ['channels', t.users.liveTvChannelsTitle],
+    ['sources', t.groups.sourcesTitle],
     ['members', t.groups.membersTitle],
   ]
   const nav = (
@@ -221,6 +229,7 @@ function GroupPage({ group }: { group: Group }) {
               <BlockedGenresSection key={`genres:${version}`} id="genres" target={target} />
               <AllowedHoursSection key={`hours:${version}`} id="hours" target={target} />
               <LiveTvChannelsSection key={`channels:${version}`} id="channels" target={target} />
+              <SourcesSection group={group} />
               <MembersSection group={group} />
             </>
           )}
@@ -295,6 +304,89 @@ function AccessSection({ group }: { group: Group }) {
         }}
       />
     </PageSection>
+  )
+}
+
+/**
+ * The server's sources the group gets, one switch each, saved at once: a switch lists the group in
+ * its source's Used by, or takes it off, through a request of its own, so that quick switches do
+ * not undo each other. A source used by everyone is on and locked, with a link to its page, where
+ * that changes. Members' own sources are theirs alone and not listed.
+ */
+function SourcesSection({ group }: { group: Group }) {
+  const { t } = useI18n()
+  const sources = useQuery({
+    queryKey: queryKeys.addons('shared'),
+    queryFn: ({ signal }) => fetchAddons('shared', signal),
+  })
+
+  return (
+    <PageSection id="sources" title={t.groups.sourcesTitle} description={t.groups.sourcesHelp}>
+      {sources.isPending ? (
+        <SkeletonRows rows={3} boxed label={t.common.loading} />
+      ) : sources.isError ? (
+        <InlineError onRetry={() => void sources.refetch()} retrying={sources.isFetching}>
+          {errorMessage(t, sources.error)}
+        </InlineError>
+      ) : sources.data.length === 0 ? (
+        <EmptyState
+          icon={PuzzlePieceIcon}
+          title={t.groups.noSources}
+          action={<ButtonLink to="/sources">{t.sources.add}</ButtonLink>}
+        >
+          {t.groups.noSourcesHelp}
+        </EmptyState>
+      ) : (
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+          {sources.data.map((source) => (
+            <SourceSwitch key={source.id} group={group} source={source} />
+          ))}
+        </div>
+      )}
+    </PageSection>
+  )
+}
+
+/** One server source on a group's page: on when the group, or everyone, gets it. */
+function SourceSwitch({ group, source }: { group: Group; source: Addon }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const save = useMutation({
+    mutationFn: (uses: boolean) => setGroupSource(group.id, source.id, uses),
+    onSuccess: (updated, uses) => {
+      replaceCachedAddon('shared', updated)
+      toast(uses ? t.groups.sourceGiven(updated.name) : t.groups.sourceTaken(updated.name))
+    },
+    onError: refreshGroupIfGone,
+    // The list again: a source used by everyone meanwhile, or removed, is refused.
+    onSettled: () => invalidateScope('shared'),
+  })
+  const everyone = source.usedBy.mode === 'everyone'
+  const gets = source.usedBy.groups.includes(group.id)
+  const kind = t.sources.kindName[source.kind]
+
+  return (
+    <SettingRow
+      kind="switch"
+      label={source.name}
+      detail={everyone ? `${kind} · ${t.groups.sourceEveryone}` : kind}
+      checked={everyone || (save.isPending ? save.variables === true : gets)}
+      disabled={everyone}
+      error={save.isError ? errorMessage(t, save.error) : undefined}
+      onChange={(uses) => {
+        // A change waits for the one before it.
+        if (!save.isPending) {
+          save.reset()
+          save.mutate(uses)
+        }
+      }}
+    >
+      {everyone && (
+        <TextLink to={sourcePath('shared', source.id)} className="-ml-3">
+          {t.groups.changeWhoUses}
+        </TextLink>
+      )}
+    </SettingRow>
   )
 }
 

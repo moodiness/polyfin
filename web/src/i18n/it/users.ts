@@ -663,6 +663,16 @@ const users: typeof en = {
     filter: 'Mostra gli utenti di',
     allGroups: 'Tutti i gruppi',
     noneShown: 'Nessun utente qui.',
+    sourcesTitle: 'Origini',
+    sourcesHelp:
+      'Le origini del server che riceve ogni membro, che segua il gruppo o mantenga le proprie impostazioni. Ogni modifica viene salvata subito in «Usata da» dell’origine. Le origini proprie dei membri non sono elencate.',
+    noSources: 'Ancora nessuna origine del server.',
+    noSourcesHelp:
+      'Aggiungi un add-on, un’origine IPTV o una cartella: potrai poi darla al gruppo qui.',
+    sourceEveryone: 'Usata da tutti',
+    changeWhoUses: 'Cambia chi la usa nella sua pagina',
+    sourceGiven: (name: string) => `Il gruppo riceve ${name}.`,
+    sourceTaken: (name: string) => `Il gruppo non riceve più ${name}.`,
   },
   resetDefaults: {
     button: 'Ripristina i valori predefiniti',

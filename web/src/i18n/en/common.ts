@@ -87,6 +87,7 @@ const common = {
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
     invalid_language: 'Choose a language from the list.',
     invalid_used_by: 'A group or a user ticked no longer exists. Reload the page.',
+    used_by_everyone: 'This source is now used by everyone: change who uses it on its page.',
     invalid_audio_region: 'Choose a region from the list.',
     invalid_interface_size: 'Choose a size from the list.',
     invalid_catalog_limit: 'Titles read per catalog must be a whole number from 100 to 20,000.',
