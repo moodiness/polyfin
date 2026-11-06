@@ -78,7 +78,7 @@ func (c *signIns) keepDevice(hash string, entry resolvedDevice, generation uint6
 
 // touched records the activity written for the device of hash, if it is
 // still remembered, without making it more recent: the device and user
-// were not read again.
+// were not read again. Activity times never move backwards.
 func (c *signIns) touched(hash string, at time.Time, remoteAddress string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -86,9 +86,26 @@ func (c *signIns) touched(hash string, at time.Time, remoteAddress string) {
 	if !ok {
 		return
 	}
-	entry.device.LastActivityAt, entry.device.RemoteAddress = at, remoteAddress
-	entry.user.LastActivityAt = &at
+	entry.device.LastActivityAt, entry.device.RemoteAddress = latest(entry.device.LastActivityAt, at), remoteAddress
+	entry.user.LastActivityAt = laterActivity(entry.user.LastActivityAt, at)
 	c.devices[hash] = entry
+}
+
+// latest returns the later of two times.
+func latest(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
+
+// laterActivity returns a user's last activity once activity at a time is
+// written: activity times never move backwards.
+func laterActivity(last *time.Time, at time.Time) *time.Time {
+	if last != nil && !at.After(*last) {
+		return last
+	}
+	return &at
 }
 
 // key returns what the API key of hash resolved to, if it is recent.

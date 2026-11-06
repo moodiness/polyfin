@@ -100,7 +100,7 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 				remote_address = excluded.remote_address,
 				capabilities = '{}',
 				provider = excluded.provider,
-				last_activity_at = now()
+				last_activity_at = greatest(d.last_activity_at, now())
 			RETURNING `+deviceColumns,
 			user, hash, info.DeviceID, info.DeviceName, info.Client, info.ClientVersion, info.RemoteAddress, info.Provider))
 		if err != nil {
@@ -123,7 +123,8 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 			return err
 		}
 		device.Unfamiliar = first && others
-		_, err = tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = now() WHERE id = $1", user)
+		// Activity times never move backwards, whichever clock wrote them.
+		_, err = tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = greatest(last_activity_at, now()) WHERE id = $1", user)
 		return err
 	})
 	if err != nil {
@@ -134,7 +135,8 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 
 // DeviceByToken resolves an access token to its device and enabled user, and
 // records the activity, at most once a minute or when the device's address
-// changes. A token resolved less than signInLife ago is not looked up again.
+// changes, never moving it backwards. A token resolved less than signInLife
+// ago is not looked up again.
 // The device of an account that ended is refused, as one of a disabled
 // account is, and kept: a later end date brings it back.
 func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) (Device, User, error) {
@@ -157,15 +159,15 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 	}
 	if now.Sub(entry.device.LastActivityAt) >= activityResolution || entry.device.RemoteAddress != remoteAddress {
 		_, err := s.db.Exec(ctx, `WITH touched AS (
-				UPDATE devices SET last_activity_at = $3, remote_address = $2 WHERE id = $1 RETURNING user_id
-			) UPDATE users SET last_activity_at = $3 WHERE id = (SELECT user_id FROM touched)`,
+				UPDATE devices SET last_activity_at = greatest(last_activity_at, $3), remote_address = $2 WHERE id = $1 RETURNING user_id
+			) UPDATE users SET last_activity_at = greatest(last_activity_at, $3) WHERE id = (SELECT user_id FROM touched)`,
 			entry.device.ID, remoteAddress, now)
 		if err != nil {
 			return Device{}, User{}, err
 		}
 		s.signIns.touched(hash, now, remoteAddress)
-		entry.device.LastActivityAt, entry.device.RemoteAddress = now, remoteAddress
-		entry.user.LastActivityAt = &now
+		entry.device.LastActivityAt, entry.device.RemoteAddress = latest(entry.device.LastActivityAt, now), remoteAddress
+		entry.user.LastActivityAt = laterActivity(entry.user.LastActivityAt, now)
 	}
 	return entry.device, entry.user, nil
 }

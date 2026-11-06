@@ -75,7 +75,8 @@ func (s *Store) createAdminSession(ctx context.Context, user ID, device *ID) (st
 			HashAdminToken(token), user, expires, device); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = now() WHERE id = $1", user)
+		// Activity times never move backwards, whichever clock wrote them.
+		_, err := tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = greatest(last_activity_at, now()) WHERE id = $1", user)
 		return err
 	})
 	return token, expires, err
@@ -83,6 +84,8 @@ func (s *Store) createAdminSession(ctx context.Context, user ID, device *ID) (st
 
 // AdminSession resolves a session token of an enabled user whose account
 // has not ended, and extends the session when it is more than a day old.
+// Its use counts as the user's activity, written at most once a minute and
+// never backwards, as a device's is.
 func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, error) {
 	session := AdminSession{TokenHash: HashAdminToken(token)}
 	user := &session.User
@@ -104,6 +107,19 @@ func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, e
 			return AdminSession{}, err
 		}
 		session.Renewed = true
+	}
+	// The tokens remembered for the user's devices need not learn of it:
+	// their devices were last active before the user, so over a minute
+	// ago, and their next request writes the activity again.
+	if now := s.now(); user.LastActivityAt == nil || now.Sub(*user.LastActivityAt) >= activityResolution {
+		written, err := s.db.Exec(ctx, `UPDATE users SET last_activity_at = $2
+			WHERE id = $1 AND NOT is_disabled AND (last_activity_at IS NULL OR last_activity_at < $2)`, user.ID, now)
+		if err != nil {
+			return AdminSession{}, err
+		}
+		if written.RowsAffected() > 0 {
+			user.LastActivityAt = &now
+		}
 	}
 	return session, nil
 }
