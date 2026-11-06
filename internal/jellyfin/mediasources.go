@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/basepath"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -470,13 +471,16 @@ func mustRelay(r *http.Request, version library.Version) bool {
 		requestScheme(r) == "http" && strings.HasPrefix(version.URL, "https:")
 }
 
-// baseURL is the address the player reached Polyfin at.
+// baseURL is the address the player reached Polyfin at, with the base
+// path it came under (see basepath): a reverse proxy that forwards only
+// /jellyfin to Polyfin then receives the requests to the addresses
+// Polyfin builds on it, as Jellyfin's own addresses carry its BaseUrl.
 func baseURL(r *http.Request) string {
 	host := r.Host
 	if forwarded := r.Header.Get("X-Forwarded-Host"); forwarded != "" {
 		host, _, _ = strings.Cut(forwarded, ",")
 	}
-	return requestScheme(r) + "://" + strings.TrimSpace(host)
+	return requestScheme(r) + "://" + strings.TrimSpace(host) + basepath.Of(r)
 }
 
 func requestScheme(r *http.Request) string {
