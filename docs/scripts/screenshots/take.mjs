@@ -189,6 +189,7 @@ async function main() {
     await open(page, server.url, '/')
     const card = await waitForSection(page, 'Get started')
     await clickText(page, 'button', 'All 7 steps')
+    await restMouse(page)
     await sleep(300)
     return clipAround(page, [card], 24)
   })
@@ -200,6 +201,7 @@ async function main() {
     const field = await dialog.waitForSelector('input[type="url"]')
     await sleep(300)
     await field.type('https://addon.example/manifest.json')
+    await blur(page)
     return clipAround(page, [dialog], 24)
   })
 
@@ -242,7 +244,7 @@ async function main() {
 
   await shot('add-a-source-folder', async () => {
     // Tall enough for the whole form, which scrolls inside the dialog otherwise.
-    await page.setViewport({ ...viewport, height: 1500 })
+    await page.setViewport({ ...viewport, height: 2100 })
     await open(page, server.url, '/sources')
     await clickText(page, 'button', 'Add a source')
     const dialog = await page.waitForSelector('dialog[open]')
@@ -250,8 +252,7 @@ async function main() {
     await sleep(300)
     await typeInto(page, 'Name', 'Movies')
     await typeInto(page, 'Path in the container', '/media/movies')
-    await page.evaluate(() => document.activeElement?.blur())
-    await sleep(300)
+    await blur(page)
     return clipAround(page, [dialog], 24)
   })
 
@@ -264,8 +265,10 @@ async function main() {
   })
 
   await shot('home-rows-editor', async () => {
-    await open(page, server.url, '/settings/web-player#home-rows')
+    // Without the section's address, which would light it as a search jump does.
+    await open(page, server.url, '/settings/web-player')
     const rows = await waitForSection(page, 'Home rows')
+    await restMouse(page)
     return clipAround(page, [rows], 24)
   })
 
@@ -769,7 +772,8 @@ async function typeInto(page, label, text) {
 
 /**
  * The box of what an element shows: its texts, controls and framed panels, without the empty
- * width of its layout's wrappers.
+ * width of its layout's wrappers, nor what is laid out but not seen: the hidden dock, and the
+ * help that only screen readers read.
  */
 async function contentBox(page, selector) {
   return page.$eval(selector, (root) => {
@@ -777,6 +781,8 @@ async function contentBox(page, selector) {
     for (const element of root.querySelectorAll('*')) {
       const rect = element.getBoundingClientRect()
       if (rect.width === 0 || rect.height === 0) continue
+      if (element.closest('[inert], .sr-only')) continue
+      if (!element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue
       const style = getComputedStyle(element)
       const framed =
         parseFloat(style.borderTopWidth) > 0 || style.backgroundColor !== 'rgba(0, 0, 0, 0)'
@@ -858,7 +864,7 @@ async function addMarkers(page, marks) {
           background: '#5b63f6',
           boxShadow: '0 0 0 2px #08080e',
           color: '#fff',
-          font: '600 12px/22px "Geist Variable", system-ui, sans-serif',
+          font: '600 12px/22px "Figtree Variable", system-ui, sans-serif',
           textAlign: 'center',
           zIndex: '2147483647',
           pointerEvents: 'none',
@@ -875,6 +881,17 @@ async function clearMarkers(page) {
   await page.evaluate(() => {
     for (const marker of document.querySelectorAll('[data-screenshot-marker]')) marker.remove()
   })
+}
+
+/** No focused field, so that none shows lit. */
+async function blur(page) {
+  await page.evaluate(() => document.activeElement?.blur())
+  await sleep(300)
+}
+
+/** The mouse off the page's controls, so that none shows lit under it. */
+async function restMouse(page) {
+  await page.mouse.move(1, 1)
 }
 
 /** Saves the clip as WebP, at the best quality that keeps it under maxBytes. */

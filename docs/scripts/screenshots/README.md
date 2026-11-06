@@ -63,14 +63,14 @@ All are 1440 pixels wide at twice the pixel density, cropped to their subject. E
 | `get-started.webp`          | **Home**                  | The Get started card of a fresh server                         |
 | `add-a-source-addon.webp`   | **Content › Sources**     | **Add a source**, Stremio addon, with a manifest address typed |
 | `home-now-playing.webp`     | **Home**                  | Now playing with two playbacks, one with **Details** open      |
-| `top-bar-account-menu.webp` | Any page                  | The top bar with the account menu open, with numbered markers  |
+| `top-bar-account-menu.webp` | Any page                  | The top bar with the account panel open, with numbered markers |
 | `add-a-source-folder.webp`  | **Content › Sources**     | **Add a source**, Folder, with a name and a path typed         |
 | `user-page.webp`            | **Users**                 | A member's page, with its sections                             |
 | `home-rows-editor.webp`     | **Settings › Web player** | The Home rows list                                             |
-| `iptv-source.webp`          | **Content › Sources**     | An IPTV source's page, on Summary                              |
+| `iptv-source.webp`          | **Content › Sources**     | An IPTV source's page beside the list, on Summary              |
 
-The markers of `top-bar-account-menu.webp` are numbered in this order: 1, the sections; 2, the search; 3, the account menu. The page that shows the shot explains them.
+The markers of `top-bar-account-menu.webp` are numbered in this order: 1, the areas; 2, the search; 3, the account panel. The page that shows the shot explains them.
 
 ## Change or add a shot
 
-Each shot is a `shot('<name>', …)` step of `take.mjs`. It opens a page, brings it to the state wanted, and returns the area to keep. Use `clipAround()` around the elements of the subject, with a margin, and `addMarkers()` only where numbers help the text. To add data, extend `seed()` or `demo.mjs`.
+Each shot is a `shot('<name>', …)` step of `take.mjs`. It opens a page, brings it to the state wanted, and returns the area to keep. Use `clipAround()` around the elements of the subject, with a margin, and `addMarkers()` only where numbers help the text. The admin app lights the control under the mouse or the focus, so end a step with `restMouse()` or `blur()` unless the light is part of the subject. To add data, extend `seed()` or `demo.mjs`.
