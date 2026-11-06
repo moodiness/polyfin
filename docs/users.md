@@ -73,7 +73,7 @@ A group's page holds the limit sections of a user's page:
 - **Playback and access**, with the **Quality group** and the two options of [Louder sound](loudness.md#louder-sound);
 - **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**.
 
-As on a user's page, the **Access** switches save at once, and the group's name and the other sections with the dock's **Save**. It also lists the **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
+As on a user's page, the **Access** switches save at once, and the group's name and the other sections with the dock's **Save**. The **Sources** switches save at once too (see [Server sources a group uses](#server-sources-a-group-uses)). The page also lists the **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
 
 ### Members
 
@@ -101,7 +101,15 @@ Leaving with **No group**, or deleting the group, works like turning **Follow th
 
 ### Server sources a group uses
 
-A group has no addon setting. Each server source is used by everyone, or only by some groups and users (see [Who uses a server addon](addons.md#who-uses-a-server-addon)).
+Each server source is used by everyone, or only by some groups and users (see [Who uses a server addon](addons.md#who-uses-a-server-addon)). The source keeps the setting, and a group's page shows it from the group's side.
+
+**Sources**, on a group's page, lists the server's sources, one switch each: an addon, an IPTV source, a tuner or a local folder.
+
+- A switch is on when the group gets the source. Turning it on ticks the group in the source's **Used by**; turning it off unticks it. It saves at once, and the rest of the list stays as it is.
+- A source used by everyone is shown on and locked, with **Change who uses it on its page**: limit it there first, to **Only these groups and users**.
+- Members' own sources are not listed: they belong to their owner alone.
+
+The rules are the source's, wherever they are changed:
 
 - A user uses a limited source when they or their group are ticked, following the group or not.
 - A new user in no group uses no limited source.

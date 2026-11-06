@@ -57,7 +57,7 @@ API details: [Versions a user may not play](jellyfin-api.md#versions-a-user-may-
 
 ## Who uses a server addon
 
-Every server source has a **Used by** setting: a Stremio or Eclipse addon, an IPTV source, a tuner or a local folder. Set it on the source's page under **Content › Sources**, or in **Add a source**.
+Every server source has a **Used by** setting: a Stremio or Eclipse addon, an IPTV source, a tuner or a local folder. Set it on the source's page under **Content › Sources**, or in **Add a source**. A group's page gives the group its sources too (see [From a group page](#from-a-group-page)).
 
 | Choice | Who gets the source |
 |---|---|
@@ -67,6 +67,14 @@ Every server source has a **Used by** setting: a Stremio or Eclipse addon, an IP
 - Sources made before this setting existed are on **Everyone**, so nothing changes until an administrator limits one.
 - A group member who keeps **Own settings** still belongs to the group, and gets its sources.
 - Administrators are users like others here. An administrator left out still manages the source under **Content › Sources**. The source's page warns that their own apps will not use it.
+
+### From a group page
+
+**Sources**, on a group's page under **Users › Groups**, shows the same setting from the group's side: one switch per server source, on when the group gets it. Members' own sources are not listed.
+
+- **On or off:** turning a switch on ticks the group in the source's **Used by**, and turning it off unticks it. Each switch saves at once. The rest of the list stays as it is, so two switches turned one after the other both count, even turned on two pages at once.
+- **Used by everyone:** such a source is shown on and locked, as every group gets it. **Change who uses it on its page** opens the source, to choose **Only these groups and users** there first.
+- **Activity log:** each change is recorded as a change of the source's **Used by**, naming the whole list.
 
 ### What a user without the source misses
 
