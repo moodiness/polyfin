@@ -47,7 +47,6 @@ export type User = {
   isHidden: boolean
   isDisabled: boolean
   createdAt: string
-  lastLoginAt: string | null
   lastActivityAt: string | null
   parentalControl: ParentalControl
   /** Whether the user may have video and audio converted (transcoded). */

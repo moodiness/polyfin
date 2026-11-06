@@ -231,7 +231,7 @@ const users = {
       'The highest resolution this user is offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when this user cannot use conversion. Live TV is converted down too. Only versions that fit are downloaded as they are; with "Converted downloads" on under Settings › Conversion (transcoding), the apps that ask for it download the others converted down.',
     qualityGroupOriginal: 'Original (no limit)',
     member: 'Member',
-    lastSignInLabel: 'Last sign-in:',
+    lastActivityLabel: 'Last activity:',
     active: 'Active',
     pinRequested: 'PIN requested',
     emptyHelp:

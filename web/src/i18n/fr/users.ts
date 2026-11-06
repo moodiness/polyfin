@@ -238,7 +238,7 @@ const users: typeof en = {
       'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie. Seules les versions qui conviennent sont téléchargées telles quelles ; avec « Téléchargements convertis » dans Paramètres › Conversion (transcodage), les applis qui le demandent téléchargent les autres converties.',
     qualityGroupOriginal: 'D’origine (sans limite)',
     member: 'Membre',
-    lastSignInLabel: 'Dernière connexion :',
+    lastActivityLabel: 'Dernière activité :',
     active: 'Actif',
     pinRequested: 'PIN demandé',
     emptyHelp:

@@ -199,13 +199,13 @@ export default function UsersList() {
   )
 }
 
-/** A user as a big row: the avatar, the name with its tags, the last sign-in, and the state. */
+/** A user as a big row: the avatar, the name with its tags, the last activity, and the state. */
 function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
   const restrictions = useRestrictions(user)
-  const lastSignIn =
-    user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />
+  const lastActivity =
+    user.lastActivityAt === null ? t.common.never : <RelativeTime iso={user.lastActivityAt} />
 
   return (
     <Row
@@ -232,7 +232,7 @@ function UserRow({ user }: { user: User }) {
           <span className="mb-1 block sm:hidden">
             <UserState user={user} />
           </span>
-          {t.users.lastSignInLabel} {lastSignIn}
+          {t.users.lastActivityLabel} {lastActivity}
           {user.endsOn !== null && (
             <span>
               {' · '}

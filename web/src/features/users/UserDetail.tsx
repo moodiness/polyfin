@@ -221,8 +221,12 @@ function UserPage({ user }: { user: User }) {
             </Badge>
           )}
           <span>
-            {t.users.lastSignInLabel}{' '}
-            {user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />}
+            {t.users.lastActivityLabel}{' '}
+            {user.lastActivityAt === null ? (
+              t.common.never
+            ) : (
+              <RelativeTime iso={user.lastActivityAt} />
+            )}
           </span>
           {user.endsOn !== null && (
             <span>

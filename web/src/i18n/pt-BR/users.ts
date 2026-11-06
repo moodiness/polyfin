@@ -234,7 +234,7 @@ const users: typeof en = {
       'A resolução mais alta oferecida a este usuário. Versões superiores são deixadas de fora enquanto houver uma que se encaixe; se nenhuma se encaixar, elas são convertidas para uma resolução menor, ou recusadas quando este usuário não pode usar a conversão. A TV ao Vivo também é convertida para uma resolução menor. Somente as versões que se encaixam são baixadas como estão; com “Downloads convertidos” ativado em Configurações › Conversão (transcodificação), os aplicativos que solicitarem baixam as outras convertidas para uma resolução menor.',
     qualityGroupOriginal: 'Original (sem limite)',
     member: 'Membro',
-    lastSignInLabel: 'Último login:',
+    lastActivityLabel: 'Última atividade:',
     active: 'Ativo',
     pinRequested: 'PIN solicitado',
     emptyHelp:
