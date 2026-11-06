@@ -7,7 +7,7 @@ import {
   XIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import {
   ApiError,
@@ -33,23 +33,18 @@ import {
   Block,
   Button,
   ButtonLink,
-  Checkbox,
   ConfirmDialog,
   EmptyState,
   Field,
   FieldError,
   IconButton,
   InlineError,
-  NumberInput,
-  Panel,
-  PanelFooter,
-  PanelSection,
   Row,
   RowList,
-  Segmented,
-  Select,
+  SaveBar,
+  SettingRow,
   SkeletonRows,
-  Switch,
+  StatusPill,
   TextInput,
   useToast,
 } from '@/ui'
@@ -113,6 +108,11 @@ export function OwnChannels() {
           ]
           if (channel.blocks.length > 0) parts.push(t.ownChannels.blockCount(channel.blocks.length))
           const now = channel.airing[0]
+          const state = !channel.enabled ? (
+            <StatusPill tone="muted">{t.ownChannels.off}</StatusPill>
+          ) : now ? (
+            <span className="break-words">{t.ownChannels.now(now.name)}</span>
+          ) : null
           return (
             <Row
               key={channel.id}
@@ -121,11 +121,12 @@ export function OwnChannels() {
               title={channel.number === null ? channel.name : `${channel.number} · ${channel.name}`}
               muted={!channel.enabled}
               meta={
-                <span className="truncate">
-                  {channel.enabled ? parts.join(' · ') : t.ownChannels.off}
-                  {channel.enabled && now && ` · ${t.ownChannels.now(now.name)}`}
-                </span>
+                <>
+                  <span>{parts.join(' · ')}</span>
+                  {state && <PhoneState>{state}</PhoneState>}
+                </>
               }
+              trailing={state && <WideState>{state}</WideState>}
             />
           )
         })}
@@ -141,6 +142,16 @@ export function OwnChannels() {
       {body}
     </Block>
   )
+}
+
+/** A row's state on the right from 768 px up. */
+export function WideState({ children }: { children: ReactNode }) {
+  return <span className="max-md:hidden">{children}</span>
+}
+
+/** A row's state on its own line under its second one on a phone, leaving the label room. */
+export function PhoneState({ children }: { children: ReactNode }) {
+  return <span className="mt-1.5 basis-full md:hidden">{children}</span>
 }
 
 const emptyDraft: OwnChannelDraft = {
@@ -204,6 +215,37 @@ export default function OwnChannelRoute() {
   )
 }
 
+/** The fields of a saved channel that its form changes. */
+function draftOf(saved: OwnChannel | null): OwnChannelDraft {
+  if (saved === null) return emptyDraft
+  return {
+    name: saved.name,
+    number: saved.number,
+    enabled: saved.enabled,
+    source: saved.source,
+    shuffle: saved.shuffle,
+    blocks: saved.blocks.map(({ start, end, source, shuffle }) => ({
+      start,
+      end,
+      source,
+      shuffle,
+    })),
+  }
+}
+
+/** How many of a channel's settings differ from the saved ones. */
+function countChanges(draft: OwnChannelDraft, saved: OwnChannelDraft): number {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  return [
+    draft.name !== saved.name,
+    draft.number !== saved.number,
+    draft.enabled !== saved.enabled,
+    !same(draft.source, saved.source),
+    draft.shuffle !== saved.shuffle,
+    !same(draft.blocks, saved.blocks),
+  ].filter(Boolean).length
+}
+
 function Editor({
   saved,
   choices,
@@ -216,26 +258,12 @@ function Editor({
   const { t, language } = useI18n()
   const toast = useToast()
   const navigate = useNavigate()
-  const [draft, setDraft] = useState<OwnChannelDraft>(() =>
-    saved
-      ? {
-          name: saved.name,
-          number: saved.number,
-          enabled: saved.enabled,
-          source: saved.source,
-          shuffle: saved.shuffle,
-          blocks: saved.blocks.map(({ start, end, source, shuffle }) => ({
-            start,
-            end,
-            source,
-            shuffle,
-          })),
-        }
-      : emptyDraft,
-  )
+  const [draft, setDraft] = useState<OwnChannelDraft>(() => draftOf(saved))
   const [rebuild, setRebuild] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const change = (patch: Partial<OwnChannelDraft>) => setDraft((d) => ({ ...d, ...patch }))
+  const was = saved ? draftOf(saved) : null
+  const changes = was ? countChanges(draft, was) + (rebuild ? 1 : 0) : 0
 
   const save = useMutation({
     mutationFn: () =>
@@ -261,113 +289,136 @@ function Editor({
   const numberError = code === 'invalid_channel_number' ? errorMessage(t, save.error) : undefined
   const generalError =
     save.isError && !nameError && !numberError ? errorMessage(t, save.error) : undefined
+  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
 
   return (
     <PageLayout
       title={saved ? saved.name : t.ownChannels.newTitle}
       lede={t.ownChannels.lede}
       back={back}
+      actions={
+        saved && (
+          <Button variant="danger" icon={TrashIcon} onClick={() => setDeleting(true)}>
+            {t.ownChannels.delete}
+          </Button>
+        )
+      }
     >
       <form
         onSubmit={(event) => {
           event.preventDefault()
           save.mutate()
         }}
+        className="flex flex-col gap-block"
       >
-        <Panel flush>
-          <PanelSection>
-            <div className="grid gap-6 md:grid-cols-3">
-              <Field label={t.ownChannels.name} error={nameError}>
-                <TextInput value={draft.name} maxLength={64} onValue={(name) => change({ name })} />
-              </Field>
-              <Field
-                label={t.ownChannels.number}
-                help={t.ownChannels.numberHelp}
-                error={numberError}
-              >
-                <NumberInput
-                  value={draft.number}
-                  min={1}
-                  max={9999}
-                  step={1}
-                  placeholder={t.ownChannels.noNumber}
-                  onValue={(number) => change({ number })}
-                />
-              </Field>
-              <Field label={t.ownChannels.enabled}>
-                <Switch checked={draft.enabled} onChange={(enabled) => change({ enabled })} />
-              </Field>
-            </div>
-          </PanelSection>
-          <PanelSection title={t.ownChannels.programmes} description={t.ownChannels.programmesHelp}>
+        <div className={rows}>
+          <SettingRow
+            kind="text"
+            label={t.ownChannels.name}
+            value={draft.name}
+            maxLength={64}
+            onChange={(name) => change({ name })}
+            saved={was?.name}
+            error={nameError}
+          />
+          <SettingRow
+            kind="number"
+            label={t.ownChannels.number}
+            help={t.ownChannels.numberHelp}
+            value={draft.number}
+            min={1}
+            max={9999}
+            step={1}
+            picker="well"
+            onChange={(number) => change({ number })}
+            saved={was ? was.number : undefined}
+            error={numberError}
+          />
+          <SettingRow
+            kind="switch"
+            label={t.ownChannels.enabled}
+            checked={draft.enabled}
+            onChange={(enabled) => change({ enabled })}
+            saved={was?.enabled}
+          />
+        </div>
+
+        <Block title={t.ownChannels.programmes}>
+          <p className={blockHelp}>{t.ownChannels.programmesHelp}</p>
+          <div className={rows}>
             <SourcePicker
               source={draft.source}
+              saved={was?.source}
               choices={choices}
               onChange={(source) => change({ source })}
             />
-            <div className="mt-4">
-              <Checkbox
-                checked={draft.shuffle}
-                onChange={(shuffle) => change({ shuffle })}
-                label={t.ownChannels.shuffle}
-                help={t.ownChannels.shuffleHelp}
-              />
-            </div>
-          </PanelSection>
-          <PanelSection title={t.ownChannels.blocks} description={t.ownChannels.blocksHelp}>
-            <div className="space-y-6">
-              {draft.blocks.map((block, i) => {
-                const set = (patch: Partial<OwnChannelDraft['blocks'][number]>) =>
-                  change({ blocks: draft.blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) })
-                return (
-                  <fieldset key={i} className="rounded-field border border-line p-4">
-                    <legend className="px-1 text-control font-medium text-ink">
-                      {t.ownChannels.block(i + 1)}
-                    </legend>
-                    <div className="mb-4 flex flex-wrap items-end gap-4">
-                      <Field label={t.ownChannels.from}>
-                        <TextInput
-                          type="time"
-                          value={clock(block.start)}
-                          onValue={(value) => set({ start: minutesOf(value, false) })}
-                          className="w-[140px]"
-                        />
-                      </Field>
-                      <Field label={t.ownChannels.until}>
-                        <TextInput
-                          type="time"
-                          value={clock(block.end === 24 * 60 ? 0 : block.end)}
-                          onValue={(value) => set({ end: minutesOf(value, true) })}
-                          className="w-[140px]"
-                        />
-                      </Field>
-                      <Button
-                        variant="danger"
+            <SettingRow
+              kind="switch"
+              label={t.ownChannels.shuffle}
+              help={t.ownChannels.shuffleHelp}
+              checked={draft.shuffle}
+              onChange={(shuffle) => change({ shuffle })}
+              saved={was?.shuffle}
+            />
+          </div>
+        </Block>
+
+        <Block title={t.ownChannels.blocks} count={draft.blocks.length}>
+          <p className={blockHelp}>{t.ownChannels.blocksHelp}</p>
+          <div className="flex flex-col gap-10">
+            {draft.blocks.map((block, i) => {
+              const set = (patch: Partial<OwnChannelDraft['blocks'][number]>) =>
+                change({ blocks: draft.blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) })
+              return (
+                <fieldset key={i} className="min-w-0">
+                  <legend className="mb-4 text-group text-ink">{t.ownChannels.block(i + 1)}</legend>
+                  <div className="mb-4 flex flex-wrap items-end gap-3">
+                    <Field label={t.ownChannels.from}>
+                      <TextInput
+                        type="time"
                         size="sm"
-                        icon={TrashIcon}
-                        onClick={() => change({ blocks: draft.blocks.filter((_, j) => j !== i) })}
-                      >
-                        {t.ownChannels.removeBlock(i + 1)}
-                      </Button>
-                    </div>
+                        value={clock(block.start)}
+                        onValue={(value) => set({ start: minutesOf(value, false) })}
+                        className="w-[160px]"
+                      />
+                    </Field>
+                    <Field label={t.ownChannels.until}>
+                      <TextInput
+                        type="time"
+                        size="sm"
+                        value={clock(block.end === 24 * 60 ? 0 : block.end)}
+                        onValue={(value) => set({ end: minutesOf(value, true) })}
+                        className="w-[160px]"
+                      />
+                    </Field>
+                    <Button
+                      variant="danger"
+                      icon={TrashIcon}
+                      onClick={() => change({ blocks: draft.blocks.filter((_, j) => j !== i) })}
+                    >
+                      {t.ownChannels.removeBlock(i + 1)}
+                    </Button>
+                  </div>
+                  <div className={rows}>
                     <SourcePicker
                       source={block.source}
                       choices={choices}
                       onChange={(source) => set({ source })}
                     />
-                    <div className="mt-4">
-                      <Checkbox
-                        checked={block.shuffle}
-                        onChange={(shuffle) => set({ shuffle })}
-                        label={t.ownChannels.shuffle}
-                      />
-                    </div>
-                  </fieldset>
-                )
-              })}
+                    <SettingRow
+                      kind="switch"
+                      label={t.ownChannels.shuffle}
+                      help={t.ownChannels.shuffleHelp}
+                      checked={block.shuffle}
+                      onChange={(shuffle) => set({ shuffle })}
+                    />
+                  </div>
+                </fieldset>
+              )
+            })}
+            <div>
               <Button
                 icon={PlusIcon}
-                size="sm"
                 disabled={draft.blocks.length >= 12}
                 onClick={() =>
                   change({
@@ -386,54 +437,68 @@ function Editor({
                 {t.ownChannels.addBlock}
               </Button>
             </div>
-          </PanelSection>
-          {saved && (
-            <PanelSection title={t.ownChannels.airing} description={t.ownChannels.airingHelp}>
-              {saved.airing.length === 0 ? (
-                <p className="text-small text-ink-3">{t.ownChannels.nothing}</p>
-              ) : (
-                <ul className="space-y-1.5 text-small">
-                  {saved.airing.map((airing) => (
-                    <li key={airing.start} className="flex gap-3">
-                      <span className="figures w-[110px] shrink-0 text-ink-3">
-                        {new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(
-                          new Date(airing.start),
-                        )}
+          </div>
+        </Block>
+
+        {saved && (
+          <Block title={t.ownChannels.airing}>
+            <p className={blockHelp}>{t.ownChannels.airingHelp}</p>
+            {saved.airing.length === 0 ? (
+              <p className="mb-4 text-small text-ink-3">{t.ownChannels.nothing}</p>
+            ) : (
+              <RowList compact aria-label={t.ownChannels.airing} className="mb-4">
+                {saved.airing.map((airing) => (
+                  <Row
+                    key={airing.start}
+                    leading={
+                      <span className={airingTime}>
+                        {time.format(new Date(airing.start))}
                         {' – '}
-                        {new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(
-                          new Date(airing.end),
-                        )}
+                        {time.format(new Date(airing.end))}
                       </span>
-                      <span className="text-ink">
-                        {airing.name}
-                        {airing.episode !== '' &&
-                          ` · ${formatEpisode(airing.season, airing.number)} · ${airing.episode}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="mt-4">
-                <Checkbox
-                  checked={rebuild}
-                  onChange={setRebuild}
-                  label={t.ownChannels.rebuild}
-                  help={t.ownChannels.rebuildHelp}
-                />
-              </div>
-            </PanelSection>
-          )}
-          <PanelFooter note={generalError && <FieldError>{generalError}</FieldError>}>
-            {saved && (
-              <Button variant="danger" icon={TrashIcon} onClick={() => setDeleting(true)}>
-                {t.ownChannels.delete}
-              </Button>
+                    }
+                    title={airing.name}
+                    meta={
+                      airing.episode !== ''
+                        ? `${formatEpisode(airing.season, airing.number)} · ${airing.episode}`
+                        : undefined
+                    }
+                  />
+                ))}
+              </RowList>
             )}
+            <div className={rows}>
+              <SettingRow
+                kind="switch"
+                label={t.ownChannels.rebuild}
+                help={t.ownChannels.rebuildHelp}
+                checked={rebuild}
+                onChange={setRebuild}
+              />
+            </div>
+          </Block>
+        )}
+
+        {saved ? (
+          <SaveBar
+            dirty={changes > 0}
+            saving={save.isPending}
+            changes={changes}
+            onDiscard={() => {
+              setDraft(draftOf(saved))
+              setRebuild(false)
+              save.reset()
+            }}
+            error={generalError}
+          />
+        ) : (
+          <div className="flex flex-col items-start gap-4">
+            {generalError && <FieldError>{generalError}</FieldError>}
             <Button type="submit" variant="primary" loading={save.isPending}>
-              {saved ? t.ownChannels.save : t.ownChannels.create}
+              {t.ownChannels.create}
             </Button>
-          </PanelFooter>
-        </Panel>
+          </div>
+        )}
       </form>
       <ConfirmDialog
         open={deleting}
@@ -451,64 +516,74 @@ function Editor({
   )
 }
 
-/** Chooses what a channel or a block is built from. */
+/** The start and end of a programme at the start of its row. */
+const airingTime = 'figures w-[124px] shrink-0 text-micro text-ink-3 max-md:w-[96px]'
+/** Settings rows, 8 px apart. */
+const rows = 'grid grid-cols-[minmax(0,1fr)] gap-2'
+/** The help under a block's title. */
+const blockHelp = 'mb-5 max-w-[72ch] text-small text-ink-2'
+
+/** Chooses what a channel or a block is built from, as settings rows. */
 function SourcePicker({
   source,
+  saved,
   choices,
   onChange,
 }: {
   source: ChannelSource
+  /** The saved source, for the rows' "was" marks; none for a block. */
+  saved?: ChannelSource
   choices: ChannelChoices
   onChange: (source: ChannelSource) => void
 }) {
   const { t } = useI18n()
   const listed = source.kind === 'collection' ? choices.collections : choices.smartLists
+  const chosen = source.items[0]?.id ?? ''
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-2">
-        <span className="text-control font-medium text-ink">{t.ownChannels.kind}</span>
-        <Segmented
-          label={t.ownChannels.kind}
-          value={source.kind}
-          onChange={(kind) => onChange({ kind, items: [] })}
-          options={kinds.map((value) => ({ value, label: t.ownChannels.kinds[value] }))}
-        />
-      </div>
+    <>
+      <SettingRow
+        kind="choice"
+        label={t.ownChannels.kind}
+        value={source.kind}
+        options={kinds.map((value) => ({ value, label: t.ownChannels.kinds[value] }))}
+        onChange={(kind) => onChange({ kind, items: [] })}
+        saved={saved?.kind}
+      />
       {(source.kind === 'collection' || source.kind === 'smartlist') &&
         (listed.length === 0 ? (
-          <p className="text-small text-ink-3">
+          <p className="px-[30px] py-2 text-small text-ink-2 max-md:px-5">
             {source.kind === 'collection'
               ? t.ownChannels.noCollections
               : t.ownChannels.noSmartLists}
           </p>
         ) : (
-          <Field
+          <SettingRow
+            kind="choice"
             label={
               source.kind === 'collection' ? t.ownChannels.collection : t.ownChannels.smartList
             }
-          >
-            <Select
-              value={source.items[0]?.id ?? ''}
-              className="w-full max-w-[420px]"
-              options={[
-                { value: '', label: t.ownChannels.choose, disabled: true },
-                ...listed.map((c) => ({ value: c.id, label: c.name })),
-              ]}
-              onValue={(id) => {
-                const choice = listed.find((c) => c.id === id)
-                if (choice)
-                  onChange({
-                    kind: source.kind,
-                    items: [{ id, name: choice.name, kind: source.kind }],
-                  })
-              }}
-            />
-          </Field>
+            value={chosen}
+            options={[
+              ...(chosen === ''
+                ? [{ value: '', label: t.ownChannels.choose, disabled: true }]
+                : []),
+              ...listed.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            onChange={(id) => {
+              const choice = listed.find((c) => c.id === id)
+              if (choice)
+                onChange({
+                  kind: source.kind,
+                  items: [{ id, name: choice.name, kind: source.kind }],
+                })
+            }}
+            saved={saved?.kind === source.kind ? (saved.items[0]?.id ?? '') : undefined}
+          />
         ))}
       {(source.kind === 'series' || source.kind === 'titles') && (
         <TitlePicker source={source} onChange={onChange} />
       )}
-    </div>
+    </>
   )
 }
 
@@ -536,16 +611,17 @@ function TitlePicker({
     setAsked(query.trim())
   }
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-4 pt-4">
       <div className="flex flex-wrap items-end gap-2">
         <Field
           label={series ? t.ownChannels.searchSeries : t.ownChannels.searchTitles}
-          className="min-w-[220px] flex-1"
+          className="min-w-[200px] flex-1"
         >
           <TextInput
             value={query}
             onValue={setQuery}
             icon={MagnifyingGlassIcon}
+            size="sm"
             onKeyDown={(event) => {
               if (event.key === 'Enter') submit(event)
             }}
@@ -560,47 +636,59 @@ function TitlePicker({
         <p className="text-small text-ink-3">{t.ownChannels.noResults}</p>
       )}
       {results.length > 0 && (
-        <ul className="max-h-[240px] space-y-1 overflow-y-auto rounded-field border border-line p-2">
-          {results.map((title) => (
-            <li key={title.id} className="flex items-center justify-between gap-3">
-              <span className="truncate text-small text-ink">
-                {title.name}
-                {title.year !== null && ` (${title.year})`} ·{' '}
-                {title.kind === 'series' ? t.ownChannels.series : t.ownChannels.movie}
-              </span>
-              <IconButton
-                label={t.ownChannels.pick(title.name)}
-                icon={PlusIcon}
-                onClick={() => {
-                  const item = { id: title.id, name: title.name, kind: title.kind }
-                  if (series) onChange({ kind: 'series', items: [item] })
-                  else if (!source.items.some((i) => i.id === title.id))
-                    onChange({ kind: 'titles', items: [...source.items, item] })
-                }}
+        <div className="max-h-[320px] overflow-y-auto rounded-row">
+          <RowList compact aria-label={t.ownChannels.searchTitles}>
+            {results.map((title) => (
+              <Row
+                key={title.id}
+                title={title.name}
+                meta={[
+                  title.year !== null ? String(title.year) : '',
+                  title.kind === 'series' ? t.ownChannels.series : t.ownChannels.movie,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                trailing={
+                  <IconButton
+                    label={t.ownChannels.pick(title.name)}
+                    icon={PlusIcon}
+                    size="sm"
+                    onClick={() => {
+                      const item = { id: title.id, name: title.name, kind: title.kind }
+                      if (series) onChange({ kind: 'series', items: [item] })
+                      else if (!source.items.some((i) => i.id === title.id))
+                        onChange({ kind: 'titles', items: [...source.items, item] })
+                    }}
+                  />
+                }
               />
-            </li>
-          ))}
-        </ul>
+            ))}
+          </RowList>
+        </div>
       )}
-      <div>
-        <p className="mb-1 text-control font-medium text-ink">{t.ownChannels.picked}</p>
+      <div className="flex flex-col gap-2.5">
+        <p className="text-small font-semibold text-ink-2">{t.ownChannels.picked}</p>
         {source.items.length === 0 ? (
           <p className="text-small text-ink-3">{t.ownChannels.pickedNone}</p>
         ) : (
-          <ul className="space-y-1">
+          <RowList compact aria-label={t.ownChannels.picked}>
             {source.items.map((item) => (
-              <li key={item.id} className="flex items-center gap-2 text-small text-ink">
-                <span className="truncate">{item.name}</span>
-                <IconButton
-                  label={t.ownChannels.remove(item.name)}
-                  icon={XIcon}
-                  onClick={() =>
-                    onChange({ ...source, items: source.items.filter((i) => i.id !== item.id) })
-                  }
-                />
-              </li>
+              <Row
+                key={item.id}
+                title={item.name}
+                trailing={
+                  <IconButton
+                    label={t.ownChannels.remove(item.name)}
+                    icon={XIcon}
+                    size="sm"
+                    onClick={() =>
+                      onChange({ ...source, items: source.items.filter((i) => i.id !== item.id) })
+                    }
+                  />
+                }
+              />
             ))}
-          </ul>
+          </RowList>
         )}
       </div>
     </div>

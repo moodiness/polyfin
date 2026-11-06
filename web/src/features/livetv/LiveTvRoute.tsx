@@ -27,19 +27,19 @@ import {
   Badge,
   Block,
   ButtonLink,
-  cx,
   EmptyState,
+  FigureTile,
   IconTile,
   InlineError,
   Notice,
-  Panel,
+  RelativeTime,
   Row,
   RowList,
   Skeleton,
   SkeletonRows,
   StatusPill,
   TextLink,
-  RelativeTime,
+  type StatusTone,
 } from '@/ui'
 import {
   catalogState,
@@ -50,7 +50,7 @@ import {
   isTvCatalog,
 } from './catalogs'
 import { TunersShort } from './TunersShort'
-import { OwnChannels } from './OwnChannels'
+import { OwnChannels, PhoneState, WideState } from './OwnChannels'
 
 /**
  * `/live-tv`: the server's TV catalogs with the state of their guides, the channels of its IPTV
@@ -93,8 +93,9 @@ export default function LiveTvRoute() {
       <Block title={t.livetv.iptvTitle} count={addons.data?.filter(isIptv).length}>
         <p className="mb-5 max-w-[72ch] text-small text-ink-2">{t.livetv.iptvHelp}</p>
         {addons.isPending ? (
-          <div role="status" aria-label={t.livetv.iptvLoading}>
-            <Skeleton className="h-[188px] w-full rounded-panel" />
+          <div role="status" aria-label={t.livetv.iptvLoading} className="space-y-2.5">
+            <Skeleton className="h-20 w-full rounded-row" />
+            <Skeleton className="h-[120px] w-full rounded-row" />
           </div>
         ) : addons.isError ? (
           <InlineError onRetry={() => void addons.refetch()} retrying={addons.isFetching}>
@@ -143,60 +144,67 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
         const state = catalogState(t, library, addon?.enabled === false)
         const failing = failingGuides(library)
         const open = library.enabled && library.browsable
-        const guidesButton = (
-          <ButtonLink
-            size="sm"
-            to={guidesLink('shared', library, iptv)}
-            aria-label={iptv ? t.livetv.lineupLabel(name) : t.livetv.manageLabel(name)}
-          >
-            {iptv ? t.livetv.lineup : t.livetv.manage}
-          </ButtonLink>
-        )
+        const kind =
+          addon?.kind === 'hdhomerun'
+            ? t.livetv.kindTuner
+            : iptv
+              ? t.livetv.kinds.iptv
+              : t.livetv.kinds.stremio
         return (
           <Row
             key={`${library.addonId}:${library.catalogId}`}
-            leading={iptv ? BroadcastIcon : TelevisionSimpleIcon}
+            leading={
+              <IconTile
+                icon={iptv ? BroadcastIcon : TelevisionSimpleIcon}
+                tone={state.tone === 'danger' || state.tone === 'warn' ? state.tone : undefined}
+              />
+            }
+            to={open ? guidesLink('shared', library, iptv) : undefined}
             title={name}
             muted={!library.enabled}
             meta={
-              <span className="truncate">
-                {library.addonName} ·{' '}
-                {addon?.kind === 'hdhomerun'
-                  ? t.livetv.kindTuner
-                  : iptv
-                    ? t.livetv.kinds.iptv
-                    : t.livetv.kinds.stremio}
-              </span>
+              <>
+                <span>
+                  {[
+                    library.addonName,
+                    kind,
+                    library.enabled ? guideSummary(t, language, library) : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                <PhoneState>
+                  <StatusPill tone={state.tone}>{state.label}</StatusPill>
+                </PhoneState>
+              </>
             }
             trailing={
-              <div className="flex items-center gap-4">
+              <WideState>
                 <StatusPill tone={state.tone}>{state.label}</StatusPill>
-                {open && <span className="max-sm:hidden">{guidesButton}</span>}
-              </div>
+              </WideState>
             }
           >
-            <div className="-mt-2 space-y-1.5 pr-[18px] pl-3 text-small text-ink-3 max-sm:px-4">
-              {library.enabled ? (
-                <p>{guideSummary(t, language, library)}</p>
-              ) : (
-                <p>
-                  {t.livetv.notShownHelp}{' '}
-                  <TextLink to="/libraries" arrow={false} className="text-small">
-                    {t.livetv.openLibraries}
-                  </TextLink>
-                </p>
-              )}
-              {failing.map((guide) => (
-                <p key={guide.id} className="flex items-start gap-1.5 text-danger">
-                  <WarningCircleIcon size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
-                  {t.livetv.guideLine(
-                    guide.position,
-                    t.lineup.guideErrors[guide.error] ?? t.errors.generic,
-                  )}
-                </p>
-              ))}
-              {open && <div className="pt-1.5 sm:hidden">{guidesButton}</div>}
-            </div>
+            {!library.enabled || failing.length > 0 ? (
+              <div className="-mt-2 space-y-1.5 text-small text-ink-2">
+                {!library.enabled && (
+                  <p>
+                    {t.livetv.notShownHelp}{' '}
+                    <TextLink to="/libraries" arrow={false} className="text-small">
+                      {t.livetv.openLibraries}
+                    </TextLink>
+                  </p>
+                )}
+                {failing.map((guide) => (
+                  <p key={guide.id} className="flex items-start gap-2 text-danger">
+                    <WarningCircleIcon size={20} aria-hidden="true" className="mt-px shrink-0" />
+                    {t.livetv.guideLine(
+                      guide.position,
+                      t.lineup.guideErrors[guide.error] ?? t.errors.generic,
+                    )}
+                  </p>
+                ))}
+              </div>
+            ) : undefined}
           </Row>
         )
       })}
@@ -222,117 +230,118 @@ function IptvSources({ addons }: { addons: Addon[] }) {
     )
   }
   return (
-    <div className="space-y-4">
+    <div className="space-y-10">
       {addons.map((addon) =>
         addon.source === null ? null : (
-          <IptvSourcePanel key={addon.id} addon={addon} source={addon.source} />
+          <IptvSourceBlock key={addon.id} addon={addon} source={addon.source} />
         ),
       )}
     </div>
   )
 }
 
-function IptvSourcePanel({ addon, source }: { addon: Addon; source: IptvSource }) {
+/** An IPTV source as a row opening its channels, then the figures of its line-up. */
+function IptvSourceBlock({ addon, source }: { addon: Addon; source: IptvSource }) {
   const { language, t } = useI18n()
   const number = (value: number) => value.toLocaleString(language)
   const lineup = source.lineup
-  const figures = [
-    { label: t.livetv.figures.entries, value: source.channels },
-    { label: t.livetv.figures.enabled, value: lineup.enabledChannels },
-    { label: t.livetv.figures.shown, value: lineup.shownChannels },
-    { label: t.livetv.figures.mapped, value: lineup.mapped },
-    { label: t.livetv.figures.unmapped, value: lineup.unmapped, warn: lineup.unmapped > 0 },
-  ]
+  const state: { tone: StatusTone; label: string } = !addon.enabled
+    ? { tone: 'muted', label: t.livetv.turnedOff }
+    : source.error !== ''
+      ? { tone: 'danger', label: t.livetv.downloadFailed }
+      : { tone: 'ok', label: t.livetv.active }
+  const kind =
+    addon.kind === 'hdhomerun'
+      ? t.livetv.kindTuner
+      : addon.kind === 'xtream'
+        ? t.livetv.kindXtream
+        : t.livetv.kindM3u
   return (
-    <Panel
-      title={addon.name}
-      titleAs="h3"
-      media={<IconTile icon={BroadcastIcon} />}
-      description={
-        <>
-          {addon.kind === 'hdhomerun'
-            ? t.livetv.kindTuner
-            : addon.kind === 'xtream'
-              ? t.livetv.kindXtream
-              : t.livetv.kindM3u}{' '}
-          · {t.livetv.lastDownload}
-          {t.common.colon}{' '}
-          {source.fetchedAt === null ? t.livetv.never : <RelativeTime iso={source.fetchedAt} />}
-          {source.nextAt !== null && (
+    <section aria-label={addon.name} className="space-y-2.5">
+      <RowList>
+        <Row
+          leading={
+            <IconTile icon={BroadcastIcon} tone={state.tone === 'danger' ? 'danger' : undefined} />
+          }
+          to={lineupPath('shared', addon.id, source.options.liveTv ? 'channels' : 'options')}
+          title={addon.name}
+          muted={!addon.enabled}
+          meta={
             <>
-              {', '}
-              {t.livetv.nextDownload} <RelativeTime iso={source.nextAt} />
+              <span>
+                {kind} · {t.livetv.lastDownload}
+                {t.common.colon}{' '}
+                {source.fetchedAt === null ? (
+                  t.livetv.never
+                ) : (
+                  <RelativeTime iso={source.fetchedAt} />
+                )}
+                {source.nextAt !== null && (
+                  <>
+                    {', '}
+                    {t.livetv.nextDownload} <RelativeTime iso={source.nextAt} />
+                  </>
+                )}
+              </span>
+              <PhoneState>
+                <StatusPill tone={state.tone}>{state.label}</StatusPill>
+              </PhoneState>
             </>
-          )}
-        </>
-      }
-      actions={
+          }
+          trailing={
+            <WideState>
+              <StatusPill tone={state.tone}>{state.label}</StatusPill>
+            </WideState>
+          }
+        />
+      </RowList>
+      {source.error !== '' && (
+        <Notice tone="warn">{t.iptv.errors[source.error] ?? t.errors.generic}</Notice>
+      )}
+      {source.options.liveTv ? (
         <>
-          {!addon.enabled && <StatusPill tone="muted">{t.livetv.turnedOff}</StatusPill>}
-          {source.options.liveTv && (
-            <ButtonLink
-              size="sm"
-              to={lineupPath('shared', addon.id, 'channels')}
-              aria-label={t.livetv.channelsLabel(addon.name)}
-              className="max-sm:hidden"
-            >
-              {t.livetv.channels}
-            </ButtonLink>
+          <div
+            role="group"
+            aria-label={t.livetv.figuresLabel(addon.name)}
+            className="grid grid-cols-4 gap-2.5 max-md:grid-cols-2"
+          >
+            <FigureTile
+              value={number(lineup.enabledChannels)}
+              total={number(source.channels)}
+              label={t.livetv.figures.enabled}
+            />
+            <FigureTile
+              value={number(lineup.shownChannels)}
+              total={number(lineup.enabledChannels)}
+              label={t.livetv.figures.shown}
+            />
+            <FigureTile value={number(lineup.mapped)} label={t.livetv.figures.mapped} />
+            <FigureTile
+              value={number(lineup.unmapped)}
+              label={t.livetv.figures.unmapped}
+              tone={lineup.unmapped > 0 ? 'warn' : undefined}
+            />
+          </div>
+          {lineup.unmapped > 0 && (
+            <div className="px-1.5 pt-1.5">
+              <TextLink to={lineupPath('shared', addon.id, 'mapping')}>
+                {t.livetv.openMapping}
+              </TextLink>
+            </div>
           )}
         </>
-      }
-    >
-      <div className="space-y-5">
-        {source.error !== '' && (
-          <Notice tone="warn">{t.iptv.errors[source.error] ?? t.errors.generic}</Notice>
-        )}
-        {source.options.liveTv ? (
-          <>
-            <dl
-              aria-label={t.livetv.figuresLabel(addon.name)}
-              className="grid grid-cols-5 gap-y-5 border-t border-line pt-5 max-md:grid-cols-3 max-sm:grid-cols-2"
-            >
-              {figures.map((figure) => (
-                <div
-                  key={figure.label}
-                  className="min-w-0 md:border-l md:border-line md:px-5 md:first:border-l-0 md:first:pl-0"
-                >
-                  <dt className="truncate text-small text-ink-3">{figure.label}</dt>
-                  <dd
-                    className={cx(
-                      'figures mt-1.5 text-h2 font-medium',
-                      figure.warn ? 'text-warn' : 'text-ink',
-                    )}
-                  >
-                    {number(figure.value)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <TextLink to={lineupPath('shared', addon.id, 'channels')} className="sm:hidden">
-                {t.livetv.channels}
-              </TextLink>
-              {lineup.unmapped > 0 && (
-                <TextLink to={lineupPath('shared', addon.id, 'mapping')}>
-                  {t.livetv.openMapping}
-                </TextLink>
-              )}
-            </div>
-          </>
-        ) : (
-          <Notice
-            action={
-              <TextLink to={lineupPath('shared', addon.id, 'options')} arrow={false}>
-                {t.livetv.importOptions}
-              </TextLink>
-            }
-          >
-            {t.livetv.noLiveTv}
-          </Notice>
-        )}
-      </div>
-    </Panel>
+      ) : (
+        <Notice
+          action={
+            <TextLink to={lineupPath('shared', addon.id, 'options')} arrow={false}>
+              {t.livetv.importOptions}
+            </TextLink>
+          }
+        >
+          {t.livetv.noLiveTv}
+        </Notice>
+      )}
+    </section>
   )
 }
 
@@ -392,6 +401,16 @@ function Recordings() {
 function TimerRow({ timer }: { timer: Timer }) {
   const { language, t } = useI18n()
   const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
+  const state =
+    timer.status === 'InProgress' ? (
+      <StatusPill tone="live">{t.livetv.recordingNow}</StatusPill>
+    ) : timer.status === 'Error' ? (
+      <StatusPill tone="danger">{t.livetv.failed}</StatusPill>
+    ) : (
+      <StatusPill tone="muted" icon={ClockIcon}>
+        {t.livetv.scheduled}
+      </StatusPill>
+    )
   return (
     <Row
       leading={RecordIcon}
@@ -405,24 +424,19 @@ function TimerRow({ timer }: { timer: Timer }) {
         ) : undefined
       }
       meta={
-        <span className="truncate">
-          {timer.channel || t.livetv.unknownChannel} · {t.livetv.scheduledBy(timer.userName)}
-        </span>
+        <>
+          <span className="min-w-0 break-words">
+            {timer.channel || t.livetv.unknownChannel} · {t.livetv.scheduledBy(timer.userName)}
+          </span>
+          <PhoneState>{state}</PhoneState>
+        </>
       }
       trailing={
         <>
-          <time dateTime={timer.from} className="figures text-small text-ink">
+          <time dateTime={timer.from} className="figures text-ink">
             {dateTime(timer.from, language)} – {time.format(new Date(timer.until))}
           </time>
-          {timer.status === 'InProgress' ? (
-            <StatusPill tone="live">{t.livetv.recordingNow}</StatusPill>
-          ) : timer.status === 'Error' ? (
-            <StatusPill tone="danger">{t.livetv.failed}</StatusPill>
-          ) : (
-            <StatusPill tone="muted" icon={ClockIcon}>
-              {t.livetv.scheduled}
-            </StatusPill>
-          )}
+          <WideState>{state}</WideState>
         </>
       }
     />

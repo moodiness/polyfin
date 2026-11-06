@@ -21,8 +21,8 @@ Enable a Stremio TV catalog (the `tv` type) under **Content › Libraries**, and
 
 | Part | What it lists | Buttons |
 |---|---|---|
-| **TV catalogs** | Each addon TV catalog, its guide state (such as **Guide complete** or **Guide download failed**), and how many of its channels have a guide. A catalog not shown as a library is marked **Not in Live TV**. | **Guides and mapping** opens its guides. **Open Libraries**, for a catalog not in Live TV. |
-| **IPTV channels** | Each IPTV source's live entries, and how many channels are on, shown in apps and with a guide | **Line-up and guides** opens [its source page](iptv.md#the-source-page) |
+| **TV catalogs** | Each addon TV catalog, its guide state (such as **Guide complete** or **Guide download failed**), and how many of its channels have a guide. A catalog not shown as a library is marked **Not in Live TV**. | The catalog's row opens its guides and mapping. **Open Libraries**, for a catalog not in Live TV. |
+| **IPTV channels** | Each IPTV source's live entries, and how many channels are on, shown in apps and with a guide | The source's row opens the **Channels** of [its source page](iptv.md#the-source-page) |
 | **Recordings** | The recordings under way and scheduled (see [Recordings](recordings.md)) | |
 | **Channels of your titles** | The channels aired from your titles (see [Channels of your titles](#channels-of-your-titles)) | **Add a channel** |
 

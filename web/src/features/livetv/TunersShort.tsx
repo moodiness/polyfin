@@ -7,7 +7,7 @@ import { StatusPill, Tooltip } from '@/ui'
 export function TunersShort({ text }: { text: { tunersShort: string; tunersShortHelp: string } }) {
   return (
     <Tooltip content={text.tunersShortHelp}>
-      <span tabIndex={0} className="rounded-sm">
+      <span tabIndex={0} className="focus-lit rounded-full">
         <StatusPill tone="warn">{text.tunersShort}</StatusPill>
       </span>
     </Tooltip>
