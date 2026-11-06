@@ -33,14 +33,17 @@ import {
   cx,
   EmptyState,
   ExternalButtonLink,
+  FigureTile,
   InlineError,
   Notice,
+  Row,
+  RowList,
   Segmented,
   Select,
   Skeleton,
-  Table,
+  SkeletonRows,
 } from '@/ui'
-import { BarList, HourGrid, MethodShare, TimeChart, userColor, type TimeColumn } from './charts'
+import { BarList, HourGrid, MethodShare, seriesColor, TimeChart, type TimeColumn } from './charts'
 
 const historyPage = 20
 
@@ -110,9 +113,9 @@ export default function StatisticsView({ scope }: { scope: StatisticsScope }) {
         </Notice>
       )}
       {statistics.isPending ? (
-        <div role="status" aria-label={t.common.loading} className="grid gap-4 sm:grid-cols-3">
+        <div role="status" aria-label={t.common.loading} className="grid gap-2.5 sm:grid-cols-3">
           {[0, 1, 2].map((index) => (
-            <Skeleton key={index} className="h-20" />
+            <Skeleton key={index} className="h-[118px] rounded-row" />
           ))}
         </div>
       ) : statistics.isError ? (
@@ -171,26 +174,32 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
   ]
   return (
     <>
-      <dl className={cx('grid gap-4', scope === 'server' ? 'sm:grid-cols-4' : 'sm:grid-cols-3')}>
-        <Figure label={text.figures.played} value={formatSpan(statistics.played, language)} />
-        <Figure label={text.figures.plays} value={number.format(statistics.plays)} />
-        {scope === 'server' && (
-          <Figure label={text.figures.users} value={number.format(statistics.users.length)} />
+      <div
+        className={cx(
+          'grid grid-cols-2 gap-2.5',
+          scope === 'server' ? 'xl:grid-cols-4' : 'xl:grid-cols-3',
         )}
-        <Figure label={text.figures.sent} value={formatBytes(statistics.sent, language)} />
-      </dl>
+      >
+        <FigureTile label={text.figures.played} value={formatSpan(statistics.played, language)} />
+        <FigureTile label={text.figures.plays} value={number.format(statistics.plays)} />
+        {scope === 'server' && (
+          <FigureTile label={text.figures.users} value={number.format(statistics.users.length)} />
+        )}
+        <FigureTile label={text.figures.sent} value={formatBytes(statistics.sent, language)} />
+      </div>
       <Block title={statistics.unit === 'month' ? text.perMonth : text.perDay}>
         <TimeChart
           label={statistics.unit === 'month' ? text.perMonth : text.perDay}
           columns={timeColumns(statistics, colors, language)}
         />
         {scope === 'server' && statistics.users.length > 1 && (
-          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-small text-ink-2">
+          <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-small text-ink-2">
             {statistics.users.map((u, index) => (
-              <li key={u.id} className="flex items-center gap-1.5">
+              <li key={u.id} className="flex items-center gap-2">
                 <span
                   aria-hidden="true"
-                  className={cx('size-2.5 rounded-full', userColor(index))}
+                  className="size-3 rounded-full"
+                  style={{ backgroundColor: seriesColor(index) }}
                 />
                 {u.name}
               </li>
@@ -215,7 +224,7 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
         {lists.map((list) => (
           <Block key={list.title} title={list.title}>
             {list.items.length === 0 ? (
-              <p className="text-small text-ink-3">{text.none}</p>
+              <p className="text-small text-ink-2">{text.none}</p>
             ) : (
               <BarList label={list.title} items={list.items} />
             )}
@@ -226,19 +235,10 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
         <MethodShare methods={statistics.methods} />
       </Block>
       <Block title={text.hours}>
-        <p className="mb-3 text-small text-ink-3">{text.hoursHelp}</p>
+        <p className="mb-4 max-w-[66ch] text-small text-ink-2">{text.hoursHelp}</p>
         <HourGrid label={text.hours} hours={statistics.hours} />
       </Block>
     </>
-  )
-}
-
-function Figure({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-panel border border-line-2 bg-s1 px-4 py-3.5">
-      <dt className="text-small text-ink-3">{label}</dt>
-      <dd className="figures mt-1 text-h2 text-ink">{value}</dd>
-    </div>
   )
 }
 
@@ -300,65 +300,68 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
   return (
     <Block title={text.history} count={history.data?.pages.at(-1)?.total}>
       {history.isPending ? (
-        <Skeleton className="h-40" />
+        <SkeletonRows rows={3} />
       ) : history.isError ? (
         <InlineError onRetry={() => void history.refetch()} retrying={history.isFetching}>
           {errorMessage(t, history.error)}
         </InlineError>
       ) : entries.length === 0 ? (
-        <p className="text-small text-ink-3">{text.historyEmpty}</p>
+        <p className="text-small text-ink-2">{text.historyEmpty}</p>
       ) : (
         <>
-          <Table label={text.history} minWidth={scope === 'server' ? 860 : 740}>
-            <thead>
-              <tr>
-                <th scope="col">{text.columns.started}</th>
-                {scope === 'server' && <th scope="col">{text.columns.user}</th>}
-                <th scope="col">{text.columns.title}</th>
-                <th scope="col">{text.columns.device}</th>
-                <th scope="col" className="text-right">
-                  {text.columns.played}
-                </th>
-                <th scope="col" className="text-right">
-                  {text.columns.sent}
-                </th>
-                <th scope="col">{text.columns.method}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id}>
-                  <td className="figures whitespace-nowrap">
-                    {dateTime(entry.startedAt, language)}
-                  </td>
-                  {scope === 'server' && <td className="text-ink">{entry.user.name}</td>}
-                  <td className="text-ink">
-                    <EntryTitle entry={entry} />
-                    {entry.shared && (
-                      <span title={text.sharedHelp} className="mt-1 block">
+          <RowList compact aria-label={text.history}>
+            {entries.map((entry) => {
+              const [name, part] = entryTitle(entry)
+              return (
+                <Row
+                  key={entry.id}
+                  title={name}
+                  titleAside={
+                    entry.shared ? (
+                      <span title={text.sharedHelp}>
                         <Badge tone="accent">{text.shared}</Badge>
                       </span>
-                    )}
-                  </td>
-                  <td>
-                    {entry.shared
-                      ? text.sharedLink
-                      : text.appOn(entry.app, entry.device) || text.unknownDevice}
-                  </td>
-                  <td
-                    className="figures text-right whitespace-nowrap"
-                    title={formatClock(entry.position)}
-                  >
-                    {formatSpan(entry.played, language)}
-                  </td>
-                  <td className="figures text-right whitespace-nowrap">
-                    {entry.sent > 0 ? formatBytes(entry.sent, language) : '–'}
-                  </td>
-                  <td className="whitespace-nowrap">{text.methodNames[entry.method]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+                    ) : undefined
+                  }
+                  meta={
+                    <span className="figures">
+                      {[
+                        part,
+                        dateTime(entry.startedAt, language),
+                        scope === 'server' ? entry.user.name : null,
+                        entry.shared
+                          ? text.sharedLink
+                          : text.appOn(entry.app, entry.device) || text.unknownDevice,
+                        text.methodNames[entry.method],
+                      ]
+                        .filter((said) => said !== null)
+                        .join(' · ')}
+                    </span>
+                  }
+                  trailing={
+                    <>
+                      <span className="figures text-ink" title={formatClock(entry.position)}>
+                        <span className="sr-only">
+                          {text.columns.played}
+                          {t.common.colon}{' '}
+                        </span>
+                        {formatSpan(entry.played, language)}
+                      </span>
+                      {entry.sent > 0 && (
+                        <span className="figures text-micro text-ink-2">
+                          <span className="sr-only">
+                            {text.columns.sent}
+                            {t.common.colon}{' '}
+                          </span>
+                          {formatBytes(entry.sent, language)}
+                        </span>
+                      )}
+                    </>
+                  }
+                />
+              )
+            })}
+          </RowList>
           {history.hasNextPage && (
             <Button
               variant="ghost"
@@ -375,26 +378,15 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
   )
 }
 
-/** A playback's title as it was called: an episode with its series, a programme with its channel. */
-function EntryTitle({ entry }: { entry: HistoryEntry }) {
+/**
+ * A playback's title as it was called, and what part of what it was: an episode under its series
+ * name, a programme with its channel.
+ */
+function entryTitle(entry: HistoryEntry): [string, string | null] {
   const { item } = entry
   if (item.kind === 'episode' && item.seriesName !== null) {
-    return (
-      <>
-        {item.seriesName}
-        <span className="block text-small text-ink-3">
-          {formatEpisode(item.season ?? 0, item.episode ?? 0)} · {item.name}
-        </span>
-      </>
-    )
+    return [item.seriesName, `${formatEpisode(item.season ?? 0, item.episode ?? 0)} · ${item.name}`]
   }
-  if (item.kind !== 'channel' && item.channelName) {
-    return (
-      <>
-        {item.name}
-        <span className="block text-small text-ink-3">{item.channelName}</span>
-      </>
-    )
-  }
-  return <>{item.name}</>
+  if (item.kind !== 'channel' && item.channelName) return [item.name, item.channelName]
+  return [item.name, null]
 }

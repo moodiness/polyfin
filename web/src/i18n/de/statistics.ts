@@ -52,13 +52,8 @@ const statistics: typeof en = {
     history: 'Letzte Wiedergaben',
     historyEmpty: 'Keine Wiedergabe in diesem Zeitraum.',
     columns: {
-      started: 'Gestartet',
-      user: 'Benutzer',
-      title: 'Titel',
-      device: 'App und Gerät',
       played: 'Abgespielt',
       sent: 'Gesendete Daten',
-      method: 'Wiedergabeart',
     },
     appOn: (app: string, device: string) =>
       app && device ? `${app} auf ${device}` : app || device,

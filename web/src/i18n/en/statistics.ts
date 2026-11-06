@@ -45,13 +45,8 @@ const statistics = {
     history: 'Recent playbacks',
     historyEmpty: 'No playback in this period.',
     columns: {
-      started: 'Started',
-      user: 'User',
-      title: 'Title',
-      device: 'App and device',
       played: 'Played',
       sent: 'Data sent',
-      method: 'How it played',
     },
     appOn: (app: string, device: string) => (app && device ? `${app} on ${device}` : app || device),
     /** A playback a guest started through a share link. */

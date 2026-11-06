@@ -53,13 +53,8 @@ const statistics: typeof en = {
     history: 'Lectures récentes',
     historyEmpty: 'Aucune lecture sur cette période.',
     columns: {
-      started: 'Début',
-      user: 'Utilisateur',
-      title: 'Titre',
-      device: 'Appli et appareil',
       played: 'Durée regardée',
       sent: 'Données envoyées',
-      method: 'Mode de lecture',
     },
     appOn: (app: string, device: string) =>
       app && device ? `${app} sur ${device}` : app || device,

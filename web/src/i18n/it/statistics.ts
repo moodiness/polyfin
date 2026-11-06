@@ -53,13 +53,8 @@ const statistics: typeof en = {
     history: 'Riproduzioni recenti',
     historyEmpty: 'Nessuna riproduzione in questo periodo.',
     columns: {
-      started: 'Inizio',
-      user: 'Utente',
-      title: 'Titolo',
-      device: 'Applicazione e dispositivo',
       played: 'Durata riprodotta',
       sent: 'Dati inviati',
-      method: 'Modalità di riproduzione',
     },
     appOn: (app: string, device: string) => (app && device ? `${app} su ${device}` : app || device),
     shared: 'Condiviso',
