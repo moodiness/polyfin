@@ -26,7 +26,7 @@ Apps reach Polyfin at its address, such as `http://192.168.1.10:8096`. They also
 Jellyfin apps ask for a name and a password, never for a code. An account with [two-step sign-in](sign-in-and-security.md#two-step-sign-in), and an administrator while **Require two-step sign-in for administrators** is on, signs in to them with Quick Connect:
 
 1. In the app, choose Quick Connect on the sign-in screen: it shows a 6-digit code.
-2. Sign in to the admin app, with the password and the code of your authenticator app, and enter the app's code on the **Quick Connect** page: in the top bar for members, in the account menu for administrators.
+2. Sign in to the admin app, with the password and the code of your authenticator app, and enter the app's code on the **Quick Connect** page: in the top bar for members, in the account panel for administrators.
 3. The app signs in as you.
 
 **Allow Quick Connect**, in **Settings › General**, must stay on. Typing the password in the app is refused as a wrong password is, and counts as one toward the client's failed attempts, so that the answer never tells whether the password was right. The apps signed in before two-step sign-in was turned on stay signed in; sign them out under **My account › Devices** if needed. API keys made by administrators keep working. See also [Jellyfin apps](sign-in-and-security.md#jellyfin-apps) under two-step sign-in.
@@ -273,7 +273,7 @@ API details: [DLNA sessions for apps](jellyfin-api.md#dlna-sessions-for-apps).
 
 ### Live TV tuners
 
-The server's HDHomeRun tuners (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)) are Jellyfin's tuner hosts of type `hdhomerun`. Their channels are listed with the others in Live TV. The web player's tuner pages open the tuner's page in the admin app, or **Add a source** on its **HDHomeRun tuner** tab for a new tuner (see [Dashboard links and single sign-on](web-client.md#dashboard-links-and-single-sign-on)).
+The server's HDHomeRun tuners (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)) are Jellyfin's tuner hosts of type `hdhomerun`. Their channels are listed with the others in Live TV. The web player's tuner pages open the tuner's page in the admin app, or **Add a source** with **HDHomeRun tuner** chosen for a new tuner (see [Dashboard links and single sign-on](web-client.md#dashboard-links-and-single-sign-on)).
 
 API details: [Live TV tuners for apps](jellyfin-api.md#live-tv-tuners-for-apps).
 

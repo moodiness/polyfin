@@ -201,7 +201,7 @@ A recording that ends is finished, or partial when part of its programme is miss
 
 ### Health problems
 
-Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**. They include the database, disk space, addons, IPTV sources and tuners, programme guides, failed tasks, backups, stored keys, HTTPS and local network discovery.
+Every five minutes, Polyfin looks at the problems **System › Health** shows under **To look at**. They include the database, disk space, addons, IPTV sources and tuners, programme guides, failed tasks, backups, stored keys, HTTPS and local network discovery.
 
 - A problem is told once two checks in a row found it, so that a brief failure sends nothing.
 - It is told solved once two checks in a row no longer find it.

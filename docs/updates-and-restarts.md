@@ -13,7 +13,7 @@ Polyfin tells administrators when a new version is out, while **Check for new ve
 
 When the release is newer than the running version, in semantic version order:
 
-- **Home** shows a tile under **To look at**, and **System › Health** an item under **Needs attention**, with the new version and **Release notes**, which opens them on GitHub;
+- **Home** and **System › Health** each show a tile under **To look at**, with the new version and **Release notes**, which opens them on GitHub;
 - Jellyfin apps see `HasUpdateAvailable` true in `/System/Info`;
 - the **New version** notification is sent once per version, to the server's targets and administrators' own (see [Notifications](notifications.md#new-versions)).
 

@@ -116,7 +116,7 @@ In the web player, these open Polyfin's [admin app](administration.md) at `/admi
 Live TV's tuner pages open the admin app too:
 
 - A tuner's page opens the tuner's source page.
-- The page to add a tuner opens **Add a source** on its **HDHomeRun tuner** tab (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)).
+- The page to add a tuner opens **Add a source** with **HDHomeRun tuner** chosen (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)).
 
 ### The Polyfin entry for members
 

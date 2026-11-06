@@ -4,12 +4,12 @@ This page is for administrators with an HDHomeRun tuner on the local network, fe
 
 ## Adding a tuner
 
-Open **Add a source** in **Content › Sources**, then its **HDHomeRun tuner** tab. Only administrators add tuners, to the server's sources.
+Open **Add a source** in **Content › Sources**, then choose **HDHomeRun tuner** under **Kind of source**. Only administrators add tuners, to the server's sources.
 
 - Only an administrator's sources may reach the local network.
 - A tuner's tuners are the server's to share.
 
-The tab finds a tuner in one of two ways:
+The form finds a tuner in one of two ways:
 
 | Way | What it does |
 |---|---|
@@ -40,7 +40,7 @@ The tuner is added under the name it gives itself, with its Live TV catalog only
 | The host's network (`compose.host.yaml`) | Yes |
 | A network that gives the container its own address | Yes |
 
-When no tuner answers, the tab says so. Two ways work on any network:
+When no tuner answers, the form says so. Two ways work on any network:
 
 - **Add by address** works on any network the container reaches the tuner from.
 - `POLYFIN_HDHOMERUN_ADDRESSES` lists the tuners' addresses, such as `192.168.1.20`. **Find tuners** then asks each one directly instead of broadcasting (see [Configuration](configuration.md)).

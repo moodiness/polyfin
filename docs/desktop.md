@@ -304,7 +304,7 @@ The app goes back when the new version's server ends before it answers, 3 starts
 2. puts the copy of the database and the previous app back, removing the new ones;
 3. starts the previous version.
 
-**System › Health** then says, under **Needs attention**, which version did not start and why, as the app's log does. That version is no longer offered; the next one is. A server that runs without answering, such as one still upgrading a large database, is left to finish.
+**System › Health** then says, under **To look at**, which version did not start and why, as the app's log does. That version is no longer offered; the next one is. A server that runs without answering, such as one still upgrading a large database, is left to finish.
 
 A `.deb` cannot go back. The system's package installer replaces it and keeps no previous app, and the app keeps no copy of the database. Reinstall the previous `.deb` from its release page, and restore a backup if the new version changed the database (see [Backups](backups.md)).
 

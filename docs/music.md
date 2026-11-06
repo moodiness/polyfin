@@ -12,7 +12,7 @@ Eclipse music addons install like Stremio addons (see [Server addons](addons.md#
 
 - Polyfin tells Stremio and Eclipse addons apart by their manifest.
 - Eclipse addon addresses are redacted like manifest addresses (see [Manifest addresses](addons.md#manifest-addresses)).
-- The sources list names their kind **Eclipse**, in its filter and on their badge. **System › Health** marks their row with the same badge.
+- The sources list names their kind **Eclipse**, in its filter and on their badge. **System › Health** marks their row with the same badge, in the details of **Addons**.
 
 ### Music addon settings
 

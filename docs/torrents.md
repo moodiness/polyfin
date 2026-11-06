@@ -166,7 +166,7 @@ Torrent versions do not start while their route is down, and nothing falls back 
 
 - A play passes those versions over, as it does a version that cannot be read.
 - They stay listed, and are tried as any other version (see [Which streams become versions](versions.md#which-streams-become-versions)).
-- **System › Health** says why under **Needs attention**.
+- **System › Health** says why under **To look at**.
 - A route's failure is not the version's: the version plays again as soon as the route is back, and Health clears.
 - A WireGuard tunnel counts as up while its last handshake is less than 30 seconds old.
 - Past that, a check makes a new handshake and waits 8 seconds for its answer.
@@ -463,7 +463,7 @@ The torrent versions that did not start in time stay in the title's versions, in
 
 What to check:
 
-- **System › Health**, under **Needs attention:** a route that cannot carry torrents, a proxy without `UDP ASSOCIATE`, or a torrent that did not start, and why.
+- **System › Health**, under **To look at:** a route that cannot carry torrents, a proxy without `UDP ASSOCIATE`, or a torrent that did not start, and why.
 - **The route reaches the internet:** an interface that is up but routes nowhere, or a proxy that cannot reach out, finds no peer.
 - **UDP:** through a proxy, it needs `UDP ASSOCIATE`, and the proxy must relay the datagrams back. Without UDP, only HTTP trackers find peers, many torrents list UDP trackers alone, and the peers that take uTP alone are not reached.
 - **The trackers' answers:** turn on **Detailed log (to diagnose a problem)** under **Settings › Diagnostics**, and play again. Then read `A tracker could not be reached` in **System › Logs**, with each tracker's own reason for a refusal.
@@ -520,7 +520,7 @@ The version stays the same version whichever file it finds: its identity, its an
 
 The **Source cache** tells the part torrent pieces take.
 
-Under **Needs attention**:
+Under **To look at**:
 
 | Problem | Kind |
 |---|---|

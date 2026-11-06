@@ -4,16 +4,18 @@ This page is for administrators. It covers what **System › Health** shows, eac
 
 ## What Health shows
 
-**System › Health** puts problems first, under **Needs attention**. A new version of Polyfin follows there when one is out (see [New versions](updates-and-restarts.md#new-versions)). The page then shows:
+**System › Health** puts problems first, under **To look at**: each one is a tile, marked **Error** or **Warning**, with a link to what fixes it. A new version of Polyfin is a tile there too, when one is out (see [New versions](updates-and-restarts.md#new-versions)). The page updates every 10 seconds.
+
+Under **Checks**, a tile for each main part tells its state at a glance: **Addons**, **IPTV sources**, **Programme guides**, **Database**, **Transcoder**, **Backups**, **Source cache** and **Stored keys**. The other parts are rows under **Also on this page**, each with its value, when they apply. A tile or a row opens its details over the page, and has its own address, such as `/admin/system/health#process`, which the problems and notifications link to.
 
 - **Addons**, from the requests made for apps since start: last answer, last failure and response time.
-  - **Check** asks an addon for its manifest, at most once a minute. For a member's own addon, it reaches only public addresses.
+  - **Check**, in its details, asks an addon for its manifest, at most once a minute. For a member's own addon, it reaches only public addresses.
   - An addon whose server asked to wait for its catalog pages shows "asked to slow down (too many requests)" until the wait ends, whatever it answered meanwhile (see [Addons that ask to wait](addons.md#addons-that-ask-to-wait)).
 - **IPTV sources** and **Programme guides**.
 - **Network shares**, when there are some. Each is **Notified** of its changes by its server, **Polled** by listing its folders again, **At scans only**, or **Not watched**, with why. Polling runs every 2 minutes by default, 30 for S3 buckets, as each folder's settings ask (see [Local folders](local-folders.md#watching-for-changes)).
-- Under **Server**, the parts below.
+- The server's parts below.
 
-| Part | What it shows |
+| Part | What its details show |
 |---|---|
 | **Transcoder** | GPU, encoders, and conversions against the limit (see [Transcoding](transcoding.md)) |
 | **Database** | The database and its size |
@@ -51,7 +53,7 @@ The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy,
 
 ## Warnings and errors
 
-Each problem below shows under **Needs attention**, most with a link to the setting or page that fixes it.
+Each problem below shows under **To look at**, most with a link to the setting or page that fixes it.
 
 ### Proxies
 
@@ -134,7 +136,7 @@ The copy of the web player's **Custom** theme kept in Polyfin misses some of its
 A new version's server ended 3 times before it answered, so Polyfin Desktop returned to the previous version. This is a warning (see [Going back to the previous version](desktop.md#going-back-to-the-previous-version)).
 
 - It names the version that did not start, the one put back, and why, as the app's log tells it.
-- It links to the server's version under **Process**.
+- It links to the server's version, in the details of **Polyfin**.
 - It lasts while a version older than the one that did not start runs, and goes once a newer version answers.
 
 ### Unwritable folder
@@ -174,7 +176,7 @@ API details: [Health problems](jellyfin-api.md#health-problems-in-the-admin-api)
 
 ## Artwork and people
 
-**Artwork**, under **Server** in **System › Health**, tells why images stay blank in apps. It needs no **Detailed log (to diagnose a problem)**. It shows:
+**Artwork**, a row under **Also on this page** in **System › Health**, tells why images stay blank in apps. It needs no **Detailed log (to diagnose a problem)**. Its details show:
 
 - the artwork downloads that failed in the last hour, by kind: **Not found** (`404` or `410`), **Asked to slow down** (`429`, or a `503` with `Retry-After`), **Timed out**, **Server errors** (other `5xx`) and **Other failures**;
 - the servers that failed, by host name, the 10 that failed most first. No address is shown;
@@ -182,7 +184,7 @@ API details: [Health problems](jellyfin-api.md#health-problems-in-the-admin-api)
 
 An hour with failures also logs one INFO line, `Artwork downloads failed in the last hour`. It holds the same counts, the 5 servers that failed most and those waited for.
 
-**People** tells how the photos and biographies of people from TMDB stand (see [Photos and biographies from TMDB](collections-people-and-ratings.md#photos-and-biographies-from-tmdb)):
+**People**, a row beside it, tells how the photos and biographies of people from TMDB stand (see [Photos and biographies from TMDB](collections-people-and-ratings.md#photos-and-biographies-from-tmdb)):
 
 - whether a **TMDB API key** is saved under **Settings › Content**;
 - the people TMDB found and did not find, and those whose last lookup failed;
@@ -203,7 +205,7 @@ API details: [Artwork and people health](jellyfin-api.md#artwork-and-people-heal
 
 ## Clearing the image cache
 
-**Clear the image cache**, under **Image cache** in **System › Health**, empties at once the cache of the images Polyfin serves to apps (see [Artwork](artwork-and-editing.md#artwork)). A message tells how many images and bytes it freed, and the cache's size beside it then shows empty.
+**Clear the image cache**, in the details of **Image cache** in **System › Health**, empties at once the cache of the images Polyfin serves to apps (see [Artwork](artwork-and-editing.md#artwork)). A message tells how many images and bytes it freed, and the cache's size beside it then shows empty.
 
 It is a button rather than a task under **System › Schedule** for two reasons:
 

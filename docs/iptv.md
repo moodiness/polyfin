@@ -9,7 +9,7 @@ This page is for administrators, and for users who add their own sources. It sho
 
 ## Adding a source
 
-Open **Add a source**, then its **IPTV source** tab. It is in **Content › Sources** for the server's sources, and in **My sources** for your own.
+Open **Add a source**, then choose **IPTV source** under **Kind of source**. It is in **Content › Sources** for the server's sources, and in **My sources** for your own.
 
 Adding a source takes two steps: the **Account**, then **What to import** and its categories.
 
@@ -117,7 +117,7 @@ Polyfin paces its requests to a provider's server: its lists, its guide, and the
 
 ## HDHomeRun tuners
 
-An HDHomeRun tuner on the local network is a source too. Administrators add it from the **HDHomeRun tuner** tab of **Add a source**. See [HDHomeRun tuners](hdhomerun.md) for finding tuners, their channels and how they are shared.
+An HDHomeRun tuner on the local network is a source too. Administrators add it with **Add a source**, choosing **HDHomeRun tuner** under **Kind of source**. See [HDHomeRun tuners](hdhomerun.md) for finding tuners, their channels and how they are shared.
 
 ## What to import
 
@@ -180,9 +180,9 @@ With **Merge quality variants**, entries of a category with the same name become
 
 Each source has its own page, titled with the source's name and kind: **M3U playlist** or **Xtream Codes account**. Select its row in **Content › Sources** or **My sources**: the page opens beside the list.
 
-![An M3U playlist source's page on Summary, with Download again and its six sections as tabs](images/iptv-source.webp)
+![An M3U playlist source's page on Summary, beside the list of sources, with Download again and its six sections as words under its name](images/iptv-source.webp)
 
-- The header holds **Download again**, on every section, and the more-actions menu with **Edit the account** and **Remove**.
+- The page's head holds **Download again**, on every section, and the more-actions menu with **Edit the account** and **Remove**.
 - The page has six sections, as words under its name: **Summary**, **Import options**, **Categories**, **Channels**, **Guides** and **Guide mapping**.
 - **Summary** shows a failed download first, with **Download again**, then the Live TV figures, the first channels, **Enabled**, **Used by**, the order, and the lists' downloads.
 - While **Live TV channels** is off, the four Live TV sections are hidden: **Categories**, **Channels**, **Guides** and **Guide mapping**.

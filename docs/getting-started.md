@@ -147,7 +147,7 @@ An account with [two-step sign-in](sign-in-and-security.md#two-step-sign-in) sig
 To approve a device with Quick Connect:
 
 1. On the device, choose Quick Connect in a Jellyfin app, or open Silo's app on a TV.
-2. In the admin app, open **Quick Connect** and type the code the device shows in **Quick Connect code**. An administrator finds the page in the account menu, and other users in the top bar.
+2. In the admin app, open **Quick Connect** and type the code the device shows in **Quick Connect code**. An administrator finds the page in the account panel, under their name at the top right, and other users in the top bar.
 3. Check the device, then choose **Approve and sign in this device**.
 
 Codes expire after 10 minutes. Quick Connect works while **Allow Quick Connect**, in **Settings › General**, is on, as it is by default.

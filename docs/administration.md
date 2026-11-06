@@ -31,7 +31,7 @@ A row of big words at the top of every page holds the areas, for administrators:
 
 The pages of Content and System show as smaller words under the page's title. The account, on the right after **Search** and the web player, opens a panel with **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language, a link to Polyfin's source code on GitHub, and **Sign out**.
 
-![The admin app's top bar with the account menu open, numbered 1 to 3](images/top-bar-account-menu.webp)
+![The admin app's top bar with the account panel open, numbered 1 to 3](images/top-bar-account-menu.webp)
 
 1: the areas. 2: **Search**, with the web player link beside it. 3: the account panel.
 
@@ -54,7 +54,7 @@ In the Jellyfin apps, Android's **Back** button and the iOS app's **Home** tab l
 The admin app is in English, French, German, Spanish, Italian and Brazilian Portuguese.
 
 - It starts in the first of these the browser prefers. Any Portuguese means Brazilian Portuguese; no match means English.
-- To change it for this browser, use the language list at the top of the sign-in and setup pages, or **Language** in the account menu.
+- To change it for this browser, use the language list at the top of the sign-in and setup pages, or **Language** in the account panel.
 
 ### My account
 
@@ -110,7 +110,7 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 
 Below 1024 pixels wide, Home is one column, in the same order, with **Recent activity** last.
 
-A **member's Home** greets them too, then shows what they play now, as a wide tile on its poster with where it is read from and their quality group, while they play. Under it come **Quick Connect**, where they type a device's code to approve it, **My sources**, with **Use the server's sources**, and **My account**, with the server's status under it. A member sees their own playbacks only, never another user's, and cannot stop them or send them a message from there.
+A member's **Home** greets them too, then shows what they play now, as a wide tile on its poster with where it is read from and their quality group, while they play. Under it come **Quick Connect**, where they type a device's code to approve it, **My sources**, with **Use the server's sources**, and **My account**, with the server's status under it. A member sees their own playbacks only, never another user's, and cannot stop them or send them a message from there.
 
 **Compared with Jellyfin**
 

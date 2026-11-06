@@ -14,7 +14,7 @@ Any addon that speaks the standard Stremio protocol works. Music addons are on [
 A server addon is shared with every user. To add one:
 
 1. Open **Content › Sources**, then **Add a source**.
-2. Keep the **Stremio addon** tab.
+2. Under **Kind of source**, keep **Stremio addon**, the first choice.
 3. Paste its **Manifest address**, copied from the addon's configure page.
 4. In **Content › Libraries**, choose which of its catalogs become libraries in Jellyfin apps.
 

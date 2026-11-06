@@ -64,7 +64,7 @@ Polyfin keeps no maximum of versions, and ignores seeders, source, size and lang
 - **System › Health › Addons** shows an addon's last failure.
 - The notices line comes once per answer, addresses and keys hidden, links never logged.
 - A source failing later in a play logs why, never its address. A torrent route failing mid-play logs `the route for torrents does not answer`, without an addon.
-- `A torrent did not start in time` is logged, and **System › Health** lists it under **Needs attention**, as it does a torrent its route stopped mid-play.
+- `A torrent did not start in time` is logged, and **System › Health** lists it under **To look at**, as it does a torrent its route stopped mid-play.
 - The another-title line comes once while Polyfin remembers the version.
 - Nothing is logged for streams with nothing to play, torrents left out, files listed twice, blocked files, the hide rules or the quality group: the Versions page shows them.
 - `GET /Polyfin/Items/{id}/Versions` tells how many versions are known and how many addons are still asked (see [Title pages](#title-pages)).
