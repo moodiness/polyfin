@@ -121,7 +121,7 @@ The icon shows whether Polyfin runs: it is faded while Polyfin starts or is stop
 
 - **Opening the app** while it runs opens the admin app.
 - **Language:** the menu speaks the system's language when Polyfin does: English, French, German, Spanish, Italian or Brazilian Portuguese. Otherwise it speaks English.
-- **No icon:** when the system shows no icon, such as in a Windows session without its taskbar, Polyfin starts all the same. After 30 seconds without its icon, the app writes an error to `desktop.log` and runs on without it. `polyfin-desktop -quit` quits it then (see [Quitting from a terminal](#quitting-from-a-terminal)).
+- **No icon:** when the system shows no icon, such as in a Windows session without its taskbar, Polyfin starts all the same. The app writes an error to `desktop.log` and runs on without it: at once when Windows refuses the icon, otherwise after 30 seconds without it. `polyfin-desktop -quit` quits it then (see [Quitting from a terminal](#quitting-from-a-terminal)).
 
 Polyfin stops only when you stop it:
 

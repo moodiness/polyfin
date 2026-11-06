@@ -25,7 +25,8 @@ import (
 const iconSize = 44
 
 // trayWait is how long the icon may take to show before the app says it
-// runs without it: the library shows it as Run starts, or never.
+// runs without it: the library shows it as Run starts, or never. When the
+// library says it gave up on the icon, the app says so at once.
 const trayWait = 30 * time.Second
 
 // runTray shows the icon and its menu until Quit Polyfin, an interrupt or
@@ -34,8 +35,9 @@ const trayWait = 30 * time.Second
 // menu or the admin app installs. Polyfin starts and quits without
 // waiting for the icon: when the system shows none, such as a session
 // without Windows' taskbar, the app logs an error and runs on without it,
-// until an interrupt or polyfin-desktop -quit.
-func runTray(options app.Options, logger *slog.Logger, asked requests) *exec.Cmd {
+// until an interrupt or polyfin-desktop -quit. refused is closed when the
+// tray's library gave up on the icon (logLibraries).
+func runTray(options app.Options, logger *slog.Logger, asked requests, refused <-chan struct{}) *exec.Cmd {
 	text := textsFor(desktop.Language())
 	changes := make(chan app.Status, 1)
 	options.Changed = func(s app.Status) {
@@ -233,7 +235,7 @@ func runTray(options app.Options, logger *slog.Logger, asked requests) *exec.Cmd
 			return
 		}
 	}()
-	go awaitTray(shown, quitting, time.After(trayWait), logger)
+	go awaitTray(shown, quitting, refused, time.After(trayWait), logger)
 	// macOS calls onExit as it terminates the app, at logout: Polyfin
 	// stops before it returns. Quit Polyfin ends Run without it.
 	onExit := func() {
@@ -285,17 +287,18 @@ func open(logger *slog.Logger, target string) {
 	}
 }
 
-// awaitTray waits for the icon, and logs an error when timeout comes
-// first: the app then runs on without it. It tells whether the icon
-// showed.
-func awaitTray(shown, quitting <-chan struct{}, timeout <-chan time.Time, logger *slog.Logger) bool {
+// awaitTray waits for the icon, and logs an error when the library gives
+// up on it, or when timeout comes first: the app then runs on without it.
+// It tells whether the icon showed.
+func awaitTray(shown, quitting, refused <-chan struct{}, timeout <-chan time.Time, logger *slog.Logger) bool {
 	select {
 	case <-shown:
 		return true
 	case <-quitting:
 		return false
+	case <-refused:
 	case <-timeout:
-		logger.Error("The tray icon could not be shown: Polyfin runs without it, and polyfin-desktop -quit quits it")
-		return false
 	}
+	logger.Error("The tray icon could not be shown: Polyfin runs without it, and polyfin-desktop -quit quits it")
+	return false
 }

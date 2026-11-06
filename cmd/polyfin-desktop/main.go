@@ -106,7 +106,7 @@ func run(headless, background bool) error {
 		out = io.MultiWriter(logFile, os.Stderr)
 	}
 	logger := slog.New(slog.NewTextHandler(out, nil))
-	logLibraries(logger)
+	trayRefused := logLibraries(logger)
 
 	release, err := app.Lock(folders.Lock())
 	if errors.Is(err, app.ErrRunning) {
@@ -164,7 +164,7 @@ func run(headless, background bool) error {
 	if headless {
 		relaunch = runHeadless(options, logger, asked)
 	} else {
-		relaunch = runTray(options, logger, asked)
+		relaunch = runTray(options, logger, asked, trayRefused)
 	}
 	stopInstallListening()
 	stopListening()
@@ -289,10 +289,43 @@ func offers(a *app.App, version string, logger *slog.Logger) bool {
 
 // logLibraries sends what libraries write with the standard log package,
 // such as the tray's errors, to the app's log as warnings: an app without
-// a console has nowhere else to show them.
-func logLibraries(logger *slog.Logger) {
-	slog.SetDefault(logger)
+// a console has nowhere else to show them. The channel it returns is
+// closed once the tray's library writes that it gave up on the icon.
+func logLibraries(logger *slog.Logger) <-chan struct{} {
+	h := &libraryHandler{Handler: logger.Handler(), refused: make(chan struct{}), once: &sync.Once{}}
+	slog.SetDefault(slog.New(h))
 	slog.SetLogLoggerLevel(slog.LevelWarn)
+	return h.refused
+}
+
+// trayRefusals begin the lines the tray's library writes on Windows when
+// it cannot make the icon. It then returns before the icon's onReady, and
+// never tries again: the icon will not show.
+var trayRefusals = []string{"systray error: unable to init instance:", "systray error: unable to create menu:"}
+
+// libraryHandler passes the libraries' lines on, and closes refused at the
+// first of trayRefusals.
+type libraryHandler struct {
+	slog.Handler
+	refused chan struct{}
+	once    *sync.Once
+}
+
+func (h *libraryHandler) Handle(ctx context.Context, r slog.Record) error {
+	for _, refusal := range trayRefusals {
+		if strings.HasPrefix(r.Message, refusal) {
+			h.once.Do(func() { close(h.refused) })
+		}
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+func (h *libraryHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &libraryHandler{Handler: h.Handler.WithAttrs(attrs), refused: h.refused, once: h.once}
+}
+
+func (h *libraryHandler) WithGroup(name string) slog.Handler {
+	return &libraryHandler{Handler: h.Handler.WithGroup(name), refused: h.refused, once: h.once}
 }
 
 // quit stops the server and the database, waiting for them.
