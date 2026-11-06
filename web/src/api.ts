@@ -43,6 +43,9 @@ export const userImageUrl = (user: { id: string; imageTag: string | null }) =>
     ? undefined
     : `/UserImage?userId=${encodeURIComponent(user.id)}&tag=${encodeURIComponent(user.imageTag)}`
 
+/** The app of a user's last activity in the admin app (see `User.lastActivityApp`). */
+export const ADMIN_APP = 'Polyfin admin'
+
 export type User = {
   id: string
   name: string
@@ -51,6 +54,11 @@ export type User = {
   isDisabled: boolean
   createdAt: string
   lastActivityAt: string | null
+  /**
+   * The app of the last activity, written with its time: the name a Jellyfin or Silo app sends,
+   * or `ADMIN_APP`. Empty when unknown.
+   */
+  lastActivityApp: string
   parentalControl: ParentalControl
   /** Whether the user may have video and audio converted (transcoded). */
   transcoding: boolean

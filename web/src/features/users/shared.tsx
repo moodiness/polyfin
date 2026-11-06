@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  ADMIN_APP,
   ApiError,
   fetchParentalRatings,
   queryClient,
@@ -16,7 +17,7 @@ import {
 import { SubAreaContext } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
-import { scaledPx, StatusPill, Tabs } from '@/ui'
+import { RelativeTime, scaledPx, StatusPill, Tabs } from '@/ui'
 
 /** PageLayout claims the words; there is nothing to show above a page in their place. */
 const noClaim = () => () => {}
@@ -58,6 +59,22 @@ export function UserState({ user }: { user: User }) {
     )
   }
   return <StatusPill tone="ok">{t.users.active}</StatusPill>
+}
+
+/**
+ * A user's last activity and its app: "Last activity: 3 minutes ago · Jellyfin Android TV", or
+ * "Last activity: Never". The admin app's own name reads in the language of the page.
+ */
+export function LastActivity({ user }: { user: User }) {
+  const { t } = useI18n()
+  if (user.lastActivityAt === null) return <>{`${t.users.lastActivityLabel} ${t.common.never}`}</>
+  const app = user.lastActivityApp === ADMIN_APP ? t.users.adminApp : user.lastActivityApp
+  return (
+    <>
+      {t.users.lastActivityLabel} <RelativeTime iso={user.lastActivityAt} />
+      {app !== '' && ` · ${app}`}
+    </>
+  )
 }
 
 /** Puts a user returned by the server into the cached list. */

@@ -45,7 +45,6 @@ import {
   Modal,
   Notice,
   OpenRow,
-  RelativeTime,
   SectionNav,
   Select,
   SettingRow,
@@ -59,6 +58,7 @@ import { DraftForm, useDraftPart } from './draft'
 import { Band, PageSection, posterUrl, useWatching, WatchingLink } from './rows'
 import {
   clockTime,
+  LastActivity,
   refreshIfGone,
   storeUser,
   useSectionInView,
@@ -221,12 +221,7 @@ function UserPage({ user }: { user: User }) {
             </Badge>
           )}
           <span>
-            {t.users.lastActivityLabel}{' '}
-            {user.lastActivityAt === null ? (
-              t.common.never
-            ) : (
-              <RelativeTime iso={user.lastActivityAt} />
-            )}
+            <LastActivity user={user} />
           </span>
           {user.endsOn !== null && (
             <span>

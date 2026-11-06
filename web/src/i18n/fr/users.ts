@@ -239,6 +239,7 @@ const users: typeof en = {
     qualityGroupOriginal: 'D’origine (sans limite)',
     member: 'Membre',
     lastActivityLabel: 'Dernière activité :',
+    adminApp: 'Appli d’administration',
     active: 'Actif',
     pinRequested: 'PIN demandé',
     emptyHelp:

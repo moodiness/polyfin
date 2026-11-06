@@ -34,12 +34,11 @@ import {
   RowList,
   Select,
   SkeletonRows,
-  RelativeTime,
   useToast,
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
 import { CreateInviteModal, InviteLinks } from './InviteLinks'
-import { UserState, useRestrictions, UsersArea } from './shared'
+import { LastActivity, UserState, useRestrictions, UsersArea } from './shared'
 
 /** The users the list shows: every one, those in no group, or the members of one group. */
 const allUsers = 'all'
@@ -204,8 +203,6 @@ function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
   const restrictions = useRestrictions(user)
-  const lastActivity =
-    user.lastActivityAt === null ? t.common.never : <RelativeTime iso={user.lastActivityAt} />
 
   return (
     <Row
@@ -232,7 +229,7 @@ function UserRow({ user }: { user: User }) {
           <span className="mb-1 block sm:hidden">
             <UserState user={user} />
           </span>
-          {t.users.lastActivityLabel} {lastActivity}
+          <LastActivity user={user} />
           {user.endsOn !== null && (
             <span>
               {' · '}
