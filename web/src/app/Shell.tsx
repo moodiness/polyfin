@@ -59,10 +59,12 @@ export function PublicShell({ children }: { children: ReactNode }) {
         <Brand link={false} />
         <LanguageSwitch />
       </header>
+      {/* The public pages' frame: in px, like the signed-in page's, so it keeps its width at every
+          density; the column inside it scales. */}
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-[55rem] flex-1 animate-rise px-5 pt-5 pb-20 outline-none max-md:pt-7"
+        className="mx-auto w-full max-w-[880px] flex-1 animate-rise px-5 pt-5 pb-20 outline-none max-md:pt-7"
       >
         {children}
       </main>
