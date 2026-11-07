@@ -67,8 +67,8 @@ func TestPeopleCountsReadNoTitles(t *testing.T) {
 	walk = func(n planNode) {
 		if n.Relation == "items" {
 			read++
-			if n.Type == "Seq Scan" || n.Removed > 0 {
-				t.Errorf("items read by %s, %d rows filtered out: %s", n.Type, n.Removed, plan)
+			if n.NodeType == "Seq Scan" || n.Removed > 0 {
+				t.Errorf("items read by %s, %d rows filtered out: %s", n.NodeType, n.Removed, plan)
 			}
 		}
 		for _, child := range n.Plans {
@@ -86,14 +86,6 @@ func TestPeopleCountsReadNoTitles(t *testing.T) {
 	if status.Found != 20 {
 		t.Errorf("found %d, want 20", status.Found)
 	}
-}
-
-// planNode is a node of a plan EXPLAIN tells in JSON.
-type planNode struct {
-	Type     string     `json:"Node Type"`
-	Relation string     `json:"Relation Name"`
-	Removed  int        `json:"Rows Removed by Filter"`
-	Plans    []planNode `json:"Plans"`
 }
 
 // Health's poll does not count the people again: their counts are kept,
