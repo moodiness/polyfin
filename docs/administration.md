@@ -250,18 +250,20 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Refresh ratings | Only when started: it asks the addons again |
 | Forget the version lists | Only when started: every title asks its addons again for its versions (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)) |
 | Record ended accounts | Every hour |
-| Record expired share links | Every 10 minutes, also deleting the links that ended more than 30 days ago |
+| Record expired share links | Every 10 minutes while share links are on, also deleting the links that ended more than 30 days ago |
 | Scan local folders | Each folder at startup, then every number of hours set in **Settings › Catalogs** |
 | Delete old recordings | For the recordings older than the days the settings keep them |
 | Schedule series recordings | For the new programmes of each series recording |
 | Find commercials in recordings | While **Find commercials in recordings** is on, in **Settings › Recordings** |
 | Back up the database | Every day at the hour set in **Settings › Backups**, while backups are on |
-| Build taste profiles | Every hour |
+| Build taste profiles | Every hour, for the users whose watch data, hidden titles or access changed, and once a day for every user |
 | Clean the playback history | For the playbacks older than the days to keep set in **Settings › Playback** |
 | Send the weekly summary | At the day and hour set in **Settings › Notifications** |
 | Send the month in review | On the 1st, at the hour of the weekly summary |
 | Send the year in review | On January 1st, at the hour of the weekly summary |
 | Look for versions of watchlist titles | For each title again after the hours set in **Settings › Catalogs** |
+
+A task that runs every few minutes or hours first runs a few minutes after its interval, at an offset of its own, so that such tasks do not all start in the same second. The tasks that run at start still do then.
 
 Jellyfin apps see every task of **System › Schedule**, and can start and stop them. They cannot change these schedules. Some follow the hours and days set in Polyfin's settings, as above.
 
