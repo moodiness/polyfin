@@ -12,7 +12,10 @@ import (
 // the addons whose streams it does not remember, or remembers stale: it
 // asks them in the background (see VersionsNow), then asks them again a
 // little later (see followUpList), and Pending tells how many it still
-// asks, for a page to add their versions as they come.
+// asks, for a page to add their versions as they come. An addon that
+// failed is not asked again in the background for a while (see
+// failedFor), so that a page following the title does not have it asked
+// at each of its reads.
 
 const (
 	// askedFor is how long the addons asked for a user's title are counted;
@@ -20,6 +23,12 @@ const (
 	askedFor = 5 * time.Minute
 	// maxAsked bounds the titles counted at once.
 	maxAsked = 2000
+	// failedFor is how long an addon's failure to list a title's streams
+	// is remembered: item details and the title's versions page list
+	// what they know meanwhile, its stale list or nothing, without asking
+	// it again. Playing, Ask addons again, Try again and a refresh still
+	// ask it at once.
+	failedFor = 3 * time.Minute
 )
 
 type askedKey struct {

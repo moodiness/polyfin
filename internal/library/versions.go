@@ -431,9 +431,10 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // listVersions lists the versions serving list for t, as far as mode goes,
 // and returns the addons whose streams are not known, or are asked again:
 // for knownOnly, those whose lists are not remembered; for askLater, those
-// and those whose lists are stale; for staleNow, those whose lists are
-// stale; for waitAll, none. Torrents' files are listed only with torrents
-// set, for a user who may play them (see accounts.Settings.TorrentsAllowed).
+// and those whose lists are stale, but those that failed lately (see
+// failedFor); for staleNow, those whose lists are stale; for waitAll,
+// none. Torrents' files are listed only with torrents set, for a user who
+// may play them (see accounts.Settings.TorrentsAllowed).
 func (s *Service) listVersions(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([]Version, []streamSource) {
 	lists, unknown := s.gatherStreams(ctx, t, serving, mode)
 	return s.buildVersions(t, serving, lists, torrents, s.versionChoices(ctx), nil), unknown
@@ -460,6 +461,10 @@ func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamS
 		}
 		switch {
 		case fresh || ok && mode == knownOnly:
+			lists[i] = l.items
+		case mode == askLater && s.failed(entry.key()):
+			// An addon that failed lately is not asked again in the
+			// background: its stale list is listed meanwhile, if any.
 			lists[i] = l.items
 		case ok:
 			// A stale list is listed until the addon answers again.
@@ -958,7 +963,8 @@ func (s *Service) streamTurn(ctx context.Context, entry installed, key streamKey
 // askStreamsOf asks an addon for its streams for a title once, as
 // streamAnswer does. A failure, and an answer of notices alone, are
 // logged here, once whoever waits for it (see streamsFailed), and the
-// notices remembered (see noticedAnswer).
+// notices remembered (see noticedAnswer), as is the failure (see
+// failedFor) until the addon answers.
 func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	flight := streamsFlight(key)
 	s.streamLogs.waits(ctx, flight)
@@ -969,13 +975,33 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if userWaited := s.streamLogs.ended(flight); err != nil {
 			s.streamsFailed(ctx, entry, key, userWaited, err)
+			s.failedNow(key, asked)
 			return nil, err
 		}
+		s.failedLately.Delete(key)
 		if len(streams) > 0 && streamKind.count(streams) == 0 {
 			return s.noticesAnswered(ctx, entry, key, asked, streams)
 		}
 		return s.followStreams(ctx, entry, key, asked, streams)
 	})
+}
+
+// failedNow remembers, for failedFor, that an addon failed to list a
+// title's streams to request asked (see ask), unless a refresh forgot the
+// request meanwhile: the addon is asked anew then.
+func (s *Service) failedNow(key streamKey, asked uint64) {
+	s.followUps.mu.Lock()
+	defer s.followUps.mu.Unlock()
+	if s.followUps.asking[followKey{listStreams, key}] == asked {
+		s.failedLately.Put(key, struct{}{})
+	}
+}
+
+// failed reports whether an addon failed to list a title's streams within
+// failedFor, and has not answered since.
+func (s *Service) failed(key streamKey) bool {
+	_, ok := s.failedLately.Get(key)
+	return ok
 }
 
 // noticeLife is how long an addon's answer of notices alone for a title
