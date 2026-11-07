@@ -37,6 +37,12 @@ if (options.help || !options['database-url']) {
 
 const widths = [1440, 390]
 const languages = ['en', 'de']
+/**
+ * The GETs of the admin API a page may send more than once while it loads, each with its reason:
+ * `path` matches the address, without the server, query included. Keep it short: a page asks
+ * each address once, its components sharing the answer.
+ */
+const repeatsAllowed = []
 /** The member the sweep signs in as: Alex, whose tracking services are connected. */
 const member = members[2]
 /** The most addresses of one route the sweep visits, of those the pages link to. */
@@ -288,10 +294,26 @@ class Sweep {
     page.on('console', onConsole)
     page.on('pageerror', onError)
     const pending = new Set()
+    // The admin API's GETs of the page loaded, not of the one before, until it settles.
+    const sent = new Map()
+    let counting = false
+    const onNavigated = (frame) => {
+      if (frame === page.mainFrame()) counting = true
+    }
     const onRequest = (request) => {
       if (!['eventsource', 'websocket'].includes(request.resourceType())) pending.add(request)
+      const address = request.url().replace(this.stage.server.url, '')
+      if (
+        counting &&
+        request.method() === 'GET' &&
+        ['fetch', 'xhr'].includes(request.resourceType()) &&
+        address.startsWith('/admin/api/')
+      ) {
+        sent.set(address, (sent.get(address) ?? 0) + 1)
+      }
     }
     const onDone = (request) => pending.delete(request)
+    page.on('framenavigated', onNavigated)
     page.on('request', onRequest)
     page.on('requestfinished', onDone)
     page.on('requestfailed', onDone)
@@ -307,6 +329,7 @@ class Sweep {
         else if (Date.now() - quietSince >= 500) break
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
+      counting = false
       await page.evaluate(() => document.fonts.ready.then(() => undefined))
       // Still: the entrances and transitions under way end first (5 seconds at most), so boxes
       // are measured where they rest. Mid-rise, a 1 px box reads 1.00003 px tall, and its text,
@@ -330,6 +353,7 @@ class Sweep {
     } catch (error) {
       found = [{ kind: 'page', detail: `did not load: ${error.message}` }]
     } finally {
+      page.off('framenavigated', onNavigated)
       page.off('console', onConsole)
       page.off('pageerror', onError)
       page.off('request', onRequest)
@@ -342,6 +366,10 @@ class Sweep {
         kind: 'console',
         detail: `${error.text}${error.source ? ` (${error.source.replace(this.stage.server.url, '')})` : ''}`,
       })
+    }
+    for (const [address, times] of sent) {
+      if (times < 2 || repeatsAllowed.some((allowed) => allowed.path.test(address))) continue
+      found.push({ kind: 'requests', detail: `GET ${address} sent ${times} times while loading` })
     }
     for (const finding of found) this.add({ ...where, url, ...finding })
     if (found.length > 0 && options.shots) await this.shoot(page, where, url, found)
