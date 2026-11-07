@@ -70,7 +70,7 @@ export function SetupKey({ setup }: { setup: TwoStepSetup }) {
       <QrCode rows={setup.qr} label={text.qrLabel} />
       <div className="min-w-0 flex-1 basis-56 space-y-3">
         <p className="max-w-[60ch] text-body text-ink-2">{text.scan}</p>
-        <div className="rounded-field bg-s2 px-5 py-3.5">
+        <div className="rounded-field bg-s2 px-4 py-2.5">
           <p className="text-small text-ink-2">{text.key}</p>
           <code className="figures block font-mono text-lead tracking-wider break-all text-ink select-all">
             {setup.secret.match(/.{1,4}/g)?.join(' ')}
@@ -115,7 +115,7 @@ export function RecoveryCodes({
     <div className="space-y-4">
       <Notice tone="warn">{text.recoveryHelp}</Notice>
       {/* Two columns where a code fits whole in each, one on a narrow screen. */}
-      <ul className="figures grid max-w-[38rem] grid-cols-[repeat(auto-fit,minmax(19ch,1fr))] gap-x-6 gap-y-2 rounded-field bg-s2 px-5 py-4 font-mono text-lead whitespace-nowrap text-ink select-all">
+      <ul className="figures grid max-w-[38rem] grid-cols-[repeat(auto-fit,minmax(19ch,1fr))] gap-x-6 gap-y-1.5 rounded-field bg-s2 px-4 py-3 font-mono text-lead whitespace-nowrap text-ink select-all">
         {codes.map((code) => (
           <li key={code}>{code}</li>
         ))}

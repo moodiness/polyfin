@@ -90,7 +90,7 @@ export function PlexSignInWaiting({ link }: { link: PlexSignIn }) {
   const { t } = useI18n()
   const text = t.account.plexImport
   return (
-    <div className="flex flex-col gap-4 rounded-row bg-s2 px-6 py-5 max-sm:px-4">
+    <div className="flex flex-col gap-3 rounded-row bg-s2 px-4 py-3">
       <p className="text-control text-ink">{text.approve}</p>
       <ExternalButtonLink
         variant="primary"
@@ -173,7 +173,7 @@ export function PlexImportForm({
 
   return (
     <>
-      <div className="flex max-w-[38rem] flex-col gap-5 px-6 py-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-4 px-5 max-md:px-4">
         {header}
         {account === null && link === null && <p className="text-small text-ink-3">{text.help}</p>}
         {link !== null && <PlexSignInWaiting link={link} />}

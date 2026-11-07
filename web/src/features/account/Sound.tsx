@@ -38,7 +38,7 @@ export function OwnSoundOptions() {
   const disabled = followsGroup || save.isPending
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <SettingRow
           kind="switch"
           label={text.boostVolume}

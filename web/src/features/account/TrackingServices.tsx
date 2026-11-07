@@ -95,7 +95,7 @@ export default function TrackingServices() {
     )
   }
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col gap-1.5">
       {tracking.data.services.map((service) => (
         <ServiceRow
           key={service.service}
@@ -345,7 +345,7 @@ function ServiceRow({
     const expiry = relativeTime(code.expiresAt, language, t.time.justNow)
     body = (
       <>
-        <div className="flex flex-col gap-4 rounded-row bg-s2 px-6 py-5 max-sm:px-4">
+        <div className="flex flex-col gap-3 rounded-row bg-s2 px-4 py-3">
           {paste ? (
             <>
               <p className="text-control text-ink">
@@ -378,7 +378,7 @@ function ServiceRow({
               <div className="flex flex-wrap items-center gap-3">
                 <p
                   aria-label={text.codeLabel}
-                  className="rounded-field bg-s3 px-5 py-2 font-mono text-[1.625rem] font-semibold tracking-[0.2em] text-ink select-all"
+                  className="rounded-field bg-s3 px-4 py-1.5 font-mono text-[1.375rem] font-semibold tracking-[0.2em] text-ink select-all"
                 >
                   {code.userCode}
                 </p>
@@ -494,8 +494,8 @@ function ServiceRow({
     <li
       aria-labelledby={headingId}
       className={cx(
-        'grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-4 rounded-row bg-s1 px-6 py-5',
-        'max-sm:grid-cols-[2.5rem_minmax(0,1fr)] max-sm:gap-x-3.5 max-sm:px-4 max-sm:py-[1.125rem]',
+        'grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-start gap-x-3 rounded-row bg-s1 py-2.5 pr-3 pl-4',
+        'max-sm:grid-cols-[2.25rem_minmax(0,1fr)] max-sm:px-3.5',
       )}
     >
       {service.available ? (
@@ -503,7 +503,7 @@ function ServiceRow({
       ) : (
         <span
           aria-hidden="true"
-          className="inline-grid size-10 place-items-center rounded-[0.875rem] bg-s3 text-small font-semibold text-ink-3"
+          className="inline-grid size-9 place-items-center rounded-[0.75rem] bg-s3 text-small font-semibold text-ink-3"
         >
           {monograms[service.service]}
         </span>
@@ -512,24 +512,24 @@ function ServiceRow({
         <h3
           id={headingId}
           className={cx(
-            'flex h-10 items-center text-h3 font-semibold',
+            'flex h-9 items-center text-h3',
             service.available ? 'text-ink' : 'text-ink-2',
           )}
         >
           {name}
         </h3>
-        <p className={cx('-mt-1.5 text-control', service.available ? 'text-ink-2' : 'text-ink-3')}>
+        <p className={cx('-mt-1 text-small', service.available ? 'text-ink-2' : 'text-ink-3')}>
           {sub}
         </p>
       </div>
-      <div className="flex h-10 items-center justify-end gap-1.5 max-sm:col-span-full max-sm:mt-3 max-sm:h-auto max-sm:flex-wrap">
+      <div className="flex h-9 items-center justify-end gap-1.5 max-sm:col-span-full max-sm:mt-2 max-sm:h-auto max-sm:flex-wrap">
         <StatusPill tone={status.tone} icon={status.icon} className="max-sm:mr-auto">
           {status.label}
         </StatusPill>
         {actions}
       </div>
       {body !== null && (
-        <div className="col-start-2 -col-end-1 mt-4 flex min-w-0 flex-col gap-4 max-sm:col-span-full">
+        <div className="col-start-2 -col-end-1 mt-3 flex min-w-0 flex-col gap-3 max-sm:col-span-full">
           {body}
         </div>
       )}
@@ -699,7 +699,7 @@ function HistoryImport({
   const failed = toggle.error ?? now.error
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <SettingRow
           kind="switch"
           nested
@@ -745,7 +745,7 @@ function HistoryImport({
         )}
       </div>
       {importing && (
-        <div className="flex items-center justify-between gap-4 rounded-row bg-s2 px-6 py-5 max-sm:flex-col max-sm:items-start max-sm:px-4">
+        <div className="flex items-center justify-between gap-3 rounded-row bg-s2 px-4 py-3 max-sm:flex-col max-sm:items-start">
           <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
             <ClockCounterClockwiseIcon
               size="1rem"

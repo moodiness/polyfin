@@ -522,7 +522,7 @@ function NewLink({ link, onClose }: { link: NewShareLink; onClose: () => void })
         <Notice tone="warn" live>
           {text.createdNotice(link.item.name)}
         </Notice>
-        <code className="block rounded-field bg-s2 px-5 py-3.5 font-mono text-control break-all text-ink select-all">
+        <code className="block rounded-field bg-s2 px-4 py-2.5 font-mono text-control break-all text-ink select-all">
           {address}
         </code>
         <div aria-live="polite">

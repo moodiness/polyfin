@@ -191,7 +191,7 @@ export default function AccountRoute() {
       nav={<SectionNav label={text.sectionsLabel} current={current} items={items} />}
     >
       <AccountSection id="statistics" title={labels.statistics} help={text.statisticsHelp}>
-        <div className="space-y-10">
+        <div className="space-y-6">
           <StatisticsView scope="own" />
         </div>
       </AccountSection>
@@ -221,8 +221,8 @@ export default function AccountRoute() {
         <OwnTrackChoices />
       </AccountSection>
       {/* Four settings of one row each: the row is the section, its label the heading's
-              words, its help shown while it is lit. */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+              words, its help its caption. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <div id="metadata-language" className={anchorMargin}>
           <OwnMetadataLanguage />
         </div>
@@ -294,7 +294,7 @@ export default function AccountRoute() {
         </AccountSection>
       )}
       <AccountSection id="notifications" title={labels.notifications} help={text.notificationsHelp}>
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-6">
           <NotificationTargets scope="own" />
           <ReminderSettingsForm />
         </div>
@@ -328,16 +328,11 @@ function PersonBand({ user }: { user: SessionUser }) {
   const posterId = watching?.item?.posterId
   const art = posterId && artFailed !== posterId ? posterId : null
   return (
-    <header className="mb-14 flex flex-wrap items-center gap-x-8 gap-y-5 rounded-panel bg-s1 px-8 py-7 max-md:mb-6 max-md:gap-x-5 max-md:rounded-[1.5rem] max-md:px-5 max-md:py-5">
-      <Avatar
-        name={user.name}
-        image={userImageUrl(user)}
-        size="xl"
-        className="max-md:size-16 max-md:text-[1.75rem]"
-      />
+    <header className="mb-7 flex flex-wrap items-center gap-x-5 gap-y-3 rounded-panel bg-s1 px-5 py-4 max-md:mb-6 max-md:gap-x-3.5 max-md:px-4">
+      <Avatar name={user.name} image={userImageUrl(user)} size="xl" />
       <div className="min-w-0 flex-1 basis-60 max-md:basis-40">
-        <h1 className="text-h1 break-words text-ink max-md:text-[2.25rem]">{text.title}</h1>
-        <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-lead text-ink-2 max-md:text-[1.09375rem]">
+        <h1 className="text-h1 break-words text-ink">{text.title}</h1>
+        <p className="mt-1 flex flex-wrap gap-x-3.5 gap-y-1 text-control text-ink-2">
           <span className="min-w-0 break-words">
             {text.signedInAs}
             <span className="font-semibold text-ink">{user.name}</span>
@@ -348,7 +343,7 @@ function PersonBand({ user }: { user: SessionUser }) {
           <WatchingLink session={watching} art={art} onArtError={() => setArtFailed(art)} />
         )}
       </div>
-      <div className="flex max-w-full flex-wrap gap-3">
+      <div className="flex max-w-full flex-wrap gap-2">
         <ResetPreferences />
       </div>
     </header>
@@ -370,11 +365,11 @@ function AccountSection({
   const headingId = useId()
   return (
     <section id={id} aria-labelledby={headingId} className={anchorMargin}>
-      <h2 id={headingId} className="text-group text-ink">
+      <h2 id={headingId} className="text-h2 text-ink">
         {title}
       </h2>
-      <p className="mt-2 max-w-[66ch] text-small text-ink-2">{help}</p>
-      <div className="mt-6 max-md:mt-5">{children}</div>
+      <p className="mt-1 max-w-[72ch] text-small text-ink-2">{help}</p>
+      <div className="mt-3">{children}</div>
     </section>
   )
 }
