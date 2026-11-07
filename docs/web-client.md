@@ -359,7 +359,7 @@ jellyfin-web is free software by the Jellyfin contributors, and a separate progr
 - Its complete source code is attached to every Polyfin release on GitHub as `jellyfin-web-12.4-source.tar.gz`. It is also at <https://github.com/jellyfin/jellyfin-web/tree/v12.4>.
 - The Dockerfile pins both, side by side, to be changed together when jellyfin-web is updated.
 
-The default theme, LumaaGlaass by Om Gupta and Dyhlio, is under the MIT License. Polyfin embeds its files, with two patches, and serves them to the web player (see [LumaaGlaass](themes-and-custom-code.md#lumaaglaass)).
+The default theme, LumaaGlaass by Om Gupta and Dyhlio, is under the MIT License. Polyfin embeds its files, with three patches, and serves them to the web player (see [LumaaGlaass](themes-and-custom-code.md#lumaaglaass)).
 
 - Its license and a notice naming the commit are in `/usr/share/doc/lumaaglaass` (from [`third_party/lumaaglaass`](../third_party/lumaaglaass)).
 - With Polyfin Desktop, they are in `licenses/lumaaglaass`.
