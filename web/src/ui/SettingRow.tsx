@@ -120,6 +120,10 @@ export type SettingRowProps<T extends string | number = string> = Common &
  * where they step, and in an open list. A click on the name or the caption focuses the control.
  * With `saved`, a changed row keeps a dot, "was 0" and its value in the link color. Rows go 6 px
  * apart (`grid grid-cols-[minmax(0,1fr)] gap-1.5`).
+ *
+ * A `disabled` row is an inactive control (`data-inactive`), dimmed as WCAG allows for one: its
+ * fill, and the inks of its name, help and children (`inactive`), its control as a whole. Its
+ * More, links and buttons, which still work, and its error keep their full contrast.
  */
 export function SettingRow<T extends string | number = string>(props: SettingRowProps<T>) {
   const {
@@ -183,7 +187,10 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
   const mark = changed && (
     <span
       aria-hidden="true"
-      className="absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-link"
+      className={cx(
+        'absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-link',
+        disabled && 'opacity-60',
+      )}
     />
   )
 
@@ -191,17 +198,20 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
     <div
       ref={row}
       id={anchor}
+      data-inactive={disabled || undefined}
       onKeyDownCapture={onKeyDownCapture}
       onKeyDown={onKeyDown}
       className={cx(
         'relative min-w-0 scroll-mt-32 rounded-row transition-[background-color,box-shadow] duration-350 ease-nuit',
         'data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
+        // The fill an inactive row had as a whole at 60 %.
         nested
-          ? cx('bg-s2 [--lit-fill:var(--color-s3)]', !disabled && 'hover:bg-s4')
-          : cx('bg-s1', !disabled && 'hover:bg-s2'),
+          ? cx('[--lit-fill:var(--color-s3)]', disabled ? 'bg-s2/60' : 'bg-s2 hover:bg-s4')
+          : disabled
+            ? 'bg-s1/60'
+            : 'bg-s1 hover:bg-s2',
         // Lit while the keyboard or the mouse is in its control, or its list is open.
         'focus-within:lit-row has-[[aria-expanded=true]]:lit-row',
-        disabled && 'opacity-60',
         className,
       )}
     >
@@ -214,11 +224,22 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
         )}
       >
         <div className="min-w-0 flex-[1_1_14rem]">
-          <span id={labelId} className="block text-h3 hyphenate text-ink">
+          <span
+            id={labelId}
+            className={cx('block text-h3 hyphenate text-ink', disabled && 'inactive')}
+          >
             {label}
           </span>
-          {detail !== undefined && <span className="block text-small text-ink-2">{detail}</span>}
-          {help !== undefined && <SettingHelp id={helpId}>{help}</SettingHelp>}
+          {detail !== undefined && (
+            <span className={cx('block text-small text-ink-2', disabled && 'inactive')}>
+              {detail}
+            </span>
+          )}
+          {help !== undefined && (
+            <SettingHelp id={helpId} dimmed={disabled}>
+              {help}
+            </SettingHelp>
+          )}
         </div>
         <div
           className={cx(
@@ -226,6 +247,7 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
             below && 'basis-full justify-start',
             // A changed value is written in the link color, as the dot.
             changed && '[&_[role=combobox]]:text-link [&_input]:text-link',
+            disabled && 'opacity-60',
           )}
         >
           {changed && (
@@ -246,7 +268,11 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       )}
-      {children !== undefined && <div className="px-4 pb-3 text-small text-ink-2">{children}</div>}
+      {children !== undefined && (
+        <div className={cx('px-4 pb-3 text-small text-ink-2', disabled && 'inactive')}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
@@ -254,15 +280,18 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
 /**
  * A setting's help under its name (a SettingRow's, an OpenRow's): a muted caption, two lines at
  * most, with More at the end of a longer one to read the rest. Screen readers read it whole. A
- * list row's caption (a scheduled task's description) takes `lines={1}`.
+ * list row's caption (a scheduled task's description) takes `lines={1}`. `dimmed`, in an
+ * inactive row, dims the caption but never More.
  */
 export function SettingHelp({
   id,
   lines = 2,
+  dimmed = false,
   children,
 }: {
   id: string | undefined
   lines?: 1 | 2
+  dimmed?: boolean
   children: ReactNode
 }) {
   const { t } = useI18n()
@@ -282,7 +311,12 @@ export function SettingHelp({
   }, [open])
 
   return (
-    <div className="mt-0.5 flex max-w-[72ch] items-end gap-2 text-small text-ink-3">
+    <div
+      className={cx(
+        'mt-0.5 flex max-w-[72ch] items-end gap-2 text-small text-ink-3',
+        dimmed && 'inactive',
+      )}
+    >
       <p
         id={id}
         ref={text}
