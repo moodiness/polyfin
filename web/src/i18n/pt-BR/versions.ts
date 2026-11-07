@@ -55,6 +55,8 @@ const versions: typeof en = {
       asked: 'Sendo perguntada',
     },
     embedded: 'Na descrição do título',
+    embeddedSource: (source: string) => `${source}, na descrição do título`,
+    repeatedSource: (name: string, place: number) => `${name} (${place})`,
     noStreams: 'Não listou nenhum stream.',
     noSources: 'Nenhum complemento lista streams para este título.',
     steps: {

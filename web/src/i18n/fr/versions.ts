@@ -54,6 +54,8 @@ const versions: typeof en = {
       asked: 'En cours de demande',
     },
     embedded: 'Dans la description du titre',
+    embeddedSource: (source: string) => `${source}, dans la description du titre`,
+    repeatedSource: (name: string, place: number) => `${name} (${place})`,
     noStreams: 'N’a listé aucun flux.',
     noSources: 'Aucun addon ne liste de flux pour ce titre.',
     steps: {
