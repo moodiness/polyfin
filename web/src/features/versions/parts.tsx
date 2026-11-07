@@ -40,7 +40,7 @@ export function UserPicker({ user, onUser }: { user: string; onUser: (user: stri
       .map((other) => ({ value: other.id, label: other.name })),
   ]
   return (
-    <Field label={t.versions.asUser} help={t.versions.asUserHelp} className="max-w-[28.5rem]">
+    <Field label={t.versions.asUser} help={t.versions.asUserHelp} className="max-w-[24rem]">
       <Select value={user} options={options} onValue={onUser} />
     </Field>
   )

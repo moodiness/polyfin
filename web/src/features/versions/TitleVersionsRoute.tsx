@@ -140,9 +140,9 @@ function Explained({
     )
     .join(', ')
   return (
-    <div className="flex flex-col gap-block max-md:gap-11">
+    <div className="flex flex-col gap-block">
       <Block title={text.order}>
-        <div className="flex max-w-[72ch] flex-col gap-2 text-body text-ink-2">
+        <div className="flex max-w-[72ch] flex-col gap-1.5 text-body text-ink-2">
           <p>{criteria === '' ? text.orderNone : text.orderBy(criteria)}</p>
           {explained.qualityGroup > 0 && <p>{text.group(explained.qualityGroup)}</p>}
           {explained.keptAll && <Notice tone="info">{text.keptAll}</Notice>}
@@ -159,7 +159,7 @@ function Explained({
         {explained.sources.length === 0 ? (
           <EmptyState title={text.noSources} />
         ) : (
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-5">
             {explained.sources.map((source) => (
               <SourceStreams
                 key={`${source.id}-${source.embedded}`}
@@ -565,7 +565,7 @@ function BlockModal({
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-6 px-8 pb-6 max-sm:px-5">
+      <form id={formId} onSubmit={submit} noValidate className="space-y-4 px-5 pb-5">
         <p className="text-body break-words text-ink">{stream.name || stream.filename}</p>
         <Field label={text.blockScope} help={text.scopeHelp}>
           <Segmented
@@ -651,7 +651,7 @@ function Decisions({ explained }: { explained: TitleVersions }) {
   const text = t.versions
   return (
     <Block title={text.decisions} count={explained.decisions.length}>
-      <p className="mb-5 max-w-[72ch] text-small text-ink-2">{text.decisionsHelp}</p>
+      <p className="mb-3 max-w-[72ch] text-small text-ink-2">{text.decisionsHelp}</p>
       {explained.decisions.length === 0 ? (
         <EmptyState title={text.noDecisions} />
       ) : (
