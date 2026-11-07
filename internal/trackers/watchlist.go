@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
@@ -180,21 +181,29 @@ func (r *reader) readSimklWatchlist(ctx context.Context) (watchlistRead, error) 
 // mergeWatchlist finds the titles of list and saves them as the
 // connection's watchlist, counting what it adds and what it does not find.
 // Of the titles found for one entry, one an anime catalog lists counts
-// only when nothing else was found, as in the history.
-func (s *Service) mergeWatchlist(ctx context.Context, r *reader, list watchlistRead, result *ImportResult) error {
+// only when nothing else was found, as in the history. The titles linked
+// by hand are named by their links. It returns what the import keeps of
+// the titles it did not find; those no mapping knows are only counted.
+func (s *Service) mergeWatchlist(ctx context.Context, r *reader, list watchlistRead, linked importlinks.Linked,
+	result *ImportResult) ([]importlinks.Entry, error) {
+	listName := watchlist.Tracking(r.key.service)
 	refs := make([]library.TitleRef, len(list.entries))
+	entries := make([]importlinks.Entry, len(list.entries))
 	for i, e := range list.entries {
-		refs[i] = e.ref
+		refs[i], entries[i] = keptTitle(linked, e.ref, nil)
+		entries[i].Watchlist, entries[i].AddedAt = listName, e.at
 	}
 	targets, err := s.resolve(ctx, r, refs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var titles []watchlist.Title
+	var kept []importlinks.Entry
 	unmapped := map[library.TitleRef]bool{}
 	for i, e := range list.entries {
 		if len(targets[i]) == 0 {
-			unmapped[e.ref] = true
+			unmapped[refs[i]] = true
+			kept = append(kept, entries[i])
 		}
 		for _, t := range targets[i] {
 			if !counts(targets[i], t) {
@@ -208,6 +217,6 @@ func (s *Service) mergeWatchlist(ctx context.Context, r *reader, list watchlistR
 		}
 	}
 	result.Unmapped += len(unmapped) + list.unknown
-	result.Watchlist, err = s.watchlist.Save(ctx, r.key.user, watchlist.Tracking(r.key.service), titles, list.whole)
-	return err
+	result.Watchlist, err = s.watchlist.Save(ctx, r.key.user, listName, titles, list.whole)
+	return kept, err
 }

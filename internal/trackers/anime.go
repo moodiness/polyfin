@@ -7,6 +7,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/anime"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -165,6 +166,59 @@ func (e animeEntry) ref(a animeJSON, movie bool, season, number int) (library.Ti
 	return library.TitleRef{}, false
 }
 
+// title names the anime a as ref does, or, when no mapping knows it, as
+// unmappedAnime does, the ref then empty.
+func (e animeEntry) title(a animeJSON, movie bool, season, number int) (library.TitleRef, *unmappedTitle) {
+	if ref, ok := e.ref(a, movie, season, number); ok {
+		return ref, nil
+	}
+	u := unmappedAnime(a, movie, season, number)
+	return library.TitleRef{}, &u
+}
+
+// unmappedAnime names the anime a no mapping knows, the movie it is when
+// movie, else its episode number of season, by the entry its list names
+// it by, or by its title when the list gives no identifier: kept by the
+// import, a user may link it by hand. Neither given, its key is empty.
+func unmappedAnime(a animeJSON, movie bool, season, number int) unmappedTitle {
+	label := importlinks.Label{Kind: importlinks.KindMovie, Name: strings.TrimSpace(a.Title)}
+	if !movie {
+		label.Kind, label.Season, label.Episode = importlinks.KindEpisode, season, number
+	}
+	source, id, ok := a.IDs.entry()
+	switch {
+	case ok:
+		label.IDs = string(source) + ":" + strconv.Itoa(id)
+		return unmappedTitle{key: importlinks.Key("anime", string(source), strconv.Itoa(id)), label: label}
+	case label.Name != "":
+		return unmappedTitle{key: importlinks.Key("anime", "title", label.Name), label: label}
+	}
+	return unmappedTitle{label: label}
+}
+
+// animeRefEntry names, as unmappedAnime does, the anime entry ref names by
+// its anime catalogs' identifiers only: an episode as the entry numbers
+// it, in its first season. Without those identifiers, its key is empty.
+func animeRefEntry(ref library.TitleRef) (string, importlinks.Label) {
+	label := importlinks.Label{Kind: importlinks.KindMovie, Name: ref.Name}
+	switch {
+	case ref.Episode:
+		label.Kind, label.Season, label.Episode = importlinks.KindEpisode, 1, ref.Anime.Episode
+	case ref.Series:
+		label.Kind = importlinks.KindSeries
+	}
+	for _, id := range []struct {
+		source anime.Source
+		id     int
+	}{{anime.AniDB, ref.Anime.AniDB}, {anime.MyAnimeList, ref.Anime.MyAnimeList}, {anime.Kitsu, ref.Anime.Kitsu}} {
+		if id.id > 0 {
+			label.IDs = string(id.source) + ":" + strconv.Itoa(id.id)
+			return importlinks.Key("anime", string(id.source), strconv.Itoa(id.id)), label
+		}
+	}
+	return "", label
+}
+
 // listed is the entry ids and the mapping name, as anime catalogs list
 // it: by the identifiers Simkl gives, else those the mapping knows.
 func (e animeEntry) listed(ids animeIDsJSON, source anime.Source, id int) library.AnimeRef {
@@ -206,9 +260,8 @@ func (h *watchHistory) addAnime(e animeEntry, items []simklAnime) {
 		}
 		a.AnimeType = cmpOr(a.AnimeType, item.AnimeType)
 		if strings.EqualFold(a.AnimeType, "movie") {
-			if ref, ok := e.ref(*a, true, 1, 1); ok {
-				h.watched = append(h.watched, watchedEntry{ref: ref, at: date(item.LastWatchedAt)})
-			}
+			ref, unmapped := e.title(*a, true, 1, 1)
+			h.watched = append(h.watched, watchedEntry{ref: ref, at: date(item.LastWatchedAt), unmapped: unmapped})
 			continue
 		}
 		for _, season := range item.Seasons {
@@ -216,9 +269,8 @@ func (h *watchHistory) addAnime(e animeEntry, items []simklAnime) {
 				if episode.Number <= 0 {
 					continue
 				}
-				if ref, ok := e.ref(*a, false, season.Number, episode.Number); ok {
-					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.WatchedAt)})
-				}
+				ref, unmapped := e.title(*a, false, season.Number, episode.Number)
+				h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.WatchedAt), unmapped: unmapped})
 			}
 		}
 	}
@@ -257,9 +309,8 @@ func (h *watchHistory) addAnimePlayback(e animeEntry, items []animePlaybackJSON)
 				continue
 			}
 		}
-		if ref, ok := e.ref(*item.Anime, movie, season, number); ok {
-			h.resumes = append(h.resumes, resumeEntry{ref: ref, percent: float64(item.Progress), at: *at})
-		}
+		ref, unmapped := e.title(*item.Anime, movie, season, number)
+		h.resumes = append(h.resumes, resumeEntry{ref: ref, percent: float64(item.Progress), at: *at, unmapped: unmapped})
 	}
 }
 

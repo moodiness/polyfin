@@ -225,19 +225,16 @@ func (r *reader) readAnimeHistory(ctx context.Context) (watchHistory, string, er
 		a := r.animeOf(item)
 		if item.movie {
 			if item.status == statusCompleted || item.status == statusRepeating {
-				if ref, ok := mapping.ref(a, true, 1, 1); ok {
-					h.watched = append(h.watched, watchedEntry{ref: ref, at: at})
-				}
+				ref, unmapped := mapping.title(a, true, 1, 1)
+				h.watched = append(h.watched, watchedEntry{ref: ref, at: at, unmapped: unmapped})
 			}
 			continue
 		}
 		for n := 1; n <= min(last, maxEntryEpisodes); n++ {
-			if ref, ok := mapping.ref(a, false, 1, n); ok {
-				h.watched = append(h.watched, watchedEntry{ref: ref, at: at})
-			}
+			ref, unmapped := mapping.title(a, false, 1, n)
+			h.watched = append(h.watched, watchedEntry{ref: ref, at: at, unmapped: unmapped})
 		}
 	}
-	h.unknown = mapping.unknown
 	return h, "", nil
 }
 

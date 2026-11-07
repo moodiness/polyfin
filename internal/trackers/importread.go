@@ -506,7 +506,6 @@ func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, st
 		h.addAnimePlayback(mapping, playbacks)
 		animeAt = all
 	}
-	h.unknown = mapping.unknown
 	next := all
 	if all != "" {
 		next = all + "|" + animeAt

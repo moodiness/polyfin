@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -287,28 +288,38 @@ func (s *Service) importDue() {
 }
 
 // watchedEntry is a title a history says the user watched, at a date when
-// it gives one.
+// it gives one. A title no mapping knows has no ref, but unmapped.
 type watchedEntry struct {
-	ref library.TitleRef
-	at  *time.Time
+	ref      library.TitleRef
+	at       *time.Time
+	unmapped *unmappedTitle
 }
 
 // resumeEntry is a resume point a service keeps: at Percent of the title,
-// or at Position of Runtime when the service tells them, set at At.
+// or at Position of Runtime when the service tells them, set at At. A
+// title no mapping knows has no ref, but unmapped.
 type resumeEntry struct {
 	ref               library.TitleRef
 	percent           float64
 	position, runtime time.Duration
 	at                time.Time
+	unmapped          *unmappedTitle
+}
+
+// unmappedTitle is a title a history names that no mapping knows, which
+// counts as not found: its entry key, empty when nothing names it the
+// same way from one import to the next, and its label (see package
+// importlinks).
+type unmappedTitle struct {
+	key   string
+	label importlinks.Label
 }
 
 // history is what an import read of a service: what it watched and its
-// resume points, and the titles it names that no mapping knows, which
-// count as not found.
+// resume points.
 type watchHistory struct {
 	watched []watchedEntry
 	resumes []resumeEntry
-	unknown map[string]bool
 }
 
 // runImport imports the watch history of key, and its watchlist, as
@@ -361,9 +372,19 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		s.logger.Info("A watch history could not be read whole: what was read is imported", "user_id", key.user.String(),
 			"service", key.service, "problem", result.Problem)
 	}
-	err = s.merge(ctx, r, read, &result)
+	// The titles linked by hand are named by their links.
+	var linked importlinks.Linked
+	if s.links != nil {
+		linked, err = s.links.Linked(ctx, key.user, key.service)
+	}
+	var kept []importlinks.Entry
+	if err == nil {
+		kept, err = s.merge(ctx, r, read, linked, &result)
+	}
 	if err == nil && list && watchlists(key.service) {
-		err = s.mergeWatchlist(ctx, r, listed, &result)
+		var listKept []importlinks.Entry
+		listKept, err = s.mergeWatchlist(ctx, r, listed, linked, &result)
+		kept = append(kept, listKept...)
 	}
 	if err == nil && ratings && readErr == nil {
 		err = s.mergeRatings(ctx, r, &result)
@@ -374,6 +395,15 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 			s.logger.Warn("A watch history could not be imported", "service", key.service, "error", err)
 		}
 		return
+	}
+	if s.links != nil {
+		// A history read from no cursor and without a problem was read
+		// whole: what it no longer holds leaves the titles kept. Else what
+		// was read adds to them.
+		whole := history && cursor == "" && readErr == nil
+		if err := s.links.Save(ctx, key.user, key.service, kept, whole); err != nil && ctx.Err() == nil {
+			s.logger.Warn("The titles a watch history import did not find could not be kept", "service", key.service, "error", err)
+		}
 	}
 	metrics.Imported(key.service, result.Problem == "")
 	result.At = s.now().UTC()
@@ -428,27 +458,98 @@ func counts(found []library.TitleTarget, t library.TitleTarget) bool {
 	return !t.Anime || !slices.ContainsFunc(found, func(o library.TitleTarget) bool { return !o.Anime })
 }
 
+// The reasons the imports keep the titles they did not find for (see
+// importlinks.Entry): identifiers no title has, and titles no mapping
+// knows.
+const (
+	reasonNotFound  = "not_found"
+	reasonNotMapped = "not_mapped"
+)
+
+// keptTitle names the title ref names, or unmapped when no mapping knows
+// it, as the import resolves it: by its link when it was linked by hand
+// (see importlinks.Linked). It also returns what the import keeps of it
+// when it does not find it, but for what it would bring. An episode
+// numbered absolutely is not kept, as no season and number place it, but
+// its series' link names it.
+func keptTitle(linked importlinks.Linked, ref library.TitleRef, unmapped *unmappedTitle) (library.TitleRef, importlinks.Entry) {
+	e := importlinks.Entry{Reason: reasonNotFound}
+	switch key := importlinks.RefKey(ref); {
+	case unmapped != nil:
+		e.Key, e.Label, e.Reason = unmapped.key, unmapped.label, reasonNotMapped
+	case key == "" && ref.Anime != (library.AnimeRef{}):
+		e.Key, e.Label = animeRefEntry(ref)
+	default:
+		e.Key, e.Label = key, refLabel(ref)
+	}
+	named := ref
+	if to, ok := linked.Ref(e.Key, e.Label); ok {
+		named = to
+		named.Absolute = ref.Absolute
+	}
+	if ref.Absolute {
+		e.Key = ""
+	}
+	return named, e
+}
+
+// refLabel describes the title ref names to the user.
+func refLabel(ref library.TitleRef) importlinks.Label {
+	label := importlinks.Label{Kind: importlinks.KindMovie, Name: ref.Name, IDs: importlinks.RefIDs(ref)}
+	switch {
+	case ref.Episode:
+		label.Kind, label.Season, label.Episode = importlinks.KindEpisode, ref.Season, ref.Number
+	case ref.Series:
+		label.Kind = importlinks.KindSeries
+	}
+	return label
+}
+
 // merge finds the titles of h and adds them to the user's data: played
-// marks, then resume points of the titles still unplayed.
-func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *ImportResult) error {
+// marks, then resume points of the titles still unplayed. The titles
+// linked by hand are named by their links. It returns what the import
+// keeps of the titles it did not find.
+func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, linked importlinks.Linked,
+	result *ImportResult) ([]importlinks.Entry, error) {
 	key := r.key
 	refs := make([]library.TitleRef, 0, len(h.watched)+len(h.resumes))
+	entries := make([]importlinks.Entry, 0, len(h.watched)+len(h.resumes))
 	for _, w := range h.watched {
-		refs = append(refs, w.ref)
+		ref, e := keptTitle(linked, w.ref, w.unmapped)
+		e.Played, e.PlayedAt = true, w.at
+		refs, entries = append(refs, ref), append(entries, e)
 	}
 	for _, point := range h.resumes {
-		refs = append(refs, point.ref)
+		ref, e := keptTitle(linked, point.ref, point.unmapped)
+		e.Resume = &userdata.ImportedResume{Percent: point.percent, Position: point.position, Runtime: point.runtime, At: point.at}
+		refs, entries = append(refs, ref), append(entries, e)
 	}
 	targets, err := s.resolve(ctx, r, refs)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	// The titles not found count once each: by their refs, and those no
+	// mapping knows by what names them and their place in their series.
 	unmapped := map[library.TitleRef]bool{}
+	unknown := map[unmappedTitle]bool{}
+	var kept []importlinks.Entry
+	notFound := func(i int, u *unmappedTitle) {
+		if u != nil && refs[i] == (library.TitleRef{}) {
+			counted := unmappedTitle{key: u.key, label: importlinks.Label{Kind: u.label.Kind, Season: u.label.Season, Episode: u.label.Episode}}
+			if u.key == "" {
+				counted.label.Name = u.label.Name
+			}
+			unknown[counted] = true
+		} else {
+			unmapped[refs[i]] = true
+		}
+		kept = append(kept, entries[i])
+	}
 	marks := map[accounts.ID]*played{}
 	var markOrder []accounts.ID
 	for i, w := range h.watched {
 		if len(targets[i]) == 0 {
-			unmapped[w.ref] = true
+			notFound(i, w.unmapped)
 		}
 		for _, t := range targets[i] {
 			item := userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season}
@@ -469,7 +570,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 	for i, r := range h.resumes {
 		found := targets[len(h.watched)+i]
 		if len(found) == 0 {
-			unmapped[r.ref] = true
+			notFound(len(h.watched)+i, r.unmapped)
 		}
 		for _, t := range found {
 			if p := points[t.ID]; p != nil && !r.at.After(p.At) {
@@ -486,7 +587,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 				ImportedResume: userdata.ImportedResume{Percent: r.percent, Position: r.position, Runtime: runtime, At: r.at}}
 		}
 	}
-	result.Unmapped = len(unmapped) + len(h.unknown)
+	result.Unmapped = len(unmapped) + len(unknown)
 
 	for batch := range chunks(markOrder) {
 		items := make([]userdata.Item, 0, len(batch))
@@ -498,7 +599,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 				result.Played++
 			}
 		}); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	settings := s.settings()
@@ -521,10 +622,10 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 				}
 			}
 		}); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return kept, nil
 }
 
 // chunks yields ids importBatch at a time.
@@ -538,10 +639,29 @@ func chunks(ids []accounts.ID) func(func([]accounts.ID) bool) {
 	}
 }
 
-// resolve finds the items of refs. PublicMetaDB names titles by their
-// TMDB identifier only: those Polyfin does not know by it are looked up
-// by the IMDb identifier PublicMetaDB maps them to.
+// resolve finds the items of refs, none of an empty ref (a title no
+// mapping knows). PublicMetaDB names titles by their TMDB identifier
+// only: those Polyfin does not know by it are looked up by the IMDb
+// identifier PublicMetaDB maps them to.
 func (s *Service) resolve(ctx context.Context, r *reader, refs []library.TitleRef) ([][]library.TitleTarget, error) {
+	if slices.Contains(refs, library.TitleRef{}) {
+		var named []library.TitleRef
+		var at []int
+		for i, ref := range refs {
+			if ref != (library.TitleRef{}) {
+				named, at = append(named, ref), append(at, i)
+			}
+		}
+		found, err := s.resolve(ctx, r, named)
+		if err != nil {
+			return nil, err
+		}
+		targets := make([][]library.TitleTarget, len(refs))
+		for j, i := range at {
+			targets[i] = found[j]
+		}
+		return targets, nil
+	}
 	targets, err := s.titles.Resolve(ctx, refs)
 	if err != nil || r.key.service != PublicMetaDB {
 		return targets, err
