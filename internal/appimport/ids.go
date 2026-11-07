@@ -1,6 +1,7 @@
 package appimport
 
 import (
+	"cmp"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,10 +16,10 @@ var imdbID = regexp.MustCompile(`^tt\d+$`)
 // id, the identifier of a movie or series as metadata addons give it, and
 // for an episode its season and episode numbers (episode zero names the
 // title itself). Apps name titles by IMDb ("tt…"), TMDB ("tmdb:…") and
-// Kitsu ("kitsu:…") identifiers, the last found through the anime
-// mapping, and as anime catalogs list the entry; an episode of a Kitsu
-// entry is numbered in the entry. It reports false for other identifiers:
-// the entry is then unmatched (see Identified).
+// anime ("kitsu:…", "mal:…", "anidb:…") identifiers, the last found
+// through the anime mapping, and as anime catalogs list the entry; an
+// episode of an anime entry is numbered in the entry. It reports false
+// for other identifiers: the entry is then unmatched (see Identified).
 func TitleRef(mapping *anime.Service, id string, movie bool, season, episode int) (library.TitleRef, bool) {
 	ref := library.TitleRef{Episode: !movie && episode > 0, Series: !movie && episode <= 0}
 	if ref.Episode {
@@ -37,19 +38,20 @@ func TitleRef(mapping *anime.Service, id string, movie bool, season, episode int
 		return ref, true
 	}
 	source, entry, _, ok := anime.StremioID(id)
-	if !ok || source != anime.Kitsu {
+	if !ok {
 		return library.TitleRef{}, false
 	}
-	return kitsuRef(mapping, entry, movie, episode), true
+	return animeRef(mapping, source, entry, movie, episode), true
 }
 
-// kitsuRef names the Kitsu entry, or its episode number when not zero: by
-// the identifiers and numbering of Polyfin's titles that the mapping
-// gives, when it knows the entry, and as anime catalogs list it, by its
-// Kitsu identifier and those the mapping completes.
-func kitsuRef(mapping *anime.Service, entry int, movie bool, episode int) library.TitleRef {
+// animeRef names the anime entry source identifies as entry, or its
+// episode number when not zero: by the identifiers and numbering of
+// Polyfin's titles that the mapping gives, when it knows the entry, and
+// as anime catalogs list it, by its identifier and those the mapping
+// completes.
+func animeRef(mapping *anime.Service, source anime.Source, entry int, movie bool, episode int) library.TitleRef {
 	ref := library.TitleRef{Episode: !movie && episode > 0, Series: !movie && episode <= 0}
-	if mapped, ok := mapping.Title(anime.Kitsu, entry, false, episode, movie); ok {
+	if mapped, ok := mapping.Title(source, entry, false, episode, movie); ok {
 		switch {
 		case mapped.Movie:
 			ref = library.TitleRef{IMDb: mapped.IMDb, TMDB: mapped.TMDB}
@@ -60,9 +62,19 @@ func kitsuRef(mapping *anime.Service, entry int, movie bool, episode int) librar
 			ref = library.TitleRef{Series: true, IMDb: mapped.IMDb, TVDB: mapped.TVDB}
 		}
 	}
-	listed := library.AnimeRef{Kitsu: entry}
-	if found := mapping.IDs(anime.Kitsu, strconv.Itoa(entry)); len(found) > 0 {
-		listed.MyAnimeList, listed.AniDB = found[0].MyAnimeList, found[0].AniDB
+	var listed library.AnimeRef
+	switch source {
+	case anime.Kitsu:
+		listed.Kitsu = entry
+	case anime.MyAnimeList:
+		listed.MyAnimeList = entry
+	case anime.AniDB:
+		listed.AniDB = entry
+	}
+	if found := mapping.IDs(source, strconv.Itoa(entry)); len(found) > 0 {
+		listed.Kitsu = cmp.Or(listed.Kitsu, found[0].Kitsu)
+		listed.MyAnimeList = cmp.Or(listed.MyAnimeList, found[0].MyAnimeList)
+		listed.AniDB = cmp.Or(listed.AniDB, found[0].AniDB)
 	}
 	if ref.Episode {
 		listed.Episode = episode

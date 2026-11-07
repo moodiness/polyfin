@@ -9,6 +9,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 func TestResolveFindsTitlesByAnyOfTheirIdentifiers(t *testing.T) {
@@ -435,5 +436,144 @@ func TestResolveLeavesUnfoundWhatNoAddonDescribes(t *testing.T) {
 	}
 	if _, err := e.service.load(t.Context(), itemID("movie|tmdb:1483614")); err == nil {
 		t.Error("an undescribed title was recorded")
+	}
+}
+
+// tmdbFallbackEnv is an env whose server has a TMDB key when key is not
+// empty, TMDB being f: it gives the IMDb identifiers of movie 700 and
+// series 800, none for movie 701, and that of movie 702, which a catalog
+// listed by its IMDb identifier only. An addon describes the movie
+// "tmdb:703", without an IMDb identifier, and a catalog listed the movie
+// "tmdb:550".
+func tmdbFallbackEnv(t *testing.T, key string) (env, *fakeCreditsTMDB) {
+	t.Helper()
+	e := newEnv(t)
+	f := newFakeCreditsTMDB(t)
+	e.service.UseTMDB(tmdb.New(f.URL+"/3", f.URL+"/img/", "test", e.users.Settings))
+	e.setting(func(s *accounts.Settings) { s.TMDBKey = key })
+	f.answers["/movie/700/external_ids"] = map[string]any{"imdb_id": "tt0700000"}
+	f.answers["/tv/800/external_ids"] = map[string]any{"imdb_id": "tt0800000"}
+	f.answers["/movie/701/external_ids"] = map[string]any{"imdb_id": nil}
+	f.answers["/movie/702/external_ids"] = map[string]any{"imdb_id": "tt0702000"}
+	e.install(addons.Shared(), &fakeAddon{
+		manifest: stremio.Manifest{ID: "tmdb", Name: "By TMDB", Version: "1", Types: []string{"movie", "series"},
+			Resources: []stremio.Resource{{Name: "meta"}}, IDPrefixes: []string{"tmdb:"}},
+		metas: map[string]stremio.Meta{"movie/tmdb:703": {ID: "tmdb:703", Type: "movie", Name: "Described by an addon"}},
+	})
+	listed := []stremio.Meta{{ID: "tt0702000", Type: "movie", Name: "Listed by IMDb"}, {ID: "tmdb:550", Type: "movie", Name: "Listed by TMDB"}}
+	for _, meta := range listed {
+		if err := e.service.save(t.Context(), []record{{ID: itemID(titleKey(KindMovie, meta.ID)), Key: titleKey(KindMovie, meta.ID), Kind: KindMovie,
+			Meta: &meta}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return e, f
+}
+
+// tmdbFallbackRefs are the refs tmdbFallbackEnv's tests resolve.
+var tmdbFallbackRefs = []TitleRef{
+	{TMDB: 700, Name: "Found by TMDB"},               // TMDB gives its IMDb identifier
+	{Episode: true, TMDB: 800, Season: 1, Number: 2}, // and its series'
+	{TMDB: 701}, // TMDB gives none
+	{TMDB: 702}, // listed by the IMDb identifier TMDB gives
+	{TMDB: 550}, // listed: TMDB is not asked
+	{TMDB: 703}, // described by an addon: TMDB is not asked
+	{TMDB: 700}, // asked once
+}
+
+func TestResolveAsksTMDBForTheIMDbIdentifierOfTitlesNothingElseFinds(t *testing.T) {
+	t.Parallel()
+	e, f := tmdbFallbackEnv(t, "k3y")
+	want := [][]TitleTarget{
+		{{ID: itemID("movie|tt0700000")}},
+		{{ID: itemID("episode|tt0800000:1:2"), Series: itemID("series|tt0800000"), Season: itemID("season|tt0800000|1"), SeasonNumber: 1, Number: 2}},
+		nil,
+		{{ID: itemID("movie|tt0702000")}},
+		{{ID: itemID("movie|tmdb:550")}},
+		{{ID: itemID("movie|tmdb:703")}},
+		{{ID: itemID("movie|tt0700000")}},
+	}
+	check := func(when string, got [][]TitleTarget, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range want {
+			if len(got[i]) != len(want[i]) || len(want[i]) > 0 && got[i][0] != want[i][0] {
+				t.Errorf("%s, %+v: %+v, want %+v", when, tmdbFallbackRefs[i], got[i], want[i])
+			}
+		}
+	}
+	asked := func(when string, want int) {
+		t.Helper()
+		for _, path := range []string{"/3/movie/700/external_ids", "/3/tv/800/external_ids", "/3/movie/701/external_ids", "/3/movie/702/external_ids"} {
+			if got := len(f.requests(path)); got != want {
+				t.Errorf("%s: %s asked %d times, want %d", when, path, got, want)
+			}
+		}
+		if got := len(f.requests("/")); got != 4*want {
+			t.Errorf("%s: TMDB was asked %v", when, f.requests("/"))
+		}
+	}
+	got, err := e.service.Resolve(t.Context(), tmdbFallbackRefs)
+	check("first", got, err)
+	asked("first", 1)
+
+	// The titles found are recorded as those of an IMDb identifier, with
+	// the ref's name and TMDB identifier.
+	if r, err := e.service.load(t.Context(), itemID("movie|tt0700000")); err != nil || r.Meta == nil || r.Meta.ID != "tt0700000" ||
+		r.Meta.Name != "Found by TMDB" || r.Meta.ImdbID != "tt0700000" || r.Meta.TmdbID != "700" {
+		t.Errorf("record of tt0700000: %+v %v", r.Meta, err)
+	}
+	if r, err := e.service.load(t.Context(), itemID("episode|tt0800000:1:2")); err != nil || r.SeriesID != "tt0800000" || r.Video == nil ||
+		r.Video.ID != "tt0800000:1:2" {
+		t.Errorf("episode recorded: %+v %v", r, err)
+	}
+	if _, err := e.service.load(t.Context(), itemID("movie|tmdb:701")); err == nil {
+		t.Error("a title TMDB gives no IMDb identifier for was recorded")
+	}
+
+	// After a restart, with TMDB's answers it kept in memory gone and the
+	// record of movie 700 too, TMDB is not asked again: its answers, found
+	// or not, are kept.
+	if _, err := e.service.db.Exec(t.Context(), "DELETE FROM items WHERE key = 'movie|tt0700000'"); err != nil {
+		t.Fatal(err)
+	}
+	restarted := e.restarted()
+	restarted.service.UseTMDB(tmdb.New(f.URL+"/3", f.URL+"/img/", "test", e.users.Settings))
+	got, err = restarted.service.Resolve(t.Context(), tmdbFallbackRefs)
+	check("after a restart", got, err)
+	asked("after a restart", 1)
+
+	// A month later, TMDB is asked again for the title it gave none for.
+	restarted.service.SetClock(func() time.Time { return time.Now().Add(titleIMDbFresh + time.Hour) })
+	f.mu.Lock()
+	f.answers["/movie/701/external_ids"] = map[string]any{"imdb_id": "tt0701000"}
+	f.mu.Unlock()
+	restarted.service.UseTMDB(tmdb.New(f.URL+"/3", f.URL+"/img/", "test", e.users.Settings))
+	got, err = restarted.service.Resolve(t.Context(), tmdbFallbackRefs[2:3])
+	if err != nil || len(got[0]) != 1 || got[0][0].ID != itemID("movie|tt0701000") {
+		t.Errorf("a month later: %+v %v", got, err)
+	}
+	if got := len(f.requests("/3/movie/701/external_ids")); got != 2 {
+		t.Errorf("a month later, movie 701 asked %d times, want 2", got)
+	}
+}
+
+func TestResolveAsksTMDBNothingWithoutAKey(t *testing.T) {
+	t.Parallel()
+	e, f := tmdbFallbackEnv(t, "")
+	got, err := e.service.Resolve(t.Context(), tmdbFallbackRefs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, ref := range tmdbFallbackRefs {
+		// Only the listed and the described titles are found.
+		if found := len(got[i]) > 0; found != (ref.TMDB == 550 || ref.TMDB == 703) {
+			t.Errorf("%+v: %+v", ref, got[i])
+		}
+	}
+	if asked := f.requests("/"); len(asked) != 0 {
+		t.Errorf("TMDB was asked %v without a key", asked)
 	}
 }

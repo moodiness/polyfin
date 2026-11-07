@@ -386,7 +386,7 @@ const account: typeof en = {
       kindColumn: 'Art',
       reasonColumn: 'Grund',
       reasons: {
-        other_identifier: 'Keine IMDb-, TMDB- oder Kitsu-Kennung',
+        other_identifier: 'Keine IMDb-, TMDB-, Kitsu- oder MyAnimeList-Kennung',
         not_found: 'Nicht in Polyfin',
         episode_list:
           'Die Folgen stimmen nicht mit der Liste von Polyfin überein: Keine wurde als gesehen markiert',

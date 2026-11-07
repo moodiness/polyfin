@@ -389,7 +389,7 @@ const account = {
       kindColumn: 'Kind',
       reasonColumn: 'Reason',
       reasons: {
-        other_identifier: 'Not an IMDb, TMDB or Kitsu identifier',
+        other_identifier: 'Not an IMDb, TMDB, Kitsu or MyAnimeList identifier',
         not_found: 'Not in Polyfin',
         episode_list: 'Its episodes do not match Polyfin’s list: none was marked played',
       },

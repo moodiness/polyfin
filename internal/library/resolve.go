@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"slices"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 // TitleRef names a movie, a series, or an episode by its series and
@@ -127,6 +129,11 @@ const describedFetches = 4
 // one asked, an episode then by the description's video of its season and
 // number. The addons are asked for nothing else.
 //
+// A ref still found by nothing, which has a TMDB identifier but no IMDb
+// one and which no addon described, takes the IMDb identifier TMDB gives
+// it when the server has a TMDB key (see imdbFromTMDB), and is then found
+// or recorded as a ref with that IMDb identifier is.
+//
 // The items Resolve names that Polyfin has no record of, as a title no
 // catalog listed, are recorded as the addons would name them: a movie or
 // series by its identifier and the ref's name, or the description's, and
@@ -140,6 +147,10 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 		return nil, err
 	}
 	refs, titles, described, err := s.describeUnlisted(ctx, refs, titles)
+	if err != nil {
+		return nil, err
+	}
+	refs, titles, err = s.imdbFromTMDB(ctx, refs, titles, described)
 	if err != nil {
 		return nil, err
 	}
@@ -392,12 +403,89 @@ func (s *Service) describeUnlisted(ctx context.Context, refs []TitleRef, titles 
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	return refs, withTitles(titles, more), described, nil
+}
+
+// withTitles adds to titles those of more it does not hold.
+func withTitles(titles, more []knownTitle) []knownTitle {
 	for _, title := range more {
 		if !slices.ContainsFunc(titles, func(t knownTitle) bool { return t.kind == title.kind && t.stremioID == title.stremioID }) {
 			titles = append(titles, title)
 		}
 	}
-	return refs, titles, described, nil
+	return titles
+}
+
+// imdbFromTMDB completes, when the server has a TMDB key, the refs that
+// have a TMDB identifier and no IMDb one, that Polyfin listed nothing
+// under and that no addon described (described[i] nil), with the IMDb
+// identifier TMDB gives their title: the answer kept, found or not (see
+// learntIMDb), else TMDB's, asked a few at a time and kept (see
+// lookUpIMDb). It returns the refs completed, and titles with those
+// Polyfin listed under the IMDb identifiers found. A lookup that fails
+// leaves its ref as it is, for the next time.
+func (s *Service) imdbFromTMDB(ctx context.Context, refs []TitleRef, titles []knownTitle, described []*description) ([]TitleRef, []knownTitle, error) {
+	if !s.tmdb.Enabled() {
+		return refs, titles, nil
+	}
+	// The TMDB title of each ref asked for, zero for the others.
+	of := make([]tmdbTitle, len(refs))
+	var asked []personCredit
+	for i, ref := range refs {
+		if ref.IMDb != "" || ref.TMDB <= 0 || described[i] != nil {
+			continue
+		}
+		if found, anime := ref.listedAmong(titles); len(found) > 0 || len(anime) > 0 {
+			continue
+		}
+		of[i] = tmdbTitle{tmdb.Movie, ref.TMDB}
+		if ref.kind() == KindSeries {
+			of[i].kind = tmdb.TV
+		}
+		if !slices.ContainsFunc(asked, func(c personCredit) bool { return c.title() == of[i] }) {
+			asked = append(asked, personCredit{Kind: string(of[i].kind), ID: ref.TMDB})
+		}
+	}
+	if len(asked) == 0 {
+		return refs, titles, nil
+	}
+	known, err := s.learntIMDb(ctx, asked)
+	if err != nil {
+		return nil, nil, err
+	}
+	unknown := slices.DeleteFunc(slices.Clone(asked), func(c personCredit) bool { return hasKey(known, c.title()) })
+	if len(unknown) > 0 {
+		failures := make([]error, len(unknown))
+		var group errgroup.Group
+		group.SetLimit(describedFetches)
+		for j, c := range unknown {
+			group.Go(func() error {
+				failures[j] = s.lookUpIMDb(ctx, c.title())
+				return nil
+			})
+		}
+		_ = group.Wait()
+		if err := errors.Join(failures...); err != nil && ctx.Err() == nil {
+			s.logger.Warn("TMDB did not give the IMDb identifiers of titles known by their TMDB one: they are asked again the next time",
+				"error", err)
+		}
+		if known, err = s.learntIMDb(ctx, asked); err != nil {
+			return nil, nil, err
+		}
+	}
+	refs = slices.Clone(refs)
+	var completed []TitleRef
+	for i, t := range of {
+		if imdb := known[t]; t.id > 0 && imdb != "" {
+			refs[i].IMDb = imdb
+			completed = append(completed, refs[i])
+		}
+	}
+	more, err := s.knownTitles(ctx, completed)
+	if err != nil {
+		return nil, nil, err
+	}
+	return refs, withTitles(titles, more), nil
 }
 
 // describedNumber reads an identifier a description gives as a number,
