@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -17,7 +18,8 @@ import (
 )
 
 const (
-	adminPrefix = "/admin/"
+	adminPrefix       = "/admin/"
+	shareAssetsPrefix = "/share/assets/"
 	// jellyfinBase is the path apps also reach the Jellyfin API, its
 	// WebSocket and the web client under, as on a Jellyfin server behind a
 	// reverse proxy that serves it at /jellyfin: given an address without a
@@ -47,6 +49,9 @@ type Options struct {
 	// Share serves the share links' page and its playback, under /share/;
 	// nil leaves /share/ to the Jellyfin API, which answers 404.
 	Share http.Handler
+	// ShareAssets holds the files of the share links' page, served under
+	// /share/assets/ (see shareAssets); nil leaves them to Share.
+	ShareAssets fs.FS
 	// DLNA serves the routes of DLNA devices, under /dlna/ (see
 	// dlna.Service.Handler); nil leaves /dlna/ to the Jellyfin API, which
 	// answers 404.
@@ -133,6 +138,9 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /activate", rootOnly(http.HandlerFunc(activate), options.Jellyfin))
 	if options.Share != nil {
 		mux.Handle("/share/", rootOnly(options.Share, options.Jellyfin))
+	}
+	if options.ShareAssets != nil {
+		mux.Handle("GET /share/assets/", rootOnly(shareAssets(options.ShareAssets), options.Jellyfin))
 	}
 	if options.DLNA != nil {
 		mux.Handle("/dlna/", rootOnly(options.DLNA, options.Jellyfin))
@@ -255,10 +263,12 @@ func setUp(ctx context.Context, setupRequired func(context.Context) (bool, error
 // adminApp serves the single-page application. Paths without a file
 // extension are client-side routes and receive index.html; a missing file
 // with an extension is a real 404, so a stale asset never loads the page.
-// Text files go compressed to clients that take gzip, compressed once each.
+// The hashed files of assets/ are cached for good; the others, index.html
+// first, are checked again at each load, by their ETag. Text files go in
+// brotli or gzip to clients that take them, compressed once each (see
+// staticFiles).
 func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
-	fileServer := http.StripPrefix(adminPrefix, http.FileServerFS(files))
-	compressed := newGzipFiles(files)
+	static := newOwnFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -267,7 +277,7 @@ func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
 		}
 		name := strings.TrimPrefix(r.URL.Path, adminPrefix)
 		if name == "" || name == "index.html" {
-			serveIndex(w, files, logger)
+			serveIndex(w, r, static, logger)
 			return
 		}
 		if info, err := fs.Stat(files, name); err == nil && !info.IsDir() {
@@ -276,8 +286,9 @@ func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
 			} else {
 				w.Header().Set("Cache-Control", "no-cache")
 			}
-			if !compressed.serve(w, r, name, info, "") {
-				fileServer.ServeHTTP(w, r)
+			if !static.serve(w, r, name, info, "") {
+				w.Header().Del("Cache-Control")
+				http.NotFound(w, r)
 			}
 			return
 		}
@@ -285,20 +296,55 @@ func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		serveIndex(w, files, logger)
+		serveIndex(w, r, static, logger)
 	})
 }
 
-func serveIndex(w http.ResponseWriter, files fs.FS, logger *slog.Logger) {
-	page, err := fs.ReadFile(files, "index.html")
-	if err != nil {
-		logger.Error("The admin application is missing; build it with `make web`", "error", err)
-		http.Error(w, "The admin application is not built.", http.StatusInternalServerError)
-		return
+// serveIndex serves index.html, checked again at each load.
+func serveIndex(w http.ResponseWriter, r *http.Request, static *staticFiles, logger *slog.Logger) {
+	info, err := fs.Stat(static.files, "index.html")
+	if err == nil {
+		w.Header().Set("Cache-Control", "no-cache")
+		if static.serve(w, r, "index.html", info, "text/html; charset=utf-8") {
+			return
+		}
+		w.Header().Del("Cache-Control")
+		err = errors.New("index.html cannot be read")
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(page)
+	logger.Error("The admin application is missing; build it with `make web`", "error", err)
+	http.Error(w, "The admin application is not built.", http.StatusInternalServerError)
+}
+
+// shareAssets serves the files of the share links' page, under
+// /share/assets/. A file the page links with its version, its ETag
+// without quotes in v, is cached for good; the fonts, which the style
+// links by name, for a day; the others are checked again at each load.
+// Every file has an ETag, and text files go in brotli or gzip to clients
+// that take them, compressed once each (see staticFiles).
+func shareAssets(files fs.FS) http.Handler {
+	static := newOwnFiles(files)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, shareAssetsPrefix)
+		header := w.Header()
+		header.Set("X-Robots-Tag", "noindex, nofollow")
+		info, err := fs.Stat(files, name)
+		if err != nil || !info.Mode().IsRegular() {
+			http.NotFound(w, r)
+			return
+		}
+		switch {
+		case static.versioned(name, info, r.URL.Query().Get("v")):
+			header.Set("Cache-Control", immutableCache)
+		case strings.HasPrefix(name, "figtree"):
+			header.Set("Cache-Control", "public, max-age=86400")
+		default:
+			header.Set("Cache-Control", "no-cache")
+		}
+		if !static.serve(w, r, name, info, "") {
+			header.Del("Cache-Control")
+			http.NotFound(w, r)
+		}
+	})
 }
 
 // securityHeaders sets the headers every answer gets, and the admin app's

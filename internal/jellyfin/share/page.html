@@ -6,19 +6,18 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <title>{{if .Title}}{{.Title.Name}} · {{end}}{{.Text.PageTitle}}</title>
-<link rel="icon" href="/share/assets/polyfin.svg">
+<link rel="icon" href="{{.Assets.Logo}}">
 <link rel="preload" href="/share/assets/figtree-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/share/assets/share.css">
-<script src="/share/assets/hls.min.js" defer></script>
-<script src="/share/assets/share.js" defer></script>
+<link rel="stylesheet" href="{{.Assets.Style}}">
+<script src="{{.Assets.Script}}" defer></script>
 </head>
 <body{{if .Title}} class="has-title"{{end}}>
 {{- if .Title}}
 <div class="room" aria-hidden="true"><img alt=""></div>
 {{- end}}
-<main class="share"{{if .Link}} data-link="{{.Link}}"{{end}}{{if .Gone}} data-gone{{end}}{{if .Title}} data-runtime="{{.Title.Seconds}}"{{end}}>
+<main class="share"{{if .Link}} data-link="{{.Link}}"{{end}}{{if .Gone}} data-gone{{end}}{{if .Title}} data-runtime="{{.Title.Seconds}}" data-hls="{{.Assets.Hls}}"{{end}}>
 <header class="top">
-<img class="mark" src="/share/assets/polyfin.svg" alt="" width="40" height="40">
+<img class="mark" src="{{.Assets.Logo}}" alt="" width="40" height="40">
 <p class="from">{{.Text.SharedFrom}} <strong>{{.Server}}</strong></p>
 </header>
 {{- if .Title}}

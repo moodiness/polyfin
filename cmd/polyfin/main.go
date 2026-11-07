@@ -849,6 +849,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			AdminAPI:      admin.New(adminOptions),
 			Jellyfin:      jellyfinAPI,
 			Share:         jellyfinAPI.Share(),
+			ShareAssets:   jellyfin.ShareAssets,
 			DLNA:          sharing.Handler(),
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,

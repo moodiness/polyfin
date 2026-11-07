@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -43,7 +44,8 @@ import (
 //	                                       its position, and its end;
 //	GET  /share/assets/{file}              the page's script, style, logo,
 //	                                       font and hls.js, the same for
-//	                                       every link.
+//	                                       every link, which package server
+//	                                       serves from ShareAssets.
 //
 // A guest plays through Polyfin, never from the source, as stream
 // addresses can hold keys, and over HLS only, nothing to download. The
@@ -85,16 +87,40 @@ var shareFiles embed.FS
 
 var sharePage = template.Must(template.ParseFS(shareFiles, "share/page.html"))
 
-// shareAssets are the files of /share/assets/: the page's script, style
+// ShareAssets are the files of /share/assets/: the page's script, style
 // and logo, and, vendored, hls.js (see third_party/hls.js) and the
 // Figtree font (see third_party/figtree).
-var shareAssets = func() fs.FS {
+var ShareAssets = func() fs.FS {
 	sub, err := fs.Sub(shareFiles, "share/assets")
 	if err != nil {
 		panic(err)
 	}
 	return sub
 }()
+
+// shareLinks are the addresses the page links its files at.
+var shareLinks = shareAssetLinks{Style: shareAssetLink("share.css"), Script: shareAssetLink("share.js"),
+	Logo: shareAssetLink("polyfin.svg"), Hls: shareAssetLink("hls.min.js")}
+
+// shareAssetLinks are the addresses of the page's files, each with its
+// version, which lets the browser keep it for good.
+type shareAssetLinks struct {
+	Style, Script, Logo string
+	// Hls is hls.js, which the page loads once Play is pressed.
+	Hls string
+}
+
+// shareAssetLink is the address of the file name of ShareAssets, with its
+// version in v: the first 8 bytes of its SHA-256, in hex, as package
+// server tags it (its ETag without quotes), which it caches for good.
+func shareAssetLink(name string) string {
+	data, err := fs.ReadFile(ShareAssets, name)
+	if err != nil {
+		panic(err)
+	}
+	sum := sha256.Sum256(data)
+	return "/share/assets/" + name + "?v=" + hex.EncodeToString(sum[:8])
+}
 
 // guestProfile is what a guest's browser is sent: H.264 video and AAC or
 // MP3 audio, in fragmented MP4 over HLS, which every browser plays, with
@@ -272,7 +298,6 @@ func (h *Handler) followGuest(play guestPlay, kind int) {
 // Share serves the share links' routes, under /share/.
 func (h *Handler) Share() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("GET /share/assets/{file}", http.StripPrefix("/share/assets/", shareAssetsHandler()))
 	mux.HandleFunc("GET /share/{token}", h.sharePage)
 	mux.HandleFunc("GET /share/{token}/image/{kind}", h.shareImage)
 	mux.HandleFunc("POST /share/{token}/play", h.startGuest)
@@ -285,21 +310,6 @@ func (h *Handler) Share() http.Handler {
 		header.Set("X-Robots-Tag", "noindex, nofollow")
 		header.Set("X-Frame-Options", "DENY")
 		mux.ServeHTTP(w, r)
-	})
-}
-
-// shareAssetsHandler serves the files of /share/assets/: hls.js and the
-// font, which never change under their names, kept for a day, the page's
-// own files checked again at each load.
-func shareAssetsHandler() http.Handler {
-	files := http.FileServerFS(shareAssets)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "hls") || strings.HasPrefix(r.URL.Path, "figtree") {
-			w.Header().Set("Cache-Control", "public, max-age=86400")
-		} else {
-			w.Header().Set("Cache-Control", "no-cache")
-		}
-		files.ServeHTTP(w, r)
 	})
 }
 
@@ -390,6 +400,7 @@ type sharePageData struct {
 	Title    *shareTitleData
 	Message  string
 	Messages map[string]string
+	Assets   shareAssetLinks
 }
 
 type shareTitleData struct {
@@ -409,7 +420,8 @@ type shareTitleData struct {
 func (h *Handler) sharePage(w http.ResponseWriter, r *http.Request) {
 	language := h.shareLanguage(r)
 	text := shareTexts[language]
-	data := sharePageData{Language: language, Text: text, Server: h.Accounts.Settings().ServerName, Messages: text.messages()}
+	data := sharePageData{Language: language, Text: text, Server: h.Accounts.Settings().ServerName, Messages: text.messages(),
+		Assets: shareLinks}
 	link, _, item, failed := h.openTitle(r)
 	if link.ID != (accounts.ID{}) {
 		data.Link = link.ID.String()

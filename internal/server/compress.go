@@ -16,7 +16,7 @@ const (
 	// compressionLevel is the level of answers compressed as they are
 	// sent. On Jellyfin JSON of 20 to 200 KB, level 5 gives answers 1 to 4%
 	// larger than the default level 6, for 20 to 30% less work; files
-	// compressed once are compressed at the best level (see gzipFiles).
+	// compressed once are compressed at the best level (see staticFiles).
 	compressionLevel = 5
 )
 
@@ -75,15 +75,27 @@ func hlsPath(path string) bool {
 // acceptsGzip reports whether the client accepts gzip: named, as gzip or
 // x-gzip, or through *, with a quality above zero.
 func acceptsGzip(header http.Header) bool {
-	gzipQuality, anyQuality := -1.0, -1.0
+	return accepts(header, "gzip", "x-gzip")
+}
+
+// acceptsBrotli reports whether the client accepts brotli: named, as br,
+// or through *, with a quality above zero.
+func acceptsBrotli(header http.Header) bool {
+	return accepts(header, "br", "br")
+}
+
+// accepts reports whether the client accepts the content coding named
+// name or alias, or any through *, with a quality above zero.
+func accepts(header http.Header, name, alias string) bool {
+	namedQuality, anyQuality := -1.0, -1.0
 	for _, value := range header.Values("Accept-Encoding") {
 		for element := range strings.SplitSeq(value, ",") {
 			coding, params, _ := strings.Cut(element, ";")
 			coding = strings.TrimSpace(coding)
 			quality := 1.0
 			for param := range strings.SplitSeq(params, ";") {
-				name, text, ok := strings.Cut(param, "=")
-				if !ok || !strings.EqualFold(strings.TrimSpace(name), "q") {
+				key, text, ok := strings.Cut(param, "=")
+				if !ok || !strings.EqualFold(strings.TrimSpace(key), "q") {
 					continue
 				}
 				// An unreadable quality refuses, as the safe reading.
@@ -94,15 +106,15 @@ func acceptsGzip(header http.Header) bool {
 				quality = parsed
 			}
 			switch {
-			case strings.EqualFold(coding, "gzip"), strings.EqualFold(coding, "x-gzip"):
-				gzipQuality = max(gzipQuality, quality)
+			case strings.EqualFold(coding, name), strings.EqualFold(coding, alias):
+				namedQuality = max(namedQuality, quality)
 			case coding == "*":
 				anyQuality = max(anyQuality, quality)
 			}
 		}
 	}
-	if gzipQuality >= 0 {
-		return gzipQuality > 0
+	if namedQuality >= 0 {
+		return namedQuality > 0
 	}
 	return anyQuality > 0
 }
@@ -147,14 +159,20 @@ func addVary(header http.Header) {
 	header.Add("Vary", "Accept-Encoding")
 }
 
-// gzipTag is the ETag of the compressed variant of an answer whose strong
+// gzipTag is the ETag of the gzip variant of an answer whose strong ETag
+// is tag (see codingTag).
+func gzipTag(tag string) string {
+	return codingTag(tag, "gzip")
+}
+
+// codingTag is the ETag of the variant in coding of an answer whose strong
 // ETag is tag; weak ETags, and headers without one, stay as they are: a
 // weak ETag already covers equivalent bodies.
-func gzipTag(tag string) string {
+func codingTag(tag, coding string) string {
 	if len(tag) < 2 || tag[0] != '"' || tag[len(tag)-1] != '"' {
 		return tag
 	}
-	return tag[:len(tag)-1] + `-gzip"`
+	return tag[:len(tag)-1] + "-" + coding + `"`
 }
 
 // hasTag reports whether the If-None-Match list holds tag, compared
