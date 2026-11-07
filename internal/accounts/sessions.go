@@ -95,21 +95,26 @@ func (s *Store) createAdminSession(ctx context.Context, user ID, device *ID) (st
 
 // AdminSession resolves a session token of an enabled user whose account
 // has not ended, and extends the session when it is more than a day old.
-// Its use counts as the user's activity, written at most once a minute and
-// never backwards, as a device's is.
+// The user is read as User reads them. Its use counts as the user's
+// activity, written at most once a minute and never backwards, as a
+// device's is.
 func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, error) {
 	session := AdminSession{TokenHash: HashAdminToken(token)}
-	user := &session.User
-	err := s.db.QueryRow(ctx, "SELECT s.expires_at, "+qualifiedUserColumns("u")+`
-		FROM admin_sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.is_disabled AND (u.ends_on IS NULL OR u.ends_on > $2)`,
-		session.TokenHash, Day(s.now())).Scan(
-		append([]any{&session.ExpiresAt}, user.fields()...)...)
+	var userID ID
+	err := s.db.QueryRow(ctx, "SELECT expires_at, user_id FROM admin_sessions WHERE token_hash = $1 AND expires_at > now()",
+		session.TokenHash).Scan(&session.ExpiresAt, &userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AdminSession{}, ErrNotFound
 	}
 	if err != nil {
 		return AdminSession{}, err
+	}
+	if session.User, err = s.User(ctx, userID); err != nil {
+		return AdminSession{}, err
+	}
+	user := &session.User
+	if user.Refused(s.now()) {
+		return AdminSession{}, ErrNotFound
 	}
 	if time.Until(session.ExpiresAt) < AdminSessionLifetime-renewAfter {
 		session.ExpiresAt = time.Now().Add(AdminSessionLifetime)
@@ -130,6 +135,10 @@ func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, e
 		}
 		if written.RowsAffected() > 0 {
 			user.LastActivityAt, user.LastActivityApp = &now, AdminApp
+			s.signIns.userActive(user.ID, now, AdminApp)
+		} else {
+			// A later activity is stored than the user remembered.
+			s.signIns.forgetUser(user.ID)
 		}
 	}
 	return session, nil

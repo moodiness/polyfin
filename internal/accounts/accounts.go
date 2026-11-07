@@ -558,9 +558,21 @@ func createUser(ctx context.Context, db interface {
 	return created, err
 }
 
-// User returns one account.
+// User returns one account. One read less than signInLife ago is not read
+// again: every change to it this process makes forgets it (see
+// forgetSignIns), so that it applies from the user's next request.
 func (s *Store) User(ctx context.Context, id ID) (User, error) {
-	return scanUser(s.db.QueryRow(ctx, "SELECT "+userColumns+" FROM users WHERE id = $1", id))
+	now := s.now()
+	if user, ok := s.signIns.user(id, now); ok {
+		return user, nil
+	}
+	generation := s.signIns.current()
+	user, err := scanUser(s.db.QueryRow(ctx, "SELECT "+userColumns+" FROM users WHERE id = $1", id))
+	if err != nil {
+		return User{}, err
+	}
+	s.signIns.keepUser(user, now, generation)
+	return user, nil
 }
 
 // Users returns every account, sorted by name.
