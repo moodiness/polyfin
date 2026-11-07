@@ -1,0 +1,214 @@
+diff --git a/assets/lumaaglaass.js b/assets/lumaaglaass.js
+index 998b73d8..979d9425 100644
+--- a/assets/lumaaglaass.js
++++ b/assets/lumaaglaass.js
+@@ -715,6 +715,7 @@
+         identity = key;
+     }
+     const homeSections = page => page && [...page.querySelectorAll('.homeSectionsContainer')].find(visible);
++    const shownHomePage = () => [...document.querySelectorAll('.homePage')].find(visible);
+     // Recent titles - A home row links to tab=1 of one library. Its matching navigation link provides
+     // the library label already chosen by Jellyfin, so simplification never needs translated title text.
+     function clearHomeLibraryTitles() {
+@@ -726,12 +727,11 @@
+             delete heading.dataset.lgHomeRecentLabel;
+         });
+     }
+-    function syncHomeLibraryTitles() {
++    function syncHomeLibraryTitles(page) {
+         if (!enabled() || !settings.homeLibraryNamesOnly || !home()) {
+             clearHomeLibraryTitles();
+             return;
+         }
+-        const page = [...document.querySelectorAll('.homePage')].find(visible);
+         if (!page) return;
+         const labels = new Map();
+         for (const link of document.querySelectorAll('.lnkMediaFolder[href]')) {
+@@ -752,9 +752,9 @@
+     }
+     // Banner - A shell of its final size holds its place from the first home frame, filled by the
+     // session's items or a load; none after an empty load (a later find then moves the rows once).
+-    function syncHero() {
++    // The home page and its rows are read by the caller, before its writes.
++    function syncHero(sections) {
+         if (!settings.homeCarousel || !home() || !identity || (!items.length && heroEmpty)) return;
+-        const sections = homeSections([...document.querySelectorAll('.homePage')].find(visible));
+         if (!sections) return;
+         if (!hero?.isConnected || hero.parentNode !== sections.parentNode) {
+             removeHero();
+@@ -783,7 +783,7 @@
+             if (!visible(hero)) removeHero();
+             return;
+         }
+-        const page = [...document.querySelectorAll('.homePage')].find(visible);
++        const page = shownHomePage();
+         const sections = homeSections(page);
+         if (!sections) return;
+         if (!settings.homeCarousel && homeScene?.page === page && homeScene.key === key) return;
+@@ -839,7 +839,7 @@
+             removeHero();
+             return;
+         }
+-        syncHero();
++        syncHero(homeSections(page));
+     }
+     // Home backdrop - --lg-backdrop and the class that shows it, for the banner and the still backdrop.
+     function showHomeBackdrop(art) {
+@@ -1481,12 +1481,13 @@
+         }
+     }
+     // Controls - Draw the native AppBar controls inside the card: page coordinates written once per
+-    // layout change (never from a scroll handler), held while the grid reloads.
++    // layout change (never from a scroll handler), held while the grid reloads. Without frames, at once.
+     function syncLibraryControls() {
+-        if (!libraryControlFrame) libraryControlFrame = requestAnimationFrame(placeLibraryControls);
++        if (typeof requestAnimationFrame !== 'function') placeLibraryControls();
++        else if (!libraryControlFrame) libraryControlFrame = requestAnimationFrame(placeLibraryControls);
+     }
+     function placeLibraryControls() {
+-        cancelAnimationFrame(libraryControlFrame);
++        if (libraryControlFrame) cancelAnimationFrame(libraryControlFrame);
+         libraryControlFrame = 0;
+         const card = [...document.querySelectorAll('.lg-library-page .lg-library-section')].find(visible);
+         const heading = card?.querySelector('.lg-library-title');
+@@ -1827,22 +1828,26 @@
+         for (const backdrop of detailFallbacks) {
+             if (!backdrop.isConnected || !backdrop.closest(DETAILS_WITH_POSTER)) releaseFallback(backdrop);
+         }
+-        document.querySelectorAll(DETAILS_WITH_POSTER).forEach(page => {
++        // Reads first: the posters' images and whether their pages show follow none of the writes below.
++        const fallbacks = [...document.querySelectorAll(DETAILS_WITH_POSTER)].map(page => {
+             const backdrop = page.querySelector('.itemBackdrop');
+             const poster = page.querySelector('.detailImageContainer .cardImageContainer');
+-            if (!backdrop || !poster) return;
++            return backdrop && poster && {
++                page, backdrop,
++                posterImage: getComputedStyle(poster).backgroundImage,
++                shown: route() === '#/details' && visible(page)
++            };
++        }).filter(Boolean);
++        for (const { page, backdrop, posterImage, shown } of fallbacks) {
+             const missing = !backdrop.style.backgroundImage || backdrop.style.backgroundImage === 'none';
+             backdrop.classList.toggle('lg-is-fallback', missing);
+-            const posterImage = getComputedStyle(poster).backgroundImage;
+             if (posterImage && posterImage !== 'none' && backdrop.style.getPropertyValue('--lg-detail-fallback-backdrop') !== posterImage) {
+                 backdrop.style.setProperty('--lg-detail-fallback-backdrop', posterImage);
+             }
+             // Tracked whenever touched, so stop() also clears a class set without a poster image.
+             detailFallbacks.add(backdrop);
+-            if (route() === '#/details' && visible(page)) {
+-                rememberBackdrop(missing ? posterImage : getComputedStyle(backdrop).backgroundImage, key, page);
+-            }
+-        });
++            if (shown) rememberBackdrop(missing ? posterImage : getComputedStyle(backdrop).backgroundImage, key, page);
++        }
+         detailMetadata.forEach((wrapper, tags) => {
+             if (!tags.isConnected || !tags.closest(DETAILS_WITH_POSTER)) unwrapMetadata(wrapper, tags);
+         });
+@@ -2225,17 +2230,19 @@
+         nodes.forEach(node => layoutObserver.observe(node));
+         layoutNodes = nodes;
+     }
+-    // Schedule - Cheap syncs run at once (a page's first frame is final), home mounting at most once per
+-    // 150 ms; state, session and page are read before any write, which would force a style recalc.
++    // Schedule - Cheap syncs run in one pass (a page's first frame is final), home mounting at most once
++    // per 150 ms. State, session, page, the header and the home page are read before any write: a
++    // layout read after a write forces a style recalculation.
+     const schedule = () => {
+         if (stopped) return;
+         const on = enabled(), api = on ? currentClient() : null, key = on ? sessionKey(api) : '';
+         const context = key ? pageCardContext() : null;
++        const homePage = on && home() ? shownHomePage() : undefined, homeRows = homeSections(homePage);
++        observeLayout(on);
++        const moved = syncHeaderInset(on);
+         if (on && styleGate) openStyleGate();
+         tooltipController.sync(on);
+         pruneOwnedAttributes();
+-        observeLayout(on);
+-        const moved = syncHeaderInset(on);
+         syncPageMarks(on);
+         syncPlaybackPage(on);
+         if (on) {
+@@ -2263,10 +2270,10 @@
+         } else {
+             collectionFilterController.stop();
+         }
+-        syncHomeLibraryTitles();
++        syncHomeLibraryTitles(homePage);
+         if (on) {
+             syncHomeSession(api, key);
+-            syncHero();
++            syncHero(homeRows);
+         }
+         resumeClock();
+         if (scheduled) return;
+@@ -2275,33 +2282,53 @@
+             void mount();
+         }, 150);
+     };
++    // Frames - Jellyfin changes the page in many batches per frame, and each pass reads the layout:
++    // a pass after each batch paid a style recalculation for it. The page observer, the routes, image
++    // loads and the clock only mark a pass as due; it runs once, in the next frame, before it paints.
++    // A hidden page has no frames: its due pass runs as it shows or hides. Without frames, at once.
++    let passDue = false, passFrame = 0;
++    const runPass = () => {
++        passDue = false;
++        if (passFrame) cancelAnimationFrame(passFrame);
++        passFrame = 0;
++        schedule();
++    };
++    const schedulePass = () => {
++        if (stopped) return;
++        passDue = true;
++        if (typeof requestAnimationFrame !== 'function') runPass();
++        else if (!passFrame) passFrame = requestAnimationFrame(runPass);
++    };
++    listen(document, 'visibilitychange', () => { if (passDue) runPass(); });
+     // Observer - One for the whole page. The banner, the tooltip popup (written on every hover) and the
+     // settings form are ignored: their own writes would run the passes again, and mount the banner in a loop.
+     const ownMutation = record => record.target instanceof Element &&
+         (record.target.closest('#lg-hero,#lg-tooltip,#lg-preferences') !== null ||
+         (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => node === tooltipController.popup)));
+     const observer = new MutationObserver(records => {
+-        if (!records.every(ownMutation)) schedule();
++        if (!records.every(ownMutation)) schedulePass();
+     });
+     observer.observe(document.documentElement, {
+         childList: true, subtree: true, attributes: true,
+         attributeFilter: ['class', 'hidden', 'data-id', 'data-type', 'disabled', 'lang', 'data-culture', 'data-theme']
+     });
+-    listen(window, 'hashchange', schedule);
+-    listen(window, 'popstate', schedule);
++    listen(window, 'hashchange', schedulePass);
++    listen(window, 'popstate', schedulePass);
+     listen(window, 'resize', () => {
+         syncHeaderInset(enabled());
+         syncLibraryControls();
+     });
+     // Pages - Jellyfin shows a legacy page, then names its item (viewbeforeshow) in a later microtask
+-    // of the same task: a pass then marks the page before its first frame.
+-    listen(document, 'viewbeforeshow', schedule, true);
+-    listen(document, 'viewshow', schedule, true);
++    // of the same task: a pass then marks the page before its first frame. This pass runs at once, not
++    // in a frame: a frame asked for from a frame callback comes after that frame paints, so a page shown
++    // from one would first paint unmarked.
++    listen(document, 'viewbeforeshow', runPass, true);
++    listen(document, 'viewshow', runPass, true);
+     // Images - Posters and the library image change the layout when they load, without a mutation.
+-    listen(document, 'load', schedule, true);
++    listen(document, 'load', schedulePass, true);
+     // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, the 45 s Play
+     // expiry, a paused carousel, layout changes the layout observer does not watch.
+-    const poll = setInterval(schedule, 1000);
++    const poll = setInterval(schedulePass, 1000);
+ 
+     // =====================================================================
+     // Lifecycle
+@@ -2331,6 +2358,7 @@
+             stopped = true;
+             openStyleGate();
+             clearTimeout(scheduled);
++            if (passFrame) cancelAnimationFrame(passFrame);
+             clearInterval(poll);
+             observer.disconnect();
+             layoutObserver.disconnect();
