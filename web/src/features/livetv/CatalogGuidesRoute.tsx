@@ -69,7 +69,7 @@ export default function CatalogGuidesRoute() {
           end: true,
         }))}
       />
-      <div className="!mt-8">
+      <div className="!mt-5">
         {section === 'guides' ? (
           <CatalogGuides
             scope={scope}

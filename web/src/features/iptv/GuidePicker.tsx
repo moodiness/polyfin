@@ -122,7 +122,7 @@ export default function GuidePicker({
             return (
               <li
                 key={`${channel.guideId}:${channel.id}`}
-                className="flex min-w-0 items-start gap-3 rounded-[1rem] px-3 py-2.5 transition-colors duration-300 ease-nuit hover:bg-s2"
+                className="flex min-w-0 items-start gap-2.5 rounded-[0.625rem] px-2.5 py-1.5 transition-colors duration-300 ease-nuit hover:bg-s2"
               >
                 <GuideIcon icon={channel.icon} name={channel.name} />
                 <div className="min-w-0 flex-1">
@@ -173,7 +173,7 @@ export default function GuidePicker({
 
 function GuideIcon({ icon, name }: { icon: string | null; name: string }) {
   const [failed, setFailed] = useState(false)
-  const frame = 'size-9 shrink-0 overflow-hidden rounded-[0.75rem] bg-s2'
+  const frame = 'size-7.5 shrink-0 overflow-hidden rounded-[0.5rem] bg-s2'
   if (!icon || failed) {
     return (
       <span

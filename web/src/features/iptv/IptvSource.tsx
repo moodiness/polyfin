@@ -111,13 +111,11 @@ export function IptvSource({
 
   return (
     <>
-      <p className="mt-[1.125rem] max-w-[64ch] text-[1.15625rem] text-ink-2 max-md:text-[1.03125rem]">
-        {t.lineup.description}
-      </p>
+      <p className="mt-3 max-w-[64ch] text-lead text-ink-2">{t.lineup.description}</p>
       <Tabs
         variant="underline"
         label={t.lineup.sectionsLabel}
-        className="mt-[1.125rem]"
+        className="mt-3"
         items={lineupSections
           .filter((name) => liveTv || !liveSections.has(name))
           .map((name) => ({
@@ -127,7 +125,7 @@ export function IptvSource({
             end: true,
           }))}
       />
-      <div className="mt-7">
+      <div className="mt-5">
         {section === 'summary' ? (
           <Summary scope={scope} addon={addon} source={source} forWhom={forWhom} retry={retry} />
         ) : section === 'options' ? (
@@ -217,7 +215,7 @@ function Summary({
         <AlertTile
           tone="danger"
           title={t.iptv.errors[source.error] ?? t.errors.generic}
-          className="mb-13 max-md:mb-10"
+          className="mb-8 max-md:mb-7"
           actions={retry}
         >
           {source.checkedAt !== null && (
@@ -259,7 +257,7 @@ function Summary({
           {lineup.unmapped > 0 && (
             <Notice
               tone="warn"
-              className="mt-5"
+              className="mt-3"
               action={
                 <TextLink to={lineupPath(scope, addon.id, 'mapping')}>
                   {t.lineup.openMapping}
@@ -271,7 +269,7 @@ function Summary({
           )}
           {lineup.archived > 0 && (
             <Notice
-              className="mt-5"
+              className="mt-3"
               action={
                 <TextLink to={`${lineupPath(scope, addon.id, 'channels')}?archive=yes`}>
                   {t.lineup.openArchived}
@@ -469,12 +467,12 @@ function TunerPart({
         </Button>
       }
     >
-      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{text.help}</p>
       {tuner.failure !== '' && (
         <AlertTile
           tone="warn"
           title={tuner.failure === 'unreachable' ? text.unreachable : text.failed}
-          className="mb-5"
+          className="mb-3"
         >
           {tuner.failedAt !== null && <RelativeTime iso={tuner.failedAt} />}
         </AlertTile>
@@ -490,7 +488,7 @@ function TunerPart({
         </Fact>
       </Facts>
       {tuner.scan !== null && (
-        <div className="mt-5 space-y-2 rounded-row bg-s1 px-7 py-5 max-md:px-5">
+        <div className="mt-3 space-y-1.5 rounded-row bg-s1 px-4 py-3.5 max-md:px-3.5">
           <ProgressBar
             value={tuner.scan.progress / 100}
             label={text.scanProgress}
@@ -502,8 +500,8 @@ function TunerPart({
           </p>
         </div>
       )}
-      <p className="mt-4 max-w-[66ch] px-2 text-small text-ink-3">{text.scanHelp}</p>
-      <div className={cx('mt-5 grid grid-cols-[minmax(0,1fr)] gap-2')}>
+      <p className="mt-3 max-w-[66ch] px-2 text-small text-ink-3">{text.scanHelp}</p>
+      <div className={cx('mt-3.5 grid grid-cols-[minmax(0,1fr)] gap-1.5')}>
         <SettingRow
           kind="switch"
           label={t.sourceAdd.favoritesOnly}
@@ -555,7 +553,7 @@ function Options({ scope, id, source }: { scope: Scope; id: string; source: Sour
   }
   return (
     <form onSubmit={submit} noValidate>
-      <p className="mb-8 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{text.help}</p>
       <SourceOptions
         value={draft}
         saved={source.options}

@@ -78,7 +78,7 @@ export default function LiveTvRoute() {
       }
     >
       <Block title={t.livetv.catalogsTitle} count={libraries.data?.filter(isTvCatalog).length}>
-        <p className="mb-5 max-w-[72ch] text-small text-ink-2">{t.livetv.catalogsHelp}</p>
+        <p className="mb-3 max-w-[72ch] text-small text-ink-2">{t.livetv.catalogsHelp}</p>
         {libraries.isPending ? (
           <SkeletonRows rows={2} label={t.livetv.catalogsLoading} />
         ) : libraries.isError ? (
@@ -91,11 +91,11 @@ export default function LiveTvRoute() {
       </Block>
 
       <Block title={t.livetv.iptvTitle} count={addons.data?.filter(isIptv).length}>
-        <p className="mb-5 max-w-[72ch] text-small text-ink-2">{t.livetv.iptvHelp}</p>
+        <p className="mb-3 max-w-[72ch] text-small text-ink-2">{t.livetv.iptvHelp}</p>
         {addons.isPending ? (
-          <div role="status" aria-label={t.livetv.iptvLoading} className="space-y-2.5">
-            <Skeleton className="h-20 w-full rounded-row" />
-            <Skeleton className="h-[7.5rem] w-full rounded-row" />
+          <div role="status" aria-label={t.livetv.iptvLoading} className="space-y-1.5">
+            <SkeletonRows rows={1} />
+            <Skeleton className="h-[5.75rem] w-full rounded-row" />
           </div>
         ) : addons.isError ? (
           <InlineError onRetry={() => void addons.refetch()} retrying={addons.isFetching}>
@@ -185,7 +185,7 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
             }
           >
             {!library.enabled || failing.length > 0 ? (
-              <div className="-mt-2 space-y-1.5 text-small text-ink-2">
+              <div className="-mt-1 space-y-1 text-small text-ink-2">
                 {!library.enabled && (
                   <p>
                     {t.livetv.notShownHelp}{' '}
@@ -195,12 +195,8 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
                   </p>
                 )}
                 {failing.map((guide) => (
-                  <p key={guide.id} className="flex items-start gap-2 text-danger">
-                    <WarningCircleIcon
-                      size="1.25rem"
-                      aria-hidden="true"
-                      className="mt-px shrink-0"
-                    />
+                  <p key={guide.id} className="flex items-start gap-1.5 text-danger">
+                    <WarningCircleIcon size="1rem" aria-hidden="true" className="mt-px shrink-0" />
                     {t.livetv.guideLine(
                       guide.position,
                       t.lineup.guideErrors[guide.error] ?? t.errors.generic,
@@ -234,7 +230,7 @@ function IptvSources({ addons }: { addons: Addon[] }) {
     )
   }
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       {addons.map((addon) =>
         addon.source === null ? null : (
           <IptvSourceBlock key={addon.id} addon={addon} source={addon.source} />
@@ -391,7 +387,7 @@ function Recordings() {
         </RowList>
       )}
       {timers.data?.converted && timers.data.converted.recordings > 0 && (
-        <p className="mt-4 text-small text-ink-2">
+        <p className="mt-3 text-small text-ink-2">
           {t.livetv.spaceSaved(
             timers.data.converted.recordings,
             formatBytes(timers.data.converted.saved, language),
