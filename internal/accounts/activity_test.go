@@ -64,10 +64,12 @@ func TestAdminAppUseIsActivityOnceAMinute(t *testing.T) {
 		t.Errorf("activity written again within a minute: %v", got)
 	}
 
-	// A user never seen gets their first activity.
+	// A user never seen gets their first activity: the change, made in the
+	// database, is forgotten as one the server makes.
 	if _, err := store.db.Exec(ctx, "UPDATE users SET last_activity_at = NULL WHERE id = $1", alice.ID); err != nil {
 		t.Fatal(err)
 	}
+	store.forgetSignIns()
 	if _, err := store.AdminSession(ctx, token); err != nil {
 		t.Fatal(err)
 	}

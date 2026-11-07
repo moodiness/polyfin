@@ -135,7 +135,7 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 // DeviceByToken resolves an access token to its device and enabled user, and
 // records the activity, at most once a minute or when the device's address
 // changes, never moving it backwards. A token resolved less than signInLife
-// ago is not looked up again.
+// ago is not looked up again, and its user is remembered as User reads one.
 // The device of an account that ended is refused, as one of a disabled
 // account is, and kept: a later end date brings it back.
 func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) (Device, User, error) {
@@ -152,6 +152,7 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 		}
 		entry.device, entry.at = device, now
 		s.signIns.keepDevice(hash, entry, generation)
+		s.signIns.keepUser(entry.user, now, generation)
 	}
 	if entry.user.Ended(now) {
 		return Device{}, User{}, ErrNotFound
@@ -166,7 +167,7 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 		if err != nil {
 			return Device{}, User{}, err
 		}
-		s.signIns.touched(hash, now, remoteAddress)
+		s.signIns.touched(hash, entry.device, now, remoteAddress)
 		entry.device.LastActivityAt, entry.device.RemoteAddress = latest(entry.device.LastActivityAt, now), remoteAddress
 		entry.user.active(now, entry.device.Client)
 	}
@@ -215,8 +216,12 @@ func (s *Store) Devices(ctx context.Context, user ID) ([]Device, error) {
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Device, error) { return scanDevice(row) })
 }
 
-// Device returns a signed-in device by its identifier.
+// Device returns a signed-in device by its identifier: as its token
+// resolved, when that was less than signInLife ago.
 func (s *Store) Device(ctx context.Context, id ID) (Device, error) {
+	if device, ok := s.signIns.deviceByID(id, s.now()); ok {
+		return device, nil
+	}
 	return scanDevice(s.db.QueryRow(ctx, "SELECT "+deviceColumns+" FROM devices d WHERE d.id = $1", id))
 }
 
