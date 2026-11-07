@@ -4308,6 +4308,22 @@ export const saveAddonSettings = (scope: Scope, id: string, values: Record<strin
 export const deleteAddon = (scope: Scope, id: string) =>
   request<void>('DELETE', `${scopePath(scope)}/addons/${seg(id)}`)
 
+/**
+ * What removing an addon loses: the home rows on its catalogs and collections, its enabled
+ * libraries with their names, images and settings, the users who have one of its libraries hidden
+ * (a source added again gets new libraries, not hidden for them), and the recordings scheduled on
+ * its channels; recordings already made are kept.
+ */
+export type AddonRemoval = {
+  homeRows: number
+  libraries: number
+  hiddenLibraries: number
+  recordings: number
+}
+
+export const fetchAddonRemoval = (scope: Scope, id: string, signal?: AbortSignal) =>
+  request<AddonRemoval>('GET', `${scopePath(scope)}/addons/${seg(id)}/removal`, undefined, signal)
+
 /** Sets the order of the scope's addons; `ids` must list every addon of the scope. */
 export const orderAddons = (scope: Scope, ids: string[]) =>
   request<void>('PUT', `${scopePath(scope)}/addons/order`, { ids })
@@ -5141,6 +5157,13 @@ export type HealthProblem = {
   | { code: 'addon'; name: string; owner?: NonNullable<Owner>; failure: string }
   /** Searches leave out the addon's search catalog for a few minutes: it did not answer in time. */
   | { code: 'search_late'; name: string; owner?: NonNullable<Owner> }
+  /**
+   * A smart list whose catalogs were all removed with their addons or dropped by them: it is kept
+   * and lists nothing until other catalogs are chosen. `owner` is set for a user's own list.
+   */
+  | { code: 'smart_list_empty'; name: string; owner?: NonNullable<Owner> }
+  /** A channel of the server's own titles airs a source that no longer exists. */
+  | { code: 'virtual_channel_source'; name: string }
   | { code: 'conversions_full' }
   | { code: 'thumbnails_paused'; host: string }
   /** A host answers the same error file instead of the videos, since `at`: `host` names it, by name only. */
@@ -5836,6 +5859,8 @@ export const queryKeys = {
   episodeOrder: (id: string) => ['episode-orders', id] as const,
   orderedSeries: (search: string) => ['episode-orders', 'series', search] as const,
   smartList: (scope: Scope, id: string) => ['scopes', scope, 'smart-lists', id] as const,
+  /** What removing an addon loses, asked as its removal is confirmed; outside the scope prefix. */
+  addonRemoval: (scope: Scope, id: string) => ['addon-removal', scope, id] as const,
   smartChoices: (scope: Scope) => ['scopes', scope, 'smart-choices'] as const,
   smartPreview: (scope: Scope, list: SmartListDraft) =>
     ['scopes', scope, 'smart-preview', JSON.stringify(list)] as const,

@@ -6,9 +6,10 @@ import {
   TrashIcon,
 } from '@phosphor-icons/react'
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   deleteAddon,
+  fetchAddonRemoval,
   queryClient,
   queryKeys,
   refreshAddon,
@@ -147,6 +148,27 @@ export function SourceDetail({
     },
     onSettled: () => invalidateScope(fallbackScope),
   })
+
+  // What removing it loses, asked only while the removal is being confirmed.
+  const removal = useQuery({
+    queryKey: queryKeys.addonRemoval(fallbackScope, addon.id),
+    queryFn: ({ signal }) => fetchAddonRemoval(fallbackScope, addon.id, signal),
+    enabled: confirming && scope !== null,
+  })
+  const counts = removal.data
+  const lost =
+    counts === undefined
+      ? []
+      : (
+          [
+            [counts.homeRows, text.removal.homeRows],
+            [counts.libraries, text.removal.libraries],
+            [counts.hiddenLibraries, text.removal.hiddenLibraries],
+            [counts.recordings, text.removal.recordings],
+          ] as const
+        ).flatMap(([count, line]) =>
+          count > 0 ? [line(count, count.toLocaleString(language))] : [],
+        )
 
   const kindLine = [
     folder !== null && folder.share !== ''
@@ -489,7 +511,19 @@ export function SourceDetail({
           busy={remove.isPending}
           error={remove.isError ? errorMessage(t, remove.error) : undefined}
         >
-          {scope === 'shared' ? text.removeShared : text.removeMine}
+          <div className="space-y-3">
+            <p>{scope === 'shared' ? text.removeShared : text.removeMine}</p>
+            {lost.length > 0 && (
+              <div>
+                <p>{text.removal.lead}</p>
+                <ul className="mt-1 list-disc space-y-0.5 ps-5">
+                  {lost.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </ConfirmDialog>
       )}
     </article>

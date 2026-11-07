@@ -228,6 +228,8 @@ const libraries: typeof en = {
     serverBadge: 'Servidor',
     noCatalogs: 'Nenhum catálogo disponível ainda: adicione uma fonte primeiro.',
     noCatalogMatch: 'Nenhum catálogo corresponde a este filtro.',
+    catalogsGone:
+      'Os catálogos de onde esta lista tirava os títulos não existem mais: foram removidos com os complementos deles ou retirados por eles. Escolha outros; até lá, ela não lista nada.',
     rules: 'Regras',
     rulesHelp: 'Sem regras, a lista mantém todos os títulos dos seus catálogos.',
     exclude: 'Exclusões',

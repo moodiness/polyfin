@@ -101,6 +101,21 @@ const sources: typeof en = {
       'Ihre Bibliotheken verschwinden für alle Benutzer aus den Jellyfin-Apps. Dies kann nicht rückgängig gemacht werden.',
     removeMine:
       'Ihre Bibliotheken verschwinden aus deinen Jellyfin-Apps. Dies kann nicht rückgängig gemacht werden.',
+    removal: {
+      lead: 'Damit geht auch verloren:',
+      homeRows: (count: number, figure: string) =>
+        count === 1 ? '1 Startseitenzeile' : `${figure} Startseitenzeilen`,
+      libraries: (count: number, figure: string) =>
+        count === 1
+          ? '1 Bibliothek mit ihrem Namen, Bild und ihren Einstellungen'
+          : `${figure} Bibliotheken mit ihren Namen, Bildern und Einstellungen`,
+      hiddenLibraries: (count: number, figure: string) =>
+        count === 1
+          ? 'Das Ausblenden ihrer Bibliotheken für 1 Benutzer (fügst du sie wieder hinzu, sieht er sie)'
+          : `Das Ausblenden ihrer Bibliotheken für ${figure} Benutzer (fügst du sie wieder hinzu, sehen sie sie)`,
+      recordings: (count: number, figure: string) =>
+        count === 1 ? '1 geplante Aufnahme' : `${figure} geplante Aufnahmen`,
+    },
     removed: (name: string) => `${name} wurde entfernt.`,
     readOnly: (name: string) =>
       `Dies ist eine eigene Quelle von ${name}. Nur diese Person kann sie ändern, über ihre Seite „Meine Quellen“.`,

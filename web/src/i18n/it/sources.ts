@@ -101,6 +101,21 @@ const sources: typeof en = {
       'Le sue librerie scompariranno dalle applicazioni Jellyfin di tutti gli utenti. L’operazione non può essere annullata.',
     removeMine:
       'Le sue librerie scompariranno dalle tue applicazioni Jellyfin. L’operazione non può essere annullata.',
+    removal: {
+      lead: 'Si perdono anche:',
+      homeRows: (count: number, figure: string) =>
+        count === 1 ? '1 riga della Home' : `${figure} righe della Home`,
+      libraries: (count: number, figure: string) =>
+        count === 1
+          ? '1 libreria, con nome, immagine e impostazioni'
+          : `${figure} librerie, con nomi, immagini e impostazioni`,
+      hiddenLibraries: (count: number, figure: string) =>
+        count === 1
+          ? 'Le sue librerie nascoste a 1 utente (se la aggiungi di nuovo, le vedrà)'
+          : `Le sue librerie nascoste a ${figure} utenti (se la aggiungi di nuovo, le vedranno)`,
+      recordings: (count: number, figure: string) =>
+        count === 1 ? '1 registrazione pianificata' : `${figure} registrazioni pianificate`,
+    },
     removed: (name: string) => `${name} è stata rimossa.`,
     readOnly: (name: string) =>
       `Questa è un’origine personale di ${name}. Solo il proprietario può modificarla, dalla sua pagina Le mie origini.`,

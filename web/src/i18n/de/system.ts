@@ -176,6 +176,12 @@ const system: typeof en = {
           `${name}: Die Titel seiner Dateien konnten nicht gesucht werden${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Sie bleiben nicht zugeordnet, bis eine Suche gelingt, was Polyfin von selbst erneut versucht, erst nach ein paar Minuten, dann seltener.`,
         searchLate: (name: string) =>
           `${name}: Seine Suche hat nicht rechtzeitig geantwortet. Suchen lassen es einige Minuten lang aus und fragen es dann erneut.`,
+        smartListEmpty: (name: string, owner: string | null) =>
+          owner === null
+            ? `Die intelligente Liste ${name} listet nichts: Die Kataloge, aus denen sie ihre Titel nahm, sind verschwunden. Wähle andere Kataloge für sie.`
+            : `Die intelligente Liste ${name} von ${owner} listet nichts: Die Kataloge, aus denen sie ihre Titel nahm, sind verschwunden. Für sie sind andere Kataloge zu wählen.`,
+        virtualChannelSource: (name: string) =>
+          `Der Kanal ${name} sendet eine Quelle, die es nicht mehr gibt. Wähle eine andere Quelle für ihn.`,
         guide: (name: string) =>
           `${name}: Der letzte Abruf des Fernsehprogramms ist fehlgeschlagen.`,
         paused: (host: string) =>
