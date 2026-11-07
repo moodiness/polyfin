@@ -63,19 +63,19 @@ func (s *Service) ShareTitles(ctx context.Context, user accounts.User, term stri
 	if err != nil {
 		return nil, err
 	}
-	known, err := s.recordedTitles(ctx, v, term, kinds, items, limit-len(items))
+	known, err := s.recordedTitles(ctx, v, term, items, limit-len(items))
 	if err != nil {
 		return nil, err
 	}
 	return append(items, s.overridden(known)...), nil
 }
 
-// recordedTitles lists up to count titles of the given kinds whose name
-// contains term, without regard to case, among those Polyfin recorded
-// from a catalog of one of the user's addons, and not among found: those
-// whose name starts so first, then the most recently listed. Titles the
-// user does not reach are left out (see described).
-func (s *Service) recordedTitles(ctx context.Context, v view, term string, kinds []Kind, found []Item, count int) ([]Item, error) {
+// recordedTitles lists up to count movies and series whose name contains
+// term, without regard to case, among those Polyfin recorded from a
+// catalog of one of the user's addons, and not among found: those whose
+// name starts so first, then the most recently listed. Titles the user
+// does not reach are left out (see described).
+func (s *Service) recordedTitles(ctx context.Context, v view, term string, found []Item, count int) ([]Item, error) {
 	if count <= 0 || len(v.addons) == 0 {
 		return nil, nil
 	}
@@ -88,19 +88,17 @@ func (s *Service) recordedTitles(ctx context.Context, v view, term string, kinds
 		}
 		addonIDs = append(addonIDs, string(data))
 	}
-	kindNames := make([]string, 0, len(kinds))
-	for _, kind := range kinds {
-		kindNames = append(kindNames, string(kind))
-	}
 	skipped := make([]accounts.ID, 0, len(found))
 	for _, item := range found {
 		skipped = append(skipped, item.ID)
 	}
 	// Twice as many as wanted leaves room for those the user cannot reach.
-	rows, err := s.db.Query(ctx, `SELECT id FROM items WHERE kind = ANY($1::text[]) AND data->'addon' = ANY($2::text[]::jsonb[])
-		AND NOT id = ANY($3::uuid[]) AND strpos(lower(data->'meta'->>'name'), lower($4::text)) > 0
-		ORDER BY strpos(lower(data->'meta'->>'name'), lower($4::text)) = 1 DESC, updated_at DESC, id LIMIT $5`,
-		kindNames, addonIDs, skipped, term, 2*count)
+	// The kinds are written out, for prepared plans to use the index of
+	// the titles' names.
+	rows, err := s.db.Query(ctx, `SELECT id FROM items WHERE kind IN ('movie', 'series') AND data->'addon' = ANY($1::text[]::jsonb[])
+		AND NOT id = ANY($2::uuid[]) AND lower(data->'meta'->>'name') LIKE lower($3::text)
+		ORDER BY starts_with(lower(data->'meta'->>'name'), lower($4::text)) DESC, updated_at DESC, id LIMIT $5`,
+		addonIDs, skipped, containing(term), term, 2*count)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +106,7 @@ func (s *Service) recordedTitles(ctx context.Context, v view, term string, kinds
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.itemsOf(ctx, v, ids, kinds)
+	items, err := s.itemsOf(ctx, v, ids, []Kind{KindMovie, KindSeries})
 	if err != nil {
 		return nil, err
 	}

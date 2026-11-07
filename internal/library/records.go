@@ -481,6 +481,9 @@ const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(
 	WHERE key IN ('parent', 'rating', 'ratedAt', 'genres')), '{}'::jsonb) || excluded.data`
 
 func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
+	if r, ok, err := preloaded(ctx, id); ok {
+		return r, err
+	}
 	var r record
 	var data []byte
 	err := s.db.QueryRow(ctx, "SELECT key, data FROM items WHERE id = $1", id).Scan(&r.Key, &data)
