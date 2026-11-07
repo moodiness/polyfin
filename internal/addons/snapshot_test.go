@@ -261,7 +261,7 @@ func TestEveryWriteOfTheStoreIsReadAtOnce(t *testing.T) {
 	if l := guided(); l.AddonName != "B" {
 		t.Errorf("after Update: %v", l)
 	}
-	if err := store.Remove(ctx, Shared(), installed.ID); err != nil {
+	if _, err := store.Remove(ctx, Shared(), installed.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Find(ctx, installed.ID); !errors.Is(err, ErrNotFound) {

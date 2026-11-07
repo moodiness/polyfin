@@ -289,7 +289,7 @@ func TestStayingConnectedKeepsTheSignInAndImportsAgain(t *testing.T) {
 	if err != nil || len(installed) != 1 {
 		t.Fatalf("Alice's addons: %+v %v", installed, err)
 	}
-	if err := h.addons.Remove(t.Context(), addons.Personal(alice.ID), installed[0].ID); err != nil {
+	if _, err := h.addons.Remove(t.Context(), addons.Personal(alice.ID), installed[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	h.source.set(func(f *fakeSource) {

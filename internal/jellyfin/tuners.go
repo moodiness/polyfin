@@ -248,13 +248,6 @@ func (h *Handler) deleteTunerHost(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		h.Activity.AddonRemoved(r.Context(), callerFrom(r.Context()).User, addon.Manifest.Name, true)
-		// The images uploaded for its library go with the tuner, even when
-		// the request is abandoned; the tuner is gone either way.
-		if h.Library != nil {
-			if err := h.Library.DeleteLibraryImages(context.WithoutCancel(r.Context()), addon); err != nil {
-				h.Logger.Warn("The images of a removed tuner's library could not be deleted", "tuner", addon.Manifest.Name, "error", err)
-			}
-		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

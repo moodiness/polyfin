@@ -463,6 +463,8 @@ type Store struct {
 	// database, so that a burst of requests reads one snapshot.
 	snapshot atomic.Pointer[snapshot]
 	loading  sync.Mutex
+	// cleanup runs with each removal (see SetCleanup).
+	cleanup Cleanup
 }
 
 func New(db *pgxpool.Pool, client *stremio.Client) *Store {
@@ -1236,14 +1238,56 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 	return addon, err
 }
 
-// Remove uninstalls an addon with its libraries.
-func (s *Store) Remove(ctx context.Context, scope Scope, id accounts.ID) error {
+// Cleanup deletes, in the transaction that removes an addon, what the
+// addon brought to the rest of the database, and returns what to forget
+// once the removal is stored (see SetCleanup).
+type Cleanup func(ctx context.Context, tx pgx.Tx, removed Addon) (after func(), err error)
+
+// SetCleanup has Remove run cleanup with each removal; the foreign keys
+// alone remove the addon's own tables.
+func (s *Store) SetCleanup(cleanup Cleanup) { s.cleanup = cleanup }
+
+// Remove uninstalls an addon with its libraries, and what the cleanup
+// set deletes with them, in one transaction, and returns it.
+func (s *Store) Remove(ctx context.Context, scope Scope, id accounts.ID) (Addon, error) {
 	defer s.changed()
-	tag, err := s.db.Exec(ctx, "DELETE FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2", id, scope.Owner)
-	if err == nil && tag.RowsAffected() == 0 {
-		return ErrNotFound
+	var removed Addon
+	var after func()
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var err error
+		removed, err = scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
+			id, scope.Owner))
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM addons WHERE id = $1", id); err != nil {
+			return err
+		}
+		if s.cleanup == nil {
+			return nil
+		}
+		after, err = s.cleanup(ctx, tx, removed)
+		return err
+	})
+	if err != nil {
+		return Addon{}, err
 	}
-	return err
+	if after != nil {
+		after()
+	}
+	return removed, nil
+}
+
+// Installed returns every addon installed, by anyone, as tx reads them,
+// and holds them as they are until tx ends: a refresh, a change or a
+// removal waits for it. The cleanup of what removed addons left (see
+// library's leftovers.go) tells what is gone from them.
+func Installed(ctx context.Context, tx pgx.Tx) ([]Addon, error) {
+	rows, err := tx.Query(ctx, "SELECT "+addonColumns+" FROM addons FOR SHARE")
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Addon, error) { return scanAddon(row) })
 }
 
 // Reorder sets the order of the scope's addons; ids must list each of them
