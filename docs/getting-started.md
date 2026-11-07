@@ -40,7 +40,7 @@ The language the setup page shows becomes the language of the names Polyfin gene
 
 ### The Get started card
 
-Once the administrator exists, the admin app's **Home** shows **Get started**: how many steps of a good setup are done, and the next one to do. **All 7 steps** lists them all, each marked **Done** or **To do**. Each step opens the page where it is set. The card reads the server's state each time Home loads, and again every 10 seconds for what **System › Health** tells.
+Once the administrator exists, the admin app's **Home** shows **Get started**: how many steps of a good setup are done, and the next one to do. **All 7 steps** lists them all, each marked **Done** or **To do**. Each step opens the page where it is set. The card reads the server's state each time Home loads, then with what Home reads of **System › Health**: its problems every 10 seconds, the rest every 30 seconds while **Bandwidth** or **Server state** is on screen.
 
 ![The Get started card on Home, with 1 of 7 steps done and each step marked Done or To do](images/get-started.webp)
 
