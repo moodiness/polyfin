@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Ref } from 'react'
 import { ArrowSquareOutIcon, CaretRightIcon, CheckCircleIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -21,6 +21,7 @@ import {
   SkeletonRows,
   StatusPill,
   TextLink,
+  useOnScreen,
 } from '@/ui'
 import { GetStarted } from './GetStarted'
 import { MemberHome } from './MemberHome'
@@ -53,7 +54,11 @@ function Overview({ name }: { name: string }) {
   const { t } = useI18n()
   const text = t.dashboard.overview
   const sessions = useLiveSessions()
-  const health = useHealth()
+  // The health, which Server state and the conversions under Bandwidth show, is followed while
+  // either is on screen.
+  const [bandwidthRef, bandwidthOnScreen] = useOnScreen<HTMLElement>()
+  const [serverRef, serverOnScreen] = useOnScreen<HTMLElement>()
+  const health = useHealth(bandwidthOnScreen || serverOnScreen)
   const problems = useHealthProblems()
   const transcoder = health.data?.transcoder
   const actions = useServerActions()
@@ -100,12 +105,14 @@ function Overview({ name }: { name: string }) {
           </div>
           <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
             <Bandwidth
+              ref={bandwidthRef}
+              playing={playing.length > 0}
               conversions={
                 transcoder ? { count: transcoder.conversions, limit: transcoder.limit } : undefined
               }
             />
             <GetStarted />
-            <ServerState actions={actions.data} onOpen={setOpen} />
+            <ServerState ref={serverRef} actions={actions.data} onOpen={setOpen} />
           </div>
         </div>
       </PageLayout>
@@ -234,9 +241,12 @@ function ToLookAt({
 function ServerState({
   actions,
   onOpen,
+  ref,
 }: {
   actions: ServerActions | undefined
   onOpen: (action: ServerAction) => void
+  /** The block, which Home watches to follow the health while it is on screen. */
+  ref: Ref<HTMLElement>
 }) {
   const { language, t } = useI18n()
   const text = t.dashboard.overview
@@ -251,6 +261,7 @@ function ServerState({
 
   return (
     <Block
+      ref={ref}
       title={text.serverTitle}
       aside={<TextLink to="/system/health">{text.openHealth}</TextLink>}
     >

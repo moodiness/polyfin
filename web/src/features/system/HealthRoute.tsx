@@ -79,7 +79,8 @@ import {
 export default function HealthRoute() {
   const { language, t } = useI18n()
   const text = t.system.health
-  const health = useHealth()
+  // The whole page tells the health: it follows it.
+  const health = useHealth(true)
   // The server's addons, IPTV sources and guides, then each user's own.
   const sources = useQuery({
     queryKey: queryKeys.sources,

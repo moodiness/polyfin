@@ -32,6 +32,11 @@ const versions: typeof en = {
       count === 1
         ? 'Todavía se pregunta a 1 extensión…'
         : `Todavía se pregunta a ${count} extensiones…`,
+    pendingStopped: (count: number) =>
+      count === 1
+        ? 'Nada cambió en un minuto, así que la página dejó de actualizarse: todavía se pregunta a 1 extensión.'
+        : `Nada cambió en un minuto, así que la página dejó de actualizarse: todavía se pregunta a ${count} extensiones.`,
+    checkAgain: 'Comprobar de nuevo',
     order: 'Cómo se ordenan las versiones',
     orderNone: 'El orden de las extensiones: «Ordenar las versiones por» no tiene ningún criterio.',
     orderBy: (criteria: string) => `Ordenar las versiones por: ${criteria}.`,
@@ -53,6 +58,7 @@ const versions: typeof en = {
     sourceStates: {
       known: 'Respondió',
       stale: 'Caducada, se vuelve a preguntar',
+      failed: 'Falló hace poco',
       asked: 'Preguntando',
     },
     embedded: 'En la descripción del título',

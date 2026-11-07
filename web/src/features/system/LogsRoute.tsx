@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import {
   BugIcon,
   DownloadSimpleIcon,
@@ -12,6 +20,7 @@ import {
   WarningIcon,
   type Icon,
 } from '@phosphor-icons/react'
+import { focusManager } from '@tanstack/react-query'
 import { ApiError, fetchLogLines, logDownloadUrl, sessionEnded } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import {
@@ -105,12 +114,19 @@ export default function LogsRoute() {
   const view = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
 
-  // Reads the lines written since the last read, now and every 2 seconds while following.
+  // Reads the lines written since the last read, now and every 2 seconds while following and the
+  // tab shows; a hidden tab reads again once shown.
   useEffect(() => {
     if (!following) return
     const controller = new AbortController()
     let timer = 0
+    let waiting = false
     async function read() {
+      timer = 0
+      if (!focusManager.isFocused()) {
+        waiting = true
+        return
+      }
       try {
         const page = await fetchLogLines(next.current, keptLines, controller.signal)
         const first = page.next - page.lines.length
@@ -133,19 +149,29 @@ export default function LogsRoute() {
       }
       timer = window.setTimeout(read, pollInterval)
     }
+    const shown = focusManager.subscribe((focused) => {
+      if (!focused || !waiting) return
+      waiting = false
+      void read()
+    })
     void read()
     return () => {
       controller.abort()
       window.clearTimeout(timer)
+      shown()
     }
   }, [following, attempt])
 
   const minimum = levelRank[filters[filter]]
   const needle = search.trim().toLocaleLowerCase(language)
-  const matching = lines.filter(
-    (line) =>
-      levelRank[line.level] >= minimum &&
-      (needle === '' || line.text.toLocaleLowerCase(language).includes(needle)),
+  const matching = useMemo(
+    () =>
+      lines.filter(
+        (line) =>
+          levelRank[line.level] >= minimum &&
+          (needle === '' || line.text.toLocaleLowerCase(language).includes(needle)),
+      ),
+    [lines, minimum, needle, language],
   )
   const drawn = matching.slice(-drawnLines)
 
@@ -258,21 +284,7 @@ export default function LogsRoute() {
             ) : (
               <ol className="grid grid-cols-[minmax(0,1fr)] py-2">
                 {drawn.map((line) => (
-                  <li
-                    key={line.seq}
-                    className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-center gap-x-3 rounded-[0.5rem] px-3 py-1 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2"
-                  >
-                    <span className="text-micro text-ink-2 figures">{line.time}</span>
-                    <StatusPill
-                      tone={levelLooks[line.level].tone}
-                      icon={levelLooks[line.level].icon}
-                    >
-                      {line.level}
-                    </StatusPill>
-                    <span className="min-w-0 font-mono text-[0.8125rem] leading-5 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2">
-                      {line.text}
-                    </span>
-                  </li>
+                  <LogLine key={line.seq} line={line} />
                 ))}
               </ol>
             )}
@@ -297,3 +309,21 @@ export default function LogsRoute() {
     </PageLayout>
   )
 }
+
+/**
+ * A line of the log. Lines never change once read, so each is drawn once, not again at each read
+ * that adds lines after it.
+ */
+const LogLine = memo(function LogLine({ line }: { line: Line }) {
+  return (
+    <li className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-center gap-x-3 rounded-[0.5rem] px-3 py-1 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2">
+      <span className="text-micro text-ink-2 figures">{line.time}</span>
+      <StatusPill tone={levelLooks[line.level].tone} icon={levelLooks[line.level].icon}>
+        {line.level}
+      </StatusPill>
+      <span className="min-w-0 font-mono text-[0.8125rem] leading-5 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2">
+        {line.text}
+      </span>
+    </li>
+  )
+})

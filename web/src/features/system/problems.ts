@@ -11,12 +11,18 @@ import { dateTime, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 
-/** The server's health, refreshed every 10 seconds. */
-export function useHealth() {
+/** How often the health is read again where it is followed, in milliseconds. */
+const healthPoll = 30_000
+
+/**
+ * The server's health. With `poll`, read again every 30 seconds: a page follows it with one
+ * observer only, while what shows it is on screen, as reading it scans the library.
+ */
+export function useHealth(poll = false) {
   return useQuery({
     queryKey: queryKeys.health,
     queryFn: ({ signal }) => fetchHealth(signal),
-    refetchInterval: 10_000,
+    refetchInterval: poll ? healthPoll : false,
   })
 }
 

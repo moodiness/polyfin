@@ -32,6 +32,11 @@ const versions: typeof en = {
       count === 1
         ? '1 complemento ainda está sendo perguntado…'
         : `${count} complementos ainda estão sendo perguntados…`,
+    pendingStopped: (count: number) =>
+      count === 1
+        ? 'Nada mudou em um minuto, então a página parou de atualizar: 1 complemento ainda está sendo perguntado.'
+        : `Nada mudou em um minuto, então a página parou de atualizar: ${count} complementos ainda estão sendo perguntados.`,
+    checkAgain: 'Verificar de novo',
     order: 'Como as versões são ordenadas',
     orderNone: 'A ordem dos complementos: “Ordenar versões por” não tem nenhum critério.',
     orderBy: (criteria: string) => `Ordenar versões por: ${criteria}.`,
@@ -52,6 +57,7 @@ const versions: typeof en = {
     sourceStates: {
       known: 'Respondeu',
       stale: 'Expirada, perguntada de novo',
+      failed: 'Falhou recentemente',
       asked: 'Sendo perguntada',
     },
     embedded: 'Na descrição do título',

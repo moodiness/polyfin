@@ -43,10 +43,10 @@ export function SessionGate() {
     refetchInterval: 10_000,
   })
   const setupRequired = status.data?.setupRequired
+  // Asked together with the status, not after it: before setup, it answers no session.
   const session = useQuery({
     queryKey: queryKeys.session,
     queryFn: ({ signal }) => fetchSession(signal),
-    enabled: setupRequired === false,
     // Read again when the tab comes back after 30 s: a profile picture or a name changed in an
     // app shows on the account button.
     staleTime: 30_000,

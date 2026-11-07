@@ -29,6 +29,11 @@ const versions: typeof en = {
     askedLately: 'Gli add-on sono stati interpellati da poco: riprova tra qualche secondo.',
     pending: (count: number) =>
       count === 1 ? '1 add-on è ancora interpellato…' : `${count} add-on sono ancora interpellati…`,
+    pendingStopped: (count: number) =>
+      count === 1
+        ? 'Nulla è cambiato da un minuto, quindi la pagina non si aggiorna più: 1 add-on è ancora interpellato.'
+        : `Nulla è cambiato da un minuto, quindi la pagina non si aggiorna più: ${count} add-on sono ancora interpellati.`,
+    checkAgain: 'Controlla di nuovo',
     order: 'Come sono ordinate le versioni',
     orderNone: 'L’ordine degli add-on: «Ordina le versioni per» non ha alcun criterio.',
     orderBy: (criteria: string) => `Ordina le versioni per: ${criteria}.`,
@@ -50,6 +55,7 @@ const versions: typeof en = {
     sourceStates: {
       known: 'Ha risposto',
       stale: 'Scaduta, richiesta di nuovo',
+      failed: 'Fallita di recente',
       asked: 'In richiesta',
     },
     embedded: 'Nella descrizione del titolo',

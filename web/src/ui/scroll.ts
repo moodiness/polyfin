@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react'
+import { useCallback, useEffect, useState, type RefCallback, type RefObject } from 'react'
 import { scaledPx } from './cx'
 
 /**
@@ -46,4 +46,21 @@ export function useScrollFade(ref: RefObject<HTMLElement | null>) {
       row.removeEventListener('scroll', update)
     }
   }, [ref])
+}
+
+/**
+ * Whether an element shows on screen, for what is worth reading again only while it is seen: give
+ * the callback as its ref.
+ */
+export function useOnScreen<T extends Element>(): [RefCallback<T>, boolean] {
+  const [onScreen, setOnScreen] = useState(false)
+  const ref = useCallback((element: T | null) => {
+    if (!element) return
+    const observer = new IntersectionObserver(([entry]) =>
+      setOnScreen(entry?.isIntersecting ?? false),
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  return [ref, onScreen]
 }
