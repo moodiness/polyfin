@@ -21,7 +21,8 @@ type NextUpRemoval struct {
 // taken off again counts from the latest removal.
 func (s *Store) RemoveFromNextUp(ctx context.Context, user, series accounts.ID, at time.Time) error {
 	_, err := s.db.Exec(ctx, `INSERT INTO next_up_removed (user_id, series_id, removed_at) VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, series_id) DO UPDATE SET removed_at = excluded.removed_at`, user, series, at)
+		ON CONFLICT (user_id, series_id) DO UPDATE SET removed_at = excluded.removed_at
+		WHERE next_up_removed.removed_at IS DISTINCT FROM excluded.removed_at`, user, series, at)
 	return err
 }
 
