@@ -359,7 +359,7 @@ function Editor({
       }
     >
       <form
-        className="[&>*+*]:mt-block max-md:[&>*+*]:mt-11"
+        className="[&>*+*]:mt-block"
         onSubmit={(event) => {
           event.preventDefault()
           if (!maxValid) {
@@ -372,7 +372,7 @@ function Editor({
           save.mutate()
         }}
       >
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           <SettingRow
             kind="text"
             label={t.smartLists.name}
@@ -428,7 +428,7 @@ function Editor({
           />
         </div>
         <Block title={t.smartLists.catalogs} count={draft.catalogs.length}>
-          <p className="mb-5 max-w-[66ch] text-small text-ink-2">{t.smartLists.catalogsHelp}</p>
+          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.catalogsHelp}</p>
           <Panel as="div">
             <CatalogPicker
               choices={choices.catalogs}
@@ -444,7 +444,7 @@ function Editor({
           )}
         </Block>
         <Block title={t.smartLists.rules}>
-          <p className="mb-5 max-w-[66ch] text-small text-ink-2">{t.smartLists.rulesHelp}</p>
+          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.rulesHelp}</p>
           <Panel as="div">
             <GroupEditor
               group={draft.rules}
@@ -462,7 +462,7 @@ function Editor({
           )}
         </Block>
         <Block title={t.smartLists.exclude}>
-          <p className="mb-5 max-w-[66ch] text-small text-ink-2">{t.smartLists.excludeHelp}</p>
+          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.excludeHelp}</p>
           <Panel as="div">
             <GroupEditor
               group={draft.exclude}
@@ -542,7 +542,7 @@ function CatalogPicker({
   const toggle = (ref: SmartListDraft['catalogs'][number], on: boolean) =>
     onChange(on ? [...chosen, ref] : chosen.filter((c) => catalogKey(c) !== catalogKey(ref)))
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2.5">
       {choices.length > 8 && (
         <Field label={t.smartLists.catalogFilter} hideLabel>
           <TextInput
@@ -553,11 +553,11 @@ function CatalogPicker({
             placeholder={t.smartLists.catalogFilterPlaceholder}
             onValue={setFilter}
             autoComplete="off"
-            className="max-w-[26.25rem]"
+            className="max-w-[22rem]"
           />
         </Field>
       )}
-      <div className="grid max-h-[26.25rem] gap-x-8 gap-y-4 overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] sm:grid-cols-2">
+      <div className="grid max-h-[24rem] gap-x-6 overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] sm:grid-cols-2">
         {missing.map((c) => (
           <Checkbox
             key={catalogKey(c)}
@@ -1065,7 +1065,7 @@ function Preview({ scope, draft }: { scope: Scope; draft: SmartListDraft }) {
         )
       }
     >
-      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{t.smartLists.previewHelp}</p>
+      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.previewHelp}</p>
       {body}
     </Block>
   )
