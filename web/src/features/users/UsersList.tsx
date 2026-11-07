@@ -202,36 +202,50 @@ export default function UsersList() {
 
 /**
  * A user as a row: the avatar, the name with its tags, the last activity, and the state; then,
- * outside its link, the "…" of quick actions.
+ * outside its link, the "…" of quick actions. As on a source's row, whose controls sit beside its
+ * link, the row draws no chevron. On a phone the state leads the second line, and the tags keep
+ * to one line under the name when they do not fit beside it.
  */
 function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
   const restrictions = useRestrictions(user)
+  const tags = [
+    user.id === self.id && <Badge key="you">{t.users.you}</Badge>,
+    user.isAdministrator && (
+      <Badge key="administrator" tone="accent">
+        {t.users.administrator}
+      </Badge>
+    ),
+    user.passwordResetPin !== null && (
+      <Badge key="pin" tone="warn">
+        {t.users.pinRequested}
+      </Badge>
+    ),
+    user.groupName !== null && (
+      <Badge key="group">
+        {user.followGroup
+          ? t.groups.groupBadge(user.groupName)
+          : t.groups.groupOwnBadge(user.groupName)}
+      </Badge>
+    ),
+  ].filter(Boolean)
 
   return (
     <Row
       to={`/users/${user.id}`}
+      chevron={false}
       leading={<Avatar name={user.name} image={userImageUrl(user)} size="md" />}
       title={user.name}
       titleAside={
-        <>
-          {user.id === self.id && <Badge>{t.users.you}</Badge>}
-          {user.isAdministrator && <Badge tone="accent">{t.users.administrator}</Badge>}
-          {user.passwordResetPin !== null && <Badge tone="warn">{t.users.pinRequested}</Badge>}
-          {user.groupName !== null && (
-            <Badge>
-              {user.followGroup
-                ? t.groups.groupBadge(user.groupName)
-                : t.groups.groupOwnBadge(user.groupName)}
-            </Badge>
-          )}
-        </>
+        tags.length > 0 && (
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5">{tags}</span>
+        )
       }
       meta={
         <span className="min-w-0">
-          {/* On a phone the state goes on this line, leaving the name its width. */}
-          <span className="mb-1 block sm:hidden">
+          {/* On a phone the state leads this line, leaving the name its width. */}
+          <span className="mr-2 inline-flex align-middle sm:hidden">
             <UserState user={user} />
           </span>
           <LastActivity user={user} />
