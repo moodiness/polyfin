@@ -101,6 +101,22 @@ function torrentStartWhy(
     : `${why} (${text.torrentStartPeers(peers.found, counts.join(', '))})`
 }
 
+/**
+ * That a host answers an error file instead of the videos, since a time: Health's problem, and the
+ * notice on the versions from that host.
+ */
+export function hostErrorFileText(
+  t: Messages,
+  language: string,
+  host: string,
+  since: string,
+): string {
+  return t.system.health.problems.hostErrorFile(
+    host,
+    new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(new Date(since)),
+  )
+}
+
 /** What a problem the server found says. */
 export function problemText(t: Messages, language: string, problem: HealthProblem): string {
   const health = t.system.health
@@ -140,6 +156,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
         new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(new Date(problem.at)),
         text.torrentStoppedWhy[problem.failure](problem.name ?? ''),
       )
+    case 'host_error_file':
+      return hostErrorFileText(t, language, problem.host, problem.at)
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
     case 'proxy_name_unresolved':

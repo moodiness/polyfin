@@ -3124,6 +3124,8 @@ export type VersionStream = {
   /** A torrent that did not start lately: listed, but passed over by plays that pick none. */
   unstarted: boolean
   block: VersionBlock | null
+  /** The error file its host answers instead of the videos now, by the host's name only; null when none. */
+  hostErrorFile: { host: string; since: string } | null
   labels: {
     height: number
     codec: string
@@ -5135,6 +5137,8 @@ export type HealthProblem = {
   | { code: 'search_late'; name: string; owner?: NonNullable<Owner> }
   | { code: 'conversions_full' }
   | { code: 'thumbnails_paused'; host: string }
+  /** A host answers the same error file instead of the videos, since `at`: `host` names it, by name only. */
+  | { code: 'host_error_file'; host: string; at: string }
   | { code: 'unknown_proxy'; address: string }
   | { code: 'discovery_port'; port: number }
   | { code: 'discovery_address'; address: string }

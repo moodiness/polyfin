@@ -180,6 +180,8 @@ const system: typeof en = {
         guide: (name: string) => `${name} : la dernière récupération du guide a échoué.`,
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,
+        hostErrorFile: (host: string, since: string) =>
+          `L’hôte ${host} répond par un fichier d’erreur au lieu des vidéos, depuis ${since}.`,
         unknownProxy: (address: string) =>
           `${address} transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme ${address}. Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.`,
         discoveryPort: (port: number) =>

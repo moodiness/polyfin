@@ -179,6 +179,8 @@ const system: typeof en = {
           `${name}: la sua ricerca non ha risposto in tempo. Le ricerche lo escludono per qualche minuto, poi lo interrogano di nuovo.`,
         guide: (name: string) => `${name}: l’ultimo recupero della guida TV non è riuscito.`,
         paused: (host: string) => `Miniature in pausa per ${host}: ha chiesto di rallentare.`,
+        hostErrorFile: (host: string, since: string) =>
+          `L’host ${host} risponde con un file di errore invece dei video, dalle ${since}.`,
         unknownProxy: (address: string) =>
           `${address} inoltra richieste (X-Forwarded-For) ma non è un proxy noto, quindi tutti i suoi client vengono considerati come ${address}. Se è il tuo reverse proxy, aggiungilo a Proxy noti in Impostazioni › Sicurezza.`,
         discoveryPort: (port: number) =>

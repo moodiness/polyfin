@@ -180,6 +180,8 @@ const system: typeof en = {
           `${name}: Der letzte Abruf des Fernsehprogramms ist fehlgeschlagen.`,
         paused: (host: string) =>
           `Vorschaubilder für ${host} pausiert: Der Host hat um Verlangsamung gebeten.`,
+        hostErrorFile: (host: string, since: string) =>
+          `Der Host ${host} liefert seit ${since} eine Fehlerdatei statt der Videos.`,
         unknownProxy: (address: string) =>
           `${address} leitet Anfragen weiter (X-Forwarded-For), ist aber kein bekannter Proxy, daher zählen alle seine Clients als ${address}. Wenn es dein Reverse-Proxy ist, füge ihn unter Einstellungen › Sicherheit zu „Bekannte Proxys“ hinzu.`,
         discoveryPort: (port: number) =>

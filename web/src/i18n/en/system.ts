@@ -173,6 +173,8 @@ const system = {
           `${name}: its search did not answer in time. Searches leave it out for a few minutes, then ask it again.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
+        hostErrorFile: (host: string, since: string) =>
+          `The host ${host} answers an error file instead of the videos, since ${since}.`,
         unknownProxy: (address: string) =>
           `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
         discoveryPort: (port: number) =>
