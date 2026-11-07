@@ -140,8 +140,8 @@ function countChanges(entries: Entry[], saved: Entry[]): number {
   return Math.max(count, 1)
 }
 
-/** 64 px between the blocks of the editor (44 on a phone), as PageLayout spaces a page's. */
-const blockSpacing = '[&>*+*]:mt-block max-md:[&>*+*]:mt-11'
+/** The page's space between the blocks of the editor, as PageLayout spaces a page's. */
+const blockSpacing = '[&>*+*]:mt-block'
 
 /**
  * A list too long for the page scrolls in its own box, with a thin scrollbar, so the blocks below
@@ -207,15 +207,15 @@ function RefreshStatus({ refresh, name }: { refresh: LibraryRefresh | null; name
   const figure = (value: number) => value.toLocaleString(language)
   switch (refresh.state) {
     case 'queued':
-      return <p className="mt-1.5 text-small text-ink-3">{text.queued}</p>
+      return <p className="mt-0.5 text-small text-ink-3">{text.queued}</p>
     case 'running':
       return (
-        <div className="mt-1.5 max-w-[20rem]">
+        <div className="mt-1 max-w-[20rem]">
           <p className="figures text-small text-ink-3">
             {text.running(figure(refresh.done + refresh.failed), figure(refresh.titles))}
           </p>
           <ProgressBar
-            className="mt-1.5"
+            className="mt-1"
             size="sm"
             label={text.progress(name)}
             value={refresh.titles === 0 ? 0 : (refresh.done + refresh.failed) / refresh.titles}
@@ -224,18 +224,18 @@ function RefreshStatus({ refresh, name }: { refresh: LibraryRefresh | null; name
       )
     case 'done':
       return (
-        <p className="figures mt-1.5 text-small text-ink-3">
+        <p className="figures mt-0.5 text-small text-ink-3">
           {text.done(figure(refresh.done), refresh.failed, figure(refresh.failed))}
         </p>
       )
     case 'stopped':
       return (
-        <p className="figures mt-1.5 text-small text-ink-3">
+        <p className="figures mt-0.5 text-small text-ink-3">
           {text.stopped(figure(refresh.done + refresh.failed), figure(refresh.titles))}
         </p>
       )
     case 'failed':
-      return <p className="mt-1.5 text-small text-danger">{text.failed}</p>
+      return <p className="mt-0.5 text-small text-danger">{text.failed}</p>
   }
 }
 
@@ -509,11 +509,11 @@ function LibraryForm({
         <p className="sr-only" role="status">
           {announcement}
         </p>
-        <p className="mb-5 max-w-[66ch] text-small text-ink-2">
+        <p className="mb-3 max-w-[66ch] text-small text-ink-2">
           {scope === 'shared' ? t.libraries.shownHelp : t.libraries.shownHelpMine}
         </p>
         {entries.length > recommendedLibraries && (
-          <Notice tone="warn" className="mb-4">
+          <Notice tone="warn" className="mb-3">
             {t.libraries.manyWarning}
           </Notice>
         )}
@@ -525,7 +525,7 @@ function LibraryForm({
           <ol
             ref={shownList}
             aria-label={t.libraries.listLabel}
-            className="grid grid-cols-[minmax(0,1fr)] gap-2"
+            className="grid grid-cols-[minmax(0,1fr)] gap-1.5"
           >
             {entries.map((entry, index) => {
               const library = byKey.get(entry.key) ?? entry.library
@@ -555,19 +555,19 @@ function LibraryForm({
                   {rowDrag.dropBefore === index && (
                     <span
                       aria-hidden="true"
-                      className="absolute inset-x-4 -top-[0.3125rem] h-0.5 rounded-full bg-accent"
+                      className="absolute inset-x-4 -top-[0.25rem] h-0.5 rounded-full bg-accent"
                     />
                   )}
                   {rowDrag.dropBefore === entries.length && index === entries.length - 1 && (
                     <span
                       aria-hidden="true"
-                      className="absolute inset-x-4 -bottom-[0.3125rem] h-0.5 rounded-full bg-accent"
+                      className="absolute inset-x-4 -bottom-[0.25rem] h-0.5 rounded-full bg-accent"
                     />
                   )}
                   <div
                     className={cx(
-                      'grid min-h-20 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 rounded-row py-3.5 pr-[1.375rem] pl-3',
-                      'max-md:min-h-[4.25rem] max-md:grid-cols-[auto_auto_minmax(0,1fr)] max-md:gap-x-3 max-md:py-3 max-md:pr-4 max-md:pl-2',
+                      'grid min-h-15 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-row py-2 pr-3 pl-2',
+                      'max-md:grid-cols-[auto_auto_minmax(0,1fr)] max-md:gap-x-2.5 max-md:pr-3 max-md:pl-1.5',
                       optionsShown || imageShown ? 'bg-s2' : 'bg-s1',
                     )}
                   >
@@ -577,12 +577,12 @@ function LibraryForm({
                         aria-hidden="true"
                         title={t.libraries.dragHandle(name)}
                         className={cx(
-                          'flex h-10 w-7 shrink-0 touch-none items-center justify-center rounded-control text-ink-3 select-none [-webkit-touch-callout:none] hover:text-ink',
+                          'flex h-8 w-6 shrink-0 touch-none items-center justify-center rounded-control text-ink-3 select-none [-webkit-touch-callout:none] hover:text-ink',
                           dragged ? 'cursor-grabbing' : 'cursor-grab',
                         )}
                         {...rowDrag.grip(index)}
                       >
-                        <DotsSixVerticalIcon size="1.25rem" />
+                        <DotsSixVerticalIcon size="1.125rem" />
                       </span>
                       <span
                         aria-hidden="true"
@@ -607,7 +607,7 @@ function LibraryForm({
                       />
                     )}
                     <div className="min-w-0">
-                      <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                      <p className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                         <span className="min-w-0 text-h3 break-words text-ink">
                           {library.catalogName}
                         </span>
@@ -628,28 +628,21 @@ function LibraryForm({
                             · {t.libraries.appName(appName ?? name)}
                           </span>
                         )}
+                        {/* Its states on the same line, after what it is. */}
+                        {offAddons.has(library.addonId) && (
+                          <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
+                        )}
+                        {missing && <StatusPill tone="danger">{t.libraries.missing}</StatusPill>}
+                        {!tv && entry.hideInMenus && (
+                          <StatusPill tone="muted">{t.libraries.hiddenInMenus}</StatusPill>
+                        )}
+                        {library.skippable && entry.skipLocal && (
+                          <StatusPill tone="muted">{t.libraries.skippedLocal}</StatusPill>
+                        )}
+                        {!tv && shown !== undefined && (otherVideos || shown !== 'listed') && (
+                          <StatusPill tone="muted">{t.libraries.showAs.pill[shown]}</StatusPill>
+                        )}
                       </p>
-                      {(offAddons.has(library.addonId) ||
-                        missing ||
-                        (!tv && entry.hideInMenus) ||
-                        (library.skippable && entry.skipLocal) ||
-                        (!tv && shown !== undefined && (otherVideos || shown !== 'listed'))) && (
-                        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          {offAddons.has(library.addonId) && (
-                            <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
-                          )}
-                          {missing && <StatusPill tone="danger">{t.libraries.missing}</StatusPill>}
-                          {!tv && entry.hideInMenus && (
-                            <StatusPill tone="muted">{t.libraries.hiddenInMenus}</StatusPill>
-                          )}
-                          {library.skippable && entry.skipLocal && (
-                            <StatusPill tone="muted">{t.libraries.skippedLocal}</StatusPill>
-                          )}
-                          {!tv && shown !== undefined && (otherVideos || shown !== 'listed') && (
-                            <StatusPill tone="muted">{t.libraries.showAs.pill[shown]}</StatusPill>
-                          )}
-                        </p>
-                      )}
                       {tv && <TvSummary scope={scope} library={library} name={name} iptv={iptv} />}
                       {library.refreshable && (
                         <RefreshStatus refresh={library.refresh} name={name} />
@@ -718,7 +711,7 @@ function LibraryForm({
                     </div>
                   </div>
                   {imageShown && (
-                    <div className="mt-2 pl-12 max-md:pl-0">
+                    <div className="mt-1.5 pl-10 max-md:pl-0">
                       <LibraryImageEditor
                         id={ids.image(entry.key)}
                         scope={scope}
@@ -735,7 +728,7 @@ function LibraryForm({
                     <section
                       id={ids.options(entry.key)}
                       aria-label={t.libraries.optionsLabel(name)}
-                      className="mt-2 grid animate-rise grid-cols-[minmax(0,1fr)] gap-2 pl-12 max-md:pl-0"
+                      className="mt-1.5 grid animate-rise grid-cols-[minmax(0,1fr)] gap-1.5 pl-10 max-md:pl-0"
                     >
                       {!tv && (
                         <>
@@ -808,12 +801,12 @@ function LibraryForm({
                         />
                       )}
                       {!tv && (music !== undefined || iptv) && (
-                        <div className="px-[1.875rem] pt-1 text-small text-ink-2 max-md:px-5">
+                        <div className="px-4 pt-1 text-small text-ink-2 max-md:px-3.5">
                           {music !== undefined && (
                             <p>{t.libraries.music.help[music] ?? t.libraries.music.help.music}</p>
                           )}
                           {iptv && (
-                            <p className={cx(music !== undefined && 'mt-1.5')}>
+                            <p className={cx(music !== undefined && 'mt-1')}>
                               {t.libraries.iptvVod}{' '}
                               <Link
                                 to={lineupPath(scope, library.addonId, 'options')}
@@ -833,7 +826,7 @@ function LibraryForm({
           </ol>
         )}
         {scope === 'shared' && <UserLibraryOrders dirty={dirty} />}
-        <details className="group mt-6">
+        <details className="group mt-4">
           <summary className="focus-lit inline-flex cursor-pointer list-none items-center gap-2 rounded-control px-2 py-1.5 text-control font-medium text-ink-2 transition-colors duration-300 ease-nuit hover:text-ink max-md:-mx-2 [&::-webkit-details-marker]:hidden">
             <CaretRightIcon
               size="1.125rem"
@@ -842,19 +835,19 @@ function LibraryForm({
             />
             {t.libraries.defaultTitle}
           </summary>
-          <p className="mt-2 max-w-[66ch] pl-9 text-small text-ink-2 max-md:pl-6">
+          <p className="mt-1.5 max-w-[66ch] pl-8 text-small text-ink-2 max-md:pl-6">
             {t.libraries.defaultHelp}
           </p>
         </details>
       </Block>
 
       <Block title={t.libraries.availableTitle} count={notShown.length}>
-        <p className="mb-5 max-w-[66ch] text-small text-ink-2">{t.libraries.availableHelp}</p>
+        <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.libraries.availableHelp}</p>
         {notShown.length === 0 ? (
           <EmptyState icon={SquaresFourIcon} title={t.libraries.availableEmpty} />
         ) : (
           <>
-            <div className="mb-5 flex flex-wrap items-end gap-3">
+            <div className="mb-4 flex flex-wrap items-end gap-2.5">
               <div id={ids.filter} className="min-w-0 flex-[1_1_16.25rem] md:max-w-[27.5rem]">
                 <Field label={t.libraries.filter}>
                   <TextInput
@@ -894,7 +887,7 @@ function LibraryForm({
               <div
                 ref={availableBox}
                 className={cx(
-                  'grid grid-cols-[minmax(0,1fr)] gap-6',
+                  'grid grid-cols-[minmax(0,1fr)] gap-4',
                   notShown.length > boxedCatalogs && cx(scrollBox, 'pr-1'),
                 )}
               >
@@ -904,7 +897,7 @@ function LibraryForm({
                     <section key={addonId} aria-labelledby={headingId} className="min-w-0">
                       <h3
                         id={headingId}
-                        className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-group text-ink"
+                        className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-group text-ink"
                       >
                         <span className="min-w-0 break-words">{items[0].addonName}</span>
                         {offAddons.has(addonId) && (
@@ -1035,19 +1028,19 @@ function TvSummary({
   const { language, t } = useI18n()
   if (library.guides === null) {
     return (
-      <div className="mt-1.5 text-small text-ink-2">
+      <div className="mt-0.5 text-small text-ink-2">
         <p>{t.libraries.liveTv}</p>
-        <p className="mt-1">{t.libraries.guideAfterSave}</p>
+        <p className="mt-0.5">{t.libraries.guideAfterSave}</p>
       </div>
     )
   }
   const failing = failingGuides(library).length
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-small">
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-small">
       <span className="text-ink-2">{guideSummary(t, language, library)}</span>
       {failing > 0 && (
         <span className="flex items-center gap-1.5 text-warn">
-          <WarningIcon size="1.125rem" aria-hidden="true" className="shrink-0" />
+          <WarningIcon size="1rem" aria-hidden="true" className="shrink-0" />
           {t.livetv.failing(failing)}
         </span>
       )}
@@ -1057,7 +1050,7 @@ function TvSummary({
         className="focus-lit rounded-control font-medium text-link transition-colors duration-300 ease-nuit hover:text-link-hover"
       >
         {iptv ? t.livetv.lineup : t.livetv.manage}
-        <CaretRightIcon size="1rem" aria-hidden="true" className="ml-1 inline align-[-2px]" />
+        <CaretRightIcon size="0.875rem" aria-hidden="true" className="ml-1 inline align-[-1px]" />
       </Link>
     </div>
   )

@@ -102,12 +102,12 @@ export default function EpisodeOrders() {
 
   return (
     <Block title={e.title} count={orders.data?.length}>
-      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{e.help}</p>
+      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{e.help}</p>
       {list}
       <form
         onSubmit={submit}
         noValidate
-        className="mt-6 flex max-w-[45rem] flex-wrap items-end gap-3"
+        className="mt-4 flex max-w-[40rem] flex-wrap items-end gap-2.5"
       >
         <Field label={e.search} className="min-w-0 flex-[1_1_15rem]">
           <TextInput
@@ -122,7 +122,7 @@ export default function EpisodeOrders() {
         </Button>
       </form>
       {asked !== '' && (
-        <div className="mt-4 max-w-[45rem]">
+        <div className="mt-3 max-w-[40rem]">
           {found.isPending ? (
             <SkeletonRows rows={2} label={e.searching} />
           ) : found.isError ? (

@@ -69,11 +69,11 @@ function Picture({
     return (
       <span
         className={cx(
-          'grid aspect-video place-items-center rounded-[0.875rem] bg-s3 text-ink-3',
+          'grid aspect-video place-items-center rounded-[0.5rem] bg-s3 text-ink-3',
           className,
         )}
       >
-        <ImageIcon size="1.375rem" aria-hidden="true" />
+        <ImageIcon size="1.125rem" aria-hidden="true" />
       </span>
     )
   }
@@ -83,13 +83,13 @@ function Picture({
       alt=""
       loading="lazy"
       onError={() => setFailed(url)}
-      className={cx('aspect-video rounded-[0.875rem] bg-s3 object-cover', className)}
+      className={cx('aspect-video rounded-[0.5rem] bg-s3 object-cover', className)}
     />
   )
 }
 
 /** The size of the thumbnail at the start of a library's row. */
-const thumbSize = 'w-16 md:w-24'
+const thumbSize = 'w-14 md:w-20'
 
 /**
  * The small 16:9 image at the start of a library's row: a button that opens or closes the
@@ -128,7 +128,7 @@ export function LibraryThumb({
       title={text.edit(name, state)}
       onClick={onToggle}
       className={cx(
-        'group focus-lit relative shrink-0 cursor-pointer rounded-[0.875rem] transition-[box-shadow,scale] duration-300 ease-nuit',
+        'group focus-lit relative shrink-0 cursor-pointer rounded-[0.5rem] transition-[box-shadow,scale] duration-300 ease-nuit',
         open && 'shadow-[0_0_0_3px] shadow-ink',
         thumbSize,
       )}
@@ -136,9 +136,9 @@ export function LibraryThumb({
       <Picture library={library} width={160} className="w-full" />
       <span
         aria-hidden="true"
-        className="absolute inset-0 grid place-items-center rounded-[0.875rem] bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
+        className="absolute inset-0 grid place-items-center rounded-[0.5rem] bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
       >
-        <PencilSimpleIcon size="1.25rem" />
+        <PencilSimpleIcon size="1rem" />
       </span>
     </button>
   )
@@ -150,11 +150,11 @@ export function LiveTvThumb() {
     <span
       aria-hidden="true"
       className={cx(
-        'grid aspect-video shrink-0 place-items-center rounded-[0.875rem] bg-s3 text-ink-3',
+        'grid aspect-video shrink-0 place-items-center rounded-[0.5rem] bg-s3 text-ink-3',
         thumbSize,
       )}
     >
-      <TelevisionSimpleIcon size="1.375rem" />
+      <TelevisionSimpleIcon size="1.125rem" />
     </span>
   )
 }
@@ -295,10 +295,10 @@ export function LibraryImageEditor({
       ref={section}
       id={id}
       aria-labelledby={labelId}
-      className="animate-rise rounded-row bg-s1 py-6 pr-[1.375rem] pl-7 max-md:py-5 max-md:pr-4 max-md:pl-5"
+      className="animate-rise rounded-row bg-s1 py-4 pr-3 pl-4 max-md:py-3.5 max-md:pr-3 max-md:pl-3.5"
     >
-      <div className="flex gap-6 max-sm:flex-col max-sm:gap-4">
-        <Picture library={library} width={480} className="w-48 shrink-0 self-start sm:w-[15rem]" />
+      <div className="flex gap-4 max-sm:flex-col max-sm:gap-3">
+        <Picture library={library} width={480} className="w-40 shrink-0 self-start sm:w-[12rem]" />
         <div className="min-w-0 sm:flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -310,9 +310,9 @@ export function LibraryImageEditor({
             <IconButton size="sm" icon={XIcon} label={text.close(name)} onClick={onClose} />
           </div>
           {library.itemId === null ? (
-            <Notice className="mt-4">{text.afterSave}</Notice>
+            <Notice className="mt-3">{text.afterSave}</Notice>
           ) : (
-            <div className="mt-5 space-y-5">
+            <div className="mt-3.5 space-y-4">
               <div aria-busy={save.isPending && !uploading && !downloading ? true : undefined}>
                 <Segmented
                   label={text.label}
