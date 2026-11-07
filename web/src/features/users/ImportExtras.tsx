@@ -28,7 +28,7 @@ export function ExtrasChoice({
   const id = useId()
   return (
     <fieldset className="space-y-3" aria-describedby={plex ? `${id}-help` : undefined}>
-      <legend className="mb-1 text-[0.9375rem] font-medium text-ink">{text.title}</legend>
+      <legend className="mb-1 text-small font-medium text-ink">{text.title}</legend>
       {plex && (
         <p id={`${id}-help`} className="text-small text-ink-3">
           {text.plexHelp}

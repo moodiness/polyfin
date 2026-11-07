@@ -95,7 +95,7 @@ export default function CreateUserModal({
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-5 p-5">
+      <form id={formId} onSubmit={submit} noValidate className="space-y-4 p-5">
         <Field label={t.users.name} help={t.common.nameRule} error={nameError}>
           <TextInput
             value={name}

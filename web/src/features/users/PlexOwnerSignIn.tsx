@@ -51,7 +51,7 @@ export function PlexOwnerSignIn({
   return (
     <section
       aria-label={text.title}
-      className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[1.125rem] py-4 max-sm:p-3.5"
+      className="flex flex-col gap-3 rounded-row border border-line bg-bg px-4 py-3 max-sm:p-3"
     >
       <div className="flex flex-col gap-1">
         <h3 className="text-control font-medium text-ink">{text.title}</h3>

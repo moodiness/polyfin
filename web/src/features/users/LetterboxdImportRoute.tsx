@@ -48,7 +48,7 @@ export default function LetterboxdImportRoute() {
           {errorMessage(t, users.error)}
         </InlineError>
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6">
           <SettingRow
             kind="choice"
             label={text.user}
