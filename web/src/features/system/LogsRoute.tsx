@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   BugIcon,
   DownloadSimpleIcon,
@@ -22,6 +22,7 @@ import {
   Field,
   InlineError,
   Segmented,
+  Select,
   StatusPill,
   TextInput,
   type StatusTone,
@@ -40,6 +41,20 @@ type Level = keyof typeof levelRank
 /** The minimum level each filter shows. */
 const filters = { all: 'DEBUG', info: 'INFO', warn: 'WARN', error: 'ERROR' } as const
 type Filter = keyof typeof filters
+
+const wideQuery = '(min-width: 48rem)'
+
+/** Whether the four levels fit side by side: from 768 px up. */
+function useWide(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const media = window.matchMedia(wideQuery)
+      media.addEventListener('change', onChange)
+      return () => media.removeEventListener('change', onChange)
+    },
+    () => window.matchMedia(wideQuery).matches,
+  )
+}
 
 type Line = { seq: number; time: string; level: Level; text: string }
 
@@ -77,6 +92,11 @@ export default function LogsRoute() {
   const [lines, setLines] = useState<Line[]>([])
   const [following, setFollowing] = useState(true)
   const [filter, setFilter] = useState<Filter>('all')
+  const wide = useWide()
+  const levelOptions = (Object.keys(filters) as Filter[]).map((key) => ({
+    value: key,
+    label: text.levels[key],
+  }))
   const [search, setSearch] = useState('')
   const [error, setError] = useState<unknown>(null)
   const [loaded, setLoaded] = useState(false)
@@ -164,16 +184,19 @@ export default function LogsRoute() {
           aria-label={text.filters}
           className="mb-3 flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-end"
         >
+          {/* Side by side from 768 px up; on a phone, where they would wrap onto three lines, a
+              list. */}
           <Field label={text.level}>
-            <Segmented
-              label={text.level}
-              value={filter}
-              onChange={setFilter}
-              options={(Object.keys(filters) as Filter[]).map((key) => ({
-                value: key,
-                label: text.levels[key],
-              }))}
-            />
+            {wide ? (
+              <Segmented
+                label={text.level}
+                value={filter}
+                onChange={setFilter}
+                options={levelOptions}
+              />
+            ) : (
+              <Select value={filter} onValue={setFilter} options={levelOptions} />
+            )}
           </Field>
           <Field label={text.search} className="md:max-w-[24rem] md:min-w-[14rem] md:flex-1">
             <TextInput
