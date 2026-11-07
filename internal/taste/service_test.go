@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -119,4 +120,89 @@ func TestProfileIsBuiltFromTheUsersData(t *testing.T) {
 	if on, _ := again.Taglines(t.Context(), user.ID); on {
 		t.Error("building turned the taglines on")
 	}
+}
+
+// countedTitles counts the times titles are described: once per profile
+// built.
+type countedTitles struct {
+	fakeTitles
+	asked atomic.Int32
+}
+
+func (c *countedTitles) ItemsOf(ctx context.Context, user accounts.User, ids []accounts.ID, kinds []library.Kind) ([]library.Item, error) {
+	c.asked.Add(1)
+	return c.fakeTitles.ItemsOf(ctx, user, ids, kinds)
+}
+
+// Building every profile again builds only those whose user played,
+// rated or hid something, or changed what they reach, since; and every
+// profile once a day, as its titles age.
+func TestProfilesAreBuiltAgainOnlyWhenTheirInputsChanged(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	pool := migrated.New(t)
+	users, err := accounts.Open(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := users.CreateUser(ctx, accounts.NewUser{Name: "alice", Password: "correct horse"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := userdata.New(pool)
+	movie, other := accounts.ID{1}, accounts.ID{2}
+	titles := &countedTitles{fakeTitles: fakeTitles{
+		movie: {ID: movie, Kind: library.KindMovie, Genres: []string{"Thriller"}},
+		other: {ID: other, Kind: library.KindMovie, Genres: []string{"Western"}},
+	}}
+	clock := now
+	service := New(pool, users, data, titles, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetClock(func() time.Time { return clock })
+	play := func(count int) {
+		t.Helper()
+		if _, err := data.Change(ctx, user.ID, []userdata.Item{{ID: movie}}, func(d *userdata.Data) {
+			d.Played, d.PlayCount, d.LastPlayed = true, count, new(clock)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	builds := int32(0)
+	run := func(step string, built bool) {
+		t.Helper()
+		clock = clock.Add(BuildInterval)
+		if err := service.BuildAll(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if built {
+			builds++
+		}
+		if got := titles.asked.Load(); got != builds {
+			t.Fatalf("%s: %d builds, want %d", step, got, builds)
+		}
+		profile, err := service.Profile(ctx, user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if built != profile.Built.Equal(clock.UTC()) {
+			t.Errorf("%s: profile built at %v, now %v", step, profile.Built, clock)
+		}
+	}
+	play(1)
+	run("first", true)
+	run("nothing changed", false)
+	play(2)
+	run("played again", true)
+	run("nothing changed since", false)
+	if err := data.Hide(ctx, user.ID, other, clock); err != nil {
+		t.Fatal(err)
+	}
+	run("hid a title", true)
+	if _, err := users.UpdateUser(ctx, user.ID, accounts.UserChanges{BlockedGenres: &[]string{"Western"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	run("blocked a genre", true)
+	for range 23 {
+		run("within the day", false)
+	}
+	run("a day later", true)
 }

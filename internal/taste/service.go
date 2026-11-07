@@ -3,6 +3,7 @@ package taste
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -19,8 +20,12 @@ import (
 )
 
 const (
-	// BuildInterval is how often the profiles are built again.
+	// BuildInterval is how often the profiles are built again: those
+	// whose inputs changed (see BuildAll).
 	BuildInterval = time.Hour
+	// rebuildAfter is how long a profile whose inputs did not change is
+	// kept: recency weighting ages it.
+	rebuildAfter = 24 * time.Hour
 	// maxTitles bounds the titles a profile is built from: those the user
 	// did something with last.
 	maxTitles = 300
@@ -46,10 +51,13 @@ type Service struct {
 }
 
 // saved is a user's row: their profile, and whether their titles' details
-// tell why a title is for them.
+// tell why a title is for them; inputs is the digest of what this run of
+// the server built the profile from (see digest), zero when it was read
+// from the database.
 type saved struct {
 	profile  Profile
 	taglines bool
+	inputs   [sha256.Size]byte
 }
 
 // New returns a service keeping profiles in db, built from the data of
@@ -120,15 +128,18 @@ func (s *Service) SetTaglines(ctx context.Context, user accounts.ID, on bool) er
 	return nil
 }
 
-// BuildAll builds every user's profile again, one user after the other.
-// A user whose profile fails is logged and left as it was.
+// BuildAll builds the users' profiles again, one user after the other: a
+// user whose data, hidden titles and settings that change what they reach
+// are as when this run of the server last built their profile keeps it,
+// until it is rebuildAfter old. A user whose profile fails is logged and
+// left as it was.
 func (s *Service) BuildAll(ctx context.Context) error {
 	users, err := s.users.Users(ctx)
 	if err != nil {
 		return err
 	}
 	for _, user := range users {
-		if _, err := s.Build(ctx, user); err != nil {
+		if err := s.buildChanged(ctx, user); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -138,10 +149,45 @@ func (s *Service) BuildAll(ctx context.Context) error {
 	return nil
 }
 
+// buildChanged builds the user's profile again unless its inputs did not
+// change since it was built, less than rebuildAfter ago.
+func (s *Service) buildChanged(ctx context.Context, user accounts.User) error {
+	in, err := s.inputs(ctx, user)
+	if err != nil {
+		return err
+	}
+	digest, err := in.digest(user)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	row, ok := s.saved[user.ID]
+	s.mu.Unlock()
+	if ok && row.inputs == digest && s.now().Sub(row.profile.Built) < rebuildAfter {
+		return nil
+	}
+	_, err = s.build(ctx, user, in, digest)
+	return err
+}
+
 // Build builds the user's profile again from what they did with the
 // movies and series they reach, and keeps it.
 func (s *Service) Build(ctx context.Context, user accounts.User) (Profile, error) {
-	evidence, err := s.evidence(ctx, user)
+	in, err := s.inputs(ctx, user)
+	if err != nil {
+		return Profile{}, err
+	}
+	digest, err := in.digest(user)
+	if err != nil {
+		return Profile{}, err
+	}
+	return s.build(ctx, user, in, digest)
+}
+
+// build builds the user's profile from in, whose digest is digest, and
+// keeps it.
+func (s *Service) build(ctx context.Context, user accounts.User, in inputs, digest [sha256.Size]byte) (Profile, error) {
+	evidence, err := s.evidence(ctx, user, in)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -158,23 +204,47 @@ func (s *Service) Build(ctx context.Context, user accounts.User) (Profile, error
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.saved[user.ID] = saved{profile: profile, taglines: taglines}
+	s.saved[user.ID] = saved{profile: profile, taglines: taglines, inputs: digest}
 	return profile, nil
+}
+
+// inputs are the user's data a profile is built from: the data of every
+// item they touched, and the titles they hid.
+type inputs struct {
+	Touched []userdata.Entry
+	Hidden  []userdata.HiddenTitle
+}
+
+func (s *Service) inputs(ctx context.Context, user accounts.User) (inputs, error) {
+	touched, err := s.data.Touched(ctx, user.ID)
+	if err != nil {
+		return inputs{}, err
+	}
+	hidden, err := s.data.Hidden(ctx, user.ID)
+	return inputs{Touched: touched, Hidden: hidden}, err
+}
+
+// digest sums in, with the user's settings that change the titles they
+// reach: two equal digests build the same profile at the same time, as
+// long as the titles and libraries are the same.
+func (in inputs) digest(user accounts.User) ([sha256.Size]byte, error) {
+	sum := sha256.New()
+	err := json.NewEncoder(sum).Encode(struct {
+		inputs
+		Administrator, PersonalAddons, SharedAddons bool
+		Parental                                    accounts.ParentalControl
+		HiddenLibraries                             []accounts.ID
+		BlockedGenres                               []string
+	}{in, user.IsAdministrator, user.PersonalAddons, user.UseSharedAddons, user.Parental, user.HiddenLibraries, user.BlockedGenres})
+	return [sha256.Size]byte(sum.Sum(nil)), err
 }
 
 // evidence is what the user did with each movie and series, the latest
 // maxTitles of them, each described: from its data, its episodes' data
 // for a series, and the titles hidden. The titles the user no longer
 // reaches are left out.
-func (s *Service) evidence(ctx context.Context, user accounts.User) ([]Evidence, error) {
-	entries, err := s.data.Touched(ctx, user.ID)
-	if err != nil {
-		return nil, err
-	}
-	hidden, err := s.data.Hidden(ctx, user.ID)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) evidence(ctx context.Context, user accounts.User, in inputs) ([]Evidence, error) {
+	entries, hidden := in.Touched, in.Hidden
 	activities := map[accounts.ID]*Activity{}
 	var order []accounts.ID
 	of := func(id accounts.ID) *Activity {
