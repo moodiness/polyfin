@@ -408,12 +408,13 @@ func (s *Service) Variants(ctx context.Context, remux Remux, lower bool) ([]hls.
 	if bandwidth <= 0 && analysis.Duration > 0 {
 		bandwidth = int64(float64(analysis.Size*8) / analysis.Duration.Seconds())
 	}
-	variants := []hls.Variant{variant(analysis, video, bandwidth, remux)}
+	t := TuningOf(s.settings())
+	variants := []hls.Variant{variant(analysis, video, bandwidth, remux, t)}
 	if lower && remux.ConvertVideo != nil {
 		for i := range remux.ConvertVideo.Steps(video.Width, video.Height) {
 			step := remux
 			step.Variant = i + 1
-			variants = append(variants, variant(analysis, video, bandwidth, step))
+			variants = append(variants, variant(analysis, video, bandwidth, step, t))
 		}
 	}
 	return variants, nil
@@ -441,8 +442,8 @@ func (r Remux) HasVariant() bool {
 }
 
 // variant describes in a master playlist what remux makes of video, the
-// source being bandwidth bits per second.
-func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux Remux) hls.Variant {
+// source being bandwidth bits per second, converted as t tunes it.
+func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux Remux, t Tuning) hls.Variant {
 	v := hls.Variant{Bandwidth: bandwidth, Width: video.Width, Height: video.Height, Range: hlsRange(video)}
 	if rate := video.AverageRate; rate > 0 {
 		v.FrameRate = math.Round(rate*1000) / 1000
@@ -451,16 +452,15 @@ func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux
 	}
 	codecs := []string{videoCodecString(video)}
 	if c := remux.conversion(video); c != nil {
-		// What the encoder writes, at most its peak rate with the audio
-		// sent, on average its bitrate with it, at the frame rate the
-		// app's profile allows.
-		if c.FrameRate > 0 && (v.FrameRate <= 0 || c.FrameRate < v.FrameRate) {
-			v.FrameRate = math.Round(c.FrameRate*1000) / 1000
-		}
-		codecs[0] = c.CodecString(v.FrameRate)
+		// What the encoder writes (see encoding): at the frame rate and
+		// level it is told, at most its peak rate with the audio sent, on
+		// average its bitrate with it.
+		rate, _ := c.encodedRate(knownRate(video.AverageRate, video.FrameRate), t)
+		level := c.codecLevel(rate)
+		v.FrameRate, codecs[0] = math.Round(rate*1000)/1000, c.codecString(level)
 		v.Width, v.Height, v.Range = c.Width, c.Height, "SDR"
 		audio := sentAudio(analysis, remux)
-		v.Bandwidth, v.AverageBandwidth = c.peak()+audio, c.Bitrate+audio
+		v.Bandwidth, v.AverageBandwidth = level.peak+audio, level.bitrate+audio
 	}
 	if audio, ok := streamOf(analysis, remux.Audio); ok {
 		if remux.ConvertAudio != nil {
@@ -791,27 +791,24 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 // encoding is what an encoding converts video to as c says, tuned by t,
 // with the remux's subtitle burned in.
 func (remux Remux) encoding(c *VideoConversion, video media.Stream, t Tuning) *hls.VideoEncoding {
-	rate := video.AverageRate
-	if rate <= 0 {
-		rate = video.FrameRate
-	}
-	// Like Jellyfin, frames are doubled up to 30 a second, within the
-	// frame rate the app's profile allows, which drops the frames beyond
-	// it.
-	double := c.Deinterlace && t.DoubleRate && rate > 0 && rate <= 30 && (c.FrameRate <= 0 || rate*2 <= c.FrameRate)
-	if double {
-		rate *= 2
-	}
-	drop := c.FrameRate > 0 && rate > c.FrameRate
-	if drop {
-		rate = c.FrameRate
-	}
+	rate, double := c.encodedRate(knownRate(video.AverageRate, video.FrameRate), t)
 	// The source's colors, which video converted without tone mapping
 	// keeps (see hls.VideoEncoding.Colors).
 	colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
-	return &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
-		FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, ToneMapReason: c.ToneMapReason,
-		Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
-		ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double,
-		DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
+	e := &hls.VideoEncoding{Encoder: c.Encoder, Width: c.Width, Height: c.Height, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU,
+		ToneMapReason: c.ToneMapReason, Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware,
+		Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat,
+		Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
+	c.encodeAt(e, rate)
+	return e
+}
+
+// encodeAt has e encode c's video at rate frames a second, pinned with
+// -r, at the level c declares for that rate, with the bitrates that
+// level holds (see VideoConversion.codecLevel): the encoder is set up
+// with nothing the level does not hold.
+func (c *VideoConversion) encodeAt(e *hls.VideoEncoding, rate float64) {
+	l := c.codecLevel(rate)
+	e.Level, e.FrameRate, e.PinRate = l.name(), rate, true
+	e.Bitrate, e.MaxRate, e.BufSize = l.bitrate, l.peak, l.buffer
 }

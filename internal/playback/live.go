@@ -638,7 +638,7 @@ func (s *Service) LiveVariant(ctx context.Context, remux Remux) (hls.Variant, er
 	if bandwidth <= 0 {
 		bandwidth = liveBandwidth
 	}
-	return variant(analysis, video, bandwidth, remux), nil
+	return variant(analysis, video, bandwidth, remux, TuningOf(s.settings())), nil
 }
 
 // LiveVideo is the video a live stream plays: of the variants an HLS

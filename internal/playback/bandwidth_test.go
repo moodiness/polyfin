@@ -50,7 +50,7 @@ func TestMasterBandwidthCountsTheAudioSent(t *testing.T) {
 			for i := 0; i <= len(d.Video.Steps(video.Width, video.Height)); i++ {
 				remux.Variant = i
 				c := remux.conversion(video)
-				v := variant(analysis, video, analysis.Bitrate, remux)
+				v := variant(analysis, video, analysis.Bitrate, remux, Tuning{})
 				if v.Bandwidth != c.peak()+sent || v.AverageBandwidth != c.Bitrate+sent {
 					t.Errorf("%s within %d, quality %d: BANDWIDTH %d, AVERAGE-BANDWIDTH %d; want %d and %d", tc.name, limit, i,
 						v.Bandwidth, v.AverageBandwidth, c.peak()+sent, c.Bitrate+sent)
