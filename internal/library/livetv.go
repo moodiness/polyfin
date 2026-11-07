@@ -580,8 +580,15 @@ func (s *Service) searchProgram(ctx context.Context, id accounts.ID) (programRef
 // SweepPrograms deletes the programmes kept as items that ended more than
 // two days ago and that no timer or recording names: Native EPG programmes
 // listed, and those of guides kept before they no longer were; and the
-// Replay programmes no archive keeps any more, past maxReplayDays.
+// Replay programmes no archive keeps any more, past maxReplayDays. Without
+// any programme kept, as on a server without Live TV, it reads only the
+// index of programmes. The kinds are written in the statements, so that
+// the planner uses that index (see migration items_programmes).
 func (s *Service) SweepPrograms(ctx context.Context) (int64, error) {
+	var kept bool
+	if err := s.db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM items WHERE kind IN ('program', 'replay'))").Scan(&kept); err != nil || !kept {
+		return 0, err
+	}
 	tag, err := s.db.Exec(ctx, `DELETE FROM items WHERE kind = 'program'
 		AND CASE WHEN data->'video'->>'endTime' ~ '^\d{4}-\d\d-\d\dT\d\d:\d\d' THEN (data->'video'->>'endTime')::timestamptz < $1 ELSE false END
 		AND id NOT IN (SELECT program_id FROM live_timers WHERE program_id IS NOT NULL
@@ -590,8 +597,8 @@ func (s *Service) SweepPrograms(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	replays, err := s.db.Exec(ctx, `DELETE FROM items WHERE kind = $1
-		AND CASE WHEN data->'video'->>'endTime' ~ '^\d{4}-\d\d-\d\dT\d\d:\d\d' THEN (data->'video'->>'endTime')::timestamptz < $2 ELSE true END`,
-		string(KindReplay), s.now().AddDate(0, 0, -maxReplayDays))
+	replays, err := s.db.Exec(ctx, `DELETE FROM items WHERE kind = 'replay'
+		AND CASE WHEN data->'video'->>'endTime' ~ '^\d{4}-\d\d-\d\dT\d\d:\d\d' THEN (data->'video'->>'endTime')::timestamptz < $1 ELSE true END`,
+		s.now().AddDate(0, 0, -maxReplayDays))
 	return tag.RowsAffected() + replays.RowsAffected(), err
 }
