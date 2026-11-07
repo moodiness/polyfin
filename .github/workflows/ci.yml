@@ -504,7 +504,38 @@ jobs:
       - name: Test
         env:
           PART: ${{ matrix.part }}
-        run: make "test-race-$PART"
+          # go test -json through gotestsum, which prints go test's lines
+          # and keeps the events, each test's time among them. From the Go
+          # module proxy, its version checked by the Go checksum database.
+          GOTEST: &gotestsum go run gotest.tools/gotestsum@v1.13.0 --format standard-quiet --jsonfile ${{ runner.temp }}/go-test.json --
+        run: make "test-race-$PART" GOTEST="$GOTEST"
+      - &test-times
+        name: Check each test's time, and list the packages testing serially
+        # A test over 30 s fails the job unless .github/slow-tests.txt names
+        # it; the job's summary lists the tests over 30 s, the slowest ones,
+        # and the packages whose tests run one after the other. After a
+        # failing test too, as long as tests ran.
+        if: ${{ !cancelled() }}
+        env:
+          TITLE: ${{ github.job == 'jellyfin' && 'Jellyfin API tests' || 'Go tests' }} under the race detector, part ${{ matrix.part }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/go-test.json" ]; then echo "No test ran"; exit 0; fi
+          python3 scripts/test-times.py --limit 30 --allowlist .github/slow-tests.txt --title "$TITLE" \
+            --out "$RUNNER_TEMP/test-times" --summary "$GITHUB_STEP_SUMMARY" "$RUNNER_TEMP/go-test.json"
+      - &keep-test-times
+        name: Keep the tests' times
+        # go test's events, and the times the step above wrote:
+        # durations.tsv, each test's and subtest's; packages.tsv, each
+        # package's; over-limit.txt, the lines the allowlist lacks.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-times-${{ github.job }}-${{ matrix.part }}
+          path: |
+            ${{ runner.temp }}/go-test.json
+            ${{ runner.temp }}/test-times
+          if-no-files-found: ignore
+          retention-days: 30
       - *save-go-caches
 
   jellyfin:
@@ -531,7 +562,10 @@ jobs:
       - name: Test internal/jellyfin
         env:
           PART: ${{ matrix.part }}
-        run: make "test-jellyfin-$PART"
+          GOTEST: *gotestsum
+        run: make "test-jellyfin-$PART" GOTEST="$GOTEST"
+      - *test-times
+      - *keep-test-times
       - *save-go-caches
 
   windows:
@@ -568,22 +602,99 @@ jobs:
       - *setup-go
       - *find-go-caches
       - *restore-go-caches
+      - &choose-postgresql
+        name: Choose PostgreSQL 18's server programs
+        # EnterpriseDB's binaries for Windows and macOS, as postgresql.org
+        # links them, each download checked against its checksum. What the
+        # jobs take from the archive is cached under both. Linux's come
+        # from PostgreSQL's packages.
+        id: postgresql
+        run: |
+          case "$RUNNER_OS" in
+            Windows)
+              # x64, which Windows on Arm emulates.
+              url=https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
+              sha256=41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323
+              ;;
+            macOS)
+              # For Apple silicon and Intel alike.
+              url=https://get.enterprisedb.com/postgresql/postgresql-18.6-2-osx-binaries.zip
+              sha256=21c0432b3cb45ab763aab2b4efe9edfa91f658c3be09cddf272c7b52eb2aa3fc
+              ;;
+            *) exit 0 ;;
+          esac
+          {
+            echo "url=$url"
+            echo "sha256=$sha256"
+          } >> "$GITHUB_OUTPUT"
+      - &restore-postgresql
+        name: Restore PostgreSQL 18's server programs
+        # The archive's bin, lib and share: its 22,000 files, most of them
+        # pgAdmin's, took a minute to unzip on Windows on Arm, its download
+        # 4 s. A change to what is taken from it needs a new key.
+        id: postgresql-cache
+        if: steps.postgresql.outputs.url != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/install/postgresql
+          key: &postgresql-key postgresql-${{ runner.os }}-${{ runner.arch }}-${{ steps.postgresql.outputs.url }}-${{ steps.postgresql.outputs.sha256 }}
+      - &fetch-postgresql
+        name: Fetch PostgreSQL 18's server programs, into an install folder
+        # The install folder as the packages lay it out: postgresql/bin, lib
+        # and share, and the server, built by the desktop job.
+        if: steps.postgresql-cache.outputs.cache-hit != 'true'
+        env:
+          URL: ${{ steps.postgresql.outputs.url }}
+          SHA256: ${{ steps.postgresql.outputs.sha256 }}
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then temp="$(cygpath -u "$RUNNER_TEMP")"; else temp="$RUNNER_TEMP"; fi
+          mkdir -p "$temp/install"
+          if [ "$RUNNER_OS" = Linux ]; then
+            # PostgreSQL's own packages, signed with the key checked here,
+            # without the cluster Debian's packaging would make.
+            curl -fsSLo "$temp/pgdg.asc" https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            echo "0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76  $temp/pgdg.asc" | sha256sum -c -
+            sudo install -d /usr/share/postgresql-common/pgdg /etc/postgresql-common/createcluster.d
+            sudo cp "$temp/pgdg.asc" /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+            echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.d/polyfin.conf
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+              | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-18
+            ln -s /usr/lib/postgresql/18 "$temp/install/postgresql"
+            exit 0
+          fi
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$temp/postgresql.zip" "$URL"
+          if [ "$RUNNER_OS" = macOS ]; then sum=(shasum -a 256); else sum=(sha256sum); fi
+          echo "$SHA256  $temp/postgresql.zip" | "${sum[@]}" -c -
+          # The whole archive, then its bin, lib and share: the unzip of Git
+          # for Windows takes a * of a pattern for one folder level only,
+          # which would leave out share's subfolders.
+          unzip -q "$temp/postgresql.zip" -d "$temp/edb"
+          mkdir "$temp/install/postgresql"
+          mv "$temp/edb/pgsql/bin" "$temp/edb/pgsql/lib" "$temp/edb/pgsql/share" "$temp/install/postgresql/"
+          rm -rf "$temp/edb" "$temp/postgresql.zip"
+      - &keep-postgresql
+        name: Keep PostgreSQL 18's server programs for the next runs
+        # From any run that missed them, a pull request's too, as the
+        # Tesseract packages, before the server starts from them.
+        if: steps.postgresql.outputs.url != '' && steps.postgresql-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/install/postgresql
+          key: *postgresql-key
       - name: Start PostgreSQL 18 and install the image's FFmpeg, for Windows
         run: |
-          # PostgreSQL's Windows binaries, from EnterpriseDB as postgresql.org
-          # links them, and BtbN's FFmpeg build of the Dockerfile's release
-          # for Windows: each checked against its checksum.
+          # BtbN's FFmpeg build of the Dockerfile's release for Windows,
+          # checked against its checksum.
           temp="$(cygpath -u "$RUNNER_TEMP")"
-          curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
-          echo "41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323  $temp/postgresql.zip" | sha256sum -c -
           curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$temp/ffmpeg.zip" https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0.zip
           echo "3da6c7b60bb9ccd73ec5b5e815ba804a0879eb362ba0e3beebce50174c022696  $temp/ffmpeg.zip" | sha256sum -c -
-          unzip -q "$temp/postgresql.zip" -d "$temp"
           unzip -q "$temp/ffmpeg.zip" -d "$temp"
           mv "$temp"/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0 "$temp/ffmpeg"
           # pg_ctl drops the runner's administrator rights, which the
           # server refuses to run with.
-          bin="$temp/pgsql/bin"
+          bin="$temp/install/postgresql/bin"
           printf polyfin > "$temp/password"
           "$bin/initdb" -D "$temp/pgdata" -U polyfin --pwfile="$temp/password" -A scram-sha-256 -E UTF8 --locale=C
           "$bin/pg_ctl" -D "$temp/pgdata" -l "$temp/postgresql.log" -o "-p 5432" -w start
@@ -592,8 +703,8 @@ jobs:
           windows="$(cygpath -m "$RUNNER_TEMP")"
           {
             echo "POLYFIN_TEST_FFMPEG=$windows/ffmpeg/bin/ffmpeg.exe"
-            echo "POLYFIN_TEST_PG_DUMP=$windows/pgsql/bin/pg_dump.exe"
-            echo "POLYFIN_TEST_PG_RESTORE=$windows/pgsql/bin/pg_restore.exe"
+            echo "POLYFIN_TEST_PG_DUMP=$windows/install/postgresql/bin/pg_dump.exe"
+            echo "POLYFIN_TEST_PG_RESTORE=$windows/install/postgresql/bin/pg_restore.exe"
           } >> "$GITHUB_ENV"
           # The tests of the GPU methods look FFmpeg up in PATH.
           echo "$windows/ffmpeg/bin" >> "$GITHUB_PATH"
@@ -811,52 +922,48 @@ jobs:
         shell: bash
     steps: &desktop-steps
       - *checkout
+      - name: Find the Go toolchain go.mod asks for, on Windows on Arm
+        # The runner lacks it: setup-go downloaded it in 1 s, then took
+        # about 45 s to unzip its 15,600 files and copy them into the tool
+        # cache. That folder is cached under the version, and found there.
+        id: go-toolchain
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        run: |
+          # As setup-go reads go.mod: its toolchain line, else its go line.
+          version="$(awk '$1 == "toolchain" { sub(/^go/, "", $2); print $2; exit }' go.mod)"
+          if [ -z "$version" ]; then version="$(awk '$1 == "go" { print $2; exit }' go.mod)"; fi
+          folder="$RUNNER_TOOL_CACHE/go/$version/arm64"
+          {
+            echo "version=$version"
+            echo "paths<<PATHS"
+            echo "$folder"
+            echo "$folder.complete"
+            echo "PATHS"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore the Go toolchain
+        id: go-toolchain-cache
+        if: steps.go-toolchain.outputs.version != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-toolchain.outputs.paths }}
+          key: &go-toolchain-key go-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-toolchain.outputs.version }}
       - *setup-go
+      - name: Keep the Go toolchain for the next runs
+        # From any run that missed it, a pull request's too.
+        if: steps.go-toolchain.outputs.version != '' && steps.go-toolchain-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-toolchain.outputs.paths }}
+          key: *go-toolchain-key
       - *find-go-caches
       - *restore-go-caches
-      - name: Fetch PostgreSQL 18's server programs, into an install folder
+      - *choose-postgresql
+      - *restore-postgresql
+      - *fetch-postgresql
+      - *keep-postgresql
+      - name: Start a test database
         run: |
-          # The install folder as the packages lay it out: postgresql/bin,
-          # lib and share, and the server, built below. Each download is
-          # checked against its checksum.
           if [ "$RUNNER_OS" = Windows ]; then temp="$(cygpath -u "$RUNNER_TEMP")"; else temp="$RUNNER_TEMP"; fi
-          mkdir -p "$temp/install"
-          case "$RUNNER_OS" in
-            Linux)
-              # PostgreSQL's own packages, signed with the key checked here,
-              # without the cluster Debian's packaging would make.
-              curl -fsSLo "$temp/pgdg.asc" https://www.postgresql.org/media/keys/ACCC4CF8.asc
-              echo "0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76  $temp/pgdg.asc" | sha256sum -c -
-              sudo install -d /usr/share/postgresql-common/pgdg /etc/postgresql-common/createcluster.d
-              sudo cp "$temp/pgdg.asc" /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
-              echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.d/polyfin.conf
-              echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-                | sudo tee /etc/apt/sources.list.d/pgdg.list
-              sudo apt-get update
-              sudo apt-get install -y --no-install-recommends postgresql-18
-              ln -s /usr/lib/postgresql/18 "$temp/install/postgresql"
-              ;;
-            Windows)
-              # EnterpriseDB's binaries, as postgresql.org links them; x64,
-              # which Windows on Arm emulates.
-              curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
-              echo "41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323  $temp/postgresql.zip" | sha256sum -c -
-              ;;
-            macOS)
-              # EnterpriseDB's binaries, for Apple silicon and Intel alike.
-              curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-osx-binaries.zip
-              echo "21c0432b3cb45ab763aab2b4efe9edfa91f658c3be09cddf272c7b52eb2aa3fc  $temp/postgresql.zip" | shasum -a 256 -c -
-              ;;
-          esac
-          if [ "$RUNNER_OS" != Linux ]; then
-            # The whole archive, then its bin, lib and share: the unzip of
-            # Git for Windows takes a * of a pattern for one folder level
-            # only, which would leave out share's subfolders.
-            unzip -q "$temp/postgresql.zip" -d "$temp/edb"
-            mkdir "$temp/install/postgresql"
-            mv "$temp/edb/pgsql/bin" "$temp/edb/pgsql/lib" "$temp/edb/pgsql/share" "$temp/install/postgresql/"
-            rm -rf "$temp/edb" "$temp/postgresql.zip"
-          fi
           bin="$temp/install/postgresql/bin"
           "$bin/postgres" --version
           # A database for the test that reads the server's check for new
@@ -962,7 +1069,27 @@ jobs:
     steps:
       - *checkout
       - *setup-buildx
+      - name: Let Docker's build reach GitHub's cache
+        # buildx's gha cache reads the runtime's token and the cache's
+        # address from the environment, which only an action sees.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const name of ['ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL', 'ACTIONS_CACHE_URL', 'ACTIONS_CACHE_SERVICE_V2']) {
+              const value = process.env[name]
+              if (!value) continue
+              if (name === 'ACTIONS_RUNTIME_TOKEN') core.setSecret(value)
+              core.exportVariable(name, value)
+            }
       - name: Take jellyfin-web and the fonts from the image's stages
+        # Their layers from GitHub's cache: 83 MB, which took the build
+        # from 74 s to 7 s in a local test (files.sh takes 18 s on CI).
+        # The image job keeps none: its cache would be 1.7 GB, in a
+        # repository cache already over its 10 GB, for no gain on a pull
+        # request that changes Go code (152 s without it, 154 s with it,
+        # locally), as both Go builds run again.
+        env:
+          POLYFIN_DESKTOP_FILES_CACHE: type=gha,scope=desktop-files
         run: scripts/packaging/files.sh "$RUNNER_TEMP/files"
       - name: Keep them for the packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

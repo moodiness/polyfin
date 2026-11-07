@@ -1,0 +1,18 @@
+# Tests allowed over 30 s in CI's race jobs, which fail on any other
+# (scripts/test-times.py): one a line, the package as go test prints it,
+# the test, then why after a #. A job's summary lists the tests of this file
+# now under 30 s, whose lines can go.
+#
+# These wait in real time, by design, for a torrent's start and its pieces'
+# timeouts: a 2026-11-07 run of the whole suite took 30.8 to 124.5 s each.
+github.com/moodiness/polyfin/internal/jellyfin TestATorrentWhoseFirstBytesComeSlowlyPlaysAtItsFirstPlay # a 40 s engine start scales its waits up to 140 s
+github.com/moodiness/polyfin/internal/jellyfin TestATorrentTooSlowForThePlayIsToldToTryLater # the play's longest wait, 64 s
+github.com/moodiness/polyfin/internal/jellyfin TestAPlayJoiningASlowTorrentsAnalysisWaitsAsLongAsAlone # each play's longest wait, 64 s
+github.com/moodiness/polyfin/internal/jellyfin TestATorrentWhosePeerHoldsItsPiecesPlaysOnceItSends # the engine's start and a piece's wait
+github.com/moodiness/polyfin/internal/jellyfin TestATorrentWhosePiecesKeepComingPlaysAtItsFirstPlay # pieces for about 55 s past a 35 s first wait
+github.com/moodiness/polyfin/internal/jellyfin TestATorrentWhoseProxyFreezesAtItsFirstPlayPlaysOnceItAnswers # a proxy frozen for 40 s
+github.com/moodiness/polyfin/internal/jellyfin TestPlaysThatGaveUpLeaveNoGoroutineBehind # an analysis waiting a piece's wait twice
+github.com/moodiness/polyfin/internal/jellyfin TestATorrentPlayAnswersOnceItsStartAndAPiecesWaitPassed # the start and a piece's wait
+github.com/moodiness/polyfin/internal/playback TestASubtitleTrackOfAStalledTorrentIsReadOnceItSends # a read stalled over a swarm sending nothing
+github.com/moodiness/polyfin/internal/playback TestAPictureTrackOfAStalledTorrentIsReadOnceItSends # a read stalled over a swarm sending nothing
+github.com/moodiness/polyfin/internal/playback TestSubtitlesOfASlowTorrentAreLocatedOnceItSends # an index read too slow for its wait

@@ -70,6 +70,21 @@ CI runs the tests in four jobs at once:
 
 A new package goes to the second share, and a new test of `internal/jellyfin` to the half its name falls in.
 
+### Test times
+
+These four jobs run the tests through `go test -json`, by [gotestsum](https://github.com/gotestyourself/gotestsum), and check each test's time with `scripts/test-times.py`:
+
+- **Over 30 seconds:** a test fails its job, unless `.github/slow-tests.txt` lists it with the reason. A subtest's time counts in its test's.
+- **The job's summary:** the tests over 30 seconds, the slowest tests, and the packages whose tests run one after the other. An allowlisted test now under 30 seconds is listed too, so that its line can go.
+- **The run's artifacts:** each job keeps `test-times-<job>-<part>`, with go test's events and `durations.tsv`, every test's time. `over-limit.txt` holds the lines the allowlist lacks.
+
+The same check runs on any `go test -json` output:
+
+```sh
+go test -json -race ./internal/lyrics > times.json
+python3 scripts/test-times.py --allowlist .github/slow-tests.txt times.json
+```
+
 ### Tests in parallel
 
 A test calls `t.Parallel()` first, and so does each of its subtests: a package's tests run at once.
@@ -292,7 +307,7 @@ For Windows on Arm, `postgresql-windows.sh`:
 - Ninja and NSIS, as GitHub's `windows-11-arm` runners have them;
 - Docker, only when `POLYFIN_DESKTOP_FILES` names no folder made by `files.sh`.
 
-jellyfin-web and the fonts come from the Docker image's stages, through `files.sh`. On a Mac without Docker, give `POLYFIN_DESKTOP_FILES` the folder that `files.sh` made elsewhere. Every download is checked against its checksum, and kept in `~/.cache/polyfin-packaging`.
+jellyfin-web and the fonts come from the Docker image's stages, through `files.sh`. On a Mac without Docker, give `POLYFIN_DESKTOP_FILES` the folder that `files.sh` made elsewhere. `POLYFIN_DESKTOP_FILES_CACHE` names a buildx cache its build takes its layers from and keeps them in, as CI's `type=gha,scope=desktop-files`. Every download is checked against its checksum, and kept in `~/.cache/polyfin-packaging`.
 
 `scripts/packaging/test.sh <package>` tests a package on the system it is for:
 

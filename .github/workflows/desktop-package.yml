@@ -57,12 +57,44 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
+      - name: Find the Go toolchain go.mod asks for, on Windows on Arm
+        # As in the CI workflow's desktop job: setup-go takes about 45 s to
+        # unzip it and copy it into the tool cache, whose folder is cached
+        # under the version, and found there.
+        id: go-toolchain
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        run: |
+          # As setup-go reads go.mod: its toolchain line, else its go line.
+          version="$(awk '$1 == "toolchain" { sub(/^go/, "", $2); print $2; exit }' go.mod)"
+          if [ -z "$version" ]; then version="$(awk '$1 == "go" { print $2; exit }' go.mod)"; fi
+          folder="$RUNNER_TOOL_CACHE/go/$version/arm64"
+          {
+            echo "version=$version"
+            echo "paths<<PATHS"
+            echo "$folder"
+            echo "$folder.complete"
+            echo "PATHS"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore the Go toolchain
+        id: go-toolchain-cache
+        if: steps.go-toolchain.outputs.version != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-toolchain.outputs.paths }}
+          key: &go-toolchain-key go-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-toolchain.outputs.version }}
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           # The steps below keep Go's caches, as in the CI workflow.
           cache: false
+      - name: Keep the Go toolchain for the next runs
+        # From any run that missed it, a pull request's too.
+        if: steps.go-toolchain.outputs.version != '' && steps.go-toolchain-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-toolchain.outputs.paths }}
+          key: *go-toolchain-key
       - name: Find Go's caches
         id: go-env
         run: |
