@@ -482,14 +482,7 @@ const users: typeof en = {
         plex_no_history: () =>
           'Plex no muestra ninguna reproducción de esta cuenta en este servidor. Su historial de reproducción solo contiene los títulos reproducidos hasta el final en este servidor: los títulos marcados como vistos sin reproducirlos, o sincronizados desde la cuenta de Plex, no figuran en él. Para traerlo todo, puntos de reanudación incluidos, inicie sesión con Plex como propietario en esta importación, con el PIN de un perfil de Plex Home que lo tenga, o la persona inicia sesión con Plex en Mi cuenta › Importar desde otro servidor.',
       },
-      unmatched: (count: number) =>
-        count === 1 ? '1 título no encontrado' : `${count} títulos no encontrados`,
-      unmatchedTitle: (name: string) => `Títulos no encontrados para ${name}`,
       unmatchedHelp: 'Estos títulos no se importaron: el motivo indica por qué.',
-      titleColumn: 'Título',
-      kindColumn: 'Tipo',
-      yearColumn: 'Año',
-      reasonColumn: 'Motivo',
       kinds: {
         movie: 'Película',
         episode: 'Episodio',
@@ -501,14 +494,13 @@ const users: typeof en = {
         not_in_library: 'Ya no está en las bibliotecas de Plex',
         other_episode_order: 'Numerado según otro orden de episodios de TheTVDB',
       },
-      more: (count: number) => (count === 1 ? 'Y 1 más.' : `Y ${count} más.`),
     },
     appImport: {
       summary: 'Los datos de visionado de un usuario desde su cuenta en una app basada en addons.',
       open: 'Importar desde una aplicación',
       title: 'Importar desde una aplicación',
       description:
-        'Traiga los datos de visionado de un usuario desde su cuenta en una aplicación basada en extensiones: las películas y episodios que ha reproducido con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación como favoritos, identificados mediante IMDb, TMDB o Kitsu. A los datos de Polyfin solo se les añade información, y no se escribe nada en la aplicación. Necesita los datos de inicio de sesión del usuario en la aplicación; los usuarios también pueden importarlos ellos mismos, en «Mi cuenta».',
+        'Traiga los datos de visionado de un usuario desde su cuenta en una aplicación basada en extensiones: las películas y episodios que ha reproducido con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación, que pasa a su lista «Para ver» en las aplicaciones de Jellyfin, identificados mediante IMDb, TMDB o Kitsu. A los datos de Polyfin solo se les añade información, y no se escribe nada en la aplicación. Necesita los datos de inicio de sesión del usuario en la aplicación; los usuarios también pueden importarlos ellos mismos, en «Mi cuenta».',
       user: 'En la cuenta de',
       userHelp:
         'El usuario de Polyfin a cuyos datos de visionado y extensiones se añade la importación.',

@@ -23,6 +23,7 @@ import {
   type TrackingServiceName,
 } from '@/api'
 import { useSessionUser } from '@/app/session'
+import { TitlesNotFound } from '@/features/imports/TitlesNotFound'
 import { dateTime, errorMessage, relativeTime } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
@@ -43,17 +44,7 @@ import {
   useToast,
   type StatusTone,
 } from '@/ui'
-
-const serviceNames: Record<TrackingServiceName, string> = {
-  trakt: 'Trakt',
-  simkl: 'Simkl',
-  mdblist: 'MDBList',
-  publicmetadb: 'PublicMetaDB',
-  anilist: 'AniList',
-  myanimelist: 'MyAnimeList',
-  lastfm: 'Last.fm',
-  listenbrainz: 'ListenBrainz',
-}
+import { serviceNames } from './serviceNames'
 
 /** The letters in each service's tile. */
 const monograms: Record<TrackingServiceName, string> = {
@@ -804,6 +795,7 @@ function HistoryImport({
           </Button>
         </div>
       )}
+      {importing && <TitlesNotFound scope="own" source={service.service} stamp={last?.at ?? ''} />}
       {importing && !service.importing && last?.problem && (
         <Notice tone="warn">{text.problem[last.problem](name)}</Notice>
       )}

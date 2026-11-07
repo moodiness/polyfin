@@ -485,14 +485,7 @@ const users: typeof en = {
         plex_no_history: () =>
           'Plex non elenca alcuna riproduzione di questo account su questo server. La sua cronologia di riproduzione contiene solo i titoli riprodotti fino alla fine su questo server: i titoli segnati come visti senza riprodurli, o sincronizzati dall’account Plex, non vi compaiono. Per portare tutto, punti di ripresa compresi, accedi con Plex come proprietario in questa importazione, con il PIN di un profilo Plex Home che ne ha uno, oppure la persona accede con Plex da Il mio account › Importa da un altro server.',
       },
-      unmatched: (count: number) =>
-        count === 1 ? '1 titolo non trovato' : `${count} titoli non trovati`,
-      unmatchedTitle: (name: string) => `Titoli non trovati per ${name}`,
       unmatchedHelp: 'Questi titoli non sono stati importati: il motivo spiega perché.',
-      titleColumn: 'Titolo',
-      kindColumn: 'Tipo',
-      yearColumn: 'Anno',
-      reasonColumn: 'Motivo',
       kinds: {
         movie: 'Film',
         episode: 'Episodio',
@@ -504,14 +497,13 @@ const users: typeof en = {
         not_in_library: 'Non più nelle librerie di Plex',
         other_episode_order: 'Numerato secondo un altro ordine degli episodi di TheTVDB',
       },
-      more: (count: number) => (count === 1 ? 'E 1 altro.' : `E altri ${count}.`),
     },
     appImport: {
       summary: 'I dati di visione di un utente dal suo account su un’app basata su addon.',
       open: 'Importa da un’applicazione',
       title: 'Importa da un’applicazione',
       description:
-        'Trasferisci i dati di visione di un utente dal suo account su un’applicazione basata su add-on: i film e gli episodi riprodotti con le relative date, i punti di ripresa e la libreria dell’applicazione come preferiti, abbinati tramite IMDb, TMDB o Kitsu. I dati di Polyfin vengono solo integrati e nulla viene scritto nell’applicazione. Ti servono le credenziali di accesso dell’utente all’applicazione; gli utenti possono anche importare da soli, in Il mio account.',
+        'Trasferisci i dati di visione di un utente dal suo account su un’applicazione basata su add-on: i film e gli episodi riprodotti con le relative date, i punti di ripresa e la libreria dell’applicazione, che finisce nella sua lista «Da guardare» nelle applicazioni Jellyfin, abbinati tramite IMDb, TMDB o Kitsu. I dati di Polyfin vengono solo integrati e nulla viene scritto nell’applicazione. Ti servono le credenziali di accesso dell’utente all’applicazione; gli utenti possono anche importare da soli, in Il mio account.',
       user: 'Nell’account di',
       userHelp: 'L’utente Polyfin ai cui dati di visione e add-on si aggiunge l’importazione.',
     },

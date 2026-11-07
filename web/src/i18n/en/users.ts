@@ -475,14 +475,7 @@ const users = {
         plex_no_history: () =>
           'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it. To bring everything over, resume points included, sign in with Plex as the owner in this import, with the PIN of a Plex Home profile that has one, or the person signs in with Plex under My account › Import from another server.',
       },
-      unmatched: (count: number) =>
-        count === 1 ? '1 title not found' : `${count} titles not found`,
-      unmatchedTitle: (name: string) => `Titles not found for ${name}`,
       unmatchedHelp: 'These titles were not imported: the reason tells why.',
-      titleColumn: 'Title',
-      kindColumn: 'Kind',
-      yearColumn: 'Year',
-      reasonColumn: 'Reason',
       kinds: {
         movie: 'Movie',
         episode: 'Episode',
@@ -494,14 +487,13 @@ const users = {
         not_in_library: 'No longer in Plex’s libraries',
         other_episode_order: 'Numbered in another of TheTVDB’s episode orders',
       },
-      more: (count: number) => `And ${count} more.`,
     },
     appImport: {
       summary: 'A user’s watch data from their account on an app built on addons.',
       open: 'Import from an app',
       title: 'Import from an app',
       description:
-        'Bring a user’s watch data over from their account on an app built on addons: the movies and episodes they played with their dates, their resume points, and the app’s library as favorites, matched by IMDb, TMDB or Kitsu. Polyfin’s data is only added to, and nothing is written to the app. You need the user’s sign-in to the app; users can also import themselves, under My account.',
+        'Bring a user’s watch data over from their account on an app built on addons: the movies and episodes they played with their dates, their resume points, and the app’s library, which goes to their Watchlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. Polyfin’s data is only added to, and nothing is written to the app. You need the user’s sign-in to the app; users can also import themselves, under My account.',
       user: 'Into the account of',
       userHelp: 'The Polyfin user whose watch data and addons the import adds to.',
     },

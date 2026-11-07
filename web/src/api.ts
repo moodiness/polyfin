@@ -3354,23 +3354,6 @@ export type JellyfinImportProblem =
   | 'internal'
   | 'jellyfin_user_forbidden'
 
-/** A title of a Jellyfin user's watch data that no Polyfin title matches. */
-export type JellyfinUnmatched = {
-  name: string
-  type: 'movie' | 'episode' | 'series'
-  year: number | null
-  /** For an episode: its series, season and number, when Jellyfin knows them. */
-  series: string | null
-  season: number | null
-  episode: number | null
-  /**
-   * `no_identifier`: no IMDb, TMDB or TVDB identifier; `not_found`: no Polyfin title has it;
-   * `not_in_library`: a Plex history names it, but no library section lists it any longer;
-   * `other_episode_order`: Plex numbers the episode in another of TheTVDB's episode orders.
-   */
-  reason: 'no_identifier' | 'not_found' | 'not_in_library' | 'other_episode_order'
-}
-
 /** How the import of one Jellyfin user's watch data goes. */
 export type JellyfinUserImport = {
   jellyfinId: string
@@ -3412,9 +3395,8 @@ export type JellyfinUserImport = {
   upToDate: number
   /** Resume points without a date, which are not added. */
   undated: number
-  /** Every title not matched; `unmatched` lists the first 500 only. */
+  /** The titles not matched, which the user's list of titles not found keeps. */
   unmatchedCount: number
-  unmatched: JellyfinUnmatched[]
   problem: JellyfinImportProblem | null
   /** Why a user's import that ended without a problem added nothing; null otherwise. */
   nothingAdded: JellyfinNothingAdded | null
@@ -3607,21 +3589,10 @@ export const fetchPlexOwnerAccess = async (
     )
   ).accounts
 
-/** Why a movie of a Letterboxd export was not found. */
-export type LetterboxdReason = 'not_found' | 'ambiguous' | 'search_failed'
-
-/** A movie of a Letterboxd export no title matched, with its Letterboxd link when it has one. */
-export type LetterboxdUnmatched = {
-  name: string
-  year: number | null
-  link: string | null
-  reason: LetterboxdReason
-}
-
 /**
  * An import of a Letterboxd export into a user's account, running or the last one since Polyfin
  * started: the switches it was started with, how many of its movies were looked up, then what it
- * added, and the movies not found (the first 500 in `unmatched`).
+ * added, and how many movies it did not find, which the user's list of titles not found keeps.
  */
 export type LetterboxdImportStatus = {
   id: string
@@ -3639,7 +3610,6 @@ export type LetterboxdImportStatus = {
   searched: number
   added: { played: number; watchlist: number; ratings: number; favorites: number }
   unmatchedCount: number
-  unmatched: LetterboxdUnmatched[]
 }
 
 /** Whether an import of the user's account is one of a Letterboxd export. */
@@ -3728,19 +3698,6 @@ export type AppAccount = {
   profiles: AppProfile[]
 }
 
-/**
- * A title of the app no Polyfin title matched, by its identifier in the app, or a series whose
- * episodes played could not be read (`episode_list`).
- */
-export type AppUnmatched = {
-  id: string
-  name: string
-  type: 'movie' | 'series' | 'episode'
-  season: number | null
-  episode: number | null
-  reason: 'other_identifier' | 'not_found' | 'episode_list'
-}
-
 /** An addon an import installs as the user's own, and why it was not. */
 export type AppAddonInstalled = {
   name: string
@@ -3776,9 +3733,8 @@ export type AppImportStatus = {
   played: number
   resumed: number
   watchlist: number
-  /** Every title not matched; `unmatched` lists the first 500 only. */
+  /** The titles not matched, which the user's list of titles not found keeps. */
   unmatchedCount: number
-  unmatched: AppUnmatched[]
   addons: AppAddonInstalled[]
 }
 
@@ -3950,6 +3906,106 @@ export const userAppConnections = (id: string) => appConnectionActions(`/users/$
 
 export const startUserAppImport = async (id: string, body: AppImportChoice) =>
   (await request<{ import: AppImportStatus }>('POST', `/users/${seg(id)}/app-import`, body)).import
+
+/**
+ * Whose titles not found: the signed-in user's, under My account, or a user's, for an
+ * administrator.
+ */
+export type ImportTitlesScope = 'own' | { userId: string }
+
+const importTitlesBase = (scope: ImportTitlesScope) =>
+  `${scope === 'own' ? '/account' : `/users/${seg(scope.userId)}`}/import-titles`
+
+/** The key of a scope in the query keys. */
+const importTitlesScopeKey = (scope: ImportTitlesScope) => (scope === 'own' ? 'own' : scope.userId)
+
+/**
+ * How many titles an import kept as not found, by source (`nuvio`, `stremio`, a tracking
+ * service, `letterboxd`, `jellyfin`, `emby`, `plex`): those not linked, and those linked.
+ */
+export type ImportTitleCount = { source: string; notFound: number; linked: number }
+
+/** The title a title not found is linked to, and who linked it, when. */
+export type ImportTitleLink = {
+  kind: 'movie' | 'series'
+  /** Its IMDb identifier, else empty; its TMDB identifier, else 0. */
+  imdb: string
+  tmdb: number
+  /** Empty when the title has no name Polyfin knows. */
+  name: string
+  year: number | null
+  linkedAt: string
+  linkedBy: { id: string; name: string } | null
+}
+
+/**
+ * A title an import did not find. `key` names it across imports: an episode has its series' key,
+ * so that one link covers all of a series' episodes. `name` is the series' for an episode, and may
+ * be empty; `ids` is what the source names it by, readable. `season` and `episode` are 0 for
+ * movies and series. `reason` is the source's own: for an app `other_identifier`, `not_found` or
+ * `episode_list`; for a tracking service `not_found` (no title has its identifiers) or
+ * `not_mapped` (Polyfin could not identify it); for the import by name and year `not_found`,
+ * `ambiguous` or `search_failed`; for a server `no_identifier`, `not_found`, `not_in_library` or
+ * `other_episode_order`.
+ */
+export type ImportTitle = {
+  key: string
+  kind: 'movie' | 'series' | 'episode'
+  name: string
+  year: number | null
+  ids: string
+  season: number
+  episode: number
+  reason: string
+  link: ImportTitleLink | null
+}
+
+export const fetchImportTitleCounts = async (scope: ImportTitlesScope, signal?: AbortSignal) =>
+  (
+    await request<{ sources: ImportTitleCount[] }>(
+      'GET',
+      importTitlesBase(scope),
+      undefined,
+      signal,
+    )
+  ).sources
+
+export const fetchImportTitles = async (
+  scope: ImportTitlesScope,
+  source: string,
+  signal?: AbortSignal,
+) =>
+  (
+    await request<{ titles: ImportTitle[] }>(
+      'GET',
+      `${importTitlesBase(scope)}/${seg(source)}`,
+      undefined,
+      signal,
+    )
+  ).titles
+
+/**
+ * Links the titles under `key` to `target`: an IMDb identifier, a TMDB one, or an IMDb or TMDB
+ * address. What they would import is added at once, and again at each later import. Fails with
+ * `invalid_target`, `kind_mismatch` or `target_not_found`.
+ */
+export const linkImportTitle = async (
+  scope: ImportTitlesScope,
+  source: string,
+  key: string,
+  target: string,
+) =>
+  (
+    await request<{ link: ImportTitleLink }>(
+      'PUT',
+      `${importTitlesBase(scope)}/${seg(source)}/links`,
+      { key, target },
+    )
+  ).link
+
+/** Removes the link of the titles under `key`: later imports skip them again; marks set stay. */
+export const unlinkImportTitle = (scope: ImportTitlesScope, source: string, key: string) =>
+  request<void>('DELETE', `${importTitlesBase(scope)}/${seg(source)}/links`, { key })
 
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
@@ -5760,6 +5816,14 @@ export const queryKeys = {
   ownAppImport: ['account', 'app-import'] as const,
   userAppImport: (id: string) => ['users', id, 'app-import'] as const,
   userLetterboxdImport: (id: string) => ['users', id, 'server-import'] as const,
+  /** Prefix of everything kept of a scope's titles not found: invalidated after a link. */
+  importTitles: (scope: ImportTitlesScope) =>
+    ['import-titles', importTitlesScopeKey(scope)] as const,
+  /** The counts by source; `stamp` follows the import status shown beside them. */
+  importTitleCounts: (scope: ImportTitlesScope, stamp: string) =>
+    ['import-titles', importTitlesScopeKey(scope), 'sources', stamp] as const,
+  importTitleList: (scope: ImportTitlesScope, source: string) =>
+    ['import-titles', importTitlesScopeKey(scope), 'source', source] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
   settingsApps: ['settings', 'apps'] as const,

@@ -21,7 +21,8 @@ import {
   type ServerKind,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
-import { errorMessage, formatEpisode } from '@/format'
+import { TitlesNotFound } from '@/features/imports/TitlesNotFound'
+import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
   Avatar,
@@ -30,7 +31,6 @@ import {
   Checkbox,
   Field,
   InlineError,
-  Modal,
   Notice,
   Panel,
   PanelFooter,
@@ -41,7 +41,6 @@ import {
   Select,
   SkeletonRows,
   StatusPill,
-  Table,
   TextInput,
   useToast,
   type SelectOption,
@@ -218,7 +217,6 @@ export function ImportProgress({
 }) {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
-  const [shownId, setShownId] = useState<string | null>(null)
   const running = current.state === 'running'
   const product = text.servers[current.server.kind]
   const title = running
@@ -232,8 +230,6 @@ export function ImportProgress({
       queryClient.setQueryData(queryKeys.jellyfinImport, stopped)
     },
   })
-  // Looked up in each poll's answer, so an open list follows the import.
-  const shown = current.users.find((user) => user.jellyfinId === shownId)
 
   return (
     <Panel
@@ -279,20 +275,12 @@ export function ImportProgress({
               key={user.jellyfinId}
               user={user}
               product={product}
+              kind={current.server.kind}
+              own={own}
               finished={!running}
-              onShowUnmatched={() => setShownId(user.jellyfinId)}
             />
           ))}
         </RowList>
-        <Modal
-          open={shown !== undefined}
-          onClose={() => setShownId(null)}
-          title={shown === undefined ? '' : text.unmatchedTitle(shown.jellyfinName)}
-          width={640}
-          footer={<Button onClick={() => setShownId(null)}>{t.users.close}</Button>}
-        >
-          {shown !== undefined && <UnmatchedList user={shown} />}
-        </Modal>
       </div>
     </Panel>
   )
@@ -300,20 +288,23 @@ export function ImportProgress({
 
 /**
  * One user of an import: the Polyfin user it went into, its state, what it read while it reads,
- * then what it read and added, and why it added nothing when it did not. A finished import's users
- * still waiting were never reached.
+ * then what it read and added, the titles it did not find, which open the user's list of titles
+ * not found of that kind of server, and why it added nothing when it did not. A finished import's
+ * users still waiting were never reached. `own` is the user's own import, under My account.
  */
 function ImportedUserRow({
   user,
   product,
+  kind,
+  own,
   finished,
-  onShowUnmatched,
 }: {
   user: JellyfinUserImport
   /** The kind of server's name, such as Emby. */
   product: string
+  kind: ServerKind
+  own: boolean
   finished: boolean
-  onShowUnmatched: () => void
 }) {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
@@ -345,11 +336,11 @@ function ImportedUserRow({
           <StatusPill tone={notReached ? 'muted' : userTones[user.state]}>
             {notReached ? text.notImported : text.userStates[user.state]}
           </StatusPill>
-          {user.unmatchedCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={onShowUnmatched}>
-              {text.unmatched(user.unmatchedCount)}
-            </Button>
-          )}
+          <TitlesNotFound
+            scope={own ? 'own' : { userId: user.userId }}
+            source={kind}
+            stamp={`${user.state}:${user.unmatchedCount}`}
+          />
         </>
       }
     >
@@ -368,54 +359,6 @@ function ImportedUserRow({
         </Notice>
       )}
     </Row>
-  )
-}
-
-/** The titles of a user's watch data that no Polyfin title matched, and why. */
-function UnmatchedList({ user }: { user: JellyfinUserImport }) {
-  const { t } = useI18n()
-  const text = t.users.jellyfinImport
-  // The server lists the first 500 only.
-  const more = user.unmatchedCount - user.unmatched.length
-  return (
-    <div className="space-y-4 p-5">
-      <p className="text-small text-ink-3">{text.unmatchedHelp}</p>
-      <Table label={text.unmatchedTitle(user.jellyfinName)} minWidth={520}>
-        <thead>
-          <tr>
-            <th scope="col">{text.titleColumn}</th>
-            <th scope="col">{text.kindColumn}</th>
-            <th scope="col" className="figures text-right">
-              {text.yearColumn}
-            </th>
-            <th scope="col">{text.reasonColumn}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {user.unmatched.map((entry, index) => {
-            // "Series · S01 · E03", with what Jellyfin knows of the episode's place.
-            const place =
-              entry.type !== 'episode' || entry.series === null
-                ? ''
-                : entry.season === null || entry.episode === null
-                  ? entry.series
-                  : `${entry.series} · ${formatEpisode(entry.season, entry.episode)}`
-            return (
-              <tr key={index}>
-                <td>
-                  <span className="block text-ink">{entry.name}</span>
-                  {place !== '' && <span className="block text-small text-ink-3">{place}</span>}
-                </td>
-                <td>{text.kinds[entry.type]}</td>
-                <td className="figures text-right">{entry.year}</td>
-                <td>{text.reasons[entry.reason]}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </Table>
-      {more > 0 && <p className="text-small text-ink-3">{text.more(more)}</p>}
-    </div>
   )
 }
 

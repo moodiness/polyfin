@@ -1,4 +1,4 @@
-import { ArrowSquareInIcon, ArrowSquareOutIcon, FileZipIcon } from '@phosphor-icons/react'
+import { ArrowSquareInIcon, FileZipIcon } from '@phosphor-icons/react'
 import { useMutation } from '@tanstack/react-query'
 import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
@@ -7,20 +7,19 @@ import {
   type LetterboxdImportStatus,
   type LetterboxdUpload,
 } from '@/api'
+import { TitlesNotFound } from '@/features/imports/TitlesNotFound'
 import { errorMessage, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Button,
   Checkbox,
   Field,
-  Modal,
   Notice,
   Panel,
   PanelFooter,
   ProgressBar,
   RelativeTime,
   StatusPill,
-  Table,
   useField,
   useToast,
   type StatusTone,
@@ -183,8 +182,8 @@ function FilePicker({ file, onFile }: { file: File | null; onFile: (file: File) 
 
 /**
  * An import of a Letterboxd export, running or the last one: how far the search of its movies has
- * gone, then what it added, and the movies not found, with why and their Letterboxd link. `own` is
- * the user's own account, under My account.
+ * gone, then what it added, and the movies not found, which open the list of the import's titles
+ * not found. `own` is the user's own account, under My account.
  */
 export function LetterboxdProgress({
   current,
@@ -195,7 +194,6 @@ export function LetterboxdProgress({
 }) {
   const { t } = useI18n()
   const text = t.account.letterboxd
-  const [showUnmatched, setShowUnmatched] = useState(false)
   const running = current.state === 'running'
   const title = running ? text.currentTitle : own ? text.ownLastTitle : text.lastTitle
   const added = [
@@ -242,64 +240,11 @@ export function LetterboxdProgress({
         ) : (
           <p className="text-body text-ink">{text.summary(current.movies, added)}</p>
         )}
-        {current.unmatchedCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start"
-            onClick={() => setShowUnmatched(true)}
-          >
-            {text.unmatched(current.unmatchedCount)}
-          </Button>
-        )}
-        <Modal
-          open={showUnmatched}
-          onClose={() => setShowUnmatched(false)}
-          title={text.unmatchedTitle}
-          width={640}
-          footer={<Button onClick={() => setShowUnmatched(false)}>{t.users.close}</Button>}
-        >
-          <div className="space-y-4 p-5">
-            <p className="text-small text-ink-3">{text.unmatchedHelp}</p>
-            <Table label={text.unmatchedTitle} minWidth={480}>
-              <thead>
-                <tr>
-                  <th scope="col">{text.movieColumn}</th>
-                  <th scope="col">{text.reasonColumn}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {current.unmatched.map((movie, index) => (
-                  <tr key={index}>
-                    <td>
-                      <span className="block text-ink">
-                        {movie.name}
-                        {movie.year !== null && <span className="text-ink-3"> ({movie.year})</span>}
-                      </span>
-                      {movie.link !== null && (
-                        <a
-                          href={movie.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-small text-link hover:text-link-hover"
-                        >
-                          {text.onLetterboxd}
-                          <ArrowSquareOutIcon size="0.875rem" aria-hidden="true" />
-                        </a>
-                      )}
-                    </td>
-                    <td>{text.reasons[movie.reason]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-            {current.unmatchedCount > current.unmatched.length && (
-              <p className="text-small text-ink-3">
-                {t.users.jellyfinImport.more(current.unmatchedCount - current.unmatched.length)}
-              </p>
-            )}
-          </div>
-        </Modal>
+        <TitlesNotFound
+          scope={own ? 'own' : { userId: current.user.id }}
+          source="letterboxd"
+          stamp={`${current.id}:${current.state}:${current.unmatchedCount}`}
+        />
       </div>
     </Panel>
   )

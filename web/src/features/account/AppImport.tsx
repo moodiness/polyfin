@@ -17,11 +17,13 @@ import {
   type AppImportStatus,
   type AppKind,
   type AppReaders,
+  type ImportTitlesScope,
   type NuvioSignIn,
   type StremioLink,
   type StremioUnlock,
 } from '@/api'
-import { dateTime, errorMessage, formatEpisode } from '@/format'
+import { TitlesNotFound } from '@/features/imports/TitlesNotFound'
+import { dateTime, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Button,
@@ -29,7 +31,6 @@ import {
   ConfirmDialog,
   ExternalButtonLink,
   Field,
-  Modal,
   Notice,
   Panel,
   PanelFooter,
@@ -37,7 +38,6 @@ import {
   Segmented,
   Select,
   StatusPill,
-  Table,
   TextInput,
   useToast,
   type StatusTone,
@@ -788,7 +788,7 @@ function StremioKeyForm({
 function AppImportProgress({ current, own }: { current: AppImportStatus; own: boolean }) {
   const { t } = useI18n()
   const text = t.account.appImport
-  const [showUnmatched, setShowUnmatched] = useState(false)
+  const scope: ImportTitlesScope = own ? 'own' : { userId: current.user.id }
   const running = current.state === 'running'
   const title = running ? text.currentTitle : own ? text.ownLastTitle : text.lastTitle
   const app = text.apps[current.app]
@@ -824,16 +824,11 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
             ? text.read(current.read)
             : text.counts(current.read, current.played, current.resumed, current.watchlist)}
         </p>
-        {current.unmatchedCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start"
-            onClick={() => setShowUnmatched(true)}
-          >
-            {text.unmatched(current.unmatchedCount)}
-          </Button>
-        )}
+        <TitlesNotFound
+          scope={scope}
+          source={current.app}
+          stamp={`${current.id}:${current.state}:${current.unmatchedCount}`}
+        />
         {current.addons.length > 0 && (
           <ul className="flex flex-col gap-1 text-small">
             {current.addons.map((addon, index) => (
@@ -849,50 +844,6 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
             ))}
           </ul>
         )}
-        <Modal
-          open={showUnmatched}
-          onClose={() => setShowUnmatched(false)}
-          title={text.unmatchedTitle}
-          width={640}
-          footer={<Button onClick={() => setShowUnmatched(false)}>{t.users.close}</Button>}
-        >
-          <div className="space-y-4 p-5">
-            <p className="text-small text-ink-3">{text.unmatchedHelp}</p>
-            <Table label={text.unmatchedTitle} minWidth={520}>
-              <thead>
-                <tr>
-                  <th scope="col">{text.titleColumn}</th>
-                  <th scope="col">{text.kindColumn}</th>
-                  <th scope="col">{text.reasonColumn}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {current.unmatched.map((entry, index) => (
-                  <tr key={index}>
-                    <td>
-                      <span className="block text-ink">
-                        {entry.name === '' ? entry.id : entry.name}
-                      </span>
-                      <span className="block font-mono text-small text-ink-3">
-                        {entry.id}
-                        {entry.season !== null && entry.episode !== null
-                          ? ` · ${formatEpisode(entry.season, entry.episode)}`
-                          : ''}
-                      </span>
-                    </td>
-                    <td>{t.users.jellyfinImport.kinds[entry.type]}</td>
-                    <td>{text.reasons[entry.reason]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-            {current.unmatchedCount > current.unmatched.length && (
-              <p className="text-small text-ink-3">
-                {t.users.jellyfinImport.more(current.unmatchedCount - current.unmatched.length)}
-              </p>
-            )}
-          </div>
-        </Modal>
       </div>
     </Panel>
   )
@@ -900,21 +851,22 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
 
 /**
  * A user's connections to apps, imported every `importEveryMinutes`: under My account, the user's
- * own, or a user's, for an administrator. Each shows its account, its last and next import, and why
- * it stopped or is paused, with Import now and Disconnect. `own` is the user's own account, where a
- * paused connection cannot be imported. `onChanged` tells that the connections changed.
+ * own, or a user's, for an administrator: `scope` tells whose. Each shows its account, its last
+ * and next import, how many titles it did not find, with their list, and why it stopped or is
+ * paused, with Import now and Disconnect. Under My account, a paused connection cannot be
+ * imported. `onChanged` tells that the connections changed.
  */
 export function AppConnections({
   connections,
   actions,
   onChanged,
-  own,
+  scope,
   importEveryMinutes,
 }: {
   connections: AppConnection[]
   actions: AppConnectionActions
   onChanged: () => void
-  own: boolean
+  scope: ImportTitlesScope
   importEveryMinutes: number
 }) {
   const { t } = useI18n()
@@ -934,7 +886,7 @@ export function AppConnections({
             connection={connection}
             actions={actions}
             onChanged={onChanged}
-            own={own}
+            scope={scope}
           />
         ))}
       </ul>
@@ -946,12 +898,12 @@ function AppConnectionRow({
   connection,
   actions,
   onChanged,
-  own,
+  scope,
 }: {
   connection: AppConnection
   actions: AppConnectionActions
   onChanged: () => void
-  own: boolean
+  scope: ImportTitlesScope
 }) {
   const { language, t } = useI18n()
   const text = t.account.appImport.connections
@@ -1021,6 +973,7 @@ function AppConnectionRow({
                 <RelativeTime iso={last.at} />
                 {text.colon}
                 {t.account.appImport.counts(last.read, last.played, last.resumed, last.watchlist)}
+                {last.unmatched > 0 && ` ${t.importTitles.notFound(last.unmatched)}.`}
               </>
             )}
             {connection.nextImportAt !== null && !connection.importing && (
@@ -1035,13 +988,18 @@ function AppConnectionRow({
         <Button
           icon={DownloadSimpleIcon}
           loading={importNow.isPending || connection.importing}
-          disabled={stopped || (own && connection.paused)}
+          disabled={stopped || (scope === 'own' && connection.paused)}
           onClick={() => importNow.mutate()}
           className="shrink-0"
         >
           {connection.importing ? text.importing : text.importNow}
         </Button>
       </div>
+      <TitlesNotFound
+        scope={scope}
+        source={connection.app}
+        stamp={`${last?.at ?? ''}:${connection.importing}`}
+      />
       {stopped ? (
         <Notice tone="danger">{text.stopped(name)}</Notice>
       ) : (
