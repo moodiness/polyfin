@@ -1,39 +1,25 @@
-import { CaretRightIcon } from '@phosphor-icons/react'
 import {
-  useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
-  type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from 'react'
 import { useI18n, type Messages } from '@/i18n'
 import { cx } from './cx'
 import { describedBy, FieldError } from './Field'
 import { NumberInput, TextInput } from './Input'
-import { Kbd } from './Kbd'
 import { SecretField, type SecretFieldProps } from './SecretField'
+import { segmentClass } from './Segmented'
 import { Select, type SelectOption } from './Select'
 import { Switch } from './Switch'
 
-/** Past this many choices, a choice opens a searchable list instead of a strip. */
-const stripMax = 12
-/** Up to this many values, a number opens a strip of them instead of a well. */
-const numberStripMax = 33
-
-/** Whether a pointer is down anywhere: a row losing the focus to a press folds on its release. */
-let pressed = false
-let pressesWatched = false
-
-/** Follows presses on the whole page, once for every row. */
-function watchPresses() {
-  if (pressesWatched) return
-  pressesWatched = true
-  document.addEventListener('pointerdown', () => (pressed = true), true)
-  document.addEventListener('pointerup', () => (pressed = false), true)
-  document.addEventListener('pointercancel', () => (pressed = false), true)
-}
+/** Up to this many choices sit side by side in the row; more take a list. */
+const sideBySideMax = 4
+/** Side-by-side choices whose labels pass this many characters together take a list instead. */
+const sideBySideChars = 34
 
 type Common = {
   /** The id of the row: the target of its `#anchor`, which a page may flash (`data-flash`). */
@@ -43,8 +29,9 @@ type Common = {
   /** A second line under the label. */
   detail?: ReactNode
   /**
-   * What the setting does: shown only while the row is lit, always read by screen readers
-   * (`aria-describedby`). Range and default belong here ("From 0 to 32. 0 by default.").
+   * What the setting does: always shown, as a muted caption under the name, and read by screen
+   * readers with the control (`aria-describedby`). Range and default belong here ("From 0 to 32.
+   * 0 by default.").
    */
   help?: ReactNode
   /** The error of this setting, from validation or the server; shown under the row. */
@@ -70,7 +57,10 @@ export type SwitchSetting = {
 export type ChoiceSetting<T extends string | number> = {
   kind: 'choice'
   value: T
-  /** The choices in order: a strip of big choices, or a searchable list past 12. */
+  /**
+   * The choices in order: side by side in the row up to 4 short ones, else a list that opens in
+   * one click, with a search past 12.
+   */
   options: readonly SelectOption<T>[]
   onChange: (value: T) => void
   saved?: T
@@ -84,27 +74,22 @@ export type NumberSetting = {
   min: number
   max: number
   step?: number
-  /** The unit after the value and in the well: "min", "GB". */
+  /** The unit in the well, after the number: "min", "GB". */
   unit?: string
-  /** Writes a value (strip and display): `(n) => n === 0 ? 'No limit' : String(n)`. */
+  /** Writes a value in "was …": `(n) => n === 0 ? 'No limit' : String(n)`. */
   format?: (value: number) => string
-  /**
-   * `strip`: a strip of every value, for small ranges (0 to 32); `well`: a number field. By
-   * default a strip up to 33 values, a well past that.
-   */
-  picker?: 'strip' | 'well'
   saved?: number | null
 }
 
 export type TextSetting = {
-  /** `path` writes the value in tabular figures and, on a phone, under the label. */
+  /** `path` is a wider well, in tabular figures. */
   kind: 'text' | 'path'
   value: string
   onChange: (value: string) => void
   saved?: string
   /**
    * The value used while the setting is empty (a default folder or address): shown in the empty
-   * well, and dimmed in the closed row, read "Default: …" by screen readers.
+   * well, and in "was …" as "Default: …".
    */
   placeholder?: string
   maxLength?: number
@@ -121,19 +106,20 @@ export type SettingRowProps<T extends string | number = string> = Common &
   (SwitchSetting | ChoiceSetting<T> | NumberSetting | TextSetting | SecretSetting)
 
 /**
- * One setting as a Salon row: the label on the left, the value and a chevron on the right, the
- * help shown only while the row is lit. Enter, Space or a click opens its control inside the
- * row; Escape closes it and returns to the row; ↑ ↓ move to the next row without trapping Tab.
- * - `switch`: the switch on the right alone toggles (`role="switch"`, with its word); a click on
- *   the name or elsewhere on the row lights it to show the help, and never toggles.
- * - `choice`: a strip of big choices (`role="radiogroup"`, ← → move and choose, Enter closes),
- *   or a searchable list past 12 choices.
- * - `number`: a strip of values, or a number well with its unit.
- * - `text` and `path`: a text well (Enter closes).
- * - `secret`: the SecretField (masked typing, reveal, replace, remove).
+ * One setting as a Salon row, edited in the row itself: the name on the left with its help as a
+ * muted caption under it, the control on the right. Nothing opens below the row.
+ * - `switch`: the switch alone toggles (`role="switch"`, with its word); a click elsewhere on
+ *   the row moves the focus to it, and never toggles.
+ * - `choice`: up to 4 short choices side by side (`role="radiogroup"`, ← → choose); more, or
+ *   longer ones, a list that opens in one click, with a search past 12.
+ * - `number`: a number well with its unit: typed in place, ↑ ↓ step.
+ * - `text` and `path`: a text well; each keystroke is a change for the dock, no Enter needed.
+ * - `secret`: the SecretField under the name (masked typing, reveal, replace, remove).
  *
- * With `saved`, a changed row keeps a dot and "was 0", and its value in the link color. Rows go
- * 8 px apart (`grid grid-cols-[minmax(0,1fr)] gap-2`).
+ * ↑ ↓ move to the previous or next row's control (`data-setting-head`), except in a number well,
+ * where they step, and in an open list. A click on the name or the caption focuses the control.
+ * With `saved`, a changed row keeps a dot, "was 0" and its value in the link color. Rows go 6 px
+ * apart (`grid grid-cols-[minmax(0,1fr)] gap-1.5`).
  */
 export function SettingRow<T extends string | number = string>(props: SettingRowProps<T>) {
   const {
@@ -150,484 +136,296 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
   const { t } = useI18n()
   const id = useId()
   const labelId = `${id}-label`
-  const valueId = `${id}-value`
   const helpId = help !== undefined ? `${id}-help` : undefined
   const errorId = error ? `${id}-error` : undefined
-  const pickerId = `${id}-picker`
-  const head = useRef<HTMLButtonElement>(null)
-  const picker = useRef<HTMLDivElement>(null)
+  const wasId = `${id}-was`
   const row = useRef<HTMLDivElement>(null)
-  const [focused, setFocused] = useState(false)
-  const [open, setOpen] = useState(false)
-  useEffect(watchPresses, [])
-  const lit = focused || open
 
-  const { display, was, changed } = describe(props, t)
-  const strip = stripChoices(props)
+  const { was, changed } = describe(props, t)
+  const describedById = describedBy(helpId, errorId, changed ? wasId : undefined)
+  const below = props.kind === 'secret'
 
-  // Opening moves the keyboard into the control: the chosen choice, or the well.
-  useEffect(() => {
-    if (!open) return
-    const box = picker.current
-    const into =
-      box?.querySelector<HTMLElement>('[aria-checked="true"]') ??
-      box?.querySelector<HTMLElement>('input, button:not([disabled])')
-    into?.focus()
-  }, [open])
-
-  // The chosen choice stays in view: from the start while it fits, centred once past the middle.
-  const chosen = strip?.find((choice) => choice.checked)?.key
-  useEffect(() => {
-    const row = picker.current?.querySelector<HTMLElement>('[role="radiogroup"]')
-    const on = row?.querySelector<HTMLElement>('[aria-checked="true"]')
-    if (!row || !on) return
-    const fits = on.offsetLeft + on.offsetWidth < row.clientWidth - 90
-    const left = fits ? 0 : Math.max(0, on.offsetLeft - row.clientWidth / 2 + on.offsetWidth / 2)
-    row.scrollTo({
-      left,
-      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-    })
-  }, [open, chosen])
-
-  function close() {
-    setOpen(false)
-    head.current?.focus()
-  }
-
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    const to = event.relatedTarget
-    if (to instanceof Node && event.currentTarget.contains(to)) return
-    // Another control took the focus: the picker closes. A list, popover or dialog it opened
-    // keeps it.
-    const closes =
-      to instanceof Element &&
-      !to.closest('[popover], [role="listbox"], [role="dialog"], [role="menu"]')
-    const fold = () => {
-      if (row.current?.contains(document.activeElement)) return
-      setFocused(false)
-      if (closes) setOpen(false)
-    }
-    // A press elsewhere (another row) waits for its release: folding now would move the rows
-    // under the pointer, and the click would land on another one.
-    if (pressed) window.addEventListener('pointerup', () => setTimeout(fold), { once: true })
-    else fold()
+  // ↑ ↓ from a closed list's button move between rows, before the list would open on them.
+  function onKeyDownCapture(event: KeyboardEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement
+    if (target.matches('button[role="combobox"][aria-expanded="false"]')) moveToRow(event)
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.defaultPrevented) return
     const target = event.target as HTMLElement
-    if (event.key === 'Escape' && open) {
-      event.preventDefault()
-      event.stopPropagation()
-      close()
-      return
-    }
-    if (event.key === 'Enter' && open && target.matches('[role="radio"], [data-setting-well]')) {
-      event.preventDefault()
-      close()
-      return
-    }
-    if (target !== head.current || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
-    const scope = head.current.closest('form') ?? document
-    const heads = [...scope.querySelectorAll<HTMLElement>('[data-setting-head]')]
-    const next = heads[heads.indexOf(head.current) + (event.key === 'ArrowDown' ? 1 : -1)]
+    // A number well steps with the arrows, and an open list moves through its options.
+    if (target.matches('input[type="number"], [aria-expanded="true"]')) return
+    moveToRow(event)
+  }
+
+  function moveToRow(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.defaultPrevented || event.altKey) return
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    // The row's own control: the switch, the chosen choice, the list's button or the well.
+    const head = row.current?.querySelector<HTMLElement>('[data-setting-head]')
+    if (!head) return
+    const scope = head.closest('form') ?? document
+    const heads = [...scope.querySelectorAll<HTMLElement>('[data-setting-head]:not(:disabled)')]
+    const next = heads[heads.indexOf(head) + (event.key === 'ArrowDown' ? 1 : -1)]
     if (!next) return
     event.preventDefault()
+    event.stopPropagation()
     next.focus()
   }
 
-  function onStripKey(event: KeyboardEvent<HTMLDivElement>) {
-    if (!strip) return
-    const enabled = strip.filter((choice) => !choice.disabled)
-    const index = enabled.findIndex((choice) => choice.checked)
-    const target =
-      event.key === 'ArrowRight' || event.key === 'ArrowDown'
-        ? enabled[Math.min(index + 1, enabled.length - 1)]
-        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
-          ? enabled[Math.max(index - 1, 0)]
-          : event.key === 'Home'
-            ? enabled[0]
-            : event.key === 'End'
-              ? enabled[enabled.length - 1]
-              : undefined
-    if (!target) return
-    event.preventDefault()
-    target.choose()
-    const group = event.currentTarget
-    requestAnimationFrame(() =>
-      group.querySelector<HTMLElement>(`[data-choice="${CSS.escape(target.key)}"]`)?.focus(),
-    )
+  // A click on the name, the caption or the row's padding focuses its control.
+  function onClick(event: MouseEvent<HTMLDivElement>) {
+    if ((event.target as Element).closest('button, input, a, [role="listbox"], [popover]')) return
+    if (window.getSelection()?.isCollapsed === false) return
+    row.current?.querySelector<HTMLElement>('[data-setting-head]')?.focus()
   }
 
-  const wasId = `${id}-was`
-  const headClass = cx(
-    'flex w-full items-center gap-4 rounded-row py-3.5 pr-[1.375rem] pl-[1.875rem] text-left',
-    'min-h-[5.125rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
-    disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-  )
   const mark = changed && (
-    <span aria-hidden="true" className="-mr-0.5 size-2.5 shrink-0 rounded-full bg-link" />
-  )
-  const name = (
     <span
-      id={labelId}
-      className={cx(
-        'min-w-0 flex-1 text-h3 text-ink',
-        props.kind === 'path' && 'max-md:basis-[calc(100%-2.5rem)]',
-      )}
-    >
-      {label}
-      {detail !== undefined && (
-        <span className="mt-0.5 block text-[1.03125rem] font-[450] tracking-normal text-ink-3 max-md:text-micro">
-          {detail}
-        </span>
-      )}
-    </span>
+      aria-hidden="true"
+      className="absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-link"
+    />
   )
 
   return (
     <div
       ref={row}
       id={anchor}
-      onFocus={() => setFocused(true)}
-      onBlur={onBlur}
+      onKeyDownCapture={onKeyDownCapture}
       onKeyDown={onKeyDown}
       className={cx(
-        'min-w-0 scroll-mt-32 rounded-row transition-[background-color,box-shadow] duration-350 ease-nuit',
+        'relative min-w-0 scroll-mt-32 rounded-row transition-[background-color,box-shadow] duration-350 ease-nuit',
         'data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
-        lit
-          ? cx('lit-row', nested && '[--lit-fill:var(--color-s3)]')
-          : nested
-            ? cx('bg-s2', !disabled && 'hover:bg-s4')
-            : cx('bg-s1', !disabled && 'hover:bg-s2'),
+        nested
+          ? cx('bg-s2 [--lit-fill:var(--color-s3)]', !disabled && 'hover:bg-s4')
+          : cx('bg-s1', !disabled && 'hover:bg-s2'),
+        // Lit while the keyboard or the mouse is in its control, or its list is open.
+        'focus-within:lit-row has-[[aria-expanded=true]]:lit-row',
         disabled && 'opacity-60',
         className,
       )}
     >
-      {props.kind === 'switch' ? (
-        // Only the switch toggles. A click anywhere else on the head moves the focus to it, which
-        // lights the row and shows the help; the help is in the switch's description already, so
-        // the keyboard and screen readers need nothing more.
-        <div onClick={() => head.current?.focus()} className={headClass}>
-          {mark}
-          {name}
+      {mark}
+      <div
+        onClick={onClick}
+        className={cx(
+          'flex min-h-[3.375rem] flex-wrap items-center gap-x-5 gap-y-2 py-2 pr-3 pl-4',
+          disabled ? 'cursor-not-allowed' : 'cursor-default',
+        )}
+      >
+        <div className="min-w-0 flex-[1_1_14rem]">
+          <span id={labelId} className="block text-h3 hyphenate text-ink">
+            {label}
+          </span>
+          {detail !== undefined && <span className="block text-small text-ink-2">{detail}</span>}
+          {help !== undefined && <SettingHelp id={helpId}>{help}</SettingHelp>}
+        </div>
+        <div
+          className={cx(
+            'flex max-w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1',
+            below && 'basis-full justify-start',
+            // A changed value is written in the link color, as the dot.
+            changed && '[&_[role=combobox]]:text-link [&_input]:text-link',
+          )}
+        >
           {changed && (
-            <span id={wasId} className="sr-only">
+            <span id={wasId} className="min-w-0 truncate text-micro text-ink-3 sm:max-w-[16rem]">
               {t.ui.was(was)}
             </span>
           )}
-          <Switch
-            ref={head}
-            data-setting-head
-            checked={props.checked}
-            onChange={props.onChange}
-            labelledBy={labelId}
-            describedById={describedBy(helpId, errorId, changed ? wasId : undefined)}
-            stateText={props.stateText ?? true}
-            disabled={disabled}
-            // A comfortable target: 12 px around the switch take the click too.
-            className="relative -my-1 after:absolute after:-inset-3"
+          <Control
+            {...props}
+            labelId={labelId}
+            describedById={describedById}
+            invalid={Boolean(error)}
           />
         </div>
-      ) : (
-        <button
-          ref={head}
-          type="button"
-          data-setting-head
-          disabled={disabled}
-          aria-expanded={open}
-          aria-controls={open ? pickerId : undefined}
-          aria-labelledby={`${labelId} ${valueId}`}
-          aria-describedby={describedBy(helpId, errorId)}
-          onClick={() => setOpen(!open)}
-          className={cx(
-            headClass,
-            'focus-visible:outline-none',
-            props.kind === 'path' && 'max-md:flex-wrap max-md:gap-y-0.5',
-          )}
-        >
-          {mark}
-          {name}
-          <span
-            id={valueId}
-            className={cx(
-              // The value wraps before the label does: it takes 55 % of the row at most.
-              'flex max-w-[55%] min-w-0 flex-wrap items-baseline justify-end gap-x-3 text-right text-lead text-ink-2 max-md:gap-x-2 max-md:text-[1.0625rem]',
-              props.kind === 'path' &&
-                'figures max-md:order-3 max-md:max-w-none max-md:basis-full max-md:justify-start max-md:text-left',
-            )}
-          >
-            {changed && (
-              <span className="text-[1rem] font-medium text-ink-3 max-md:text-[0.9375rem]">
-                {t.ui.was(was)}
-              </span>
-            )}
-            <span className={cx('min-w-0 break-words', changed && 'font-[650] text-link')}>
-              {display}
-            </span>
-          </span>
-          <CaretRightIcon
-            size="1.5rem"
-            aria-hidden="true"
-            className={cx(
-              'shrink-0 text-ink-3 transition-transform duration-500 ease-nuit',
-              open && 'rotate-90',
-              props.kind === 'path' && 'max-md:order-2',
-            )}
-          />
-        </button>
-      )}
+      </div>
       {error && (
-        <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
+        <div className="px-4 pb-3">
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       )}
-      {children !== undefined && (
-        <div className="px-[1.875rem] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">
-          {children}
-        </div>
-      )}
-      {(help !== undefined || open) && (
-        <div
-          className={
-            lit ? 'px-[1.875rem] pb-[1.875rem] max-md:px-5 max-md:pb-[1.375rem]' : 'sr-only'
-          }
+      {children !== undefined && <div className="px-4 pb-3 text-small text-ink-2">{children}</div>}
+    </div>
+  )
+}
+
+/**
+ * A setting's help under its name (a SettingRow's, an OpenRow's): a muted caption, two lines at
+ * most, with More at the end of a longer one to read the rest. Screen readers read it whole.
+ */
+export function SettingHelp({ id, children }: { id: string | undefined; children: ReactNode }) {
+  const { t } = useI18n()
+  const text = useRef<HTMLParagraphElement>(null)
+  const [open, setOpen] = useState(false)
+  const [long, setLong] = useState(false)
+
+  // More shows only while the clamp cuts the caption, which a narrower window may do.
+  useLayoutEffect(() => {
+    const node = text.current
+    if (!node || open) return
+    const measure = () => setLong(node.scrollHeight > node.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [open])
+
+  return (
+    <div className="mt-0.5 flex max-w-[72ch] items-end gap-2 text-small text-ink-3">
+      <p id={id} ref={text} className={cx('min-w-0', !open && 'line-clamp-2')}>
+        {children}
+      </p>
+      {(long || open) && (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen(!open)}
+          className="-mx-1 shrink-0 cursor-pointer rounded-[0.375rem] px-1 font-semibold whitespace-nowrap text-ink-2 focus-lit hover:text-ink"
         >
-          {help !== undefined && (
-            <p
-              id={helpId}
-              className="max-w-[66ch] text-[1.09375rem] leading-[1.58] text-ink-2 max-md:text-[1rem]"
-            >
-              {help}
-            </p>
-          )}
-          {open && (
-            <div
-              ref={picker}
-              id={pickerId}
-              className={cx(help !== undefined && 'mt-6 max-md:mt-4')}
-            >
-              {strip ? (
-                <div
-                  role="radiogroup"
-                  aria-labelledby={labelId}
-                  onKeyDown={onStripKey}
-                  className="relative -mx-[1.875rem] flex scroll-px-[1.875rem] gap-2 overflow-x-auto px-[1.875rem] pt-2 pb-2.5 scrollbar-none [mask-image:linear-gradient(90deg,transparent_0,#000_1.875rem,#000_calc(100%-5.625rem),transparent)] max-md:-mx-5 max-md:px-5"
-                >
-                  {strip.map((choice) => (
-                    <button
-                      key={choice.key}
-                      type="button"
-                      role="radio"
-                      data-choice={choice.key}
-                      aria-checked={choice.checked}
-                      tabIndex={choice.checked ? 0 : -1}
-                      disabled={choice.disabled}
-                      onClick={choice.choose}
-                      className={cx(
-                        'figures h-[3.75rem] min-w-[3.75rem] shrink-0 cursor-pointer rounded-choice bg-s1 px-[1.125rem] text-[1.3125rem] font-[620] whitespace-nowrap text-ink',
-                        'transition-[scale,background-color,color,box-shadow] duration-450 ease-nuit hover:bg-s2 disabled:cursor-not-allowed disabled:opacity-45',
-                        'focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid',
-                        'aria-checked:scale-[1.08] aria-checked:bg-focus aria-checked:text-on-focus aria-checked:shadow-[0_14px_26px_-14px_rgb(0_0_0/0.9)] motion-reduce:aria-checked:scale-100',
-                        'max-md:h-[3.25rem] max-md:min-w-[3.25rem] max-md:px-3.5 max-md:text-[1.1875rem]',
-                      )}
-                    >
-                      {choice.label}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <Control
-                  {...props}
-                  labelId={labelId}
-                  describedById={describedBy(helpId, errorId)}
-                />
-              )}
-              <p className="mt-3.5 flex flex-wrap gap-x-5 gap-y-1.5 text-micro text-ink-2 max-md:hidden">
-                {strip && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Kbd>←</Kbd>
-                    <Kbd>→</Kbd>
-                    {props.kind === 'number' ? t.ui.pickerKeys.change : t.ui.pickerKeys.choose}
-                  </span>
-                )}
-                {props.kind !== 'secret' && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Kbd>Enter</Kbd>
-                    {t.ui.pickerKeys.confirm}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1.5">
-                  <Kbd>Esc</Kbd>
-                  {t.ui.pickerKeys.close}
-                </span>
-              </p>
-            </div>
-          )}
-        </div>
+          {open ? t.ui.lessHelp : t.ui.moreHelp}
+        </button>
       )}
     </div>
   )
 }
 
-/** The value written on the right, the saved one for "was …", and whether they differ. */
+/** The saved value for "was …", and whether the value differs from it. */
 function describe<T extends string | number>(
   props: SettingRowProps<T>,
   t: Messages,
-): { display: ReactNode; was: string; changed: boolean } {
+): { was: string; changed: boolean } {
   switch (props.kind) {
     case 'switch': {
       const [on, off] = props.stateText ?? [t.ui.on, t.ui.off]
       return {
-        display: props.checked ? on : off,
         was: props.saved ? on : off,
         changed: props.saved !== undefined && props.saved !== props.checked,
       }
     }
-    case 'choice': {
-      const name = (value: T | undefined) =>
-        props.options.find((option) => option.value === value)?.label ?? String(value ?? '')
+    case 'choice':
       return {
-        display: name(props.value),
-        was: name(props.saved),
+        was:
+          props.options.find((option) => option.value === props.saved)?.label ??
+          String(props.saved ?? ''),
         changed: props.saved !== undefined && props.saved !== props.value,
       }
-    }
     case 'number': {
-      const write = (value: number | null | undefined) =>
-        value === null || value === undefined
-          ? ''
-          : props.format
-            ? props.format(value)
-            : props.unit
-              ? `${value} ${props.unit}`
-              : String(value)
+      const saved = props.saved
       return {
-        display:
-          props.value === null ? (
-            <span className="text-ink-3">{t.ui.notSet}</span>
-          ) : (
-            write(props.value)
-          ),
-        was: props.saved === null ? t.ui.notSet : write(props.saved),
-        changed: props.saved !== undefined && props.saved !== props.value,
+        was:
+          saved === null || saved === undefined
+            ? t.ui.notSet
+            : props.format
+              ? props.format(saved)
+              : props.unit
+                ? `${saved} ${props.unit}`
+                : String(saved),
+        changed: saved !== undefined && saved !== props.value,
       }
     }
     case 'text':
     case 'path': {
-      // Empty means the default when the setting has one: its placeholder, dimmed.
+      // Empty means the default when the setting has one.
       const fallback = props.placeholder || undefined
-      const empty = (
-        <span className="text-ink-3">
-          {fallback === undefined ? (
-            t.ui.notSet
-          ) : (
-            <>
-              <span className="sr-only">{t.ui.byDefault} </span>
-              {fallback}
-            </>
-          )}
-        </span>
-      )
-      const emptyWas = fallback === undefined ? t.ui.notSet : `${t.ui.byDefault} ${fallback}`
       return {
-        display: props.value === '' ? empty : props.value,
-        was: props.saved === '' ? emptyWas : (props.saved ?? ''),
+        was:
+          props.saved !== ''
+            ? (props.saved ?? '')
+            : fallback === undefined
+              ? t.ui.notSet
+              : `${t.ui.byDefault} ${fallback}`,
         changed: props.saved !== undefined && props.saved !== props.value,
       }
     }
-    case 'secret': {
-      const was = props.saved ? t.ui.secret.saved : t.ui.notSet
-      const display =
-        props.value === undefined
-          ? was
-          : props.value === ''
-            ? props.saved
-              ? t.ui.secret.removing
-              : t.ui.notSet
-            : '••••••••'
-      return { display, was, changed: props.value !== undefined }
-    }
+    case 'secret':
+      return {
+        was: props.saved ? t.ui.secret.saved : t.ui.notSet,
+        changed: props.value !== undefined,
+      }
   }
 }
 
-type StripChoice = {
-  key: string
-  label: string
-  checked: boolean
-  disabled: boolean
-  choose: () => void
+/** Whether a choice's options sit side by side in the row, rather than in a list. */
+function sideBySide(options: readonly SelectOption<string | number>[]): boolean {
+  if (options.length < 2 || options.length > sideBySideMax) return false
+  return options.reduce((sum, option) => sum + option.label.length, 0) <= sideBySideChars
 }
 
-/** The choices of a strip, or null when the setting opens another control. */
-function stripChoices<T extends string | number>(props: SettingRowProps<T>): StripChoice[] | null {
-  if (props.kind === 'choice' && props.options.length <= stripMax) {
-    return props.options.map((option) => ({
-      key: String(option.value),
-      label: option.label,
-      checked: option.value === props.value,
-      disabled: option.disabled ?? false,
-      choose: () => props.onChange(option.value),
-    }))
-  }
-  if (props.kind !== 'number') return null
-  const step = props.step ?? 1
-  const count = Math.floor((props.max - props.min) / step) + 1
-  const picker = props.picker ?? (count <= numberStripMax ? 'strip' : 'well')
-  if (picker !== 'strip') return null
-  return Array.from({ length: count }, (_, index) => {
-    const value = props.min + index * step
-    return {
-      key: String(value),
-      label: props.format ? props.format(value) : String(value),
-      checked: value === props.value,
-      disabled: false,
-      choose: () => props.onChange(value),
-    }
-  })
-}
-
-/** The control a row opens when it is not a strip: a well, a list, or the secret field. */
+/** The control of a row, in the row: a switch, choices, a list, a well or the secret field. */
 function Control<T extends string | number>({
   labelId,
   describedById,
+  invalid,
   ...props
-}: SettingRowProps<T> & { labelId: string; describedById: string | undefined }) {
-  const invalid = Boolean(props.error)
+}: SettingRowProps<T> & {
+  labelId: string
+  describedById: string | undefined
+  invalid: boolean
+}) {
+  const disabled = props.disabled ?? false
   switch (props.kind) {
-    case 'choice':
+    case 'switch':
       return (
+        <Switch
+          data-setting-head
+          checked={props.checked}
+          onChange={props.onChange}
+          labelledBy={labelId}
+          describedById={describedById}
+          stateText={props.stateText ?? true}
+          disabled={disabled}
+          // A comfortable target: 12 px around the switch take the click too.
+          className="relative after:absolute after:-inset-3"
+        />
+      )
+    case 'choice':
+      return sideBySide(props.options) ? (
+        <Choices
+          value={props.value}
+          options={props.options}
+          onChange={props.onChange}
+          labelId={labelId}
+          describedById={describedById}
+          disabled={disabled}
+        />
+      ) : (
         <Select
+          data-setting-head
           value={props.value}
           options={props.options}
           onValue={props.onChange}
           aria-label={props.label}
           aria-describedby={describedById}
           invalid={invalid}
-          className="max-w-[26.25rem]"
+          disabled={disabled}
+          className="w-[16.5rem] max-w-full"
         />
       )
     case 'number':
       return (
         <NumberInput
-          data-setting-well
+          data-setting-head
           value={props.value}
           onValue={props.onChange}
           min={props.min}
           max={props.max}
           step={props.step}
           suffix={props.unit}
+          disabled={disabled}
           aria-labelledby={labelId}
           aria-describedby={describedById}
           invalid={invalid}
-          className="w-[13.75rem] max-w-full"
+          className="w-[9rem]"
         />
       )
     case 'text':
     case 'path':
       return (
         <TextInput
-          data-setting-well
+          data-setting-head
           value={props.value}
           onValue={props.onChange}
           placeholder={props.placeholder}
@@ -636,10 +434,14 @@ function Control<T extends string | number>({
           mono={props.mono}
           autoComplete="off"
           spellCheck={props.kind === 'path' ? false : undefined}
+          disabled={disabled}
           aria-labelledby={labelId}
           aria-describedby={describedById}
           invalid={invalid}
-          className="max-w-[35rem]"
+          className={cx(
+            'max-w-full',
+            props.kind === 'path' ? 'w-[30rem] [&_input]:figures' : 'w-[22rem]',
+          )}
         />
       )
     case 'secret':
@@ -647,6 +449,7 @@ function Control<T extends string | number>({
         <SecretField
           label={props.label}
           hideLabel
+          size="md"
           saved={props.saved}
           value={props.value}
           onValue={props.onValue}
@@ -658,7 +461,82 @@ function Control<T extends string | number>({
           actions={props.actions}
         />
       )
-    case 'switch':
-      return null
   }
+}
+
+/**
+ * Two to four choices side by side, a radio group: one click chooses; ← → (and Home, End) move
+ * and choose, ↑ ↓ are the rows'. The chosen one is the row's control (`data-setting-head`).
+ */
+function Choices<T extends string | number>({
+  value,
+  options,
+  onChange,
+  labelId,
+  describedById,
+  disabled,
+}: {
+  value: T
+  options: readonly SelectOption<T>[]
+  onChange: (value: T) => void
+  labelId: string
+  describedById: string | undefined
+  disabled: boolean
+}) {
+  const enabled = options.filter((option) => !option.disabled)
+  // The chosen one takes the Tab stop, else the first that may be chosen.
+  const stop = enabled.find((option) => option.value === value) ?? enabled[0]
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const index = enabled.findIndex((option) => option.value === value)
+    const target =
+      event.key === 'ArrowRight'
+        ? enabled[Math.min(index + 1, enabled.length - 1)]
+        : event.key === 'ArrowLeft'
+          ? enabled[Math.max(index - 1, 0)]
+          : event.key === 'Home'
+            ? enabled[0]
+            : event.key === 'End'
+              ? enabled[enabled.length - 1]
+              : undefined
+    if (!target) return
+    event.preventDefault()
+    if (target.value !== value) onChange(target.value)
+    const group = event.currentTarget
+    requestAnimationFrame(() =>
+      group
+        .querySelector<HTMLElement>(`[data-choice="${CSS.escape(String(target.value))}"]`)
+        ?.focus(),
+    )
+  }
+
+  return (
+    <div
+      role="radiogroup"
+      aria-labelledby={labelId}
+      aria-describedby={describedById}
+      onKeyDown={onKeyDown}
+      className="inline-flex max-w-full flex-wrap justify-end gap-1"
+    >
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          role="radio"
+          lang={option.lang}
+          data-choice={String(option.value)}
+          data-setting-head={option === stop || undefined}
+          aria-checked={option.value === value}
+          tabIndex={option === stop ? 0 : -1}
+          disabled={disabled || option.disabled}
+          onClick={() => {
+            if (option.value !== value) onChange(option.value)
+          }}
+          className={segmentClass('md')}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
 }

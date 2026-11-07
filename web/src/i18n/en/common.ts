@@ -636,6 +636,8 @@ const common = {
     noMatch: 'Nothing matches.',
     changes: (count: number) => (count === 1 ? '1 change' : `${count} changes`),
     was: (value: string) => `was ${value}`,
+    moreHelp: 'More',
+    lessHelp: 'Less',
     notSet: 'Not set',
     byDefault: 'Default:',
     ofTotal: (total: number | string) => `of ${total}`,
@@ -643,12 +645,6 @@ const common = {
     fix: 'Fix',
     meanwhile: 'Meanwhile',
     alertKind: { danger: 'Error', warn: 'Warning', info: 'Note' },
-    pickerKeys: {
-      change: 'to change',
-      choose: 'to choose',
-      confirm: 'to confirm',
-      close: 'to close',
-    },
     secret: {
       saved: 'Saved',
       notSet: 'Not set',

@@ -439,7 +439,6 @@ export default function ConversionSection(api: SectionFormApi) {
               disabled={processorToneMapOff}
               {...minMax('toneMappingDesat')}
               step={0.1}
-              picker="well"
               saved={saved.toneMappingDesat}
               {...number('tone-mapping-desat', form.toneMappingDesat, (value) =>
                 update({ toneMappingDesat: value }),
@@ -499,7 +498,6 @@ export default function ConversionSection(api: SectionFormApi) {
           error={error('downmix-boost')}
           {...minMax('downmixBoost')}
           step={0.1}
-          picker="well"
           saved={saved.downmixBoost}
           {...number('downmix-boost', form.downmixBoost, (value) =>
             update({ downmixBoost: value }),

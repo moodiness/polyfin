@@ -674,6 +674,8 @@ const common: typeof en = {
     noMatch: 'Nessun risultato.',
     changes: (count: number) => (count === 1 ? '1 modifica' : `${count} modifiche`),
     was: (value: string) => `prima: ${value}`,
+    moreHelp: 'Altro',
+    lessHelp: 'Meno',
     notSet: 'Non impostato',
     byDefault: 'Predefinito:',
     ofTotal: (total: number | string) => `su ${total}`,
@@ -681,12 +683,6 @@ const common: typeof en = {
     fix: 'Soluzione',
     meanwhile: 'Nel frattempo',
     alertKind: { danger: 'Errore', warn: 'Avviso', info: 'Nota' },
-    pickerKeys: {
-      change: 'per cambiare',
-      choose: 'per scegliere',
-      confirm: 'per confermare',
-      close: 'per chiudere',
-    },
     secret: {
       saved: 'Salvato',
       notSet: 'Non impostato',
