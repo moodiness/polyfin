@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import {
   useMutation,
   useQuery,
@@ -36,6 +36,7 @@ import {
   Row,
   RowList,
   Skeleton,
+  SettingHelp,
   SkeletonRows,
   SkeletonText,
   StatusPill,
@@ -103,7 +104,7 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
     <Anchor id="tasks">
       <Block title={text.tasksTitle} count={tasks.data?.length} aside={text.autoRefresh}>
         {tasks.isPending ? (
-          <SkeletonRows rows={4} />
+          <SkeletonRows rows={6} />
         ) : tasks.isError ? (
           <InlineError onRetry={() => void tasks.refetch()} retrying={tasks.isFetching}>
             {errorMessage(t, tasks.error)}
@@ -113,33 +114,13 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
             {text.noTasksHint}
           </EmptyState>
         ) : (
-          <div className="space-y-12 max-md:space-y-9">
+          <div className="space-y-6 max-md:space-y-5">
             {[...categories].map(([category, list]) => (
               <section key={category} aria-label={category}>
-                <h3 className="mb-4 text-group text-ink max-md:mb-3">{category}</h3>
-                <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
+                <h3 className="mb-2 text-group text-ink">{category}</h3>
+                <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                   {list.map((task) => (
-                    // Below 640 px a task is a compact row: its name and Run now side by side,
-                    // then its last and next runs across the row, and its description left to
-                    // screen readers.
-                    <li
-                      key={task.id}
-                      className="grid gap-x-10 gap-y-4 rounded-row bg-s1 py-5 pr-[1.375rem] pl-7 max-md:px-5 max-md:py-4 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-3 max-sm:gap-y-2 max-sm:py-3.5 max-sm:pr-3.5 max-sm:pl-4 lg:grid-cols-[minmax(0,1fr)_minmax(13.0625rem,auto)_auto] lg:items-center"
-                    >
-                      <div className="min-w-0 max-sm:contents">
-                        <p className="text-h3 break-words hyphens-auto text-ink max-md:text-[1.125rem] max-sm:col-start-1 max-sm:row-start-1 max-sm:self-center">
-                          {task.name}
-                        </p>
-                        <p className="mt-1 max-w-[66ch] text-small text-ink-2 max-md:text-[1rem] max-sm:sr-only">
-                          {task.description}
-                        </p>
-                        <LastRun task={task} />
-                      </div>
-                      <NextRun task={task} />
-                      <div className="flex max-sm:col-start-2 max-sm:row-start-1 max-sm:self-start lg:justify-end">
-                        <TaskButton task={task} act={act} />
-                      </div>
-                    </li>
+                    <TaskRow key={task.id} task={task} act={act} />
                   ))}
                 </ul>
               </section>
@@ -148,6 +129,36 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
         )}
       </Block>
     </Anchor>
+  )
+}
+
+/**
+ * One task on one row: its name with its description as a one-line caption (More reads the
+ * rest), how its last run went, when it runs next, and Run now. Below 1024 px the name and caption
+ * take the row's width, and the last and next runs go under them, beside Run now.
+ */
+function TaskRow({ task, act }: { task: Task; act: Act }) {
+  const id = useId()
+  const error = task.state === 'Idle' && task.last !== null ? task.last.error : ''
+  return (
+    <li className="grid min-h-15 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 rounded-row bg-s1 py-2 pr-2.5 pl-4 lg:grid-cols-[minmax(0,1fr)_16.5rem_10rem_auto] lg:gap-y-1">
+      <div className="col-span-full min-w-0 lg:col-span-1">
+        <p className="text-h3 break-words hyphens-auto text-ink">{task.name}</p>
+        {task.description !== '' && (
+          <SettingHelp id={`${id}-about`} lines={1}>
+            {task.description}
+          </SettingHelp>
+        )}
+      </div>
+      <div className="col-start-1 row-start-2 flex min-w-0 flex-col gap-y-0.5 lg:contents">
+        <LastRun task={task} />
+        <NextRun task={task} />
+      </div>
+      <div className="col-start-2 row-start-2 flex justify-end self-end lg:col-start-4 lg:row-start-1 lg:self-center">
+        <TaskButton task={task} act={act} />
+      </div>
+      {error !== '' && <p className="col-span-full text-small break-words text-danger">{error}</p>}
+    </li>
   )
 }
 
@@ -180,66 +191,68 @@ function TaskButton({ task, act }: { task: Task; act: Act }) {
   )
 }
 
+/** When the task runs next, then how often; "Next run" is for screen readers. */
 function NextRun({ task }: { task: Task }) {
   const { language, t } = useI18n()
   const text = t.system.schedule
+  const cadence =
+    task.interval > 0
+      ? text.every(formatSpan(task.interval, language))
+      : task.daily !== null
+        ? text.daily(formatHour(task.daily, language))
+        : null
   return (
-    <div className="text-small text-ink-2 figures max-sm:col-span-full max-sm:flex max-sm:flex-wrap max-sm:gap-x-2 lg:text-right">
-      <p>{text.nextRun}</p>
-      {task.next !== null ? (
-        <p className="text-lead text-ink max-md:text-[1.125rem] max-sm:text-small">
-          <RelativeTime iso={task.next} />
-        </p>
-      ) : (
-        <p className="text-lead text-ink max-md:text-[1.125rem] max-sm:text-small">
-          {text.byHandOnly}
-        </p>
-      )}
-      {task.interval > 0 && <p>{text.every(formatSpan(task.interval, language))}</p>}
-      {task.daily !== null && <p>{text.daily(formatHour(task.daily, language))}</p>}
+    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-small figures lg:block">
+      <span className="sr-only">{text.nextRun}</span>
+      <span className="text-ink lg:block">
+        {task.next !== null ? <RelativeTime iso={task.next} /> : text.byHandOnly}
+      </span>
+      {cadence !== null && <span className="text-ink-3 lg:block lg:text-micro">{cadence}</span>}
     </div>
   )
 }
 
-/** How the task's last run went, under its description. */
+/**
+ * How the task's last run went, and how long it took, which a phone leaves out to keep it on one
+ * line; "Last run" is for screen readers.
+ */
 function LastRun({ task }: { task: Task }) {
   const { language, t } = useI18n()
   const text = t.system.schedule
-  const label = <span className="text-ink-2">{text.lastRun}</span>
+  const label = <span className="sr-only">{text.lastRun}</span>
+  const box = 'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-small figures lg:gap-y-0'
   if (task.state !== 'Idle') {
     return (
-      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-small max-sm:col-span-full max-sm:mt-0">
+      <div className={box}>
         {label}
         <StatusPill tone="live">
           <span className="motion-safe:animate-pulse">
             {task.state === 'Running' ? text.running : text.cancelling}
           </span>
         </StatusPill>
-      </p>
+      </div>
     )
   }
   if (task.last === null) {
     return (
-      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-small max-sm:col-span-full max-sm:mt-0">
+      <div className={box}>
         {label}
-        <span className="text-ink">{text.notRunYet}</span>
-      </p>
+        <span className="text-ink-2">{text.notRunYet}</span>
+      </div>
     )
   }
   const last = task.last
   const tone = last.status === 'Completed' ? 'ok' : last.status === 'Failed' ? 'danger' : 'muted'
   return (
-    <div className="mt-3 text-small max-sm:col-span-full max-sm:mt-0">
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {label}
-        <StatusPill tone={tone}>{text.results[last.status] ?? last.status}</StatusPill>
-        <span className="text-ink-2 figures">
-          <RelativeTime iso={last.end} />
-          {' · '}
-          {text.took(formatSpan((Date.parse(last.end) - Date.parse(last.start)) / 1000, language))}
-        </span>
-      </p>
-      {last.error !== '' && <p className="mt-1 break-words text-danger">{last.error}</p>}
+    <div className={box}>
+      {label}
+      <StatusPill tone={tone}>{text.results[last.status] ?? last.status}</StatusPill>
+      <span className="text-ink-2">
+        <RelativeTime iso={last.end} />
+      </span>
+      <span className="text-ink-3 max-sm:hidden lg:basis-full lg:text-micro">
+        {text.took(formatSpan((Date.parse(last.end) - Date.parse(last.start)) / 1000, language))}
+      </span>
     </div>
   )
 }

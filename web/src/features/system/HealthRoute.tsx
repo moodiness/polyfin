@@ -115,10 +115,10 @@ export default function HealthRoute() {
         <>
           {text.description}
           {checked && (
-            <span className="mt-3.5 flex items-center gap-2.5 text-small text-ink-3 figures">
+            <span className="mt-2 flex items-center gap-2 text-small text-ink-3 figures">
               <span
                 aria-hidden="true"
-                className="size-2 shrink-0 rounded-full bg-ok ring-4 ring-ok/14"
+                className="size-1.5 shrink-0 rounded-full bg-ok ring-3 ring-ok/14"
               />
               {checked}
             </span>
@@ -141,7 +141,7 @@ export default function HealthRoute() {
       )}
       {health.data && shown !== null && (
         <Modal open={open !== null} onClose={close} title={detailTitle(t, shown)} width={680}>
-          <div className="px-8 pb-8 max-sm:px-5 max-sm:pb-6">
+          <div className="px-5 pb-5">
             <DetailBody id={shown} health={health.data} sources={sources.data} />
           </div>
         </Modal>
@@ -154,15 +154,15 @@ function HealthSkeleton() {
   return (
     <>
       <div>
-        <Skeleton className="mb-5 h-7 w-40" />
+        <Skeleton className="mb-3 h-6 w-40" />
         <SkeletonRows rows={1} />
       </div>
       <div>
-        <Skeleton className="mb-5 h-7 w-32" />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <Skeleton className="mb-3 h-6 w-32" />
+        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((index) => (
-            <div key={index} className="min-h-[13.125rem] rounded-panel bg-s1 px-[1.625rem] py-6">
-              <Skeleton className="mb-8 size-9 rounded-full" />
+            <div key={index} className="min-h-[9.25rem] rounded-panel bg-s1 px-4 py-3.5">
+              <Skeleton className="mb-5 size-7.5 rounded-full" />
               <SkeletonText lines={3} />
             </div>
           ))}
@@ -225,7 +225,7 @@ function Problems({ health }: { health: Health }) {
           )}
           <ul
             aria-label={text.problemsTitle}
-            className="grid gap-3 lg:grid-cols-2 lg:[&>li:last-child:nth-child(odd)]:col-span-2"
+            className="grid gap-2.5 lg:grid-cols-2 lg:[&>li:last-child:nth-child(odd)]:col-span-2"
           >
             {problems.map((problem) => {
               const [title, rest] = splitSentence(language, problemText(t, language, problem))
@@ -654,7 +654,7 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
         </span>
       }
     >
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
         {checks.map((check, index) => (
           <CheckTile
             key={check.id}
