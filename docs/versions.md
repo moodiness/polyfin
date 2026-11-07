@@ -56,13 +56,15 @@ Polyfin keeps no maximum of versions, and ignores seeders, source, size and lang
 
 | Cause | Log line | Level | Also logged |
 |---|---|---|---|
-| Addon failed or timed out | `An addon could not list streams` | Warn | Addon, error |
-| Addon answered only notices | `An addon answered only notices, nothing to play` | Warn | Addon, title type and identifier, notices' text |
+| Addon failed or timed out | `An addon could not list streams` | Warn when a user waits (a title opened, a play), Info for background work alone | Addon, title type and identifier, error |
+| Addon answered only notices | `An addon answered only notices, nothing to play` | Warn for a refusal for its rate, Info otherwise | Addon, title type and identifier, notices' text, counts of entries |
 | Version could not be analyzed | `A version could not be analyzed` | Info | Addon, why |
 | Stream names another title | `A version names another title` | Debug | Addon, marker (`S01E03`, `S02`, `1998`) |
 
 - **System › Health › Addons** shows an addon's last failure.
-- The notices line comes once per answer, addresses and keys hidden, links never logged.
+- The failure line comes once per request, however many waited for it. Background work is the watchlist checks, home rows listed ahead and playback prepared in advance; when a user waits for the same request too, it is a warning. A re-asking that fails (see below) is logged at Debug only, as `An addon asked again for a list failed`: the list stays.
+- The notices line comes once a day for the same addon, title and notices' text; repeats within the day are at Debug. Addresses and keys are hidden, links never logged.
+- The notices line counts the answer's entries (`entries`), and those of each shape Polyfin cannot play: no link, as a notice, a web page or a YouTube video (`no_link`); Usenet downloads (`usenet`); archives' files (`archives`); links of another scheme than `http` or `https` (`other_schemes`); torrents whose info hash is not 40 hexadecimal digits, or whose file index is negative (`invalid_info_hash`). Polyfin plays none of these: when they outnumber the addon's notices, set the addon to send `http` links.
 - A source failing later in a play logs why, never its address. A torrent route failing mid-play logs `the route for torrents does not answer`, without an addon.
 - `A torrent did not start in time` is logged, and **System › Health** lists it under **To look at**, as it does a torrent its route stopped mid-play.
 - The another-title line comes once while Polyfin remembers the version.
@@ -133,7 +135,7 @@ After that, a reopened title shows old versions at once while addons are re-aske
 - A new answer replaces the list. Versions it lacks stay listed after it, and playable, until re-asking stops (see below): gathering addons often answer partly first. Then they disappear.
 - [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops old lists. Addon subtitles are kept the same way.
 - An empty answer replaces the list: the addon has nothing for the title any more.
-- A notices-only answer, as from an addon limiting requests, is not kept. For a minute the addon is not asked for the title: its earlier versions stay, or it gives none. Afterwards it is asked with the title; **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once. The log tells it once per answer.
+- A notices-only answer is not kept: an addon limiting requests often answers this way, and some addons answer only their own summary once their filters left nothing. For a minute the addon is not asked for the title: its earlier versions stay, or it gives none. The next request after it asks again; **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once. The log tells it once a day (see [Which streams become versions](#which-streams-become-versions)).
 
 Gathering addons answer first with what arrived within their own time limit, and get the rest moments later. So Polyfin re-asks an addon 10 seconds after its first answer for a title, and again 30 seconds later if that answer listed more playable streams.
 

@@ -31,6 +31,15 @@ type Stream struct {
 	Sources       []string       `json:"sources,omitempty"`
 	Subtitles     []Subtitle     `json:"subtitles,omitempty"`
 	BehaviorHints StreamBehavior `json:"behaviorHints,omitzero"`
+	// Usenet is a Usenet download's NZB link, and RARs to Tars archives'
+	// files: streams Polyfin does not play. They are decoded only to count
+	// them in a log line, never asked for.
+	Usenet   string            `json:"nzbUrl,omitempty"`
+	RARs     []json.RawMessage `json:"rarUrls,omitempty"`
+	Zips     []json.RawMessage `json:"zipUrls,omitempty"`
+	SevenZip []json.RawMessage `json:"7zipUrls,omitempty"`
+	TGZs     []json.RawMessage `json:"tgzUrls,omitempty"`
+	Tars     []json.RawMessage `json:"tarUrls,omitempty"`
 	// Identity is Polyfin's, never an addon's: the file an earlier answer
 	// of the addon listed the stream as, when the stream's link or hints
 	// changed since, empty otherwise.
@@ -75,6 +84,12 @@ func (s Stream) Playable() bool { return webURL(s.URL) }
 func (s Stream) Torrent() bool {
 	raw, err := hex.DecodeString(s.InfoHash)
 	return s.URL == "" && err == nil && len(raw) == 20 && (s.FileIdx == nil || *s.FileIdx >= 0)
+}
+
+// Archive reports whether the stream is an archive's file, which Polyfin
+// does not play.
+func (s Stream) Archive() bool {
+	return len(s.RARs)+len(s.Zips)+len(s.SevenZip)+len(s.TGZs)+len(s.Tars) > 0
 }
 
 // Details returns the description, from whichever field the addon used.

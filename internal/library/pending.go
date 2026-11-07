@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -185,10 +184,9 @@ func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, 
 		go func() {
 			defer s.versionsChanged(t.item)
 			defer a.done(entry.addon.ID)
-			// An answer of notices alone is logged where it is asked, once.
-			if _, err := s.streams(detached, entry.installed, entry.contentType, entry.id); err != nil && !errors.Is(err, errOnlyNotices) {
-				s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
-			}
+			// A failure, or an answer of notices alone, is logged where the
+			// addon is asked, once (see askStreamsOf).
+			_, _ = s.streams(detached, entry.installed, entry.contentType, entry.id)
 		}()
 	}
 }

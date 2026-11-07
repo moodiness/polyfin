@@ -467,13 +467,9 @@ func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamS
 			unknown = append(unknown, entry)
 		case mode == waitAll || mode == staleNow:
 			wg.Go(func() {
-				streams, err := s.streams(ctx, entry.installed, entry.contentType, entry.id)
-				// An app that stops waiting cancels ctx: nothing failed. An
-				// answer of notices alone is logged where it is asked, once.
-				if err != nil && ctx.Err() == nil && !errors.Is(err, errOnlyNotices) {
-					s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
-				}
-				lists[i] = streams
+				// A failure, or an answer of notices alone, is logged where
+				// the addon is asked, once (see askStreamsOf).
+				lists[i], _ = s.streams(ctx, entry.installed, entry.contentType, entry.id)
 			})
 		default:
 			unknown = append(unknown, entry)
@@ -960,15 +956,19 @@ func (s *Service) streamTurn(ctx context.Context, entry installed, key streamKey
 }
 
 // askStreamsOf asks an addon for its streams for a title once, as
-// streamAnswer does. An answer of notices alone is logged here, once
-// whoever waits for it, and remembered (see noticedAnswer).
+// streamAnswer does. A failure, and an answer of notices alone, are
+// logged here, once whoever waits for it (see streamsFailed), and the
+// notices remembered (see noticedAnswer).
 func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
-	return shared(ctx, s, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
+	flight := streamsFlight(key)
+	s.streamLogs.waits(ctx, flight)
+	return shared(ctx, s, flight, func(ctx context.Context) ([]stremio.Stream, error) {
 		asked, done := s.ask(followKey{listStreams, key})
 		defer done()
 		s.logger.Debug("An addon is asked for streams", "addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id)
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
-		if err != nil {
+		if userWaited := s.streamLogs.ended(flight); err != nil {
+			s.streamsFailed(ctx, entry, key, userWaited, err)
 			return nil, err
 		}
 		if len(streams) > 0 && streamKind.count(streams) == 0 {
@@ -984,10 +984,9 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 const noticeLife = time.Minute
 
 // noticesAnswered remembers notices, an addon's answer of notices alone
-// to request asked (see ask), and logs it, its notices' text redacted and
-// their links left out. A request a refresh forgot meanwhile is
-// errForgotten, its answer left out. It returns what noticedAnswer
-// returns.
+// to request asked (see ask), and logs it (see noticesLogged). A request
+// a refresh forgot meanwhile is errForgotten, its answer left out. It
+// returns what noticedAnswer returns.
 func (s *Service) noticesAnswered(ctx context.Context, entry installed, key streamKey, asked uint64, notices []stremio.Stream) ([]stremio.Stream, error) {
 	s.followUps.mu.Lock()
 	if s.followUps.asking[followKey{listStreams, key}] != asked {
@@ -997,11 +996,11 @@ func (s *Service) noticesAnswered(ctx context.Context, entry installed, key stre
 	s.noticed.Put(key, notices)
 	s.followUps.mu.Unlock()
 	streams, _, err := s.noticedAnswer(ctx, key)
-	message := "An addon answered only notices, nothing to play; it is asked again in a minute"
+	message := "An addon answered only notices, nothing to play"
 	if err != nil {
 		message = "An addon answered only notices, nothing to play; the streams it listed before are kept"
 	}
-	s.logger.Warn(message, "addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id, "notice", noticeText(notices))
+	s.noticesLogged(ctx, entry, key, message, notices)
 	return streams, err
 }
 
@@ -1047,7 +1046,7 @@ func noticeText(notices []stremio.Stream) string {
 // errOnlyNotices is an addon's answer listing only notices for a title it
 // listed streams for, such as a notice that it limits requests: it would
 // list them again a moment later. The list kept stays as it was, and the
-// callers get it with the error, the warning already logged once (see
+// callers get it with the error, the answer already logged once (see
 // noticesAnswered). An empty answer is the addon having nothing for the
 // title any more: it replaces the list as any answer does.
 var errOnlyNotices = errors.New("its answer has only notices, nothing to play: the streams it listed before are kept")
