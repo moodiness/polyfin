@@ -17,8 +17,10 @@ import './navigationEntries'
 import { paletteGroups, paletteSources, type PaletteEntry } from './registry'
 
 // Each area registers its entries in `src/features/<area>/palette.ts`; loading them here is all
-// it takes for the palette to offer them.
-import.meta.glob('/src/features/*/palette.ts', { eager: true })
+// it takes for the palette to offer them. They load on the palette's first opening, not with the
+// app: the settings' entries bring the settings catalog and two languages' words for it.
+const areaEntries = import.meta.glob('/src/features/*/palette.ts')
+let areaEntriesLoaded: Promise<unknown> | undefined
 
 const PaletteContext = createContext<() => void>(() => {})
 
@@ -42,6 +44,14 @@ function isTyping(target: EventTarget | null): boolean {
  */
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  // Drawn once the areas' entries are in: each source is a hook, so the list of them must not
+  // change while the palette is drawn.
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (!open || ready) return
+    areaEntriesLoaded ??= Promise.all(Object.values(areaEntries).map((load) => load()))
+    void areaEntriesLoaded.then(() => setReady(true))
+  }, [open, ready])
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -70,7 +80,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   return (
     <PaletteContext value={() => setOpen(true)}>
       {children}
-      <CommandPalette open={open} onClose={() => setOpen(false)} />
+      {ready && <CommandPalette open={open} onClose={() => setOpen(false)} />}
     </PaletteContext>
   )
 }
