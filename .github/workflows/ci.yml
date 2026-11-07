@@ -299,14 +299,24 @@ jobs:
             ghcr.io/hadolint/hadolint@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
             < Dockerfile
       - name: Look for Go functions nothing reaches, on Linux, Windows and macOS
-        # deadcode -test: functions neither a program nor a test calls. A
-        # function in the allowlist, as package.Function, is kept on
-        # purpose: PingAddrFromAddr stays as in the upstream netstack the
-        # torrents' network interface copies.
+        # deadcode -test: functions neither a program nor a test calls. Each
+        # GOOS is analyzed without cgo, as a Linux runner can build no other
+        # way for macOS, so that the result is the same on any machine. An
+        # allowlist entry, "GOOS package.Function" or "all package.Function",
+        # is kept on purpose:
+        # - PingAddrFromAddr stays as in the upstream netstack the torrents'
+        #   network interface copies;
+        # - on macOS, the desktop app's tray needs cgo, so without it
+        #   desktop.Copy, desktop.Language and systemLanguage have no caller.
+        #   The Linux leg analyzes the same tray and the same functions
+        #   (system_unix.go), so they are still checked there.
         shell: bash
         env:
           ALLOWED: |
-            github.com/moodiness/polyfin/internal/torrent/netstack.PingAddrFromAddr
+            all github.com/moodiness/polyfin/internal/torrent/netstack.PingAddrFromAddr
+            darwin github.com/moodiness/polyfin/internal/desktop.Copy
+            darwin github.com/moodiness/polyfin/internal/desktop.Language
+            darwin github.com/moodiness/polyfin/internal/desktop.systemLanguage
           # One line a function: package.Function file:line.
           FORMAT: '{{$p := .Path}}{{range .Funcs}}{{printf "%s.%s %s:%d\n" $p .Name .Position.File .Position.Line}}{{end}}'
         run: |
@@ -314,8 +324,9 @@ jobs:
           GOBIN="$RUNNER_TEMP/tools" go install golang.org/x/tools/cmd/deadcode@v0.52.0
           found=0
           for goos in linux windows darwin; do
-            dead=$(GOOS=$goos "$RUNNER_TEMP/tools/deadcode" -test -f "$FORMAT" ./... |
-              awk 'NR == FNR { allowed[$1]; next } !($1 in allowed)' <(printf '%s' "$ALLOWED") -)
+            dead=$(CGO_ENABLED=0 GOOS=$goos "$RUNNER_TEMP/tools/deadcode" -test -f "$FORMAT" ./... |
+              awk -v goos="$goos" 'NR == FNR { if ($1 == "all" || $1 == goos) allowed[$2]; next } !($1 in allowed)' \
+                <(printf '%s' "$ALLOWED") -)
             if [[ -n $dead ]]; then
               printf 'Unreachable on %s:\n%s\n' "$goos" "$dead"
               found=1
