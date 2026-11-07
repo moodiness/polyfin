@@ -1,6 +1,6 @@
 # `src/ui`: the « Salon » design system
 
-The admin app with the calm of a TV interface: big type, few things per screen, soft rounded tiles with no borders, and one strong, friendly focus. What is under the keyboard, the mouse or the remote is **lit**: it turns pale lavender-white with dark words, or gets a thick white halo (art tiles). Values sit on the right with a chevron, and help shows for the lit row only.
+The admin app with the calm of a TV interface: big type, few things per screen, soft rounded tiles with no borders, and one strong, friendly focus. What is under the keyboard, the mouse or the remote is **lit**: a button or a field turns pale lavender-white with dark words, and a row or a tile stays dark with a thin edge of the accent. Values sit on the right with a chevron, and help shows for the lit row only.
 
 Import everything from `@/ui`. Each component documents its props in its file; `/admin/dev/ui` (development builds only) shows them all in their states. Colors, radii and type come from the tokens in `src/index.css`, under the « Nuit » names with Salon values (`bg-s1`, `text-ink-2`, `rounded-row`, `text-h1`, `shadow-lift`…): never write a raw color. Icons come from `@phosphor-icons/react`, regular weight.
 
@@ -11,7 +11,9 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 - **Surfaces are fills, never boxes:** `bg-s1` for tiles, rows and panels, `bg-s2` for hover, fields and the current section. No hairlines, and no card inside a card: rows, figures, tables and panels inside a `Panel` drop their own fill.
 - **Radii:** art tiles `rounded-tile` (34), panels `rounded-panel` (28), rows `rounded-row` (24), buttons `rounded-control` (17), choices `rounded-choice` (18), wells `rounded-field` (20).
 - **Type, Figtree:** `text-display` 56 (a greeting), `text-h1` 48 (a page title), `text-h2` 27 (a shelf title), `text-group` 25 (a group of rows), `text-h3` 21 (a row label), `text-lead` 20 (values, ledes), `text-body` 19, `text-control` 18, `text-small` 17 (help), `text-micro` 15.5 (captions, times). `figures` gives tabular figures.
-- **The lit state:** the `lit` utility (inside it, ink, surfaces and state colors switch to their lit variants by themselves), `lift` (the rise over a soft shadow, `--lift` sets how far) and `focus-lit` (both on `:focus-visible`, in place of an outline ring). Every control of `@/ui` wears it. It is never the only cue: keep `aria-current`, `aria-checked`, `aria-selected`, `aria-expanded`.
+- **The lit state of a control** (a button, a choice, a field being typed in): the `lit` utility (inside it, ink, surfaces and state colors switch to their lit variants by themselves), `lift` (the rise over a soft shadow, `--lift` sets how far) and `focus-lit` (both on `:focus-visible`, in place of an outline ring). Every control of `@/ui` wears it.
+- **The lit state of a row or a tile** (a setting row, a row of a list, the chosen source, the current section, a figure, a Health tile, an art tile): never white. The `lit-row` utility keeps its dark fill, one step up at most (`--lit-fill`, `s2` by default), its white words at their size, and draws a 2 px edge of `lit-edge`, the accent a step brighter; `focus-lit-row` wears it on `:focus-visible`. Nothing inside it switches color, and nothing rises. An art tile wears the same edge as an outline.
+- **Either is never the only cue:** keep `aria-current`, `aria-checked`, `aria-selected`, `aria-expanded`.
 - **Motion:** one spring, `ease-nuit`, on transform, background and color only; `prefers-reduced-motion` removes the motion and the lift.
 - **Floating surfaces** (menus, lists, dialogs, tooltips, toasts, the unsaved dock) are `raised`: a glass over the page with `shadow-pop`.
 
@@ -30,32 +32,32 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 
 ## Rows, tiles and data
 
-| Need                                                                     | Use                                                                                                                                      |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed)                                                        |
-| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows (48 on a desktop)                                                                                          |
-| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                                                                                |
-| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`, `xl` for a band; `ok`, `warn`, `danger`), or `Avatar` for a person                                         |
-| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with a halo and its tools; `fit="contain"` for logos, `fallback` when there is no poster |
-| A problem to look at, with its cause and fix                             | `AlertTile`                                                                                                                              |
-| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                                                                                     |
-| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)                                                                   |
-| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                                                                                |
-| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                                                                                      |
-| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                                                                                      |
+| Need                                                                     | Use                                                                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed)                                                                 |
+| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows (48 on a desktop)                                                                                                   |
+| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                                                                                         |
+| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`, `xl` for a band; `ok`, `warn`, `danger`), or `Avatar` for a person                                                  |
+| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with the accent edge and its tools; `fit="contain"` for logos, `fallback` when there is no poster |
+| A problem to look at, with its cause and fix                             | `AlertTile`                                                                                                                                       |
+| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                                                                                              |
+| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)                                                                            |
+| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                                                                                         |
+| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                                                                                               |
+| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                                                                                               |
 
 ### Setting rows
 
 `SettingRow` is the label on the left, the value and a chevron on the right, and the help shown only while the row is lit (always in `aria-describedby`). Enter, Space or a click opens its control inside the row; Escape closes it and returns to the row; ↑ ↓ move between rows without trapping Tab.
 
-| `kind`   | Opens                                                                           | Its own props                                             |
-| -------- | ------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `switch` | Nothing: the row is the `role="switch"`, with the toggle and its word           | `checked`, `onChange`, `stateText`                        |
-| `choice` | A strip of big choices (`role="radiogroup"`, ← →), or a searchable list past 12 | `value`, `options`, `onChange`                            |
-| `number` | A strip of values up to 33 of them, else a number well with its unit            | `value`, `min`, `max`, `step`, `unit`, `format`, `picker` |
-| `text`   | A text well; Enter closes it                                                    | `value`, `onChange`, `placeholder`, `maxLength`, `mono`   |
-| `path`   | The same well; the value goes under the label on a phone                        | as `text`                                                 |
-| `secret` | The `SecretField` (masked typing, reveal, replace, remove)                      | the SecretField's own                                     |
+| `kind`   | Opens                                                                                                                                                   | Its own props                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `switch` | Nothing: the switch on the right alone toggles (`role="switch"`, with its word); a click on the name or elsewhere on the row lights it to show its help | `checked`, `onChange`, `stateText`                        |
+| `choice` | A strip of big choices (`role="radiogroup"`, ← →), or a searchable list past 12                                                                         | `value`, `options`, `onChange`                            |
+| `number` | A strip of values up to 33 of them, else a number well with its unit                                                                                    | `value`, `min`, `max`, `step`, `unit`, `format`, `picker` |
+| `text`   | A text well; Enter closes it                                                                                                                            | `value`, `onChange`, `placeholder`, `maxLength`, `mono`   |
+| `path`   | The same well; the value goes under the label on a phone                                                                                                | as `text`                                                 |
+| `secret` | The `SecretField` (masked typing, reveal, replace, remove)                                                                                              | the SecretField's own                                     |
 
 Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and its value in the link color. A row without `saved` (settings that apply at once) keeps no mark. `anchor` gives it the id of its `#anchor`, `error` shows under it, and `children` add a note under it.
 
