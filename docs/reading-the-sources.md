@@ -93,7 +93,7 @@ A title played again, or resumed after a restart or update, reads its kept parts
 
 - **Kept:** addon, S3, SFTP and rclone files, by version, whatever link the addon gives next.
 - **Not kept:** torrent files, whose pieces are removed on stop by design (see [Torrents](torrents.md)), and files of unknown size, such as live video.
-- **Changed links:** a file at the same link reads from disk at once after a restart. For a new link, Polyfin asks the size once: the same size reuses the parts; another size is another file, whose parts are removed (`A source's link now names a file of another size: the blocks kept of it were removed`, at Info).
+- **Changed links:** a file at the same link reads from disk at once after a restart. For a new link, Polyfin asks the size once: the same size reuses the parts; another size is another file, whose parts are removed (`A source's link now names a file of another size: the blocks kept of it were removed`, at Info). An answer that agrees with neither the parts kept nor the size the addon announced, nor the analysis, is refused instead, and the parts stay (see [Hosts answering an error file](#hosts-answering-an-error-file)).
 - **Plays again:** a playback 6 hours or more after the last counts. Each, 8 at most, adds the extra days.
 - **Removal order:** titles played once go before titles played again, whether the disk is full or days run out. When full, the oldest-read parts go first, extra days counted; parts read in the last 30 seconds stay. Expired parts go at start and hourly.
 - **Crashes:** each file's record of parts is saved 30 seconds after a change, and at stop once parts reach disk. After a crash, the last 30 seconds of reads are fetched again; an unclaimed part is never served.
@@ -131,7 +131,7 @@ A starting playback stops it within 8 MiB. Its reads are background reads, and a
 | No headers within 15 seconds | Fails. |
 | Nothing sent for 10 seconds | Reopens; a host silent a few more seconds fails, so waiting segments error in seconds, not two minutes. |
 | Slow-down (`429`, `503`), at open or mid-file | Retries up to 4 times, after `Retry-After` (5 seconds at most), else 0.5, 1, then 2 seconds. Reads wait. Then reads fail, and the file is retried 5 seconds later. |
-| Wrong-size answer (error page, link to another file, `416` with another size) | Asks once more, renewing the link if the file was known, then fails. Its bytes are never served. |
+| Wrong-size answer (error page, link to another file, `416` with another size) | Asks once more, renewing the link if the file was known, then fails. Its bytes are never served. An error file a host answers for every link is told apart (see [Hosts answering an error file](#hosts-answering-an-error-file)). |
 | Range answered with the whole file (`200`) | Treats ranges as ignored; reads from the start to the part asked. |
 | Same, from a host that served a range before | Asks again up to 3 times (4 requests in all), 0.5, 1, then 2 seconds apart: such hosts do this now and then, and reading through would hold a seek for minutes. |
 | Announced size off by over 1%, once the addon's sizes proved right | Another file: fails at once. Within 1%, the real size is used. Addons wrong more often than right are not checked. |
@@ -149,6 +149,17 @@ A starting playback stops it within 8 MiB. Its reads are background reads, and a
 A page or error usually means the site wants a header the addon does not declare (`proxyHeaders`), such as a player's user agent. Without one, Polyfin sends `Polyfin/<version>`.
 
 API details: [First segment reads for apps](jellyfin-api.md#first-segment-reads-for-apps).
+
+### Hosts answering an error file
+
+A host whose service is down may answer every link with the same short video, an error file, in place of the files asked. Polyfin tells it apart from a link that names another file.
+
+- **Found:** one host answers the same size, 50 MB at most, for different files, each more than ten times that size, as their analysis, addon or kept parts tell. From two such files, that size is the host's error file: it is refused at once, whatever the addon's sizes are worth. A real episode is never that small: versions that all answer the same episode under a pack's announced size are no error file.
+- **Told:** from three files within 10 minutes, `A host answers an error file instead of the files asked` is logged at Warn, **System › Health** names the host, never the link, and since when, and **Content › Versions** shows it on the versions from that host (see [Host answering an error file](health.md#host-answering-an-error-file)). A host asked nothing for 6 hours is no longer told: nothing tells whether it recovered.
+- **Analyzed files:** a version analyzed before reads its file with the size its analysis found, when its addon announced a size within 1% of it. An answer more than 1% off is refused at its first byte, before the host is found answering an error file.
+- **What stays:** an error file never removes the parts kept of a file, nor makes the sizes an addon announces untrusted.
+- **Recovery:** as soon as the host answers a file of its own size, the problem goes, and the versions refused meanwhile are tried again at once, not after their 15 minutes (`A host answers its files again`, at Info). A file that took the error file for its own, before the host was found answering one, is read anew.
+- **Analysis of another file:** an analysis the addon's size does not side with, such as one made of an error page, never refuses the file: the file is read as before, and the analysis's size is corrected from it.
 
 ### Carrying a play on
 
