@@ -8,6 +8,7 @@ import {
   WarningCircleIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import {
   fetchAddons,
   fetchLibraries,
@@ -176,6 +177,36 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
                 <PhoneState>
                   <StatusPill tone={state.tone}>{state.label}</StatusPill>
                 </PhoneState>
+                {/* Under the second line, as a TV library's guides on Libraries: one more line,
+                    not a block of its own. */}
+                {(!library.enabled || failing.length > 0) && (
+                  <div className="mt-0.5 basis-full space-y-0.5 text-ink-2">
+                    {!library.enabled && (
+                      <p>
+                        {t.livetv.notShownHelp}{' '}
+                        <Link
+                          to="/libraries"
+                          className="focus-lit rounded-control font-medium text-link transition-colors duration-300 ease-nuit hover:text-link-hover"
+                        >
+                          {t.livetv.openLibraries}
+                        </Link>
+                      </p>
+                    )}
+                    {failing.map((guide) => (
+                      <p key={guide.id} className="flex items-start gap-1.5 text-danger">
+                        <WarningCircleIcon
+                          size="1rem"
+                          aria-hidden="true"
+                          className="mt-px shrink-0"
+                        />
+                        {t.livetv.guideLine(
+                          guide.position,
+                          t.lineup.guideErrors[guide.error] ?? t.errors.generic,
+                        )}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </>
             }
             trailing={
@@ -183,29 +214,7 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
                 <StatusPill tone={state.tone}>{state.label}</StatusPill>
               </WideState>
             }
-          >
-            {!library.enabled || failing.length > 0 ? (
-              <div className="-mt-1 space-y-1 text-small text-ink-2">
-                {!library.enabled && (
-                  <p>
-                    {t.livetv.notShownHelp}{' '}
-                    <TextLink to="/libraries" arrow={false} className="text-small">
-                      {t.livetv.openLibraries}
-                    </TextLink>
-                  </p>
-                )}
-                {failing.map((guide) => (
-                  <p key={guide.id} className="flex items-start gap-1.5 text-danger">
-                    <WarningCircleIcon size="1rem" aria-hidden="true" className="mt-px shrink-0" />
-                    {t.livetv.guideLine(
-                      guide.position,
-                      t.lineup.guideErrors[guide.error] ?? t.errors.generic,
-                    )}
-                  </p>
-                ))}
-              </div>
-            ) : undefined}
-          </Row>
+          />
         )
       })}
     </RowList>
