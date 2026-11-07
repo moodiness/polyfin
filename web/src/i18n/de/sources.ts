@@ -84,7 +84,7 @@ const sources: typeof en = {
     replace: 'Adresse ersetzen',
     newManifestUrl: 'Neue Manifest-Adresse',
     replaceHint:
-      'Verwende dies, nachdem du das Add-on auf seiner Konfigurationsseite neu eingerichtet hast. Seine Bibliotheken bleiben erhalten.',
+      'Verwende dies, nachdem du das Add-on auf seiner Konfigurationsseite neu eingerichtet hast. Seine Bibliotheken bleiben erhalten, und seine Versionslisten werden vergessen, damit jeder Titel es erneut fragt.',
     replaceSubmit: 'Ersetzen',
     replaced: 'Die Manifest-Adresse wurde ersetzt.',
     language: 'Sprache der Beschreibungen',

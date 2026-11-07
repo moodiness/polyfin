@@ -84,7 +84,7 @@ const sources: typeof en = {
     replace: 'Substituir o endereço',
     newManifestUrl: 'Novo endereço do manifesto',
     replaceHint:
-      'Use isto depois de reconfigurar o complemento na página de configuração dele. As bibliotecas dele são mantidas.',
+      'Use isto depois de reconfigurar o complemento na página de configuração dele. As bibliotecas dele são mantidas, e as listas de versões dele são esquecidas, para que cada título o consulte de novo.',
     replaceSubmit: 'Substituir',
     replaced: 'O endereço do manifesto foi substituído.',
     language: 'Idioma das descrições',

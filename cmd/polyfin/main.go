@@ -755,6 +755,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// offers them.
 		Versions: jellyfinAPI,
 		Titles:   lib,
+		// Replacing an addon's address forgets its version lists.
+		VersionLists: lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,
@@ -1038,6 +1040,7 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			return err
 		},
 	})
+	registry.Register(forgetVersionListsTask(lib, logger))
 	// An account is refused from its end date on its own: this only writes
 	// the end to the activity log.
 	registry.Register(tasks.Task{
@@ -1270,6 +1273,29 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 		},
 		Run: send(notifications.YearlySummary),
 	})
+}
+
+// forgetVersionListsTask forgets the version lists of every addon, and
+// logs how many it forgot. Every title then asks its addons again: it
+// runs only when an administrator starts it.
+func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Task {
+	return tasks.Task{
+		Key:      "ForgetVersionLists",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Forget the version lists", Description: "Forgets the versions and subtitles the addons listed for every title, those kept across restarts included, so that each title asks its addons again. Pinned versions and blocked files stay. Afterwards, the first play of each title waits for the addons again, and the addons get more requests for a while."},
+			"fr":    {Name: "Oublier les listes de versions", Description: "Oublie les versions et les sous-titres que les addons ont donnés pour chaque titre, y compris ceux gardés d’un redémarrage à l’autre, pour que chaque titre redemande à ses addons. Les versions épinglées et les fichiers bloqués restent. Ensuite, la première lecture de chaque titre attend de nouveau les addons, et les addons reçoivent plus de demandes pendant un moment."},
+			"de":    {Name: "Versionslisten vergessen", Description: "Vergisst die Versionen und Untertitel, die die Add-ons für jeden Titel gelistet haben, auch die über Neustarts hinweg behaltenen, damit jeder Titel seine Add-ons erneut fragt. Angeheftete Versionen und gesperrte Dateien bleiben. Danach wartet die erste Wiedergabe jedes Titels wieder auf die Add-ons, und die Add-ons erhalten eine Zeit lang mehr Anfragen."},
+			"es":    {Name: "Olvidar las listas de versiones", Description: "Olvida las versiones y los subtítulos que las extensiones indicaron para cada título, incluidos los conservados entre reinicios, para que cada título vuelva a consultar a sus extensiones. Las versiones fijadas y los archivos bloqueados se mantienen. Después, la primera reproducción de cada título vuelve a esperar a las extensiones, y las extensiones reciben más solicitudes durante un tiempo."},
+			"it":    {Name: "Dimentica gli elenchi delle versioni", Description: "Dimentica le versioni e i sottotitoli che gli add-on hanno elencato per ogni titolo, compresi quelli conservati da un riavvio all’altro, così ogni titolo interpella di nuovo i suoi add-on. Le versioni fissate e i file bloccati restano. In seguito, la prima riproduzione di ogni titolo attende di nuovo gli add-on, e gli add-on ricevono più richieste per un po’."},
+			"pt-BR": {Name: "Esquecer as listas de versões", Description: "Esquece as versões e as legendas que os complementos listaram para cada título, inclusive as mantidas entre reinicializações, para que cada título consulte de novo seus complementos. As versões fixadas e os arquivos bloqueados permanecem. Depois, a primeira reprodução de cada título espera de novo pelos complementos, e os complementos recebem mais solicitações por um tempo."},
+		},
+		Run: func(ctx context.Context) error {
+			forgotten, err := lib.ForgetVersionLists(ctx)
+			logger.Info("Version lists forgotten", "lists", forgotten)
+			return err
+		},
+	}
 }
 
 // registerWatchlistTask registers the checks of the watchlists for

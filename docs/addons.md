@@ -197,7 +197,7 @@ Anime databases make each season, or part of a season, an entry of its own. Its 
 
 ## Manifest addresses
 
-Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu.
+Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu. It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
 
 Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first.
 

@@ -134,13 +134,14 @@ After that, a reopened title shows old versions at once while addons are re-aske
 - After a restart, saved versions show at once, as old versions.
 - A new answer replaces the list. Versions it lacks stay listed after it, and playable, until re-asking stops (see below): gathering addons often answer partly first. Then they disappear.
 - [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops old lists. Addon subtitles are kept the same way.
+- **Replace the address** and the task "Forget the version lists" drop them for every title at once (see [Forgetting the version lists](#forgetting-the-version-lists)).
 - An empty answer replaces the list: the addon has nothing for the title any more.
 - A notices-only answer is not kept: an addon limiting requests often answers this way, and some addons answer only their own summary once their filters left nothing. For a minute the addon is not asked for the title: its earlier versions stay, or it gives none. The next request after it asks again; **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once. The log tells it once a day (see [Which streams become versions](#which-streams-become-versions)).
 
 Gathering addons answer first with what arrived within their own time limit, and get the rest moments later. So Polyfin re-asks an addon 10 seconds after its first answer for a title, and again 30 seconds later if that answer listed more playable streams.
 
 - It keeps the longer list, from then on for **Keep version lists for (minutes)**, never a shorter one, comparing with the addon's previous answer, not old versions still listed.
-- It stops at an answer with no more streams, an error, or when the list is dropped by [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) or expires. Late answers never revive such lists.
+- It stops at an answer with no more streams, an error, or when the list is dropped, by [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) or [forgetting the version lists](#forgetting-the-version-lists), or expires. Late answers never revive such lists.
 - It re-asks only addons it asked itself, not kept lists, and never IPTV sources, whose streams are Polyfin's own.
 - Addon subtitles are re-asked alike, keeping the longer list.
 - Opening and playing never wait for these requests.
@@ -189,6 +190,20 @@ In apps:
 - Jellyfin analyzes files when scanning, so pages list tracks from the start. jellyfin-web fills track menus when building the page and when a version is picked, never otherwise. Polyfin's script refills them once Polyfin learns a listed version's tracks (`src/apps/legacy/controllers/itemDetails/index.js`, `renderTrackSelections`, at the 12.4 tag).
 
 API details: [Version list progress for apps](jellyfin-api.md#version-list-progress-for-apps).
+
+### Forgetting the version lists
+
+Two actions drop addons' lists for every title at once, saved ones included, as [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) does for one title:
+
+- **Replace the address**, in a source's more-actions menu, drops that addon's lists: once reconfigured, it may list other streams. Other addons' lists stay.
+- The task "Forget the version lists", under **System › Schedule**, drops every addon's lists, subtitles included. It runs only when started by hand, and the log tells how many lists it forgot.
+
+Either way:
+
+- Re-asking stops, and answers already on their way are left out: the addon is asked anew.
+- Pages open on a title are told, as with **Ask addons again**.
+- Pins and blocks stay. A file known only by a link that changes at each answer (token links) gets a new identifier, having no list to take it from: a pin on it shows the file missing, and a block on it no longer matches, until set again.
+- Each title asks its addons again when opened or played. Its first play waits for them, as for a title never opened, and the addons get more requests for a while: those that refuse too many requests may refuse some.
 
 ## Tracks from RemuxDB
 

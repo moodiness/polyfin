@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -16,14 +17,19 @@ import (
 // that a restart does not forget the versions known before: a list read
 // back is stale (see list), listed at once while the addon is asked again,
 // as a list that expired is, and kept as long (see staleLists). A refresh
-// of the title deletes it (see forgetLists). A list's saving, reading back
-// and dropping take its lock (see listLocks), so that the copy saved ends
-// as the list in memory: a list dropped while it was being saved is not
-// saved back, nor read back from a copy read before it was dropped.
+// of the title deletes it (see forgetLists), and so does forgetting the
+// version lists of every addon, or of one (see forgetVersionLists). A
+// list's saving, reading back and dropping take its lock (see listLocks),
+// so that the copy saved ends as the list in memory: a list dropped while
+// it was being saved is not saved back, nor read back from a copy read
+// before it was dropped.
 
 const (
 	// savedTimeout bounds the reading and saving of a list.
 	savedTimeout = 5 * time.Second
+	// forgetTimeout bounds the deleting of many lists at once (see
+	// deleteSavedLists).
+	forgetTimeout = 30 * time.Second
 	// sweepEvery is how often saved lists past keeping are deleted.
 	sweepEvery = time.Hour
 )
@@ -162,10 +168,40 @@ func (s *Service) dropStreams(ctx context.Context, key streamKey) {
 	tracked.unsaved.Put(key, true)
 }
 
+// deleteSavedLists deletes the stream lists saved, every addon's, or
+// addon's alone unless it is nil, and passes the key of each one deleted
+// to deleted. The deletion goes on when ctx ends, bounded by
+// forgetTimeout: the lists dropped from memory are not left saved.
+func (s *Service) deleteSavedLists(ctx context.Context, addon *accounts.ID, deleted func(streamKey)) error {
+	if s.db == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), forgetTimeout)
+	defer cancel()
+	query, args := "DELETE FROM stream_lists RETURNING addon_id, content_type, stremio_id", []any(nil)
+	if addon != nil {
+		query, args = "DELETE FROM stream_lists WHERE addon_id = $1 RETURNING addon_id, content_type, stremio_id", []any{*addon}
+	}
+	rows, err := s.db.Query(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	var key streamKey
+	_, err = pgx.ForEachRow(rows, []any{&key.addon, &key.contentType, &key.id}, func() error {
+		deleted(key)
+		return nil
+	})
+	return err
+}
+
 // listLocks holds a lock for each stream list being saved, read back or
-// dropped (see writeStreams, streamListOf and dropStreams). A list's lock
-// is dropped once nothing holds or awaits it. Its zero value is ready.
+// dropped (see writeStreams, streamListOf and dropStreams), and a lock of
+// every list, which forgetting many lists at once holds (see lockAll). A
+// list's lock is dropped once nothing holds or awaits it. Its zero value
+// is ready.
 type listLocks struct {
+	// all is held shared with each list's lock, and alone by lockAll.
+	all   sync.RWMutex
 	mu    sync.Mutex
 	locks map[streamKey]*listLock
 }
@@ -178,6 +214,7 @@ type listLock struct {
 
 // lock locks key's list, and returns what unlocks it.
 func (l *listLocks) lock(key streamKey) func() {
+	l.all.RLock()
 	l.mu.Lock()
 	if l.locks == nil {
 		l.locks = map[streamKey]*listLock{}
@@ -197,5 +234,14 @@ func (l *listLocks) lock(key streamKey) func() {
 			delete(l.locks, key)
 		}
 		l.mu.Unlock()
+		l.all.RUnlock()
 	}
+}
+
+// lockAll locks every list, once the lists locked now are unlocked, and
+// returns what unlocks them: a save or a read back under way ends first,
+// and the next ones wait.
+func (l *listLocks) lockAll() func() {
+	l.all.Lock()
+	return l.all.Unlock
 }

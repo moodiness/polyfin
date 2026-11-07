@@ -84,7 +84,7 @@ const sources: typeof en = {
     replace: 'Sostituisci l’indirizzo',
     newManifestUrl: 'Nuovo indirizzo del manifest',
     replaceHint:
-      'Usalo dopo aver riconfigurato l’add-on nella sua pagina di configurazione. Le sue librerie vengono mantenute.',
+      'Usalo dopo aver riconfigurato l’add-on nella sua pagina di configurazione. Le sue librerie vengono mantenute, e i suoi elenchi delle versioni vengono dimenticati, così ogni titolo lo interpella di nuovo.',
     replaceSubmit: 'Sostituisci',
     replaced: 'L’indirizzo del manifest è stato sostituito.',
     language: 'Lingua delle descrizioni',

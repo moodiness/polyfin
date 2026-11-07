@@ -85,7 +85,7 @@ const sources: typeof en = {
     replace: 'Reemplazar la dirección',
     newManifestUrl: 'Nueva dirección del manifiesto',
     replaceHint:
-      'Úselo después de volver a configurar la extensión en su página de configuración. Sus bibliotecas se conservan.',
+      'Úselo después de volver a configurar la extensión en su página de configuración. Sus bibliotecas se conservan, y sus listas de versiones se olvidan para que cada título vuelva a consultarla.',
     replaceSubmit: 'Reemplazar',
     replaced: 'Se ha reemplazado la dirección del manifiesto.',
     language: 'Idioma de sus descripciones',

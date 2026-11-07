@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -439,4 +440,100 @@ func (s *Service) forgetStreams(ctx context.Context, key streamKey) {
 	s.flight.Forget(streamsFlight(key))
 	s.noticed.Delete(key)
 	s.dropStreams(ctx, key)
+}
+
+// ForgetVersionLists forgets the version lists of every addon (see
+// forgetVersionLists), as the task Forget the version lists asks, and
+// returns how many it forgot.
+func (s *Service) ForgetVersionLists(ctx context.Context) (int, error) {
+	return s.forgetVersionLists(ctx, nil)
+}
+
+// ForgetAddonVersionLists forgets an addon's version lists (see
+// forgetVersionLists), and returns how many it forgot: an addon whose
+// address is replaced, once reconfigured, may list other streams.
+func (s *Service) ForgetAddonVersionLists(ctx context.Context, addon accounts.ID) (int, error) {
+	return s.forgetVersionLists(ctx, &addon)
+}
+
+// forgetVersionLists forgets the lists the addons gave for titles, every
+// addon's, or addon's alone unless it is nil, as forgetLists does for a
+// title: their stream lists, saved ones included, their subtitle lists,
+// their answers of notices alone, and the versions known from them or
+// with a mirror of theirs. Their follow-ups stop, and the requests asking
+// them since before are not joined any more: their answers, which may be
+// what the forgetting is to replace, are not stored, the addons are asked
+// anew (see ask). The lists are dropped under every list's lock (see
+// listLocks): a save or a read back under way ends first, and none after
+// brings a list back. The items of the titles whose lists were forgotten
+// are told, for their pages (see versionsChanged). Pins and blocks stay:
+// they are choices, not lists. It returns how many stream lists it
+// forgot, in memory or saved; those in memory stay forgotten when
+// deleting the saved ones fails.
+func (s *Service) forgetVersionLists(ctx context.Context, addon *accounts.ID) (int, error) {
+	of := func(id accounts.ID) bool { return addon == nil || id == *addon }
+	var flights []string
+	s.followUps.mu.Lock()
+	for key := range s.followUps.asking {
+		if !of(key.addon) {
+			continue
+		}
+		delete(s.followUps.asking, key)
+		if key.list == listStreams {
+			flights = append(flights, streamsFlight(key.streamKey))
+		} else {
+			flights = append(flights, subtitlesFlight(key.streamKey))
+		}
+	}
+	for key := range s.followUps.running {
+		if of(key.addon) {
+			delete(s.followUps.running, key)
+		}
+	}
+	s.followUps.mu.Unlock()
+	for _, flight := range flights {
+		s.flight.Forget(flight)
+	}
+	tracked := s.tracked()
+	unlock := tracked.saving.lockAll()
+	forgotten := map[streamKey]bool{}
+	s.streamLists.DeleteFunc(func(key streamKey, _ list[stremio.Stream]) bool {
+		if !of(key.addon) {
+			return false
+		}
+		forgotten[key] = true
+		return true
+	})
+	dropAll(s.subtitleLists, of)
+	dropAll(s.noticed, of)
+	s.versions.DeleteFunc(func(_ accounts.ID, version Version) bool {
+		return of(version.Origin.Addon) || slices.ContainsFunc(version.Mirrors, func(mirror Version) bool { return of(mirror.Origin.Addon) })
+	})
+	// The items told, those of the titles whose lists were forgotten.
+	told := map[accounts.ID]bool{}
+	tell := func(key streamKey) {
+		if item, ok := tracked.titles.Get(listedTitle{key.contentType, key.id}); ok {
+			told[item] = true
+		}
+	}
+	for key := range forgotten {
+		tell(key)
+	}
+	n := len(forgotten)
+	err := s.deleteSavedLists(ctx, addon, func(key streamKey) {
+		if !forgotten[key] {
+			n++
+			tell(key)
+		}
+	})
+	unlock()
+	for item := range told {
+		s.versionsChanged(item)
+	}
+	return n, err
+}
+
+// dropAll drops the entries of lists kept for the addons of reports.
+func dropAll[T any](lists *cache.Cache[streamKey, T], of func(accounts.ID) bool) {
+	lists.DeleteFunc(func(key streamKey, _ T) bool { return of(key.addon) })
 }

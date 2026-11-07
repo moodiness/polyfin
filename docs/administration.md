@@ -248,6 +248,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Read the libraries' first pages | For the libraries older than **Refresh catalogs after (minutes)** |
 | Read every collection | Every day at the hour set in **Settings › Catalogs**; never by default |
 | Refresh ratings | Only when started: it asks the addons again |
+| Forget the version lists | Only when started: every title asks its addons again for its versions (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)) |
 | Record ended accounts | Every hour |
 | Record expired share links | Every 10 minutes, also deleting the links that ended more than 30 days ago |
 | Scan local folders | Each folder at startup, then every number of hours set in **Settings › Catalogs** |
