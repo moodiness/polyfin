@@ -88,24 +88,24 @@ export function ConfirmDialog({
       ref={dialog}
       aria-labelledby={titleId}
       aria-describedby={children ? bodyId : undefined}
-      className="m-auto w-[min(32.5rem,calc(100vw-1.5rem))] rounded-panel p-0 text-ink raised backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
+      className="m-auto w-[min(27.5rem,calc(100vw-1.5rem))] rounded-panel p-0 text-ink raised backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
     >
-      <div className="px-8 pt-8 pb-6 max-sm:px-5 max-sm:pt-6">
+      <div className="px-5 pt-5 pb-4">
         <h2 id={titleId} className="text-group text-ink">
           {title}
         </h2>
         {children && (
-          <div id={bodyId} className="mt-3 text-body text-ink-2">
+          <div id={bodyId} className="mt-2 text-body text-ink-2">
             {children}
           </div>
         )}
         {error && (
-          <div className="mt-4">
+          <div className="mt-3">
             <FieldError>{error}</FieldError>
           </div>
         )}
       </div>
-      <div className="flex flex-wrap justify-end gap-3 px-8 pt-2 pb-8 max-sm:px-5 max-sm:pb-5">
+      <div className="flex flex-wrap justify-end gap-2 px-5 pt-1 pb-5 max-sm:pb-4">
         <Button variant="ghost" onClick={onClose} autoFocus>
           {cancelLabel ?? t.common.cancel}
         </Button>
@@ -164,7 +164,7 @@ export function Modal({
         'backdrop:bg-scrim backdrop:backdrop-blur-[6px]',
       )}
     >
-      <div className="flex h-20 shrink-0 items-center justify-between gap-3 pr-4 pl-8 max-sm:h-16 max-sm:pl-5">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 pr-3 pl-5">
         <h2 id={titleId} className={cx('text-group text-ink', hideTitle && 'sr-only')}>
           {title}
         </h2>
@@ -172,7 +172,7 @@ export function Modal({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
       {footer && (
-        <div className="flex shrink-0 flex-wrap justify-end gap-3 px-8 py-5 shadow-[inset_0_1px_0_var(--color-line-2)] max-sm:px-5">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 px-5 py-3.5 shadow-[inset_0_1px_0_var(--color-line-2)]">
           {footer}
         </div>
       )}

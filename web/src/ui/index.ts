@@ -54,6 +54,7 @@ export { SecretField, type SecretFieldProps } from './SecretField'
 export { useScrollFade } from './scroll'
 export { SectionNav, type SectionNavItem, type SectionNavProps } from './SectionNav'
 export {
+  SettingHelp,
   SettingRow,
   type ChoiceSetting,
   type NumberSetting,

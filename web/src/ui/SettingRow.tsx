@@ -253,9 +253,18 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
 
 /**
  * A setting's help under its name (a SettingRow's, an OpenRow's): a muted caption, two lines at
- * most, with More at the end of a longer one to read the rest. Screen readers read it whole.
+ * most, with More at the end of a longer one to read the rest. Screen readers read it whole. A
+ * list row's caption (a scheduled task's description) takes `lines={1}`.
  */
-export function SettingHelp({ id, children }: { id: string | undefined; children: ReactNode }) {
+export function SettingHelp({
+  id,
+  lines = 2,
+  children,
+}: {
+  id: string | undefined
+  lines?: 1 | 2
+  children: ReactNode
+}) {
   const { t } = useI18n()
   const text = useRef<HTMLParagraphElement>(null)
   const [open, setOpen] = useState(false)
@@ -274,7 +283,11 @@ export function SettingHelp({ id, children }: { id: string | undefined; children
 
   return (
     <div className="mt-0.5 flex max-w-[72ch] items-end gap-2 text-small text-ink-3">
-      <p id={id} ref={text} className={cx('min-w-0', !open && 'line-clamp-2')}>
+      <p
+        id={id}
+        ref={text}
+        className={cx('min-w-0', !open && (lines === 1 ? 'line-clamp-1' : 'line-clamp-2'))}
+      >
         {children}
       </p>
       {(long || open) && (
