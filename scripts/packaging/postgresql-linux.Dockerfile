@@ -27,11 +27,13 @@ WORKDIR /src
 # EnterpriseDB's builds for Windows and macOS have them. PostgreSQL finds
 # share and lib relative to its programs, wherever the folder goes. No
 # readline (no one types into psql here) and no OpenSSL (the cluster
-# listens on the loopback only).
+# listens on the loopback only). Of the extensions PostgreSQL ships apart,
+# pg_trgm only: its trigram indexes serve Polyfin's name searches.
 RUN tar -xjf postgresql.tar.bz2 --strip-components=1 \
 	&& ./configure --prefix=/usr/local/pgsql --with-icu --without-readline --disable-rpath \
 	&& make -j"$(nproc)" -s \
 	&& make -s install \
+	&& make -C contrib/pg_trgm -s install \
 	&& rm -rf /usr/local/pgsql/include /usr/local/pgsql/lib/pgxs /usr/local/pgsql/lib/pkgconfig /usr/local/pgsql/lib/*.a
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # ICU's libraries go in lib, by the names the programs load them by; every

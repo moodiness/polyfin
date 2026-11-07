@@ -182,6 +182,11 @@ check_install() {
 		echo "the install folder $1 lacks PostgreSQL's share" >&2
 		missing=1
 	fi
+	# pg_trgm's trigram indexes serve Polyfin's name searches.
+	if [ ! -e "$1/postgresql/share/extension/pg_trgm.control" ] && [ ! -e "$1/postgresql/share/postgresql/extension/pg_trgm.control" ]; then
+		echo "the install folder $1 lacks PostgreSQL's pg_trgm extension" >&2
+		missing=1
+	fi
 	return "$missing"
 }
 
