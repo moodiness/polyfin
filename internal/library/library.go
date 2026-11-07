@@ -237,6 +237,9 @@ type Service struct {
 	// titleArtwork keeps the posters and backdrops TMDB gives titles
 	// lacking their addon's (see tmdbartwork.go).
 	titleArtwork titleArtworks
+	// saved remembers the records saves stored that left their items as
+	// they are (see records.go).
+	saved savedRecords
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
