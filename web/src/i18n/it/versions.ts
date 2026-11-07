@@ -30,7 +30,7 @@ const versions: typeof en = {
     pending: (count: number) =>
       count === 1 ? '1 add-on è ancora interpellato…' : `${count} add-on sono ancora interpellati…`,
     order: 'Come sono ordinate le versioni',
-    orderNone: 'L’ordine degli add-on: Ordina le versioni per non ha alcun criterio.',
+    orderNone: 'L’ordine degli add-on: «Ordina le versioni per» non ha alcun criterio.',
     orderBy: (criteria: string) => `Ordina le versioni per: ${criteria}.`,
     group: (height: number) => `Gruppo di qualità: ${height}p.`,
     keptAll:

@@ -29,7 +29,7 @@ const versions = {
     pending: (count: number) =>
       count === 1 ? '1 addon is still asked…' : `${count} addons are still asked…`,
     order: 'How versions are ordered',
-    orderNone: 'The addons’ order: Order versions by has no criterion.',
+    orderNone: 'The addons’ order: “Order versions by” has no criterion.',
     orderBy: (criteria: string) => `Order versions by: ${criteria}.`,
     group: (height: number) => `Quality group: ${height}p.`,
     keptAll: 'The hide rules would hide every version, so none is hidden.',

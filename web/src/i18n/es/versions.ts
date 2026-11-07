@@ -33,7 +33,7 @@ const versions: typeof en = {
         ? 'Todavía se pregunta a 1 extensión…'
         : `Todavía se pregunta a ${count} extensiones…`,
     order: 'Cómo se ordenan las versiones',
-    orderNone: 'El orden de las extensiones: Ordenar las versiones por no tiene ningún criterio.',
+    orderNone: 'El orden de las extensiones: «Ordenar las versiones por» no tiene ningún criterio.',
     orderBy: (criteria: string) => `Ordenar las versiones por: ${criteria}.`,
     group: (height: number) => `Grupo de calidad: ${height}p.`,
     keptAll:

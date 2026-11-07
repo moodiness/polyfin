@@ -33,7 +33,7 @@ const versions: typeof en = {
         ? '1 complemento ainda está sendo perguntado…'
         : `${count} complementos ainda estão sendo perguntados…`,
     order: 'Como as versões são ordenadas',
-    orderNone: 'A ordem dos complementos: Ordenar versões por não tem nenhum critério.',
+    orderNone: 'A ordem dos complementos: “Ordenar versões por” não tem nenhum critério.',
     orderBy: (criteria: string) => `Ordenar versões por: ${criteria}.`,
     group: (height: number) => `Grupo de qualidade: ${height}p.`,
     keptAll: 'As regras de ocultação ocultariam todas as versões, então nenhuma é ocultada.',
