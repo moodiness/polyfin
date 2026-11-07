@@ -22,12 +22,11 @@
 #
 # Subtitles come after, on a library of their own: a clip with embedded
 # SubRip and ASS tracks, fonts and a cover, whose unscrubbed answers (media
-# source, PlaybackInfo, attachments, tracks in each format, encoding
-# options) go to ass/.
+# source, attachments, encoding options) go to ass/.
 #
 # Live TV comes last: an M3U tuner whose one HLS channel the static file
-# server serves, first without a guide, then with an XMLTV one. Unscrubbed
-# answers (channels, programmes, playback, live playlists) go to livetv/.
+# server serves, first without a guide, then with an XMLTV one. The
+# channel's PlaybackInfo, unscrubbed, goes to livetv/.
 #
 # Requirements: Docker, curl, jq, ffmpeg, ffprobe. Usage: scripts/jellyfin-fixtures.sh
 set -euo pipefail
@@ -403,11 +402,9 @@ get /Localization/ParentalRatings | save localization-parental-ratings
 get /Localization/Options | save localization-options
 
 # Requests from here on are also recorded by HTTP status, under a readable
-# key, in next-statuses.json; non-empty error bodies go to
-# next-error-bodies.json. request leaves the status in $code and the answer
-# in $body, which kept saves as a fixture when the request succeeded.
+# key, in next-statuses.json. request leaves the status in $code and the
+# answer in $body, which kept saves as a fixture when the request succeeded.
 statuses='{}'
-error_bodies='{}'
 request() {
 	local key=$1 method=$2 path=$3 authorization=$4 response
 	response=$(curl --silent --show-error --request "$method" --header "Authorization: $authorization" \
@@ -415,10 +412,6 @@ request() {
 	code=${response##*$'\n'}
 	body=${response%$'\n'*}
 	statuses=$(jq --compact-output --arg key "$key" --argjson code "$code" '.[$key] = $code' <<<"$statuses")
-	if ((code >= 400)) && [[ -n $body ]]; then
-		error_bodies=$(jq --compact-output --arg key "$key" --arg body "$body" \
-			'.[$key] = ($body | fromjson? // $body)' <<<"$error_bodies")
-	fi
 }
 kept() {
 	if [[ $code == 2* ]]; then
@@ -524,9 +517,8 @@ kept playlist-user
 # a positioned sign, a \h hard space), three dummy fonts with the MIME types
 # muxers write (Odd.ttf's is one jellyfin-web does not list) and a JPEG
 # cover, which FFmpeg's demuxer turns into an attached picture. ass/ holds
-# unscrubbed answers, with tokens redacted: the media source, the
-# PlaybackInfo decisions, the attachment route, the tracks in each subtitle
-# format, and the encoding options jellyfin-web reads its fallback font from.
+# unscrubbed answers, with tokens redacted: the media source, the attachment
+# route, and the encoding options jellyfin-web reads its fallback font from.
 ass_media="$media/subtitles/ass-srt-fonts-mkv"
 sources="$media/sources"
 mkdir -p "$ass_media" "$sources"
@@ -579,20 +571,6 @@ ass=$(get "/Items?userId=$user&recursive=true&includeItemTypes=Movie&fields=Path
 redact='walk(if type == "string" then gsub("(?<k>api_key|ApiKey)=[^&]*"; "\(.k)=<redacted>"; "i") else . end)'
 ass_source=$(get "/Users/$user/Items/$ass" | jq '.MediaSources[0]')
 jq --sort-keys "$redact" <<<"$ass_source" >"$ass_out/media-source.json"
-ass_playback_info() {
-	post "$base/Items/$ass/PlaybackInfo" --header "Authorization: $signed" \
-		--data "$(jq --null-input --arg user "$user" --arg id "$ass" --argjson options "$1" \
-			--slurpfile profile "$playback_out/profiles/jellyfin-web-chrome.json" \
-			'$options + {UserId: $user, MediaSourceId: $id, DeviceProfile: $profile[0]}')" |
-		jq --argjson options "$1" '{options: $options, MediaSource: .MediaSources[0]}'
-}
-ass_index=$(jq --exit-status '.MediaStreams[] | select(.Type == "Subtitle" and .Codec == "ass") | .Index' <<<"$ass_source")
-srt_index=$(jq --exit-status '.MediaStreams[] | select(.Type == "Subtitle" and .Codec != "ass") | .Index' <<<"$ass_source")
-{
-	ass_playback_info '{}'
-	ass_playback_info "{\"SubtitleStreamIndex\":$ass_index}"
-	ass_playback_info "{\"SubtitleStreamIndex\":$srt_index}"
-} | jq --slurp --sort-keys "$redact" >"$ass_out/playback-info.json"
 
 # Answers recorded by key: status, Content-Type and length, plus whether the
 # bytes equal the attached file when one is expected, else the body.
@@ -632,14 +610,7 @@ answer 'Fallback fonts as viewer' /FallbackFont/Fonts '' --header "Authorization
 answer 'Fallback fonts as administrator' /FallbackFont/Fonts '' --header "Authorization: $signed"
 jq --sort-keys . <<<"$ass_answers" >"$ass_out/answers.json"
 
-# The tracks as Jellyfin serves them, from the start.
-for format in ass js vtt srt; do
-	get "/Videos/$ass/$ass/Subtitles/$ass_index/0/Stream.$format" >"$ass_out/ass-track.$format"
-done
-get "/Videos/$ass/$ass/Subtitles/$srt_index/0/Stream.ass" >"$ass_out/srt-track.ass"
-
 jq --sort-keys . <<<"$statuses" >"$out/next-statuses.json"
-save next-error-bodies <<<"$error_bodies"
 
 # People and similar titles: someone credited in Sintel (an actor when it
 # has one) as an item, by name and in the people list, the titles apps list
@@ -656,9 +627,8 @@ get "/Items/$movie/Similar?userId=$user&limit=12&fields=PrimaryImageAspectRatio,
 
 # Live TV, last, as adding a tuner adds a view to the user's: an M3U tuner
 # with one HLS channel, served by the .strm movie's file server, and no
-# guide, as addons give none. Besides shape fixtures, livetv/ holds
-# unscrubbed answers with tokens redacted: the channel's PlaybackInfo,
-# opened and not, and the playlists of its live transcoding.
+# guide, as addons give none. livetv/ holds the channel's PlaybackInfo,
+# opened and not, unscrubbed with tokens redacted.
 live_files="$remote/live"
 mkdir -p "$live_files"
 encode -f lavfi -i "$pattern" -f lavfi -i "$(tone 440)" -c:v libx264 -b:v 1M -pix_fmt yuv420p -g 48 -c:a aac -b:a 128k \
@@ -680,40 +650,24 @@ live_channels() {
 await 'the M3U channel' live_channels
 channel=$(get "/LiveTv/Channels?userId=$user" | jq --exit-status --raw-output '.Items[0].Id')
 await 'the Live TV view' view livetv
-livetv=$(view livetv)
 livetv_out="$out/livetv"
 mkdir -p "$livetv_out"
 live_redact='walk(if type == "string" then gsub("(?<k>api_key|ApiKey|LiveStreamId|PlaySessionId|OpenToken)=[^&]*"; "\(.k)=<redacted>"; "i") else . end)
 	| walk(if type == "object" then with_entries(if (.key | test("^(LiveStreamId|OpenToken|PlaySessionId)$")) and .value != null then .value = "<redacted>" else . end) else . end)'
-# Saves an answer as a shape fixture and, unscrubbed, as livetv/$2.json.
-live_save() {
-	local body
-	body=$(cat)
-	save "$1" <<<"$body"
-	jq --sort-keys "$live_redact" <<<"$body" >"$livetv_out/$2.json"
-}
-get /LiveTv/Info | live_save livetv-info info
+get /LiveTv/Info | save livetv-info
 get /LiveTv/GuideInfo | save livetv-guide-info
-# jellyfin-web's Channels tab, the channel as the player and item details
-# open it, and the Live TV view among the user's.
-get "/LiveTv/Channels?userId=$user&fields=PrimaryImageAspectRatio&startIndex=0&enableImageTypes=Primary" | live_save livetv-channels channels
-get "/LiveTv/Channels/$channel?userId=$user" | live_save livetv-channel channel
-get "/Users/$user/Items/$channel" | live_save livetv-channel-item channel-item
-get "/UserViews?userId=$user" | jq '.Items[] | select(.CollectionType == "livetv")' | live_save livetv-view view
-get "/Users/$user/Items/$livetv" | live_save livetv-view-item view-item
-get "/Users/$user/Items?ParentId=$livetv" | save livetv-view-children
-get "/Items?userId=$user&recursive=true&includeItemTypes=TvChannel" | live_save livetv-channel-items channel-items
+# jellyfin-web's Channels tab, the channel as the player opens it, and the
+# Live TV view among the user's.
+get "/LiveTv/Channels?userId=$user&fields=PrimaryImageAspectRatio&startIndex=0&enableImageTypes=Primary" | save livetv-channels
+get "/LiveTv/Channels/$channel?userId=$user" | save livetv-channel
+get "/UserViews?userId=$user" | jq '.Items[] | select(.CollectionType == "livetv")' | save livetv-view
+get "/Items?userId=$user&recursive=true&includeItemTypes=TvChannel" | save livetv-channel-items
 # The guide without programs: jellyfin-web's Programs tab and home section,
-# its guide's query, and the lists of its Recordings, Schedule and Series
-# tabs.
+# and the lists of its Recordings, Schedule and Series tabs.
 get "/LiveTv/Programs/Recommended?userId=$user&IsAiring=true&limit=12&ImageTypeLimit=1&EnableImageTypes=Primary,Thumb,Backdrop&EnableTotalRecordCount=false&Fields=ChannelInfo,PrimaryImageAspectRatio" |
 	save livetv-recommended
 get "/LiveTv/Programs?userId=$user&HasAired=false&limit=9&IsMovie=true&EnableTotalRecordCount=false&Fields=ChannelInfo&EnableImageTypes=Primary,Thumb" |
 	save livetv-programs
-get "/LiveTv/Programs?userId=$user&channelIds=$channel&MaxStartDate=$(jq --null-input --raw-output 'now + 86400 | todate')&MinEndDate=$(jq --null-input --raw-output 'now | todate')&ImageTypeLimit=1&EnableImages=false&SortBy=StartDate&EnableTotalRecordCount=false&EnableUserData=false" |
-	save livetv-guide-programs
-post "$base/LiveTv/Programs" --header "Authorization: $signed" \
-	--data "{\"UserId\":\"$user\",\"ChannelIds\":[\"$channel\"],\"HasAired\":false}" | save livetv-posted-programs
 get "/LiveTv/Recordings?userId=$user&IsInProgress=true&Fields=CanDelete,PrimaryImageAspectRatio&EnableTotalRecordCount=false&EnableImageTypes=Primary,Thumb,Backdrop" |
 	save livetv-recordings
 get "/LiveTv/Recordings/Folders?userId=$user" | save livetv-recording-folders
@@ -731,16 +685,6 @@ opened=$(live_playback_info '{"IsPlayback":true,"AutoOpenLiveStream":true}')
 unopened=$(live_playback_info '{"IsPlayback":false,"AutoOpenLiveStream":false}')
 jq --null-input --sort-keys --argjson opened "$opened" --argjson unopened "$unopened" \
 	"{opened: \$opened, unopened: \$unopened} | $live_redact" >"$livetv_out/playback-info.json"
-# The live transcoding's master playlist, and the media playlist it names
-# once FFmpeg has written segments.
-transcoding=$(jq --exit-status --raw-output '.MediaSources[0].TranscodingUrl' <<<"$opened")
-playlist_redact='gsub("(?<k>api_key|ApiKey|LiveStreamId|PlaySessionId|DeviceId)=[^&\"]*"; "\(.k)=<redacted>"; "i")'
-master=$(get "$transcoding")
-jq --raw-input --raw-output "$playlist_redact" <<<"$master" >"$livetv_out/master.m3u8"
-media_playlist="$(dirname "${transcoding%%\?*}")/$(grep -v '^#' <<<"$master" | head -n 1)"
-live_segments() { get "$media_playlist" | grep '^#EXTINF' >/dev/null; }
-await 'the live playlist' live_segments
-get "$media_playlist" | jq --raw-input --raw-output "$playlist_redact" >"$livetv_out/media.m3u8"
 post "$base/LiveStreams/Close?liveStreamId=$(jq --exit-status --raw-output '.MediaSources[0].LiveStreamId' <<<"$opened")" \
 	--header "Authorization: $signed"
 
@@ -767,14 +711,11 @@ live_programs() {
 }
 await 'the guide programmes' live_programs
 get "/LiveTv/Programs?userId=$user&channelIds=$channel&MaxStartDate=$(jq --null-input --raw-output 'now + 86400 | todate')&MinEndDate=$(jq --null-input --raw-output 'now | todate')&ImageTypeLimit=1&EnableImages=false&SortBy=StartDate&EnableUserData=false" |
-	live_save livetv-guided-programs guided-programs
+	save livetv-guided-programs
 get "/LiveTv/Programs/Recommended?userId=$user&IsAiring=true&limit=12&ImageTypeLimit=1&EnableImageTypes=Primary,Thumb,Backdrop&EnableTotalRecordCount=false&Fields=ChannelInfo,PrimaryImageAspectRatio" |
-	live_save livetv-guided-recommended guided-recommended
+	save livetv-guided-recommended
 program=$(get "/LiveTv/Programs?userId=$user&IsAiring=true" | jq --exit-status --raw-output '.Items[0].Id')
-get "/LiveTv/Programs/$program?userId=$user" | live_save livetv-program program
-get "/Users/$user/Items/$program" | live_save livetv-program-item program-item
-get "/LiveTv/Channels?userId=$user&fields=PrimaryImageAspectRatio&startIndex=0&enableImageTypes=Primary" | live_save livetv-guided-channels guided-channels
-get "/LiveTv/Channels/$channel?userId=$user" | live_save livetv-guided-channel guided-channel
+get "/LiveTv/Programs/$program?userId=$user" | save livetv-program
 
 echo "Fixtures written to $out"
 
