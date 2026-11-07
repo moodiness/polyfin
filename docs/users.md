@@ -6,7 +6,7 @@ This page is for administrators. It covers user accounts, groups, and the limits
 
 Each user has their own account, and signs in with a password or Quick Connect, as on Jellyfin. Polyfin keeps watch state, favorites, resume points and Next Up for each user. Each user can be limited to titles up to a rating.
 
-Create a user with **Create a user**, at the top of **Users**. Each user is a row with their last activity and state; open one to set their limits. A user's page starts with their role, state, last activity and, while they play something, what they watch, then lists its sections on the left.
+Create a user with **Create a user**, at the top of **Users**. Each user is a row with their last activity and state; open one to set their limits. The "…" at the end of a row does three things without opening the page: **Disable** (**Enable** for a disabled user), **Reset password** and **Sign out of all devices**, which signs out every Jellyfin app the user has. **Disable** and **Sign out of all devices** ask first, and your own row has no **Disable**. A user's page starts with their role, state, last activity and, while they play something, what they watch, then lists its sections on the left.
 
 **Last activity** is the user's last request from a Jellyfin app, a [Silo app](silo-apps.md) or the admin app, to the minute. It reads **Never** for a user not seen yet, such as one imported from another server. A Jellyfin app signs in once and keeps its sign-in for months, so every request counts, not only sign-ins. Share-link guests, API keys and DLNA devices don't count as the user's activity. Jellyfin apps get the same time as the user's last activity date, as on Jellyfin.
 

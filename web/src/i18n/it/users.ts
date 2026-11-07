@@ -71,6 +71,23 @@ const users: typeof en = {
     lastAdminHelp:
       'L’ultimo amministratore abilitato non può essere eliminato, declassato o disabilitato.',
     updated: 'Modifiche salvate.',
+    moreActions: (name: string) => `Altre azioni per ${name}`,
+    disable: 'Disabilita',
+    enable: 'Abilita',
+    disableTitle: (name: string) => `Disabilitare ${name}?`,
+    disabling: 'Disabilitazione…',
+    disabledNow: (name: string) => `${name} è stato disabilitato.`,
+    enabledNow: (name: string) => `${name} può di nuovo accedere.`,
+    signOutAll: 'Disconnetti tutti i dispositivi',
+    signOutAllConfirm: (name: string) =>
+      `Disconnettere tutti i dispositivi Jellyfin di ${name}? Ogni app dovrà accedere di nuovo.`,
+    signingOutAll: 'Disconnessione…',
+    signedOutAll: (count: number) =>
+      count === 0
+        ? 'Nessun dispositivo era connesso.'
+        : count === 1
+          ? '1 dispositivo è stato disconnesso.'
+          : `${count} dispositivi sono stati disconnessi.`,
     metadataLanguageTitle: 'Lingua dei metadati',
     metadataLanguageHelp:
       'La lingua dei nomi, delle trame e delle immagini dei titoli nelle applicazioni di questo utente, quando uno degli add-on del server li descrive in quella lingua; i titoli che nessun add-on descrive in quella lingua mantengono la descrizione del server. Generi, classificazioni e persone restano gli stessi per tutti, così il controllo parentale e i generi bloccati valutano ogni utente allo stesso modo. I nomi creati da Polyfin stesso la seguono quando Polyfin la parla: inglese, francese, tedesco, spagnolo, italiano o portoghese.',

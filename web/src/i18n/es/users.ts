@@ -70,6 +70,23 @@ const users: typeof en = {
           : `${count} usuarios ya no pueden descargar.`,
     lastAdminHelp: 'El último administrador activo no se puede borrar, degradar ni desactivar.',
     updated: 'Cambios guardados.',
+    moreActions: (name: string) => `Más acciones para ${name}`,
+    disable: 'Desactivar',
+    enable: 'Activar',
+    disableTitle: (name: string) => `¿Desactivar a ${name}?`,
+    disabling: 'Desactivando…',
+    disabledNow: (name: string) => `Se ha desactivado a ${name}.`,
+    enabledNow: (name: string) => `${name} puede volver a iniciar sesión.`,
+    signOutAll: 'Cerrar sesión en todos los dispositivos',
+    signOutAllConfirm: (name: string) =>
+      `¿Cerrar la sesión de todos los dispositivos Jellyfin de ${name}? Cada aplicación tendrá que volver a iniciar sesión.`,
+    signingOutAll: 'Cerrando sesión…',
+    signedOutAll: (count: number) =>
+      count === 0
+        ? 'No había ningún dispositivo conectado.'
+        : count === 1
+          ? 'Se ha cerrado la sesión de 1 dispositivo.'
+          : `Se ha cerrado la sesión de ${count} dispositivos.`,
     metadataLanguageTitle: 'Idioma de los metadatos',
     metadataLanguageHelp:
       'El idioma de los nombres, las sinopsis y las imágenes de los títulos en las aplicaciones de este usuario, cuando una de las extensiones del servidor los describe en ese idioma; los títulos que ninguna extensión describe en él conservan la descripción del servidor. Los géneros, las clasificaciones y las personas son los mismos para todos, de modo que el control parental y los géneros bloqueados juzgan a todos los usuarios por igual. Los nombres que crea el propio Polyfin lo siguen cuando Polyfin lo habla: inglés, francés, alemán, español, italiano o portugués.',

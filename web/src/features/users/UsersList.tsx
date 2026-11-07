@@ -39,15 +39,17 @@ import {
 import CreateUserModal from './CreateUserModal'
 import { CreateInviteModal, InviteLinks } from './InviteLinks'
 import { LastActivity, UserState, useRestrictions, UsersArea } from './shared'
+import UserActions from './UserActions'
 
 /** The users the list shows: every one, those in no group, or the members of one group. */
 const allUsers = 'all'
 const noGroup = 'none'
 
 /**
- * `/users`: every account as a big row opening its page, with the buttons creating a user and an
- * invite link; then the invite links; then the imports of accounts and watch data from another
- * server, an app or Letterboxd, and the one turning downloads off for everyone.
+ * `/users`: every account as a row opening its page, with a "…" of quick actions beside it, and
+ * the buttons creating a user and an invite link; then the invite links; then the imports of
+ * accounts and watch data from another server, an app or Letterboxd, and the one turning
+ * downloads off for everyone.
  */
 export default function UsersList() {
   const { t } = useI18n()
@@ -198,7 +200,10 @@ export default function UsersList() {
   )
 }
 
-/** A user as a big row: the avatar, the name with its tags, the last activity, and the state. */
+/**
+ * A user as a row: the avatar, the name with its tags, the last activity, and the state; then,
+ * outside its link, the "…" of quick actions.
+ */
 function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
@@ -207,7 +212,7 @@ function UserRow({ user }: { user: User }) {
   return (
     <Row
       to={`/users/${user.id}`}
-      leading={<Avatar name={user.name} image={userImageUrl(user)} size="lg" />}
+      leading={<Avatar name={user.name} image={userImageUrl(user)} size="md" />}
       title={user.name}
       titleAside={
         <>
@@ -244,6 +249,7 @@ function UserRow({ user }: { user: User }) {
           <UserState user={user} />
         </span>
       }
+      actions={<UserActions user={user} />}
     />
   )
 }
