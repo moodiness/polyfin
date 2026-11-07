@@ -132,7 +132,7 @@ API details: [Home rows](jellyfin-api.md#home-rows-for-apps).
 
 ### The taste profile
 
-Polyfin builds a taste profile for each user, in the background, every hour and at start. The scheduled task is "Build taste profiles". It reads up to the user's 300 latest movies and series, from their watch data and hidden titles. Each title is weighed by what the user did with it:
+Polyfin builds a taste profile for each user, in the background, at start, then every hour for the users whose watch data, hidden titles or access changed since, and once a day for every user, as weights fade with time. The scheduled task is "Build taste profiles". It reads up to the user's 300 latest movies and series, from their watch data and hidden titles. Each title is weighed by what the user did with it:
 
 | What the user did | Weight |
 |---|---|
