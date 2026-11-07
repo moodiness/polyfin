@@ -43,6 +43,7 @@ import {
   useToast,
   type StatusTone,
 } from '@/ui'
+import { HostErrorFile } from './HostErrorFile'
 import { userQuery, UserPicker, useVersionsUser } from './parts'
 
 /** How long the page waits before reading the versions again while addons are still asked. */
@@ -335,6 +336,17 @@ function sectionNames(
   })
 }
 
+/** What became of a stream: its place among the versions offered, or the step that left it out. */
+function StreamStep({ stream }: { stream: VersionStream }) {
+  const { t } = useI18n()
+  const text = t.versions
+  return stream.step === 'offered' ? (
+    <Badge tone="accent">{text.steps.offered(stream.place)}</Badge>
+  ) : (
+    <StatusPill tone={stepTones[stream.step] ?? 'muted'}>{text.steps[stream.step]}</StatusPill>
+  )
+}
+
 /** A source's streams, each with what became of it and the actions on its version. */
 function SourceStreams({
   id,
@@ -413,16 +425,18 @@ function SourceStreams({
                 key={`${index}-${stream.version}`}
                 title={<span className="break-words">{stream.name || stream.filename}</span>}
                 titleAside={
-                  stream.pinned || stream.analyzed ? (
-                    <span className="flex flex-wrap gap-1.5">
-                      {stream.pinned && (
-                        <Badge tone="ok" icon={PushPinIcon}>
-                          {text.pinned}
-                        </Badge>
-                      )}
-                      {stream.analyzed && <Badge>{text.analyzed}</Badge>}
+                  <span className="flex flex-wrap gap-1.5">
+                    {stream.pinned && (
+                      <Badge tone="ok" icon={PushPinIcon}>
+                        {text.pinned}
+                      </Badge>
+                    )}
+                    {stream.analyzed && <Badge>{text.analyzed}</Badge>}
+                    {/* On a phone the step moves here, as the right column hides. */}
+                    <span className="sm:hidden">
+                      <StreamStep stream={stream} />
                     </span>
-                  ) : undefined
+                  </span>
                 }
                 meta={
                   <span className="flex min-w-0 flex-col break-words">
@@ -450,20 +464,17 @@ function SourceStreams({
                     )}
                     {explanation !== '' && <span className="text-ink-2">{explanation}</span>}
                     {stream.unstarted && <span className="text-ink-2">{text.unstarted}</span>}
+                    <HostErrorFile stream={stream} />
                   </span>
                 }
                 trailing={
-                  stream.step === 'offered' ? (
-                    <Badge tone="accent">{text.steps.offered(stream.place)}</Badge>
-                  ) : (
-                    <StatusPill tone={stepTones[stream.step] ?? 'muted'}>
-                      {text.steps[stream.step]}
-                    </StatusPill>
-                  )
+                  <span className="max-sm:hidden">
+                    <StreamStep stream={stream} />
+                  </span>
                 }
               >
                 {blocked !== null ? (
-                  <div className="-mt-3 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       loading={unblock.isPending && unblock.variables === blocked.id}
@@ -473,7 +484,7 @@ function SourceStreams({
                     </Button>
                   </div>
                 ) : isVersion ? (
-                  <div className="-mt-3 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {stream.step === 'offered' && !stream.pinned && (
                       <Button
                         size="sm"
