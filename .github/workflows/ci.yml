@@ -259,6 +259,10 @@ jobs:
         # The tests under the race detector run meanwhile, in jobs of their
         # own.
         run: make web lint bounds
+      - name: Check the admin app's bundle budget
+        # On the build above: the entry's JavaScript under its gzip budget,
+        # and each language in files of its own.
+        run: npm --prefix web run check:bundle
       - name: Test the torrents' network interface route
         # A dummy interface with an address, which the tests set down and
         # up (NET_ADMIN, so as root); the build cache of root's run is its

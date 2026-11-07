@@ -10,8 +10,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
-    "format": "prettier --write src index.html vite.config.ts",
-    "format:check": "prettier --check src index.html vite.config.ts"
+    "format": "prettier --write src scripts index.html vite.config.ts",
+    "format:check": "prettier --check src scripts index.html vite.config.ts",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "prettier": {
     "singleQuote": true,

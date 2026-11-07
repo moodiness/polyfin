@@ -145,6 +145,7 @@ How the jobs are set up:
 - **Tesseract:** the race jobs keep the Tesseract packages apt fetches in a cache, keyed by their checksums, as Ubuntu's mirror sometimes sends them at a few kB/s. A cached package without the checksum apt expects is fetched again, and a cached set that fails to install is fetched in full.
 - **Windows:** the Windows tests run in two jobs, balanced by the packages' times on the Windows runner. `internal/playback` and the smaller packages run in one, `internal/localfiles` and `internal/hls` in the other.
 - **Polyfin Desktop's packages:** `.github/workflows/desktop-package.yml` builds each package, then installs and smokes it. The CI workflow calls it for each package, so that each test waits for its own package only. Every package embeds the admin app one Linux job builds, through the scripts' `SKIP_WEB=1`: `npm ci` alone takes about a minute and a half on Windows on Arm.
+- **The admin app's bundle:** after the build, `npm --prefix web run check:bundle` fails when the JavaScript the first page loads, the entry file with the files it imports, passes its gzip budget, or when one file holds the messages of more than one language. The budget is in `web/scripts/check-bundle.mjs`; raise it on purpose, in the change that needs it.
 
 ## Following Silo
 
