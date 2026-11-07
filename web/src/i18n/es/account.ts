@@ -300,14 +300,8 @@ const account: typeof en = {
       rated: (count: number) => (count === 1 ? '1 valorada' : `${count} valoradas`),
       favorites: (count: number) =>
         count === 1 ? '1 añadida a favoritos' : `${count} añadidas a favoritos`,
-      unmatched: (count: number) =>
-        count === 1 ? '1 película no encontrada' : `${count} películas no encontradas`,
-      unmatchedTitle: 'Películas no encontradas',
       unmatchedHelp:
-        'Estas películas no se importaron. Cada una se busca por su nombre y año, y solo se conserva cuando las extensiones de metadatos del servidor conocen exactamente una película con ese nombre y año. Ábralas en Letterboxd para comprobarlas.',
-      movieColumn: 'Película',
-      reasonColumn: 'Motivo',
-      onLetterboxd: 'En Letterboxd',
+        'Estas películas no se importaron. Cada una se busca por su nombre y año, y solo se conserva cuando las extensiones de metadatos del servidor conocen exactamente una película con ese nombre y año.',
       reasons: {
         not_found: 'No encontrada',
         ambiguous: 'Varias películas con ese nombre y año',
@@ -381,14 +375,8 @@ const account: typeof en = {
       read: (count: number) => (count === 1 ? '1 título leído.' : `${count} títulos leídos.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
         `${read === 1 ? '1 título leído' : `${read} títulos leídos`}: ${played === 1 ? '1 marcado como reproducido' : `${played} marcados como reproducidos`}, ${resumed === 1 ? '1 punto de reanudación' : `${resumed} puntos de reanudación`}, ${watchlist === 1 ? '1 añadido' : `${watchlist} añadidos`} a la lista «Para ver».`,
-      unmatched: (count: number) =>
-        count === 1 ? '1 título no encontrado' : `${count} títulos no encontrados`,
-      unmatchedTitle: 'Títulos no encontrados',
       unmatchedHelp:
         'Estos títulos no se han importado: la aplicación los identifica con un identificador que Polyfin no reconoce, o ningún título de Polyfin lo tiene. En el caso de una serie, la aplicación también puede indicar los episodios vistos por su posición en una lista de episodios que las extensiones de Polyfin ordenan de otra forma.',
-      titleColumn: 'Título',
-      kindColumn: 'Tipo',
-      reasonColumn: 'Motivo',
       reasons: {
         other_identifier: 'No es un identificador de IMDb, TMDB, Kitsu o MyAnimeList',
         not_found: 'No está en Polyfin',
@@ -768,6 +756,43 @@ const account: typeof en = {
     confirm: 'Restablecer',
     resetting: 'Restableciendo…',
     done: 'Se han restablecido tus preferencias.',
+  },
+  importTitles: {
+    notFound: (count: number) =>
+      count === 1 ? '1 título no encontrado' : `${count} títulos no encontrados`,
+    linkedCount: (count: number) =>
+      count === 1 ? '1 título vinculado' : `${count} títulos vinculados`,
+    title: (source: string) => `Títulos no encontrados: ${source}`,
+    help: 'Vincule uno a su título en IMDb o TMDB: lo que importaría se añade al momento, y de nuevo en cada importación posterior.',
+    none: 'No queda ningún título en esta lista.',
+    trackerReasons: {
+      not_found: 'No está en Polyfin',
+      not_mapped: 'Polyfin no lo identificó',
+    },
+    morePlaces: (count: number) => `y ${count} más`,
+    fieldLabel: (title: string) => `Vincular ${title} con`,
+    fieldHint: 'Un id de IMDb o TMDB, o la dirección del título en IMDb o TMDB',
+    placeholder: 'tt1234567, tmdb:123…',
+    link: 'Vincular',
+    linkedTo: (title: string, by: string | null) =>
+      by === null ? `Vinculado a ${title}.` : `Vinculado a ${title} por ${by}.`,
+    marksStay:
+      'Quitar el vínculo lo detiene en las importaciones posteriores. Las marcas ya puestas se quedan.',
+    unlink: 'Quitar el vínculo',
+    linked: (title: string, target: string) => `${title} está vinculado a ${target}.`,
+    unlinked: (title: string) =>
+      `Se quitó el vínculo de ${title}. Las marcas ya puestas se quedan.`,
+    errors: {
+      invalid_target:
+        'Introduzca un id de IMDb (tt…), un id de TMDB o la dirección de un título en IMDb o TMDB.',
+      kind_mismatch:
+        'Este título es de otro tipo: vincule una película a una película, y una serie o un episodio a una serie.',
+      target_not_found: 'Ningún título tiene este id de TMDB.',
+    },
+    sectionTitle: 'Títulos no encontrados',
+    sectionHelp:
+      'Los títulos que las importaciones de este usuario no encontraron, por importación. Vincule uno a su título en IMDb o TMDB: se aplica al momento, y de nuevo en las importaciones posteriores.',
+    sectionNone: 'Sus importaciones encontraron todos los títulos.',
   },
 }
 

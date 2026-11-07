@@ -2,6 +2,7 @@ import {
   ArrowCounterClockwiseIcon,
   CheckCircleIcon,
   KeyIcon,
+  LinkIcon,
   ShareNetworkIcon,
   TrashIcon,
   UserCircleDashedIcon,
@@ -13,6 +14,7 @@ import {
   ApiError,
   deleteUser,
   fetchGroups,
+  fetchImportTitleCounts,
   fetchMetadataLanguages,
   fetchUserDevices,
   fetchUserShareLinks,
@@ -31,6 +33,7 @@ import {
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
+import { sourceName, TitlesNotFoundDialog } from '@/features/imports/TitlesNotFound'
 import { errorMessage, formatDate, languageOptions } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -92,6 +95,7 @@ const sectionIds = [
   'hours',
   'channels',
   'share-links',
+  'import-titles',
   'devices',
 ] as const
 
@@ -183,6 +187,7 @@ function UserPage({ user }: { user: User }) {
     ['hours', t.users.allowedHoursTitle],
     ['channels', t.users.liveTvChannelsTitle],
     ['share-links', t.users.shareLinksTitle],
+    ['import-titles', t.importTitles.sectionTitle],
     ['devices', t.users.devicesTitle],
   ]
   const nav = (
@@ -284,6 +289,7 @@ function UserPage({ user }: { user: User }) {
               <AllowedHoursSection key={`hours:${formsKey}`} id="hours" target={target} />
               <LiveTvChannelsSection key={`channels:${formsKey}`} id="channels" target={target} />
               <ShareLinksSection user={user} />
+              <ImportTitlesSection user={user} />
               <PageSection id="devices" title={t.users.devicesTitle}>
                 <DeviceList
                   queryKey={queryKeys.userDevices(user.id)}
@@ -966,6 +972,50 @@ function ShareLinksSection({ user }: { user: User }) {
           revoke={revokeShareLink}
         />
       )}
+    </PageSection>
+  )
+}
+
+/**
+ * The titles the user's imports did not find, for an administrator: each source with how many are
+ * not linked and linked, which opens its list, where they are linked for the user.
+ */
+function ImportTitlesSection({ user }: { user: User }) {
+  const { t } = useI18n()
+  const text = t.importTitles
+  const [source, setSource] = useState<string | null>(null)
+  const scope = { userId: user.id }
+  const counts = useQuery({
+    queryKey: queryKeys.importTitleCounts(scope, ''),
+    queryFn: ({ signal }) => fetchImportTitleCounts(scope, signal),
+  })
+
+  return (
+    <PageSection id="import-titles" title={text.sectionTitle} description={text.sectionHelp}>
+      {counts.isPending ? (
+        <SkeletonRows rows={2} boxed label={t.common.loading} />
+      ) : counts.isError ? (
+        <InlineError onRetry={() => void counts.refetch()} retrying={counts.isFetching}>
+          {errorMessage(t, counts.error)}
+        </InlineError>
+      ) : counts.data.length === 0 ? (
+        <EmptyState icon={LinkIcon} title={text.sectionNone} />
+      ) : (
+        counts.data.map((count) => (
+          <OpenRow
+            key={count.source}
+            label={sourceName(t, count.source)}
+            value={[
+              count.notFound > 0 ? text.notFound(count.notFound) : '',
+              count.linked > 0 ? text.linkedCount(count.linked) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            onClick={() => setSource(count.source)}
+          />
+        ))
+      )}
+      <TitlesNotFoundDialog scope={scope} source={source} onClose={() => setSource(null)} />
     </PageSection>
   )
 }

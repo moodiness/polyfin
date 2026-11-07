@@ -485,14 +485,7 @@ const users: typeof en = {
         plex_no_history: () =>
           'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas. Pour tout reprendre, points de reprise compris, connectez-vous avec Plex en tant que propriétaire dans cet import, avec le code PIN d’un profil Plex Home qui en a un, ou la personne se connecte avec Plex dans Mon compte › Importer depuis un autre serveur.',
       },
-      unmatched: (count: number) =>
-        count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
-      unmatchedTitle: (name: string) => `Titres introuvables pour ${name}`,
       unmatchedHelp: 'Ces titres n’ont pas été importés : la raison dit pourquoi.',
-      titleColumn: 'Titre',
-      kindColumn: 'Type',
-      yearColumn: 'Année',
-      reasonColumn: 'Raison',
       kinds: {
         movie: 'Film',
         episode: 'Épisode',
@@ -504,7 +497,6 @@ const users: typeof en = {
         not_in_library: 'Plus dans les bibliothèques de Plex',
         other_episode_order: 'Numéroté selon un autre ordre des épisodes de TheTVDB',
       },
-      more: (count: number) => (count <= 1 ? `Et ${count} autre.` : `Et ${count} autres.`),
     },
     appImport: {
       summary:
@@ -512,7 +504,7 @@ const users: typeof en = {
       open: 'Importer depuis une appli',
       title: 'Importer depuis une appli',
       description:
-        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons : les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli en favoris, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli ; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
+        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons : les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli, qui va dans « À regarder » de ses applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli ; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
       user: 'Dans le compte de',
       userHelp:
         'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',

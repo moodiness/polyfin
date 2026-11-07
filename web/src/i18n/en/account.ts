@@ -300,14 +300,8 @@ const account = {
       addedToWatchlist: (count: number) => `${count} added to the Watchlist`,
       rated: (count: number) => `${count} rated`,
       favorites: (count: number) => `${count} made favorites`,
-      unmatched: (count: number) =>
-        count === 1 ? '1 movie not found' : `${count} movies not found`,
-      unmatchedTitle: 'Movies not found',
       unmatchedHelp:
-        'These movies were not imported. Each one is searched by its name and year, and kept only when the server’s metadata addons know exactly one movie of that name and year. Open it on Letterboxd to check them.',
-      movieColumn: 'Movie',
-      reasonColumn: 'Reason',
-      onLetterboxd: 'On Letterboxd',
+        'These movies were not imported. Each one is searched by its name and year, and kept only when the server’s metadata addons know exactly one movie of that name and year.',
       reasons: {
         not_found: 'Not found',
         ambiguous: 'Several movies of that name and year',
@@ -380,14 +374,8 @@ const account = {
       read: (count: number) => (count === 1 ? '1 title read.' : `${count} titles read.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
         `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${watchlist} added to the Watchlist.`,
-      unmatched: (count: number) =>
-        count === 1 ? '1 title not found' : `${count} titles not found`,
-      unmatchedTitle: 'Titles not found',
       unmatchedHelp:
         'These titles were not imported: the app names them by an identifier Polyfin does not match, or no Polyfin title has it. For a series, the app may also tell the episodes watched by their place in a list of episodes that Polyfin’s addons list otherwise.',
-      titleColumn: 'Title',
-      kindColumn: 'Kind',
-      reasonColumn: 'Reason',
       reasons: {
         other_identifier: 'Not an IMDb, TMDB, Kitsu or MyAnimeList identifier',
         not_found: 'Not in Polyfin',
@@ -753,6 +741,42 @@ const account = {
     confirm: 'Reset',
     resetting: 'Resetting…',
     done: 'Your preferences have been reset.',
+  },
+  /** The titles an import did not find, kept for each source, and their links to IMDb or TMDB. */
+  importTitles: {
+    notFound: (count: number) => (count === 1 ? '1 title not found' : `${count} titles not found`),
+    linkedCount: (count: number) => (count === 1 ? '1 title linked' : `${count} titles linked`),
+    title: (source: string) => `Titles not found: ${source}`,
+    help: 'Link one to its title on IMDb or TMDB: what it would import is added at once, and again at each later import.',
+    none: 'No title is left in this list.',
+    /** Why a tracking service's title was not found. */
+    trackerReasons: {
+      not_found: 'Not in Polyfin',
+      not_mapped: 'Not identified by Polyfin',
+    },
+    morePlaces: (count: number) => `and ${count} more`,
+    fieldLabel: (title: string) => `Link ${title} to`,
+    fieldHint: 'An IMDb or TMDB id, or the title’s address on IMDb or TMDB',
+    placeholder: 'tt1234567, tmdb:123…',
+    link: 'Link',
+    linkedTo: (title: string, by: string | null) =>
+      by === null ? `Linked to ${title}.` : `Linked to ${title} by ${by}.`,
+    marksStay: 'Removing the link stops it at later imports. Marks already set stay.',
+    unlink: 'Remove the link',
+    linked: (title: string, target: string) => `${title} is linked to ${target}.`,
+    unlinked: (title: string) => `The link of ${title} is removed. Marks already set stay.`,
+    errors: {
+      invalid_target:
+        'Enter an IMDb id (tt…), a TMDB id, or the address of a title on IMDb or TMDB.',
+      kind_mismatch:
+        'This title is of another kind: link a movie to a movie, and a series or an episode to a series.',
+      target_not_found: 'No title has this TMDB id.',
+    },
+    /** The section of a user's page, for an administrator. */
+    sectionTitle: 'Titles not found',
+    sectionHelp:
+      'The titles this user’s imports did not find, by import. Link one to its title on IMDb or TMDB: it applies at once, and again at later imports.',
+    sectionNone: 'Their imports found every title.',
   },
 }
 

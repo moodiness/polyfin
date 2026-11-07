@@ -271,7 +271,7 @@ export default function AccountRoute() {
               onChanged={() =>
                 void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
               }
-              own
+              scope="own"
               importEveryMinutes={ownAppImport.data.importEveryMinutes}
             />
             {importingFromApps && (

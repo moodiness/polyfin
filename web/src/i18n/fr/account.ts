@@ -301,14 +301,8 @@ const account: typeof en = {
       rated: (count: number) => (count <= 1 ? `${count} noté` : `${count} notés`),
       favorites: (count: number) =>
         count <= 1 ? `${count} mis en favori` : `${count} mis en favoris`,
-      unmatched: (count: number) =>
-        count <= 1 ? `${count} film non trouvé` : `${count} films non trouvés`,
-      unmatchedTitle: 'Films non trouvés',
       unmatchedHelp:
-        'Ces films n’ont pas été importés. Chacun est cherché par son nom et son année, et retenu seulement quand les addons de métadonnées du serveur connaissent exactement un film de ce nom et de cette année. Ouvrez-le sur Letterboxd pour les vérifier.',
-      movieColumn: 'Film',
-      reasonColumn: 'Raison',
-      onLetterboxd: 'Sur Letterboxd',
+        'Ces films n’ont pas été importés. Chacun est cherché par son nom et son année, et retenu seulement quand les addons de métadonnées du serveur connaissent exactement un film de ce nom et de cette année.',
       reasons: {
         not_found: 'Non trouvé',
         ambiguous: 'Plusieurs films de ce nom et de cette année',
@@ -382,14 +376,8 @@ const account: typeof en = {
       read: (count: number) => (count <= 1 ? `${count} titre lu.` : `${count} titres lus.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
         `${read <= 1 ? `${read} titre lu` : `${read} titres lus`} : ${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${watchlist <= 1 ? `${watchlist} ajouté` : `${watchlist} ajoutés`} à « À regarder ».`,
-      unmatched: (count: number) =>
-        count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
-      unmatchedTitle: 'Titres introuvables',
       unmatchedHelp:
         'Ces titres n’ont pas été importés : l’appli les nomme par un identifiant que Polyfin ne reconnaît pas, ou aucun titre de Polyfin ne l’a. Pour une série, l’appli peut aussi désigner les épisodes vus par leur place dans une liste d’épisodes que les addons de Polyfin donnent autrement.',
-      titleColumn: 'Titre',
-      kindColumn: 'Type',
-      reasonColumn: 'Raison',
       reasons: {
         other_identifier: 'Pas un identifiant IMDb, TMDB, Kitsu ou MyAnimeList',
         not_found: 'Absent de Polyfin',
@@ -768,6 +756,43 @@ const account: typeof en = {
     confirm: 'Rétablir',
     resetting: 'Rétablissement…',
     done: 'Vos préférences ont été rétablies.',
+  },
+  importTitles: {
+    notFound: (count: number) =>
+      count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
+    linkedCount: (count: number) =>
+      count <= 1 ? `${count} titre associé` : `${count} titres associés`,
+    title: (source: string) => `Titres introuvables\u202f: ${source}`,
+    help: 'Associez-en un à son titre sur IMDb ou TMDB\u202f: ce qu’il importerait est ajouté aussitôt, puis à chaque import suivant.',
+    none: 'Il ne reste aucun titre dans cette liste.',
+    trackerReasons: {
+      not_found: 'Absent de Polyfin',
+      not_mapped: 'Non identifié par Polyfin',
+    },
+    morePlaces: (count: number) => `et ${count} de plus`,
+    fieldLabel: (title: string) => `Associer ${title} à`,
+    fieldHint: 'Un identifiant IMDb ou TMDB, ou l’adresse du titre sur IMDb ou TMDB',
+    placeholder: 'tt1234567, tmdb:123…',
+    link: 'Associer',
+    linkedTo: (title: string, by: string | null) =>
+      by === null ? `Associé à ${title}.` : `Associé à ${title} par ${by}.`,
+    marksStay:
+      'Retirer l’association l’arrête aux imports suivants. Les marques déjà posées restent.',
+    unlink: 'Retirer l’association',
+    linked: (title: string, target: string) => `${title} est associé à ${target}.`,
+    unlinked: (title: string) =>
+      `L’association de ${title} est retirée. Les marques déjà posées restent.`,
+    errors: {
+      invalid_target:
+        'Saisissez un identifiant IMDb (tt…), un identifiant TMDB, ou l’adresse d’un titre sur IMDb ou TMDB.',
+      kind_mismatch:
+        'Ce titre est d’un autre type\u202f: associez un film à un film, et une série ou un épisode à une série.',
+      target_not_found: 'Aucun titre n’a cet identifiant TMDB.',
+    },
+    sectionTitle: 'Titres introuvables',
+    sectionHelp:
+      'Les titres que les imports de ce membre n’ont pas trouvés, par import. Associez-en un à son titre sur IMDb ou TMDB\u202f: l’association s’applique aussitôt, puis à chaque import suivant.',
+    sectionNone: 'Ses imports ont trouvé tous les titres.',
   },
 }
 

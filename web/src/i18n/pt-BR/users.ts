@@ -477,14 +477,7 @@ const users: typeof en = {
         plex_no_history: () =>
           'O Plex não lista nenhuma reprodução desta conta neste servidor. O histórico de reprodução dela contém apenas os títulos reproduzidos até o fim neste servidor: títulos marcados como assistidos sem reprodução, ou sincronizados da conta Plex, não estão nele. Para trazer tudo, pontos de retomada incluídos, entre com o Plex como proprietário nesta importação, com o PIN de um perfil do Plex Home que tenha um, ou a pessoa entra com o Plex em Minha conta › Importar de outro servidor.',
       },
-      unmatched: (count: number) =>
-        count === 1 ? '1 título não encontrado' : `${count} títulos não encontrados`,
-      unmatchedTitle: (name: string) => `Títulos não encontrados para ${name}`,
       unmatchedHelp: 'Estes títulos não foram importados: o motivo diz por quê.',
-      titleColumn: 'Título',
-      kindColumn: 'Tipo',
-      yearColumn: 'Ano',
-      reasonColumn: 'Motivo',
       kinds: {
         movie: 'Filme',
         episode: 'Episódio',
@@ -496,7 +489,6 @@ const users: typeof en = {
         not_in_library: 'Não está mais nas bibliotecas do Plex',
         other_episode_order: 'Numerado em outra ordem de episódios do TheTVDB',
       },
-      more: (count: number) => (count === 1 ? 'E mais 1.' : `E mais ${count}.`),
     },
     appImport: {
       summary:
@@ -504,7 +496,7 @@ const users: typeof en = {
       open: 'Importar de um aplicativo',
       title: 'Importar de um aplicativo',
       description:
-        'Traga os dados de visualização de um usuário a partir da conta dele em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, os pontos de retomada e a biblioteca do aplicativo como favoritos, identificados por IMDb, TMDB ou Kitsu. Os dados do Polyfin são apenas complementados, e nada é gravado no aplicativo. Você precisa do login do usuário no aplicativo; os usuários também podem importar por conta própria, em Minha conta.',
+        'Traga os dados de visualização de um usuário a partir da conta dele em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, os pontos de retomada e a biblioteca do aplicativo, que vai para a lista “Para assistir” dele nos aplicativos Jellyfin, identificados por IMDb, TMDB ou Kitsu. Os dados do Polyfin são apenas complementados, e nada é gravado no aplicativo. Você precisa do login do usuário no aplicativo; os usuários também podem importar por conta própria, em Minha conta.',
       user: 'Para a conta de',
       userHelp:
         'O usuário do Polyfin a cujos dados de visualização e complementos a importação será adicionada.',

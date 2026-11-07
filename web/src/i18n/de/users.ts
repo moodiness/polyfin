@@ -479,14 +479,7 @@ const users: typeof en = {
         plex_no_history: () =>
           'Plex listet keine Wiedergabe dieses Kontos auf diesem Server. Sein Wiedergabeverlauf enthält nur die Titel, die auf diesem Server bis zum Ende abgespielt wurden: Ohne Abspielen als gesehen markierte oder aus dem Plex-Konto synchronisierte Titel stehen nicht darin. Um alles zu übernehmen, Fortsetzungspunkte eingeschlossen, melde dich in diesem Import als Besitzer mit Plex an, mit der PIN eines Plex-Home-Profils, das eine hat, oder die Person meldet sich unter Mein Konto › Von einem anderen Server importieren mit Plex an.',
       },
-      unmatched: (count: number) =>
-        count === 1 ? '1 Titel nicht gefunden' : `${count} Titel nicht gefunden`,
-      unmatchedTitle: (name: string) => `Nicht gefundene Titel für ${name}`,
       unmatchedHelp: 'Diese Titel wurden nicht importiert: Der Grund sagt, warum.',
-      titleColumn: 'Titel',
-      kindColumn: 'Art',
-      yearColumn: 'Jahr',
-      reasonColumn: 'Grund',
       kinds: {
         movie: 'Film',
         episode: 'Folge',
@@ -498,7 +491,6 @@ const users: typeof en = {
         not_in_library: 'Nicht mehr in den Bibliotheken von Plex',
         other_episode_order: 'In einer anderen Folgenreihenfolge von TheTVDB nummeriert',
       },
-      more: (count: number) => (count === 1 ? 'Und 1 weiterer.' : `Und ${count} weitere.`),
     },
     appImport: {
       summary:
@@ -506,7 +498,7 @@ const users: typeof en = {
       open: 'Aus einer App importieren',
       title: 'Aus einer App importieren',
       description:
-        'Übernimm die Wiedergabedaten eines Benutzers aus seinem Konto in einer App, die auf Add-ons basiert: die abgespielten Filme und Folgen mit Datum, die Fortsetzungspunkte und die Bibliothek der App als Favoriten, zugeordnet über IMDb, TMDB oder Kitsu. Die Daten in Polyfin werden nur ergänzt, und in die App wird nichts geschrieben. Du brauchst die Anmeldedaten des Benutzers für die App. Benutzer können auch selbst importieren, unter „Mein Konto“.',
+        'Übernimm die Wiedergabedaten eines Benutzers aus seinem Konto in einer App, die auf Add-ons basiert: die abgespielten Filme und Folgen mit Datum, die Fortsetzungspunkte und die Bibliothek der App, die in Jellyfin-Apps in seine Merkliste kommt, zugeordnet über IMDb, TMDB oder Kitsu. Die Daten in Polyfin werden nur ergänzt, und in die App wird nichts geschrieben. Du brauchst die Anmeldedaten des Benutzers für die App. Benutzer können auch selbst importieren, unter „Mein Konto“.',
       user: 'In das Konto von',
       userHelp: 'Der Polyfin-Benutzer, dessen Wiedergabedaten und Add-ons der Import ergänzt.',
     },
