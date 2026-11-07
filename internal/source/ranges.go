@@ -1,6 +1,7 @@
 package source
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -110,7 +111,7 @@ func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, err
 	if !ok || start != off {
 		return nil, fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 	}
-	if err := s.learn(response.StatusCode, total, response.Header.Get("Content-Type")); err != nil {
+	if err := s.learn(respondent(response), response.StatusCode, total, response.Header.Get("Content-Type")); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	if total >= 0 && off+int64(n) > total {
@@ -224,16 +225,19 @@ type multiRange struct {
 	// range read goes.
 	asked  []int
 	result [][]byte
-	// budget is the bytes parts may still take.
+	// budget is the bytes parts may still take, and host the host that
+	// answered, empty when unknown.
 	budget int64
+	host   string
 }
 
 // read reads the response to a request for several ranges into the
 // results, the body only when it is made of them.
 func (m *multiRange) read(response *http.Response) error {
+	m.host = respondent(response)
 	switch response.StatusCode {
 	case http.StatusOK:
-		if err := m.source.learn(response.StatusCode, response.ContentLength, response.Header.Get("Content-Type")); err != nil {
+		if err := m.source.learn(m.host, response.StatusCode, response.ContentLength, response.Header.Get("Content-Type")); err != nil {
 			return fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 		return fmt.Errorf("%w: HTTP 200", container.ErrMultiRangeUnsupported)
@@ -288,7 +292,7 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 	if !ok || end < start {
 		return fmt.Errorf("%w: a part of range %q", container.ErrMultiRangeUnsupported, value)
 	}
-	if err := m.source.learn(0, total, ""); err != nil {
+	if err := m.source.learn(m.host, 0, total, ""); err != nil {
 		return fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	// Ranges past the end of the file, which the part tells, have no part.
@@ -458,7 +462,8 @@ func expiredStatus(status int) bool {
 }
 
 // renewLink asks for a fresh link to the source, which the next requests
-// use. ErrExpired when the source has no way to renew it.
+// use: the same file, whose analysis still tells its size. ErrExpired when
+// the source has no way to renew it.
 func (s *Source) renewLink(ctx context.Context) error {
 	s.mu.Lock()
 	renew := s.renew
@@ -471,6 +476,7 @@ func (s *Source) renewLink(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
+	fresh.Analyzed = cmp.Or(fresh.Analyzed, s.origin.Analyzed)
 	s.origin, s.pinned = fresh, nil
 	s.mu.Unlock()
 	s.cache.logger.Debug("A source link was renewed", "source", s.id)
@@ -484,7 +490,7 @@ func (s *Source) renewLink(ctx context.Context) error {
 func (s *Source) unsatisfiable(response *http.Response, off int64) error {
 	response.Body.Close()
 	if _, _, total, ok := contentRange(response.Header.Get("Content-Range")); ok && total >= 0 {
-		if err := s.learn(0, total, ""); err != nil {
+		if err := s.learn(respondent(response), 0, total, ""); err != nil {
 			return fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 		if off < total {

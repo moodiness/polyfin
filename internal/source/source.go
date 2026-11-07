@@ -5,6 +5,7 @@
 package source
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -113,9 +114,10 @@ func (e *StatusError) Unwrap() error { return e.Kind }
 var errWrongRange = errors.New("unexpected range")
 
 // errOtherFile reports an answer whose size is not the file's, known from
-// an earlier answer or from the size the addon announced: a short error
-// page some hosts send with HTTP 200, or a link now naming another file.
-// Its body is not read as the file's.
+// an earlier answer, from its analysis or from the size the addon
+// announced: a short error page some hosts send with HTTP 200, the error
+// file a host answers for every link (see ErrorFiles), or a link now
+// naming another file. Its body is not read as the file's.
 var errOtherFile = errors.New("an answer of another size than the file")
 
 // errNoAnswer reports a source that sent no headers in time.
@@ -197,6 +199,12 @@ type Location struct {
 	// Cache.sizeTrusted).
 	Size      int64
 	Announcer string
+	// Analyzed is the size the file's analysis found, 0 when unknown: an
+	// answer more than 1% off is another file, refused at its first byte
+	// whatever the addon's sizes are worth. It is given only where the
+	// addon's announced size agrees with it, so that an analysis of
+	// another file never refuses the file.
+	Analyzed int64
 	// Opener, when set, sends the source's requests in place of the
 	// cache's: one that signs them for the storage, or answers them from
 	// another protocol (see FileOpener), as a folder on an S3 bucket, an
@@ -309,10 +317,16 @@ type Cache struct {
 
 	// hosts and sizes are what the cache learned of hosts and of the sizes
 	// addons announce, under their own lock, taken with a source's or
-	// slotsMu.
-	learned sync.Mutex
-	hosts   map[string]*hostState
-	sizes   map[string]*sizeRecord
+	// slotsMu; uncounted the sources whose answer counted in an addon's
+	// record was taken back, as a host's error file (see noteMisfit).
+	learned   sync.Mutex
+	hosts     map[string]*hostState
+	sizes     map[string]*sizeRecord
+	uncounted map[accounts.ID]bool
+	// recovered is told the sources refused for a host's error file once
+	// the host answers its files again (see OnRecovered).
+	recoveredMu sync.Mutex
+	recovered   func(sources []accounts.ID)
 
 	// slots are the connections held of each host, under slotsMu, which
 	// may take a source's lock, never the other way round.
@@ -348,7 +362,7 @@ func New(dir string, policy func() Policy, opener Opener, logger *slog.Logger) (
 		headerTimeout: headerTimeout, stallTimeout: stallTimeout, recoveryTimeout: recoveryTimeout, starveAfter: starveAfter,
 		linger: lingerDelay, attachedLinger: attachedLinger, connections: maxConnections, hostConnections: hostConnections,
 		sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{},
-		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}, slots: map[string]*hostSlots{},
+		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}, uncounted: map[accounts.ID]bool{}, slots: map[string]*hostSlots{},
 		stop: make(chan struct{}), sleep: pause}
 	c.free = func() (int64, bool) {
 		free, _, _, ok := diskspace.Measure(c.dir)
@@ -478,8 +492,15 @@ func (c *Cache) Discard(id accounts.ID) bool {
 	if s.refs > 0 {
 		return false
 	}
+	c.discardLocked(s)
+	return true
+}
+
+// discardLocked removes what the cache holds of source s, which no reader
+// holds. The cache's lock is held.
+func (c *Cache) discardLocked(s *Source) {
 	for key, use := range c.chunks {
-		if key.source == id {
+		if key.source == s.id {
 			delete(c.chunks, key)
 			c.used -= use.size
 		}
@@ -487,8 +508,7 @@ func (c *Cache) Discard(id accounts.ID) bool {
 	if err := s.discard(); err != nil {
 		c.logger.Warn("A cached source could not be removed", "error", err)
 	}
-	delete(c.sources, id)
-	return true
+	delete(c.sources, s.id)
 }
 
 // Usage is what the cache keeps, and how its reads went since the start.
@@ -651,11 +671,13 @@ type Source struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	// refs is guarded by the cache's lock, and so are plays, the plays of
-	// the source counted for its credit (see Policy.Credit), and playedAt,
-	// when a playback last read it.
-	refs     int
-	plays    int
-	playedAt time.Time
+	// the source counted for its credit (see Policy.Credit), playedAt,
+	// when a playback last read it, and forgotten, which marks a source
+	// removed once its last reader releases it (see Cache.forget).
+	refs      int
+	plays     int
+	playedAt  time.Time
+	forgotten bool
 	// writing is held to read while a block is written into dir, or the
 	// state saved there, and to write while the source is discarded or
 	// kept as the cache closes, which then waits for it.
@@ -888,11 +910,16 @@ type want struct {
 }
 
 // Release tells the cache a reader is done with the source. The last one
-// has the source's state saved soon, with the chunks it read.
+// has the source's state saved soon, with the chunks it read, or the
+// source removed when it was forgotten meanwhile.
 func (s *Source) Release() {
 	s.cache.mu.Lock()
 	defer s.cache.mu.Unlock()
 	if s.refs--; s.refs == 0 {
+		if s.forgotten {
+			s.cache.discardLocked(s)
+			return
+		}
 		s.mu.Lock()
 		s.cache.saveLater(s)
 		s.mu.Unlock()
@@ -1339,41 +1366,64 @@ func (s *Source) Failure() error {
 	return nil
 }
 
-// learn records what a response tells about the source: its status, its
-// total size, when known, and its media type. errOtherFile when the size
-// is not the one an earlier response told, or the first one tells a size
+// learn records what a response host sent tells about the source: its
+// status, its total size, when known, and its media type. errOtherFile
+// when the size is not the one an earlier response told, is the error
+// file the host answers for other files (see noteAnswer), is more than 1%
+// from the one the file's analysis found, or the first one tells a size
 // more than 1% from the one its addon announced while that addon's sizes
 // are trusted: the response is not the file's, and nothing is recorded.
 // The first size told makes the blocks a previous run kept of the source
 // its own when it is the one kept, and removes them otherwise (see
-// restore): the link changed, and now names another file.
-func (s *Source) learn(status int, total int64, contentType string) error {
+// restore): the link changed, and now names another file. Those blocks
+// stay for an answer that sides with neither them nor the addon, which
+// announced their size. An answer of the file's own size has the sources
+// refused for an error file the host answered tried again (see retry).
+// host is empty when unknown: the one the source's requests go to.
+func (s *Source) learn(host string, status int, total int64, contentType string) error {
 	s.mu.Lock()
-	dropped, err := s.learnLocked(status, total, contentType)
+	dropped, recovered, err := s.learnLocked(host, status, total, contentType)
 	s.mu.Unlock()
 	if dropped != nil {
 		s.cache.dropKept(s, dropped)
 	}
+	s.cache.retry(recovered)
 	return err
 }
 
 // learnLocked is learn under the source's lock, which tells the chunks it
 // removed, those a previous run kept of another file, for the cache to
-// stop counting them.
-func (s *Source) learnLocked(status int, total int64, contentType string) (dropped []int64, err error) {
-	if total >= 0 && s.size >= 0 && total != s.size {
-		return nil, fmt.Errorf("%w: %d bytes, not %d", errOtherFile, total, s.size)
+// stop counting them, and the sources to try again.
+func (s *Source) learnLocked(host string, status int, total int64, contentType string) (dropped []int64, recovered recovery, err error) {
+	announced := total >= 0 && s.size < 0 && s.origin.Size > 0 && s.origin.Announcer != "" && !s.sizeChecked
+	// Trusted as before this answer counts.
+	trusted := announced && s.cache.sizeTrusted(s.origin.Announcer)
+	if total >= 0 {
+		var errorFile bool
+		if errorFile, recovered = s.noteAnswer(cmp.Or(host, s.host()), total); errorFile {
+			return nil, recovered, fmt.Errorf("%w: %d bytes, the error file its host answers for other files", errOtherFile, total)
+		}
 	}
-	if total >= 0 && s.size < 0 && s.origin.Size > 0 && s.origin.Announcer != "" && !s.sizeChecked {
-		if err := s.checkAnnounced(total); err != nil {
-			return nil, err
+	if total >= 0 && s.size >= 0 && total != s.size {
+		return nil, recovered, fmt.Errorf("%w: %d bytes, not %d", errOtherFile, total, s.size)
+	}
+	if analyzed := s.origin.Analyzed; total >= 0 && s.size < 0 && analyzed > 0 && !nearSize(total, analyzed) {
+		return nil, recovered, fmt.Errorf("%w: %d bytes, not the %d analyzed", errOtherFile, total, analyzed)
+	}
+	otherThanKept := total >= 0 && s.size < 0 && s.pending != nil && total != s.kept.Size
+	if otherThanKept && s.origin.Size > 0 && nearSize(s.kept.Size, s.origin.Size) && !nearSize(total, s.origin.Size) {
+		return nil, recovered, fmt.Errorf("%w: %d bytes, not the %d kept, which its addon announced", errOtherFile, total, s.kept.Size)
+	}
+	if announced {
+		if err := s.checkAnnounced(total, trusted); err != nil {
+			return nil, recovered, err
 		}
 	}
 	if total >= 0 && s.size < 0 && s.pending != nil {
-		if total == s.kept.Size {
-			s.adopt()
-		} else {
+		if otherThanKept {
 			dropped = s.dropPending()
+		} else {
+			s.adopt()
 		}
 	}
 	if total >= 0 {
@@ -1389,7 +1439,54 @@ func (s *Source) learnLocked(status int, total int64, contentType string) (dropp
 		s.status = status
 		close(s.learned)
 	}
-	return dropped, nil
+	return dropped, recovered, nil
+}
+
+// noteAnswer tells the cache what size host answered for the source, and
+// reports whether it is the error file the host answers for other files
+// (see noteMisfit): an answer too small for a video (errorMost), far
+// under the size the file is known or expected to have (errorShare), its
+// analyzed, announced or kept one, that the addon does not announce, is
+// noted as a misfit, and one of that size as the file's (see noteFit). A
+// misfit that is not the host's error file counts against the addon's
+// announced sizes as a first answer would. The
+// source's lock is held.
+func (s *Source) noteAnswer(host string, total int64) (bool, recovery) {
+	expected := s.expectedSize()
+	switch {
+	case expected <= 0:
+		return false, recovery{}
+	case total <= errorMost && total < expected/errorShare && (s.origin.Size <= 0 || !nearSize(total, s.origin.Size)):
+		announcer := ""
+		if s.size < 0 && s.origin.Size > 0 && s.origin.Announcer != "" && !s.sizeNoted {
+			announcer = s.origin.Announcer
+		}
+		errorFile := s.cache.noteMisfit(host, s.id, hostOf(s.origin.URL), total, announcer)
+		if announcer != "" && !errorFile {
+			s.sizeNoted = true
+		}
+		return errorFile, recovery{}
+	case total == s.size || s.size < 0 && nearSize(total, expected):
+		return false, s.cache.noteFit(host, total)
+	}
+	return false, recovery{}
+}
+
+// expectedSize is the size the source's file is known to have, else the
+// one its analysis found, its addon announced, or a previous run kept; 0
+// when none tells. The source's lock is held.
+func (s *Source) expectedSize() int64 {
+	switch {
+	case s.size >= 0:
+		return s.size
+	case s.origin.Analyzed > 0:
+		return s.origin.Analyzed
+	case s.origin.Size > 0:
+		return s.origin.Size
+	case s.pending != nil:
+		return s.kept.Size
+	}
+	return 0
 }
 
 // Learned returns a channel closed once an answer read as the source's
@@ -1401,12 +1498,13 @@ func (s *Source) Learned() <-chan struct{} {
 
 // checkAnnounced compares the first size the source tells with the one
 // its addon announced, and refuses one more than 1% off while the
-// addon's sizes are trusted. Within 1%, the size told is the file's. Each
-// file counts once in the addon's record. The source's lock is held.
-func (s *Source) checkAnnounced(total int64) error {
+// addon's sizes are trusted, trusted telling whether they were before
+// this answer. Within 1%, the size told is the file's. Each file counts
+// once in the addon's record, again when what it counted was taken back
+// (see noteMisfit). The source's lock is held.
+func (s *Source) checkAnnounced(total int64, trusted bool) error {
 	agrees := nearSize(total, s.origin.Size)
-	trusted := s.cache.sizeTrusted(s.origin.Announcer)
-	if !s.sizeNoted {
+	if !s.sizeNoted || s.cache.recount(s.id) {
 		s.sizeNoted = true
 		s.cache.noteSize(s.origin.Announcer, agrees)
 	}
