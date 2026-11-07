@@ -23,9 +23,10 @@ import (
 // group. Playback still offers these versions when no other is left, but
 // a title found only in them is not told of as available: they are what
 // the user chose not to be offered. It is background work, whose requests
-// to addons are paced (see library.Background).
+// to addons are paced (see library.Background), and builds the user's view
+// once for its reads of the library (see library.PerRequest).
 func (h *Handler) FindWatchlistVersions(ctx context.Context, user accounts.User, title accounts.ID) (watchlist.Found, error) {
-	ctx = library.Background(ctx)
+	ctx = library.PerRequest(library.Background(ctx))
 	item, err := h.Library.Item(ctx, user, title)
 	if errors.Is(err, library.ErrNotFound) {
 		return watchlist.Unseen, nil
