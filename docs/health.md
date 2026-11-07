@@ -172,6 +172,14 @@ A torrent's route gave no answer, and its peers no byte, for a minute. This is a
 - It does not show while the route still does not answer: the route error tells it then.
 - A short outage the plays went on through is no problem: it shows under **Torrents**.
 
+### Host answering an error file
+
+A host answers the same small file, such as an error video, for several different files, each far larger, as a provider's host does while its service is down. This is a warning naming the host, never the link, and since when, as "The host files.example answers an error file instead of the videos, since 20:40" (see [Hosts answering an error file](reading-the-sources.md#hosts-answering-an-error-file)).
+
+- It shows from the third file answered with that size within 10 minutes. One file answered with another size is no problem.
+- It goes as soon as the host answers a file of its own size, and the versions refused meanwhile are tried again at once.
+- **Content › Versions** shows it too, on the versions from that host.
+
 API details: [Health problems](jellyfin-api.md#health-problems-in-the-admin-api).
 
 ## Artwork and people

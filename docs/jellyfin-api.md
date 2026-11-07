@@ -959,7 +959,8 @@ The admin app reads and saves the settings at `/admin/api/settings`, and the hea
 - a return to the previous version of Polyfin Desktop as `desktop_rolled_back`, with `name`, the version that did not start, `previous` and `error`;
 - an unwritable folder as `folder_unwritable`, with `folder` (`conversion`, `reading` or `cache`), `path` and `error`;
 - torrent streams that cannot play as `torrent_route`, with `failure` and `name`, and `grace`, the seconds the torrents playing go on for, while they ride the outage out;
-- a torrent that stopped while it played as `torrent_stopped`, with `at`, `failure` (`proxy_unreachable`, `proxy_refused`, `interface_missing`, `interface_down`, `interface_no_address`, `wireguard_endpoint`, `wireguard_down`, `wireguard_handshake`, or `route` for another failure) and `name`, the interface, proxy or WireGuard server.
+- a torrent that stopped while it played as `torrent_stopped`, with `at`, `failure` (`proxy_unreachable`, `proxy_refused`, `interface_missing`, `interface_down`, `interface_no_address`, `wireguard_endpoint`, `wireguard_down`, `wireguard_handshake`, or `route` for another failure) and `name`, the interface, proxy or WireGuard server;
+- a host answering an error file instead of the videos as `host_error_file`, with `host`, its name only, and `at`, when it started. `GET /admin/api/titles/{id}/versions` gives it on each stream from that host as `hostErrorFile`, with `host` and `since`, `null` for none.
 
 Also:
 
