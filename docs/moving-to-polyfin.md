@@ -328,14 +328,14 @@ Nothing else comes over: settings, collections, home screen layouts, and device-
 
 ### How app titles are matched
 
-Addon-based apps name titles by their addons' identifiers. Polyfin finds IMDb (`tt…`) and TMDB (`tmdb:…`) ones as an [imported watch history](tracking-imports.md#importing-your-watch-history) does, and Kitsu ones (`kitsu:…`) through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and season and episode numbers, or for Kitsu, by its number in the entry.
+Addon-based apps name titles by their addons' identifiers. Polyfin finds IMDb (`tt…`) and TMDB (`tmdb:…`) ones as an [imported watch history](tracking-imports.md#importing-your-watch-history) does. It finds Kitsu (`kitsu:…`) and MyAnimeList (`mal:…`) ones, and the anime mapping's other entry identifiers, through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and season and episode numbers, or for an anime entry, by its number in the entry.
 
-A title no catalog listed yet shows in the user's lists at once, described by the addons. An unlisted `tmdb:…` title is asked of the metadata addons that describe titles by it. It is found by the IMDb and TVDB identifiers they give, else shows under its `tmdb:…` identifier, with episodes as described.
+A title no catalog listed yet shows in the user's lists at once, described by the addons. An unlisted `tmdb:…` title is asked of the metadata addons that describe titles by it. It is found by the IMDb and TVDB identifiers they give, else shows under its `tmdb:…` identifier, with episodes as described. When no addon describes it and the server has a [TMDB API key](collections-people-and-ratings.md#tmdb-key), TMDB gives its IMDb identifier, and the title is then found as an IMDb one. TMDB's answer is kept, so later imports do not ask again. When TMDB gives no IMDb identifier, it is asked again after 30 days.
 
 Unmatched titles are left out and the import goes on. The result lists them with why:
 
-- **Not an IMDb, TMDB or Kitsu identifier**: an addon's own identifier.
-- **Not in Polyfin**: no catalog lists its identifier, and for `tmdb:…`, no server metadata addon describes it.
+- **Not an IMDb, TMDB, Kitsu or MyAnimeList identifier**: an addon's own identifier.
+- **Not in Polyfin**: no catalog lists its identifier. For `tmdb:…`, no server metadata addon describes it either, and TMDB gives it no IMDb identifier or the server has no TMDB API key.
 - **Its episodes do not match Polyfin's list**: a Stremio series (see [Stremio](#stremio)). Its watched episodes are not marked, but it still goes on the Watchlist if in the library.
 
 Data merges as in the other imports (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)). Played marks and resume points are only added, Polyfin's later date stays, and the more recent resume point stays. Resume points follow Polyfin's thresholds (see [Played and resume thresholds](watch-state.md#played-and-resume-thresholds)): one past the played threshold marks the title played. Re-importing adds nothing twice. The result counts library titles added to the Watchlist: those not already there and not started.

@@ -391,7 +391,7 @@ const account: typeof en = {
       kindColumn: 'Type',
       reasonColumn: 'Raison',
       reasons: {
-        other_identifier: 'Pas un identifiant IMDb, TMDB ou Kitsu',
+        other_identifier: 'Pas un identifiant IMDb, TMDB, Kitsu ou MyAnimeList',
         not_found: 'Absent de Polyfin',
         episode_list:
           'Ses épisodes ne correspondent pas à la liste de Polyfin : aucun n’a été marqué vu',

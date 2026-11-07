@@ -102,8 +102,9 @@ type Metas interface {
 
 // Options are the dependencies of the reader.
 type Options struct {
-	// Anime maps the Kitsu identifiers of anime to Polyfin's titles; nil
-	// finds them as anime catalogs list them only.
+	// Anime maps the anime identifiers of titles ("kitsu:…", "mal:…",
+	// "anidb:…") to Polyfin's titles; nil finds them as anime catalogs
+	// list them only.
 	Anime *anime.Service
 	// Metas gives the episodes of series; nil reads no episode watched.
 	Metas Metas

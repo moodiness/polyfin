@@ -386,7 +386,7 @@ const account: typeof en = {
       kindColumn: 'Tipo',
       reasonColumn: 'Motivo',
       reasons: {
-        other_identifier: 'Non è un identificatore IMDb, TMDB o Kitsu',
+        other_identifier: 'Non è un identificatore IMDb, TMDB, Kitsu o MyAnimeList',
         not_found: 'Non presente in Polyfin',
         episode_list:
           'I suoi episodi non corrispondono all’elenco di Polyfin: nessuno è stato segnato come visto',

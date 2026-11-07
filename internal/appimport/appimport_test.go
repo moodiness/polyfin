@@ -413,7 +413,8 @@ func TestTitlesAreNamedByTheIdentifiersAppsUse(t *testing.T) {
 		{"kitsu:12", false, 1, 3, library.TitleRef{Episode: true, Anime: library.AnimeRef{Kitsu: 12, Episode: 3}}, true},
 		{"kitsu:7", true, 0, 0, library.TitleRef{Anime: library.AnimeRef{Kitsu: 7}}, true},
 		{"tmdb:x", true, 0, 0, library.TitleRef{}, false},
-		{"mal:5", true, 0, 0, library.TitleRef{}, false},
+		{"mal:5", true, 0, 0, library.TitleRef{Anime: library.AnimeRef{MyAnimeList: 5}}, true},
+		{"anidb:6", false, 1, 2, library.TitleRef{Episode: true, Anime: library.AnimeRef{AniDB: 6, Episode: 2}}, true},
 		{"srv1:abc", true, 0, 0, library.TitleRef{}, false},
 		{"custom-prefix:1", false, 1, 1, library.TitleRef{}, false},
 	} {
