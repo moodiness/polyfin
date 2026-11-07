@@ -19,6 +19,7 @@ import { SettingHelp } from './SettingRow'
  *   list to choose from); Escape closes them and returns to the row.
  * - With `onClick`, the row is a button for an action shown elsewhere (a dialog).
  * ↑ ↓ on the row move to the next row, SettingRows included, without trapping Tab.
+ * A `disabled` row is dimmed as a SettingRow's (`data-inactive`), its More and error excepted.
  */
 export function OpenRow({
   anchor,
@@ -104,13 +105,14 @@ export function OpenRow({
   return (
     <div
       id={anchor}
+      data-inactive={disabled || undefined}
       onFocus={() => setFocused(true)}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       className={cx(
         'min-w-0 scroll-mt-32 rounded-row transition-[background-color,box-shadow] duration-350 ease-nuit',
-        lit ? 'lit-row' : cx('bg-s1', !disabled && 'hover:bg-s2'),
-        disabled && 'opacity-60',
+        // An inactive row's fill as it was at 60 % as a whole.
+        lit ? 'lit-row' : disabled ? 'bg-s1/60' : 'bg-s1 hover:bg-s2',
       )}
     >
       <button
@@ -124,7 +126,7 @@ export function OpenRow({
         aria-describedby={describedBy(helpId, errorId)}
         onClick={() => (onClick ? onClick() : setOpen(!open))}
         className={cx(
-          'flex w-full cursor-pointer items-center gap-4 rounded-row pr-3 pl-4 text-left focus-visible:outline-none disabled:cursor-not-allowed',
+          'flex w-full cursor-pointer items-center gap-4 rounded-row pr-3 pl-4 text-left focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60',
           help === undefined ? 'min-h-[3.375rem] py-2' : 'min-h-11 pt-2 pb-0.5',
         )}
       >
@@ -145,7 +147,9 @@ export function OpenRow({
       </button>
       {help !== undefined && (
         <div className="pr-12 pb-2.5 pl-4">
-          <SettingHelp id={helpId}>{help}</SettingHelp>
+          <SettingHelp id={helpId} dimmed={disabled}>
+            {help}
+          </SettingHelp>
         </div>
       )}
       {error && (
@@ -153,7 +157,9 @@ export function OpenRow({
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       )}
-      {note !== undefined && <div className="px-4 pb-3 text-small text-ink-2">{note}</div>}
+      {note !== undefined && (
+        <div className={cx('px-4 pb-3 text-small text-ink-2', disabled && 'inactive')}>{note}</div>
+      )}
       {open && (
         <div ref={panel} id={panelId} className="px-4 pb-4">
           {children}
