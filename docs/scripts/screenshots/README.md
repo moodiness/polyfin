@@ -3,7 +3,7 @@
 Two tools run against the same demo Polyfin, with a fixed dataset:
 
 - **`take.mjs`** retakes the admin app's screenshots in `docs/images/` in one pass. Run it after a change to the admin app's look, then commit the WebP files that changed.
-- **`sweep.mjs`** visits every page of the admin app and fails on what overflows or logs an error (see [The sweep](#the-sweep)). CI runs it on each pull request.
+- **`sweep.mjs`** visits every page of the admin app and fails on what overflows, logs an error or fails an accessibility check (see [The sweep](#the-sweep)). CI runs it on each pull request.
 
 Each starts the demo, works in a local Chrome, then stops everything and drops its database. `stage.mjs` starts and fills the demo for both; `demo.mjs` serves its addons, IPTV list and logos.
 
@@ -16,7 +16,7 @@ Each starts the demo, works in a local Chrome, then stops everything and drops i
 - **Chrome or Chromium.** The tool looks in the usual install folders. Give another one with `--chrome` or `CHROME_PATH`.
 - **A PostgreSQL server** the tool may create and drop a database on, such as the one of `compose.yaml`.
 
-The tool has its own `package.json`, so the documentation's `npm ci` never installs it. It uses `puppeteer-core`, which downloads no browser.
+The tool has its own `package.json`, so the documentation's `npm ci` never installs it. It uses `puppeteer-core`, which downloads no browser, and the sweep `axe-core`, each at an exact version.
 
 ## Run it
 
@@ -122,4 +122,5 @@ Each shot is a `shot('<name>', …)` step of `take.mjs`. It opens a page, brings
   - **Overflow:** the page scrolls sideways, or an element goes past its edge, unless a box that scrolls or clips keeps it in.
   - **Text:** text runs out of the nearest box that frames it (a border, a background or its own overflow), or is cut off by it, unless it ends with an ellipsis or a line clamp, or the box scrolls. What only screen readers read is left out.
   - **Console:** any error, but the two expected: the 401 of the session check signed out, and the 404 of an invite that does not exist.
-- **Report:** the findings, by page and case, then an exit code of 1. With `--shots`, a screenshot of each page with a finding.
+  - **Accessibility:** a serious or critical violation of axe-core's rules, run on the settled page. `axeAllowed` in `sweep.mjs` lists those accepted, each with its reason; keep it short. It has one: the contrast of a disabled setting's name, value and explanation (`data-inactive` on its row), dimmed as an inactive control, which WCAG exempts. A link or a button in that row is never accepted.
+- **Report:** the findings, by page and case, then an exit code of 1. With `--shots`, a screenshot of each page with a finding. The log also counts axe's violations by rule and impact, the moderate and minor ones and those accepted included.
