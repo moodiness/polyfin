@@ -24,8 +24,9 @@ const english = path.join(i18nDir, 'en') + path.sep
 const languages = readdirSync(i18nDir, { withFileTypes: true })
   .filter((e) => e.isDirectory())
   .map((e) => e.name)
+// The area files; index.ts only merges them for one language's import().
 const areas = readdirSync(english)
-  .filter((f) => f.endsWith('.ts'))
+  .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
   .map((f) => f.slice(0, -3))
 
 function typescript() {
