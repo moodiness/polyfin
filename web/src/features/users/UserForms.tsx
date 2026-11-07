@@ -121,7 +121,7 @@ function LimitsSection({
 }
 
 /** A tile for what is more than a row (chips, lists to tick), as wide as the rows. */
-const tile = 'min-w-0 rounded-row bg-s1 px-[1.875rem] py-6 max-md:px-5 max-md:py-5'
+const tile = 'min-w-0 rounded-row bg-s1 px-4 py-3'
 
 /** A chip of a list (a genre, a channel) with its button taking it out. */
 function Chip({
@@ -398,7 +398,7 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
       description={t.users.visibleLibrariesHelp}
     >
       {choices.isPending ? (
-        <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
+        <Skeleton className="h-24 rounded-row" />
       ) : choices.isError ? (
         <InlineError onRetry={() => void choices.refetch()} retrying={choices.isFetching}>
           {errorMessage(t, choices.error)}
@@ -406,20 +406,36 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
       ) : choices.data.libraries.length === 0 ? (
         <EmptyState title={t.users.noServerLibraries}>{t.users.noServerLibrariesHelp}</EmptyState>
       ) : (
-        choices.data.libraries.map((library) => (
-          <SettingRow
-            key={library.id}
-            kind="switch"
-            label={library.name}
-            checked={!hidden.includes(library.id)}
-            saved={readOnly ? undefined : !savedHidden.includes(library.id)}
-            stateText={[t.users.libraryShown, t.users.libraryHidden]}
-            disabled={readOnly}
-            onChange={(shown) =>
-              setHidden(shown ? hidden.filter((id) => id !== library.id) : [...hidden, library.id])
-            }
-          />
-        ))
+        // A checklist in two columns: a library is a line to tick, shown or hidden in the apps.
+        <div
+          role="group"
+          aria-labelledby={`${id}-title`}
+          className="grid min-w-0 gap-x-6 rounded-row bg-s1 px-4 py-2 sm:grid-cols-2"
+        >
+          {choices.data.libraries.map((library) => {
+            const shown = !hidden.includes(library.id)
+            const savedShown = !savedHidden.includes(library.id)
+            return (
+              <Checkbox
+                key={library.id}
+                label={library.name}
+                checked={shown}
+                disabled={readOnly}
+                onChange={(on) =>
+                  setHidden(on ? hidden.filter((id) => id !== library.id) : [...hidden, library.id])
+                }
+                aside={
+                  !readOnly && shown !== savedShown ? (
+                    <span className="inline-flex items-center gap-1.5 text-micro">
+                      <span aria-hidden="true" className="size-1.5 rounded-full bg-link" />
+                      {t.ui.was(savedShown ? t.users.libraryShown : t.users.libraryHidden)}
+                    </span>
+                  ) : undefined
+                }
+              />
+            )
+          })}
+        </div>
       )}
     </LimitsSection>
   )
