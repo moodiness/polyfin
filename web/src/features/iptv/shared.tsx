@@ -150,7 +150,7 @@ export function Figures({ items, label }: { items: readonly Figure[]; label?: st
           className={cx(
             'relative flex min-w-0 flex-col rounded-row bg-s1 px-6 pt-[1.375rem] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
             item.to &&
-              'transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit hover:bg-s2 has-[a:focus-visible]:lit has-[a:focus-visible]:lift [--lift:1.03]',
+              'transition-[background-color,box-shadow] duration-350 ease-nuit hover:bg-s2 has-[a:focus-visible]:lit-row',
           )}
         >
           <dt className="order-2 mt-2.5 text-small text-ink-2">

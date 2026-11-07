@@ -103,8 +103,8 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
         ) : episodes.data.length === 0 ? (
           <p className="text-small text-ink-3">{text.noEpisodes}</p>
         ) : (
-          // Long seasons scroll inside, with room for the lit row's rise.
-          <div className="-mx-2 max-h-[35rem] overflow-y-auto px-2 py-1">
+          // Long seasons scroll inside.
+          <div className="max-h-[35rem] overflow-y-auto">
             <RowList compact aria-label={text.episodesOf(series.name)}>
               {episodes.data.map((episode) => (
                 <Row

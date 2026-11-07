@@ -34,12 +34,12 @@ export type SectionNavProps = {
 }
 
 // A long label ("Konvertierung (Transkodierung)") wraps inside its fill in the column; on a
-// phone, where the list is a strip, it stays on one line. The current section is filled and
-// bold with a chevron, the lit one (focus) pale with dark words.
+// phone, where the list is a strip, it stays on one line. The current section is filled, bold
+// and lit as a row, with a chevron; the one under the keyboard is lit as a row too.
 const linkClass = cx(
-  'group flex min-h-[2.875rem] shrink-0 items-center justify-between gap-2.5 rounded-[0.9375rem] px-4 py-2 text-[1.15625rem] leading-snug font-medium text-ink-2 focus-lit [--lift:1.03] hover:bg-s1 hover:text-ink',
-  'aria-[current]:bg-s2 aria-[current]:font-semibold aria-[current]:text-ink',
-  'max-md:min-h-11 max-md:bg-s1 max-md:px-3.5 max-md:py-0 max-md:text-[1.03125rem] max-md:whitespace-nowrap max-md:aria-[current]:lit',
+  'group flex min-h-[2.875rem] shrink-0 items-center justify-between gap-2.5 rounded-[0.9375rem] px-4 py-2 text-[1.15625rem] leading-snug font-medium text-ink-2 focus-lit-row hover:bg-s1 hover:text-ink focus-visible:text-ink',
+  'aria-[current]:font-semibold aria-[current]:text-ink aria-[current]:lit-row',
+  'max-md:min-h-11 max-md:bg-s1 max-md:px-3.5 max-md:py-0 max-md:text-[1.03125rem] max-md:whitespace-nowrap',
 )
 
 /**

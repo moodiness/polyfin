@@ -103,6 +103,7 @@ const swatches = [
   ['on-focus-2', 'bg-on-focus-2'],
   ['accent', 'bg-accent'],
   ['accent-hover', 'bg-accent-hover'],
+  ['lit-edge', 'bg-lit-edge'],
   ['link', 'bg-link'],
   ['link-lit', 'bg-link-lit'],
   ['ok', 'bg-ok'],
@@ -273,10 +274,11 @@ export default function UiGallery() {
         </div>
         <div className="mt-8 flex flex-wrap gap-3">
           <div className="rounded-row bg-s1 px-7 py-5 text-h3">A row</div>
-          <div className="lit lift rounded-row px-7 py-5 text-h3 [--lift:1.012]">
-            Lit <span className="text-lead text-ink-2">value</span>{' '}
+          <div className="lit-row rounded-row px-7 py-5 text-h3">
+            Lit row <span className="text-lead text-ink-2">value</span>{' '}
             <span className="text-lead text-ok">Ready</span>
           </div>
+          <div className="lit rounded-control px-5 py-5 text-control font-[620]">Lit button</div>
           <div className="raised rounded-panel px-7 py-5 text-h3">Raised glass</div>
         </div>
       </Block>
@@ -771,7 +773,7 @@ export default function UiGallery() {
 
       <Block title="Tiles">
         <div className="flex flex-col gap-10">
-          <Specimen name="ArtShelf and ArtTile: the lit tile opens wide, with a halo and its tools">
+          <Specimen name="ArtShelf and ArtTile: the lit tile opens wide, with the accent edge and its tools">
             <ArtShelf label="Playing now" className="w-full">
               <ArtTile
                 poster={amberRoad}
