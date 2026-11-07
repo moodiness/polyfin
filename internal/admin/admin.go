@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/homerows"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/letterboxd"
@@ -158,6 +159,9 @@ type Options struct {
 	// Letterboxd imports Letterboxd members' export files; nil offers no
 	// import.
 	Letterboxd *letterboxd.Service
+	// ImportTitles keeps the titles each import did not find, and the
+	// links users make of them; nil offers none.
+	ImportTitles *importlinks.Store
 	// Nuvio reads Nuvio accounts, for AppImport; nil offers none.
 	Nuvio *nuvio.Reader
 	// Stremio reads Stremio accounts, for AppImport; nil offers none.
@@ -316,6 +320,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/account/app-import/stremio/unlock", h.signedIn(h.unlockStremio(h.ownAppImportTarget)))
 	mux.Handle("POST /admin/api/account/app-connections/{app}/import", h.signedIn(h.importAppConnection(h.ownAppImportTarget)))
 	mux.Handle("DELETE /admin/api/account/app-connections/{app}", h.signedIn(h.disconnectApp(h.ownAppConnectionTarget)))
+	mux.Handle("GET /admin/api/account/import-titles", h.signedIn(h.importTitleSources(h.ownImportTitlesTarget)))
+	mux.Handle("GET /admin/api/account/import-titles/{source}", h.signedIn(h.importTitles(h.ownImportTitlesTarget)))
+	mux.Handle("PUT /admin/api/account/import-titles/{source}/links", h.signedIn(h.linkImportTitle(h.ownImportTitlesTarget)))
+	mux.Handle("DELETE /admin/api/account/import-titles/{source}/links", h.signedIn(h.unlinkImportTitle(h.ownImportTitlesTarget)))
 	own := notificationRoutes{h: h, owner: ownTargets}
 	mux.Handle("GET /admin/api/account/notifications", h.signedIn(own.list))
 	mux.Handle("POST /admin/api/account/notifications/targets", h.signedIn(own.create))
@@ -397,6 +405,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/unlock", h.administrator(h.unlockStremio(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-connections/{app}/import", h.administrator(h.importAppConnection(h.userAppImportTarget)))
 	mux.Handle("DELETE /admin/api/users/{id}/app-connections/{app}", h.administrator(h.disconnectApp(h.userAppImportTarget)))
+	mux.Handle("GET /admin/api/users/{id}/import-titles", h.administrator(h.importTitleSources(h.userImportTitlesTarget)))
+	mux.Handle("GET /admin/api/users/{id}/import-titles/{source}", h.administrator(h.importTitles(h.userImportTitlesTarget)))
+	mux.Handle("PUT /admin/api/users/{id}/import-titles/{source}/links", h.administrator(h.linkImportTitle(h.userImportTitlesTarget)))
+	mux.Handle("DELETE /admin/api/users/{id}/import-titles/{source}/links", h.administrator(h.unlinkImportTitle(h.userImportTitlesTarget)))
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))
