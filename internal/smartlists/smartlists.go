@@ -231,6 +231,14 @@ func (s *Store) Get(ctx context.Context, owner *accounts.ID, id accounts.ID) (Li
 	return found[0], nil
 }
 
+// Emptied returns every list left with no catalog, the server's first:
+// the addons of all its catalogs were removed, or dropped them (see
+// library's leftovers.go). Such a list lists nothing until it is given
+// other catalogs.
+func (s *Store) Emptied(ctx context.Context) ([]List, error) {
+	return s.load(ctx, "WHERE catalogs = '[]' ORDER BY owner_id IS NOT NULL, created_at, id")
+}
+
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]List, error) {
 	if !strings.Contains(where, "ORDER BY") {
 		where += " ORDER BY created_at, id"

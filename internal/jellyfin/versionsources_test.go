@@ -227,7 +227,7 @@ func TestVersionSourceOrderLaterSources(t *testing.T) {
 		false); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.addons.Remove(t.Context(), addons.Shared(), p.two.ID); err != nil {
+	if _, err := p.addons.Remove(t.Context(), addons.Shared(), p.two.ID); err != nil {
 		t.Fatal(err)
 	}
 	french, frenchToken := p.another(t, "french", "fre")

@@ -95,16 +95,26 @@ func (s *Service) CheckHealth(ctx context.Context) {
 			continue
 		}
 		st.missing++
+		// A record deleted meanwhile is of a source removed, its
+		// problems with it (see library's leftovers.go): it is forgotten
+		// without a word, not told solved.
 		if st.announced && st.missing < s.timing.healthConfirm {
-			s.saveHealth(ctx, st)
+			tag, err := s.db.Exec(ctx, "UPDATE notification_health SET missing = $2 WHERE key = $1", key, st.missing)
+			if err != nil && ctx.Err() == nil {
+				s.logger.Debug("A health problem could not be kept", "error", err)
+			}
+			if err == nil && tag.RowsAffected() == 0 {
+				delete(s.health, key)
+			}
 			continue
 		}
-		if st.announced {
-			s.dispatchAdministrators(s.healthEventOf(st.problem, st.since, true))
-		}
 		delete(s.health, key)
-		if _, err := s.db.Exec(ctx, "DELETE FROM notification_health WHERE key = $1", key); err != nil && ctx.Err() == nil {
+		tag, err := s.db.Exec(ctx, "DELETE FROM notification_health WHERE key = $1", key)
+		if err != nil && ctx.Err() == nil {
 			s.logger.Debug("A solved health problem could not be forgotten", "error", err)
+		}
+		if st.announced && (err != nil || tag.RowsAffected() > 0) {
+			s.dispatchAdministrators(s.healthEventOf(st.problem, st.since, true))
 		}
 	}
 }

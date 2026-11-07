@@ -168,7 +168,7 @@ func TestLibrariesRejectInvalidChoices(t *testing.T) {
 	if _, err := store.SetLibraries(t.Context(), Personal(alice.ID), []LibraryChoice{{AddonID: installed.ID, CatalogType: "movie", CatalogID: "movie-0"}}); !errors.Is(err, ErrInvalidLibrary) {
 		t.Errorf("foreign addon: got %v", err)
 	}
-	if err := store.Remove(t.Context(), Personal(alice.ID), installed.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := store.Remove(t.Context(), Personal(alice.ID), installed.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("removing another scope's addon: got %v", err)
 	}
 }

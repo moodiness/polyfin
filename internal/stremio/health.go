@@ -151,6 +151,19 @@ func (c *Client) Health(manifestURL string) (Health, bool) {
 	return result, true
 }
 
+// KeepHealth forgets the health of the addons whose base URL (see BaseURL)
+// keep does not keep, as once they are removed: an address installed
+// again starts anew.
+func (c *Client) KeepHealth(keep func(base string) bool) {
+	c.health.mu.Lock()
+	defer c.health.mu.Unlock()
+	for base := range c.health.byAddon {
+		if !keep(base) {
+			delete(c.health.byAddon, base)
+		}
+	}
+}
+
 // CatalogsWait records that the catalog pages of the addons on the host of
 // manifestURL are not asked for until until, as one of them asked to wait,
 // for Health to tell.

@@ -141,7 +141,7 @@ func TestSettingsVersionSourceOrder(t *testing.T) {
 		t.Errorf("a source installed later: %s", order(body))
 	}
 	// A source removed leaves the order, when read and when saved.
-	if err := store.Remove(t.Context(), addons.Shared(), two.ID); err != nil {
+	if _, err := store.Remove(t.Context(), addons.Shared(), two.ID); err != nil {
 		t.Fatal(err)
 	}
 	want = sources([]addons.Addon{shelf}, one, shelf, three)

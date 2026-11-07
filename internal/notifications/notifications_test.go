@@ -746,6 +746,44 @@ func TestHealthProblemsFoundAndSolved(t *testing.T) {
 	}
 }
 
+// The problem of a source removed is not told solved: the removal deletes
+// its record (see library's leftovers.go), which the checks then forget,
+// in the middle of confirming it gone as at its end.
+func TestHealthProblemsOfARemovedSourceAreNotToldSolved(t *testing.T) {
+	h := newHarness(t)
+	h.add(t, nil, h.webhook("/server", HealthProblem, HealthSolved))
+	addon := Problem{Key: "addon:0123456789abcdef0123456789abcdef", Severity: SeverityWarning, Text: "Addon: could not be reached"}
+	folder := Problem{Key: "folder:fedcba9876543210fedcba9876543210", Severity: SeverityError, Text: "Folder: missing"}
+	check := func(problems ...Problem) {
+		*h.problems = problems
+		h.CheckHealth(t.Context())
+		h.idle(t)
+	}
+	check(addon, folder)
+	check(addon, folder)
+	h.targets.wait(t, "/server", 2)
+	// The folder is removed between two checks without it, the addon
+	// before them.
+	if _, err := h.db.Exec(t.Context(), "DELETE FROM notification_health WHERE key = $1", addon.Key); err != nil {
+		t.Fatal(err)
+	}
+	check()
+	if _, err := h.db.Exec(t.Context(), "DELETE FROM notification_health WHERE key = $1", folder.Key); err != nil {
+		t.Fatal(err)
+	}
+	check()
+	check()
+	time.Sleep(50 * time.Millisecond)
+	if got := types(h.targets.at("/server")); len(got) != 2 || slices.Contains(got, "health_solved "+addon.Key) ||
+		slices.Contains(got, "health_solved "+folder.Key) {
+		t.Errorf("messages: %v", got)
+	}
+	var left int
+	if err := h.db.QueryRow(t.Context(), "SELECT count(*) FROM notification_health").Scan(&left); err != nil || left != 0 {
+		t.Errorf("%d records left: %v", left, err)
+	}
+}
+
 // A user who joined through an invite is told to the server's targets and
 // to administrators' own, naming who created the invite; a member may not
 // choose the event, and a user no longer an administrator stops hearing it.

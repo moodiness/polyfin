@@ -503,11 +503,12 @@ func (s *Service) RemoveTuner(ctx context.Context, id accounts.ID) (addons.Addon
 	if !list[index].Tuner() {
 		return addons.Addon{}, ErrNotTuner
 	}
-	if err := s.addons.Remove(ctx, addons.Shared(), id); err != nil {
+	removed, err := s.addons.Remove(ctx, addons.Shared(), id)
+	if err != nil {
 		return addons.Addon{}, err
 	}
 	s.forget(id)
-	return list[index], nil
+	return removed, nil
 }
 
 // HDHomeRun's discovery: a packet is its type and payload's length (big

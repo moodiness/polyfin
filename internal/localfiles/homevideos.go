@@ -73,6 +73,15 @@ const fingerprintSpan = 1 << 20
 // recognize).
 const goneDays = 30
 
+// ForgetGoneVideos forgets the home videos gone more than goneDays days
+// ago, and returns how many. Scans of home videos folders do, and the
+// hourly cleanup of removed sources: a folder removed remembers its videos
+// too (see migration 0098), with no folder left to scan.
+func (s *Service) ForgetGoneVideos(ctx context.Context) (int64, error) {
+	tag, err := s.db.Exec(ctx, "DELETE FROM local_videos_gone WHERE gone_at <= now() - make_interval(days => $1)", goneDays)
+	return tag.RowsAffected(), err
+}
+
 // videoFingerprint reads the fingerprint of a home video of size bytes: a
 // SHA-256 hash of its first and last fingerprintSpan bytes, of all of it
 // when smaller. With the size, it tells the video wherever it is.
@@ -336,7 +345,7 @@ func (s *Service) scanHomeVideos(ctx context.Context, id accounts.ID, root strin
 			return err
 		}
 	}
-	if _, err := s.db.Exec(ctx, "DELETE FROM local_videos_gone WHERE gone_at <= now() - make_interval(days => $1)", goneDays); err != nil {
+	if _, err := s.ForgetGoneVideos(ctx); err != nil {
 		return err
 	}
 	entries := make(map[string]entry, len(files))

@@ -941,13 +941,7 @@ func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// The addon is named in the activity log, which needs its name first.
-	installed, err := h.Addons.Addons(r.Context(), scope)
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
-	err = h.Addons.Remove(r.Context(), scope, id)
+	addon, err := h.Addons.Remove(r.Context(), scope, id)
 	if addonError(w, err) {
 		return
 	}
@@ -955,18 +949,7 @@ func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	for _, addon := range installed {
-		if addon.ID == id {
-			h.Activity.AddonRemoved(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, scope.Owner == nil)
-			// The images uploaded for its libraries go with the addon, even
-			// when the request is abandoned; the addon is gone either way.
-			if h.LibraryImages != nil {
-				if err := h.LibraryImages.DeleteLibraryImages(context.WithoutCancel(r.Context()), addon); err != nil {
-					h.Logger.Warn("The images of a removed addon's libraries could not be deleted", "addon", addon.Manifest.Name, "error", err)
-				}
-			}
-		}
-	}
+	h.Activity.AddonRemoved(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, scope.Owner == nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
