@@ -3,6 +3,8 @@ package source
 import (
 	"net/url"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 // What the cache learns of hosts and addons, kept for the sources to come.
@@ -20,11 +22,14 @@ type hostState struct {
 	// single is how fast one connection alone read from it, in bytes a
 	// second; limited, until when it is given one connection per file;
 	// crowded, until when it is given fewer connections (see slotCap);
-	// full whether all its slots were held, as last known.
+	// full whether all its slots were held, as last known; misfits what it
+	// answered of sizes far under the files' own, by size (see
+	// noteMisfit).
 	single  float64
 	limited time.Time
 	crowded time.Time
 	full    bool
+	misfits map[int64]*misfits
 }
 
 // hostOf is the host a URL names, port included: what the cache learns
@@ -115,6 +120,24 @@ func (c *Cache) sizeTrusted(announcer string) bool {
 func (c *Cache) noteSize(announcer string, agrees bool) {
 	c.learned.Lock()
 	defer c.learned.Unlock()
+	c.noteSizeLocked(announcer, agrees)
+}
+
+// recount reports whether the answer of the source of id that counted in
+// its addon's record was taken back (see noteMisfit), and forgets it: its
+// next answer counts again.
+func (c *Cache) recount(id accounts.ID) bool {
+	c.learned.Lock()
+	defer c.learned.Unlock()
+	if !c.uncounted[id] {
+		return false
+	}
+	delete(c.uncounted, id)
+	return true
+}
+
+// noteSizeLocked is noteSize, c.learned held.
+func (c *Cache) noteSizeLocked(announcer string, agrees bool) {
 	record := c.sizes[announcer]
 	if record == nil {
 		record = &sizeRecord{}

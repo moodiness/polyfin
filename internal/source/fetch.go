@@ -894,7 +894,7 @@ func (s *Source) connect(c *conn, block int64) error {
 				cancel()
 				return fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 			}
-			if other = s.learn(status, total, response.Header.Get("Content-Type")); other == nil {
+			if other = s.learn(answerHost(t, response), status, total, response.Header.Get("Content-Type")); other == nil {
 				s.mu.Lock()
 				s.ranged, s.rangeless = true, false
 				s.mu.Unlock()
@@ -915,7 +915,7 @@ func (s *Source) connect(c *conn, block int64) error {
 			// error page, which some hosts send so when they refuse a
 			// request: the size of a file is never taken from it, which
 			// would cut the file short for every reader.
-			if other = s.learn(status, response.ContentLength, response.Header.Get("Content-Type")); other == nil {
+			if other = s.learn(answerHost(t, response), status, response.ContentLength, response.Header.Get("Content-Type")); other == nil {
 				if offset > 0 {
 					s.mu.Lock()
 					again := s.ranged && attempt < attempts
@@ -1021,10 +1021,16 @@ func (s *Source) connect(c *conn, block int64) error {
 // answerHost is the host that answered a request sent to t: where the
 // origin redirected it, if it did.
 func answerHost(t target, response *http.Response) string {
+	return cmp.Or(respondent(response), t.host)
+}
+
+// respondent is the host that sent response, where the origin redirected
+// the request, if it did; empty when unknown.
+func respondent(response *http.Response) string {
 	if response.Request != nil && response.Request.URL != nil {
 		return response.Request.URL.Host
 	}
-	return t.host
+	return ""
 }
 
 // connected records connection c's body, which yields next, read from via.
