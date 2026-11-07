@@ -45,3 +45,47 @@ func TestWatchlistChecksAskNoAddonThatAskedToWait(t *testing.T) {
 	e.wait(61 * time.Second)
 	check("after the wait", 1, 4, true)
 }
+
+// An addon's answer of notices alone that refuse nothing, such as its
+// summary of the streams its own filters left out, settles a watchlist
+// check: with nothing to play, or with the list it gave before. Notices
+// refusing the request for its rate leave the title unsettled, as a
+// failure does.
+func TestWatchlistChecksSettleOnNoticesThatRefuseNothing(t *testing.T) {
+	t.Parallel()
+	// 0 answers a summary, 1 a refusal for the rate, 2 one stream.
+	var mode atomic.Int32
+	e := repliedEnv(t, func(w http.ResponseWriter, r *http.Request, resource string) {
+		switch {
+		case resource != "stream":
+			answerNumbered(w, resource, nil)
+		case mode.Load() == 1:
+			answerNumbered(w, resource, []int{0})
+		case mode.Load() == 2:
+			answerNumbered(w, resource, []int{1})
+		default:
+			_, _ = w.Write([]byte(`{"streams":[{"name":"Summary","description":"12 results filtered out"}]}`))
+		}
+	})
+	check := func(what string, versions, asked int, complete bool) {
+		t.Helper()
+		found, done, err := e.service.WatchlistVersions(t.Context(), e.member, e.movie)
+		if err != nil || len(found) != versions || done != complete || e.asked("stream") != asked {
+			t.Errorf("%s: %d versions, complete %v, %d requests, %v; want %d, %v, %d", what, len(found), done, e.asked("stream"), err,
+				versions, complete, asked)
+		}
+	}
+	check("a summary", 0, 1, true)
+	e.wait(noticeLife + time.Second)
+	mode.Store(1)
+	check("a refusal", 0, 2, false)
+	e.wait(paceWait + time.Second)
+	mode.Store(2)
+	check("a stream", 1, 3, true)
+	e.wait(time.Hour)
+	mode.Store(0)
+	check("a summary after a list", 1, 4, true)
+	e.wait(time.Hour)
+	mode.Store(1)
+	check("a refusal after a list", 0, 5, false)
+}

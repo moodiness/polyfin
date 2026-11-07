@@ -21,11 +21,12 @@ import (
 )
 
 // waitingAddon is an addon of movies and a series whose streams the test
-// gives and takes away (see setStreams).
+// gives and takes away (see setStreams), counting its stream requests.
 type waitingAddon struct {
 	url     string
 	mu      sync.Mutex
 	streams map[string][]stremio.Stream
+	asked   map[string]int
 }
 
 func (a *waitingAddon) setStreams(id string, streams ...stremio.Stream) {
@@ -34,9 +35,16 @@ func (a *waitingAddon) setStreams(id string, streams ...stremio.Stream) {
 	a.streams[id] = streams
 }
 
+// requests counts the stream requests for id.
+func (a *waitingAddon) requests(id string) int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.asked[id]
+}
+
 func newWaitingAddon(t *testing.T) *waitingAddon {
 	t.Helper()
-	a := &waitingAddon{streams: map[string][]stremio.Stream{}}
+	a := &waitingAddon{streams: map[string][]stremio.Stream{}, asked: map[string]int{}}
 	metas := map[string]stremio.Meta{
 		"tt7001": {Type: "movie", Name: "Open Door", Released: "2001-06-01T00:00:00.000Z", ReleaseInfo: "2001", Extras: &stremio.Extras{Certification: "G"}},
 		"tt7002": {Type: "movie", Name: "Grim Night", Released: "2005-09-01T00:00:00.000Z", ReleaseInfo: "2005", Extras: &stremio.Extras{Certification: "R"}},
@@ -69,6 +77,7 @@ func newWaitingAddon(t *testing.T) *waitingAddon {
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": m})
 		case len(parts) == 3 && parts[0] == "stream":
 			a.mu.Lock()
+			a.asked[parts[2]]++
 			streams := append([]stremio.Stream{}, a.streams[parts[2]]...)
 			a.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
@@ -273,4 +282,83 @@ func TestWatchlistTitlesMoveToNowAvailableWhenVersionsAreFound(t *testing.T) {
 	if got := tells.all(); len(got) != 5 {
 		t.Errorf("told in all: %q", got)
 	}
+}
+
+// A title whose addon answers only notices that refuse nothing, such as
+// its summary of the streams its own filters left out, is recorded as
+// waiting, and asked again only after the hours set. One whose addon
+// refuses the request for its rate is not recorded: the next check asks
+// it again.
+func TestWatchlistTitlesAnsweredOnlyNoticesWait(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	addon := newWaitingAddon(t)
+	installed, err := s.addons.Install(t.Context(), addons.Shared(), addon.url, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: installed.ID, CatalogType: "movie", CatalogID: "top"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	member := s.user("member", nil)
+	token := s.signIn("member", "tv")
+	ids := map[string]accounts.ID{}
+	var page QueryResult
+	s.get(t, "/Items?ParentId="+s.viewIDs(t, token)["Top"], token, &page)
+	for _, item := range page.Items {
+		ids[item.Name], _ = accounts.ParseID(item.Id)
+	}
+	lists := watchlist.New(s.pool)
+	if _, err := lists.Save(t.Context(), member.ID, watchlist.Import, []watchlist.Title{
+		{ID: ids["Open Door"], AddedAt: new(time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))},
+		{ID: ids["Grim Night"], AddedAt: new(time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC))},
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	s.addRow(t, homerows.Row{Name: "Still waiting", Kind: homerows.KindWaiting, Place: homerows.PlaceBottom, Everyone: true})
+	addon.setStreams("tt7001", stremio.Stream{Name: "Summary", Description: "12 results filtered out"})
+	addon.setStreams("tt7002", stremio.Stream{Name: "Notice", Description: "Rate limit exceeded"})
+
+	now := time.Now()
+	var clock sync.Mutex
+	at := func() time.Time {
+		clock.Lock()
+		defer clock.Unlock()
+		return now
+	}
+	later := func(d time.Duration) {
+		clock.Lock()
+		defer clock.Unlock()
+		now = now.Add(d)
+	}
+	s.library.SetClock(at)
+	checker := watchlist.NewChecker(watchlist.CheckerOptions{Store: lists, Users: s.store.Users, Hours: func() int { return 6 },
+		Find: s.handler.FindWatchlistVersions, Logger: s.handler.Logger, Now: at})
+	check := func(what string, openDoor, grimNight int, waiting string) {
+		t.Helper()
+		if err := checker.Check(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := [2]int{addon.requests("tt7001"), addon.requests("tt7002")}, [2]int{openDoor, grimNight}; got != want {
+			t.Errorf("%s: requests %v, want %v", what, got, want)
+		}
+		var rows []string
+		for _, row := range s.customRowsOf(t, token) {
+			rows = append(rows, row.Name+": "+strings.Join(itemNames(row.Items), ", "))
+		}
+		if want := []string{"Still waiting: " + waiting}; !slices.Equal(rows, want) {
+			t.Errorf("%s: rows %q, want %q", what, rows, want)
+		}
+	}
+	check("the first check", 1, 1, "Open Door")
+	// Past the pause the refusal started, within the hours set.
+	later(time.Hour)
+	check("an hour later", 1, 2, "Open Door")
+	// Grim Night, never recorded, is asked first: a refusal would pause
+	// the requests that follow.
+	addon.setStreams("tt7002", stremio.Stream{Name: "Summary", Description: "3 results filtered out"})
+	later(6 * time.Hour)
+	check("past the hours set", 2, 3, "Open Door, Grim Night")
 }
