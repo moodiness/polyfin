@@ -20,25 +20,33 @@ export function useNumber(): (n: number) => string {
   return (n: number) => n.toLocaleString(language)
 }
 
-/** Previous and next buttons over a paged list, with where the page stands. */
+/**
+ * Previous and next buttons over a paged list, with where the page stands. A list paged above
+ * and below gives the one below `end`, for a name of its own.
+ */
 export function Pager({
   offset,
   limit,
   total,
   busy,
+  end = false,
   onOffset,
 }: {
   offset: number
   limit: number
   total: number
   busy: boolean
+  end?: boolean
   onOffset: (offset: number) => void
 }) {
   const { t } = useI18n()
   const number = useNumber()
   if (total === 0) return null
   return (
-    <nav aria-label={t.lineup.pager.label} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <nav
+      aria-label={end ? t.lineup.pager.labelEnd : t.lineup.pager.label}
+      className="flex flex-wrap items-center gap-x-4 gap-y-2"
+    >
       <p aria-live="polite" className="figures text-small text-ink-2">
         {t.lineup.pager.range(
           number(offset + 1),
