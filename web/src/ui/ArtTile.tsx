@@ -41,7 +41,7 @@ export function ArtShelf({
         aria-label={label}
         // Tiles keep their own height: one whose details open does not stretch its neighbour.
         className={cx(
-          'flex flex-wrap items-start gap-6 max-md:flex-col max-md:items-stretch max-md:gap-4',
+          'flex flex-wrap items-start gap-4 max-md:flex-col max-md:items-stretch max-md:gap-3',
           className,
         )}
       >
@@ -132,8 +132,8 @@ export function ArtTile({
   const art = backdropSrc !== undefined && !failed.has(backdropSrc) ? backdropSrc : undefined
   const frame = poster !== undefined || fallback !== undefined
   const frameClass = cx(
-    'aspect-[400/560] rounded-[1.125rem] shadow-[0_24px_48px_-16px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-24 max-md:rounded-[0.875rem]',
-    wide ? 'w-[clamp(9.375rem,22vh,12.75rem)]' : 'w-[clamp(6.75rem,15.5vh,8.75rem)]',
+    'aspect-[400/560] rounded-[0.75rem] shadow-[0_18px_36px_-12px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-20 max-md:rounded-[0.625rem]',
+    wide ? 'w-[clamp(6.75rem,16vh,9.25rem)]' : 'w-[clamp(5rem,11.5vh,6.5rem)]',
   )
 
   function light() {
@@ -159,7 +159,7 @@ export function ArtTile({
     <li
       ref={item}
       className={cx(
-        'min-w-[min(100%,23.75rem)] transition-[flex-grow] duration-700 ease-nuit motion-reduce:transition-none max-md:min-w-0',
+        'min-w-[min(100%,17.5rem)] transition-[flex-grow] duration-700 ease-nuit motion-reduce:transition-none max-md:min-w-0',
         wide ? 'grow-7 basis-0' : 'grow-5 basis-0',
       )}
     >
@@ -173,11 +173,11 @@ export function ArtTile({
         }}
         onKeyDown={onKeyDown}
         className={cx(
-          'group/art relative isolate grid h-full cursor-default grid-rows-[1fr_auto] gap-x-[1.875rem] gap-y-5 overflow-hidden rounded-tile bg-s1-solid px-8 pt-[1.625rem] pb-6',
+          'group/art relative isolate grid h-full cursor-default grid-rows-[1fr_auto] gap-x-5 gap-y-3.5 overflow-hidden rounded-tile bg-s1-solid px-5 pt-4.5 pb-4',
           'outline-2 outline-offset-[3px] outline-solid',
           'transition-[box-shadow,outline-color] duration-500 ease-nuit',
           'after:absolute after:inset-0 after:-z-1 after:bg-[linear-gradient(100deg,rgb(22_20_27/0.35)_0%,rgb(22_20_27/0.72)_42%,rgb(22_20_27/0.82)_100%)]',
-          'max-md:gap-x-[1.125rem] max-md:gap-y-4 max-md:rounded-[1.75rem] max-md:p-[1.125rem]',
+          'max-md:gap-x-3.5 max-md:gap-y-3 max-md:rounded-[1.125rem] max-md:p-3.5',
           frame ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
           lit
             ? 'shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] outline-lit-edge'
@@ -214,7 +214,7 @@ export function ArtTile({
               aria-hidden="true"
               className={cx(
                 frameClass,
-                'grid place-items-center bg-s2 text-[2.75rem] font-bold text-ink-2 max-md:text-[2rem]',
+                'grid place-items-center bg-s2 text-[2rem] font-bold text-ink-2 max-md:text-[1.75rem]',
               )}
             >
               {fallback ?? <FilmStripIcon size="1em" />}
@@ -225,8 +225,8 @@ export function ArtTile({
           {top !== undefined && (
             <div
               className={cx(
-                'flex min-w-0 items-center gap-2.5 text-[1.125rem] text-ink-2 max-md:text-micro',
-                tools !== undefined && wide && 'md:pr-40',
+                'flex min-w-0 items-center gap-2 text-small text-ink-2 max-md:text-micro',
+                tools !== undefined && wide && 'md:pr-32',
               )}
             >
               {top}
@@ -235,29 +235,29 @@ export function ArtTile({
           <Title
             id={titleId}
             className={cx(
-              'mt-3 leading-[1.05] font-bold tracking-[-0.02em] hyphenate text-ink max-md:mt-2 max-md:text-[1.625rem]',
-              wide ? 'text-[2.625rem]' : 'text-[2.125rem]',
+              'mt-2 leading-[1.08] font-bold tracking-[-0.018em] hyphenate text-ink max-md:mt-1.5 max-md:text-[1.375rem]',
+              wide ? 'text-[1.875rem]' : 'text-[1.5rem]',
             )}
           >
             {title}
           </Title>
           {meta !== undefined && (
-            <p className="mt-1.5 text-[1.125rem] text-ink-2 max-md:text-micro">{meta}</p>
+            <p className="mt-1 text-small text-ink-2 max-md:text-micro">{meta}</p>
           )}
           {children !== undefined && (
-            <div className="mt-4 text-[1.0625rem] text-ink-2 max-md:mt-2.5 max-md:text-micro">
+            <div className="mt-2.5 text-small text-ink-2 max-md:mt-2 max-md:text-micro">
               {children}
             </div>
           )}
           {detail !== undefined && wide && (
-            <div className="mt-3 text-[1.0625rem] text-ink-2 max-md:text-micro">{detail}</div>
+            <div className="mt-2 text-small text-ink-2 max-md:text-micro">{detail}</div>
           )}
         </div>
         {footer !== undefined && <div className="col-span-full min-w-0">{footer}</div>}
         {tools !== undefined && (
           <div
             className={cx(
-              'flex gap-2 transition-opacity duration-300 ease-nuit md:absolute md:top-[1.375rem] md:right-[1.375rem] max-md:col-span-full max-md:opacity-100',
+              'flex gap-1.5 transition-opacity duration-300 ease-nuit md:absolute md:top-3.5 md:right-3.5 max-md:col-span-full max-md:opacity-100',
               lit ? 'opacity-100' : 'opacity-0 group-focus-within/art:opacity-100',
             )}
           >

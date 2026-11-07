@@ -66,7 +66,7 @@ export function Field({
   const helpId = help ? `${id}-help` : undefined
   const errorId = error ? `${id}-error` : undefined
   const helpText = help && (
-    <p id={helpId} className={cx('max-w-[66ch] text-small text-ink-2', helpFirst && '-mt-1')}>
+    <p id={helpId} className={cx('max-w-[66ch] text-small text-ink-2', helpFirst && '-mt-0.5')}>
       {help}
     </p>
   )
@@ -74,7 +74,7 @@ export function Field({
     <FieldContext
       value={{ id, describedBy: describedBy(helpId, errorId), invalid: Boolean(error) }}
     >
-      <div className={cx('flex min-w-0 flex-col gap-2.5', className)}>
+      <div className={cx('flex min-w-0 flex-col gap-1.5', className)}>
         <div className={cx('flex items-center justify-between gap-3', hideLabel && 'sr-only')}>
           <label htmlFor={id} className={fieldLabel}>
             {label}

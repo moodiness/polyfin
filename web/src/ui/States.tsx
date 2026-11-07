@@ -33,22 +33,20 @@ export function EmptyState({
   return (
     <div
       className={cx(
-        'flex flex-col items-center rounded-panel bg-s1 px-8 py-14 text-center max-sm:px-5 max-sm:py-10',
+        'flex flex-col items-center rounded-panel bg-s1 px-6 py-9 text-center max-sm:px-5 max-sm:py-8',
         className,
       )}
     >
       {Glyph && (
-        <span className="mb-5 inline-grid size-14 place-items-center rounded-full bg-s2 text-ink-2">
-          <Glyph size="1.75rem" aria-hidden="true" />
+        <span className="mb-3.5 inline-grid size-11 place-items-center rounded-full bg-s2 text-ink-2">
+          <Glyph size="1.375rem" aria-hidden="true" />
         </span>
       )}
-      <p className="text-[1.375rem] leading-tight font-[650] tracking-[-0.005em] text-ink max-sm:text-[1.1875rem]">
-        {title}
-      </p>
+      <p className="text-group text-ink">{title}</p>
       {children !== undefined && (
         <p className="mt-2 max-w-[56ch] text-small text-ink-2">{children}</p>
       )}
-      {action && <div className="mt-6">{action}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   )
 }
@@ -82,36 +80,47 @@ export function SkeletonText({ lines = 2, className }: { lines?: number; classNa
 
 /**
  * Rows loading, as a RowList draws them: a bubble, a title and a meta line, each row its own fill
- * 8 px apart. The list is announced as loading with `label`.
+ * 6 px apart, 60 px high (51 in Compact), or 48 with `compact`. The list is announced as loading
+ * with `label`.
  */
 export function SkeletonRows({
   rows = 3,
   label,
   boxed = true,
+  compact = false,
 }: {
   rows?: number
   /** Read by screen readers: "Loading sources…". Defaults to the shared "Loading…". */
   label?: string
   /** Each row on its own fill, like RowList's `boxed`; without, the rows sit on the room. */
   boxed?: boolean
+  /** The rows of a `compact` RowList. */
+  compact?: boolean
 }) {
   const { t } = useI18n()
   return (
-    <div role="status" aria-label={label ?? t.common.loading} className="flex flex-col gap-2">
+    <div
+      role="status"
+      aria-label={label ?? t.common.loading}
+      className={cx('flex flex-col', compact ? 'gap-1' : 'gap-1.5')}
+    >
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}
           className={cx(
-            'flex min-h-20 items-center gap-4 rounded-row py-3.5',
-            boxed ? 'bg-s1 pr-5.5 pl-7 max-sm:px-5' : 'px-2',
+            'flex items-center',
+            compact
+              ? 'min-h-12 gap-2.5 rounded-[0.625rem] py-1.5'
+              : 'min-h-15 gap-3 rounded-row py-2',
+            boxed ? (compact ? 'bg-s1 pr-3 pl-3.5' : 'bg-s1 pr-3 pl-4') : 'px-2',
           )}
         >
-          <Skeleton className="size-11 rounded-full" />
-          <span className="flex flex-1 flex-col gap-2.5">
-            <Skeleton className="h-5 w-1/3" />
-            <Skeleton className="h-4 w-1/2" />
+          <Skeleton className={cx('rounded-full', compact ? 'size-7.5' : 'size-9')} />
+          <span className="flex flex-1 flex-col gap-1.5">
+            <Skeleton className={cx('w-1/3', compact ? 'h-3.5' : 'h-4')} />
+            <Skeleton className="h-3 w-1/2" />
           </span>
-          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-3.5 w-16" />
         </div>
       ))}
     </div>
@@ -139,15 +148,15 @@ export function InlineError({
     <div
       role="alert"
       className={cx(
-        'flex flex-wrap items-center gap-4 rounded-row bg-s1 py-4 pr-4 pl-5 text-body text-ink',
+        'flex flex-wrap items-center gap-3 rounded-row bg-s1 py-2.5 pr-3 pl-4 text-body text-ink',
         className,
       )}
     >
       <span
         aria-hidden="true"
-        className="inline-grid size-11 shrink-0 place-items-center rounded-full bg-danger/14 text-danger"
+        className="inline-grid size-9 shrink-0 place-items-center rounded-full bg-danger/14 text-danger"
       >
-        <WarningCircleIcon size="1.375rem" />
+        <WarningCircleIcon size="1.125rem" />
       </span>
       <p className="min-w-0 flex-1">{children}</p>
       {onRetry && (
@@ -196,7 +205,7 @@ export function Notice({
     <div
       role={live ? (tone === 'danger' ? 'alert' : 'status') : undefined}
       className={cx(
-        'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-row py-4 pr-4 pl-5 text-body text-ink',
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-row py-2.5 pr-3 pl-4 text-body text-ink',
         nested ? 'bg-s2' : 'bg-s1',
         className,
       )}
@@ -204,11 +213,11 @@ export function Notice({
       <span
         aria-hidden="true"
         className={cx(
-          'inline-grid size-11 shrink-0 place-items-center self-start rounded-full',
+          'inline-grid size-9 shrink-0 place-items-center self-start rounded-full',
           bubble,
         )}
       >
-        <Glyph size="1.375rem" />
+        <Glyph size="1.125rem" />
       </span>
       <div className="min-w-0 flex-1 basis-48 self-center">{children}</div>
       {action && <div className="shrink-0">{action}</div>}

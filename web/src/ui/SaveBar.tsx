@@ -96,22 +96,20 @@ export function SaveBar({
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none translate-y-8 opacity-0',
         // A bar along the bottom of a phone.
-        'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-[1.5rem] max-md:py-2 max-md:pr-2 max-md:pl-4',
+        'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-[1.125rem] max-md:py-1.5 max-md:pr-1.5 max-md:pl-3.5',
         // A card under the section list, or at the end of the form, where a hidden card leaves
         // no gap under the form.
-        'md:grid-cols-[1fr_auto] md:gap-x-2 md:gap-y-3.5 md:px-3.5 md:pt-[1.125rem] md:pb-3.5',
+        'md:grid-cols-[1fr_auto] md:gap-x-2 md:gap-y-2.5 md:px-2.5 md:pt-3 md:pb-2.5',
         docked || shown ? 'md:grid' : 'md:hidden',
-        docked
-          ? 'md:w-full'
-          : 'md:sticky md:bottom-7 md:mt-10 md:ml-auto md:w-max md:min-w-[18.75rem]',
+        docked ? 'md:w-full' : 'md:sticky md:bottom-7 md:mt-8 md:ml-auto md:w-max md:min-w-[16rem]',
       )}
     >
-      <div className="flex min-w-0 items-center gap-3 font-semibold text-ink max-md:mr-auto max-md:gap-2 max-md:text-[1rem] md:col-span-full md:pl-2.5 md:text-body">
-        <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-link" />
+      <div className="flex min-w-0 items-center gap-2.5 font-semibold text-control text-ink max-md:mr-auto max-md:gap-2 md:col-span-full md:pl-2">
+        <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-link" />
         <span className="min-w-0 max-md:whitespace-nowrap">{count}</span>
       </div>
       {note !== undefined && (
-        <p className="text-small text-ink-2 max-md:hidden md:col-span-full md:-mt-2 md:pl-[2.125rem]">
+        <p className="text-small text-ink-2 max-md:hidden md:col-span-full md:-mt-1.5 md:pl-6.5">
           {note}
         </p>
       )}
@@ -141,7 +139,7 @@ export function SaveBar({
         {saving ? (savingLabel ?? t.common.saving) : (saveLabel ?? t.common.save)}
       </Button>
       {error && (
-        <div className="basis-full pt-1 md:col-span-full md:px-2.5">
+        <div className="basis-full pt-1 md:col-span-full md:px-2">
           <FieldError>{error}</FieldError>
         </div>
       )}
@@ -150,7 +148,7 @@ export function SaveBar({
 
   return (
     <>
-      <div ref={anchor} aria-hidden="true" className={cx(shown && 'max-md:h-24')} />
+      <div ref={anchor} aria-hidden="true" className={cx(shown && 'max-md:h-[4.5rem]')} />
       {/* Says the count as it changes, and "All changes saved" once a save went through. */}
       <p aria-live="polite" className="sr-only">
         {shown ? count : t.ui.allSaved}
