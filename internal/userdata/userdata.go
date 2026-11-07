@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -68,7 +69,15 @@ type Counts struct {
 
 // Store keeps user data in PostgreSQL.
 type Store struct {
-	db *pgxpool.Pool
+	db db
+}
+
+// db is a pool, or a transaction in tests that count the rows a change
+// writes.
+type db interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // New returns a store backed by db.
@@ -242,11 +251,15 @@ func (s *Store) ChangeEach(ctx context.Context, user accounts.ID, items []Item, 
 	var result []Data
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		// Rows are created first, so that concurrent changes of a new item
-		// wait for each other below.
+		// wait for each other below. Neither statement rewrites a row whose
+		// values stay the same: imports and app connections re-apply whole
+		// histories, mostly unchanged.
 		if _, err := tx.Exec(ctx, `INSERT INTO user_data (user_id, item_id, series_id, season_id)
 			SELECT $1, * FROM unnest($2::uuid[], $3::uuid[], $4::uuid[])
 			ON CONFLICT (user_id, item_id) DO UPDATE
-			SET series_id = coalesce(excluded.series_id, user_data.series_id), season_id = coalesce(excluded.season_id, user_data.season_id)`,
+			SET series_id = coalesce(excluded.series_id, user_data.series_id), season_id = coalesce(excluded.season_id, user_data.season_id)
+			WHERE excluded.series_id IS NOT NULL AND excluded.series_id IS DISTINCT FROM user_data.series_id
+				OR excluded.season_id IS NOT NULL AND excluded.season_id IS DISTINCT FROM user_data.season_id`,
 			user, ids, series, seasons); err != nil {
 			return err
 		}
@@ -292,7 +305,11 @@ func (s *Store) ChangeEach(ctx context.Context, user accounts.ID, items []Item, 
 				resume_removed_at = c.resume_removed_at
 			FROM unnest($2::uuid[], $3::bool[], $4::int[], $5::bigint[], $6::bigint[], $7::bool[], $8::float8[], $9::timestamptz[], $10::timestamptz[])
 				AS c (item_id, played, play_count, position_ticks, runtime_ticks, favorite, rating, last_played_at, resume_removed_at)
-			WHERE user_data.user_id = $1 AND user_data.item_id = c.item_id`,
+			WHERE user_data.user_id = $1 AND user_data.item_id = c.item_id
+				AND (user_data.played, user_data.play_count, user_data.position_ticks, user_data.runtime_ticks, user_data.favorite,
+					user_data.rating, user_data.last_played_at, user_data.resume_removed_at)
+				IS DISTINCT FROM (c.played, c.play_count, c.position_ticks, c.runtime_ticks, c.favorite,
+					c.rating, c.last_played_at, c.resume_removed_at)`,
 			user, ids, played, counts, positions, runtimes, favorites, ratings, lastPlayed, resumeRemoved)
 		return err
 	})
