@@ -228,9 +228,9 @@ func (h *handler) startUserLetterboxdImport(w http.ResponseWriter, r *http.Reque
 	h.startLetterboxd(w, r, sessionFrom(r.Context()).User, user)
 }
 
-// letterboxdImportJSON is how an import of a Letterboxd export goes, or
-// went: how many of its movies were looked up, then what it added, and
-// the movies not found.
+// letterboxdImportJSON is how an import by name and year goes, or went: how
+// many of its movies were looked up, then what it added, and how many it
+// did not find (the import titles API lists them).
 type letterboxdImportJSON struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"`
@@ -242,18 +242,17 @@ type letterboxdImportJSON struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"startedBy"`
-	Watchlist        bool                      `json:"watchlist"`
-	Ratings          bool                      `json:"ratings"`
-	LikesAsFavorites bool                      `json:"likesAsFavorites"`
-	State            string                    `json:"state"`
-	Problem          *string                   `json:"problem"`
-	StartedAt        time.Time                 `json:"startedAt"`
-	EndedAt          *time.Time                `json:"endedAt"`
-	Movies           int                       `json:"movies"`
-	Searched         int                       `json:"searched"`
-	Added            letterboxdAddedJSON       `json:"added"`
-	UnmatchedCount   int                       `json:"unmatchedCount"`
-	Unmatched        []letterboxdUnmatchedJSON `json:"unmatched"`
+	Watchlist        bool                `json:"watchlist"`
+	Ratings          bool                `json:"ratings"`
+	LikesAsFavorites bool                `json:"likesAsFavorites"`
+	State            string              `json:"state"`
+	Problem          *string             `json:"problem"`
+	StartedAt        time.Time           `json:"startedAt"`
+	EndedAt          *time.Time          `json:"endedAt"`
+	Movies           int                 `json:"movies"`
+	Searched         int                 `json:"searched"`
+	Added            letterboxdAddedJSON `json:"added"`
+	UnmatchedCount   int                 `json:"unmatchedCount"`
 }
 
 // letterboxdAddedJSON counts what an import added: movies marked played,
@@ -265,16 +264,6 @@ type letterboxdAddedJSON struct {
 	Favorites int `json:"favorites"`
 }
 
-// letterboxdUnmatchedJSON is a movie of the export no title matched: its
-// name, its year (null when the export gives none), its Letterboxd link
-// (null when it gives none), and why.
-type letterboxdUnmatchedJSON struct {
-	Name   string  `json:"name"`
-	Year   *int    `json:"year"`
-	Link   *string `json:"link"`
-	Reason string  `json:"reason"`
-}
-
 func newLetterboxdImportJSON(status *letterboxd.Status) *letterboxdImportJSON {
 	if status == nil {
 		return nil
@@ -284,16 +273,8 @@ func newLetterboxdImportJSON(status *letterboxd.Status) *letterboxdImportJSON {
 		Problem: optional(status.Problem), StartedAt: status.StartedAt.UTC().Truncate(time.Second), EndedAt: utcSeconds(status.EndedAt),
 		Movies: status.Movies, Searched: status.Searched, UnmatchedCount: status.UnmatchedCount,
 		Added: letterboxdAddedJSON{Played: status.Played, Watchlist: status.Watchlist, Ratings: status.Ratings,
-			Favorites: status.Favorites},
-		Unmatched: make([]letterboxdUnmatchedJSON, 0, len(status.Unmatched))}
+			Favorites: status.Favorites}}
 	result.User.ID, result.User.Name = status.User.String(), status.UserName
 	result.StartedBy.ID, result.StartedBy.Name = status.StartedBy.String(), status.StartedByName
-	for _, u := range status.Unmatched {
-		entry := letterboxdUnmatchedJSON{Name: u.Name, Link: optional(u.Link), Reason: u.Reason}
-		if u.Year > 0 {
-			entry.Year = &u.Year
-		}
-		result.Unmatched = append(result.Unmatched, entry)
-	}
 	return result
 }

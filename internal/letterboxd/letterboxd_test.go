@@ -16,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
@@ -125,6 +126,7 @@ type harness struct {
 	titles *fakeTitles
 	data   *userdata.Store
 	lists  *watchlist.Store
+	links  *importlinks.Store
 	user   accounts.User
 }
 
@@ -140,13 +142,15 @@ func newHarness(t *testing.T) harness {
 	lib := library.New(pool, addons.New(pool, client), client, logger, store.Settings)
 	titles := &fakeTitles{Service: lib, searches: map[string]int{}}
 	data, lists := userdata.New(pool), watchlist.New(pool)
-	s := New(Options{Titles: titles, UserData: data, Watchlist: lists, Logger: logger})
+	links := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: titles, UserData: data,
+		Watchlist: lists, Logger: logger})
+	s := New(Options{Titles: titles, UserData: data, Watchlist: lists, Logger: logger, Links: links})
 	t.Cleanup(s.Close)
 	user, err := store.CreateUser(t.Context(), accounts.NewUser{Name: "mira", Password: "correct horse"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return harness{Service: s, titles: titles, data: data, lists: lists, user: user}
+	return harness{Service: s, titles: titles, data: data, lists: lists, links: links, user: user}
 }
 
 // imported imports export with choice into the user's account, and waits
@@ -219,7 +223,8 @@ func noon(day string) time.Time {
 // diary's when ratings.csv lacks the movie, and a rating Polyfin has
 // stays; the watchlist goes to the Watchlist until started; the movies
 // liked become favorites only with the switch on; the movies not found are
-// listed with why and their link; and importing again adds nothing.
+// kept with why, by their link, else their name and year, with what the
+// import would have brought of them; and importing again adds nothing.
 func TestImport(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -241,18 +246,31 @@ func TestImport(t *testing.T) {
 			t.Errorf("%s searched %d times", name, got)
 		}
 	}
-	want := []Unmatched{
-		{Name: "Twin Rivers", Year: 2014, Link: "https://boxd.it/aaa5", Reason: ReasonAmbiguous},
-		{Name: "Unknown Shore", Year: 2001, Link: "https://boxd.it/aaa6", Reason: ReasonNotFound},
-		// Its link is not a web address: it is not shown.
-		{Name: "Broken Compass", Year: 1990, Reason: ReasonSearchFailed},
+	if first.UnmatchedCount != 3 {
+		t.Errorf("not found: %d", first.UnmatchedCount)
 	}
-	if first.UnmatchedCount != len(want) || len(first.Unmatched) != len(want) {
-		t.Fatalf("unmatched: %+v", first.Unmatched)
+	rows, err := h.links.List(t.Context(), h.user.ID, linksSource)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for i := range want {
-		if first.Unmatched[i] != want[i] {
-			t.Errorf("unmatched %d: %+v, want %+v", i, first.Unmatched[i], want[i])
+	want := []importlinks.Entry{
+		// Its link is not a web address: its name and year name it.
+		{Key: "name:broken compass:1990", Label: importlinks.Label{Kind: importlinks.KindMovie, Name: "Broken Compass", Year: 1990},
+			Reason: ReasonSearchFailed, Played: true, PlayedAt: new(noon("2021-07-11")), Plays: 1},
+		{Key: "https://boxd.it/aaa5", Label: importlinks.Label{Kind: importlinks.KindMovie, Name: "Twin Rivers", Year: 2014},
+			Reason: ReasonAmbiguous, Played: true, PlayedAt: new(noon("2021-07-09")), Plays: 1},
+		{Key: "https://boxd.it/aaa6", Label: importlinks.Label{Kind: importlinks.KindMovie, Name: "Unknown Shore", Year: 2001},
+			Reason: ReasonNotFound, Played: true, PlayedAt: new(noon("2021-07-10")), Plays: 1},
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("kept: %+v", rows)
+	}
+	for i, w := range want {
+		got := rows[i]
+		if got.Key != w.Key || got.Label != w.Label || got.Reason != w.Reason || got.Played != w.Played ||
+			got.PlayedAt == nil || !got.PlayedAt.Equal(*w.PlayedAt) || got.Plays != w.Plays || got.Rating != nil ||
+			got.Watchlist != "" || got.Link != nil {
+			t.Errorf("kept %d: %+v, want %+v", i, got, w)
 		}
 	}
 
@@ -314,6 +332,67 @@ func TestImport(t *testing.T) {
 	}
 	if listed, err := h.lists.Titles(t.Context(), h.user.ID); err != nil || len(listed) != 0 {
 		t.Errorf("watchlist once started: %v %v", listed, err)
+	}
+}
+
+// linkedExport is an export of Unknown Shore, which the addons do not
+// know, watched on days, the last rated 4 stars, and of Quiet Harbour.
+func linkedExport(t *testing.T, days ...string) []byte {
+	t.Helper()
+	diary := "Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date\n"
+	for i, day := range days {
+		rating := ""
+		if i == len(days)-1 {
+			rating = "4"
+		}
+		diary += fmt.Sprintf("%s,Unknown Shore,2001,https://boxd.it/d%d,%s,,,%s\n", day, i, rating, day)
+	}
+	return exportZip(t, map[string]string{
+		"watched.csv": "Date,Name,Year,Letterboxd URI\n2021-03-04,Unknown Shore,2001,https://boxd.it/aaa6\n" +
+			"2022-05-06,Quiet Harbour,1999,https://boxd.it/aaa2\n",
+		"diary.csv": diary,
+	})
+}
+
+// A movie not found, linked by hand to an IMDb title, is that title at
+// once: played at its latest date, as many times as the export logs it,
+// rated. The next import of an export holding it does not search it: it
+// is the title of its link, played again, and not counted as not found,
+// while it stays listed with its link.
+func TestLinkedMovie(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	first := h.imported(t, linkedExport(t, "2021-03-04", "2023-06-10"), Choice{Ratings: true})
+	if first.UnmatchedCount != 1 || first.Played != 1 || h.titles.searched("Unknown Shore") != 1 {
+		t.Fatalf("first import: %+v", first)
+	}
+	rows, err := h.links.List(t.Context(), h.user.ID, linksSource)
+	if err != nil || len(rows) != 1 || rows[0].Key != "https://boxd.it/aaa6" || rows[0].Plays != 2 || rows[0].Rating == nil ||
+		*rows[0].Rating != 8 {
+		t.Fatalf("kept: %+v %v", rows, err)
+	}
+
+	link, err := h.links.Link(t.Context(), h.user.ID, h.user.ID, linksSource, "https://boxd.it/aaa6", "tt7100009")
+	if err != nil || link.Kind != importlinks.KindMovie || link.IMDb != "tt7100009" {
+		t.Fatalf("link: %+v %v", link, err)
+	}
+	shore := h.dataOf(t, "tt7100009")["tt7100009"]
+	if !shore.Played || shore.PlayCount != 2 || shore.LastPlayed == nil || !shore.LastPlayed.Equal(noon("2023-06-10")) ||
+		shore.Rating == nil || *shore.Rating != 8 {
+		t.Errorf("Unknown Shore, linked: %+v", shore)
+	}
+
+	again := h.imported(t, linkedExport(t, "2021-03-04", "2023-06-10", "2024-02-03"), Choice{Ratings: true})
+	if again.UnmatchedCount != 0 || again.Searched != 2 || h.titles.searched("Unknown Shore") != 1 {
+		t.Errorf("the next import: %+v, Unknown Shore searched %d times", again, h.titles.searched("Unknown Shore"))
+	}
+	shore = h.dataOf(t, "tt7100009")["tt7100009"]
+	if shore.PlayCount != 3 || shore.LastPlayed == nil || !shore.LastPlayed.Equal(noon("2024-02-03")) {
+		t.Errorf("Unknown Shore, imported again: %+v", shore)
+	}
+	rows, err = h.links.List(t.Context(), h.user.ID, linksSource)
+	if err != nil || len(rows) != 1 || rows[0].Link == nil || rows[0].Link.IMDb != "tt7100009" {
+		t.Errorf("kept after the next import: %+v %v", rows, err)
 	}
 }
 
