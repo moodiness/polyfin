@@ -98,8 +98,8 @@ export function UsedByPicker({
         ]}
       />
       {value.mode === 'listed' && (
-        <div className="flex flex-col gap-6 rounded-row bg-s1 px-[1.875rem] py-6 max-md:px-5 max-md:py-5">
-          <div className="grid gap-6 sm:grid-cols-2">
+        <div className="flex flex-col gap-4 rounded-row bg-s1 px-4 py-3.5">
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             <fieldset className="flex min-w-0 flex-col gap-2" disabled={disabled}>
               <legend className="mb-3 text-h3 text-ink">{text.groups}</legend>
               {groups.length === 0 && <p className="text-small text-ink-3">{text.noGroups}</p>}

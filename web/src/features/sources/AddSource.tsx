@@ -66,8 +66,8 @@ export function AddSourceModal({
 
   return (
     <Modal open={open} onClose={onClose} title={text.title} width={720}>
-      <div key={round} className="flex flex-col gap-7 p-5">
-        <div className="flex flex-col gap-3">
+      <div key={round} className="flex flex-col gap-5 p-5">
+        <div className="flex flex-col gap-2">
           <p aria-hidden="true" className="text-h3 text-ink">
             {text.kind}
           </p>
@@ -176,7 +176,7 @@ function InstallForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <p className="text-small text-ink-3">{help}</p>
       <Field
         label={text.manifestUrl}
