@@ -39,7 +39,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        'inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2.5 text-micro leading-none font-semibold whitespace-nowrap',
+        'inline-flex h-5.5 shrink-0 items-center gap-1 rounded-full px-2.5 text-micro leading-none font-semibold whitespace-nowrap',
         Glyph && 'pl-2',
         badgeTones[tone],
         className,
