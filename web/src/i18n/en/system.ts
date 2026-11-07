@@ -312,6 +312,8 @@ const system = {
       lastSuccess: 'Last answer',
       lastFailure: 'Last failure',
       responseTime: 'Response time',
+      /** The term of `requests` in an addon's details, for screen readers. */
+      requestsTerm: 'Requests',
       requests: (count: number, failures: number) =>
         `${count} ${count === 1 ? 'request' : 'requests'}, ${failures} failed`,
       check: 'Check',
