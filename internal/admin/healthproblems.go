@@ -91,6 +91,9 @@ const (
 	problemTorrentUDP     = "torrent_udp"
 	problemTorrentStart   = "torrent_start"
 	problemTorrentStopped = "torrent_stopped"
+	// A host answers the same error file instead of the files asked, since
+	// At: Host names it, by name only (see source.Cache.ErrorFiles).
+	problemHostErrorFile = "host_error_file"
 	// Every metadata addon of the server has a language: Name and To are
 	// the first one's, whose Language of its descriptions should be None.
 	problemMetadataLanguages = "metadata_languages"
@@ -139,7 +142,8 @@ const (
 // or for the NVIDIA driver version NVENC needs, with Failure, the
 // failure's code, for an addon or a local folder, or why a local folder
 // is not watched, and Share, the kind of network share a folder is
-// ("smb", "webdav"); Host for paused thumbnails; Address
+// ("smb", "webdav"); Host for paused thumbnails, and with At for a host
+// answering an error file since then; Address
 // for an address that sends forwarded headers without being a known
 // proxy, or for a container's address discovery announces; Port for the
 // UDP port discovery cannot listen on, or the TCP port HTTPS cannot; Task,
@@ -423,6 +427,13 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		for _, paused := range h.Health.Thumbnails.Status().Paused {
 			p := warning("thumbnails:"+paused.Host, problemThumbnailsPaused, "thumbnails")
 			p.Host, p.Transient = paused.Host, true
+			add(p)
+		}
+	}
+	if h.Health.Cache != nil {
+		for _, e := range h.Health.Cache.ErrorFiles() {
+			p := warning("host_error_file:"+e.Host, problemHostErrorFile, "cache")
+			p.Host, p.At = e.Host, &e.Since
 			add(p)
 		}
 	}
@@ -997,6 +1008,14 @@ func (p healthProblemJSON) text(language string) string {
 			"Un torrent si è fermato durante la riproduzione alle %s: %s. Nulla è stato inviato per altra via. Verifica che il percorso resti raggiungibile; la prossima riproduzione riavvia il torrent.",
 			"Um torrent parou durante a reprodução às %s: %s. Nada foi enviado por outro caminho. Verifique se a rota continua acessível; a próxima reprodução inicia o torrent de novo."},
 			p.At.Local().Format("15:04"), why.In(language))
+	case problemHostErrorFile:
+		return say(i18n.Text{"The host %s answers an error file instead of the videos, since %s.",
+			"L’hôte %s répond par un fichier d’erreur au lieu des vidéos, depuis %s.",
+			"Der Host %s liefert seit %s eine Fehlerdatei statt der Videos.",
+			"El host %s responde con un archivo de error en lugar de los vídeos, desde las %s.",
+			"L’host %s risponde con un file di errore invece dei video, dalle %s.",
+			"O host %s responde com um arquivo de erro em vez dos vídeos, desde as %s."},
+			p.Host, p.At.Local().Format("15:04"))
 	case problemDLNAPort:
 		return say(i18n.Text{"Polyfin cannot listen on UDP port %d, so DLNA devices on the local network do not find it by themselves. " +
 			"Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.",

@@ -173,23 +173,32 @@ type versionSourceExplainedJSON struct {
 }
 
 // versionStreamJSON is a stream an addon listed and what became of it;
-// version is empty for a stream with nothing to play.
+// version is empty for a stream with nothing to play. HostErrorFile is the
+// error file its host answers instead of the videos now, nil when none.
 type versionStreamJSON struct {
-	Name      string            `json:"name"`
-	Filename  string            `json:"filename"`
-	Size      int64             `json:"size"`
-	Torrent   bool              `json:"torrent"`
-	Version   string            `json:"version"`
-	Step      string            `json:"step"`
-	Rule      string            `json:"rule"`
-	Detail    string            `json:"detail"`
-	Place     int               `json:"place"`
-	Pinned    bool              `json:"pinned"`
-	Unstarted bool              `json:"unstarted"`
-	Block     *versionBlockJSON `json:"block"`
-	Labels    versionLabelsJSON `json:"labels"`
-	Facts     versionFactsJSON  `json:"facts"`
-	Analyzed  bool              `json:"analyzed"`
+	Name          string             `json:"name"`
+	Filename      string             `json:"filename"`
+	Size          int64              `json:"size"`
+	Torrent       bool               `json:"torrent"`
+	Version       string             `json:"version"`
+	Step          string             `json:"step"`
+	Rule          string             `json:"rule"`
+	Detail        string             `json:"detail"`
+	Place         int                `json:"place"`
+	Pinned        bool               `json:"pinned"`
+	Unstarted     bool               `json:"unstarted"`
+	Block         *versionBlockJSON  `json:"block"`
+	Labels        versionLabelsJSON  `json:"labels"`
+	Facts         versionFactsJSON   `json:"facts"`
+	Analyzed      bool               `json:"analyzed"`
+	HostErrorFile *hostErrorFileJSON `json:"hostErrorFile"`
+}
+
+// hostErrorFileJSON is a host answering an error file instead of the
+// videos, by name only, and since when.
+type hostErrorFileJSON struct {
+	Host  string    `json:"host"`
+	Since time.Time `json:"since"`
 }
 
 // versionLabelsJSON is what the stream's labels tell: its height, video
@@ -360,6 +369,9 @@ func (h *handler) titleVersions(w http.ResponseWriter, r *http.Request) {
 			if stream.Block != nil {
 				block := h.newVersionBlockJSON(r.Context(), *stream.Block, names)
 				listed.Block = &block
+			}
+			if e := stream.ErrorFile; e != nil {
+				listed.HostErrorFile = &hostErrorFileJSON{Host: e.Host, Since: e.Since}
 			}
 			streams = append(streams, listed)
 		}
