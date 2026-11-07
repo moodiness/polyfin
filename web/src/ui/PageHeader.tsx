@@ -5,9 +5,9 @@ import { Count } from './Badge'
 import { cx } from './cx'
 
 /**
- * The top of a page: the title (48 px, 36 on a phone; 56 for a greeting), a lede of one or two
- * sentences, the page's main actions on the right, and the sub-area words under it all (`nav`,
- * a Tabs). `back` adds a link above the title for detail pages.
+ * The top of a page: the title (34 px, 29 in Compact, 28 on a phone; 40 for a greeting), a lede
+ * of one or two sentences, the page's main actions on the right, and the sub-area words under it
+ * all (`nav`, a Tabs). `back` adds a link above the title for detail pages.
  */
 export function PageHeader({
   title,
@@ -35,26 +35,23 @@ export function PageHeader({
   greeting?: boolean
   className?: string
 }) {
-  const titleClass = cx(
-    'min-w-0 hyphenate text-ink',
-    greeting ? 'text-display max-md:text-[2.25rem]' : 'text-h1 max-md:text-[2.25rem]',
-  )
+  const titleClass = cx('min-w-0 hyphenate text-ink', greeting ? 'text-display' : 'text-h1')
   return (
-    <header className={cx('mb-12 max-md:mb-8', className)}>
+    <header className={cx('mb-7 max-md:mb-6', className)}>
       {back && (
         <Link
           to={back.to}
-          className="group focus-lit mb-3 -ml-3 inline-flex items-center gap-2 rounded-control px-3 py-1.5 text-small font-medium text-ink-2 hover:bg-s1 hover:text-ink"
+          className="group focus-lit mb-2 -ml-2.5 inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 text-small font-medium text-ink-2 hover:bg-s1 hover:text-ink"
         >
           <ArrowLeftIcon
-            size="1.125rem"
+            size="1rem"
             aria-hidden="true"
             className="transition-transform duration-300 ease-nuit group-hover:-translate-x-0.5"
           />
           {back.label}
         </Link>
       )}
-      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           {titleAside ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -68,9 +65,7 @@ export function PageHeader({
             <p
               className={cx(
                 'max-w-[62ch] text-ink-2',
-                greeting
-                  ? 'mt-2 text-[1.4375rem] max-md:text-[1.1875rem]'
-                  : 'mt-2.5 text-lead max-md:text-[1.09375rem]',
+                greeting ? 'mt-1.5 text-[1.1875rem] max-md:text-[1.0625rem]' : 'mt-1.5 text-lead',
               )}
             >
               {lede}
@@ -79,17 +74,17 @@ export function PageHeader({
         </div>
         {/* No wider than the page, so that a long row of actions wraps on a phone. */}
         {actions && (
-          <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">{actions}</div>
+          <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>
         )}
       </div>
-      {nav !== undefined && <div className="mt-[1.125rem] max-md:mt-3.5">{nav}</div>}
+      {nav !== undefined && <div className="mt-3">{nav}</div>}
     </header>
   )
 }
 
 /**
- * A shelf of a page: its title (27 px) with an optional Count, an aside on the right (a TextLink
- * such as "Open the log"), then the content. Shelves are 64 px apart inside PageLayout.
+ * A shelf of a page: its title (24 px) with an optional Count, an aside on the right (a TextLink
+ * such as "Open the log"), then the content. Shelves are 40 px apart inside PageLayout.
  */
 export function Block({
   title,
@@ -109,8 +104,8 @@ export function Block({
   const id = useId()
   return (
     <section aria-labelledby={id} className={className}>
-      <div className="mb-[1.125rem] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 max-md:mb-3.5">
-        <h2 id={id} className="flex items-center gap-3 text-h2 text-ink">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+        <h2 id={id} className="flex items-center gap-2.5 text-h2 text-ink">
           {title}
           {count !== undefined && <Count>{count}</Count>}
         </h2>
@@ -143,14 +138,14 @@ export function TextLink({
     <Link
       to={to}
       className={cx(
-        'group focus-lit inline-flex items-center gap-1.5 rounded-[0.75rem] px-3 py-1.5 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
+        'group focus-lit inline-flex items-center gap-1 rounded-[0.5rem] px-2.5 py-1 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
         className,
       )}
     >
       {children}
       {arrow && (
         <CaretRightIcon
-          size="1.125rem"
+          size="1rem"
           aria-hidden="true"
           className="transition-transform duration-300 ease-nuit group-hover:translate-x-0.5"
         />

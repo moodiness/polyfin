@@ -3,21 +3,21 @@ import { cx, Field } from '@/ui'
 
 /**
  * A titled group of settings in a section, like « Passer l'intro et le générique »: its rows,
- * `SettingRow`s of `@/ui` or `PlainRow`s, go 8 px apart.
+ * `SettingRow`s of `@/ui` or `PlainRow`s, go 6 px apart.
  */
 export function SettingsGroup({ title, children }: { title?: string; children: ReactNode }) {
   const id = useId()
   return (
     <section
       aria-labelledby={title === undefined ? undefined : id}
-      className="mt-[3.25rem] first:mt-10 max-md:mt-9 max-md:first:mt-7"
+      className="mt-7 first:mt-5 max-md:mt-6 max-md:first:mt-4"
     >
       {title !== undefined && (
-        <h3 id={id} className="mb-4 text-group text-ink max-md:mb-3 max-md:text-[1.3125rem]">
+        <h3 id={id} className="mb-2 text-group text-ink">
           {title}
         </h3>
       )}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">{children}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">{children}</div>
     </section>
   )
 }
@@ -40,7 +40,7 @@ export function PlainRow({
     <div
       id={anchor}
       className={cx(
-        'min-w-0 scroll-mt-32 rounded-row bg-s1 px-[1.875rem] py-6 max-md:px-5 max-md:py-5',
+        'min-w-0 scroll-mt-32 rounded-row bg-s1 px-4 py-3',
         'transition-[box-shadow] duration-350 ease-nuit data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
         className,
       )}
@@ -69,7 +69,7 @@ export function ListRows({
       id={anchor}
       className="min-w-0 scroll-mt-32 rounded-row transition-[box-shadow] duration-350 ease-nuit data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45"
     >
-      <p className="mb-4 max-w-[66ch] text-body text-ink-2 max-md:text-[1.03125rem]">{help}</p>
+      <p className="mb-2.5 max-w-[72ch] text-small text-ink-3">{help}</p>
       {children}
     </div>
   )
@@ -102,7 +102,7 @@ export function FieldRow({
         error={error}
         aside={aside}
         helpFirst
-        className="[&_label]:text-h3 [&_label]:text-ink max-md:[&_label]:text-[1.125rem]"
+        className="[&_label]:text-h3 [&_label]:text-ink"
       >
         {children}
       </Field>
@@ -113,7 +113,7 @@ export function FieldRow({
 /** Plain text in a tile (a setup step), outside any control. */
 export function TextRow({ anchor, children }: { anchor: string; children: ReactNode }) {
   return (
-    <PlainRow anchor={anchor} className="text-body text-ink-2 max-md:text-[1.03125rem]">
+    <PlainRow anchor={anchor} className="text-body text-ink-2">
       {children}
     </PlainRow>
   )

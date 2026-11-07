@@ -28,12 +28,12 @@ export type PageLayoutProps = (
   /** The title at the display size of a greeting ("Good afternoon, Morgan"), for Home. */
   greeting?: boolean
   /**
-   * A SectionNav: the page becomes a split, with the section list in a 300 px column and the
+   * A SectionNav: the page becomes a split, with the section list in a 240 px column and the
    * content beside it. The unsaved dock of a SaveBar docks under the list. On a phone the list
    * becomes a strip that scrolls sideways, and the dock a bar along the bottom.
    */
   nav?: ReactNode
-  /** The blocks of the page (Block, Panel, RowList…), 64 px apart, rising one after the other. */
+  /** The blocks of the page (Block, Panel, RowList…), 40 px apart, rising one after the other. */
   children: ReactNode
   className?: string
 }
@@ -51,13 +51,13 @@ export const SubAreaContext = createContext<{
 /** Set inside a PageLayout: a PageLayout nested in it is a part of the page, not the page. */
 const InsidePage = createContext(false)
 
-/** 64 px between the blocks of a page (44 on a phone), none above the first. */
+/** 40 px between the blocks of a page (32 on a phone), none above the first. */
 const blockSpacing = '[&>*+*]:mt-block'
 
 /**
  * The frame of a page inside the shell: its head (the title, the lede, the actions, and the area's
  * sub-area words under them), then its blocks, rising with a fade one after the other. The shell
- * already sets the width (1280 px with 80 px margins, 56 under 1400 px and 20 on a phone) and the
+ * already sets the width (1440 px with 56 px margins, 40 under 1400 px and 20 on a phone) and the
  * space under the top row.
  *
  *   <PageLayout title={t.nav.health} lede={…} actions={<Button>…</Button>}>
@@ -100,7 +100,7 @@ export function PageLayout({
         <DockSlotContext value={dock}>
           <div className={cx('stagger', className)}>
             {header}
-            <div className="grid items-start gap-[4.5rem] md:grid-cols-[18.75rem_minmax(0,1fr)] max-xl:gap-12 max-lg:md:grid-cols-[14.5rem_minmax(0,1fr)] max-lg:gap-8 max-md:block">
+            <div className="grid items-start gap-10 md:grid-cols-[15rem_minmax(0,1fr)] max-xl:gap-8 max-lg:md:grid-cols-[13rem_minmax(0,1fr)] max-lg:gap-6 max-md:block">
               {/* As tall as the content beside it: the list stays in view while scrolling, and
                   the dock sits at the foot of the column, over the bottom of the screen. The list
                   sticks inside its own part, which ends above the dock's place, so at the end of

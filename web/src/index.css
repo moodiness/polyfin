@@ -76,63 +76,64 @@
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* An 8 px grid, in steps of 4. Sizes are in rem, so they follow the root's density (see
-     `html`): 4 px a step on a phone, 3.4 on a desktop. */
+     `html`): 4 px a step on a phone and in Large, 3.4 in Compact. */
   --spacing: 0.25rem;
 
   /*
-   * Type. The « Nuit » names hold the Salon steps: `h1` a page title (48), `h2` a shelf title
-   * (27), `h3` a row label (21), `lead` values and ledes (20), `body` (19), `control` buttons and
-   * fields (18), `small` help and secondary text (17), `micro` captions and times (15.5). Salon
-   * adds `display` for greetings (56), `group` for a group of rows (25) and `area` for the top
-   * row's words (24). Phone sizes are set in the base layer.
+   * Type, in design pixels at 16 px to the rem (Compact shows them at 85 %). The « Nuit » names
+   * hold the Salon steps: `h1` a page title (34), `h2` a section or shelf title (24), `h3` a row
+   * label or a setting's name (17.5), `lead` values and ledes (16.5), `body` (16.5), `control`
+   * buttons and fields (16.5), `small` help, captions and secondary text (15.5), `micro` times
+   * and counts (14). Salon adds `display` for greetings (40), `group` for a group of rows (18) and
+   * `area` for the top row's words (17). Phone sizes are set in the base layer.
    */
-  --text-display: 3.5rem;
-  --text-display--line-height: 1.08;
-  --text-display--letter-spacing: -0.018em;
+  --text-display: 2.5rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.016em;
   --text-display--font-weight: 650;
-  --text-h1: 3rem;
-  --text-h1--line-height: 1.08;
-  --text-h1--letter-spacing: -0.018em;
+  --text-h1: 2.125rem;
+  --text-h1--line-height: 1.12;
+  --text-h1--letter-spacing: -0.014em;
   --text-h1--font-weight: 650;
-  --text-h2: 1.6875rem;
-  --text-h2--line-height: 1.2;
-  --text-h2--letter-spacing: -0.01em;
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 1.25;
+  --text-h2--letter-spacing: -0.008em;
   --text-h2--font-weight: 650;
-  --text-group: 1.5625rem;
-  --text-group--line-height: 1.2;
-  --text-group--letter-spacing: -0.01em;
+  --text-group: 1.125rem;
+  --text-group--line-height: 1.3;
+  --text-group--letter-spacing: -0.003em;
   --text-group--font-weight: 650;
-  --text-area: 1.5rem;
-  --text-area--line-height: 1.25;
+  --text-area: 1.0625rem;
+  --text-area--line-height: 1.3;
   --text-area--font-weight: 600;
-  --text-h3: 1.3125rem;
+  --text-h3: 1.09375rem;
   --text-h3--line-height: 1.3;
   --text-h3--letter-spacing: -0.003em;
   --text-h3--font-weight: 600;
-  --text-lead: 1.25rem;
-  --text-lead--line-height: 1.5;
-  --text-body: 1.1875rem;
+  --text-lead: 1.03125rem;
+  --text-lead--line-height: 1.45;
+  --text-body: 1.03125rem;
   --text-body--line-height: 1.45;
-  --text-control: 1.125rem;
+  --text-control: 1.03125rem;
   --text-control--line-height: 1.3;
-  --text-small: 1.0625rem;
-  --text-small--line-height: 1.55;
-  --text-micro: 0.96875rem;
-  --text-micro--line-height: 1.45;
+  --text-small: 0.96875rem;
+  --text-small--line-height: 1.42;
+  --text-micro: 0.875rem;
+  --text-micro--line-height: 1.4;
 
-  /* Radii: containers are softer, controls tighter. Art tiles, panels, rows, buttons, the
-     choices of a picker, the 64 px field wells, checkboxes. */
-  --radius-tile: 2.125rem;
-  --radius-panel: 1.75rem;
-  --radius-row: 1.5rem;
-  --radius-control: 1.0625rem;
-  --radius-choice: 1.125rem;
-  --radius-field: 1.25rem;
-  --radius-check: 0.5rem;
+  /* Radii: containers are softer, controls tighter. Art tiles, panels, rows, buttons, side by
+     side choices, field wells, checkboxes. */
+  --radius-tile: 1.375rem;
+  --radius-panel: 1.125rem;
+  --radius-row: 0.875rem;
+  --radius-control: 0.625rem;
+  --radius-choice: 0.625rem;
+  --radius-field: 0.625rem;
+  --radius-check: 0.3125rem;
 
   /* Spacing beyond the grid: between page blocks. The top row scrolls away with the page, so
      nothing is offset under it (`topbar` is 0). */
-  --spacing-block: 4rem;
+  --spacing-block: 2.5rem;
   --spacing-topbar: 0px;
   /* The page's frame (`max-w-page`), margins included: in px, so a page keeps its width at
      every density and a denser desktop shows more of it. */
@@ -426,32 +427,31 @@
   /* Phone and narrow steps of the type scale, and of the top row's words. */
   :root {
     @media (max-width: 87.5rem) {
-      --text-area: 1.375rem;
+      --text-area: 1rem;
     }
     @media (max-width: 68.75rem) {
-      --text-area: 1.25rem;
+      --text-area: 0.9375rem;
     }
     @media (max-width: 47.5rem) {
-      --text-display: 2.25rem;
-      --text-h1: 2.125rem;
-      --text-h2: 1.4375rem;
-      --text-group: 1.3125rem;
-      --text-h3: 1.125rem;
-      --text-lead: 1.09375rem;
-      --text-body: 1.0625rem;
-      --text-control: 1.03125rem;
-      --text-small: 1rem;
-      --text-micro: 0.9375rem;
-      --spacing-block: 2.75rem;
+      --text-display: 2rem;
+      --text-h1: 1.75rem;
+      --text-h2: 1.3125rem;
+      --text-group: 1.0625rem;
+      --text-h3: 1rem;
+      --text-lead: 1rem;
+      --text-body: 1rem;
+      --text-small: 0.875rem;
+      --text-micro: 0.8125rem;
+      --spacing-block: 2rem;
     }
   }
 
   /*
-   * The density: every size is in rem, so this one knob sets them all. A phone keeps 16 px to the
-   * rem (fields stay at 16 px or more, so iOS does not zoom on focus); from 48rem up the app is
-   * 15 % denser, while the page keeps its 1280 px width. That is the Compact interface size; Large,
-   * a choice of My account, keeps 16 px on every screen (`data-interface-size`, see
-   * interfaceSize.ts).
+   * The density: every size is in rem, so this one knob sets them all. Compact and Large are one
+   * layout: the tokens and components hold the dense sizes, and the knob scales it. A phone keeps
+   * 16 px to the rem (fields stay at 16 px or more, so iOS does not zoom on focus); from 48rem up,
+   * Compact is 85 % of that, and Large, a choice of My account, keeps 16 px, the same layout
+   * 18 % bigger (`data-interface-size`, see interfaceSize.ts). The page's frame stays 1440 px.
    */
   html {
     font-size: 100%;

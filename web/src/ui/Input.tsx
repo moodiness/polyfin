@@ -18,9 +18,10 @@ import { IconButton } from './Button'
 export const fieldBox = 'well'
 
 /**
- * The sizes of a well. `md` is the big 64 px well (60 on a phone), the default; `sm` 52 px for
- * filter bars and toolbars; `compact` 44 px with 17 px text, for compact rows, table cells and
- * dense filter bars. All light up the same way.
+ * The sizes of a well. `md` is a 38 px well (32 in Compact, 44 on a phone), the default, for
+ * forms and setting rows; `sm` 34 px for filter bars and toolbars; `compact` 32 px, for compact
+ * rows, table cells and dense filter bars. All light up the same way, and keep 16 px words on a
+ * phone.
  */
 export type WellSize = 'md' | 'sm' | 'compact'
 
@@ -43,33 +44,33 @@ export const wellSizes: Record<
   }
 > = {
   md: {
-    box: 'h-16 max-sm:h-15',
-    min: 'min-h-16 max-sm:min-h-15',
-    text: 'px-5.5 text-[1.3125rem] font-medium max-sm:text-[1.1875rem]',
-    mono: 'px-5 font-mono text-lead',
-    lead: 'ml-5',
-    icon: 22,
-    suffix: 'pr-5 text-lead',
-    button: 'md',
+    box: 'h-9.5 max-sm:h-11',
+    min: 'min-h-9.5 max-sm:min-h-11',
+    text: 'px-3 text-control font-medium',
+    mono: 'px-3 font-mono text-small max-sm:text-base',
+    lead: 'ml-3',
+    icon: 18,
+    suffix: 'pr-3 text-control',
+    button: 'sm',
   },
   sm: {
-    box: 'h-13',
-    min: 'min-h-13',
-    text: 'px-4.5 text-control',
-    mono: 'px-4.5 font-mono text-small',
-    lead: 'ml-4',
-    icon: 20,
-    suffix: 'pr-4.5 text-control',
+    box: 'h-8.5 max-sm:h-10',
+    min: 'min-h-8.5 max-sm:min-h-10',
+    text: 'px-2.5 text-control',
+    mono: 'px-2.5 font-mono text-small max-sm:text-base',
+    lead: 'ml-2.5',
+    icon: 17,
+    suffix: 'pr-2.5 text-control',
     button: 'sm',
   },
   compact: {
-    box: 'h-11 [--well-radius:0.875rem]',
-    min: 'min-h-11 [--well-radius:0.875rem]',
-    text: 'px-3.5 text-small',
-    mono: 'px-3.5 font-mono text-micro',
-    lead: 'ml-3.5',
-    icon: 18,
-    suffix: 'pr-3.5 text-small',
+    box: 'h-8 [--well-radius:0.5rem]',
+    min: 'min-h-8 [--well-radius:0.5rem]',
+    text: 'px-2.5 text-small max-sm:text-base',
+    mono: 'px-2.5 font-mono text-micro max-sm:text-base',
+    lead: 'ml-2.5',
+    icon: 16,
+    suffix: 'pr-2.5 text-small',
     button: 'sm',
   },
 }
@@ -106,7 +107,7 @@ export type TextInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size' 
   invalid?: boolean
   /** For `type="password"`: adds an eye that shows what is typed (`aria-pressed`). */
   revealable?: boolean
-  /** The well's size; see WellSize. Defaults to the 64 px `md`. */
+  /** The well's size; see WellSize. Defaults to the 38 px `md`. */
   size?: WellSize
   /** Mono with tabular figures, for codes, paths and addresses. */
   mono?: boolean
@@ -169,7 +170,7 @@ export function TextInput({
           pressed={shown}
           aria-controls={controlProps.id}
           onClick={() => setShown(!shown)}
-          className={size === 'md' ? 'mr-2.5' : 'mr-1'}
+          className="mr-0.5"
         />
       )}
       {end}
@@ -188,9 +189,9 @@ export type NumberInputProps = Omit<
   /** A unit at the end: "%", "min", "h". */
   suffix?: ReactNode
   invalid?: boolean
-  /** The well's size; see WellSize. Defaults to the 64 px `md`. */
+  /** The well's size; see WellSize. Defaults to the 38 px `md`. */
   size?: WellSize
-  /** Classes of the outer box; it is 160 px wide by default (120 for `compact`). */
+  /** Classes of the outer box; it is 128 px wide by default (96 for `compact`). */
   className?: string
 }
 
@@ -212,7 +213,7 @@ export function NumberInput({
   const controlProps = useControlProps(id, ownDescribedBy, invalid)
   const well = wellSizes[size]
   return (
-    <div className={cx(fieldBox, well.box, size === 'compact' ? 'w-30' : 'w-40', className)}>
+    <div className={cx(fieldBox, well.box, size === 'compact' ? 'w-24' : 'w-32', className)}>
       <input
         type="number"
         inputMode="decimal"
@@ -267,7 +268,11 @@ export function Textarea({
           onChange?.(event)
           onValue?.(event.target.value)
         }}
-        className={cx(control, 'resize-y px-5.5 py-4', mono ? 'font-mono text-small' : 'text-body')}
+        className={cx(
+          control,
+          'resize-y px-3 py-2',
+          mono ? 'font-mono text-small max-sm:text-base' : 'text-body',
+        )}
         {...controlProps}
         {...rest}
       />

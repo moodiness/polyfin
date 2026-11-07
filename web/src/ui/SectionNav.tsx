@@ -37,9 +37,9 @@ export type SectionNavProps = {
 // phone, where the list is a strip, it stays on one line. The current section is filled, bold
 // and lit as a row, with a chevron; the one under the keyboard is lit as a row too.
 const linkClass = cx(
-  'group flex min-h-[2.875rem] shrink-0 items-center justify-between gap-2.5 rounded-[0.9375rem] px-4 py-2 text-[1.15625rem] leading-snug font-medium text-ink-2 focus-lit-row hover:bg-s1 hover:text-ink focus-visible:text-ink',
+  'group flex min-h-9 shrink-0 items-center justify-between gap-2 rounded-[0.5rem] px-3 py-1 text-control leading-snug font-medium text-ink-2 focus-lit-row hover:bg-s1 hover:text-ink focus-visible:text-ink',
   'aria-[current]:font-semibold aria-[current]:text-ink aria-[current]:lit-row',
-  'max-md:min-h-11 max-md:bg-s1 max-md:px-3.5 max-md:py-0 max-md:text-[1.03125rem] max-md:whitespace-nowrap',
+  'max-md:min-h-10 max-md:bg-s1 max-md:px-3 max-md:py-0 max-md:whitespace-nowrap',
 )
 
 /**
@@ -56,9 +56,9 @@ export function SectionNav({ label, items, current, search, className }: Section
 
   return (
     // On a phone the wrapper steps aside (`contents`), so that the strip sticks along the page.
-    <div className={cx('max-md:contents md:sticky md:top-8', className)}>
+    <div className={cx('max-md:contents md:sticky md:top-6', className)}>
       {search && (
-        <div className="mb-[1.125rem] max-md:mb-3.5">
+        <div className="mb-3">
           <TextInput
             type="search"
             size="sm"
@@ -82,15 +82,15 @@ export function SectionNav({ label, items, current, search, className }: Section
       >
         <div
           ref={row}
-          className="flex flex-col gap-0.5 max-md:scroll-fade max-md:scrollbar-none max-md:flex-row max-md:gap-1.5 max-md:overflow-x-auto max-md:px-5 max-md:py-2"
+          className="flex flex-col gap-0.5 max-md:scroll-fade max-md:scrollbar-none max-md:flex-row max-md:gap-1 max-md:overflow-x-auto max-md:px-5 max-md:py-2"
         >
           {items.map((item) => {
             const content = (
               <>
-                <span className="flex min-w-0 items-center gap-3">
+                <span className="flex min-w-0 items-center gap-2">
                   {item.icon && (
                     <item.icon
-                      size="1.25rem"
+                      size="1rem"
                       aria-hidden="true"
                       className="shrink-0 text-ink-3 max-md:hidden"
                     />
@@ -98,7 +98,7 @@ export function SectionNav({ label, items, current, search, className }: Section
                   {item.label}
                 </span>
                 <CaretRightIcon
-                  size="1.25rem"
+                  size="1rem"
                   aria-hidden="true"
                   className="shrink-0 opacity-0 group-aria-[current]:opacity-80 max-md:hidden"
                 />

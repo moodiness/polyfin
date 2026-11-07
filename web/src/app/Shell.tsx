@@ -33,10 +33,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         <main
           id="main"
           tabIndex={-1}
-          className={cx(
-            pageFrame,
-            'pt-[1.875rem] pb-[7.5rem] outline-none max-md:pt-4 max-md:pb-20',
-          )}
+          className={cx(pageFrame, 'pt-5 pb-16 outline-none max-md:pt-3 max-md:pb-20')}
         >
           {children}
         </main>

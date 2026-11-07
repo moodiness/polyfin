@@ -147,7 +147,7 @@ function useActiveInView(list: RefObject<HTMLElement | null>, activeId: string |
   }, [list, activeId])
 }
 
-const listboxClass = 'relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5'
+const listboxClass = 'relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5'
 
 /** One choice of a list. Pointer moves make it the active one; a press does not move the focus. */
 function ListOption({
@@ -170,7 +170,7 @@ function ListOption({
   disabled?: boolean
   /** A `lang` attribute, for an option written in another language. */
   lang?: string
-  /** A 44 px row with 17 px text, in the list of a compact field. */
+  /** A 32 px row with smaller words, in the list of a compact field. */
   compact?: boolean
   onActivate: () => void
   onChoose: () => void
@@ -193,8 +193,8 @@ function ListOption({
       className={cx(
         'flex cursor-pointer items-center gap-3 text-ink transition-[background-color,color] duration-300 ease-nuit select-none',
         compact
-          ? 'min-h-11 rounded-[0.875rem] px-3.5 py-1.5 text-small'
-          : 'min-h-[3.375rem] rounded-choice px-4 py-2 text-[1.15625rem]',
+          ? 'min-h-8 rounded-[0.5rem] px-2.5 py-1 text-small'
+          : 'min-h-9 rounded-choice px-3 py-1.5 text-control',
         'data-active:lit',
         checked && 'font-semibold',
         disabled && 'cursor-not-allowed opacity-45 active:bg-transparent',
@@ -203,7 +203,7 @@ function ListOption({
       <span className="min-w-0 flex-1 break-words">{children}</span>
       {checked && (
         <CheckIcon
-          size={rem(compact ? 18 : 22)}
+          size={rem(compact ? 15 : 17)}
           aria-hidden="true"
           className="shrink-0 text-link"
         />
@@ -236,8 +236,10 @@ export type SelectProps<T extends string | number> = {
   className?: string
   /** The choice shown wraps onto more lines, the box growing, rather than being cut. */
   wrap?: boolean
-  /** The well's size; see WellSize. Defaults to the 64 px `md`; `compact` lists have 44 px rows. */
+  /** The well's size; see WellSize. Defaults to the 38 px `md`; `compact` lists have 32 px rows. */
   size?: WellSize
+  /** Marks the button as a setting row's control, which ↑ ↓ move between (`SettingRow`). */
+  'data-setting-head'?: boolean
 }
 
 /**
@@ -262,6 +264,7 @@ export function Select<T extends string | number>({
   className,
   wrap,
   size = 'md',
+  'data-setting-head': settingHead,
 }: SelectProps<T>) {
   const well = wellSizes[size]
   // The search at the top of a long list: one step smaller than the field.
@@ -440,6 +443,7 @@ export function Select<T extends string | number>({
         aria-activedescendant={activeId}
         aria-label={ariaLabel}
         disabled={disabled}
+        data-setting-head={settingHead}
         {...controlProps}
         id={triggerId}
         onPointerDown={(event) => {
@@ -458,8 +462,8 @@ export function Select<T extends string | number>({
           control,
           well.text,
           'flex cursor-pointer items-center text-left',
-          size === 'compact' ? 'pr-10' : 'pr-14',
-          wrap && cx(well.min, size === 'compact' ? 'py-2.5' : 'py-4'),
+          size === 'compact' ? 'pr-8' : 'pr-9',
+          wrap && cx(well.min, 'py-1.5'),
         )}
       >
         <span
@@ -470,18 +474,18 @@ export function Select<T extends string | number>({
         </span>
       </button>
       <CaretDownIcon
-        size={rem(size === 'compact' ? 16 : 20)}
+        size={rem(size === 'compact' ? 14 : 16)}
         aria-hidden="true"
         className={cx(
           'pointer-events-none absolute text-ink-2 transition-transform duration-300 ease-nuit',
-          size === 'compact' ? 'right-3.5' : 'right-5',
+          size === 'compact' ? 'right-2.5' : 'right-3',
           open && 'rotate-180',
         )}
       />
       {open && (
         <ListPopover anchor={box} ref={popover} onDismiss={() => close(false)}>
           {withSearch && (
-            <div className={size === 'compact' ? 'px-1.5 pt-1.5' : 'px-2.5 pt-2.5'}>
+            <div className={size === 'compact' ? 'px-1 pt-1' : 'px-1.5 pt-1.5'}>
               <div className={cx(fieldBox, wellSizes[searchSize].box)}>
                 <MagnifyingGlassIcon
                   size={rem(wellSizes[searchSize].icon)}
@@ -519,7 +523,7 @@ export function Select<T extends string | number>({
             role="listbox"
             aria-labelledby={ariaLabel === undefined ? triggerId : undefined}
             aria-label={ariaLabel}
-            className={cx(listboxClass, size === 'compact' && 'p-1.5')}
+            className={cx(listboxClass, size === 'compact' && 'p-1')}
           >
             {shown.map((index) => (
               <ListOption
@@ -538,7 +542,7 @@ export function Select<T extends string | number>({
               </ListOption>
             ))}
             {shown.length === 0 && (
-              <p role="status" className="px-4 py-3 text-small text-ink-2">
+              <p role="status" className="px-3 py-2 text-small text-ink-2">
                 {t.ui.noMatch}
               </p>
             )}
@@ -669,7 +673,7 @@ export function SuggestInput({
             role="listbox"
             aria-labelledby={inputId}
             aria-label={inputId === undefined ? rest['aria-label'] : undefined}
-            className={cx(listboxClass, compact ? 'p-1.5' : 'p-2.5')}
+            className={cx(listboxClass, compact && 'p-1')}
           >
             {shown.map((suggestion, index) => (
               <ListOption
