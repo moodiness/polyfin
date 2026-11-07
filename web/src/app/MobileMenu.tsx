@@ -33,10 +33,10 @@ import { ProblemCount, topControl } from './shellParts'
 
 /** The rows of the menu's foot: the account's pages, the web player, the language, signing out. */
 const rowClass =
-  'focus-lit flex min-h-14 w-full cursor-pointer items-center gap-3.5 rounded-choice px-3 text-left text-[1.1875rem] text-ink hover:bg-s1 [--lift:1.012] disabled:cursor-not-allowed disabled:opacity-45'
+  'focus-lit flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-choice px-3 text-left text-lead text-ink hover:bg-s1 [--lift:1.012] disabled:cursor-not-allowed disabled:opacity-45'
 
 function RowIcon({ icon: Glyph }: { icon: Icon }) {
-  return <Glyph size="1.375rem" aria-hidden="true" className="shrink-0 text-ink-2" />
+  return <Glyph size="1.25rem" aria-hidden="true" className="shrink-0 text-ink-2" />
 }
 
 /** The pages under an area, as the menu lists them: Content's and System's, Settings' sections. */
@@ -57,9 +57,9 @@ function isCurrentPage(page: { to: string }, pathname: string): boolean {
 
 /**
  * The phone menu: the menu button of the top row and the full-screen room it opens. The account
- * at the top, then search, then the five areas as 32 px words, each with its pages as smaller
- * words, then My account, My sources, Quick Connect, the web player, the language and signing
- * out. A member's areas are their own pages, so their foot starts at the web player.
+ * at the top, then search, then the five areas as section-title words, each with its pages as
+ * smaller words, then My account, My sources, Quick Connect, the web player, the language and
+ * signing out. A member's areas are their own pages, so their foot starts at the web player.
  * `inPlace`: the web player opens in place, as the way back to it.
  */
 export function MobileMenu({
@@ -102,9 +102,9 @@ export function MobileMenu({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className={cx(topControl, 'size-12 justify-center')}
+        className={cx(topControl, 'size-11 justify-center')}
       >
-        <ListIcon size="1.375rem" aria-hidden="true" />
+        <ListIcon size="1.25rem" aria-hidden="true" />
       </button>
       <dialog
         ref={dialog}
@@ -120,12 +120,12 @@ export function MobileMenu({
         className="m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto overscroll-contain bg-bg bg-[radial-gradient(600px_400px_at_0%_0%,rgb(76_63_217/0.22),transparent_70%)] p-0 text-ink backdrop:bg-bg open:animate-fade"
       >
         {open && (
-          <div className="px-5 pt-[1.125rem] pb-10">
-            <div className="mb-4 flex h-[3.75rem] items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3.5">
+          <div className="px-4 pt-3 pb-8">
+            <div className="mb-3 flex h-14 items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <Avatar name={user.name} image={userImageUrl(user)} size="md" />
                 <div className="min-w-0">
-                  <p className="truncate text-[1.1875rem] font-semibold">{user.name}</p>
+                  <p className="truncate text-lead font-semibold">{user.name}</p>
                   <p className="text-micro text-ink-3">
                     {user.isAdministrator ? t.nav.administrator : t.nav.member}
                   </p>
@@ -136,9 +136,9 @@ export function MobileMenu({
                 aria-label={t.nav.closeMenu}
                 title={t.nav.closeMenu}
                 onClick={() => setOpen(false)}
-                className={cx(topControl, 'size-12 justify-center')}
+                className={cx(topControl, 'size-11 justify-center')}
               >
-                <XIcon size="1.375rem" aria-hidden="true" />
+                <XIcon size="1.25rem" aria-hidden="true" />
               </button>
             </div>
             <button
@@ -149,11 +149,11 @@ export function MobileMenu({
               }}
               className={cx(
                 topControl,
-                'mb-3.5 h-[3.25rem] w-full gap-3 px-5 text-control text-ink-3 [--lift:1.02]',
+                'mb-2.5 h-11 w-full gap-2.5 px-4 text-control text-ink-3 [--lift:1.02]',
               )}
             >
               <MagnifyingGlassIcon
-                size="1.375rem"
+                size="1.25rem"
                 aria-hidden="true"
                 className="shrink-0 text-ink-2"
               />
@@ -171,7 +171,7 @@ export function MobileMenu({
                 />
               ))}
             </nav>
-            <div className="mt-[1.125rem] flex flex-col pt-[1.125rem] shadow-[inset_0_1px_0] shadow-line-2">
+            <div className="mt-3 flex flex-col pt-3 shadow-[inset_0_1px_0] shadow-line-2">
               {user.isAdministrator &&
                 accountPages.map((page: NavPage) => (
                   <Link
@@ -205,7 +205,7 @@ export function MobileMenu({
                   )}
                 </a>
               )}
-              <div className="flex min-h-14 flex-wrap items-center gap-x-3.5 gap-y-2 px-3 py-1.5 text-[1.1875rem]">
+              <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-1 text-lead">
                 <RowIcon icon={GlobeIcon} />
                 <span className="mr-auto">{t.nav.language}</span>
                 <LanguageSwitch className="w-[11.5rem]" />
@@ -236,7 +236,7 @@ export function MobileMenu({
   )
 }
 
-/** An area as a 32 px word (lit while current), and its pages as smaller words under it. */
+/** An area as a section title's word (lit while current), and its pages as smaller words under it. */
 function Area({
   section,
   current,
@@ -250,26 +250,26 @@ function Area({
 }): ReactNode {
   const { t } = useI18n()
   return (
-    <div className="pt-2 pb-3.5">
+    <div className="pt-1 pb-2">
       <Link
         to={section.to}
         data-area
         aria-current={current ? 'page' : undefined}
-        className="focus-lit -mx-1.5 flex min-h-[3.75rem] items-center justify-between gap-3 rounded-[1.25rem] px-[1.125rem] text-[2rem] leading-tight font-[650] tracking-[-0.01em] text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.02] aria-[current=page]:lit"
+        className="focus-lit -mx-1 flex min-h-12 items-center justify-between gap-3 rounded-row px-3 text-h2 text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.02] aria-[current=page]:lit"
       >
         <span className="min-w-0 break-words">{section.label(t)}</span>
         {section.id === 'system' && (
-          <ProblemCount className="ml-0 h-auto rounded-[0.890625rem] px-2.5 py-1 text-[1rem]" />
+          <ProblemCount className="ml-0 h-auto rounded-full px-2 py-0.5 text-small" />
         )}
       </Link>
       {pages.length > 0 && (
-        <div className="flex flex-wrap gap-x-1.5 gap-y-1 px-1 pt-1.5">
+        <div className="flex flex-wrap gap-x-1 gap-y-0.5 px-0.5 pt-1">
           {pages.map((page) => (
             <Link
               key={page.to}
               to={page.to}
               aria-current={isCurrentPage(page, pathname) ? 'page' : undefined}
-              className="focus-lit rounded-[0.875rem] px-3 py-2 text-[1.125rem] text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.04] aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:underline aria-[current=page]:decoration-[3px] aria-[current=page]:underline-offset-[0.4375rem]"
+              className="focus-lit rounded-control px-2.5 py-2 text-control text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.04] aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:underline aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-[0.375rem]"
             >
               {page.label}
             </Link>
