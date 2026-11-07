@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { useI18n } from '@/i18n'
 import { cx } from './cx'
 import { describedBy, useField } from './Field'
@@ -24,14 +25,13 @@ export type SwitchProps = {
   disabled?: boolean
   id?: string
   className?: string
+  ref?: Ref<HTMLButtonElement>
+  /** Marks the switch as a setting row's head, which ↑ ↓ move between (`SettingRow`). */
+  'data-setting-head'?: boolean
 }
 
-/**
- * The 60 × 36 toggle drawn alone, hidden from screen readers: for a row that is itself the
- * `role="switch"` button (a settings row). Periwinkle when on; inside a lit row its colors switch
- * by themselves.
- */
-export function SwitchTrack({ checked, className }: { checked: boolean; className?: string }) {
+/** The 60 × 36 toggle, hidden from screen readers. Periwinkle when on, darker while lit. */
+function SwitchTrack({ checked }: { checked: boolean }) {
   return (
     <span
       aria-hidden="true"
@@ -39,7 +39,6 @@ export function SwitchTrack({ checked, className }: { checked: boolean; classNam
         'relative inline-block h-9 w-15 shrink-0 rounded-full transition-[background-color] duration-350 ease-nuit',
         'max-sm:h-8 max-sm:w-13',
         checked ? 'bg-accent' : 'bg-s4',
-        className,
       )}
     >
       <span
@@ -67,14 +66,18 @@ export function Switch({
   disabled = false,
   id,
   className,
+  ref,
+  'data-setting-head': settingHead,
 }: SwitchProps) {
   const { t } = useI18n()
   const field = useField()
   const words = stateText === true ? [t.ui.on, t.ui.off] : stateText || null
   return (
     <button
+      ref={ref}
       type="button"
       role="switch"
+      data-setting-head={settingHead}
       id={id ?? field?.id}
       aria-checked={checked}
       aria-label={label}

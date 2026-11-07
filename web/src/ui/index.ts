@@ -73,7 +73,7 @@ export {
   SkeletonText,
   type NoticeTone,
 } from './States'
-export { Switch, SwitchTrack, type SwitchProps } from './Switch'
+export { Switch, type SwitchProps } from './Switch'
 export { Table } from './Table'
 export { Tabs, type TabItem, type TabsProps } from './Tabs'
 export { ToastProvider, useToast, type ToastOptions, type ToastTone } from './Toast'
