@@ -939,9 +939,10 @@ jobs:
     # server's shapes: every route of its router as an administrator, as a
     # member and signed out, 1440 and 390 pixels wide, in English and
     # German. It fails on a page that scrolls sideways, an element past its
-    # edge, text out of its box, or a console error but the expected 401
-    # and 404 (docs/scripts/screenshots/README.md). Polyfin embeds the
-    # admin app desktop-admin-app built.
+    # edge, text out of its box, a console error but the expected 401 and
+    # 404, or a serious or critical axe-core violation but those its
+    # allowlist explains (docs/scripts/screenshots/README.md). Polyfin
+    # embeds the admin app desktop-admin-app built.
     name: Sweep the admin app on the demo server
     needs: [tested, desktop-admin-app]
     if: needs.tested.outputs.run == 'true'
