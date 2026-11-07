@@ -21,7 +21,6 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/playlists"
-	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 // Administrators' edits.
@@ -518,8 +517,8 @@ func (h *Handler) remoteSearch(kind library.Kind) http.HandlerFunc {
 // was given, then by its name, as Jellyfin 12.4's TMDB providers do
 // (TmdbSeriesProvider.cs lines 55-127, TmdbMovieProvider.cs lines
 // 55-115): the title an identifier finds is the one result, and the name
-// is searched only when none finds any (see lookUpIDs). The name is
-// searched in the server's addons that describe titles.
+// is searched only when none finds any (see library.Service.LookUpIDs).
+// The name is searched in the server's addons that describe titles.
 func (h *Handler) searchProviders(w http.ResponseWriter, r *http.Request, kind library.Kind) {
 	var request struct {
 		SearchInfo *struct {
@@ -541,7 +540,7 @@ func (h *Handler) searchProviders(w http.ResponseWriter, r *http.Request, kind l
 		writeJSON(w, http.StatusOK, results)
 		return
 	}
-	identified, err := h.lookUpIDs(r.Context(), kind, request.SearchInfo.ProviderIds)
+	identified, err := h.Library.LookUpIDs(r.Context(), kind, request.SearchInfo.ProviderIds)
 	if err != nil {
 		h.browseError(w, r, err)
 		return
@@ -582,93 +581,6 @@ func remoteSearchResult(f library.RemoteResult) RemoteSearchResult {
 		result.PremiereDate = new(Time(*item.PremiereDate))
 	}
 	return result
-}
-
-// lookUpIDs finds the title of kind the identifiers Identify was given
-// name, in Jellyfin's order: a TMDB identifier, then an IMDb one, then a
-// TVDB one, each tried until one finds a title, which the server's addons
-// that describe titles describe (see library.Service.RemoteLookup). An
-// IMDb identifier is looked up as it is. A TMDB identifier is turned into
-// the title's IMDb identifier by TMDB, with the server's key, else looked
-// up as "tmdb:" and the identifier in the addons that take those. A TVDB
-// identifier is found on TMDB (TMDB's find), with the key only: Polyfin
-// has no other way to TVDB. It returns nil when none finds a title, and
-// TMDB failing is no failure of the search.
-func (h *Handler) lookUpIDs(ctx context.Context, kind library.Kind, ids map[string]string) (*library.RemoteResult, error) {
-	var imdb, tmdbID, tvdb string
-	for key, value := range ids {
-		value = strings.TrimSpace(value)
-		switch {
-		case strings.EqualFold(key, "Imdb"):
-			imdb = strings.ToLower(value)
-		case strings.EqualFold(key, "Tmdb"):
-			tmdbID = value
-		case strings.EqualFold(key, "Tvdb"):
-			tvdb = value
-		}
-	}
-	tmdbKind := tmdb.Movie
-	if kind == library.KindSeries {
-		tmdbKind = tmdb.TV
-	}
-	// fromTMDB is the IMDb identifier of the title TMDB identifies as id.
-	fromTMDB := func(id string) string {
-		number, err := strconv.Atoi(id)
-		if err != nil || number <= 0 || !h.TMDB.Enabled() {
-			return ""
-		}
-		found, err := h.TMDB.IMDbID(ctx, tmdbKind, number)
-		if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
-			h.Logger.Debug("TMDB could not give a title's IMDb identifier", "tmdb", id, "error", err)
-		}
-		return found
-	}
-	// Each step gives the identifiers to look up, in turn.
-	steps := []func() []string{
-		func() []string {
-			if tmdbID == "" {
-				return nil
-			}
-			if found := fromTMDB(tmdbID); found != "" {
-				return []string{found, "tmdb:" + tmdbID}
-			}
-			return []string{"tmdb:" + tmdbID}
-		},
-		func() []string {
-			if imdb == "" {
-				return nil
-			}
-			return []string{imdb}
-		},
-		func() []string {
-			if tvdb == "" || !h.TMDB.Enabled() {
-				return nil
-			}
-			id, err := h.TMDB.FindByTVDB(ctx, tmdbKind, tvdb)
-			if err != nil {
-				if !errors.Is(err, tmdb.ErrNotFound) {
-					h.Logger.Debug("TMDB could not find a title by its TVDB identifier", "tvdb", tvdb, "error", err)
-				}
-				return nil
-			}
-			if found := fromTMDB(id); found != "" {
-				return []string{found}
-			}
-			return nil
-		},
-	}
-	for _, step := range steps {
-		for _, id := range step() {
-			result, found, err := h.Library.RemoteLookup(ctx, kind, id)
-			if err != nil {
-				return nil, err
-			}
-			if found {
-				return &result, nil
-			}
-		}
-	}
-	return nil, nil
 }
 
 // applyRemoteSearch is Identify's last step, which binds an item to the

@@ -3,11 +3,13 @@ package library
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 // Identifying an item (jellyfin-web's Identify) binds it to the title an
@@ -121,6 +123,95 @@ func (s *Service) RemoteLookup(ctx context.Context, kind Kind, id string) (resul
 		return RemoteResult{Item: item, Provider: candidate.addon.Manifest.Name}, true, nil
 	}
 	return RemoteResult{}, false, nil
+}
+
+// LookUpIDs finds the title of kind that ids, keyed by provider names as
+// Jellyfin keys them ("Imdb", "Tmdb", "Tvdb", in any case), name, in
+// Jellyfin's order: a TMDB identifier, then an IMDb one, then a TVDB one,
+// each tried until one finds a title, which the server's addons that
+// describe titles describe (see RemoteLookup). An IMDb identifier is
+// looked up as it is. A TMDB identifier is turned into the title's IMDb
+// identifier by TMDB, with the server's key, else looked up as "tmdb:"
+// and the identifier in the addons that take those. A TVDB identifier is
+// found on TMDB (TMDB's find), with the key only: Polyfin has no other
+// way to TVDB. It returns nil when none finds a title, and TMDB failing
+// is no failure of the search. Identify searches by it, and so does the
+// link of a title an import did not find (see package importlinks).
+func (s *Service) LookUpIDs(ctx context.Context, kind Kind, ids map[string]string) (*RemoteResult, error) {
+	var imdb, tmdbID, tvdb string
+	for key, value := range ids {
+		value = strings.TrimSpace(value)
+		switch {
+		case strings.EqualFold(key, "Imdb"):
+			imdb = strings.ToLower(value)
+		case strings.EqualFold(key, "Tmdb"):
+			tmdbID = value
+		case strings.EqualFold(key, "Tvdb"):
+			tvdb = value
+		}
+	}
+	tmdbKind := tmdb.Movie
+	if kind == KindSeries {
+		tmdbKind = tmdb.TV
+	}
+	// fromTMDB is the IMDb identifier of the title TMDB identifies as id.
+	fromTMDB := func(id string) string {
+		number, err := strconv.Atoi(id)
+		if err != nil || number <= 0 || !s.tmdb.Enabled() {
+			return ""
+		}
+		found, err := s.tmdb.IMDbID(ctx, tmdbKind, number)
+		if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
+			s.logger.Debug("TMDB could not give a title's IMDb identifier", "tmdb", id, "error", err)
+		}
+		return found
+	}
+	// Each step gives the identifiers to look up, in turn.
+	steps := []func() []string{
+		func() []string {
+			if tmdbID == "" {
+				return nil
+			}
+			if found := fromTMDB(tmdbID); found != "" {
+				return []string{found, "tmdb:" + tmdbID}
+			}
+			return []string{"tmdb:" + tmdbID}
+		},
+		func() []string {
+			if imdb == "" {
+				return nil
+			}
+			return []string{imdb}
+		},
+		func() []string {
+			if tvdb == "" || !s.tmdb.Enabled() {
+				return nil
+			}
+			id, err := s.tmdb.FindByTVDB(ctx, tmdbKind, tvdb)
+			if err != nil {
+				if !errors.Is(err, tmdb.ErrNotFound) {
+					s.logger.Debug("TMDB could not find a title by its TVDB identifier", "tvdb", tvdb, "error", err)
+				}
+				return nil
+			}
+			if found := fromTMDB(id); found != "" {
+				return []string{found}
+			}
+			return nil
+		},
+	}
+	for _, step := range steps {
+		for _, id := range step() {
+			result, found, err := s.RemoteLookup(ctx, kind, id)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				return &result, nil
+			}
+		}
+	}
+	return nil, nil
 }
 
 // MatchedPlain describes, as Item does, the title a plain video's item
