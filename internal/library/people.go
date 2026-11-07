@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -362,11 +363,14 @@ func (v view) reach() (addonIDs, types, prefixes []string, err error) {
 	return addonIDs, types, prefixes, nil
 }
 
-// reachesTitle is view.reaches on the row title of the items table, with
-// the parameters of view.reach at $10, $11 and $12.
-const reachesTitle = `(title.data->'addon' = ANY($10::jsonb[]) OR EXISTS (
-	SELECT 1 FROM unnest($11::text[], $12::text[]) AS rule(type, prefix)
+// reachesTitle is view.reaches on the row title of the items table, the
+// parameters of view.reach being at the placeholders addonIDs, types and
+// prefixes.
+func reachesTitle(addonIDs, types, prefixes string) string {
+	return `(title.data->'addon' = ANY(` + addonIDs + `::jsonb[]) OR EXISTS (
+	SELECT 1 FROM unnest(` + types + `::text[], ` + prefixes + `::text[]) AS rule(type, prefix)
 	WHERE title.data->'meta'->>'type' = rule.type AND starts_with(title.data->'meta'->>'id', rule.prefix)))`
+}
 
 // credited lists the titles a person is credited in that the user's view
 // reaches and their parental control lets them see, but the movies
@@ -576,24 +580,77 @@ type PeopleQuery struct {
 	Start, Limit int
 }
 
-// peopleFilter selects the people matching $1 to $13 (see People): those
-// credited in a title the user reaches, among the titles of $13 when it is
-// set. Like Jellyfin 12.2, it keeps only the people People can list, so
-// that the count it reports is theirs.
-const peopleFilter = `FROM items AS person WHERE person.kind = 'person' AND jsonb_typeof(person.data->'person') = 'object'
-	AND ($1 = '' OR strpos(lower(person.data->'person'->>'name'), lower($1)) > 0)
-	AND ($2 = '' OR starts_with(lower(person.data->'person'->>'name'), lower($2)))
-	AND ($3 = '' OR lower(person.data->'person'->>'name') < lower($3))
-	AND ($4 = '' OR lower(person.data->'person'->>'name') >= lower($4))
+// containing is a LIKE pattern that matches text anywhere, the %, _ and \
+// it holds matching themselves.
+func containing(text string) string { return "%" + likeEscaper.Replace(text) + "%" }
+
+// startingWith is a LIKE pattern that matches what starts with text, the
+// %, _ and \ it holds matching themselves.
+func startingWith(text string) string { return likeEscaper.Replace(text) + "%" }
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// personName is the name people are searched and sorted by.
+const personName = `lower(person.data->'person'->>'name')`
+
+// peopleFilter selects the people matching q (see People) and the
+// arguments it takes: those credited in a title the user reaches, through
+// the addons, types and prefixes of view.reach, and among titles unless it
+// is nil. Like Jellyfin 12.2, it keeps only the people People can list, so
+// that the count it reports is theirs. It holds only the conditions q
+// sets, so that prepared plans can use the name indexes.
+func peopleFilter(q PeopleQuery, addonIDs, types, prefixes []string, titles []accounts.ID) (string, []any) {
+	var args []any
+	arg := func(value any) string {
+		args = append(args, value)
+		return "$" + strconv.Itoa(len(args))
+	}
+	lower := func(values []string) []string {
+		result := make([]string, 0, len(values))
+		for _, value := range values {
+			result = append(result, strings.ToLower(value))
+		}
+		return result
+	}
+	var b strings.Builder
+	b.WriteString(`FROM items AS person WHERE person.kind = 'person' AND jsonb_typeof(person.data->'person') = 'object'`)
+	// lower() is applied to the escaped text: it changes no %, _ or \.
+	if q.NameContains != "" {
+		b.WriteString("\n\tAND " + personName + " LIKE lower(" + arg(containing(q.NameContains)) + ")")
+	}
+	if q.NameStartsWith != "" {
+		b.WriteString("\n\tAND " + personName + " LIKE lower(" + arg(startingWith(q.NameStartsWith)) + ")")
+	}
+	if q.NameBefore != "" {
+		b.WriteString("\n\tAND " + personName + " < lower(" + arg(q.NameBefore) + ")")
+	}
+	if q.NameFrom != "" {
+		b.WriteString("\n\tAND " + personName + " >= lower(" + arg(q.NameFrom) + ")")
+	}
+	b.WriteString(`
 	AND EXISTS (
 		SELECT 1 FROM jsonb_each(person.data->'credits') AS credit(item, kinds)
 			JOIN items AS title ON title.id = credit.item::uuid
 			CROSS JOIN jsonb_array_elements_text(credit.kinds) AS credited(kind)
-		WHERE (cardinality($5::text[]) = 0 OR lower(credited.kind) = ANY($5::text[])) AND NOT lower(credited.kind) = ANY($6::text[])
-			AND ($13::uuid[] IS NULL OR title.id = ANY($13::uuid[]))
-			AND ` + reachesTitle + `)
-	AND (NOT $7 OR person.id = ANY($8::uuid[]))
-	AND NOT person.id = ANY($9::uuid[])`
+		WHERE ` + reachesTitle(arg(addonIDs), arg(types), arg(prefixes)))
+	if len(q.Types) > 0 {
+		b.WriteString("\n\t\t\tAND lower(credited.kind) = ANY(" + arg(lower(q.Types)) + "::text[])")
+	}
+	if len(q.ExcludedTypes) > 0 {
+		b.WriteString("\n\t\t\tAND NOT lower(credited.kind) = ANY(" + arg(lower(q.ExcludedTypes)) + "::text[])")
+	}
+	if titles != nil {
+		b.WriteString("\n\t\t\tAND title.id = ANY(" + arg(titles) + "::uuid[])")
+	}
+	b.WriteString(")")
+	if q.Restricted {
+		b.WriteString("\n\tAND person.id = ANY(" + arg(append([]accounts.ID{}, q.Only...)) + "::uuid[])")
+	}
+	if len(q.Excluded) > 0 {
+		b.WriteString("\n\tAND NOT person.id = ANY(" + arg(q.Excluded) + "::uuid[])")
+	}
+	return b.String(), args
+}
 
 // People lists, by name, the people credited in the titles Polyfin knows
 // that the user reaches, and how many match the query. Jellyfin likewise
@@ -608,38 +665,24 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 	if err != nil {
 		return nil, 0, err
 	}
-	lower := func(values []string) []string {
-		result := make([]string, 0, len(values))
-		for _, value := range values {
-			result = append(result, strings.ToLower(value))
-		}
-		return result
-	}
-	ids := func(values []accounts.ID) []accounts.ID {
-		if values == nil {
-			return []accounts.ID{}
-		}
-		return values
-	}
-	args := []any{q.NameContains, q.NameStartsWith, q.NameBefore, q.NameFrom, lower(q.Types), lower(q.ExcludedTypes),
-		q.Restricted, ids(q.Only), ids(q.Excluded), addonIDs, types, prefixes, []accounts.ID(nil)}
+	var titles []accounts.ID
 	if v.restricted() {
-		visible, err := s.visibleCredits(ctx, v, args)
-		if err != nil {
+		filter, args := peopleFilter(q, addonIDs, types, prefixes, nil)
+		if titles, err = s.visibleCredits(ctx, v, filter, args); err != nil {
 			return nil, 0, err
 		}
-		args[len(args)-1] = visible
 	}
+	filter, args := peopleFilter(q, addonIDs, types, prefixes, titles)
 	var total int
-	if err := s.db.QueryRow(ctx, "SELECT count(*) "+peopleFilter, args...).Scan(&total); err != nil {
+	if err := s.db.QueryRow(ctx, "SELECT count(*) "+filter, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	var limit *int
 	if q.Limit >= 0 {
 		limit = &q.Limit
 	}
-	rows, err := s.db.Query(ctx, "SELECT person.id, person.data "+peopleFilter+
-		" ORDER BY lower(person.data->'person'->>'name'), person.id OFFSET $14 LIMIT $15", append(args, max(q.Start, 0), limit)...)
+	page := fmt.Sprintf(" ORDER BY %s, person.id OFFSET $%d LIMIT $%d", personName, len(args)+1, len(args)+2)
+	rows, err := s.db.Query(ctx, "SELECT person.id, person.data "+filter+page, append(args, max(q.Start, 0), limit)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -663,11 +706,11 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 	return s.overridden(people), total, rows.Err()
 }
 
-// visibleCredits lists the titles crediting the people a query matches
-// (see People, whose arguments args are) that the user's parental control
-// lets them see.
-func (s *Service) visibleCredits(ctx context.Context, v view, args []any) ([]accounts.ID, error) {
-	rows, err := s.db.Query(ctx, "SELECT DISTINCT credit.item::uuid FROM items AS person, jsonb_each(person.data->'credits') AS credit(item, kinds) WHERE person.id IN (SELECT person.id "+peopleFilter+")", args...)
+// visibleCredits lists the titles crediting the people filter selects
+// with args (see peopleFilter) that the user's parental control lets them
+// see.
+func (s *Service) visibleCredits(ctx context.Context, v view, filter string, args []any) ([]accounts.ID, error) {
+	rows, err := s.db.Query(ctx, "SELECT DISTINCT credit.item::uuid FROM items AS person, jsonb_each(person.data->'credits') AS credit(item, kinds) WHERE person.id IN (SELECT person.id "+filter+")", args...)
 	if err != nil {
 		return nil, err
 	}

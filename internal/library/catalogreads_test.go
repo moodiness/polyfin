@@ -1,7 +1,6 @@
 package library
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -145,46 +144,6 @@ func TestAPageFetchedAgainWritesNothing(t *testing.T) {
 	}
 }
 
-// statements counts the SQL statements a pool runs.
-type statements struct {
-	mu     sync.Mutex
-	counts map[string]int
-}
-
-func (c *statements) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	words := strings.Fields(data.SQL)
-	key := ""
-	if len(words) > 0 {
-		key = strings.ToUpper(words[0])
-	}
-	for i, word := range words {
-		if i > 0 && (strings.EqualFold(words[i-1], "FROM") || strings.EqualFold(words[i-1], "INTO") || strings.EqualFold(words[i-1], "UPDATE")) {
-			key += " " + strings.Trim(word, "(),")
-			break
-		}
-	}
-	c.mu.Lock()
-	c.counts[key]++
-	c.mu.Unlock()
-	return ctx
-}
-
-func (c *statements) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
-
-// take returns the statements counted since the last take, by their first
-// word and table, and their total.
-func (c *statements) take() (map[string]int, int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	counts := c.counts
-	c.counts = map[string]int{}
-	total := 0
-	for _, count := range counts {
-		total += count
-	}
-	return counts, total
-}
-
 // countedAddon counts the movie catalog pages asked of an addon, by
 // catalog, and those asked at once. Once hold is set, each page waits until
 // hold of them are asked at once, or holdLimit passed, then all answer at
@@ -257,7 +216,7 @@ func TestReadingTheCollectionsStaysWithinItsBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counted := &statements{counts: map[string]int{}}
+	counted := &statements{}
 	config.ConnConfig.Tracer = counted
 	config.MaxConns = 4
 	pool, err := pgxpool.NewWithConfig(t.Context(), config)
