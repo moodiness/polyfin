@@ -61,10 +61,11 @@ export function Variables() {
           ) : (
             <ul aria-label={text.sections.variables} className="grid gap-2">
               {variables.data.map((variable) => (
+                // A step over its row, s1 on s1: on s2, the accent badge falls under 4.5 to 1.
                 <li
                   key={variable.name}
                   id={variableAnchor(variable.name)}
-                  className="flex scroll-mt-32 flex-col gap-1.5 rounded-row bg-s2 px-4 py-3 transition-colors duration-700 data-[flash]:bg-accent/8 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                  className="flex scroll-mt-32 flex-col gap-1.5 rounded-row bg-s1 px-4 py-3 transition-colors duration-700 data-[flash]:bg-accent/8 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
                 >
                   <code className="font-mono text-small break-all text-ink">{variable.name}</code>
                   <span className="flex flex-wrap items-center gap-2 sm:justify-end">
