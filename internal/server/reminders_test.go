@@ -90,8 +90,7 @@ func TestProgrammePagesGetReminders(t *testing.T) {
 			want: []string{ask, "[Rappel prévu] note(Vous rappelle chaque diffusion vers 18:30.)"},
 		},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 async function run(scenario) {
@@ -215,7 +214,7 @@ async function run(scenario) {
     },
   }
   if (scenario.start) go(scenario.start)
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, document, MutationObserver, window: { ApiClient }, Object, JSON, String, Date,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),

@@ -60,8 +60,7 @@ func TestTheSpinnerTellsHowATorrentStarts(t *testing.T) {
 			steps: []string{pieces, "spin", "show", found, "tick", "show"},
 			want:  []string{"Réception du début : 2,4 Mo depuis 3 pairs", "Recherche de pairs : 12 trouvés, 3 connectés"}},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 async function run(scenario) {
@@ -145,7 +144,7 @@ async function run(scenario) {
   }
   const location = { href: 'http://polyfin.test/web/#/home', hash: '#/home' }
   const history = { pushState: () => {}, replaceState: () => {} }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, URLSearchParams, document, MutationObserver, Object, JSON, String, Date, Number,
     window: { ApiClient, localStorage, sessionStorage: localStorage },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },

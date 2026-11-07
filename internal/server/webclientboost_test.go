@@ -79,8 +79,7 @@ func TestVideosAreBoostedForTheUsersWhoAsk(t *testing.T) {
 		"a pause lets it rest": {answers: []bool{true, true}, steps: []string{"gesture only", "video " + relayed, "tap", "play", "pause", "wait", "state", "play", "state", "show"},
 			want: []string{"suspended", "running", boosted}},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 async function run(scenario) {
@@ -213,7 +212,7 @@ async function run(scenario) {
   const steps = scenario.steps.slice()
   if (steps[0] === 'no audio') steps.shift()
   else window.AudioContext = AudioContext
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, document, MutationObserver, window, addEventListener,
     CustomEvent: class { constructor(type) { this.type = type } }, Event: class { constructor(type) { this.type = type } },
     setTimeout: (run, delay) => (delay >= 3000 ? timers.push(run) : 0), clearTimeout: (id) => { if (id) timers[id - 1] = null },
