@@ -17,6 +17,11 @@
 // the watchlist adds to the user's (see watchlist.Import), where a title
 // stays until started. Importing the same export again adds nothing twice.
 //
+// The movies not found are kept, with what the import would have brought
+// of them, for the user to link them by hand to their IMDb or TMDB title:
+// a movie linked is not searched again, it is the title of its link (see
+// package importlinks).
+//
 // One import into a user's account runs at a time. It and the last one's
 // result are kept in memory: an import cut by a restart is lost and is
 // started again.
@@ -27,13 +32,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"log/slog"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -56,6 +61,9 @@ type Options struct {
 	UserData  *userdata.Store
 	Watchlist *watchlist.Store
 	Logger    *slog.Logger
+	// Links keeps the movies the imports did not find, and applies the
+	// links users made of them (see package importlinks); nil keeps none.
+	Links *importlinks.Store
 }
 
 // Service imports exports, one import into an account at a time.
@@ -63,6 +71,7 @@ type Service struct {
 	titles    Titles
 	userData  *userdata.Store
 	watchlist *watchlist.Store
+	links     *importlinks.Store
 	logger    *slog.Logger
 	now       func() time.Time
 	ctx       context.Context
@@ -82,9 +91,9 @@ type Service struct {
 // New returns a service importing with options.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{titles: options.Titles, userData: options.UserData, watchlist: options.Watchlist, logger: options.Logger,
-		now: time.Now, ctx: ctx, cancel: cancel, imports: map[accounts.ID]*Status{}, stops: map[accounts.ID]context.CancelFunc{},
-		reserved: map[accounts.ID]bool{}}
+	return &Service{titles: options.Titles, userData: options.UserData, watchlist: options.Watchlist, links: options.Links,
+		logger: options.Logger, now: time.Now, ctx: ctx, cancel: cancel, imports: map[accounts.ID]*Status{},
+		stops: map[accounts.ID]context.CancelFunc{}, reserved: map[accounts.ID]bool{}}
 }
 
 // Close stops the imports running and waits for them to end.
@@ -118,9 +127,9 @@ const (
 	ReasonSearchFailed = "search_failed"
 )
 
-// maxUnmatched bounds the movies not found an import lists; the count
-// goes on.
-const maxUnmatched = 500
+// linksSource is the source the movies an import does not find are kept
+// under, and their links made (see package importlinks).
+const linksSource = "letterboxd"
 
 // Choice is what is imported besides the movies watched: the watchlist,
 // the ratings, and the movies liked, as favorites.
@@ -152,24 +161,14 @@ type Status struct {
 	// nor started, Ratings the ratings set, and Favorites the movies made
 	// favorites.
 	Played, Watchlist, Ratings, Favorites int
-	// Unmatched lists the first movies not found, UnmatchedCount counts
-	// them all.
-	Unmatched      []Unmatched
+	// UnmatchedCount counts the movies not found, kept with what the
+	// import would have brought of them (see package importlinks).
 	UnmatchedCount int
-}
-
-// Unmatched is a movie of the export no title matched, and why.
-type Unmatched struct {
-	Name   string
-	Year   int
-	Link   string
-	Reason string
 }
 
 // clone copies s, so that what the import changes later does not show.
 func (s *Status) clone() *Status {
 	c := *s
-	c.Unmatched = slices.Clone(s.Unmatched)
 	return &c
 }
 

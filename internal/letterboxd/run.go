@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/metrics"
@@ -65,27 +66,43 @@ func (r *run) run(ctx context.Context) {
 	r.s.mu.Unlock()
 }
 
-// found is a movie matched: the title the search found, named by its
-// identifiers, or the item it was recorded as when it has none.
+// found is a movie matched: the title the search found, or its link,
+// named by its identifiers, or the item the search recorded when it has
+// none; a linked movie has no item.
 type found struct {
 	ref  library.TitleRef
 	item accounts.ID
 }
 
 // match searches each movie's name, one search at a time, each name once,
-// and keeps the one movie of that name and year. It returns the movies
-// found, by their index, and lists the others with why.
-func (r *run) match(ctx context.Context) (map[int]found, []Unmatched, error) {
+// and keeps the one movie of that name and year. A movie the user linked
+// by hand is not searched: it is the title of its link. It returns the
+// movies found, by their index, and the others, with why and what the
+// import would have brought of them.
+func (r *run) match(ctx context.Context) (map[int]found, []importlinks.Entry, error) {
+	var linked importlinks.Linked
+	if r.s.links != nil {
+		var err error
+		if linked, err = r.s.links.Linked(ctx, r.user, linksSource); err != nil {
+			return nil, nil, err
+		}
+	}
 	type search struct {
 		results []library.RemoteResult
 		err     error
 	}
 	searches := map[string]search{}
 	matched := map[int]found{}
-	var unmatched []Unmatched
+	var unmatched []importlinks.Entry
 	for i, m := range r.movies {
-		key := strings.ToLower(m.Name)
-		done, ok := searches[key]
+		key, label := entryKey(m), importlinks.Label{Kind: importlinks.KindMovie, Name: m.Name, Year: m.Year}
+		if ref, ok := linked.Ref(key, label); ok {
+			matched[i] = found{ref: ref}
+			r.update(func(s *Status) { s.Searched++ })
+			continue
+		}
+		name := strings.ToLower(m.Name)
+		done, ok := searches[name]
 		if !ok {
 			done.results, done.err = r.s.titles.RemoteSearch(ctx, library.KindMovie, m.Name, localfiles.SearchLimit)
 			if ctx.Err() != nil {
@@ -94,7 +111,7 @@ func (r *run) match(ctx context.Context) (map[int]found, []Unmatched, error) {
 			if done.err != nil {
 				r.s.logger.Debug("The metadata addons could not search a Letterboxd movie", "name", m.Name, "error", done.err)
 			}
-			searches[key] = done
+			searches[name] = done
 		}
 		// A movie the addons that answered do not know may be one an addon
 		// that failed knows.
@@ -109,11 +126,40 @@ func (r *run) match(ctx context.Context) (map[int]found, []Unmatched, error) {
 			reason = ReasonNotFound
 		}
 		if reason != "" {
-			unmatched = append(unmatched, Unmatched{Name: m.Name, Year: m.Year, Link: m.Link, Reason: reason})
+			unmatched = append(unmatched, r.entry(m, key, label, reason))
 		}
 		r.update(func(s *Status) { s.Searched++ })
 	}
 	return matched, unmatched, nil
+}
+
+// entryKey names the movie m as its kept entry and link do: by its link in
+// the export, else by its name and year.
+func entryKey(m Movie) string {
+	if m.Link != "" {
+		return m.Link
+	}
+	year := ""
+	if m.Year > 0 {
+		year = strconv.Itoa(m.Year)
+	}
+	return importlinks.Key("name", m.Name, year)
+}
+
+// entry is what is kept of the movie m not found, for reason: what the
+// import would have brought of it.
+func (r *run) entry(m Movie, key string, label importlinks.Label, reason string) importlinks.Entry {
+	e := importlinks.Entry{Key: key, Label: label, Reason: reason}
+	if m.Watched {
+		e.Played, e.PlayedAt, e.Plays = true, m.PlayedAt, m.Plays
+	}
+	if r.choice.Watchlist && m.Watchlist {
+		e.Watchlist, e.AddedAt = watchlist.Import, m.AddedAt
+	}
+	if r.choice.Ratings {
+		e.Rating = m.Rating
+	}
+	return e
 }
 
 // titleRef names the movie item as the other imports' titles are named:
@@ -150,13 +196,18 @@ func (r *run) merge(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	r.update(func(s *Status) {
-		s.UnmatchedCount = len(unmatched)
-		s.Unmatched = unmatched[:min(len(unmatched), maxUnmatched)]
-	})
+	r.update(func(s *Status) { s.UnmatchedCount = len(unmatched) })
+	// The export is read whole: the movies it no longer holds, or found
+	// since, are no longer kept.
+	if r.s.links != nil {
+		if err := r.s.links.Save(ctx, r.user, linksSource, unmatched, true); err != nil {
+			return err
+		}
+	}
 
 	// Movies named by identifiers are resolved, as other imports' titles
-	// are; one without is the item its search recorded.
+	// are, those linked by hand too; one without is the item its search
+	// recorded.
 	var order []int
 	var refs []library.TitleRef
 	for i := range r.movies {
@@ -178,7 +229,7 @@ func (r *run) merge(ctx context.Context) error {
 		}
 	}
 	for i, f := range matched {
-		if len(targets[i]) == 0 {
+		if len(targets[i]) == 0 && f.item != (accounts.ID{}) {
 			targets[i] = []accounts.ID{f.item}
 		}
 	}
