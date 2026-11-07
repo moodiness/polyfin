@@ -28,6 +28,12 @@ const versions = {
     askedLately: 'The addons were asked a moment ago: try again in a few seconds.',
     pending: (count: number) =>
       count === 1 ? '1 addon is still asked…' : `${count} addons are still asked…`,
+    /** The page stopped reading the versions again, as nothing changed for a minute. */
+    pendingStopped: (count: number) =>
+      count === 1
+        ? 'Nothing changed for a minute, so the page stopped updating: 1 addon is still asked.'
+        : `Nothing changed for a minute, so the page stopped updating: ${count} addons are still asked.`,
+    checkAgain: 'Check again',
     order: 'How versions are ordered',
     orderNone: 'The addons’ order: “Order versions by” has no criterion.',
     orderBy: (criteria: string) => `Order versions by: ${criteria}.`,
@@ -48,6 +54,8 @@ const versions = {
     sourceStates: {
       known: 'Answered',
       stale: 'Expired, asked again',
+      /** Not asked again for a few minutes, but by a play or Ask addons again. */
+      failed: 'Failed lately',
       asked: 'Being asked',
     },
     embedded: 'In the title’s description',

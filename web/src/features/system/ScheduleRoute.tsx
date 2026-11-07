@@ -261,7 +261,7 @@ function LastRun({ task }: { task: Task }) {
 function Backups({ tasks, act }: { tasks: Task[] | undefined; act: Act }) {
   const { t } = useI18n()
   const text = t.system.schedule
-  // The Health page polls this every 10 seconds; here it follows the backup task's runs.
+  // The Health page polls this every 30 seconds; here it follows the backup task's runs.
   const health = useQuery({
     queryKey: queryKeys.health,
     queryFn: ({ signal }) => fetchHealth(signal),

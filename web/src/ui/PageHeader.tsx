@@ -1,5 +1,5 @@
 import { ArrowLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
-import { useId, type ReactNode } from 'react'
+import { useId, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
 import { Count } from './Badge'
 import { cx } from './cx'
@@ -92,6 +92,7 @@ export function Block({
   aside,
   children,
   className,
+  ref,
 }: {
   title: ReactNode
   /** A number after the title, in a Count. */
@@ -100,10 +101,12 @@ export function Block({
   aside?: ReactNode
   children: ReactNode
   className?: string
+  /** The section, as for useOnScreen. */
+  ref?: Ref<HTMLElement>
 }) {
   const id = useId()
   return (
-    <section aria-labelledby={id} className={className}>
+    <section ref={ref} aria-labelledby={id} className={className}>
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
         <h2 id={id} className="flex items-center gap-2.5 text-h2 text-ink">
           {title}

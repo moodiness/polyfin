@@ -2212,18 +2212,24 @@ export const turnOffOwnTwoStep = (confirmation: TwoStepConfirmation) =>
  * Returns the signed-in user, or null when there is no valid session. Without one, the web client's
  * sign-in on this server is tried first: it opens a session for its user, administrator or member.
  * Opened from the web client signed in as someone else, the admin app signs its session out and
- * takes the web client's, so that it never shows another user's pages than the web client's.
+ * takes the web client's, so that it never shows another user's pages than the web client's. It is
+ * asked together with the status, whose server ID it waits for only once the session answered.
  */
 export async function fetchSession(signal?: AbortSignal): Promise<SessionUser | null> {
-  const serverId = queryClient.getQueryData<Status>(queryKeys.status)?.serverId
+  const status = queryClient
+    .ensureQueryData({ queryKey: queryKeys.status, queryFn: ({ signal }) => fetchStatus(signal) })
+    .then(
+      (answer) => answer.serverId,
+      () => undefined,
+    )
   try {
     const user = (await request<{ user: SessionUser }>('GET', '/session', undefined, signal)).user
-    if (!arrivedAsAnotherUser(serverId, user.id)) return user
+    if (!arrivedAsAnotherUser(await status, user.id)) return user
     await request<void>('DELETE', '/session', undefined, signal)
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 401)) throw error
   }
-  const token = takeWebClientToken(serverId)
+  const token = takeWebClientToken(await status)
   if (token === null) return null
   try {
     const authorization = { Authorization: `MediaBrowser Token="${token}"` }
@@ -3168,8 +3174,8 @@ export type TitleVersionSource = {
   name: string
   /** The streams the title's description embeds for the video. */
   embedded: boolean
-  /** Whether its list is known, stale and asked again, or being asked. */
-  state: 'known' | 'stale' | 'asked'
+  /** Whether its list is known, stale and asked again, being asked, or failed lately (not asked again for a few minutes). */
+  state: 'known' | 'stale' | 'asked' | 'failed'
   streams: VersionStream[]
 }
 
@@ -5941,6 +5947,10 @@ export const queryClient: QueryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
+      // An answer is read again on a component's mount only once 5 seconds old: the components of
+      // a page that load after its first answer, such as the nine that read the status, share it,
+      // and a page load asks each address once. Polls and invalidations read again regardless.
+      staleTime: 5_000,
       // Fail fast so an unreachable server is reported within seconds, not after long backoff.
       // Client errors (401, 403, 404) are answers, not transient failures.
       retry: (failureCount, error) =>

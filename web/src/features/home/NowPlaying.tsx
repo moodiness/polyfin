@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent, type Ref } from 'react'
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -87,12 +87,19 @@ const deliveryIcons: Record<string, Icon> = {
   stream: WavesIcon,
 }
 
-/** The playbacks under way, refreshed every 3 seconds; shared with the page's summary. */
+/** How often the playbacks and the bandwidth are read again, while some play and while none do. */
+const playingPoll = 3_000
+const idlePoll = 15_000
+
+/**
+ * The playbacks under way, refreshed every 3 seconds while some play, every 15 otherwise; shared
+ * with the page's summary.
+ */
 export function useLiveSessions() {
   return useQuery({
     queryKey: queryKeys.liveSessions,
     queryFn: ({ signal }) => fetchLiveSessions(signal),
-    refetchInterval: 3_000,
+    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? playingPoll : idlePoll),
   })
 }
 
@@ -113,22 +120,27 @@ function rateParts(bytesPerSecond: number, language: string): { value: string; u
  * two big figures refreshed with Playing now, then the video conversions under way.
  */
 export function Bandwidth({
+  playing,
   conversions,
+  ref,
 }: {
+  /** Whether some playback is under way: the figures move only then. */
+  playing: boolean
   /** The conversions under way and their limit, once Health tells them. */
   conversions?: { count: number; limit: number }
+  ref?: Ref<HTMLElement>
 }) {
   const { language, t } = useI18n()
   const text = t.dashboard.overview
   const total = useQuery({
     queryKey: queryKeys.bandwidth,
     queryFn: ({ signal }) => fetchBandwidth(signal),
-    refetchInterval: 3_000,
+    refetchInterval: playing ? playingPoll : idlePoll,
   })
   const sent = total.data && rateParts(total.data.sent, language)
   const received = total.data && rateParts(total.data.received, language)
   return (
-    <Block title={text.bandwidth}>
+    <Block ref={ref} title={text.bandwidth}>
       <Panel as="div">
         {total.isError && total.data === undefined ? (
           <InlineError onRetry={() => void total.refetch()} retrying={total.isFetching}>
@@ -196,12 +208,14 @@ export function PlayingNow({ onLight }: { onLight: (sessionId: string) => void }
   const { t } = useI18n()
   const live = t.dashboard.live
   const sessions = useLiveSessions()
-  // Positions move on between refreshes, once a second, as players do.
+  const playing = (sessions.data?.length ?? 0) > 0
+  // Positions move on between refreshes, once a second, as players do, while some play.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
+    if (!playing) return
     const timer = window.setInterval(() => setNow(Date.now()), 1_000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [playing])
   const elapsed = Math.max(0, (now - sessions.dataUpdatedAt) / 1000)
 
   return (
@@ -541,11 +555,13 @@ export function MyPlayback({ onLight }: { onLight: (sessionId: string) => void }
   const { t } = useI18n()
   const live = t.dashboard.live
   const sessions = useLiveSessions()
+  const playing = (sessions.data?.length ?? 0) > 0
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
+    if (!playing) return
     const timer = window.setInterval(() => setNow(Date.now()), 1_000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [playing])
   const elapsed = Math.max(0, (now - sessions.dataUpdatedAt) / 1000)
   if (sessions.data === undefined || sessions.data.length === 0) return null
   return (

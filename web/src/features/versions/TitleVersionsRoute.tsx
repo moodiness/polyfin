@@ -1,6 +1,6 @@
 import { ArrowsClockwiseIcon, ProhibitIcon, PushPinIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router'
 import {
   analyzeVersion,
@@ -46,8 +46,25 @@ import {
 import { HostErrorFile } from './HostErrorFile'
 import { userQuery, UserPicker, useVersionsUser } from './parts'
 
-/** How long the page waits before reading the versions again while addons are still asked. */
-const pendingPoll = 2000
+/**
+ * The waits before reading the versions again while addons are still asked, in milliseconds: each
+ * answer the same as the one before waits the next one, and after the last the page stops reading
+ * and says so. A new answer, the tab or the window shown again, or Check again start over.
+ */
+const pendingPolls = [2_000, 4_000, 8_000, 16_000, 30_000]
+
+/** The answers read one after the other the same as the last, counted once per read. */
+type SameAnswers = { data: unknown; at: number; count: number }
+
+/** Counts the answer read at `at` in `seen`, and returns how many in a row were the same. */
+function sameAnswers(seen: SameAnswers, data: unknown, at: number): number {
+  if (at !== seen.at) {
+    seen.count = data === seen.data ? seen.count + 1 : 0
+    seen.data = data
+    seen.at = at
+  }
+  return seen.count
+}
 
 /**
  * `/versions/:id`: every stream each addon listed for a movie or an episode, as a user is offered
@@ -64,11 +81,40 @@ export default function TitleVersionsRoute() {
     queryKey: queryKeys.versionTitle(user, id),
     queryFn: ({ signal }) => fetchVersionTitle(user, id, signal),
   })
+  // The same answer keeps the same data, React Query sharing what did not change.
+  const seen = useRef<SameAnswers>({ data: undefined, at: 0, count: 0 })
   const versions = useQuery({
     queryKey: queryKeys.titleVersions(id, user),
     queryFn: ({ signal }) => fetchTitleVersions(id, user, signal),
-    refetchInterval: (query) => ((query.state.data?.pending ?? 0) > 0 ? pendingPoll : false),
+    refetchInterval: (query) =>
+      (query.state.data?.pending ?? 0) > 0
+        ? (pendingPolls[sameAnswers(seen.current, query.state.data, query.state.dataUpdatedAt)] ??
+          false)
+        : false,
   })
+  const stopped =
+    (versions.data?.pending ?? 0) > 0 &&
+    sameAnswers(seen.current, versions.data, versions.dataUpdatedAt) >= pendingPolls.length
+  const checkAgain = () => {
+    seen.current.data = undefined
+    void versions.refetch({ cancelRefetch: false })
+  }
+  // Shown again, the tab or the window starts over, reading at once while addons are asked.
+  useEffect(() => {
+    const key = queryKeys.titleVersions(id, user)
+    const shown = () => {
+      if (document.hidden) return
+      seen.current.data = undefined
+      if ((queryClient.getQueryData<TitleVersions>(key)?.pending ?? 0) === 0) return
+      void queryClient.refetchQueries({ queryKey: key, exact: true }, { cancelRefetch: false })
+    }
+    window.addEventListener('focus', shown)
+    document.addEventListener('visibilitychange', shown)
+    return () => {
+      window.removeEventListener('focus', shown)
+      document.removeEventListener('visibilitychange', shown)
+    }
+  }, [id, user])
   const ask = useMutation({
     mutationFn: () => askVersionsAgain(id, user),
     onSuccess: () => {
@@ -114,7 +160,14 @@ export default function TitleVersionsRoute() {
           {errorMessage(t, versions.error)}
         </InlineError>
       ) : (
-        <Explained id={id} user={user} explained={versions.data} />
+        <Explained
+          id={id}
+          user={user}
+          explained={versions.data}
+          stopped={stopped}
+          checking={versions.isFetching}
+          onCheckAgain={checkAgain}
+        />
       )}
     </PageLayout>
   )
@@ -125,10 +178,17 @@ function Explained({
   id,
   user,
   explained,
+  stopped,
+  checking,
+  onCheckAgain,
 }: {
   id: string
   user: string
   explained: TitleVersions
+  /** The page stopped reading the versions again while addons are still asked. */
+  stopped: boolean
+  checking: boolean
+  onCheckAgain: () => void
 }) {
   const { t } = useI18n()
   const text = t.versions
@@ -148,11 +208,29 @@ function Explained({
           {explained.qualityGroup > 0 && <p>{text.group(explained.qualityGroup)}</p>}
           {explained.keptAll && <Notice tone="info">{text.keptAll}</Notice>}
           {explained.closest && <Notice tone="info">{text.closest}</Notice>}
-          {explained.pending > 0 && (
-            <Notice tone="info" live>
-              {text.pending(explained.pending)}
-            </Notice>
-          )}
+          {explained.pending > 0 &&
+            (stopped ? (
+              <Notice
+                tone="info"
+                live
+                action={
+                  <Button
+                    size="sm"
+                    icon={ArrowsClockwiseIcon}
+                    loading={checking}
+                    onClick={onCheckAgain}
+                  >
+                    {text.checkAgain}
+                  </Button>
+                }
+              >
+                {text.pendingStopped(explained.pending)}
+              </Notice>
+            ) : (
+              <Notice tone="info" live>
+                {text.pending(explained.pending)}
+              </Notice>
+            ))}
         </div>
       </Block>
       <PinBlock id={id} explained={explained} />
@@ -400,6 +478,7 @@ function SourceStreams({
   const state: Record<TitleVersionSource['state'], StatusTone> = {
     known: 'ok',
     stale: 'warn',
+    failed: 'warn',
     asked: 'muted',
   }
   return (
