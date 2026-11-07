@@ -59,15 +59,13 @@ export default function Mappings({
     onChanged?.()
   }
 
-  const pager = mappings.data !== undefined && (
-    <Pager
-      offset={offset}
-      limit={pageSize}
-      total={mappings.data.total}
-      busy={mappings.isFetching}
-      onOffset={setOffset}
-    />
-  )
+  const paging = mappings.data !== undefined && {
+    offset,
+    limit: pageSize,
+    total: mappings.data.total,
+    busy: mappings.isFetching,
+    onOffset: setOffset,
+  }
 
   return (
     <Block title={text.title} count={mappings.data?.total}>
@@ -107,7 +105,7 @@ export default function Mappings({
         {announcement}
       </p>
       {mappings.data !== undefined && mappings.data.total > 0 && (
-        <div className="mt-4 mb-2 pl-5 max-sm:pl-4">{pager}</div>
+        <div className="mt-4 mb-2 pl-5 max-sm:pl-4">{paging && <Pager {...paging} />}</div>
       )}
       {mappings.isPending ? (
         <div className="mt-4">
@@ -173,7 +171,7 @@ export default function Mappings({
         </ul>
       )}
       {mappings.data !== undefined && mappings.data.total > 0 && (
-        <div className="mt-4 pl-5 max-sm:pl-4">{pager}</div>
+        <div className="mt-4 pl-5 max-sm:pl-4">{paging && <Pager {...paging} end />}</div>
       )}
     </Block>
   )

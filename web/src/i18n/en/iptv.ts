@@ -76,6 +76,8 @@ const iptv = {
     close: 'Close',
     pager: {
       label: 'Pages',
+      /** The pager below a list paged above it too: landmark names must differ. */
+      labelEnd: 'Pages, below the list',
       range: (from: string, to: string, total: string) => `${from}–${to} of ${total}`,
       previous: 'Previous',
       next: 'Next',

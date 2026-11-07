@@ -136,18 +136,16 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
   })
   const allSelected = items.length > 0 && items.every((item) => selected.has(item.id))
   const someSelected = !allSelected && items.some((item) => selected.has(item.id))
-  const pager = channels.data !== undefined && (
-    <Pager
-      offset={offset}
-      limit={pageSize}
-      total={channels.data.total}
-      busy={channels.isFetching}
-      onOffset={(next) => {
-        setOffset(next)
-        setSelected(new Set())
-      }}
-    />
-  )
+  const paging = channels.data !== undefined && {
+    offset,
+    limit: pageSize,
+    total: channels.data.total,
+    busy: channels.isFetching,
+    onOffset: (next: number) => {
+      setOffset(next)
+      setSelected(new Set())
+    },
+  }
 
   return (
     <div className="space-y-8 max-md:space-y-7">
@@ -248,7 +246,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
             }
           />
           {selected.size === 0 ? (
-            pager
+            paging && <Pager {...paging} />
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <span className="figures mr-1 text-control text-ink">
@@ -333,7 +331,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           </ul>
         )}
         {channels.data !== undefined && channels.data.total > 0 && (
-          <div className="mt-4 pl-4">{pager}</div>
+          <div className="mt-4 pl-4">{paging && <Pager {...paging} end />}</div>
         )}
       </Block>
       <Modal

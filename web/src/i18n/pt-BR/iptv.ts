@@ -79,6 +79,7 @@ const iptv: typeof en = {
     close: 'Fechar',
     pager: {
       label: 'Páginas',
+      labelEnd: 'Páginas, abaixo da lista',
       range: (from: string, to: string, total: string) => `${from}–${to} de ${total}`,
       previous: 'Anterior',
       next: 'Próxima',
