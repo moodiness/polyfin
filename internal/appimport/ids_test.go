@@ -103,8 +103,8 @@ func TestMyAnimeListEntriesAreImported(t *testing.T) {
 		{Title: listed, Label: Label{ID: "mal:99", Name: "Listed by MyAnimeList", Kind: "episode", Season: 1, Episode: 3}, Played: true},
 	}
 	status := h.imported(t, alice, alice, Account{App: "test", Profiles: []Profile{{ID: "1", Entries: entries}}}, Choice{Profile: "1"})
-	if len(status.Unmatched) != 0 {
-		t.Errorf("unmatched: %+v", status.Unmatched)
+	if status.UnmatchedCount != 0 {
+		t.Errorf("unmatched: %d", status.UnmatchedCount)
 	}
 	for name, ref := range map[string]library.TitleRef{
 		"the mapped episode": {Episode: true, IMDb: "tt0000100", Season: 2, Number: 2},

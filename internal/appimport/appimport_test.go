@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
@@ -31,6 +32,8 @@ type harness struct {
 	addons *addons.Store
 	// watchlist holds the users' watchlists the imports fill.
 	watchlist *watchlist.Store
+	// links keeps the titles the imports did not find.
+	links *importlinks.Store
 	// personalAddons is the server's switch of users' own addons.
 	personalAddons *atomic.Bool
 }
@@ -57,13 +60,15 @@ func newHarness(t *testing.T, configure ...func(*Options)) harness {
 		s.PersonalAddons = personalAddons.Load()
 		return s
 	}
-	options := Options{Settings: settings, Titles: lib, UserData: data, Addons: addonStore, Logger: logger, DB: pool, Watchlist: lists}
+	links := importlinks.New(importlinks.Options{DB: pool, Settings: settings, Titles: lib, UserData: data, Watchlist: lists, Logger: logger})
+	options := Options{Settings: settings, Titles: lib, UserData: data, Addons: addonStore, Logger: logger, DB: pool, Watchlist: lists,
+		Links: links}
 	for _, c := range configure {
 		c(&options)
 	}
 	s := New(options)
 	t.Cleanup(s.Close)
-	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, addons: addonStore, watchlist: lists,
+	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, addons: addonStore, watchlist: lists, links: links,
 		personalAddons: personalAddons}
 }
 
@@ -115,6 +120,17 @@ func (h harness) watchlistOf(t *testing.T, user accounts.ID) []accounts.ID {
 		t.Fatal(err)
 	}
 	return ids
+}
+
+// unfound is what user's imports from source kept of the titles they did
+// not find.
+func (h harness) unfound(t *testing.T, user accounts.ID, source string) []importlinks.Row {
+	t.Helper()
+	rows, err := h.links.List(t.Context(), user, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows
 }
 
 // imported holds account for by, imports choice of it into user's
@@ -224,12 +240,13 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		t.Errorf("counts: %+v", status)
 	}
 	reasons := map[string]string{}
-	for _, u := range status.Unmatched {
+	kept := h.unfound(t, alice.ID, "test")
+	for _, u := range kept {
 		reasons[u.Name] = u.Reason
 	}
 	if len(reasons) != 3 || reasons["Holiday"] != ReasonOtherIdentifier || reasons["Unknown"] != ReasonNotFound ||
 		reasons["Series"] != ReasonEpisodeList {
-		t.Errorf("unmatched: %+v", status.Unmatched)
+		t.Errorf("unmatched: %+v", kept)
 	}
 
 	check := func(name string, ref library.TitleRef, want func(userdata.Data) bool) {
