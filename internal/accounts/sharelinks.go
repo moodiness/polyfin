@@ -285,8 +285,13 @@ func (s *Store) ShareLinkToNotify(ctx context.Context, id ID) (bool, error) {
 
 // ExpiredShareLinks returns the links that expired, unrevoked, and were not
 // returned yet, once each, for the activity log, and deletes those that
-// expired or were revoked more than 30 days ago.
+// expired or were revoked more than 30 days ago. While the settings turn
+// share links off it does nothing: the links that expired meanwhile are
+// returned once they are on again.
 func (s *Store) ExpiredShareLinks(ctx context.Context) ([]ShareLink, error) {
+	if !s.Settings().ShareLinks {
+		return nil, nil
+	}
 	now := s.now()
 	if _, err := s.db.Exec(ctx, `DELETE FROM share_links WHERE id IN (SELECT id FROM share_links
 		WHERE least(expires_at, coalesce(revoked_at, expires_at)) < $1 ORDER BY id FOR UPDATE)`, now.Add(-shareLinksKept)); err != nil {
