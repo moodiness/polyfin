@@ -238,7 +238,7 @@ export function CreateInviteModal({
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-5 p-5">
+      <form id={formId} onSubmit={submit} noValidate className="space-y-4 p-5">
         <Field label={text.maxUses} help={text.maxUsesHelp} error={usesError}>
           <NumberInput
             value={maxUses}

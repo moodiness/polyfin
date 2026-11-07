@@ -19,7 +19,6 @@ import {
   Button,
   EmptyState,
   Field,
-  IconTile,
   InlineError,
   Modal,
   Notice,
@@ -33,7 +32,7 @@ import {
 import { UsersArea } from './shared'
 
 /**
- * `/users/groups`: the groups, each a big row opening its page, and the button creating one. A group holds
+ * `/users/groups`: the groups, each a row opening its page, and the button creating one. A group holds
  * the limits of a user's page, which its members follow.
  */
 export default function GroupsList() {
@@ -71,7 +70,7 @@ export default function GroupsList() {
                 <Row
                   key={group.id}
                   to={`/users/groups/${group.id}`}
-                  leading={<IconTile icon={UsersThreeIcon} size="lg" />}
+                  leading={UsersThreeIcon}
                   title={group.name}
                   meta={t.groups.memberCount(group.memberCount)}
                 />
@@ -160,7 +159,7 @@ function CreateGroupModal({
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-5 p-5">
+      <form id={formId} onSubmit={submit} noValidate className="space-y-4 p-5">
         <Field label={t.groups.name} help={t.groups.nameRule} error={nameError}>
           <TextInput
             value={name}

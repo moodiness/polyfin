@@ -337,7 +337,7 @@ function SourcesSection({ group }: { group: Group }) {
           {t.groups.noSourcesHelp}
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {sources.data.map((source) => (
             <SourceSwitch key={source.id} group={group} source={source} />
           ))}
@@ -426,7 +426,7 @@ function MembersSection({ group }: { group: Group }) {
             <Row
               key={member.id}
               to={`/users/${member.id}`}
-              leading={<Avatar name={member.name} image={userImageUrl(member)} size="lg" />}
+              leading={<Avatar name={member.name} image={userImageUrl(member)} size="md" />}
               title={member.name}
               titleAside={!member.followGroup && <Badge tone="warn">{t.groups.ownSettings}</Badge>}
               meta={member.followGroup ? t.groups.followsHelp : t.groups.ownSettingsHelp}
@@ -515,7 +515,7 @@ function AddMembersModal({
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-5 p-5">
+      <form id={formId} onSubmit={submit} noValidate className="space-y-4 p-5">
         <p className="text-control text-ink-2">{t.groups.addMembersHelp}</p>
         {candidates.length === 0 ? (
           <EmptyState title={t.groups.noCandidates}>{t.groups.noCandidatesHelp}</EmptyState>

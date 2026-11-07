@@ -138,7 +138,7 @@ function Chip({
   return (
     <li
       title={title}
-      className="flex min-h-11 max-w-full items-center gap-1 rounded-full bg-s2 py-1 pr-1.5 pl-4 text-control text-ink"
+      className="flex min-h-9 max-w-full items-center gap-0.5 rounded-full bg-s2 py-0.5 pr-0.5 pl-3.5 text-control text-ink"
     >
       <span className="min-w-0 break-words">{label}</span>
       <IconButton
@@ -331,7 +331,7 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
           {errorMessage(t, ratings.error)}
         </InlineError>
       ) : ratings.isPending ? (
-        <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
+        <Skeleton className="h-15 rounded-row" />
       ) : (
         <SettingRow<number>
           kind="choice"
@@ -646,7 +646,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
         ) : allGroups.length === 0 ? (
           <EmptyState title={t.users.noChannelGroups} />
         ) : (
-          <fieldset disabled={readOnly} className={cx(tile, 'space-y-8')}>
+          <fieldset disabled={readOnly} className={cx(tile, 'space-y-5')}>
             {mode === 'except' && (
               <Checkbox
                 label={t.users.hideNewChannelGroups}
@@ -805,12 +805,12 @@ export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: 
           <p className={cx(tile, 'text-body text-ink-2')}>{t.users.noAllowedHours}</p>
         ) : (
           <ul
-            className="grid grid-cols-[minmax(0,1fr)] gap-2"
+            className="grid grid-cols-[minmax(0,1fr)] gap-1.5"
             aria-label={t.users.allowedHoursTitle}
           >
             {schedules.map((schedule, index) => (
               // Rows have no identity of their own; they are edited in place.
-              <li key={index} className={cx(tile, 'flex flex-wrap items-end gap-3 py-5')}>
+              <li key={index} className={cx(tile, 'flex flex-wrap items-end gap-3')}>
                 <Field label={t.users.day} className="min-w-[12.5rem] flex-1">
                   <Select<ScheduleDay>
                     size="sm"

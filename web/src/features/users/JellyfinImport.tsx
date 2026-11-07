@@ -406,7 +406,7 @@ function ConnectForm({
   return (
     <Panel title={text.connectTitle(product)} description={text.connectHelp} flush>
       <form onSubmit={submit} noValidate>
-        <div className="flex max-w-[38rem] flex-col gap-5 px-6 pb-6 max-sm:px-4">
+        <div className="flex max-w-[38rem] flex-col gap-4 px-5 max-md:px-4">
           <div className="flex flex-col gap-2">
             <span aria-hidden className="text-control font-medium text-ink">
               {text.serverKind}
