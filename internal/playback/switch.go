@@ -356,7 +356,7 @@ func (c *carry) target(sw versionSwitch) (hls.Remux, error) {
 		if played.Fast != nil {
 			fast := *played.Fast
 			fast.ToneMap, fast.ToneMapOnCPU, fast.Deinterlace, fast.DoubleRate = encode.ToneMap, encode.ToneMapOnCPU, encode.Deinterlace, false
-			fast.Burn, fast.DecodeOnCPU, fast.FrameRate, fast.DropFrames = nil, encode.DecodeOnCPU, encode.FrameRate, encode.DropFrames
+			fast.Burn, fast.DecodeOnCPU, fast.FrameRate = nil, encode.DecodeOnCPU, encode.FrameRate
 			r.Fast, r.FastTag = &fast, played.FastTag
 		}
 	}
@@ -372,7 +372,9 @@ func (c *carry) target(sw versionSwitch) (hls.Remux, error) {
 // mapping and deinterlacing; a picture subtitle of the first version's
 // own file is not burned in. Copied video is converted into its codec,
 // size, profile and frame rate, its parameter sets repeated before each
-// keyframe in fragmented MP4 (see inBand).
+// keyframe in fragmented MP4 (see inBand). Either way the frame rate the
+// app plays, which sets the timescale of fragmented MP4 and the frames of
+// each segment, is pinned, at the level that holds it.
 func (c *carry) video(first, video media.Stream, analysis media.Analysis, converted *hls.VideoEncoding, t Tuning) (*hls.VideoEncoding, error) {
 	codec := first.Codec
 	if converted != nil {
@@ -382,36 +384,26 @@ func (c *carry) video(first, video media.Stream, analysis media.Analysis, conver
 	if conversion == nil || conversion.Codec != codec {
 		return nil, fmt.Errorf("%w: its video cannot be converted to %s", errNotAlike, codec)
 	}
-	rate := cmp0(first.AverageRate, first.FrameRate)
-	if converted == nil {
-		conversion.Width, conversion.Height = first.Width&^1, first.Height&^1
-		conversion.Bitrate = max(int64(cmp0(float64(first.Bitrate), float64(c.analysis.Bitrate))), 300_000)
-		conversion.Peak, conversion.FrameRate, conversion.Size = 0, 0, ConversionSize{}
-		if profile := strings.ToLower(first.Profile); codec == "h264" && (profile == "main" || profile == "constrained baseline" || profile == "baseline") {
-			conversion.Profile = strings.TrimPrefix(profile, "constrained ")
-		}
-		alone := c.remux
-		alone.ConvertVideo, alone.Variant, alone.Burn, alone.BurnFile, alone.ConvertAudio = conversion, 0, nil, "", nil
-		var r hls.Remux
-		alone.convert(&r, video, t)
-		converted = r.Encode
-		converted.Level = conversion.Level(rate)
-		converted.InBand = c.remux.Format == hls.FMP4
-	} else {
+	if converted != nil {
 		e := *converted
 		e.ToneMap, e.ToneMapOnCPU, e.Deinterlace, e.DoubleRate = conversion.ToneMap, conversion.ToneMapOnCPU, conversion.Deinterlace, false
 		e.Burn = nil
 		e.DecodeOnCPU = !t.DecodesOnGPU(video.Codec, video.BitDepth)
-		converted = &e
-		rate = e.FrameRate
+		return &e, nil
 	}
-	// The frame rate the app plays, which sets the timescale of fragmented
-	// MP4 and the frames of each segment.
-	if own := cmp0(video.AverageRate, video.FrameRate); rate > 0 {
-		converted.FrameRate = rate
-		converted.DropFrames = own <= 0 || math.Abs(own-rate) > rate/1000
+	conversion.Width, conversion.Height = first.Width&^1, first.Height&^1
+	conversion.Bitrate = max(int64(cmp0(float64(first.Bitrate), float64(c.analysis.Bitrate))), 300_000)
+	conversion.Peak, conversion.FrameRate, conversion.Size = 0, 0, ConversionSize{}
+	if profile := strings.ToLower(first.Profile); codec == "h264" && (profile == "main" || profile == "constrained baseline" || profile == "baseline") {
+		conversion.Profile = strings.TrimPrefix(profile, "constrained ")
 	}
-	return converted, nil
+	alone := c.remux
+	alone.ConvertVideo, alone.Variant, alone.Burn, alone.BurnFile, alone.ConvertAudio = conversion, 0, nil, "", nil
+	var r hls.Remux
+	alone.convert(&r, video, t)
+	r.Encode.InBand = c.remux.Format == hls.FMP4
+	conversion.encodeAt(r.Encode, knownRate(first.AverageRate, first.FrameRate))
+	return r.Encode, nil
 }
 
 // audio sets the audio track r plays of analysis: the first of the

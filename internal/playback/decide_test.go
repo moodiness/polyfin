@@ -581,7 +581,8 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 	h264 := VideoConversion{Codec: "h264"}
 	hevc := VideoConversion{Codec: "hevc"}
 	for _, c := range []struct{ got, want string }{
-		{h264.CodecString(23.976), "avc1.640029"}, {h264.CodecString(59.94), "avc1.64002A"}, {hevc.CodecString(59.94), "hvc1.1.6.L123.B0"},
+		{h264.codecString(h264.codecLevel(23.976)), "avc1.640029"}, {h264.codecString(h264.codecLevel(59.94)), "avc1.64002A"},
+		{hevc.codecString(hevc.codecLevel(59.94)), "hvc1.1.6.L123.B0"},
 	} {
 		if c.got != c.want {
 			t.Errorf("codec string %s, want %s", c.got, c.want)
@@ -608,7 +609,8 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 		{VideoConversion{Codec: "hevc", Width: 3840, Height: 2160}, 23.976, "5", "hvc1.1.6.L150.B0"},
 		{VideoConversion{Codec: "hevc", Width: 3840, Height: 2160}, 59.94, "5.1", "hvc1.1.6.L153.B0"},
 	} {
-		if level, codecs := c.conversion.Level(c.rate), c.conversion.CodecString(c.rate); level != c.level || codecs != c.codecsString {
+		l := c.conversion.codecLevel(c.rate)
+		if level, codecs := l.name(), c.conversion.codecString(l); level != c.level || codecs != c.codecsString {
 			t.Errorf("%dx%d %s at %v: level %s, %s; want %s, %s", c.conversion.Width, c.conversion.Height, c.conversion.Codec, c.rate, level, codecs, c.level, c.codecsString)
 		}
 	}

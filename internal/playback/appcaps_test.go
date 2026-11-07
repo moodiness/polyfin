@@ -60,9 +60,9 @@ func TestConversionKeepsWithinTheAppsProfile(t *testing.T) {
 			if v.FrameRate > 0 {
 				rate = v.FrameRate
 			}
-			if v.Width != test.width || v.Height != test.height || v.Level(rate) != test.level || v.FrameRate != test.frameRate ||
+			if level := v.codecLevel(rate).name(); v.Width != test.width || v.Height != test.height || level != test.level || v.FrameRate != test.frameRate ||
 				v.Bitrate != test.bitrate || v.Profile != test.profileName {
-				t.Errorf("%dx%d level %s, %v frames a second, %d b/s, profile %q", v.Width, v.Height, v.Level(rate), v.FrameRate, v.Bitrate, v.Profile)
+				t.Errorf("%dx%d level %s, %v frames a second, %d b/s, profile %q", v.Width, v.Height, level, v.FrameRate, v.Bitrate, v.Profile)
 			}
 		})
 	}

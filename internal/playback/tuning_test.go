@@ -175,11 +175,13 @@ func TestTuningChangesConversions(t *testing.T) {
 	}{
 		{"25 frames a second doubled, 10-bit HEVC decoded in software", "h264",
 			media.Stream{Codec: "hevc", BitDepth: 10, AverageRate: 25},
-			hls.VideoEncoding{Encoder: "h264_nvenc", Level: "4.2", Width: 1920, Height: 1080, Bitrate: 10_000_000, FrameRate: 50, Deinterlace: true, Hardware: gpu,
+			hls.VideoEncoding{Encoder: "h264_nvenc", Level: "4.2", Width: 1920, Height: 1080, Bitrate: 10_000_000, MaxRate: 15_000_000, BufSize: 20_000_000,
+				FrameRate: 50, PinRate: true, Deinterlace: true, Hardware: gpu,
 				Preset: "slow", Quality: 21, ToneMapCurve: "mobius", ToneMapPeak: 400, ToneMapDesat: 0.5, Deinterlacer: "bwdif", DoubleRate: true, DecodeOnCPU: true}},
 		{"50 frames a second kept, HEVC's quality, 8-bit decoded on the GPU", "hevc",
 			media.Stream{Codec: "hevc", BitDepth: 8, AverageRate: 50},
-			hls.VideoEncoding{Encoder: "libx265", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 10_000_000, FrameRate: 50, Deinterlace: true,
+			hls.VideoEncoding{Encoder: "libx265", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 10_000_000, MaxRate: 15_000_000, BufSize: 20_000_000,
+				FrameRate: 50, PinRate: true, Deinterlace: true,
 				Preset: "slow", Quality: 27, ToneMapCurve: "mobius", ToneMapPeak: 400, ToneMapDesat: 0.5, Deinterlacer: "bwdif"}},
 	} {
 		c := can
@@ -193,8 +195,8 @@ func TestTuningChangesConversions(t *testing.T) {
 	}
 }
 
-// Untuned, a conversion keeps the frame rate, decodes on the GPU and lets
-// FFmpeg choose its threads, as before the settings.
+// Untuned, a conversion keeps the frame rate, which it pins, decodes on
+// the GPU and lets FFmpeg choose its threads, as before the settings.
 func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
 	gpu := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}}
 	can := Capabilities{Encoders: []string{"libx264"}, Hardware: gpu}
@@ -202,7 +204,8 @@ func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
 	remux := Remux{ConvertVideo: ConvertVideo("h264", Limits{}, interlaced, can), ConvertAudio: &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}}
 	r := hls.Remux{Audio: 1}
 	remux.convert(&r, media.Stream{Codec: "hevc", BitDepth: 10, AverageRate: 25}, Tuning{})
-	want := hls.VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 10_000_000, FrameRate: 25, Deinterlace: true, Hardware: gpu}
+	want := hls.VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 10_000_000, MaxRate: 15_000_000, BufSize: 20_000_000,
+		FrameRate: 25, PinRate: true, Deinterlace: true, Hardware: gpu}
 	if r.Encode == nil || !reflect.DeepEqual(*r.Encode, want) || r.Threads != 0 || r.AudioFilter != "" {
 		t.Errorf("%+v, %d threads, audio filter %q, want %+v", r.Encode, r.Threads, r.AudioFilter, want)
 	}

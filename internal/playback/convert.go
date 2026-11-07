@@ -410,16 +410,55 @@ func appFrame(app AppCaps, rung, width, height int, exact bool) (int, int) {
 	return w, h
 }
 
-// sourceRate is the frame rate of video, as its conversion takes it: its
-// average, else its real one, 0 when not known.
-func sourceRate(video MediaStream) float64 {
-	switch {
-	case video.AverageFrameRate != nil && *video.AverageFrameRate > 0:
-		return *video.AverageFrameRate
-	case video.RealFrameRate != nil:
-		return *video.RealFrameRate
+// mostRate is the highest frame rate taken for a video's own: ffprobe
+// gives 1/time base for a rate it does not find, 1000 in Matroska and
+// 90000 in MPEG-TS, which no level holds.
+const mostRate = 240
+
+// unknownRate is the frame rate video whose own is not known is
+// converted at, which holds the usual 23.976 to 30 without dropping a
+// frame.
+const unknownRate = 30
+
+// knownRate is the frame rate a conversion takes video of average and
+// real frame rates at, as ffprobe gives them: the average, else the real
+// one, leaving out 0, NaN and rates above mostRate; else unknownRate.
+func knownRate(average, real float64) float64 {
+	for _, rate := range []float64{average, real} {
+		if rate > 0 && rate <= mostRate {
+			return rate
+		}
 	}
-	return 0
+	return unknownRate
+}
+
+// sourceRate is the frame rate of video, as its conversion takes it (see
+// knownRate).
+func sourceRate(video MediaStream) float64 {
+	var average, real float64
+	if video.AverageFrameRate != nil {
+		average = *video.AverageFrameRate
+	}
+	if video.RealFrameRate != nil {
+		real = *video.RealFrameRate
+	}
+	return knownRate(average, real)
+}
+
+// encodedRate is the frame rate a conversion encodes video of rate at,
+// tuned by t, and whether it doubles the frames: like Jellyfin, when
+// deinterlacing makes a frame of each field, up to 30 frames a second
+// and within the frame rate the app's profile allows, to which the rate
+// is brought down, dropping the frames beyond it.
+func (v *VideoConversion) encodedRate(rate float64, t Tuning) (float64, bool) {
+	double := v.Deinterlace && t.DoubleRate && rate <= 30 && (v.FrameRate <= 0 || rate*2 <= v.FrameRate)
+	if double {
+		rate *= 2
+	}
+	if v.FrameRate > 0 && rate > v.FrameRate {
+		rate = v.FrameRate
+	}
+	return rate, double
 }
 
 // fits reports whether the 16:9 frame of a height holds the whole source,
@@ -572,13 +611,14 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 	}
 	rate := sourceRate(video)
 	if most := limits.App.FrameRate; most > 0 && rate > most+0.01 {
-		conversion.FrameRate, rate = most, most
+		conversion.FrameRate = most
 	}
+	rate, _ = conversion.encodedRate(rate, can.Tuning)
 	// A frame larger than the level the app decodes holds goes down the
 	// ladder until it fits.
 	if conversion.MaxLevel = limits.App.level(conversion.Codec); conversion.MaxLevel > 0 {
 		for _, r := range rungs {
-			if conversion.level(rate) <= conversion.MaxLevel {
+			if conversion.codecLevel(rate).tenths <= conversion.MaxLevel {
 				break
 			}
 			if w, h := appFrame(limits.App, r.height, width, height, false); h < conversion.Height {
@@ -745,70 +785,113 @@ func (v *VideoConversion) Steps(width, height int) []VideoConversion {
 
 // levels are the codec levels a conversion may declare, lowest first, in
 // tenths (41 is 4.1), with the largest frame and the most samples a second
-// each holds: macroblocks for H.264 (ITU-T H.264, table A-1), luma samples
-// for HEVC (ITU-T H.265, table A.8, main tier). Conversions are 4K at
-// most, which 5.2 holds up to 60 frames a second and 6.1 above. 6.0 is
-// left out: NVENC's H.264 calls it 6.0 and VAAPI 6, while every encoder
-// Polyfin uses takes the other levels' names. Those below 4.1 serve only
-// apps that decode no higher (see level).
+// each holds, macroblocks for H.264 (ITU-T H.264, table A-1) and luma
+// samples for HEVC (ITU-T H.265, tables A.8 and A.9), then the most bits a
+// second and bits buffered of its Main tier, in thousands, which H.264's
+// High profile takes 1.25 times (table A-2). HEVC is always declared at
+// the Main tier: many TVs decode no other, and apps state a level, never
+// a tier. Conversions are 4K at most, which 5.2 holds up to 60 frames a
+// second and 6.1 above. 6.0 is left out: NVENC's H.264 calls it 6.0 and
+// VAAPI 6, while every encoder Polyfin uses takes the other levels'
+// names. Those below 4.1 serve only apps that decode no higher (see
+// codecLevel).
 var levels = map[string][]struct {
 	tenths        int
 	frame, second int64
+	rate, buffer  int64
 }{
-	"h264": {{30, 1_620, 40_500}, {31, 3_600, 108_000}, {32, 5_120, 216_000}, {40, 8_192, 245_760}, {41, 8_192, 245_760},
-		{42, 8_704, 522_240}, {50, 22_080, 589_824}, {51, 36_864, 983_040}, {52, 36_864, 2_073_600}, {61, 139_264, 8_355_840}},
-	"hevc": {{30, 552_960, 16_588_800}, {31, 983_040, 33_177_600}, {40, 2_228_224, 66_846_720}, {41, 2_228_224, 133_693_440},
-		{50, 8_912_896, 267_386_880}, {51, 8_912_896, 534_773_760}, {52, 8_912_896, 1_069_547_520}, {61, 35_651_584, 2_139_095_040}},
+	"h264": {
+		{30, 1_620, 40_500, 10_000, 10_000}, {31, 3_600, 108_000, 14_000, 14_000}, {32, 5_120, 216_000, 20_000, 20_000},
+		{40, 8_192, 245_760, 20_000, 25_000}, {41, 8_192, 245_760, 50_000, 62_500}, {42, 8_704, 522_240, 50_000, 62_500},
+		{50, 22_080, 589_824, 135_000, 135_000}, {51, 36_864, 983_040, 240_000, 240_000}, {52, 36_864, 2_073_600, 240_000, 240_000},
+		{61, 139_264, 8_355_840, 480_000, 480_000},
+	},
+	"hevc": {
+		{30, 552_960, 16_588_800, 6_000, 6_000}, {31, 983_040, 33_177_600, 10_000, 10_000}, {40, 2_228_224, 66_846_720, 12_000, 12_000},
+		{41, 2_228_224, 133_693_440, 20_000, 20_000}, {50, 8_912_896, 267_386_880, 25_000, 25_000},
+		{51, 8_912_896, 534_773_760, 40_000, 40_000}, {52, 8_912_896, 1_069_547_520, 60_000, 60_000},
+		{61, 35_651_584, 2_139_095_040, 120_000, 120_000},
+	},
 }
 
-// level is the codec level a conversion declares for video of a frame
-// rate, in tenths: the lowest that holds its frame and its samples a
-// second, and never below H.264 4.1 (4.2 above 30 frames a second) or HEVC
-// 4.1, unless the app decodes no higher (MaxLevel). An NVIDIA GPU refuses
-// to encode at a level too low for the video.
-func (v *VideoConversion) level(rate float64) int {
-	frame := int64(v.Width) * int64(v.Height)
-	least := 41
+// codecLevel is the level a conversion declares at a frame rate, and
+// what its encoder is told within it (see VideoConversion.codecLevel).
+type codecLevel struct {
+	// tenths is the level, 41 for 4.1.
+	tenths int
+	// bitrate, peak and buffer are the encoder's bitrate, maximum rate
+	// and buffer, in bits.
+	bitrate, peak, buffer int64
+}
+
+// name is the level as "4.1" or "5". internal/hls spells it as each
+// encoder takes it.
+func (l codecLevel) name() string {
+	if l.tenths%10 == 0 {
+		return strconv.Itoa(l.tenths / 10)
+	}
+	return strconv.Itoa(l.tenths/10) + "." + strconv.Itoa(l.tenths%10)
+}
+
+// codecLevel is the level a conversion declares for video of a frame
+// rate, at the Main tier, and the bitrates its encoder is told, all of
+// which the level holds: NVENC refuses to encode otherwise, as x265 does
+// at a rate above the level's. It is the lowest level holding the frame,
+// its samples a second and the peak (see peak), never below H.264 4.1
+// (4.2 above 30 frames a second) or HEVC 4.1, unless the app decodes no
+// higher (MaxLevel), and up to the app's level. The buffer, twice the
+// bitrate, is brought within that level's, which holds at least a second
+// of the peak. A peak no such level holds is brought within the highest
+// one, the bitrate with it, as within 6.1 when no level holds the frame.
+func (v *VideoConversion) codecLevel(rate float64) codecLevel {
+	frame, factor, least := int64(v.Width)*int64(v.Height), int64(1000), 41
 	if v.Codec == "h264" {
 		frame = int64((v.Width+15)/16) * int64((v.Height+15)/16)
 		if rate > 30 {
 			least = 42
 		}
+		if v.Profile == "" {
+			factor = 1250
+		}
 	}
 	if v.MaxLevel > 0 && v.MaxLevel < least {
 		least = 0
 	}
-	highest := least
-	for _, l := range levels[v.Codec] {
-		if l.tenths >= least && frame <= l.frame && float64(frame)*rate <= float64(l.second) {
-			return l.tenths
+	c := codecLevel{bitrate: v.Bitrate, peak: v.peak(), buffer: v.Bitrate * 2}
+	table := levels[v.Codec]
+	top, found := len(table)-1, false
+	for i, l := range table {
+		if l.tenths < least || frame > l.frame || float64(frame)*rate > float64(l.second) {
+			continue
 		}
-		highest = l.tenths
+		// Above the lowest level holding the frame and its samples, the
+		// app's level is the highest.
+		if found && v.MaxLevel > 0 && l.tenths > v.MaxLevel {
+			break
+		}
+		top, found = i, true
+		if c.peak <= l.rate*factor {
+			break
+		}
 	}
-	return highest
+	l := table[top]
+	c.tenths = l.tenths
+	c.peak, c.buffer = min(c.peak, l.rate*factor), min(c.buffer, l.buffer*factor)
+	c.bitrate = min(c.bitrate, c.peak)
+	return c
 }
 
-// Level is the codec level a conversion declares for video of a frame
-// rate: "4.1", "5". internal/hls spells it as each encoder takes it.
-func (v *VideoConversion) Level(rate float64) string {
-	tenths := v.level(rate)
-	if tenths%10 == 0 {
-		return strconv.Itoa(tenths / 10)
-	}
-	return strconv.Itoa(tenths/10) + "." + strconv.Itoa(tenths%10)
-}
-
-// CodecString is the RFC 6381 codec string of a conversion's video: H.264
-// at its profile, High unless the app's allows only Main or Baseline, or
-// HEVC Main, at its level. The constraint flags are those x264 writes:
-// Baseline as constrained (set 0 and 1), Main with set 1.
-func (v *VideoConversion) CodecString(rate float64) string {
-	tenths := v.level(rate)
+// codecString is the RFC 6381 codec string of a conversion's video at l:
+// H.264 at its profile, High unless the app's allows only Main or
+// Baseline, or HEVC Main, at the Main tier. The constraint flags are
+// those x264 writes: Baseline as constrained (set 0 and 1), Main with set
+// 1.
+func (v *VideoConversion) codecString(l codecLevel) string {
 	if v.Codec == "hevc" {
 		// HEVC levels count in thirtieths: 4.1 is 123.
-		return "hvc1.1.6.L" + strconv.Itoa(tenths*3) + ".B0"
+		return "hvc1.1.6.L" + strconv.Itoa(l.tenths*3) + ".B0"
 	}
-	level := strings.ToUpper(strconv.FormatInt(int64(tenths), 16))
+	level := strings.ToUpper(strconv.FormatInt(int64(l.tenths), 16))
 	switch v.Profile {
 	case "main":
 		return "avc1.4D40" + level

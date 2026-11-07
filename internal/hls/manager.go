@@ -179,18 +179,22 @@ type Remux struct {
 // what Polyfin did before they were settings.
 type VideoEncoding struct {
 	// Encoder is libx264, libx265 or one of Hardware's; Level, the codec
-	// level it declares.
+	// level it declares, HEVC's at the Main tier, which NVENC and VAAPI
+	// write by default, and x265 with bitrates within the Main tier's.
 	Encoder, Level string
 	Width, Height  int
-	// Bitrate is the average the encoder aims for, in bits per second, and
+	// Bitrate is the average the encoder aims for, in bits per second;
 	// MaxRate the most it lets the video peak at, 0 for one and a half
-	// times Bitrate.
-	Bitrate, MaxRate int64
+	// times Bitrate; BufSize, in bits, the buffer it keeps that peak
+	// within, 0 for twice Bitrate.
+	Bitrate, MaxRate, BufSize int64
 	// FrameRate is the converted video's, frames a second: the source's,
-	// twice it with DoubleRate, or less with DropFrames, which brings the
-	// video down to it, as an app's profile asks.
-	FrameRate  float64
-	DropFrames bool
+	// twice it with DoubleRate, or less, as an app's profile asks. PinRate
+	// tells the encoder that rate with -r, which drops or repeats frames
+	// to keep it, so that Level holds the rate the encoder is set up with;
+	// without it, the encoder takes FFmpeg's own guess.
+	FrameRate float64
+	PinRate   bool
 	// Profile is the H.264 profile written, high, main or baseline; empty
 	// writes High, and HEVC Main whatever it says.
 	Profile string
@@ -589,11 +593,14 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 	default:
 		args = append(args, "-b:v", strconv.FormatInt(v.Bitrate, 10))
 	}
-	maxRate := v.MaxRate
+	maxRate, bufSize := v.MaxRate, v.BufSize
 	if maxRate <= 0 {
 		maxRate = v.Bitrate * 3 / 2
 	}
-	args = append(args, "-maxrate", strconv.FormatInt(maxRate, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
+	if bufSize <= 0 {
+		bufSize = v.Bitrate * 2
+	}
+	args = append(args, "-maxrate", strconv.FormatInt(maxRate, 10), "-bufsize", strconv.FormatInt(bufSize, 10),
 		"-force_key_frames", keyframes)
 	if !v.Burns() {
 		args = append(args, "-vf", skip+v.filters())
@@ -610,7 +617,7 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 			profile = "constrained_baseline"
 		}
 	}
-	if v.DropFrames && v.FrameRate > 0 {
+	if v.PinRate && v.FrameRate > 0 {
 		args = append(args, "-r", strconv.FormatFloat(v.FrameRate, 'f', -1, 64))
 	}
 	switch {
