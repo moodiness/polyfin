@@ -15,7 +15,7 @@ import { NumberInput, TextInput } from './Input'
 import { Kbd } from './Kbd'
 import { SecretField, type SecretFieldProps } from './SecretField'
 import { Select, type SelectOption } from './Select'
-import { SwitchTrack } from './Switch'
+import { Switch } from './Switch'
 
 /** Past this many choices, a choice opens a searchable list instead of a strip. */
 const stripMax = 12
@@ -124,7 +124,8 @@ export type SettingRowProps<T extends string | number = string> = Common &
  * One setting as a Salon row: the label on the left, the value and a chevron on the right, the
  * help shown only while the row is lit. Enter, Space or a click opens its control inside the
  * row; Escape closes it and returns to the row; ↑ ↓ move to the next row without trapping Tab.
- * - `switch`: the whole row is the `role="switch"`, with the toggle and its word.
+ * - `switch`: the switch on the right alone toggles (`role="switch"`, with its word); a click on
+ *   the name or elsewhere on the row lights it to show the help, and never toggles.
  * - `choice`: a strip of big choices (`role="radiogroup"`, ← → move and choose, Enter closes),
  *   or a searchable list past 12 choices.
  * - `number`: a strip of values, or a number well with its unit.
@@ -258,23 +259,44 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
     )
   }
 
-  const isSwitch = props.kind === 'switch'
-  const words = props.kind === 'switch' ? (props.stateText ?? ([t.ui.on, t.ui.off] as const)) : null
   const wasId = `${id}-was`
+  const headClass = cx(
+    'flex w-full items-center gap-4 rounded-row py-3.5 pr-[1.375rem] pl-[1.875rem] text-left',
+    'min-h-[5.125rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
+    disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+  )
+  const mark = changed && (
+    <span aria-hidden="true" className="-mr-0.5 size-2.5 shrink-0 rounded-full bg-link" />
+  )
+  const name = (
+    <span
+      id={labelId}
+      className={cx(
+        'min-w-0 flex-1 text-h3 text-ink',
+        props.kind === 'path' && 'max-md:basis-[calc(100%-2.5rem)]',
+      )}
+    >
+      {label}
+      {detail !== undefined && (
+        <span className="mt-0.5 block text-[1.03125rem] font-[450] tracking-normal text-ink-3 max-md:text-micro">
+          {detail}
+        </span>
+      )}
+    </span>
+  )
 
   return (
     <div
       ref={row}
       id={anchor}
-      data-lit={lit || undefined}
       onFocus={() => setFocused(true)}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       className={cx(
-        'min-w-0 scroll-mt-32 rounded-row transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit',
+        'min-w-0 scroll-mt-32 rounded-row transition-[background-color,box-shadow] duration-350 ease-nuit',
         'data-flash:shadow-[0_0_0_4px] data-flash:shadow-link/45',
         lit
-          ? 'lit lift [--lift:1.012]'
+          ? cx('lit-row', nested && '[--lit-fill:var(--color-s3)]')
           : nested
             ? cx('bg-s2', !disabled && 'hover:bg-s4')
             : cx('bg-s1', !disabled && 'hover:bg-s2'),
@@ -282,71 +304,68 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
         className,
       )}
     >
-      <button
-        ref={head}
-        type="button"
-        data-setting-head
-        disabled={disabled}
-        role={isSwitch ? 'switch' : undefined}
-        aria-checked={props.kind === 'switch' ? props.checked : undefined}
-        aria-expanded={isSwitch ? undefined : open}
-        aria-controls={!isSwitch && open ? pickerId : undefined}
-        aria-labelledby={isSwitch ? labelId : `${labelId} ${valueId}`}
-        aria-describedby={describedBy(helpId, errorId, isSwitch && changed ? wasId : undefined)}
-        onClick={() => {
-          if (props.kind === 'switch') props.onChange(!props.checked)
-          else setOpen(!open)
-        }}
-        className={cx(
-          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[1.375rem] pl-[1.875rem] text-left focus-visible:outline-none disabled:cursor-not-allowed',
-          'min-h-[5.125rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
-          props.kind === 'path' && 'max-md:flex-wrap max-md:gap-y-0.5',
-        )}
-      >
-        {changed && (
-          <span aria-hidden="true" className="-mr-0.5 size-2.5 shrink-0 rounded-full bg-link" />
-        )}
-        <span
-          id={labelId}
-          className={cx(
-            'min-w-0 flex-1 text-h3 text-ink',
-            props.kind === 'path' && 'max-md:basis-[calc(100%-2.5rem)]',
-          )}
-        >
-          {label}
-          {detail !== undefined && (
-            <span className="mt-0.5 block text-[1.03125rem] font-[450] tracking-normal text-ink-3 max-md:text-micro">
-              {detail}
-            </span>
-          )}
-        </span>
-        <span
-          id={valueId}
-          className={cx(
-            // The value wraps before the label does: it takes 55 % of the row at most.
-            'flex max-w-[55%] min-w-0 flex-wrap items-baseline justify-end gap-x-3 text-right text-lead text-ink-2 max-md:gap-x-2 max-md:text-[1.0625rem]',
-            props.kind === 'path' &&
-              'figures max-md:order-3 max-md:max-w-none max-md:basis-full max-md:justify-start max-md:text-left',
-            isSwitch && 'sr-only',
-          )}
-        >
+      {props.kind === 'switch' ? (
+        // Only the switch toggles. A click anywhere else on the head moves the focus to it, which
+        // lights the row and shows the help; the help is in the switch's description already, so
+        // the keyboard and screen readers need nothing more.
+        <div onClick={() => head.current?.focus()} className={headClass}>
+          {mark}
+          {name}
           {changed && (
-            <span id={wasId} className="text-[1rem] font-medium text-ink-3 max-md:text-[0.9375rem]">
+            <span id={wasId} className="sr-only">
               {t.ui.was(was)}
             </span>
           )}
-          <span className={cx('min-w-0 break-words', changed && 'font-[650] text-link')}>
-            {display}
-          </span>
-        </span>
-        {words && props.kind === 'switch' ? (
-          <>
-            <span aria-hidden="true" className="min-w-[2.2em] text-right text-body text-ink-2">
-              {props.checked ? words[0] : words[1]}
+          <Switch
+            ref={head}
+            data-setting-head
+            checked={props.checked}
+            onChange={props.onChange}
+            labelledBy={labelId}
+            describedById={describedBy(helpId, errorId, changed ? wasId : undefined)}
+            stateText={props.stateText ?? true}
+            disabled={disabled}
+            // A comfortable target: 12 px around the switch take the click too.
+            className="relative -my-1 after:absolute after:-inset-3"
+          />
+        </div>
+      ) : (
+        <button
+          ref={head}
+          type="button"
+          data-setting-head
+          disabled={disabled}
+          aria-expanded={open}
+          aria-controls={open ? pickerId : undefined}
+          aria-labelledby={`${labelId} ${valueId}`}
+          aria-describedby={describedBy(helpId, errorId)}
+          onClick={() => setOpen(!open)}
+          className={cx(
+            headClass,
+            'focus-visible:outline-none',
+            props.kind === 'path' && 'max-md:flex-wrap max-md:gap-y-0.5',
+          )}
+        >
+          {mark}
+          {name}
+          <span
+            id={valueId}
+            className={cx(
+              // The value wraps before the label does: it takes 55 % of the row at most.
+              'flex max-w-[55%] min-w-0 flex-wrap items-baseline justify-end gap-x-3 text-right text-lead text-ink-2 max-md:gap-x-2 max-md:text-[1.0625rem]',
+              props.kind === 'path' &&
+                'figures max-md:order-3 max-md:max-w-none max-md:basis-full max-md:justify-start max-md:text-left',
+            )}
+          >
+            {changed && (
+              <span className="text-[1rem] font-medium text-ink-3 max-md:text-[0.9375rem]">
+                {t.ui.was(was)}
+              </span>
+            )}
+            <span className={cx('min-w-0 break-words', changed && 'font-[650] text-link')}>
+              {display}
             </span>
-            <SwitchTrack checked={props.checked} />
-          </>
-        ) : (
+          </span>
           <CaretRightIcon
             size="1.5rem"
             aria-hidden="true"
@@ -356,8 +375,8 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
               props.kind === 'path' && 'max-md:order-2',
             )}
           />
-        )}
-      </button>
+        </button>
+      )}
       {error && (
         <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
           <FieldError id={errorId}>{error}</FieldError>
@@ -409,7 +428,7 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
                         'figures h-[3.75rem] min-w-[3.75rem] shrink-0 cursor-pointer rounded-choice bg-s1 px-[1.125rem] text-[1.3125rem] font-[620] whitespace-nowrap text-ink',
                         'transition-[scale,background-color,color,box-shadow] duration-450 ease-nuit hover:bg-s2 disabled:cursor-not-allowed disabled:opacity-45',
                         'focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid',
-                        'aria-checked:scale-[1.08] aria-checked:bg-on-focus aria-checked:text-focus aria-checked:shadow-[0_14px_26px_-14px_rgb(28_26_33/0.9)] motion-reduce:aria-checked:scale-100',
+                        'aria-checked:scale-[1.08] aria-checked:bg-focus aria-checked:text-on-focus aria-checked:shadow-[0_14px_26px_-14px_rgb(0_0_0/0.9)] motion-reduce:aria-checked:scale-100',
                         'max-md:h-[3.25rem] max-md:min-w-[3.25rem] max-md:px-3.5 max-md:text-[1.1875rem]',
                       )}
                     >
