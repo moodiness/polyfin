@@ -169,7 +169,7 @@ function TitleList({ scope, source }: { scope: ImportTitlesScope; source: string
       ) : rows.size === 0 ? (
         <p className="text-control text-ink-3">{text.none}</p>
       ) : (
-        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {[...rows].map(([key, group]) => (
             <TitleRow key={key} scope={scope} source={source} titles={group} />
           ))}
@@ -244,7 +244,7 @@ function TitleRow({
   }
 
   return (
-    <li className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 rounded-row bg-s1 px-6 py-4 max-md:px-5">
+    <li className="flex flex-wrap items-start justify-between gap-x-5 gap-y-2 rounded-row bg-s1 py-2.5 pr-3 pl-4">
       <div className="min-w-0 flex-1 basis-[16.25rem]">
         <p className="hyphenate text-control font-medium text-ink">{heading}</p>
         {first.name !== '' && first.ids !== '' && (

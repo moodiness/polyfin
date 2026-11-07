@@ -89,7 +89,7 @@ export function LetterboxdForm({
 
   return (
     <form onSubmit={submit} noValidate>
-      <div className="flex max-w-[38rem] flex-col gap-5 px-6 py-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-4 px-5 max-md:px-4">
         {header}
         <p className="text-small text-ink-2">{text.help}</p>
         {!searchable && <Notice tone="warn">{text.noSearch}</Notice>}

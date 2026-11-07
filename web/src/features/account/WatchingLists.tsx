@@ -263,7 +263,7 @@ export function NextUpList() {
         checked={nextUp.data.withResume}
         disabled={withResume.isPending}
         onChange={(on) => withResume.mutate(on)}
-        className="mt-6"
+        className="mt-4"
       />
     </div>
   )
@@ -372,7 +372,7 @@ export function HomeRowList() {
           {text.emptyHelp}
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {rows.data.rows.map((row) => (
             <SettingRow
               key={row.id}

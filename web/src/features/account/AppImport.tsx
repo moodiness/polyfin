@@ -115,7 +115,7 @@ export default function AppImport({
       {current !== null && <AppImportProgress current={current} own={own} />}
       {!running && account === null && (
         <Panel as="div" flush>
-          <div className="flex max-w-[38rem] flex-col gap-2 px-6 pt-6 max-sm:px-4">
+          <div className="flex max-w-[38rem] flex-col gap-2 px-5 max-md:px-4">
             <span aria-hidden className="text-control font-medium text-ink">
               {text.app}
             </span>
@@ -162,7 +162,7 @@ export default function AppImport({
           titleAs="h3"
           description={text.chooseHelp[account.app]}
         >
-          <div className="flex max-w-[38rem] flex-col gap-5 px-6 py-6 max-sm:px-4">
+          <div className="flex max-w-[38rem] flex-col gap-4 px-5 max-md:px-4">
             <Field
               label={text.profile}
               help={
@@ -384,7 +384,7 @@ function NuvioSignInForm({
 
   return (
     <form onSubmit={submit} noValidate>
-      <div className="flex max-w-[38rem] flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-4 px-5 pt-4 max-md:px-4">
         <Field label={text.backend} help={text.backendHelp} error={backendError}>
           <TextInput
             type="url"
@@ -467,7 +467,7 @@ function StremioSignIn({
 
   return (
     <>
-      <div className="flex max-w-[38rem] flex-col gap-2 px-6 pt-5 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-2 px-5 pt-4 max-md:px-4">
         <span aria-hidden className="text-control font-medium text-ink">
           {text.way}
         </span>
@@ -568,16 +568,16 @@ function StremioLinkForm({
 
   return (
     <>
-      <div className="flex max-w-[38rem] flex-col gap-4 px-6 pt-5 pb-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-4 px-5 pt-4 max-md:px-4">
         {link === null ? (
           <p className="text-small text-ink-3">{text.linkHelp}</p>
         ) : (
-          <div className="flex flex-col gap-4 rounded-row bg-s2 px-6 py-5 max-sm:px-4">
+          <div className="flex flex-col gap-3 rounded-row bg-s2 px-4 py-3">
             <p className="text-control text-ink">{text.approve}</p>
             <div className="flex flex-wrap items-center gap-3">
               <p
                 aria-label={text.codeLabel}
-                className="rounded-field bg-s3 px-5 py-2 font-mono text-[1.625rem] font-semibold tracking-[0.2em] text-ink select-all"
+                className="rounded-field bg-s3 px-4 py-1.5 font-mono text-[1.375rem] font-semibold tracking-[0.2em] text-ink select-all"
               >
                 {link.code}
               </p>
@@ -666,7 +666,7 @@ function StremioPasswordForm({
 
   return (
     <form onSubmit={submit} noValidate>
-      <div className="flex max-w-[38rem] flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-4 px-5 pt-4 max-md:px-4">
         <Field label={text.email}>
           <TextInput
             type="email"
@@ -744,7 +744,7 @@ function StremioKeyForm({
 
   return (
     <form onSubmit={submit} noValidate>
-      <div className="flex max-w-[38rem] flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+      <div className="flex max-w-[38rem] flex-col gap-4 px-5 pt-4 max-md:px-4">
         <Field label={text.key} help={text.keyHelp} error={refused ? message : undefined}>
           <TextInput
             type="password"
@@ -933,7 +933,7 @@ function AppConnectionRow({
         : { tone: 'ok', label: text.status.connected }
 
   return (
-    <li className="flex flex-col gap-3 px-6 py-5 max-sm:px-4">
+    <li className="flex flex-col gap-2.5 px-5 py-3 max-md:px-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="text-h3 font-semibold text-ink">{name}</h4>
@@ -957,7 +957,7 @@ function AppConnectionRow({
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-4 rounded-row bg-s2 px-6 py-5 max-sm:flex-col max-sm:items-start max-sm:px-4">
+      <div className="flex items-center justify-between gap-3 rounded-row bg-s2 px-4 py-3 max-sm:flex-col max-sm:items-start">
         <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
           <ClockCounterClockwiseIcon
             size="1rem"

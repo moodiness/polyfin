@@ -155,7 +155,7 @@ export function ReminderSettingsForm() {
   return (
     <div className="space-y-4">
       <h3 className="text-h3 text-ink">{text.settingsTitle}</h3>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <SettingRow<number>
           kind="choice"
           label={text.before}

@@ -45,7 +45,7 @@ export default function OwnTrackChoices() {
   const { titles } = current.data
   return (
     // One row: what is kept on the left, Forget on the right; the button wraps under it on a phone.
-    <div className="flex min-h-20 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-row bg-s1 py-3.5 pr-4 pl-6 max-md:pl-5">
+    <div className="flex min-h-15 flex-wrap items-center justify-between gap-x-5 gap-y-2 rounded-row bg-s1 py-2 pr-3 pl-4">
       <p className="min-w-0 text-h3 text-ink">{titles === 0 ? text.none : text.kept(titles)}</p>
       <Button
         variant="secondary"
