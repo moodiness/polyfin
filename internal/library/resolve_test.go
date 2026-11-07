@@ -1,6 +1,8 @@
 package library
 
 import (
+	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -576,4 +578,162 @@ func TestResolveAsksTMDBNothingWithoutAKey(t *testing.T) {
 	if asked := f.requests("/"); len(asked) != 0 {
 		t.Errorf("TMDB was asked %v without a key", asked)
 	}
+}
+
+// Each kind of identifier finds the titles listed under it, and those
+// whose description gives it, in the order of the table, while a title of
+// the other kind with the same identifier is not found.
+func TestResolveFindsTitlesByEachKindOfIdentifier(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name   string
+		kind   Kind
+		listed string              // the Stremio identifier the ref names
+		ref    TitleRef            // the ref, by that identifier
+		given  func(*stremio.Meta) // gives the identifier in a description
+	}{
+		{"IMDb", KindMovie, "tt0000301", TitleRef{IMDb: "tt0000301"}, func(m *stremio.Meta) { m.ImdbID = "tt0000301" }},
+		{"TMDB", KindMovie, "tmdb:302", TitleRef{TMDB: 302}, func(m *stremio.Meta) { m.TmdbID = "302" }},
+		{"TVDB", KindSeries, "tvdb:303", TitleRef{Series: true, TVDB: 303}, func(m *stremio.Meta) { m.TvdbID = "303" }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			e := newEnv(t)
+			other := KindSeries
+			if c.kind == KindSeries {
+				other = KindMovie
+			}
+			// Saved one at a time, so that the table holds them in this
+			// order: a title whose description gives the identifier, the
+			// title listed under it, and a title of the other kind whose
+			// description gives it.
+			given := stremio.Meta{ID: "own:1", Type: string(c.kind), Name: "Described"}
+			c.given(&given)
+			stray := stremio.Meta{ID: "own:2", Type: string(other), Name: "Other kind"}
+			c.given(&stray)
+			for _, r := range []record{
+				{ID: itemID(titleKey(c.kind, given.ID)), Key: titleKey(c.kind, given.ID), Kind: c.kind, Meta: &given},
+				{ID: itemID(titleKey(c.kind, c.listed)), Key: titleKey(c.kind, c.listed), Kind: c.kind,
+					Meta: &stremio.Meta{ID: c.listed, Type: string(c.kind), Name: "Listed"}},
+				{ID: itemID(titleKey(other, stray.ID)), Key: titleKey(other, stray.ID), Kind: other, Meta: &stray},
+			} {
+				if err := e.service.save(t.Context(), []record{r}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := e.service.Resolve(t.Context(), []TitleRef{c.ref})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []TitleTarget{{ID: itemID(titleKey(c.kind, given.ID))}, {ID: itemID(titleKey(c.kind, c.listed))}}
+			if len(got) != 1 || !slices.Equal(got[0], want) {
+				t.Errorf("%+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+// knownTitles and knownEpisodes look their titles and episodes up through
+// indexes, generic plans included: with sequential scans disabled, no plan
+// reads items whole, nor reads a whole index of it.
+func TestKnownLookupsReadItemsThroughIndexes(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := t.Context()
+	// Titles and episodes of about the size of production's, mixed in the
+	// table as listings mix them, enough for the plans to tell a lookup
+	// from a read of every title: 5,000 titles, a third of them series,
+	// each with 5 episodes.
+	if _, err := e.service.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
+		SELECT gen_random_uuid(), key, kind, data FROM (
+			SELECT kind || '|tt' || (1000000 + i) AS key, kind, jsonb_build_object('kind', kind,
+				'meta', jsonb_build_object('id', 'tt' || (1000000 + i), 'type', kind, 'imdb_id', 'tt' || (1000000 + i),
+					'_tmdbId', (100000 + i)::text, '_tvdbId', CASE WHEN kind = 'series' THEN (300000 + i)::text END,
+					'description', (SELECT string_agg(md5(i || ':' || n), ' ') FROM generate_series(1, 30) n))) AS data
+			FROM generate_series(1, 5000) i, LATERAL (SELECT CASE WHEN i % 3 = 0 THEN 'series' ELSE 'movie' END AS kind) k
+			UNION ALL
+			SELECT 'episode|tt' || (1000000 + s) || ':1:' || n, 'episode', jsonb_build_object('kind', 'episode',
+				'seriesId', 'tt' || (1000000 + s), 'video', jsonb_build_object('id', 'tt' || (1000000 + s) || ':1:' || n,
+					'season', 1, 'episode', n, 'overview', (SELECT string_agg(md5(s || ':' || n || ':' || o), ' ') FROM generate_series(1, 12) o)))
+			FROM generate_series(3, 5000, 3) s, generate_series(1, 5) n) listed
+		ORDER BY md5(key)`); err != nil {
+		t.Fatal(err)
+	}
+	// As autovacuum does after such writes.
+	if _, err := e.service.db.Exec(ctx, "ANALYZE items"); err != nil {
+		t.Fatal(err)
+	}
+	// n identifiers of every seventh title: format applied to from + 1,
+	// from + 8, and so on.
+	ids := func(format string, from, n int) []string {
+		var ids []string
+		for i := range n {
+			ids = append(ids, fmt.Sprintf(format, from+1+i*7))
+		}
+		return ids
+	}
+	// The statements as Resolve runs them: for a few identifiers, IMDb and
+	// TMDB ones only, as most imports send; for a batch of an import; and
+	// their generic plans. The few have an empty, not nil, list of TVDB
+	// identifiers: a condition on it, unlike one on nil (NULL), would let
+	// a small partial index (items_person_tmdb) stand for it, read whole.
+	fewTitles, fewTitlesArgs := knownTitlesQuery([]string{"movie|tt1000001", "movie|tmdb:100001"}, []string{"tt1000001"}, []string{"100001"},
+		[]string{})
+	batchTitles, batchTitlesArgs := knownTitlesQuery(ids("movie|tt%d", 1000000, 150), ids("tt%d", 1000000, 150),
+		ids("%d", 100000, 150), ids("%d", 300000, 50))
+	for _, c := range []struct {
+		name, query string
+		args        []any // none for the generic plan
+	}{
+		{"knownTitles, a few identifiers", fewTitles, fewTitlesArgs},
+		{"knownTitles, an import batch", batchTitles, batchTitlesArgs},
+		{"knownTitles, the generic plan", batchTitles, nil},
+		{"knownEpisodes, a few identifiers", knownEpisodesQuery, []any{[]string{"tt1000003"}}},
+		{"knownEpisodes, an import batch", knownEpisodesQuery, []any{ids("tt%d", 1000000, 150)}},
+		{"knownEpisodes, the generic plan", knownEpisodesQuery, nil},
+	} {
+		tx, err := e.service.db.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec(ctx, "SET LOCAL enable_seqscan = off"); err != nil {
+			t.Fatal(err)
+		}
+		var out []byte
+		if c.args == nil {
+			// EXPLAIN's generic plan takes no values, so it goes
+			// unprepared, its parameters as written.
+			results, err := tx.Conn().PgConn().Exec(ctx, "EXPLAIN (GENERIC_PLAN, FORMAT JSON) "+c.query).ReadAll()
+			if err != nil {
+				t.Fatal(err)
+			}
+			out = results[0].Rows[0][0]
+		} else if err := tx.QueryRow(ctx, "EXPLAIN (FORMAT JSON) "+c.query, c.args...).Scan(&out); err != nil {
+			t.Fatal(err)
+		}
+		_ = tx.Rollback(ctx)
+		var plans []struct{ Plan planNode }
+		if err := json.Unmarshal(out, &plans); err != nil || len(plans) != 1 {
+			t.Fatalf("%s: %v %s", c.name, err, out)
+		}
+		if read := plans[0].Plan.wholeReads(); len(read) > 0 {
+			t.Errorf("%s: reads %s whole:\n%s", c.name, strings.Join(read, ", "), out)
+		}
+	}
+}
+
+// wholeReads lists the tables the plan scans sequentially and the indexes
+// it reads without a condition: whole.
+func (n planNode) wholeReads() []string {
+	var read []string
+	switch {
+	case n.NodeType == "Seq Scan":
+		read = append(read, "table "+n.Relation)
+	case n.Index != "" && n.IndexCond == "":
+		read = append(read, "index "+n.Index)
+	}
+	for _, child := range n.Plans {
+		read = append(read, child.wholeReads()...)
+	}
+	return read
 }

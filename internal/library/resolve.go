@@ -541,6 +541,41 @@ func (t knownTitle) matches(ref TitleRef) bool {
 	return false
 }
 
+// knownTitlesQuery returns the statement that reads the movies and series
+// listed under one of keys, or with one of the IMDb (imdbs), TMDB (tmdbs)
+// or TVDB (tvdbs) identifiers, and its arguments. Each identifier is
+// compared with the very expression of its index and statistics
+// (items_title_*), so that PostgreSQL looks each one up and combines them
+// in one read of the table: each title once, in the order of the table,
+// which decides the title found first when several match a ref. A kind of
+// identifier with none to look up, nil or empty, gets no condition:
+// PostgreSQL takes a comparison with an empty array for false, and false
+// lets any partial index of items stand for it, read whole
+// (items_person_tmdb, for one).
+func knownTitlesQuery(keys, imdbs, tmdbs, tvdbs []string) (string, []any) {
+	var query strings.Builder
+	query.Grow(256)
+	query.WriteString(`SELECT kind, key, data->'meta' FROM items WHERE kind IN ('movie', 'series') AND (key = ANY($1)`)
+	args := make([]any, 1, 4)
+	args[0] = keys
+	for _, by := range [...]struct {
+		expression string
+		ids        []string
+	}{{`data->'meta'->>'imdb_id'`, imdbs}, {`data->'meta'->>'_tmdbId'`, tmdbs}, {`data->'meta'->>'_tvdbId'`, tvdbs}} {
+		if len(by.ids) == 0 {
+			continue
+		}
+		args = append(args, by.ids)
+		query.WriteString(" OR ")
+		query.WriteString(by.expression)
+		query.WriteString(" = ANY($")
+		query.WriteString(strconv.Itoa(len(args)))
+		query.WriteString(")")
+	}
+	query.WriteString(")")
+	return query.String(), args
+}
+
 // knownTitles loads the movies and series Polyfin listed under one of the
 // identifiers of refs, or that an anime catalog listed under their
 // AnimeRef.
@@ -566,9 +601,8 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 	if len(keys) == 0 {
 		return nil, nil
 	}
-	rows, err := s.db.Query(ctx, `SELECT kind, key, data->'meta' FROM items
-		WHERE kind IN ('movie', 'series') AND (key = ANY($1) OR data->'meta'->>'imdb_id' = ANY($2)
-			OR data->'meta'->>'_tmdbId' = ANY($3) OR data->'meta'->>'_tvdbId' = ANY($4))`, keys, imdbs, tmdbs, tvdbs)
+	query, args := knownTitlesQuery(keys, imdbs, tmdbs, tvdbs)
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -647,11 +681,16 @@ func (l episodeList) conventional(series string) bool {
 	return true
 }
 
+// knownEpisodesQuery reads the episodes listed of the series of the Stremio
+// identifiers $1, through the index and statistics of the expression it
+// compares (items_episode_series).
+const knownEpisodesQuery = `SELECT id, data->>'seriesId', data->'video' FROM items
+	WHERE kind = 'episode' AND data->>'seriesId' = ANY($1)`
+
 // knownEpisodes loads the episodes Polyfin listed of the series, by their
 // Stremio identifiers.
 func (s *Service) knownEpisodes(ctx context.Context, series []string) (map[string]episodeList, error) {
-	rows, err := s.db.Query(ctx, `SELECT id, data->>'seriesId', data->'video' FROM items
-		WHERE kind = 'episode' AND data->>'seriesId' = ANY($1)`, series)
+	rows, err := s.db.Query(ctx, knownEpisodesQuery, series)
 	if err != nil {
 		return nil, err
 	}
