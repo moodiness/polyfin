@@ -23,6 +23,7 @@ package tasks
 import (
 	"context"
 	"crypto/md5"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"log/slog"
@@ -194,7 +195,9 @@ func (r *Registry) Start(ctx context.Context) {
 }
 
 // schedule runs e at start and on its interval or daily hour; r.mu is
-// held.
+// held. An interval task's first timed run comes its stagger after its
+// interval (see stagger), so that tasks of one interval do not all run in
+// the same second.
 func (r *Registry) schedule(e *entry) {
 	if e.AtStart {
 		r.start(e, false)
@@ -207,22 +210,40 @@ func (r *Registry) schedule(e *entry) {
 	if e.Interval <= 0 {
 		return
 	}
-	e.next = time.Now().Add(e.Interval)
+	first := e.Interval + stagger(e.Key, e.Interval)
+	e.next = time.Now().Add(first)
 	go func() {
-		ticker := time.NewTicker(e.Interval)
-		defer ticker.Stop()
+		timer := time.NewTimer(first)
+		defer timer.Stop()
 		for {
 			select {
 			case <-r.ctx.Done():
 				return
-			case at := <-ticker.C:
+			case at := <-timer.C:
 				r.mu.Lock()
 				e.next = at.Add(e.Interval)
 				r.start(e, false)
 				r.mu.Unlock()
+				timer.Reset(time.Until(at.Add(e.Interval)))
 			}
 		}
 	}()
+}
+
+// maxStagger bounds how long after its interval an interval task first
+// runs.
+const maxStagger = 5 * time.Minute
+
+// stagger is how long after its interval the task of key first runs: a
+// share of maxStagger, or of half the interval when shorter, taken from
+// the key's hash, so the same in every run of the server.
+func stagger(key string, interval time.Duration) time.Duration {
+	bound := min(maxStagger, interval/2)
+	if bound <= 0 {
+		return 0
+	}
+	sum := md5.Sum([]byte("polyfin.task.stagger." + key))
+	return time.Duration(binary.BigEndian.Uint64(sum[:8]) % uint64(bound))
 }
 
 // daily runs e every day at the hour e.Daily gives, next the first time,
