@@ -403,8 +403,6 @@ const users: typeof en = {
       endedLabel: 'Terminée',
       startedBy: (name: string, own: boolean) =>
         own ? `Historique de ${name}, depuis Mon compte` : `Lancée par ${name}`,
-      runningHelp:
-        'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, l’importation s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien en double.',
       stop: 'Arrêter l’importation',
       stopping: 'Arrêt…',
       states: {
@@ -564,7 +562,6 @@ const users: typeof en = {
     createdNotice: 'Copiez ce lien maintenant : il n’est affiché que cette fois.',
     copy: 'Copier le lien',
     copied: 'Lien copié.',
-    copyFailed: 'Le lien n’a pas pu être copié. Sélectionnez-le et copiez-le à la main.',
     done: 'Terminé',
     uses: (uses: number, maxUses: number) =>
       maxUses === 1

@@ -8,7 +8,7 @@ import type { SectionFormApi } from './SectionForm'
 export type WorkFolder = 'conversionFolder' | 'readingFolder' | 'cacheFolder'
 
 /** The anchor of each, which its errors are shown at. */
-export const workFolderAnchors: Record<WorkFolder, string> = {
+const workFolderAnchors: Record<WorkFolder, string> = {
   conversionFolder: 'conversion-folder',
   readingFolder: 'reading-folder',
   cacheFolder: 'cache-folder',

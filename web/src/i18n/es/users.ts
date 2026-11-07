@@ -402,8 +402,6 @@ const users: typeof en = {
       endedLabel: 'Finalizada',
       startedBy: (name: string, own: boolean) =>
         own ? `Historial de reproducción de ${name}, desde Mi cuenta` : `Iniciada por ${name}`,
-      runningHelp:
-        'Puede salir de esta página: la importación continúa. Si Polyfin se reinicia mientras tanto, la importación se detiene: lo importado se conserva, y volver a importar no añade nada por duplicado.',
       stop: 'Detener importación',
       stopping: 'Deteniendo…',
       states: {
@@ -560,7 +558,6 @@ const users: typeof en = {
     createdNotice: 'Copie este enlace ahora: solo se muestra esta vez.',
     copy: 'Copiar enlace',
     copied: 'Enlace copiado.',
-    copyFailed: 'No se pudo copiar el enlace. Selecciónelo y cópielo manualmente.',
     done: 'Hecho',
     uses: (uses: number, maxUses: number) =>
       maxUses === 1 ? `${uses} de 1 cuenta creada` : `${uses} de ${maxUses} cuentas creadas`,

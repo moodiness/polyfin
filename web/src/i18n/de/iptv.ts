@@ -2,19 +2,10 @@ import type en from '../en/iptv'
 
 const iptv: typeof en = {
   iptv: {
-    name: 'Name',
-    kind: 'Art',
-    kindM3u: 'M3U-Wiedergabeliste',
-    kindXtream: 'Xtream-Codes-Konto',
-    kindTuner: 'HDHomeRun-Tuner',
-    server: 'Serveradresse',
     address: 'Adresse',
-    channels: 'Kanäle',
     lastFetch: 'Letzter Download',
     nextFetch: 'Nächster Download',
     never: 'Nie',
-    edit: 'Bearbeiten',
-    saved: 'Quelle gespeichert.',
     errors: {
       unreachable:
         'Der letzte Download ist fehlgeschlagen: Der Server war nicht erreichbar. Die bisherigen Kanäle bleiben erhalten.',
@@ -34,7 +25,6 @@ const iptv: typeof en = {
   },
   lineup: {
     open: 'Quelle öffnen',
-    titleLoading: 'IPTV-Quelle',
     description:
       'Was diese Quelle importiert und wie Jellyfin-Apps es anzeigen: ihre Live-TV-Kanäle mit Reihenfolge, Namen und Fernsehprogramm sowie ihre Filme und Serien.',
     backMine: 'Zurück zu meinen Quellen',
@@ -468,13 +458,6 @@ const iptv: typeof en = {
       guides: (count: number) => (count === 1 ? '1 Fernsehprogramm' : `${count} Fernsehprogramme`),
       mapped: (mapped: string, channels: string) =>
         `${mapped} von ${channels} Kanälen mit Fernsehprogramm`,
-      failing: (count: number) =>
-        count === 1
-          ? 'Der letzte Download von 1 Fernsehprogramm ist fehlgeschlagen.'
-          : `Der letzte Download von ${count} Fernsehprogrammen ist fehlgeschlagen.`,
-      manage: 'Fernsehprogramme und Zuordnung',
-      lineup: 'Senderliste und Fernsehprogramme',
-      manageLabel: (name: string) => `Fernsehprogramme und Zuordnung von ${name}`,
     },
   },
 }

@@ -670,12 +670,6 @@ const sources: typeof en = {
   },
   music: {
     content: { music: 'Musique', audiobook: 'Livres audio', podcast: 'Podcasts' },
-    library: {
-      music: 'Bibliothèque musicale',
-      audiobook: 'Bibliothèque de livres',
-      podcast: 'Bibliothèque musicale',
-    },
-    settings: 'Réglages',
     settingsTitle: 'Réglages de l’addon',
     settingsHelp:
       'Proposés par l’addon et envoyés avec chaque requête que Polyfin lui fait. Ils peuvent contenir les infos de votre compte : seuls vous, ou les administrateurs pour les addons du serveur, pouvez les voir.',

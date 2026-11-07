@@ -5,7 +5,7 @@ import { cx } from './cx'
  * Whether a component sits inside a Panel. Rows, tables and panels inside one drop their own
  * fill, so that no card sits inside a card.
  */
-export const PanelContext = createContext(false)
+const PanelContext = createContext(false)
 
 /** True inside a Panel: draw no fill of your own. */
 export function useInPanel(): boolean {

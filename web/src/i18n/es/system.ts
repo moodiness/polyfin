@@ -64,9 +64,6 @@ const system: typeof en = {
       series: 'Serie',
       scheduledBy: (name: string) => `Programada por ${name}`,
       unknownChannel: 'No se encontró el canal',
-      tunersShort: 'No hay suficientes sintonizadores',
-      tunersShortHelp:
-        'Hay más grabaciones simultáneas en los canales de este sintonizador que sintonizadores disponibles: una de ellas podría fallar.',
       refreshesTitle: 'Actualizaciones de Televisión en vivo',
       refreshesHelp: (hours: number) =>
         `Las listas de canales IPTV y las guías de programación, tanto las del servidor como las de los usuarios, se vuelven a descargar cada ${hours} h (Ajustes › Televisión en vivo) mediante la tarea «Actualizar guías de Televisión en vivo».`,

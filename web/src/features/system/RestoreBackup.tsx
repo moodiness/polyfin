@@ -128,7 +128,7 @@ function RestoreModal({
     <Modal open onClose={onClose} title={text.title} width={680}>
       <div className="space-y-5 p-5">
         <p className="text-small text-ink-2">{text.intro}</p>
-        {unavailable !== '' && <Notice tone="danger">{text.unavailable[unavailable]}</Notice>}
+        {unavailable !== '' && <Notice tone="danger">{t.errors[unavailable]}</Notice>}
         {prepare.isPending && (
           <p className="flex items-center gap-2 text-small text-ink-2">
             <Spinner /> {text.checking}
@@ -350,7 +350,7 @@ function DownloadDecrypted({ file, onClose }: { file: string; onClose: () => voi
  * The passphrase of an encrypted backup prepared: `unlock` opens it, and the backup, then checked,
  * goes to `onUnlocked`. A wrong passphrase may be typed again; a damaged backup is dropped.
  */
-export function Unlock({
+function Unlock({
   plan,
   unlock,
   onUnlocked,

@@ -46,7 +46,6 @@ const account: typeof en = {
         none: 'Aspecto propio de jellyfin-web',
         custom: 'Personalizado',
       },
-      locked: 'Su administrador eligió el tema de su reproductor web.',
       saved: 'Tema del reproductor web guardado.',
     },
     audioRegion: {
@@ -286,8 +285,6 @@ const account: typeof en = {
       states: { running: 'En curso', done: 'Completada', failed: 'Fallida' },
       problem:
         'Polyfin encontró un error durante la importación: el registro del servidor ofrece más detalles. Lo que se importó se conserva.',
-      runningHelp:
-        'Puede salir de esta página: la importación continúa. Si Polyfin se reinicia mientras tanto, la importación se detiene: lo importado se conserva, y volver a importar no duplica nada.',
       searching: (searched: number, movies: number) =>
         `Buscando las películas: ${searched} de ${movies}.`,
       searchingLabel: 'Películas buscadas',
@@ -370,8 +367,6 @@ const account: typeof en = {
       states: { running: 'En curso', done: 'Completada', failed: 'Fallida' },
       problem:
         'Polyfin ha encontrado un error durante la importación: el registro del servidor ofrece más detalles. Lo importado se conserva.',
-      runningHelp:
-        'Puede salir de esta página: la importación continúa. Si Polyfin se reinicia mientras tanto, la importación se detiene: lo importado se conserva, y volver a importar no añade nada dos veces.',
       read: (count: number) => (count === 1 ? '1 título leído.' : `${count} títulos leídos.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
         `${read === 1 ? '1 título leído' : `${read} títulos leídos`}: ${played === 1 ? '1 marcado como reproducido' : `${played} marcados como reproducidos`}, ${resumed === 1 ? '1 punto de reanudación' : `${resumed} puntos de reanudación`}, ${watchlist === 1 ? '1 añadido' : `${watchlist} añadidos`} a la lista «Para ver».`,

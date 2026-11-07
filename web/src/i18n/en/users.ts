@@ -395,8 +395,6 @@ const users = {
       endedLabel: 'Ended',
       startedBy: (name: string, own: boolean) =>
         own ? `${name}’s own watch history, from My account` : `Started by ${name}`,
-      runningHelp:
-        'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
       stop: 'Stop import',
       stopping: 'Stopping…',
       states: {
@@ -549,7 +547,6 @@ const users = {
     createdNotice: 'Copy this link now: it is shown only this once.',
     copy: 'Copy link',
     copied: 'Link copied.',
-    copyFailed: 'The link could not be copied. Select it and copy it by hand.',
     done: 'Done',
     uses: (uses: number, maxUses: number) =>
       maxUses === 1 ? `${uses} of 1 account created` : `${uses} of ${maxUses} accounts created`,

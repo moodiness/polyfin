@@ -3,7 +3,7 @@ import { createContext, use, useCallback, useRef, useState, type ReactNode } fro
 import { useI18n } from '@/i18n'
 import { cx } from './cx'
 
-export type ToastTone = 'ok' | 'info' | 'danger'
+type ToastTone = 'ok' | 'info' | 'danger'
 
 export type ToastOptions = {
   /** `ok` for a saved change (the default), `info` for a neutral note, `danger` for a failure. */

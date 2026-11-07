@@ -44,7 +44,7 @@ type Common = {
   className?: string
 }
 
-export type SwitchSetting = {
+type SwitchSetting = {
   kind: 'switch'
   checked: boolean
   onChange: (checked: boolean) => void
@@ -54,7 +54,7 @@ export type SwitchSetting = {
   stateText?: readonly [on: string, off: string]
 }
 
-export type ChoiceSetting<T extends string | number> = {
+type ChoiceSetting<T extends string | number> = {
   kind: 'choice'
   value: T
   /**
@@ -66,7 +66,7 @@ export type ChoiceSetting<T extends string | number> = {
   saved?: T
 }
 
-export type NumberSetting = {
+type NumberSetting = {
   kind: 'number'
   /** The number, or null while the well is empty. */
   value: number | null
@@ -81,7 +81,7 @@ export type NumberSetting = {
   saved?: number | null
 }
 
-export type TextSetting = {
+type TextSetting = {
   /** `path` is a wider well, in tabular figures. */
   kind: 'text' | 'path'
   value: string
@@ -98,7 +98,7 @@ export type TextSetting = {
   mono?: boolean
 }
 
-export type SecretSetting = {
+type SecretSetting = {
   kind: 'secret'
 } & Omit<SecretFieldProps, 'label' | 'help' | 'error'>
 

@@ -49,7 +49,7 @@ import { optionsChanges, optionsValid, SourceOptions } from './ImportOptions'
 import Mappings from './Mappings'
 import { useNumber } from './shared'
 
-export const lineupSections = [
+const lineupSections = [
   'summary',
   'options',
   'categories',
@@ -57,7 +57,7 @@ export const lineupSections = [
   'guides',
   'mapping',
 ] as const
-export type LineupSection = (typeof lineupSections)[number]
+type LineupSection = (typeof lineupSections)[number]
 
 /** The sections about live channels, hidden while the source does not import them. */
 const liveSections: ReadonlySet<LineupSection> = new Set([

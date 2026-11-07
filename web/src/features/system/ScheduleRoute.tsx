@@ -385,7 +385,7 @@ function Timers() {
                     {timer.status === 'Error' && (
                       <StatusPill tone="danger">{text.failed}</StatusPill>
                     )}
-                    {timer.tunersShort && <TunersShort text={text} />}
+                    {timer.tunersShort && <TunersShort text={t.livetv} />}
                   </span>
                 }
                 meta={

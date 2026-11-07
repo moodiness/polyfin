@@ -60,7 +60,6 @@ const libraries: typeof en = {
       undecided:
         'Polyfin la muestra como películas y series en cuanto lee la primera página del catálogo, si cada título ahí es una película o una serie.',
     },
-    remove: 'Eliminar',
     removeLabel: (name: string) => `Eliminar ${name}`,
     moreActions: (name: string) => `Más acciones para ${name}`,
     userOrders: {
@@ -111,7 +110,6 @@ const libraries: typeof en = {
     notBrowsableHelp: 'Necesita una búsqueda u otro valor, por lo que no puede ser una biblioteca.',
     availableEmpty: 'Ya se muestran todos los catálogos.',
     noMatch: 'Ningún catálogo coincide con este filtro.',
-    reset: 'Restablecer',
     saved: 'Bibliotecas guardadas.',
     guideAfterSave: 'Guarde las bibliotecas para añadir una guía de programación a este catálogo.',
     guideFetched: 'Última obtención',
@@ -244,7 +242,6 @@ const libraries: typeof en = {
     match: 'Los títulos cumplen',
     matchChoices: { all: 'Todas las reglas', any: 'Alguna de las reglas' },
     groupMatch: 'Este grupo cumple',
-    group: 'Grupo',
     addRule: 'Añadir una regla',
     addGroup: 'Añadir un grupo',
     removeRule: 'Eliminar esta regla',
@@ -316,7 +313,6 @@ const libraries: typeof en = {
       'Las series van según su último episodio regular emitido, o el estreno de su última temporada, según su descripción, sin especiales ni episodios por venir; las películas según su fecha de estreno. Una serie cuya descripción aún no se ha leído va al final hasta que se lea.',
     maxItems: 'Máximo de títulos',
     maxHelp: (max: string) => `De 1 a ${max}. Vacío: sin máximo.`,
-    noMax: 'Sin máximo',
     create: 'Crear la lista',
     created: 'Lista inteligente creada.',
     saved: 'Lista inteligente guardada.',

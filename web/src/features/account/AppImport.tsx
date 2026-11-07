@@ -817,7 +817,7 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
       }
     >
       <div className="flex flex-col gap-4">
-        {running && <p className="text-small text-ink-3">{text.runningHelp}</p>}
+        {running && <p className="text-small text-ink-3">{t.common.importRunningHelp}</p>}
         {current.problem !== null && <Notice tone="danger">{text.problem}</Notice>}
         <p className="text-body text-ink">
           {running

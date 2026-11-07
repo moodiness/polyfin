@@ -31,7 +31,7 @@ export function useHealthProblems() {
 }
 
 /** A row's name, followed by whose it is when it is a user's own. */
-export function ownedName(t: Messages, name: string, owner: Owner): string {
+function ownedName(t: Messages, name: string, owner: Owner): string {
   return owner === null ? name : `${name} (${t.system.health.owner.user(owner.name)})`
 }
 

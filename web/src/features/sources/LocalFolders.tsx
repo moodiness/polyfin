@@ -126,7 +126,7 @@ export function useFolderScanFollowed(addon: Addon) {
  * Where an address leads: an SMB share, a WebDAV folder, an S3 bucket, an SFTP folder, an rclone
  * remote, or else a path in the container.
  */
-export function shareOf(path: string): FolderShare {
+function shareOf(path: string): FolderShare {
   const address = path.trim().toLowerCase()
   if (address.startsWith('smb://')) return 'smb'
   if (address.startsWith('http://') || address.startsWith('https://')) return 'webdav'

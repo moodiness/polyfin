@@ -65,9 +65,6 @@ const system: typeof en = {
       series: 'Serie',
       scheduledBy: (name: string) => `Geplant von ${name}`,
       unknownChannel: 'Kanal nicht gefunden',
-      tunersShort: 'Nicht genügend Tuner',
-      tunersShortHelp:
-        'Auf den Kanälen dieses Tuners laufen gleichzeitig mehr Aufnahmen, als er Tuner hat: Eine davon kann fehlschlagen.',
       refreshesTitle: 'Live-TV-Aktualisierungen',
       refreshesHelp: (hours: number) =>
         `IPTV-Kanallisten und Fernsehprogramme, die des Servers und die eigenen der Benutzer, werden alle ${hours} h erneut heruntergeladen (Einstellungen › Live-TV), durch die Aufgabe „Live-TV-Fernsehprogramme aktualisieren“.`,

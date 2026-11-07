@@ -29,6 +29,9 @@ const common = {
     passwordRule: 'At least 8 characters.',
     nameRule: "1 to 64 characters: letters, digits, spaces and - _ ' . @ +",
     passwordMismatch: 'The two passwords do not match.',
+    /** An import page's help while the import runs. */
+    importRunningHelp:
+      'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
     moveUp: (name: string) => `Move ${name} up`,
     moveDown: (name: string) => `Move ${name} down`,
     moved: (name: string, position: number, count: number) =>
@@ -566,7 +569,6 @@ const common = {
   },
   status: {
     title: 'Server status',
-    description: 'Health of this Polyfin server at a glance.',
     version: 'Version',
     serverId: 'Server ID',
     database: 'Database',

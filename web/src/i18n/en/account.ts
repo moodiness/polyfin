@@ -43,7 +43,6 @@ const account = {
       label: 'Web player theme',
       server: (theme: string) => `The server’s (${theme})`,
       choices: { lumaaglaass: 'LumaaGlaass', none: 'jellyfin-web’s own look', custom: 'Custom' },
-      locked: 'Your administrator chose your web player theme.',
       saved: 'Web player theme saved.',
     },
     /** My account › Audio region, and the names of the regions offered there and on a user's page. */
@@ -289,8 +288,6 @@ const account = {
       states: { running: 'Running', done: 'Done', failed: 'Failed' },
       problem:
         'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
-      runningHelp:
-        'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
       searching: (searched: number, movies: number) =>
         `Searching the movies: ${searched} of ${movies}.`,
       searchingLabel: 'Movies searched',
@@ -369,8 +366,6 @@ const account = {
       states: { running: 'Running', done: 'Done', failed: 'Failed' },
       problem:
         'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
-      runningHelp:
-        'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
       read: (count: number) => (count === 1 ? '1 title read.' : `${count} titles read.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
         `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${watchlist} added to the Watchlist.`,

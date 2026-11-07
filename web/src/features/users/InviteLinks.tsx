@@ -354,7 +354,7 @@ function NewLink({
         </code>
         <div aria-live="polite">
           {copy === 'copied' && <Notice tone="ok">{text.copied}</Notice>}
-          {copy === 'failed' && <Notice tone="danger">{text.copyFailed}</Notice>}
+          {copy === 'failed' && <Notice tone="danger">{t.shareLinks.copyFailed}</Notice>}
         </div>
       </div>
     </Modal>

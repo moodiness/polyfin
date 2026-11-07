@@ -64,9 +64,6 @@ const system: typeof en = {
       series: 'Série',
       scheduledBy: (name: string) => `Agendada por ${name}`,
       unknownChannel: 'Canal não encontrado',
-      tunersShort: 'Sintonizadores insuficientes',
-      tunersShortHelp:
-        'Há mais gravações simultâneas nos canais deste sintonizador do que sintonizadores disponíveis: uma delas pode falhar.',
       refreshesTitle: 'Atualizações da TV ao Vivo',
       refreshesHelp: (hours: number) =>
         `As listas de canais IPTV e os guias de programação, tanto os do servidor quanto os dos próprios usuários, são baixados novamente a cada ${hours} h (Configurações › TV ao Vivo), pela tarefa “Atualizar guias da TV ao Vivo”.`,

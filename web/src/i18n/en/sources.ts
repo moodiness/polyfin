@@ -638,12 +638,6 @@ const sources = {
       string,
       string
     >,
-    library: {
-      music: 'Music library',
-      audiobook: 'Books library',
-      podcast: 'Music library',
-    } as Record<string, string>,
-    settings: 'Settings',
     settingsTitle: 'Addon settings',
     settingsHelp:
       'Declared by the addon and sent with every request Polyfin makes to it. They may hold your account details: only you, or the administrators for the server’s addons, can see them.',

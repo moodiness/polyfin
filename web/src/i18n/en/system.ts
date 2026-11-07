@@ -61,9 +61,6 @@ const system = {
       series: 'Series',
       scheduledBy: (name: string) => `Scheduled by ${name}`,
       unknownChannel: 'Channel not found',
-      tunersShort: 'Not enough tuners',
-      tunersShortHelp:
-        'More recordings on this tuner’s channels than it has tuners run at the same time: one of them may fail.',
       refreshesTitle: 'Live TV refreshes',
       refreshesHelp: (hours: number) =>
         `IPTV channel lists and programme guides, the server’s and users’ own, are downloaded again every ${hours} h (Settings › Live TV), by the “Refresh Live TV guides” task.`,

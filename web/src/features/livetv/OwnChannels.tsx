@@ -50,7 +50,7 @@ import {
 } from '@/ui'
 
 /** The page of a channel of the server's titles, `new` for one being made. */
-export function ownChannelPath(id: string): string {
+function ownChannelPath(id: string): string {
   return `/live-tv/channels/${id}`
 }
 

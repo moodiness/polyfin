@@ -664,12 +664,6 @@ const sources: typeof en = {
       string,
       string
     >,
-    library: {
-      music: 'Libreria musicale',
-      audiobook: 'Libreria di libri',
-      podcast: 'Libreria musicale',
-    } as Record<string, string>,
-    settings: 'Impostazioni',
     settingsTitle: 'Impostazioni dell’add-on',
     settingsHelp:
       'Dichiarate dall’add-on e inviate con ogni richiesta che Polyfin gli fa. Possono contenere i dati del tuo account: solo tu, o gli amministratori per gli add-on del server, potete vederle.',

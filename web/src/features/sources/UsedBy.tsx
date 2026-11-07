@@ -36,7 +36,7 @@ function useAccounts() {
 }
 
 /** Whether a user uses a source set to `usedBy`: listed, or their group is. */
-export const usesSource = (usedBy: UsedBy, user: Pick<User, 'id' | 'groupId'>) =>
+const usesSource = (usedBy: UsedBy, user: Pick<User, 'id' | 'groupId'>) =>
   usedBy.mode === 'everyone' ||
   usedBy.users.includes(user.id) ||
   (user.groupId !== null && usedBy.groups.includes(user.groupId))
@@ -45,7 +45,7 @@ export const usesSource = (usedBy: UsedBy, user: Pick<User, 'id' | 'groupId'>) =
  * The names a source's Used by lists, groups then users, sorted; those deleted meanwhile are left
  * out, as the server drops them.
  */
-export function usedByNames(usedBy: UsedBy, groups: GroupSummary[], users: User[]): string[] {
+function usedByNames(usedBy: UsedBy, groups: GroupSummary[], users: User[]): string[] {
   const named = (ids: string[], list: { id: string; name: string }[]) =>
     list
       .filter((entry) => ids.includes(entry.id))

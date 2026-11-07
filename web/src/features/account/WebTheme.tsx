@@ -70,7 +70,7 @@ export function OwnWebTheme() {
       disabled={locked || save.isPending}
       error={save.isError ? errorMessage(t, save.error) : undefined}
     >
-      {locked ? <Notice>{text.locked}</Notice> : undefined}
+      {locked ? <Notice>{t.errors.web_theme_locked}</Notice> : undefined}
     </SettingRow>
   )
 }

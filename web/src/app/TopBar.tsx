@@ -35,7 +35,7 @@ import { useOpenPalette } from './palette/CommandPalette'
 import { useSignOut } from './session'
 
 /** Whether the server serves the web player at /web/, from the public status. */
-export function useWebClient(): boolean {
+function useWebClient(): boolean {
   const status = useQuery({
     queryKey: queryKeys.status,
     queryFn: ({ signal }) => fetchStatus(signal),
