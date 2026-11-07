@@ -3,6 +3,7 @@ package library
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -37,6 +38,9 @@ const (
 	arrivalForgotten = 180 * 24 * time.Hour
 	// maxArrivals bounds the new titles a listing describes.
 	maxArrivals = 500
+	// seenAgain is how often a catalog read again, or a title seen again,
+	// is noted: far more often than either is forgotten.
+	seenAgain = 24 * time.Hour
 )
 
 // arrivalKinds are what the home row of new titles lists.
@@ -45,7 +49,9 @@ var arrivalKinds = []Kind{KindMovie, KindSeries, KindVideo}
 // recordArrivals notes the titles of a page src's addon gave at skip, at
 // seen: new to the catalog when the page lies within what was read of it
 // before. The records of the titles new to Polyfin are saved, so that the
-// row of new titles describes them before any listing did.
+// row of new titles describes them before any listing did. A page read
+// again writes nothing, unless it extends the reach or seenAgain passed
+// since the catalog or its titles were last noted.
 func (s *Service) recordArrivals(ctx context.Context, src source, skip int, metas []stremio.Meta, seen time.Time) error {
 	if LiveCatalog(src.catalog.Type) || src.catalog.Type == "collection" || src.search != "" || src.date != "" {
 		return nil
@@ -65,15 +71,19 @@ func (s *Service) recordArrivals(ctx context.Context, src source, skip int, meta
 		ids = append(ids, r.ID)
 	}
 	key := []any{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre}
+	noted := seen.Add(-seenAgain)
 	var fresh []accounts.ID
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO catalog_reach (addon_id, catalog_type, catalog_id, genre, reach, read_at)
-			VALUES ($1, $2, $3, $4, 0, $5) ON CONFLICT DO NOTHING`, append(key, seen)...); err != nil {
-			return err
+		reach, readAt, err := lockReach(ctx, tx, key)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// A catalog never read, unless another read notes it first.
+			err = tx.QueryRow(ctx, `INSERT INTO catalog_reach (addon_id, catalog_type, catalog_id, genre, reach, read_at)
+				VALUES ($1, $2, $3, $4, 0, $5) ON CONFLICT DO NOTHING RETURNING reach, read_at`, append(key, seen)...).Scan(&reach, &readAt)
+			if errors.Is(err, pgx.ErrNoRows) {
+				reach, readAt, err = lockReach(ctx, tx, key)
+			}
 		}
-		var reach int
-		if err := tx.QueryRow(ctx, `SELECT reach FROM catalog_reach
-			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 FOR UPDATE`, key...).Scan(&reach); err != nil {
+		if err != nil {
 			return err
 		}
 		// Only a page that starts within the reach extends it: one beyond
@@ -82,20 +92,23 @@ func (s *Service) recordArrivals(ctx context.Context, src source, skip int, meta
 		if skip <= reach {
 			end = max(reach, skip+len(metas))
 		}
-		if _, err := tx.Exec(ctx, `UPDATE catalog_reach SET reach = $5, read_at = greatest(read_at, $6)
-			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4`, append(key, end, seen)...); err != nil {
-			return err
+		if end != reach || readAt.Before(noted) {
+			if _, err := tx.Exec(ctx, `UPDATE catalog_reach SET reach = $5, read_at = greatest(read_at, $6)
+				WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4`, append(key, end, seen)...); err != nil {
+				return err
+			}
 		}
 		if len(ids) == 0 {
 			return nil
 		}
 		rows, _ := tx.Query(ctx, `INSERT INTO catalog_arrivals (addon_id, catalog_type, catalog_id, genre, item_id, first_seen, last_seen, arrived)
 			SELECT $1, $2, $3, $4, id, $6, $6, $7 FROM unnest($5::uuid[]) AS i(id) ORDER BY id
-			ON CONFLICT (addon_id, catalog_type, catalog_id, genre, item_id) DO UPDATE SET last_seen = greatest(catalog_arrivals.last_seen, excluded.last_seen)
-			RETURNING item_id, xmax = 0`, append(key, ids, seen, skip < reach)...)
+			ON CONFLICT (addon_id, catalog_type, catalog_id, genre, item_id) DO UPDATE SET last_seen = excluded.last_seen
+			WHERE catalog_arrivals.last_seen < $8
+			RETURNING item_id, xmax = 0`, append(key, ids, seen, skip < reach, noted)...)
 		var id accounts.ID
 		var inserted bool
-		_, err := pgx.ForEachRow(rows, []any{&id, &inserted}, func() error {
+		_, err = pgx.ForEachRow(rows, []any{&id, &inserted}, func() error {
 			if inserted {
 				fresh = append(fresh, id)
 			}
@@ -107,6 +120,14 @@ func (s *Service) recordArrivals(ctx context.Context, src source, skip int, meta
 		return err
 	}
 	return s.saveNew(ctx, slices.DeleteFunc(records, func(r record) bool { return !slices.Contains(fresh, r.ID) }))
+}
+
+// lockReach reads and locks the reach of the catalog of key, and when it
+// was last read: pgx.ErrNoRows for a catalog never read.
+func lockReach(ctx context.Context, tx pgx.Tx, key []any) (reach int, readAt time.Time, err error) {
+	err = tx.QueryRow(ctx, `SELECT reach, read_at FROM catalog_reach
+		WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 FOR UPDATE`, key...).Scan(&reach, &readAt)
+	return reach, readAt, err
 }
 
 // inLockOrderValues is inLockOrder for records held by value.

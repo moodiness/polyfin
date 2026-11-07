@@ -1117,9 +1117,9 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 		return result, total, err
 	}
 	need := start + count
-	// A quarter more than an even share, as duplicates and short catalogs
-	// leave the share short, saves most listings a second round.
-	per := (need+need/4)/len(sources) + 1
+	// An even share each; a second round asks for what duplicates and
+	// short catalogs left the listing short of.
+	per := need/len(sources) + 1
 	limit := 0
 	for _, src := range sources {
 		limit = max(limit, v.limit(src))
@@ -1157,7 +1157,7 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 			}
 			return result[start:min(need, len(result))], total, nil
 		}
-		per *= 2
+		per += need - len(result)
 	}
 }
 
