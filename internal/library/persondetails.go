@@ -68,6 +68,9 @@ const (
 	englishBiography = "en"
 	// deadPhotoFor is how long a photo found dead is not shown.
 	deadPhotoFor = 24 * time.Hour
+	// deadPhotoMarked is how long a photo marked dead is not marked again,
+	// which would only move its deadPhotoFor that much later.
+	deadPhotoMarked = time.Hour
 )
 
 // personDetails is what TMDB told of a person, kept on their record: their
@@ -139,11 +142,14 @@ func (r record) photoDead(photo string, now time.Time) bool {
 // (jellyfin's artworkDead): its server does not have it, or failed it
 // several times running. For deadPhotoFor, the person shows TMDB's in its
 // place, looking it up as for a person without one, else none, unless the
-// addon gives a new one.
+// addon gives a new one. A photo marked dead less than deadPhotoMarked ago
+// is left as it is: apps ask for it again and again meanwhile.
 func (s *Service) PhotoFailed(ctx context.Context, id accounts.ID, photo string) error {
+	now := s.now()
 	_, err := s.db.Exec(ctx, `UPDATE items SET data = jsonb_set(data, '{deadPhotos}',
 			COALESCE(data->'deadPhotos', '{}'::jsonb) || jsonb_build_object($2::text, $3::timestamptz)), updated_at = now()
-		WHERE id = $1 AND kind = 'person'`, id, photo, s.now())
+		WHERE id = $1 AND kind = 'person' AND COALESCE((data->'deadPhotos'->>$2)::timestamptz <= $4, true)`,
+		id, photo, now, now.Add(-deadPhotoMarked))
 	return err
 }
 
@@ -220,12 +226,38 @@ func (r record) identityDue(now time.Time) bool {
 
 // personLookups are the people being looked up, each by the language of
 // its biography; done is closed once the lookup ends. Its zero value is
-// ready, but for slots (see New).
+// ready, but for slots (see New). counts are what the lookups found, as
+// PeopleStatus tells it.
 type personLookups struct {
 	mu      sync.Mutex
 	running map[personLookupKey]chan struct{}
 	slots   chan struct{}
 	wg      sync.WaitGroup
+	counts  peopleCounts
+}
+
+// peopleCounts are the people TMDB found, did not find, and whose last
+// lookup failed, kept between the writes that change them, so that
+// Health's poll reads none. Valid tells whether they still hold; changes
+// counts those writes (see peopleChanged), so that counts read while one
+// ran are not kept.
+type peopleCounts struct {
+	mu                       sync.Mutex
+	valid                    bool
+	changes                  uint64
+	found, notFound, failing int
+}
+
+// peopleChanged tells that a write to people's TMDB details ended, which
+// the people counts may no longer match: the next PeopleStatus counts
+// them again. It is called once the write is committed, whether it
+// succeeded or not.
+func (s *Service) peopleChanged() {
+	c := &s.personLookups.counts
+	c.mu.Lock()
+	c.valid = false
+	c.changes++
+	c.mu.Unlock()
 }
 
 type personLookupKey struct {
@@ -429,6 +461,7 @@ func (s *Service) keepPersonDetails(ctx context.Context, id accounts.ID, fields 
 				ELSE COALESCE(data->'tmdb'->'biographies', '{}'::jsonb) || $3::jsonb END))),
 			updated_at = now()
 		WHERE id = $1 AND kind = 'person'`, id, encoded, bios, found)
+	s.peopleChanged()
 	return err
 }
 
@@ -607,17 +640,36 @@ type PeopleStatus struct {
 	LimitWait time.Duration
 }
 
-// PeopleStatus tells how people's lookups on TMDB stand.
+// peopleCountsQuery counts the people TMDB found, did not find, and whose
+// last lookup failed, through items_person_tmdb.
+const peopleCountsQuery = `SELECT
+		count(*) FILTER (WHERE data->'tmdb' ? 'foundAt' AND COALESCE((data->'tmdb'->>'id')::int, 0) > 0),
+		count(*) FILTER (WHERE data->'tmdb' ? 'foundAt' AND COALESCE((data->'tmdb'->>'id')::int, 0) = 0),
+		count(*) FILTER (WHERE data->'tmdb' ? 'failedAt')
+	FROM items WHERE kind = 'person' AND data ? 'tmdb'`
+
+// PeopleStatus tells how people's lookups on TMDB stand. The counts are
+// read once, then again only after a write changed people's TMDB details
+// (see peopleChanged).
 func (s *Service) PeopleStatus(ctx context.Context) (PeopleStatus, error) {
 	status := PeopleStatus{Enabled: s.tmdb.Enabled()}
 	status.LimitedAt, status.LimitWait = s.tmdb.LastRateLimit()
-	err := s.db.QueryRow(ctx, `SELECT
-			count(*) FILTER (WHERE data->'tmdb' ? 'foundAt' AND COALESCE((data->'tmdb'->>'id')::int, 0) > 0),
-			count(*) FILTER (WHERE data->'tmdb' ? 'foundAt' AND COALESCE((data->'tmdb'->>'id')::int, 0) = 0),
-			count(*) FILTER (WHERE data->'tmdb' ? 'failedAt')
-		FROM items WHERE kind = 'person' AND data ? 'tmdb'`).Scan(&status.Found, &status.NotFound, &status.Failing)
-	if err != nil {
-		return PeopleStatus{}, err
+	c := &s.personLookups.counts
+	c.mu.Lock()
+	valid, changes := c.valid, c.changes
+	status.Found, status.NotFound, status.Failing = c.found, c.notFound, c.failing
+	c.mu.Unlock()
+	if !valid {
+		err := s.db.QueryRow(ctx, peopleCountsQuery).Scan(&status.Found, &status.NotFound, &status.Failing)
+		if err != nil {
+			return PeopleStatus{}, err
+		}
+		c.mu.Lock()
+		if c.changes == changes {
+			c.valid = true
+			c.found, c.notFound, c.failing = status.Found, status.NotFound, status.Failing
+		}
+		c.mu.Unlock()
 	}
 	l := &s.personLookups
 	l.mu.Lock()

@@ -232,6 +232,7 @@ func (r record) identity() string {
 // point to it, with the users' marks, an administrator's edits and
 // uploaded images; nothing when source already points somewhere.
 func (s *Service) mergePerson(ctx context.Context, source accounts.ID, tmdb string) error {
+	defer s.peopleChanged()
 	target := itemID(personTMDBKey(tmdb))
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		first, second := source, target

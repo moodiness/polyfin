@@ -229,6 +229,7 @@ func metaArtwork(meta stremio.Meta) []string {
 // starts now, paced as others are (see lookUp), TMDB's answers kept about
 // them forgotten.
 func (s *Service) refreshPeople(ctx context.Context, user accounts.User, people []record, urls []string, all bool) error {
+	defer s.peopleChanged()
 	now := s.now()
 	var due, changed []accounts.ID
 	for _, r := range people {
