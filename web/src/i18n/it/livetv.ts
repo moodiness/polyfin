@@ -155,7 +155,6 @@ const livetv: typeof en = {
     rebuildHelp:
       'Rilegge le fonti per i titoli aggiunti o rimossi da allora. Il palinsesto ricomincia oggi.',
     create: 'Crea il canale',
-    save: 'Salva',
     created: 'Canale creato',
     saved: 'Canale salvato',
     delete: 'Elimina',

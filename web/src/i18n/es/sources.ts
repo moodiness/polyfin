@@ -669,12 +669,6 @@ const sources: typeof en = {
       string,
       string
     >,
-    library: {
-      music: 'Biblioteca de música',
-      audiobook: 'Biblioteca de libros',
-      podcast: 'Biblioteca de música',
-    } as Record<string, string>,
-    settings: 'Ajustes',
     settingsTitle: 'Ajustes de la extensión',
     settingsHelp:
       'Los declara la extensión y se envían con cada solicitud que Polyfin le hace. Pueden contener los datos de su cuenta: solo usted, o los administradores en el caso de las extensiones del servidor, puede verlos.',

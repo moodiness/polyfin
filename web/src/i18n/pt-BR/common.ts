@@ -26,6 +26,8 @@ const common: typeof en = {
     passwordRule: 'Pelo menos 8 caracteres.',
     nameRule: "De 1 a 64 caracteres: letras, dígitos, espaços e - _ ' . @ +",
     passwordMismatch: 'As duas senhas não coincidem.',
+    importRunningHelp:
+      'Você pode sair desta página: a importação continua. Se o Polyfin reiniciar nesse meio-tempo, a importação para: o que foi importado é mantido, e importar novamente não adiciona nada duas vezes.',
     moveUp: (name: string) => `Mover ${name} para cima`,
     moveDown: (name: string) => `Mover ${name} para baixo`,
     moved: (name: string, position: number, count: number) =>
@@ -589,7 +591,6 @@ const common: typeof en = {
   },
   status: {
     title: 'Status do servidor',
-    description: 'Visão rápida da integridade deste servidor Polyfin.',
     version: 'Versão',
     serverId: 'ID do servidor',
     database: 'Banco de dados',

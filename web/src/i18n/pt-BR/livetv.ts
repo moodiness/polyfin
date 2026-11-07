@@ -155,7 +155,6 @@ const livetv: typeof en = {
     rebuildHelp:
       'Lê as fontes de novo para os títulos adicionados ou removidos desde então. A programação recomeça hoje.',
     create: 'Criar o canal',
-    save: 'Salvar',
     created: 'Canal criado',
     saved: 'Canal salvo',
     delete: 'Excluir',

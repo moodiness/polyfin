@@ -1,19 +1,10 @@
 /** IPTV: adding a source and its source page (summary, what to import, categories, channels, guides, mapping). */
 const iptv = {
   iptv: {
-    name: 'Name',
-    kind: 'Kind',
-    kindM3u: 'M3U playlist',
-    kindXtream: 'Xtream Codes account',
-    kindTuner: 'HDHomeRun tuner',
-    server: 'Server address',
     address: 'Address',
-    channels: 'Channels',
     lastFetch: 'Last download',
     nextFetch: 'Next download',
     never: 'Never',
-    edit: 'Edit',
-    saved: 'Source saved.',
     errors: {
       unreachable:
         'The last download failed: the server could not be reached. The previous channels are kept.',
@@ -32,7 +23,6 @@ const iptv = {
   },
   lineup: {
     open: 'Open the source',
-    titleLoading: 'IPTV source',
     description:
       'What this source imports and how Jellyfin apps show it: its Live TV channels, with their order, names and programme guides, and its movies and series.',
     backMine: 'Back to my sources',
@@ -456,13 +446,6 @@ const iptv = {
       guides: (count: number) => (count === 1 ? '1 guide' : `${count} guides`),
       mapped: (mapped: string, channels: string) =>
         `${mapped} of ${channels} channels with a guide`,
-      failing: (count: number) =>
-        count === 1
-          ? 'The last download of 1 guide failed.'
-          : `The last download of ${count} guides failed.`,
-      manage: 'Guides and mapping',
-      lineup: 'Line-up and guides',
-      manageLabel: (name: string) => `Guides and mapping of ${name}`,
     },
   },
 }

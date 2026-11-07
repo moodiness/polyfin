@@ -64,9 +64,6 @@ const system: typeof en = {
       series: 'Serie TV',
       scheduledBy: (name: string) => `Pianificata da ${name}`,
       unknownChannel: 'Canale non trovato',
-      tunersShort: 'Sintonizzatori insufficienti',
-      tunersShortHelp:
-        'Sono in corso contemporaneamente più registrazioni sui canali di questo sintonizzatore di quanti sintonizzatori abbia: una di esse potrebbe non riuscire.',
       refreshesTitle: 'Aggiornamenti della Diretta TV',
       refreshesHelp: (hours: number) =>
         `Gli elenchi canali IPTV e le guide dei programmi, sia del server sia degli utenti, vengono scaricati di nuovo ogni ${hours} h (Impostazioni › Diretta TV) dall’operazione «Aggiorna le guide della Diretta TV».`,

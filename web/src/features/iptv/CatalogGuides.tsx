@@ -322,7 +322,7 @@ function GuideList({
 }
 
 /** How a guide's last download went: a state with its icon and word, then its figures. */
-export function GuideStatus({ guide }: { guide: CatalogGuide }) {
+function GuideStatus({ guide }: { guide: CatalogGuide }) {
   const { t } = useI18n()
   const number = useNumber()
   const text = t.lineup.guides

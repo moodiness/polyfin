@@ -1,7 +1,7 @@
 import type { Icon } from '@phosphor-icons/react'
 import { cx, rem } from './cx'
 
-export type SegmentedOption<T extends string> = {
+type SegmentedOption<T extends string> = {
   value: T
   label: string
   /** Optional Phosphor icon before the label. */

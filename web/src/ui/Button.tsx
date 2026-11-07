@@ -11,11 +11,11 @@ import { Spinner } from './Spinner'
  * - `ghost`: quiet actions in rows and toolbars (disconnect, reset), no fill until hovered.
  * - `danger`: destructive actions, in red words; pair them with ConfirmDialog.
  */
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 /** `md` is 38 px tall (32 in Compact), the default, 44 on a phone; `sm` is 34 px, for dense rows
  * and docks. Both grow when a label wraps on a phone. */
-export type ButtonSize = 'md' | 'sm'
+type ButtonSize = 'md' | 'sm'
 
 const variants: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-press',
@@ -30,7 +30,7 @@ const sizes: Record<ButtonSize, string> = {
 }
 
 /** The classes of a button, for the rare element that cannot be a Button or ButtonLink. */
-export function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md'): string {
+function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md'): string {
   return cx(
     // A label too long for a phone wraps inside the button rather than push the page sideways.
     'inline-flex max-w-full shrink-0 cursor-pointer items-center justify-center rounded-control text-center leading-tight font-[620] whitespace-nowrap select-none max-sm:whitespace-normal',

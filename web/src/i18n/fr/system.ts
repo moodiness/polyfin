@@ -65,9 +65,6 @@ const system: typeof en = {
       series: 'Série',
       scheduledBy: (name: string) => `Prévu par ${name}`,
       unknownChannel: 'Chaîne introuvable',
-      tunersShort: 'Pas assez de tuners',
-      tunersShortHelp:
-        'Plus d’enregistrements sur les chaînes de ce tuner qu’il n’a de tuners ont lieu en même temps : l’un d’eux peut échouer.',
       refreshesTitle: 'Mises à jour de la TV en direct',
       refreshesHelp: (hours: number) =>
         `Les listes de chaînes IPTV et les guides des programmes, ceux du serveur comme ceux des utilisateurs, sont téléchargés à nouveau toutes les ${hours} h (Paramètres › TV en direct), par la tâche « Actualiser les guides TV ».`,

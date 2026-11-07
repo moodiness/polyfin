@@ -403,8 +403,6 @@ const users: typeof en = {
       endedLabel: 'Terminata',
       startedBy: (name: string, own: boolean) =>
         own ? `Cronologia di visione di ${name}, da Il mio account` : `Avviata da ${name}`,
-      runningHelp:
-        'Puoi lasciare questa pagina: l’importazione continua. Se nel frattempo Polyfin si riavvia, l’importazione si interrompe: ciò che è stato importato resta, e importando di nuovo non viene aggiunto nulla due volte.',
       stop: 'Interrompi importazione',
       stopping: 'Interruzione…',
       states: {
@@ -562,7 +560,6 @@ const users: typeof en = {
     createdNotice: 'Copia subito questo link: viene mostrato solo questa volta.',
     copy: 'Copia link',
     copied: 'Link copiato.',
-    copyFailed: 'Impossibile copiare il link. Selezionalo e copialo manualmente.',
     done: 'Fine',
     uses: (uses: number, maxUses: number) =>
       maxUses === 1

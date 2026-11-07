@@ -115,10 +115,6 @@ const backups: typeof en = {
       unlock: 'Abrir',
       unlocking: 'Descifrando y comprobando…',
       checking: 'Comprobando la copia de seguridad…',
-      unavailable: {
-        pg_restore_missing:
-          'No se ha encontrado pg_restore en el servidor: instale las herramientas cliente de PostgreSQL 18, que incluye la imagen de Docker.',
-      },
       confirmTitle: (file: string) => `¿Restaurar ${file}?`,
       made: (date: string) => `Hecha el ${date}.`,
       from: (name: string) => `Desde ${name}.`,

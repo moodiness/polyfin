@@ -11,7 +11,7 @@ export function smartListPath(scope: Scope, id: string): string {
 }
 
 /** Counts the rules of a group, those of the groups within it included. */
-export function ruleCount(group: SmartRule): number {
+function ruleCount(group: SmartRule): number {
   return (group.rules ?? []).reduce(
     (count, rule) => count + (rule.field === 'group' ? ruleCount(rule) : 1),
     0,

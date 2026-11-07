@@ -112,10 +112,6 @@ const backups = {
       unlock: 'Open',
       unlocking: 'Decrypting and checking…',
       checking: 'Checking the backup…',
-      unavailable: {
-        pg_restore_missing:
-          'pg_restore was not found on the server: install PostgreSQL 18’s client tools, which the Docker image includes.',
-      },
       confirmTitle: (file: string) => `Restore ${file}?`,
       made: (date: string) => `Made ${date}.`,
       from: (name: string) => `From ${name}.`,

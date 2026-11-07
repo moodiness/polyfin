@@ -155,7 +155,6 @@ const livetv: typeof en = {
     rebuildHelp:
       'Relit les sources pour les titres ajoutés ou retirés depuis. La grille recommence aujourd’hui.',
     create: 'Créer la chaîne',
-    save: 'Enregistrer',
     created: 'Chaîne créée',
     saved: 'Chaîne enregistrée',
     delete: 'Supprimer',

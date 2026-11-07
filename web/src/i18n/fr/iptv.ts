@@ -2,19 +2,10 @@ import type en from '../en/iptv'
 
 const iptv: typeof en = {
   iptv: {
-    name: 'Nom',
-    kind: 'Type',
-    kindM3u: 'Playlist M3U',
-    kindXtream: 'Compte Xtream Codes',
-    kindTuner: 'Tuner HDHomeRun',
-    server: 'Adresse du serveur',
     address: 'Adresse',
-    channels: 'Chaînes',
     lastFetch: 'Dernier téléchargement',
     nextFetch: 'Prochain téléchargement',
     never: 'Jamais',
-    edit: 'Modifier',
-    saved: 'Source enregistrée.',
     errors: {
       unreachable:
         'Le dernier téléchargement a échoué : impossible de joindre le serveur. Les chaînes précédentes sont gardées.',
@@ -34,7 +25,6 @@ const iptv: typeof en = {
   },
   lineup: {
     open: 'Ouvrir la source',
-    titleLoading: 'Source IPTV',
     description:
       'Ce que cette source importe et comment les applis Jellyfin l’affichent : ses chaînes de TV en direct, avec leur ordre, leurs noms et leurs guides des programmes, et ses films et séries.',
     backMine: 'Retour à mes sources',
@@ -473,13 +463,6 @@ const iptv: typeof en = {
       guides: (count: number) => (count === 1 ? '1 guide' : `${count} guides`),
       mapped: (mapped: string, channels: string) =>
         `${mapped} chaînes sur ${channels} avec un guide`,
-      failing: (count: number) =>
-        count === 1
-          ? 'Le dernier téléchargement d’un guide a échoué.'
-          : `Le dernier téléchargement de ${count} guides a échoué.`,
-      manage: 'Guides et correspondance',
-      lineup: 'Grille et guides',
-      manageLabel: (name: string) => `Guides et correspondance de ${name}`,
     },
   },
 }

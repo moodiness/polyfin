@@ -152,7 +152,6 @@ const livetv = {
     rebuildHelp:
       'Reads the sources again for the titles added or removed since. The schedule starts again today.',
     create: 'Create the channel',
-    save: 'Save',
     created: 'Channel created',
     saved: 'Channel saved',
     delete: 'Delete',

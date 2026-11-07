@@ -2,19 +2,10 @@ import type en from '../en/iptv'
 
 const iptv: typeof en = {
   iptv: {
-    name: 'Nome',
-    kind: 'Tipo',
-    kindM3u: 'Lista de reprodução M3U',
-    kindXtream: 'Conta Xtream Codes',
-    kindTuner: 'Sintonizador HDHomeRun',
-    server: 'Endereço do servidor',
     address: 'Endereço',
-    channels: 'Canais',
     lastFetch: 'Último download',
     nextFetch: 'Próximo download',
     never: 'Nunca',
-    edit: 'Editar',
-    saved: 'Fonte salva.',
     errors: {
       unreachable:
         'O último download falhou: não foi possível acessar o servidor. Os canais anteriores foram mantidos.',
@@ -34,7 +25,6 @@ const iptv: typeof en = {
   },
   lineup: {
     open: 'Abrir a fonte',
-    titleLoading: 'Fonte IPTV',
     description:
       'O que esta fonte importa e como os aplicativos Jellyfin a exibem: seus canais de TV ao Vivo, com ordem, nomes e guias de programação, e seus filmes e séries.',
     backMine: 'Voltar para minhas fontes',
@@ -468,13 +458,6 @@ const iptv: typeof en = {
     library: {
       guides: (count: number) => (count === 1 ? '1 guia' : `${count} guias`),
       mapped: (mapped: string, channels: string) => `${mapped} de ${channels} canais com guia`,
-      failing: (count: number) =>
-        count === 1
-          ? 'O último download de 1 guia falhou.'
-          : `O último download de ${count} guias falhou.`,
-      manage: 'Guias e mapeamento',
-      lineup: 'Lista de canais e guias',
-      manageLabel: (name: string) => `Guias e mapeamento de ${name}`,
     },
   },
 }

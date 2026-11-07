@@ -214,10 +214,10 @@ export type ChannelRule = {
 }
 
 /** A channel group of the server's line-ups: an IPTV category, or a TV catalog's genre. */
-export type ChannelGroupChoice = { key: string; name: string; source: string; channels: number }
+type ChannelGroupChoice = { key: string; name: string; source: string; channels: number }
 
 /** A channel of the server's line-ups, with the key of its group. */
-export type LineupChannelChoice = { key: string; name: string; number: string; group: string }
+type LineupChannelChoice = { key: string; name: string; number: string; group: string }
 
 /** Every channel group of the server's line-ups, and a page of their channels. */
 export type LineupChannelChoices = {
@@ -321,7 +321,7 @@ export type HttpsMode = 'off' | 'files' | 'letsencrypt'
 export type AcmeChallenge = 'http-01' | 'tls-alpn-01'
 
 /** What a saved WireGuard configuration says, without its keys (see Settings.torrentWireGuardSaved). */
-export type WireGuardSaved = {
+type WireGuardSaved = {
   /** The server, host:port. */
   endpoint: string
   /** The tunnel's addresses, with their prefix length. */
@@ -354,7 +354,7 @@ export const sourceCachePresets = ['off', 'small', 'everyday', 'large', 'custom'
 export type SourceCachePreset = (typeof sourceCachePresets)[number]
 
 /** What a source cache preset sets. */
-export type SourceCacheLimits = {
+type SourceCacheLimits = {
   cacheSizeGb: number
   sourceCacheDays: number
   sourceCacheCreditDays: number
@@ -895,7 +895,7 @@ export type DynamicRangeCompression = 'encoded' | 'none' | 'night'
 export type SubtitleOcr = 'off' | 'played' | 'scans'
 
 /** A GPU conversions run on. */
-export type ConversionGPU = {
+type ConversionGPU = {
   /** cuda for NVIDIA, vaapi for AMD and Intel on Linux, videotoolbox on macOS, qsv for Intel and amf for AMD on Windows. */
   method: string
   device: string
@@ -934,7 +934,7 @@ export type OlderDriverFFmpeg = {
 }
 
 /** What conversions run on. */
-export type ConversionHardware = {
+type ConversionHardware = {
   /** The GPU chosen, null for none. */
   gpu: ConversionGPU | null
   /** Software video encoders FFmpeg has. */
@@ -1074,7 +1074,7 @@ export type MatchMethod =
   'name' | 'nfo' | 'search' | 'year' | 'numerals' | 'yearNumerals' | 'link' | 'tmdb'
 
 /** The looser rule a search kept a title by, as a looser match tells it. */
-export type LooserRule = 'year' | 'numerals' | 'year_numerals'
+type LooserRule = 'year' | 'numerals' | 'year_numerals'
 
 /**
  * A local folder: a folder mounted in the container, or a network share Polyfin reads itself,
@@ -1179,7 +1179,7 @@ export type LocalFolder = {
  * A failed search of a title: the name of the addon that failed it, '' for another failure, and
  * why, as System › Health names an addon's failures, or 'failed'.
  */
-export type SearchFailure = {
+type SearchFailure = {
   addon: string
   failure: string
 }
@@ -1192,7 +1192,7 @@ export type DiscKind = 'bluray' | 'dvd' | 'bluray_image' | 'dvd_image'
  * when the disc is gone), folder or image, and number, and its episodes, such as `S01E05` or
  * `S01E05-E06`.
  */
-export type GivenEpisode = {
+type GivenEpisode = {
   path: string
   disc: DiscKind | ''
   discPath: string
@@ -1247,7 +1247,7 @@ export type UnmatchedFile = {
  * Why the name of a matched show's file tells no episode: an episode's number outside a season's
  * folder, an air date, or no number at all.
  */
-export type EpisodeNameReason = 'no_season' | 'air_date' | 'no_episode_number'
+type EpisodeNameReason = 'no_season' | 'air_date' | 'no_episode_number'
 
 /** Episodes as ranges of numbers that follow one another, `[first, last]`. */
 export type EpisodeRanges = [number, number][]
@@ -1278,7 +1278,7 @@ export type UnlistedShow = {
 export type ShowNumbering = 'catalog' | 'per_season' | 'continuing' | 'absolute' | 'order'
 
 /** Why a show's numbering could not place a file, which is then an episode of its own. */
-export type UnmappedReason =
+type UnmappedReason =
   'no_catalog' | 'outside_season' | 'beyond_catalog' | 'not_in_order' | 'not_listed' | 'no_order'
 
 /**
@@ -1456,7 +1456,7 @@ export type IptvOptions = {
   favoritesOnly: boolean
 }
 
-export type VodCounts = {
+type VodCounts = {
   /** Titles in the provider's lists, before exclusions. */
   movies: number
   series: number
@@ -1487,7 +1487,7 @@ export const defaultIptvOptions: IptvOptions = {
 /** The limits the server accepts for IptvOptions.excluded. */
 export const excludedKeysLimit = 5000
 
-export type LineupCounts = {
+type LineupCounts = {
   categories: number
   enabledCategories: number
   channels: number
@@ -1504,7 +1504,7 @@ export type LineupCounts = {
 export type PreviewBy = 'group' | 'country' | 'movie' | 'series'
 
 /** A category of a source's list, before import: a group, a country, or a VOD category. */
-export type PreviewCategory = { key: string; name: string; channels: number; excluded: boolean }
+type PreviewCategory = { key: string; name: string; channels: number; excluded: boolean }
 
 export type Preview = { total: number; categories: PreviewCategory[] }
 
@@ -1520,9 +1520,6 @@ export type IptvAccount = {
 
 /** A paged answer: `total` counts every row matching the filters. */
 export type Page<T> = { total: number; offset: number; limit: number; items: T[] }
-
-/** The most rows one page of the API returns. */
-export const pageLimit = 500
 
 export type LineupCategory = {
   id: string
@@ -1540,7 +1537,7 @@ export type LineupCategory = {
 }
 
 /** How a stream last answered when its channel was opened. */
-export type StreamHealth = {
+type StreamHealth = {
   okAt: string | null
   /** dead (no live stream), refused (not served now), timeout (nothing came), drm (needs a DRM Polyfin does not support), keys (the list's keys do not decrypt it), or empty. */
   failure: '' | 'dead' | 'refused' | 'timeout' | 'drm' | 'keys'
@@ -1550,7 +1547,7 @@ export type StreamHealth = {
   hiddenUntil: string | null
 }
 
-export type ChannelStream = {
+type ChannelStream = {
   id: string
   label: string
   enabled: boolean
@@ -1802,7 +1799,7 @@ export const applyLibraryOrder = () =>
 export type OrderedSeries = { id: string; name: string; year: number; posterId: string }
 
 /** The name Jellyfin gives a TMDB episode group's type, a series' DisplayOrder. */
-export type EpisodeGroupType =
+type EpisodeGroupType =
   'originalAirDate' | 'absolute' | 'dvd' | 'digital' | 'storyArc' | 'production' | 'tv'
 
 /** Where a series' specials show. */
@@ -1856,7 +1853,7 @@ export const saveEpisodeOrder = (id: string, group: string, specials: SpecialsPl
   })
 
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
-export type Guide = {
+type Guide = {
   /** Redacted address: the credentials it may embed are never returned. Empty: no guide. */
   url: string
   checkedAt: string | null
@@ -1917,20 +1914,16 @@ export type SmartField =
   | 'rank'
   | 'state'
 
-/** What a `state` rule matches, for the user who opens the list. */
-export type SmartState = 'played' | 'unplayed' | 'started' | 'favorite'
-
 /** How a smart list orders its titles. */
 export type SmartSort =
   'catalog' | 'premiere' | 'latestEpisode' | 'seasonPremiere' | 'rating' | 'name' | 'random'
 
-/** What a `homeRelease` rule matches: titles out at home in the last days, in the next, or either. */
-export type SmartHomeRelease = 'released' | 'upcoming' | 'both'
-
 /**
  * A rule of a smart list, or a group of them. `not` negates it. `value` is a genre, an ISO 639
  * language code, the highest content rating, a person's or a studio's name, `movie` or `series`,
- * a SmartState, or a SmartHomeRelease; `min` and `max` bound a year, a rating, its votes, a
+ * for a `state` rule `played`, `unplayed`, `started` or `favorite` (for the user who opens the
+ * list), or for a `homeRelease` rule `released`, `upcoming` or `both` (titles out at home in the
+ * last days, in the next, or either); `min` and `max` bound a year, a rating, its votes, a
  * runtime in minutes, or a release in days from today (negative: past), and `max` is the place in
  * its catalog or a home release's days. A group matches `all` or `any` of its `rules`.
  */
@@ -1945,7 +1938,7 @@ export type SmartRule = {
 }
 
 /** A catalog a smart list draws from. */
-export type SmartCatalogRef = { addonId: string; type: string; id: string }
+type SmartCatalogRef = { addonId: string; type: string; id: string }
 
 /** A smart list as it is saved: `itemId` is its library or collection in Jellyfin apps. */
 export type SmartList = {
@@ -1995,7 +1988,7 @@ export type SmartChoices = {
  * A title of a smart list's preview. `languages`: those its description gives, by their ISO 639-1
  * code when they have one; empty while it was not described.
  */
-export type SmartTitle = {
+type SmartTitle = {
   id: string
   name: string
   type: 'movie' | 'series'
@@ -2028,7 +2021,7 @@ export type AddonPreferences = {
 }
 
 /** Signing in with `pin` as the password, before `expiresAt`, makes it the user's new password. */
-export type PasswordResetPin = { pin: string; expiresAt: string }
+type PasswordResetPin = { pin: string; expiresAt: string }
 
 /** A key tools and apps use to call the Jellyfin API with administrator rights. */
 export type ApiKey = { id: string; app: string; createdAt: string; lastUsedAt: string | null }
@@ -2088,7 +2081,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 const apiBase = `${import.meta.env.BASE_URL}api`
 
-export async function request<T>(
+async function request<T>(
   method: Method,
   path: string,
   body?: unknown,
@@ -2455,7 +2448,7 @@ export const setOwnHomeRow = (id: string, off: boolean) =>
   request<void>('PUT', `/account/home-rows/${seg(id)}`, { off })
 
 /** What a taste profile weighs titles by. */
-export type TasteFacet = 'genre' | 'director' | 'cast' | 'decade' | 'language'
+type TasteFacet = 'genre' | 'director' | 'cast' | 'decade' | 'language'
 
 /** A value of a facet and its weight; `vetoed` tells a genre whose titles leave Top picks for you. */
 export type TasteLeaning = { name: string; weight: number; vetoed?: boolean }
@@ -2503,7 +2496,7 @@ export const fetchOwnHidden = (signal?: AbortSignal) =>
 export const showOwnHidden = (id: string) => request<void>('DELETE', `/account/hidden/${seg(id)}`)
 
 /** A series taken off Next Up and still off it, and when. */
-export type NextUpRemoval = { item: AccountTitle; removedAt: string }
+type NextUpRemoval = { item: AccountTitle; removedAt: string }
 
 /**
  * The user's Next Up: its episodes, the series taken off it, and whether Remove from Continue
@@ -2524,7 +2517,7 @@ export const setOwnNextUpWithResume = (withResume: boolean) =>
   request<{ withResume: boolean }>('PUT', '/account/next-up/settings', { withResume })
 
 /** A reminder of one programme, set from the web player. */
-export type ProgrammeReminder = {
+type ProgrammeReminder = {
   id: string
   programId: string
   name: string
@@ -2535,7 +2528,7 @@ export type ProgrammeReminder = {
 }
 
 /** A reminder of every airing of a title on a channel, at the time of day of `start`. */
-export type SeriesReminder = {
+type SeriesReminder = {
   id: string
   name: string
   channelId: string
@@ -2644,7 +2637,7 @@ export type TrackingService = {
 }
 
 /** How an import of a watch history, and of a watchlist, went. */
-export type TrackingImport = {
+type TrackingImport = {
   at: string
   /** Titles it newly marked played. */
   played: number
@@ -3085,7 +3078,7 @@ export const fetchShareEpisodes = (seriesId: string, signal?: AbortSignal) =>
   )
 
 /** What became of a stream an addon listed for a title (docs/playback.md, Which streams become versions). */
-export type VersionStep =
+type VersionStep =
   | 'offered'
   | 'nothing'
   | 'torrents'
@@ -3096,11 +3089,8 @@ export type VersionStep =
   | 'hidden'
   | 'group'
 
-/** The hide rule that hides a version; label rules may add their own. */
-export type VersionHideRule = 'elsewhere' | 'larger' | 'codec' | 'release' | 'words' | string
-
 /** A video's range as labels or the analysis tell it; empty when unknown. */
-export type VersionRange = 'sdr' | 'hdr' | ''
+type VersionRange = 'sdr' | 'hdr' | ''
 
 export type VersionBlock = {
   id: string
@@ -3169,7 +3159,7 @@ export type VersionStream = {
 }
 
 /** A version's best audio format; channels is 0 when unknown. */
-export type VersionAudio = { lossless: boolean; object: boolean; channels: number }
+type VersionAudio = { lossless: boolean; object: boolean; channels: number }
 
 export type TitleVersionSource = {
   id: string
@@ -3182,7 +3172,7 @@ export type TitleVersionSource = {
 }
 
 /** What came of a version a play tried. */
-export type PlayTryOutcome =
+type PlayTryOutcome =
   | 'plays'
   | 'unreadable'
   | 'unstarted'
@@ -3313,7 +3303,7 @@ export const acceptInvite = (token: string, body: { name: string; password: stri
 export type ServerKind = 'jellyfin' | 'emby' | 'plex'
 
 /** A server as the import reads it; `address` is the normalized one to send back. */
-export type JellyfinServer = { kind: ServerKind; name: string; version: string; address: string }
+type JellyfinServer = { kind: ServerKind; name: string; version: string; address: string }
 
 /** A user of the Jellyfin server, with the Polyfin user of the same name as a suggestion. */
 export type JellyfinUser = {
@@ -3347,7 +3337,7 @@ export type JellyfinImportEntry = {
  * Why an import, or one of its users, failed. `jellyfin_user_forbidden` fails that user only: the
  * server does not let the key read their data.
  */
-export type JellyfinImportProblem =
+type JellyfinImportProblem =
   | 'jellyfin_unreachable'
   | 'jellyfin_key_refused'
   | 'not_jellyfin'
@@ -3408,7 +3398,7 @@ export type JellyfinUserImport = {
  * library; the Plex owner, or the account signed in to Plex, has nothing played, in progress or
  * rated; Plex lists no play of the account.
  */
-export type JellyfinNothingAdded =
+type JellyfinNothingAdded =
   | 'up_to_date'
   | 'nothing_played'
   | 'no_sections'
@@ -3669,13 +3659,13 @@ export const startUserLetterboxdImport = (id: string, upload: LetterboxdUpload) 
 export type AppKind = 'nuvio' | 'stremio'
 
 /** An addon a profile of an app offers to install, by its index; its address is redacted. */
-export type AppAddon = { index: number; name: string; address: string }
+type AppAddon = { index: number; name: string; address: string }
 
 /**
  * A profile of an app account: the titles it holds, how many it played, resumed and keeps in its
  * library, and its addons. `name` is empty when the app gives none.
  */
-export type AppProfile = {
+type AppProfile = {
   id: string
   name: string
   /** Asks for its PIN before it is read (`AppReaders.stremio.unlock`): it holds nothing until then. */
@@ -3699,7 +3689,7 @@ export type AppAccount = {
 }
 
 /** An addon an import installs as the user's own, and why it was not. */
-export type AppAddonInstalled = {
+type AppAddonInstalled = {
   name: string
   address: string
   installed: boolean
@@ -3753,13 +3743,13 @@ export type NuvioSignIn = {
 export type StremioLink = { code: string; link: string }
 
 /** A Stremio link code polled: the account read once the code is approved, else pending. */
-export type StremioLinkPoll = AppAccount | { pending: true }
+type StremioLinkPoll = AppAccount | { pending: true }
 
 /**
  * What signs in to a Stremio account; the password is used for this sign-in only. With
  * `stayConnected`, the server keeps the auth key the sign-in gives, never the password.
  */
-export type StremioSignIn = { email: string; password: string; stayConnected: boolean }
+type StremioSignIn = { email: string; password: string; stayConnected: boolean }
 
 /** A profile of a Stremio account held under `key`, and the PIN that opens it. */
 export type StremioUnlock = { key: string; profile: string; pin: string }
@@ -3802,7 +3792,7 @@ const appReaders = (base: string): AppReaders => ({
  * How an import of a connection went: when it ended, what it read and added, the titles it did not
  * find, and what kept it from reading the account.
  */
-export type AppConnectionImport = {
+type AppConnectionImport = {
   at: string
   read: number
   played: number
@@ -4050,7 +4040,7 @@ export type UserWebTheme = WebTheme | ''
 export type WebThemes = { serverTheme: WebTheme; themes: WebTheme[] }
 
 /** A file of the copy Polyfin keeps of a theme's files. */
-export type ThemeCopyFile = {
+type ThemeCopyFile = {
   /** The address it came from. */
   address: string
   /** How the Custom texts named it, for the files they name. */
@@ -4062,7 +4052,7 @@ export type ThemeCopyFile = {
 }
 
 /** Why an address could not be saved in the copy. */
-export type ThemeCopyReason =
+type ThemeCopyReason =
   | 'private_address'
   | 'not_http'
   | 'unavailable'
@@ -4184,10 +4174,6 @@ export const fetchRcloneRemotes = (query: {
     `${scopePath('shared')}/folders/rclone-remotes`,
     query,
   )
-
-/** Starts a scan of a local folder; the answer tells the scan under way. */
-export const scanLocalFolder = (id: string) =>
-  request<Addon>('POST', `${scopePath('shared')}/folders/${seg(id)}/scan`)
 
 export const fetchUnmatchedFiles = (id: string, signal?: AbortSignal) =>
   request<{ total: number; files: UnmatchedFile[] }>(
@@ -4620,7 +4606,7 @@ export type StreamInfo = {
 }
 
 /** How a playback reaches its app; `stream` is HLS whose encoding is idle, so details are unknown. */
-export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
+type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
 
 /**
  * What set the size of converted video: nothing below the source's, the GPU's 4K, the
@@ -4628,7 +4614,7 @@ export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
  * at a lower height, the user's quality group, the settings' maximum quality of converted
  * video, the bitrate limit, or what the app's profile allows.
  */
-export type SizeLimit =
+type SizeLimit =
   | 'source'
   | 'gpu'
   | 'processor'
@@ -4712,13 +4698,13 @@ export type LiveSession = {
  * and received from its source. `redirected` is true when the app was sent to read the source
  * itself, so that none of its bytes pass through Polyfin.
  */
-export type PlayBandwidth = { sent: number; received: number; redirected: boolean }
+type PlayBandwidth = { sent: number; received: number; redirected: boolean }
 
 /** The kinds of source a play reads from. */
-export type OriginKind = 'addon' | 'torrent' | 'localFolder' | 'networkShare' | 'iptv'
+type OriginKind = 'addon' | 'torrent' | 'localFolder' | 'networkShare' | 'iptv'
 
 /** Where a play's version is read from: its addon, folder or IPTV source by name, and a torrent's peers. */
-export type PlayOrigin = { kind: OriginKind; name: string; peers: number }
+type PlayOrigin = { kind: OriginKind; name: string; peers: number }
 
 /** What every play moves now, in bytes per second: sent to apps, and received from sources. */
 export type ServerBandwidth = { sent: number; received: number }
@@ -4735,7 +4721,7 @@ export const stopLiveSession = (id: string) => request<void>('POST', `/sessions/
 export const messageLiveSession = (id: string, message: { text: string; timeout: number }) =>
   request<void>('POST', `/sessions/${seg(id)}/message`, message)
 
-export type TaskResult = {
+type TaskResult = {
   start: string
   end: string
   status: 'Completed' | 'Failed' | 'Cancelled'
@@ -4798,12 +4784,12 @@ export const fetchTimers = (signal?: AbortSignal) =>
 export type ChannelSourceKind = 'collection' | 'smartlist' | 'series' | 'titles'
 
 /** An item a channel's source names: a collection, a smart list, a series or a movie. */
-export type ChannelSourceItem = { id: string; name: string; kind: string }
+type ChannelSourceItem = { id: string; name: string; kind: string }
 
 export type ChannelSource = { kind: ChannelSourceKind; items: ChannelSourceItem[] }
 
 /** A daily time block, in minutes past midnight in the server's time zone. */
-export type ChannelBlock = {
+type ChannelBlock = {
   start: number
   end: number
   source: ChannelSource
@@ -4814,7 +4800,7 @@ export type ChannelBlock = {
 }
 
 /** A programme a channel airs now or next. */
-export type ChannelAiring = {
+type ChannelAiring = {
   name: string
   episode: string
   season: number
@@ -4852,7 +4838,7 @@ export type OwnChannelDraft = {
 }
 
 /** A collection or a smart list a channel may be built from. */
-export type ChannelChoice = { id: string; name: string; source: string }
+type ChannelChoice = { id: string; name: string; source: string }
 
 export type ChannelChoices = { collections: ChannelChoice[]; smartLists: ChannelChoice[] }
 
@@ -4928,7 +4914,7 @@ export type ShareHealth = {
 }
 
 /** The folders the settings choose for conversion, files being read and the cache. */
-export type WorkFolderName = 'conversion' | 'reading' | 'cache'
+type WorkFolderName = 'conversion' | 'reading' | 'cache'
 
 export type Health = {
   checkedAt: string
@@ -5083,7 +5069,7 @@ export type Health = {
 }
 
 /** The kinds of artwork download failures System › Health counts. */
-export type ArtworkFailureKind = 'not_found' | 'rate_limited' | 'timeout' | 'server_error' | 'other'
+type ArtworkFailureKind = 'not_found' | 'rate_limited' | 'timeout' | 'server_error' | 'other'
 
 /**
  * A stored secret POLYFIN_SECRET_KEY cannot decrypt: a server setting (the SMTP password is one,
@@ -5116,7 +5102,7 @@ export type UnreadableSecret = {
  * The peers a torrent that did not start found: those connected, and the others by how their last
  * dial or connection ended, each count left out at 0.
  */
-export type TorrentPeerCounts = {
+type TorrentPeerCounts = {
   found: number
   connected: number
   timedOut?: number
@@ -5597,7 +5583,7 @@ export const checkAddon = (id: string) =>
  * What starts Polyfin again once it exits: Polyfin Desktop, a restart policy or service manager an
  * administrator confirmed, or nothing Polyfin knows of.
  */
-export type RestartKind = 'desktop' | 'confirmed' | 'unknown'
+type RestartKind = 'desktop' | 'confirmed' | 'unknown'
 
 /** The update Polyfin Desktop offers: its download's progress, and whether its last install failed. */
 export type DesktopUpdate = {
@@ -5915,7 +5901,7 @@ export const queryKeys = {
  * under way rather than cancelling it, which could leave the web client's token taken without the
  * session it opened.
  */
-export function askSessionAgain() {
+function askSessionAgain() {
   void queryClient.refetchQueries({ queryKey: queryKeys.session }, { cancelRefetch: false })
 }
 

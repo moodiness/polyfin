@@ -4,7 +4,7 @@ import type en from '@/i18n/en/settings'
 import type { RangeText } from '@/i18n/en/settings'
 
 /** The messages a setting's words come from: the settings area file of one language. */
-export type SettingsText = typeof en
+type SettingsText = typeof en
 
 /**
  * The bounds and default of a setting, by its name in Settings, as help texts show them; `scale`

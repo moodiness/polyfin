@@ -185,7 +185,7 @@ export function useParentalRatings(enabled = true) {
 }
 
 /** "Up to PG-13" when the user has a rating limit, once the ratings are known. */
-export function useRatingLimit(parentalControl: ParentalControl): string | null {
+function useRatingLimit(parentalControl: ParentalControl): string | null {
   const { t } = useI18n()
   const limited = parentalControl.maxRating !== null
   const ratings = useParentalRatings(limited)

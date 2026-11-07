@@ -57,7 +57,6 @@ const libraries = {
       undecided:
         'Polyfin shows it as movies and shows once it reads the catalog’s first page, if every title there is a movie or a show.',
     },
-    remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
     moreActions: (name: string) => `More actions for ${name}`,
     userOrders: {
@@ -105,7 +104,6 @@ const libraries = {
     notBrowsableHelp: 'Needs a search or another value, so it cannot be a library.',
     availableEmpty: 'Every catalog is already shown.',
     noMatch: 'No catalog matches this filter.',
-    reset: 'Reset',
     saved: 'Libraries saved.',
     guideAfterSave: 'Save the libraries to add a programme guide to this catalog.',
     guideFetched: 'Last fetched',
@@ -235,7 +233,6 @@ const libraries = {
     match: 'Titles match',
     matchChoices: { all: 'All of the rules', any: 'Any of the rules' },
     groupMatch: 'This group matches',
-    group: 'Group',
     addRule: 'Add a rule',
     addGroup: 'Add a group',
     removeRule: 'Remove this rule',
@@ -307,7 +304,6 @@ const libraries = {
       'Series come by their latest regular episode aired, or their latest season premiere, as their description tells, specials and episodes to come left out; movies by their premiere date. A series whose description is not read yet comes last until it is.',
     maxItems: 'Maximum titles',
     maxHelp: (max: string) => `From 1 to ${max}. Empty: no maximum.`,
-    noMax: 'No maximum',
     create: 'Create the list',
     created: 'Smart list created.',
     saved: 'Smart list saved.',

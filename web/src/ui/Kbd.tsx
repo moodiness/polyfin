@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { cx } from './cx'
 
 /** Whether the device is an Apple one, whose shortcuts use ⌘ rather than Ctrl. */
-export const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
 
 /** The modifier of shortcuts as keys show it: "⌘" on Apple devices, "Ctrl" elsewhere. */
 export const modKey = isApple ? '⌘' : 'Ctrl'

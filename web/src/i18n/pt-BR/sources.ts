@@ -661,12 +661,6 @@ const sources: typeof en = {
       string,
       string
     >,
-    library: {
-      music: 'Biblioteca de música',
-      audiobook: 'Biblioteca de livros',
-      podcast: 'Biblioteca de música',
-    } as Record<string, string>,
-    settings: 'Configurações',
     settingsTitle: 'Configurações do complemento',
     settingsHelp:
       'Definidas pelo complemento e enviadas em cada solicitação que o Polyfin faz a ele. Podem conter os dados da sua conta: somente você, ou os administradores no caso dos complementos do servidor, pode vê-las.',

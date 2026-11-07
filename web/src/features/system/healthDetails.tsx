@@ -52,7 +52,7 @@ import { Facts, Meter } from './parts'
  * The parts of Health a check tile or a row opens, by the `#anchor` that opens them: the same
  * anchors the server's problems and notifications link to.
  */
-export const detailIds = [
+const detailIds = [
   'addons',
   'iptv',
   'guides',

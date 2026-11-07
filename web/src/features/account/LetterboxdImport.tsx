@@ -226,7 +226,7 @@ export function LetterboxdProgress({
       }
     >
       <div className="flex flex-col gap-4">
-        {running && <p className="text-small text-ink-3">{text.runningHelp}</p>}
+        {running && <p className="text-small text-ink-3">{t.common.importRunningHelp}</p>}
         {current.problem !== null && <Notice tone="danger">{text.problem}</Notice>}
         {running ? (
           <div className="flex flex-col gap-2">
