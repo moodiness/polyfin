@@ -47,7 +47,7 @@ export default function SetupRoute() {
   if (restoring) {
     return (
       <AuthFrame title={t.setup.restoreTitle} lede={t.setup.restoreLede}>
-        <Notice className="mb-8">{t.setup.codeHelp[host]}</Notice>
+        <Notice className="mb-5">{t.setup.codeHelp[host]}</Notice>
         <SetupRestore
           setupCode={setupCode}
           onSetupCode={setSetupCode}
@@ -59,7 +59,7 @@ export default function SetupRoute() {
 
   return (
     <AuthFrame title={t.setup.title} lede={t.setup.description}>
-      <Notice className="mb-8">{t.setup.codeHelp[host]}</Notice>
+      <Notice className="mb-5">{t.setup.codeHelp[host]}</Notice>
       <form onSubmit={submit} noValidate className={authForm}>
         <Field label={t.setup.setupCode} help={t.setup.setupCodeHint}>
           <TextInput
