@@ -15,8 +15,8 @@ import (
 // series, the collections of an addon above it, then a library.
 const maxListingDepth = 6
 
-// ListedUnder reports whether any of the items was last listed under
-// folder: in it, or in a series or addon collection listed there.
+// ListedUnder reports whether any of the items is recorded under folder
+// (see savedData): in it, or in a series or addon collection listed there.
 func (s *Service) ListedUnder(ctx context.Context, ids []accounts.ID, folder accounts.ID) (bool, error) {
 	seen := map[accounts.ID]bool{}
 	for depth := 0; len(ids) > 0 && depth < maxListingDepth; depth++ {

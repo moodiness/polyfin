@@ -74,7 +74,7 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 			continue
 		}
 		// Merged catalogs do not tell which library listed a title: like a
-		// search result, it keeps the folder it was last listed in.
+		// search result, it keeps the folder it has.
 		r.Parent = nil
 		items, records = append(items, item), append(records, r)
 	}

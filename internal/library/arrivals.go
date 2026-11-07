@@ -144,14 +144,20 @@ func inLockOrderValues(records []record) []record {
 // catalogForgotten, and the titles no read saw for arrivalForgotten. Both
 // take their rows in key order, as recordArrivals does.
 func (s *Service) forgetArrivals(ctx context.Context) error {
-	if _, err := s.db.Exec(ctx, `DELETE FROM catalog_reach WHERE (addon_id, catalog_type, catalog_id, genre) IN (
+	reach, err := s.db.Exec(ctx, `DELETE FROM catalog_reach WHERE (addon_id, catalog_type, catalog_id, genre) IN (
 		SELECT addon_id, catalog_type, catalog_id, genre FROM catalog_reach WHERE read_at < $1
-		ORDER BY addon_id, catalog_type, catalog_id, genre FOR UPDATE)`, s.now().Add(-catalogForgotten)); err != nil {
+		ORDER BY addon_id, catalog_type, catalog_id, genre FOR UPDATE)`, s.now().Add(-catalogForgotten))
+	if err != nil {
 		return err
 	}
-	_, err := s.db.Exec(ctx, `DELETE FROM catalog_arrivals WHERE (addon_id, catalog_type, catalog_id, genre, item_id) IN (
+	arrivals, err := s.db.Exec(ctx, `DELETE FROM catalog_arrivals WHERE (addon_id, catalog_type, catalog_id, genre, item_id) IN (
 		SELECT addon_id, catalog_type, catalog_id, genre, item_id FROM catalog_arrivals WHERE last_seen < $1
 		ORDER BY addon_id, catalog_type, catalog_id, genre, item_id FOR UPDATE)`, s.now().Add(-arrivalForgotten))
+	// A title its first catalog no longer lists goes to the next one that
+	// does (see savedData): what saves learned of it no longer holds.
+	if reach.RowsAffected()+arrivals.RowsAffected() > 0 {
+		s.forgetAllSaved()
+	}
 	return err
 }
 

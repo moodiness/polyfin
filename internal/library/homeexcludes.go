@@ -16,12 +16,12 @@ import (
 
 // ListedOnlyIn returns those of titles (movies, series, videos) that only
 // the libraries of excluded list for user, as far as Polyfin knows without
-// asking an addon. A title is listed by the library it was last listed in
-// (the one a parentId finds it under, see ListedUnder), by a local folder
-// library holding it, and by a catalog library whose kept pages list it. A
-// title last listed in a library not excluded, or in none of the user's
-// libraries (a search result), is not returned: Polyfin cannot tell that
-// it is only the excluded libraries'.
+// asking an addon. A title is listed by the library it is recorded in (the
+// one a parentId finds it under, see ListedUnder and savedData), by a local
+// folder library holding it, and by a catalog library whose kept pages
+// list it. A title recorded in a library not excluded, or in none of the
+// user's libraries (a search result), is not returned: Polyfin cannot tell
+// that it is only the excluded libraries'.
 func (s *Service) ListedOnlyIn(ctx context.Context, user accounts.User, titles, excluded []accounts.ID) (map[accounts.ID]bool, error) {
 	if len(titles) == 0 || len(excluded) == 0 {
 		return nil, nil
@@ -63,7 +63,7 @@ func (s *Service) ListedOnlyIn(ctx context.Context, user accounts.User, titles, 
 	return only, nil
 }
 
-// listedIn returns the library of v that r was last listed in, climbing
+// listedIn returns the library of v that r is recorded in, climbing
 // the addon collections between them, zero when it is none of v's.
 func (s *Service) listedIn(ctx context.Context, v view, r record) (accounts.ID, error) {
 	seen := map[accounts.ID]bool{}

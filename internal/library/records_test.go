@@ -6,12 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // Listings that save the same titles at once in other orders, as smart
@@ -206,5 +212,222 @@ func TestMergingItemsChangedMeanwhileSucceeds(t *testing.T) {
 	}
 	if !strings.Contains(log.String(), "Items were not recorded") || !strings.Contains(log.String(), second.Key) {
 		t.Errorf("log:\n%s", log)
+	}
+}
+
+// listingAddon serves the movie catalogs Top, of movies 0 to 4, and New,
+// of movies 3 to 7, and the series catalog Shows, of one series of two
+// seasons.
+func listingAddon() *fakeAddon {
+	movies := func(from, to int) []stremio.Meta {
+		var result []stremio.Meta
+		for i := from; i <= to; i++ {
+			result = append(result, stremio.Meta{ID: fmt.Sprintf("tt%d", i), Type: "movie", Name: fmt.Sprintf("Movie %d", i)})
+		}
+		return result
+	}
+	show := stremio.Meta{ID: "tt100", Type: "series", Name: "Show"}
+	for season := 1; season <= 2; season++ {
+		for episode := 1; episode <= 3; episode++ {
+			show.Videos = append(show.Videos, stremio.Video{ID: fmt.Sprintf("tt100:%d:%d", season, episode), Title: fmt.Sprintf("Episode %d", episode),
+				Season: stremio.Number(season), Episode: stremio.Number(episode), Released: fmt.Sprintf("2020-0%d-0%dT00:00:00Z", season, episode)})
+		}
+	}
+	preview := show
+	preview.Videos = nil
+	return &fakeAddon{
+		manifest: stremio.Manifest{ID: "listings", Name: "Listings", Version: "1", Types: []string{"movie", "series"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+			Catalogs: []stremio.Catalog{
+				{Type: "movie", ID: "top", Name: "Top"},
+				{Type: "movie", ID: "new", Name: "New"},
+				{Type: "series", ID: "shows", Name: "Shows"},
+			}},
+		catalogs: map[string][]stremio.Meta{"movie/top": movies(0, 4), "movie/new": movies(3, 7), "series/shows": {preview}},
+		metas:    map[string]stremio.Meta{"series/tt100": show},
+	}
+}
+
+// listed lists the whole of a library of the user, and returns the items
+// listed.
+func (e env) listed(user accounts.User, library string) []accounts.ID {
+	e.t.Helper()
+	var ids []accounts.ID
+	for _, item := range e.children(user, library, 0, 100).Items {
+		ids = append(ids, item.ID)
+	}
+	return ids
+}
+
+// itemVersions returns the xmin and xmax of the items ids: an update
+// changes the first, a row lock the second.
+func (e env) itemVersions(ids []accounts.ID) map[accounts.ID]string {
+	e.t.Helper()
+	rows, err := e.service.db.Query(e.t.Context(), "SELECT id, xmin::text || '/' || xmax::text FROM items WHERE id = ANY($1::uuid[])", ids)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	result := map[accounts.ID]string{}
+	var id accounts.ID
+	var versions string
+	if _, err := pgx.ForEachRow(rows, []any{&id, &versions}, func() error {
+		result[id] = versions
+		return nil
+	}); err != nil {
+		e.t.Fatal(err)
+	}
+	if len(result) != len(ids) {
+		e.t.Fatalf("%d items stored of %d", len(result), len(ids))
+	}
+	return result
+}
+
+// itemUpdates returns the count of rows of items updated so far, once
+// every connection of the pool reported its statistics: each reports
+// them as it goes idle, forced, before it answers.
+func (e env) itemUpdates() int64 {
+	e.t.Helper()
+	ctx := e.t.Context()
+	for _, conn := range e.service.db.AcquireAllIdle(ctx) {
+		_, err := conn.Exec(ctx, "SELECT pg_stat_force_next_flush()")
+		conn.Release()
+		if err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	var updates int64
+	if err := e.service.db.QueryRow(ctx, "SELECT n_tup_upd FROM pg_stat_user_tables WHERE relid = 'items'::regclass").Scan(&updates); err != nil {
+		e.t.Fatal(err)
+	}
+	return updates
+}
+
+// Listing the same pages again, the libraries, a library's titles, and a
+// series' seasons and episodes, as Next Up does, writes nothing, and
+// locks no row: what was saved is known to be stored as it is.
+func TestListingAgainWritesNothing(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	e.install(addons.Shared(), listingAddon())
+	show := itemID(titleKey(KindSeries, "tt100"))
+	list := func() []accounts.ID {
+		ids := append(e.listed(e.member, "Top"), e.listed(e.member, "Shows")...)
+		seasons, err := e.service.Seasons(t.Context(), e.member, show)
+		if err != nil {
+			t.Fatal(err)
+		}
+		episodes, err := e.service.Episodes(t.Context(), e.member, show, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range slices.Concat(seasons, episodes) {
+			ids = append(ids, item.ID)
+		}
+		return append(ids, e.library(e.member, "Top").ID)
+	}
+	// The series' description, read once it was listed, stored its rating:
+	// the second listing finds the series changed since, and saves it once
+	// more.
+	ids := list()
+	if len(ids) != 15 {
+		t.Fatalf("%d items listed", len(ids))
+	}
+	list()
+	versions, updates := e.itemVersions(ids), e.itemUpdates()
+	list()
+	if again := e.itemVersions(ids); !maps.Equal(again, versions) {
+		t.Errorf("rows written or locked: %v, then %v", versions, again)
+	}
+	if n := e.itemUpdates() - updates; n != 0 {
+		t.Errorf("%d rows updated", n)
+	}
+}
+
+// A save leaves out only what is stored as it saved it: a row another
+// writer changed or deleted behind its back, without telling, is saved
+// again by the next listing.
+func TestListingsSaveRowsChangedBehindThem(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	e.install(addons.Shared(), listingAddon())
+	ids := e.listed(e.member, "Top")
+	e.listed(e.member, "Top")
+	changed, deleted := ids[0], ids[1]
+	if _, err := e.service.db.Exec(t.Context(), `UPDATE items SET data = jsonb_set(data, '{meta,name}', '"Changed"') WHERE id = $1`, changed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.db.Exec(t.Context(), "DELETE FROM items WHERE id = $1", deleted); err != nil {
+		t.Fatal(err)
+	}
+	e.listed(e.member, "Top")
+	if r, err := e.service.load(t.Context(), changed); err != nil || r.Meta.Name != "Movie 0" {
+		t.Errorf("the row changed: %+v %v", r.Meta, err)
+	}
+	if r, err := e.service.load(t.Context(), deleted); err != nil || r.Meta.Name != "Movie 1" || r.Parent == nil {
+		t.Errorf("the row deleted: %+v %v", r, err)
+	}
+}
+
+// A movie two catalogs list keeps the catalog that listed it first, and
+// that catalog's library as its folder, however often either is read
+// again, which then writes nothing; once that catalog no longer lists it,
+// the next catalog listing it takes it.
+func TestATitleKeepsTheCatalogThatListedItFirst(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	addon := listingAddon()
+	e.install(addons.Shared(), addon)
+	top, fresh := e.library(e.member, "Top").ID, e.library(e.member, "New").ID
+	both := itemID(titleKey(KindMovie, "tt3"))
+	stored := func() (string, accounts.ID) {
+		t.Helper()
+		r, err := e.service.load(t.Context(), both)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.CatalogID, deref(r.Parent)
+	}
+	e.listed(e.member, "Top")
+	if catalog, parent := stored(); catalog != "top" || parent != top {
+		t.Fatalf("listed by Top: %s %v", catalog, parent)
+	}
+	e.listed(e.member, "New")
+	if catalog, parent := stored(); catalog != "top" || parent != top {
+		t.Errorf("listed by New after Top: %s %v", catalog, parent)
+	}
+	if r, err := e.service.load(t.Context(), itemID(titleKey(KindMovie, "tt7"))); err != nil || r.CatalogID != "new" || deref(r.Parent) != fresh {
+		t.Errorf("a movie only New lists: %+v %v", r, err)
+	}
+	ids := []accounts.ID{both}
+	versions, updates := e.itemVersions(ids), e.itemUpdates()
+	for range 2 {
+		e.listed(e.member, "Top")
+		e.listed(e.member, "New")
+	}
+	if again := e.itemVersions(ids); !maps.Equal(again, versions) {
+		t.Errorf("the movie was written or locked: %v, then %v", versions, again)
+	}
+	if n := e.itemUpdates() - updates; n != 0 {
+		t.Errorf("%d rows updated", n)
+	}
+
+	// Top drops the movie, which Polyfin forgets it held once it has not
+	// seen it there for long.
+	addon.mu.Lock()
+	addon.catalogs["movie/top"] = slices.DeleteFunc(slices.Clone(addon.catalogs["movie/top"]), func(m stremio.Meta) bool { return m.ID == "tt3" })
+	addon.mu.Unlock()
+	later := time.Now().Add(arrivalForgotten + 24*time.Hour)
+	e.service.SetClock(func() time.Time { return later })
+	e.listed(e.member, "Top")
+	e.listed(e.member, "New")
+	if catalog, _ := stored(); catalog != "top" {
+		t.Errorf("before Top's arrival is forgotten: %s", catalog)
+	}
+	if err := e.service.forgetArrivals(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	e.listed(e.member, "New")
+	if catalog, parent := stored(); catalog != "new" || parent != fresh {
+		t.Errorf("once Top no longer lists it: %s %v", catalog, parent)
 	}
 }
