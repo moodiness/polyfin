@@ -1,258 +1,42 @@
-import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react'
-import enAccount from './en/account'
-import enNotifications from './en/notifications'
-import enBackups from './en/backups'
-import enAuth from './en/auth'
-import enCommon from './en/common'
-import enHome from './en/home'
-import enIptv from './en/iptv'
-import enLibraries from './en/libraries'
-import enLivetv from './en/livetv'
-import enNav from './en/nav'
-import enSettings from './en/settings'
-import enSources from './en/sources'
-import enStatistics from './en/statistics'
-import enSystem from './en/system'
-import enUsers from './en/users'
-import enVersions from './en/versions'
-import frAccount from './fr/account'
-import frNotifications from './fr/notifications'
-import frBackups from './fr/backups'
-import frAuth from './fr/auth'
-import frCommon from './fr/common'
-import frHome from './fr/home'
-import frIptv from './fr/iptv'
-import frLibraries from './fr/libraries'
-import frLivetv from './fr/livetv'
-import frNav from './fr/nav'
-import frSettings from './fr/settings'
-import frSources from './fr/sources'
-import frStatistics from './fr/statistics'
-import frSystem from './fr/system'
-import frUsers from './fr/users'
-import frVersions from './fr/versions'
-import deAccount from './de/account'
-import deNotifications from './de/notifications'
-import deBackups from './de/backups'
-import deAuth from './de/auth'
-import deCommon from './de/common'
-import deHome from './de/home'
-import deIptv from './de/iptv'
-import deLibraries from './de/libraries'
-import deLivetv from './de/livetv'
-import deNav from './de/nav'
-import deSettings from './de/settings'
-import deSources from './de/sources'
-import deStatistics from './de/statistics'
-import deSystem from './de/system'
-import deUsers from './de/users'
-import deVersions from './de/versions'
-import esAccount from './es/account'
-import esNotifications from './es/notifications'
-import esBackups from './es/backups'
-import esAuth from './es/auth'
-import esCommon from './es/common'
-import esHome from './es/home'
-import esIptv from './es/iptv'
-import esLibraries from './es/libraries'
-import esLivetv from './es/livetv'
-import esNav from './es/nav'
-import esSettings from './es/settings'
-import esSources from './es/sources'
-import esStatistics from './es/statistics'
-import esSystem from './es/system'
-import esUsers from './es/users'
-import esVersions from './es/versions'
-import itAccount from './it/account'
-import itNotifications from './it/notifications'
-import itBackups from './it/backups'
-import itAuth from './it/auth'
-import itCommon from './it/common'
-import itHome from './it/home'
-import itIptv from './it/iptv'
-import itLibraries from './it/libraries'
-import itLivetv from './it/livetv'
-import itNav from './it/nav'
-import itSettings from './it/settings'
-import itSources from './it/sources'
-import itStatistics from './it/statistics'
-import itSystem from './it/system'
-import itUsers from './it/users'
-import itVersions from './it/versions'
-import ptBRAccount from './pt-BR/account'
-import ptBRNotifications from './pt-BR/notifications'
-import ptBRBackups from './pt-BR/backups'
-import ptBRAuth from './pt-BR/auth'
-import ptBRCommon from './pt-BR/common'
-import ptBRHome from './pt-BR/home'
-import ptBRIptv from './pt-BR/iptv'
-import ptBRLibraries from './pt-BR/libraries'
-import ptBRLivetv from './pt-BR/livetv'
-import ptBRNav from './pt-BR/nav'
-import ptBRSettings from './pt-BR/settings'
-import ptBRSources from './pt-BR/sources'
-import ptBRStatistics from './pt-BR/statistics'
-import ptBRSystem from './pt-BR/system'
-import ptBRUsers from './pt-BR/users'
-import ptBRVersions from './pt-BR/versions'
+import { createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type englishMessages from './en/index'
 
 /*
  * The messages are split into one file per area and language, `en/<area>.ts`, `fr/<area>.ts` and so
- * on, each holding whole top-level keys (`t.users`, `t.lineup`…). English is the reference: each
- * other language's file is typed with its English twin, so a missing or extra key fails type
- * checking.
+ * on, each holding whole top-level keys (`t.users`, `t.lineup`…), and merged by each language's
+ * `index.ts`. English is the reference: each other language's file is typed with its English twin,
+ * so a missing or extra key fails type checking. Each language is a file of its own, downloaded
+ * when the interface first shows it: before the first draw, or before a switch to it shows.
  */
 
 export type Language = 'en' | 'fr' | 'de' | 'es' | 'it' | 'pt-BR'
 
 export const languages: readonly Language[] = ['en', 'fr', 'de', 'es', 'it', 'pt-BR']
 
-const en = {
-  ...enCommon,
-  ...enNav,
-  ...enHome,
-  ...enAuth,
-  ...enSources,
-  ...enIptv,
-  ...enLibraries,
-  ...enLivetv,
-  ...enUsers,
-  ...enSystem,
-  ...enSettings,
-  ...enAccount,
-  ...enNotifications,
-  ...enStatistics,
-  ...enBackups,
-  ...enVersions,
-}
-
 /** Every message of the interface, in one language. */
-export type Messages = typeof en
+export type Messages = typeof englishMessages
 
-const fr: Messages = {
-  ...frCommon,
-  ...frNav,
-  ...frHome,
-  ...frAuth,
-  ...frSources,
-  ...frIptv,
-  ...frLibraries,
-  ...frLivetv,
-  ...frUsers,
-  ...frSystem,
-  ...frSettings,
-  ...frAccount,
-  ...frNotifications,
-  ...frStatistics,
-  ...frBackups,
-  ...frVersions,
+const loaders: Record<Language, () => Promise<{ default: Messages }>> = {
+  en: () => import('./en/index'),
+  fr: () => import('./fr/index'),
+  de: () => import('./de/index'),
+  es: () => import('./es/index'),
+  it: () => import('./it/index'),
+  'pt-BR': () => import('./pt-BR/index'),
 }
 
-const de: Messages = {
-  ...deCommon,
-  ...deNav,
-  ...deHome,
-  ...deAuth,
-  ...deSources,
-  ...deIptv,
-  ...deLibraries,
-  ...deLivetv,
-  ...deUsers,
-  ...deSystem,
-  ...deSettings,
-  ...deAccount,
-  ...deNotifications,
-  ...deStatistics,
-  ...deBackups,
-  ...deVersions,
+const loaded: Partial<Record<Language, Messages>> = {}
+
+/** A language's messages, downloaded once. */
+async function loadMessages(language: Language): Promise<Messages> {
+  return (loaded[language] ??= (await loaders[language]()).default)
 }
 
-const es: Messages = {
-  ...esCommon,
-  ...esNav,
-  ...esHome,
-  ...esAuth,
-  ...esSources,
-  ...esIptv,
-  ...esLibraries,
-  ...esLivetv,
-  ...esUsers,
-  ...esSystem,
-  ...esSettings,
-  ...esAccount,
-  ...esNotifications,
-  ...esStatistics,
-  ...esBackups,
-  ...esVersions,
+/** The language the interface starts in, with its messages: the app draws once they are in. */
+export async function loadInitialLanguage(): Promise<ShownLanguage> {
+  const language = initialLanguage()
+  return { language, t: await loadMessages(language) }
 }
-
-const it: Messages = {
-  ...itCommon,
-  ...itNav,
-  ...itHome,
-  ...itAuth,
-  ...itSources,
-  ...itIptv,
-  ...itLibraries,
-  ...itLivetv,
-  ...itUsers,
-  ...itSystem,
-  ...itSettings,
-  ...itAccount,
-  ...itNotifications,
-  ...itStatistics,
-  ...itBackups,
-  ...itVersions,
-}
-
-const ptBR: Messages = {
-  ...ptBRCommon,
-  ...ptBRNav,
-  ...ptBRHome,
-  ...ptBRAuth,
-  ...ptBRSources,
-  ...ptBRIptv,
-  ...ptBRLibraries,
-  ...ptBRLivetv,
-  ...ptBRUsers,
-  ...ptBRSystem,
-  ...ptBRSettings,
-  ...ptBRAccount,
-  ...ptBRNotifications,
-  ...ptBRStatistics,
-  ...ptBRBackups,
-  ...ptBRVersions,
-}
-
-// Two areas defining the same top-level key would silently hide one of them.
-if (import.meta.env.DEV) {
-  const seen = new Set<string>()
-  for (const area of [
-    enCommon,
-    enNav,
-    enHome,
-    enAuth,
-    enSources,
-    enIptv,
-    enLibraries,
-    enLivetv,
-    enUsers,
-    enSystem,
-    enSettings,
-    enAccount,
-    enNotifications,
-    enStatistics,
-    enBackups,
-    enVersions,
-  ]) {
-    for (const key of Object.keys(area)) {
-      if (seen.has(key)) throw new Error(`i18n: the key "${key}" is defined by two areas`)
-      seen.add(key)
-    }
-  }
-}
-
-const dictionaries: Record<Language, Messages> = { en, fr, de, es, it, 'pt-BR': ptBR }
 
 const storageKey = 'polyfin.language'
 
@@ -280,36 +64,48 @@ function browserLanguage(tag: string): Language | undefined {
   return languages.find((code) => code !== 'pt-BR' && lower.split('-')[0] === code)
 }
 
-type I18nContextValue = {
-  language: Language
+/** The language the interface shows, with its messages. */
+export type ShownLanguage = { language: Language; t: Messages }
+
+type I18nContextValue = ShownLanguage & {
+  /** Shows another language once its messages are in, so that no key ever shows raw. */
   setLanguage: (language: Language) => void
-  t: Messages
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null)
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(initialLanguage)
+export function LanguageProvider({
+  initial,
+  children,
+}: {
+  initial: ShownLanguage
+  children: ReactNode
+}) {
+  const [shown, setShown] = useState(initial)
+  // The last language chosen: a slower download of an earlier choice must not replace it.
+  const chosen = useRef(initial.language)
 
   useEffect(() => {
-    document.documentElement.lang = language
-    document.title = dictionaries[language].documentTitle
-  }, [language])
+    document.documentElement.lang = shown.language
+    document.title = shown.t.documentTitle
+  }, [shown])
 
   const value = useMemo<I18nContextValue>(
     () => ({
-      language,
-      t: dictionaries[language],
+      ...shown,
       setLanguage: (next) => {
+        chosen.current = next
         try {
           window.localStorage.setItem(storageKey, next)
         } catch {
           // The choice still applies for this session when storage is unavailable.
         }
-        setLanguageState(next)
+        void loadMessages(next).then((t) => {
+          if (chosen.current === next) setShown({ language: next, t })
+        })
       },
     }),
-    [language],
+    [shown],
   )
 
   return <I18nContext value={value}>{children}</I18nContext>
