@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -80,10 +81,14 @@ func TestATaskRunsOnceAtATimeAndStopsWhenCancelled(t *testing.T) {
 	}
 }
 
+// An interval task first runs its stagger after its interval, so that
+// tasks of one interval do not run in the same second.
 func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
 	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	registry.Register(Task{Key: "Hourly", Interval: time.Hour, Text: map[string]Text{"en": {Name: "Hourly"}},
-		Run: func(context.Context) error { return nil }})
+	for _, key := range []string{"Hourly", "AlsoHourly"} {
+		registry.Register(Task{Key: key, Interval: time.Hour, Text: map[string]Text{"en": {Name: key}},
+			Run: func(context.Context) error { return nil }})
+	}
 	registry.Register(Task{Key: "ByHand", Text: map[string]Text{"en": {Name: "By hand"}},
 		Run: func(context.Context) error { return nil }})
 	if info, _ := registry.Task(ID("Hourly"), "en"); info.Next != nil {
@@ -91,12 +96,40 @@ func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
 	}
 	before := time.Now()
 	registry.Start(t.Context())
-	hourly, _ := registry.Task(ID("Hourly"), "en")
-	if hourly.Next == nil || hourly.Next.Before(before.Add(time.Hour)) || hourly.Next.After(time.Now().Add(time.Hour)) {
-		t.Errorf("next run of an hourly task: %v", hourly.Next)
+	after := time.Now()
+	for _, key := range []string{"Hourly", "AlsoHourly"} {
+		first := time.Hour + stagger(key, time.Hour)
+		if info, _ := registry.Task(ID(key), "en"); info.Next == nil || info.Next.Before(before.Add(first)) || info.Next.After(after.Add(first)) {
+			t.Errorf("next run of %s: %v, want %v after the start", key, info.Next, first)
+		}
+	}
+	if d := stagger("Hourly", time.Hour) - stagger("AlsoHourly", time.Hour); d > -time.Second && d < time.Second {
+		t.Error("two hourly tasks run in the same second")
 	}
 	if manual, _ := registry.Task(ID("ByHand"), "en"); manual.Next != nil {
 		t.Errorf("next run of a task without schedule: %v", manual.Next)
+	}
+}
+
+// A task's stagger depends on its key alone, the same in every run of the
+// server, and stays under 5 minutes and under half its interval.
+func TestStaggersAreStableAndBounded(t *testing.T) {
+	if got, want := stagger("WarmLibraries", time.Hour), time.Duration(267227399570); got != want {
+		t.Errorf("stagger of WarmLibraries: %v, want %v", got, want)
+	}
+	if got, want := stagger("RefreshLiveTvGuides", 5*time.Minute), time.Duration(142099951770); got != want {
+		t.Errorf("stagger of RefreshLiveTvGuides: %v, want %v", got, want)
+	}
+	for i := range 1000 {
+		key := "Task" + strconv.Itoa(i)
+		for _, interval := range []time.Duration{time.Millisecond, time.Second, 5 * time.Minute, 10 * time.Minute, time.Hour, 24 * time.Hour} {
+			if s := stagger(key, interval); s < 0 || s >= min(5*time.Minute, interval/2) {
+				t.Fatalf("stagger of %s every %v: %v", key, interval, s)
+			}
+		}
+	}
+	if s := stagger("Never", 0); s != 0 {
+		t.Errorf("stagger without interval: %v", s)
 	}
 }
 
