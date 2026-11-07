@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
@@ -168,7 +169,8 @@ type Service struct {
 // sets on segments, the limit of the playbacks converting video, whenever
 // one more would start, the segments made ahead of the player, and whether
 // converted video is kept when the audio track changes, as each request
-// comes.
+// comes. The versions sources refused for their host's error file are
+// tried again as soon as the host answers its files (see retryRefused).
 func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger,
 	settings func() accounts.Settings) (*Service, error) {
 	server, err := newLoopback()
@@ -216,6 +218,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		switches:    newSwitchState(),
 	}
 	server.live = s.serveLive
+	sources.OnRecovered(s.retryRefused)
 	return s, nil
 }
 
@@ -238,17 +241,37 @@ func (s *Service) open(version library.Version) *source.Source {
 		}
 		return src
 	}
-	location, renew := s.location(version)
+	analyzed := s.analyzedSize(version)
+	location, renew := s.location(version, analyzed)
 	for _, mirror := range version.Mirrors {
-		at, renewMirror := s.location(mirror)
+		at, renewMirror := s.location(mirror, analyzed)
 		location.Mirrors = append(location.Mirrors, source.Mirror{Location: at, Renew: renewMirror})
 	}
 	return s.sources.Open(version.ID, location, renew)
 }
 
+// analyzedSize is the size a remote version's analysis found, which the
+// source cache checks its host's first answer against, so that an error
+// file is refused at its first byte (see source.Location.Analyzed), when
+// its addon announced a size within 1% of it; 0 otherwise. An analysis
+// that the addon does not side with may be of another file, such as one
+// made of an error page, or of a file the link no longer names: the file
+// is then read as before, its size corrected (see readSized). The server's
+// own files get none. The analyses remembered are looked at, not the
+// database: a play analyzes its version before it reads it, which
+// remembers its analysis.
+func (s *Service) analyzedSize(version library.Version) int64 {
+	analysis, _ := s.analyses.Get(version.ID)
+	if !s.remote(version) || version.Size <= 0 || math.Abs(float64(analysis.Size-version.Size)) > 0.01*float64(version.Size) {
+		return 0
+	}
+	return analysis.Size
+}
+
 // location is where the source cache reads a version's link, and how it
-// renews it: through its addon, but for a local folder's file.
-func (s *Service) location(version library.Version) (source.Location, source.Renewer) {
+// renews it: through its addon, but for a local folder's file. analyzed
+// is the size the file's analysis found, 0 when unknown.
+func (s *Service) location(version library.Version, analyzed int64) (source.Location, source.Renewer) {
 	if location, ok := s.storedLocation(version); ok {
 		return location, nil
 	}
@@ -256,10 +279,10 @@ func (s *Service) location(version library.Version) (source.Location, source.Ren
 	if s.renew != nil {
 		renew = func(ctx context.Context) (source.Location, error) {
 			fresh, err := s.renew(ctx, version)
-			return locationOf(fresh), err
+			return locationOf(fresh, analyzed), err
 		}
 	}
-	return locationOf(version), renew
+	return locationOf(version, analyzed), renew
 }
 
 // storedLookup bounds finding where a local file is read from (see
@@ -285,11 +308,12 @@ func (s *Service) storedLocation(version library.Version) (source.Location, bool
 }
 
 // locationOf is where a version's bytes are, with the size its addon
-// announced: the source cache refuses another file at the first byte once
-// the addon's sizes prove right.
-func locationOf(version library.Version) source.Location {
+// announced and the one its analysis found, analyzed, 0 when unknown: the
+// source cache refuses another file at the first byte, once the addon's
+// sizes prove right, or as soon as the file was analyzed.
+func locationOf(version library.Version, analyzed int64) source.Location {
 	return source.Location{URL: version.URL, Headers: version.RequestHeaders(), Confined: version.Confined, Size: version.Size,
-		Announcer: version.Addon}
+		Announcer: version.Addon, Analyzed: analyzed}
 }
 
 // Torrents has the source cache read the versions that are torrents'
@@ -991,12 +1015,32 @@ type versionFailure struct {
 
 // fail keeps err as why a version could not be analyzed or reached: it is
 // not tried again for failureTTL, unless its addon changes or its item is
-// tried again (see Retry and RetryItem).
+// tried again (see Retry and RetryItem), or its host answered an error
+// file for it and answers its files again (see retryRefused).
 func (s *Service) fail(version library.Version, err error) {
 	if passing(version, err) {
 		return
 	}
 	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})
+}
+
+// retryRefused forgets the failures of the versions whose sources were
+// refused for the error file their host answered, now that it answers its
+// files: they are tried again at once, rather than after failureTTL (see
+// source.Cache.OnRecovered).
+func (s *Service) retryRefused(versions []accounts.ID) {
+	for _, id := range versions {
+		s.failures.Delete(id)
+	}
+}
+
+// ErrorFile is the error file the host of a version answers instead of
+// its file, if any (see source.Cache.ErrorFileOf).
+func (s *Service) ErrorFile(version library.Version) (source.ErrorFile, bool) {
+	if version.Torrent != nil {
+		return source.ErrorFile{}, false
+	}
+	return s.sources.ErrorFileOf(version.ID, version.URL)
 }
 
 // passing reports whether err, met reading a version, tells of the moment
