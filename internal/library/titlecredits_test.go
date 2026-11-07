@@ -571,3 +571,42 @@ func TestRefreshReadsATitlesCreditsAgain(t *testing.T) {
 		t.Errorf("Quiet Pier's credits were asked %d times", len(asked))
 	}
 }
+
+// A title's kept credits are read from the database once, then from
+// memory, which every write of them follows: a refresh asks TMDB again,
+// and the title shows its new credits.
+func TestKeptCreditsAreRemembered(t *testing.T) {
+	t.Parallel()
+	e := newCreditsEnv(t, "k3y", time.Hour)
+	e.service.UseTitleCredits(e.queue)
+	if got := cast(e.open(e.admin, "Quiet Pier").People, "Actor"); !slices.Equal(got, []string{"Ana Actor", "Ben Actor"}) {
+		t.Fatalf("Quiet Pier's actors: %v", got)
+	}
+	e.settle()
+	// Changed behind Polyfin's back, the credits kept are not read again.
+	if _, err := e.service.db.Exec(t.Context(), `UPDATE title_credits SET credits = '[]'`); err != nil {
+		t.Fatal(err)
+	}
+	item, err := e.service.Item(t.Context(), e.admin, e.titles["Quiet Pier"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cast(item.People, "Actor"); !slices.Equal(got, []string{"Ana Actor", "Ben Actor"}) {
+		t.Errorf("Quiet Pier's actors as remembered: %v", got)
+	}
+	e.tmdb.movie("tt0882002", 1002, billed([]int{6002, 6000, 6900}, map[int]string{6002: "Cleo Actor", 6000: "Ana Actor", 6900: "Ben Actor"}), nil)
+	if err := e.service.Refresh(t.Context(), e.admin, e.titles["Quiet Pier"]); err != nil {
+		t.Fatal(err)
+	}
+	e.settle()
+	items, err := e.service.Items(t.Context(), e.admin, []accounts.ID{e.titles["Quiet Pier"], e.titles["Harbor Lights"]})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("%d items: %v", len(items), err)
+	}
+	if got := cast(items[0].People, "Actor"); !slices.Equal(got, []string{"Cleo Actor", "Ana Actor", "Ben Actor"}) {
+		t.Errorf("Quiet Pier's actors after Refresh metadata: %v", got)
+	}
+	if got := cast(items[1].People, "Actor"); !slices.Equal(got, addonCast) {
+		t.Errorf("Harbor Lights' actors, its credits not read yet: %v", got)
+	}
+}

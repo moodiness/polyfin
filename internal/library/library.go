@@ -240,6 +240,9 @@ type Service struct {
 	// titleArtwork keeps the posters and backdrops TMDB gives titles
 	// lacking their addon's (see tmdbartwork.go).
 	titleArtwork titleArtworks
+	// titleCredits remembers the credits of titles TMDB gives, as kept
+	// (see titlecredits.go).
+	titleCredits titleCreditsMemory
 	// saved remembers the records saves stored that left their items as
 	// they are (see records.go).
 	saved savedRecords
@@ -2249,7 +2252,14 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 	if err != nil {
 		return nil, err
 	}
+	// Seasons and episodes are described from their series, read together
+	// rather than one by one.
+	if ctx, err = s.withPreloaded(ctx, unloadedSeries(ctx, records)); err != nil {
+		return nil, err
+	}
 	found := make([]*Item, len(ids))
+	// credited are the titles whose people are left to titlesPeople.
+	credited := make([]bool, len(ids))
 	var g errgroup.Group
 	g.SetLimit(8)
 	for i, id := range ids {
@@ -2266,7 +2276,7 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 			var item Item
 			var err error
 			if recorded && !isLibrary {
-				item, err = s.described(ctx, v, r)
+				item, credited[i], err = s.describedUncredited(ctx, v, r)
 			} else {
 				item, err = s.item(ctx, v, id)
 			}
@@ -2283,6 +2293,13 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 		})
 	}
 	_ = g.Wait()
+	var titles []*Item
+	for i, item := range found {
+		if item != nil && credited[i] {
+			titles = append(titles, item)
+		}
+	}
+	s.titlesPeople(ctx, titles)
 	items := make([]Item, 0, len(ids))
 	for _, item := range found {
 		if item != nil {
@@ -2290,6 +2307,23 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 		}
 	}
 	return items, nil
+}
+
+// unloadedSeries returns the series of the seasons and episodes of
+// records, each once, but those already read ahead in ctx.
+func unloadedSeries(ctx context.Context, records []record) []accounts.ID {
+	var series []accounts.ID
+	seen := map[accounts.ID]bool{}
+	for _, r := range records {
+		if r.Kind != KindSeason && r.Kind != KindEpisode {
+			continue
+		}
+		if id := r.seriesItemID(); !seen[id] && !isPreloaded(ctx, id) {
+			seen[id] = true
+			series = append(series, id)
+		}
+	}
+	return series
 }
 
 // goneVideos are the items of records that are home videos no folder
@@ -2410,71 +2444,11 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		s.addGenerated(ctx, v, items, []record{r})
 		return items[0], nil
 	case KindMovie, KindSeries, KindVideo, KindFolder:
-		// A title only an addon the user does not use knows is no title
-		// of theirs, nor one its library no longer shows so.
-		if s.withholdsHolder(ctx, v, r) || v.misplaced(r) {
-			return Item{}, ErrNotFound
+		item, uncredited, err := s.describedTitle(ctx, v, r)
+		if uncredited {
+			item.People = s.titlePeople(ctx, item.ID, item.Kind, item.ProviderIDs, item.People)
 		}
-		if r.folderVideo() {
-			return s.folderVideoItem(ctx, v, r)
-		}
-		if r.Meta == nil {
-			return Item{}, ErrNotFound
-		}
-		meta := *r.Meta
-		full, described := s.titleMeta(ctx, v, r)
-		if described {
-			meta = full
-		}
-		// A restricted user's addons are the server's (see view): the
-		// description gives the rating and genres.
-		t := describedTraits(meta)
-		if !described {
-			t, _ = s.knownTraits(ctx, v, r)
-		}
-		// Jellyfin answers a title the user may not see as one that does not
-		// exist.
-		kind := r.Kind
-		switch {
-		case described && r.otherTitle():
-			kind = otherKind(meta)
-		case described && r.shownTitle():
-			kind = shownKind(meta)
-			// A title shown as a movie plays as one (see target).
-			if kind != r.Kind {
-				r.Kind = kind
-				if err := s.save(ctx, []record{r}); err != nil {
-					s.logger.Debug("The kind of a title could not be recorded", "title", r.Meta.ID, "error", err)
-				}
-			}
-		}
-		if !v.allows(kind, s.overriddenTraits(id, t)) {
-			return Item{}, ErrNotFound
-		}
-		item := Item{ID: id, Kind: kind, ParentID: deref(r.Parent), Available: true}
-		// The user's language changes what the title shows, never the facts
-		// judged above.
-		fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta))
-		item.OfficialRating = t.rating
-		switch {
-		case kind == KindSeries && len(meta.Videos) > 0:
-			item.Contents = contents(meta, nil, s.now())
-		case kind == KindFolder && described:
-			item.Contents = folderContents(meta, s.now())
-		}
-		// Apps show the credited people and open them by identifier: those
-		// of an addon's description are recorded when it is fetched (see
-		// fetchKeptMeta), those of an IPTV source's here, as it describes
-		// its titles anew each time.
-		if r.Addon != nil {
-			if entry, ok := v.addon(*r.Addon); ok && entry.addon.IPTV() {
-				return item, s.saveCredits(ctx, id, item.People, r.Confined)
-			}
-		}
-		// While TMDB credits the title, its people are TMDB's (see
-		// titlecredits.go).
-		item.People = s.titlePeople(ctx, id, kind, item.ProviderIDs, item.People)
-		return item, nil
+		return item, err
 	case KindSeason, KindEpisode:
 		series, meta, full, err := s.series(ctx, v, r.seriesItemID())
 		if err != nil {
@@ -2530,6 +2504,91 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 	default:
 		return Item{}, ErrNotFound
 	}
+}
+
+// describedUncredited is described, but for the people of a movie or a
+// series, which it leaves to titlePeople or titlesPeople: it reports
+// whether it did.
+func (s *Service) describedUncredited(ctx context.Context, v view, r record) (Item, bool, error) {
+	switch r.Kind {
+	case KindMovie, KindSeries, KindVideo, KindFolder:
+		return s.describedTitle(ctx, v, r)
+	}
+	item, err := s.described(ctx, v, r)
+	return item, false, err
+}
+
+// describedTitle describes the title Polyfin recorded as r, a movie, a
+// series, a video or a folder, as described does, but for its people as
+// TMDB credits them, which it leaves to titlePeople: it reports whether
+// it did.
+func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, bool, error) {
+	id := r.ID
+	// A title only an addon the user does not use knows is no title of
+	// theirs, nor one its library no longer shows so.
+	if s.withholdsHolder(ctx, v, r) || v.misplaced(r) {
+		return Item{}, false, ErrNotFound
+	}
+	if r.folderVideo() {
+		item, err := s.folderVideoItem(ctx, v, r)
+		return item, false, err
+	}
+	if r.Meta == nil {
+		return Item{}, false, ErrNotFound
+	}
+	meta := *r.Meta
+	full, described := s.titleMeta(ctx, v, r)
+	if described {
+		meta = full
+	}
+	// A restricted user's addons are the server's (see view): the
+	// description gives the rating and genres.
+	t := describedTraits(meta)
+	if !described {
+		t, _ = s.knownTraits(ctx, v, r)
+	}
+	// Jellyfin answers a title the user may not see as one that does not
+	// exist.
+	kind := r.Kind
+	switch {
+	case described && r.otherTitle():
+		kind = otherKind(meta)
+	case described && r.shownTitle():
+		kind = shownKind(meta)
+		// A title shown as a movie plays as one (see target).
+		if kind != r.Kind {
+			r.Kind = kind
+			if err := s.save(ctx, []record{r}); err != nil {
+				s.logger.Debug("The kind of a title could not be recorded", "title", r.Meta.ID, "error", err)
+			}
+		}
+	}
+	if !v.allows(kind, s.overriddenTraits(id, t)) {
+		return Item{}, false, ErrNotFound
+	}
+	item := Item{ID: id, Kind: kind, ParentID: deref(r.Parent), Available: true}
+	// The user's language changes what the title shows, never the facts
+	// judged above.
+	fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta))
+	item.OfficialRating = t.rating
+	switch {
+	case kind == KindSeries && len(meta.Videos) > 0:
+		item.Contents = contents(meta, nil, s.now())
+	case kind == KindFolder && described:
+		item.Contents = folderContents(meta, s.now())
+	}
+	// Apps show the credited people and open them by identifier: those of
+	// an addon's description are recorded when it is fetched (see
+	// fetchKeptMeta), those of an IPTV source's here, as it describes its
+	// titles anew each time.
+	if r.Addon != nil {
+		if entry, ok := v.addon(*r.Addon); ok && entry.addon.IPTV() {
+			return item, false, s.saveCredits(ctx, id, item.People, r.Confined)
+		}
+	}
+	// While TMDB credits the title, its people are TMDB's (see
+	// titlecredits.go).
+	return item, true, nil
 }
 
 func deref(id *accounts.ID) accounts.ID {
@@ -2747,26 +2806,76 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 	if err != nil {
 		return nil, err
 	}
-	if inAiredOrder(ctx) {
-		return s.episodes(ctx, v, seriesID, seasonID)
-	}
-	series, shown, meta, err := s.series(ctx, v, seriesID)
+	result, records, err := s.orderedEpisodes(ctx, v, seriesID, seasonID)
 	if err != nil {
 		return nil, err
 	}
-	layout := s.layoutOf(ctx, series.ID, meta, v.words)
+	return s.overridden(result), s.save(ctx, records)
+}
+
+// SeriesEpisodes lists the episodes of each of series as Episodes does,
+// by series, leaving out those it cannot list. The series are read
+// together, and the episodes recorded at once: Next Up lists those of up
+// to 50 series. It fails when the episodes could not be recorded.
+func (s *Service) SeriesEpisodes(ctx context.Context, user accounts.User, series []accounts.ID) (map[accounts.ID][]Item, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	if ctx, err = s.withPreloaded(ctx, series); err != nil {
+		return nil, err
+	}
+	type listed struct {
+		episodes []Item
+		records  []record
+	}
+	found := make([]*listed, len(series))
+	var g errgroup.Group
+	g.SetLimit(6)
+	for i, id := range series {
+		g.Go(func() error {
+			if episodes, records, err := s.orderedEpisodes(ctx, v, id, nil); err == nil {
+				found[i] = &listed{episodes: episodes, records: records}
+			}
+			return nil
+		})
+	}
+	_ = g.Wait()
+	result := make(map[accounts.ID][]Item, len(series))
+	var records []record
+	for i, id := range series {
+		if found[i] != nil {
+			result[id] = s.overridden(found[i].episodes)
+			records = append(records, found[i].records...)
+		}
+	}
+	return result, s.save(ctx, records)
+}
+
+// orderedEpisodes lists a series' episodes for v as Episodes does, with
+// the records of them, of the series' seasons, and of the seasons of its
+// order.
+func (s *Service) orderedEpisodes(ctx context.Context, v view, seriesID accounts.ID, seasonID *accounts.ID) ([]Item, []record, error) {
+	series, shown, meta, err := s.series(ctx, v, seriesID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var layout *episodeLayout
+	if !inAiredOrder(ctx) {
+		layout = s.layoutOf(ctx, series.ID, meta, v.words)
+	}
 	if layout == nil {
-		return s.seriesEpisodes(ctx, v, series, shown, meta, seasonID)
+		return listEpisodes(series, shown, meta, seasonID, v.words, s.now())
 	}
 	result, records, err := listEpisodes(series, shown, meta, nil, v.words, s.now())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	result, found := layout.arrange(result, seasonID)
 	if !found {
-		return nil, ErrSeasonNotFound
+		return nil, nil, ErrSeasonNotFound
 	}
-	return s.overridden(result), s.save(ctx, append(records, layout.records(series.ID, meta.ID)...))
+	return result, append(records, layout.records(series.ID, meta.ID)...), nil
 }
 
 // episodes lists a series' episodes for v as aired, of one season when
@@ -2776,11 +2885,6 @@ func (s *Service) episodes(ctx context.Context, v view, seriesID accounts.ID, se
 	if err != nil {
 		return nil, err
 	}
-	return s.seriesEpisodes(ctx, v, series, shown, meta, seasonID)
-}
-
-// seriesEpisodes is episodes for a series described (see series).
-func (s *Service) seriesEpisodes(ctx context.Context, v view, series Item, shown, meta stremio.Meta, seasonID *accounts.ID) ([]Item, error) {
 	result, records, err := listEpisodes(series, shown, meta, seasonID, v.words, s.now())
 	if err != nil {
 		return nil, err
