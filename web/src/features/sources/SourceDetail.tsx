@@ -49,7 +49,14 @@ import {
   useFolderScanFollowed,
   useServerSystem,
 } from './LocalFolders'
-import { invalidateScope, isIptv, lastTime, replaceCachedAddon, type Entry } from './model'
+import {
+  invalidateScope,
+  isIptv,
+  lastTime,
+  replaceCachedAddon,
+  useSourceToggle,
+  type Entry,
+} from './model'
 import { Fact, Facts, Group, SourceMark, SourceStatus } from './parts'
 import { SourceUsedBy } from './UsedBy'
 
@@ -107,11 +114,7 @@ export function SourceDetail({
   const [confirming, setConfirming] = useState(false)
 
   const fallbackScope: Scope = scope ?? 'shared'
-  const toggle = useMutation({
-    mutationFn: (enabled: boolean) => updateAddon(fallbackScope, addon.id, { enabled }),
-    onSuccess: (updated) => replaceCachedAddon(fallbackScope, updated),
-    onSettled: () => invalidateScope(fallbackScope),
-  })
+  const toggle = useSourceToggle(fallbackScope, addon.id)
   const refresh = useMutation({
     mutationFn: () => refreshAddon(fallbackScope, addon.id),
     onSuccess: (updated) => {
@@ -240,16 +243,13 @@ export function SourceDetail({
 
   return (
     <article aria-labelledby={`source-${addon.id}`} className="min-w-0">
-      <header className="flex items-start gap-[1.375rem] max-md:flex-wrap max-md:gap-3.5">
+      <header className="flex items-start gap-3.5 max-md:flex-wrap">
         <SourceMark addon={addon} />
         <div className="min-w-0 flex-1">
-          <h2
-            id={`source-${addon.id}`}
-            className="text-[2.75rem] leading-[1.05] font-[680] tracking-[-0.02em] hyphenate text-ink max-md:text-[2rem]"
-          >
+          <h2 id={`source-${addon.id}`} className="text-h2 hyphenate text-ink">
             {addon.name}
           </h2>
-          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-control text-ink-2 max-md:text-[1.03125rem]">
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-control text-ink-2">
             <span>{kindLine}</span>
             {addon.music !== null && <MusicBadge music={addon.music} />}
             <SourceStatus addon={addon} />
@@ -513,15 +513,15 @@ function OrderRow({
   const { t } = useI18n()
   return (
     <div className="rounded-row bg-s1">
-      <div className="flex min-h-[5.125rem] items-center gap-4 py-3.5 pr-3.5 pl-[1.875rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:pr-2 max-md:pl-5">
+      <div className="flex min-h-[3.375rem] items-center gap-4 py-2 pr-3 pl-4">
         <span className="min-w-0 flex-1 text-h3 text-ink">{t.sources.order}</span>
-        <span className="figures text-lead text-ink-2 max-md:text-[1.0625rem]">
+        <span className="figures text-control text-ink-2">
           {t.sources.position(index + 1, count)}
         </span>
         <MoveButtons name={name} index={index} count={count} onMove={onMove} />
       </div>
       {error !== undefined && (
-        <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
+        <div className="px-4 pb-3">
           <FieldError>{error}</FieldError>
         </div>
       )}

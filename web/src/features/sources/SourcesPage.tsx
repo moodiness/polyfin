@@ -23,21 +23,23 @@ import {
   EmptyState,
   InlineError,
   Modal,
-  RelativeTime,
+  MoveButtons,
   Row,
   RowList,
   Select,
   Skeleton,
   SkeletonRows,
+  Switch,
   TextInput,
+  useToast,
 } from '@/ui'
 import { AddSourceModal, type AddKind } from './AddSource'
 import {
   invalidateScope,
   isIptv,
   kindOf,
-  lastTime,
   sourcePath,
+  useSourceToggle,
   type Entry,
   type KindFilter,
 } from './model'
@@ -47,6 +49,44 @@ import { UsedByChip } from './UsedBy'
 
 /** Content's Sources (the server's, each user's), or a user's own My sources. */
 export type SourcesArea = 'content' | 'mine'
+
+/**
+ * What a source's row of the list holds beside its link: its switch, and ↑ ↓ to move it among the
+ * sources of its scope, so that turning it off or reordering it never opens it.
+ */
+function RowControls({
+  scope,
+  addon,
+  index,
+  count,
+  onMove,
+}: {
+  scope: Scope
+  addon: Addon
+  index: number
+  count: number
+  onMove: (to: number) => void
+}) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const toggle = useSourceToggle(scope, addon.id)
+  return (
+    <>
+      <Switch
+        checked={toggle.isPending ? (toggle.variables ?? addon.enabled) : addon.enabled}
+        label={t.sources.enabledLabel(addon.name)}
+        stateText={false}
+        disabled={toggle.isPending}
+        onChange={(enabled) =>
+          toggle.mutate(enabled, {
+            onError: (error) => toast(errorMessage(t, error), { tone: 'danger' }),
+          })
+        }
+      />
+      {count > 1 && <MoveButtons name={addon.name} index={index} count={count} onMove={onMove} />}
+    </>
+  )
+}
 
 const wideQuery = '(min-width: 1024px)'
 
@@ -347,7 +387,11 @@ export function SourcesPage({
 
   const list = (
     <section aria-label={text.listLabel} className="min-w-0">
-      <div role="group" aria-label={text.kindFilter} className="mb-3.5 -ml-3 flex flex-wrap gap-1">
+      <div
+        role="group"
+        aria-label={text.kindFilter}
+        className="mb-2.5 -ml-2.5 flex flex-wrap gap-0.5"
+      >
         {kindFilters.map((value) => (
           <button
             key={value}
@@ -355,17 +399,17 @@ export function SourcesPage({
             aria-pressed={filters.kind === value}
             onClick={() => setFilters({ kind: value })}
             className={cx(
-              'focus-lit inline-flex items-baseline gap-2 rounded-[0.875rem] px-3 py-2 text-control font-semibold transition-colors duration-300 ease-nuit',
+              'focus-lit inline-flex items-baseline gap-1.5 rounded-[0.5rem] px-2.5 py-1 text-control font-semibold transition-colors duration-300 ease-nuit',
               filters.kind === value ? 'bg-s2 text-ink' : 'text-ink-3 hover:text-ink',
             )}
           >
             {value === 'all' ? text.all : text.kinds[value]}
-            <span className="figures text-[1rem] font-semibold text-ink-3">{counts[value]}</span>
+            <span className="figures text-micro font-semibold text-ink-3">{counts[value]}</span>
           </button>
         ))}
       </div>
       {(entries.length > 4 || needle !== '' || (content && owners.size > 0)) && (
-        <div className="mb-3.5 flex flex-col gap-2">
+        <div className="mb-2.5 flex flex-col gap-1.5">
           <TextInput
             size="sm"
             icon={MagnifyingGlassIcon}
@@ -411,50 +455,52 @@ export function SourcesPage({
       ) : (
         <RowList variant="separate" aria-label={text.listLabel}>
           {visible.map((entry) => {
-            const when = lastTime(entry.addon)
+            const scope = entry.scope
+            const siblings = scope === null ? [] : scopeEntries(scope)
             return (
               <Row
                 key={entry.key}
-                className="py-[1.125rem]"
                 leading={<SourceTile addon={entry.addon} selected={entry === chosen} />}
                 title={entry.addon.name}
                 muted={!entry.addon.enabled}
                 meta={
-                  <>
-                    <span className="basis-full">{rowMeta(t, language, entry.addon)}</span>
+                  <span className="flex min-w-0 items-center gap-x-2">
+                    <SourceStatus addon={entry.addon} quiet className="text-micro" />
+                    <span className="min-w-0 truncate">{rowMeta(t, language, entry.addon)}</span>
                     {entry.owner !== null && content && (
-                      <span className="basis-full">
-                        <OwnerLabel entry={entry} selfId={user.id} />
-                      </span>
+                      <OwnerLabel entry={entry} selfId={user.id} />
                     )}
                     {entry.owner === null && entry.addon.usedBy.mode === 'listed' && (
-                      <span className="flex min-w-0 basis-full">
-                        <UsedByChip usedBy={entry.addon.usedBy} />
-                      </span>
+                      <UsedByChip usedBy={entry.addon.usedBy} />
                     )}
-                    <span className="mt-2 flex basis-full flex-wrap items-center gap-x-3 gap-y-1">
-                      <SourceStatus addon={entry.addon} className="text-[1.03125rem]" />
-                      {when !== null && (
-                        <RelativeTime iso={when} className="text-micro text-ink-3" />
-                      )}
-                    </span>
-                  </>
+                  </span>
                 }
                 selected={entry === chosen && !missing}
+                chevron={false}
                 // Another user's source has no page of its own: the list opens it beside itself.
                 to={
-                  entry.scope !== null
-                    ? sourcePath(entry.scope, entry.addon.id)
+                  scope !== null
+                    ? sourcePath(scope, entry.addon.id)
                     : `/sources?source=${encodeURIComponent(entry.key)}`
+                }
+                actions={
+                  scope === null ? undefined : (
+                    <RowControls
+                      key={entry.addon.id}
+                      scope={scope}
+                      addon={entry.addon}
+                      index={siblings.indexOf(entry)}
+                      count={siblings.length}
+                      onMove={(to) => movers[scope].move(siblings.indexOf(entry), to)}
+                    />
+                  )
                 }
               />
             )
           })}
         </RowList>
       )}
-      {content && (
-        <p className="mt-[1.125rem] px-1.5 text-[1.03125rem] text-ink-3">{text.listNote}</p>
-      )}
+      {content && <p className="mt-3 px-1 text-small text-ink-3">{text.listNote}</p>}
     </section>
   )
 
@@ -470,7 +516,7 @@ export function SourcesPage({
     )
   } else if (loading && !narrowPage) {
     body = (
-      <div className="grid items-start gap-14 lg:grid-cols-[26.25rem_minmax(0,1fr)] max-[1180px]:gap-10 max-[1180px]:lg:grid-cols-[21.25rem_minmax(0,1fr)]">
+      <div className="grid items-start gap-8 lg:grid-cols-[28rem_minmax(0,1fr)] max-[1180px]:gap-6 max-[1180px]:lg:grid-cols-[24rem_minmax(0,1fr)]">
         <div>
           <Skeleton className="mb-3.5 h-10 w-64" />
           <SkeletonRows rows={3} label={text.loading} />
@@ -496,7 +542,7 @@ export function SourcesPage({
     body = detail
   } else {
     body = (
-      <div className="grid items-start gap-14 lg:grid-cols-[26.25rem_minmax(0,1fr)] max-[1180px]:gap-10 max-[1180px]:lg:grid-cols-[21.25rem_minmax(0,1fr)]">
+      <div className="grid items-start gap-8 lg:grid-cols-[28rem_minmax(0,1fr)] max-[1180px]:gap-6 max-[1180px]:lg:grid-cols-[24rem_minmax(0,1fr)]">
         {/* The list stays in view beside a long page; a list taller than the screen scrolls. */}
         <div className="min-w-0 lg:sticky lg:top-6 lg:-m-3 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:p-3">
           {list}
