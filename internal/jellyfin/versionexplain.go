@@ -10,6 +10,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 // The admin app's Versions page explains a movie's or an episode's
@@ -79,7 +80,8 @@ type SourceExplanation struct {
 // 1; Pinned marks the version pinned; Unstarted, a torrent that did not
 // start lately, which a play picking no version passes over. Labels and
 // Height are what its addon's labels tell, Facts what the rules know of it
-// (see versionFacts), Analyzed whether it was analyzed.
+// (see versionFacts), Analyzed whether it was analyzed. ErrorFile is the
+// error file its host answers instead of the videos now, nil when none.
 type StreamExplanation struct {
 	Name      string
 	Filename  string
@@ -97,6 +99,7 @@ type StreamExplanation struct {
 	Labels    library.Labels
 	Facts     ExplainedFacts
 	Analyzed  bool
+	ErrorFile *source.ErrorFile
 }
 
 // ExplainedFacts are what the version rules know of a version: its
@@ -212,6 +215,9 @@ func (h *Handler) ExplainVersions(ctx context.Context, user accounts.User, id ac
 			Languages: known.languages, Multi: known.multi, Tier: known.tier, Audio: known.audio, Edition: known.edition,
 			PerMinute: known.perMinute, Score: score, LabelRules: matched}
 		_, explained.Analyzed = h.Playback.Analyzed(ctx, stream.Version.ID)
+		if e, ok := h.Playback.ErrorFile(stream.Version); ok {
+			explained.ErrorFile = &e
+		}
 		explained.Pinned = pinned && stream.Version.ID == pin.Version && stream.Step == library.StepVersion
 		if stream.Step != library.StepVersion {
 			return explained
