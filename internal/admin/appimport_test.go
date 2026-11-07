@@ -146,13 +146,9 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 		done["app"] != "nuvio" || done["user"].(map[string]any)["name"] != "bob" || done["startedBy"].(map[string]any)["name"] != "bob" {
 		t.Errorf("Bob's result: %v", done)
 	}
-	reasons := map[string]string{}
-	for _, u := range done["unmatched"].([]any) {
-		entry := u.(map[string]any)
-		reasons[entry["id"].(string)] = entry["reason"].(string)
-	}
-	if reasons["tmdb:999999"] != "not_found" || reasons["custom:1"] != "other_identifier" {
-		t.Errorf("unmatched: %v", done["unmatched"])
+	// The titles not found are kept by the import, not answered with it.
+	if _, listed := done["unmatched"]; listed {
+		t.Errorf("unmatched answered: %v", done["unmatched"])
 	}
 	bobID := api.userID("bob")
 	if !playedMovie(t, lib, data, bobID, "tt0000001") || playedMovie(t, lib, data, bobID, "tt0000009") {
@@ -369,13 +365,9 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 	if done["read"] != 12.0 || done["played"] != 5.0 || done["resumed"] != 2.0 || done["watchlist"] != 1.0 || done["unmatchedCount"] != 3.0 {
 		t.Errorf("Bob's result: %v", done)
 	}
-	reasons := map[string]string{}
-	for _, u := range done["unmatched"].([]any) {
-		entry := u.(map[string]any)
-		reasons[entry["id"].(string)] = entry["reason"].(string)
-	}
-	if reasons["tt0200"] != "episode_list" || reasons["custom:1"] != "other_identifier" || reasons["tmdb:999999"] != "not_found" {
-		t.Errorf("unmatched: %v", done["unmatched"])
+	// The titles not found are kept by the import, not answered with it.
+	if _, listed := done["unmatched"]; listed {
+		t.Errorf("unmatched answered: %v", done["unmatched"])
 	}
 	bobID := api.userID("bob")
 	if !playedMovie(t, lib, data, bobID, "tt0000001") || !playedMovie(t, lib, data, bobID, "tt0000003") ||

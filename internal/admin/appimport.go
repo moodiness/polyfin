@@ -542,20 +542,7 @@ type appImportJSON struct {
 	Resumed        int                     `json:"resumed"`
 	Watchlist      int                     `json:"watchlist"`
 	UnmatchedCount int                     `json:"unmatchedCount"`
-	Unmatched      []appUnmatchedJSON      `json:"unmatched"`
 	Addons         []appAddonInstalledJSON `json:"addons"`
-}
-
-// appUnmatchedJSON is a title of the app no Polyfin title matched: its
-// identifier in the app, its name when the app gives one, and an
-// episode's numbers.
-type appUnmatchedJSON struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Season  *int   `json:"season"`
-	Episode *int   `json:"episode"`
-	Reason  string `json:"reason"`
 }
 
 // appAddonInstalledJSON is an addon an import installs, and how it went.
@@ -573,16 +560,9 @@ func newAppImportJSON(status *appimport.Status) *appImportJSON {
 	result := &appImportJSON{ID: status.ID, App: status.App, Profile: status.Profile, State: status.State, Problem: optional(status.Problem),
 		StartedAt: status.StartedAt.UTC().Truncate(time.Second), EndedAt: utcSeconds(status.EndedAt), Read: status.Read,
 		Played: status.Played, Resumed: status.Resumed, Watchlist: status.Watchlist, UnmatchedCount: status.UnmatchedCount,
-		Unmatched: make([]appUnmatchedJSON, 0, len(status.Unmatched)), Addons: make([]appAddonInstalledJSON, 0, len(status.Addons))}
+		Addons: make([]appAddonInstalledJSON, 0, len(status.Addons))}
 	result.User.ID, result.User.Name = status.User.String(), status.UserName
 	result.StartedBy.ID, result.StartedBy.Name = status.StartedBy.String(), status.StartedByName
-	for _, u := range status.Unmatched {
-		entry := appUnmatchedJSON{ID: u.ID, Name: u.Name, Type: u.Kind, Reason: u.Reason}
-		if u.Kind == "episode" {
-			entry.Season, entry.Episode = &u.Season, &u.Episode
-		}
-		result.Unmatched = append(result.Unmatched, entry)
-	}
 	for _, a := range status.Addons {
 		result.Addons = append(result.Addons, appAddonInstalledJSON{Name: a.Name, Address: a.Address, Installed: a.Installed,
 			Problem: optional(a.Problem)})

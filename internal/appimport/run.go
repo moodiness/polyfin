@@ -10,6 +10,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -128,29 +129,62 @@ func counts(found []library.TitleTarget, t library.TitleTarget) bool {
 	return !t.Anime || !slices.ContainsFunc(found, func(o library.TitleTarget) bool { return !o.Anime })
 }
 
+// label describes the entry l labels as package importlinks does: the app
+// names it by its ID.
+func (l Label) label() importlinks.Label {
+	return importlinks.Label{Kind: l.Kind, Name: l.Name, IDs: l.ID, Season: l.Season, Episode: l.Episode}
+}
+
+// unfound is what the import keeps of e, not found for reason: what it
+// would have imported of it. Its key is the app's ID, its series' for an
+// episode, which a link names.
+func (r *run) unfound(e Entry, reason string) importlinks.Entry {
+	kept := importlinks.Entry{Key: e.Label.ID, Label: e.Label.label(), Reason: reason, Played: e.Played, PlayedAt: e.PlayedAt,
+		Plays: e.Plays, AddedAt: e.AddedAt}
+	if e.Resume != nil {
+		kept.Resume = &userdata.ImportedResume{Position: e.Resume.Position, Runtime: e.Resume.Runtime, At: e.Resume.At}
+	}
+	if e.Watchlist {
+		kept.Watchlist = r.list
+	}
+	return kept
+}
+
 // merge finds the titles of the entries and adds them to the user's data:
 // played marks, then resume points of the titles still unplayed, then the
-// library to the watchlist, a movie or a series, never an episode. It
-// reports the entries it did not find, and those found that the source
-// could not read whole.
+// library to the watchlist, a movie or a series, never an episode. An
+// entry the user linked by hand is the title of its link (see package
+// importlinks). It counts the entries it did not find, and those found
+// that the source could not read whole, and keeps them with what they
+// would have imported, in place of those the last import kept.
 func (r *run) merge(ctx context.Context) error {
+	var linked importlinks.Linked
+	if r.s.links != nil {
+		var err error
+		if linked, err = r.s.links.Linked(ctx, r.user.ID, r.status.App); err != nil {
+			return err
+		}
+	}
 	refs := make([]library.TitleRef, 0, len(r.entries))
 	// of is the index in refs of each entry's title, -1 for one without
 	// identifiers.
 	of := make([]int, len(r.entries))
 	for i, e := range r.entries {
 		of[i] = -1
-		if Identified(e.Title) {
-			of[i] = len(refs)
-			// A title no catalog listed is recorded with the name the app
-			// gives it, a series' for its episodes, until an addon
-			// describes it.
-			ref := e.Title
-			if ref.Name == "" {
-				ref.Name = e.Label.Name
-			}
-			refs = append(refs, ref)
+		ref := e.Title
+		if link, ok := linked.Ref(e.Label.ID, e.Label.label()); ok {
+			ref = link
+		} else if !Identified(ref) {
+			continue
 		}
+		of[i] = len(refs)
+		// A title no catalog listed is recorded with the name the app
+		// gives it, a series' for its episodes, until an addon describes
+		// it.
+		if ref.Name == "" {
+			ref.Name = e.Label.Name
+		}
+		refs = append(refs, ref)
 	}
 	targets := make([][]library.TitleTarget, 0, len(refs))
 	for start := 0; start < len(refs); start += batch {
@@ -161,7 +195,7 @@ func (r *run) merge(ctx context.Context) error {
 		targets = append(targets, found...)
 	}
 
-	var noMatch []Unmatched
+	var noMatch []importlinks.Entry
 	marks := map[accounts.ID]*mark{}
 	points := map[accounts.ID]*point{}
 	var titles []watchlist.Title
@@ -169,16 +203,16 @@ func (r *run) merge(ctx context.Context) error {
 	var markOrder, pointOrder []accounts.ID
 	for i, e := range r.entries {
 		if of[i] < 0 {
-			noMatch = append(noMatch, Unmatched{Label: e.Label, Reason: ReasonOtherIdentifier})
+			noMatch = append(noMatch, r.unfound(e, ReasonOtherIdentifier))
 			continue
 		}
 		found := targets[of[i]]
 		if len(found) == 0 {
-			noMatch = append(noMatch, Unmatched{Label: e.Label, Reason: ReasonNotFound})
+			noMatch = append(noMatch, r.unfound(e, ReasonNotFound))
 			continue
 		}
 		if e.Problem != "" {
-			noMatch = append(noMatch, Unmatched{Label: e.Label, Reason: e.Problem})
+			noMatch = append(noMatch, r.unfound(e, e.Problem))
 		}
 		for _, t := range found {
 			item := userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season}
@@ -218,10 +252,13 @@ func (r *run) merge(ctx context.Context) error {
 			}
 		}
 	}
-	r.update(func(s *Status) {
-		s.UnmatchedCount = len(noMatch)
-		s.Unmatched = noMatch[:min(len(noMatch), maxUnmatched)]
-	})
+	r.update(func(s *Status) { s.UnmatchedCount = len(noMatch) })
+	if r.s.links != nil {
+		// The profile is read whole: what it no longer holds goes.
+		if err := r.s.links.Save(ctx, r.user.ID, r.status.App, noMatch, true); err != nil {
+			return err
+		}
+	}
 
 	settings := r.s.settings()
 	thresholds := userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent}

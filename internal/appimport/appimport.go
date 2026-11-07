@@ -43,6 +43,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -78,10 +79,6 @@ const holdFor = 5 * time.Minute
 
 // batch is how many items an import resolves and writes at a time.
 const batch = 500
-
-// maxUnmatched bounds the unmatched titles an import lists; the count goes
-// on.
-const maxUnmatched = 500
 
 // Account is an app account a source signed in to and read.
 type Account struct {
@@ -208,6 +205,9 @@ type Options struct {
 	// Watchlist keeps the titles of the apps' libraries, on the users'
 	// watchlists; nil keeps none.
 	Watchlist *watchlist.Store
+	// Links keeps the titles the imports did not find, and applies the
+	// links users made of them (see package importlinks); nil keeps none.
+	Links *importlinks.Store
 }
 
 // Service holds the accounts read until the user chooses what to import,
@@ -245,6 +245,9 @@ type Service struct {
 	connecting map[connectionKey]*connectionRun
 	// watchlist keeps the titles of the apps' libraries.
 	watchlist *watchlist.Store
+	// links keeps the titles imports did not find and applies the links
+	// made of them; nil keeps none.
+	links *importlinks.Store
 }
 
 // held is an account read, and the key that names it to its reader.
@@ -263,7 +266,7 @@ func New(options Options) *Service {
 		stopped: options.Stopped,
 		holdFor: holdFor, timing: defaultTiming, ctx: ctx, cancel: cancel, signOuts: signOuts, cancelSignOuts: cancelSignOuts,
 		closeWait: closeWait, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{}, connecting: map[connectionKey]*connectionRun{},
-		watchlist: options.Watchlist}
+		watchlist: options.Watchlist, links: options.Links}
 }
 
 // closeWait is how long Close waits, at most, for the sessions being
@@ -429,7 +432,8 @@ const ProblemInternal = "internal"
 // identifiers. ReasonEpisodeList is a series found, whose episodes played
 // the app tells by their place in its list of the series' episodes,
 // which the list Polyfin's addons give does not match: none of them is
-// marked played (see Entry.Problem).
+// marked played (see Entry.Problem). The import keeps the titles with
+// their reasons (see package importlinks).
 const (
 	ReasonOtherIdentifier = "other_identifier"
 	ReasonNotFound        = "not_found"
@@ -472,20 +476,13 @@ type Status struct {
 	// Watchlist the titles the import added to the user's watchlist that
 	// were not on it, nor started.
 	Read, Played, Resumed, Watchlist int
-	// Unmatched lists the first titles not found, UnmatchedCount counts
-	// them all.
-	Unmatched      []Unmatched
+	// UnmatchedCount counts the titles not found, and those the source
+	// could not read whole, which the import keeps (see package
+	// importlinks).
 	UnmatchedCount int
 	// Addons are the addons chosen, in order, and how their installation
 	// went.
 	Addons []AddonStatus
-}
-
-// Unmatched is an entry no Polyfin title matched, or one the source could
-// not read whole, and why.
-type Unmatched struct {
-	Label
-	Reason string
 }
 
 // AddonStatus is an addon an import installs: its name, the address of its
@@ -499,7 +496,6 @@ type AddonStatus struct {
 // clone copies s, so that what the import changes later does not show.
 func (s *Status) clone() *Status {
 	c := *s
-	c.Unmatched = slices.Clone(s.Unmatched)
 	c.Addons = slices.Clone(s.Addons)
 	return &c
 }
