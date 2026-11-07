@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 
@@ -19,9 +20,12 @@ import (
 // They are background work, paced (see pacing): an addon whose server's
 // background requests pause is not asked either. Only the answers of the
 // addons asked count: complete is false when an addon was not asked,
-// failed, or answered only notices, in which case versions are those of
-// the others. A movie waiting for its digital release has none, and its
-// addons are not asked.
+// failed, or answered only notices refusing the request for its rate
+// (see refusedNotices), in which case versions are those of the others.
+// Other notices alone, such as an addon's summary of the streams its own
+// filters left out, are an answer with nothing to play, or the list it
+// gave before when it has one (see noticedAnswer). A movie waiting for
+// its digital release has none, and its addons are not asked.
 func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id accounts.ID) (versions []Version, complete bool, err error) {
 	ctx = Background(ctx)
 	t, v, err := s.target(ctx, user, id)
@@ -42,7 +46,9 @@ func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id 
 		serving = slices.DeleteFunc(serving, func(source streamSource) bool { return source.addon.ID == t.embeddedBy.addon.ID })
 	}
 	complete = true
-	answered := make([]bool, len(serving))
+	// answered are the addons whose answers count; nothing those that
+	// answered notices alone, with no list.
+	answered, nothing := make([]bool, len(serving)), make([]bool, len(serving))
 	var wg sync.WaitGroup
 	for i, entry := range serving {
 		if own(entry.addon) {
@@ -54,12 +60,18 @@ func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id 
 			continue
 		}
 		wg.Go(func() {
-			_, err := s.streams(ctx, entry.installed, entry.contentType, entry.id)
-			if err == nil {
+			streams, err := s.streams(ctx, entry.installed, entry.contentType, entry.id)
+			switch {
+			case err == nil && len(streams) > 0 && streamKind.count(streams) == 0:
+				// Notices alone, never stored.
+				answered[i] = !refusedNotices(streams)
+				nothing[i] = answered[i]
+			case err == nil:
 				answered[i] = true
-				return
-			}
-			if ctx.Err() == nil {
+			case errors.Is(err, errOnlyNotices):
+				notices, _ := s.noticed.Get(entry.key())
+				answered[i] = !refusedNotices(notices)
+			case ctx.Err() == nil:
 				s.catalogRefused(entry.addon.ManifestURL, err)
 			}
 		})
@@ -67,9 +79,11 @@ func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id 
 	wg.Wait()
 	var asked []streamSource
 	for i, entry := range serving {
-		if answered[i] {
+		switch {
+		case nothing[i]:
+		case answered[i]:
 			asked = append(asked, entry)
-		} else {
+		default:
 			complete = false
 		}
 	}
