@@ -232,6 +232,75 @@ func (h *handler) peopleHealth(ctx context.Context) *peopleHealthJSON {
 	return result
 }
 
+// secretsKeptFor is how long the report of the stored secrets is kept,
+// at most: it decrypts every one of them, and Health and its problems
+// are polled every few seconds. A secret stored (see secrets.Changes)
+// or an administrator's write drops it at once; the key only changes
+// with a restart. The limit catches what neither tells, such as a
+// connection a task removes.
+const secretsKeptFor = 5 * time.Minute
+
+// secretsCache keeps the report of the stored secrets: the one read at
+// at, while secrets.Changes told changes, before the forgotten-th write
+// (see forgetSecrets).
+type secretsCache struct {
+	mu        sync.Mutex
+	valid     bool
+	report    secrets.Report
+	at        time.Time
+	changes   uint64
+	forgotten uint64
+}
+
+// secretsReport tells how the stored secrets stand, as Health.Secrets
+// does, from the report kept while it holds (see secretsKeptFor).
+func (h *handler) secretsReport(ctx context.Context) (secrets.Report, error) {
+	c := &h.secrets
+	c.mu.Lock()
+	changes, forgotten := secrets.Changes(), c.forgotten
+	if c.valid && c.changes == changes && h.now().Before(c.at.Add(secretsKeptFor)) {
+		report := c.report
+		c.mu.Unlock()
+		return report, nil
+	}
+	c.mu.Unlock()
+	report, err := h.Health.Secrets(ctx)
+	if err != nil {
+		return secrets.Report{}, err
+	}
+	c.mu.Lock()
+	if c.forgotten == forgotten {
+		c.valid, c.report, c.at, c.changes = true, report, h.now(), changes
+	}
+	c.mu.Unlock()
+	return report, nil
+}
+
+// forgetSecrets drops the report of the stored secrets: a secret may
+// have changed.
+func (h *handler) forgetSecrets() {
+	c := &h.secrets
+	c.mu.Lock()
+	c.valid = false
+	c.forgotten++
+	c.mu.Unlock()
+}
+
+// forgetSecretsOnWrites has next's requests that may write, all but GET,
+// HEAD and OPTIONS, drop the report of the stored secrets once they end:
+// they may have removed or replaced one, which no Seal tells when it
+// removes. Requests that change nothing drop it only sooner than needed.
+func (h *handler) forgetSecretsOnWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			h.forgetSecrets()
+		}
+	})
+}
+
 // proxyNameJSON is a host name of Known proxies and the addresses it
 // resolved to at ResolvedAt, sorted: none when it resolves to nothing,
 // which trusts nothing.

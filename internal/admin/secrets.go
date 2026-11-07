@@ -132,7 +132,7 @@ func (h *handler) secretsHealth(ctx context.Context) *secretsHealthJSON {
 	if h.Health.Secrets == nil {
 		return nil
 	}
-	report, err := h.Health.Secrets(ctx)
+	report, err := h.secretsReport(ctx)
 	if err != nil {
 		// A request that ended, such as a tab closed during a refresh, is
 		// not a failure: nobody reads the answer.

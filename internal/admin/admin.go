@@ -259,6 +259,8 @@ type handler struct {
 	// decryptedDownloads are the downloads of backups decrypted that a
 	// passphrase checked allows (see checkBackupPassphrase).
 	decryptedDownloads once[decryptedDownload]
+	// secrets keeps the report of the stored secrets (see secretsReport).
+	secrets secretsCache
 }
 
 // New returns the handler of every /admin/api/ route.
@@ -624,7 +626,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
-	return sameOrigin(mux)
+	return sameOrigin(h.forgetSecretsOnWrites(mux))
 }
 
 // NewSetupCode returns a random code formatted XXXX-XXXX, without letters
