@@ -65,6 +65,23 @@ const users = {
           : `${count} users can no longer download.`,
     lastAdminHelp: 'The last enabled administrator cannot be deleted, demoted or disabled.',
     updated: 'Changes saved.',
+    moreActions: (name: string) => `More actions for ${name}`,
+    disable: 'Disable',
+    enable: 'Enable',
+    disableTitle: (name: string) => `Disable ${name}?`,
+    disabling: 'Disabling…',
+    disabledNow: (name: string) => `${name} has been disabled.`,
+    enabledNow: (name: string) => `${name} can sign in again.`,
+    signOutAll: 'Sign out of all devices',
+    signOutAllConfirm: (name: string) =>
+      `Sign out every Jellyfin device of ${name}? Each app will need to sign in again.`,
+    signingOutAll: 'Signing out…',
+    signedOutAll: (count: number) =>
+      count === 0
+        ? 'No device was signed in.'
+        : count === 1
+          ? '1 device has been signed out.'
+          : `${count} devices have been signed out.`,
     metadataLanguageTitle: 'Metadata language',
     metadataLanguageHelp:
       'The language of titles’ names, overviews and images in this user’s apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone, so parental control and blocked genres judge every user alike. The names Polyfin makes itself follow it when Polyfin speaks it: English, French, German, Spanish, Italian or Portuguese.',

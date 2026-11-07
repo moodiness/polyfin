@@ -71,6 +71,23 @@ const users: typeof en = {
     lastAdminHelp:
       'Le dernier administrateur actif ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     updated: 'Modifications enregistrées.',
+    moreActions: (name: string) => `Autres actions pour ${name}`,
+    disable: 'Désactiver',
+    enable: 'Réactiver',
+    disableTitle: (name: string) => `Désactiver ${name} ?`,
+    disabling: 'Désactivation…',
+    disabledNow: (name: string) => `${name} a été désactivé.`,
+    enabledNow: (name: string) => `${name} peut de nouveau se connecter.`,
+    signOutAll: 'Déconnecter tous les appareils',
+    signOutAllConfirm: (name: string) =>
+      `Déconnecter tous les appareils Jellyfin de ${name} ? Chaque application devra se reconnecter.`,
+    signingOutAll: 'Déconnexion…',
+    signedOutAll: (count: number) =>
+      count === 0
+        ? 'Aucun appareil n’était connecté.'
+        : count === 1
+          ? '1 appareil a été déconnecté.'
+          : `${count} appareils ont été déconnectés.`,
     metadataLanguageTitle: 'Langue des métadonnées',
     metadataLanguageHelp:
       'La langue des noms, des résumés et des images des titres dans les applis de cet utilisateur, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous : le contrôle parental et les genres bloqués jugent chaque utilisateur de la même façon. Les noms que Polyfin crée lui-même la suivent quand Polyfin la parle : anglais, français, allemand, espagnol, italien ou portugais.',

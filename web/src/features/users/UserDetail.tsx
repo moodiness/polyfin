@@ -1,14 +1,13 @@
 import {
   ArrowCounterClockwiseIcon,
   CheckCircleIcon,
-  KeyIcon,
   LinkIcon,
   ShareNetworkIcon,
   TrashIcon,
   UserCircleDashedIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import {
   ApiError,
@@ -43,9 +42,7 @@ import {
   ButtonLink,
   ConfirmDialog,
   EmptyState,
-  Field,
   InlineError,
-  Modal,
   Notice,
   OpenRow,
   SectionNav,
@@ -57,6 +54,7 @@ import {
   useToast,
 } from '@/ui'
 import DeviceList from './DeviceList'
+import PasswordModal from './PasswordModal'
 import { DraftForm, useDraftPart } from './draft'
 import { Band, PageSection, posterUrl, useWatching, WatchingLink } from './rows'
 import {
@@ -204,14 +202,7 @@ function UserPage({ user }: { user: User }) {
     <Band
       back={{ to: '/users', label: t.users.title }}
       art={art === null ? null : posterUrl(art, 300)}
-      leading={
-        <Avatar
-          name={user.name}
-          image={userImageUrl(user)}
-          size="xl"
-          className="max-md:size-16 max-md:text-[1.75rem]"
-        />
-      }
+      leading={<Avatar name={user.name} image={userImageUrl(user)} size="xl" />}
       title={user.name}
       facts={
         <>
@@ -442,92 +433,6 @@ function ProfileSection({ user, nameError }: { user: User; nameError: string | u
         {t.users.turnOffTwoStepConfirm(user.name)}
       </ConfirmDialog>
     </PageSection>
-  )
-}
-
-/** A new password for the user, set at once; it signs out their Jellyfin devices. */
-function PasswordModal({
-  user,
-  open,
-  onClose,
-}: {
-  user: User
-  open: boolean
-  onClose: () => void
-}) {
-  const { t } = useI18n()
-  const toast = useToast()
-  const formId = useId()
-  const [password, setPassword] = useState('')
-  const resetPassword = useUserPatch(user)
-  const error = resetPassword.isError ? errorMessage(t, resetPassword.error) : undefined
-
-  function close() {
-    resetPassword.reset()
-    setPassword('')
-    onClose()
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={close}
-      title={t.users.resetPassword}
-      width={520}
-      footer={
-        <>
-          <Button variant="ghost" onClick={close}>
-            {t.common.cancel}
-          </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form={formId}
-            icon={KeyIcon}
-            loading={resetPassword.isPending}
-          >
-            {resetPassword.isPending ? t.common.saving : t.users.resetPassword}
-          </Button>
-        </>
-      }
-    >
-      <form
-        id={formId}
-        noValidate
-        className="p-5 sm:px-8"
-        onSubmit={(event: FormEvent<HTMLFormElement>) => {
-          event.preventDefault()
-          resetPassword.mutate(
-            { password },
-            {
-              onSuccess: () => {
-                toast(t.users.passwordReset)
-                close()
-              },
-            },
-          )
-        }}
-      >
-        <Field
-          label={t.users.newPassword}
-          help={`${t.common.passwordRule} ${t.users.resetPasswordHelp}`}
-          error={error}
-        >
-          <TextInput
-            type="password"
-            revealable
-            value={password}
-            onValue={(value) => {
-              resetPassword.reset()
-              setPassword(value)
-            }}
-            autoComplete="new-password"
-            required
-            invalid={error !== undefined}
-          />
-        </Field>
-      </form>
-    </Modal>
   )
 }
 
@@ -800,7 +705,7 @@ function MetadataLanguageSection({ user }: { user: User }) {
   return (
     <PageSection id="metadata-language" title={t.users.metadataLanguageTitle}>
       {languages.isPending ? (
-        <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
+        <Skeleton className="h-15 rounded-row" />
       ) : languages.isError ? (
         <InlineError onRetry={() => void languages.refetch()} retrying={languages.isFetching}>
           {errorMessage(t, languages.error)}
@@ -851,7 +756,7 @@ function WebThemeSection({ user }: { user: User }) {
   }
 
   let rows
-  if (themes.isPending) rows = <Skeleton className="h-[5.125rem] rounded-row max-md:h-[4.25rem]" />
+  if (themes.isPending) rows = <Skeleton className="h-15 rounded-row" />
   else if (themes.isError)
     rows = (
       <InlineError onRetry={() => void themes.refetch()} retrying={themes.isFetching}>
