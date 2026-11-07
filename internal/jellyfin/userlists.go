@@ -367,43 +367,59 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 		}
 		candidates = candidates[:min(len(candidates), watchedSeriesLimit)]
 	}
+	if parent != nil {
+		within := make([]bool, len(candidates))
+		var wg sync.WaitGroup
+		limiter := make(chan struct{}, 6)
+		for i, candidate := range candidates {
+			wg.Go(func() {
+				limiter <- struct{}{}
+				defer func() { <-limiter }()
+				series, err := h.Library.Item(ctx, user, candidate.series)
+				within[i] = err == nil && h.within(ctx, user, series, *parent)
+			})
+		}
+		wg.Wait()
+		n := 0
+		for i, candidate := range candidates {
+			if within[i] {
+				candidates[n] = candidate
+				n++
+			}
+		}
+		candidates = candidates[:n]
+	}
+	// The episodes of every series are listed at once; a series they
+	// could not be recorded for is left out, as are all of them when none
+	// could be.
+	series := make([]accounts.ID, len(candidates))
+	for i, c := range candidates {
+		series[i] = c.series
+	}
+	listed, err := h.Library.SeriesEpisodes(ctx, user, series)
+	if err != nil {
+		listed = nil
+	}
 	type entry struct {
 		episode library.Item
 		date    *time.Time
 	}
-	found := make([][]entry, len(candidates))
-	var wg sync.WaitGroup
-	limiter := make(chan struct{}, 6)
-	for i, candidate := range candidates {
-		wg.Go(func() {
-			limiter <- struct{}{}
-			defer func() { <-limiter }()
-			if parent != nil {
-				series, err := h.Library.Item(ctx, user, candidate.series)
-				if err != nil || !h.within(ctx, user, series, *parent) {
-					return
-				}
-			}
-			episodes, err := h.Library.Episodes(ctx, user, candidate.series, nil)
-			if err != nil {
-				return
-			}
-			if candidate.removed != nil && !releasedSince(episodes, *candidate.removed) {
-				return
-			}
-			if episode, date, ok := nextEpisode(episodes, data, resumable); ok {
-				found[i] = append(found[i], entry{episode: episode, date: date})
-			}
-			if !rewatching {
-				return
-			}
-			if episode, date, ok := rewatchEpisode(episodes, data); ok {
-				found[i] = append(found[i], entry{episode: episode, date: date})
-			}
-		})
+	var next []entry
+	for _, candidate := range candidates {
+		episodes, ok := listed[candidate.series]
+		if !ok || candidate.removed != nil && !releasedSince(episodes, *candidate.removed) {
+			continue
+		}
+		if episode, date, ok := nextEpisode(episodes, data, resumable); ok {
+			next = append(next, entry{episode: episode, date: date})
+		}
+		if !rewatching {
+			continue
+		}
+		if episode, date, ok := rewatchEpisode(episodes, data); ok {
+			next = append(next, entry{episode: episode, date: date})
+		}
 	}
-	wg.Wait()
-	next := slices.Concat(found...)
 	// The latest played first; series with no episode played, without a
 	// date, last, in the order they were started.
 	slices.SortStableFunc(next, func(a, b entry) int {
@@ -471,19 +487,24 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC()
 	from := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, time.UTC)
+	// Episodes are listed first, those of every series at once: it turns
+	// down a favorite that is not a series without asking its addon for
+	// it. None are when they could not be recorded.
+	listed, err := h.Library.SeriesEpisodes(r.Context(), user, candidates)
+	if err != nil {
+		listed = nil
+	}
 	found := make([][]library.Item, len(candidates))
 	var wg sync.WaitGroup
 	limiter := make(chan struct{}, 6)
 	for i, candidate := range candidates {
+		episodes, ok := listed[candidate]
+		if !ok {
+			continue
+		}
 		wg.Go(func() {
 			limiter <- struct{}{}
 			defer func() { <-limiter }()
-			// Episodes are listed first: it turns down a favorite that is
-			// not a series without asking its addon for it.
-			episodes, err := h.Library.Episodes(r.Context(), user, candidate, nil)
-			if err != nil {
-				return
-			}
 			if hasParent {
 				series, err := h.Library.Item(r.Context(), user, candidate)
 				if err != nil || !h.within(r.Context(), user, series, parent) {
