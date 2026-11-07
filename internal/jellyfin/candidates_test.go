@@ -379,13 +379,15 @@ func newListsAddon(t *testing.T) *listsAddon {
 				return
 			}
 			streams := make([]stremio.Stream, len(names))
+			// The size announced is the one served: the same small file for
+			// versions announced far larger is a host's error file.
 			for i, name := range names {
 				streams[i] = stremio.Stream{Name: name, URL: server.URL + "/files/" + name + ".mkv",
-					BehaviorHints: stremio.StreamBehavior{Filename: name + ".mkv", VideoSize: 1_000_000}}
+					BehaviorHints: stremio.StreamBehavior{Filename: name + ".mkv", VideoSize: stremio.Number(len(mediaBytes))}}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
 		case strings.HasPrefix(path, "/files/"):
-			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader(mediaBytes))
 		default:
 			http.NotFound(w, r)
 		}

@@ -27,6 +27,10 @@ import (
 
 const playbackFixtures = "testdata/jellyfin-12.2/playback"
 
+// mediaBytes are the bytes the test addons serve for a stream's file: a
+// Matroska header, then a few bytes more.
+const mediaBytes = "\x1a\x45\xdf\xa3 media bytes"
+
 // streamingAddon serves two movies with two streams each, the first with a
 // SubRip subtitle, and the bytes of the streams.
 func streamingAddon(t *testing.T) string {
@@ -52,11 +56,14 @@ func streamingAddon(t *testing.T) string {
 		case path == "/meta/movie/tt2000.json":
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie("tt2000", "Remote")})
 		case strings.HasPrefix(path, "/stream/movie/"):
+			// The sizes announced are those served: files far larger than
+			// what their host answers, alike for several titles, are an
+			// error file the host answers (see source.ErrorFiles).
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{
 				{Name: "Source 2160p", Description: "REMUX\nHEVC", URL: server.URL + "/files/remux.mkv",
-					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.2160p.mkv", VideoSize: 80_000_000_000}},
+					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.2160p.mkv", VideoSize: 52_341}},
 				{Name: "Source 1080p", Description: "WEB-DL", URL: server.URL + "/files/web.mp4",
-					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.1080p.mp4", VideoSize: 3_000_000_000}},
+					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.1080p.mp4", VideoSize: stremio.Number(len(mediaBytes))}},
 				{Name: "Statistics", ExternalURL: "https://addon.example/"},
 			}})
 		case path == "/subtitles/movie/tt1000.json":
@@ -69,7 +76,7 @@ func streamingAddon(t *testing.T) string {
 			// A real Matroska file, whose index remuxing reads.
 			http.ServeFile(w, r, filepath.Join("..", "container", "testdata", "forced.mkv"))
 		case strings.HasPrefix(path, "/files/"):
-			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader(mediaBytes))
 		default:
 			http.NotFound(w, r)
 		}

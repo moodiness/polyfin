@@ -15,16 +15,16 @@ import (
 )
 
 // remuxDBAnswer is what a fake RemuxDB knows of the streaming addon's
-// movie: the files of both its versions.
+// movie: the files of both its versions, of the sizes the addon announces.
 const remuxDBAnswer = `[
-  {"container": "matroska,webm", "duration": 7210.5, "size": 80000000000,
+  {"container": "matroska,webm", "duration": 7210.5, "size": 52341,
    "sources": [{"kind": "torrent", "filename": "Movie.2160p/Movie.2160p.mkv", "torrent_info_hash": "aa", "torrent_file_idx": 0}],
    "tracks": [
      {"kind": "video", "idx": 0, "codec": "hevc", "width": 3840, "height": 1600, "color_transfer": "smpte2084", "is_default": true},
      {"kind": "audio", "idx": 1, "codec": "eac3", "language": "eng", "channels": 6, "is_default": true},
      {"kind": "audio", "idx": 2, "codec": "ac3", "language": "fre", "channels": 6},
      {"kind": "subtitle", "idx": 3, "codec": "subrip", "language": "fre", "is_forced": true}]},
-  {"container": "matroska,webm", "duration": 7200, "size": 3000000000,
+  {"container": "matroska,webm", "duration": 7200, "size": 16,
    "sources": [{"kind": "nzb", "filename": "Movie.1080p.mp4", "indexer": "indexer", "indexer_guid": "1e8b"}],
    "tracks": [{"kind": "video", "idx": 0, "codec": "hevc", "width": 1920, "height": 1036}]}
 ]`
