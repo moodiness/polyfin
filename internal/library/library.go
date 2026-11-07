@@ -99,6 +99,9 @@ type Service struct {
 	// shared once it waits on the key's fetch: the one it started, or the
 	// one under way it shares.
 	joined func(key string)
+	// streamLogs are what the log lines of the requests for addons'
+	// streams need (see streamsFailed and noticesLogged).
+	streamLogs streamLogs
 	// libraryImages are the libraries' automatic images, by catalog (see
 	// automaticImage).
 	libraryImages *cache.Cache[pageKey, fetched[foundImage]]
@@ -397,6 +400,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)
 	s.releaseStatuses = cache.NewLasting[string, ReleaseStatus](20000, func() time.Duration { return releaseStatusLife }, clock)
 	s.refreshes.pace, s.refreshes.wait = LibraryRefreshPace, waitFor
+	s.streamLogs.notices = cache.NewLasting[noticeLine, struct{}](2000, func() time.Duration { return noticeLogLife }, clock)
 	return s
 }
 
