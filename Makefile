@@ -1,4 +1,8 @@
 GO ?= go
+# What runs the tests: go test, or a runner of it ending with the flags it
+# passes on, such as CI's "gotestsum --jsonfile file --", which records
+# each test's time (scripts/test-times.py).
+GOTEST ?= $(GO) test
 NPM ?= npm
 VERSION ?= dev
 # The PostgreSQL image-health starts the image against, on the host.
@@ -52,22 +56,22 @@ RACE_REST = $$($(GO) list ./... | grep -vxF $(addprefix -e ,$(JELLYFIN) $(RACE_1
 JELLYFIN_1 := ^Test[A-K]
 
 test:
-	$(GO) test -race -timeout 18m $(JELLYFIN) $(RACE_1) $(RACE_2) $(RACE_REST)
+	$(GOTEST) -race -timeout 18m $(JELLYFIN) $(RACE_1) $(RACE_2) $(RACE_REST)
 
 test-race-1:
-	$(GO) test -race $(RACE_1)
+	$(GOTEST) -race $(RACE_1)
 
 test-race-2:
-	$(GO) test -race $(RACE_2) $(RACE_REST)
+	$(GOTEST) -race $(RACE_2) $(RACE_REST)
 
 # Whole, under the race detector, this package took about 9 minutes on
 # CI's runners, near go test's default of 10, so a slower runner timed out
 # with no test failing: each half keeps the larger bound.
 test-jellyfin-1:
-	$(GO) test -race -timeout 18m -run '$(JELLYFIN_1)' $(JELLYFIN)
+	$(GOTEST) -race -timeout 18m -run '$(JELLYFIN_1)' $(JELLYFIN)
 
 test-jellyfin-2:
-	$(GO) test -race -timeout 18m -skip '$(JELLYFIN_1)' $(JELLYFIN)
+	$(GOTEST) -race -timeout 18m -skip '$(JELLYFIN_1)' $(JELLYFIN)
 
 # Time bounds checked without the race detector, which slows the work they
 # time tenfold.

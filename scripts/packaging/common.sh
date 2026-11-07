@@ -9,6 +9,10 @@
 #   POLYFIN_DESKTOP_FILES   a folder made by files.sh, with jellyfin-web, the
 #                           fonts and their licenses: made with Docker when
 #                           unset.
+#   POLYFIN_DESKTOP_FILES_CACHE
+#                           a buildx cache files.sh's build takes its layers
+#                           from and keeps them in, such as CI's
+#                           type=gha,scope=desktop-files.
 #   SKIP_WEB                1 to use the admin app already in web/dist
 #                           rather than building it.
 #   DOCKER_HUB_MIRROR       a mirror of Docker Hub to pull Debian's image
