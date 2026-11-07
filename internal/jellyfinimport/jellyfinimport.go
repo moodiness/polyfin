@@ -18,6 +18,11 @@
 // stays. Running an import again adds nothing twice. The server is only
 // read, but for the sessions signing in opens and the import ends.
 //
+// The titles not found are kept in each user's list of the server's kind,
+// jellyfin, emby or plex, with what the import would have brought of them,
+// and a title linked there by hand is found as its link names it, now and
+// at every later import (see package importlinks).
+//
 // An API key of the server's dashboard reads every user's watch data. A
 // user's own key or access token, or a user signed in, reads that user's
 // only: Jellyfin refuses it the others', and some servers that speak
@@ -47,6 +52,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/collections"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -132,6 +138,9 @@ type Options struct {
 	Settings func() accounts.Settings
 	Titles   Titles
 	UserData *userdata.Store
+	// Links keeps the titles the imports did not find, and applies the
+	// links users made of them (see package importlinks); nil keeps none.
+	Links *importlinks.Store
 	// Version is Polyfin's, which the server is told.
 	Version string
 	Logger  *slog.Logger
@@ -184,6 +193,9 @@ type Service struct {
 	titles    Titles
 	userData  *userdata.Store
 	watchlist *watchlist.Store
+	// links keeps the titles not found and gives the links made of them;
+	// nil keeps none and applies none.
+	links *importlinks.Store
 	// collections and playlists keep the lists imports bring.
 	collections *collections.Store
 	playlists   *playlists.Store
@@ -228,6 +240,7 @@ func New(options Options) *Service {
 		titles:      options.Titles,
 		userData:    options.UserData,
 		watchlist:   options.Watchlist,
+		links:       options.Links,
 		collections: options.Collections,
 		playlists:   options.Playlists,
 		version:     options.Version,
@@ -318,10 +331,6 @@ const (
 	NothingPlexNoHistory = "plex_no_history"
 )
 
-// maxUnmatched bounds the unmatched titles listed for each user; the
-// count goes on.
-const maxUnmatched = 500
-
 // Status is how an import goes, or went.
 type Status struct {
 	ID         string
@@ -371,9 +380,8 @@ type UserStatus struct {
 	// title found, and Undated the resume points without a date, which are
 	// not added: whether Polyfin's own is newer cannot be told.
 	Matched, UpToDate, Undated int
-	// Unmatched lists the first titles not found, UnmatchedCount counts
-	// them all.
-	Unmatched      []Unmatched
+	// UnmatchedCount counts the titles not found, which the user's list
+	// of the server's kind keeps (see package importlinks).
 	UnmatchedCount int
 	Problem        string
 	// Skipped lists the collections and playlists read that no title of
@@ -383,19 +391,6 @@ type UserStatus struct {
 	// problem added nothing, empty when it added something, or when the
 	// titles it could not match tell why.
 	NothingAdded string
-}
-
-// Unmatched is a title of Jellyfin's that no Polyfin title matched.
-type Unmatched struct {
-	// Name is the title's; Kind is "movie", "series" or "episode"; Year is
-	// zero when Jellyfin does not tell it.
-	Name, Kind string
-	Year       int
-	// Series, Season and Episode place an episode; Season and Episode are
-	// nil when Jellyfin does not number it.
-	Series          string
-	Season, Episode *int
-	Reason          string
 }
 
 // The kinds of SkippedList.
@@ -416,7 +411,6 @@ func (s *Status) clone() *Status {
 	c := *s
 	c.Users = slices.Clone(s.Users)
 	for i := range c.Users {
-		c.Users[i].Unmatched = slices.Clone(c.Users[i].Unmatched)
 		c.Users[i].Skipped = slices.Clone(c.Users[i].Skipped)
 	}
 	return &c

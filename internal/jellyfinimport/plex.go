@@ -79,6 +79,10 @@ func (p plexItemJSON) show() string {
 	return path.Base(p.GrandparentKey)
 }
 
+// plexDeleted begins the identifier an import gives an item a Plex
+// history names that was deleted from the libraries: Plex gives it none.
+const plexDeleted = "deleted:"
+
 // providers are the identifiers of p's Guid list, as Jellyfin names them,
 // else, for an item an older Plex agent matched, which has no Guid list,
 // the ones its guid names.
@@ -365,7 +369,7 @@ func (c *client) plexWatched(ctx context.Context, user string, own, ratings bool
 			// Plex keeps the plays of an item deleted from its libraries
 			// without its rating key: they are told apart by what they
 			// name.
-			p.RatingKey = fmt.Sprint("deleted:", p.Type, "\x00", p.GrandparentTitle, "\x00", p.Title, "\x00",
+			p.RatingKey = fmt.Sprint(plexDeleted, p.Type, "\x00", p.GrandparentTitle, "\x00", p.Title, "\x00",
 				deref(p.ParentIndex), "\x00", deref(p.Index))
 		}
 		seen := plays[p.RatingKey]

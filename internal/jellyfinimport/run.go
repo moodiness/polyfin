@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -161,7 +162,7 @@ func (r *run) user(ctx context.Context, i int) string {
 		u.State = UserSaving
 		u.Sections, u.Listed, u.History = h.source.sections, h.source.listed, h.source.rows
 	})
-	if err := r.merge(context.WithoutCancel(ctx), i, h); err != nil {
+	if err := r.merge(context.WithoutCancel(ctx), i, h, problem == ""); err != nil {
 		r.s.logger.Warn("A Jellyfin user's watch data could not be saved", "error", err)
 		problem = ProblemInternal
 	}
@@ -463,16 +464,12 @@ func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
 			return nil, false
 		}
 		ref, ok := identified(providers, true)
-		ref.Name = item.SeriesName
-		if !ok || item.ParentIndexNumber == nil || item.IndexNumber == nil || *item.ParentIndexNumber < 0 || *item.IndexNumber <= 0 {
+		numbers := episodeNumbers(item)
+		if !ok || len(numbers) == 0 {
 			return nil, true
 		}
-		ref.Episode, ref.Season = true, *item.ParentIndexNumber
-		last := *item.IndexNumber
-		if end := item.IndexNumberEnd; end != nil && *end > last && *end-last < maxEpisodesPerFile {
-			last = *end
-		}
-		for number := *item.IndexNumber; number <= last; number++ {
+		ref.Episode, ref.Season, ref.Name = true, *item.ParentIndexNumber, item.SeriesName
+		for _, number := range numbers {
 			ref.Number = number
 			refs = append(refs, ref)
 		}
@@ -481,13 +478,160 @@ func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
 	return nil, true
 }
 
-// unmatched describes item, which no title matched for reason.
-func unmatched(item itemJSON, reason string) Unmatched {
-	u := Unmatched{Name: item.Name, Kind: strings.ToLower(item.Type), Year: item.ProductionYear, Reason: reason}
-	if item.Type == "Episode" {
-		u.Series, u.Season, u.Episode = item.SeriesName, item.ParentIndexNumber, item.IndexNumber
+// episodeNumbers are the numbers of the episodes item, an episode, holds:
+// its own, and the next ones up to the last of a file holding several;
+// none when it is not numbered.
+func episodeNumbers(item itemJSON) []int {
+	if item.ParentIndexNumber == nil || item.IndexNumber == nil || *item.ParentIndexNumber < 0 || *item.IndexNumber <= 0 {
+		return nil
 	}
-	return u
+	first, last := *item.IndexNumber, *item.IndexNumber
+	if end := item.IndexNumberEnd; end != nil && *end > last && *end-last < maxEpisodesPerFile {
+		last = *end
+	}
+	numbers := make([]int, 0, last-first+1)
+	for number := first; number <= last; number++ {
+		numbers = append(numbers, number)
+	}
+	return numbers
+}
+
+// title names item as the titles an import did not find are kept, and
+// linked by hand (see package importlinks): its key, and its label. The
+// key is the title's identifiers, an episode's series', when it has some;
+// else its identifier on the server, an episode's series', with the
+// server's, as rating keys of different Plex servers meet; else, for a
+// title deleted from Plex's libraries, which has none, its name, an
+// episode's series', with the server's: each stays the same from one
+// import to the next. It is empty for an item of no title, or of no name.
+func (r *run) title(item itemJSON) (string, importlinks.Label) {
+	label := importlinks.Label{Name: item.Name, Year: item.ProductionYear}
+	var ref library.TitleRef
+	id := item.ID
+	switch item.Type {
+	case "Movie":
+		label.Kind = importlinks.KindMovie
+		ref, _ = identified(item.ProviderIDs, false)
+	case "Series":
+		label.Kind = importlinks.KindSeries
+		ref, _ = identified(item.ProviderIDs, true)
+		ref.Series = true
+	case "Episode":
+		// An episode is named by its series, whose year the episode's is
+		// not.
+		label = importlinks.Label{Kind: importlinks.KindEpisode, Name: item.SeriesName}
+		if item.ParentIndexNumber != nil && *item.ParentIndexNumber >= 0 {
+			label.Season = *item.ParentIndexNumber
+		}
+		if item.IndexNumber != nil {
+			label.Episode = *item.IndexNumber
+		}
+		ref, _ = identified(r.series[item.SeriesID], true)
+		ref.Episode = true
+		id = item.SeriesID
+	default:
+		return "", label
+	}
+	label.IDs = importlinks.RefIDs(ref)
+	if key := importlinks.RefKey(ref); key != "" {
+		return key, label
+	}
+	kind := label.Kind
+	if kind == importlinks.KindEpisode {
+		kind = importlinks.KindSeries
+	}
+	switch {
+	case id != "" && !strings.HasPrefix(id, plexDeleted):
+		return importlinks.Key(kind, "item", r.status.source, id), label
+	case label.Name != "":
+		return importlinks.Key(kind, "name", r.status.source, label.Name), label
+	}
+	return "", label
+}
+
+// linkedRefs names the titles item is by the link its title was given by
+// hand among linked: the movie or the series linked, or, for an episode,
+// the series' episodes of item's numbers. It reports false when the title
+// has no link, or one of another kind, or the episode no number.
+func (r *run) linkedRefs(linked importlinks.Linked, item itemJSON) ([]library.TitleRef, bool) {
+	key, label := r.title(item)
+	if _, ok := linked[key]; !ok || key == "" {
+		return nil, false
+	}
+	if label.Kind != importlinks.KindEpisode {
+		ref, ok := linked.Ref(key, label)
+		return []library.TitleRef{ref}, ok
+	}
+	var refs []library.TitleRef
+	for _, number := range episodeNumbers(item) {
+		label.Episode = number
+		ref, ok := linked.Ref(key, label)
+		if !ok {
+			return nil, false
+		}
+		refs = append(refs, ref)
+	}
+	return refs, len(refs) > 0
+}
+
+// unfound are the entries of the items of noMatch, which no title matched
+// for their reasons, with what h holds of them that the import would have
+// brought: the played mark, its latest date and the most plays, the
+// newest dated resume point, the rating, and the Plex Watchlist. A file
+// holding several episodes gives one entry for each; an item title names
+// no key of, and an episode not numbered, none.
+func (r *run) unfound(h history, noMatch []itemJSON, reasons map[string]string) []importlinks.Entry {
+	byID := make(map[string]*importlinks.Entry, len(noMatch))
+	for _, item := range noMatch {
+		if key, label := r.title(item); key != "" {
+			byID[item.ID] = &importlinks.Entry{Key: key, Label: label, Reason: reasons[item.ID]}
+		}
+	}
+	for _, item := range h.played {
+		if e := byID[item.ID]; e != nil {
+			e.Played = true
+			if at := date(item.UserData.LastPlayedDate); at != nil && (e.PlayedAt == nil || at.After(*e.PlayedAt)) {
+				e.PlayedAt = at
+			}
+			e.Plays = max(e.Plays, item.UserData.PlayCount)
+		}
+	}
+	for _, item := range h.resumes {
+		// As merge does, a resume point without a date is left out.
+		if e := byID[item.ID]; e != nil {
+			if at := date(item.UserData.LastPlayedDate); at != nil && (e.Resume == nil || at.After(e.Resume.At)) {
+				e.Resume = &userdata.ImportedResume{Percent: item.UserData.PlayedPercentage,
+					Position: time.Duration(item.UserData.PlaybackPositionTicks) * tick, Runtime: time.Duration(item.RunTimeTicks) * tick,
+					At: *at}
+			}
+		}
+	}
+	for _, item := range h.ratings {
+		if e := byID[item.ID]; e != nil && e.Rating == nil {
+			e.Rating = item.rating
+		}
+	}
+	for _, item := range h.watchlist {
+		if e := byID[item.ID]; e != nil {
+			e.Watchlist = watchlist.Import
+		}
+	}
+	kept := make([]importlinks.Entry, 0, len(noMatch))
+	for _, item := range noMatch {
+		e := byID[item.ID]
+		switch {
+		case e == nil:
+		case e.Kind != importlinks.KindEpisode:
+			kept = append(kept, *e)
+		default:
+			for _, number := range episodeNumbers(item) {
+				each := *e
+				each.Episode = number
+				kept = append(kept, each)
+			}
+		}
+	}
+	return kept
 }
 
 // mark is a played mark an import adds: at the latest date Jellyfin
@@ -507,11 +651,21 @@ type point struct {
 // merge finds the titles of h and adds them to the data of the i-th
 // user's Polyfin account: played marks, then resume points of the titles
 // still unplayed, favorites, ratings where Polyfin has none, the
-// Watchlist, and the collections and playlists with the titles found. It
-// reports the titles it did not find, and counts those it found, and what
-// of theirs Polyfin already had.
-func (r *run) merge(ctx context.Context, i int, h history) error {
+// Watchlist, and the collections and playlists with the titles found. A
+// title linked by hand in the user's list of the server's kind is found
+// as its link names it. The titles it did not find are counted, and kept
+// in that list with what it would have brought of them, whole telling the
+// user's data was read whole (see importlinks.Store.Save); it counts those
+// it found, and what of theirs Polyfin already had.
+func (r *run) merge(ctx context.Context, i int, h history, whole bool) error {
 	user := r.status.Users[i].User
+	var linked importlinks.Linked
+	if r.s.links != nil {
+		var err error
+		if linked, err = r.s.links.Linked(ctx, user, string(r.status.Kind)); err != nil {
+			return err
+		}
+	}
 	var refs []library.TitleRef
 	// spans are the refs of each item, in order: played, resumes,
 	// favorites, ratings, Watchlist, then the entries of the collections
@@ -519,18 +673,25 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 	type span struct{ start, end int }
 	lists := [][]itemJSON{h.played, h.resumes, h.favorites, h.ratings, h.watchlist, entries(h.collections), entries(h.playlists)}
 	spans := make([][]span, len(lists))
-	var noMatch []Unmatched
-	reported := map[string]bool{}
+	// noMatch are the items no title matched, each once, in the order
+	// read, and reasons why, by their identifier.
+	var noMatch []itemJSON
+	reasons := map[string]string{}
 	report := func(item itemJSON, reason string) {
-		if !reported[item.ID] {
-			reported[item.ID] = true
-			noMatch = append(noMatch, unmatched(item, reason))
+		if _, seen := reasons[item.ID]; !seen {
+			reasons[item.ID] = reason
+			noMatch = append(noMatch, item)
 		}
 	}
 	for l, list := range lists {
 		spans[l] = make([]span, len(list))
 		for j, item := range list {
 			found, known := r.refs(item)
+			if len(linked) > 0 {
+				if byLink, ok := r.linkedRefs(linked, item); ok {
+					found, known = byLink, true
+				}
+			}
 			switch {
 			case known && len(found) == 0 && item.unmatchable != "":
 				report(item, item.unmatchable)
@@ -678,9 +839,13 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 	collectionItems, playlistItems := itemsOf(5, h.collections), itemsOf(6, h.playlists)
 	r.update(i, func(u *UserStatus) {
 		u.UnmatchedCount = len(noMatch)
-		u.Unmatched = noMatch[:min(len(noMatch), maxUnmatched)]
 		u.Matched, u.Undated = matched, undated
 	})
+	if r.s.links != nil {
+		if err := r.s.links.Save(ctx, user, string(r.status.Kind), r.unfound(h, noMatch, reasons), whole); err != nil {
+			return err
+		}
+	}
 
 	settings := r.s.settings()
 	thresholds := userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent}
