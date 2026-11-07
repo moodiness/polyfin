@@ -53,6 +53,8 @@ const versions: typeof en = {
       asked: 'Wird gefragt',
     },
     embedded: 'In der Beschreibung des Titels',
+    embeddedSource: (source: string) => `${source}, in der Beschreibung des Titels`,
+    repeatedSource: (name: string, place: number) => `${name} (${place})`,
     noStreams: 'Hat keinen Stream aufgelistet.',
     noSources: 'Kein Add-on listet Streams für diesen Titel.',
     steps: {

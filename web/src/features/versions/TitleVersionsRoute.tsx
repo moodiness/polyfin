@@ -160,12 +160,13 @@ function Explained({
           <EmptyState title={text.noSources} />
         ) : (
           <div className="flex flex-col gap-5">
-            {explained.sources.map((source) => (
+            {sectionNames(explained.sources, text).map(([source, name]) => (
               <SourceStreams
                 key={`${source.id}-${source.embedded}`}
                 id={id}
                 user={user}
                 source={source}
+                name={name}
               />
             ))}
           </div>
@@ -316,15 +317,36 @@ function channelLayout(channels: number): string {
   return `${channels}.0`
 }
 
+/**
+ * The name of each source's section, unique on the page: a source also listed in the title's
+ * description says so, and a name met again (a member's own source named as a server's) takes
+ * its place among those of that name.
+ */
+function sectionNames(
+  sources: TitleVersionSource[],
+  text: Messages['versions'],
+): [TitleVersionSource, string][] {
+  const seen = new Map<string, number>()
+  return sources.map((source) => {
+    const name = source.embedded ? text.embeddedSource(source.name) : source.name
+    const place = (seen.get(name) ?? 0) + 1
+    seen.set(name, place)
+    return [source, place === 1 ? name : text.repeatedSource(name, place)]
+  })
+}
+
 /** A source's streams, each with what became of it and the actions on its version. */
 function SourceStreams({
   id,
   user,
   source,
+  name,
 }: {
   id: string
   user: string
   source: TitleVersionSource
+  /** The section's name, unique on the page (sectionNames). */
+  name: string
 }) {
   const { t, language } = useI18n()
   const text = t.versions
@@ -369,7 +391,7 @@ function SourceStreams({
     asked: 'muted',
   }
   return (
-    <section aria-label={source.name} className="flex flex-col gap-3">
+    <section aria-label={name} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h3 className="text-group text-ink">{source.name}</h3>
         {source.embedded && <Badge>{text.embedded}</Badge>}
@@ -378,7 +400,7 @@ function SourceStreams({
       {source.streams.length === 0 ? (
         <p className="text-small text-ink-3">{text.noStreams}</p>
       ) : (
-        <RowList compact aria-label={source.name}>
+        <RowList compact aria-label={name}>
           {source.streams.map((stream, index) => {
             const explanation = why(t, stream)
             const labels = tags(stream.labels, t)

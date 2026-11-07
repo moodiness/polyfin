@@ -51,6 +51,10 @@ const versions = {
       asked: 'Being asked',
     },
     embedded: 'In the title’s description',
+    /** The name of a source's streams found in the title's description, for screen readers. */
+    embeddedSource: (source: string) => `${source}, in the title’s description`,
+    /** The name of a section whose name another one has, by its place among them: 2, 3… */
+    repeatedSource: (name: string, place: number) => `${name} (${place})`,
     noStreams: 'Listed no stream.',
     noSources: 'No addon lists streams for this title.',
     steps: {
