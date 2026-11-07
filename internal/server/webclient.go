@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -29,17 +29,35 @@ const (
 	// webScript is the name Polyfin's own script is served under, in /web/,
 	// beside the files of jellyfin-web.
 	webScript = "polyfin.js"
+	// webScriptFile is the script as it is served: webclient.js, its
+	// source, minified (see TestTheScriptIsServedMinified, which go
+	// generate runs to write it again after a change of the source).
+	webScriptFile = "webclient.min.js"
 	// themesID is the identifier of the element of the page that describes
 	// the themes to Polyfin's script (see withWebScripts).
 	themesID = "polyfinWebThemes"
 )
 
+//go:generate go test -run ^TestTheScriptIsServedMinified$ -update
+
 var (
-	//go:embed webclient.js
-	webScriptBody []byte
-	webScriptETag = etag(webScriptBody)
+	//go:embed webclient.min.js
+	webScriptFS embed.FS
+	// webScriptFiles serves the script as Polyfin's own files are served:
+	// in brotli or gzip, each made once, with its ETag.
+	webScriptFiles = newOwnFiles(webScriptFS)
+	// webScriptVersion is the version of the script, its ETag without
+	// quotes, which the page links it with: the script is then cached
+	// for good, and a new Polyfin's page links its new version.
+	webScriptVersion = func() string {
+		data, err := fs.ReadFile(webScriptFS, webScriptFile)
+		if err != nil {
+			panic(err)
+		}
+		return strings.Trim(etag(data), `"`)
+	}()
 	// webScriptTag loads Polyfin's script from jellyfin-web's index.html.
-	webScriptTag = []byte(`<script src="` + webScript + `"></script>`)
+	webScriptTag = []byte(`<script src="` + webScript + `?v=` + webScriptVersion + `"></script>`)
 	// hashedName matches the content hash webpack puts in the names of
 	// jellyfin-web's chunks, styles, fonts and images.
 	hashedName = regexp.MustCompile(`\.[0-9a-f]{16,}\.`)
@@ -174,15 +192,15 @@ func serveText(w http.ResponseWriter, r *http.Request, name, text, contentType s
 // the requests no file answers to the Jellyfin API, which has routes under
 // /web/ too. index.html is never cached and gets Polyfin's script, with
 // the web player's themes, which the script loads each user's (see
-// withWebScripts); files whose name or query carries a build or content
-// hash are cached for good. Other files are revalidated (Jellyfin sends no
-// Cache-Control for them, which leaves browsers guessing a lifetime for
-// config.json and the like). The default theme's files are Polyfin's own,
-// under webtheme.Path (see serveTheme), the Custom theme's texts are
-// served while set (see serveText), and the copy of a theme's files kept
-// in savedThemes under themecopy.Path (see serveSavedTheme). Text files go
-// compressed to clients that take gzip, compressed once each (see
-// staticFiles).
+// withWebScripts, and serveWebScript for the script); files whose name or
+// query carries a build or content hash are cached for good. Other files
+// are revalidated (Jellyfin sends no Cache-Control for them, which leaves
+// browsers guessing a lifetime for config.json and the like). The default
+// theme's files are Polyfin's own, under webtheme.Path (see serveTheme),
+// the Custom theme's texts are served while set (see serveText), and the
+// copy of a theme's files kept in savedThemes under themecopy.Path (see
+// serveSavedTheme). Text files go compressed to clients that take gzip,
+// compressed once each (see staticFiles).
 func webClient(files fs.FS, setUp func(context.Context) bool, themes *webThemes, savedThemes string, savedOriginal func(id, name string) (string, bool), api http.Handler, logger *slog.Logger) http.Handler {
 	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -202,11 +220,7 @@ func webClient(files fs.FS, setUp func(context.Context) bool, themes *webThemes,
 			serveWebIndex(w, r, files, themes.page(), logger)
 			return
 		case webScript:
-			header := w.Header()
-			header.Set("Content-Type", "text/javascript; charset=utf-8")
-			header.Set("Cache-Control", "no-cache")
-			header.Set("ETag", webScriptETag)
-			http.ServeContent(w, r, webScript, time.Time{}, bytes.NewReader(webScriptBody))
+			serveWebScript(w, r)
 			return
 		case webtheme.CustomCss:
 			serveText(w, r, name, themes.current().CustomCss, "text/css; charset=utf-8", &themes.css, api)
@@ -366,6 +380,25 @@ func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, themes *
 	header.Set("Cache-Control", "no-cache")
 	header.Set("ETag", etag(page))
 	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
+}
+
+// serveWebScript serves Polyfin's script, minified, as Polyfin's own files
+// are served (see staticFiles): in brotli or gzip, each made once, with
+// its ETag. At the version the page links it with (webScriptTag), it is
+// cached for good; at any other address, revalidated, so that an old
+// address gets today's script.
+func serveWebScript(w http.ResponseWriter, r *http.Request) {
+	header := w.Header()
+	if r.URL.Query().Get("v") == webScriptVersion {
+		header.Set("Cache-Control", immutableCache)
+	} else {
+		header.Set("Cache-Control", "no-cache")
+	}
+	info, err := fs.Stat(webScriptFS, webScriptFile)
+	if err != nil || !webScriptFiles.serve(w, r, webScriptFile, info, "text/javascript; charset=utf-8") {
+		header.Del("Cache-Control")
+		http.NotFound(w, r)
+	}
 }
 
 // withWebScripts adds Polyfin's script to the end of the page's head, where
