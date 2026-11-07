@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,6 +55,17 @@ type Store struct {
 	settings func() accounts.Settings
 	logger   *slog.Logger
 	now      func() time.Time
+	total    total
+}
+
+// total is how many entries the log holds, kept from the first count on,
+// with each entry recorded and each sweep, so that listing all the
+// entries counts them no more: known tells whether n holds. mu is held
+// across the write and the count, which thus never interleave.
+type total struct {
+	mu    sync.Mutex
+	known bool
+	n     int
 }
 
 // New returns a store; settings gives the language entries are named in.
@@ -70,15 +82,21 @@ func (s *Store) record(ctx context.Context, e Entry) {
 	if e.Severity == "" {
 		e.Severity = Information
 	}
+	s.total.mu.Lock()
+	defer s.total.mu.Unlock()
 	_, err := s.db.Exec(context.WithoutCancel(ctx), `INSERT INTO activity_log (name, overview, short_overview, type, item_id, user_id, date, severity)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		clip(e.Name, 1024), clipped(e.Overview, 4096), clipped(e.ShortOverview, 1024), e.Type, e.ItemID, e.UserID, s.now(), e.Severity)
 	if err != nil {
+		// Whether the entry was written is not known for sure: the next
+		// listing counts them again.
+		s.total.known = false
 		s.logger.Warn("An activity could not be recorded", "type", e.Type, "error", err)
+		return
 	}
+	s.total.n++
 }
 
-// clip shortens s to at most n characters.
 func clip(s string, n int) string {
 	runes := []rune(s)
 	if len(runes) <= n {
@@ -150,13 +168,37 @@ func (s *Store) Entries(ctx context.Context, q Query) (Page, error) {
 		return Page{}, err
 	}
 	page := Page{Entries: append([]Entry{}, entries...)}
+	if minDate == nil && q.HasUserID == nil && types == nil && severities == nil {
+		page.Total, err = s.count(ctx)
+		return page, err
+	}
 	err = s.db.QueryRow(ctx, "SELECT count(*) FROM activity_log "+where, minDate, q.HasUserID, types, severities).Scan(&page.Total)
 	return page, err
 }
 
+// count tells how many entries the log holds, counting them only the
+// first time, or after a write that may or may not have happened.
+func (s *Store) count(ctx context.Context) (int, error) {
+	s.total.mu.Lock()
+	defer s.total.mu.Unlock()
+	if !s.total.known {
+		if err := s.db.QueryRow(ctx, "SELECT count(*) FROM activity_log").Scan(&s.total.n); err != nil {
+			return 0, err
+		}
+		s.total.known = true
+	}
+	return s.total.n, nil
+}
+
 // Sweep deletes the entries older than Retention and returns how many.
 func (s *Store) Sweep(ctx context.Context) (int64, error) {
+	s.total.mu.Lock()
+	defer s.total.mu.Unlock()
 	tag, err := s.db.Exec(ctx, "DELETE FROM activity_log WHERE date < $1", s.now().Add(-Retention))
+	if err != nil {
+		s.total.known = false
+	}
+	s.total.n -= int(tag.RowsAffected())
 	return tag.RowsAffected(), err
 }
 
