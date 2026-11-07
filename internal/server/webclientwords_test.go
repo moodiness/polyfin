@@ -13,7 +13,7 @@ import (
 // Portuguese), each with every word of the English.
 func TestWebClientWordsInEveryLanguage(t *testing.T) {
 	t.Parallel()
-	script := string(webScriptBody)
+	script := string(webScriptSource(t))
 	declarations := regexp.MustCompile(`var (\w*[wW]ords) = \{`).FindAllStringSubmatchIndex(script, -1)
 	if len(declarations) < 4 {
 		t.Fatalf("found %d dictionaries of words, want at least 4", len(declarations))

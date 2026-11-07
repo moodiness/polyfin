@@ -7,6 +7,7 @@ require (
 	github.com/andybalholm/brotli v1.2.8
 	github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701
 	github.com/coder/websocket v1.8.15
+	github.com/evanw/esbuild v0.28.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pkg/sftp v1.13.11

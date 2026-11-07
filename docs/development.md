@@ -26,6 +26,10 @@ make check                    # formatting, vet and tests
 
 `make check` builds the admin app first, as its formatting check needs it.
 
+### The web player's script
+
+`internal/server/webclient.js` is the script Polyfin adds to jellyfin-web's page, written in ES5. The page loads `webclient.min.js` beside it, the same script minified, which the server embeds. After a change to `webclient.js`, run `go generate ./internal/server` to write it again: `TestTheScriptIsServedMinified` fails while it is not the source minified.
+
 ## Tests
 
 Some tests need a program or a service, and run only when a variable names it. Without it, they are skipped.

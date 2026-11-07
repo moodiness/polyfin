@@ -201,7 +201,7 @@ func TestJellyfinBaseAnswersAsTheRoot(t *testing.T) {
 		t.Errorf("signed in, /jellyfin/Users/Me: %d %q", recorder.Code, recorder.Body)
 	}
 
-	if body := get(h, "/jellyfin/web/").Body.String(); !strings.Contains(body, `<script src="polyfin.js"></script>`) {
+	if body := get(h, "/jellyfin/web/").Body.String(); !strings.Contains(body, string(webScriptTag)) {
 		t.Errorf("/jellyfin/web/: %q, want the web client's page", body)
 	}
 	for target, want := range map[string]string{

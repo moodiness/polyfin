@@ -45,13 +45,15 @@ func adminFiles(t *testing.T) fstest.MapFS {
 
 func ownFilesHandler(admin fs.FS) http.Handler {
 	return New(Options{
-		Database:    database{},
-		Admin:       admin,
-		AdminAPI:    owner("admin api"),
-		Jellyfin:    owner("jellyfin"),
-		Share:       owner("share"),
-		ShareAssets: jellyfin.ShareAssets,
-		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Database:      database{},
+		Admin:         admin,
+		AdminAPI:      owner("admin api"),
+		Jellyfin:      owner("jellyfin"),
+		Share:         owner("share"),
+		ShareAssets:   jellyfin.ShareAssets,
+		Web:           webFiles,
+		SetupRequired: setupState{}.SetupRequired,
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 }
 
@@ -74,10 +76,11 @@ func shareTargets(t *testing.T) []string {
 	return targets
 }
 
-// Every file under /admin/ and /share/assets/ is cached for good, or has
-// an ETag that a second visit gets a 304 for, whatever encodings the
-// browser takes: index.html is checked again at each load. The share
-// page's files linked with their version are cached for good.
+// Every file under /admin/ and /share/assets/, and Polyfin's script in
+// /web/, is cached for good, or has an ETag that a second visit gets a 304
+// for, whatever encodings the browser takes: index.html is checked again
+// at each load. The share page's files and the script, linked with their
+// version, are cached for good.
 func TestOwnFilesAreCachedForGoodOrRevalidated(t *testing.T) {
 	admin := adminFiles(t)
 	h := ownFilesHandler(admin)
@@ -86,6 +89,7 @@ func TestOwnFilesAreCachedForGoodOrRevalidated(t *testing.T) {
 		targets = append(targets, adminPrefix+name)
 	}
 	targets = append(targets, shareTargets(t)...)
+	targets = append(targets, webPrefix+webScript, webPrefix+webScript+"?v="+webScriptVersion)
 	for _, target := range targets {
 		for _, accept := range []string{"", "gzip, deflate", "gzip, deflate, br, zstd"} {
 			response := fetch(h, http.MethodGet, target, "Accept-Encoding", accept)
@@ -117,9 +121,11 @@ func TestOwnFilesAreCachedForGoodOrRevalidated(t *testing.T) {
 		}
 	}
 	// A version that is not the file's is checked again.
-	stale := fetch(h, http.MethodGet, shareAssetsPrefix+"share.js?v=0123456789abcdef")
-	if stale.Code != http.StatusOK || stale.Header().Get("Cache-Control") == immutableCache {
-		t.Errorf("another version: %d, Cache-Control %q", stale.Code, stale.Header().Get("Cache-Control"))
+	for _, target := range []string{shareAssetsPrefix + "share.js?v=0123456789abcdef", webPrefix + webScript + "?v=0123456789abcdef"} {
+		stale := fetch(h, http.MethodGet, target)
+		if stale.Code != http.StatusOK || stale.Header().Get("Cache-Control") == immutableCache {
+			t.Errorf("%s, another version: %d, Cache-Control %q", target, stale.Code, stale.Header().Get("Cache-Control"))
+		}
 	}
 }
 
@@ -133,16 +139,18 @@ func unbrotli(t *testing.T, body []byte) []byte {
 	return data
 }
 
-// The admin app's and the share page's scripts and styles go in brotli to
-// browsers that take it, once made, in gzip to the others that take gzip,
-// and as they are to the rest, each with an ETag of its own. Until brotli
-// is made, gzip goes; a browser that holds the gzip copy keeps it then.
+// The admin app's, the share page's and the web player's scripts and
+// styles go in brotli to browsers that take it, once made, in gzip to the
+// others that take gzip, and as they are to the rest, each with an ETag of
+// its own. Until brotli is made, gzip goes; a browser that holds the gzip
+// copy keeps it then.
 func TestOwnScriptsAndStylesComeInBrotli(t *testing.T) {
 	admin := adminFiles(t)
 	h := ownFilesHandler(admin)
 	files := map[string][]byte{
 		"/admin/assets/index-1a2b3c4d.js":  admin["assets/index-1a2b3c4d.js"].Data,
 		"/admin/assets/index-1a2b3c4d.css": admin["assets/index-1a2b3c4d.css"].Data,
+		webPrefix + webScript:              webScriptBody,
 	}
 	for _, name := range []string{"share.js", "share.css", "hls.min.js"} {
 		data, err := fs.ReadFile(jellyfin.ShareAssets, name)

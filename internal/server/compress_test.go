@@ -335,15 +335,21 @@ func TestFlushDeliversEarly(t *testing.T) {
 // A compressed answer has an ETag of its own, so that a cache never takes
 // one variant for the other, and revalidates with it.
 func TestCompressedAnswersHaveTheirOwnETag(t *testing.T) {
-	h := webHandler(setupState{})
-	identity := fetch(h, http.MethodGet, "/web/polyfin.js")
-	compressed := fetch(h, http.MethodGet, "/web/polyfin.js", "Accept-Encoding", "gzip")
+	script := bytes.Repeat([]byte("console.log('polyfin')\n"), 200)
+	h := answering(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", `"script"`)
+		http.ServeContent(w, r, "script.js", time.Time{}, bytes.NewReader(script))
+	})
+	identity := fetch(h, http.MethodGet, "/web/script.js")
+	compressed := fetch(h, http.MethodGet, "/web/script.js", "Accept-Encoding", "gzip")
 	tag := identity.Header().Get("ETag")
 	if compressed.Header().Get("Content-Encoding") != "gzip" || compressed.Header().Get("ETag") != gzipTag(tag) || gzipTag(tag) == tag {
-		t.Fatalf("polyfin.js: Content-Encoding %q, ETag %q for identity %q", compressed.Header().Get("Content-Encoding"), compressed.Header().Get("ETag"), tag)
+		t.Fatalf("script.js: Content-Encoding %q, ETag %q for identity %q", compressed.Header().Get("Content-Encoding"), compressed.Header().Get("ETag"), tag)
 	}
 	if !bytes.Equal(gunzip(t, compressed.Body.Bytes()), identity.Body.Bytes()) || compressed.Header().Get("Cache-Control") != "no-cache" {
-		t.Error("polyfin.js: the compressed script differs")
+		t.Error("script.js: the compressed script differs")
 	}
 	for _, tc := range []struct {
 		held           string
@@ -359,7 +365,7 @@ func TestCompressedAnswersHaveTheirOwnETag(t *testing.T) {
 		{gzipTag(tag), "", http.StatusOK, tag},
 		{`"other"`, "gzip", http.StatusOK, gzipTag(tag)},
 	} {
-		response := fetch(h, http.MethodGet, "/web/polyfin.js", "Accept-Encoding", tc.acceptEncoding, "If-None-Match", tc.held)
+		response := fetch(h, http.MethodGet, "/web/script.js", "Accept-Encoding", tc.acceptEncoding, "If-None-Match", tc.held)
 		if response.Code != tc.status || response.Header().Get("ETag") != tc.etag {
 			t.Errorf("If-None-Match %s, Accept-Encoding %q: %d with ETag %q, want %d with %q",
 				tc.held, tc.acceptEncoding, response.Code, response.Header().Get("ETag"), tc.status, tc.etag)
