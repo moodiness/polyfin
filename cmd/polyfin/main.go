@@ -41,6 +41,7 @@ import (
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/homerows"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
@@ -546,11 +547,17 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings: store.Settings, Logger: logger})
 	defer audioSegments.Close()
 	userData := userdata.New(pool)
+	// The titles every import did not find are kept, each with what it
+	// would import, and a user may link one to its IMDb or TMDB title:
+	// the link applies at once, and again at each later import that
+	// meets the entry.
+	importTitles := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: lib, UserData: userData,
+		Watchlist: watchlist.New(pool), Logger: logger})
 	// Imported watch histories find their titles in the library and add to
 	// the users' data. A connection a service stops is told to the
 	// notifications, made below, as recordings are.
 	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
-		Titles: lib, UserData: userData, Anime: animeMapping,
+		Titles: lib, UserData: userData, Anime: animeMapping, Links: importTitles,
 		Stopped: func(user accounts.ID, service string) {
 			notifier.ConnectionStopped(user, notifications.ConnectionTracking, service)
 		}})
@@ -566,7 +573,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	}
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
 		Logger: logger, Watchlist: watchlist.New(pool), Collections: collections.New(pool), Playlists: playlists.New(pool),
-		PlexClient: plexClient})
+		PlexClient: plexClient, Links: importTitles})
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
 	// Stremio's, finds its titles and merges the same way; the accounts'
@@ -582,12 +589,13 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Activity: activityLog, Logger: logger, DB: pool, Secrets: box,
 		Sources:   map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio},
 		Stopped:   func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) },
-		Watchlist: watchlist.New(pool)})
+		Watchlist: watchlist.New(pool), Links: importTitles})
 	defer fromApps.Close()
 	// Letterboxd exports name their movies by name and year only: they are
 	// searched in the server's metadata addons, then merge the same way,
 	// their watchlist going on the users' watchlists.
-	fromLetterboxd := letterboxd.New(letterboxd.Options{Titles: lib, UserData: userData, Watchlist: watchlist.New(pool), Logger: logger})
+	fromLetterboxd := letterboxd.New(letterboxd.Options{Titles: lib, UserData: userData, Watchlist: watchlist.New(pool), Logger: logger,
+		Links: importTitles})
 	defer fromLetterboxd.Close()
 	// Deleting a user signs out, in the background, the sessions Polyfin
 	// opened for them at apps and tracking services, and stops their
@@ -790,6 +798,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		JellyfinImport: fromJellyfin,
 		AppImport:      fromApps,
 		Letterboxd:     fromLetterboxd,
+		ImportTitles:   importTitles,
 		Nuvio:          fromNuvio,
 		Stremio:        fromStremio,
 		Plays:          history,
