@@ -283,6 +283,20 @@ class Sweep {
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
       await page.evaluate(() => document.fonts.ready.then(() => undefined))
+      // Still: the entrances and transitions under way end first (5 seconds at most), so boxes
+      // are measured where they rest. Mid-rise, a 1 px box reads 1.00003 px tall, and its text,
+      // left to screen readers, would count as seen. Endless ones (a spinner) are not waited for.
+      await page.evaluate(() =>
+        Promise.race([
+          Promise.all(
+            document
+              .getAnimations()
+              .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+              .map((animation) => animation.finished.catch(() => undefined)),
+          ),
+          new Promise((resolve) => setTimeout(resolve, 5000)),
+        ]).then(() => undefined),
+      )
       await page.evaluate(
         () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
       )
