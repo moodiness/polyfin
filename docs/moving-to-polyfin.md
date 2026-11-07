@@ -89,7 +89,7 @@ Titles are found as an [imported watch history](tracking-imports.md#importing-yo
 
 A title no catalog listed yet shows in the user's lists at once, described by the addons. One known only by TMDB, or a series only by TVDB, is asked of the metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`). It is found by the other identifiers they give, else shows under `tmdb:<id>` or `tvdb:<id>`.
 
-An unmatched title is left out and the import goes on. Each user's result lists it with why:
+An unmatched title is left out and the import goes on. Each user's result counts it, and the user's list of titles not found keeps it with why (see [Linking titles not found](#linking-titles-not-found)):
 
 - **No IMDb, TMDB or TVDB identifier**: a home video, or an episode Jellyfin did not number.
 - **Not in Polyfin**: no IMDb identifier, no catalog lists its TMDB or TVDB one, and no server metadata addon describes it by TMDB, or a series by TVDB.
@@ -285,11 +285,11 @@ Polyfin reads only those files, `ratings.csv`, `watchlist.csv` and the liked mov
 - A line whose name, link, year, date or rating exceeds 512 bytes is skipped.
 - The file is read in memory, never written to disk, and dropped once read.
 
-**Matching:** The export gives only name, year and Letterboxd link. Each movie is searched by name in the server's metadata addons, as local files are (see [Matching](naming-and-matching.md#matching)). It matches only if exactly one movie has that name and year. Searches run one at a time, once per name per import, whatever file it is in. Without a metadata addon that searches movies, nothing can match, and the form says so before upload. The result lists unmatched movies with their Letterboxd link and why: **Not found** (no movie of that name and year, even one listed under another year or name), **Several movies of that name and year**, or **Search failed**.
+**Matching:** The export gives only name, year and Letterboxd link. Each movie is searched by name in the server's metadata addons, as local files are (see [Matching](naming-and-matching.md#matching)). It matches only if exactly one movie has that name and year. Searches run one at a time, once per name per import, whatever file it is in. Without a metadata addon that searches movies, nothing can match, and the form says so before upload. The result counts unmatched movies, and the list of titles not found keeps them with why (see [Linking titles not found](#linking-titles-not-found)): **Not found** (no movie of that name and year, even one listed under another year or name), **Several movies of that name and year**, or **Search failed**.
 
 **Merging:** As the other imports (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)): played marks, ratings and favorites are only added, Polyfin's later date and the larger play count stay, and existing ratings stay. The same export imported again adds nothing twice.
 
-**Progress:** One import per account at a time. An export sent while another uploads or imports into that account is refused (`server_import_running`) before being read. During searching, the section shows how many movies were searched. Then it counts movies marked played, Watchlist additions, and ratings and favorites set, and lists movies not found. The import and result stay in memory, like an app import's (see [Progress of an app import](#progress-of-an-app-import)).
+**Progress:** One import per account at a time. An export sent while another uploads or imports into that account is refused (`server_import_running`) before being read. During searching, the section shows how many movies were searched. Then it counts movies marked played, Watchlist additions, ratings and favorites set, and movies not found, which open their list. The import and result stay in memory, like an app import's (see [Progress of an app import](#progress-of-an-app-import)).
 
 An administrator can run it for a user: **Import from Letterboxd**, at the top of **Users**, asks **Into the account of** which user, then takes the file the same way. Turning off users' own imports does not turn off the administrator's.
 
@@ -465,6 +465,40 @@ Reading a Stremio account has risks:
 Users who connected Trakt in Stremio can also import from Trakt (see [Tracking services](tracking.md)).
 
 API details: [Stremio import](jellyfin-api.md#stremio-import-for-apps).
+
+## Linking titles not found
+
+Every import keeps the titles it did not find, per account and per import: Nuvio, Stremio, each tracking service, the import by name and year, Jellyfin, Emby and Plex. Each one keeps what it would import: the played date and play count, the resume point, the Watchlist, and the rating when the import brings one. The list outlives a restart. A later import of the same source adds to it, or, when it reads the source whole, replaces the titles not linked.
+
+**Where the list is:** each import's status shows how many titles it did not find, such as **29 titles not found**, which opens the list; once all are linked, **2 titles linked** opens it.
+
+- Under **My account**: the last import from an app and each connected app, each tracking service under **Tracking**, and the last import from another server or by name and year.
+- For an administrator: **Titles not found** on the user's page, which lists every import of theirs, and the import pages under **Users** (an app import, the import by name and year, and each user of a server import).
+
+Each row shows the title's name, or the identifiers the source names it by when it has none, its kind, the episodes the import met for a series, and why it was not found. The episodes of one series share one row and one link.
+
+**What the field takes:**
+
+- an IMDb id, such as `tt0903747`;
+- a TMDB id, such as `1396` or `tmdb:1396`;
+- the address of an IMDb title, such as `https://www.imdb.com/title/tt0903747/`;
+- the address of a TMDB movie or series, such as `https://www.themoviedb.org/tv/1396`.
+
+**Link**, or Enter in the field, links the title. The kind must match: a movie to a movie, and a series, or an episode, to a series. Otherwise:
+
+| Code | Why |
+|---|---|
+| `invalid_target` | Not an IMDb id, a TMDB id, or the address of an IMDb or TMDB title. |
+| `kind_mismatch` | The title found is of another kind, such as a movie for a series, or a TMDB address of a series for a movie. |
+| `target_not_found` | No title has that TMDB id. |
+
+**The link applies at once:** what the title would import is added, as the import adds it (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)). The row then shows the title found, with its year, and who linked it. The link applies again whenever a later import of the same source meets the same title; a series' episodes are found in the linked series by their season and episode numbers. Links are per account and per import: a link made in the Trakt list does not apply to Simkl.
+
+**Remove the link** stops it: later imports leave the title out again. Marks already set stay, as the row says.
+
+Members link their own titles under **My account**; an administrator links a user's from the user's page or the import pages.
+
+API details: [Titles an import did not find](jellyfin-api.md#titles-an-import-did-not-find).
 
 ## How often connected accounts are imported
 
