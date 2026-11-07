@@ -47,11 +47,10 @@ type countingSource struct {
 }
 
 type request struct {
-	at        time.Time
-	kind      string
-	off, n    int64
-	ranges    int
-	fetchedAt int64
+	at     time.Time
+	kind   string
+	off, n int64
+	ranges int
 }
 
 func (c *countingSource) record(r request) {

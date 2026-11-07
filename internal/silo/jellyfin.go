@@ -200,20 +200,3 @@ type mediaSource struct {
 	DefaultAudioStreamIndex    *int
 	DefaultSubtitleStreamIndex *int
 }
-
-type userDto struct {
-	Id     string
-	Name   string
-	Policy struct {
-		IsAdministrator          bool
-		EnableContentDownloading bool
-		MaxParentalRating        *int
-		EnableAllFolders         bool
-		EnabledFolders           []string
-	}
-	Configuration struct {
-		AudioLanguagePreference    string
-		SubtitleLanguagePreference string
-		SubtitleMode               string
-	}
-}

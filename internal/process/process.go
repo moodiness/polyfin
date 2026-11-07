@@ -12,7 +12,6 @@ package process
 import (
 	"io"
 	"os/exec"
-	"strconv"
 )
 
 // Outputs are the outputs a child writes besides its standard output and
@@ -52,9 +51,4 @@ func (o *Outputs) close() {
 	for _, r := range o.Readers {
 		_ = r.Close()
 	}
-}
-
-// pipeName is how a child names its output i, from 0: pipe:3 on.
-func pipeName(i int) string {
-	return "pipe:" + strconv.Itoa(3+i)
 }

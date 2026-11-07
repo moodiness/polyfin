@@ -249,9 +249,6 @@ func (c *Cluster) PID() int {
 	return pid
 }
 
-// ListeningPort is the port the cluster listens on once started.
-func (c *Cluster) ListeningPort() int { return c.port }
-
 // choosePort is Port when set; else the port chosen at an earlier start
 // while it is free, else a free port, kept for the next starts.
 func (c *Cluster) choosePort() (int, error) {

@@ -299,8 +299,8 @@ func TestSyncPlaySessionMatchesJellyfin(t *testing.T) {
 				}
 				return resolved
 			case string:
-				name, isPlaceholder := strings.CutPrefix(v, "{")
-				if name, isPlaceholder = strings.CutSuffix(name, "}"); !isPlaceholder {
+				name, isPlaceholder := strings.CutSuffix(strings.TrimPrefix(v, "{"), "}")
+				if !isPlaceholder {
 					return v
 				}
 				switch name {

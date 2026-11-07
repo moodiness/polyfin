@@ -485,10 +485,9 @@ func (s *Service) UpdateChannel(ctx context.Context, scope addons.Scope, source,
 	if changes.Enabled != nil {
 		set("enabled", *changes.Enabled)
 	}
-	name := current.Name
 	if changes.Name != nil {
 		var value *string
-		name = current.ProviderName
+		name := current.ProviderName
 		if changes.Name.Value != nil {
 			trimmed := strings.TrimSpace(*changes.Name.Value)
 			if !printable(trimmed, 100) {

@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"strconv"
 	"sync"
 
 	"golang.org/x/sys/windows"
@@ -33,6 +34,11 @@ func (o *Outputs) open(cmd *exec.Cmd, n int) error {
 		}
 	}
 	return nil
+}
+
+// pipeName is how a child names its output i, from 0: pipe:3 on.
+func pipeName(i int) string {
+	return "pipe:" + strconv.Itoa(3+i)
 }
 
 func (o *Outputs) started(cmd *exec.Cmd, err error) {
