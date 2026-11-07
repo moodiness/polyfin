@@ -10,6 +10,7 @@
     "take": "node take.mjs"
   },
   "dependencies": {
+    "axe-core": "4.11.0",
     "pg": "8.23.1",
     "puppeteer-core": "25.16.0"
   }

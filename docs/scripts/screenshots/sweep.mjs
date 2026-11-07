@@ -1,8 +1,10 @@
 // Sweeps the admin app on the demo server of stage.mjs: every route of web/src/app/router.tsx, as
 // the administrator, as a member and signed out, 1440 and 390 pixels wide, in English and German.
 // It fails with a list of what it found: a page that scrolls sideways or an element past its
-// edge, text running out of its box, and a console error but those expected. See README.md.
+// edge, text running out of its box, a console error but those expected, and a serious or
+// critical axe-core violation but those of axeAllowed. See README.md.
 import { mkdir, readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { client, defaultChrome, log, members, repoDir, run, seed, startStage } from './stage.mjs'
@@ -39,6 +41,26 @@ const languages = ['en', 'de']
 const member = members[2]
 /** The most addresses of one route the sweep visits, of those the pages link to. */
 const perRoute = 40
+/** axe-core, from this folder's package.json, run in each page once it has settled. */
+const axeSource = await readFile(
+  createRequire(import.meta.url).resolve('axe-core/axe.min.js'),
+  'utf8',
+)
+/** The axe impacts that fail the sweep; the others are only counted. */
+const axeFailing = ['serious', 'critical']
+/**
+ * The axe violations the sweep accepts, each with its reason: those of `rule` on an element
+ * inside `within`, unless the element is a control or inside one, which must pass.
+ */
+const axeAllowed = [
+  {
+    rule: 'color-contrast',
+    within: '[data-inactive]',
+    reason:
+      'the name, value or explanation of a disabled setting, dimmed as an inactive control, ' +
+      'which WCAG 1.4.3 exempts; the links and buttons of its row keep their contrast',
+  },
+]
 
 async function main() {
   const started = Date.now()
@@ -118,6 +140,7 @@ async function main() {
 
   const minutes = ((Date.now() - started) / 60000).toFixed(1)
   log(`${sweep.visits} pages in ${minutes} minutes`)
+  log(`axe: ${sweep.axeSummary()}`)
   if (sweep.findings.length === 0) {
     log('No finding')
     return
@@ -196,6 +219,8 @@ class Sweep {
     this.badInvite = badInvite
     this.findings = []
     this.visits = 0
+    /** The axe violations seen, by rule and impact: nodes, and those axeAllowed accepts. */
+    this.axeCounts = new Map()
   }
 
   route(url) {
@@ -301,6 +326,7 @@ class Sweep {
         () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
       )
       ;({ found, links } = await page.evaluate(inspect, where.language))
+      found.push(...(await this.axe(page)))
     } catch (error) {
       found = [{ kind: 'page', detail: `did not load: ${error.message}` }]
     } finally {
@@ -340,6 +366,39 @@ class Sweep {
       source.startsWith('/admin/api/invite/') &&
       /\b404\b/.test(error.text)
     )
+  }
+
+  /**
+   * Runs axe-core in the page and counts what it finds; returns, as findings, the serious and
+   * critical violations no entry of axeAllowed accepts.
+   */
+  async axe(page) {
+    await page.evaluate(axeSource)
+    const nodes = await page.evaluate(axeInPage, axeAllowed)
+    const found = []
+    for (const node of nodes) {
+      const key = `${node.rule} (${node.impact})`
+      const count = this.axeCounts.get(key) ?? { nodes: 0, allowed: 0 }
+      count.nodes++
+      if (node.allowed) count.allowed++
+      this.axeCounts.set(key, count)
+      if (node.allowed || !axeFailing.includes(node.impact)) continue
+      found.push({
+        kind: 'axe',
+        detail: `${node.rule}, ${node.name}: ${node.message}`,
+        path: node.path,
+      })
+    }
+    return found
+  }
+
+  /** The axe counts, by rule and impact. */
+  axeSummary() {
+    if (this.axeCounts.size === 0) return 'no violation'
+    return [...this.axeCounts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, count]) => `${key} ${count.nodes} nodes, ${count.allowed} allowed`)
+      .join('; ')
   }
 
   async shoot(page, where, url, found) {
@@ -534,6 +593,42 @@ function inspect(language) {
     .filter((link) => !link.pathname.startsWith('/admin/api/'))
     .map((link) => link.pathname.replace(/^\/admin/, '').replace(/\/$/, '') || '/')
   return { found, links: [...new Set(links)] }
+}
+
+/**
+ * Runs in the page, once axe-core is in it: a node of each violation, named by its tag and text,
+ * with its message and whether an entry of `allowed` accepts it. A control, or what is inside
+ * one, is never accepted: only the text around it.
+ */
+async function axeInPage(allowed) {
+  const result = await window.axe.run(document, { resultTypes: ['violations'] })
+  const control =
+    'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), ' +
+    'textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+  return result.violations.flatMap((violation) =>
+    violation.nodes.map((node) => {
+      const path = node.target.length === 1 ? String(node.target[0]) : null
+      const element = path ? document.querySelector(path) : null
+      const text = (element?.innerText || element?.getAttribute('aria-label') || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+      const tag = element ? element.tagName.toLowerCase() : node.target.join(' ')
+      const checks = [...node.any, ...node.all, ...node.none]
+      return {
+        rule: violation.id,
+        impact: node.impact ?? violation.impact,
+        name: `<${tag}>${text ? ` "${text.length > 60 ? `${text.slice(0, 57)}…` : text}"` : ''}`,
+        message: checks.find((check) => check.message)?.message ?? violation.help,
+        path,
+        allowed: allowed.some(
+          (entry) =>
+            entry.rule === violation.id &&
+            element?.closest(entry.within) &&
+            !element.closest(control),
+        ),
+      }
+    }),
+  )
 }
 
 // Last, once the class above is defined.
