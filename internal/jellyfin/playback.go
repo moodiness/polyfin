@@ -91,10 +91,6 @@ func (h *Handler) recorded(ctx context.Context, event playbackEvent, state playb
 	h.track(ctx, c.User, c.Device, event, state, positionKnown, before)
 }
 
-func (h *Handler) noContent(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // sessionWindow is how recently a device must have been active to count as
 // a session, unless the request says otherwise.
 const sessionWindow = 10 * time.Minute

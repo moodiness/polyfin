@@ -44,7 +44,6 @@ type Provider struct {
 	forge   bool
 	codes   map[string]grant
 	keySets int
-	tokens  int
 }
 
 // grant is a code the authorization endpoint gave.
@@ -138,13 +137,6 @@ func (p *Provider) KeySets() int {
 	return p.keySets
 }
 
-// Tokens is how many ID tokens the token endpoint gave.
-func (p *Provider) Tokens() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.tokens
-}
-
 func (p *Provider) discovery(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                p.URL,
@@ -234,7 +226,6 @@ func (p *Provider) token(w http.ResponseWriter, r *http.Request) {
 	}
 	p.mu.Lock()
 	edit := p.edit
-	p.tokens++
 	p.mu.Unlock()
 	if edit != nil {
 		edit(claims)

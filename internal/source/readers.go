@@ -21,10 +21,9 @@ type Reader struct {
 	// guarded by the source's lock: closed, waiting is the block waited
 	// for, -1 for none, and from and last the blocks a run of sequential
 	// reads started at and last read.
-	closed      bool
-	waiting     int64
-	from, last  int64
-	sequentials int64
+	closed     bool
+	waiting    int64
+	from, last int64
 }
 
 // window is the read-ahead window of a streaming reader: the blocks from

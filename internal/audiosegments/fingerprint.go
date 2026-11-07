@@ -18,8 +18,6 @@ const (
 	sampleRate = 8000
 	window     = 2048
 	hop        = 512
-	// frameTime is the time between two frames.
-	frameTime = time.Duration(hop) * time.Second / sampleRate
 )
 
 // bandEdges are the frequencies bounding the bands whose energies make a

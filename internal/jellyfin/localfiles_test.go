@@ -420,16 +420,10 @@ func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
 	}
 }
 
-// localDisc is a test server, its ffprobe at ffprobe, with a local folder
+// localDiscOn is a test server, its ffprobe at ffprobe, with a local folder
 // holding the disc populate puts in it, at "Movie (2008)", which is linked
-// to the movie, and the disc's media source in the movie's details.
-func localDisc(t *testing.T, ffprobe string, populate func(at string)) (playbackSetup, MediaSourceInfo) {
-	t.Helper()
-	return localDiscOn(t, ffprobe, populate, false)
-}
-
-// localDiscOn is localDisc, the folder served as a WebDAV share when share
-// is set.
+// to the movie, and the disc's media source in the movie's details; the
+// folder is served as a WebDAV share when share is set.
 func localDiscOn(t *testing.T, ffprobe string, populate func(at string), share bool) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
 	var folders *localfiles.Service

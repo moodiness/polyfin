@@ -15,14 +15,12 @@ import (
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
-// listed is an entry of a fake AniList or MyAnimeList list, with the
-// entry's episode count, as MyAnimeList names its status.
+// listed is an entry of a fake AniList or MyAnimeList list, as MyAnimeList
+// names its status.
 type listed struct {
 	status    string
 	progress  int
 	score     float64
-	episodes  int
-	movie     bool
 	completed string
 }
 
@@ -32,9 +30,7 @@ type listed struct {
 type fakeLists struct {
 	mu      sync.Mutex
 	entries map[string]map[int]*listed
-	// media are the episode counts of the entries not listed.
-	media  map[int]int
-	writes map[string]int
+	writes  map[string]int
 }
 
 func (l *fakeLists) entry(service string, id int) *listed {

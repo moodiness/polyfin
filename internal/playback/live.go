@@ -579,7 +579,6 @@ func rewriteAttributes(line string, rewrite func(string) (string, error)) (strin
 		if strings.HasPrefix(rest, `"`) {
 			end := strings.IndexByte(rest[1:], '"')
 			if end < 0 {
-				end = len(rest) - 1
 				value, raw, rest = rest[1:], rest, ""
 			} else {
 				value, raw, rest = rest[1:end+1], rest[:end+2], rest[end+2:]
