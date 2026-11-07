@@ -480,6 +480,14 @@ func inLockOrder(records []record) []*record {
 const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(items.data)
 	WHERE key IN ('parent', 'rating', 'ratedAt', 'genres')), '{}'::jsonb) || excluded.data`
 
+// isPreloaded reports whether withPreloaded read the row of id ahead in
+// ctx.
+func isPreloaded(ctx context.Context, id accounts.ID) bool {
+	found, _ := ctx.Value(preloadedKey{}).(map[accounts.ID]preloadedRow)
+	_, ok := found[id]
+	return ok
+}
+
 func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
 	if r, ok, err := preloaded(ctx, id); ok {
 		return r, err

@@ -1,18 +1,22 @@
 package library
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
@@ -34,14 +38,15 @@ import (
 //
 // The credits are kept in the database, for every user, by the identifier
 // the title was looked up with, and read again after titleCreditsFresh;
-// saveCredits records them on the people, so that a person lists the
-// titles TMDB credits them in. They are read in the background, in the
-// queue of TMDB's background lookups (see tmdb.Queue), which respects
-// TMDB's rate with the box sets' lookups: a title's page asks for its own,
-// waiting titleCreditsWait at most, ahead of the passes, and a pass, once
-// a day while a key is saved, asks for those of the first CreditsPassMost
-// movies and series of each of the server's libraries, those not read
-// yet or read too long ago.
+// those of the titles read lately are also remembered in memory (see
+// titleCreditsMemory). saveCredits records them on the people, so that a
+// person lists the titles TMDB credits them in. They are read in the
+// background, in the queue of TMDB's background lookups (see tmdb.Queue),
+// which respects TMDB's rate with the box sets' lookups: a title's page
+// asks for its own, waiting titleCreditsWait at most, ahead of the passes,
+// and a pass, once a day while a key is saved, asks for those of the first
+// CreditsPassMost movies and series of each of the server's libraries,
+// those not read yet or read too long ago.
 //
 // What it costs: one request to TMDB a title, two for a title known by
 // its IMDb identifier only, whose TMDB identifier box sets did not learn,
@@ -157,8 +162,103 @@ func (k keptCredits) shows(title accounts.ID) bool {
 // metadata language.
 func (s *Service) creditsLanguage() string { return s.settings().Language }
 
-// keptTitleCredits reads what is kept of titles' credits, by key.
+// keptCreditsMost bounds the titles whose kept credits titleCreditsMemory
+// remembers.
+const keptCreditsMost = 2048
+
+// titleCreditsMemory remembers what is kept of the credits of the titles
+// read lately, and the titles of none: listings describe each title's
+// people from them (see titlePeople), several times a second, while they
+// change only when TMDB is asked. Polyfin runs one server process per
+// database, and only this file writes them: each write remembers what it
+// wrote, or forgets the title (see rememberCredits and forgetCredits). A
+// read that began before a write remembers nothing.
+type titleCreditsMemory struct {
+	mu sync.Mutex
+	// known holds the credits kept by key, nil for a title of none; it is
+	// made on first use.
+	known *cache.Cache[creditsKey, *keptCredits]
+	// writes counts the writes.
+	writes uint64
+}
+
+// keptTitleCredits returns what is kept of titles' credits, by key: as
+// remembered, the others read from the database in one statement, then
+// remembered.
 func (s *Service) keptTitleCredits(ctx context.Context, keys []creditsKey) (map[creditsKey]keptCredits, error) {
+	m := &s.titleCredits
+	kept := map[creditsKey]keptCredits{}
+	var unknown []creditsKey
+	asked := map[creditsKey]bool{}
+	m.mu.Lock()
+	if m.known == nil {
+		m.known = cache.New[creditsKey, *keptCredits](keptCreditsMost, math.MaxInt64)
+	}
+	for _, key := range keys {
+		if k, ok := m.known.Get(key); ok {
+			if k != nil {
+				kept[key] = *k
+			}
+		} else if !asked[key] {
+			asked[key] = true
+			unknown = append(unknown, key)
+		}
+	}
+	writes := m.writes
+	m.mu.Unlock()
+	if len(unknown) == 0 {
+		return kept, nil
+	}
+	read, err := s.readTitleCredits(ctx, unknown)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, key := range unknown {
+		k, ok := read[key]
+		if ok {
+			kept[key] = k
+		}
+		switch {
+		case writes != m.writes:
+		case ok:
+			m.known.Put(key, &k)
+		default:
+			m.known.Put(key, nil)
+		}
+	}
+	return kept, nil
+}
+
+// rememberCredits remembers k as what is kept of the credits of key, which
+// was just written.
+func (s *Service) rememberCredits(key creditsKey, k keptCredits) {
+	m := &s.titleCredits
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.writes++
+	if m.known == nil {
+		m.known = cache.New[creditsKey, *keptCredits](keptCreditsMost, math.MaxInt64)
+	}
+	m.known.Put(key, &k)
+}
+
+// forgetCredits forgets what is remembered of the credits of key, which
+// were just written, or may have been.
+func (s *Service) forgetCredits(key creditsKey) {
+	m := &s.titleCredits
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.writes++
+	if m.known != nil {
+		m.known.Delete(key)
+	}
+}
+
+// readTitleCredits reads what is kept of titles' credits from the
+// database, by key.
+func (s *Service) readTitleCredits(ctx context.Context, keys []creditsKey) (map[creditsKey]keptCredits, error) {
 	kept := map[creditsKey]keptCredits{}
 	if len(keys) == 0 {
 		return kept, nil
@@ -191,7 +291,7 @@ func (s *Service) keptTitleCredits(ctx context.Context, keys []creditsKey) (map[
 	return kept, rows.Err()
 }
 
-// keptOne reads what is kept of a title's credits.
+// keptOne returns what is kept of a title's credits.
 func (s *Service) keptOne(ctx context.Context, key creditsKey) (keptCredits, bool, error) {
 	kept, err := s.keptTitleCredits(ctx, []creditsKey{key})
 	k, ok := kept[key]
@@ -203,14 +303,48 @@ func (s *Service) keptOne(ctx context.Context, key creditsKey) (keptCredits, boo
 // saved on its people, else the addon's people, each under the record
 // they are kept as (see resolvedPeople).
 func (s *Service) titlePeople(ctx context.Context, title accounts.ID, kind Kind, ids map[string]string, addon []Person) []Person {
+	item := Item{ID: title, Kind: kind, ProviderIDs: ids, People: addon}
+	s.titlesPeople(ctx, []*Item{&item})
+	return item.People
+}
+
+// titlesPeople gives each of titles the people titlePeople gives it, of
+// its kind, identifiers and addon's people, reading the credits kept and
+// the records of the people of them all at once.
+func (s *Service) titlesPeople(ctx context.Context, titles []*Item) {
+	if len(titles) == 0 {
+		return
+	}
+	credited := make([]bool, len(titles))
 	if s.lookups.Enabled() {
-		if key, ok := titleCreditsKey(kind, ids); ok {
-			if k, ok, err := s.keptOne(ctx, key); err == nil && ok && k.shows(title) {
-				return s.tmdbPeople(k.credits, addon)
+		keys := make([]creditsKey, len(titles))
+		valid := make([]bool, len(titles))
+		var asked []creditsKey
+		for i, title := range titles {
+			if keys[i], valid[i] = titleCreditsKey(title.Kind, title.ProviderIDs); valid[i] {
+				asked = append(asked, keys[i])
+			}
+		}
+		if kept, err := s.keptTitleCredits(ctx, asked); err == nil {
+			for i, title := range titles {
+				if k, ok := kept[keys[i]]; valid[i] && ok && k.shows(title.ID) {
+					title.People, credited[i] = s.tmdbPeople(k.credits, title.People), true
+				}
 			}
 		}
 	}
-	return s.resolvedPeople(ctx, addon)
+	var lists [][]Person
+	for i, title := range titles {
+		if !credited[i] {
+			lists = append(lists, title.People)
+		}
+	}
+	resolved := s.resolvedPeople(ctx, lists)
+	for i, title := range titles {
+		if !credited[i] {
+			title.People, resolved = resolved[0], resolved[1:]
+		}
+	}
 }
 
 // creditedByTMDB reports whether a title's people are its TMDB credits
@@ -263,40 +397,47 @@ func (s *Service) tmdbPeople(credits []tmdb.TitleCredit, addon []Person) []Perso
 	return people
 }
 
-// resolvedPeople returns an addon's people under the records their
-// credits are kept as (see creditedAs): those the addon gives a TMDB
-// identifier under its record while the server's TMDB key is saved, the
-// others under the record their name's became, once they were known by
-// their TMDB identifier.
-func (s *Service) resolvedPeople(ctx context.Context, people []Person) []Person {
+// resolvedPeople returns lists of an addon's people under the records
+// their credits are kept as (see creditedAs): those the addon gives a
+// TMDB identifier under its record while the server's TMDB key is saved,
+// the others under the record their name's became, once they were known
+// by their TMDB identifier. The records of all are read at once.
+func (s *Service) resolvedPeople(ctx context.Context, lists [][]Person) [][]Person {
 	byTMDB := s.tmdb.Enabled()
-	people = slices.Clone(people)
+	resolved := make([][]Person, len(lists))
 	var names []accounts.ID
-	for i, p := range people {
-		switch {
-		case p.TMDB != "" && byTMDB:
-			people[i].ID = creditedID(p.Name, p.TMDB)
-		default:
-			names = append(names, p.ID)
+	for l, people := range lists {
+		people = slices.Clone(people)
+		for i, p := range people {
+			switch {
+			case p.TMDB != "" && byTMDB:
+				people[i].ID = creditedID(p.Name, p.TMDB)
+			default:
+				names = append(names, p.ID)
+			}
 		}
+		resolved[l] = people
 	}
 	if len(names) == 0 {
-		return people
+		return resolved
 	}
-	records, err := s.loadWhere(ctx, "id = ANY($1::uuid[]) AND kind = 'person' AND data ? 'sameAs'", names)
+	slices.SortFunc(names, func(a, b accounts.ID) int { return bytes.Compare(a[:], b[:]) })
+	records, err := s.loadWhere(ctx, "id = ANY($1::uuid[]) AND kind = 'person' AND data ? 'sameAs'", slices.Compact(names))
 	if err != nil || len(records) == 0 {
-		return people
+		return resolved
 	}
 	moved := make(map[accounts.ID]record, len(records))
 	for _, r := range records {
 		moved[r.ID] = r
 	}
-	for i, p := range people {
-		if same, ok := moved[p.ID].sameAs(); ok && (p.TMDB == "" || !byTMDB) {
-			people[i].ID = same
+	for _, people := range resolved {
+		for i, p := range people {
+			if same, ok := moved[p.ID].sameAs(); ok && (p.TMDB == "" || !byTMDB) {
+				people[i].ID = same
+			}
 		}
 	}
-	return people
+	return resolved
 }
 
 // AwaitTitleCredits has the credits of a movie or series a user opens read
@@ -340,6 +481,7 @@ func (s *Service) refreshTitleCredits(ctx context.Context, title record) error {
 	var tmdbID *int
 	err := s.db.QueryRow(ctx, `UPDATE title_credits SET asked_at = 'epoch' WHERE kind = $1 AND provider = $2 AND id = $3
 		RETURNING tmdb_id`, string(key.kind), key.provider, key.id).Scan(&tmdbID)
+	s.forgetCredits(key)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
@@ -394,6 +536,7 @@ func (s *Service) lookUpCredits(ctx context.Context, key creditsKey, title accou
 	}
 	_, err = s.db.Exec(ctx, `UPDATE title_credits SET titles = array_append(array_remove(titles, $4::uuid), $4::uuid)
 		WHERE kind = $1 AND provider = $2 AND id = $3`, string(key.kind), key.provider, key.id, title)
+	s.forgetCredits(key)
 	return err
 }
 
@@ -435,9 +578,16 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, language strin
 			titles = CASE WHEN title_credits.tmdb_id IS NOT DISTINCT FROM excluded.tmdb_id THEN title_credits.titles ELSE '{}' END
 		RETURNING titles`,
 		string(key.kind), key.provider, key.id, tmdbID, language, encoded, now).Scan(&titles); err != nil {
+		s.forgetCredits(key)
 		return keptCredits{}, err
 	}
-	return keptCredits{found: found, language: language, credits: credits, titles: titles, asked: now}, nil
+	kept := keptCredits{found: found, language: language, credits: credits, titles: titles, asked: now}
+	// Remembered as a read gives it: the database keeps microseconds, and
+	// tells a title TMDB knows by its TMDB identifier.
+	remembered := kept
+	remembered.found, remembered.asked = tmdbID != nil, now.Truncate(time.Microsecond)
+	s.rememberCredits(key, remembered)
+	return kept, nil
 }
 
 // learntTMDB is the TMDB identifier box sets or credits learnt for a title
@@ -495,7 +645,9 @@ func (s *Service) creditsPass(ctx context.Context) error {
 		for i, title := range batch {
 			keys[i], valid[i] = titleCreditsKey(title.Kind, title.ProviderIDs)
 		}
-		kept, err := s.keptTitleCredits(ctx, keys)
+		// Read from the database, not remembered: the pass reads every
+		// title once a day, not the few listed often.
+		kept, err := s.readTitleCredits(ctx, keys)
 		if err != nil {
 			return err
 		}
