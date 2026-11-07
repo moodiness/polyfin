@@ -117,6 +117,7 @@ Each shot is a `shot('<name>', …)` step of `take.mjs`. It opens a page, brings
 
 - **Addresses:** a route without a parameter is visited as is. Signed in at 1440 pixels in English, the sweep follows each page's links to the routes with parameters, 40 addresses of each at most, then visits those in every other case. Signed out, every address leads to the sign-in page, so one address of each route is enough. A title's versions, which a search opens, and an open invite, which no page links to, are given. An invite that does not exist is visited signed out only: each lookup counts against the address's sign-in attempts, which a dozen exhaust.
 - **A route no page links to** fails the sweep: give the demo something that shows it.
+- **When it measures:** once no request has been under way for half a second, the fonts are loaded and the entrances and transitions under way have ended, so that boxes are measured where they rest. A rising block is a fraction of a pixel off, enough for a box left to screen readers to count as seen.
 - **Findings:**
   - **Overflow:** the page scrolls sideways, or an element goes past its edge, unless a box that scrolls or clips keeps it in.
   - **Text:** text runs out of the nearest box that frames it (a border, a background or its own overflow), or is cut off by it, unless it ends with an ellipsis or a line clamp, or the box scrolls. What only screen readers read is left out.
