@@ -148,6 +148,9 @@ func newImageSearch(t *testing.T) *imageSearch {
 	}
 	s.testServer = newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
 		o.TMDB = tmdb.New(api.URL+"/3", images.URL+"/t/p/", "test", o.Accounts.Settings)
+		// Identify's lookup is the library's, with the same client, as
+		// Polyfin gives both.
+		o.Library.UseTMDB(o.TMDB)
 	})
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	s.user("member", nil)
