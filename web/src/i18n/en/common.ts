@@ -628,7 +628,8 @@ const common = {
     hide: 'Hide',
     close: 'Close',
     dismiss: 'Dismiss',
-    notifications: 'Notifications',
+    /** The name of the toasts' region: not Notifications, a section of My account. */
+    messages: 'Messages',
     unsaved: 'Unsaved changes',
     allSaved: 'All changes saved',
     discard: 'Discard changes',

@@ -666,7 +666,7 @@ const common: typeof en = {
     hide: 'Nascondi',
     close: 'Chiudi',
     dismiss: 'Ignora',
-    notifications: 'Notifiche',
+    messages: 'Messaggi',
     unsaved: 'Modifiche non salvate',
     allSaved: 'Tutte le modifiche sono salvate',
     discard: 'Annulla modifiche',

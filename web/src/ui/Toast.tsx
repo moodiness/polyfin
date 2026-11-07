@@ -60,7 +60,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext value={show}>
       {children}
       <section
-        aria-label={t.ui.notifications}
+        aria-label={t.ui.messages}
         aria-live="polite"
         className="pointer-events-none fixed inset-x-0 bottom-7 z-[60] flex flex-col items-center gap-2.5 px-3"
       >

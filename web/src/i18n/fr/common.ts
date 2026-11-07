@@ -671,7 +671,7 @@ const common: typeof en = {
     hide: 'Masquer',
     close: 'Fermer',
     dismiss: 'Fermer le message',
-    notifications: 'Notifications',
+    messages: 'Messages',
     unsaved: 'Modifications non enregistrées',
     allSaved: 'Tout est enregistré',
     discard: 'Annuler les modifications',

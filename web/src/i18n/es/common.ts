@@ -670,7 +670,7 @@ const common: typeof en = {
     hide: 'Ocultar',
     close: 'Cerrar',
     dismiss: 'Descartar',
-    notifications: 'Notificaciones',
+    messages: 'Mensajes',
     unsaved: 'Cambios sin guardar',
     allSaved: 'Todos los cambios guardados',
     discard: 'Descartar cambios',
