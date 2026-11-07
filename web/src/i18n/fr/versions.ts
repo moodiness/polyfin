@@ -31,7 +31,7 @@ const versions: typeof en = {
     pending: (count: number) =>
       count === 1 ? '1 addon est encore demandé…' : `${count} addons sont encore demandés…`,
     order: 'Ordre des versions',
-    orderNone: 'L’ordre des addons : Trier les versions par n’a aucun critère.',
+    orderNone: 'L’ordre des addons : « Trier les versions par » n’a aucun critère.',
     orderBy: (criteria: string) => `Trier les versions par : ${criteria}.`,
     group: (height: number) => `Groupe de qualité : ${height}p.`,
     keptAll: 'Les règles de masquage cacheraient toutes les versions : aucune n’est cachée.',

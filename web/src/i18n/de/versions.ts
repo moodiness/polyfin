@@ -31,7 +31,7 @@ const versions: typeof en = {
     pending: (count: number) =>
       count === 1 ? '1 Add-on wird noch gefragt…' : `${count} Add-ons werden noch gefragt…`,
     order: 'Wie Versionen sortiert werden',
-    orderNone: 'Die Reihenfolge der Add-ons: Versionen sortieren nach hat kein Kriterium.',
+    orderNone: 'Die Reihenfolge der Add-ons: „Versionen sortieren nach“ hat kein Kriterium.',
     orderBy: (criteria: string) => `Versionen sortieren nach: ${criteria}.`,
     group: (height: number) => `Qualitätsgruppe: ${height}p.`,
     keptAll: 'Die Ausblendregeln würden jede Version ausblenden, daher wird keine ausgeblendet.',
