@@ -21,7 +21,7 @@ import {
   EmptyState,
   Field,
   InlineError,
-  Select,
+  Segmented,
   StatusPill,
   TextInput,
   type StatusTone,
@@ -162,19 +162,20 @@ export default function LogsRoute() {
         <div
           role="search"
           aria-label={text.filters}
-          className="mb-4 flex flex-col gap-3 md:flex-row md:items-end"
+          className="mb-3 flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-end"
         >
-          <Field label={text.level} className="md:w-60">
-            <Select
+          <Field label={text.level}>
+            <Segmented
+              label={text.level}
               value={filter}
-              onValue={setFilter}
+              onChange={setFilter}
               options={(Object.keys(filters) as Filter[]).map((key) => ({
                 value: key,
                 label: text.levels[key],
               }))}
             />
           </Field>
-          <Field label={text.search} className="md:max-w-[28.5rem] md:flex-1">
+          <Field label={text.search} className="md:max-w-[24rem] md:min-w-[14rem] md:flex-1">
             <TextInput
               type="search"
               icon={MagnifyingGlassIcon}
@@ -198,7 +199,7 @@ export default function LogsRoute() {
           </InlineError>
         )}
         {/* The tile, and inside it the lines scrolling, faded where they pass its edges. */}
-        <div className="rounded-panel bg-s1 p-2 max-md:rounded-[1.5rem]">
+        <div className="rounded-panel bg-s1 p-1.5 max-md:rounded-[1.125rem]">
           <div
             ref={view}
             role="log"
@@ -211,14 +212,14 @@ export default function LogsRoute() {
               atBottom.current =
                 element.scrollHeight - element.scrollTop - element.clientHeight < 24
             }}
-            className="focus-lit-row h-[65dvh] min-h-80 overflow-auto rounded-[1.25rem] [mask-image:linear-gradient(to_bottom,transparent,#000_0.875rem,#000_calc(100%-0.875rem),transparent)] max-md:rounded-[1rem]"
+            className="focus-lit-row h-[65dvh] min-h-80 overflow-auto rounded-row [mask-image:linear-gradient(to_bottom,transparent,#000_0.625rem,#000_calc(100%-0.625rem),transparent)] max-md:rounded-[0.75rem]"
           >
             {!loaded && error === null ? (
-              <div aria-hidden="true" className="space-y-5 px-4 py-4">
+              <div aria-hidden="true" className="space-y-3.5 px-3 py-3">
                 {[70, 55, 82, 64, 48, 76, 60].map((width, index) => (
                   <span
                     key={index}
-                    className="block h-4 animate-pulse rounded-[0.445312rem] bg-s3 motion-reduce:animate-none"
+                    className="block h-3.5 animate-pulse rounded-[0.375rem] bg-s3 motion-reduce:animate-none"
                     style={{ width: `${width}%` }}
                   />
                 ))}
@@ -232,20 +233,20 @@ export default function LogsRoute() {
                 {lines.length === 0 ? text.emptyHint : text.noMatchHint}
               </EmptyState>
             ) : (
-              <ol className="grid grid-cols-[minmax(0,1fr)] gap-0.5 py-3">
+              <ol className="grid grid-cols-[minmax(0,1fr)] py-2">
                 {drawn.map((line) => (
                   <li
                     key={line.seq}
-                    className="grid min-h-14 grid-cols-[6.53125rem_8.3125rem_minmax(0,1fr)] items-center gap-x-4 rounded-[1.125rem] px-4 py-2 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1.5 max-md:px-3 max-md:py-3"
+                    className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-center gap-x-3 rounded-[0.5rem] px-3 py-1 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2"
                   >
-                    <span className="text-small text-ink-2 figures">{line.time}</span>
+                    <span className="text-micro text-ink-2 figures">{line.time}</span>
                     <StatusPill
                       tone={levelLooks[line.level].tone}
                       icon={levelLooks[line.level].icon}
                     >
                       {line.level}
                     </StatusPill>
-                    <span className="min-w-0 font-mono text-[0.9375rem] leading-6 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2 max-md:text-[0.875rem]">
+                    <span className="min-w-0 font-mono text-[0.8125rem] leading-5 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2">
                       {line.text}
                     </span>
                   </li>
@@ -254,7 +255,7 @@ export default function LogsRoute() {
             )}
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap justify-between gap-x-6 gap-y-2 text-small text-ink-2">
+        <div className="mt-2.5 flex flex-wrap justify-between gap-x-6 gap-y-1.5 text-small text-ink-2">
           <p aria-live="polite" className="inline-flex items-center gap-2">
             <span
               aria-hidden="true"

@@ -29,8 +29,7 @@ const methodIndex: Record<PlayMethod, number> = {
 }
 
 /** A chart's ground: a tile with no border. */
-const tile =
-  'rounded-panel bg-s1 px-[1.875rem] py-7 max-md:rounded-[1.5rem] max-md:px-5 max-md:py-[1.375rem]'
+const tile = 'rounded-panel bg-s1 px-5 py-4.5 max-md:rounded-[1.125rem] max-md:px-4 max-md:py-4'
 
 export type BarItem = { key: string; label: string; detail: string; value: number }
 
@@ -123,7 +122,7 @@ export function MethodShare({
   const percent = new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 })
   return (
     <div className={tile}>
-      <div className="flex h-4 gap-[0.1875rem] overflow-hidden rounded-full" aria-hidden="true">
+      <div className="flex h-3 gap-[0.1875rem] overflow-hidden rounded-full" aria-hidden="true">
         {methods.map((m) => (
           <div
             key={m.method}
@@ -134,7 +133,7 @@ export function MethodShare({
           />
         ))}
       </div>
-      <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {methods.map((m) => (
           <li key={m.method} className="flex items-start gap-3">
             <span
