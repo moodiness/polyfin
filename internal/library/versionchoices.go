@@ -302,6 +302,9 @@ const (
 	ListStale = "stale"
 	// ListAsked: its list is not known; the addon is asked.
 	ListAsked = "asked"
+	// ListFailed: the addon failed to give its list lately, and is not
+	// asked again before failedFor; its stale list is listed, if any.
+	ListFailed = "failed"
 )
 
 // VersionsExplained tells what became of every stream the addons listed
@@ -373,11 +376,14 @@ func (s *Service) ExplainVersions(ctx context.Context, user accounts.User, id ac
 	explained.Sources = make([]SourceExplained, len(serving))
 	for i, source := range serving {
 		state := ListKnown
-		if slices.ContainsFunc(unknown, func(other streamSource) bool { return other.key() == source.key() }) {
+		switch {
+		case slices.ContainsFunc(unknown, func(other streamSource) bool { return other.key() == source.key() }):
 			state = ListAsked
 			if lists[i] != nil {
 				state = ListStale
 			}
+		case !own(source.addon) && s.failed(source.key()):
+			state = ListFailed
 		}
 		explained.Sources[i] = SourceExplained{Addon: source.addon.ID, Name: source.addon.Manifest.Name, State: state}
 	}
