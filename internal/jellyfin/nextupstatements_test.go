@@ -1,14 +1,18 @@
 package jellyfin
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -22,8 +26,13 @@ import (
 )
 
 // statementCounter counts the statements a pool sends, those of batches
-// too, and those that write or lock items.
-type statementCounter struct{ statements, itemWrites atomic.Int64 }
+// too, and those that write or lock items, and each statement's sends.
+type statementCounter struct {
+	statements, itemWrites atomic.Int64
+
+	mu   sync.Mutex
+	sent map[string]int
+}
 
 // writesItems matches the statements that write or lock rows of items.
 var writesItems = regexp.MustCompile(`(?s)INSERT INTO items|UPDATE items|FROM items\b.*FOR UPDATE`)
@@ -33,6 +42,35 @@ func (c *statementCounter) count(sql string) {
 	if writesItems.MatchString(sql) {
 		c.itemWrites.Add(1)
 	}
+	c.mu.Lock()
+	if c.sent == nil {
+		c.sent = map[string]int{}
+	}
+	c.sent[strings.Join(strings.Fields(sql), " ")]++
+	c.mu.Unlock()
+}
+
+// reset forgets the statements counted so far.
+func (c *statementCounter) reset() {
+	c.statements.Store(0)
+	c.itemWrites.Store(0)
+	c.mu.Lock()
+	c.sent = nil
+	c.mu.Unlock()
+}
+
+// mostSent lists the most sent statements since the last reset, at most
+// count of them, each with its sends and its first 160 characters.
+func (c *statementCounter) mostSent(count int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	statements := slices.Collect(maps.Keys(c.sent))
+	slices.SortFunc(statements, func(a, b string) int { return cmp.Or(c.sent[b]-c.sent[a], strings.Compare(a, b)) })
+	var b strings.Builder
+	for _, sql := range statements[:min(count, len(statements))] {
+		fmt.Fprintf(&b, "%4d  %.160s\n", c.sent[sql], sql)
+	}
+	return b.String()
 }
 
 func (c *statementCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
@@ -91,8 +129,9 @@ func watchedSeriesAddon(t *testing.T, count, episodes int) string {
 
 // Next Up reads the episodes of every series the user watches, and
 // records them: once they are stored as it records them, it writes and
-// locks no row, and its statements stay within one look-up of each
-// series and one of its episodes' versions, however many episodes.
+// locks no row, and its statements stay within one look-up of all the
+// series and one of all their episodes' versions, however many series
+// and episodes.
 func TestNextUpStatementsStayWithinABudget(t *testing.T) {
 	t.Parallel()
 	const series = 6
@@ -140,8 +179,7 @@ func TestNextUpStatementsStayWithinABudget(t *testing.T) {
 	restarted.url = server.URL
 	nextUp := func() {
 		t.Helper()
-		counter.statements.Store(0)
-		counter.itemWrites.Store(0)
+		counter.reset()
 		var page QueryResult
 		if status := restarted.get(t, "/Shows/NextUp", token, &page); status != http.StatusOK || len(page.Items) != series {
 			t.Fatalf("Next Up: %d, %d items", status, len(page.Items))
@@ -150,7 +188,7 @@ func TestNextUpStatementsStayWithinABudget(t *testing.T) {
 	nextUp()
 	nextUp()
 	t.Logf("Next Up: %d statements, %d writing or locking items", counter.statements.Load(), counter.itemWrites.Load())
-	if n := counter.statements.Load(); n > 2*series+8 {
+	if n := counter.statements.Load(); n > 10 {
 		t.Errorf("%d statements for %d series", n, series)
 	}
 	if n := counter.itemWrites.Load(); n != 0 {

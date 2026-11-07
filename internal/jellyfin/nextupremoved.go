@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -172,28 +171,26 @@ func (h *Handler) NextUpRemovals(ctx context.Context, user accounts.User) ([]Nex
 	for _, item := range items {
 		byID[item.ID] = item
 	}
-	found := make([]*NextUpRemoval, len(removals))
-	var wg sync.WaitGroup
-	limiter := make(chan struct{}, 6)
-	for i, removal := range removals {
+	var series []accounts.ID
+	for _, removal := range removals {
+		if item, ok := byID[removal.Series]; ok && item.Kind == library.KindSeries && !removalLifted(removal.At, latest[removal.Series]) {
+			series = append(series, item.ID)
+		}
+	}
+	// The episodes of every series are listed at once; a series they
+	// could not be listed or recorded for stays off.
+	listed, err := h.Library.SeriesEpisodes(ctx, user, series)
+	if err != nil {
+		listed = nil
+	}
+	result := make([]NextUpRemoval, 0, len(removals))
+	for _, removal := range removals {
 		item, ok := byID[removal.Series]
 		if !ok || item.Kind != library.KindSeries || removalLifted(removal.At, latest[removal.Series]) {
 			continue
 		}
-		wg.Go(func() {
-			limiter <- struct{}{}
-			defer func() { <-limiter }()
-			episodes, err := h.Library.Episodes(ctx, user, item.ID, nil)
-			if err != nil || !releasedSince(episodes, removal.At) {
-				found[i] = &NextUpRemoval{Item: item, At: removal.At}
-			}
-		})
-	}
-	wg.Wait()
-	result := make([]NextUpRemoval, 0, len(removals))
-	for _, removal := range found {
-		if removal != nil {
-			result = append(result, *removal)
+		if episodes, ok := listed[item.ID]; !ok || !releasedSince(episodes, removal.At) {
+			result = append(result, NextUpRemoval{Item: item, At: removal.At})
 		}
 	}
 	return result, nil
