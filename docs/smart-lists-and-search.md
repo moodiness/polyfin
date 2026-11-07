@@ -11,7 +11,7 @@ A smart list gathers titles by what they are, from the catalogs it names, such a
 | The server | **Content › Libraries**, with **Add a smart list** | Every user, unless their visible libraries leave out a list shown as a library |
 | A user | **My sources** | That user only (see [Users' own addons](sign-in-and-security.md#users-own-addons)) |
 
-A list draws from any catalog of movies or series of the server's addons, turned on as a library or not. A user's own list may also draw from their own addons.
+A list draws from any catalog of movies or series of the server's addons, turned on as a library or not. A user's own list may also draw from their own addons. A list whose catalogs are all gone, removed with their addons or dropped by them, is kept and lists nothing until other catalogs are chosen: its editor and **System › Health** show it (see [Smart list without catalogs](health.md#smart-list-without-catalogs)).
 
 ### Rules
 

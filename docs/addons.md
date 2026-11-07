@@ -1,6 +1,6 @@
 # Addons
 
-This page is for administrators, and for users who add their own addons. Polyfin gets its content from Stremio addons and Eclipse music addons. It covers adding addons, who uses each source, which streams play, how addons are asked, what to do when one fails, how Polyfin keeps to addons' request limits, and the order and languages of sources.
+This page is for administrators, and for users who add their own addons. Polyfin gets its content from Stremio addons and Eclipse music addons. It covers adding addons, who uses each source, which streams play, how addons are asked, removing a source, what to do when one fails, how Polyfin keeps to addons' request limits, and the order and languages of sources.
 
 Each addon has a role:
 
@@ -199,7 +199,28 @@ Anime databases make each season, or part of a season, an entry of its own. Its 
 
 Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu. It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
 
-Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first.
+Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
+
+## Removing a source
+
+**Remove** asks before it deletes the source. Once it has counted them, the question also lists what will be lost: home rows, libraries with their names, images and settings, the hidden libraries of users, and scheduled recordings.
+
+Removing a source deletes what belongs to it:
+
+- **Libraries:** its libraries, with their names, images and settings.
+- **Home rows:** the rows of **Settings › Web player › Home rows** on its catalogs and collections.
+- **Live TV:** its channels, with their pending timers, series timers and series reminders. Recordings already made are kept.
+- **IPTV movies and series:** an IPTV source's titles, with their seasons and episodes.
+- **Smart lists:** its catalogs leave every smart list. A list left with none is kept and lists nothing: **System › Health** and the list's editor show it (see [Smart list without catalogs](health.md#smart-list-without-catalogs)).
+- **Users' choices:** the hidden libraries and the Jellyfin apps' view settings of its libraries, and the Live TV channel limits naming its channels.
+- **Health:** its health records.
+
+What it leaves:
+
+- **Titles it listed first:** they are released. The next catalog that lists them takes them.
+- **Channels of your titles:** a channel airing a removed collection, smart list, series or titles stays, and Health shows it (see [Channel airing a removed source](health.md#channel-airing-a-removed-source)).
+- **Adding it again:** the source gets new libraries. Home rows, library settings and hidden libraries are not restored: users who had one of its libraries hidden see the new ones.
+- **Sources removed another way:** the hourly task "Clean up removed sources" does the same for a user deleted with their own sources, a catalog an addon dropped, or a delete made in the database (see [Scheduled tasks](administration.md#scheduled-tasks)).
 
 ## Addons that fail
 

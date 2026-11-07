@@ -116,6 +116,19 @@ An addon's search catalog did not answer a search in time. This is a warning, wi
 - Searches leave the addon out for 5 minutes, then ask it again.
 - It comes and goes with the searches, so it is not sent as a health problem. The addon's own failure, "did not answer in time", is.
 
+### Smart list without catalogs
+
+Every catalog a smart list drew from was removed with its addon, or dropped by it, so the list lists nothing. This is a warning naming the list, and its owner for a user's own list (see [Removing a source](addons.md#removing-a-source)). It links to the list's editor for a server's list, and to the owner's page for a user's own.
+
+- The list is kept, and its editor shows the same until other catalogs are chosen there (see [Smart lists](smart-lists-and-search.md#smart-lists)).
+- It goes away once the list draws from a catalog again.
+
+### Channel airing a removed source
+
+A channel of your titles airs a collection, smart list, series or titles that no longer exist. This is a warning naming the channel, with a link to its page (see [Channels of your titles](live-tv.md#channels-of-your-titles)).
+
+- It goes away once another source is chosen for the channel.
+
 ### No addon for a local folder
 
 A local folder's files are left unmatched because no addon of the server describes and searches titles of its kind. This is a warning, with a link to **Content › Sources**, where such an addon is added (see [What a search needs](naming-and-matching.md#what-a-search-needs)).
