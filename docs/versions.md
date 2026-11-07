@@ -98,6 +98,8 @@ Actions:
 - **Analyze now** analyzes a version, forgetting its recent failure, and says why analysis failed. Torrents are analyzed only by plays.
 - **Ask addons again** re-asks the user's addons, as `POST /Polyfin/Items/{id}/Versions/Search` does, at most once every 20 seconds; the page follows addons still asked.
 
+While addons are still asked, the page reads the versions again after 2, 4, 8, 16, then 30 seconds as long as nothing changes, then stops and says so, with **Check again**. A change, the tab or the window shown again, or an action starts over. An addon that failed shows **Failed lately**: for 3 minutes, the page and title pages do not ask it again (see [Title pages](#title-pages)).
+
 **Compared with Jellyfin**
 
 - Jellyfin 12.4 cannot explain, pin or block versions: they are the files in its folders, in its order. A pin only reorders `MediaSources`, which every Jellyfin app reads.
@@ -138,6 +140,7 @@ After that, a reopened title shows old versions at once while addons are re-aske
 - **Replace the address** and the task "Forget the version lists" drop them for every title at once (see [Forgetting the version lists](#forgetting-the-version-lists)).
 - An empty answer replaces the list: the addon has nothing for the title any more.
 - A notices-only answer is not kept: an addon limiting requests often answers this way, and some addons answer only their own summary once their filters left nothing. For a minute the addon is not asked for the title: its earlier versions stay, or it gives none. The next request after it asks again; **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once. The log tells it once a day (see [Which streams become versions](#which-streams-become-versions)).
+- A failed request is remembered for 3 minutes: opening the title, and its versions page, list the addon's earlier versions, or none, without asking it again, and the page counts it as answered. Play, **Try again**, **Ask addons again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once.
 
 Gathering addons answer first with what arrived within their own time limit, and get the rest moments later. So Polyfin re-asks an addon 10 seconds after its first answer for a title, and again 30 seconds later if that answer listed more playable streams.
 

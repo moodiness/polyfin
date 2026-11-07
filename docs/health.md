@@ -4,7 +4,7 @@ This page is for administrators. It covers what **System › Health** shows, eac
 
 ## What Health shows
 
-**System › Health** puts problems first, under **To look at**: each one is a tile, marked **Error** or **Warning**, with a link to what fixes it. A new version of Polyfin is a tile there too, when one is out (see [New versions](updates-and-restarts.md#new-versions)). The page updates every 10 seconds.
+**System › Health** puts problems first, under **To look at**: each one is a tile, marked **Error** or **Warning**, with a link to what fixes it. A new version of Polyfin is a tile there too, when one is out (see [New versions](updates-and-restarts.md#new-versions)). The problems update every 10 seconds, the rest of the page every 30.
 
 Under **Checks**, a tile for each main part tells its state at a glance: **Addons**, **IPTV sources**, **Programme guides**, **Database**, **Transcoder**, **Backups**, **Source cache** and **Stored keys**. The other parts are rows under **Also on this page**, each with its value, when they apply. A tile or a row opens its details over the page, and has its own address, such as `/admin/system/health#process`, which the problems and notifications link to.
 

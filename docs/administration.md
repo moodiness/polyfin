@@ -104,10 +104,12 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 
 **Home** greets you by name, with how many playbacks are under way and how many things need a look. Below, it shows:
 
-- **Now playing**, updated every 3 seconds (see [Now playing](#now-playing)). The playback under the keyboard or the mouse tints the top of the page with the colour of its poster.
+- **Now playing**, updated every 3 seconds while something plays, every 15 seconds otherwise (see [Now playing](#now-playing)). The playback under the keyboard or the mouse tints the top of the page with the colour of its poster.
 - Then two columns:
   - on the left, **To look at**: a new version, when one is out, with **Release notes**, and **Update now** while an update tool is set (see [New versions](updates-and-restarts.md#new-versions)), then each problem [Health](health.md) found, with a link to the page that fixes it. Under it, **Recent activity**: the [activity log](#activity-log), which you can filter by kind and search. Its list scrolls in its own box, and loads older events as you reach its end.
   - on the right, **Bandwidth**: what every playback sends to apps and receives from sources, then the video conversions under way. Then **Get started**, until each step of a good setup is done or you dismiss it (see [The Get started card](getting-started.md#the-get-started-card)). Then **Server state**: the graphics card, the cache and the database, each opening Health, how long Polyfin has run and its version, with **Restart**, and **Update now** while an update tool is set (see [Restart and updates](updates-and-restarts.md#restart-and-updates)).
+
+Home reads the server's state, which the conversions under **Bandwidth** and **Server state** show, every 30 seconds while either is on screen: Polyfin looks through the whole library for it. A tab in the background reads nothing until shown again.
 
 Below 1024 pixels wide, Home is one column, in the same order, with **Recent activity** last.
 
@@ -177,7 +179,7 @@ Other plays count this way:
 
 **The rate from the source** counts what the source cache and the relays read from the source. Several plays of the same version share it.
 
-Beside the title of **Now playing**, Home shows the server's totals, refreshed every 3 seconds:
+Beside the title of **Now playing**, Home shows the server's totals, refreshed every 3 seconds while something plays, every 15 seconds otherwise:
 
 - what every play sends to apps;
 - what Polyfin receives from sources, a version played on several devices counted once.
