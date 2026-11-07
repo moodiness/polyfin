@@ -517,7 +517,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 	}
 
 	if h.Health.Secrets != nil {
-		report, err := h.Health.Secrets(ctx)
+		report, err := h.secretsReport(ctx)
 		if err != nil {
 			return nil, err
 		}

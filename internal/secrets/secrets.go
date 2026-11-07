@@ -13,7 +13,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
+	"sync/atomic"
 )
+
+// changes counts the values sealed (see Changes).
+var changes atomic.Uint64
+
+// Changes counts the values given to Seal since the start, by any box,
+// with a key or without: every secret stored goes through Seal first, so
+// that a report of the stored secrets (see Box.Inspect) read when Changes
+// told n may have changed once it tells more. It may tell more for
+// nothing, for a value sealed but never stored: a report kept on its
+// word is only read again sooner than needed.
+func Changes() uint64 { return changes.Load() }
 
 // prefix starts every sealed value: the scheme and its version.
 const prefix = "enc:v1:"
@@ -81,6 +93,7 @@ func Sealed(stored string) bool { return strings.HasPrefix(stored, prefix) }
 // Seal returns what to store for value: sealed with the key, or value
 // itself without one. Empty stays empty, for no value.
 func (b *Box) Seal(value string) string {
+	changes.Add(1)
 	if b == nil || value == "" {
 		return value
 	}
