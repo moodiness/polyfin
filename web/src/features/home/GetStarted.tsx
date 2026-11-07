@@ -209,23 +209,23 @@ function Steps({ onDismiss }: { onDismiss: () => void }) {
       }
     >
       <Panel as="div">
-        <p className="text-[1.3125rem] font-[650] text-ink max-md:text-[1.125rem]">
+        <p className="text-h3 text-ink">
           {text.progress(steps.length - open.length, steps.length)}
         </p>
         {/* A count filling from the left, as the words above say it ("4 of 7 steps done"). */}
-        <div aria-hidden="true" className="mt-4 grid grid-flow-col gap-1.5">
+        <div aria-hidden="true" className="mt-3 grid grid-flow-col gap-1">
           {steps.map((step, index) => (
             <i
               key={step.id}
               className={cx(
-                'h-2 rounded-full',
+                'h-1.5 rounded-full',
                 index < steps.length - open.length ? 'bg-focus' : 'bg-s3',
               )}
             />
           ))}
         </div>
         {/* The next step is a tile of its own, inside the panel's padding. */}
-        <RowList aria-label={text.next} className="mx-0! mt-5">
+        <RowList aria-label={text.next} className="mx-0! mt-3.5">
           <Row
             to={next.to}
             leading={<IconTile icon={icons[next.id]} />}

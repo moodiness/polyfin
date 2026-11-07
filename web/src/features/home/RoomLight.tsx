@@ -12,7 +12,7 @@ export function RoomLight({ posters, lit }: { posters: string[]; lit: string | n
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 top-0 -z-1 h-[47.5rem] overflow-hidden [mask-image:linear-gradient(180deg,#000_0%,rgb(0_0_0/0.5)_45%,transparent_100%)] max-md:h-[35rem]"
+      className="pointer-events-none absolute inset-x-0 top-0 -z-1 h-[36rem] overflow-hidden [mask-image:linear-gradient(180deg,#000_0%,rgb(0_0_0/0.5)_45%,transparent_100%)] max-md:h-[28rem]"
     >
       {posters.map((poster) => (
         <img

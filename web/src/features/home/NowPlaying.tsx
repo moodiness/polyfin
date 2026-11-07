@@ -135,13 +135,13 @@ export function Bandwidth({
             {errorMessage(t, total.error)}
           </InlineError>
         ) : sent && received ? (
-          <div className="grid grid-cols-2 gap-6 max-md:gap-4">
+          <div className="grid grid-cols-2 gap-4 max-md:gap-3">
             <FigureTile
               value={sent.value}
               unit={sent.unit}
               label={
                 <span className="flex items-center gap-1.5">
-                  <ArrowUpIcon size="1.1875rem" aria-hidden="true" className="shrink-0" />
+                  <ArrowUpIcon size="1rem" aria-hidden="true" className="shrink-0" />
                   {text.sentToApps}
                 </span>
               }
@@ -151,24 +151,24 @@ export function Bandwidth({
               unit={received.unit}
               label={
                 <span className="flex items-center gap-1.5">
-                  <ArrowDownIcon size="1.1875rem" aria-hidden="true" className="shrink-0" />
+                  <ArrowDownIcon size="1rem" aria-hidden="true" className="shrink-0" />
                   {text.receivedFromSources}
                 </span>
               }
             />
           </div>
         ) : (
-          <div role="status" aria-label={t.common.loading} className="grid grid-cols-2 gap-6">
+          <div role="status" aria-label={t.common.loading} className="grid grid-cols-2 gap-4">
             {[0, 1].map((figure) => (
               <span key={figure} className="flex flex-col gap-3">
-                <Skeleton className="h-11 w-24" />
+                <Skeleton className="h-8 w-20" />
                 <Skeleton className="h-4 w-32" />
               </span>
             ))}
           </div>
         )}
         {conversions && (
-          <div className="mt-6 pt-2 shadow-[inset_0_1px_0] shadow-line-2">
+          <div className="mt-4 pt-1.5 shadow-[inset_0_1px_0] shadow-line-2">
             <RowList aria-label={text.conversions}>
               <Row
                 to="/system/health#transcoder"
@@ -178,7 +178,7 @@ export function Bandwidth({
                     {text.conversionsOf(conversions.count, conversions.limit)}
                   </span>
                 }
-                className="min-h-16 max-md:min-h-14"
+                className="min-h-12"
               />
             </RowList>
           </div>
@@ -208,17 +208,17 @@ export function PlayingNow({ onLight }: { onLight: (sessionId: string) => void }
     <Block title={live.title} count={sessions.data?.length} className="scroll-mt-24">
       <div id="now-playing" className="scroll-mt-24">
         {sessions.isPending ? (
-          <div role="status" aria-label={t.common.loading} className="flex gap-6 max-md:flex-col">
+          <div role="status" aria-label={t.common.loading} className="flex gap-4 max-md:flex-col">
             {[7, 5].map((grow) => (
               <div
                 key={grow}
                 style={{ flexGrow: grow }}
-                className="flex basis-0 gap-[1.875rem] rounded-tile bg-s1 px-8 pt-[1.625rem] pb-6 max-md:rounded-[1.75rem] max-md:p-[1.125rem]"
+                className="flex basis-0 gap-5 rounded-tile bg-s1 px-5 pt-4.5 pb-4 max-md:rounded-[1.125rem] max-md:p-3.5"
               >
-                <Skeleton className="aspect-[400/560] w-[clamp(6.75rem,15.5vh,8.75rem)] rounded-[1.125rem] max-md:w-24" />
-                <span className="flex flex-1 flex-col gap-3 pt-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-9 w-56 max-w-full" />
+                <Skeleton className="aspect-[400/560] w-[clamp(5rem,11.5vh,6.5rem)] rounded-[0.75rem] max-md:w-20" />
+                <span className="flex flex-1 flex-col gap-2 pt-1">
+                  <Skeleton className="h-3.5 w-36" />
+                  <Skeleton className="h-7 w-48 max-w-full" />
                   <Skeleton className="h-4 w-24" />
                 </span>
               </div>
@@ -393,7 +393,7 @@ function SessionTile({
       }
       detail={
         mine ? (
-          <dl className="figures mt-1 grid max-w-[27.5rem] grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 rounded-[1.375rem] bg-s1 px-5 py-4 max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:px-4 max-md:[&_dd]:mb-1.5 max-md:[&_dd]:text-left">
+          <dl className="figures mt-1 grid max-w-[24rem] grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-row bg-s1 px-3.5 py-2.5 max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:px-3 max-md:[&_dd]:mb-1 max-md:[&_dd]:text-left">
             {origin && (
               <>
                 <dt className="text-ink-3">{live.source}</dt>
@@ -459,18 +459,18 @@ function SessionTile({
               <span>{live.remaining(formatSpan(runtime - position, language))}</span>
             ) : null}
           </div>
-          <p className="figures mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[1.03125rem] text-ink-2 max-md:text-micro">
+          <p className="figures mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-small text-ink-2 max-md:text-micro">
             {session.bandwidth.redirected ? (
               <span>{live.bandwidth.redirected}</span>
             ) : (
               <span className="flex items-center gap-1.5">
-                <ArrowUpIcon size="1.0625rem" aria-hidden="true" className="shrink-0" />
+                <ArrowUpIcon size="0.9375rem" aria-hidden="true" className="shrink-0" />
                 {live.bandwidth.sent(rateText(session.bandwidth.sent, language))}
               </span>
             )}
             {(session.origin !== null || session.bandwidth.received > 0) && (
               <span className="flex items-center gap-1.5">
-                <ArrowDownIcon size="1.0625rem" aria-hidden="true" className="shrink-0" />
+                <ArrowDownIcon size="0.9375rem" aria-hidden="true" className="shrink-0" />
                 {live.bandwidth.received(rateText(session.bandwidth.received, language))}
               </span>
             )}
@@ -479,12 +479,12 @@ function SessionTile({
             </span>
           </p>
           {details && (
-            <div id={detailsId} className="mt-5">
+            <div id={detailsId} className="mt-3.5">
               <HowItPlays session={session} />
             </div>
           )}
           {messaging && (
-            <div id={formId} className="mt-5">
+            <div id={formId} className="mt-3.5">
               <MessageForm
                 session={session}
                 onClose={() => setMessaging(false)}
@@ -512,8 +512,8 @@ function SessionTile({
       }
     >
       <p className="flex flex-col gap-0.5">
-        <strong className="flex items-center gap-2 text-[1.1875rem] font-semibold text-ink max-md:text-[1.03125rem]">
-          <DeliveryIcon size="1.1875rem" aria-hidden="true" className="shrink-0" />
+        <strong className="flex items-center gap-1.5 text-body font-semibold text-ink">
+          <DeliveryIcon size="1rem" aria-hidden="true" className="shrink-0" />
           {live.delivery[session.delivery] ?? session.delivery}
         </strong>
         <span className="max-w-[46ch]">
@@ -524,7 +524,7 @@ function SessionTile({
       </p>
       {app && !mine && !session.shared && !session.download && (
         <p className="mt-2 flex min-w-0 items-center gap-2">
-          <DeviceMobileIcon size="1.125rem" aria-hidden="true" className="shrink-0" />
+          <DeviceMobileIcon size="1rem" aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 truncate">{app}</span>
         </p>
       )}
@@ -652,12 +652,12 @@ function HowItPlays({ session }: { session: LiveSession }) {
   ]
 
   return (
-    <div className="rounded-[1.375rem] bg-bg/55 px-5 py-4 text-[1.03125rem] max-md:px-4 max-md:text-micro">
+    <div className="rounded-row bg-bg/55 px-3.5 py-3 text-small max-md:px-3 max-md:text-micro">
       {/* The tile tells this help already when it shows no streams in its place. */}
       {session.delivery !== 'directPlay' && session.sent !== null && (
-        <p className="mb-3 text-ink-2">{live.deliveryHelp[session.delivery]}</p>
+        <p className="mb-2 text-ink-2">{live.deliveryHelp[session.delivery]}</p>
       )}
-      <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-[auto_minmax(0,1fr)]">
+      <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
         {rows.map((row) => (
           <div key={row.label} className="contents">
             <dt className="text-ink-3">{row.label}</dt>
@@ -710,10 +710,7 @@ function MessageForm({
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-4 rounded-[1.375rem] bg-bg/55 p-5 max-md:p-4"
-    >
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-row bg-bg/55 p-3.5 max-md:p-3">
       <Field
         label={live.messageLabel(session.device.name)}
         help={live.messageHint}
@@ -721,7 +718,7 @@ function MessageForm({
       >
         <Textarea value={text} autoFocus rows={2} maxLength={500} required onValue={setText} />
       </Field>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2">
         <Button
           type="submit"
           variant="primary"

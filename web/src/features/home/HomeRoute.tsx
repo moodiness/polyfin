@@ -82,8 +82,8 @@ function Overview({ name }: { name: string }) {
         }
       >
         <PlayingNow onLight={setLitId} />
-        <div className="grid items-start gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-lg:gap-16 max-md:mt-11 max-md:gap-11">
-          <div className="flex flex-col gap-16 max-lg:contents max-md:gap-11">
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-8 max-lg:gap-10 max-md:mt-8 max-md:gap-8">
+          <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
             <ToLookAt
               health={health.data}
               problems={problems.data ?? []}
@@ -98,7 +98,7 @@ function Overview({ name }: { name: string }) {
               <RecentActivity />
             </div>
           </div>
-          <div className="flex flex-col gap-16 max-lg:contents max-md:gap-11">
+          <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
             <Bandwidth
               conversions={
                 transcoder ? { count: transcoder.conversions, limit: transcoder.limit } : undefined
@@ -181,7 +181,7 @@ function ToLookAt({
           {text.problemsEmptyHelp}
         </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-2">
           {update && health && (
             <li>
               <AlertTile
@@ -273,7 +273,7 @@ function ServerState({
                   <span className="text-ink">
                     {t.dashboard.live.gpuMethod(data.transcoder.hardware.method)}
                   </span>
-                  <span className="max-w-[17.8125rem] text-micro break-words text-ink-3 max-md:max-w-full">
+                  <span className="max-w-[15rem] text-micro break-words text-ink-3 max-md:max-w-full">
                     {[
                       data.transcoder.hardware.encoders.join(', '),
                       data.transcoder.hardware.toneMapping ? text.toneMapping : '',
@@ -285,7 +285,7 @@ function ServerState({
               ) : (
                 <>
                   <span className="text-ink">{text.graphicsNone}</span>
-                  <span className="max-w-[17.8125rem] text-micro text-ink-3 max-md:max-w-full">
+                  <span className="max-w-[15rem] text-micro text-ink-3 max-md:max-w-full">
                     {text.graphicsCpu}
                   </span>
                 </>
@@ -312,7 +312,7 @@ function ServerState({
                       variant={data.cache.used / data.cache.limit > 0.9 ? 'warn' : 'neutral'}
                       value={data.cache.used / data.cache.limit}
                       label={text.cacheUnit}
-                      className="w-[7.5rem] max-md:w-[5.625rem]"
+                      className="w-[6rem] max-md:w-[5rem]"
                     />
                   )}
                 </>
@@ -337,8 +337,8 @@ function ServerState({
           />
         </RowList>
       )}
-      <div className="mt-[1.125rem] flex flex-wrap items-center justify-between gap-x-4 gap-y-3 pl-[1.625rem] max-md:flex-col max-md:items-stretch max-md:pl-0">
-        <div className="min-w-0 flex-1 basis-[16.625rem] text-[1.125rem] text-ink-3 max-md:basis-auto max-md:text-[1rem]">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 pl-4 max-md:flex-col max-md:items-stretch max-md:pl-0">
+        <div className="min-w-0 flex-1 basis-[14rem] text-small text-ink-3 max-md:basis-auto">
           {data !== undefined && (
             <p className="figures">
               {text.uptime}{' '}
@@ -363,7 +363,7 @@ function ServerState({
           )}
         </div>
         {actions && (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <ServerActionButtons actions={actions} onOpen={onOpen} />
           </div>
         )}
