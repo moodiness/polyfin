@@ -5,7 +5,7 @@ import type { Messages } from '@/i18n'
 /** The groups of results, in the order the palette shows them. */
 export const paletteGroups = ['pages', 'settings', 'users', 'sources'] as const
 
-export type PaletteGroup = (typeof paletteGroups)[number]
+type PaletteGroup = (typeof paletteGroups)[number]
 
 /** One result of the command palette. */
 export type PaletteEntry = {
@@ -25,7 +25,7 @@ export type PaletteEntry = {
 }
 
 /** What every entry source receives while the palette is open. */
-export type PaletteContext = {
+type PaletteContext = {
   t: Messages
   user: SessionUser
 }
