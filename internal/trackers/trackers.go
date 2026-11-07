@@ -34,6 +34,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/anime"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -212,6 +213,9 @@ type Options struct {
 	// without both, nothing is imported.
 	Titles   Titles
 	UserData *userdata.Store
+	// Links keeps the titles the imports did not find, and applies the
+	// links users made of them (see package importlinks); nil keeps none.
+	Links *importlinks.Store
 	// Anime maps anime between identifiers and numberings: Simkl's anime
 	// history, the titles anime addons name, and what AniList and
 	// MyAnimeList list, are found and sent by it. Nil leaves them out.
@@ -360,6 +364,9 @@ type Service struct {
 	stopped func(user accounts.ID, service string)
 	// watchlist keeps the watchlists the imports read.
 	watchlist *watchlist.Store
+	// links keeps the titles the imports do not find and applies the
+	// links made of them; nil keeps none.
+	links *importlinks.Store
 }
 
 // New returns a service keeping connections and queued changes in the
@@ -410,6 +417,7 @@ func New(options Options) *Service {
 		anime:            options.Anime,
 		stopped:          options.Stopped,
 		watchlist:        watchlist.New(options.DB),
+		links:            options.Links,
 	}
 }
 
