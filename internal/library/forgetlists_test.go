@@ -134,9 +134,13 @@ func TestAnAnswerOnItsWayIsNotKeptOnceTheVersionListsAreForgotten(t *testing.T) 
 	e.eventually("the addon to be asked again", func() bool { return e.asked("stream") == 4 })
 	e.numbers <- []int{5}
 	e.eventually("the answer after the forgetting", func() bool { return slices.Equal(e.listed(), []string{"Source 5"}) })
-	if versions, _ := e.restarted().KnownVersions(ctx, e.member, e.movie); !slices.Equal(versionNames(versions), []string{"Source 5"}) {
-		t.Errorf("saved: %q, want the answer after the forgetting", versionNames(versions))
-	}
+	// The answer is kept in memory, then saved: the request asked in the
+	// background, nothing waits for the save. A new service each time, as
+	// one finding no list saved does not look for it again.
+	e.eventually("the answer after the forgetting to be saved", func() bool {
+		versions, _ := e.restarted().KnownVersions(ctx, e.member, e.movie)
+		return slices.Equal(versionNames(versions), []string{"Source 5"})
+	})
 }
 
 // A list still being saved when the version lists are forgotten is not
