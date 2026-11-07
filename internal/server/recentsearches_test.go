@@ -116,8 +116,7 @@ func TestSearchPageListsTheUsersRecentSearches(t *testing.T) {
 			steps: []string{"#/search", "type matrix", "draw", "signout", "#/login", "signin viewer", "#/search", "show", "signout", "#/login", "signin boss", "#/search", "show"},
 			want:  []string{"none", "recent(matrix)"}},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 // The searches the server finds something for.
@@ -259,7 +258,7 @@ async function run(scenario) {
       getJSON: () => Promise.reject(new Error('not asked here')),
       ajax: () => Promise.reject(new Error('not asked here')),
     }
-    vm.runInNewContext(script, {
+    runScript(script, {
       location, history, document, MutationObserver, Object, JSON, String, Date,
       window: { ApiClient, localStorage, sessionStorage: localStorage },
       CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },

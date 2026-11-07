@@ -154,7 +154,7 @@ func TestWebClientLeavesOtherPathsToJellyfin(t *testing.T) {
 
 func TestOnlyTheWebClientPageLoadsPolyfinScript(t *testing.T) {
 	h := webHandler(setupState{})
-	tag := `<script src="polyfin.js"></script>`
+	tag := string(webScriptTag)
 	for range 2 {
 		for _, target := range []string{"/web/", "/web/index.html"} {
 			body := get(h, target).Body.String()
@@ -218,7 +218,7 @@ func TestWebClientNeedsJellyfinWebIndex(t *testing.T) {
 		Database: database{}, Admin: fstest.MapFS{}, AdminAPI: owner("admin api"), Jellyfin: owner("jellyfin"),
 		Web: files, SetupRequired: setupState{}.SetupRequired, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	if body := get(h, "/web/").Body.String(); !strings.Contains(body, `<script src="polyfin.js"></script>`) {
+	if body := get(h, "/web/").Body.String(); !strings.Contains(body, string(webScriptTag)) {
 		t.Errorf("/web/ from a folder: %q", body)
 	}
 }
@@ -277,8 +277,7 @@ func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 		"#/list?parentId=0123&serverId=dashboard":                                     "-",
 		"#/userprofile?userId=0123&from=dashboard":                                    "-",
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, routes } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const results = {}
 for (const route of routes) {
@@ -293,7 +292,7 @@ for (const route of routes) {
       const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
       // The page's head takes the style the script adds.
       const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
-      vm.runInNewContext(script, { location, history, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+      runScript(script, { location, history, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
       if (way === 'pushState' || way === 'replaceState') history[way](null, '', route || page)
       if (way === 'hashchange' || way === 'popstate') { go(route || page); (listeners[way] || []).forEach((listener) => listener()) }
       results[way + ' ' + page + route] = replaced
@@ -362,8 +361,7 @@ func TestRowTitlesOpenACollectionLibraryOnItsChosenScreen(t *testing.T) {
 		"#/tv?topParentId=0123&collectionType=tvshows&tab=1":    "#/tv?topParentId=0123&collectionType=tvshows&tab=1",
 		"#/details?id=0123&tab=1":                               "#/details?id=0123&tab=1",
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, links } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const results = {}
 const node = (parentNode, matches) => ({ parentNode, matches, closest(selector) { for (let e = this; e; e = e.parentNode) if (e.matches(selector)) return e; return null } })
@@ -374,7 +372,7 @@ for (const href of links) {
       const location = { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} }
       const history = { pushState: () => {}, replaceState: () => {} }
       const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
-      vm.runInNewContext(script, { location, history, URL, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+      runScript(script, { location, history, URL, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
       const attributes = { href }
       const link = node(null, (selector) => selector === 'a[href]')
       link.getAttribute = (name) => attributes[name] ?? null
@@ -387,7 +385,7 @@ for (const href of links) {
 }
 // Elsewhere than on a link, nothing happens and nothing fails.
 const listeners = {}
-vm.runInNewContext(script, { location: { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} }, history: { pushState: () => {}, replaceState: () => {} }, URL, document: { head: { appendChild: () => {} }, createElement: () => ({}) }, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+runScript(script, { location: { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} }, history: { pushState: () => {}, replaceState: () => {} }, URL, document: { head: { appendChild: () => {} }, createElement: () => ({}) }, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
 for (const target of [node(null, () => false), {}, null]) for (const listener of listeners.click || []) listener({ type: 'click', target })
 process.stdout.write(JSON.stringify(results))
 `
@@ -443,8 +441,7 @@ func TestTheGenericErrorOverARefusedPlaybackIsClosed(t *testing.T) {
 		"a dialog that is not an alert":                 "- -",
 		"the second alert never opening":                "- closed late",
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const results = {}
 for (const name of scenarios) {
@@ -492,7 +489,7 @@ for (const name of scenarios) {
   const body = {}
   const document = { head: { appendChild: () => {} }, createElement: () => ({}), body: name.includes('after load') ? undefined : body }
   const location = { href: 'http://polyfin.test/web/#/details?id=x', hash: '#/details?id=x', replace: () => {} }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history: { pushState: () => {}, replaceState: () => {} }, URL, document, MutationObserver,
     Date: { now: () => now }, setTimeout: (run, delay) => timers.push({ at: now + delay, run }), clearTimeout: () => {},
     addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
@@ -810,8 +807,7 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// ends.
 		steps: append([]string{title}, ticks(91)...), want: append(ninety, "idle")}
 
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 const TITLE = '0123456789abcdef0123456789abcdef'
@@ -938,7 +934,7 @@ async function run(scenario) {
       return () => {}
     }
   }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, document, CustomEvent, Event, MutationObserver, window: { ApiClient },
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
@@ -1147,8 +1143,7 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 			want:  []string{ask, free, free, free}},
 	}
 
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 const TITLE = '0123456789abcdef0123456789abcdef'
@@ -1338,7 +1333,7 @@ async function run(scenario) {
       return Promise.resolve({ Id: id, MediaSources: [] })
     },
   }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, document, CustomEvent, MutationObserver, window: { ApiClient },
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
@@ -1561,8 +1556,7 @@ func TestHiddenLibrariesLeaveTheWebPlayerMenus(t *testing.T) {
 			want:  slices.Concat(nothing, []string{asks("u1")}, hidden("a", ""))},
 	}
 
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, key, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 const short = (id) => (id === id[0].repeat(32) ? id[0] : id)
@@ -1761,7 +1755,7 @@ async function run(scenario) {
     log.push(['other', ...ids.filter((id) => others(id).some((chain) => WIDTHS.some((width) => hides(chain, width)))).map(short)].join(' '))
     log.push(['button', ...WIDTHS.filter((width) => hides(more, width))].join(' '))
   }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, document, MutationObserver, window,
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
@@ -1925,8 +1919,7 @@ func TestMembersGetAPolyfinEntry(t *testing.T) {
 			steps: []string{"signin root", "answer alice", "draw", "show"}, want: []string{adminDrawer, adminSettings, adminMenu}},
 	}
 
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, key, dashboardIcon, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 async function run(scenario) {
@@ -2113,7 +2106,7 @@ async function run(scenario) {
   const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
   const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
   const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, document, MutationObserver, window: { ApiClient, localStorage },
     Date, setTimeout: () => 0, clearTimeout: () => {},
     addEventListener: () => {},
@@ -2246,8 +2239,7 @@ func TestTitlePagesShowTheirThreeScores(t *testing.T) {
 			answers: []map[string]any{all}, steps: []string{"video", title, "show", "end video", "show"}, want: []string{ask, plain, kept},
 		},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 const TITLE = '0123456789abcdef0123456789abcdef'
@@ -2362,7 +2354,7 @@ async function run(scenario) {
   }
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   class Event { constructor(type) { this.type = type } }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, document, CustomEvent, Event, MutationObserver, window: { ApiClient },
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
@@ -2477,8 +2469,7 @@ func TestItemMenusGetPolyfinsEntries(t *testing.T) {
 		"another click before the menu":                        "",
 		"a menu too late":                                      "",
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 ;(async () => {
@@ -2601,7 +2592,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
       setItem: (key, value) => { stored[key] = String(value) },
       removeItem: (key) => { delete stored[key] },
     }
-    vm.runInNewContext(script, {
+    runScript(script, {
       location, history, URL, document, MutationObserver, Promise, HTMLDivElement, WeakMap,
       window: { ApiClient, innerHeight: 800, innerWidth: narrow ? 393 : 1280, sessionStorage, localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } },
       Date: { now: () => now, parse: Date.parse }, setTimeout: (run) => run(), clearTimeout: () => {},
@@ -2633,7 +2624,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
         now = at
         class Div {}
         const again = Object.create(Div.prototype)
-        vm.runInNewContext(script, {
+        runScript(script, {
           location: { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} },
           history: { pushState: () => {}, replaceState: () => {}, back: () => {} }, URL, MutationObserver, Promise, HTMLDivElement: Div, WeakMap,
           document: { head: { appendChild: () => {} }, body: { appendChild: () => {} }, documentElement: { lang: 'en' }, createElement: element,
@@ -2792,8 +2783,7 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 			want: []string{ask, "Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]",
 				"Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]"}},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 async function run(scenario) {
@@ -2945,7 +2935,7 @@ async function run(scenario) {
   }
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   class Event { constructor(type) { this.type = type } }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, URLSearchParams, document, CustomEvent, Event, MutationObserver, window: { ApiClient, sessionStorage },
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
@@ -3087,8 +3077,7 @@ func TestTitlePagesOfferShare(t *testing.T) {
 			answers: []map[string]any{yes}, steps: []string{"video", title, "show", "end video", "show"}, want: []string{ask, plain, shared},
 		},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 const TITLE = '0123456789abcdef0123456789abcdef'
@@ -3203,7 +3192,7 @@ async function run(scenario) {
   const window = scenario.noClient ? {} : { ApiClient }
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   class Event { constructor(type) { this.type = type } }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, document, CustomEvent, Event, MutationObserver, window,
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),

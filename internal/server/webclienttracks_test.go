@@ -101,8 +101,7 @@ func TestTitlePagesRefreshTheirTrackMenusOnceAVersionIsAnalyzed(t *testing.T) {
 			want:  slices.Concat(opened, []string{"idle", bare})},
 	}
 
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 const TITLE = '0123456789abcdef0123456789abcdef'
@@ -270,7 +269,7 @@ async function run(scenario) {
     },
   }
   const raise = (type) => { for (const listener of listeners[type] || []) listener(new CustomEvent(type, { bubbles: true })) }
-  vm.runInNewContext(script, {
+  runScript(script, {
     location, history, URL, document, CustomEvent, Event, MutationObserver, window: { ApiClient },
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),

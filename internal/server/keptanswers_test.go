@@ -95,8 +95,7 @@ func TestAnotherUserDoesNotGetTheAnswersKeptForTheLast(t *testing.T) {
 			steps: []string{"kept"},
 			want:  []string{"replace http://polyfin.test/admin/users?from=web", "deleted jellyfin-query-cache", "kept s/viewer"}},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, key, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 async function run(scenario) {
@@ -156,7 +155,7 @@ async function run(scenario) {
   }
   if (!scenario.bare) context.indexedDB = indexedDB
   if (scenario.old) Object.assign(context, { WeakMap: undefined, WeakSet: undefined })
-  vm.runInNewContext(script, context)
+  runScript(script, context)
   // jellyfin-web, whose scripts run after this one, then listens to
   // language changes, which clear its query cache.
   if (!scenario.bare) document._callbacks = { LANGUAGE_CHANGE: [() => log.push('cache cleared')] }

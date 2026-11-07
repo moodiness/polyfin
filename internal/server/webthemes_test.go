@@ -48,7 +48,7 @@ func describedThemes(t *testing.T, h http.Handler, target string) pageThemes {
 	if len(tags) != 1 {
 		t.Fatalf("%s: %d descriptions of the themes in %s", target, len(tags), body)
 	}
-	if !strings.HasPrefix(body[tags[0][1]:], `<script src="polyfin.js"></script></head>`) {
+	if !strings.HasPrefix(body[tags[0][1]:], string(webScriptTag)+`</head>`) {
 		t.Errorf("%s: the themes are not described right before Polyfin's script: %s", target, body)
 	}
 	var themes pageThemes
@@ -304,8 +304,7 @@ func TestThePageShowsEachUsersTheme(t *testing.T) {
 			want: []string{"cookie lumaaglaass", `fetch /Branding/Configuration {"cache":"no-store","credentials":"same-origin"}`,
 				`fetch /Branding/Css.css?v=2 {"cache":"no-store","credentials":"same-origin"}`, `fetch /Users/Me {"cache":"no-store"}`}},
 	}
-	const harness = `
-const vm = require('node:vm')
+	const harness = scriptRunner + `
 const { script, page, cssOnlyPage, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 class Element {
@@ -415,7 +414,7 @@ async function run(scenario) {
         },
       }
     }
-    vm.runInNewContext(script, context)
+    runScript(script, context)
     document.readyState = 'complete'
     return { head, body, history, window }
   }

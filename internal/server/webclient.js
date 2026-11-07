@@ -22,6 +22,19 @@
 // and falls back where a later API (WeakMap, WeakSet, isConnected) is
 // missing.
 //
+// Five parts follow the whole page as jellyfin-web renders it, through one
+// observer of the body that serves them all, rather than one each: it
+// gathers the page's changes until the browser next draws the page, then
+// tells them once, as a "polyfinpagechange" event on the document.
+// jellyfin-web changes the page many times as it renders a route; each
+// part then looks at the page once a frame, before it is drawn, and only
+// while it listens: the menus' entry (the eighth) and the home page's rows
+// (the eleventh) always, the play buttons (the third) on a title's page
+// until the first answer, the reminders (the thirteenth) on a title's
+// page, which may be a programme's, and the recent searches (the
+// fifteenth) on the search page. The other parts that follow the page
+// watch less of it: a title's page, a menu, or the body's own children.
+//
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
 // watches the route only, never the page, so that a new jellyfin-web keeps
@@ -189,10 +202,10 @@
 // script asks jellyfin-web's client (ApiClient.getCurrentUser) whether the
 // user is an administrator whenever the user signed in changes, as for the
 // seventh, and keeps the last member in the browser's storage, so that the
-// entry shows as soon as jellyfin-web draws a menu. A MutationObserver on
-// the page puts it back as jellyfin-web draws its menus anew. It never shows
-// where Dashboard shows, nor before sign-in, and goes as soon as the user
-// signed in is another, signing out included. Any error just stops it.
+// entry shows as soon as jellyfin-web draws a menu. The page's changes put
+// it back as jellyfin-web draws its menus anew. It never shows where
+// Dashboard shows, nor before sign-in, and goes as soon as the user signed
+// in is another, signing out included. Any error just stops it.
 //
 // Ninth, on a title's page, it shows the title's three scores in the first
 // line of its details (.itemMiscInfo-primary): its IMDb rating, its
@@ -295,8 +308,8 @@
 // (#/list?parentId= the row's Id), each card a poster with the title's
 // played mark, or count of unplayed episodes, and progress, opening the
 // title's page. When jellyfin-web draws the home page anew, which empties
-// it, a MutationObserver on the page puts the rows back from the last
-// answer. Every time it draws them, it leaves out the titles the item
+// it, the page's changes put the rows back from the last answer. Every
+// time it draws them, it leaves out the titles the item
 // menus hid meanwhile, as the tenth keeps them in the session storage for
 // the user signed in (a series taking its items with it), and a row left
 // without a title. Nothing else changes, nor anything while the answer is awaited.
@@ -337,7 +350,7 @@
 // posts to /Polyfin/Reminders to set one, with the page's language, which
 // the message is written in, and deletes /Polyfin/Reminders/{id} to remove
 // one. It asks once jellyfin-web has drawn the page's recording fields,
-// and a MutationObserver puts the buttons back as jellyfin-web renders the
+// and the page's changes put the buttons back as jellyfin-web renders the
 // page anew. Its words follow jellyfin-web's language, as the third's. It
 // never changes the page during a video, and takes the buttons off as the
 // route leaves the programme. Any error just stops it.
@@ -536,6 +549,31 @@
 // change; a video that cannot be boosted now is from the next one, which a
 // toast says. Its words follow jellyfin-web's language, as the third's.
 // Without Web Audio it does nothing, and any error just stops it.
+
+// The page's changes, told to the parts that follow the whole page (see
+// the header's start).
+;(function () {
+  if (typeof MutationObserver !== 'function') return
+  // Whether the page changed since the parts were last told.
+  var due = false
+  function tell() {
+    due = false
+    document.dispatchEvent(new Event('polyfinpagechange'))
+  }
+  // A browser without requestAnimationFrame tells at once.
+  function changed() {
+    if (due) return
+    if (typeof requestAnimationFrame !== 'function') return tell()
+    due = true
+    requestAnimationFrame(tell)
+  }
+  // The script runs in the page's head, before the body exists.
+  function watch() {
+    new MutationObserver(changed).observe(document.body, { childList: true, subtree: true })
+  }
+  if (document.body) watch()
+  else addEventListener('DOMContentLoaded', watch)
+})()
 ;(function () {
   var themes = null
   try {
@@ -1254,8 +1292,7 @@
   // take brings the page to an answer.
   function take(progress) {
     latest = progress
-    if (early) early.disconnect()
-    early = null
+    followEarly(false)
     hold()
     update(progress)
     dueTracks()
@@ -1342,15 +1379,16 @@
   }
   // The play buttons held, each with what the script changed as it was
   // before and the tooltip it gave; the line telling that no source is
-  // available; the page watched for jellyfin-web's renders, and the document
-  // until the first answer; whether the latest answer may have come before
-  // the title's details asked any addon; and when the title's addons may be
-  // asked again.
+  // available; the page watched for jellyfin-web's renders, and whether the
+  // page's changes are followed until the first answer (see the header's
+  // start); whether the latest answer may have come before the title's
+  // details asked any addon; and when the title's addons may be asked
+  // again.
   var held = []
   var note = null
   var watched = null
   var watcher = null
-  var early = null
+  var early = false
   var unsure = false
   var againAt = 0
   var againTimer = null
@@ -1516,6 +1554,14 @@
     var changes = { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'disabled', 'class'] }
     watcher.observe(page, changes)
   }
+  // followEarly follows the page's changes, or stops, so that the page is
+  // found as jellyfin-web renders it until the first answer.
+  function followEarly(on) {
+    if (on === early) return
+    early = on
+    if (on) document.addEventListener('polyfinpagechange', hold)
+    else document.removeEventListener('polyfinpagechange', hold)
+  }
   // style adds the look of the buttons held and of the line, once.
   function style() {
     if (document.getElementById('polyfinStyle')) return
@@ -1548,8 +1594,7 @@
     if (watcher) watcher.disconnect()
     watcher = null
     watched = null
-    if (early) early.disconnect()
-    early = null
+    followEarly(false)
     unsure = true
     clearTimeout(againTimer)
     againTimer = null
@@ -1566,10 +1611,7 @@
     if (!id) return
     // Until the first answer, the page is looked for as jellyfin-web renders
     // it, in case it lists only the placeholder.
-    if (document.body) {
-      early = new MutationObserver(hold)
-      early.observe(document.body, { childList: true, subtree: true })
-    }
+    followEarly(true)
     hold()
     poll(id, 0)
   }
@@ -2121,12 +2163,6 @@
     var ripple = item.querySelector('.MuiTouchRipple-root')
     if (ripple) ripple.textContent = ''
     return item
-  }
-  // jellyfin-web draws its menus anew, which the script, loaded in the
-  // head, follows once the body exists.
-  function watchMenus() {
-    if (typeof MutationObserver !== 'function' || !document.body) return
-    new MutationObserver(placeEntries).observe(document.body, { childList: true, subtree: true })
   }
   // The link pressed or clicked, if it opens a collection library on
   // Suggestions, without the tab: the library opens on its chosen screen.
@@ -2856,13 +2892,11 @@
   // Both run before jellyfin-web opens its item menu.
   addEventListener('click', quietly(aim), true)
   addEventListener('contextmenu', quietly(aim), true)
-  if (document.body) {
-    watchDialogs()
-    watchMenus()
-  } else {
-    addEventListener('DOMContentLoaded', watchDialogs)
-    addEventListener('DOMContentLoaded', watchMenus)
-  }
+  // jellyfin-web draws its menus anew, which the page's changes tell (see
+  // the header's start).
+  document.addEventListener('polyfinpagechange', placeEntries)
+  if (document.body) watchDialogs()
+  else addEventListener('DOMContentLoaded', watchDialogs)
   follow()
 })()
 ;(function () {
@@ -3163,14 +3197,15 @@
       ]
     )
   }
-  // watch checks the page as jellyfin-web changes it, the route included.
+  // watch checks the page as jellyfin-web changes it (see the header's
+  // start), the route included.
   function watch() {
     function checked() {
       try {
         check()
       } catch (error) {}
     }
-    new MutationObserver(checked).observe(document.body, { childList: true, subtree: true })
+    document.addEventListener('polyfinpagechange', checked)
     addEventListener('hashchange', checked)
     addEventListener('popstate', checked)
     checked()
@@ -3265,15 +3300,16 @@
   }
   // The programme whose page is followed, how it stands as Polyfin last
   // answered, whether it was asked, whether a change is under way, the
-  // buttons drawn and the answer they were drawn for, and the observer of
-  // the document while the page is followed.
+  // buttons drawn and the answer they were drawn for, and whether the
+  // page's changes are followed, as they are while the page is (see the
+  // header's start).
   var program = ''
   var state = null
   var asked = false
   var busy = false
   var drawn = null
   var drawnFor = null
-  var watcher = null
+  var watching = false
   function quietly(listener) {
     return function () {
       try {
@@ -3298,25 +3334,27 @@
     busy = false
     undraw()
     if (!id) {
-      if (watcher) watcher.disconnect()
-      watcher = null
+      if (watching) document.removeEventListener('polyfinpagechange', placed)
+      watching = false
       return
     }
     // The script runs in the page's head: a page opened on a programme's
-    // address has no body yet, which the observer waits for.
+    // address has no body yet, which watch waits for.
     if (document.body) watch()
     else addEventListener('DOMContentLoaded', quietly(watch))
   }
-  // watch observes the document while a programme's page is followed, and
-  // looks at the page.
+  // watch follows the page's changes while a programme's page is followed,
+  // and looks at the page.
   function watch() {
     if (!program || !document.body) return
-    if (!watcher) {
-      watcher = new MutationObserver(quietly(place))
-      watcher.observe(document.body, { childList: true, subtree: true })
+    if (!watching) {
+      watching = true
+      document.addEventListener('polyfinpagechange', placed)
     }
     place()
   }
+  // place as it listens to the page's changes.
+  var placed = quietly(place)
   // undraw takes the buttons off.
   function undraw() {
     if (drawn && drawn.parentNode) drawn.parentNode.removeChild(drawn)
@@ -3696,14 +3734,15 @@
   // page; the search shown with results, with the user it is for, as
   // { user, query }; the first card of the results and the line that
   // nothing was found when last looked at; the list drawn and what it was
-  // drawn for; and the observer of the document while the page is followed.
+  // drawn for; and whether the page's changes are followed, as they are
+  // while the page is (see the header's start).
   var typed = null
   var shown = null
   var shownCard = null
   var shownNothing = null
   var drawn = null
   var drawnFor = ''
-  var watcher = null
+  var watching = false
   // user is the user signed in, as server/user; "" when none.
   function user() {
     var api = window.ApiClient
@@ -3827,28 +3866,30 @@
     }
     typed = query
     if (query === null) {
-      if (watcher) watcher.disconnect()
-      watcher = null
+      if (watching) document.removeEventListener('polyfinpagechange', looked)
+      watching = false
       shownCard = null
       shownNothing = null
       undraw()
       return
     }
     // The script runs in the page's head: a page opened on the search
-    // page's address has no body yet, which the observer waits for.
+    // page's address has no body yet, which watch waits for.
     if (document.body) watch()
     else addEventListener('DOMContentLoaded', quietly(watch))
   }
-  // watch observes the document while the search page is followed, and
-  // looks at the page.
+  // watch follows the page's changes while the search page is followed,
+  // and looks at the page.
   function watch() {
     if (typed === null || !document.body) return
-    if (!watcher) {
-      watcher = new MutationObserver(quietly(look))
-      watcher.observe(document.body, { childList: true, subtree: true })
+    if (!watching) {
+      watching = true
+      document.addEventListener('polyfinpagechange', looked)
     }
     look()
   }
+  // look as it listens to the page's changes.
+  var looked = quietly(look)
   function searchPage() {
     var page = document.getElementById('searchPage')
     return page && !page.classList.contains('hide') ? page : null
