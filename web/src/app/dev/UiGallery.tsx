@@ -571,18 +571,23 @@ export default function UiGallery() {
         >
           <DockSlotContext value={dock}>
             <div className="flex flex-col self-stretch max-md:contents">
-              <SectionNav
-                label="Settings sections"
-                search={{ value: search, onChange: setSearch, placeholder: 'Search a setting' }}
-                items={settingsSections.slice(0, 6).map((section) => ({
-                  id: section.id,
-                  label: t.nav.settingsSections[section.key],
-                  icon: section.icon,
-                  to: `#${section.id}`,
-                }))}
-                current="conversion"
+              <div className="flex-1 max-md:contents">
+                <SectionNav
+                  label="Settings sections"
+                  search={{ value: search, onChange: setSearch, placeholder: 'Search a setting' }}
+                  items={settingsSections.slice(0, 6).map((section) => ({
+                    id: section.id,
+                    label: t.nav.settingsSections[section.key],
+                    icon: section.icon,
+                    to: `#${section.id}`,
+                  }))}
+                  current="conversion"
+                />
+              </div>
+              <div
+                ref={setDock}
+                className="pointer-events-none sticky bottom-7 pt-10 max-md:hidden"
               />
-              <div ref={setDock} className="sticky bottom-7 mt-auto pt-10 max-md:hidden" />
             </div>
             <div className="min-w-0">
               <h3 className="mb-4 text-group">General</h3>

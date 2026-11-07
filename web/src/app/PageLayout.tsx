@@ -102,10 +102,16 @@ export function PageLayout({
             {header}
             <div className="grid items-start gap-[4.5rem] md:grid-cols-[18.75rem_minmax(0,1fr)] max-xl:gap-12 max-lg:md:grid-cols-[14.5rem_minmax(0,1fr)] max-lg:gap-8 max-md:block">
               {/* As tall as the content beside it: the list stays in view while scrolling, and
-                  the dock sits at the foot of the column, over the bottom of the screen. */}
+                  the dock sits at the foot of the column, over the bottom of the screen. The list
+                  sticks inside its own part, which ends above the dock's place, so at the end of
+                  the page it rises clear of the dock. The place takes no clicks, the dock only
+                  while it shows, and without a dock (a page with no SaveBar) it takes no room. */}
               <div className="flex flex-col self-stretch max-md:contents">
-                {nav}
-                <div ref={setDock} className="sticky bottom-7 mt-auto max-md:hidden" />
+                <div className="flex-1 max-md:contents">{nav}</div>
+                <div
+                  ref={setDock}
+                  className="pointer-events-none sticky bottom-7 mt-6 empty:hidden max-md:hidden"
+                />
               </div>
               {/* A band has no space under it for the strip of a phone: the content keeps 24 px. */}
               <div className={cx('min-w-0', blockSpacing, head !== undefined && 'max-md:mt-6')}>

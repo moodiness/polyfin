@@ -91,7 +91,10 @@ export function SaveBar({
       inert={!shown}
       className={cx(
         'z-30 rounded-panel raised transition-[translate,opacity] duration-500 ease-nuit motion-reduce:transition-none',
-        shown ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-8 opacity-0',
+        // The slot of a split page takes no clicks: the shown dock takes its own.
+        shown
+          ? 'pointer-events-auto translate-y-0 opacity-100'
+          : 'pointer-events-none translate-y-8 opacity-0',
         // A bar along the bottom of a phone.
         'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-[1.5rem] max-md:py-2 max-md:pr-2 max-md:pl-4',
         // A card under the section list, or at the end of the form, where a hidden card leaves
