@@ -1001,7 +1001,6 @@ function NarrowRows({
       <SettingRow
         anchor={maxItemsId}
         kind="number"
-        picker="well"
         label={text.maxItems}
         help={
           scope === 'shared'

@@ -329,7 +329,6 @@ function Editor({
             min={1}
             max={9999}
             step={1}
-            picker="well"
             onChange={(number) => change({ number })}
             saved={was ? was.number : undefined}
             error={numberError}

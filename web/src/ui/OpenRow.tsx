@@ -10,11 +10,11 @@ import {
 } from 'react'
 import { cx } from './cx'
 import { describedBy, FieldError } from './Field'
+import { SettingHelp } from './SettingRow'
 
 /**
- * A row that opens something other than a SettingRow's picker: the
- * label on the left, the value and a chevron on the right, the help shown while the row is lit
- * (always in `aria-describedby`), as a SettingRow draws them.
+ * A row for what no SettingRow kind edits in place: the label on the left with its help as a
+ * muted caption under it, the value and a chevron on the right, as a SettingRow draws them.
  * - With `children`, Enter, Space or a click opens them inside the row (a date with its buttons, a
  *   list to choose from); Escape closes them and returns to the row.
  * - With `onClick`, the row is a button for an action shown elsewhere (a dialog).
@@ -35,7 +35,7 @@ export function OpenRow({
   label: string
   /** What is set now, on the right. */
   value?: ReactNode
-  /** What the row does: shown only while it is lit, always read by screen readers. */
+  /** What the row does: always shown, as a caption under the label. */
   help?: ReactNode
   /** An error under the row. */
   error?: ReactNode
@@ -124,21 +124,18 @@ export function OpenRow({
         aria-describedby={describedBy(helpId, errorId)}
         onClick={() => (onClick ? onClick() : setOpen(!open))}
         className={cx(
-          'flex w-full cursor-pointer items-center gap-4 rounded-row py-3.5 pr-[1.375rem] pl-[1.875rem] text-left focus-visible:outline-none disabled:cursor-not-allowed',
-          'min-h-[5.125rem] max-md:min-h-[4.25rem] max-md:gap-2.5 max-md:py-3 max-md:pr-3.5 max-md:pl-5',
+          'flex w-full cursor-pointer items-center gap-4 rounded-row pr-3 pl-4 text-left focus-visible:outline-none disabled:cursor-not-allowed',
+          help === undefined ? 'min-h-[3.375rem] py-2' : 'min-h-11 pt-2 pb-0.5',
         )}
       >
-        <span id={labelId} className="min-w-0 flex-1 text-h3 text-ink">
+        <span id={labelId} className="min-w-0 flex-1 text-h3 hyphenate text-ink">
           {label}
         </span>
-        <span
-          id={valueId}
-          className="min-w-0 text-right text-lead break-words text-ink-2 max-md:text-[1.0625rem]"
-        >
+        <span id={valueId} className="min-w-0 text-right text-control break-words text-ink-2">
           {value}
         </span>
         <CaretRightIcon
-          size="1.5rem"
+          size="1.125rem"
           aria-hidden="true"
           className={cx(
             'shrink-0 text-ink-3 transition-transform duration-500 ease-nuit',
@@ -146,35 +143,20 @@ export function OpenRow({
           )}
         />
       </button>
+      {help !== undefined && (
+        <div className="pr-12 pb-2.5 pl-4">
+          <SettingHelp id={helpId}>{help}</SettingHelp>
+        </div>
+      )}
       {error && (
-        <div className="px-[1.875rem] pb-5 max-md:px-5 max-md:pb-4">
+        <div className="px-4 pb-3">
           <FieldError id={errorId}>{error}</FieldError>
         </div>
       )}
-      {note !== undefined && (
-        <div className="px-[1.875rem] pb-5 text-small text-ink-2 max-md:px-5 max-md:pb-4">
-          {note}
-        </div>
-      )}
-      {(help !== undefined || open) && (
-        <div
-          className={
-            lit ? 'px-[1.875rem] pb-[1.875rem] max-md:px-5 max-md:pb-[1.375rem]' : 'sr-only'
-          }
-        >
-          {help !== undefined && (
-            <p
-              id={helpId}
-              className="max-w-[66ch] text-[1.09375rem] leading-[1.58] text-ink-2 max-md:text-[1rem]"
-            >
-              {help}
-            </p>
-          )}
-          {open && (
-            <div ref={panel} id={panelId} className={cx(help !== undefined && 'mt-6 max-md:mt-4')}>
-              {children}
-            </div>
-          )}
+      {note !== undefined && <div className="px-4 pb-3 text-small text-ink-2">{note}</div>}
+      {open && (
+        <div ref={panel} id={panelId} className="px-4 pb-4">
+          {children}
         </div>
       )}
     </div>

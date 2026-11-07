@@ -411,7 +411,6 @@ function Editor({
           <SettingRow
             anchor={maxId}
             kind="number"
-            picker="well"
             label={t.smartLists.maxItems}
             help={t.smartLists.maxHelp(max)}
             error={
