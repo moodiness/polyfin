@@ -436,24 +436,23 @@ type jellyfinUserImportJSON struct {
 	Read         int    `json:"read"`
 	// Sections, Listed and History tell what was read of a Plex server,
 	// null for the other kinds.
-	Sections       *int                    `json:"sections"`
-	Listed         *int                    `json:"listed"`
-	History        *int                    `json:"history"`
-	Matched        int                     `json:"matched"`
-	Played         int                     `json:"played"`
-	Resumed        int                     `json:"resumed"`
-	Favorites      int                     `json:"favorites"`
-	Ratings        int                     `json:"ratings"`
-	Watchlist      int                     `json:"watchlist"`
-	Collections    int                     `json:"collections"`
-	Playlists      int                     `json:"playlists"`
-	ListTitles     int                     `json:"listTitles"`
-	UpToDate       int                     `json:"upToDate"`
-	Undated        int                     `json:"undated"`
-	UnmatchedCount int                     `json:"unmatchedCount"`
-	Unmatched      []jellyfinUnmatchedJSON `json:"unmatched"`
-	Problem        *string                 `json:"problem"`
-	NothingAdded   *string                 `json:"nothingAdded"`
+	Sections       *int    `json:"sections"`
+	Listed         *int    `json:"listed"`
+	History        *int    `json:"history"`
+	Matched        int     `json:"matched"`
+	Played         int     `json:"played"`
+	Resumed        int     `json:"resumed"`
+	Favorites      int     `json:"favorites"`
+	Ratings        int     `json:"ratings"`
+	Watchlist      int     `json:"watchlist"`
+	Collections    int     `json:"collections"`
+	Playlists      int     `json:"playlists"`
+	ListTitles     int     `json:"listTitles"`
+	UpToDate       int     `json:"upToDate"`
+	Undated        int     `json:"undated"`
+	UnmatchedCount int     `json:"unmatchedCount"`
+	Problem        *string `json:"problem"`
+	NothingAdded   *string `json:"nothingAdded"`
 	// Skipped are the collections and playlists no title of matched,
 	// which were not created.
 	Skipped []jellyfinSkippedJSON `json:"skipped"`
@@ -464,17 +463,6 @@ type jellyfinUserImportJSON struct {
 type jellyfinSkippedJSON struct {
 	Kind string `json:"kind"`
 	Name string `json:"name"`
-}
-
-// jellyfinUnmatchedJSON is a title no Polyfin title matched.
-type jellyfinUnmatchedJSON struct {
-	Name    string  `json:"name"`
-	Type    string  `json:"type"`
-	Year    *int    `json:"year"`
-	Series  *string `json:"series"`
-	Season  *int    `json:"season"`
-	Episode *int    `json:"episode"`
-	Reason  string  `json:"reason"`
 }
 
 func newJellyfinImportJSON(status *jellyfinimport.Status) *jellyfinImportJSON {
@@ -492,21 +480,13 @@ func newJellyfinImportJSON(status *jellyfinimport.Status) *jellyfinImportJSON {
 		user := jellyfinUserImportJSON{JellyfinID: u.JellyfinID, JellyfinName: u.JellyfinName, UserID: u.User.String(), UserName: u.UserName,
 			State: u.State, Read: u.Read, Matched: u.Matched, Played: u.Played, Resumed: u.Resumed, Favorites: u.Favorites,
 			Ratings: u.Ratings, Watchlist: u.Watchlist, Collections: u.Collections, Playlists: u.Playlists, ListTitles: u.ListTitles,
-			UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount, Unmatched: make([]jellyfinUnmatchedJSON, 0, len(u.Unmatched)),
+			UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount,
 			Problem: optional(u.Problem), NothingAdded: optional(u.NothingAdded), Skipped: make([]jellyfinSkippedJSON, 0, len(u.Skipped))}
 		for _, list := range u.Skipped {
 			user.Skipped = append(user.Skipped, jellyfinSkippedJSON{Kind: list.Kind, Name: list.Name})
 		}
 		if status.Kind == jellyfinimport.Plex {
 			user.Sections, user.Listed, user.History = &u.Sections, &u.Listed, &u.History
-		}
-		for _, title := range u.Unmatched {
-			entry := jellyfinUnmatchedJSON{Name: title.Name, Type: title.Kind, Series: optional(title.Series), Season: title.Season,
-				Episode: title.Episode, Reason: title.Reason}
-			if title.Year > 0 {
-				entry.Year = &title.Year
-			}
-			user.Unmatched = append(user.Unmatched, entry)
 		}
 		result.Users = append(result.Users, user)
 	}

@@ -141,12 +141,9 @@ func TestJellyfinRatingsCollectionsAndPlaylistsComeOnce(t *testing.T) {
 		!slices.Equal(gotAlice.Skipped, []SkippedList{{Kind: ListCollection, Name: "Home videos"}}) || gotAlice.NothingAdded != "" {
 		t.Errorf("alice: %+v", gotAlice)
 	}
-	reasons := map[string]string{}
-	for _, u := range gotAlice.Unmatched {
-		reasons[u.Name] = u.Reason
-	}
-	if reasons["Lost"] != ReasonNotFound || reasons["Holiday"] != ReasonNoIdentifier || reasons["A song"] != "" {
-		t.Errorf("alice's unmatched: %+v", gotAlice.Unmatched)
+	if reasons := h.keptReasons(t, alice.ID, Jellyfin); reasons["Lost"] != ReasonNotFound || reasons["Holiday"] != ReasonNoIdentifier ||
+		reasons["A song"] != "" {
+		t.Errorf("alice's kept: %+v", reasons)
 	}
 	// Bob sees the collection Alice's import created, and gets his own
 	// copy of the playlist he sees.
@@ -343,8 +340,8 @@ func TestPlexCollectionsAndPlaylistsComeOnce(t *testing.T) {
 		!slices.Equal(gotOwner.Skipped, []SkippedList{{Kind: ListCollection, Name: "Gone"}}) {
 		t.Errorf("owner: %+v", gotOwner)
 	}
-	if len(gotOwner.Unmatched) != 1 || gotOwner.Unmatched[0].Name != "Deleted" || gotOwner.Unmatched[0].Reason != ReasonNotInLibrary {
-		t.Errorf("owner's unmatched: %+v", gotOwner.Unmatched)
+	if reasons := h.keptReasons(t, owner.ID, Plex); len(reasons) != 1 || reasons["Deleted"] != ReasonNotInLibrary {
+		t.Errorf("owner's kept: %+v", reasons)
 	}
 	if gotCarol.Collections != 0 || gotCarol.Playlists != 0 || len(gotCarol.Skipped) != 0 {
 		t.Errorf("Carol: %+v", gotCarol)

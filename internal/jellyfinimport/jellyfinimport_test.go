@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/collections"
+	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -307,6 +308,7 @@ type harness struct {
 	store *accounts.Store
 	lib   *library.Service
 	data  *userdata.Store
+	links *importlinks.Store
 	f     *fakeJellyfin
 }
 
@@ -323,11 +325,38 @@ func newHarness(t *testing.T) harness {
 	client := stremio.NewClient("test")
 	lib := library.New(pool, addons.New(pool, client), client, logger, store.Settings)
 	data := userdata.New(pool)
-	s := New(Options{Settings: store.Settings, Titles: lib, UserData: data, Version: "1.2.3", Logger: logger,
+	links := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: lib, UserData: data, Logger: logger})
+	s := New(Options{Settings: store.Settings, Titles: lib, UserData: data, Links: links, Version: "1.2.3", Logger: logger,
 		Collections: collections.New(pool), Playlists: playlists.New(pool)})
 	s.timing.gap, s.timing.retryFirst, s.timing.pageSize = 0, time.Millisecond, 2
 	t.Cleanup(s.Close)
-	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, f: newFakeJellyfin(t)}
+	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, links: links, f: newFakeJellyfin(t)}
+}
+
+// kept lists what user's list of kind keeps of the titles imports did not
+// find.
+func (h harness) kept(t *testing.T, user accounts.ID, kind Kind) []importlinks.Row {
+	t.Helper()
+	rows, err := h.links.List(t.Context(), user, string(kind))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}
+
+// keptReasons are the reasons of what user's list of kind keeps, by name,
+// an episode's as its series' with its numbers, "Series s1e2".
+func (h harness) keptReasons(t *testing.T, user accounts.ID, kind Kind) map[string]string {
+	t.Helper()
+	reasons := map[string]string{}
+	for _, row := range h.kept(t, user, kind) {
+		name := row.Name
+		if row.Kind == importlinks.KindEpisode {
+			name = fmt.Sprintf("%s s%de%d", name, row.Season, row.Episode)
+		}
+		reasons[name] = row.Reason
+	}
+	return reasons
 }
 
 func (h harness) user(t *testing.T, name string) accounts.User {
@@ -539,13 +568,11 @@ func TestWatchDataIsMatchedAndOnlyAddedTo(t *testing.T) {
 	if got.State != UserDone || got.Read != 14 || got.Played != 5 || got.Resumed != 2 || got.Favorites != 3 || got.UnmatchedCount != 3 {
 		t.Errorf("counts: %+v", got)
 	}
-	reasons := map[string]string{}
-	for _, u := range got.Unmatched {
-		reasons[u.Name] = u.Reason
-	}
-	if len(reasons) != 3 || reasons["Holiday"] != ReasonNoIdentifier || reasons["Unknown"] != ReasonNotFound ||
-		reasons["Episode e4"] != ReasonNoIdentifier {
-		t.Errorf("unmatched: %+v", got.Unmatched)
+	// The episode not numbered is counted, but not kept: no link could
+	// place it.
+	if reasons := h.keptReasons(t, alice.ID, Jellyfin); len(reasons) != 2 || reasons["Holiday"] != ReasonNoIdentifier ||
+		reasons["Unknown"] != ReasonNotFound {
+		t.Errorf("kept: %+v", reasons)
 	}
 
 	check := func(name string, ref library.TitleRef, want func(userdata.Data) bool) {
@@ -1280,9 +1307,11 @@ func TestPlexImportsTheOwnersAndEachAccountsWatchData(t *testing.T) {
 	}
 	// The owner: two movies and an episode played (the home video is not
 	// found), a movie and an episode resumed.
-	if got := status.Users[0]; got.Played != 2 || got.Resumed != 2 || got.UnmatchedCount != 1 || got.Unmatched[0].Name != "Holiday" ||
-		got.Unmatched[0].Reason != ReasonNoIdentifier {
+	if got := status.Users[0]; got.Played != 2 || got.Resumed != 2 || got.UnmatchedCount != 1 {
 		t.Errorf("owner: %+v", got)
+	}
+	if reasons := h.keptReasons(t, owner.ID, Plex); len(reasons) != 1 || reasons["Holiday"] != ReasonNoIdentifier {
+		t.Errorf("owner's kept: %+v", reasons)
 	}
 	if got := status.Users[1]; got.Played != 2 || got.Resumed != 0 || got.UnmatchedCount != 0 {
 		t.Errorf("Carol: %+v", got)
@@ -1473,13 +1502,20 @@ func TestPlexPlaysOfDeletedTitlesAreListedAndOtherAccountsLeftOut(t *testing.T) 
 		{"historyKey": "/status/sessions/history/1", "ratingKey": "12", "type": "movie", "title": "Two", "viewedAt": viewed, "accountID": 7},
 	}
 	got := h.plexImported(t, p, "5", carol)
-	if got.Played != 1 || got.History != 5 || got.UnmatchedCount != 2 || len(got.Unmatched) != 2 {
+	if got.Played != 1 || got.History != 5 || got.UnmatchedCount != 2 {
 		t.Fatalf("Carol: %+v", got)
 	}
-	movie, episode := got.Unmatched[0], got.Unmatched[1]
-	if movie.Name != "Deleted" || movie.Kind != "movie" || movie.Reason != ReasonNotInLibrary ||
-		episode.Name != "Gone episode" || episode.Series != "Gone show" || *episode.Season != 2 || *episode.Episode != 3 || episode.Reason != ReasonNotInLibrary {
-		t.Errorf("unmatched: %+v %+v", movie, episode)
+	// A deleted title, which Plex gives no identifier, is kept by its
+	// name, an episode by its series'.
+	kept := h.kept(t, carol.ID, Plex)
+	if len(kept) != 2 {
+		t.Fatalf("kept: %+v", kept)
+	}
+	movie, episode := kept[0], kept[1]
+	if movie.Name != "Deleted" || movie.Kind != importlinks.KindMovie || movie.Reason != ReasonNotInLibrary || !movie.Played ||
+		episode.Name != "Gone show" || episode.Kind != importlinks.KindEpisode || episode.Season != 2 || episode.Episode != 3 ||
+		episode.Reason != ReasonNotInLibrary || !episode.Played {
+		t.Errorf("kept: %+v %+v", movie, episode)
 	}
 	if d := h.dataOf(t, carol.ID, library.TitleRef{IMDb: "tt0000012"}); d.Played {
 		t.Errorf("another account's play: %+v", d)
@@ -1527,9 +1563,9 @@ func TestPlexReadsTheIdentifiersOfOlderAgents(t *testing.T) {
 	if got.Played != 4 || got.UnmatchedCount != 2 {
 		t.Fatalf("owner: %+v", got)
 	}
-	if stray, other := got.Unmatched[0], got.Unmatched[1]; stray.Name != "Stray" || stray.Reason != ReasonNoIdentifier ||
-		other.Name != "Third" || other.Reason != ReasonOtherEpisodeOrder {
-		t.Errorf("unmatched: %+v", got.Unmatched)
+	if reasons := h.keptReasons(t, owner.ID, Plex); len(reasons) != 2 || reasons["Stray"] != ReasonNoIdentifier ||
+		reasons["Other order s1e3"] != ReasonOtherEpisodeOrder {
+		t.Errorf("kept: %+v", reasons)
 	}
 	for name, ref := range map[string]library.TitleRef{"by IMDb": {IMDb: "tt0000011"}, "by TMDB": {TMDB: 550},
 		"usual order": {Episode: true, TVDB: 81189, Season: 1, Number: 1}, "packed": {Episode: true, TVDB: 81189, Season: 1, Number: 2}} {

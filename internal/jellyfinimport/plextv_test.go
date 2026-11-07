@@ -275,9 +275,14 @@ func TestAUserSignedInToPlexImportsTheirOwnWatchData(t *testing.T) {
 	status := h.ended(t)
 	got := status.Users[0]
 	if status.State != StateDone || got.JellyfinName != "Friend" || got.Played != 2 || got.Resumed != 1 || got.Ratings != 1 ||
-		got.Watchlist != 2 || got.UnmatchedCount != 1 || got.Unmatched[0].Name != "Unknown" || got.Unmatched[0].Reason != ReasonNoIdentifier ||
-		got.NothingAdded != "" {
+		got.Watchlist != 2 || got.UnmatchedCount != 1 || got.NothingAdded != "" {
 		t.Fatalf("import: %+v", status)
+	}
+	// The title of the Watchlist not found is kept with the Watchlist it
+	// would go on.
+	if kept := h.kept(t, friend.ID, Plex); len(kept) != 1 || kept[0].Name != "Unknown" || kept[0].Reason != ReasonNoIdentifier ||
+		kept[0].Watchlist != watchlist.Import {
+		t.Errorf("kept: %+v", kept)
 	}
 	check := func(name string, ref library.TitleRef, want func(d userDataView) bool) {
 		t.Helper()
