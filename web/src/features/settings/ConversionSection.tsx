@@ -198,7 +198,12 @@ export default function ConversionSection(api: SectionFormApi) {
           <h4 className="text-h3 text-ink max-md:text-[1.125rem]">{c.detected}</h4>
           <dl className="mt-3.5 grid gap-1.5 text-small">
             {gpu === null ? (
-              <div className="rounded-row bg-s2 px-4 py-3 text-ink-2">{c.noGpu}</div>
+              // A term and its value, as a list of details holds: the term left to screen
+              // readers, the sentence says it.
+              <div className="rounded-row bg-s2 px-4 py-3 text-ink-2">
+                <dt className="sr-only">{c.gpu}</dt>
+                <dd>{c.noGpu}</dd>
+              </div>
             ) : (
               <>
                 <Detail term={c.gpu}>

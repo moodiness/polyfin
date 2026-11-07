@@ -246,9 +246,10 @@ function Addons({ health, sources }: { health: Health; sources: Sources | undefi
                   <SmallFact label={text.responseTime}>
                     {addon.requests > 0 && addon.lastSuccessAt ? `${addon.responseTime} ms` : '–'}
                   </SmallFact>
-                  <p className="self-end text-ink-3">
-                    {text.requests(addon.requests, addon.failures)}
-                  </p>
+                  <div className="self-end">
+                    <dt className="sr-only">{text.requestsTerm}</dt>
+                    <dd className="text-ink-3">{text.requests(addon.requests, addon.failures)}</dd>
+                  </div>
                 </dl>
               </Row>
             )

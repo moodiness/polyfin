@@ -328,6 +328,7 @@ const system: typeof en = {
       lastSuccess: 'Letzte Antwort',
       lastFailure: 'Letzter Fehler',
       responseTime: 'Antwortzeit',
+      requestsTerm: 'Anfragen',
       requests: (count: number, failures: number) =>
         `${count} ${count === 1 ? 'Anfrage' : 'Anfragen'}, ${failures} fehlgeschlagen`,
       check: 'Prüfen',
