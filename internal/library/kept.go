@@ -389,6 +389,9 @@ func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetche
 	return kept, true
 }
 
+// storePage keeps a page in the database. A page the addon gave again
+// unchanged keeps its stored metas, which the update then neither copies
+// nor rewrites: only fetched_at moves.
 func (s *Service) storePage(ctx context.Context, src source, key pageKey, kept fetched[[]stremio.Meta]) error {
 	metas := kept.value
 	if metas == nil {
@@ -401,7 +404,8 @@ func (s *Service) storePage(ctx context.Context, src source, key pageKey, kept f
 	_, err = s.db.Exec(ctx, `INSERT INTO catalog_pages (addon_id, catalog_type, catalog_id, genre, skip, config, metas, fetched_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (addon_id, catalog_type, catalog_id, genre, skip)
-		DO UPDATE SET config = excluded.config, metas = excluded.metas, fetched_at = excluded.fetched_at`,
+		DO UPDATE SET config = excluded.config, fetched_at = excluded.fetched_at,
+			metas = CASE WHEN catalog_pages.metas = excluded.metas THEN catalog_pages.metas ELSE excluded.metas END`,
 		key.addon, key.catalogType, key.catalogID, key.genre, key.skip, configOf(src.addon.addon), data, kept.at)
 	return err
 }
@@ -799,14 +803,20 @@ func (s *Service) Warm(ctx context.Context) error {
 	return s.forgetArrivals(ctx)
 }
 
+// collectionsAtOnce is how many collections ReadCollections reads at once:
+// two keep the host's places busy (see catalogHostFetches) while one
+// collection waits for its description or the last pages of a catalog.
+const collectionsAtOnce = 2
+
 // ReadCollections reads every collection of the server's collection
-// libraries whole, as a whole listing lists it (see Whole), one collection
-// after the other, then every catalog of the server's smart lists up to
-// its maximum, so that apps then open each at once with all its titles. It
-// asks the addons again for the pages past their refresh age and waits for
-// their answers (see withRefreshing), and reads the pages never read. It
-// reads the libraries a request without a user sees: those of the
-// server's addons.
+// libraries whole, as a whole listing lists it (see Whole),
+// collectionsAtOnce at a time, then every catalog of the server's smart
+// lists up to its maximum, so that apps then open each at once with all
+// its titles. It asks the addons again for the pages past their refresh
+// age and waits for their answers (see withRefreshing), and reads the
+// pages never read. It reads the libraries a request without a user sees:
+// those of the server's addons. Each library and each collection is read
+// as a request is served (see PerRequest): its view is built once.
 func (s *Service) ReadCollections(ctx context.Context) error {
 	started := time.Now()
 	ctx = withRefreshing(context.WithValue(ctx, wholeKey{}, true))
@@ -815,8 +825,10 @@ func (s *Service) ReadCollections(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var mu sync.Mutex
 	read, failed := 0, 0
 	whole := func(parent accounts.ID) (Page, error) {
+		ctx := PerRequest(ctx)
 		most, _, err := s.listingLimit(ctx, server, parent)
 		if err != nil {
 			return Page{}, err
@@ -836,19 +848,30 @@ func (s *Service) ReadCollections(ctx context.Context) error {
 			failed++
 			continue
 		}
+		var group errgroup.Group
+		group.SetLimit(collectionsAtOnce)
 		for _, collection := range listed.Items {
 			if collection.Kind != KindCollection {
 				continue
 			}
-			if _, err := whole(collection.ID); err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+			group.Go(func() error {
+				_, err := whole(collection.ID)
+				if err != nil && ctx.Err() == nil {
+					s.logger.Debug("A collection could not be read", "collection", collection.Name, "error", err)
 				}
-				s.logger.Debug("A collection could not be read", "collection", collection.Name, "error", err)
-				failed++
-				continue
-			}
-			read++
+				mu.Lock()
+				defer mu.Unlock()
+				if err != nil {
+					failed++
+				} else {
+					read++
+				}
+				return nil
+			})
+		}
+		_ = group.Wait()
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 	}
 	lists, listsFailed, err := s.readSmartLists(ctx, v)
