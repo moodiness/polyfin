@@ -44,7 +44,7 @@ A condition applies whether `IsRequired` is set or not. One about another codec,
 | `Width` and `Height` | The picture is scaled down to fit both, keeping its shape: a 1080p source under `Height` 720 converts to 1280×720, and under `Width` 1280 too. Its bitrate follows the smaller picture (see [Bitrate of converted video](#bitrate-of-converted-video)). | `MaxWidth`, `MaxHeight` |
 | `VideoBitrate` | The video's bitrate stays within it, and the picture is no taller than that bitrate allows, as under a bitrate limit. | The lower of the two, as `VideoBitrate` |
 | `VideoFramerate` | A source above it is brought down to it, frames dropped. The master playlist's `FRAME-RATE` says so. | `MaxFramerate` |
-| `VideoLevel` | Polyfin declares the lowest level that holds the picture it sends. When that is above the app's, the picture goes down the ladder until a level the app decodes holds it: under H.264 level 3.1, 1080p converts to 720p. | `h264-level` or `hevc-level` |
+| `VideoLevel` | Polyfin declares the lowest level that holds the picture it sends, at its frame rate and bitrates (see [Frame rate and codec level](#frame-rate-and-codec-level)). When that is above the app's, the picture goes down the ladder until a level the app decodes holds it: under H.264 level 3.1, 1080p converts to 720p. A peak above what the app's level holds is brought within it. | `h264-level` or `hevc-level` |
 | `VideoProfile` | Converted H.264 is in the highest of High, Main and Baseline the condition allows, Baseline as constrained baseline, under the name each encoder gives it. A condition allowing none of the three, such as `high 10` alone, leaves High. HEVC stays in Main. | The profiles allowed, as `h264-profile` |
 
 The other conditions decide only whether the source plays as it is or its video is copied, as in Jellyfin, whose encoder does not read them either. They cover reference frames, bit depth, dynamic range, codec tag, and anamorphic or interlaced video.
@@ -73,7 +73,7 @@ Converted video keeps about its source's bitrate, as in Jellyfin, up to what the
 
 A 15 Mb/s 10-bit HEVC movie in 1080p thus converts to H.264 at 26 Mb/s with no limit. Within 10 Mb/s, with its audio converted to stereo, it converts at 9.6 Mb/s. The user's quality group, **Maximum quality of converted video** and the app's profile lower the bitrate with the picture's size.
 
-**Peaks:** The encoder lets the video peak at one and a half times its bitrate, over a buffer of two seconds of it.
+**Peaks:** The encoder lets the video peak at one and a half times its bitrate, over a buffer of two seconds of it, both within its codec level (see [Frame rate and codec level](#frame-rate-and-codec-level)).
 
 - Under the app's or the user's limit, the peak stays within what the limit leaves once the audio sent is taken off. Video and audio together thus never go above the limit.
 - Where the limit sets the bitrate, as with 10 Mb/s above, the video peaks at its bitrate. Within 3 Mb/s, 720p H.264 aims for 2.6 Mb/s and peaks at 2.6 Mb/s, with 384 kb/s of audio.
@@ -81,6 +81,21 @@ A 15 Mb/s 10-bit HEVC movie in 1080p thus converts to H.264 at 26 Mb/s with no l
 - The master playlist's `BANDWIDTH` is that peak with the audio sent, counted as above. Its `AVERAGE-BANDWIDTH` is the video's bitrate with that audio. Within 3 Mb/s, both are 3000000.
 
 **Cost:** a higher bitrate takes more bandwidth, and more of the processor without a GPU. In Auto on the local network, jellyfin-web asks for at least 140 Mb/s, so its conversions get about the source's bitrate. To keep them smaller, set a **Maximum quality** for the user, or a quality in the app.
+
+### Frame rate and codec level
+
+Converted video has one frame rate, which the encoder is told, and declares a codec level that holds it:
+
+- **Frame rate:** the source's average, else its real one, as its analysis found them; twice that with **Double the frame rate**, or less under `VideoFramerate`. A rate of 0, or above 240 frames a second, is left out: for a stream that states none, the analysis gives its time base, 1000 in Matroska and 90000 in MPEG-TS. A source with no rate left converts at 30 frames a second. The encoder drops or repeats frames to keep the rate.
+- **Codec level:** the lowest that holds the picture at that rate and its peak, never below H.264 4.1 (4.2 above 30 frames a second) or HEVC 4.1. HEVC is always at its Main tier, since many TVs and boxes decode no other. The buffer is brought within the level's, which holds at least a second of the peak. A 4K movie converted to HEVC at 26 Mb/s peaks at 39 Mb/s: level 5 holds 25 Mb/s, level 5.1 holds 40 Mb/s and a 40 Mbit buffer, so it is level 5.1 with a 40 Mbit buffer.
+- **The app's level:** under the app's `VideoLevel`, the peak, the buffer and the bitrate are brought within the highest level the app decodes, as within 6.1 without one. 1080p H.264 at 30 Mb/s peaks and aims at 25 Mb/s under level 4.0, and 1080p HEVC at 40 Mb/s at 20 Mb/s under level 4.1.
+- **Master playlist:** its `CODECS` and `FRAME-RATE` state the same level and frame rate.
+
+An NVIDIA GPU refuses to start a conversion at a level that does not hold what its encoder is told, as x265 does for the frame rate. QSV and VideoToolbox's HEVC encoder pick their own level.
+
+**Compared with Jellyfin**
+
+- Jellyfin passes NVENC no level, and its other encoders the app's level, whatever the frame rate and bitrate.
 
 ### Audio bitrate
 
