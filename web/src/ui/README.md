@@ -1,16 +1,16 @@
 # `src/ui`: the « Salon » design system
 
-The admin app with the calm of a TV interface: big type, few things per screen, soft rounded tiles with no borders, and one strong, friendly focus. What is under the keyboard, the mouse or the remote is **lit**: a button or a field turns pale lavender-white with dark words, and a row or a tile stays dark with a thin edge of the accent. Values sit on the right with a chevron, and help shows for the lit row only.
+The admin app with the calm of a TV interface and the density of a desktop tool: clear type, soft rounded tiles with no borders, and one strong, friendly focus. What is under the keyboard, the mouse or the remote is **lit**: a button or a field turns pale lavender-white with dark words, and a row or a tile stays dark with a thin edge of the accent. A setting is edited in its own row, with its explanation always shown under its name.
 
 Import everything from `@/ui`. Each component documents its props in its file; `/admin/dev/ui` (development builds only) shows them all in their states. Colors, radii and type come from the tokens in `src/index.css`, under the « Nuit » names with Salon values (`bg-s1`, `text-ink-2`, `rounded-row`, `text-h1`, `shadow-lift`…): never write a raw color. Icons come from `@phosphor-icons/react`, regular weight.
 
 ## The look
 
-- **Sizes are in rem, with one density knob.** The root is 16 px on a phone and 85 % of that from 48rem (768 px) up, so the whole app is 15 % denser on a desktop. The page's frame stays 1440 px at most, margins included (`max-w-page`, in px), so a denser desktop shows more of the page. Every size the file quotes is in design pixels at 16 px to the rem: a phone shows it as is, a desktop at 85 % (a 64 px well is about 54 px there, the 64 px between blocks too). Write classes in rem (`h-16`, `text-[1.3125rem]`, `rounded-[1.5rem]`); keep px for the page's frame, hairlines of 2 px or less, shadows, blurs and the breakpoints of media queries. Sizes set from code go through `rem(px)` (an icon's `size`, an inline style), and code that places or measures in pixels uses `scaledPx(px)`.
-- **The interface size turns that knob.** A user's **Interface size** in My account is Compact, the 85 % above, or Large, 16 px to the rem on every screen; a phone shows both alike. `<html data-interface-size>` holds it, set by `interfaceSize.ts` before the first frame. Sizes in rem follow both, so a page never asks which one is on.
+- **Sizes are in rem, with one density knob.** Compact and Large are one layout: the tokens and the components hold its sizes, and the root scales it. The root is 16 px on a phone and in Large, and 85 % of that in Compact from 48rem (768 px) up. The page's frame stays 1440 px at most, margins included (`max-w-page`, in px), so a denser desktop shows more of the page. Every size the file quotes is in design pixels at 16 px to the rem: a phone and Large show it as is, Compact at 85 % (a 38 px field is 32 px there, a 34 px page title 29 px). Write classes in rem (`h-9.5`, `text-[1.0625rem]`, `rounded-[0.5rem]`); keep px for the page's frame, hairlines of 2 px or less, shadows, blurs and the breakpoints of media queries. Sizes set from code go through `rem(px)` (an icon's `size`, an inline style), and code that places or measures in pixels uses `scaledPx(px)`.
+- **The interface size turns that knob.** A user's **Interface size** in My account is Compact, the 85 % above, or Large, 16 px to the rem on every screen: the same layout 18 % bigger. A phone shows both alike. `<html data-interface-size>` holds it, set by `interfaceSize.ts` before the first frame. Sizes in rem follow both, so a page never asks which one is on.
 - **Surfaces are fills, never boxes:** `bg-s1` for tiles, rows and panels, `bg-s2` for hover, fields and the current section. No hairlines, and no card inside a card: rows, figures, tables and panels inside a `Panel` drop their own fill.
-- **Radii:** art tiles `rounded-tile` (34), panels `rounded-panel` (28), rows `rounded-row` (24), buttons `rounded-control` (17), choices `rounded-choice` (18), wells `rounded-field` (20).
-- **Type, Figtree:** `text-display` 56 (a greeting), `text-h1` 48 (a page title), `text-h2` 27 (a shelf title), `text-group` 25 (a group of rows), `text-h3` 21 (a row label), `text-lead` 20 (values, ledes), `text-body` 19, `text-control` 18, `text-small` 17 (help), `text-micro` 15.5 (captions, times). `figures` gives tabular figures.
+- **Radii:** art tiles `rounded-tile` (22), panels `rounded-panel` (18), rows `rounded-row` (14), buttons `rounded-control` (10), side by side choices `rounded-choice` (10), wells `rounded-field` (10).
+- **Type, Figtree,** in design pixels (Compact at 85 %): `text-display` 40 (a greeting), `text-h1` 34 (a page title), `text-h2` 24 (a section or shelf title), `text-group` 18 (a group of rows, a panel's title), `text-h3` 17.5 (a row label, a setting's name), `text-area` 17 (the top row's words), `text-lead` 16.5 (values, ledes), `text-body` 16.5, `text-control` 16.5 (buttons and fields), `text-small` 15.5 (help, captions), `text-micro` 14 (times, counts). A phone has its own steps (`index.css`). `figures` gives tabular figures.
 - **The lit state of a control** (a button, a choice, a field being typed in): the `lit` utility (inside it, ink, surfaces and state colors switch to their lit variants by themselves), `lift` (the rise over a soft shadow, `--lift` sets how far) and `focus-lit` (both on `:focus-visible`, in place of an outline ring). Every control of `@/ui` wears it.
 - **The lit state of a row or a tile** (a setting row, a row of a list, the chosen source, the current section, a figure, a Health tile, an art tile): never white. The `lit-row` utility keeps its dark fill, one step up at most (`--lit-fill`, `s2` by default), its white words at their size, and draws a 2 px edge of `lit-edge`, the accent a step brighter; `focus-lit-row` wears it on `:focus-visible`. Nothing inside it switches color, and nothing rises. An art tile wears the same edge as an outline.
 - **Either is never the only cue:** keep `aria-current`, `aria-checked`, `aria-selected`, `aria-expanded`.
@@ -19,49 +19,49 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 
 ## Page structure
 
-| Need                                                                                            | Use                                                                       |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| The frame of a page: title, lede, actions, sub-area words, blocks 64 px apart (54 on a desktop) | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader`             |
-| A greeting at the top of Home                                                                   | `PageLayout` with `greeting`                                              |
-| A page split with a list of sections on the left (Settings, a user)                             | `PageLayout` with `nav={<SectionNav … />}`; the dock docks under the list |
-| A split page opening on a band (a user, a group, My account)                                    | `PageLayout` with `head={<Band … />}` and `nav`                           |
-| A shelf of a page, with a count or a link on the right                                          | `Block` (+ `Count`, `TextLink`)                                           |
-| Content that needs a ground of its own: a detail, a figure with its rows                        | `Panel`, split by `PanelSection`, closed by `PanelFooter`                 |
-| The sub-area words under a page title (Sources · Libraries · Live TV)                           | `Tabs` with links (`words`, the default), passed as PageHeader's `nav`    |
-| Sections inside a page part (a source's Summary, Categories…)                                   | `Tabs` with `variant="underline"`                                         |
+| Need                                                                                          | Use                                                                       |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| The frame of a page: title, lede, actions, sub-area words, blocks 40 px apart (34 in Compact) | `PageLayout` (in `@/app/PageLayout`), which uses `PageHeader`             |
+| A greeting at the top of Home                                                                 | `PageLayout` with `greeting`                                              |
+| A page split with a list of sections on the left (Settings, a user)                           | `PageLayout` with `nav={<SectionNav … />}`; the dock docks under the list |
+| A split page opening on a band (a user, a group, My account)                                  | `PageLayout` with `head={<Band … />}` and `nav`                           |
+| A shelf of a page, with a count or a link on the right                                        | `Block` (+ `Count`, `TextLink`)                                           |
+| Content that needs a ground of its own: a detail, a figure with its rows                      | `Panel`, split by `PanelSection`, closed by `PanelFooter`                 |
+| The sub-area words under a page title (Sources · Libraries · Live TV)                         | `Tabs` with links (`words`, the default), passed as PageHeader's `nav`    |
+| Sections inside a page part (a source's Summary, Categories…)                                 | `Tabs` with `variant="underline"`                                         |
 
 ## Rows, tiles and data
 
-| Need                                                                     | Use                                                                                                                                               |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed)                                                                 |
-| Long lists (logs, channels, versions)                                    | `RowList compact`: 56 px rows (48 on a desktop)                                                                                                   |
-| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-2`                                                                                         |
-| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`, `xl` for a band; `ok`, `warn`, `danger`), or `Avatar` for a person                                                  |
-| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with the accent edge and its tools; `fit="contain"` for logos, `fallback` when there is no poster |
-| A problem to look at, with its cause and fix                             | `AlertTile`                                                                                                                                       |
-| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                                                                                              |
-| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)                                                                            |
-| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                                                                                         |
-| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                                                                                               |
-| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                                                                                               |
+| Need                                                                     | Use                                                                                                                                                                  |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Things with a label, a second line and a value (sources, devices, state) | `RowList` + `Row` (`boxed` tiles, `separate` beside a detail, `plain` for a feed), 60 px a row; controls of a linked row go in `actions` (a source's switch and ↑ ↓) |
+| Long lists (logs, channels, devices)                                     | `RowList compact`: 48 px rows                                                                                                                                        |
+| A setting: switch, choice, number with unit, text, path, secret          | `SettingRow`, in a `grid grid-cols-[minmax(0,1fr)] gap-1.5`                                                                                                          |
+| The icon or letters at the start of a row, or a tinted state bubble      | `IconTile` (`sm`, `md`, `lg`, `xl` for a band; `ok`, `warn`, `danger`), or `Avatar` for a person                                                                     |
+| What is playing, on its poster                                           | `ArtShelf` + `ArtTile`: the lit tile opens wide with the accent edge and its tools; `fit="contain"` for logos, `fallback` when there is no poster                    |
+| A problem to look at, with its cause and fix                             | `AlertTile`                                                                                                                                                          |
+| A big number ("4 of 4")                                                  | `FigureTile`, side by side in a grid                                                                                                                                 |
+| Columns of comparable values                                             | `Table` (`compact` for long ones; values right; scrolls inside itself)                                                                                               |
+| How far something is                                                     | `ProgressBar` (`playback` for what plays)                                                                                                                            |
+| A time ("18 min ago"), with the full date on hover                       | `RelativeTime` (`className` for its color and size)                                                                                                                  |
+| Reordering an item of a list from the keyboard                           | `MoveButtons` (focus follows the item after a move)                                                                                                                  |
 
 ### Setting rows
 
-`SettingRow` is the label on the left, the value and a chevron on the right, and the help shown only while the row is lit (always in `aria-describedby`). Enter, Space or a click opens its control inside the row; Escape closes it and returns to the row; ↑ ↓ move between rows without trapping Tab.
+`SettingRow` is edited in the row itself, in both sizes: the name on the left, its help under it as a muted caption (two lines at most, with More for the rest, and always in `aria-describedby`), and the control on the right, which wraps under the name when the row is too narrow. Nothing opens below the row. ↑ ↓ move to the previous or next row's control (`data-setting-head`), except in a number well, where they step, and in an open list; a click on the name or the caption focuses the control.
 
-| `kind`   | Opens                                                                                                                                                   | Its own props                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `switch` | Nothing: the switch on the right alone toggles (`role="switch"`, with its word); a click on the name or elsewhere on the row lights it to show its help | `checked`, `onChange`, `stateText`                        |
-| `choice` | A strip of big choices (`role="radiogroup"`, ← →), or a searchable list past 12                                                                         | `value`, `options`, `onChange`                            |
-| `number` | A strip of values up to 33 of them, else a number well with its unit                                                                                    | `value`, `min`, `max`, `step`, `unit`, `format`, `picker` |
-| `text`   | A text well; Enter closes it                                                                                                                            | `value`, `onChange`, `placeholder`, `maxLength`, `mono`   |
-| `path`   | The same well; the value goes under the label on a phone                                                                                                | as `text`                                                 |
-| `secret` | The `SecretField` (masked typing, reveal, replace, remove)                                                                                              | the SecretField's own                                     |
+| `kind`   | In the row                                                                                                                                    | Its own props                                           |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `switch` | The switch alone toggles (`role="switch"`, with its word); a click elsewhere on the row focuses it                                            | `checked`, `onChange`, `stateText`                      |
+| `choice` | Up to 4 short choices side by side (`role="radiogroup"`, ← → choose); more, or longer, a `Select` that opens in one click, searchable past 12 | `value`, `options`, `onChange`                          |
+| `number` | A number well with its unit, typed in place, ↑ ↓ step                                                                                         | `value`, `min`, `max`, `step`, `unit`, `format`         |
+| `text`   | A text well: each keystroke is a change for the dock, no Enter needed                                                                         | `value`, `onChange`, `placeholder`, `maxLength`, `mono` |
+| `path`   | The same, wider, in tabular figures                                                                                                           | as `text`                                               |
+| `secret` | The `SecretField` under the name (masked typing, reveal, replace, remove)                                                                     | the SecretField's own                                   |
 
-Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and its value in the link color. A row without `saved` (settings that apply at once) keeps no mark. `anchor` gives it the id of its `#anchor`, `error` shows under it, and `children` add a note under it.
+Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and its value in the link color. A row without `saved` (settings that apply at once) keeps no mark. `anchor` gives it the id of its `#anchor`, `error` shows under it, and `children` add a note under it. Rules and lists (version order, label rules, Home rows, allowed hours) keep their editors beside the rows; a list of items to tick is a two-column checklist of `Checkbox`es.
 
-`OpenRow` draws the same head and lit state for a row that no `kind` covers: with `children`, Enter, Space or a click opens them inside the row (a date with its buttons, a list to choose from) and Escape closes them; with `onClick`, the row is a button for an action shown elsewhere (a dialog).
+`OpenRow` draws the same head and caption for a row that no `kind` covers: with `children`, Enter, Space or a click opens them inside the row (a date with its buttons, a list to choose from) and Escape closes them; with `onClick`, the row is a button for an action shown elsewhere (a dialog).
 
 ## States
 
@@ -77,18 +77,18 @@ Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and 
 
 ## Forms
 
-| Need                                      | Use                                                                        |
-| ----------------------------------------- | -------------------------------------------------------------------------- |
-| Any labelled control, with help and error | `Field` around the control                                                 |
-| Text, a filter, a password                | `TextInput` (`icon`, `suffix`, `revealable`; `size` `md`, `sm`, `compact`) |
-| A number with a unit                      | `NumberInput`                                                              |
-| One choice among many                     | `Select`; two to four side by side: `Segmented`                            |
-| Free text with suggestions (a genre)      | `SuggestInput`                                                             |
-| Several lines                             | `Textarea` (`mono` for code)                                               |
-| Something that turns on or off            | `Switch` (the word of its state beside it), or a `switch` SettingRow       |
-| Picking items of a list                   | `Checkbox`                                                                 |
-| An API key, a client secret               | `SecretField` (masked typing, reveal, replace, remove)                     |
-| Saving a whole page of settings           | `SaveBar`, inside the `<form>`, once per page: the unsaved dock            |
+| Need                                      | Use                                                                                    |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| Any labelled control, with help and error | `Field` around the control                                                             |
+| Text, a filter, a password                | `TextInput` (`icon`, `suffix`, `revealable`; `size` `md` 38 px, `sm` 34, `compact` 32) |
+| A number with a unit                      | `NumberInput`                                                                          |
+| One choice among many                     | `Select`; two to four side by side: `Segmented`                                        |
+| Free text with suggestions (a genre)      | `SuggestInput`                                                                         |
+| Several lines                             | `Textarea` (`mono` for code)                                                           |
+| Something that turns on or off            | `Switch` (the word of its state beside it), or a `switch` SettingRow                   |
+| Picking items of a list                   | `Checkbox`                                                                             |
+| An API key, a client secret               | `SecretField` (masked typing, reveal, replace, remove)                                 |
+| Saving a whole page of settings           | `SaveBar`, inside the `<form>`, once per page: the unsaved dock                        |
 
 `SaveBar` is the unsaved dock: "2 changes" (pass `changes`), Discard changes and Save. It shows only while there are changes. On a split page it docks under the section list (`DockSlotContext`, which `PageLayout` provides), elsewhere it sticks to the end of the form, and on a phone it is a bar along the bottom with room kept under the last row: it never covers a row for good. Its Save button submits its form, even from the dock.
 
