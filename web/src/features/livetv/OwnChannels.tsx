@@ -138,7 +138,7 @@ export function OwnChannels() {
       count={channels.data?.length}
       aside={channels.data && channels.data.length > 0 ? add : undefined}
     >
-      <p className="mb-5 max-w-[72ch] text-small text-ink-2">{t.ownChannels.help}</p>
+      <p className={blockHelp}>{t.ownChannels.help}</p>
       {body}
     </Block>
   )
@@ -151,7 +151,7 @@ export function WideState({ children }: { children: ReactNode }) {
 
 /** A row's state on its own line under its second one on a phone, leaving the label room. */
 export function PhoneState({ children }: { children: ReactNode }) {
-  return <span className="mt-1.5 basis-full md:hidden">{children}</span>
+  return <span className="mt-1 basis-full md:hidden">{children}</span>
 }
 
 const emptyDraft: OwnChannelDraft = {
@@ -364,14 +364,16 @@ function Editor({
 
         <Block title={t.ownChannels.blocks} count={draft.blocks.length}>
           <p className={blockHelp}>{t.ownChannels.blocksHelp}</p>
-          <div className="flex flex-col gap-10">
+          <div className="flex flex-col gap-6">
             {draft.blocks.map((block, i) => {
               const set = (patch: Partial<OwnChannelDraft['blocks'][number]>) =>
                 change({ blocks: draft.blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) })
               return (
                 <fieldset key={i} className="min-w-0">
-                  <legend className="mb-4 text-group text-ink">{t.ownChannels.block(i + 1)}</legend>
-                  <div className="mb-4 flex flex-wrap items-end gap-3">
+                  <legend className="mb-2.5 text-group text-ink">
+                    {t.ownChannels.block(i + 1)}
+                  </legend>
+                  <div className="mb-3 flex flex-wrap items-end gap-2.5">
                     <Field label={t.ownChannels.from}>
                       <TextInput
                         type="time"
@@ -443,9 +445,9 @@ function Editor({
           <Block title={t.ownChannels.airing}>
             <p className={blockHelp}>{t.ownChannels.airingHelp}</p>
             {saved.airing.length === 0 ? (
-              <p className="mb-4 text-small text-ink-3">{t.ownChannels.nothing}</p>
+              <p className="mb-3 text-small text-ink-3">{t.ownChannels.nothing}</p>
             ) : (
-              <RowList compact aria-label={t.ownChannels.airing} className="mb-4">
+              <RowList compact aria-label={t.ownChannels.airing} className="mb-3">
                 {saved.airing.map((airing) => (
                   <Row
                     key={airing.start}
@@ -491,7 +493,7 @@ function Editor({
             error={generalError}
           />
         ) : (
-          <div className="flex flex-col items-start gap-4">
+          <div className="flex flex-col items-start gap-3">
             {generalError && <FieldError>{generalError}</FieldError>}
             <Button type="submit" variant="primary" loading={save.isPending}>
               {t.ownChannels.create}
@@ -516,11 +518,11 @@ function Editor({
 }
 
 /** The start and end of a programme at the start of its row. */
-const airingTime = 'figures w-[7.75rem] shrink-0 text-micro text-ink-3 max-md:w-[6rem]'
-/** Settings rows, 8 px apart. */
-const rows = 'grid grid-cols-[minmax(0,1fr)] gap-2'
+const airingTime = 'figures w-[6.5rem] shrink-0 text-micro text-ink-3 max-md:w-[5.5rem]'
+/** Settings rows, 6 px apart. */
+const rows = 'grid grid-cols-[minmax(0,1fr)] gap-1.5'
 /** The help under a block's title. */
-const blockHelp = 'mb-5 max-w-[72ch] text-small text-ink-2'
+const blockHelp = 'mb-3 max-w-[72ch] text-small text-ink-2'
 
 /** Chooses what a channel or a block is built from, as settings rows. */
 function SourcePicker({
@@ -550,7 +552,7 @@ function SourcePicker({
       />
       {(source.kind === 'collection' || source.kind === 'smartlist') &&
         (listed.length === 0 ? (
-          <p className="px-[1.875rem] py-2 text-small text-ink-2 max-md:px-5">
+          <p className="px-4 py-1.5 text-small text-ink-2 max-md:px-3.5">
             {source.kind === 'collection'
               ? t.ownChannels.noCollections
               : t.ownChannels.noSmartLists}
@@ -610,11 +612,11 @@ function TitlePicker({
     setAsked(query.trim())
   }
   return (
-    <div className="flex flex-col gap-4 pt-4">
+    <div className="flex flex-col gap-3 pt-3">
       <div className="flex flex-wrap items-end gap-2">
         <Field
           label={series ? t.ownChannels.searchSeries : t.ownChannels.searchTitles}
-          className="min-w-[12.5rem] flex-1"
+          className="min-w-[11rem] flex-1"
         >
           <TextInput
             value={query}
@@ -635,7 +637,7 @@ function TitlePicker({
         <p className="text-small text-ink-3">{t.ownChannels.noResults}</p>
       )}
       {results.length > 0 && (
-        <div className="max-h-[20rem] overflow-y-auto rounded-row">
+        <div className="max-h-[18rem] overflow-y-auto rounded-row">
           <RowList compact aria-label={t.ownChannels.searchTitles}>
             {results.map((title) => (
               <Row
@@ -665,7 +667,7 @@ function TitlePicker({
           </RowList>
         </div>
       )}
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1.5">
         <p className="text-small font-semibold text-ink-2">{t.ownChannels.picked}</p>
         {source.items.length === 0 ? (
           <p className="text-small text-ink-3">{t.ownChannels.pickedNone}</p>

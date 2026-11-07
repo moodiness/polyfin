@@ -50,7 +50,7 @@ export function SourceOptions({
     type === 'movie' ? value.movies : value.series,
   )
   return (
-    <div className="space-y-14 max-md:space-y-11">
+    <div className="space-y-9 max-md:space-y-8">
       {!tuner && <ContentFields value={value} saved={saved} onChange={onChange} />}
       {saved?.liveTv && !value.liveTv && <Notice tone="danger">{text.liveOffWarning}</Notice>}
       {value.liveTv && (
@@ -124,7 +124,7 @@ function OptionsGroup({
         {title}
       </h3>
       {help !== undefined && <p className="mt-1 max-w-[66ch] text-small text-ink-2">{help}</p>}
-      <div className="mt-5 space-y-10 max-md:mt-4 max-md:space-y-8">{children}</div>
+      <div className="mt-3 space-y-6 max-md:space-y-5">{children}</div>
     </section>
   )
 }
@@ -165,7 +165,7 @@ function ContentFields({
           />
         ))}
         {none && (
-          <div className="px-[1.875rem] pt-2 max-md:px-5">
+          <div className="px-4 pt-1.5 max-md:px-3.5">
             <FieldError>{text.none}</FieldError>
           </div>
         )}
@@ -429,15 +429,15 @@ function ExclusionPicker({
             </div>
           )}
           {listed.length === 0 ? (
-            <p className="mt-3 rounded-row bg-s1 px-5 py-8 text-center text-small text-ink-2">
+            <p className="mt-3 rounded-row bg-s1 px-4 py-5 text-center text-small text-ink-2">
               {text.noMatch}
             </p>
           ) : (
-            <ul className="mt-3 grid max-h-[35.625rem] gap-x-8 gap-y-0.5 overflow-y-auto overscroll-contain rounded-row bg-s1 px-5 py-3 max-md:px-4 sm:grid-cols-2">
+            <ul className="mt-3 grid max-h-[30rem] gap-x-6 overflow-y-auto overscroll-contain rounded-row bg-s1 px-4 py-2 max-md:px-3.5 sm:grid-cols-2">
               {listed.map((category) => (
                 <li
                   key={category.key}
-                  className="min-w-0 [contain-intrinsic-size:auto_3.265625rem] [content-visibility:auto]"
+                  className="min-w-0 [contain-intrinsic-size:auto_2rem] [content-visibility:auto]"
                 >
                   <Checkbox
                     checked={!set.has(category.key)}

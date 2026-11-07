@@ -150,7 +150,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
   )
 
   return (
-    <div className="space-y-12 max-md:space-y-10">
+    <div className="space-y-8 max-md:space-y-7">
       {keywordOpen && (
         <KeywordBulk
           scope={scope}
@@ -160,7 +160,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
         />
       )}
       <Block title={text.title} count={channels.data?.total}>
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-x-5 gap-y-2">
           <p className="max-w-[66ch] text-small text-ink-2">
             {reorder ? text.reorderHelp : text.help}
           </p>
@@ -172,7 +172,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
             {t.lineup.keyword.title}
           </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-2.5">
           <Field label={text.search} className="min-w-56 flex-[2_1_16.625rem]">
             <TextInput
               type="search"
@@ -229,7 +229,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           />
         </div>
 
-        <div className="mt-5 mb-2 flex min-h-11 flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-4">
+        <div className="mt-3.5 mb-1.5 flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-1.5 pl-3.5">
           <Checkbox
             checked={allSelected}
             indeterminate={someSelected}
@@ -441,7 +441,7 @@ function ChannelRow({
         onDrop()
       }}
       className={cx(
-        'flex min-h-14 min-w-0 items-center gap-3 rounded-[1.125rem] py-1.5 pr-3 pl-4 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_4.15625rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-2',
+        'flex min-h-11 min-w-0 items-center gap-2.5 rounded-[0.625rem] py-1 pr-2 pl-3.5 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_3rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-1.5',
         dragging && 'opacity-40',
         selected ? 'bg-accent/14' : 'bg-s1 hover:bg-s2',
       )}
@@ -585,11 +585,11 @@ function KeywordBulk({
       description={text.help}
       actions={<IconButton icon={XIcon} label={t.lineup.close} onClick={onClose} />}
     >
-      <form onSubmit={submit} noValidate className="flex flex-wrap items-start gap-x-2.5 gap-y-3">
+      <form onSubmit={submit} noValidate className="flex flex-wrap items-start gap-x-2 gap-y-2.5">
         <Field
           label={text.label}
           help={text.hint}
-          className="min-w-48 flex-1 max-sm:basis-full sm:max-w-[42.75rem]"
+          className="min-w-48 flex-1 max-sm:basis-full sm:max-w-[36rem]"
         >
           <TextInput
             size="sm"
@@ -605,7 +605,7 @@ function KeywordBulk({
         </Field>
         <Button
           type="submit"
-          className="mt-[2.125rem] max-sm:mt-0"
+          className="mt-7 max-sm:mt-0"
           loading={count.isPending}
           disabled={tooShort}
         >

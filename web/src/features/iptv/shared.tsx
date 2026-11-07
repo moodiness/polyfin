@@ -77,7 +77,7 @@ export function DragGrip({ name }: { name: string }) {
       title={t.lineup.dragHandle(name)}
       className="hidden shrink-0 cursor-grab text-ink-3 active:cursor-grabbing sm:inline"
     >
-      <DotsSixVerticalIcon size="1.25rem" />
+      <DotsSixVerticalIcon size="1.125rem" />
     </span>
   )
 }
@@ -85,7 +85,7 @@ export function DragGrip({ name }: { name: string }) {
 /**
  * A channel's logo, through Polyfin as Jellyfin apps get it, on a soft round tile; its initial when
  * it has none or it fails to load. `logo` only tells whether there is one, and refreshes it when it
- * changes. 36 px in a compact row, 56 px (`large`) at the head of its editor.
+ * changes. 30 px in a compact row, 44 px (`large`) at the head of its editor.
  */
 export function ChannelLogo({
   id,
@@ -101,7 +101,7 @@ export function ChannelLogo({
   const [failed, setFailed] = useState<string | null>(null)
   const frame = cx(
     'shrink-0 overflow-hidden bg-s2',
-    large ? 'size-14 rounded-[1.125rem]' : 'size-9 rounded-[0.75rem]',
+    large ? 'size-11 rounded-[0.75rem]' : 'size-7.5 rounded-[0.5rem]',
   )
   if (!logo || failed === logo) {
     return (
@@ -148,12 +148,12 @@ export function Figures({ items, label }: { items: readonly Figure[]; label?: st
         <div
           key={item.label}
           className={cx(
-            'relative flex min-w-0 flex-col rounded-row bg-s1 px-6 pt-[1.375rem] pb-6 max-md:px-5 max-md:pt-5 max-md:pb-5',
+            'relative flex min-w-0 flex-col rounded-row bg-s1 px-4 pt-3.5 pb-4 max-md:px-4 max-md:pt-3.5 max-md:pb-3.5',
             item.to &&
               'transition-[background-color,box-shadow] duration-350 ease-nuit hover:bg-s2 has-[a:focus-visible]:lit-row',
           )}
         >
-          <dt className="order-2 mt-2.5 text-small text-ink-2">
+          <dt className="order-2 mt-2 text-small text-ink-2">
             {item.to ? (
               // The link covers the whole tile.
               <Link
@@ -168,7 +168,7 @@ export function Figures({ items, label }: { items: readonly Figure[]; label?: st
           </dt>
           <dd
             className={cx(
-              'figures order-1 text-[2.75rem] leading-none font-[650] tracking-[-0.02em] max-md:text-[2.25rem]',
+              'figures order-1 text-[2rem] leading-none font-[650] tracking-[-0.02em] max-md:text-[1.75rem]',
               item.tone === 'warn' && 'text-warn',
               item.tone === 'ok' && 'text-ok',
             )}

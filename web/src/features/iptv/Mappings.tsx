@@ -71,7 +71,7 @@ export default function Mappings({
 
   return (
     <Block title={text.title} count={mappings.data?.total}>
-      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{text.help}</p>
       <div className="flex flex-wrap items-center gap-2.5">
         <Segmented
           label={text.show}
@@ -139,10 +139,10 @@ export default function Mappings({
           {mappings.data.items.map((item) => (
             <li
               key={item.channelId}
-              className="min-w-0 rounded-[1.125rem] bg-s1 py-1.5 pr-3 pl-5 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_4.15625rem] [content-visibility:auto] max-sm:pl-4"
+              className="min-w-0 rounded-[0.625rem] bg-s1 py-1 pr-2 pl-3.5 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3rem] [content-visibility:auto] max-sm:pl-3"
             >
-              <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5">
-                <span className="figures w-9 shrink-0 text-right text-small text-ink-3">
+              <div className="flex min-h-10 flex-wrap items-center gap-x-2.5 gap-y-1">
+                <span className="figures w-8 shrink-0 text-right text-small text-ink-3">
                   {item.number}
                 </span>
                 <div className="min-w-0 flex-1 basis-40">
@@ -153,7 +153,7 @@ export default function Mappings({
                     {item.guideId !== '' && item.guideId !== item.mapping?.guideChannelId && (
                       <>
                         <span className="figures break-all">{item.guideId}</span>
-                        <ArrowRightIcon size="0.875rem" aria-hidden="true" className="shrink-0" />
+                        <ArrowRightIcon size="0.75rem" aria-hidden="true" className="shrink-0" />
                       </>
                     )}
                     <MappingText mapping={item.mapping} />

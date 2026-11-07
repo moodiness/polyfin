@@ -41,7 +41,7 @@ import { MappingControls, mappingWords, MappingText } from './MappingControls'
 import { ChannelLogo } from './shared'
 
 /** The padding of the editor's parts, lined up with the dialog's title. */
-const pad = 'px-8 max-sm:px-5'
+const pad = 'px-5'
 
 /** Edits one channel: its name, logo, description, category, number, streams and guide. */
 export default function ChannelEditor({
@@ -65,15 +65,15 @@ export default function ChannelEditor({
   }
   if (channel.isPending) {
     return (
-      <div role="status" aria-label={t.common.loading} className={cx(pad, 'space-y-7 pb-8')}>
-        <div className="flex items-center gap-4">
-          <Skeleton className="size-14 rounded-[1.125rem]" />
+      <div role="status" aria-label={t.common.loading} className={cx(pad, 'space-y-5 pb-5')}>
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-11 rounded-[0.75rem]" />
           <SkeletonText className="flex-1" />
         </div>
         {Array.from({ length: 4 }, (_, index) => (
-          <span key={index} className="block space-y-2.5">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-16 w-full rounded-field" />
+          <span key={index} className="block space-y-1.5">
+            <Skeleton className="h-3.5 w-28" />
+            <Skeleton className="h-9.5 w-full rounded-field" />
           </span>
         ))}
       </div>
@@ -81,7 +81,7 @@ export default function ChannelEditor({
   }
   if (channel.isError) {
     return (
-      <div className={cx(pad, 'pb-8')}>
+      <div className={cx(pad, 'pb-5')}>
         <InlineError onRetry={() => void channel.refetch()} retrying={channel.isFetching}>
           {errorMessage(t, channel.error)}
         </InlineError>
@@ -89,7 +89,7 @@ export default function ChannelEditor({
     )
   }
   return (
-    <div className="space-y-12 pb-8 max-sm:space-y-10 max-sm:pb-6">
+    <div className="space-y-8 pb-5 max-sm:space-y-7">
       <Details scope={scope} id={id} channel={channel.data} onSaved={show} />
       <Streams scope={scope} id={id} channel={channel.data} onSaved={show} />
       <Guide scope={scope} id={id} channel={channel.data} />
@@ -154,7 +154,7 @@ function Details({
   }
 
   return (
-    <form onSubmit={submit} noValidate className={cx(pad, 'space-y-6')}>
+    <form onSubmit={submit} noValidate className={cx(pad, 'space-y-4')}>
       <div className="flex items-center gap-4">
         <ChannelLogo id={channel.id} logo={channel.logo} name={channel.name} large />
         <div className="min-w-0">
@@ -332,7 +332,7 @@ function Streams({
   }
 
   return (
-    <section aria-labelledby={titleId} className={cx(pad, 'space-y-5')}>
+    <section aria-labelledby={titleId} className={cx(pad, 'space-y-3')}>
       <div>
         <h3 id={titleId} className="text-group text-ink">
           {text.title}
@@ -343,7 +343,7 @@ function Streams({
         {streams.map((stream, index) => (
           <li
             key={stream.id}
-            className="flex min-h-14 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-[1.125rem] bg-s1 py-1.5 pr-2 pl-4"
+            className="flex min-h-12 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 rounded-[0.625rem] bg-s1 py-1.5 pr-1.5 pl-3.5"
           >
             <span className="figures w-5 text-right text-small text-ink-3">{index + 1}</span>
             <div className="min-w-0 flex-1 basis-40">
@@ -429,7 +429,7 @@ function Streams({
           if (url.trim() !== '') add.mutate()
         }}
         noValidate
-        className="space-y-5 pt-4"
+        className="space-y-3.5 pt-3"
       >
         <h4 className="text-h3 text-ink">{text.addTitle}</h4>
         <Field
@@ -480,11 +480,11 @@ function Guide({ scope, id, channel }: { scope: Scope; id: string; channel: Line
   const [changed, setChanged] = useState<string | null>(null)
   const key = [...queryKeys.lineup(scope, id), 'channel', channel.id]
   return (
-    <section aria-labelledby={titleId} className={cx(pad, 'space-y-5')}>
+    <section aria-labelledby={titleId} className={cx(pad, 'space-y-3')}>
       <h3 id={titleId} className="text-group text-ink">
         {text.guideTitle}
       </h3>
-      <dl className="grid gap-x-6 gap-y-2 text-body sm:grid-cols-[auto_minmax(0,1fr)]">
+      <dl className="grid gap-x-5 gap-y-1.5 text-body sm:grid-cols-[auto_minmax(0,1fr)]">
         <dt className="text-ink-2">{text.providerGuideId}</dt>
         <dd className="figures text-small break-all text-ink sm:self-center">
           {channel.guideId || '–'}
