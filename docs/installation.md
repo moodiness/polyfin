@@ -93,6 +93,8 @@ docker run -d --name polyfin --network host -v polyfin_data:/data \
   -e POLYFIN_DATABASE_URL=postgresql://polyfin:password@127.0.0.1:5432/polyfin ghcr.io/moodiness/polyfin:latest
 ```
 
+With a PostgreSQL server of your own, searches by name use its `pg_trgm` extension, which the official PostgreSQL image has. Polyfin adds it, with the indexes it serves, the first time a version of Polyfin that uses it starts, if its user may create in its database. Without it, searches still work, only slower, and adding the extension later does not add the indexes.
+
 Only one program on a host's network can use port 7359:
 
 - **Next to a Jellyfin server:** on the same host's network, Polyfin starts anyway and logs it. **System › Health** says that it cannot answer.
