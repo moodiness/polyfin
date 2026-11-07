@@ -1,10 +1,11 @@
 // Polyfin (MIT License). The page of a share link, at /share/{token}: it
 // shows the title's artwork, the link's expiry in the reader's language,
 // and plays the title over HLS, through hls.js where the browser has no
-// HLS of its own. Pressing Play asks the server to start a playback
-// (POST …/play), which answers its play session, or why it does not
-// start; the page then reports the position every 10 seconds, and the end
-// of the playback when the video ends or the page closes.
+// HLS of its own, loaded when Play is first pressed. Pressing Play asks
+// the server to start a playback (POST …/play), which answers its play
+// session, or why it does not start; the page then reports the position
+// every 10 seconds, and the end of the playback when the video ends or
+// the page closes.
 //
 // Where the guest stopped is kept in this browser only, per link, under
 // the link's ID, never its token: on the next visit the page offers to
@@ -210,10 +211,36 @@
     resume.disabled = !enabled
   }
 
+  // hls.js plays where the browser has Media Source Extensions: it is
+  // loaded when Play is first pressed, while the playback starts. A load
+  // that fails is tried again at the next press.
+  var hlsLoading = null
+  function loadHls() {
+    if (!hlsLoading) {
+      hlsLoading = new Promise(function (resolve) {
+        var address = page.getAttribute('data-hls')
+        if (window.Hls || !address || !(window.MediaSource || window.ManagedMediaSource)) return resolve()
+        var script = document.createElement('script')
+        script.onload = function () {
+          resolve()
+        }
+        script.onerror = function () {
+          hlsLoading = null
+          script.parentNode.removeChild(script)
+          resolve()
+        }
+        script.src = address
+        document.head.appendChild(script)
+      })
+    }
+    return hlsLoading
+  }
+
   function start() {
     var from = at
     message.hidden = true
     enable(false)
+    var loading = loadHls()
     fetch(base + '/play', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -232,41 +259,50 @@
           }
           session = answer.session
           started = false
-          var source = playback() + '/master.m3u8'
-          if (window.Hls && window.Hls.isSupported()) {
-            hls = new window.Hls({ enableWorker: true, startPosition: from > 0 ? from : -1 })
-            hls.on(window.Hls.Events.ERROR, function (event, error) {
-              if (!error.fatal) return
-              // The server converts as many videos as it may; any other
-              // refusal is told by the answer to a report.
-              if (error.response && error.response.code === 503) say('busy')
-              else report()
-            })
-            hls.loadSource(source)
-            hls.attachMedia(video)
-          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            if (from > 0) {
-              video.addEventListener('loadedmetadata', function seek() {
-                video.removeEventListener('loadedmetadata', seek)
-                video.currentTime = from
-              })
-            }
-            video.src = source
-          } else {
-            say('error')
-            end(false)
-            return
-          }
-          button.hidden = true
-          resume.hidden = true
-          video.play().catch(function () {})
-          timer = setInterval(report, 10000)
+          return loading.then(function () {
+            attach(answer.session, from)
+          })
         })
       })
       .catch(function () {
         say('error')
         enable(true)
       })
+  }
+
+  // attach plays the playback session from from, unless it ended while
+  // hls.js loaded.
+  function attach(id, from) {
+    if (session !== id) return
+    var source = playback() + '/master.m3u8'
+    if (window.Hls && window.Hls.isSupported()) {
+      hls = new window.Hls({ enableWorker: true, startPosition: from > 0 ? from : -1 })
+      hls.on(window.Hls.Events.ERROR, function (event, error) {
+        if (!error.fatal) return
+        // The server converts as many videos as it may; any other
+        // refusal is told by the answer to a report.
+        if (error.response && error.response.code === 503) say('busy')
+        else report()
+      })
+      hls.loadSource(source)
+      hls.attachMedia(video)
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      if (from > 0) {
+        video.addEventListener('loadedmetadata', function seek() {
+          video.removeEventListener('loadedmetadata', seek)
+          video.currentTime = from
+        })
+      }
+      video.src = source
+    } else {
+      say('error')
+      end(false)
+      return
+    }
+    button.hidden = true
+    resume.hidden = true
+    video.play().catch(function () {})
+    timer = setInterval(report, 10000)
   }
 
   var entry = key && store ? read(key) : null

@@ -182,7 +182,7 @@ func serveText(w http.ResponseWriter, r *http.Request, name, text, contentType s
 // served while set (see serveText), and the copy of a theme's files kept
 // in savedThemes under themecopy.Path (see serveSavedTheme). Text files go
 // compressed to clients that take gzip, compressed once each (see
-// gzipFiles).
+// staticFiles).
 func webClient(files fs.FS, setUp func(context.Context) bool, themes *webThemes, savedThemes string, savedOriginal func(id, name string) (string, bool), api http.Handler, logger *slog.Logger) http.Handler {
 	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -65,7 +65,7 @@ func staticFilesAreCompressedOnce(t *testing.T, h http.Handler, files *countingF
 	var wait sync.WaitGroup
 	for i := range responses {
 		wait.Go(func() {
-			response := fetch(h, http.MethodGet, target, "Accept-Encoding", "gzip, br")
+			response := fetch(h, http.MethodGet, target, "Accept-Encoding", "gzip, deflate")
 			header := response.Header()
 			if response.Code != http.StatusOK || header.Get("Content-Encoding") != "gzip" || !varies(header) ||
 				header.Get("Content-Type") != contentType || header.Get("Cache-Control") != cache {

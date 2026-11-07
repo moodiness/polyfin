@@ -1,16 +1,17 @@
 package jellyfin
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io/fs"
 	"maps"
-	"net/http"
-	"net/http/httptest"
 	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The page of a share link keeps where the guest stopped in their browser,
@@ -37,8 +38,8 @@ func TestSharePageKeepsWhereTheGuestStopped(t *testing.T) {
 		// video's, once loaded; both 600 seconds when unset.
 		Runtime  float64 `json:"runtime"`
 		Duration float64 `json:"duration"`
-		// Native plays HLS without hls.js; Gone loads the page of a link
-		// expired or revoked.
+		// Native plays HLS without hls.js, and has no Media Source
+		// Extensions; Gone loads the page of a link expired or revoked.
 		Native bool `json:"native"`
 		Gone   bool `json:"gone"`
 		// Steps: "load" and "reload" the page, "close" it; "click play",
@@ -49,7 +50,8 @@ func TestSharePageKeepsWhereTheGuestStopped(t *testing.T) {
 		// "tick" for the 10-second report; "server <code>" has the server
 		// answer the next starts and reports with that refusal; "days N"
 		// passes the time. "show" logs the buttons and the message,
-		// "kept" the positions stored, "time" the video's position.
+		// "kept" the positions stored, "time" the video's position,
+		// "loaded" how many times the page loaded hls.js.
 		Steps []string `json:"steps"`
 		// Want logs, besides, "start N" for each start asked of the
 		// server, "hls N" for each hls.js start position (-1 for the
@@ -112,6 +114,16 @@ func TestSharePageKeepsWhereTheGuestStopped(t *testing.T) {
 		"native HLS starts at the position kept": {Native: true, Stored: map[string][2]float64{"polyfin.share.L1": {124, 0}},
 			Steps: []string{"load", "click resume", "metadata", "playing", "time", "at 130", "pause", "kept"},
 			Want:  []string{"start 124", "time 124", "kept polyfin.share.L1=130"}},
+		"hls.js loads at the first press of Play, once": {
+			Steps: []string{"load", "loaded", "click play", "loaded", "playing", "at 124", "pause", "server ended", "tick", "server ok",
+				"click play", "loaded"},
+			Want: []string{"hls.js 0", "start 0", "hls -1", "hls.js 1", "start 124", "hls 124", "hls.js 1"}},
+		"a browser that plays HLS itself never loads hls.js": {Native: true,
+			Steps: []string{"load", "click play", "metadata", "playing", "loaded"},
+			Want:  []string{"start 0", "hls.js 0"}},
+		"the page of a link gone never loads hls.js": {Gone: true,
+			Steps: []string{"load", "loaded"},
+			Want:  []string{"hls.js 0"}},
 	}
 	const harness = `
 const vm = require('node:vm')
@@ -149,11 +161,12 @@ async function run(scenario) {
   function load() {
     const window = {}
     const listeners = {}
-    const main = new Element('', Object.assign({ 'data-link': 'L1' }, scenario.gone ? { 'data-gone': '' } : { 'data-runtime': String(runtime) }))
+    const main = new Element('', Object.assign({ 'data-link': 'L1' }, scenario.gone ? { 'data-gone': '' } : { 'data-runtime': String(runtime), 'data-hls': '/share/assets/hls.min.js?v=0' }))
     const elements = { 'share-messages': Object.assign(new Element('share-messages'), { textContent: JSON.stringify(messages) }) }
     let video = null
     let hls = null
     let interval = null
+    let loads = 0
     if (!scenario.gone) {
       video = new Element('video')
       Object.assign(video, { currentTime: 0, duration: NaN, paused: true, seeking: false, src: '' })
@@ -183,13 +196,16 @@ async function run(scenario) {
     Object.assign(window, {
       window,
       localStorage,
-      Hls: scenario.native ? undefined : Hls,
+      MediaSource: scenario.native ? undefined : class {},
       location: { pathname: '/share/TOKEN/' },
       navigator: { sendBeacon: (url) => { if (url.endsWith('/stop')) log.push('stop'); return true } },
       document: {
         documentElement: { lang: 'en' },
         getElementById: (id) => elements[id] || null,
         querySelector: (selector) => (selector === 'main.share' ? main : selector === 'img.poster' ? elements.poster || null : null),
+        createElement: (tag) => new Element(tag),
+        // hls.js defines Hls once loaded.
+        head: { appendChild: (element) => { loads++; setImmediate(() => { window.Hls = Hls; element.onload() }) } },
       },
       Image: class { addEventListener() {} },
       Date: class extends Date { static now() { return now } },
@@ -214,6 +230,7 @@ async function run(scenario) {
       close: () => { for (const listener of listeners.pagehide || []) listener({ type: 'pagehide' }) },
       tick: () => interval && interval(),
       hls: () => hls,
+      loads: () => loads,
     }
   }
   for (const step of scenario.steps) {
@@ -253,6 +270,7 @@ async function run(scenario) {
         break
       }
       case 'time': log.push('time ' + video.currentTime); break
+      case 'loaded': log.push('hls.js ' + page.loads()); break
       default: throw new Error('unknown step ' + step)
     }
     await flush()
@@ -288,43 +306,71 @@ async function run(scenario) {
 	}
 }
 
-// Every file the page and its style link to is served from
-// /share/assets/: the logo and the style, and the font and hls.js, which
-// are kept for a day while the page's own files are checked at each load.
-func TestSharePageAssetsAreServed(t *testing.T) {
+// renderedSharePage is the page of a link that opens its title.
+func renderedSharePage(t *testing.T) string {
+	t.Helper()
+	text := shareTexts["en"]
+	var page strings.Builder
+	if err := sharePage.Execute(&page, sharePageData{Language: "en", Text: text, Server: "Polyfin", Link: "L1", Messages: text.messages(),
+		Assets: shareLinks, Title: &shareTitleData{Name: "A movie", Minutes: 100, Seconds: 6000, Expires: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	return page.String()
+}
+
+// Every file the page and its style link to is one of /share/assets/:
+// the logo and the style, and the font and hls.js. The page links its
+// own files and hls.js with their version, the hash package server tags
+// them with, which lets the browser keep them for good.
+func TestSharePageLinksItsAssets(t *testing.T) {
 	t.Parallel()
-	page, err := fs.ReadFile(shareFiles, "share/page.html")
+	page := renderedSharePage(t)
+	style, err := fs.ReadFile(ShareAssets, "share.css")
 	if err != nil {
 		t.Fatal(err)
 	}
-	style, err := fs.ReadFile(shareFiles, "share/assets/share.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, match := range regexp.MustCompile(`/share/assets/([\w.-]+)`).FindAllStringSubmatch(string(page), -1) {
-		names = append(names, match[1])
+	versions := map[string]string{}
+	for _, match := range regexp.MustCompile(`/share/assets/([\w.-]+)(?:\?v=(\w+))?`).FindAllStringSubmatch(page, -1) {
+		versions[match[1]] = match[2]
 	}
 	for _, match := range regexp.MustCompile(`url\('([\w.-]+)'\)`).FindAllStringSubmatch(string(style), -1) {
-		names = append(names, match[1])
+		versions[match[1]] = ""
 	}
 	for _, want := range []string{"share.css", "share.js", "hls.min.js", "polyfin.svg",
 		"figtree-latin-wght-normal.woff2", "figtree-latin-ext-wght-normal.woff2"} {
-		if !slices.Contains(names, want) {
-			t.Errorf("%s is not linked: %q", want, names)
+		if _, ok := versions[want]; !ok {
+			t.Errorf("%s is not linked: %q", want, slices.Sorted(maps.Keys(versions)))
 		}
 	}
-	handler := http.StripPrefix("/share/assets/", shareAssetsHandler())
-	for _, name := range names {
-		recorder := httptest.NewRecorder()
-		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/share/assets/"+name, nil))
-		kept := strings.HasPrefix(name, "hls") || strings.HasPrefix(name, "figtree")
-		cache := recorder.Header().Get("Cache-Control")
-		if recorder.Code != http.StatusOK || kept != (cache == "public, max-age=86400") {
-			t.Errorf("%s: %d, Cache-Control %q", name, recorder.Code, cache)
+	for name, version := range versions {
+		data, err := fs.ReadFile(ShareAssets, name)
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
 		}
-		if strings.HasSuffix(name, ".woff2") && recorder.Header().Get("Content-Type") != "font/woff2" {
-			t.Errorf("%s: Content-Type %q", name, recorder.Header().Get("Content-Type"))
+		sum := sha256.Sum256(data)
+		versioned := !strings.HasPrefix(name, "figtree")
+		if want := hex.EncodeToString(sum[:8]); versioned && version != want {
+			t.Errorf("%s: linked with version %q, want %q", name, version, want)
 		}
+	}
+}
+
+// Before Play, the page loads its own script only, within a budget:
+// hls.js loads once Play is pressed, and only where it plays.
+func TestSharePageScriptsBeforePlayStayWithinBudget(t *testing.T) {
+	t.Parallel()
+	const budget = 16 << 10
+	page := renderedSharePage(t)
+	total := 0
+	for _, match := range regexp.MustCompile(`<script src="/share/assets/([\w.-]+)`).FindAllStringSubmatch(page, -1) {
+		data, err := fs.ReadFile(ShareAssets, match[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		total += len(data)
+	}
+	if total == 0 || total > budget {
+		t.Errorf("the page loads %d bytes of script before Play, want 1 to %d", total, budget)
 	}
 }

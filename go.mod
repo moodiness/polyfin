@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	fyne.io/systray v1.12.2
+	github.com/andybalholm/brotli v1.2.8
 	github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701
 	github.com/coder/websocket v1.8.15
 	github.com/fsnotify/fsnotify v1.10.1
