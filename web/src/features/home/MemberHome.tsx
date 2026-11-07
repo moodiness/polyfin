@@ -66,9 +66,9 @@ export function MemberHome({ name }: { name: string }) {
         }
       >
         <MyPlayback onLight={setLitId} />
-        <div className="grid items-start gap-14 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-12 max-md:gap-11">
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-8 max-md:gap-8">
           <QuickConnect />
-          <div className="flex flex-col gap-16 max-md:gap-11">
+          <div className="flex flex-col gap-10 max-md:gap-8">
             <MySources />
             <MyAccount />
           </div>
@@ -108,7 +108,7 @@ function QuickConnect() {
 
   return (
     <Panel title={text.title} description={text.description} className="lg:px-1.5">
-      <form onSubmit={submit} className="max-w-[22.5rem]">
+      <form onSubmit={submit} className="max-w-[18rem]">
         <Field label={text.code} help={text.codeHint}>
           <TextInput
             value={code}
@@ -119,22 +119,22 @@ function QuickConnect() {
             maxLength={longLength}
             placeholder="000000"
             mono
-            className="[&_input]:text-[1.625rem] [&_input]:tracking-[0.32em] max-md:[&_input]:text-[1.375rem]"
+            className="[&_input]:text-[1.375rem] [&_input]:tracking-[0.32em] max-md:[&_input]:text-[1.25rem]"
           />
         </Field>
       </form>
       <ol
         aria-label={text.stepsLabel}
-        className="mt-8 grid grid-cols-3 gap-3 max-md:grid-cols-[minmax(0,1fr)]"
+        className="mt-5 grid grid-cols-3 gap-2 max-md:grid-cols-[minmax(0,1fr)]"
       >
         {text.steps.map((step, index) => (
           <li
             key={step}
-            className="min-w-0 rounded-[1.375rem] bg-s1 px-5 pt-5 pb-[1.375rem] text-[1.0625rem] text-ink-2 max-md:flex max-md:items-start max-md:gap-3.5 max-md:py-4 max-md:text-[1rem]"
+            className="min-w-0 rounded-row bg-s1 px-3.5 pt-3.5 pb-4 text-small text-ink-2 max-md:flex max-md:items-start max-md:gap-3 max-md:py-3"
           >
             <span
               aria-hidden="true"
-              className="figures mb-3 grid size-[2.125rem] shrink-0 place-items-center rounded-full bg-s2 text-[1rem] font-bold text-ink max-md:mb-0"
+              className="figures mb-2 grid size-7 shrink-0 place-items-center rounded-full bg-s2 text-small font-bold text-ink max-md:mb-0"
             >
               {index + 1}
             </span>
@@ -271,7 +271,7 @@ function StatusLine() {
   }
   const ready = status.data.database === 'ready'
   return (
-    <p className="figures mt-[1.125rem] flex flex-wrap items-center gap-x-[1.375rem] gap-y-1.5 px-1.5 text-[1.03125rem] text-ink-3">
+    <p className="figures mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1.5 text-small text-ink-3">
       <span className="flex items-center gap-2">
         {t.status.title}
         {t.common.colon}

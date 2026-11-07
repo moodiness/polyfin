@@ -70,10 +70,10 @@ export default function QuickConnectRoute() {
 
   return (
     <PageLayout title={text.title} lede={text.description}>
-      <div className="grid max-w-[55rem] gap-6">
+      <div className="grid max-w-[48rem] gap-4">
         {approvedDevice !== null ? (
           <Panel as="div">
-            <div className="flex flex-col items-start gap-6">
+            <div className="flex flex-col items-start gap-4">
               <Notice tone="ok" live>
                 {text.approved(approvedDevice, user.name)}
               </Notice>
@@ -86,7 +86,7 @@ export default function QuickConnectRoute() {
           <>
             <Panel as="div">
               {/* The code in one big well, its figures spaced like the device shows them. */}
-              <Field label={text.code} help={text.codeHint} className="max-w-[27.5rem]">
+              <Field label={text.code} help={text.codeHint} className="max-w-[22rem]">
                 <TextInput
                   value={code}
                   onValue={(value) => {
@@ -100,21 +100,21 @@ export default function QuickConnectRoute() {
                   placeholder="000000"
                   autoFocus
                   mono
-                  className="h-[5.5rem] max-sm:h-[4.75rem] [&_input]:figures [&_input]:text-[2.375rem] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[1.875rem] max-sm:[&_input]:tracking-[0.24em]"
+                  className="h-15 max-sm:h-14 [&_input]:figures [&_input]:text-[1.75rem] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[1.5rem] max-sm:[&_input]:tracking-[0.24em]"
                 />
               </Field>
               <ol
                 aria-label={text.stepsLabel}
-                className="mt-8 grid gap-3 md:grid-cols-3 max-md:mt-6"
+                className="mt-5 grid gap-2 md:grid-cols-3 max-md:mt-4"
               >
                 {text.steps.map((step, index) => (
                   <li
                     key={step}
-                    className="rounded-[1.375rem] bg-s1 px-5 pt-5 pb-[1.375rem] text-small text-ink-2"
+                    className="rounded-row bg-s1 px-3.5 pt-3.5 pb-4 text-small text-ink-2"
                   >
                     <span
                       aria-hidden="true"
-                      className="figures mb-3 grid size-[2.125rem] place-items-center rounded-full bg-s3 text-[1rem] font-bold text-ink"
+                      className="figures mb-2 grid size-7 place-items-center rounded-full bg-s3 text-small font-bold text-ink"
                     >
                       {index + 1}
                     </span>
@@ -128,12 +128,12 @@ export default function QuickConnectRoute() {
               <div
                 role="status"
                 aria-label={text.lookingUp}
-                className="flex items-center gap-5 rounded-panel bg-s1 p-7"
+                className="flex items-center gap-3.5 rounded-panel bg-s1 p-4.5"
               >
-                <Skeleton className="size-14 rounded-row" />
-                <span className="flex flex-1 flex-col gap-2.5">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-4 w-64" />
+                <Skeleton className="size-11 rounded-row" />
+                <span className="flex flex-1 flex-col gap-2">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3.5 w-64" />
                 </span>
               </div>
             )}
@@ -159,7 +159,7 @@ export default function QuickConnectRoute() {
                   </PanelFooter>
                 }
               >
-                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-3 text-body">
+                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-1.5 text-body">
                   <dt className="text-ink-3">{text.device}</dt>
                   <dd className="font-medium text-ink">{lookup.data.deviceName}</dd>
                   <dt className="text-ink-3">{text.app}</dt>
@@ -178,7 +178,7 @@ export default function QuickConnectRoute() {
                   </dd>
                 </dl>
                 {approve.isError && (
-                  <Notice tone="danger" live className="mt-5">
+                  <Notice tone="danger" live className="mt-3.5">
                     {errorMessage(t, approve.error)}
                   </Notice>
                 )}

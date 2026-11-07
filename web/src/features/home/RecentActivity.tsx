@@ -178,7 +178,7 @@ export function RecentActivity() {
       aside={<TextLink to="/system/logs">{text.openLog}</TextLink>}
       className="scroll-mt-24"
     >
-      <div className="mb-4 flex flex-col gap-3">
+      <div className="mb-3 flex flex-col gap-2">
         <div
           ref={filterRef}
           className="-mx-5 scroll-fade overflow-x-auto px-5 scrollbar-none md:mx-0 md:px-0"
@@ -206,14 +206,14 @@ export function RecentActivity() {
         />
       </div>
       {activity.isPending ? (
-        <div role="status" aria-label={t.common.loading} className="flex flex-col gap-1">
+        <div role="status" aria-label={t.common.loading} className="flex flex-col gap-0.5">
           {[0, 1, 2, 3].map((row) => (
             <div
               key={row}
-              className="grid min-h-16 grid-cols-[5.25rem_2.25rem_minmax(0,1fr)] items-center gap-4 px-4 max-sm:grid-cols-[2.25rem_minmax(0,1fr)] max-sm:px-0"
+              className="grid min-h-12 grid-cols-[4.5rem_1.875rem_minmax(0,1fr)] items-center gap-3 px-3 max-sm:grid-cols-[1.875rem_minmax(0,1fr)] max-sm:px-0"
             >
-              <Skeleton className="h-4 w-14 max-sm:hidden" />
-              <Skeleton className="size-9 rounded-full" />
+              <Skeleton className="h-3.5 w-12 max-sm:hidden" />
+              <Skeleton className="size-7.5 rounded-full" />
               <Skeleton className="h-4 w-2/3" />
             </div>
           ))}
@@ -245,13 +245,13 @@ export function RecentActivity() {
             height === undefined && 'max-h-[28.75rem] sm:max-h-[37.5rem]',
           )}
         >
-          <ol className="flex flex-col gap-1">
+          <ol className="flex flex-col gap-0.5">
             {shown.map((entry) => (
               <ActivityRow key={entry.id} entry={entry} />
             ))}
           </ol>
           {hasNextPage && (
-            <div ref={sentinelRef} className="flex h-12 items-center justify-center text-ink-3">
+            <div ref={sentinelRef} className="flex h-10 items-center justify-center text-ink-3">
               {isFetchingNextPage && (
                 <span role="status" className="flex items-center gap-2 text-small">
                   <Spinner />
@@ -332,7 +332,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         ? WarningIcon
         : (typeIcons[entry.type] ?? InfoIcon)
   return (
-    <li className="grid min-h-16 grid-cols-[5.25rem_2.25rem_minmax(0,1fr)_auto] items-center gap-4 rounded-[1.375rem] px-4 py-2.5 text-[1.125rem] max-sm:grid-cols-[2.25rem_minmax(0,1fr)] max-sm:items-start max-sm:gap-3 max-sm:px-0 max-sm:text-[1.03125rem]">
+    <li className="grid min-h-12 grid-cols-[4.5rem_1.875rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[0.625rem] px-3 py-1.5 text-body max-sm:grid-cols-[1.875rem_minmax(0,1fr)] max-sm:items-start max-sm:gap-2.5 max-sm:px-0">
       <time
         dateTime={entry.date}
         title={dateTime(entry.date, language)}
@@ -352,7 +352,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       <div className="min-w-0">
         <p className="break-words text-ink">{entry.name}</p>
         {entry.shortOverview !== null && (
-          <p className="mt-0.5 break-words text-[1rem] text-ink-3 max-sm:text-micro">
+          <p className="break-words text-small text-ink-3 max-sm:text-micro">
             {entry.shortOverview}
           </p>
         )}
