@@ -41,7 +41,7 @@ export default function VersionsRoute() {
   return (
     <PageLayout title={t.versions.title} lede={t.versions.description}>
       <Block title={t.versions.find}>
-        <div className="flex flex-col gap-7">
+        <div className="flex flex-col gap-4">
           <UserPicker user={user} onUser={setUser} />
           <TitleFinder
             key={user}
@@ -86,9 +86,9 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
     return (
       <section
         aria-label={text.episodesOf(series.name)}
-        className="flex max-w-[57rem] flex-col gap-3"
+        className="flex max-w-[48rem] flex-col gap-2"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <h3 className="min-w-0 text-h3 break-words text-ink">{text.episodesOf(series.name)}</h3>
           <Button size="sm" variant="ghost" icon={ArrowLeftIcon} onClick={() => setSeries(null)}>
             {text.back}
@@ -104,14 +104,14 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
           <p className="text-small text-ink-3">{text.noEpisodes}</p>
         ) : (
           // Long seasons scroll inside.
-          <div className="max-h-[35rem] overflow-y-auto">
+          <div className="max-h-[30rem] overflow-y-auto">
             <RowList compact aria-label={text.episodesOf(series.name)}>
               {episodes.data.map((episode) => (
                 <Row
                   key={episode.id}
                   onClick={() => onPick(episode)}
                   leading={
-                    <span className="figures w-[5.5rem] shrink-0 text-micro whitespace-nowrap text-ink-3">
+                    <span className="figures w-[4.5rem] shrink-0 text-micro whitespace-nowrap text-ink-3">
                       {formatEpisode(episode.season, episode.episode)}
                     </span>
                   }
@@ -126,7 +126,7 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
   }
 
   return (
-    <div className="flex max-w-[57rem] flex-col gap-5">
+    <div className="flex max-w-[48rem] flex-col gap-3.5">
       <form onSubmit={submit} noValidate>
         <Field label={text.search} help={text.searchHelp}>
           <TextInput
@@ -165,8 +165,8 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
                 key={found.id}
                 onClick={() => (found.kind === 'series' ? setSeries(found) : onPick(found))}
                 leading={
-                  // The poster, a little larger than its 32 px.
-                  <span className="flex shrink-0 [&>*]:w-10">
+                  // The poster at 32 px, which the row's 60 px hold.
+                  <span className="flex shrink-0 [&>*]:w-8">
                     <TitlePoster title={found} />
                   </span>
                 }
@@ -202,7 +202,7 @@ function BlockedEverywhere() {
   })
   return (
     <Block title={text.everywhere} count={blocks.data?.length}>
-      <p className="mb-5 max-w-[72ch] text-small text-ink-2">{text.everywhereHelp}</p>
+      <p className="mb-3 max-w-[72ch] text-small text-ink-2">{text.everywhereHelp}</p>
       {blocks.isPending ? (
         <SkeletonRows rows={2} />
       ) : blocks.isError ? (
