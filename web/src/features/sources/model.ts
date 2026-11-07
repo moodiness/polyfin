@@ -11,7 +11,16 @@ import {
   TerminalWindowIcon,
   type Icon,
 } from '@phosphor-icons/react'
-import { queryClient, queryKeys, type Addon, type LocalFolder, type Owner, type Scope } from '@/api'
+import { useMutation } from '@tanstack/react-query'
+import {
+  queryClient,
+  queryKeys,
+  updateAddon,
+  type Addon,
+  type LocalFolder,
+  type Owner,
+  type Scope,
+} from '@/api'
 
 /** The kinds the list filters by: IPTV gathers M3U playlists, Xtream accounts and tuners. */
 export type KindFilter = 'stremio' | 'eclipse' | 'iptv' | 'local'
@@ -63,6 +72,18 @@ export function replaceCachedAddon(scope: Scope, updated: Addon) {
   queryClient.setQueryData<Addon[]>(queryKeys.addons(scope), (old) =>
     old?.map((addon) => (addon.id === updated.id ? updated : addon)),
   )
+}
+
+/**
+ * Turns a source on or off, from its page or from its row of the list: the cache takes the
+ * source as answered, then the scope is refetched.
+ */
+export function useSourceToggle(scope: Scope, id: string) {
+  return useMutation({
+    mutationFn: (enabled: boolean) => updateAddon(scope, id, { enabled }),
+    onSuccess: (updated) => replaceCachedAddon(scope, updated),
+    onSettled: () => invalidateScope(scope),
+  })
 }
 
 /**

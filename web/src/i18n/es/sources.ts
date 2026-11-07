@@ -48,6 +48,7 @@ const sources: typeof en = {
     notDownloaded: 'Todavía no se ha descargado',
     moreActions: (name: string) => `Más acciones para ${name}`,
     enabled: 'Activada',
+    enabledLabel: (name: string) => `Activada: ${name}`,
     forWhom: 'Para quién',
     descriptions: 'Descripciones',
     enabledHelp:

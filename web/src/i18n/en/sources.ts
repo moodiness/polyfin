@@ -47,6 +47,7 @@ const sources = {
     notDownloaded: 'Not downloaded yet',
     moreActions: (name: string) => `More actions for ${name}`,
     enabled: 'Enabled',
+    enabledLabel: (name: string) => `Enabled: ${name}`,
     forWhom: 'For whom',
     descriptions: 'Descriptions',
     enabledHelp: 'Turning a source off hides its libraries in Jellyfin apps without losing them.',

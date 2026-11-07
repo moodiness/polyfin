@@ -58,28 +58,28 @@ function Logo({ logo, className }: { logo: SourceLogo; className: string }) {
   )
 }
 
-/** The source's kind icon in a round bubble (36 px in the list), or its logo alone once loaded. */
+/** The source's kind icon in a round bubble (30 px in the list), or its logo alone once loaded. */
 export function SourceTile({ addon, selected = false }: { addon: Addon; selected?: boolean }) {
   const logo = useLogo(addon)
   return (
-    <span className="relative inline-grid shrink-0 self-start">
+    <span className="relative inline-grid shrink-0">
       <IconTile icon={logo.loaded ? undefined : kindIcon(addon)} size="sm" selected={selected} />
-      <Logo logo={logo} className="size-9 rounded-full p-1" />
+      <Logo logo={logo} className="size-7.5 rounded-full p-0.5" />
     </span>
   )
 }
 
-/** The big mark at the head of a source's page: its kind icon (72 px, 56 on a phone), or logo. */
+/** The mark at the head of a source's page: its kind icon (48 px, 44 on a phone), or logo. */
 export function SourceMark({ addon }: { addon: Addon }) {
   const logo = useLogo(addon)
   const Glyph = kindIcon(addon)
   return (
     <span
       aria-hidden="true"
-      className="relative grid size-[4.5rem] shrink-0 place-items-center rounded-row bg-s2 text-ink-2 max-md:size-14 max-md:rounded-[1.125rem]"
+      className="relative grid size-12 shrink-0 place-items-center rounded-row bg-s2 text-ink-2 max-md:size-11"
     >
-      {!logo.loaded && <Glyph size="2.125rem" className="max-md:size-7" />}
-      <Logo logo={logo} className="size-full rounded-[inherit] p-2" />
+      {!logo.loaded && <Glyph size="1.5rem" />}
+      <Logo logo={logo} className="size-full rounded-[inherit] p-1.5" />
     </span>
   )
 }
@@ -87,12 +87,20 @@ export function SourceMark({ addon }: { addon: Addon }) {
 /**
  * Whether a source works: on, off, its last IPTV download failed, or its local folder cannot be
  * read, as when its SFTP server offers another host key, or is being scanned. Always an icon and a
- * word.
+ * word. `quiet` says nothing while it works or is off, beside a switch that says it already.
  */
-export function SourceStatus({ addon, className }: { addon: Addon; className?: string }) {
+export function SourceStatus({
+  addon,
+  quiet = false,
+  className,
+}: {
+  addon: Addon
+  quiet?: boolean
+  className?: string
+}) {
   const { t } = useI18n()
   if (!addon.enabled)
-    return (
+    return quiet ? null : (
       <StatusPill tone="muted" className={className}>
         {t.sources.off}
       </StatusPill>
@@ -115,6 +123,7 @@ export function SourceStatus({ addon, className }: { addon: Addon; className?: s
         {t.localFolders.scanning}
       </StatusPill>
     )
+  if (quiet) return null
   return (
     <StatusPill tone="ok" className={className}>
       {t.sources.active}
@@ -123,8 +132,8 @@ export function SourceStatus({ addon, className }: { addon: Addon; className?: s
 }
 
 /**
- * A group of a source's page: its title (25 px) with an aside on the right (a count, a link), then
- * its rows or tiles. Groups are 52 px apart.
+ * A group of a source's page: its title (18 px) with an aside on the right (a count, a link), then
+ * its rows or tiles. Groups are 28 px apart.
  */
 export function Group({
   title,
@@ -139,8 +148,8 @@ export function Group({
 }) {
   const id = useId()
   return (
-    <section aria-labelledby={id} className={cx('mt-13 max-md:mt-10', className)}>
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 max-md:mb-3">
+    <section aria-labelledby={id} className={cx('mt-7 max-md:mt-6', className)}>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 id={id} className="text-group text-ink">
           {title}
         </h3>
@@ -159,7 +168,7 @@ export function Group({
  */
 export function Facts({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <dl aria-label={label} className="figures flex flex-wrap gap-2.5">
+    <dl aria-label={label} className="figures flex flex-wrap gap-1.5">
       {children}
     </dl>
   )
@@ -181,19 +190,14 @@ export function Fact({
   return (
     <div
       className={cx(
-        'flex min-h-[4.5rem] min-w-0 rounded-row bg-s1 px-7 py-4 max-md:min-h-16 max-md:basis-full max-md:px-5 max-md:py-3',
+        'flex min-h-12 min-w-0 rounded-row bg-s1 px-4 py-2.5 max-md:basis-full',
         wide
           ? 'basis-full flex-col justify-center gap-1'
-          : 'grow basis-[calc(50%-0.3125rem)] flex-wrap items-center justify-between gap-x-6 gap-y-1',
+          : 'grow basis-[calc(50%-0.1875rem)] flex-wrap items-center justify-between gap-x-5 gap-y-0.5',
       )}
     >
-      <dt className="text-h3 text-ink max-md:text-[1.125rem]">{label}</dt>
-      <dd
-        className={cx(
-          'min-w-0 text-lead break-words text-ink-2 max-md:text-[1.0625rem]',
-          !wide && 'text-right',
-        )}
-      >
+      <dt className="text-h3 text-ink">{label}</dt>
+      <dd className={cx('min-w-0 text-control break-words text-ink-2', !wide && 'text-right')}>
         {children}
       </dd>
     </div>
