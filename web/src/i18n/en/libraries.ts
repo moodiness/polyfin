@@ -224,6 +224,8 @@ const libraries = {
     serverBadge: 'Server',
     noCatalogs: 'No catalog to draw from yet: add a source first.',
     noCatalogMatch: 'No catalog matches this filter.',
+    catalogsGone:
+      'The catalogs this list drew from are gone, removed with their addons or dropped by them. Choose others: it lists nothing until then.',
     rules: 'Rules',
     rulesHelp: 'Without rules, the list keeps every title of its catalogs.',
     exclude: 'Exclusions',

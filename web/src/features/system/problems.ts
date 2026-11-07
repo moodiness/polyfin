@@ -214,6 +214,10 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       )
     case 'search_late':
       return text.searchLate(ownedName(t, problem.name, problem.owner ?? null))
+    case 'smart_list_empty':
+      return text.smartListEmpty(problem.name, problem.owner?.name ?? null)
+    case 'virtual_channel_source':
+      return text.virtualChannelSource(problem.name)
     case 'folder_no_search':
       return text.folderNoSearch(problem.name)
     case 'task':

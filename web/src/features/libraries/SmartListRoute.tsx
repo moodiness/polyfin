@@ -429,6 +429,11 @@ function Editor({
         </div>
         <Block title={t.smartLists.catalogs} count={draft.catalogs.length}>
           <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.catalogsHelp}</p>
+          {saved !== null && saved.catalogs.length === 0 && (
+            <Notice tone="warn" className="mb-3">
+              {t.smartLists.catalogsGone}
+            </Notice>
+          )}
           <Panel as="div">
             <CatalogPicker
               choices={choices.catalogs}

@@ -98,6 +98,21 @@ const sources = {
     removeShared:
       'Its libraries disappear from Jellyfin apps for every user. This cannot be undone.',
     removeMine: 'Its libraries disappear from your Jellyfin apps. This cannot be undone.',
+    removal: {
+      lead: 'Also lost with it:',
+      homeRows: (count: number, figure: string) =>
+        count === 1 ? '1 home row' : `${figure} home rows`,
+      libraries: (count: number, figure: string) =>
+        count === 1
+          ? '1 library, with its name, image and settings'
+          : `${figure} libraries, with their names, images and settings`,
+      hiddenLibraries: (count: number, figure: string) =>
+        count === 1
+          ? 'Its libraries hidden from 1 user (if you add it again, they will see them)'
+          : `Its libraries hidden from ${figure} users (if you add it again, they will see them)`,
+      recordings: (count: number, figure: string) =>
+        count === 1 ? '1 scheduled recording' : `${figure} scheduled recordings`,
+    },
     removed: (name: string) => `${name} was removed.`,
     readOnly: (name: string) =>
       `This is ${name}’s own source. Only they can change it, from their My sources page.`,

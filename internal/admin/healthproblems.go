@@ -572,6 +572,11 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 	}
 	problems = append(problems, sources...)
 	problems = append(problems, guides...)
+	leftovers, err := h.leftoverProblems(ctx)
+	if err != nil {
+		return nil, err
+	}
+	problems = append(problems, leftovers...)
 
 	if h.Tasks != nil {
 		for _, task := range h.Tasks.Tasks(language) {
@@ -1113,7 +1118,7 @@ func (p healthProblemJSON) text(language string) string {
 			"La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione 610 e non è stato possibile scaricare l’FFmpeg per questi driver: %s. Polyfin riprova al prossimo avvio o quando vengono salvate le impostazioni di conversione.",
 			"A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão 610, e não foi possível baixar o FFmpeg para esses drivers: %s. O Polyfin tenta de novo na próxima inicialização, ou quando as configurações de conversão são salvas."}, p.Error)
 	}
-	return ""
+	return leftoverProblemText(p, language)
 }
 
 // ocrLanguageName names a language by its Tesseract code, in English:

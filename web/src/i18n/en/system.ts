@@ -171,6 +171,12 @@ const system = {
           `${name}: the titles of its files could not be searched${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. They stay unmatched until a search goes through, which Polyfin tries again on its own, after a few minutes, then less often.`,
         searchLate: (name: string) =>
           `${name}: its search did not answer in time. Searches leave it out for a few minutes, then ask it again.`,
+        smartListEmpty: (name: string, owner: string | null) =>
+          owner === null
+            ? `The smart list ${name} lists nothing: the catalogs it drew from are gone. Choose other catalogs for it.`
+            : `${owner}’s smart list ${name} lists nothing: the catalogs it drew from are gone. Other catalogs are to be chosen for it.`,
+        virtualChannelSource: (name: string) =>
+          `The channel ${name} airs a source that no longer exists. Choose another source for it.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         hostErrorFile: (host: string, since: string) =>

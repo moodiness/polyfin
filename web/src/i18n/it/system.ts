@@ -177,6 +177,12 @@ const system: typeof en = {
           `${name}: non è stato possibile cercare i titoli dei suoi file${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Restano non associati finché una ricerca non va a buon fine, cosa che Polyfin riprova da solo, dopo qualche minuto, poi meno spesso.`,
         searchLate: (name: string) =>
           `${name}: la sua ricerca non ha risposto in tempo. Le ricerche lo escludono per qualche minuto, poi lo interrogano di nuovo.`,
+        smartListEmpty: (name: string, owner: string | null) =>
+          owner === null
+            ? `La lista intelligente ${name} non elenca nulla: i cataloghi da cui prendeva i titoli sono spariti. Scegli altri cataloghi per lei.`
+            : `La lista intelligente ${name} di ${owner} non elenca nulla: i cataloghi da cui prendeva i titoli sono spariti. Bisogna sceglierne altri.`,
+        virtualChannelSource: (name: string) =>
+          `Il canale ${name} trasmette una fonte che non esiste più. Scegli un’altra fonte per lui.`,
         guide: (name: string) => `${name}: l’ultimo recupero della guida TV non è riuscito.`,
         paused: (host: string) => `Miniature in pausa per ${host}: ha chiesto di rallentare.`,
         hostErrorFile: (host: string, since: string) =>

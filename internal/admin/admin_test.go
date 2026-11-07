@@ -74,6 +74,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
+	addonStore.SetCleanup(lib.CleanRemoved)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)
 	options := Options{
@@ -96,6 +97,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 		Guides:           lib,
 		IPTV:             channels,
 		LibraryImages:    lib,
+		Leftovers:        lib,
 		LibraryRefreshes: lib,
 		ShownTitles:      lib,
 		SmartLists:       smartlists.New(pool),

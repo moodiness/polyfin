@@ -131,6 +131,9 @@ type Options struct {
 	// LibraryImages finds and keeps the images of libraries; nil shows
 	// none, and refuses to choose them.
 	LibraryImages LibraryImages
+	// Leftovers counts what removing a source loses, and finds the sources
+	// own channels air that are gone; nil counts nothing.
+	Leftovers Leftovers
 	// LibraryRefreshes reads the descriptions of the server's libraries
 	// again; nil offers it for none.
 	LibraryRefreshes LibraryRefreshes
@@ -556,6 +559,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.updateAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh", h.signedIn(h.refreshAddon))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.removeAddon))
+	mux.Handle("GET /admin/api/scopes/{scope}/addons/{id}/removal", h.signedIn(h.addonRemoval))
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))
 	mux.Handle("POST /admin/api/scopes/{scope}/iptv", h.signedIn(h.addSource))
 	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}", h.signedIn(h.updateSource))

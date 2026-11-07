@@ -235,6 +235,8 @@ const libraries: typeof en = {
     serverBadge: 'Serveur',
     noCatalogs: 'Aucun catalogue pour l’instant : ajoutez d’abord une source.',
     noCatalogMatch: 'Aucun catalogue ne correspond à ce filtre.',
+    catalogsGone:
+      'Les catalogues dont cette liste tirait ses titres ont disparu, supprimés avec leurs addons ou retirés par eux. Choisissez-en d’autres : d’ici là, elle ne liste rien.',
     rules: 'Règles',
     rulesHelp: 'Sans règle, la liste garde tous les titres de ses catalogues.',
     exclude: 'Exclusions',

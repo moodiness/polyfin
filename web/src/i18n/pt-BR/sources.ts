@@ -101,6 +101,21 @@ const sources: typeof en = {
       'As bibliotecas dela vão desaparecer dos aplicativos Jellyfin de todos os usuários. Isso não pode ser desfeito.',
     removeMine:
       'As bibliotecas dela vão desaparecer dos seus aplicativos Jellyfin. Isso não pode ser desfeito.',
+    removal: {
+      lead: 'Também serão perdidos:',
+      homeRows: (count: number, figure: string) =>
+        count === 1 ? '1 fileira do início' : `${figure} fileiras do início`,
+      libraries: (count: number, figure: string) =>
+        count === 1
+          ? '1 biblioteca, com nome, imagem e configurações'
+          : `${figure} bibliotecas, com nomes, imagens e configurações`,
+      hiddenLibraries: (count: number, figure: string) =>
+        count === 1
+          ? 'O ocultamento das bibliotecas dela para 1 usuário (se você a adicionar de novo, ele as verá)'
+          : `O ocultamento das bibliotecas dela para ${figure} usuários (se você a adicionar de novo, eles as verão)`,
+      recordings: (count: number, figure: string) =>
+        count === 1 ? '1 gravação agendada' : `${figure} gravações agendadas`,
+    },
     removed: (name: string) => `${name} foi removida.`,
     readOnly: (name: string) =>
       `Esta é a fonte pessoal de ${name}. Somente essa pessoa pode alterá-la, na página Minhas fontes.`,

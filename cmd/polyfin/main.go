@@ -348,6 +348,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	settings := store.Settings()
 	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
+	// A removal deletes, in its transaction, what the addon brought to the
+	// library and settings beyond its own tables.
+	addonStore.SetCleanup(lib.CleanRemoved)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
 	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
@@ -458,6 +461,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		logger.Warn("Tesseract was not found: picture subtitles are not read into text", "tesseract", cfg.Tesseract)
 	}
 	registerLocalFoldersTask(registry, folders)
+	registerCleanupTask(registry, lib, folders, logger)
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.
 	player.LiveSources(channels.Connections, func(ctx context.Context, v library.Version, failure string) {
@@ -727,6 +731,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Recordings:    recorder,
 		Library:       lib,
 		LibraryImages: lib,
+		Leftovers:     lib,
 		// Refreshing a library's descriptions, paced.
 		LibraryRefreshes: lib,
 		ShownTitles:      lib,
@@ -1117,6 +1122,42 @@ func registerLocalFoldersTask(registry *tasks.Registry, folders *localfiles.Serv
 		Interval: localfiles.ScanCheck,
 		AtStart:  true,
 		Run:      func(ctx context.Context) error { return folders.ScanDue(ctx, tasks.ByHand(ctx)) },
+	})
+}
+
+// registerCleanupTask registers the hourly cleanup of what removed
+// sources and catalogs left, as a removal does in its transaction: for a
+// user deleted with their own sources, a catalog an addon dropped, or a
+// row deleted in the database. It forgets the home videos of removed
+// folders past their days too, as scans do.
+func registerCleanupTask(registry *tasks.Registry, lib *library.Service, folders *localfiles.Service, logger *slog.Logger) {
+	registry.Register(tasks.Task{
+		Key:      "CleanUpRemovedSources",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Clean up removed sources", Description: "Deletes what sources removed and catalogs their addons dropped left behind: their libraries, collections and channels, their scheduled recordings, and their place in smart lists, hidden libraries and Live TV limits; titles they listed go to the next catalog that lists them."},
+			"fr":    {Name: "Nettoyer les sources supprimées", Description: "Supprime ce que les sources supprimées et les catalogues retirés par leurs addons ont laissé : leurs médiathèques, collections et chaînes, leurs enregistrements programmés, et leur place dans les listes intelligentes, les médiathèques masquées et les limites de TV en direct ; les titres qu’ils listaient passent au prochain catalogue qui les liste."},
+			"de":    {Name: "Entfernte Quellen aufräumen", Description: "Löscht, was entfernte Quellen und von ihren Add-ons entfernte Kataloge hinterlassen haben: ihre Bibliotheken, Sammlungen und Kanäle, ihre geplanten Aufnahmen und ihren Platz in intelligenten Listen, ausgeblendeten Bibliotheken und Live-TV-Grenzen; die Titel, die sie listeten, gehen an den nächsten Katalog, der sie listet."},
+			"es":    {Name: "Limpiar las fuentes eliminadas", Description: "Borra lo que dejaron las fuentes eliminadas y los catálogos que sus extensiones retiraron: sus bibliotecas, colecciones y canales, sus grabaciones programadas y su lugar en las listas inteligentes, las bibliotecas ocultas y los límites de televisión en vivo; los títulos que listaban pasan al siguiente catálogo que los liste."},
+			"it":    {Name: "Pulisci le fonti rimosse", Description: "Elimina ciò che hanno lasciato le fonti rimosse e i cataloghi tolti dai loro add-on: le loro librerie, collezioni e canali, le loro registrazioni programmate e il loro posto nelle liste intelligenti, nelle librerie nascoste e nei limiti della Diretta TV; i titoli che elencavano passano al prossimo catalogo che li elenca."},
+			"pt-BR": {Name: "Limpar as fontes removidas", Description: "Exclui o que as fontes removidas e os catálogos retirados pelos complementos deixaram: suas bibliotecas, coleções e canais, suas gravações agendadas e seu lugar nas listas inteligentes, nas bibliotecas ocultas e nos limites de TV ao Vivo; os títulos que listavam passam para o próximo catálogo que os liste."},
+		},
+		Interval: library.LeftoversInterval,
+		AtStart:  true,
+		Run: func(ctx context.Context) error {
+			cleaned, err := lib.CleanUpRemoved(ctx)
+			if err != nil {
+				return err
+			}
+			if cleaned.Any() {
+				logger.Info("Cleaned up what removed sources left", "items", cleaned.Items, "released", cleaned.Released, "rows", cleaned.Rows)
+			}
+			forgotten, err := folders.ForgetGoneVideos(ctx)
+			if forgotten > 0 {
+				logger.Info("Forgot the home videos gone long ago", "videos", forgotten)
+			}
+			return err
+		},
 	})
 }
 
