@@ -300,7 +300,7 @@ export function LocalFolderAddForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <Field
         label={text.location}
         help={share === null ? text.help[computer(system)] : text.shareHelp[share]}
@@ -468,7 +468,7 @@ export function LocalFolderEditForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <Field label={text.name} help={text.nameHint}>
         <TextInput value={name} onValue={setName} maxLength={64} required />
       </Field>

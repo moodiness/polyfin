@@ -202,7 +202,7 @@ export function IptvAddFlow({
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <p className="text-small text-ink-3">{text.iptvHelp}</p>
       <ol aria-label={text.steps} className="flex flex-wrap gap-2">
         {(['account', 'categories'] as const).map((id, index) => (
@@ -210,7 +210,7 @@ export function IptvAddFlow({
             key={id}
             aria-current={step === id ? 'step' : undefined}
             className={cx(
-              'inline-flex min-h-10 items-center gap-2.5 rounded-[0.875rem] px-3.5 text-control font-semibold',
+              'inline-flex min-h-9 items-center gap-2 rounded-control px-3 text-control font-semibold',
               step === id ? 'bg-s2 text-ink' : 'text-ink-3',
             )}
           >
@@ -220,7 +220,7 @@ export function IptvAddFlow({
         ))}
       </ol>
       {step === 'account' ? (
-        <form onSubmit={next} noValidate className="flex flex-col gap-5">
+        <form onSubmit={next} noValidate className="flex flex-col gap-4">
           <Field label={text.name}>
             <TextInput
               value={name}
@@ -296,7 +296,7 @@ export function IptvAddFlow({
           </div>
         </form>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           <SourceOptions
             value={options}
             onChange={(patch) => {
@@ -379,7 +379,7 @@ export function IptvEditForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <Field label={t.sourceAdd.name}>
         <TextInput
           value={name}

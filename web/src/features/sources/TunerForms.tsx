@@ -76,7 +76,7 @@ export function TunerAddFlow({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <p className="text-small text-ink-3">{text.tunerHelp}</p>
       <Checkbox
         label={text.favoritesOnly}
@@ -159,7 +159,7 @@ export function TunerAddFlow({
           ))}
         {failed?.found === true && <FieldError>{addError(t, add.error)}</FieldError>}
       </section>
-      <form onSubmit={submit} noValidate className="mt-3 flex flex-col gap-5">
+      <form onSubmit={submit} noValidate className="mt-3 flex flex-col gap-4">
         <Field
           label={text.tunerAddress}
           help={text.tunerAddressHint}
