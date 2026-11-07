@@ -111,7 +111,7 @@ API details: [Web player theme loading](jellyfin-api.md#web-player-theme-loading
 
 ## LumaaGlaass
 
-The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `43dc3e0` of its repository (October 11, 2026, after its version 1.1.0), with two patches of Polyfin's. The theme is updated with Polyfin's releases.
+The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `43dc3e0` of its repository (October 11, 2026, after its version 1.1.0), with three patches of Polyfin's. The theme is updated with Polyfin's releases.
 
 - **Served by Polyfin:** the web player serves the theme's files itself, under `/web/polyfin/themes/lumaaglaass/`. No browser loads them from elsewhere, and the theme works on a server cut off from the internet.
 - **Cached:** their address carries a version that changes with them. A browser keeps each file for a year, and gets the new ones with the Polyfin release that brings them.
@@ -142,6 +142,7 @@ The patches are in [`third_party/lumaaglaass`](../third_party/lumaaglaass), with
 
 - The LumaaGlaass page takes the options of the script's loader as its defaults. The theme's own page ignores them.
 - The theme's script, pasted rather than loaded, takes its extensions from Polyfin. Otherwise it would take them from the main branch of the theme's repository.
+- The theme's script goes over the page once per frame, rather than after each of jellyfin-web's changes to it, which made the web player slower to start and to change pages.
 
 `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again. Each update is thus a change to review.
 
