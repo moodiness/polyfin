@@ -22,8 +22,8 @@ export type TabsProps = {
   label: string
   items: readonly TabItem[]
   /**
-   * - `words`: the sub-area words under a page title (Sources · Libraries · Live TV), 20 px.
-   * - `underline`: smaller words inside a page (a source's Summary, Categories…), 18 px.
+   * - `words`: the sub-area words under a page title (Sources · Libraries · Live TV), 17.5 px.
+   * - `underline`: smaller words inside a page (a source's Summary, Categories…), 15.5 px.
    *
    * Both mark the current word with a bar under it, as well as `aria-current` or `aria-selected`.
    */
@@ -36,21 +36,21 @@ export type TabsProps = {
 }
 
 const tabStyles = {
-  words: 'px-3.5 pt-2 pb-2.5 text-lead font-semibold max-md:px-2.5 max-md:text-[1.125rem]',
-  underline: 'px-3 pt-1.5 pb-2.5 text-control font-semibold',
+  words: 'px-2.5 pt-1 pb-1.5 text-h3 max-md:px-2',
+  underline: 'px-2.5 pt-1 pb-1.5 text-small font-semibold',
 }
 
 // The current word is ink with a bar under it; the others ink-3 until hovered. Focus lights it.
 const tabBase = cx(
-  'relative flex shrink-0 items-center gap-2 rounded-[0.9375rem] whitespace-nowrap text-ink-3 focus-lit [--lift:1.04] hover:bg-s1 hover:text-ink',
-  'after:absolute after:inset-x-3.5 after:bottom-0.5 after:h-[0.1875rem] after:scale-x-0 after:rounded-full after:bg-current after:transition-transform after:duration-300 after:ease-nuit max-md:after:inset-x-2.5',
+  'relative flex shrink-0 items-center gap-1.5 rounded-[0.5rem] whitespace-nowrap text-ink-3 focus-lit [--lift:1.04] hover:bg-s1 hover:text-ink',
+  'after:absolute after:inset-x-2.5 after:bottom-0.5 after:h-0.5 after:scale-x-0 after:rounded-full after:bg-current after:transition-transform after:duration-300 after:ease-nuit max-md:after:inset-x-2',
   'aria-[current=page]:text-ink aria-[current=page]:after:scale-x-100 aria-selected:text-ink aria-selected:after:scale-x-100',
 )
 
 // The words' text lines up with the title above; the padding keeps a lit word's lift in view.
 const railStyles = {
-  words: '-mx-3.5 px-0.5 max-md:-mx-5 max-md:px-[0.625rem]',
-  underline: '-mx-3',
+  words: '-mx-2.5 px-0.5 max-md:-mx-5 max-md:px-[0.75rem]',
+  underline: '-mx-2.5',
 }
 
 /**

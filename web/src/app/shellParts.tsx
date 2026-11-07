@@ -4,9 +4,9 @@ import { cx } from '@/ui'
 
 /**
  * The column every signed-in page and the top row share: 1440 px at most at every density, margins
- * included, with margins of 20 steps, 14 under 1400 px and 5 on a phone.
+ * included, with margins of 14 steps, 10 under 1400 px and 5 on a phone.
  */
-export const pageFrame = 'mx-auto w-full max-w-page px-20 max-[1400px]:px-14 max-md:px-5'
+export const pageFrame = 'mx-auto w-full max-w-page px-14 max-[1400px]:px-10 max-md:px-5'
 
 /** The quiet squares and pills of the top row and the phone menu, lit when focused. */
 export const topControl =
@@ -25,7 +25,7 @@ export function ProblemCount({ className }: { className?: string }) {
       <span
         aria-hidden="true"
         className={cx(
-          'figures ml-2 inline-grid h-6 min-w-6 place-items-center rounded-[0.890625rem] bg-danger/14 px-1.5 text-[0.9375rem] leading-none font-bold text-danger',
+          'figures ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-danger/14 px-1 text-[0.75rem] leading-none font-bold text-danger',
           className,
         )}
       >

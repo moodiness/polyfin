@@ -13,8 +13,8 @@ import { Spinner } from './Spinner'
  */
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
-/** `md` is 52 px tall, the default; `sm` is 44 px, for dense rows and docks. Both grow when a
- * label wraps on a phone. */
+/** `md` is 38 px tall (32 in Compact), the default, 44 on a phone; `sm` is 34 px, for dense rows
+ * and docks. Both grow when a label wraps on a phone. */
 export type ButtonSize = 'md' | 'sm'
 
 const variants: Record<ButtonVariant, string> = {
@@ -25,8 +25,8 @@ const variants: Record<ButtonVariant, string> = {
 }
 
 const sizes: Record<ButtonSize, string> = {
-  md: 'min-h-13 gap-2.5 px-5.5 py-2 text-control',
-  sm: 'min-h-11 gap-2 px-4 py-1.5 text-small',
+  md: 'min-h-9.5 gap-2 px-3.5 py-1.5 text-control max-sm:min-h-11',
+  sm: 'min-h-8.5 gap-1.5 px-3 py-1 text-small',
 }
 
 /** The classes of a button, for the rare element that cannot be a Button or ButtonLink. */
@@ -61,7 +61,7 @@ function Content({
   loading,
   children,
 }: CommonProps & { loading?: boolean }) {
-  const glyph = size === 'sm' ? 18 : 21
+  const glyph = size === 'sm' ? 16 : 18
   return (
     <>
       {loading ? (
@@ -165,7 +165,7 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
   label: string
   /** The Phosphor icon. */
   icon: Icon
-  /** `md` is 44 px, `sm` 36 px for rows. */
+  /** `md` is 38 px (32 in Compact, 44 on a phone), `sm` 32 px for rows. */
   size?: 'md' | 'sm'
   /** Red on hover, for removing. */
   danger?: boolean
@@ -201,16 +201,16 @@ export function IconButton({
       className={cx(
         'inline-grid shrink-0 cursor-pointer place-items-center text-ink-2 focus-lit [--lift:1.06]',
         'hover:bg-s2 hover:text-ink aria-pressed:text-link disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-2',
-        size === 'md' ? 'size-11 rounded-control' : 'size-9 rounded-[0.875rem]',
+        size === 'md' ? 'size-9.5 rounded-control max-sm:size-11' : 'size-8 rounded-[0.5rem]',
         danger && 'hover:bg-danger/14 hover:text-danger',
         className,
       )}
       {...rest}
     >
       {loading ? (
-        <Spinner size={size === 'md' ? 22 : 19} />
+        <Spinner size={size === 'md' ? 19 : 17} />
       ) : (
-        <Glyph size={rem(size === 'md' ? 22 : 19)} aria-hidden="true" />
+        <Glyph size={rem(size === 'md' ? 19 : 17)} aria-hidden="true" />
       )}
     </button>
   )

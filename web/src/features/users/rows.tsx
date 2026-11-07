@@ -27,18 +27,18 @@ export function PageSection({
 }) {
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-8 max-md:scroll-mt-20">
-      <div className="mb-[1.125rem] flex flex-wrap items-end justify-between gap-x-4 gap-y-3 max-md:mb-3.5">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <h2 id={`${id}-title`} className="text-group break-words text-ink">
+          <h2 id={`${id}-title`} className="text-h2 break-words text-ink">
             {title}
           </h2>
           {description !== undefined && (
-            <p className="mt-1.5 max-w-[66ch] text-small text-ink-2">{description}</p>
+            <p className="mt-1 max-w-[72ch] text-small text-ink-2">{description}</p>
           )}
         </div>
         {aside}
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">{children}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">{children}</div>
     </section>
   )
 }
@@ -67,13 +67,13 @@ export function Band({
 }) {
   const titleId = useId()
   return (
-    <header className="mb-12 max-md:mb-8">
+    <header className="mb-7 max-md:mb-6">
       <Link
         to={back.to}
-        className="group focus-lit mb-3 -ml-3 inline-flex items-center gap-2 rounded-control px-3 py-1.5 text-small font-medium text-ink-2 hover:bg-s1 hover:text-ink"
+        className="group focus-lit mb-2 -ml-2.5 inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 text-small font-medium text-ink-2 hover:bg-s1 hover:text-ink"
       >
         <ArrowLeftIcon
-          size="1.125rem"
+          size="1rem"
           aria-hidden="true"
           className="transition-transform duration-300 ease-nuit group-hover:-translate-x-0.5"
         />
@@ -81,7 +81,7 @@ export function Band({
       </Link>
       <section
         aria-labelledby={titleId}
-        className="relative isolate grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-7 overflow-hidden rounded-tile bg-s1 px-8 py-[1.875rem] max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-x-[1.125rem] max-md:gap-y-4 max-md:rounded-panel max-md:px-5 max-md:py-[1.375rem]"
+        className="relative isolate grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 overflow-hidden rounded-panel bg-s1 px-5 py-4 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-x-3.5 max-md:gap-y-3 max-md:px-4"
       >
         {art && (
           <>
@@ -99,16 +99,16 @@ export function Band({
         )}
         {leading}
         <div className="min-w-0">
-          <h1 id={titleId} className="text-h1 break-words text-ink max-md:text-[2.125rem]">
+          <h1 id={titleId} className="text-h1 break-words text-ink">
             {title}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-[1.125rem] gap-y-1.5 text-[1.125rem] text-ink-2 max-md:text-[1rem]">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-control text-ink-2">
             {facts}
           </div>
           {extra}
         </div>
         {actions && (
-          <div className="flex max-w-full flex-wrap gap-3 self-start max-md:col-span-full">
+          <div className="flex max-w-full flex-wrap gap-2 self-start max-md:col-span-full">
             {actions}
           </div>
         )}
@@ -160,7 +160,7 @@ export function WatchingLink({
   return (
     <Link
       to="/"
-      className="focus-lit mt-[1.125rem] flex w-fit max-w-full items-center gap-3.5 rounded-[1.25rem] bg-ink/8 py-2 pr-[1.125rem] pl-2 text-[1.09375rem] text-ink hover:bg-ink/13 max-md:text-[1rem]"
+      className="focus-lit mt-3 flex w-fit max-w-full items-center gap-2.5 rounded-[0.75rem] bg-ink/8 py-1.5 pr-3.5 pl-1.5 text-control text-ink hover:bg-ink/13"
     >
       {art !== null && (
         <img
@@ -168,7 +168,7 @@ export function WatchingLink({
           alt=""
           loading="lazy"
           onError={onArtError}
-          className="h-14 w-10 shrink-0 rounded-[0.625rem] bg-s2 object-cover"
+          className="h-11 w-8 shrink-0 rounded-[0.375rem] bg-s2 object-cover"
         />
       )}
       <span className="min-w-0">

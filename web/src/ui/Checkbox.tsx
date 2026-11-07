@@ -23,8 +23,9 @@ export type CheckboxProps = {
 
 /**
  * A native checkbox drawn in the « Salon » style, for choosing items of a list (categories,
- * libraries, permissions): a 26 px soft box, periwinkle when checked. Under the keyboard the whole
- * row lights up. For a setting that turns something on, prefer Switch.
+ * libraries, permissions): a 20 px soft box, periwinkle when checked, on a line of 36 px (31 in
+ * Compact). Under the keyboard the whole row lights up. For a setting that turns something on,
+ * prefer Switch.
  */
 export function Checkbox({
   checked,
@@ -46,12 +47,12 @@ export function Checkbox({
   return (
     <label
       className={cx(
-        'group -mx-3 flex min-w-0 cursor-pointer items-start gap-3.5 rounded-choice px-3 py-2 text-body text-ink transition-[background-color,color,scale] duration-300 ease-nuit hover:bg-s1 has-[:focus-visible]:lit',
+        'group -mx-2 flex min-w-0 cursor-pointer items-start gap-2.5 rounded-choice px-2 py-1.5 text-body text-ink transition-[background-color,color,scale] duration-300 ease-nuit hover:bg-s1 has-[:focus-visible]:lit',
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
     >
-      <span className="relative inline-grid size-6.5 shrink-0 place-items-center">
+      <span className="relative mt-0.5 inline-grid size-5 shrink-0 place-items-center">
         <input
           ref={input}
           type="checkbox"
@@ -62,13 +63,13 @@ export function Checkbox({
           className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-check bg-s4 transition-[background-color] duration-300 ease-nuit focus-visible:outline-none checked:bg-accent indeterminate:bg-accent disabled:cursor-not-allowed"
         />
         <Mark
-          size="1rem"
+          size="0.8125rem"
           weight="bold"
           aria-hidden="true"
           className="pointer-events-none relative text-on-accent opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-100"
         />
       </span>
-      <span className={cx('min-w-0 flex-1 pt-px', hideLabel && 'sr-only')}>
+      <span className={cx('min-w-0 flex-1', hideLabel && 'sr-only')}>
         <span className="block">{label}</span>
         {help && (
           <span id={`${id}-help`} className="mt-0.5 block text-small text-ink-3">

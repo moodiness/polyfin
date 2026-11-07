@@ -30,21 +30,21 @@ export type SwitchProps = {
   'data-setting-head'?: boolean
 }
 
-/** The 60 × 36 toggle, hidden from screen readers. Periwinkle when on, darker while lit. */
+/** The 42 × 24 toggle (36 × 20 in Compact), hidden from screen readers. Periwinkle when on. */
 function SwitchTrack({ checked }: { checked: boolean }) {
   return (
     <span
       aria-hidden="true"
       className={cx(
-        'relative inline-block h-9 w-15 shrink-0 rounded-full transition-[background-color] duration-350 ease-nuit',
-        'max-sm:h-8 max-sm:w-13',
+        'relative inline-block h-6 w-10.5 shrink-0 rounded-full transition-[background-color] duration-350 ease-nuit',
+        'max-sm:h-7 max-sm:w-12',
         checked ? 'bg-accent' : 'bg-s4',
       )}
     >
       <span
         className={cx(
-          'absolute top-1 left-1 size-7 rounded-full shadow-[0_4px_10px_-2px_rgb(0_0_0/0.4)] transition-[translate,background-color] duration-500 ease-nuit max-sm:size-6',
-          checked ? 'translate-x-6 bg-white max-sm:translate-x-5' : 'bg-ink',
+          'absolute top-0.75 left-0.75 size-4.5 rounded-full shadow-[0_3px_8px_-2px_rgb(0_0_0/0.4)] transition-[translate,background-color] duration-500 ease-nuit max-sm:size-5.5',
+          checked ? 'translate-x-4.5 bg-white max-sm:translate-x-5' : 'bg-ink',
         )}
       />
     </span>
@@ -86,8 +86,8 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cx(
-        'inline-flex shrink-0 cursor-pointer items-center gap-3 rounded-full text-body text-ink-2 focus-lit [--lift:1.04]',
-        words ? 'py-1 pr-1 pl-4' : 'p-1',
+        'inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full text-control text-ink-2 focus-lit [--lift:1.04]',
+        words ? 'py-0.5 pr-0.5 pl-3' : 'p-0.5',
         'hover:text-ink disabled:cursor-not-allowed disabled:opacity-45',
         className,
       )}

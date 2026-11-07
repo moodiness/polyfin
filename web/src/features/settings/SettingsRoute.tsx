@@ -104,21 +104,15 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
         <SearchResults query={search.trim()} bounds={settings.data?.bounds} />
       )}
       <div hidden={search.trim() !== ''}>
-        <header className="max-md:pt-6">
-          <h2 className="text-h1 text-ink max-md:text-[2.125rem] max-md:leading-tight">
-            {t.nav.settingsSections[current.key]}
-          </h2>
-          {lede !== undefined && (
-            <p className="mt-4 max-w-[60ch] text-[1.3125rem] leading-normal text-ink-2 max-md:text-[1.09375rem]">
-              {lede}
-            </p>
-          )}
+        <header className="max-md:pt-4">
+          <h2 className="text-h2 text-ink">{t.nav.settingsSections[current.key]}</h2>
+          {lede !== undefined && <p className="mt-1 max-w-[72ch] text-lead text-ink-2">{lede}</p>}
         </header>
         {settings.isPending ? (
-          <div aria-busy="true" aria-label={t.common.loading} className="mt-10 space-y-2">
-            <SkeletonText lines={1} className="mb-4 w-56" />
+          <div aria-busy="true" aria-label={t.common.loading} className="mt-5 space-y-1.5">
+            <SkeletonText lines={1} className="mb-3 w-56" />
             {[0, 1, 2, 3].map((index) => (
-              <Skeleton key={index} className="h-[5.125rem] w-full rounded-row" />
+              <Skeleton key={index} className="h-[3.375rem] w-full rounded-row" />
             ))}
           </div>
         ) : settings.isError ? (

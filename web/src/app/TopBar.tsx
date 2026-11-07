@@ -47,7 +47,7 @@ export function useWebClient(): boolean {
 /**
  * The top row of every signed-in page, which scrolls away with it: the logo, the five area words
  * (a member's own pages instead), then Search with ⌘K, the web player and the account. The area
- * words are 24 px, 22 under 1400 px and 20 under 1100 px; below 1180 px, where German ones
+ * words are 17 px, 16 under 1400 px and 15 under 1100 px; below 1180 px, where German ones
  * no longer fit, they move into the full-screen menu, behind the menu button. The account's name
  * gives way first when the row is short of room. `data-top-bar` marks it for the lists of
  * `Select` and `SuggestInput`, which stay under it.
@@ -68,7 +68,7 @@ export function TopBar({ user }: { user: SessionUser }) {
       <div
         className={cx(
           pageFrame,
-          'flex h-[6.25rem] items-center gap-7 pt-[1.625rem] max-[1400px]:gap-5 max-[1180px]:h-[4.5rem] max-[1180px]:gap-2.5 max-[1180px]:pt-3.5',
+          'flex h-16 items-center gap-5 pt-2 max-[1400px]:gap-4 max-[1180px]:h-14 max-[1180px]:gap-2.5 max-[1180px]:pt-1.5',
         )}
       >
         {webClient && inPlace && (
@@ -76,14 +76,14 @@ export function TopBar({ user }: { user: SessionUser }) {
             {...webPlayerLink(true)}
             aria-label={t.nav.backToWebPlayer}
             title={t.nav.backToWebPlayer}
-            className={cx(topControl, 'size-12 justify-center bg-transparent min-[1180px]:hidden')}
+            className={cx(topControl, 'size-10 justify-center bg-transparent min-[1180px]:hidden')}
           >
-            <ArrowLeftIcon size="1.375rem" aria-hidden="true" />
+            <ArrowLeftIcon size="1.125rem" aria-hidden="true" />
           </a>
         )}
         <Brand />
         <nav aria-label={t.nav.label} className="shrink-0 max-[1180px]:hidden">
-          <ul className="flex gap-1.5 max-[1400px]:gap-0.5">
+          <ul className="flex gap-0.5">
             {sections.map((section) => (
               <li key={section.id}>
                 <AreaWord section={section} current={isCurrent(section, pathname)} />
@@ -99,12 +99,12 @@ export function TopBar({ user }: { user: SessionUser }) {
             aria-keyshortcuts="Meta+K Control+K /"
             className={cx(
               topControl,
-              'h-[3.25rem] w-[16.25rem] gap-3 px-5 text-control text-ink-3 focus-visible:[--lift:1.03] max-[1400px]:w-[13.125rem]',
-              'max-xl:w-[3.25rem] max-xl:justify-center max-xl:px-0 max-[1180px]:size-12',
+              'h-9.5 w-[14rem] gap-2 px-3 text-control text-ink-3 focus-visible:[--lift:1.03] max-[1400px]:w-[12rem]',
+              'max-xl:w-9.5 max-xl:justify-center max-xl:px-0 max-[1180px]:size-10',
             )}
           >
             <MagnifyingGlassIcon
-              size="1.375rem"
+              size="1.125rem"
               aria-hidden="true"
               className="shrink-0 text-ink-2"
             />
@@ -118,12 +118,12 @@ export function TopBar({ user }: { user: SessionUser }) {
                 inPlace ? t.nav.backToWebPlayer : `${t.nav.webPlayer}: ${t.nav.webPlayerHint}`
               }
               title={inPlace ? t.nav.backToWebPlayer : t.nav.webPlayer}
-              className={cx(topControl, 'size-[3.25rem] justify-center max-[1180px]:hidden')}
+              className={cx(topControl, 'size-9.5 justify-center max-[1180px]:hidden')}
             >
               {inPlace ? (
-                <ArrowLeftIcon size="1.5rem" aria-hidden="true" />
+                <ArrowLeftIcon size="1.25rem" aria-hidden="true" />
               ) : (
-                <MonitorPlayIcon size="1.5rem" aria-hidden="true" />
+                <MonitorPlayIcon size="1.25rem" aria-hidden="true" />
               )}
             </a>
           )}
@@ -145,9 +145,9 @@ function AreaWord({ section, current }: { section: NavSection; current: boolean 
       to={section.to}
       aria-current={current ? 'page' : undefined}
       className={cx(
-        'focus-lit group relative flex items-center rounded-choice px-5 pt-2.5 pb-3 text-area whitespace-nowrap text-ink-3 hover:bg-s1 hover:text-ink [--lift:1.05]',
-        'max-[1400px]:px-4 max-[1100px]:px-3 max-[1100px]:pt-2 max-[1100px]:pb-2.5',
-        'aria-[current=page]:text-ink aria-[current=page]:after:absolute aria-[current=page]:after:bottom-0.5 aria-[current=page]:after:left-1/2 aria-[current=page]:after:h-1 aria-[current=page]:after:w-[1.375rem] aria-[current=page]:after:-translate-x-1/2 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-current',
+        'focus-lit group relative flex items-center rounded-[0.5rem] px-3 pt-1.5 pb-2 text-area whitespace-nowrap text-ink-3 hover:bg-s1 hover:text-ink [--lift:1.05]',
+        'max-[1400px]:px-2.5 max-[1100px]:px-2 max-[1100px]:pt-1 max-[1100px]:pb-1.5',
+        'aria-[current=page]:text-ink aria-[current=page]:after:absolute aria-[current=page]:after:bottom-0 aria-[current=page]:after:left-1/2 aria-[current=page]:after:h-0.5 aria-[current=page]:after:w-4 aria-[current=page]:after:-translate-x-1/2 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-current',
       )}
     >
       {section.label(t)}
@@ -174,7 +174,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
         <button
           {...props}
           aria-label={t.nav.accountOf(user.name)}
-          className="focus-lit flex max-w-[15rem] min-w-0 cursor-pointer items-center gap-3 rounded-full py-1 pr-[1.125rem] pl-1 text-[1.1875rem] font-semibold text-ink hover:bg-s1 aria-expanded:bg-s1 [--lift:1.04] max-xl:p-1 max-[1180px]:p-0.5"
+          className="focus-lit flex max-w-[15rem] min-w-0 cursor-pointer items-center gap-2 rounded-full py-0.5 pr-3 pl-0.5 text-control font-semibold text-ink hover:bg-s1 aria-expanded:bg-s1 [--lift:1.04] max-xl:p-0.5"
         >
           <Avatar name={user.name} image={userImageUrl(user)} size="md" />
           <span className="min-w-0 truncate max-xl:hidden">{user.name}</span>
@@ -184,7 +184,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
       <MenuHeader>
         <Avatar name={user.name} image={userImageUrl(user)} size="md" />
         <div className="min-w-0">
-          <p className="truncate text-[1.25rem] font-semibold text-ink">{user.name}</p>
+          <p className="truncate text-h3 text-ink">{user.name}</p>
           <p className="text-small text-ink-3">
             {user.isAdministrator ? t.nav.administrator : t.nav.member}
           </p>

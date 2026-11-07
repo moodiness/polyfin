@@ -39,13 +39,13 @@ export function Badge({
   return (
     <span
       className={cx(
-        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-micro leading-none font-semibold whitespace-nowrap',
-        Glyph && 'pl-2.5',
+        'inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2.5 text-micro leading-none font-semibold whitespace-nowrap',
+        Glyph && 'pl-2',
         badgeTones[tone],
         className,
       )}
     >
-      {Glyph && <Glyph size="1.0625rem" aria-hidden="true" className="shrink-0" />}
+      {Glyph && <Glyph size="0.875rem" aria-hidden="true" className="shrink-0" />}
       {children}
     </span>
   )
@@ -56,7 +56,7 @@ export function Count({ children, label }: { children: ReactNode; label?: string
   return (
     <span
       aria-label={label}
-      className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-s2 px-2.5 text-micro font-semibold text-ink-2 figures"
+      className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-s2 px-2 text-micro font-semibold text-ink-2 figures"
     >
       {children}
     </span>
@@ -100,14 +100,11 @@ export function StatusPill({
     return (
       <span
         className={cx(
-          'inline-flex max-w-full shrink-0 items-center gap-2.5 text-small font-semibold text-ink',
+          'inline-flex max-w-full shrink-0 items-center gap-2 text-small font-semibold text-ink',
           className,
         )}
       >
-        <span
-          aria-hidden="true"
-          className="size-2.5 shrink-0 rounded-full bg-ok ring-4 ring-ok/20"
-        />
+        <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-ok ring-3 ring-ok/20" />
         <span className="min-w-0 break-words">{children}</span>
       </span>
     )
@@ -117,16 +114,16 @@ export function StatusPill({
   return (
     <span
       className={cx(
-        'inline-flex max-w-full shrink-0 items-center gap-2 text-small font-semibold',
+        'inline-flex max-w-full shrink-0 items-center gap-1.5 text-small font-semibold',
         color,
         className,
       )}
     >
       <span
         aria-hidden="true"
-        className={cx('inline-grid size-7 shrink-0 place-items-center rounded-full', bubble)}
+        className={cx('inline-grid size-5.5 shrink-0 place-items-center rounded-full', bubble)}
       >
-        <Glyph size="1.0625rem" />
+        <Glyph size="0.875rem" />
       </span>
       <span className="min-w-0 break-words">{children}</span>
     </span>

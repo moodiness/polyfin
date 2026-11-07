@@ -3,7 +3,7 @@ import { languages, useI18n } from '@/i18n'
 import { cx, rem, Select } from '@/ui'
 
 /**
- * The Polyfin logo, the only place for the brand's five facets. In the top row it is the 44 px
+ * The Polyfin logo, the only place for the brand's five facets. In the top row it is the 32 px
  * logo alone, linking home; without a session (`link={false}`) it is the 40 px logo and the name,
  * which a phone leaves out.
  */
@@ -31,9 +31,9 @@ export function Brand({ link = true }: { link?: boolean }) {
     <Link
       to="/"
       aria-label={`${t.header.productName}, ${t.nav.home}`}
-      className="focus-lit -ml-1.5 flex size-11 shrink-0 items-center rounded-[0.890625rem] [--lift:1.06] max-[1180px]:ml-0"
+      className="focus-lit -ml-1 flex size-9 shrink-0 items-center justify-center rounded-[0.5rem] [--lift:1.06] max-[1180px]:ml-0"
     >
-      {logo(44)}
+      {logo(32)}
     </Link>
   )
 }

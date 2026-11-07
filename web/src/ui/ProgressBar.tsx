@@ -83,8 +83,8 @@ export function Avatar({
   /** The address of the profile picture (`userImageUrl`); the initial stands in without one. */
   image?: string
   /**
-   * `sm` 32 px (inline, who is playing), `md` 44 px (the account button, a menu), `lg` 56 px (at
-   * the start of a row), `xl` 96 px (a person's page).
+   * `sm` 26 px (inline, who is playing), `md` 36 px (the account button, a menu), `lg` 44 px (at
+   * the start of a row), `xl` 64 px (a person's page).
    */
   size?: 'sm' | 'md' | 'lg' | 'xl'
   label?: string
@@ -95,10 +95,10 @@ export function Avatar({
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? '?'
   const box = cx(
     'shrink-0 rounded-full',
-    size === 'sm' && 'size-8 text-[0.9375rem]',
-    size === 'md' && 'size-11 text-[1.1875rem]',
-    size === 'lg' && 'size-14 text-[1.4375rem]',
-    size === 'xl' && 'size-24 text-[2.5rem]',
+    size === 'sm' && 'size-6.5 text-[0.8125rem]',
+    size === 'md' && 'size-9 text-[1rem]',
+    size === 'lg' && 'size-11 text-[1.1875rem]',
+    size === 'xl' && 'size-16 text-[1.75rem]',
     className,
   )
   if (image !== undefined && failed !== image) {
