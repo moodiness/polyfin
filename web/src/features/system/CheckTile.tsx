@@ -7,7 +7,7 @@ import { detailOpened } from './healthDetails'
 /**
  * A check of Health on a tile, as a link to its details: an icon, its state as an icon and a word
  * (StatusPill), the kind, the name or figure, a line on it, and a foot with a chevron. The tile is
- * lit on focus, rising a little. In a `CheckGrid`, `wide` tiles take two columns.
+ * lit as a row on focus. In a `CheckGrid`, `wide` tiles take two columns.
  */
 export function CheckTile({
   to,
@@ -40,7 +40,7 @@ export function CheckTile({
       // A part of Health opens over the page, and closing it goes back.
       state={typeof to === 'object' && to.pathname === undefined ? detailOpened : undefined}
       className={cx(
-        'focus-lit grid min-h-[13.125rem] min-w-0 grid-rows-[auto_1fr_auto] gap-3.5 rounded-panel bg-s1 px-[1.625rem] py-6 [--lift:1.02] hover:bg-s2 max-md:min-h-0 max-md:rounded-[1.5rem] max-md:p-5',
+        'focus-lit-row grid min-h-[13.125rem] min-w-0 grid-rows-[auto_1fr_auto] gap-3.5 rounded-panel bg-s1 px-[1.625rem] py-6 hover:bg-s2 max-md:min-h-0 max-md:rounded-[1.5rem] max-md:p-5',
         wide && 'xl:col-span-2',
         // Two columns: an odd last tile takes the row, so that none ends with a hole.
         'md:max-xl:[&:last-child:nth-child(odd)]:col-span-2',

@@ -57,8 +57,8 @@ const hoverLights = '(min-width: 48rem) and (hover: hover)'
 /**
  * A poster tile for what is playing: the poster on a blurred, darkened backdrop of itself under a
  * scrim, then who watches, the title, how it plays, and a foot with progress and rates. In an
- * ArtShelf the lit tile opens wide and gets a white halo; its `tools` (icon buttons) and its
- * `detail` show only then. Images load lazily.
+ * ArtShelf the lit tile opens wide and wears the accent edge of a lit tile; its `tools` (icon
+ * buttons) and its `detail` show only then. Images load lazily.
  *
  *   <ArtShelf label={t.home.playingNow}>
  *     <ArtTile poster={url} title="Amber Road" top={…} meta="Movie · 2023"
@@ -174,14 +174,14 @@ export function ArtTile({
         onKeyDown={onKeyDown}
         className={cx(
           'group/art relative isolate grid h-full cursor-default grid-rows-[1fr_auto] gap-x-[1.875rem] gap-y-5 overflow-hidden rounded-tile bg-s1-solid px-8 pt-[1.625rem] pb-6',
-          'outline-4 outline-offset-[6px] outline-solid',
-          'transition-[scale,box-shadow,outline-color] duration-500 ease-nuit',
+          'outline-2 outline-offset-[3px] outline-solid',
+          'transition-[box-shadow,outline-color] duration-500 ease-nuit',
           'after:absolute after:inset-0 after:-z-1 after:bg-[linear-gradient(100deg,rgb(22_20_27/0.35)_0%,rgb(22_20_27/0.72)_42%,rgb(22_20_27/0.82)_100%)]',
-          'max-md:gap-x-[1.125rem] max-md:gap-y-4 max-md:rounded-[1.75rem] max-md:p-[1.125rem] max-md:outline-offset-4',
+          'max-md:gap-x-[1.125rem] max-md:gap-y-4 max-md:rounded-[1.75rem] max-md:p-[1.125rem]',
           frame ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
           lit
-            ? 'outline-focus shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] md:motion-safe:scale-[1.015]'
-            : 'outline-transparent md:motion-safe:hover:scale-[1.008]',
+            ? 'shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] outline-lit-edge'
+            : 'outline-transparent',
           className,
         )}
       >

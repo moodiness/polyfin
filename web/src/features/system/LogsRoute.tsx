@@ -211,7 +211,7 @@ export default function LogsRoute() {
               atBottom.current =
                 element.scrollHeight - element.scrollTop - element.clientHeight < 24
             }}
-            className="focus-lit h-[65dvh] min-h-80 overflow-auto rounded-[1.25rem] [mask-image:linear-gradient(to_bottom,transparent,#000_0.875rem,#000_calc(100%-0.875rem),transparent)] [--lift:1] max-md:rounded-[1rem]"
+            className="focus-lit-row h-[65dvh] min-h-80 overflow-auto rounded-[1.25rem] [mask-image:linear-gradient(to_bottom,transparent,#000_0.875rem,#000_calc(100%-0.875rem),transparent)] max-md:rounded-[1rem]"
           >
             {!loaded && error === null ? (
               <div aria-hidden="true" className="space-y-5 px-4 py-4">

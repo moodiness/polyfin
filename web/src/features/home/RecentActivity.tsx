@@ -241,7 +241,7 @@ export function RecentActivity() {
           aria-busy={isFetchingNextPage}
           style={height === undefined ? undefined : { height }}
           className={cx(
-            'overflow-y-auto overscroll-contain rounded-row scrollbar-thin focus-lit [--lift:1]',
+            'overflow-y-auto overscroll-contain rounded-row scrollbar-thin focus-lit-row',
             height === undefined && 'max-h-[28.75rem] sm:max-h-[37.5rem]',
           )}
         >

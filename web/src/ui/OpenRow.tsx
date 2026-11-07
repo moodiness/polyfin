@@ -104,13 +104,12 @@ export function OpenRow({
   return (
     <div
       id={anchor}
-      data-lit={lit || undefined}
       onFocus={() => setFocused(true)}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       className={cx(
-        'min-w-0 scroll-mt-32 rounded-row transition-[scale,background-color,color,box-shadow] duration-350 ease-nuit',
-        lit ? 'lit lift [--lift:1.012]' : cx('bg-s1', !disabled && 'hover:bg-s2'),
+        'min-w-0 scroll-mt-32 rounded-row transition-[background-color,box-shadow] duration-350 ease-nuit',
+        lit ? 'lit-row' : cx('bg-s1', !disabled && 'hover:bg-s2'),
         disabled && 'opacity-60',
       )}
     >

@@ -180,9 +180,11 @@ export function Row({
       ? 'min-h-14 gap-3 rounded-[1.125rem] py-2 pr-4 pl-5'
       : 'min-h-20 gap-4 rounded-row py-3.5 pr-[1.375rem] pl-7 max-md:min-h-[4.25rem] max-md:gap-3 max-md:py-3 max-md:pr-4 max-md:pl-5',
     variant === 'plain' && !compact && 'rounded-[1.375rem]',
+    // Over the tile's s1, the lit fill adds one more s1: one step up, as a hover.
+    (interactive || selected) && '[--lit-fill:var(--color-s1)]',
     interactive &&
-      'focus-lit cursor-pointer [--lift:1.012] not-aria-[current]:hover:bg-s1 aria-[current]:lit',
-    selected && !interactive && 'lit',
+      'focus-lit-row cursor-pointer not-aria-[current]:hover:bg-s1 aria-[current]:lit-row',
+    selected && !interactive && 'lit-row',
     className,
   )
   return (

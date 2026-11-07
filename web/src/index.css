@@ -33,11 +33,14 @@
   --color-ink-2: rgb(244 242 247 / 0.74);
   --color-ink-3: rgb(244 242 247 / 0.6);
 
-  /* The lit state: what is under the keyboard, the mouse or the remote (see `lit`). Text on it,
-     15.1 to 1, and its muted text, 7.5 to 1. */
+  /* The lit state of a control: what is under the keyboard, the mouse or the remote (see `lit`).
+     Text on it, 15.1 to 1, and its muted text, 7.5 to 1. */
   --color-focus: #f1eff8;
   --color-on-focus: #1c1a21;
   --color-on-focus-2: #4e4a58;
+  /* The edge of a lit row or tile (see `lit-row`): the accent a step brighter, 4.4 to 1 on the
+     room and 3.8 or more on a tile or panel around a row. */
+  --color-lit-edge: #6970ff;
 
   /* The periwinkle of the logo, white on it (4.6 to 1), hovered and pressed. */
   --color-accent: #5b63f6;
@@ -174,10 +177,11 @@
 }
 
 /*
- * The lit state: the pale lavender-white with dark text that marks what is under the keyboard,
- * the mouse or the remote. Inside it the text and state colors switch to their lit variants, and
- * the surfaces to dark tints, so a row's value, its status word and a picker's choices read on it
- * without a class of their own. Never the only cue: keep `aria-current`, `aria-checked`…
+ * The lit state of a control (a button, a choice, a field being typed in): the pale
+ * lavender-white with dark text that marks what is under the keyboard, the mouse or the remote.
+ * Inside it the text and state colors switch to their lit variants, and the surfaces to dark
+ * tints, so what it holds reads on it without a class of its own. Rows and tiles never wear it:
+ * they wear `lit-row`. Never the only cue: keep `aria-current`, `aria-checked`…
  */
 @utility lit {
   background-color: var(--color-focus);
@@ -201,8 +205,8 @@
 }
 
 /*
- * The lit state on what is already lit (a button in a lit row, the eye in a well being typed in):
- * the dark chip, as the current choice of a picker.
+ * The lit state on what is already lit (a button in a lit menu option, the eye in a well being
+ * typed in): the dark chip.
  */
 @utility lit-inverse {
   background-color: var(--color-on-focus);
@@ -240,17 +244,41 @@
     outline: none;
     @apply lit lift;
   }
-  :where(.lit, [data-lit], .well:focus-within) &:focus-visible,
-  :where(.lit, [data-lit], .well:focus-within) &:focus-visible:hover {
+  :where(.lit) &:focus-visible,
+  :where(.lit) &:focus-visible:hover {
     @apply lit-inverse;
   }
 }
 
 /*
+ * The lit state of a row or a tile (a setting row, a row of a list, a figure, an art tile): what
+ * is under the keyboard, the mouse or the remote, open or chosen. It stays dark: its fill goes at
+ * most one step up (`--lit-fill`, `s2` by default), its words stay white and their size, and a
+ * 2 px edge of the accent marks it. Nothing inside switches color. Never the only cue: keep
+ * `aria-current`, `aria-expanded`…
+ */
+@utility lit-row {
+  background-color: var(--lit-fill, var(--color-s2));
+  box-shadow: inset 0 0 0 2px var(--color-lit-edge);
+}
+
+/* A row's or a tile's keyboard focus: lit as a row, in place of an outline ring. */
+@utility focus-lit-row {
+  transition-property: background-color, color, box-shadow;
+  transition-duration: 350ms;
+  transition-timing-function: var(--ease-nuit);
+  &:focus-visible,
+  &:focus-visible:hover {
+    outline: none;
+    @apply lit-row;
+  }
+}
+
+/*
  * A field's well: a big soft fill that lights up while you type in it or its list is open (a text
- * field, a select's button). An invalid one has a red edge. Inside a lit row (`lit` or `data-lit`), where lit on lit
- * would not show, the well being typed in takes a dark ring instead. `--well-radius` tightens the
- * corners of a compact well.
+ * field, a select's button). An invalid one has a red edge. Inside a lit control (`lit`), where
+ * lit on lit would not show, the well being typed in takes a dark ring instead. `--well-radius`
+ * tightens the corners of a compact well.
  */
 @utility well {
   position: relative;
@@ -281,12 +309,12 @@
       var(--shadow-lift),
       inset 0 0 0 2px var(--color-danger);
   }
-  :where(.lit, [data-lit]) &:focus-within {
+  :where(.lit) &:focus-within {
     background-color: var(--color-s1);
     scale: none;
     box-shadow: inset 0 0 0 2px var(--color-on-focus);
   }
-  :where(.lit, [data-lit]) &:has([aria-invalid]):focus-within {
+  :where(.lit) &:has([aria-invalid]):focus-within {
     box-shadow: inset 0 0 0 2px var(--color-danger);
   }
   &:has(:disabled) {
@@ -488,8 +516,8 @@
   }
 
   /*
-   * What has no lit state of its own (a link in a sentence, a tile) gets a thick pale halo. The
-   * controls of `@/ui` replace it with `focus-lit`.
+   * What has no lit state of its own (a link in a sentence) gets a thick pale halo. The controls
+   * of `@/ui` replace it with `focus-lit`, and rows and tiles with `focus-lit-row`.
    */
   :focus-visible {
     outline: 3px solid var(--color-focus);

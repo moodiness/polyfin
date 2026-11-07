@@ -77,9 +77,10 @@ const statusTones: Record<
 
 /**
  * A state, always as an icon and a word: "Active", "Incomplete guide", "Not configured". The icon
- * sits on a 14 % tinted bubble; on a lit row the colors darken by themselves. `live` is a green
- * dot for something happening now ("Playing"). It keeps to one line, and wraps its word only
- * where its row is narrower than it, as a long German state on a phone.
+ * sits on a 14 % tinted bubble; on a lit control (a menu's option) the colors darken by
+ * themselves. `live` is a green dot for something happening now ("Playing"). It keeps to one
+ * line, and wraps its word only where its row is narrower than it, as a long German state on a
+ * phone.
  */
 export function StatusPill({
   tone,

@@ -183,7 +183,7 @@ function FigureLink({ to, children }: { to?: string; children: ReactNode }) {
   return (
     <Link
       to={to}
-      className="focus-lit block rounded-row [--lift:1.02] hover:[&>div]:bg-s2 focus-visible:[&>div]:bg-transparent [&>div]:h-full"
+      className="focus-lit-row block rounded-row hover:[&>div]:bg-s2 focus-visible:[&>div]:bg-transparent [&>div]:h-full"
     >
       {children}
     </Link>
