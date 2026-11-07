@@ -84,7 +84,7 @@ const sources: typeof en = {
     replace: 'Remplacer l’adresse',
     newManifestUrl: 'Nouvelle adresse du manifeste',
     replaceHint:
-      'À utiliser après avoir reconfiguré l’addon sur sa page de configuration. Ses bibliothèques sont conservées.',
+      'À utiliser après avoir reconfiguré l’addon sur sa page de configuration. Ses bibliothèques sont conservées, et ses listes de versions sont oubliées, pour que chaque titre lui redemande.',
     replaceSubmit: 'Remplacer',
     replaced: 'L’adresse du manifeste a été remplacée.',
     language: 'Langue de ses descriptions',

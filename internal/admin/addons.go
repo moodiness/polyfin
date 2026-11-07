@@ -111,6 +111,28 @@ func usedBy(w http.ResponseWriter, scope addons.Scope, body *usedByJSON) (addons
 	return result, true
 }
 
+// VersionLists forgets the version lists an addon gave for titles, in
+// memory and saved, and tells how many it forgot (see
+// library.Service.ForgetAddonVersionLists).
+type VersionLists interface {
+	ForgetAddonVersionLists(ctx context.Context, addon accounts.ID) (int, error)
+}
+
+// forgetVersionLists forgets the version lists of addon, whose address
+// was replaced: reconfigured, it may list other streams, which each title
+// asks it for again. A failure is logged, the address staying replaced.
+func (h *handler) forgetVersionLists(ctx context.Context, addon addons.Addon) {
+	if h.VersionLists == nil {
+		return
+	}
+	forgotten, err := h.VersionLists.ForgetAddonVersionLists(ctx, addon.ID)
+	if err != nil {
+		h.Logger.Warn("Forgetting the version lists of an addon whose address was replaced failed", "addon", addon.Manifest.Name, "error", err)
+		return
+	}
+	h.Logger.Info("Forgot the version lists of an addon whose address was replaced", "addon", addon.Manifest.Name, "lists", forgotten)
+}
+
 // usedByChanged writes to the activity log that the caller set who uses
 // the server addon addon, by the names of the groups, then the users,
 // listed.
@@ -822,7 +844,9 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 	var addon addons.Addon
 	var err error
 	if body.ManifestURL != nil {
-		addon, err = h.Addons.Replace(r.Context(), scope, id, *body.ManifestURL, confined(r))
+		if addon, err = h.Addons.Replace(r.Context(), scope, id, *body.ManifestURL, confined(r)); err == nil {
+			h.forgetVersionLists(r.Context(), addon)
+		}
 	}
 	if err == nil && body.Enabled != nil {
 		addon, err = h.Addons.SetEnabled(r.Context(), scope, id, *body.Enabled)

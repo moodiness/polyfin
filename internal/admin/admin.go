@@ -205,6 +205,9 @@ type Options struct {
 	// no page.
 	Versions Versions
 	Titles   Titles
+	// VersionLists forgets an addon's version lists once its address is
+	// replaced; nil forgets none.
+	VersionLists VersionLists
 	// Restart stops Polyfin as a signal does, for its container's restart
 	// policy, its service manager or Polyfin Desktop to start it again; it
 	// returns at once. Nil offers no restart.

@@ -82,7 +82,7 @@ const sources = {
     replace: 'Replace the address',
     newManifestUrl: 'New manifest address',
     replaceHint:
-      'Use this after reconfiguring the addon on its configure page. Its libraries are kept.',
+      'Use this after reconfiguring the addon on its configure page. Its libraries are kept, and its version lists are forgotten, so that each title asks it again.',
     replaceSubmit: 'Replace',
     replaced: 'The manifest address was replaced.',
     language: 'Language of its descriptions',
