@@ -138,6 +138,23 @@ func (s *Store) AnyVisible(ctx context.Context, user accounts.ID) (bool, error) 
 	return found, err
 }
 
+// All lists every playlist, by name.
+func (s *Store) All(ctx context.Context) ([]Playlist, error) {
+	return s.load(ctx, "")
+}
+
+// Watchlist returns owner's watchlist; ErrNotFound once they deleted it.
+func (s *Store) Watchlist(ctx context.Context, owner accounts.ID) (Playlist, error) {
+	found, err := s.load(ctx, "WHERE watchlist AND owner_id = $1", owner)
+	if err != nil {
+		return Playlist{}, err
+	}
+	if len(found) == 0 {
+		return Playlist{}, ErrNotFound
+	}
+	return found[0], nil
+}
+
 // load reads the playlists a condition on the playlists table selects, by
 // name, with their shares and entries.
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Playlist, error) {
