@@ -29,7 +29,7 @@ flowchart TD
 2. **What is asked:** each addon, at its installed address with its configuration, for the title or episode (`/stream/<type>/<id>.json`).
    - It is asked by its own identifier or one it accepts: an anime catalog's `kitsu:<id>:3` goes to an IMDb-only addon as `tt…:2:3` when the anime mapping places it there.
    - Polyfin adds nothing and keeps the addon's order; the addon's configuration does any filtering, sorting or limits.
-   - A failing addon, or one silent 15 seconds, gives no new version; versions kept from earlier answers may show (see [Title pages](#title-pages)).
+   - A failing addon, or one silent 30 seconds, gives no new version; versions kept from earlier answers may show (see [Title pages](#title-pages)). An addon that keeps not answering in time has Polyfin's background requests to it paused (see [Addons that do not answer in time](addons.md#addons-that-do-not-answer-in-time)).
 3. **Nothing to play:** only `http` or `https` links and torrent files (an `infoHash` of 40 hexadecimal digits) play. A web page (`externalUrl`), YouTube video (`ytId`) or notice makes no version.
 4. **Torrents:** left out unless **Play torrent streams** is on under **Settings › Torrents** and the user has **Can play torrent streams**. Both are off by default (see [Turning torrents on](torrents.md#turning-torrents-on)).
 5. **The same file twice:** streams with the same file name and size are one version, the first listed, across addons, links and torrents.
@@ -180,8 +180,8 @@ In apps:
   - **Try again** drops the title's lists for the user's addons and re-asks; the buttons wait meanwhile. Once every 20 seconds per title.
   - Text follows the web player's language: English, French, German, Spanish, Italian or Portuguese; else English.
   - Nothing changes during a video; leaving the page restores the buttons.
-- Other Jellyfin apps cannot be told to refresh: they show versions known at opening, and all on Play or reopening. Titles show as playable before any version is known; Play waits for addons answering for the first time, then picks among all.
-- In every app, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on, Continue Watching and Next Up titles get versions listed when an app asks for these rows, and open with all of them. An addon failing, or silent 15 seconds, only leaves its versions out.
+- Other Jellyfin apps cannot be told to refresh: they show versions known at opening, and all on Play or reopening. Titles show as playable before any version is known; Play waits for addons answering for the first time, then picks among their versions, but waits no longer than 5 seconds for each next addon once one gave a version to play (see [How Play waits for addons](#how-play-waits-for-addons)).
+- In every app, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on, Continue Watching and Next Up titles get versions listed when an app asks for these rows, and open with all of them. An addon failing, or silent 30 seconds, only leaves its versions out.
 - Addon subtitles work alike: known ones at once, others on Play or reopening. Play waits for them 1 second at most after the versions; later ones come with the next play or track change.
 
 | Setting | Where | Default | What it does |
@@ -272,6 +272,18 @@ Three more settings change how Polyfin picks a version; two more, about converte
 - A source that does not answer in time is given up for 15 minutes, so Polyfin moves on sooner.
 - Versions tried counts titles and channels alike; titles get up to 3 analyzed at once.
 - Later versions already analyzed are still tried, as they cost nothing.
+
+### How Play waits for addons
+
+Play lists a title's versions as its details do, and asks the addons whose lists Polyfin does not keep (see [Title pages](#title-pages)):
+
+- **One version to play is enough:** once an addon gave one, Play waits at most 5 seconds for each next answer. An addon slower than that is left out of this play: one that no longer answers delays it 5 seconds, not the 30 seconds of its request.
+- **Its answer still counts:** it is kept when it comes, the request under way joined rather than sent again. The next plays and the title's page list its versions, and the web player adds them to an open page.
+- **No version to play yet:** while no addon gave one the user may play, torrents counted only for those who may, Play waits for every addon, 30 seconds each at most.
+- **None plays:** when none of the versions Play has plays, it waits for the addons it left out, then tries theirs.
+- **Expired lists:** they are played as they are, while their addons are asked again.
+
+Version order, pins, blocks and the 15 minutes a failed version is left out apply to the versions Play has.
 
 ### Prefer versions the app plays without conversion
 

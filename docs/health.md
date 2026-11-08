@@ -116,6 +116,14 @@ An addon's search catalog did not answer a search in time. This is a warning, wi
 - Searches leave the addon out for 5 minutes, then ask it again.
 - It comes and goes with the searches, so it is not sent as a health problem. The addon's own failure, "did not answer in time", is.
 
+### Addon not answering in time
+
+An addon left 3 requests for versions in a row unanswered within 30 seconds, so Polyfin's background requests to its server pause (see [Addons that do not answer in time](addons.md#addons-that-do-not-answer-in-time)). This is a warning naming the addon and when the pause ends, with a link to its page for a server's addon.
+
+- Plays and opened titles still ask it.
+- It is sent as a health problem: the addon "did not answer in time", the same problem as its failure once the pause ends.
+- **What to do:** if the addon gathers other addons' versions, turn off there the one that no longer answers, or shorten how long it waits for them. Otherwise, turn the addon off.
+
 ### Smart list without catalogs
 
 Every catalog a smart list drew from was removed with its addon, or dropped by it, so the list lists nothing. This is a warning naming the list, and its owner for a user's own list (see [Removing a source](addons.md#removing-a-source)). It links to the list's editor for a server's list, and to the owner's page for a user's own.
