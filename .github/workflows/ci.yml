@@ -576,7 +576,7 @@ jobs:
           temp="$(cygpath -u "$RUNNER_TEMP")"
           curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
           echo "41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323  $temp/postgresql.zip" | sha256sum -c -
-          curl -fsSLo "$temp/ffmpeg.zip" https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0.zip
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$temp/ffmpeg.zip" https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0.zip
           echo "3da6c7b60bb9ccd73ec5b5e815ba804a0879eb362ba0e3beebce50174c022696  $temp/ffmpeg.zip" | sha256sum -c -
           unzip -q "$temp/postgresql.zip" -d "$temp"
           unzip -q "$temp/ffmpeg.zip" -d "$temp"
