@@ -44,7 +44,7 @@ Some tests need a program or a service, and run only when a variable names it. W
 | The test of a torrent route's interface going down | `POLYFIN_TEST_TORRENT_INTERFACE` names a dummy interface with an address, with the right to set it down and up (`NET_ADMIN`). |
 | SMB share tests | `POLYFIN_TEST_SMB` names a share holding video files (see [SMB shares](#smb-shares)). |
 
-- **Databases:** most database tests work in a database of their own, copied from a template database. The template is migrated once and kept for later runs, named `polyfin_template_` followed by a key of the migrations. The other database tests work in a schema of their own.
+- **Databases:** most database tests work in a database of their own, copied from a template database. The template is migrated once and kept for later runs, named `polyfin_template_` followed by a key of the migrations. The migrations' own tests start from an empty database of their own, copied from `polyfin_template_empty`. A few other tests work in a schema of their own.
 - **Polyfin Desktop's ports:** `POLYFIN_TEST_POSTGRES_PORT` gives PostgreSQL a port, else the tests take a free one. Both packages read it, so a fixed port needs them tested apart.
 - **The desktop app's port:** `POLYFIN_TEST_DESKTOP_PORT` gives the app's tests their listening port, else they take a free one.
 - **On CI:** the workflows provide:
@@ -72,11 +72,28 @@ A new package goes to the second share, and a new test of `internal/jellyfin` to
 
 ### Tests in parallel
 
-The tests of the slowest packages run in parallel.
+A test calls `t.Parallel()` first, and so does each of its subtests: a package's tests run at once.
 
 - A test that changes state other tests read, such as a package variable, stays sequential and says why.
 - So does a test that times waits of a few milliseconds.
 - A test that counts goroutines labels its own with `runtime/pprof` labels, and counts those alone. So it runs in parallel too (see `TestPlaysThatGaveUpLeaveNoGoroutineBehind`).
+- A test calling `t.Setenv` or `t.Chdir` cannot run in parallel, and needs no reason.
+
+On a pull request, CI checks each test file it changes, whole, with the `paralleltest` and `tparallel` linters. A test that stays sequential gives its reason on the line above it, in the comment golangci-lint reads:
+
+```go
+// What the test checks.
+//
+//nolint:paralleltest // swaps the package's clock, which every test reads
+func TestSomething(t *testing.T) {
+```
+
+`//nolint:paralleltest,tparallel // reason` lets a test's subtests run in turn too. The same check, on the packages of the test files a branch changes:
+
+```sh
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --enable-only paralleltest,tparallel \
+  --new-from-rev origin/main --whole-files ./internal/lyrics/
+```
 
 ### Password and key costs in tests
 
