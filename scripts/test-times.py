@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Each test's time, from go test -json, with a limit; run by CI's race jobs.
 
-Usage: test-times.py [--limit SECONDS] [--allowlist FILE] [--title TEXT]
-                     [--out FOLDER] [--summary FILE] <go test -json file>...
+Usage: test-times.py [--limit SECONDS] [--allowlist FILE] [--base REV]
+                     [--title TEXT] [--out FOLDER] [--summary FILE]
+                     <go test -json file>...
 
 Reads the events go test -json printed (gotestsum's --jsonfile), and:
 - writes to the out folder durations.tsv, every test and subtest with its
@@ -12,25 +13,33 @@ Reads the events go test -json printed (gotestsum's --jsonfile), and:
 - appends to the summary file (GitHub's job summary) the tests over the
   limit, the slowest tests, and the packages whose tests run one after the
   other;
-- fails, exiting 1, when a test took longer than the limit, 30 s by
-  default, unless the allowlist names it.
+- with --base, a pull request's base: fails, exiting 1, when a test the
+  diff from the base to HEAD adds took longer than the limit, 30 s by
+  default, unless the allowlist names it. Any other test over the limit
+  gets a warning, as every test does without --base: an existing test near
+  the limit, which a busier runner pushes over it, fails no pull request.
 
-A test is a top-level test: a subtest's time counts in its test's. The
-allowlist has a line for each test allowed over the limit, "package Test",
-the package as go test prints it, then the reason after a #. An allowlisted
-test now under the limit is told, so that its line can go.
+A test is a top-level test: a subtest's time counts in its test's. A new
+test is a "func TestName(" line the diff adds to a _test.go file, unless it
+removes the same test from the same package (a test moved between files).
+The allowlist has a line for each test allowed over the limit, "package
+Test", the package as go test prints it, then the reason after a #: a new
+test slow on purpose, or an existing one whose warning it silences. An
+allowlisted test now under the limit is told, so that its line can go.
 
 A package runs its tests serially when, over --serial-seconds (10 s), the
 sum of its tests' times is under --serial-below (1.5) times its own: its
 tests run about one at a time. A package whose result go test took from its
 cache has no time of its own, and is left out.
 
-Python's standard library only.
+Python's standard library only, and git for --base.
 """
 
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 from collections import defaultdict
 
@@ -94,6 +103,40 @@ def read_allowlist(path):
     return allowed
 
 
+def new_tests(base):
+    """The top-level tests the diff from base to HEAD adds, as (package, Test)."""
+    root = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    with open(os.path.join(root, "go.mod"), encoding="utf-8") as lines:
+        module = next(line.split()[1] for line in lines if line.startswith("module "))
+    diff = subprocess.run(
+        ["git", "diff", "--unified=0", "--no-color", "--no-ext-diff", base, "HEAD", "--", "*_test.go"],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=root,
+    ).stdout
+    added, removed = set(), set()
+    old = new = None
+    function = re.compile(r"func (Test\w*)\(")
+    for line in diff.splitlines():
+        if line.startswith("--- "):
+            old = line[6:] if line.startswith("--- a/") else None
+        elif line.startswith("+++ "):
+            new = line[6:] if line.startswith("+++ b/") else None
+        elif line.startswith("+") and new and (found := function.match(line, 1)):
+            added.add((package_of(module, new), found.group(1)))
+        elif line.startswith("-") and old and (found := function.match(line, 1)):
+            removed.add((package_of(module, old), found.group(1)))
+    return added - removed
+
+
+def package_of(module, path):
+    folder = os.path.dirname(path)
+    return f"{module}/{folder}" if folder else module
+
+
 def seconds(value):
     return f"{value:.1f}"
 
@@ -113,6 +156,7 @@ def main():
     parser.add_argument("files", nargs="+", help="go test -json output")
     parser.add_argument("--limit", type=float, default=30, help="seconds a test may take (30)")
     parser.add_argument("--allowlist", help="tests allowed over the limit")
+    parser.add_argument("--base", help="a pull request's base: only the tests the diff from it adds may fail")
     parser.add_argument("--title", default="Go tests", help="the summary's heading")
     parser.add_argument("--out", help="folder for durations.tsv, packages.tsv and over-limit.txt")
     parser.add_argument("--summary", help="Markdown file to append the summary to")
@@ -139,6 +183,10 @@ def main():
     over = [row for row in tests if row[0] > args.limit and row[1] != "skip"]
     unlisted = [row for row in over if (row[2], row[3]) not in allowed]
     listed = [row for row in over if (row[2], row[3]) in allowed]
+    # Only a pull request's new tests fail; the others warn.
+    added = new_tests(args.base) if args.base else set()
+    failing = [row for row in unlisted if (row[2], row[3]) in added]
+    warned = [row for row in unlisted if (row[2], row[3]) not in added]
     ran = {(row[2], row[3]): row for row in tests}
     under = [ran[key] for key in allowed if key in ran and ran[key][0] <= args.limit]
 
@@ -180,11 +228,18 @@ def main():
     allowlist = args.allowlist or "the allowlist"
     tested = sum(1 for p in packages.values() if p.tests)
     counted = f"{len(tests)} {plural(len(tests), 'test')} in {tested} {plural(tested, 'package')}"
-    print(f"{counted}; {len(over)} over {limit}, {len(listed)} of them allowlisted")
-    for elapsed, result, name, test in unlisted:
+    scope = f"{len(added)} new against {args.base}" if args.base else "no base, so none fails"
+    print(f"{counted} ({scope}); {len(over)} over {limit}, {len(listed)} of them allowlisted")
+    for elapsed, result, name, test in failing:
         print(
-            f"::error title=Test over {limit}::{name} {test} took {seconds(elapsed)} s, over {limit}: "
-            f'make it faster, or add "{name} {test} # why" to {allowlist}'
+            f"::error title=New test over {limit}::{name} {test}, new in this pull request, took {seconds(elapsed)} s, "
+            f'over {limit}: make it faster, or add "{name} {test} # why" to {allowlist}'
+        )
+    why = "not new in this pull request" if args.base else "no pull request's base to tell new tests by"
+    for elapsed, result, name, test in warned:
+        print(
+            f"::warning title=Test over {limit}::{name} {test} took {seconds(elapsed)} s, over {limit}: "
+            f"{why}, so a warning only"
         )
     for elapsed, result, name, test in under:
         print(f"Allowlisted but under {limit}: {name} {test} took {seconds(elapsed)} s")
@@ -196,20 +251,24 @@ def main():
     if args.summary:
         parts = [f"### {args.title}: test times", ""]
         parts.append(
-            f"{counted}. Over {limit}: {len(over)}, of which {len(listed)} on the allowlist and {len(unlisted)} not."
+            f"{counted} ({scope}). Over {limit}: {len(over)}, of which {len(listed)} on the allowlist, "
+            f"{len(failing)} new and failing, {len(warned)} warned."
         )
-        if unlisted:
+        if failing:
             parts += [
                 "",
                 (
-                    f"**Over {limit} and not on the allowlist** (the job fails): make them faster, "
+                    f"**New tests over {limit}, not on the allowlist** (the job fails): make them faster, "
                     f"or add these lines to `{allowlist}` with the reason after the #."
                 ),
                 "",
                 "```",
-                *[f"{name} {test} # {seconds(elapsed)} s in {args.title}" for elapsed, _, name, test in unlisted],
+                *[f"{name} {test} # {seconds(elapsed)} s in {args.title}" for elapsed, _, name, test in failing],
                 "```",
             ]
+        if warned:
+            parts += ["", f"**Tests over {limit}, warned** ({why}):", ""]
+            parts.append(table(["Seconds", "Package", "Test"], [(seconds(e), n, t) for e, _, n, t in warned]))
         if listed:
             parts += ["", f"**Allowlisted, over {limit}:**", ""]
             parts.append(
@@ -249,7 +308,7 @@ def main():
         with open(args.summary, "a", encoding="utf-8") as out:
             out.write("\n".join(parts) + "\n")
 
-    return 1 if unlisted else 0
+    return 1 if failing else 0
 
 
 if __name__ == "__main__":

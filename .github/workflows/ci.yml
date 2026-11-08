@@ -385,7 +385,14 @@ jobs:
     env: *test-environment
     services: *test-services
     steps:
-      - *checkout
+      - &checkout-with-base
+        name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          # A pull request's merge commit and its first parent, the base it
+          # merges into, so that test-times.py finds the tests it adds.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       - *setup-go
       - *find-go-caches
       - *restore-go-caches
@@ -511,16 +518,22 @@ jobs:
         run: make "test-race-$PART" GOTEST="$GOTEST"
       - &test-times
         name: Check each test's time, and list the packages testing serially
-        # A test over 30 s fails the job unless .github/slow-tests.txt names
-        # it; the job's summary lists the tests over 30 s, the slowest ones,
-        # and the packages whose tests run one after the other. After a
-        # failing test too, as long as tests ran.
+        # In a pull request, a test it adds that takes over 30 s fails the
+        # job, unless .github/slow-tests.txt names it; any other test over
+        # 30 s gets a warning, so that an existing one a busier runner
+        # pushes over the limit fails no pull request. Outside pull
+        # requests nothing fails. The job's summary lists the tests over
+        # 30 s, the slowest ones, and the packages whose tests run one
+        # after the other. After a failing test too, as long as tests ran.
         if: ${{ !cancelled() }}
         env:
           TITLE: ${{ github.job == 'jellyfin' && 'Jellyfin API tests' || 'Go tests' }} under the race detector, part ${{ matrix.part }}
         run: |
           if [ ! -s "$RUNNER_TEMP/go-test.json" ]; then echo "No test ran"; exit 0; fi
-          python3 scripts/test-times.py --limit 30 --allowlist .github/slow-tests.txt --title "$TITLE" \
+          # The merge commit's first parent is the base it merges into.
+          base=()
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then base=(--base HEAD^1); fi
+          python3 scripts/test-times.py --limit 30 --allowlist .github/slow-tests.txt "${base[@]}" --title "$TITLE" \
             --out "$RUNNER_TEMP/test-times" --summary "$GITHUB_STEP_SUMMARY" "$RUNNER_TEMP/go-test.json"
       - &keep-test-times
         name: Keep the tests' times
@@ -552,7 +565,7 @@ jobs:
     env: *test-environment
     services: *test-services
     steps:
-      - *checkout
+      - *checkout-with-base
       - *setup-go
       - *find-go-caches
       - *restore-go-caches
