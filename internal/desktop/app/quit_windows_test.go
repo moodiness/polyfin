@@ -14,6 +14,7 @@ import (
 // scanner may: the app removes its record once the file is free, rather
 // than leave it behind.
 func TestTheRecordHeldOpenIsRemovedOnceFree(t *testing.T) {
+	t.Parallel()
 	folders := desktop.Folders{Data: t.TempDir()}
 	_, stop, err := ListenQuit(folders)
 	if err != nil {

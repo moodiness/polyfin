@@ -14,6 +14,7 @@ import (
 // A server a crash of the app left running is stopped at the next start;
 // a process that took the recorded number later is left alone.
 func TestStopLeftover(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	start := func() *exec.Cmd {
 		cmd := exec.Command("sleep", "120")

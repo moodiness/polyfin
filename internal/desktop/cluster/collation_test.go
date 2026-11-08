@@ -88,6 +88,7 @@ func staleVersions(t *testing.T, c *Cluster) string {
 // as the cluster starts, before the server's database is created, which
 // a template1 whose version changed would refuse.
 func TestChangedCollationVersionIsRefreshed(t *testing.T) {
+	t.Parallel()
 	bin := postgresBin(t)
 	ctx := context.Background()
 	var logs bytes.Buffer
@@ -147,6 +148,7 @@ func TestChangedCollationVersionIsRefreshed(t *testing.T) {
 // When every collation version matches, the usual case, nothing is
 // rebuilt.
 func TestMatchingCollationVersionIsLeftAlone(t *testing.T) {
+	t.Parallel()
 	bin := postgresBin(t)
 	c := newCluster(t, bin, t.TempDir())
 	var calls []bool

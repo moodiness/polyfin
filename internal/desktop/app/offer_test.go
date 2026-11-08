@@ -14,6 +14,7 @@ import (
 // runs: with its progress while it downloads, and its failure once
 // Polyfin runs again; nothing once Polyfin stops.
 func TestTheOfferIsToldToTheAdminApp(t *testing.T) {
+	t.Parallel()
 	folders := desktop.Folders{Data: t.TempDir()}
 	a := New(Options{Folders: folders})
 	read := func() *desktop.Offered {
@@ -51,6 +52,7 @@ func TestTheOfferIsToldToTheAdminApp(t *testing.T) {
 // The app gets the version each request of the server asks to install,
 // once; a request a crash left before it started installs nothing.
 func TestListenInstall(t *testing.T) {
+	t.Parallel()
 	folders := desktop.Folders{Data: t.TempDir()}
 	release, err := Lock(folders.Lock())
 	if err != nil {

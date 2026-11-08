@@ -17,6 +17,7 @@ import (
 // The lock file of a cluster that crashed is cleared, and the cluster
 // recovers as it starts again.
 func TestClusterRecoversFromACrashedPostmaster(t *testing.T) {
+	t.Parallel()
 	bin := postgresBin(t)
 	data := t.TempDir()
 	ctx := context.Background()
