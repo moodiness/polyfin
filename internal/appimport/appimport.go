@@ -71,6 +71,10 @@ var (
 	// ErrAddonsNotAllowed reports addons chosen for a user who may not add
 	// their own (see accounts.Settings.PersonalAddonsAllowed).
 	ErrAddonsNotAllowed = errors.New("the user may not add their own addons")
+	// ErrAddonsParentalControl reports addons chosen for a user whose
+	// parental control or blocked genres keep them to the server's addons:
+	// their own would be kept but not used.
+	ErrAddonsParentalControl = errors.New("parental control keeps the user to the server's addons")
 )
 
 // holdFor is how long an account read is held while the user chooses what
@@ -529,9 +533,9 @@ type Choice struct {
 // Start stops holding the account, signing out the sessions it kept open
 // that the connection does not keep, and returns the import. It fails with
 // ErrExpired, ErrUnknownProfile, ErrProfileLocked for a profile not opened
-// with its PIN yet, ErrUnknownAddon, ErrAddonsNotAllowed, or ErrRunning
-// while an import into user's account runs, holding the account still but
-// for ErrExpired.
+// with its PIN yet, ErrUnknownAddon, ErrAddonsNotAllowed,
+// ErrAddonsParentalControl, or ErrRunning while an import into user's
+// account runs, holding the account still but for ErrExpired.
 func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Status, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -556,6 +560,9 @@ func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Sta
 	}
 	if len(chosen) > 0 && !s.settings().PersonalAddonsAllowed(user) {
 		return nil, ErrAddonsNotAllowed
+	}
+	if len(chosen) > 0 && user.Restricted() {
+		return nil, ErrAddonsParentalControl
 	}
 	if current := s.imports[user.ID]; current != nil && current.State == StateRunning {
 		return nil, ErrRunning

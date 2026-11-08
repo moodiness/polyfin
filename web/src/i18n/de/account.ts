@@ -347,6 +347,8 @@ const account: typeof en = {
         'Jedes angehakte Add-on wird zu einem eigenen Add-on des Kontos, unter „Meine Quellen“. Seine Adresse kann Einstellungen und Schlüssel enthalten: Polyfin zeigt sie nie vollständig an.',
       addonsOff:
         'Eigene Add-ons sind für dieses Konto deaktiviert: Die Add-ons der App werden nicht angeboten.',
+      addonsParental:
+        'Für dieses Konto gilt die Kindersicherung: Seine eigenen Add-ons bleiben erhalten, werden aber nicht verwendet, daher werden die Add-ons der App nicht angeboten.',
       noAddons: 'Dieses Profil hat keine Add-ons.',
       back: 'Erneut anmelden',
       start: 'Dieses Profil importieren',

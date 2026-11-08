@@ -355,6 +355,8 @@ const account: typeof en = {
         'Chaque addon coché devient un addon propre au compte, sous Mes sources. Son adresse peut contenir des réglages et des clés\u202f: Polyfin ne la montre jamais en entier.',
       addonsOff:
         'Les addons personnels sont désactivés pour ce compte\u202f: les addons de l’appli ne sont pas proposés.',
+      addonsParental:
+        'Le contrôle parental s’applique à ce compte\u202f: ses propres addons sont conservés mais pas utilisés, donc les addons de l’appli ne sont pas proposés.',
       noAddons: 'Ce profil n’a aucun addon.',
       back: 'Se reconnecter',
       start: 'Importer ce profil',

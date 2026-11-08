@@ -223,6 +223,24 @@ func TestAppImportsFollowTheirPermissions(t *testing.T) {
 	if status, _, _ := admin.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
 		t.Fatalf("turning users' imports off: %d", status)
 	}
+	// Parental control keeps Bob to the server's addons: none is offered
+	// or may be chosen for him, and the refusal says why.
+	if _, err := api.store.UpdateUser(t.Context(), bobID, accounts.UserChanges{Parental: &accounts.ParentalControl{MaxRating: new(13)}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, body, _ := admin.call(http.MethodGet, userPath, nil); body["addonsAllowed"] != false || body["parentalControl"] != true {
+		t.Errorf("under parental control: %v", body)
+	}
+	if status, body, _ := admin.call(http.MethodPost, userPath, map[string]any{"key": read["key"], "profile": "1", "addons": []int{0}}); status != http.StatusForbidden ||
+		body["error"] != "parental_control_own_sources" {
+		t.Errorf("addons under parental control: %d %v", status, body)
+	}
+	if _, err := api.store.UpdateUser(t.Context(), bobID, accounts.UserChanges{Parental: &accounts.ParentalControl{}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, body, _ := admin.call(http.MethodGet, userPath, nil); body["addonsAllowed"] != true || body["parentalControl"] != false {
+		t.Errorf("once lifted: %v", body)
+	}
 	if status, body, _ := admin.call(http.MethodPost, userPath, map[string]any{"key": read["key"], "profile": "1", "addons": []int{0}}); status != http.StatusOK {
 		t.Fatalf("the administrator's import: %d %v", status, body)
 	}

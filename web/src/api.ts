@@ -3857,13 +3857,15 @@ const appConnectionActions = (base: string): AppConnectionActions => ({
 export type AppImportChoice = { key: string; profile: string; addons: number[] }
 
 /**
- * Whether the signed-in user may import from an app, whether they may add their own addons, the
- * import into their account running, else their last one, else null, their connections, and how
- * often connections are imported, in minutes.
+ * Whether the signed-in user may import from an app, whether they may add their own addons, and
+ * whether parental control keeps them from it, the import into their account running, else their
+ * last one, else null, their connections, and how often connections are imported, in minutes.
  */
 export type OwnAppImport = {
   enabled: boolean
   addonsAllowed: boolean
+  /** Parental control or blocked genres keep the user to the server's addons: none is offered. */
+  parentalControl: boolean
   import: AppImportStatus | null
   connections: AppConnection[]
   importEveryMinutes: number
@@ -3888,6 +3890,8 @@ export const startOwnAppImport = async (body: AppImportChoice) =>
  */
 export type UserAppImport = {
   addonsAllowed: boolean
+  /** Parental control or blocked genres keep the user to the server's addons: none is offered. */
+  parentalControl: boolean
   import: AppImportStatus | null
   connections: AppConnection[]
   importEveryMinutes: number

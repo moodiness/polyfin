@@ -87,6 +87,7 @@ export default function AppImportRoute() {
                 key={userId}
                 current={status.data.import}
                 addonsAllowed={status.data.addonsAllowed}
+                parentalControl={status.data.parentalControl}
                 readers={readers}
                 start={(body) => startUserAppImport(userId, body)}
                 onStarted={(started) =>

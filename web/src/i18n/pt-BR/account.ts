@@ -350,6 +350,8 @@ const account: typeof en = {
         'Cada complemento marcado se torna um complemento próprio da conta, em Minhas fontes. O endereço dele pode conter configurações e chaves: o Polyfin nunca o exibe por inteiro.',
       addonsOff:
         'Os complementos próprios estão desativados para esta conta: os complementos do aplicativo não são oferecidos.',
+      addonsParental:
+        'O controle parental se aplica a esta conta: os complementos próprios dela são mantidos, mas não são usados, então os complementos do aplicativo não são oferecidos.',
       noAddons: 'Este perfil não tem nenhum complemento.',
       back: 'Entrar novamente',
       start: 'Importar este perfil',
