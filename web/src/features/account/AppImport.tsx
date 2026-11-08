@@ -62,6 +62,7 @@ const apps: readonly AppKind[] = ['nuvio', 'stremio']
 export default function AppImport({
   current,
   addonsAllowed,
+  parentalControl,
   readers,
   start,
   onStarted,
@@ -71,6 +72,8 @@ export default function AppImport({
   current: AppImportStatus | null
   /** Whether the account's user may add their own addons: the app's are offered only then. */
   addonsAllowed: boolean
+  /** Why the app's addons are not offered: parental control or blocked genres, else own addons off. */
+  parentalControl: boolean
   readers: AppReaders
   start: (body: AppImportChoice) => Promise<AppImportStatus>
   onStarted: (started: AppImportStatus) => void
@@ -209,7 +212,9 @@ export default function AppImport({
               <div className="flex flex-col gap-3">
                 <span className="text-control font-medium text-ink">{text.addons}</span>
                 {!addonsAllowed ? (
-                  <p className="text-small text-ink-3">{text.addonsOff}</p>
+                  <p className="text-small text-ink-3">
+                    {parentalControl ? text.addonsParental : text.addonsOff}
+                  </p>
                 ) : chosen.addons.length === 0 ? (
                   <p className="text-small text-ink-3">{text.noAddons}</p>
                 ) : (

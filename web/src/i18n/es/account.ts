@@ -351,6 +351,8 @@ const account: typeof en = {
         'Cada extensión marcada pasa a ser una extensión propia de la cuenta, en «Mis fuentes». Su dirección puede contener ajustes y claves: Polyfin nunca la muestra completa.',
       addonsOff:
         'Las extensiones propias están desactivadas para esta cuenta: no se ofrecen las extensiones de la aplicación.',
+      addonsParental:
+        'El control parental se aplica a esta cuenta: sus extensiones propias se conservan, pero no se usan, así que no se ofrecen las extensiones de la aplicación.',
       noAddons: 'Este perfil no tiene ninguna extensión.',
       back: 'Volver a iniciar sesión',
       start: 'Importar este perfil',

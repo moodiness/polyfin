@@ -344,7 +344,7 @@ Data merges as in the other imports (see [How the data merges with Polyfin data]
 
 ### Addons from the app
 
-When **Allow users' own addons** and the user's **Can add their own addons** allow it (see [Users' own addons](sign-in-and-security.md#users-own-addons)), **Addons** offers the profile's addons by name. Each ticked one becomes the user's own addon under **My sources**, as if added there. Otherwise none are offered, and requesting some is refused (`personal_addons_disabled`).
+When **Allow users' own addons** and the user's **Can add their own addons** allow it, and no parental control or blocked genres apply to the user (see [Users' own addons](sign-in-and-security.md#users-own-addons)), **Addons** offers the profile's addons by name. Each ticked one becomes the user's own addon under **My sources**, as if added there. Otherwise none are offered, the section says why, and requesting some is refused: `personal_addons_disabled` while a switch is off, `parental_control_own_sources` under parental control or blocked genres.
 
 An addon address may hold the user's settings and keys. Polyfin shows only its host, never logs it, and keeps it only as the user's addon. A user's own import reaches public addresses only, like their addons; an administrator's may reach the local network. The result says per addon whether it was added, or why not: already installed, on a local network, not answering, or not an addon.
 

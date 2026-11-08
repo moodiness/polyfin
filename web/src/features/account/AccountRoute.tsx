@@ -278,6 +278,7 @@ export default function AccountRoute() {
               <AppImport
                 current={ownAppImport.data.import}
                 addonsAllowed={ownAppImport.data.addonsAllowed}
+                parentalControl={ownAppImport.data.parentalControl}
                 readers={ownAppReaders}
                 start={startOwnAppImport}
                 onStarted={(started) =>

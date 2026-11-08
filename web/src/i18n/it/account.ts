@@ -347,6 +347,8 @@ const account: typeof en = {
         'Ogni add-on selezionato diventa uno degli add-on propri dell’account, in Le mie origini. Il suo indirizzo può contenere impostazioni e chiavi: Polyfin non lo mostra mai per intero.',
       addonsOff:
         'Gli add-on personali sono disattivati per questo account: gli add-on dell’applicazione non vengono proposti.',
+      addonsParental:
+        'Il controllo parentale si applica a questo account: i suoi add-on personali vengono conservati ma non usati, quindi gli add-on dell’applicazione non vengono proposti.',
       noAddons: 'Questo profilo non ha add-on.',
       back: 'Accedi di nuovo',
       start: 'Importa questo profilo',

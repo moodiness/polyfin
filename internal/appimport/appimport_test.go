@@ -322,6 +322,16 @@ func TestAddonsAreInstalledOnlyWhenAllowedAndChosen(t *testing.T) {
 	if _, err := h.Start(root, noOwn, key, Choice{Profile: "1", Addons: []int{0}}); !errors.Is(err, ErrAddonsNotAllowed) {
 		t.Errorf("user's permission off: %v", err)
 	}
+	// Parental control or blocked genres keep a user to the server's
+	// addons: theirs would be kept but not used, so none is chosen.
+	limited, blocking := bob, bob
+	limited.Parental = accounts.ParentalControl{MaxRating: new(13)}
+	blocking.BlockedGenres = []string{"Horror"}
+	for _, user := range []accounts.User{limited, blocking} {
+		if _, err := h.Start(root, user, key, Choice{Profile: "1", Addons: []int{0}}); !errors.Is(err, ErrAddonsParentalControl) {
+			t.Errorf("parental control %+v, blocked genres %v: %v", user.Parental, user.BlockedGenres, err)
+		}
+	}
 	for _, chosen := range [][]int{{2}, {-1}, {0, 0}} {
 		if _, err := h.Start(root, bob, key, Choice{Profile: "1", Addons: chosen}); !errors.Is(err, ErrUnknownAddon) {
 			t.Errorf("addons %v: %v", chosen, err)

@@ -63,8 +63,9 @@ func (h *handler) userAppImportTarget(w http.ResponseWriter, r *http.Request) (a
 }
 
 // ownAppImport answers whether the user may import from an app, whether
-// they may add their own addons, the import into their account running,
-// else the last one, null when none, their connections, and how often, in
+// they may add their own addons, and whether parental control or blocked
+// genres keep them from it, the import into their account running, else
+// the last one, null when none, their connections, and how often, in
 // minutes, connections are imported.
 func (h *handler) ownAppImport(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
@@ -81,16 +82,25 @@ func (h *handler) ownAppImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Enabled            bool                `json:"enabled"`
 		AddonsAllowed      bool                `json:"addonsAllowed"`
+		ParentalControl    bool                `json:"parentalControl"`
 		Import             *appImportJSON      `json:"import"`
 		Connections        []appConnectionJSON `json:"connections"`
 		ImportEveryMinutes int                 `json:"importEveryMinutes"`
-	}{enabled, settings.PersonalAddonsAllowed(user), current, connections, settings.ImportEveryMinutes})
+	}{enabled, appAddonsAllowed(settings, user), user.Restricted(), current, connections, settings.ImportEveryMinutes})
+}
+
+// appAddonsAllowed reports whether an import may install addons as user's
+// own: while they may add their own, and no parental control or blocked
+// genres keep them to the server's (see appimport.Service.Start).
+func appAddonsAllowed(settings accounts.Settings, user accounts.User) bool {
+	return settings.PersonalAddonsAllowed(user) && !user.Restricted()
 }
 
 // userAppImport answers, to an administrator, whether the user the path
-// names may add their own addons, the import into their account running,
-// else the last one, their connections, and how often, in minutes,
-// connections are imported.
+// names may add their own addons, and whether parental control or blocked
+// genres keep them from it, the import into their account running, else
+// the last one, their connections, and how often, in minutes, connections
+// are imported.
 func (h *handler) userAppImport(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.userAppImportTarget(w, r)
 	if !ok {
@@ -103,10 +113,11 @@ func (h *handler) userAppImport(w http.ResponseWriter, r *http.Request) {
 	settings := h.Accounts.Settings()
 	writeJSON(w, http.StatusOK, struct {
 		AddonsAllowed      bool                `json:"addonsAllowed"`
+		ParentalControl    bool                `json:"parentalControl"`
 		Import             *appImportJSON      `json:"import"`
 		Connections        []appConnectionJSON `json:"connections"`
 		ImportEveryMinutes int                 `json:"importEveryMinutes"`
-	}{settings.PersonalAddonsAllowed(user), newAppImportJSON(h.AppImport.Current(user.ID)), connections, settings.ImportEveryMinutes})
+	}{appAddonsAllowed(settings, user), user.Restricted(), newAppImportJSON(h.AppImport.Current(user.ID)), connections, settings.ImportEveryMinutes})
 }
 
 // appConnections lists user's connections, or answers why it could not.
@@ -450,6 +461,7 @@ func (h *handler) startAppImport(target appImportTarget) http.HandlerFunc {
 			{appimport.ErrProfileLocked, http.StatusBadRequest, "invalid_request"},
 			{appimport.ErrUnknownAddon, http.StatusBadRequest, "invalid_request"},
 			{appimport.ErrAddonsNotAllowed, http.StatusForbidden, "personal_addons_disabled"},
+			{appimport.ErrAddonsParentalControl, http.StatusForbidden, "parental_control_own_sources"},
 			{appimport.ErrRunning, http.StatusConflict, "app_import_running"},
 		} {
 			if errors.Is(err, known.err) {

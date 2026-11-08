@@ -350,6 +350,8 @@ const account = {
       addonsHelp:
         'Each addon ticked becomes one of the account’s own addons, under My sources. Its address may hold settings and keys: Polyfin never shows it whole.',
       addonsOff: 'Own addons are turned off for this account: the app’s addons are not offered.',
+      addonsParental:
+        'Parental control applies to this account: its own addons are kept but not used, so the app’s addons are not offered.',
       noAddons: 'This profile has no addon.',
       back: 'Sign in again',
       start: 'Import this profile',
