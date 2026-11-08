@@ -103,7 +103,10 @@ func TestHealthTellsATorrentDidNotStart(t *testing.T) {
 
 // A torrent whose peers were found but did not connect has Health count
 // them by why: here one refused the connection, and one closed it at the
-// handshake.
+// handshake. The proxy answers the refusal itself, as when the peer
+// refused, and a redial would reach a port below the ephemeral range: a
+// port freed for the test could be given to any listener before the
+// proxy dials it, and the peer then counts as closed (seen on CI).
 func TestHealthCountsWhyATorrentsPeersDidNotConnect(t *testing.T) {
 	t.Parallel()
 	proxy := torrenttest.StartProxy(t, false, "", "")
@@ -121,13 +124,9 @@ func TestHealthCountsWhyATorrentsPeersDidNotConnect(t *testing.T) {
 			conn.Close()
 		}
 	}()
-	refusing, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	refusing.Close()
-	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", netip.MustParseAddrPort(closing.Addr().String()),
-		netip.MustParseAddrPort(refusing.Addr().String()))
+	refused := netip.MustParseAddrPort("127.0.0.1:9")
+	proxy.RefuseFirst(refused)
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", netip.MustParseAddrPort(closing.Addr().String()), refused)
 	var engine *torrent.Engine
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
 		settings := o.Accounts.Settings()
