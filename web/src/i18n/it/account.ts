@@ -109,6 +109,8 @@ const account: typeof en = {
       empty: 'Nessuna riga della Home',
       emptyHelp:
         'L’amministratore non ha aggiunto alcuna riga per te alla pagina Home del player web.',
+      watchlistKind: 'La tua playlist Da guardare',
+      playlistsKind: 'Una riga per ogni playlist segnata con ♥',
       on: (name: string) => `${name} è di nuovo nella tua pagina Home.`,
       off: (name: string) => `${name} è stata rimossa dalla tua pagina Home.`,
     },

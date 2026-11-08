@@ -1132,6 +1132,10 @@ const settings: typeof en = {
       nameHelp: 'Le titre de la rangée sur la page d’accueil.',
       becauseNameHelp:
         'Chaque rangée porte ce nom, suivi du titre qu’elle suit\u202f: «\u202fParce que vous avez regardé Film exemple\u202f».',
+      watchlistNameHelp:
+        'Son nom dans cette liste. Chaque utilisateur voit la rangée sous le nom de sa propre liste «\u202fÀ regarder\u202f»\u202f: le nom par défaut dans sa langue, ou celui qu’il lui a donné.',
+      playlistsNameHelp:
+        'Son nom dans cette liste et dans Mon compte. Sur la page d’accueil, chaque rangée porte le nom de sa liste de lecture.',
       kind: 'Type',
       kinds: {
         catalog: 'Un catalogue',
@@ -1142,6 +1146,14 @@ const settings: typeof en = {
         waiting: 'Toujours en attente',
         trakt: 'Recommandés sur Trakt',
         picks: 'Sélection pour vous',
+        watchlist: 'À regarder',
+        playlists: 'Mes listes de lecture',
+        playlist: 'Liste de lecture',
+      },
+      kindDetails: {
+        watchlist: 'La propre liste de chaque membre',
+        playlists: 'Les listes que chaque membre a marquées ♥, une rangée chacune',
+        playlist: 'Une liste de lecture que vous choisissez',
       },
       kindHelp: {
         catalog:
@@ -1159,6 +1171,12 @@ const settings: typeof en = {
           'Les films et séries que Trakt recommande à l’utilisateur, lus avec sa connexion Trakt toutes les 12 heures, sans ceux de sa collection ou de sa Watchlist Trakt ni ceux qu’il a vus. Seuls les utilisateurs qui ont connecté Trakt dans Mon compte › Suivi la voient\u202f; la première fois, elle s’affiche une fois que Trakt a répondu.',
         picks:
           'Les films et séries des bibliothèques de l’utilisateur, listes intelligentes comprises, que son profil de goûts classe en premier, sans ceux qu’il a vus ni ceux d’un genre qu’il n’aime pas. Tant que le profil ne le connaît pas assez, les premiers titres des bibliothèques, les plus populaires d’abord. Chaque utilisateur voit son profil dans Mon compte.',
+        watchlist:
+          'La liste de lecture «\u202fÀ regarder\u202f» de chaque utilisateur, dans son ordre, sous le nom qu’elle a pour lui.',
+        playlists:
+          'Une rangée pour chaque liste de lecture que l’utilisateur a marquée ♥ et peut voir, dans l’ordre des noms, chacune au nom de sa liste. Sa liste «\u202fÀ regarder\u202f» en est exclue quand une rangée «\u202fÀ regarder\u202f» lui est montrée.',
+        playlist:
+          'Une liste de lecture que vous choisissez, dans son ordre. Seuls les utilisateurs qui peuvent la voir ont la rangée\u202f: son propriétaire, ceux avec qui elle est partagée, ou tous quand elle est publique.',
       },
       defaultNames: {
         because: 'Parce que vous avez regardé',
@@ -1167,6 +1185,8 @@ const settings: typeof en = {
         waiting: 'Toujours en attente',
         trakt: 'Recommandés sur Trakt',
         picks: 'Sélection pour vous',
+        watchlist: 'À regarder',
+        playlists: 'Mes listes de lecture',
       },
       catalog: 'Catalogue',
       noCatalog: 'Les addons du serveur n’ont aucun catalogue à afficher.',
@@ -1177,11 +1197,24 @@ const settings: typeof en = {
         smart: 'Liste intelligente',
         addon: 'Addon',
       },
+      playlist: 'Liste de lecture',
+      playlistHelp:
+        'Une liste privée ne s’affiche qu’à son propriétaire et à ceux avec qui elle est partagée, même quand la rangée est montrée à tous.',
+      noPlaylist:
+        'Il n’y a encore aucune liste de lecture. Les utilisateurs en créent dans les applis Jellyfin.',
+      playlistAccess: {
+        public: 'Publique',
+        shared: 'Partagée',
+        private: 'Privée',
+      },
       choose: 'Choisir…',
       unknownCatalog: 'Un catalogue qui n’est plus proposé',
       unknownCollection: 'Une collection qui n’est plus proposée',
+      unknownPlaylist: 'Une liste de lecture qui n’est plus proposée',
       count: 'Rangées',
       countHelp: 'Combien des derniers films et séries vus ont une rangée, de 1 à 10.',
+      playlistsCountHelp:
+        'Combien de listes marquées ♥ ont une rangée au plus, de 1 à 10, les premières par nom.',
       place: 'Place',
       places: {
         top: 'En haut',

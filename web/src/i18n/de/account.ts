@@ -110,6 +110,8 @@ const account: typeof en = {
       empty: 'Keine Startseitenzeile',
       emptyHelp:
         'Der Administrator hat für dich keine Zeile zur Startseite des Web-Players hinzugefügt.',
+      watchlistKind: 'Deine Merkliste',
+      playlistsKind: 'Eine Zeile je Liste, die du mit ♥ markiert hast',
       on: (name: string) => `${name} ist wieder auf deiner Startseite.`,
       off: (name: string) => `${name} ist nicht mehr auf deiner Startseite.`,
     },

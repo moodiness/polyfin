@@ -24,6 +24,7 @@ import {
   type HomeRowDraft,
   type HomeRowKind,
   type HomeRowPlace,
+  type HomeRowPlaylist,
   type HomeRowPreviewTitle,
   type HomeRowSchedule,
   type User,
@@ -49,6 +50,7 @@ import {
   SkeletonRows,
   Switch,
   TextInput,
+  type SelectOption,
   useToast,
 } from '@/ui'
 
@@ -61,10 +63,13 @@ const kinds: HomeRowKind[] = [
   'waiting',
   'trakt',
   'picks',
+  'watchlist',
+  'playlists',
+  'playlist',
 ]
 const places: HomeRowPlace[] = ['top', 'resume', 'nextup', 'bottom']
 
-/** The bounds of Because you watched's rows, as the server checks them. */
+/** The bounds of the rows Because you watched and My playlists make, as the server checks them. */
 const count = { min: 1, max: 10, byDefault: 3 }
 
 /** The days of the week, from Sunday, as schedules number them. */
@@ -91,6 +96,11 @@ function scheduled(schedule: HomeRowSchedule) {
     schedule.days.length > 0 ||
     schedule.startHour !== null
   )
+}
+
+/** Whether a kind makes several rows, up to its `count`. */
+function counted(kind: HomeRowKind) {
+  return kind === 'because' || kind === 'playlists'
 }
 
 /** A catalog's key in the catalog list. */
@@ -164,6 +174,7 @@ export default function HomeRows() {
               onMove={(to) => move(index, to)}
               catalogs={choices.data?.catalogs ?? []}
               collections={choices.data?.collections ?? []}
+              playlists={choices.data?.playlists ?? []}
               onEdit={() => setEditing(row)}
             />
           ))}
@@ -184,6 +195,7 @@ export default function HomeRows() {
           row={editing === 'new' ? null : editing}
           catalogs={choices.data?.catalogs ?? []}
           collections={choices.data?.collections ?? []}
+          playlists={choices.data?.playlists ?? []}
           users={users.data ?? []}
           onClose={() => setEditing(null)}
         />
@@ -204,6 +216,7 @@ function HomeRowEntry({
   onMove,
   catalogs,
   collections,
+  playlists,
   onEdit,
 }: {
   row: HomeRow
@@ -213,6 +226,7 @@ function HomeRowEntry({
   onMove: (to: number) => void
   catalogs: HomeRowCatalog[]
   collections: HomeRowCollection[]
+  playlists: HomeRowPlaylist[]
   onEdit: () => void
 }) {
   const { t } = useI18n()
@@ -229,6 +243,7 @@ function HomeRowEntry({
   })
   const catalog = catalogs.find((c) => catalogKey(c) === catalogKey(row))
   const collection = collections.find((c) => c.id === row.collectionId)
+  const playlist = playlists.find((p) => p.id === row.playlistId)
   const source =
     row.kind === 'catalog'
       ? catalog
@@ -236,9 +251,11 @@ function HomeRowEntry({
         : text.unknownCatalog
       : row.kind === 'collection'
         ? (collection?.name ?? text.unknownCollection)
-        : row.kind === 'because'
-          ? `${text.kinds.because} · ${text.rowsCount(row.count)}`
-          : text.kinds[row.kind]
+        : row.kind === 'playlist'
+          ? (playlist?.name ?? text.unknownPlaylist)
+          : counted(row.kind)
+            ? `${text.kinds[row.kind]} · ${text.rowsCount(row.count)}`
+            : text.kinds[row.kind]
   return (
     <Row
       title={row.name}
@@ -303,12 +320,14 @@ function HomeRowModal({
   row,
   catalogs,
   collections,
+  playlists,
   users,
   onClose,
 }: {
   row: HomeRow | null
   catalogs: HomeRowCatalog[]
   collections: HomeRowCollection[]
+  playlists: HomeRowPlaylist[]
   users: User[]
   onClose: () => void
 }) {
@@ -322,6 +341,7 @@ function HomeRowModal({
   const [named, setNamed] = useState(row !== null)
   const [catalog, setCatalog] = useState(row?.kind === 'catalog' ? catalogKey(row) : '')
   const [collection, setCollection] = useState(row?.collectionId ?? '')
+  const [playlist, setPlaylist] = useState(row?.playlistId ?? '')
   const [rows, setRows] = useState<number | null>(row?.count ?? count.byDefault)
   const [place, setPlace] = useState<HomeRowPlace>(row?.place ?? 'top')
   const [everyone, setEveryone] = useState(row?.everyone ?? true)
@@ -354,20 +374,35 @@ function HomeRowModal({
   if (collection !== '' && !collectionOptions.some((option) => option.value === collection)) {
     collectionOptions.unshift({ value: collection, label: text.unknownCollection })
   }
+  const playlistOptions: SelectOption<string>[] = playlists.map((p) => ({
+    value: p.id,
+    label: p.name,
+    detail: `${p.ownerName} · ${text.playlistAccess[p.access]}`,
+  }))
+  if (playlist !== '' && !playlistOptions.some((option) => option.value === playlist)) {
+    playlistOptions.unshift({ value: playlist, label: text.unknownPlaylist })
+  }
 
+  /** What the row lists, as the name follows it: a catalog, a collection or a playlist. */
+  type Source = { catalog: string; collection: string; playlist: string }
+  const source: Source = { catalog, collection, playlist }
   /** The name a row gets from what it lists, until one is typed. */
-  const nameFor = (nextKind: HomeRowKind, nextCatalog: string, nextCollection: string) => {
+  const nameFor = (nextKind: HomeRowKind, next: Source) => {
     if (nextKind === 'catalog') {
-      return catalogs.find((c) => catalogKey(c) === nextCatalog)?.catalogName ?? ''
+      return catalogs.find((c) => catalogKey(c) === next.catalog)?.catalogName ?? ''
     }
     if (nextKind === 'collection')
-      return collections.find((c) => c.id === nextCollection)?.name ?? ''
+      return collections.find((c) => c.id === next.collection)?.name ?? ''
+    if (nextKind === 'playlist') return playlists.find((p) => p.id === next.playlist)?.name ?? ''
     return text.defaultNames[nextKind]
   }
-  const follow = (nextKind: HomeRowKind, nextCatalog: string, nextCollection: string) => {
+  const follow = (nextKind: HomeRowKind, next: Source) => {
     mutation.reset()
-    if (!named) setName(nameFor(nextKind, nextCatalog, nextCollection))
+    if (!named) setName(nameFor(nextKind, next))
   }
+  // My playlists makes a row of each playlist, which other apps could not be given as one library.
+  const libraryOffered = kind !== 'playlists'
+  const asLibrary = libraryOffered && library
 
   const missingUser = !everyone && chosen.length === 0
   // Dates as YYYY-MM-DD compare as text.
@@ -384,10 +419,11 @@ function HomeRowModal({
       catalogType: catalogType ?? '',
       catalogId: rest.join('/'),
       collectionId: kind === 'collection' ? collection : '',
-      count: kind === 'because' ? (rows ?? count.byDefault) : count.byDefault,
+      playlistId: kind === 'playlist' ? playlist : '',
+      count: counted(kind) ? (rows ?? count.byDefault) : count.byDefault,
       everyone,
       users: everyone ? [] : chosen,
-      library,
+      library: asLibrary,
       schedule: {
         startDate,
         endDate,
@@ -425,10 +461,17 @@ function HomeRowModal({
         <Field label={text.kind} help={text.kindHelp[kind]}>
           <Select
             value={kind}
-            options={kinds.map((value) => ({ value, label: text.kinds[value] }))}
+            options={kinds.map((value) => ({
+              value,
+              label: text.kinds[value],
+              detail:
+                value === 'watchlist' || value === 'playlists' || value === 'playlist'
+                  ? text.kindDetails[value]
+                  : undefined,
+            }))}
             onValue={(value) => {
               setKind(value)
-              follow(value, catalog, collection)
+              follow(value, source)
             }}
             className="max-w-[23.75rem]"
           />
@@ -443,7 +486,7 @@ function HomeRowModal({
                 options={[{ value: '', label: text.choose, disabled: true }, ...catalogOptions]}
                 onValue={(value) => {
                   setCatalog(value)
-                  follow(kind, value, collection)
+                  follow(kind, { ...source, catalog: value })
                 }}
               />
             </Field>
@@ -458,12 +501,38 @@ function HomeRowModal({
                 options={[{ value: '', label: text.choose, disabled: true }, ...collectionOptions]}
                 onValue={(value) => {
                   setCollection(value)
-                  follow(kind, catalog, value)
+                  follow(kind, { ...source, collection: value })
                 }}
               />
             </Field>
           ))}
-        <Field label={text.name} help={kind === 'because' ? text.becauseNameHelp : text.nameHelp}>
+        {kind === 'playlist' &&
+          (playlistOptions.length === 0 ? (
+            <Notice tone="warn">{text.noPlaylist}</Notice>
+          ) : (
+            <Field label={text.playlist} help={text.playlistHelp}>
+              <Select
+                value={playlist}
+                options={[{ value: '', label: text.choose, disabled: true }, ...playlistOptions]}
+                onValue={(value) => {
+                  setPlaylist(value)
+                  follow(kind, { ...source, playlist: value })
+                }}
+              />
+            </Field>
+          ))}
+        <Field
+          label={text.name}
+          help={
+            kind === 'because'
+              ? text.becauseNameHelp
+              : kind === 'watchlist'
+                ? text.watchlistNameHelp
+                : kind === 'playlists'
+                  ? text.playlistsNameHelp
+                  : text.nameHelp
+          }
+        >
           <TextInput
             value={name}
             onValue={(value) => {
@@ -475,8 +544,11 @@ function HomeRowModal({
             autoComplete="off"
           />
         </Field>
-        {kind === 'because' && (
-          <Field label={text.count} help={text.countHelp}>
+        {counted(kind) && (
+          <Field
+            label={text.count}
+            help={kind === 'playlists' ? text.playlistsCountHelp : text.countHelp}
+          >
             <NumberInput value={rows} onValue={setRows} min={count.min} max={count.max} step={1} />
           </Field>
         )}
@@ -516,15 +588,17 @@ function HomeRowModal({
             ))}
           </fieldset>
         )}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p id={`${formId}-library`} className="text-control font-medium text-ink">
-              {text.library}
-            </p>
-            <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.libraryHelp}</p>
+        {libraryOffered && (
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p id={`${formId}-library`} className="text-control font-medium text-ink">
+                {text.library}
+              </p>
+              <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.libraryHelp}</p>
+            </div>
+            <Switch checked={library} onChange={setLibrary} labelledBy={`${formId}-library`} />
           </div>
-          <Switch checked={library} onChange={setLibrary} labelledBy={`${formId}-library`} />
-        </div>
+        )}
         <fieldset className="space-y-4 pt-3">
           <legend className="sr-only">{text.schedule}</legend>
           <div>
@@ -561,7 +635,7 @@ function HomeRowModal({
               />
             </Field>
           </div>
-          {library ? (
+          {asLibrary ? (
             <Notice>{text.libraryDatesOnly}</Notice>
           ) : (
             <>

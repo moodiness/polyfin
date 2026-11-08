@@ -378,7 +378,13 @@ export function HomeRowList() {
               key={row.id}
               kind="switch"
               label={row.name}
-              detail={`${kinds[row.kind]} · ${places[row.place]}`}
+              detail={`${
+                row.kind === 'watchlist'
+                  ? text.watchlistKind
+                  : row.kind === 'playlists'
+                    ? text.playlistsKind
+                    : kinds[row.kind]
+              } · ${places[row.place]}`}
               checked={!row.off}
               disabled={change.isPending && change.variables.id === row.id}
               onChange={() => change.mutate(row)}

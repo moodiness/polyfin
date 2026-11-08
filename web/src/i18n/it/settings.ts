@@ -1133,6 +1133,10 @@ const settings: typeof en = {
       nameHelp: 'Il titolo della riga nella pagina Home.',
       becauseNameHelp:
         'Ogni riga prende questo nome, seguito dal titolo a cui si riferisce: «Perché hai guardato Film di esempio».',
+      watchlistNameHelp:
+        'Il suo nome in questo elenco. Ogni utente vede la riga con il nome della propria playlist Da guardare: quello predefinito nella sua lingua, o quello che le ha dato.',
+      playlistsNameHelp:
+        'Il suo nome in questo elenco e in Il mio account. Nella pagina Home, ogni riga ha il nome della sua playlist.',
       kind: 'Tipo',
       kinds: {
         catalog: 'Un catalogo',
@@ -1143,6 +1147,14 @@ const settings: typeof en = {
         waiting: 'Ancora in attesa',
         trakt: 'Consigliati su Trakt',
         picks: 'Scelti per te',
+        watchlist: 'Da guardare',
+        playlists: 'Le mie playlist',
+        playlist: 'Playlist',
+      },
+      kindDetails: {
+        watchlist: 'La lista personale di ogni membro',
+        playlists: 'Le playlist che ogni membro ha segnato con ♥, una riga ciascuna',
+        playlist: 'Una playlist scelta da te',
       },
       kindHelp: {
         catalog:
@@ -1160,6 +1172,12 @@ const settings: typeof en = {
           'I film e le serie che Trakt consiglia all’utente, letti con la sua connessione a Trakt ogni 12 ore, senza quelli della sua collezione o Watchlist di Trakt né quelli che ha già visto. La vedono solo gli utenti che hanno collegato Trakt in Il mio account › Monitoraggio; la prima volta appare appena Trakt ha risposto.',
         picks:
           'I film e le serie delle librerie dell’utente, liste intelligenti comprese, che il suo profilo dei gusti mette per primi, senza quelli già riprodotti né quelli di un genere che non gli piace. Finché il profilo non lo conosce abbastanza, i primi titoli delle librerie, i più popolari per primi. Ogni utente vede il proprio profilo in Il mio account.',
+        watchlist:
+          'La playlist Da guardare di ciascun utente, nel suo ordine, con il nome che ha per lui.',
+        playlists:
+          'Una riga per ogni playlist che l’utente ha segnato con ♥ e può vedere, in ordine di nome, ognuna con il nome della sua playlist. La sua playlist Da guardare è esclusa finché gli è mostrata una riga Da guardare.',
+        playlist:
+          'Una playlist scelta da te, nel suo ordine. Ricevono la riga solo gli utenti che possono vederla: il proprietario, chi la condivide, o tutti quando è pubblica.',
       },
       defaultNames: {
         because: 'Perché hai guardato',
@@ -1168,6 +1186,8 @@ const settings: typeof en = {
         waiting: 'Ancora in attesa',
         trakt: 'Consigliati su Trakt',
         picks: 'Scelti per te',
+        watchlist: 'Da guardare',
+        playlists: 'Le mie playlist',
       },
       catalog: 'Catalogo',
       noCatalog: 'Gli add-on del server non hanno cataloghi da mostrare.',
@@ -1178,11 +1198,23 @@ const settings: typeof en = {
         smart: 'Lista intelligente',
         addon: 'Add-on',
       },
+      playlist: 'Playlist',
+      playlistHelp:
+        'Una playlist privata è visibile solo al proprietario e a chi la condivide, anche quando la riga è mostrata a tutti.',
+      noPlaylist: 'Non c’è ancora nessuna playlist. Gli utenti le creano nelle app Jellyfin.',
+      playlistAccess: {
+        public: 'Pubblica',
+        shared: 'Condivisa',
+        private: 'Privata',
+      },
       choose: 'Scegli…',
       unknownCatalog: 'Un catalogo non più disponibile',
       unknownCollection: 'Una collezione non più disponibile',
+      unknownPlaylist: 'Una playlist non più disponibile',
       count: 'Righe',
       countHelp: 'Quanti degli ultimi film e serie TV riprodotti ottengono una riga, da 1 a 10.',
+      playlistsCountHelp:
+        'Quante playlist segnate con ♥ ottengono al massimo una riga, da 1 a 10, le prime per nome.',
       place: 'Posizione',
       places: {
         top: 'In alto',

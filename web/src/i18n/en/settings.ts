@@ -1103,6 +1103,10 @@ const settings = {
       nameHelp: 'The row’s title on the home page.',
       becauseNameHelp:
         'Each row is named after it, followed by the title it follows: “Because you watched Example Movie”.',
+      watchlistNameHelp:
+        'Its name in this list. Each user sees the row under the name of their own Watchlist playlist: the default in their language, or the name they gave it.',
+      playlistsNameHelp:
+        'Its name in this list and in My account. On the home page, each row is named after its playlist.',
       kind: 'Kind',
       kinds: {
         catalog: 'A catalog',
@@ -1113,6 +1117,14 @@ const settings = {
         waiting: 'Still waiting',
         trakt: 'Recommended on Trakt',
         picks: 'Top picks for you',
+        watchlist: 'Watchlist',
+        playlists: 'My playlists',
+        playlist: 'Playlist',
+      },
+      kindDetails: {
+        watchlist: 'Each member’s own list',
+        playlists: 'The playlists each member marked ♥, one row each',
+        playlist: 'A playlist you choose',
       },
       kindHelp: {
         catalog:
@@ -1130,6 +1142,12 @@ const settings = {
           'The movies and series Trakt recommends to the user, read with their Trakt connection every 12 hours, without those in their Trakt collection or Watchlist and those they played. Only users who connected Trakt in My account › Tracking see it; the first time, it shows once Trakt has answered.',
         picks:
           'The movies and series of the user’s libraries, smart lists included, that their taste profile ranks first, without those they played or of a genre they dislike. Until the profile knows enough of them, the libraries’ first titles, the most popular first. Users see their profile in My account.',
+        watchlist:
+          'Each user’s own Watchlist playlist, in its order, under the name it has for them.',
+        playlists:
+          'One row for each playlist the user marked ♥ and may see, in name order, each named after its playlist. Their Watchlist is left out while a Watchlist row is shown to them.',
+        playlist:
+          'A playlist you choose, in its order. Only the users who may see it get the row: its owner, those it is shared with, or every user when it is public.',
       },
       defaultNames: {
         because: 'Because you watched',
@@ -1138,6 +1156,8 @@ const settings = {
         waiting: 'Still waiting',
         trakt: 'Recommended on Trakt',
         picks: 'Top picks for you',
+        watchlist: 'Watchlist',
+        playlists: 'My playlists',
       },
       catalog: 'Catalog',
       noCatalog: 'The server’s addons have no catalog to show.',
@@ -1148,11 +1168,23 @@ const settings = {
         smart: 'Smart list',
         addon: 'Addon',
       },
+      playlist: 'Playlist',
+      playlistHelp:
+        'A private playlist shows only to its owner and those it is shared with, even when the row is shown to every user.',
+      noPlaylist: 'There is no playlist yet. Users make them in Jellyfin apps.',
+      playlistAccess: {
+        public: 'Public',
+        shared: 'Shared',
+        private: 'Private',
+      },
       choose: 'Choose…',
       unknownCatalog: 'A catalog no longer offered',
       unknownCollection: 'A collection no longer offered',
+      unknownPlaylist: 'A playlist no longer offered',
       count: 'Rows',
       countHelp: 'How many of the last movies and series played get a row, from 1 to 10.',
+      playlistsCountHelp:
+        'How many playlists marked ♥ get a row at most, from 1 to 10, the first by name.',
       place: 'Place',
       places: {
         top: 'At the top',
