@@ -48,6 +48,7 @@ func spool(t *testing.T) string {
 // A guide in a ZIP archive is read like a plain one, from its .xml file,
 // the largest when it holds several.
 func TestGuidesReadFromZIPArchives(t *testing.T) {
+	t.Parallel()
 	dir := spool(t)
 	single := zipped(t, zipFile{"guide.xml", guide})
 	channels, programmes, err := read(t, single, Options{Language: "fr", SpoolDir: dir})
@@ -68,6 +69,7 @@ func TestGuidesReadFromZIPArchives(t *testing.T) {
 }
 
 func TestBrokenZIPArchivesFail(t *testing.T) {
+	t.Parallel()
 	dir := spool(t)
 	valid := zipped(t, zipFile{"guide.xml", guide})
 	for name, data := range map[string][]byte{
@@ -90,6 +92,7 @@ func TestBrokenZIPArchivesFail(t *testing.T) {
 // An archive is bound by the download limit, and its XML file by four
 // times as much.
 func TestZIPArchivesOverTheLimitFail(t *testing.T) {
+	t.Parallel()
 	dir := spool(t)
 	valid := zipped(t, zipFile{"guide.xml", guide})
 	if _, _, err := read(t, valid, Options{Limit: int64(len(valid)), SpoolDir: dir}); err != nil {
@@ -122,6 +125,7 @@ func (f *failing) Read(p []byte) (int, error) {
 // The archive written to the spool folder is removed however reading
 // ends: cut short, stopped by a callback, or done.
 func TestZIPArchivesAreRemovedAfterReading(t *testing.T) {
+	t.Parallel()
 	dir := spool(t)
 	valid := zipped(t, zipFile{"guide.xml", guide})
 	cut := errors.New("connection reset")

@@ -64,6 +64,7 @@ func gzipped(data []byte) []byte {
 
 // A guide reads the same plain or compressed, told by its content.
 func TestGuidesReadPlainOrCompressed(t *testing.T) {
+	t.Parallel()
 	for name, data := range map[string][]byte{"plain": []byte(guide), "gzip": gzipped([]byte(guide))} {
 		channels, programmes, err := read(t, data, Options{Language: "fr"})
 		if err != nil {
@@ -107,6 +108,7 @@ func TestGuidesReadPlainOrCompressed(t *testing.T) {
 }
 
 func TestMalformedGuidesFail(t *testing.T) {
+	t.Parallel()
 	compressedJunk := gzipped([]byte("not xml at all"))
 	for name, data := range map[string][]byte{
 		"html":          []byte("<html><body>Not found</body></html>"),
@@ -124,6 +126,7 @@ func TestMalformedGuidesFail(t *testing.T) {
 }
 
 func TestGuidesOverTheLimitFail(t *testing.T) {
+	t.Parallel()
 	data := []byte(guide)
 	if _, _, err := read(t, data, Options{Limit: int64(len(data))}); err != nil {
 		t.Errorf("a guide of exactly the limit: %v", err)
@@ -142,6 +145,7 @@ func TestGuidesOverTheLimitFail(t *testing.T) {
 // Read stops at the first callback error, and reads as a stream: the
 // programmes before an error in the document were already handed over.
 func TestGuidesAreReadAsAStream(t *testing.T) {
+	t.Parallel()
 	stop := errors.New("stop")
 	calls := 0
 	err := Read(strings.NewReader(guide), Options{}, func(Channel) error { return nil }, func(Programme) error { calls++; return stop })
@@ -157,6 +161,7 @@ func TestGuidesAreReadAsAStream(t *testing.T) {
 }
 
 func TestTimesAndNumbering(t *testing.T) {
+	t.Parallel()
 	for value, want := range map[string]time.Time{
 		"20260104200000 +0100": time.Date(2026, 1, 4, 19, 0, 0, 0, time.UTC),
 		"20260104200000-0230":  time.Date(2026, 1, 4, 22, 30, 0, 0, time.UTC),

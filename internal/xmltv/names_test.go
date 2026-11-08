@@ -5,6 +5,7 @@ import "testing"
 // IPTV lists dress channel names up; guides name channels plainly. Both
 // fold to the same loose name.
 func TestChannelNamesMatchAcrossTheirDressing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ listed, guide string }{
 		{"ZEB1 HD", "ZEB1"},
 		{"ZEB1ᴴᴰ", "ZEB1"},
@@ -46,6 +47,7 @@ func TestChannelNamesMatchAcrossTheirDressing(t *testing.T) {
 // The exact form keeps quality tags, which tell a placeholder "ZEB1 4K"
 // from "ZEB1", and drops only the dressing around the name.
 func TestExactNamesKeepQualityTags(t *testing.T) {
+	t.Parallel()
 	if a, b := ParseName("ZEB1 4K").Exact, ParseName("ZEB1").Exact; a == b {
 		t.Errorf("ZEB1 4K and ZEB1 are exactly %q", a)
 	}
@@ -55,6 +57,7 @@ func TestExactNamesKeepQualityTags(t *testing.T) {
 }
 
 func TestCountries(t *testing.T) {
+	t.Parallel()
 	for name, want := range map[string]string{"FR| ZEB1": "fr", "[UK] Quill": "gb", "de: Lumo": "de", "SP| Zeb": "", "ENF| Zeb": "", "Zeb": ""} {
 		if got := ParseName(name).Country; got != want {
 			t.Errorf("%q: country %q, want %q", name, got, want)
