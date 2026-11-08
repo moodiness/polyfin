@@ -1,16 +1,16 @@
 diff --git a/assets/lumaaglaass.js b/assets/lumaaglaass.js
-index 998b73d8..979d9425 100644
+index 8c8e7b7..a516ec2 100644
 --- a/assets/lumaaglaass.js
 +++ b/assets/lumaaglaass.js
-@@ -715,6 +715,7 @@
+@@ -809,6 +809,7 @@
          identity = key;
      }
      const homeSections = page => page && [...page.querySelectorAll('.homeSectionsContainer')].find(visible);
 +    const shownHomePage = () => [...document.querySelectorAll('.homePage')].find(visible);
      // Recent titles - A home row links to tab=1 of one library. Its matching navigation link provides
      // the library label already chosen by Jellyfin, so simplification never needs translated title text.
-     function clearHomeLibraryTitles() {
-@@ -726,12 +727,11 @@
+     const RECENT_TITLES = '.verticalSection .sectionTitleContainer > a.more.sectionTitleTextButton[href] > .sectionTitle';
+@@ -821,12 +822,11 @@
              delete heading.dataset.lgHomeRecentLabel;
          });
      }
@@ -24,7 +24,7 @@ index 998b73d8..979d9425 100644
          if (!page) return;
          const labels = new Map();
          for (const link of document.querySelectorAll('.lnkMediaFolder[href]')) {
-@@ -752,9 +752,9 @@
+@@ -847,9 +847,9 @@
      }
      // Banner - A shell of its final size holds its place from the first home frame, filled by the
      // session's items or a load; none after an empty load (a later find then moves the rows once).
@@ -36,7 +36,7 @@ index 998b73d8..979d9425 100644
          if (!sections) return;
          if (!hero?.isConnected || hero.parentNode !== sections.parentNode) {
              removeHero();
-@@ -783,7 +783,7 @@
+@@ -877,7 +877,7 @@
              if (!visible(hero)) removeHero();
              return;
          }
@@ -45,7 +45,7 @@ index 998b73d8..979d9425 100644
          const sections = homeSections(page);
          if (!sections) return;
          if (!settings.homeCarousel && homeScene?.page === page && homeScene.key === key) return;
-@@ -839,7 +839,7 @@
+@@ -933,7 +933,7 @@
              removeHero();
              return;
          }
@@ -54,7 +54,21 @@ index 998b73d8..979d9425 100644
      }
      // Home backdrop - --lg-backdrop and the class that shows it, for the banner and the still backdrop.
      function showHomeBackdrop(art) {
-@@ -1481,12 +1481,13 @@
+@@ -1267,8 +1267,11 @@
+     let routeItemsKey = '';
+     // Posters - --lg-poster-min-width (Custom CSS, or the settings page on <html>) turns Jellyfin's poster
+     // grids into columns: the stylesheet needs this mark, an unset variable keeps Jellyfin's widths.
+-    function syncPosterWidth(on) {
+-        const set = on && getComputedStyle(document.documentElement).getPropertyValue('--lg-poster-min-width').trim() !== '';
++    // The pass reads the variable before its writes (posterWidthSet): a read after them forces a style
++    // recalculation.
++    const posterWidthSet = on =>
++        on && getComputedStyle(document.documentElement).getPropertyValue('--lg-poster-min-width').trim() !== '';
++    function syncPosterWidth(set) {
+         document.documentElement.classList.toggle('lg-has-poster-min-width', set);
+     }
+     // Session - Both caches belong to one user on one server; returns the id's cache key.
+@@ -1574,12 +1577,13 @@
          }
      }
      // Controls - Draw the native AppBar controls inside the card: page coordinates written once per
@@ -71,7 +85,7 @@ index 998b73d8..979d9425 100644
          libraryControlFrame = 0;
          const card = [...document.querySelectorAll('.lg-library-page .lg-library-section')].find(visible);
          const heading = card?.querySelector('.lg-library-title');
-@@ -1827,22 +1828,26 @@
+@@ -1920,22 +1924,26 @@
          for (const backdrop of detailFallbacks) {
              if (!backdrop.isConnected || !backdrop.closest(DETAILS_WITH_POSTER)) releaseFallback(backdrop);
          }
@@ -105,20 +119,21 @@ index 998b73d8..979d9425 100644
          detailMetadata.forEach((wrapper, tags) => {
              if (!tags.isConnected || !tags.closest(DETAILS_WITH_POSTER)) unwrapMetadata(wrapper, tags);
          });
-@@ -2225,17 +2230,19 @@
+@@ -2317,20 +2325,23 @@
          nodes.forEach(node => layoutObserver.observe(node));
          layoutNodes = nodes;
      }
 -    // Schedule - Cheap syncs run at once (a page's first frame is final), home mounting at most once per
 -    // 150 ms; state, session and page are read before any write, which would force a style recalc.
 +    // Schedule - Cheap syncs run in one pass (a page's first frame is final), home mounting at most once
-+    // per 150 ms. State, session, page, the header and the home page are read before any write: a
-+    // layout read after a write forces a style recalculation.
++    // per 150 ms. State, session, page, the header, the home page and the poster width are read before
++    // any write: a layout read after a write forces a style recalculation.
      const schedule = () => {
          if (stopped) return;
          const on = enabled(), api = on ? currentClient() : null, key = on ? sessionKey(api) : '';
          const context = key ? pageCardContext() : null;
 +        const homePage = on && home() ? shownHomePage() : undefined, homeRows = homeSections(homePage);
++        const posterWidth = posterWidthSet(on);
 +        observeLayout(on);
 +        const moved = syncHeaderInset(on);
          if (on && styleGate) openStyleGate();
@@ -128,8 +143,12 @@ index 998b73d8..979d9425 100644
 -        const moved = syncHeaderInset(on);
          syncPageMarks(on);
          syncPlaybackPage(on);
+-        syncPosterWidth(on);
++        syncPosterWidth(posterWidth);
          if (on) {
-@@ -2263,10 +2270,10 @@
+             syncDetails(key, context);
+         } else {
+@@ -2356,10 +2367,10 @@
          } else {
              collectionFilterController.stop();
          }
@@ -142,7 +161,7 @@ index 998b73d8..979d9425 100644
          }
          resumeClock();
          if (scheduled) return;
-@@ -2275,33 +2282,53 @@
+@@ -2368,33 +2379,53 @@
              void mount();
          }, 150);
      };
@@ -197,14 +216,14 @@ index 998b73d8..979d9425 100644
      // Images - Posters and the library image change the layout when they load, without a mutation.
 -    listen(document, 'load', schedule, true);
 +    listen(document, 'load', schedulePass, true);
-     // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, the 45 s Play
-     // expiry, a paused carousel, layout changes the layout observer does not watch.
+     // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, a paused carousel,
+     // layout changes the layout observer does not watch.
 -    const poll = setInterval(schedule, 1000);
 +    const poll = setInterval(schedulePass, 1000);
  
      // =====================================================================
      // Lifecycle
-@@ -2331,6 +2358,7 @@
+@@ -2426,6 +2457,7 @@
              stopped = true;
              openStyleGate();
              clearTimeout(scheduled);

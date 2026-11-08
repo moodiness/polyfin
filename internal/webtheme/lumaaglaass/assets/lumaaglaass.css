@@ -1,4 +1,6 @@
 /* LumaaGlaass - Main stylesheet. */
+/* Options - The theme variables in :root; docs/customization.md#theme-variables. */
+/* License - MIT, Copyright (c) 2026 Om Gupta (Abyss) and Copyright (c) 2026 Dyhlio; see LICENSE. */
 
 /* ====================================================================== */
 /* Cascade layers                                                         */
@@ -42,7 +44,6 @@
     --lg-state-row-hover: var(--lg-surface-row-hover);
     --lg-state-selected: var(--lg-surface-row-selected);
     --lg-state-selected-text: var(--lg-color-text);
-    --lg-state-selected-edge: rgba(255,255,255,.45);
     /* Menus - Selected choices draw no edge (Highlight in forced colors). */
     --lg-state-menu-selected-edge: transparent;
     /* Focus - The one keyboard ring; components only move it (outline-offset). */
@@ -94,6 +95,10 @@
     /* Legacy header - Its bottom edge (TV and legacy layouts); two rows with tabs at 1000px and
        less (Part 2 Tokens). */
     --lg-legacy-header-bottom: calc(88px + env(safe-area-inset-top,0px));
+    /* Home banner - Its base height, and the limit it grows to (16:9 backdrops): by default the base
+       height, or 75% of a taller window. */
+    --lg-hero-base-height: calc(clamp(460px, 42vw, 680px) + 120px + clamp(0px, 1vw, 20px));
+    --lg-hero-max-height: max(var(--lg-hero-base-height), 75vh);
     --lg-page-card-height: 304px;
     --lg-page-card-inset: clamp(24px, 4vw, 64px);
     --lg-page-card-title-size: clamp(30px, 3.5vw, 56px);
@@ -103,6 +108,9 @@
     --lg-artwork-action-size: 64px;
     /* Cast width - Phones override it in Part 2 Tokens. */
     --lg-cast-width: clamp(112px,10vw,180px);
+    /* Posters - The grid column for --lg-poster-min-width (unset by default), never under 80px; read
+       only under lg-has-poster-min-width, which the script sets once the variable resolves. */
+    --lg-poster-track: max(var(--lg-poster-min-width), 80px);
     --lg-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15.5' fill='white' fill-opacity='.08' stroke='white' stroke-opacity='.12'/%3E%3Cpath d='M11.417 14.167 16 18.75 20.583 14.167z' fill='%23f5f5f7'/%3E%3C/svg%3E");
 }
 
@@ -375,9 +383,8 @@ html[data-theme="dark"] header.MuiAppBar-root.MuiAppBar-positionFixed {
     --Paper-shadow: none !important;
 }
 
-/* Playback - Hide browsing navigation as soon as the real player is mounted, before the route
-   observer runs. The class remains a fallback; the player OSD keeps its own controls. */
-html:has(.videoPlayerContainer) header.MuiAppBar-root,
+/* Playback - The script marks the player from its mount, before Jellyfin opens #/video; the
+   player OSD keeps its own controls. */
 html.lg-is-playback-page header.MuiAppBar-root {
     visibility: hidden;
     pointer-events: none;
@@ -1378,7 +1385,7 @@ body .dialog.formDialog .dialogContentInner {
 
 .cardTextCentered,
 .cardTextCentered > .textActionButton {
-    text-align: left !important;
+    text-align: start !important;
 }
 
 .blurhash-canvas {
@@ -1775,7 +1782,7 @@ header.MuiAppBar-root .MuiButtonGroup-root:empty {
 }
 
 #itemDetailPage .button-link {
-    text-align: left;
+    text-align: start;
 }
 
 .trackSelections .selectContainer .detailTrackSelect {
@@ -1797,7 +1804,7 @@ header.MuiAppBar-root .MuiButtonGroup-root:empty {
 
 #itemDetailPage .detailButton {
     padding: 8px !important;
-    margin-right: var(--lg-space-button-group) !important;
+    margin-inline-end: var(--lg-space-button-group) !important;
 }
 
 #itemDetailPage .btnPlay {
@@ -1815,13 +1822,13 @@ header.MuiAppBar-root .MuiButtonGroup-root:empty {
 .layout-mobile #itemDetailPage .parentName,
 .layout-mobile #itemDetailPage .parentNameLast,
 .layout-mobile #itemDetailPage .itemName.subtitle {
-    text-align: left;
-    justify-content: left;
+    text-align: start;
+    justify-content: flex-start;
 }
 
 .layout-mobile #itemDetailPage .mainDetailButtons,
 .layout-mobile #itemDetailPage .itemMiscInfo {
-    justify-content: left;
+    justify-content: flex-start;
 }
 
 .layout-mobile .itemBackdrop {
@@ -1839,7 +1846,7 @@ header.MuiAppBar-root .MuiButtonGroup-root:empty {
 
 .layout-desktop #itemDetailPage .btnPlay,
 .layout-tv #itemDetailPage .btnPlay {
-    margin-right: 12px !important;
+    margin-inline-end: 12px !important;
     padding: .4em 1.4em .4em 1em !important;
 }
 
@@ -2173,7 +2180,7 @@ html[data-theme="dark"] .settingsContainer .MuiFormHelperText-root.MuiFormHelper
 
 #userProfilePage .readOnlyContent div {
     align-items: baseline !important;
-    margin-right: 12px !important;
+    margin-inline-end: 12px !important;
 }
 
 #dashboardPage .cardContent,
@@ -3227,6 +3234,12 @@ html body select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([si
 .lg-host-select {
     inline-size: 100%;
     max-inline-size: 100%;
+
+    /* Selects - Jellyfin appends its arrow after the select it wraps (outside Firefox), so the arrow
+       follows the shell; the trigger draws its own. */
+    & ~ .selectArrowContainer {
+        display: none !important;
+    }
 }
 
 .lg-select-trigger {
@@ -3258,11 +3271,6 @@ html body select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([si
         background-position: left 10px center;
     }
 
-    &:not(:disabled):is(:hover,:focus-visible,[aria-expanded="true"]) {
-        border-color: var(--lg-edge-open);
-        background-color: var(--lg-surface-open);
-    }
-
     &:disabled {
         opacity: .5;
         cursor: default;
@@ -3287,9 +3295,14 @@ html body select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([si
     backdrop-filter: blur(var(--lg-blur-panel));
     -webkit-backdrop-filter: blur(var(--lg-blur-panel));
     box-shadow: var(--lg-shadow-panel);
+    font-size: 15px;
 
     &[hidden] {
         display: none;
+    }
+
+    @media (max-width: 640px) {
+        font-size: 16px;
     }
 }
 
@@ -3307,6 +3320,7 @@ html body select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([si
     font: inherit;
     line-height: 1.5;
     text-align: start;
+    overflow-wrap: anywhere;
     background: transparent;
     cursor: pointer;
 
@@ -3314,14 +3328,9 @@ html body select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([si
         margin-block-start: var(--lg-space-option);
     }
 
-    &:not(:disabled):is(:hover,:focus-visible) {
-        border-color: var(--lg-edge-open);
-        background: var(--lg-surface-row-hover);
-        outline: none;
-    }
-
-    &[aria-selected="true"] {
-        background: var(--lg-surface-row-selected);
+    &:disabled {
+        opacity: .5;
+        cursor: default;
     }
 }
 
@@ -3668,7 +3677,8 @@ body .listItem:hover .itemProgressBar {
 /* ---------------------------------------------------------------------- */
 
 .cardText {
-    padding: .06em .5em 0 .06em;
+    padding-block: .06em 0;
+    padding-inline: .06em .5em;
     font-size: medium;
     font-weight: 500;
     opacity: 1;
@@ -3681,8 +3691,8 @@ body .listItem:hover .itemProgressBar {
 }
 
 .itemsContainer > .card > .cardBox {
-    margin-left: 0 !important;
-    margin-right: 12px;
+    margin-inline-start: 0 !important;
+    margin-inline-end: 12px;
 }
 
 html body .cardOverlayContainer {
@@ -3843,7 +3853,9 @@ html body .cardImageContainer.defaultCardBackground {
     overflow: hidden;
     margin: 0 var(--lg-space-gutter) 36px;
     border-radius: var(--lg-radius-panel);
-    min-height: calc(clamp(460px,42vw,680px) + 120px + clamp(0px,1vw,20px));
+    /* Size - Backdrops are 16:9: the banner (page width less the gutters) grows from its base height
+       toward that shape, up to --lg-hero-max-height. aspect-ratio would narrow it instead. */
+    min-height: min(var(--lg-hero-max-height),max(var(--lg-hero-base-height),calc((100vw - var(--lg-scrollbar-width,0px) - 2 * var(--lg-space-gutter)) * 9 / 16)));
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -3897,7 +3909,8 @@ html body .cardImageContainer.defaultCardBackground {
 
 /* Home - Text over artwork keeps its own lighter grey, with a shadow. */
 .lg-hero-kicker,
-.lg-hero-meta {
+.lg-hero-meta,
+.lg-hero-pause {
     font-size: 14px;
     color: #e0e0e5;
 }
@@ -3987,7 +4000,7 @@ html body .cardImageContainer.defaultCardBackground {
     border-left: 9px solid currentColor;
     border-top: 6px solid transparent;
     border-bottom: 6px solid transparent;
-    margin-right: 10px;
+    margin-inline-end: 10px;
 }
 
 .lg-hero-button:disabled {
@@ -4041,7 +4054,8 @@ html body .cardImageContainer.defaultCardBackground {
     }
 }
 
-.lg-hero-dot {
+.lg-hero-dot,
+.lg-hero-pause {
     position: relative;
     width: var(--lg-size-action);
     height: var(--lg-size-action);
@@ -4051,6 +4065,33 @@ html body .cardImageContainer.defaultCardBackground {
     border-radius: var(--lg-radius-pill);
     padding: 0;
     transition: background-color var(--lg-duration) var(--lg-ease);
+}
+
+/* Home - The pause control is the dots' twin; its glyph, drawn like the Play triangle, takes the
+   grey of the text over artwork: two bars, then the triangle once paused. */
+.lg-hero-pause {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+
+    &::before {
+        content: "";
+        box-sizing: border-box;
+        width: 12px;
+        height: 14px;
+        border-inline: 4px solid currentColor;
+    }
+
+    &.lg-is-paused::before {
+        width: 0;
+        height: 0;
+        border-inline: 0;
+        border-left: 11px solid currentColor;
+        border-top: 7px solid transparent;
+        border-bottom: 7px solid transparent;
+        margin-inline-start: 3px;
+    }
 }
 
 .lg-hero-dot::after {
@@ -4253,6 +4294,19 @@ body .lg-library-page .padded-right {
     padding-inline-end: var(--lg-space-gutter);
 }
 
+/* Libraries - With --lg-poster-min-width, Jellyfin's poster grids hold as many columns of that width
+   as fit, three at least; wide cards (Thumb, Banner) keep Jellyfin's widths. */
+html.lg-has-poster-min-width .itemsContainer.vertical-wrap {
+    &:has(> .card:is(.portraitCard,.squareCard)) {
+        display: grid;
+        grid-template-columns: repeat(auto-fill,minmax(min(var(--lg-poster-track),calc(100% / 3 - 1px)),1fr));
+    }
+
+    & > .card:is(.portraitCard,.squareCard) {
+        width: auto;
+    }
+}
+
 /* Libraries - Rows hold the gutters themselves, like home rows, so cards clip at the card's
    edges instead of scrolling into the gutters; their titles and scrollers add none. */
 body .lg-library-page > .verticalSection {
@@ -4427,7 +4481,7 @@ html.lg-has-library-card header.MuiAppBar-root {
             width: var(--lg-library-controls-width,calc(100vw - 80px));
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: var(--lg-space-button-group);
         }
 
         /* Compact - Flatten the native groups so every control joins the centered rows. */
@@ -4485,13 +4539,13 @@ html.lg-has-library-card header.MuiAppBar-root {
         }
 
         /* Row 2 - Without Play All, a zero-height break fills the primary row so the range
-           stays alone; -12px cancels its gap. */
+           stays alone; its negative margin cancels the row gap. */
         & > .lg-is-compact:not(:has(> .MuiStack-root > .MuiBox-root .MuiButtonGroup-root > button:first-child, > .MuiStack-root .MuiButton-containedPrimary:not([class*="MuiButtonGroup-grouped"])))::after {
             content: "";
             order: 4;
             flex: 0 0 100%;
             height: 0;
-            margin-block-end: -12px;
+            margin-block-end: calc(-1 * var(--lg-space-button-group));
         }
     }
 }
@@ -4721,7 +4775,7 @@ body #itemDetailPage.itemDetailPage:is(.lg-collection-page,[data-lg-detail-poste
 
     & .itemName {
         line-height: 1.12;
-        text-align: left !important;
+        text-align: start !important;
         margin: 0 !important;
         overflow-wrap: anywhere;
     }
@@ -4889,6 +4943,11 @@ body #itemDetailPage.itemDetailPage.lg-collection-page {
         grid-template-columns: repeat(auto-fill,minmax(180px,1fr));
         gap: 24px 18px;
         margin: 0 !important;
+
+        /* Collections - --lg-poster-min-width sizes the columns, two at least. */
+        html.lg-has-poster-min-width & {
+            grid-template-columns: repeat(auto-fill,minmax(min(var(--lg-poster-track),calc((100% - 18px) / 2 - 1px)),1fr));
+        }
     }
 
     & .collectionItemsContainer > .card {
@@ -4999,21 +5058,6 @@ body #itemDetailPage.itemDetailPage .mainDetailButtons .btnPlay .detailButton-co
 .layout-desktop #itemDetailPage .btnPlay .detailButton-content::after,
 .layout-tv #itemDetailPage .btnPlay .detailButton-content::after {
     content: attr(data-lg-play-label);
-}
-
-.lg-playback-notice {
-    box-sizing: border-box;
-    max-width: 60ch;
-    margin: 12px 0;
-    padding: 10px 12px;
-    border: 1px solid var(--lg-edge);
-    border-radius: var(--lg-radius-option);
-    background: var(--lg-surface);
-    -webkit-backdrop-filter: blur(var(--lg-blur-panel));
-    backdrop-filter: blur(var(--lg-blur-panel));
-    color: var(--lg-color-text);
-    font-size: 14px;
-    line-height: 1.5;
 }
 
 /* Details - Labels never break mid-word (the native 6.25em basis split "Réalisateur");
@@ -5190,7 +5234,7 @@ body #itemDetailPage.itemDetailPage[data-lg-detail-poster] {
     & .itemMiscInfo {
         line-height: 1.8;
         justify-content: flex-start !important;
-        text-align: left !important;
+        text-align: start !important;
     }
 
     & .mainDetailButtons {
@@ -5233,6 +5277,11 @@ body #itemDetailPage.itemDetailPage[data-lg-detail-poster] {
         grid-template-columns: repeat(auto-fill,minmax(160px,1fr));
         gap: 20px 16px;
         padding: 0 !important;
+
+        /* Details - --lg-poster-min-width sizes a series' seasons, two at least. */
+        html.lg-has-poster-min-width & {
+            grid-template-columns: repeat(auto-fill,minmax(min(var(--lg-poster-track),calc((100% - 16px) / 2 - 1px)),1fr));
+        }
     }
 
     & :is(#childrenContent,#childrenCollapsible) .itemsContainer > .portraitCard {
@@ -5268,7 +5317,7 @@ body #itemDetailPage.itemDetailPage[data-lg-detail-poster] {
         position: static !important;
         display: flex;
         justify-content: flex-start !important;
-        text-align: left !important;
+        text-align: start !important;
         width: auto !important;
         margin: 8px 0 0 !important;
         padding: 0 !important;
@@ -5281,7 +5330,7 @@ body #itemDetailPage.itemDetailPage[data-lg-detail-poster] {
         display: inline-flex;
         align-items: center;
         padding: 0 8px !important;
-        margin-left: -8px;
+        margin-inline-start: -8px;
         color: var(--lg-color-text) !important;
         text-decoration: underline;
         text-underline-offset: 3px;
@@ -5379,7 +5428,8 @@ body #itemDetailPage.itemDetailPage[data-lg-detail-poster] {
         width: 100% !important;
         max-width: 100% !important;
         min-height: 48px;
-        padding: 12px 36px 12px 14px !important;
+        padding-block: 12px !important;
+        padding-inline: 14px 36px !important;
         margin: 0 !important;
         border: 1px solid var(--lg-edge) !important;
         border-radius: var(--lg-radius) !important;
@@ -5405,14 +5455,19 @@ body #itemDetailPage.itemDetailPage[data-lg-detail-poster] {
         }
     }
 
-    /* Selects - Without customizable selects the track field draws its own arrow; with them the
-       shared dropdown applies. */
+    /* Selects - Without customizable selects the track field draws its own arrow, its text at the
+       size of the label drawn over customizable ones; with them the shared dropdown applies. */
     @supports not (appearance: base-select) {
         & .trackSelections .detailTrackSelect {
             appearance: auto !important;
 
             &:not(:disabled) {
                 appearance: none !important;
+
+                /* Phones - They keep 16px, under which iOS zooms into a focused field. */
+                @media not all and (max-width: 640px) {
+                    font-size: 14px !important;
+                }
             }
         }
     }
@@ -6137,21 +6192,21 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
 
     /* Menus - One open state: library popovers (aria-describedby), MUI menus (aria-expanded,
        script), action sheets (data-lg-menu-open) and native selects (:open). */
-    html body :is(header.MuiAppBar-root > .MuiToolbar-root:nth-child(2) button:is([aria-expanded="true"], [aria-describedby="filter-popover"],[aria-describedby="sort-popover"],[aria-describedby="selectview-popover"]), button[aria-haspopup="true"][aria-expanded="true"],[data-lg-menu-open],:is(.detailTrackSelect,select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([size]:not([size="0"]):not([size="1"]))):open):not(:disabled) {
+    html body :is(header.MuiAppBar-root > .MuiToolbar-root:nth-child(2) button:is([aria-expanded="true"], [aria-describedby="filter-popover"],[aria-describedby="sort-popover"],[aria-describedby="selectview-popover"]), button[aria-haspopup="true"][aria-expanded="true"],[data-lg-menu-open],.lg-select-trigger[aria-expanded="true"],:is(.detailTrackSelect,select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([size]:not([size="0"]):not([size="1"]))):open):not(:disabled) {
         border-color: var(--lg-edge-open) !important;
 
-        &:not(select) {
+        &:not(select,.lg-select-trigger) {
             background: var(--lg-surface-open) !important;
         }
 
         /* Selects - Only the color: the shorthand would drop their arrow. */
-        &:is(select) {
+        &:is(select,.lg-select-trigger) {
             background-color: var(--lg-surface-open) !important;
         }
     }
 
     /* Selects - Hover and keyboard focus light the field, an open list uses the open state. */
-    html body :is(.detailTrackSelect,select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([size]:not([size="0"]):not([size="1"]))) {
+    html body :is(.detailTrackSelect,.lg-select-trigger,select:is(.emby-select,.emby-select-withcolor):not([multiple]):not([size]:not([size="0"]):not([size="1"]))) {
         &:not(:disabled):hover,
         html:not([data-lg-input="pointer"]) &:not(:disabled):focus-visible {
             background-color: var(--lg-state-hover) !important;
@@ -6322,7 +6377,7 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
 
     /* Selection - The selected surface for every row and option; MUI select popups use menu
        items, not native option elements. */
-    html body :is(.lg-source-panel-option,.lg-source-dialog-option,.lg-player-dialog-option,.navMenuOption,.actionSheetMenuItem,.listItem,.MuiListItemButton-root,:is(.MuiMenu-paper,:where(:is(#sort-popover,[data-lg-library-popover="sort"]) > .MuiPopover-paper,:is(#selectview-popover,[data-lg-library-popover="selectview"]) > .MuiPopover-paper)) .MuiMenuItem-root):is([aria-pressed="true"],[aria-selected="true"],[aria-current="page"],[aria-current="true"],.selected,.navMenuOption-selected,.Mui-selected),
+    html body :is(.lg-select-option,.lg-source-panel-option,.lg-source-dialog-option,.lg-player-dialog-option,.navMenuOption,.actionSheetMenuItem,.listItem,.MuiListItemButton-root,:is(.MuiMenu-paper,:where(:is(#sort-popover,[data-lg-library-popover="sort"]) > .MuiPopover-paper,:is(#selectview-popover,[data-lg-library-popover="selectview"]) > .MuiPopover-paper)) .MuiMenuItem-root):is([aria-pressed="true"],[aria-selected="true"],[aria-current="page"],[aria-current="true"],.selected,.navMenuOption-selected,.Mui-selected),
     html body :is(#sort-popover,[data-lg-library-popover="sort"]) > .MuiPopover-paper .MuiMenuItem-root:has(.MuiListItemIcon-root svg),
     html body :is(#selectview-popover,[data-lg-library-popover="selectview"]) > .MuiPopover-paper .MuiMenuItem-root:has(svg[data-testid="CheckIcon"]) {
         background-color: var(--lg-state-selected) !important;
@@ -6334,16 +6389,12 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
 
         /* Selection - Rows take the selected weight; other list rows keep theirs, and MUI drawer
            rows give it to their label. */
-        &:is(.navMenuOption,.actionSheetMenuItem,.MuiMenuItem-root,.lg-source-panel-option,.lg-source-dialog-option,.lg-player-dialog-option) {
+        &:is(.navMenuOption,.actionSheetMenuItem,.MuiMenuItem-root,.lg-select-option,.lg-source-panel-option,.lg-source-dialog-option,.lg-player-dialog-option) {
             font-weight: 600 !important;
         }
 
         html[data-theme="dark"] &.MuiListItemButton-root.Mui-selected .MuiListItemText-root .MuiTypography-root {
             font-weight: 600 !important;
-        }
-
-        &.navMenuOption {
-            box-shadow: inset 0 0 0 1px var(--lg-state-selected-edge) !important;
         }
 
         &.MuiMenuItem-root {
@@ -6362,7 +6413,7 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
 
     /* Hover - Rows and flat buttons share the hover surface; keyboard focus gets it too, never
        the selected one. MUI's accent hover darkens labels and icons, so they stay light. */
-    html body :is(:where(:is(#sort-popover,[data-lg-library-popover="sort"]) > .MuiPopover-paper,:is(#selectview-popover,[data-lg-library-popover="selectview"]) > .MuiPopover-paper) .MuiMenuItem-root,.navMenuOption,.actionSheetMenuItem,.listItem, .raised,.fab,a[data-role="button"],.paper-icon-button-light,.button-flat, .emby-tab-button,.lg-hero-button, .MuiToolbar-root .MuiButton-root,.MuiToolbar-root .MuiIconButton-root, .MuiListItemButton-root,.MuiMenu-paper .MuiButtonBase-root, .lg-source-panel-option, .lg-source-dialog-option,.lg-player-dialog-option):not(:is(:disabled,[aria-disabled="true"],[aria-pressed="true"],[aria-selected="true"], [aria-current="page"],[aria-current="true"],.selected,.navMenuOption-selected,.Mui-selected, .emby-tab-button-active,.btnPlay,.button-submit, .lg-hero-play,.MuiButton-colorPrimary,.cardOverlayButton,.listItemImageButton,.listItemButton, :where(button):has(.playstatebutton-icon-played,:where(svg.MuiSvgIcon-colorError[data-testid="CheckIcon"])))):is(:hover,:focus-visible,.show-focus:focus) {
+    html body :is(:where(:is(#sort-popover,[data-lg-library-popover="sort"]) > .MuiPopover-paper,:is(#selectview-popover,[data-lg-library-popover="selectview"]) > .MuiPopover-paper) .MuiMenuItem-root,.navMenuOption,.actionSheetMenuItem,.listItem, .raised,.fab,a[data-role="button"],.paper-icon-button-light,.button-flat, .emby-tab-button,.lg-hero-button, .MuiToolbar-root .MuiButton-root,.MuiToolbar-root .MuiIconButton-root, .MuiListItemButton-root,.MuiMenu-paper .MuiButtonBase-root, .lg-select-option,.lg-source-panel-option, .lg-source-dialog-option,.lg-player-dialog-option):not(:is(:disabled,[aria-disabled="true"],[aria-pressed="true"],[aria-selected="true"], [aria-current="page"],[aria-current="true"],.selected,.navMenuOption-selected,.Mui-selected, .emby-tab-button-active,.btnPlay,.button-submit, .lg-hero-play,.MuiButton-colorPrimary,.cardOverlayButton,.listItemImageButton,.listItemButton, :where(button):has(.playstatebutton-icon-played,:where(svg.MuiSvgIcon-colorError[data-testid="CheckIcon"])))):is(:hover,:focus-visible,.show-focus:focus) {
         background-color: var(--lg-state-hover) !important;
         color: var(--lg-color-text) !important;
 
@@ -6388,7 +6439,7 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
     }
 
     /* Focus - Rows and pill tabs sit in clipping containers, so their ring is drawn inside; MUI
-       menu rows draw it on their edge. */
+       menu rows draw it on their edge, picker options at the native options' inset. */
     html {
         & body :is(.navMenuOption,.actionSheetMenuItem,.emby-tab-button,.lg-collection-filter-button,.lg-source-panel-option,.lg-source-dialog-option,.lg-player-dialog-option):is(:focus-visible,.show-focus:focus) {
             outline-offset: -3px !important;
@@ -6396,6 +6447,10 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
 
         &[data-theme="dark"] :is(.MuiMenu-paper,:where(:is(#sort-popover,[data-lg-library-popover="sort"]) > .MuiPopover-paper,:is(#selectview-popover,[data-lg-library-popover="selectview"]) > .MuiPopover-paper)) .MuiMenuItem-root:focus-visible {
             outline-offset: -1px !important;
+        }
+
+        & body .lg-select-option:focus-visible {
+            outline-offset: -2px !important;
         }
     }
 
@@ -6535,23 +6590,24 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
         background: var(--lg-state-hover) !important;
     }
 
-    /* Home - The current hero dot is a filled pill; the others light up and grow on hover and
-       keyboard focus. */
+    /* Home - The current hero dot is a filled pill; the other dots and the pause control light up
+       on hover and keyboard focus, and the dots grow. */
+    :is(.lg-hero-dot:not(.lg-is-active),.lg-hero-pause):is(:hover,:focus-visible) {
+        background: var(--lg-state-hover) !important;
+        -webkit-backdrop-filter: blur(var(--lg-blur-control)) !important;
+        backdrop-filter: blur(var(--lg-blur-control)) !important;
+        color: var(--lg-color-text) !important;
+    }
+
     .lg-hero-dot {
         &.lg-is-active::after {
             background: var(--lg-surface-primary) !important;
             width: 24px !important;
         }
 
-        &:not(.lg-is-active):is(:hover,:focus-visible) {
-            background: var(--lg-state-hover) !important;
-            -webkit-backdrop-filter: blur(var(--lg-blur-control)) !important;
-            backdrop-filter: blur(var(--lg-blur-control)) !important;
-
-            &::after {
-                background: var(--lg-color-text) !important;
-                transform: scale(calc(1 + .35 * var(--lg-motion))) !important;
-            }
+        &:not(.lg-is-active):is(:hover,:focus-visible)::after {
+            background: var(--lg-color-text) !important;
+            transform: scale(calc(1 + .35 * var(--lg-motion))) !important;
         }
     }
 
@@ -6602,7 +6658,6 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
         --lg-state-hover: Canvas;
         --lg-state-selected: Highlight;
         --lg-state-selected-text: HighlightText;
-        --lg-state-selected-edge: Highlight;
         --lg-state-menu-selected-edge: Highlight;
         /* Edges - SVG keeps its author colors in forced colors; an open control gets Highlight. */
         --lg-edge: CanvasText;
@@ -6622,7 +6677,8 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
     /* Transparency - The plain page color replaces every backdrop artwork, details included. */
     @media (prefers-reduced-transparency: reduce) {
         html:is(.lg-has-home-backdrop,.lg-has-last-backdrop,.lg-has-page-card-backdrop) .backgroundContainer::before,
-        #itemDetailPage[data-lg-detail-poster] > .itemBackdrop {
+        #itemDetailPage[data-lg-detail-poster] > .itemBackdrop,
+        .backdropContainer {
             display: none !important;
         }
     }
@@ -6670,6 +6726,11 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
             animation-duration: 0.01ms !important;
             animation-iteration-count: 1 !important;
             transition-duration: 0.01ms !important;
+        }
+
+        /* Home - The banner never advances on its own here, so it has nothing to pause. */
+        .lg-hero-pause {
+            display: none !important;
         }
     }
 }

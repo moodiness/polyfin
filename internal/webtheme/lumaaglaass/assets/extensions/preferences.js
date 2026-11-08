@@ -1,7 +1,13 @@
-/* LumaaGlaass - Optional per-account preferences. */
+/* LumaaGlaass - Preferences extension. */
 ;
 (() => {
     'use strict';
+
+    // =====================================================================
+    // Configuration
+    // =====================================================================
+    // Options - None of its own: the main script loads it when LumaaGlaassOptions.preferences is true.
+    // Docs: customization.md#settings-page.
 
     // =====================================================================
     // Instance
@@ -124,15 +130,22 @@
             SettingsLoadError: 'The settings could not be loaded. Check the connection, then try again.',
             SettingsRetry: 'Try again',
             SettingsResetDefaults: 'Reset to defaults',
-            SettingsDefaultsRestored: 'Recommended settings restored. Save to keep them.',
+            SettingsDefaultsRestored: 'Default settings restored. Save to keep them.',
             SettingsDeleteSaved: 'Delete saved settings',
             SettingsDeleteConfirm: 'Delete the saved LumaaGlaass settings for this account now? This is immediate; no Save ' +
                 'click is needed. It discards unsaved edits on this page and cannot be undone. Other Jellyfin preferences are kept.',
             SettingsDeleting: 'Deleting…',
-            SettingsDeleted: 'Saved LumaaGlaass settings deleted. Recommended settings are now active.',
+            SettingsDeleted: 'Saved LumaaGlaass settings deleted. Default settings are now active.',
             SettingsDeletedOther: 'Saved LumaaGlaass settings deleted. They apply the next time this account opens the web client.',
             SettingsDeleteError: 'Could not confirm deletion. Reload the page and check this account’s settings before ' +
                 'trying again.',
+            SettingsDeleteAll: 'Delete for every user',
+            SettingsDeleteAllConfirm: 'Delete the saved LumaaGlaass settings of every user on this server now? Each account ' +
+                'returns to its starting settings the next time it opens the web client. This cannot be undone; other ' +
+                'Jellyfin preferences are kept.',
+            SettingsDeletedAll: 'Saved LumaaGlaass settings deleted: {deleted} account(s); {untouched} account(s) had none.',
+            SettingsDeletedAllFailed: '{failed} account(s) could not be changed: try again.',
+            SettingsDeleteAllError: 'The user list could not be read: nothing was deleted.',
             SettingsSaving: 'Saving…',
             SettingsSaved: 'Settings saved.',
             SettingsSavedOther: 'Settings saved. They apply the next time this user opens the web client.',
@@ -152,9 +165,14 @@
             SettingsRecipeSnappy: 'Snappier motion',
             SettingsRecipeCalm: 'Calmer motion',
             SettingsRecipeTight: 'Tighter page layout',
+            SettingsRecipeTallerBanner: 'Taller home banner',
+            SettingsRecipeShorterBanner: 'Shorter home banner',
+            SettingsRecipeBiggerPosters: 'Bigger posters',
+            SettingsRecipeSmallerPosters: 'Smaller posters',
             SettingsResetAll: 'Reset every variable',
             SettingsReset: 'Reset',
             SettingsDefault: 'Default',
+            SettingsAuto: 'Auto',
             SettingsOpacity: 'Opacity of',
             SettingsInvalid: 'A value is not valid for its variable: correct the highlighted field.',
             SettingsColors: 'Colors',
@@ -203,8 +221,10 @@
             '--lg-space-list-option': 'Space between source, version and episode choices (extensions).',
             '--lg-size-action': 'Round actions; keep at least 44px for touch.',
             '--lg-size-option': 'Menu rows; keep at least 44px for touch.',
+            '--lg-hero-max-height': 'Maximum height of the home banner, in % of the window; Auto keeps its usual size.',
             '--lg-page-card-height': 'Height of the library and collection page card.',
             '--lg-cast-width': 'Width of cast cards on details pages.',
+            '--lg-poster-min-width': 'Minimum poster width in grids; Auto keeps the usual columns.',
             '--lg-font': 'Font of the whole interface; load the font itself with an @import in Custom CSS.',
             '--lg-font-section-title': 'Row titles on home, libraries and details.',
             '--lg-page-card-title-size': 'Title size of the library and collection page card.',
@@ -298,17 +318,25 @@
             SettingsLoadError: 'Les paramètres n’ont pas pu être chargés. Vérifiez la connexion, puis réessayez.',
             SettingsRetry: 'Réessayer',
             SettingsResetDefaults: 'Réinitialiser par défaut',
-            SettingsDefaultsRestored: 'Réglages recommandés rétablis. Enregistrez pour les conserver.',
+            SettingsDefaultsRestored: 'Réglages par défaut rétablis. Enregistrez pour les conserver.',
             SettingsDeleteSaved: 'Supprimer les réglages enregistrés',
             SettingsDeleteConfirm: 'Supprimer immédiatement les réglages LumaaGlaass enregistrés pour ce compte ? Aucun clic sur ' +
                 'Enregistrer n’est nécessaire. Cette action annule les modifications non enregistrées de cette page, ne peut ' +
                 'pas être annulée et conserve les autres préférences Jellyfin.',
             SettingsDeleting: 'Suppression…',
-            SettingsDeleted: 'Réglages LumaaGlaass supprimés. Les réglages recommandés sont maintenant actifs.',
+            SettingsDeleted: 'Réglages LumaaGlaass supprimés. Les réglages par défaut sont maintenant actifs.',
             SettingsDeletedOther: 'Réglages LumaaGlaass supprimés. Ils s’appliqueront à la prochaine ouverture du client ' +
                 'web par ce compte.',
             SettingsDeleteError: 'Impossible de confirmer la suppression. Rechargez la page et vérifiez les réglages de ce ' +
                 'compte avant de réessayer.',
+            SettingsDeleteAll: 'Supprimer pour tous les utilisateurs',
+            SettingsDeleteAllConfirm: 'Supprimer immédiatement les réglages LumaaGlaass enregistrés de tous les utilisateurs ' +
+                'de ce serveur ? Chaque compte retrouvera ses réglages de départ à la prochaine ouverture du client web. ' +
+                'Cette action ne peut pas être annulée et conserve les autres préférences Jellyfin.',
+            SettingsDeletedAll: 'Réglages LumaaGlaass supprimés : {deleted} compte(s) ; {untouched} compte(s) sans réglages ' +
+                'enregistrés.',
+            SettingsDeletedAllFailed: '{failed} compte(s) n’ont pas pu être modifiés : réessayez.',
+            SettingsDeleteAllError: 'La liste des utilisateurs n’a pas pu être lue : rien n’a été supprimé.',
             SettingsSaving: 'Enregistrement…',
             SettingsSaved: 'Paramètres enregistrés.',
             SettingsSavedOther: 'Paramètres enregistrés. Ils s’appliqueront à la prochaine ouverture du client web par cet ' +
@@ -330,9 +358,14 @@
             SettingsRecipeSnappy: 'Animations plus vives',
             SettingsRecipeCalm: 'Animations plus calmes',
             SettingsRecipeTight: 'Mise en page plus serrée',
+            SettingsRecipeTallerBanner: 'Bannière d’accueil plus haute',
+            SettingsRecipeShorterBanner: 'Bannière d’accueil plus basse',
+            SettingsRecipeBiggerPosters: 'Affiches plus grandes',
+            SettingsRecipeSmallerPosters: 'Affiches plus petites',
             SettingsResetAll: 'Réinitialiser toutes les variables',
             SettingsReset: 'Réinitialiser',
             SettingsDefault: 'Par défaut',
+            SettingsAuto: 'Auto',
             SettingsOpacity: 'Opacité de',
             SettingsInvalid: 'Une valeur n’est pas valide pour sa variable : corrigez le champ signalé.',
             SettingsColors: 'Couleurs',
@@ -383,8 +416,10 @@
             '--lg-space-list-option': 'Espace entre les choix de source, de version et d’épisode (extensions).',
             '--lg-size-action': 'Actions rondes ; gardez au moins 44 px pour le tactile.',
             '--lg-size-option': 'Lignes de menu ; gardez au moins 44 px pour le tactile.',
+            '--lg-hero-max-height': 'Hauteur maximale de la bannière d’accueil, en % de la fenêtre ; Auto garde sa taille habituelle.',
             '--lg-page-card-height': 'Hauteur de la carte de page des médiathèques et collections.',
             '--lg-cast-width': 'Largeur des cartes de distribution sur les pages de détails.',
+            '--lg-poster-min-width': 'Largeur minimale des affiches dans les grilles ; Auto garde les colonnes habituelles.',
             '--lg-font': 'Police de toute l’interface ; chargez la police elle-même par un @import dans le CSS personnalisé.',
             '--lg-font-section-title': 'Titres des rangées sur l’accueil, les médiathèques et les détails.',
             '--lg-page-card-title-size': 'Taille du titre de la carte de page des médiathèques et collections.',
@@ -423,15 +458,10 @@
     const PREFERENCES_CACHE = 'lumaaglaass-settings:';
     const ACTION_MODES = ['native', 'details', 'hide'], BUTTON_MODES = ['native', 'hide'];
     // Recommended - Explicit per-account starting choices; it does not set public theme variables.
-    // An option the loader sets (window.LumaaGlaassOptions, handed over as host.defaults) is the
-    // starting choice of its field, so an account that never saved starts as the server chose.
-    const loaderDefault = (name, recommended) =>
-        typeof window.LumaaGlaassOptions?.[name] === 'boolean' && typeof host.defaults?.[name] === 'boolean'
-            ? host.defaults[name] : recommended;
     const RECOMMENDED_VALUES = Object.freeze({
-        homeCarousel: loaderDefault('homeCarousel', true),
-        homeLibraryNamesOnly: loaderDefault('homeLibraryNamesOnly', true),
-        collectionFilter: loaderDefault('collectionFilter', true),
+        homeCarousel: true,
+        homeLibraryNamesOnly: true,
+        collectionFilter: true,
         hideCountIndicators: true,
         'playerControls.versions': true,
         'playerControls.episodes': true,
@@ -467,18 +497,22 @@
     };
     // Fields - One control each, by its path in the saved object: choices make a select, no choices a
     // switch. requires names the switch that enables a field; asset, the file it loads (Assets).
-    // Defaults here are the per-account Recommended profile, which takes the options the loader sets.
+    // Defaults are the Recommended profile, except the main options the loader sets itself (loaderChoices).
+    const startingValue = path => typeof host.loaderChoices?.[path] === 'boolean' ? host.loaderChoices[path] : RECOMMENDED_VALUES[path];
     const PREFERENCE_SECTIONS = [
         {
             title: 'SettingsTheme', fields: [
-                { path: 'homeCarousel', label: 'SettingsHomeCarousel', help: 'SettingsHomeCarouselHelp', fallback: RECOMMENDED_VALUES.homeCarousel },
+                {
+                    path: 'homeCarousel', label: 'SettingsHomeCarousel', help: 'SettingsHomeCarouselHelp',
+                    fallback: startingValue('homeCarousel')
+                },
                 {
                     path: 'homeLibraryNamesOnly', label: 'SettingsHomeLibraryNamesOnly',
-                    help: 'SettingsHomeLibraryNamesOnlyHelp', fallback: RECOMMENDED_VALUES.homeLibraryNamesOnly
+                    help: 'SettingsHomeLibraryNamesOnlyHelp', fallback: startingValue('homeLibraryNamesOnly')
                 },
                 {
                     path: 'collectionFilter', label: 'SettingsCollectionFilter', help: 'SettingsCollectionFilterHelp',
-                    fallback: RECOMMENDED_VALUES.collectionFilter
+                    fallback: startingValue('collectionFilter')
                 },
                 {
                     path: 'hideCountIndicators', label: 'SettingsCountIndicators', help: 'SettingsCountIndicatorsHelp',
@@ -538,7 +572,7 @@
     // while the file is not wanted.
     const PREFERENCE_ASSETS = {
         countIndicators: {
-            id: 'lg-hide-count-indicators-style', file: 'extensions/hide-count-indicators.css',
+            id: 'lg-hide-count-indicators-style', file: 'extensions/hide-count-indicators.css', rule: '.countIndicator',
             options: settings => settings.hideCountIndicators ? {} : null
         },
         playerControls: {
@@ -559,9 +593,9 @@
     };
     // Theme variables - Every public variable of customization.md#theme-variables, by its table. type
     // picks the control and unit; css variables name the property a value must be valid for, and
-    // fallback is the documented default shown while the theme's own value applies.
-    const number = unit => ({
-        control: 'number', unit,
+    // fallback is the documented default shown while the theme's own value applies, else Auto.
+    const number = (unit, step, min = 0) => ({
+        control: 'number', unit, step, min,
         valid: value => new RegExp('^\\d+(?:\\.\\d+)?' + unit + '$').test(value),
         toCss: input => input.trim() === '' ? '' : Number(input) + unit,
         fromCss: value => String(parseFloat(value))
@@ -569,9 +603,13 @@
     const plain = value => !/[;{}<>\\]/.test(value);
     const THEME_TYPES = {
         color: { control: 'color', valid: value => plain(value) && CSS.supports('color', value) },
-        px: { ...number('px'), step: 1 },
-        scale: { ...number(''), step: 0.05 },
-        seconds: { ...number('s'), step: 0.01 },
+        px: number('px', 1),
+        // Columns - 10px steps reach every usual posters-per-row count (20px skip some, such as ten
+        // on a 1920px screen), from the stylesheet's 80px floor.
+        column: number('px', 10, 80),
+        vh: number('vh', 5),
+        scale: number('', 0.05),
+        seconds: number('s', 0.01),
         weight: { control: 'weight', valid: value => /^[1-9]00$/.test(value) },
         css: {
             control: 'text', valid: (value, variable) => plain(value) && CSS.supports(variable.check, value),
@@ -601,7 +639,8 @@
             ['space-gutter', 'css', 'clamp(16px, 3.4vw, 64px)', 'width'], ['space-header-gap', 'px', '32px'],
             ['space-button-group', 'px', '8px'], ['space-option', 'px', '2px'], ['space-popup', 'px', '6px'],
             ['space-list-option', 'px', '8px'], ['size-action', 'px', '44px'], ['size-option', 'px', '44px'],
-            ['page-card-height', 'px', '304px'], ['cast-width', 'css', 'clamp(112px, 10vw, 180px)', 'width']
+            ['hero-max-height', 'vh'], ['page-card-height', 'px', '304px'], ['cast-width', 'css', 'clamp(112px, 10vw, 180px)', 'width'],
+            ['poster-min-width', 'column']
         ]],
         ['SettingsText', [
             ['font', 'css', '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', 'font-family'],
@@ -629,7 +668,11 @@
         ['SettingsRecipeNoBlur', { 'blur-control': '0px', 'blur-panel': '0px' }],
         ['SettingsRecipeSnappy', { duration: '0.12s', 'duration-slow': '0.3s' }],
         ['SettingsRecipeCalm', { duration: '0.4s', 'duration-slow': '1s' }],
-        ['SettingsRecipeTight', { 'space-gutter': '16px', 'space-header-gap': '20px' }]
+        ['SettingsRecipeTight', { 'space-gutter': '16px', 'space-header-gap': '20px' }],
+        ['SettingsRecipeTallerBanner', { 'hero-max-height': '90vh' }],
+        ['SettingsRecipeShorterBanner', { 'hero-max-height': '70vh' }],
+        ['SettingsRecipeBiggerPosters', { 'poster-min-width': '240px' }],
+        ['SettingsRecipeSmallerPosters', { 'poster-min-width': '150px' }]
     ];
     // Accessibility - The variables each system preference sets in the stylesheet keep its values
     // there, as the documentation's no-preference wrapper would: a choice never undoes them.
@@ -661,15 +704,21 @@
         }
     }
     THEME_GUARDS.forEach(([query]) => listen(query, 'change', () => applyThemeVariables(themeValues)));
-    // Colors - A computed color as channels; color-mix() computes to color(srgb …) in some engines.
+    // Colors - A computed color as sRGB channels, painted on a pixel: computed values keep their own
+    // space (oklch(), lab(), color(display-p3 …), color(srgb …) from color-mix()).
+    let colorContext = null;
     function colorChannels(text) {
-        const rgb = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+)(%?))?/.exec(text);
-        const srgb = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+)(%?))?/.exec(text);
-        const match = rgb || srgb;
-        if (!match) return { r: 0, g: 0, b: 0, a: 1 };
-        const scale = rgb ? 1 : 255;
-        const alpha = match[4] === undefined ? 1 : Number(match[4]) / (match[5] ? 100 : 1);
-        return { r: Math.round(match[1] * scale), g: Math.round(match[2] * scale), b: Math.round(match[3] * scale), a: alpha };
+        if (!colorContext) {
+            const canvas = element('canvas');
+            canvas.width = canvas.height = 1;
+            colorContext = canvas.getContext('2d', { willReadFrequently: true });
+        }
+        colorContext.clearRect(0, 0, 1, 1);
+        colorContext.fillStyle = '#000';
+        colorContext.fillStyle = text;
+        colorContext.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = colorContext.getImageData(0, 0, 1, 1).data;
+        return { r, g, b, a: a / 255 };
     }
     // Colors - What a value (or, empty, the theme's own value) computes to, read on a probe while
     // the root's own value is set aside.
@@ -700,8 +749,10 @@
         return parts.slice(1).map((_, index) => parts.slice(0, index + 1).join('.'));
     }));
     const THEME_VARIABLES_BY_NAME = new Map(THEME_VARIABLES.map(variable => [variable.name, variable]));
+    // Recommended profile - The starting settings, the loader's choices included: applying it returns an
+    // account to the server's choices, as Reset to defaults and Delete saved settings do.
     const RECOMMENDED_PROFILE_SETTINGS = {};
-    for (const [path, value] of Object.entries(RECOMMENDED_VALUES)) writePath(RECOMMENDED_PROFILE_SETTINGS, path, value);
+    for (const path of Object.keys(RECOMMENDED_VALUES)) writePath(RECOMMENDED_PROFILE_SETTINGS, path, startingValue(path));
     // Normalize - Every field once: its saved value when valid, else its default. Saves made before a
     // field existed gain it; unknown entries are dropped.
     function normalizePreferences(saved) {
@@ -741,7 +792,7 @@
             delete customPrefs[PREFERENCES_ENTRY];
             await api.updateDisplayPreferences(PREFERENCES_ID, { ...dto, CustomPrefs: customPrefs }, userId, PREFERENCES_CLIENT);
         }
-        return { dto: { ...dto, CustomPrefs: customPrefs } };
+        return { dto: { ...dto, CustomPrefs: customPrefs }, existed };
     }
     const cachedPreferences = key => {
         try {
@@ -759,23 +810,23 @@
         } catch { /* The server copy is still removed when local storage is unavailable. */ }
     };
     // External - A file the theme did not add came from the server's Custom JavaScript or CSS, which
-    // decides for every account: the settings leave it alone. Stylesheets are found by their import.
+    // decides for every account: the settings leave it alone. A pasted script has no element, only its
+    // running instance, with options the settings did not write (a script still loading when they
+    // stopped runs anyway); a stylesheet is its import (any query) or its pasted rule.
+    const MANAGED = Symbol.for('lumaaGlaass.managed');
     function externalAsset(asset) {
         const node = document.getElementById(asset.id);
         if (node) return !node.hasAttribute('data-lg-managed');
-        if (asset.key) return false;
+        if (asset.key) return Boolean(window[asset.key]) && !window[asset.global]?.[MANAGED];
         for (const sheet of document.styleSheets) {
+            if (sheet.ownerNode instanceof Element && sheet.ownerNode.hasAttribute('data-lg-managed')) continue;
             let rules;
             try {
                 rules = sheet.cssRules;
             } catch { continue; }
-            // Imports lead a sheet, after @layer statements only.
             for (const rule of rules) {
-                if (rule instanceof CSSImportRule) {
-                    if (rule.href?.endsWith(asset.file)) return true;
-                } else if (!(window.CSSLayerStatementRule && rule instanceof CSSLayerStatementRule)) {
-                    break;
-                }
+                if (rule instanceof CSSImportRule && rule.href?.split(/[?#]/)[0].endsWith(asset.file)) return true;
+                if (rule instanceof CSSStyleRule && rule.selectorText === asset.rule && rule.style.display === 'none') return true;
             }
         }
         return false;
@@ -803,7 +854,7 @@
         node.id = asset.id;
         node.setAttribute('data-lg-managed', '');
         if (asset.key) {
-            window[asset.global] = options;
+            window[asset.global] = { ...options, [MANAGED]: true };
             node.src = assetUrl(asset.file);
         } else {
             node.rel = 'stylesheet';
@@ -829,13 +880,14 @@
     // theme variables apply unless the open page previews its own.
     function applyPreferences(saved) {
         activePreferences = preferencesSession ? normalizePreferences(saved) : null;
+        // Variables first: applyCore runs a theme pass, which reads them (the poster grid mark).
+        if (!preferencesPage) applyThemeVariables(activePreferences?.theme);
         host.applyCore(activePreferences ? {
             homeCarousel: activePreferences.homeCarousel,
             homeLibraryNamesOnly: activePreferences.homeLibraryNamesOnly,
             collectionFilter: activePreferences.collectionFilter
         } : null);
         Object.keys(PREFERENCE_ASSETS).forEach(syncAsset);
-        if (!preferencesPage) applyThemeVariables(activePreferences?.theme);
     }
     // Session - A new account applies its cached settings at once, then the server's.
     function syncPreferences(api, key) {
@@ -967,7 +1019,19 @@
         const deleteButton = element('button', 'raised emby-button lg-profile-delete-button', translate('SettingsDeleteSaved'));
         deleteButton.type = 'button';
         deleteButton.hidden = true;
+        const deleteAllButton = element('button', 'raised emby-button lg-profile-delete-button lg-profile-delete-all',
+            translate('SettingsDeleteAll'));
+        deleteAllButton.type = 'button';
         deleteAction.append(deleteButton);
+        // Every user - Added for an administrator on their own page only, never merely hidden, so no
+        // stylesheet can show it to anyone else.
+        if (sameId(state.userId, api.getCurrentUserId())) {
+            Promise.resolve(api.getCurrentUser?.()).then(user => {
+                if (user?.Policy?.IsAdministrator !== true || preferencesPage !== state) return;
+                state.admin = true;
+                deleteAction.append(deleteAllButton);
+            }, () => {});
+        }
         transfer.append(transferRow, urlGroup);
 
         const input = element('input', 'lg-profile-file');
@@ -981,8 +1045,8 @@
 
         Object.assign(state, { profileSelect: picker, profileApply: apply, profileImportButton: importButton,
             profileImport: input, profileExport: exportButton, profileUrlInput: urlInput, profileUrlImport: urlButton,
-            profileStatus: status, profileDelete: deleteButton, hasSavedSettings: false, importedProfile: null,
-            profileBusy: false });
+            profileStatus: status, profileDelete: deleteButton, profileDeleteAll: deleteAllButton, hasSavedSettings: false,
+            importedProfile: null, profileBusy: false });
         apply.addEventListener('click', () => applySelectedProfile(state));
         importButton.addEventListener('click', () => input.click());
         input.addEventListener('change', () => {
@@ -999,6 +1063,7 @@
         });
         exportButton.addEventListener('click', () => exportProfile(state));
         deleteButton.addEventListener('click', () => void deleteSavedSettings(state, api));
+        deleteAllButton.addEventListener('click', () => void deleteAllSavedSettings(state, api));
         block.append(row, transfer, deleteAction, status, input);
         return block;
     }
@@ -1088,7 +1153,10 @@
         form.addEventListener('input', event => {
             const entry = state.theme.get(event.target.dataset?.lgVariable);
             if (entry) {
-                if (entry.variable.type.control === 'color') entry.set = true;
+                if (entry.variable.type.control === 'color') {
+                    entry.set = true;
+                    entry.text = '';
+                }
                 previewTheme(state);
             }
             setText(state.status, '');
@@ -1459,7 +1527,9 @@
         const label = element('code', 'lg-preference-label', name);
         text.append(label, element('span', 'fieldDescription lg-preference-help', translate(name)));
         const control = element('div', 'lg-theme-control');
-        const entry = { variable, set: false, input: null, alpha: null, reset: element('button', 'paper-icon-button-light lg-theme-reset') };
+        const entry = {
+            variable, set: false, text: '', input: null, alpha: null, reset: element('button', 'paper-icon-button-light lg-theme-reset')
+        };
         if (type.control === 'color') {
             entry.input = element('input', 'lg-theme-color');
             entry.input.type = 'color';
@@ -1481,8 +1551,8 @@
         } else {
             entry.input = element('input', 'emby-input lg-theme-input');
             if (type.control === 'number') {
-                Object.assign(entry.input, { type: 'number', min: '0', step: String(type.step), inputMode: 'decimal' });
-                entry.input.placeholder = type.fromCss(variable.fallback);
+                Object.assign(entry.input, { type: 'number', min: String(type.min), step: String(type.step), inputMode: 'decimal' });
+                entry.input.placeholder = variable.fallback ? type.fromCss(variable.fallback) : translate('SettingsAuto');
             } else {
                 Object.assign(entry.input, { type: 'text', spellcheck: false, autocomplete: 'off' });
                 entry.input.placeholder = variable.fallback;
@@ -1520,6 +1590,7 @@
         input.removeAttribute('aria-invalid');
         if (variable.type.control === 'color') {
             entry.set = Boolean(value);
+            entry.text = value;
             const channels = computedColor(variable.name, value);
             input.value = hex(channels);
             alpha.value = String(Math.round(channels.a * 100));
@@ -1531,9 +1602,11 @@
         entry.select?.sync();
         entry.reset.disabled = !value;
     }
-    function themeEntryValue({ variable, input, alpha, set }) {
+    // Theme - A color keeps its written value (any color syntax) until its swatch or opacity changes.
+    function themeEntryValue({ variable, input, alpha, set, text }) {
         if (variable.type.control === 'color') {
             if (!set) return '';
+            if (text) return text;
             if (alpha.value === '100') return input.value;
             const [r, g, b] = [1, 3, 5].map(start => parseInt(input.value.slice(start, start + 2), 16));
             return `rgba(${r}, ${g}, ${b}, ${Number(alpha.value) / 100})`;
@@ -1648,49 +1721,84 @@
         setText(state.submitText, translate('Save'));
         setText(state.status, translate(message));
     }
+    // Delete - While one runs, the form and its buttons are locked and the running button says so.
+    function setDeleting(state, button, label, busy) {
+        state.profileBusy = busy;
+        if (!busy && preferencesPage !== state) return;
+        for (const control of [state.fields, state.submit, state.secondary, state.profileDelete, state.profileDeleteAll]) {
+            control.disabled = busy;
+        }
+        if (busy) button.setAttribute('aria-busy', 'true');
+        else button.removeAttribute('aria-busy');
+        setText(button, translate(busy ? 'SettingsDeleting' : label));
+        if (!busy) syncPreferenceControls(state);
+    }
+    // Deleted - The page's account has no entry left: its own session forgets the cached copy and
+    // applies its starting settings, and the open page shows them. Returns whether it is the viewer's.
+    function showDeleted(state, api, dto) {
+        state.dto = dto;
+        state.hasSavedSettings = false;
+        state.profileDelete.hidden = true;
+        const own = sameId(state.userId, api.getCurrentUserId());
+        if (own) {
+            forgetCachedPreferences(state.key);
+            if (state.key === preferencesSession) {
+                preferencesRun++;
+                preferencesState = 'loaded';
+                applyPreferences(null);
+            }
+        }
+        if (preferencesPage === state) {
+            fillPreferences(state, normalizePreferences(null));
+            previewTheme(state);
+        }
+        return own;
+    }
     async function deleteSavedSettings(state, api) {
         if (state.fields.disabled || !state.dto || !state.hasSavedSettings || state.profileBusy) return;
         if (!window.confirm(translate('SettingsDeleteConfirm'))) return;
-        state.profileBusy = true;
-        state.fields.disabled = true;
-        state.submit.disabled = true;
-        state.secondary.disabled = true;
-        state.profileDelete.disabled = true;
-        state.profileDelete.setAttribute('aria-busy', 'true');
-        setText(state.profileDelete, translate('SettingsDeleting'));
+        setDeleting(state, state.profileDelete, 'SettingsDeleteSaved', true);
         setText(state.profileStatus, '');
         try {
             const { dto } = await removeSavedPreferences(api, state.userId);
-            state.dto = dto;
-            state.hasSavedSettings = false;
-            state.profileDelete.hidden = true;
-            const own = sameId(state.userId, api.getCurrentUserId());
-            if (own) {
-                forgetCachedPreferences(state.key);
-                if (state.key === preferencesSession) {
-                    preferencesRun++;
-                    preferencesState = 'loaded';
-                    applyPreferences(null);
-                }
-            }
-            if (preferencesPage === state) {
-                fillPreferences(state, normalizePreferences(null));
-                previewTheme(state);
-                setText(state.profileStatus, translate(own ? 'SettingsDeleted' : 'SettingsDeletedOther'));
-            }
+            const own = showDeleted(state, api, dto);
+            if (preferencesPage === state) setText(state.profileStatus, translate(own ? 'SettingsDeleted' : 'SettingsDeletedOther'));
         } catch {
             if (preferencesPage === state) setText(state.profileStatus, translate('SettingsDeleteError'));
         } finally {
-            state.profileBusy = false;
-            if (preferencesPage === state) {
-                state.fields.disabled = false;
-                state.submit.disabled = false;
-                state.secondary.disabled = false;
-                state.profileDelete.disabled = false;
-                state.profileDelete.removeAttribute('aria-busy');
-                setText(state.profileDelete, translate('SettingsDeleteSaved'));
-                syncPreferenceControls(state);
+            setDeleting(state, state.profileDelete, 'SettingsDeleteSaved', false);
+        }
+    }
+    // Every user - Each account loses its entry exactly as one account's delete does: an account with
+    // nothing saved gets no write, and one that fails is counted and skipped. One account at a time.
+    async function deleteAllSavedSettings(state, api) {
+        if (!state.admin || state.fields.disabled || state.profileBusy) return;
+        if (!window.confirm(translate('SettingsDeleteAllConfirm'))) return;
+        setDeleting(state, state.profileDeleteAll, 'SettingsDeleteAll', true);
+        setText(state.profileStatus, '');
+        try {
+            const answer = await api.getUsers();
+            const users = Array.isArray(answer) ? answer : answer?.Items;
+            if (!Array.isArray(users)) throw new Error('No user list');
+            const counts = { deleted: 0, untouched: 0, failed: 0 };
+            for (const user of users) {
+                if (stopped) return;
+                try {
+                    const { dto, existed } = await removeSavedPreferences(api, user.Id);
+                    counts[existed ? 'deleted' : 'untouched']++;
+                    if (existed && sameId(user.Id, state.userId)) showDeleted(state, api, dto);
+                } catch {
+                    counts.failed++;
+                }
             }
+            if (preferencesPage === state) {
+                const message = translate('SettingsDeletedAll') + (counts.failed ? ' ' + translate('SettingsDeletedAllFailed') : '');
+                setText(state.profileStatus, message.replace(/\{(\w+)\}/g, (_, name) => String(counts[name])));
+            }
+        } catch {
+            if (preferencesPage === state) setText(state.profileStatus, translate('SettingsDeleteAllError'));
+        } finally {
+            setDeleting(state, state.profileDeleteAll, 'SettingsDeleteAll', false);
         }
     }
     // Stop - The page, the menu entry and the files the settings loaded go; the server's own stay.

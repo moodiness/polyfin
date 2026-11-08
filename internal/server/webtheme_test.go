@@ -214,16 +214,16 @@ const run = async ({ script, saved }) => {
   }
   context.window = context
   vm.runInNewContext(script ? loader : '', context)
-  // The main script hands its options over, with the theme's own defaults
-  // for those not set.
+  // The main script hands over the options that change its own defaults.
   const options = context.LumaaGlaassOptions || {}
-  const flag = (name, fallback) => typeof options[name] === 'boolean' ? options[name] : fallback
-  const defaults = Object.freeze({ homeCarousel: flag('homeCarousel', true),
-    homeLibraryNamesOnly: flag('homeLibraryNamesOnly', false), collectionFilter: flag('collectionFilter', true) })
+  const own = { homeCarousel: true, homeLibraryNamesOnly: false, collectionFilter: true }
+  const loaderChoices = Object.freeze(Object.fromEntries(Object.entries(own)
+    .filter(([name, fallback]) => typeof options[name] === 'boolean' && options[name] !== fallback)
+    .map(([name]) => [name, options[name]])))
   context.__lumaaGlaass = {
     selects: { create: () => ({}) },
     preferences: {
-      assets: '', assetUrl: (path) => path, defaults, api: () => api,
+      assets: '', assetUrl: (path) => path, loaderChoices, api: () => api,
       sessionKey: (c) => c.serverId() + ':' + c.getCurrentUserId(),
       element: node, setAttribute () {}, translate: () => null, language: () => 'en',
       params: () => new URLSearchParams(), route: () => '#/home', sameId: (a, b) => a === b, enabled: () => true,

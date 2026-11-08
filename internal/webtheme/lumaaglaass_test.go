@@ -16,7 +16,7 @@ import (
 //   - batch: jellyfin-web changes the page, a batch of the observers;
 //   - frame: the browser runs the frame callbacks asked for so far;
 //   - passes: the theme's passes so far, each reading the session once;
-//   - reads: the reads of the accent token's computed style so far.
+//   - reads: the reads of the theme token's computed style so far.
 const themePage = `
 const vm = require('node:vm')
 const script = require('node:fs').readFileSync(0, 'utf8')
@@ -52,11 +52,12 @@ const document = {
   getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
   addEventListener(type, fn) { (documentListeners[type] ||= []).push(fn) }, removeEventListener() {},
 }
-// The accent token as the stylesheets give it, and the times it is read.
-let accent = ' #f5f5f7'
+// The theme's token as the stylesheet gives it (only the stylesheet sets
+// --lg-motion), and the times it is read.
+let motion = ' normal'
 let reads = 0
 const getComputedStyle = (node) => ({
-  getPropertyValue(name) { if (node === root && name === '--lg-color-accent') { reads++; return accent } return '' },
+  getPropertyValue(name) { if (node === root && name === '--lg-motion') { reads++; return motion } return '' },
   position: 'static', overflowY: 'auto', direction: 'ltr', backgroundImage: 'none',
 })
 // The frame callbacks asked for and not yet run or cancelled.
@@ -71,6 +72,7 @@ const context = {
   document, location: { hash: '#/home', href: 'http://polyfin.test/web/#/home', pathname: '/web/' }, history: { pushState() {}, replaceState() {} },
   navigator: { language: 'en', userAgent: 'node' }, console, URL, URLSearchParams,
   Element, HTMLElement, HTMLStyleElement, HTMLLinkElement, Node: Element, getComputedStyle,
+  CSS: { supports: () => true, escape: (value) => String(value) },
   MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this) } observe() {} disconnect() {} takeRecords() { return [] } },
   ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
   IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },

@@ -1,4 +1,12 @@
-/* LumaaGlaass - Optional per-account preferences. */
+/* LumaaGlaass - Preferences extension. */
+/* Options - Loaded by the main script with preferences: true; docs/customization.md#settings-page. */
+
+/* Hidden - Jellyfin's .emby-button and the page's own rows set a display, which outranks the
+   browser's [hidden] rule: what the page hides (and the not-found view it fills) stays hidden. */
+#lg-preferences [hidden],
+#fallbackPage > [hidden] {
+    display: none !important;
+}
 
 /* Settings - The LumaaGlaass page (script): settings glass sections holding rows of a label and its
    switch or select. */
@@ -69,7 +77,9 @@
 
     & .lg-profile-delete {
         display: flex;
+        flex-wrap: wrap;
         justify-content: flex-end;
+        gap: var(--lg-space-button-group);
         margin-top: var(--lg-space-button-group);
     }
 
@@ -138,7 +148,7 @@
 
     /* Theme variables - The variable's name, then a control row: the field, its unit and a reset. */
     & code.lg-preference-label {
-        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-family: var(--lg-font);
         font-size: .9em;
         overflow-wrap: anywhere;
     }

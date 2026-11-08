@@ -18,6 +18,11 @@
         collectionFilter: flag(configured.collectionFilter, defaults.collectionFilter)
     });
     const preferencesEnabled = flag(configured.preferences, defaults.preferences);
+    // Loader choices - The options the loader changes from their defaults: the settings page starts
+    // accounts that saved nothing from them rather than from its Recommended profile. A default the
+    // loader repeats (the README loader writes them all) is not a choice.
+    const loaderChoices = Object.freeze(Object.fromEntries(
+        Object.entries(loaderSettings).filter(([name, value]) => value !== defaults[name])));
     let settings = loaderSettings;
     // Assets - Extensions load from this script's folder when it comes from the repository, so a pinned
     // revision stays pinned. A query suffix also follows every extension, which makes a cache-busted
@@ -110,11 +115,12 @@
     // it for a missing key logs an error.
     const THEME_STRINGS = {
         en: {
-            PlaybackUnavailable: 'Automatic playback did not start. Check the available sources, then use Play to retry.',
+            SlideshowPause: 'Pause the slideshow',
+            SlideshowPlay: 'Play the slideshow'
         },
         fr: {
-            PlaybackUnavailable:
-                'La lecture automatique n’a pas démarré. Vérifiez les sources disponibles, puis utilisez Lire pour réessayer.',
+            SlideshowPause: 'Mettre le diaporama en pause',
+            SlideshowPlay: 'Relancer le diaporama'
         }
     };
     const language = () => (document.documentElement.lang || navigator.language).slice(0, 2).toLowerCase();
@@ -140,7 +146,8 @@
     };
     const route = () => location.hash.split('?')[0].replace(/\.html$/, '');
     const home = () => route() === '#/home';
-    const enabled = () => getComputedStyle(document.documentElement).getPropertyValue('--lg-color-accent').trim() !== '';
+    // Theme - Only the stylesheet defines --lg-motion: the settings page writes other tokens inline on <html>.
+    const enabled = () => getComputedStyle(document.documentElement).getPropertyValue('--lg-motion').trim() !== '';
     const currentClient = () => {
         try {
             return window.ApiClient || window.ConnectionManager?.currentApiClient?.();
@@ -172,6 +179,13 @@
         let generatedId = 0;
         const states = new Set();
         const stateByControl = new WeakMap();
+        // Native lists - Without customizable selects (Firefox, Safari) the browser draws its own list,
+        // one line per option and as wide as the longest: with a mouse or the keyboard, the picker opens
+        // instead and the select keeps showing its value. Phones and tablets keep the system list.
+        const ownLists = !CSS.supports('appearance', 'base-select');
+        const NATIVE_LISTS = 'select:is(.emby-select,.emby-select-withcolor,.detailTrackSelect)';
+        const nativeStates = new WeakMap();
+        const coarsePointer = matchMedia('(pointer: coarse)');
         const picker = element('div', 'lg-select-picker');
         picker.id = 'lg-select-picker';
         picker.setAttribute('role', 'listbox');
@@ -182,19 +196,26 @@
                 [...state.control.options].findIndex(option => !option.disabled);
         };
         const choices = () => [...picker.querySelectorAll('.lg-select-option:not(:disabled)')];
+        const focusChoice = (index, direction) => {
+            const options = choices();
+            (options.find(node => Number(node.dataset.lgSelectIndex) === index) ||
+                options[direction === 'up' ? options.length - 1 : 0])?.focus();
+        };
         const close = focus => {
             const state = active;
             if (!state) return;
             active = null;
+            optionsObserver.disconnect();
             picker.hidden = true;
             picker.replaceChildren();
-            state.trigger.setAttribute('aria-expanded', 'false');
+            if (state.native) state.trigger.removeAttribute('data-lg-menu-open');
+            else state.trigger.setAttribute('aria-expanded', 'false');
             if (focus && state.trigger.isConnected) state.trigger.focus();
         };
         const sync = state => {
             if (!states.has(state)) return;
             setText(state.trigger, state.control.selectedOptions[0]?.textContent || '');
-            state.trigger.disabled = state.control.disabled;
+            if (state.trigger.disabled !== state.control.disabled) state.trigger.disabled = state.control.disabled;
         };
         const position = () => {
             const state = active;
@@ -232,23 +253,17 @@
             if (!option || option.disabled) return;
             if (state.control.selectedIndex !== index) {
                 state.control.selectedIndex = index;
+                state.control.dispatchEvent(new Event('input', { bubbles: true }));
                 state.control.dispatchEvent(new Event('change', { bubbles: true }));
             }
             sync(state);
             close(true);
         };
-        const open = (state, direction) => {
-            if (!states.has(state) || state.control.disabled || !state.control.options.length) return;
-            if (active === state) {
-                close(true);
-                return;
-            }
-            close(false);
-            active = state;
-            if (picker.parentElement !== state.portal) state.portal.append(picker);
-            state.trigger.setAttribute('aria-expanded', 'true');
-            [...state.control.options].forEach((option, index) => {
-                const choice = element('button', 'lg-select-option', option.textContent);
+        // The list mirrors the options as the browser shows them (label, hidden ones left out).
+        const render = state => {
+            picker.replaceChildren(...[...state.control.options].flatMap((option, index) => {
+                if (option.hidden) return [];
+                const choice = element('button', 'lg-select-option', option.label);
                 choice.type = 'button';
                 choice.dataset.lgSelectIndex = String(index);
                 choice.setAttribute('role', 'option');
@@ -256,16 +271,60 @@
                 choice.tabIndex = option.selected ? 0 : -1;
                 choice.disabled = option.disabled;
                 choice.addEventListener('click', () => choose(state, index));
-                picker.append(choice);
+                return [choice];
+            }));
+        };
+        // Options that change while the list is open (Polyfin adds sources as it finds them) show at
+        // once, as in a customizable picker; the focused option keeps the focus.
+        const optionsObserver = new MutationObserver(() => {
+            const state = active;
+            if (!state) return;
+            if (state.control.disabled || !state.control.options.length) {
+                close(true);
+                return;
+            }
+            const focused = picker.contains(document.activeElement) ? Number(document.activeElement.dataset.lgSelectIndex) : -1;
+            render(state);
+            position();
+            if (focused >= 0) focusChoice(focused);
+        });
+        const open = (state, direction) => {
+            if (!(states.has(state) || state.native) || state.control.disabled || !state.control.options.length) return;
+            if (active === state) {
+                close(true);
+                return;
+            }
+            close(false);
+            active = state;
+            if (picker.parentElement !== state.portal) state.portal.append(picker);
+            if (state.native) state.trigger.setAttribute('data-lg-menu-open', '');
+            else state.trigger.setAttribute('aria-expanded', 'true');
+            // A native list takes its options' text size (the track fields' is smaller).
+            picker.style.fontSize = state.native ? getComputedStyle(state.control.options[0]).fontSize : '';
+            render(state);
+            optionsObserver.observe(state.control, {
+                childList: true, subtree: true, characterData: true, attributes: true,
+                attributeFilter: ['disabled', 'hidden', 'label', 'selected']
             });
             picker.hidden = false;
             position();
-            const current = selectedIndex(state);
-            const options = choices();
-            const choice = options.find(node => Number(node.dataset.lgSelectIndex) === current) || options[
-                direction === 'up' ? options.length - 1 : 0
-            ];
-            choice?.focus();
+            focusChoice(selectedIndex(state), direction);
+        };
+        // A native list's state is kept per select, so a second press closes it; the picker joins the
+        // select's dialog, whose focus trap would otherwise take the focus back.
+        const nativeState = target => {
+            const control = target instanceof Element ? target.closest(NATIVE_LISTS) : null;
+            if (!ownLists || !control || control.multiple || control.size > 1 || control.disabled || stateByControl.has(control) ||
+                control.querySelector('optgroup') || !enabled()) {
+                return null;
+            }
+            let state = nativeStates.get(control);
+            if (!state) {
+                state = { control, shell: control, trigger: control, portal: document.body, native: true };
+                nativeStates.set(control, state);
+            }
+            state.portal = control.closest('.dialog,dialog') || document.body;
+            return state;
         };
         const triggerElement = triggerClass => {
             const trigger = element('button', 'emby-button lg-select-trigger' + (triggerClass ? ' ' + triggerClass : ''));
@@ -290,6 +349,7 @@
             state.destroy = () => {
                 if (!states.delete(state)) return;
                 if (active === state) close(false);
+                control.removeEventListener('change', state.sync);
                 observer.disconnect();
                 stateByControl.delete(control);
                 restore?.();
@@ -359,10 +419,18 @@
         listen(document, 'pointerdown', event => {
             if (active && !active.shell.contains(event.target) && !picker.contains(event.target)) close(false);
         }, true);
+        // Keys - Only while focus is in the open picker (Escape also on its trigger); Tab closes it and
+        // moves on from the trigger, and focus that lands anywhere else closes it.
         listen(document, 'keydown', event => {
             if (!active) return;
-            if (event.key === 'Escape') {
+            const focused = document.activeElement;
+            if (event.key === 'Escape' && (picker.contains(focused) || focused === active.trigger)) {
                 event.preventDefault();
+                close(true);
+                return;
+            }
+            if (!picker.contains(focused)) return;
+            if (event.key === 'Tab') {
                 close(true);
                 return;
             }
@@ -380,8 +448,34 @@
                 choose(active, Number(document.activeElement.dataset.lgSelectIndex));
             }
         });
+        // Native lists - Jellyfin's own sheet (TV layouts) prevents these events first and stays.
+        listen(document, 'mousedown', event => {
+            if (event.button !== 0 || event.defaultPrevented || coarsePointer.matches) return;
+            const state = nativeState(event.target);
+            if (!state) return;
+            event.preventDefault();
+            state.control.focus({ preventScroll: true });
+            open(state);
+        });
+        listen(document, 'keydown', event => {
+            if (active || event.defaultPrevented || event.ctrlKey || event.metaKey ||
+                !['ArrowDown', 'ArrowUp', 'Enter', ' ', 'F4'].includes(event.key)) {
+                return;
+            }
+            const state = nativeState(event.target);
+            if (!state) return;
+            event.preventDefault();
+            open(state, event.key === 'ArrowUp' ? 'up' : 'down');
+        });
+        listen(document, 'focusin', event => {
+            if (active && !picker.contains(event.target) && !active.shell.contains(event.target)) close(false);
+        });
         listen(window, 'resize', position);
-        listen(window, 'scroll', position, true);
+        // Scrolling - Placement from a scroll handler lags the compositor by a frame: a scrolling view
+        // closes the picker, as it hides the tooltip; the picker's own list scrolls freely.
+        listen(window, 'scroll', event => {
+            if (active && !(event.target instanceof Node && picker.contains(event.target))) close(false);
+        }, true);
         listen(document, 'visibilitychange', () => { if (document.hidden) close(false); });
         return {
             create,
@@ -502,12 +596,12 @@
     const backdropArt = url => 'url(' + JSON.stringify(url) + ')';
     const imageUrl = (api, id, type, tag, maxWidth) =>
         api.getUrl('Items/' + encodeURIComponent(id) + '/Images/' + type, { tag, maxWidth, quality: 90 });
-    function backdropUrl(api, item) {
+    function backdropUrl(api, item, width = 1920) {
         const id = item.BackdropImageTags?.length ? item.Id : item.ParentBackdropItemId;
         const tag = item.BackdropImageTags?.[0] || item.ParentBackdropImageTags?.[0];
         if (!id || !tag) return '';
         try {
-            return imageUrl(api, id, 'Backdrop/0', tag, 1920);
+            return imageUrl(api, id, 'Backdrop/0', tag, width);
         } catch { return ''; }
     }
     // Images - Load off-screen: loaded resolves with the image once it has pixels, or with null on
@@ -656,16 +750,21 @@
     // =====================================================================
     // Home
     // =====================================================================
-    // State - generation and action drop stale loads and Play requests; pending is a Play awaiting its
-    // page; heroParts holds the banner's nodes (null for the empty shell); heroEmpty: nothing to show.
+    // State - generation and action drop stale loads and Play requests; heroParts holds the banner's
+    // nodes (null for the empty shell); heroEmpty: nothing to show.
     let hero = null, heroParts = null, homeScene = null, items = [], client = null, identity = '', index = 0;
     let loading = false, retryAt = 0, generation = 0, lastError = '', heroEmpty = false;
     let elapsed = 0, lastTick = 0, frame = 0, wasRunning = false, hovered = false, touching = false;
-    let pending = null, action = 0;
+    let action = 0;
     const SLIDE_COUNT = 8, SLIDE_DURATION = 9000, COLLECTION_BUDGET = 60;
+    // Pause - The viewer's choice outlives rebuilds of the banner, until the page reloads.
+    let viewerPaused = false;
+    // Sharpness - The sizes slides are asked in: few, so the server resizes and caches each once.
+    const SLIDE_WIDTHS = [1920, 2560, 3840];
+    let slideWidth = SLIDE_WIDTHS[0];
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     // Details pages - The item id each page last showed (viewbeforeshow, in the task that shows the page;
-    // viewshow comes frames later): a Play and the collection mark wait for the page of their item.
+    // viewshow comes frames later): the collection mark waits for the page of its item.
     const viewIds = new WeakMap();
     const rememberViewId = e => {
         if (e.target instanceof Element && e.target.matches('.itemDetailPage') && e.detail?.params?.id) {
@@ -692,17 +791,12 @@
         document.documentElement.style.removeProperty('--lg-backdrop');
         hovered = touching = false;
     }
-    function removePlayNotices() {
-        document.querySelectorAll('.lg-playback-notice').forEach(node => node.remove());
-    }
     // Reset - Drops in-flight loads and Play requests: the next mount loads again.
     function clearHome() {
         generation++;
         action++;
-        pending = null;
         loading = false;
         removeHero();
-        removePlayNotices();
     }
     // Session - Another user or server drops the items and whatever is in flight for the last one.
     function syncHomeSession(api, key) {
@@ -718,6 +812,7 @@
     const shownHomePage = () => [...document.querySelectorAll('.homePage')].find(visible);
     // Recent titles - A home row links to tab=1 of one library. Its matching navigation link provides
     // the library label already chosen by Jellyfin, so simplification never needs translated title text.
+    const RECENT_TITLES = '.verticalSection .sectionTitleContainer > a.more.sectionTitleTextButton[href] > .sectionTitle';
     function clearHomeLibraryTitles() {
         document.querySelectorAll('[data-lg-home-recent-title]').forEach(heading => {
             if (heading.textContent === heading.dataset.lgHomeRecentLabel) {
@@ -739,14 +834,14 @@
             const id = idKey(query.get('topParentId')), label = link.textContent.trim();
             if (id && label && !labels.has(id)) labels.set(id, label);
         }
-        for (const heading of page.querySelectorAll('.verticalSection .sectionTitleContainer > a.more.sectionTitleTextButton[href] > .sectionTitle')) {
+        for (const heading of page.querySelectorAll(RECENT_TITLES)) {
             const query = new URLSearchParams(heading.parentElement.getAttribute('href').split('?')[1] || '');
             const label = labels.get(idKey(query.get('topParentId')));
             if (query.get('tab') !== '1' || !label) continue;
             if (heading.textContent !== heading.dataset.lgHomeRecentLabel) {
                 heading.dataset.lgHomeRecentTitle = heading.textContent;
             }
-            heading.dataset.lgHomeRecentLabel = label;
+            setAttribute(heading, 'data-lg-home-recent-label', label);
             setText(heading, label);
         }
     }
@@ -775,7 +870,6 @@
             clearHome();
             return;
         }
-        consumePlay();
         const api = currentClient(), key = sessionKey(api);
         syncHomeSession(api, key);
         if (!home() || !key) {
@@ -917,19 +1011,28 @@
         }, true);
         return hero;
     }
+    // Sharpness - A backdrop covers the banner: it fills its width, or its height when the banner is
+    // narrower than 16:9 (phones). Device pixels count up to a ratio of 2; a hidden page uses the window.
+    function slideImageWidth() {
+        const box = hero.getBoundingClientRect();
+        const width = box.width || document.documentElement.clientWidth;
+        const needed = Math.max(width, box.height * 16 / 9) * Math.min(window.devicePixelRatio || 1, 2);
+        return SLIDE_WIDTHS.find(size => size >= needed) || SLIDE_WIDTHS[SLIDE_WIDTHS.length - 1];
+    }
     function fillHero() {
         const backdrops = element('div', 'lg-hero-backdrops');
         backdrops.setAttribute('aria-hidden', 'true');
+        slideWidth = slideImageWidth();
         for (const item of items) {
             const slide = element('div');
-            slide.style.backgroundImage = backdropArt(backdropUrl(client, item));
+            slide.style.backgroundImage = backdropArt(backdropUrl(client, item, slideWidth));
             backdrops.append(slide);
         }
         const parts = {
             slides: [...backdrops.children], kicker: element('div', 'lg-hero-kicker'), title: element('a'),
             meta: element('div', 'lg-hero-meta'), overview: element('p', 'lg-hero-overview'),
             play: element('button', 'lg-hero-button lg-hero-play'), info: element('a', 'lg-hero-button lg-hero-info'),
-            dots: [], status: element('p', 'lg-hero-status')
+            dots: [], status: element('p', 'lg-hero-status'), pause: element('button', 'lg-hero-pause')
         };
         const inner = element('div', 'lg-hero-content'), title = element('h1', 'lg-hero-title');
         title.append(parts.title);
@@ -951,7 +1054,15 @@
             parts.dots.push(button);
             dots.append(button);
         });
-        controls.append(dots);
+        // Pause - A visible way to stop the slideshow, beyond hover and focus; one slide never moves.
+        parts.pause.type = 'button';
+        parts.pause.hidden = items.length < 2;
+        parts.pause.addEventListener('click', () => {
+            viewerPaused = !viewerPaused;
+            syncHeroLabels();
+            resumeClock();
+        });
+        controls.append(parts.pause, dots);
         parts.status.setAttribute('role', 'status');
         parts.status.hidden = true;
         hero.append(backdrops, element('div', 'lg-hero-scrim'), inner, controls, parts.status);
@@ -967,6 +1078,10 @@
         setAttribute(parts.info, 'aria-label', translate('ItemDetails'));
         // The tooltip controller moves title to data-lg-tooltip.
         setAttribute(parts.info, parts.info.hasAttribute('data-lg-tooltip') ? 'data-lg-tooltip' : 'title', translate('ItemDetails'));
+        const pauseLabel = translate(viewerPaused ? 'SlideshowPlay' : 'SlideshowPause');
+        parts.pause.classList.toggle('lg-is-paused', viewerPaused);
+        setAttribute(parts.pause, 'aria-label', pauseLabel);
+        setAttribute(parts.pause, parts.pause.hasAttribute('data-lg-tooltip') ? 'data-lg-tooltip' : 'title', pauseLabel);
         setText(parts.status, parts.status.dataset.lgHeroStatus ? translate(parts.status.dataset.lgHeroStatus) : '');
     }
     function render(next) {
@@ -976,7 +1091,8 @@
         wasRunning = false;
         index = (next + items.length) % items.length;
         const item = items[index], parts = heroParts;
-        const art = backdropArt(backdropUrl(client, item));
+        // The page backdrop reuses the slide's own URL: one download per image.
+        const art = backdropArt(backdropUrl(client, item, slideWidth));
         showHomeBackdrop(art);
         rememberBackdrop(art, identity, hero);
         parts.slides.forEach((n, i) => n.classList.toggle('lg-is-active', i === index));
@@ -996,14 +1112,16 @@
         resumeClock();
     }
     // Carousel - The clock runs on animation frames only while the banner can advance; whatever
-    // paused it (hover, touch, focus, a Play request, a hidden tab) resumes it.
+    // paused it (the pause button, hover, touch, focus, a Play request, a hidden tab) resumes it.
     function resumeClock() {
         if (!frame && hero) frame = requestAnimationFrame(tick);
     }
     function tick(now) {
         frame = 0;
+        // Keyboard focus inside the banner pauses it; a dot or arrow clicked with the pointer does not.
+        const focused = document.documentElement.dataset.lgInput === 'keyboard' && !!hero?.contains(document.activeElement);
         const running = !!(hero?.isConnected && items.length > 1 && home() && !document.hidden && !motion.matches &&
-            !hovered && !touching && !hero.contains(document.activeElement) && !hero.querySelector('[aria-busy="true"]'));
+            !viewerPaused && !hovered && !touching && !focused && !hero.querySelector('[aria-busy="true"]'));
         if (running && wasRunning && lastTick) {
             const delta = now - lastTick;
             // A gap over 250 ms means the tab or device was suspended: do not count it.
@@ -1014,7 +1132,7 @@
         lastTick = now;
         if (running) resumeClock();
     }
-    // Playback - Open the details page (a series' next episode) for consumePlay() to start.
+    // Playback - Open the details page (a series' next episode); playback stays the user's choice there.
     async function play(item, button) {
         const attempt = ++action, key = identity, api = client, user = api.getCurrentUserId();
         const initialRoute = location.hash;
@@ -1034,8 +1152,6 @@
                 }
             }
             if (!current()) return;
-            removePlayNotices();
-            pending = { id: target.Id, key, until: Date.now() + 45000 };
             location.hash = details(target);
         } catch {
             status = 'ErrorDefault';
@@ -1045,42 +1161,6 @@
             if (attempt === action) setStatus(status);
             resumeClock();
         }
-    }
-    // Playback - Press the native Play once streams are ready, within 45 s; past that,
-    // explain on the page why playback did not start.
-    function consumePlay() {
-        if (!pending) return;
-        const sameDetails = route() === '#/details' && sameId(params().get('id'), pending.id);
-        const page = sameDetails &&
-            [...document.querySelectorAll('.itemDetailPage')].find(n => visible(n) && sameId(viewIds.get(n), pending.id));
-        const expired = Date.now() > pending.until;
-        if (expired || !enabled() || sessionKey(currentClient()) !== pending.key || !sameDetails) {
-            if (expired && sameDetails) announcePlayFailure(page);
-            pending = null;
-            return;
-        }
-        if (!page) return;
-        if (page.querySelector('.remux-no-streams')) {
-            announcePlayFailure(page);
-            pending = null;
-            return;
-        }
-        const button = page.querySelector('.mainDetailButtons .btnPlay, .detailPagePrimaryContainer .btnPlay');
-        const ready = page.querySelector('.remux-streams-ready') || button?.closest('.remux-streams-ready');
-        if (!ready || !visible(button) || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
-        pending = null;
-        button.click();
-    }
-    function announcePlayFailure(page) {
-        const actions = page?.querySelector('.mainDetailButtons');
-        if (!actions) return;
-        let notice = page.querySelector('.lg-playback-notice');
-        if (!notice) {
-            notice = element('p', 'lg-playback-notice');
-            notice.setAttribute('role', 'status');
-            actions.after(notice);
-        }
-        notice.textContent = translate('PlaybackUnavailable');
     }
     // Status - The key is stored so the language pass retranslates the line.
     function setStatus(key) {
@@ -1149,9 +1229,12 @@
         root.style.setProperty('--lg-scrollbar-width', `${scrollbar}px`);
         return true;
     }
-    // Playback - The app navigation belongs to browsing, never to the player or its startup spinner.
+    // Playback - The app navigation belongs to browsing, never to the player or its startup spinner:
+    // the player mounts before Jellyfin opens #/video, and this pass lands before that frame paints.
+    // Only fullscreen playback is -onTop; a theme video plays behind a details page without it.
     function syncPlaybackPage(on) {
-        document.documentElement.classList.toggle('lg-is-playback-page', on && route() === '#/video');
+        const playing = route() === '#/video' || document.querySelector('.videoPlayerContainer-onTop') !== null;
+        document.documentElement.classList.toggle('lg-is-playback-page', on && playing);
     }
     // Page marks - Set on <html> while their selector matches, for rules a page-wide :has() would
     // slow down: the legacy header (rendered, hidden, in every layout), home, the now playing bar.
@@ -1182,6 +1265,15 @@
     // library's cards before Jellyfin shows the details page.
     const routeItems = new Map(), itemTypes = new Map();
     let routeItemsKey = '';
+    // Posters - --lg-poster-min-width (Custom CSS, or the settings page on <html>) turns Jellyfin's poster
+    // grids into columns: the stylesheet needs this mark, an unset variable keeps Jellyfin's widths.
+    // The pass reads the variable before its writes (posterWidthSet): a read after them forces a style
+    // recalculation.
+    const posterWidthSet = on =>
+        on && getComputedStyle(document.documentElement).getPropertyValue('--lg-poster-min-width').trim() !== '';
+    function syncPosterWidth(set) {
+        document.documentElement.classList.toggle('lg-has-poster-min-width', set);
+    }
     // Session - Both caches belong to one user on one server; returns the id's cache key.
     function routeItemName(key, id) {
         if (key !== routeItemsKey) {
@@ -1328,7 +1420,7 @@
     // Controls - The AppBar row (node) currently drawn inside the library card.
     let libraryControlFrame = 0, libraryControlNode = null, libraryControlCard = null;
     let libraryRangeLabel = null, libraryRangeResizeObserver = null;
-    // Image - The cards whose library image was asked for, once each.
+    // Image - The cards whose library image was asked for, once per visit.
     const libraryImageCards = new WeakSet();
     // Rebuild hold - Jellyfin replaces the grid (and our card) after a view, sort or filter
     // change; the controls keep their place until the card is back on the same route.
@@ -1377,7 +1469,11 @@
     function clearLibraryCard() {
         clearLibraryControls();
         document.querySelectorAll('.lg-library-section,.lg-library-title,.lg-library-image').forEach(node => node.remove());
-        document.querySelectorAll('.lg-library-card').forEach(node => node.classList.remove('lg-library-card', 'lg-has-image'));
+        // Legacy layouts keep their toolbar (the card) in the cached page: a return asks for its image again.
+        document.querySelectorAll('.lg-library-card').forEach(node => {
+            libraryImageCards.delete(node);
+            node.classList.remove('lg-library-card', 'lg-has-image');
+        });
     }
     // Card - Built in the pass that recognizes the page, at its final size: the title holds its line
     // until the name arrives, the image its half once the library has one, so loads move nothing.
@@ -1868,7 +1964,6 @@
     function syncLanguage() {
         syncHeroLabels();
         document.querySelectorAll('.lg-detail-metadata > summary').forEach(node => setText(node, translate('ItemDetails')));
-        document.querySelectorAll('.lg-playback-notice').forEach(node => setText(node, translate('PlaybackUnavailable')));
     }
 
     // =====================================================================
@@ -2231,13 +2326,14 @@
         layoutNodes = nodes;
     }
     // Schedule - Cheap syncs run in one pass (a page's first frame is final), home mounting at most once
-    // per 150 ms. State, session, page, the header and the home page are read before any write: a
-    // layout read after a write forces a style recalculation.
+    // per 150 ms. State, session, page, the header, the home page and the poster width are read before
+    // any write: a layout read after a write forces a style recalculation.
     const schedule = () => {
         if (stopped) return;
         const on = enabled(), api = on ? currentClient() : null, key = on ? sessionKey(api) : '';
         const context = key ? pageCardContext() : null;
         const homePage = on && home() ? shownHomePage() : undefined, homeRows = homeSections(homePage);
+        const posterWidth = posterWidthSet(on);
         observeLayout(on);
         const moved = syncHeaderInset(on);
         if (on && styleGate) openStyleGate();
@@ -2245,6 +2341,7 @@
         pruneOwnedAttributes();
         syncPageMarks(on);
         syncPlaybackPage(on);
+        syncPosterWidth(posterWidth);
         if (on) {
             syncDetails(key, context);
         } else {
@@ -2326,8 +2423,8 @@
     listen(document, 'viewshow', runPass, true);
     // Images - Posters and the library image change the layout when they load, without a mutation.
     listen(document, 'load', schedulePass, true);
-    // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, the 45 s Play
-    // expiry, a paused carousel, layout changes the layout observer does not watch.
+    // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, a paused carousel,
+    // layout changes the layout observer does not watch.
     const poll = setInterval(schedulePass, 1000);
 
     // =====================================================================
@@ -2335,13 +2432,15 @@
     // =====================================================================
     window[KEY] = {
         get status() {
-            return { active: Boolean(heroParts && hero?.isConnected), items: items.length, loading, error: lastError };
+            return {
+                active: Boolean(heroParts && hero?.isConnected), items: items.length, loading, error: lastError, running: wasRunning
+            };
         },
         selects: selectController,
         preferences: {
             assets: ASSETS,
             assetUrl,
-            defaults: loaderSettings,
+            loaderChoices,
             api: currentClient,
             sessionKey,
             element,
@@ -2365,14 +2464,18 @@
             listeners.forEach(fn => fn());
             clearLastBackdrop();
             clearHome();
+            clearHomeLibraryTitles();
             clearHeaderInset();
             syncPlaybackPage(false);
+            syncPosterWidth(false);
             clearPageMarks();
             clearPendingControls();
             clearPageCard();
             clearLibraryPopovers();
             collectionFilterController.stop();
             window.__lumaaGlaassPreferences?.stop();
+            // Preferences - The next instance loads the settings page again only when its script is gone.
+            document.querySelector('#lg-preferences-script[data-lg-managed]')?.remove();
             clearDetails();
             clearSheetTrigger();
             tooltipController.stop();
