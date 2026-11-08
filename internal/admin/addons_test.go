@@ -378,13 +378,14 @@ func TestLibrariesShowAs(t *testing.T) {
 		return map[string]any{"addonId": addonID, "catalogType": catalogType, "catalogId": catalogID, "name": nil, "showAs": showAs}
 	}
 	others, titles := []string{"home_videos", "movies_and_shows"}, []string{"listed", "movies_and_shows"}
+	anime := []string{"movies_and_shows", "shows", "movies"}
 	want := map[string]struct {
 		showAs  string
 		choices []string
 	}{
 		"library/store": {"movies_and_shows", others}, "other/clips": {"home_videos", others},
 		"movie/top": {"listed", titles}, "series/shows": {"movies_and_shows", titles},
-		"anime/mixed": {"", []string{}}, "tv/channels": {"", []string{}},
+		"anime/mixed": {"shows", anime}, "tv/channels": {"", []string{}},
 	}
 	check := func(when string, listed map[string]narrowedLibrary) {
 		t.Helper()
@@ -398,7 +399,7 @@ func TestLibrariesShowAs(t *testing.T) {
 	}
 	status, saved, code := administrator.saveLibraries("shared", library("library", "store", "movies_and_shows"),
 		library("other", "clips", "home_videos"), library("movie", "top", "listed"), library("series", "shows", "movies_and_shows"),
-		library("anime", "mixed", nil), library("tv", "channels", nil))
+		library("anime", "mixed", "shows"), library("tv", "channels", nil))
 	if status != http.StatusOK {
 		t.Fatalf("saving: %d %s", status, code)
 	}
@@ -412,7 +413,8 @@ func TestLibrariesShowAs(t *testing.T) {
 	}
 	check("kept", byCatalog(saved))
 	for _, refused := range []map[string]any{library("library", "store", "listed"), library("movie", "top", "home_videos"),
-		library("series", "shows", "movies"), library("anime", "mixed", "movies_and_shows"), library("tv", "channels", "listed")} {
+		library("series", "shows", "movies"), library("anime", "mixed", "home_videos"), library("anime", "mixed", "listed"),
+		library("tv", "channels", "listed")} {
 		if status, _, code := administrator.saveLibraries("shared", refused); status != http.StatusBadRequest || code != "invalid_library" {
 			t.Errorf("%s/%s shown as %s: %d %s", refused["catalogType"], refused["catalogId"], refused["showAs"], status, code)
 		}

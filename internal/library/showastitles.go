@@ -64,10 +64,16 @@ func catalogOffers(entry installed, catalog stremio.Catalog, kinds []Kind) (Kind
 // libraryCollectionType is the content of a library (see collectionType):
 // none, as Jellyfin's mixed libraries, for one that shows its titles as
 // movies and shows: a library of other videos shown so, or of movies or
-// series that lists each title as its own type tells (see mixedKinds).
+// series that lists each title as its own type tells (see mixedKinds);
+// shows or movies for an anime catalog shown as shows or as movies.
 func libraryCollectionType(l addons.Library) string {
-	if l.ShowAs == addons.ShowAsMoviesAndShows {
+	switch l.ShowAs {
+	case addons.ShowAsMoviesAndShows:
 		return ""
+	case addons.ShowAsShows:
+		return "tvshows"
+	case addons.ShowAsMovies:
+		return "movies"
 	}
 	return collectionType(l.Catalog.Type)
 }
