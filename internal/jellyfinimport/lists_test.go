@@ -63,6 +63,7 @@ func entryItems(p playlists.Playlist) []accounts.ID {
 // as their own, in order. Importing again adds nothing twice, but the
 // titles a collection gained since.
 func TestJellyfinRatingsCollectionsAndPlaylistsComeOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	admin, alice, bob := h.user(t, "admin"), h.user(t, "alice"), h.user(t, "bob")
 	h.listed(t, "movie", "movie|tmdb:550", `{"meta":{"id":"tmdb:550","type":"movie","name":"Listed by TMDB"}}`)
@@ -215,6 +216,7 @@ func TestJellyfinRatingsCollectionsAndPlaylistsComeOnce(t *testing.T) {
 // ratings and playlists, and the collections only once they may manage
 // collections, as Jellyfin lets only them create one.
 func TestAUsersOwnEmbyImportBringsCollectionsOnlyToThoseWhoManageThem(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.f.emby = true
 	carol := h.user(t, "carol")
@@ -291,6 +293,7 @@ func TestAUsersOwnEmbyImportBringsCollectionsOnlyToThoseWhoManageThem(t *testing
 // from the playback history. Ratings left out are not read, and importing
 // again adds nothing twice.
 func TestPlexCollectionsAndPlaylistsComeOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	p := smallPlex(t)
 	admin, owner, carol := h.user(t, "admin"), h.user(t, "owner"), h.user(t, "carol")

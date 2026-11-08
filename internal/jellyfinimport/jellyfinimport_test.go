@@ -436,6 +436,7 @@ func at(text string) time.Time {
 }
 
 func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.f.users = []map[string]any{
 		{"Id": "a1", "Name": "Alice", "LastActivityDate": "2026-10-01T20:00:00.0000000Z", "Policy": map[string]any{"IsAdministrator": true}},
@@ -494,6 +495,7 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 }
 
 func TestWatchDataIsMatchedAndOnlyAddedTo(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := h.user(t, "alice")
 	// A catalog listed a movie by its TMDB identifier, and a series by its
@@ -622,6 +624,7 @@ func TestWatchDataIsMatchedAndOnlyAddedTo(t *testing.T) {
 }
 
 func TestOneImportRunsAtATimeAndStops(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.f.items["jf-alice"] = map[string][]map[string]any{"IsPlayed": {movie("m1", "One", map[string]string{"Imdb": "tt0000001"},
@@ -676,6 +679,7 @@ func TestOneImportRunsAtATimeAndStops(t *testing.T) {
 // it with its owner's data whatever user is asked, which an import would
 // put in another user's account: only its owner is imported with it.
 func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice"}, {"Id": "jf-bob", "Name": "Bob"}}
@@ -729,6 +733,7 @@ func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
 // A user whose data the server does not let the key read fails alone, and
 // says so: the import goes on with the next users.
 func TestAUserTheKeyMayNotReadFailsAlone(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.f.items["jf-alice"] = map[string][]map[string]any{"IsPlayed": {movie("m1", "Alice's", map[string]string{"Imdb": "tt0000001"},
@@ -751,6 +756,7 @@ func TestAUserTheKeyMayNotReadFailsAlone(t *testing.T) {
 // password: even a server that answers a session with its own user's data
 // whatever user is asked gives each user theirs. Every session ends.
 func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob, carol := h.user(t, "alice"), h.user(t, "bob"), h.user(t, "carol")
 	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"},
@@ -820,6 +826,7 @@ func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 // sign-in that opens another user's session starts nothing, and says why;
 // the sessions opened meanwhile end.
 func TestASignInThatFailsStartsNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"},
 		{"Id": "jf-carol", "Name": "Carol"}, {"Id": "jf-dan", "Name": "Dan"}}
@@ -868,6 +875,7 @@ func TestASignInThatFailsStartsNothing(t *testing.T) {
 // from a server that lists every user to anyone: another user can neither
 // be signed in nor imported.
 func TestANonAdministratorConnectionListsOnlyItself(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"}}
@@ -920,6 +928,7 @@ func TestANonAdministratorConnectionListsOnlyItself(t *testing.T) {
 // user with the session's data. A refused password starts nothing, and one
 // import runs at a time, the administrator's included.
 func TestAUserImportsOnlyTheirOwnWatchData(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"}}
@@ -998,6 +1007,7 @@ func TestAUserImportsOnlyTheirOwnWatchData(t *testing.T) {
 // owner's data whatever user is asked. Signed in, each user is read signed
 // in as themselves.
 func TestEmbyIsReadWithItsHeaderAndUnderItsPath(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.f.emby = true
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
@@ -1064,6 +1074,7 @@ func TestEmbyIsReadWithItsHeaderAndUnderItsPath(t *testing.T) {
 // server asked as Emby, or an Emby server asked as Jellyfin, is told apart
 // from what it answers anyone, and is sent neither.
 func TestAServerOfAnotherKindIsSentNoKeyOrPassword(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	emby := newFakeJellyfin(t)
 	emby.emby = true
@@ -1242,6 +1253,7 @@ func guids(ids ...string) []map[string]any {
 // and dated. Episodes are found by their show's identifiers and their
 // numbers, and Plex is only read.
 func TestPlexImportsTheOwnersAndEachAccountsWatchData(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	p := newFakePlex(t)
 	owner, carol := h.user(t, "owner"), h.user(t, "carol")
@@ -1370,6 +1382,7 @@ func (b *lockedBuffer) String() string {
 // An answer an import cannot read is logged with the path it came from and
 // why, never with its query or the token.
 func TestAnAnswerAnImportCannotReadIsLoggedWithItsPath(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var logged lockedBuffer
 	h.logger = slog.New(slog.NewTextHandler(&logged, nil))
@@ -1438,6 +1451,7 @@ func smallPlex(t *testing.T) *fakePlex {
 // read was already in Polyfin. What was read is counted, and logged at
 // Info for each user without the token or the server's address.
 func TestAPlexImportTellsWhatItReadAndWhyItAddedNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var logged lockedBuffer
 	h.logger = slog.New(slog.NewTextHandler(&logged, nil))
@@ -1489,6 +1503,7 @@ func TestAPlexImportTellsWhatItReadAndWhyItAddedNothing(t *testing.T) {
 // the one asked, as a server leaving the filter out would answer, is left
 // out.
 func TestPlexPlaysOfDeletedTitlesAreListedAndOtherAccountsLeftOut(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	p := smallPlex(t)
 	carol := h.user(t, "carol")
@@ -1527,6 +1542,7 @@ func TestPlexPlaysOfDeletedTitlesAreListedAndOtherAccountsLeftOut(t *testing.T) 
 // ?lang=… after. An episode numbered in another of TheTVDB's episode orders
 // is listed as such rather than marked as another episode.
 func TestPlexReadsTheIdentifiersOfOlderAgents(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	p := smallPlex(t)
 	owner := h.user(t, "owner")
@@ -1578,6 +1594,7 @@ func TestPlexReadsTheIdentifiersOfOlderAgents(t *testing.T) {
 // The owner's resume point without a date cannot be told older or newer
 // than Polyfin's: it is counted as such rather than left out unsaid.
 func TestPlexCountsTheOwnersUndatedResumePoints(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	p := smallPlex(t)
 	owner := h.user(t, "owner")
@@ -1592,6 +1609,7 @@ func TestPlexCountsTheOwnersUndatedResumePoints(t *testing.T) {
 // and a second import of a user is told that everything was already in
 // Polyfin.
 func TestAJellyfinImportTellsWhyItAddedNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.f.items["jf-alice"] = map[string][]map[string]any{
