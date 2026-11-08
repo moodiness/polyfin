@@ -59,6 +59,17 @@ export function languageOptions(
     .sort((a, b) => a.label.localeCompare(b.label, language))
 }
 
+/** ISO 3166 country codes ("IT") as choices named in the reader's language ("Italie"), by name. */
+export function countryOptions(
+  codes: readonly string[],
+  language: string,
+): { value: string; label: string }[] {
+  const names = new Intl.DisplayNames([language], { type: 'region', fallback: 'code' })
+  return codes
+    .map((code) => ({ value: code, label: names.of(code) ?? code }))
+    .sort((a, b) => a.label.localeCompare(b.label, language))
+}
+
 const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],

@@ -18,7 +18,7 @@ import {
   posterBadgeSizes,
 } from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
-import { formatHour } from '@/format'
+import { countryOptions, formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
 import { jellyfinApp, webPlayerLink } from '@/jellyfinApps'
 import {
@@ -112,7 +112,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
 }
 
 function General({ form, update, error, range, limits, saved }: SectionFormApi) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const s = t.settings
   // Polyfin Desktop starts Polyfin again itself: nothing to confirm.
   const desktop =
@@ -143,6 +143,17 @@ function General({ form, update, error, range, limits, saved }: SectionFormApi) 
         options={languages.map((code) => ({ value: code, label: t.language[code].name }))}
         onChange={(language: Language) => update({ language })}
         saved={saved.language}
+      />
+      <SettingRow
+        kind="choice"
+        anchor="rating-country"
+        label={s.ratingCountry}
+        help={s.ratingCountryHelp}
+        error={error('rating-country')}
+        value={form.ratingCountry}
+        options={countryOptions((form.bounds.ratingCountry?.choices ?? []) as string[], language)}
+        onChange={(ratingCountry: string) => update({ ratingCountry })}
+        saved={saved.ratingCountry}
       />
       <SettingRow
         kind="switch"

@@ -57,6 +57,9 @@ const settings: typeof en = {
     language: 'Idioma dos nomes gerados',
     languageHelp:
       'O Polyfin nomeia algumas coisas por conta própria nos aplicativos Jellyfin: temporadas (“Temporada 1”, “Especiais”), episódios sem título e o tipo adicionado a bibliotecas que compartilham um nome (“Populares (Filmes)”).',
+    ratingCountry: 'País das classificações',
+    ratingCountryHelp:
+      'O Polyfin mostra e avalia a classificação de cada título para este país: os aplicativos mostram a classificação dele lá, como VM14 na Itália, e os limites de idade dos usuários são escolhidos entre as classificações dele. Mudá-lo pode afrouxar ou apertar limites, já que um título pode ter lá uma classificação para um público mais novo ou mais velho. Os títulos são lidos de novo com o tempo, então as classificações mudam aos poucos.',
     legacyAuthorization: 'Permitir autorização legada',
     legacyAuthorizationHelp:
       'Aceita os antigos cabeçalhos X-Emby-*, o parâmetro api_key e o esquema Emby para aplicativos que ainda precisam deles. Desativado por padrão, como no Jellyfin 12.4.',

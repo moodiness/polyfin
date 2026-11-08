@@ -93,6 +93,8 @@ export default function SectionForm({
       // The themes users are given follow the server's and its Custom texts.
       void queryClient.invalidateQueries({ queryKey: queryKeys.webThemes })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
+      // A user's age limit is picked among the rating country's ratings.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parentalRatings })
     },
   })
 

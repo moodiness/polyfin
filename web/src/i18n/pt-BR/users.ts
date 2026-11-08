@@ -101,11 +101,13 @@ const users: typeof en = {
       'A dublagem que este usuário prefere quando um idioma é dublado à parte para uma região, como o francês do Québec. Ela vale para o idioma de áudio escolhido nos aplicativos dele, ou então o do servidor, quando ele é o idioma da região, e o define quando nenhum foi escolhido: nesse idioma, as faixas de áudio da região tocam primeiro, e as versões dela vêm primeiro quando o servidor ordena as versões por idioma.',
     parentalTitle: 'Controle parental',
     maxRating: 'Classificação etária máxima',
-    maxRatingHelp: 'Títulos com classificação acima deste limite ficam ocultos para este usuário.',
+    maxRatingHelp:
+      'As classificações do País das classificações do servidor, definido em Configurações › Geral. Títulos com classificação acima deste limite nesse país ficam ocultos para este usuário.',
     noLimit: 'Sem limite',
     blockUnratedMovies: 'Bloquear filmes sem classificação',
     blockUnratedShows: 'Bloquear séries sem classificação',
     ratingLimit: (rating: string) => `Até ${rating}`,
+    ratingAge: (age: number) => `${age} anos`,
     devicesTitle: 'Dispositivos',
     delete: 'Excluir usuário',
     deleteConfirm: (name: string) =>

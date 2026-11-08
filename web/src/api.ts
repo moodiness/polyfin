@@ -365,6 +365,11 @@ export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
   legacyAuthorization: boolean
+  /**
+   * Country whose ratings titles show and are judged by (Jellyfin's MetadataCountryCode), an
+   * upper-case ISO 3166-1 alpha-2 code among `bounds.ratingCountry.choices`; "US" by default.
+   */
+  ratingCountry: string
   /** Asks GitHub once a day for Polyfin's latest release, to tell administrators of a new version. */
   updateCheck: boolean
   includePrereleases: boolean
