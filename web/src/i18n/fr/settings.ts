@@ -769,7 +769,7 @@ const settings: typeof en = {
       'Un partage SMB est analysé à nouveau quelques secondes après que son serveur a signalé un changement. Les dossiers WebDAV sont listés de nouveau toutes les 2 minutes, les buckets S3, dossiers SFTP et remotes rclone aussi souvent que chaque dossier le demande, en plusieurs fois pour un partage de nombreux dossiers, et analysés à nouveau quand une liste a changé. Système › Santé indique comment chaque partage est surveillé, et quels dossiers ou partages ne peuvent pas l’être, et pourquoi.',
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
-      'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
+      'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur, et faire leurs propres listes intelligentes. Sinon, leurs addons et listes intelligentes sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
     serverImports:
       'Les utilisateurs peuvent importer leur historique depuis un autre serveur ou une appli',
     serverImportsHelp:

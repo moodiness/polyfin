@@ -767,7 +767,7 @@ const settings: typeof en = {
       'Un recurso compartido SMB se vuelve a escanear unos segundos después de que su servidor notifique un cambio. Las carpetas WebDAV se vuelven a listar cada 2 minutos, y los buckets S3, las carpetas SFTP y los remotos de rclone con la frecuencia que pida cada carpeta (un recurso con muchas carpetas, en varias rondas), y se vuelven a escanear cuando un listado ha cambiado. Sistema › Estado del sistema indica cómo se vigila cada recurso compartido, y qué carpetas o recursos no se pueden vigilar y por qué.',
     personalAddons: 'Permitir extensiones propias de los usuarios',
     personalAddonsHelp:
-      'Permite a los usuarios añadir sus propias extensiones de Stremio, además de las del servidor. Si se desactiva, sus extensiones se conservan pero no se usan, y sus aplicaciones de Jellyfin solo muestran las extensiones del servidor.',
+      'Permite a los usuarios añadir sus propias extensiones de Stremio, además de las del servidor, y crear sus propias listas inteligentes. Si se desactiva, sus extensiones y listas inteligentes se conservan pero no se usan, y sus aplicaciones de Jellyfin solo muestran las extensiones del servidor.',
     serverImports:
       'Los usuarios pueden importar su historial de reproducción desde otro servidor o aplicación',
     serverImportsHelp:

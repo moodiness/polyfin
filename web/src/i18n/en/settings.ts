@@ -754,7 +754,7 @@ const settings = {
       'An SMB share is scanned again a few seconds after its server tells of a change. WebDAV folders are listed again every 2 minutes, S3 buckets, SFTP folders and rclone remotes as often as each folder asks, a share of many folders over several rounds, and scanned again when a listing changed. System › Health tells how each share is watched, and which folders or shares cannot be, and why.',
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
-      'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
+      'Lets users add Stremio addons of their own, besides the server’s, and make their own smart lists. When off, their addons and smart lists are kept but not used, and their Jellyfin apps show the server’s addons only.',
     serverImports: 'Users may import their watch history from another server or app',
     serverImportsHelp:
       'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin, Emby or Plex server, or from their Stremio or Nuvio account, signing in there as themselves, and their watched movies from a Letterboxd export. When off, those sections are hidden. An administrator can still import for a user, under Users.',

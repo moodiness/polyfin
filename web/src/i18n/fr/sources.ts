@@ -658,9 +658,9 @@ const sources: typeof en = {
       'Activé\u202f: vous profitez des sources et bibliothèques du serveur, suivies des vôtres. Désactivé\u202f: vous ne voyez que vos propres sources et bibliothèques.',
     preferenceSaved: 'Préférence enregistrée.',
     parentalControl:
-      'Le contrôle parental s’applique à votre compte\u202f: vos applications Jellyfin n’affichent que les sources et bibliothèques du serveur, qui donnent les classifications sur lesquelles il s’appuie. Vos propres sources sont conservées mais pas utilisées.',
+      'Le contrôle parental s’applique à votre compte\u202f: vos applications Jellyfin n’affichent que les sources et bibliothèques du serveur, qui donnent les classifications sur lesquelles il s’appuie. Vos propres sources et listes intelligentes sont conservées mais pas utilisées.',
     personalAddonsOff:
-      'Un administrateur a désactivé vos propres sources\u202f: vos applications Jellyfin n’affichent que les sources et bibliothèques du serveur. Vos propres sources sont conservées mais pas utilisées.',
+      'Un administrateur a désactivé vos propres sources\u202f: vos applications Jellyfin n’affichent que les sources et bibliothèques du serveur. Vos propres sources et listes intelligentes sont conservées mais pas utilisées.',
     listTitle: 'Vos sources',
   },
   usedBy: {

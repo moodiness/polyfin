@@ -200,6 +200,8 @@ const libraries: typeof en = {
     help: 'Listen aus Regeln über die Titel der Kataloge des Servers, etwa „Französische Filme der 1990er, noch nicht gesehen“. Alle Benutzer sehen sie, innerhalb der Bibliotheken, die sie sehen dürfen.',
     helpMine:
       'Listen aus Regeln über die Titel deiner Kataloge und der Kataloge des Servers, solange du sie nutzt. Nur du siehst sie.',
+    helpKept:
+      'Erhalten, aber nicht verwendet: Deine Jellyfin-Apps zeigen sie nicht an, und sie lassen sich erst ändern, wenn deine eigenen Quellen wieder verwendet werden. Du kannst sie löschen.',
     add: 'Intelligente Liste hinzufügen',
     emptyTitle: 'Noch keine intelligente Liste',
     emptyHow:
@@ -321,6 +323,9 @@ const libraries: typeof en = {
     delete: 'Löschen',
     deleteTitle: (name: string) => `${name} löschen?`,
     deleteBody: 'Jellyfin-Apps zeigen sie nicht mehr an. Ihre Titel bleiben in ihren Katalogen.',
+    deleteLabel: (name: string) => `${name} löschen`,
+    deleteKeptBody:
+      'Sie kommt mit deinen eigenen Quellen nicht zurück. Ihre Titel bleiben in ihren Katalogen.',
     deleted: 'Intelligente Liste gelöscht.',
     preview: 'Vorschau',
     previewHelp:
