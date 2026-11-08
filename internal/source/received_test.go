@@ -12,6 +12,7 @@ import (
 // reading its cached blocks again receives nothing, and another source
 // counts apart.
 func TestSourcesCountTheBytesTheyReceive(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 5*blockSize+12345)
 	cache := newCache(t, 1<<30)
 	received := bandwidth.New()
@@ -46,6 +47,7 @@ func TestSourcesCountTheBytesTheyReceive(t *testing.T) {
 // A source a previous run kept counts what it receives once opened again,
 // as a source opened for the first time does.
 func TestKeptSourcesCountTheBytesTheyReceive(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 5*blockSize+12345)
 	dir := t.TempDir()
 	location := Location{URL: server.URL + "/file"}

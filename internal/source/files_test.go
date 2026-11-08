@@ -33,6 +33,7 @@ func (memoryFile) Close() error { return nil }
 // and is read through the cache in blocks: a seek reads only the blocks
 // missing.
 func TestFileOpenerAnswersRanges(t *testing.T) {
+	t.Parallel()
 	data := make([]byte, 5*blockSize+123)
 	for i := range data {
 		data[i] = byte(i % 251)
@@ -100,6 +101,7 @@ func TestFileOpenerAnswersRanges(t *testing.T) {
 // no connection runs, so none stores or touches a chunk after the clock
 // moves, and the clock is read by this goroutine alone.
 func TestSharedBytesCountWithinTheLimit(t *testing.T) {
+	t.Parallel()
 	c := newCache(t, 8*blockSize)
 	c.chunkBlocks = 1
 	clock := time.Now()
@@ -142,6 +144,7 @@ func TestSharedBytesCountWithinTheLimit(t *testing.T) {
 
 // A playback's urge runs its source location's Playing until it stops.
 func TestUrgeRunsPlaying(t *testing.T) {
+	t.Parallel()
 	c := newCache(t, 8*blockSize)
 	var playing atomic.Int32
 	s := c.Open(accounts.ID{3}, Location{URL: "torrent:2", Playing: func() func() {
@@ -192,6 +195,7 @@ func (f heldFile) Close() error {
 // file is closed at once, rather than read on and kept open for a next
 // read, which goes on downloading a torrent.
 func TestASourceOnlyPlaybacksReadStopsWithTheLastOne(t *testing.T) {
+	t.Parallel()
 	c := newCache(t, 64*blockSize)
 	data := make([]byte, 40*blockSize)
 	ahead := make(chan struct{}, 1)
@@ -252,6 +256,7 @@ func (blockHeldFile) Close() error { return nil }
 // the connection that read towards it, a block before, ends then: another
 // fetches it, rather than the reader waiting for good.
 func TestAReaderWaitingWhenThePlaybackEndsGetsItsBlock(t *testing.T) {
+	t.Parallel()
 	c := newCache(t, 64*blockSize)
 	// One connection per file: the one reading towards the block is the
 	// only one.
@@ -344,6 +349,7 @@ func (slowProgressFile) Close() error { return nil }
 // while their bytes keep coming, as a slow torrent's pieces, is not taken
 // for one that stalled: it is read.
 func TestASlowFileWhoseBytesKeepComingDoesNotStall(t *testing.T) {
+	t.Parallel()
 	c := newCache(t, 64*blockSize)
 	data := torrentBytes(2*blockSize + 77)
 	opener := FileOpener(func(ctx context.Context, _ string) (RandomFile, int64, error) {

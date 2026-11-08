@@ -79,6 +79,7 @@ func copyHost(t *testing.T, data []byte) (*httptest.Server, func() []string) {
 // is asked only for what was not read yet. Opened again with the location
 // that failed, the source stays on the mirror.
 func TestAFailedSourceReadsOnFromItsMirror(t *testing.T) {
+	t.Parallel()
 	data := make([]byte, 6*blockSize+12345)
 	_, _ = rand.Read(data)
 	first := dyingHost(t, data, 2*blockSize+100)
@@ -109,6 +110,7 @@ func TestAFailedSourceReadsOnFromItsMirror(t *testing.T) {
 // Without a mirror, the same host going down fails the read: the mirror
 // is what carries it on.
 func TestAFailedSourceWithoutMirrorFails(t *testing.T) {
+	t.Parallel()
 	data := make([]byte, 6*blockSize+12345)
 	_, _ = rand.Read(data)
 	first := dyingHost(t, data, 2*blockSize+100)
@@ -127,6 +129,7 @@ func TestAFailedSourceWithoutMirrorFails(t *testing.T) {
 // A mirror that is another file, of another size, is no copy: it fails
 // in turn, and the source fails once no mirror is left.
 func TestAMirrorOfAnotherSizeFails(t *testing.T) {
+	t.Parallel()
 	data := make([]byte, 6*blockSize+12345)
 	_, _ = rand.Read(data)
 	first := dyingHost(t, data, 2*blockSize+100)
@@ -161,6 +164,7 @@ func readUntilError(t *testing.T, s *Source, size int) error {
 // down: the first moves the source to its mirror and drops the other,
 // whose failure, about the copy left, then fails nothing.
 func TestAConnectionOfTheCopyLeftFailsNothing(t *testing.T) {
+	t.Parallel()
 	s := newCache(t, 1<<30).Open(accounts.ID{1},
 		Location{URL: "http://192.0.2.1/file", Mirrors: []Mirror{{Location: Location{URL: "http://192.0.2.2/copy"}}}}, nil)
 	defer s.Release()

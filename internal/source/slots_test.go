@@ -67,6 +67,7 @@ func warmAll(t *testing.T, blocks int64, sources ...*Source) <-chan error {
 // the warms finish too. The warms last longer than the tries a playback
 // makes: without giving way, it would fail.
 func TestHostsAskingToSlowDownFailNothing(t *testing.T) {
+	t.Parallel()
 	host := &crowdedHost{files: map[string][]byte{"/a": randomData(24 * blockSize), "/b": randomData(24 * blockSize),
 		"/played": randomData(32 * blockSize)}, rate: 4 << 20, limit: 2}
 	server := httptest.NewServer(host)
@@ -128,6 +129,7 @@ func hostPath(s *Source) string {
 // and give theirs up to a playback's seek, served at once; they finish
 // once it is done.
 func TestBackgroundReadsGiveWayToPlaybacks(t *testing.T) {
+	t.Parallel()
 	host := &crowdedHost{files: map[string][]byte{"/a": randomData(8 * blockSize), "/b": randomData(8 * blockSize),
 		"/c": randomData(8 * blockSize), "/played": randomData(16 * blockSize)}, rate: 4 << 20}
 	server := httptest.NewServer(host)

@@ -11,6 +11,7 @@ import (
 // What a playback read is served from the cache with no request, and
 // what it did not read fails instead of being fetched.
 func TestCachedReadsWithoutRequests(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 8*blockSize)
 	cache := newCache(t, 1<<30)
 	id := accounts.ID{7}

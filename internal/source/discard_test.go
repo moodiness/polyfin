@@ -16,6 +16,7 @@ import (
 // A source whose file changed is read anew once discarded; one still read
 // is kept.
 func TestADiscardedSourceIsReadAnew(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 3*blockSize+100)
 	cache := newCache(t, 1<<30)
 	id := accounts.ID{7}
@@ -50,6 +51,7 @@ func TestADiscardedSourceIsReadAnew(t *testing.T) {
 // is written in the cache's folder once Close returns, which a test's
 // temporary folder removed after it would find not empty.
 func TestCloseWaitsForTheBlockBeingWritten(t *testing.T) {
+	t.Parallel()
 	_, server := newOrigin(t, 3*blockSize)
 	cache := newCache(t, 1<<30)
 	entered, release := make(chan struct{}), make(chan struct{})
@@ -91,6 +93,7 @@ func TestCloseWaitsForTheBlockBeingWritten(t *testing.T) {
 // A read of a source the cache's Close discarded fails at once: no
 // connection fetches its blocks any more, and it would wait for good.
 func TestAReadOfAClosedSourceFails(t *testing.T) {
+	t.Parallel()
 	_, server := newOrigin(t, 3*blockSize)
 	cache := newCache(t, 1<<30)
 	s := cache.Open(accounts.ID{9}, Location{URL: server.URL + "/file"}, nil)

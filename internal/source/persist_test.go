@@ -29,6 +29,7 @@ func keptCache(t *testing.T, dir string, limit int64) *Cache {
 // A file read before a restart is read from the disk after it, without a
 // request to its source, and the cache counts the blocks it kept.
 func TestARestartKeepsTheBlocksRead(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 5*blockSize+12345)
 	dir := t.TempDir()
 	location := Location{URL: server.URL + "/file"}
@@ -68,6 +69,7 @@ func TestARestartKeepsTheBlocksRead(t *testing.T) {
 // misses the first time a reader reads them, a block read in parts
 // included, and as hits once read again.
 func TestBytesReadForTheFirstTimeAreMisses(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 8*blockSize)
 	cache := keptCache(t, t.TempDir(), 1<<30)
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
@@ -101,6 +103,7 @@ func TestBytesReadForTheFirstTimeAreMisses(t *testing.T) {
 // the blocks kept read again only once the source told the same size; a
 // link now naming a file of another size has them removed.
 func TestAChangedLinkKeepsTheBlocksOfTheSameSize(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 4*blockSize+100)
 	dir := t.TempDir()
 	before := keptCache(t, dir, 1<<30)
@@ -145,6 +148,7 @@ func TestAChangedLinkKeepsTheBlocksOfTheSameSize(t *testing.T) {
 // A transient source, a torrent's file, keeps nothing across a restart,
 // and neither does a cache whose policy keeps nothing.
 func TestTransientSourcesAreNotKept(t *testing.T) {
+	t.Parallel()
 	o, server := newOrigin(t, 2*blockSize)
 	dir := t.TempDir()
 	before := keptCache(t, dir, 1<<30)
@@ -165,6 +169,7 @@ func TestTransientSourcesAreNotKept(t *testing.T) {
 // A title played again is evicted after one played once lately, and kept
 // past the retention, by the credit of its plays after the first.
 func TestPlaysAgainCreditTheirChunks(t *testing.T) {
+	t.Parallel()
 	c := keptCache(t, t.TempDir(), 3*blockSize)
 	c.chunkBlocks = 1
 	var mu sync.Mutex
@@ -236,6 +241,7 @@ func TestPlaysAgainCreditTheirChunks(t *testing.T) {
 // A preload averages the rate it is given, and stops once the disk would
 // keep less than the reserve free, or something plays.
 func TestPreloadKeepsItsRateAndReserve(t *testing.T) {
+	t.Parallel()
 	_, server := newOrigin(t, 40*blockSize)
 	c := newCache(t, 1<<30)
 	var mu sync.Mutex
