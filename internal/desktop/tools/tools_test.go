@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ulikunitz/xz"
 )
@@ -203,6 +204,54 @@ func TestEnsureRefusesAWrongChecksum(t *testing.T) {
 			}
 			if _, ok := tools.Ready(); ok {
 				t.Error("refused tools count as ready")
+			}
+		})
+	}
+}
+
+// A server that answers 504, as GitHub did on 2026-11-08, is tried again
+// until the file comes; one that keeps failing, or answers 404, is told
+// as a failed download, not as a wrong checksum.
+func TestEnsureRetriesPassingFailures(t *testing.T) {
+	delays := retryDelays
+	retryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	t.Cleanup(func() { retryDelays = delays })
+	good := zipOf(t, map[string]string{"ffmpeg": "fake ffmpeg", "ffprobe": "fake ffprobe"})
+	for _, c := range []struct {
+		name         string
+		failures     int32
+		code         int
+		wantErr      string
+		wantRequests int32
+	}{
+		{name: "504 twice", failures: 2, code: http.StatusGatewayTimeout, wantRequests: 3},
+		{name: "504 always", failures: 100, code: http.StatusGatewayTimeout, wantErr: "the download failed (HTTP 504)", wantRequests: 4},
+		{name: "404", failures: 100, code: http.StatusNotFound, wantErr: "the download failed (HTTP 404)", wantRequests: 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if requests.Add(1) <= c.failures {
+					w.WriteHeader(c.code)
+					_, _ = w.Write([]byte("<html><body><h1>504 Gateway Time-out</h1></body></html>\n"))
+					return
+				}
+				_, _ = w.Write(good)
+			}))
+			t.Cleanup(server.Close)
+			file := pin(server.URL+"/ffmpeg.zip", good, "zip")
+			file.Into = "bin"
+			tools := Tools{Dir: t.TempDir(), Client: server.Client(),
+				Manifest: Manifest{Version: "9.0.2", FFmpeg: "bin/ffmpeg", FFprobe: "bin/ffprobe", Files: []File{file}}}
+			_, err := tools.Ensure(context.Background(), nil)
+			switch {
+			case c.wantErr == "" && err != nil:
+				t.Fatalf("Ensure: %v", err)
+			case c.wantErr != "" && (err == nil || errors.Is(err, ErrChecksum) || !strings.Contains(err.Error(), c.wantErr)):
+				t.Fatalf("Ensure = %v, want %q", err, c.wantErr)
+			}
+			if got := requests.Load(); got != c.wantRequests {
+				t.Errorf("%d requests, want %d", got, c.wantRequests)
 			}
 		})
 	}
