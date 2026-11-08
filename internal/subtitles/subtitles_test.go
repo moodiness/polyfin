@@ -10,6 +10,7 @@ import (
 )
 
 func TestSubRipBecomesWebVTT(t *testing.T) {
+	t.Parallel()
 	srt := "\ufeff1\r\n00:00:01,500 --> 00:00:03,250\r\n<i>Bonjour</i>\r\nà tous\r\n\r\n2\r\n01:02:03,004 --> 01:02:05,000\r\nFin\r\n"
 	cues, err := Parse([]byte(srt))
 	if err != nil {
@@ -22,6 +23,7 @@ func TestSubRipBecomesWebVTT(t *testing.T) {
 }
 
 func TestWebVTTBecomesSubRip(t *testing.T) {
+	t.Parallel()
 	// Addons repeat the header, add notes, identifiers, cue settings and
 	// short timestamps without hours.
 	vtt := "WEBVTT\n\nWEBVTT\n\nNOTE made by an addon\n\nintro\n00:04.120 --> 00:08.690 align:start line:90%\n- Hello\n- Hi\n\n00:00:09.000 --> 00:00:10.5\nBye\n"
@@ -36,6 +38,7 @@ func TestWebVTTBecomesSubRip(t *testing.T) {
 }
 
 func TestWindows1252IsDecoded(t *testing.T) {
+	t.Parallel()
 	srt := []byte("1\n00:00:01,000 --> 00:00:02,000\nD\xe9j\xe0 vu \x85 \x93cool\x94\n")
 	cues, err := Parse(srt)
 	if err != nil {
@@ -49,6 +52,7 @@ func TestWindows1252IsDecoded(t *testing.T) {
 // UTF-16 is read in either byte order, with or without its byte order
 // mark; ASS scripts too.
 func TestUTF16IsDecoded(t *testing.T) {
+	t.Parallel()
 	encode := func(text string, big, mark bool) []byte {
 		var data []byte
 		if mark {
@@ -81,6 +85,7 @@ func TestUTF16IsDecoded(t *testing.T) {
 }
 
 func TestBrokenCuesAreSkipped(t *testing.T) {
+	t.Parallel()
 	srt := "1\n00:00:05,000 --> 00:00:04,000\nBackwards\n\n2\nnot a timing\nText\n\n3\n00:00:06,000 --> 00:00:07,000\nKept\n"
 	cues, err := Parse([]byte(srt))
 	if err != nil || len(cues) != 1 || cues[0].Start != 6*time.Second {
@@ -89,6 +94,7 @@ func TestBrokenCuesAreSkipped(t *testing.T) {
 }
 
 func TestOtherFilesAreRefused(t *testing.T) {
+	t.Parallel()
 	for _, data := range []string{"<!DOCTYPE html><html></html>", "", "[V4+ Styles]\nStyle: Default"} {
 		if _, err := Parse([]byte(data)); !errors.Is(err, ErrUnsupported) {
 			t.Errorf("%q: got %v", data, err)
@@ -101,6 +107,7 @@ func TestOtherFilesAreRefused(t *testing.T) {
 }
 
 func TestPlayerFormats(t *testing.T) {
+	t.Parallel()
 	cues := []Cue{
 		{Start: time.Second, End: 4 * time.Second, Lines: []string{"Hello"}},
 		{Start: 5 * time.Second, End: 8 * time.Second, Lines: []string{"<i>Second</i>", "line"}},
