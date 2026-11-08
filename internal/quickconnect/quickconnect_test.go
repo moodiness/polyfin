@@ -14,6 +14,7 @@ type clock struct{ now time.Time }
 func (c *clock) Now() time.Time { return c.now }
 
 func TestCodesOfEachKind(t *testing.T) {
+	t.Parallel()
 	store := New()
 	jellyfin, err := store.Initiate("phone", "Phone", "Jellyfin", "1")
 	if err != nil {
@@ -35,6 +36,7 @@ func TestCodesOfEachKind(t *testing.T) {
 // A code is decided once: approved for one user, another cannot take it,
 // nor deny it; a denied one is approved by no one.
 func TestDecidedOnce(t *testing.T) {
+	t.Parallel()
 	store := New()
 	alice, bob := accounts.ID{1}, accounts.ID{2}
 	approved, _ := store.InitiateSilo("tv", "TV", "tvos", "Silo", "2")
@@ -68,6 +70,7 @@ func TestDecidedOnce(t *testing.T) {
 // A Jellyfin app signs in with its approved secret until the request
 // expires, one of Silo's apps once.
 func TestRedeem(t *testing.T) {
+	t.Parallel()
 	store := New()
 	user := accounts.ID{1}
 	jellyfin, _ := store.Initiate("phone", "Phone", "Jellyfin", "1")
@@ -97,6 +100,7 @@ func TestRedeem(t *testing.T) {
 // A request withdrawn is approved by no one, nor signed in with; one
 // already used stays used.
 func TestCancel(t *testing.T) {
+	t.Parallel()
 	store := New()
 	pending, _ := store.InitiateSilo("tv", "TV", "tvos", "Silo", "2")
 	if state, err := store.Cancel(pending.Secret); err != nil || state != Canceled {
@@ -128,6 +132,7 @@ func TestCancel(t *testing.T) {
 
 // Requests end after their lifetime, approved or not.
 func TestExpiry(t *testing.T) {
+	t.Parallel()
 	c := &clock{now: time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)}
 	store := NewAt(c.Now)
 	pending, _ := store.InitiateSilo("tv", "TV", "tvos", "Silo", "2")
