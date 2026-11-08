@@ -63,6 +63,7 @@ func expect(t *testing.T, what string, got []string, want ...string) {
 // country, told by the guide channel's identifier or its display name's
 // prefix; another country's guide is still better than none.
 func TestGuideChannelsOfTheServerCountryWin(t *testing.T) {
+	t.Parallel()
 	byID := []guideChannel{{"ZebMax.de", []string{"Zeb Max"}, 30}, {"ZebMax.fr", []string{"Zeb Max"}, 10}}
 	expect(t, "by identifier", match("fr", []string{"Zeb Max"}, byID), "ZebMax.fr")
 	byPrefix := []guideChannel{{"zm1", []string{"PL| Zeb Max"}, 30}, {"zm2", []string{"Zeb Max Polska", "FR| Zeb Max"}, 10}}
@@ -83,6 +84,7 @@ func TestGuideChannelsOfTheServerCountryWin(t *testing.T) {
 // A channel listed under a country prefix takes that country's guide,
 // whatever the server language; a group prefix names no country.
 func TestTheChannelsOwnCountryBeatsTheServerLanguage(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{{"ZebMax.fr", []string{"FR| Zeb Max"}, 10}, {"ZebMax.de", []string{"DE| Zeb Max"}, 10},
 		{"ZebMax.uk", []string{"Zeb Max"}, 10}}
 	expect(t, "own prefixes", match("fr", []string{"DE: Zeb Max", "[UK] Zeb Max", "KIDS| Zeb Max"}, guide),
@@ -92,6 +94,7 @@ func TestTheChannelsOwnCountryBeatsTheServerLanguage(t *testing.T) {
 // Within a country, a name equal with its quality tags beats one equal
 // without them, whatever their programmes.
 func TestExactNamesBeatLooseOnes(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{{"ZebMaxHD.fr", []string{"FR| Zeb Max HD"}, 50}, {"ZebMax.fr", []string{"Zeb Max"}, 5},
 		{"ZebMax4K.fr", []string{"Zeb Max 4K"}, 50}}
 	expect(t, "exact", match("fr", []string{"Zeb Max", "Zeb Max 4K", "Zeb Max UHD"}, guide), "ZebMax.fr", "ZebMax4K.fr", "ZebMaxHD.fr")
@@ -101,6 +104,7 @@ func TestExactNamesBeatLooseOnes(t *testing.T) {
 // programme, lose to the guide with the most titles; then the first one
 // declared wins.
 func TestPlaceholderGuidesLose(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{{"empty.fr", []string{"FR| Zeb Max LQ"}, 0}, {"ZebMax4K.fr", []string{"FR| Zeb Max 4K"}, 1},
 		{"ZebMaxFHD.fr", []string{"FR| Zeb Max FHD"}, 40}, {"ZebMaxSD.fr", []string{"FR| Zeb Max SD"}, 40}}
 	expect(t, "placeholders", match("fr", []string{"Zeb Max ᴿᵂ"}, guide), "ZebMaxFHD.fr")
@@ -108,6 +112,7 @@ func TestPlaceholderGuidesLose(t *testing.T) {
 
 // Names escaped twice match once their entities are decoded.
 func TestEscapedGuideNamesMatch(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{{"OrbeSeries.fr", []string{"Orbe S&eacute;ries"}, 10}, {"PifHercule.fr", []string{"PIF &amp; HERCULE"}, 10}}
 	expect(t, "entities", match("fr", []string{"Orbe Séries", "Pif & Hercule"}, guide), "OrbeSeries.fr", "PifHercule.fr")
 }
@@ -116,6 +121,7 @@ func TestEscapedGuideNamesMatch(t *testing.T) {
 // whatever the names, declared or not; several channels may share a
 // guide channel.
 func TestStremioIDsMatchFirst(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{{"ZebMax.fr", []string{"Zeb Max"}, 50}, {"zeb:max", []string{"Something Else"}, 2}}
 	expect(t, "declared", match("fr", []string{"zeb:max=Zeb Max", "x=Zeb Max", "y=ZEB MAX ᴿᵂ"}, guide), "zeb:max", "ZebMax.fr", "ZebMax.fr")
 
@@ -131,6 +137,7 @@ func TestStremioIDsMatchFirst(t *testing.T) {
 // before any name; channels sharing it share the guide channel, and those
 // without one keep the name rules.
 func TestGuideIdentifiersMatchBeforeNames(t *testing.T) {
+	t.Parallel()
 	m := NewMatcher("fr")
 	m.Add("polyfin-iptv:1", "Orbe.zz", "Zeb Max")
 	m.Add("polyfin-iptv:2", "Orbe.zz", "Zeb Max ᴿᵂ")
@@ -146,6 +153,7 @@ func TestGuideIdentifiersMatchBeforeNames(t *testing.T) {
 // number, alone or before its name, before any name match; "5.1" is not
 // "5.10" nor "15.1", and a channel without a number keeps the names.
 func TestTunerNumbersMatchBeforeNames(t *testing.T) {
+	t.Parallel()
 	m := NewMatcher("en")
 	m.AddNumbered("polyfin-iptv:1", "", "KSTL", "5.1")
 	m.AddNumbered("polyfin-iptv:2", "", "Heron Hills", "7.2")
@@ -164,6 +172,7 @@ func TestTunerNumbersMatchBeforeNames(t *testing.T) {
 // part before the "@", exactly and then in another case, all before names;
 // an "@" identifier whose part before it is unknown falls back to names.
 func TestGuideIdentifiersWithFeedsAndCase(t *testing.T) {
+	t.Parallel()
 	m := NewMatcher("fr")
 	m.Add("polyfin-iptv:1", "Zeb.zz@HD", "Zeb One")
 	m.Add("polyfin-iptv:2", "ORBE.ZZ@SD", "Orbe")
@@ -193,6 +202,7 @@ func TestGuideIdentifiersWithFeedsAndCase(t *testing.T) {
 // name's tier rank candidates first; among equal ones, the first guide wins
 // over a later one with more titles, then the most titles within a guide.
 func TestGuidesRankByOrderAfterKindCountryAndTier(t *testing.T) {
+	t.Parallel()
 	m := NewMatcher("fr")
 	m.Add("a", "", "Zeb Max")
 	m.Add("b", "", "Orbe")
@@ -223,6 +233,7 @@ func TestGuidesRankByOrderAfterKindCountryAndTier(t *testing.T) {
 // a country suffix writes no name, and an identifier only takes the
 // channel it names whole.
 func TestIdentifiersWriteNames(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{
 		{"ZebOne.fr", []string{"Orbe Next"}, 5},
 		{"QuillTv.fr", []string{"QuillTv.fr"}, 5},
@@ -243,6 +254,7 @@ func TestIdentifiersWriteNames(t *testing.T) {
 // "+" reads as "plus", as identifiers write it, and names written with it
 // still take a list's name without it; "&" reads as "and" in identifiers.
 func TestPlusAndAmpersandAsIdentifiersWriteThem(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{
 		{"ZebPlusSport.fr", []string{"ZebPlusSport.fr"}, 5},
 		{"Orbe.fr", []string{"Orbe+"}, 5},
@@ -261,6 +273,7 @@ func TestPlusAndAmpersandAsIdentifiersWriteThem(t *testing.T) {
 // before a region: on a French server, or under a French prefix,
 // "F3 Zebria" is "France 3 Zebria"; elsewhere, and "F1", stay as written.
 func TestFrenchNetworksWrittenShort(t *testing.T) {
+	t.Parallel()
 	guide := []guideChannel{
 		{"France3Zebria.fr", []string{"France 3 - Zébria"}, 5},
 		{"France5Orbe.fr", []string{"France 5 Orbe"}, 5},
