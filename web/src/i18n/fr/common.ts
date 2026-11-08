@@ -252,6 +252,8 @@ const common: typeof en = {
       'Les proxys connus doivent être des adresses IP, des réseaux comme 172.18.0.0/16 ou des noms d’hôte comme traefik, un par ligne, 64 au plus.',
     personal_addons_disabled:
       'Un administrateur a désactivé vos propres addons. Ils sont conservés, mais vous ne pouvez pas en ajouter, ni les actualiser, ni les activer.',
+    parental_control_own_sources:
+      'Le contrôle parental s’applique à votre compte\u202f: vos propres sources et listes intelligentes sont conservées mais pas utilisées, et aucune ne peut être ajoutée ni modifiée.',
     invalid_hidden_libraries: 'La liste des bibliothèques a changé entre-temps. Rechargez la page.',
     invalid_blocked_genres:
       'Un genre doit comporter de 1 à 100 caractères, et 100 genres au plus peuvent être bloqués.',

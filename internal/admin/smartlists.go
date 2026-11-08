@@ -155,7 +155,8 @@ func (h *handler) smartListOf(w http.ResponseWriter, r *http.Request) {
 }
 
 // createSmartList makes a list in a scope. A user whose own addons are
-// turned off makes none: their apps would not show it.
+// turned off, or kept to the server's by their parental control or
+// blocked genres, makes none: their apps would not show it.
 func (h *handler) createSmartList(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok || h.personalAddonsRefused(w, r, scope) {

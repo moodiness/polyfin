@@ -614,15 +614,27 @@ func serverFileRefused(w http.ResponseWriter, r *http.Request, addresses ...stri
 	return true
 }
 
-// personalAddonsRefused answers 403 personal_addons_disabled and reports
-// true when scope is the caller's own addons and the server or the caller's
-// own permission turned them off: such addons are kept, and may be turned
-// off or removed, but not added, replaced, refreshed or turned on.
+// personalAddonsRefused answers 403 and reports true when scope is the
+// caller's own addons and their apps do not use them (see
+// library.viewSources): personal_addons_disabled while the server or the
+// caller's own permission turned them off, parental_control_own_sources
+// while the caller's parental control or blocked genres keep them to the
+// server's addons. Such addons and smart lists are kept, and may be turned
+// off or removed, but not added, replaced, refreshed, turned on or
+// changed.
 func (h *handler) personalAddonsRefused(w http.ResponseWriter, r *http.Request, scope addons.Scope) bool {
-	if scope.Owner == nil || h.Accounts.Settings().PersonalAddonsAllowed(sessionFrom(r.Context()).User) {
+	if scope.Owner == nil {
 		return false
 	}
-	writeError(w, http.StatusForbidden, "personal_addons_disabled")
+	user := sessionFrom(r.Context()).User
+	switch {
+	case !h.Accounts.Settings().PersonalAddonsAllowed(user):
+		writeError(w, http.StatusForbidden, "personal_addons_disabled")
+	case user.Restricted():
+		writeError(w, http.StatusForbidden, "parental_control_own_sources")
+	default:
+		return false
+	}
 	return true
 }
 

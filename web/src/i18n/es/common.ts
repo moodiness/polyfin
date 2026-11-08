@@ -247,6 +247,8 @@ const common: typeof en = {
       'Los proxies conocidos deben ser direcciones IP, redes como 172.18.0.0/16 o nombres de host como traefik, uno por línea, 64 como máximo.',
     personal_addons_disabled:
       'Un administrador ha desactivado sus extensiones propias. Se conservan, pero no puede añadir, actualizar ni activar ninguna.',
+    parental_control_own_sources:
+      'El control parental se aplica a su cuenta: sus propias fuentes y listas inteligentes se conservan, pero no se usan, y no se puede añadir ni cambiar ninguna.',
     invalid_hidden_libraries:
       'La lista de bibliotecas ha cambiado mientras tanto. Vuelva a cargar la página.',
     invalid_blocked_genres:

@@ -257,6 +257,8 @@ const common: typeof en = {
       'Bekannte Proxys müssen IP-Adressen, Netzwerke wie 172.18.0.0/16 oder Hostnamen wie traefik sein, einer pro Zeile, höchstens 64.',
     personal_addons_disabled:
       'Deine eigenen Add-ons wurden von einem Administrator deaktiviert. Sie bleiben erhalten, aber du kannst keine hinzufügen, aktualisieren oder aktivieren.',
+    parental_control_own_sources:
+      'Für dein Konto gilt die Kindersicherung: Deine eigenen Quellen und intelligenten Listen bleiben erhalten, werden aber nicht verwendet, und es lassen sich keine hinzufügen oder ändern.',
     invalid_hidden_libraries:
       'Die Bibliotheksliste hat sich inzwischen geändert. Lade die Seite neu.',
     invalid_blocked_genres:
