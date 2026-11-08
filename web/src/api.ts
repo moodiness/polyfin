@@ -1742,13 +1742,15 @@ export type Library = {
   /**
    * How the library shows its catalog's titles, one of `showAsChoices`; null while none is chosen:
    * a catalog of other videos is then shown as home videos until the server decides from its first
-   * page (movies and shows when its titles are all movies and series), the others as listed.
+   * page (movies and shows when its titles are all movies and series), an anime catalog as movies
+   * and shows, the others as listed.
    */
   showAs: LibraryShowAs | null
   /**
    * The ways the library may show its titles, the default first: `home_videos` or
    * `movies_and_shows` for a catalog of other videos, `listed` or `movies_and_shows` for a catalog of
-   * movies or series of an addon. Empty for any other catalog.
+   * movies or series of an addon, `movies_and_shows`, `shows` or `movies` for an anime catalog of an
+   * addon. Empty for any other catalog.
    */
   showAsChoices: LibraryShowAs[]
   /**
@@ -1879,9 +1881,10 @@ export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalo
  * How a library shows its titles: as home videos (folders of videos, and videos); as its catalog
  * lists them (a movie or series library); or as movies and shows, in a library without a type:
  * the titles of other videos made movies and shows, or a movie or series catalog's titles each as
- * its own type.
+ * its own type; or, for an anime catalog, as shows or as movies, in a library of that type whose
+ * tabs list that kind only.
  */
-export type LibraryShowAs = 'home_videos' | 'listed' | 'movies_and_shows'
+export type LibraryShowAs = 'home_videos' | 'listed' | 'movies_and_shows' | 'shows' | 'movies'
 
 export type LibraryImageChoice = 'none' | 'automatic' | 'generated' | 'custom'
 

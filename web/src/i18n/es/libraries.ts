@@ -41,11 +41,15 @@ const libraries: typeof en = {
         home_videos: 'Vídeos caseros',
         listed: 'Como el catálogo',
         movies_and_shows: 'Películas y series',
+        shows: 'Series',
+        movies: 'Películas',
       },
       pill: {
         home_videos: 'Mostrada como vídeos caseros',
         listed: 'Mostrada como el catálogo',
         movies_and_shows: 'Mostrada como películas y series',
+        shows: 'Mostrada como series',
+        movies: 'Mostrada como películas',
       },
       help: {
         home_videos:
@@ -54,6 +58,12 @@ const libraries: typeof en = {
           'Una biblioteca de películas o de series, según el tipo del catálogo: un título del otro tipo cuenta en su total, pero ninguna de sus pestañas lo muestra.',
         titles:
           'Para las aplicaciones de Jellyfin que solo muestran películas y series: un título con varios vídeos, o con uno numerado como episodio, pasa a ser una serie, sus vídeos sus episodios; un título sin vídeos, o con un solo archivo, una película. Los títulos que el catálogo marca como películas o series quedan como están. Las marcas de visto, los puntos de reanudación y los favoritos los siguen al guardar.',
+        shows:
+          'Una biblioteca de series: las apps llenan sus pestañas solo con series, así que las películas del catálogo cuentan en su total pero ninguna pestaña las muestra, y las apps que copian las bibliotecas en la suya no toman ninguna. La búsqueda las sigue encontrando.',
+        movies:
+          'Una biblioteca de películas: las apps llenan sus pestañas solo con películas, así que las series del catálogo cuentan en su total pero ninguna pestaña las muestra, y las apps que copian las bibliotecas en la suya no toman ninguna. La búsqueda las sigue encontrando.',
+        anime:
+          'Una biblioteca sin tipo: cada app lista cada título como la película o la serie que es, con totales exactos.',
         mixed:
           'Una biblioteca sin tipo, como las bibliotecas mixtas de películas y series de Jellyfin: cada título aparece como la película o la serie que es, así que sus pestañas también muestran una serie que un catálogo de películas incluye, con totales exactos. Las marcas de visto y los favoritos se mantienen.',
       },

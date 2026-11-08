@@ -41,11 +41,15 @@ const libraries: typeof en = {
         home_videos: 'Vidéos personnelles',
         listed: 'Comme le catalogue',
         movies_and_shows: 'Films et séries',
+        shows: 'Séries',
+        movies: 'Films',
       },
       pill: {
         home_videos: 'Affichée comme vidéos personnelles',
         listed: 'Affichée comme le catalogue',
         movies_and_shows: 'Affichée comme films et séries',
+        shows: 'Affichée comme séries',
+        movies: 'Affichée comme films',
       },
       help: {
         home_videos:
@@ -54,6 +58,12 @@ const libraries: typeof en = {
           'Une bibliothèque de films ou de séries, selon le type du catalogue\u202f: un titre de l’autre sorte compte dans son total, mais aucun de ses onglets ne le montre.',
         titles:
           'Pour les applis Jellyfin qui ne listent que des films et des séries\u202f: un titre avec plusieurs vidéos, ou une seule numérotée comme épisode, devient une série, ses vidéos ses épisodes\u202f; un titre sans vidéo, ou avec un seul fichier, un film. Les titres que le catalogue type comme films ou séries restent tels quels. Les vidéos vues, les reprises et les favoris les suivent à l’enregistrement.',
+        shows:
+          'Une bibliothèque de séries : les apps n’en remplissent les onglets que de séries, donc les films du catalogue comptent dans son total mais aucun onglet ne les montre, et les apps qui copient les bibliothèques dans la leur n’en prennent aucun. La recherche les trouve toujours.',
+        movies:
+          'Une bibliothèque de films : les apps n’en remplissent les onglets que de films, donc les séries du catalogue comptent dans son total mais aucun onglet ne les montre, et les apps qui copient les bibliothèques dans la leur n’en prennent aucune. La recherche les trouve toujours.',
+        anime:
+          'Une bibliothèque sans type : chaque app liste chaque titre comme le film ou la série qu’il est, avec des totaux exacts.',
         mixed:
           'Une bibliothèque sans type, comme les bibliothèques mixtes de films et séries de Jellyfin\u202f: chaque titre est listé comme le film ou la série qu’il est, donc ses onglets montrent aussi une série qu’un catalogue de films liste, avec des totaux exacts. Les vidéos vues et les favoris restent.',
       },

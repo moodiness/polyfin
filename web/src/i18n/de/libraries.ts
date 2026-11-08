@@ -39,11 +39,15 @@ const libraries: typeof en = {
         home_videos: 'Heimvideos',
         listed: 'Wie im Katalog',
         movies_and_shows: 'Filme und Serien',
+        shows: 'Serien',
+        movies: 'Filme',
       },
       pill: {
         home_videos: 'Als Heimvideos angezeigt',
         listed: 'Wie im Katalog angezeigt',
         movies_and_shows: 'Als Filme und Serien angezeigt',
+        shows: 'Als Serien angezeigt',
+        movies: 'Als Filme angezeigt',
       },
       help: {
         home_videos:
@@ -52,6 +56,12 @@ const libraries: typeof en = {
           'Eine Film- oder Serienbibliothek, wie es der Typ des Katalogs sagt: Ein Titel der anderen Art zählt in ihrer Gesamtzahl, aber keiner ihrer Tabs zeigt ihn.',
         titles:
           'Für Jellyfin-Apps, die nur Filme und Serien auflisten: Ein Titel mit mehreren Videos oder einem als Episode nummerierten wird zur Serie, seine Videos zu ihren Episoden; ein Titel ohne Videos oder mit einer Datei zum Film. Titel, die der Katalog als Filme oder Serien angibt, bleiben, wie sie sind. Gesehen-Markierungen, Fortsetzungspunkte und Favoriten gehen beim Speichern mit.',
+        shows:
+          'Eine Serienbibliothek: Apps füllen ihre Tabs nur mit Serien, die Filme des Katalogs zählen also zur Gesamtzahl, aber kein Tab zeigt sie, und Apps, die Bibliotheken in ihre eigene übernehmen, übernehmen keinen davon. Die Suche findet sie weiterhin.',
+        movies:
+          'Eine Filmbibliothek: Apps füllen ihre Tabs nur mit Filmen, die Serien des Katalogs zählen also zur Gesamtzahl, aber kein Tab zeigt sie, und Apps, die Bibliotheken in ihre eigene übernehmen, übernehmen keine davon. Die Suche findet sie weiterhin.',
+        anime:
+          'Eine Bibliothek ohne Typ: Jede App listet jeden Titel als den Film oder die Serie, die er ist, mit genauen Anzahlen.',
         mixed:
           'Eine Bibliothek ohne Typ, wie die gemischten Film- und Serienbibliotheken von Jellyfin: Jeder Titel wird als der Film oder die Serie aufgelistet, die er ist, sodass ihre Tabs auch eine Serie zeigen, die ein Filmkatalog listet, mit genauen Zahlen. Gesehen-Markierungen und Favoriten bleiben.',
       },
