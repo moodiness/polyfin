@@ -1,6 +1,6 @@
 # Home rows
 
-Home rows are rows an administrator adds to the web player's home page: a catalog, a collection, the titles of the user's Watchlist playlist found available or still waited for, or picks made for them. The Watchlist playlist itself has no row: it shows on the home as any playlist does. This page is for administrators, and for users who want to know why a row lists what it does. It also covers the taste profile behind **Top picks for you**.
+Home rows are rows an administrator adds to the web player's home page: a catalog, a collection, the user's Watchlist playlist and the titles of it found available or still waited for, the playlists the user marked ♥, a chosen playlist, or picks made for them. This page is for administrators, and for users who want to know why a row lists what it does. It also covers the taste profile behind **Top picks for you**.
 
 ## The Home rows list
 
@@ -36,6 +36,9 @@ Each row has these fields:
 | **Still waiting** | The titles of the user's Watchlist playlist they have not started that no version was found for yet, or that are not out yet, in the playlist's order. |
 | **Recommended on Trakt** | The movies and series Trakt recommends to the user, for the users who connected Trakt only. |
 | **Top picks for you** | The movies and series of the first page of each of the user's libraries that their taste profile ranks first, without those they played. |
+| **Watchlist** | The user's own [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), in its order. |
+| **My playlists** | One row for each playlist the user marked ♥. |
+| **Playlist** | A playlist the administrator chooses. |
 
 ### Because you watched
 
@@ -43,6 +46,20 @@ Each row has these fields:
 - Its titles are those [movie recommendations](jellyfin-compatibility.md#movie-recommendations) give, without those already played.
 - Each row is the name followed by the title it follows, such as "Because you watched Example Movie".
 - There are none while **Similar titles** is off.
+
+### Playlist rows
+
+The three playlist kinds list a playlist's entries as `/Playlists/{id}/Items` lists them to the user: titles hidden from them and those above their parental control are left out. Each row shows as many titles as the other rows, and its name opens the playlist's page. A playlist without any title the user may see makes no row.
+
+- **Watchlist:** each user sees their own Watchlist playlist, under the name it has for them: the default in their language, such as "Watchlist" or « À regarder », or the name they gave it. The **Name** field names the row in the list only.
+- **My playlists:** favorites choose the rows. A user marks a playlist ♥ (favorite) in any Jellyfin app, and it gets a row of its own, named after it.
+  - Only playlists the user may see count: their own, those shared with them and public ones.
+  - The rows go in name order, without regard to case or accents, up to **Rows**: 3 by default, 10 at most.
+  - Their Watchlist playlist is left out while a **Watchlist** row is shown to them, so that it never shows twice.
+  - The **Name** field names the row in the list and in **My account › Home rows**, where one switch turns all of them off.
+- **Playlist:** **Playlist** lists every playlist of the server but the Watchlists, each with its owner and whether it is **Public**, **Shared** or **Private**. The row's name follows the playlist's until you type one. It shows only to the users it is shown to who may see the playlist: its owner, those it is shared with, or all of them when it is public.
+
+Deleting the chosen playlist deletes its row.
 
 ### New in your libraries
 
@@ -121,6 +138,8 @@ No app can be given a new kind of home section. **Also a library in other apps**
 - Other apps list it among the user's libraries, and show its latest titles on their home.
 - The web player shows it too, in its libraries and with its own "Recently Added" row.
 - A **Because you watched** row is then one library for each title it follows.
+- A **Watchlist** or **Playlist** row is a library of its playlist's titles, for each user who sees the row. **My playlists** cannot be one: the form does not offer it.
+- The library has no image of its own, whatever the row's kind.
 
 API details: [Home rows](jellyfin-api.md#home-rows-for-apps).
 

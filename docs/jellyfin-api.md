@@ -548,8 +548,9 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 
 ### Home rows for apps
 
-- `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable`, `StillWaiting`, `Trakt` or `TopPicks`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do.
+- `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable`, `StillWaiting`, `Trakt`, `TopPicks`, `Watchlist`, `FavoritePlaylists` or `Playlist`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do.
 - A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it.
+- A row of the three playlist kinds also gives its playlist's `PlaylistId`, which its name opens. `FavoritePlaylists` answers one row for each favorite playlist, named after it, each with its own `Id`.
 - The admin API names the two watchlist kinds `available` and `waiting`. Its rows carry a `schedule`, with `startDate` and `endDate` (`YYYY-MM-DD`, empty for none), `days` (0 for Sunday to 6) and `startHour` and `endHour` (0 to 23 and 1 to 24, both null for all day), and `shownNow`.
 - `GET /admin/api/home-rows/preview/{userId}` answers the preview: `rows`, each with its folder's `id`, its `rowId`, `name`, `kind`, `place` and `titles` (`id`, `kind`, `name`, `year` and `posterId`).
 
