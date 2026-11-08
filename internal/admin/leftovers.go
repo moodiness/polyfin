@@ -145,7 +145,7 @@ func leftoverProblemText(p healthProblemJSON, language string) string {
 		if p.Owner != nil {
 			return fmt.Sprintf(i18n.Text{
 				"%[2]s’s smart list %[1]s lists nothing: the catalogs it drew from are gone. Other catalogs are to be chosen for it.",
-				"La liste intelligente %[1]s de %[2]s ne liste rien : les catalogues dont elle tirait ses titres ont disparu. Il faut lui en choisir d’autres.",
+				"La liste intelligente %[1]s de %[2]s ne liste rien\u202f: les catalogues dont elle tirait ses titres ont disparu. Il faut lui en choisir d’autres.",
 				"Die intelligente Liste %[1]s von %[2]s listet nichts: Die Kataloge, aus denen sie ihre Titel nahm, sind verschwunden. Für sie sind andere Kataloge zu wählen.",
 				"La lista inteligente %[1]s de %[2]s no lista nada: los catálogos de los que tomaba sus títulos han desaparecido. Hay que elegirle otros.",
 				"La lista intelligente %[1]s di %[2]s non elenca nulla: i cataloghi da cui prendeva i titoli sono spariti. Bisogna sceglierne altri.",
@@ -154,7 +154,7 @@ func leftoverProblemText(p healthProblemJSON, language string) string {
 		}
 		return fmt.Sprintf(i18n.Text{
 			"The smart list %s lists nothing: the catalogs it drew from are gone. Choose other catalogs for it.",
-			"La liste intelligente %s ne liste rien : les catalogues dont elle tirait ses titres ont disparu. Choisissez-lui d’autres catalogues.",
+			"La liste intelligente %s ne liste rien\u202f: les catalogues dont elle tirait ses titres ont disparu. Choisissez-lui d’autres catalogues.",
 			"Die intelligente Liste %s listet nichts: Die Kataloge, aus denen sie ihre Titel nahm, sind verschwunden. Wähle andere Kataloge für sie.",
 			"La lista inteligente %s no lista nada: los catálogos de los que tomaba sus títulos han desaparecido. Elija otros catálogos para ella.",
 			"La lista intelligente %s non elenca nulla: i cataloghi da cui prendeva i titoli sono spariti. Scegli altri cataloghi per lei.",

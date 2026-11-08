@@ -38,7 +38,7 @@ func TestHealthNamesPictureSubtitleLanguagesWithoutData(t *testing.T) {
 	for language, want := range map[string]string{
 		"en": "Picture subtitles in Japanese are not read into text: Tesseract has no data for this language. " +
 			"Add the file jpn.traineddata to the folder POLYFIN_TESSDATA_DIR names.",
-		"fr": "Les sous-titres en images en Japanese ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. " +
+		"fr": "Les sous-titres en images en Japanese ne sont pas lus en texte\u202f: Tesseract n’a pas de données pour cette langue. " +
 			"Ajoutez le fichier jpn.traineddata au dossier que nomme POLYFIN_TESSDATA_DIR.",
 	} {
 		if p, _ := found[0].(map[string]any); p != nil {

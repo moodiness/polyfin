@@ -141,14 +141,14 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 		{Key: "secrets:unreadable", Severity: notifications.SeverityError,
 			Text: "1 clé enregistrée ne peut pas être déchiffrée avec POLYFIN_SECRET_KEY et compte comme absente.", Page: "/system/health#secrets"},
 		{Key: "folder:" + folder.ID, Severity: notifications.SeverityError,
-			Text: "Shelf : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.",
+			Text: "Shelf\u202f: Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.",
 			Page: "/sources/shared/" + folder.ID},
-		{Key: "addon:" + own.ID.String(), Severity: notifications.SeverityWarning, Text: "Own TV (Addons de sam) : est sur un réseau local",
+		{Key: "addon:" + own.ID.String(), Severity: notifications.SeverityWarning, Text: "Own TV (Addons de sam)\u202f: est sur un réseau local",
 			Page: "/system/health#addons"},
 		{Key: "secrets:plaintext", Severity: notifications.SeverityWarning,
 			Text: "Les clés et jetons sont enregistrés sans chiffrement. Définissez POLYFIN_SECRET_KEY pour les chiffrer.",
 			Page: "/system/health#secrets"},
-		{Key: "task:Refresh", Severity: notifications.SeverityWarning, Text: "La tâche « Actualiser des choses » a échoué.",
+		{Key: "task:Refresh", Severity: notifications.SeverityWarning, Text: "La tâche «\u202fActualiser des choses\u202f» a échoué.",
 			Page: "/system/schedule"},
 	}
 	if !slices.Equal(told, wantTold) {
@@ -199,22 +199,22 @@ func TestUnwatchedFolderText(t *testing.T) {
 	}{
 		{"watch_limit", "", "en", "Movies: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. " +
 			"It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host."},
-		{"watch_limit", "", "fr", "Movies : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de dossiers surveillés du système est atteinte. " +
+		{"watch_limit", "", "fr", "Movies\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local\u202f: la limite de dossiers surveillés du système est atteinte. " +
 			"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte."},
 		{"instance_limit", "", "en", "Movies: Polyfin cannot watch this local folder for changes: the system’s limit of watchers or of open files is reached. " +
 			"It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files."},
 		{"open_files_limit", "", "en", "Movies: Polyfin cannot watch this local folder for changes: the system’s limit of open files is reached, " +
 			"as macOS watches each folder and file through one. It is still scanned on its schedule. Raise kern.maxfilesperproc and kern.maxfiles with sysctl."},
-		{"open_files_limit", "", "fr", "Movies : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de fichiers ouverts du système est atteinte, " +
+		{"open_files_limit", "", "fr", "Movies\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local\u202f: la limite de fichiers ouverts du système est atteinte, " +
 			"macOS surveillant chaque dossier et fichier par l’un d’eux. Il est toujours analysé selon sa planification. Augmentez kern.maxfilesperproc et kern.maxfiles avec sysctl."},
 		{"failed", "", "en", "Movies: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule."},
 		{"unreachable", "webdav", "en", "Movies: Polyfin cannot watch this network share for changes: it cannot be reached. " +
 			"It is scanned on its schedule, and again once it answers."},
-		{"unreachable", "smb", "fr", "Movies : Polyfin ne peut pas surveiller les changements de ce partage réseau : il est injoignable. " +
+		{"unreachable", "smb", "fr", "Movies\u202f: Polyfin ne peut pas surveiller les changements de ce partage réseau\u202f: il est injoignable. " +
 			"Il est analysé selon sa planification, et de nouveau dès qu’il répond."},
 		{"refused", "smb", "en", "Movies: Polyfin cannot watch this network share for changes: it refuses Polyfin’s user or password. " +
 			"Check them, and enter them again."},
-		{"failed", "webdav", "fr", "Movies : Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification."},
+		{"failed", "webdav", "fr", "Movies\u202f: Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification."},
 	} {
 		p := healthProblemJSON{Code: problemFolderUnwatched, Name: "Movies", Failure: c.failure, Share: c.share}
 		if got := p.text(c.language); got != c.want {

@@ -59,7 +59,7 @@ func TestHealthWarnsWhenEveryMetadataAddonHasALanguage(t *testing.T) {
 	for language, text := range map[string]string{
 		"en": "Meta: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. " +
 			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",
-		"fr": "Meta : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
+		"fr": "Meta\u202f: chaque addon de métadonnées du serveur a une langue\u202f: ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
 			"Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.",
 	} {
 		if got := want.text(language); got != text {

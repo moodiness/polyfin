@@ -761,80 +761,80 @@ func (p healthProblemJSON) text(language string) string {
 	case problemDatabase:
 		return say(i18n.Text{"The database does not answer.", "La base de données ne répond pas.", "Die Datenbank antwortet nicht.", "La base de datos no responde.", "Il database non risponde.", "O banco de dados não responde."})
 	case problemDisk:
-		return say(i18n.Text{"Little space left for the %s: %s free.", "Il reste peu de place pour le dossier %s : %s libres.",
+		return say(i18n.Text{"Little space left for the %s: %s free.", "Il reste peu de place pour le dossier %s\u202f: %s libres.",
 			"Wenig Speicherplatz für %s: %s frei.", "Queda poco espacio para %s: %s libres.", "Poco spazio rimasto per %s: %s liberi.", "Pouco espaço restante para %s: %s livres."},
 			diskFolders[p.Folder].In(language), gigabytes(*p.Free, language))
 	case problemAddon:
 		failure, known := addonFailures[p.Failure]
 		if !known {
-			return say(i18n.Text{"%s: %s", "%s : %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, name, p.Failure)
+			return say(i18n.Text{"%s: %s", "%s\u202f: %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, name, p.Failure)
 		}
-		return say(i18n.Text{"%s: %s", "%s : %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, name, failure.In(language))
+		return say(i18n.Text{"%s: %s", "%s\u202f: %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, name, failure.In(language))
 	case problemIPTV:
-		return say(i18n.Text{"%s: the last channel list download failed.", "%s : le dernier téléchargement de la liste a échoué.", "%s: Der letzte Download der Kanalliste ist fehlgeschlagen.", "%s: ha fallado la última descarga de la lista de canales.", "%s: l’ultimo download dell’elenco canali non è riuscito.", "%s: o último download da lista de canais falhou."}, name)
+		return say(i18n.Text{"%s: the last channel list download failed.", "%s\u202f: le dernier téléchargement de la liste a échoué.", "%s: Der letzte Download der Kanalliste ist fehlgeschlagen.", "%s: ha fallado la última descarga de la lista de canales.", "%s: l’ultimo download dell’elenco canali non è riuscito.", "%s: o último download da lista de canais falhou."}, name)
 	case problemTuner:
 		if p.Failure == "unreachable" {
-			return say(i18n.Text{"%s: the tuner does not answer.", "%s : le tuner ne répond pas.", "%s: Der Tuner antwortet nicht.", "%s: el sintonizador no responde.", "%s: il sintonizzatore non risponde.", "%s: o sintonizador não responde."}, name)
+			return say(i18n.Text{"%s: the tuner does not answer.", "%s\u202f: le tuner ne répond pas.", "%s: Der Tuner antwortet nicht.", "%s: el sintonizador no responde.", "%s: il sintonizzatore non risponde.", "%s: o sintonizador não responde."}, name)
 		}
-		return say(i18n.Text{"%s: the tuner failed to play a channel.", "%s : le tuner n’a pas pu lire une chaîne.", "%s: Der Tuner konnte einen Kanal nicht abspielen.", "%s: el sintonizador no ha podido reproducir un canal.", "%s: il sintonizzatore non è riuscito a riprodurre un canale.", "%s: o sintonizador não conseguiu reproduzir um canal."}, name)
+		return say(i18n.Text{"%s: the tuner failed to play a channel.", "%s\u202f: le tuner n’a pas pu lire une chaîne.", "%s: Der Tuner konnte einen Kanal nicht abspielen.", "%s: el sintonizador no ha podido reproducir un canal.", "%s: il sintonizzatore non è riuscito a riprodurre un canale.", "%s: o sintonizador não conseguiu reproduzir um canal."}, name)
 	case problemFolder:
 		switch {
 		case p.Failure == "unreachable":
-			return say(i18n.Text{"%s: Polyfin cannot reach this network share.", "%s : Polyfin ne peut pas joindre ce partage réseau.", "%s: Polyfin kann diese Netzwerkfreigabe nicht erreichen.", "%s: Polyfin no puede acceder a este recurso compartido de red.", "%s: Polyfin non riesce a raggiungere questa condivisione di rete.", "%s: o Polyfin não consegue acessar este compartilhamento de rede."}, name)
+			return say(i18n.Text{"%s: Polyfin cannot reach this network share.", "%s\u202f: Polyfin ne peut pas joindre ce partage réseau.", "%s: Polyfin kann diese Netzwerkfreigabe nicht erreichen.", "%s: Polyfin no puede acceder a este recurso compartido de red.", "%s: Polyfin non riesce a raggiungere questa condivisione di rete.", "%s: o Polyfin não consegue acessar este compartilhamento de rede."}, name)
 		case p.Failure == "refused":
 			return say(i18n.Text{"%s: the network share refuses Polyfin’s user or password.",
-				"%s : le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.", "%s: Die Netzwerkfreigabe lehnt den Benutzer oder das Passwort von Polyfin ab.", "%s: el recurso compartido de red rechaza el usuario o la contraseña de Polyfin.", "%s: la condivisione di rete rifiuta l’utente o la password di Polyfin.", "%s: o compartilhamento de rede recusa o usuário ou a senha do Polyfin."}, name)
+				"%s\u202f: le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.", "%s: Die Netzwerkfreigabe lehnt den Benutzer oder das Passwort von Polyfin ab.", "%s: el recurso compartido de red rechaza el usuario o la contraseña de Polyfin.", "%s: la condivisione di rete rifiuta l’utente o la password di Polyfin.", "%s: o compartilhamento de rede recusa o usuário ou a senha do Polyfin."}, name)
 		case p.Share != "":
 			return say(i18n.Text{"%s: Polyfin cannot read this network share. Check its address, and that its user may read it.",
-				"%s : Polyfin ne peut pas lire ce partage réseau. Vérifiez son adresse, et que son utilisateur peut le lire.", "%s: Polyfin kann diese Netzwerkfreigabe nicht lesen. Prüfe ihre Adresse und ob ihr Benutzer sie lesen darf.", "%s: Polyfin no puede leer este recurso compartido de red. Compruebe su dirección y que su usuario tiene permiso de lectura.", "%s: Polyfin non riesce a leggere questa condivisione di rete. Verifica il suo indirizzo e che il suo utente possa leggerla.", "%s: o Polyfin não consegue ler este compartilhamento de rede. Verifique o endereço dele e se o usuário dele tem permissão de leitura."}, name)
+				"%s\u202f: Polyfin ne peut pas lire ce partage réseau. Vérifiez son adresse, et que son utilisateur peut le lire.", "%s: Polyfin kann diese Netzwerkfreigabe nicht lesen. Prüfe ihre Adresse und ob ihr Benutzer sie lesen darf.", "%s: Polyfin no puede leer este recurso compartido de red. Compruebe su dirección y que su usuario tiene permiso de lectura.", "%s: Polyfin non riesce a leggere questa condivisione di rete. Verifica il suo indirizzo e che il suo utente possa leggerla.", "%s: o Polyfin não consegue ler este compartilhamento de rede. Verifique o endereço dele e se o usuário dele tem permissão de leitura."}, name)
 		}
 		return say(i18n.Text{"%s: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.",
-			"%s : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.", "%s: Polyfin kann diesen lokalen Ordner nicht lesen. Prüfe, ob er eingehängt und für den Benutzer 65532 lesbar ist.", "%s: Polyfin no puede leer esta carpeta local. Compruebe que está montada y que el usuario 65532 puede leerla.", "%s: Polyfin non riesce a leggere questa cartella locale. Verifica che sia montata e leggibile dall’utente 65532.", "%s: o Polyfin não consegue ler esta pasta local. Verifique se ela está montada e pode ser lida pelo usuário 65532."}, name)
+			"%s\u202f: Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.", "%s: Polyfin kann diesen lokalen Ordner nicht lesen. Prüfe, ob er eingehängt und für den Benutzer 65532 lesbar ist.", "%s: Polyfin no puede leer esta carpeta local. Compruebe que está montada y que el usuario 65532 puede leerla.", "%s: Polyfin non riesce a leggere questa cartella locale. Verifica che sia montata e leggibile dall’utente 65532.", "%s: o Polyfin não consegue ler esta pasta local. Verifique se ela está montada e pode ser lida pelo usuário 65532."}, name)
 	case problemFolderUnwatched:
 		if p.Share != "" {
 			switch p.Failure {
 			case "unreachable":
 				return say(i18n.Text{"%s: Polyfin cannot watch this network share for changes: it cannot be reached. " +
 					"It is scanned on its schedule, and again once it answers.",
-					"%s : Polyfin ne peut pas surveiller les changements de ce partage réseau : il est injoignable. " +
+					"%s\u202f: Polyfin ne peut pas surveiller les changements de ce partage réseau\u202f: il est injoignable. " +
 						"Il est analysé selon sa planification, et de nouveau dès qu’il répond.", "%s: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen: Sie ist nicht erreichbar. Sie wird nach ihrem Zeitplan gescannt und erneut, sobald sie antwortet.", "%s: Polyfin no puede vigilar los cambios de este recurso compartido de red: no se puede acceder a él. Se escanea según su programación, y de nuevo en cuanto responda.", "%s: Polyfin non riesce a monitorare le modifiche di questa condivisione di rete: non è raggiungibile. Viene scansionata secondo la sua pianificazione e di nuovo non appena risponde.", "%s: o Polyfin não consegue monitorar alterações neste compartilhamento de rede: ele está inacessível. Ele é rastreado conforme o agendamento e novamente assim que responder."}, name)
 			case "refused":
 				return say(i18n.Text{"%s: Polyfin cannot watch this network share for changes: it refuses Polyfin’s user or password. " +
 					"Check them, and enter them again.",
-					"%s : Polyfin ne peut pas surveiller les changements de ce partage réseau : il refuse l’utilisateur ou le mot de passe de Polyfin. " +
+					"%s\u202f: Polyfin ne peut pas surveiller les changements de ce partage réseau\u202f: il refuse l’utilisateur ou le mot de passe de Polyfin. " +
 						"Vérifiez-les, et saisissez-les à nouveau.", "%s: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen: Sie lehnt den Benutzer oder das Passwort von Polyfin ab. Prüfe beides und gib es erneut ein.", "%s: Polyfin no puede vigilar los cambios de este recurso compartido de red: rechaza el usuario o la contraseña de Polyfin. Compruébelos e introdúzcalos de nuevo.", "%s: Polyfin non riesce a monitorare le modifiche di questa condivisione di rete: rifiuta l’utente o la password di Polyfin. Verificali e inseriscili di nuovo.", "%s: o Polyfin não consegue monitorar alterações neste compartilhamento de rede: ele recusa o usuário ou a senha do Polyfin. Verifique-os e digite-os novamente."}, name)
 			}
 			return say(i18n.Text{"%s: Polyfin cannot watch this network share for changes. It is still scanned on its schedule.",
-				"%s : Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification.", "%s: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen. Sie wird weiterhin nach ihrem Zeitplan gescannt.", "%s: Polyfin no puede vigilar los cambios de este recurso compartido de red. Se sigue escaneando según su programación.", "%s: Polyfin non riesce a monitorare le modifiche di questa condivisione di rete. Viene comunque scansionata secondo la sua pianificazione.", "%s: o Polyfin não consegue monitorar alterações neste compartilhamento de rede. Ele continua sendo rastreado conforme o agendamento."}, name)
+				"%s\u202f: Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification.", "%s: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen. Sie wird weiterhin nach ihrem Zeitplan gescannt.", "%s: Polyfin no puede vigilar los cambios de este recurso compartido de red. Se sigue escaneando según su programación.", "%s: Polyfin non riesce a monitorare le modifiche di questa condivisione di rete. Viene comunque scansionata secondo la sua pianificazione.", "%s: o Polyfin não consegue monitorar alterações neste compartilhamento de rede. Ele continua sendo rastreado conforme o agendamento."}, name)
 		}
 		switch p.Failure {
 		case "watch_limit":
 			return say(i18n.Text{"%s: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. " +
 				"It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host.",
-				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de dossiers surveillés du système est atteinte. " +
+				"%s\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local\u202f: la limite de dossiers surveillés du système est atteinte. " +
 					"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte.", "%s: Polyfin kann diesen lokalen Ordner nicht auf Änderungen überwachen: Das Systemlimit für überwachte Ordner ist erreicht. Er wird weiterhin nach seinem Zeitplan gescannt. Erhöhe fs.inotify.max_user_watches auf dem Host.", "%s: Polyfin no puede vigilar los cambios de esta carpeta local: se ha alcanzado el límite de carpetas vigiladas del sistema. Se sigue escaneando según su programación. Aumente fs.inotify.max_user_watches en el host.", "%s: Polyfin non riesce a monitorare le modifiche di questa cartella locale: è stato raggiunto il limite di cartelle monitorate del sistema. Viene comunque scansionata secondo la sua pianificazione. Aumenta fs.inotify.max_user_watches sull’host.", "%s: o Polyfin não consegue monitorar alterações nesta pasta local: o limite de pastas monitoradas do sistema foi atingido. Ela continua sendo rastreada conforme o agendamento. Aumente fs.inotify.max_user_watches no host."}, name)
 		case "instance_limit":
 			return say(i18n.Text{"%s: Polyfin cannot watch this local folder for changes: the system’s limit of watchers or of open files is reached. " +
 				"It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files.",
-				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite d’observateurs ou de fichiers ouverts du système est atteinte. " +
+				"%s\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local\u202f: la limite d’observateurs ou de fichiers ouverts du système est atteinte. " +
 					"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_instances sur l’hôte, ou la limite de fichiers ouverts du conteneur.", "%s: Polyfin kann diesen lokalen Ordner nicht auf Änderungen überwachen: Das Systemlimit für Überwachungsinstanzen oder offene Dateien ist erreicht. Er wird weiterhin nach seinem Zeitplan gescannt. Erhöhe fs.inotify.max_user_instances auf dem Host oder das Limit für offene Dateien des Containers.", "%s: Polyfin no puede vigilar los cambios de esta carpeta local: se ha alcanzado el límite de observadores o de archivos abiertos del sistema. Se sigue escaneando según su programación. Aumente fs.inotify.max_user_instances en el host, o el límite de archivos abiertos del contenedor.", "%s: Polyfin non riesce a monitorare le modifiche di questa cartella locale: è stato raggiunto il limite di osservatori o di file aperti del sistema. Viene comunque scansionata secondo la sua pianificazione. Aumenta fs.inotify.max_user_instances sull’host, oppure il limite di file aperti del container.", "%s: o Polyfin não consegue monitorar alterações nesta pasta local: o limite de monitores ou de arquivos abertos do sistema foi atingido. Ela continua sendo rastreada conforme o agendamento. Aumente fs.inotify.max_user_instances no host, ou o limite de arquivos abertos do contêiner."}, name)
 		case "open_files_limit":
 			return say(i18n.Text{"%s: Polyfin cannot watch this local folder for changes: the system’s limit of open files is reached, as macOS watches each folder and file through one. " +
 				"It is still scanned on its schedule. Raise kern.maxfilesperproc and kern.maxfiles with sysctl.",
-				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de fichiers ouverts du système est atteinte, macOS surveillant chaque dossier et fichier par l’un d’eux. " +
+				"%s\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local\u202f: la limite de fichiers ouverts du système est atteinte, macOS surveillant chaque dossier et fichier par l’un d’eux. " +
 					"Il est toujours analysé selon sa planification. Augmentez kern.maxfilesperproc et kern.maxfiles avec sysctl.", "%s: Polyfin kann diesen lokalen Ordner nicht auf Änderungen überwachen: Das Systemlimit für offene Dateien ist erreicht, da macOS jeden Ordner und jede Datei über eine offene Datei überwacht. Er wird weiterhin nach seinem Zeitplan gescannt. Erhöhe kern.maxfilesperproc und kern.maxfiles mit sysctl.", "%s: Polyfin no puede vigilar los cambios de esta carpeta local: se ha alcanzado el límite de archivos abiertos del sistema, ya que macOS vigila cada carpeta y archivo mediante uno. Se sigue escaneando según su programación. Aumente kern.maxfilesperproc y kern.maxfiles con sysctl.", "%s: Polyfin non riesce a monitorare le modifiche di questa cartella locale: è stato raggiunto il limite di file aperti del sistema, poiché macOS monitora ogni cartella e ogni file tramite uno di essi. Viene comunque scansionata secondo la sua pianificazione. Aumenta kern.maxfilesperproc e kern.maxfiles con sysctl.", "%s: o Polyfin não consegue monitorar alterações nesta pasta local: o limite de arquivos abertos do sistema foi atingido, pois o macOS monitora cada pasta e arquivo por meio de um deles. Ela continua sendo rastreada conforme o agendamento. Aumente kern.maxfilesperproc e kern.maxfiles com sysctl."}, name)
 		}
 		return say(i18n.Text{"%s: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.",
-			"%s : Polyfin ne peut pas surveiller les changements de ce dossier local. Il est toujours analysé selon sa planification.", "%s: Polyfin kann diesen lokalen Ordner nicht auf Änderungen überwachen. Er wird weiterhin nach seinem Zeitplan gescannt.", "%s: Polyfin no puede vigilar los cambios de esta carpeta local. Se sigue escaneando según su programación.", "%s: Polyfin non riesce a monitorare le modifiche di questa cartella locale. Viene comunque scansionata secondo la sua pianificazione.", "%s: o Polyfin não consegue monitorar alterações nesta pasta local. Ela continua sendo rastreada conforme o agendamento."}, name)
+			"%s\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local. Il est toujours analysé selon sa planification.", "%s: Polyfin kann diesen lokalen Ordner nicht auf Änderungen überwachen. Er wird weiterhin nach seinem Zeitplan gescannt.", "%s: Polyfin no puede vigilar los cambios de esta carpeta local. Se sigue escaneando según su programación.", "%s: Polyfin non riesce a monitorare le modifiche di questa cartella locale. Viene comunque scansionata secondo la sua pianificazione.", "%s: o Polyfin não consegue monitorar alterações nesta pasta local. Ela continua sendo rastreada conforme o agendamento."}, name)
 	case problemFolderSearch:
 		why := ""
 		if failure, known := searchFailures[p.Failure]; known && p.Addon != "" {
-			why = say(i18n.Text{" (%s: %s)", " (%s : %s)", " (%s: %s)", " (%s: %s)", " (%s: %s)", " (%s: %s)"}, p.Addon, failure.In(language))
+			why = say(i18n.Text{" (%s: %s)", " (%s\u202f: %s)", " (%s: %s)", " (%s: %s)", " (%s: %s)", " (%s: %s)"}, p.Addon, failure.In(language))
 		} else if p.Addon != "" {
 			why = " (" + p.Addon + ")"
 		}
 		return say(i18n.Text{"%s: the titles of its files could not be searched%s. They stay unmatched until a search goes through, which Polyfin tries again on its own, after a few minutes, then less often.",
-			"%s : les titres de ses fichiers n’ont pas pu être recherchés%s. Ils restent non associés jusqu’à ce qu’une recherche aboutisse, ce que Polyfin réessaie de lui-même, après quelques minutes, puis moins souvent.",
+			"%s\u202f: les titres de ses fichiers n’ont pas pu être recherchés%s. Ils restent non associés jusqu’à ce qu’une recherche aboutisse, ce que Polyfin réessaie de lui-même, après quelques minutes, puis moins souvent.",
 			"%s: Die Titel seiner Dateien konnten nicht gesucht werden%s. Sie bleiben nicht zugeordnet, bis eine Suche gelingt, was Polyfin von selbst erneut versucht, erst nach ein paar Minuten, dann seltener.",
 			"%s: no se pudieron buscar los títulos de sus archivos%s. Siguen sin asociar hasta que una búsqueda salga bien, lo que Polyfin vuelve a intentar por sí solo, al cabo de unos minutos y luego con menos frecuencia.",
 			"%s: non è stato possibile cercare i titoli dei suoi file%s. Restano non associati finché una ricerca non va a buon fine, cosa che Polyfin riprova da solo, dopo qualche minuto, poi meno spesso.",
@@ -842,13 +842,13 @@ func (p healthProblemJSON) text(language string) string {
 			name, why)
 	case problemFolderNoSearch:
 		return say(i18n.Text{"%s: no addon of the server describes and searches the titles of its files, so they stay unmatched. Add one under Content › Sources: users’ own addons, under My sources, do not count.",
-			"%s : aucun addon du serveur ne décrit ni ne recherche les titres de ses fichiers, qui restent donc non associés. Ajoutez-en un dans Contenu › Sources : les addons propres aux utilisateurs, dans Mes sources, ne comptent pas.",
+			"%s\u202f: aucun addon du serveur ne décrit ni ne recherche les titres de ses fichiers, qui restent donc non associés. Ajoutez-en un dans Contenu › Sources\u202f: les addons propres aux utilisateurs, dans Mes sources, ne comptent pas.",
 			"%s: Kein Add-on des Servers beschreibt und sucht die Titel seiner Dateien, daher bleiben sie nicht zugeordnet. Füge eines unter Inhalte › Quellen hinzu: Die eigenen Add-ons der Benutzer unter „Meine Quellen“ zählen nicht.",
 			"%s: ninguna extensión del servidor describe ni busca los títulos de sus archivos, así que siguen sin asociar. Añada una en Contenido › Fuentes: las extensiones propias de los usuarios, en Mis fuentes, no cuentan.",
 			"%s: nessun add-on del server descrive e cerca i titoli dei suoi file, che quindi restano non associati. Aggiungine uno in Contenuti › Origini: gli add-on personali degli utenti, in Le mie origini, non contano.",
 			"%s: nenhum complemento do servidor descreve e pesquisa os títulos dos arquivos, então eles continuam sem associação. Adicione um em Conteúdo › Fontes: os complementos próprios dos usuários, em Minhas fontes, não contam."}, name)
 	case problemGuide:
-		return say(i18n.Text{"%s: the last programme guide fetch failed.", "%s : la dernière récupération du guide a échoué.", "%s: Der letzte Abruf des Fernsehprogramms ist fehlgeschlagen.", "%s: ha fallado la última obtención de la guía de programación.", "%s: l’ultimo recupero della guida TV non è riuscito.", "%s: a última obtenção do guia de programação falhou."}, name)
+		return say(i18n.Text{"%s: the last programme guide fetch failed.", "%s\u202f: la dernière récupération du guide a échoué.", "%s: Der letzte Abruf des Fernsehprogramms ist fehlgeschlagen.", "%s: ha fallado la última obtención de la guía de programación.", "%s: l’ultimo recupero della guida TV non è riuscito.", "%s: a última obtenção do guia de programação falhou."}, name)
 	case problemSecretsUnreadable:
 		if len(p.Secrets) == 1 {
 			return say(i18n.Text{"1 stored key cannot be decrypted with POLYFIN_SECRET_KEY and counts as not set.",
@@ -872,27 +872,27 @@ func (p healthProblemJSON) text(language string) string {
 	case problemBackupStale:
 		return say(i18n.Text{"The last database backup is more than two days old.", "La dernière sauvegarde de la base de données date de plus de deux jours.", "Das letzte Datenbank-Backup ist älter als zwei Tage.", "La última copia de seguridad de la base de datos tiene más de dos días.", "L’ultimo backup del database risale a più di due giorni fa.", "O último backup do banco de dados tem mais de dois dias."})
 	case problemDestinationFailed:
-		return say(i18n.Text{"%s: the last upload of the database backups failed.", "%s : le dernier envoi des sauvegardes de la base de données a échoué.",
+		return say(i18n.Text{"%s: the last upload of the database backups failed.", "%s\u202f: le dernier envoi des sauvegardes de la base de données a échoué.",
 			"%s: Der letzte Upload der Datenbank-Backups ist fehlgeschlagen.", "%s: ha fallado la última subida de las copias de seguridad de la base de datos.", "%s: l’ultimo caricamento dei backup del database non è riuscito.", "%s: o último envio dos backups do banco de dados falhou."}, name)
 	case problemDestinationStale:
 		return say(i18n.Text{"%s: the newest database backup there is more than two days old.",
-			"%s : la sauvegarde de la base de données la plus récente qui s’y trouve date de plus de deux jours.", "%s: Das neueste Datenbank-Backup dort ist älter als zwei Tage.", "%s: la copia de seguridad de la base de datos más reciente que hay ahí tiene más de dos días.", "%s: il backup del database più recente presente lì risale a più di due giorni fa.", "%s: o backup do banco de dados mais recente nesse destino tem mais de dois dias."}, name)
+			"%s\u202f: la sauvegarde de la base de données la plus récente qui s’y trouve date de plus de deux jours.", "%s: Das neueste Datenbank-Backup dort ist älter als zwei Tage.", "%s: la copia de seguridad de la base de datos más reciente que hay ahí tiene más de dos días.", "%s: il backup del database più recente presente lì risale a più di due giorni fa.", "%s: o backup do banco de dados mais recente nesse destino tem mais de dois dias."}, name)
 	case problemTask:
-		return say(i18n.Text{"The task “%s” failed.", "La tâche « %s » a échoué.", "Die Aufgabe „%s“ ist fehlgeschlagen.", "Ha fallado la tarea «%s».", "L’operazione «%s» non è riuscita.", "A tarefa “%s” falhou."}, p.Task)
+		return say(i18n.Text{"The task “%s” failed.", "La tâche «\u202f%s\u202f» a échoué.", "Die Aufgabe „%s“ ist fehlgeschlagen.", "Ha fallado la tarea «%s».", "L’operazione «%s» non è riuscita.", "A tarefa “%s” falhou."}, p.Task)
 	case problemUnknownProxy:
 		return say(i18n.Text{"%s forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as %s. " +
 			"If it is your reverse proxy, add it to Known proxies under Settings › Security.",
-			"%s transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme %s. " +
+			"%s transmet des requêtes (X-Forwarded-For) sans être un proxy connu\u202f: tous ses clients comptent donc comme %s. " +
 				"Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.", "%s leitet Anfragen weiter (X-Forwarded-For), ist aber kein bekannter Proxy, daher zählen alle seine Clients als %s. Wenn es dein Reverse-Proxy ist, füge ihn unter Einstellungen › Sicherheit zu „Bekannte Proxys“ hinzu.", "%s reenvía solicitudes (X-Forwarded-For) pero no es un proxy conocido, así que todos sus clientes cuentan como %s. Si es su proxy inverso, añádalo a «Proxies conocidos» en Ajustes › Seguridad.", "%s inoltra richieste (X-Forwarded-For) ma non è un proxy noto, quindi tutti i suoi client vengono considerati come %s. Se è il tuo reverse proxy, aggiungilo a Proxy noti in Impostazioni › Sicurezza.", "%s encaminha requisições (X-Forwarded-For), mas não é um proxy conhecido, então todos os clientes dele contam como %s. Se for o seu proxy reverso, adicione-o em Proxies conhecidos, em Configurações › Segurança."}, p.Address, p.Address)
 	case problemProxyName:
 		return say(i18n.Text{"The known proxy %s resolves to no address, so no request is trusted to come from it. " +
 			"Check its name under Settings › Security, and that Polyfin shares a network with it.",
-			"Le proxy connu %s ne correspond à aucune adresse : aucune requête n’est donc reconnue comme venant de lui. " +
+			"Le proxy connu %s ne correspond à aucune adresse\u202f: aucune requête n’est donc reconnue comme venant de lui. " +
 				"Vérifiez son nom dans Paramètres › Sécurité, et que Polyfin partage un réseau avec lui.", "Der bekannte Proxy %s wird zu keiner Adresse aufgelöst, daher wird keiner Anfrage vertraut, die von ihm kommt. Prüfe seinen Namen unter Einstellungen › Sicherheit und ob Polyfin ein Netzwerk mit ihm teilt.", "El proxy conocido %s no se resuelve en ninguna dirección, así que no se confía en que ninguna solicitud proceda de él. Compruebe su nombre en Ajustes › Seguridad y que Polyfin comparte una red con él.", "Il proxy noto %s non corrisponde a nessun indirizzo, quindi nessuna richiesta viene considerata attendibile come proveniente da esso. Verifica il suo nome in Impostazioni › Sicurezza e che Polyfin condivida una rete con esso.", "O proxy conhecido %s não resolve para nenhum endereço, então nenhuma requisição é considerada confiável como vinda dele. Verifique o nome dele em Configurações › Segurança e se o Polyfin compartilha uma rede com ele."}, p.Name)
 	case problemDiscoveryPort:
 		return say(i18n.Text{"Polyfin cannot listen on UDP port %d, so Jellyfin apps on the local network do not find it by themselves. " +
 			"Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.",
-			"Polyfin ne peut pas écouter sur le port UDP %d : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. " +
+			"Polyfin ne peut pas écouter sur le port UDP %d\u202f: les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. " +
 				"Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.", "Polyfin kann nicht auf UDP-Port %d lauschen, daher finden Jellyfin-Apps im lokalen Netzwerk den Server nicht von selbst. Wahrscheinlich nutzt ein anderes Programm den Port, etwa ein Jellyfin-Server auf demselben Host. Beim Speichern der Einstellungen wird es erneut versucht.", "Polyfin no puede escuchar en el puerto UDP %d, así que las aplicaciones de Jellyfin de la red local no lo encuentran por sí solas. Probablemente otro programa lo está usando, como un servidor Jellyfin en el mismo host. Al guardar los ajustes se vuelve a intentar.", "Polyfin non riesce a mettersi in ascolto sulla porta UDP %d, quindi le applicazioni Jellyfin sulla rete locale non lo trovano da sole. Probabilmente la usa un altro programma, ad esempio un server Jellyfin sullo stesso host. Salvando le impostazioni si riprova.", "O Polyfin não consegue escutar na porta UDP %d, então os aplicativos Jellyfin na rede local não o encontram sozinhos. Provavelmente outro programa a está usando, como um servidor Jellyfin no mesmo host. Salvar as configurações tenta novamente."}, p.Port)
 	case problemTorrentRoute:
 		var why i18n.Text
@@ -919,7 +919,7 @@ func (p healthProblemJSON) text(language string) string {
 				"il tunnel WireGuard verso " + p.Name + " non può avviarsi", "o túnel WireGuard para " + p.Name + " não pode iniciar"}
 		case torrent.WireGuardHandshake:
 			why = i18n.Text{"the WireGuard server " + p.Name + " does not answer the handshake: it is unreachable, or a key of the configuration is wrong",
-				"le serveur WireGuard " + p.Name + " ne répond pas à la négociation : il est injoignable, ou une clé de la configuration est erronée",
+				"le serveur WireGuard " + p.Name + " ne répond pas à la négociation\u202f: il est injoignable, ou une clé de la configuration est erronée",
 				"der WireGuard-Server " + p.Name + " antwortet nicht auf den Handshake: Er ist nicht erreichbar, oder ein Schlüssel der Konfiguration ist falsch",
 				"el servidor WireGuard " + p.Name + " no responde a la negociación: no se puede contactar o una clave de la configuración es incorrecta",
 				"il server WireGuard " + p.Name + " non risponde all’handshake: non è raggiungibile oppure una chiave della configurazione è errata",
@@ -929,7 +929,7 @@ func (p healthProblemJSON) text(language string) string {
 		}
 		if p.Grace > 0 {
 			return say(i18n.Text{"%s. The torrents playing go on for up to %d s; new ones cannot start. Nothing is sent another way; check the route under Settings › Torrents.",
-				"%s. Les torrents en lecture continuent jusqu’à %d s ; les nouveaux ne peuvent pas démarrer. Rien n’est envoyé par un autre chemin ; vérifiez la route dans Paramètres › Torrents.",
+				"%s. Les torrents en lecture continuent jusqu’à %d s\u202f; les nouveaux ne peuvent pas démarrer. Rien n’est envoyé par un autre chemin\u202f; vérifiez la route dans Paramètres › Torrents.",
 				"%s. Laufende Torrents spielen bis zu %d s weiter; neue können nicht starten. Es wird nichts auf anderem Weg gesendet; prüfe die Route unter Einstellungen › Torrents.",
 				"%s. Los torrents en reproducción continúan hasta %d s; los nuevos no pueden iniciarse. No se envía nada por otra vía; compruebe la ruta en Ajustes › Torrents.",
 				"%s. I torrent in riproduzione continuano fino a %d s; quelli nuovi non possono partire. Nulla viene inviato per altra via; verifica il percorso in Impostazioni › Torrent.",
@@ -937,10 +937,10 @@ func (p healthProblemJSON) text(language string) string {
 				upperFirst(why.In(language)), p.Grace)
 		}
 		return say(i18n.Text{"Torrent streams do not play: %s. Nothing is sent another way; check the route under Settings › Torrents.",
-			"Les flux torrent ne sont pas lus : %s. Rien n’est envoyé par un autre chemin ; vérifiez la route dans Paramètres › Torrents.", "Torrent-Streams werden nicht abgespielt: %s. Es wird nichts auf anderem Weg gesendet; prüfe die Route unter Einstellungen › Torrents.", "Las transmisiones torrent no se reproducen: %s. No se envía nada por otra vía; compruebe la ruta en Ajustes › Torrents.", "Gli stream torrent non vengono riprodotti: %s. Nulla viene inviato per altra via; verifica il percorso in Impostazioni › Torrent.", "As streams de torrent não são reproduzidas: %s. Nada é enviado por outro caminho; verifique a rota em Configurações › Torrents."}, why.In(language))
+			"Les flux torrent ne sont pas lus\u202f: %s. Rien n’est envoyé par un autre chemin\u202f; vérifiez la route dans Paramètres › Torrents.", "Torrent-Streams werden nicht abgespielt: %s. Es wird nichts auf anderem Weg gesendet; prüfe die Route unter Einstellungen › Torrents.", "Las transmisiones torrent no se reproducen: %s. No se envía nada por otra vía; compruebe la ruta en Ajustes › Torrents.", "Gli stream torrent non vengono riprodotti: %s. Nulla viene inviato per altra via; verifica il percorso in Impostazioni › Torrent.", "As streams de torrent não são reproduzidas: %s. Nada é enviado por outro caminho; verifique a rota em Configurações › Torrents."}, why.In(language))
 	case problemTorrentUDP:
 		return say(i18n.Text{"The SOCKS5 proxy %s does not offer UDP ASSOCIATE: torrents play over TCP, with UDP trackers and the DHT off.",
-			"Le proxy SOCKS5 %s ne propose pas UDP ASSOCIATE : les torrents sont lus en TCP, sans trackers UDP ni DHT.", "Der SOCKS5-Proxy %s bietet kein UDP ASSOCIATE an: Torrents werden über TCP abgespielt, ohne UDP-Tracker und DHT.", "El proxy SOCKS5 %s no ofrece UDP ASSOCIATE: los torrents se reproducen por TCP, sin trackers UDP ni DHT.", "Il proxy SOCKS5 %s non supporta UDP ASSOCIATE: i torrent vengono riprodotti tramite TCP, con tracker UDP e DHT disattivati.", "O proxy SOCKS5 %s não oferece UDP ASSOCIATE: os torrents são reproduzidos via TCP, com os trackers UDP e o DHT desligados."}, p.Name)
+			"Le proxy SOCKS5 %s ne propose pas UDP ASSOCIATE\u202f: les torrents sont lus en TCP, sans trackers UDP ni DHT.", "Der SOCKS5-Proxy %s bietet kein UDP ASSOCIATE an: Torrents werden über TCP abgespielt, ohne UDP-Tracker und DHT.", "El proxy SOCKS5 %s no ofrece UDP ASSOCIATE: los torrents se reproducen por TCP, sin trackers UDP ni DHT.", "Il proxy SOCKS5 %s non supporta UDP ASSOCIATE: i torrent vengono riprodotti tramite TCP, con tracker UDP e DHT disattivati.", "O proxy SOCKS5 %s não oferece UDP ASSOCIATE: os torrents são reproduzidos via TCP, com os trackers UDP e o DHT desligados."}, p.Name)
 	case problemTorrentStart:
 		why := map[string]i18n.Text{
 			"no_udp": {"no peer was found, and the route carries no UDP, which the DHT and UDP trackers need",
@@ -969,7 +969,7 @@ func (p healthProblemJSON) text(language string) string {
 				"sono stati trovati dei peer, ma nessuno l’ha inviato", "foram encontrados peers, mas nenhum o enviou"},
 		}[p.Failure]
 		return say(i18n.Text{"A torrent did not start in time: %s. Check that the route reaches the internet; the log tells each tracker’s answer at debug level.",
-			"Un torrent n’a pas démarré à temps : %s. Vérifiez que la route atteint Internet ; le journal donne la réponse de chaque tracker au niveau débogage.",
+			"Un torrent n’a pas démarré à temps\u202f: %s. Vérifiez que la route atteint Internet\u202f; le journal donne la réponse de chaque tracker au niveau débogage.",
 			"Ein Torrent ist nicht rechtzeitig gestartet: %s. Prüfe, ob die Route das Internet erreicht; das Protokoll nennt auf der Debug-Stufe die Antwort jedes Trackers.",
 			"Un torrent no se inició a tiempo: %s. Compruebe que la ruta llega a Internet; el registro indica la respuesta de cada tracker en el nivel de depuración.",
 			"Un torrent non è partito in tempo: %s. Verifica che il percorso raggiunga Internet; il log riporta la risposta di ogni tracker a livello di debug.",
@@ -1007,7 +1007,7 @@ func (p healthProblemJSON) text(language string) string {
 				"il suo percorso non ha risposto", "a rota não respondeu"}
 		}
 		return say(i18n.Text{"A torrent stopped while playing at %s: %s. Nothing was sent another way. Check that the route stays reachable; the next play starts the torrent again.",
-			"Un torrent s’est arrêté pendant la lecture à %s : %s. Rien n’a été envoyé par un autre chemin. Vérifiez que la route reste joignable ; la prochaine lecture relance le torrent.",
+			"Un torrent s’est arrêté pendant la lecture à %s\u202f: %s. Rien n’a été envoyé par un autre chemin. Vérifiez que la route reste joignable\u202f; la prochaine lecture relance le torrent.",
 			"Ein Torrent wurde um %s während der Wiedergabe beendet: %s. Es wurde nichts auf anderem Weg gesendet. Prüfe, ob die Route erreichbar bleibt; die nächste Wiedergabe startet den Torrent erneut.",
 			"Un torrent se detuvo durante la reproducción a las %s: %s. No se envió nada por otra vía. Compruebe que la ruta sigue accesible; la próxima reproducción vuelve a iniciar el torrent.",
 			"Un torrent si è fermato durante la riproduzione alle %s: %s. Nulla è stato inviato per altra via. Verifica che il percorso resti raggiungibile; la prossima riproduzione riavvia il torrent.",
@@ -1024,7 +1024,7 @@ func (p healthProblemJSON) text(language string) string {
 	case problemDLNAPort:
 		return say(i18n.Text{"Polyfin cannot listen on UDP port %d, so DLNA devices on the local network do not find it by themselves. " +
 			"Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.",
-			"Polyfin ne peut pas écouter sur le port UDP %d : les appareils DLNA du réseau local ne le trouvent donc pas d’eux-mêmes. " +
+			"Polyfin ne peut pas écouter sur le port UDP %d\u202f: les appareils DLNA du réseau local ne le trouvent donc pas d’eux-mêmes. " +
 				"Un autre programme l’utilise sans doute, comme un autre serveur DLNA sur le même hôte. Enregistrer les paramètres réessaie.", "Polyfin kann nicht auf UDP-Port %d lauschen, daher finden DLNA-Geräte im lokalen Netzwerk den Server nicht von selbst. Wahrscheinlich nutzt ein anderes Programm den Port, etwa ein anderer DLNA-Server auf demselben Host. Beim Speichern der Einstellungen wird es erneut versucht.", "Polyfin no puede escuchar en el puerto UDP %d, así que los dispositivos DLNA de la red local no lo encuentran por sí solos. Probablemente otro programa lo está usando, como otro servidor DLNA en el mismo host. Al guardar los ajustes se vuelve a intentar.", "Polyfin non riesce a mettersi in ascolto sulla porta UDP %d, quindi i dispositivi DLNA sulla rete locale non lo trovano da soli. Probabilmente la usa un altro programma, ad esempio un altro server DLNA sullo stesso host. Salvando le impostazioni si riprova.", "O Polyfin não consegue escutar na porta UDP %d, então os dispositivos DLNA na rede local não o encontram sozinhos. Provavelmente outro programa a está usando, como outro servidor DLNA no mesmo host. Salvar as configurações tenta novamente."}, p.Port)
 	case problemDiscoveryAddress:
 		return say(i18n.Text{"Jellyfin apps that look for servers on the local network are given %s, an address of Polyfin’s container they cannot reach. " +
@@ -1034,7 +1034,7 @@ func (p healthProblemJSON) text(language string) string {
 	case problemHTTPSPort:
 		return say(i18n.Text{"Polyfin cannot listen on TCP port %d, so HTTPS is not served. HTTP keeps working. " +
 			"Another program probably uses it, or it is below 1024. Choose another HTTPS port under Settings › Security.",
-			"Polyfin ne peut pas écouter sur le port TCP %d : HTTPS n’est donc pas servi. HTTP fonctionne toujours. " +
+			"Polyfin ne peut pas écouter sur le port TCP %d\u202f: HTTPS n’est donc pas servi. HTTP fonctionne toujours. " +
 				"Un autre programme l’utilise sans doute, ou il est inférieur à 1024. Choisissez un autre port HTTPS dans Paramètres › Sécurité.", "Polyfin kann nicht auf TCP-Port %d lauschen, daher wird HTTPS nicht bereitgestellt. HTTP funktioniert weiterhin. Wahrscheinlich nutzt ein anderes Programm den Port, oder er liegt unter 1024. Wähle unter Einstellungen › Sicherheit einen anderen HTTPS-Port.", "Polyfin no puede escuchar en el puerto TCP %d, así que no se sirve HTTPS. HTTP sigue funcionando. Probablemente otro programa lo está usando, o es inferior a 1024. Elija otro puerto HTTPS en Ajustes › Seguridad.", "Polyfin non riesce a mettersi in ascolto sulla porta TCP %d, quindi HTTPS non è disponibile. HTTP continua a funzionare. Probabilmente la usa un altro programma, oppure è inferiore a 1024. Scegli un’altra porta HTTPS in Impostazioni › Sicurezza.", "O Polyfin não consegue escutar na porta TCP %d, então o HTTPS não é servido. O HTTP continua funcionando. Provavelmente outro programa a está usando, ou ela é inferior a 1024. Escolha outra porta HTTPS em Configurações › Segurança."}, p.Port)
 	case problemHTTPSFiles:
 		switch p.Failure {
@@ -1050,7 +1050,7 @@ func (p healthProblemJSON) text(language string) string {
 			"Polyfin ne peut pas lire le fichier de certificat HTTPS %s, ou il ne contient aucun certificat ou clé PEM qu’il sait lire. " +
 				"Le dernier certificat lu reste utilisé.", "Polyfin kann die HTTPS-Zertifikatsdatei %s nicht lesen, oder sie enthält kein lesbares PEM-Zertifikat bzw. keinen lesbaren PEM-Schlüssel. Das zuletzt gelesene Zertifikat bleibt in Verwendung.", "Polyfin no puede leer el archivo de certificado HTTPS %s, o no contiene ningún certificado ni clave PEM que pueda leer. Se sigue usando el último certificado leído.", "Polyfin non riesce a leggere il file del certificato HTTPS %s, oppure non contiene un certificato o una chiave PEM leggibile. Resta in uso l’ultimo certificato letto.", "O Polyfin não consegue ler o arquivo de certificado HTTPS %s, ou ele não contém nenhum certificado ou chave PEM que o Polyfin consiga ler. O último certificado lido continua em uso."}, p.File)
 	case problemHTTPSRenewal:
-		return say(i18n.Text{"Let’s Encrypt did not give the HTTPS certificate: %s", "Let’s Encrypt n’a pas délivré le certificat HTTPS : %s", "Let’s Encrypt hat das HTTPS-Zertifikat nicht ausgestellt: %s", "Let’s Encrypt no ha emitido el certificado HTTPS: %s", "Let’s Encrypt non ha rilasciato il certificato HTTPS: %s", "O Let’s Encrypt não emitiu o certificado HTTPS: %s"}, p.Error)
+		return say(i18n.Text{"Let’s Encrypt did not give the HTTPS certificate: %s", "Let’s Encrypt n’a pas délivré le certificat HTTPS\u202f: %s", "Let’s Encrypt hat das HTTPS-Zertifikat nicht ausgestellt: %s", "Let’s Encrypt no ha emitido el certificado HTTPS: %s", "Let’s Encrypt non ha rilasciato il certificato HTTPS: %s", "O Let’s Encrypt não emitiu o certificado HTTPS: %s"}, p.Error)
 	case problemHTTPSExpiry:
 		if p.Tone == notifications.SeverityError {
 			return say(i18n.Text{"The HTTPS certificate expired on %s.", "Le certificat HTTPS a expiré le %s.", "Das HTTPS-Zertifikat ist am %s abgelaufen.", "El certificado HTTPS caducó el %s.", "Il certificato HTTPS è scaduto il %s.", "O certificado HTTPS expirou em %s."}, p.Expires.Format(time.DateOnly))
@@ -1059,22 +1059,22 @@ func (p healthProblemJSON) text(language string) string {
 	case problemOCRLanguage:
 		failed := ""
 		if p.Error != "" {
-			failed = " " + say(i18n.Text{"The last download of its data failed: %s", "Le dernier téléchargement de ses données a échoué : %s",
+			failed = " " + say(i18n.Text{"The last download of its data failed: %s", "Le dernier téléchargement de ses données a échoué\u202f: %s",
 				"Der letzte Download der Daten ist fehlgeschlagen: %s", "La última descarga de sus datos falló: %s",
 				"L’ultimo download dei suoi dati non è riuscito: %s", "O último download dos dados falhou: %s"}, p.Error)
 		}
 		return say(i18n.Text{"Picture subtitles in %s are not read into text: Tesseract has no data for this language. " +
 			"Add the file %s to the folder POLYFIN_TESSDATA_DIR names.",
-			"Les sous-titres en images en %s ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. " +
+			"Les sous-titres en images en %s ne sont pas lus en texte\u202f: Tesseract n’a pas de données pour cette langue. " +
 				"Ajoutez le fichier %s au dossier que nomme POLYFIN_TESSDATA_DIR.", "Bilduntertitel in %s werden nicht in Text umgewandelt: Tesseract hat keine Daten für diese Sprache. Füge die Datei %s dem Ordner hinzu, den POLYFIN_TESSDATA_DIR angibt.", "Los subtítulos en imagen en %s no se convierten a texto: Tesseract no tiene datos para este idioma. Añada el archivo %s a la carpeta que indica POLYFIN_TESSDATA_DIR.", "I sottotitoli grafici in %s non vengono convertiti in testo: Tesseract non ha dati per questa lingua. Aggiungi il file %s alla cartella indicata da POLYFIN_TESSDATA_DIR.", "As legendas em imagem em %s não são convertidas em texto: o Tesseract não tem dados para este idioma. Adicione o arquivo %s à pasta indicada por POLYFIN_TESSDATA_DIR."}, p.Name, p.File) + failed
 	case problemMetadataLanguages:
 		return say(i18n.Text{"%s: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. " +
 			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",
-			"%s : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
+			"%s\u202f: chaque addon de métadonnées du serveur a une langue\u202f: ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
 				"Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.", "%s: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.", "%s: todas las extensiones de metadatos del servidor tienen un idioma, así que describen los títulos en su idioma para todos los usuarios, sea cual sea su idioma de los metadatos. Deje «Idioma de sus descripciones» en «Ninguno» en esta extensión o en otra extensión de metadatos más.", "%s: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.", "%s: todos os complementos de metadados do servidor têm um idioma, então eles descrevem os títulos no idioma deles para todos os usuários, seja qual for o idioma dos metadados de cada um. Mantenha Idioma das descrições como Nenhum neste complemento, ou em mais um complemento de metadados."}, p.Name)
 	case problemFolderUnwritable:
 		return say(i18n.Text{"%s, %s, cannot be written into: Polyfin keeps these files in its data folder’s cache meanwhile. Make the folder writable or choose another, then restart Polyfin.",
-			"%s, %s, n’est pas accessible en écriture : Polyfin garde ces fichiers dans le cache de son dossier de données en attendant. Rendez le dossier accessible en écriture ou choisissez-en un autre, puis redémarrez Polyfin.",
+			"%s, %s, n’est pas accessible en écriture\u202f: Polyfin garde ces fichiers dans le cache de son dossier de données en attendant. Rendez le dossier accessible en écriture ou choisissez-en un autre, puis redémarrez Polyfin.",
 			"%s, %s, ist nicht beschreibbar: Polyfin legt diese Dateien bis dahin im Cache seines Datenordners ab. Mache den Ordner beschreibbar oder wähle einen anderen, und starte Polyfin dann neu.",
 			"%s, %s, no admite escritura: mientras tanto, Polyfin guarda estos archivos en la caché de su carpeta de datos. Haga que la carpeta admita escritura o elija otra, y luego reinicie Polyfin.",
 			"%s, %s, non è scrivibile: nel frattempo Polyfin tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.",
@@ -1082,7 +1082,7 @@ func (p healthProblemJSON) text(language string) string {
 			workFolders[p.Folder].In(language), p.Path)
 	case problemDesktopRolledBack:
 		return say(i18n.Text{"Polyfin Desktop went back to version %s, as version %s did not start: %s. That version is no longer offered; the next one will be.",
-			"Polyfin Desktop est revenu à la version %s, car la version %s n’a pas démarré : %s. Cette version n’est plus proposée ; la suivante le sera.",
+			"Polyfin Desktop est revenu à la version %s, car la version %s n’a pas démarré\u202f: %s. Cette version n’est plus proposée\u202f; la suivante le sera.",
 			"Polyfin Desktop ist zu Version %s zurückgekehrt, da Version %s nicht gestartet ist: %s. Diese Version wird nicht mehr angeboten, die nächste schon.",
 			"Polyfin Desktop volvió a la versión %s, ya que la versión %s no se inició: %s. Esa versión ya no se ofrece; la siguiente sí.",
 			"Polyfin Desktop è tornato alla versione %s, perché la versione %s non si è avviata: %s. Quella versione non viene più proposta; la prossima sì.",
@@ -1090,14 +1090,14 @@ func (p healthProblemJSON) text(language string) string {
 			p.Previous, p.Name, p.Error)
 	case problemThemeCopyMissing:
 		return say(i18n.Text{"The copy of the web player theme misses %d of its %d files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.",
-			"La copie du thème du lecteur web n’a plus %d de ses %d fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système : les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.",
+			"La copie du thème du lecteur web n’a plus %d de ses %d fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système\u202f: les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.",
 			"Der Kopie des Web-Player-Themes fehlen %d ihrer %d Dateien im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System: Browser laden sie bis dahin von ihren ursprünglichen Adressen, was Internet braucht. Aktualisiere die Kopie unter Einstellungen › Web-Player oder wähle ein anderes Theme.",
 			"A la copia del tema del reproductor web le faltan %d de sus %d archivos en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema: mientras tanto, los navegadores los cargan desde sus direcciones originales, lo que requiere internet. Actualice la copia en Ajustes › Reproductor web, o elija otro tema.",
 			"Alla copia del tema del lettore web mancano %d dei suoi %d file nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema: nel frattempo i browser li caricano dai loro indirizzi originali, il che richiede internet. Aggiorna la copia in Impostazioni › Lettore web, oppure scegli un altro tema.",
 			"Faltam à cópia do tema do player web %d dos seus %d arquivos na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema: enquanto isso, os navegadores os carregam dos endereços originais, o que exige internet. Atualize a cópia em Configurações › Player web, ou escolha outro tema."}, p.Missing, p.Files)
 	case problemNVIDIADriver:
 		return say(i18n.Text{"The NVIDIA graphics card does not convert video: its driver is older than version %s, which FFmpeg needs for NVENC. Update the driver to use the card.",
-			"La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version %s, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.",
+			"La carte graphique NVIDIA ne convertit pas la vidéo\u202f: son pilote est antérieur à la version %s, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.",
 			"Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version %s, die FFmpeg für NVENC braucht. Aktualisiere den Treiber, um die Karte zu nutzen.",
 			"La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión %s, que FFmpeg necesita para NVENC. Actualice el controlador para usar la tarjeta.",
 			"La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione %s, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.",
@@ -1105,14 +1105,14 @@ func (p healthProblemJSON) text(language string) string {
 	case problemOlderDriverFFmpeg:
 		if p.Failure == "encode" {
 			return say(i18n.Text{"The NVIDIA graphics card does not convert video, with the FFmpeg for drivers older than version 610 either: %s",
-				"La carte graphique NVIDIA ne convertit pas la vidéo, même avec le FFmpeg pour les pilotes antérieurs à la version 610 : %s",
+				"La carte graphique NVIDIA ne convertit pas la vidéo, même avec le FFmpeg pour les pilotes antérieurs à la version 610\u202f: %s",
 				"Die NVIDIA-Grafikkarte konvertiert keine Videos, auch nicht mit dem FFmpeg für Treiber älter als Version 610: %s",
 				"La tarjeta gráfica NVIDIA no convierte el vídeo, tampoco con el FFmpeg para controladores anteriores a la versión 610: %s",
 				"La scheda grafica NVIDIA non converte i video, nemmeno con l’FFmpeg per i driver precedenti alla versione 610: %s",
 				"A placa de vídeo NVIDIA não converte vídeo, nem com o FFmpeg para drivers anteriores à versão 610: %s"}, p.Error)
 		}
 		return say(i18n.Text{"The NVIDIA graphics card does not convert video: its driver is older than version 610, and the FFmpeg for such drivers could not be downloaded: %s. Polyfin tries again at its next start, or when the conversion settings are saved.",
-			"La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version 610, et le FFmpeg pour ces pilotes n’a pas pu être téléchargé : %s. Polyfin réessaie à son prochain démarrage, ou quand les réglages de conversion sont enregistrés.",
+			"La carte graphique NVIDIA ne convertit pas la vidéo\u202f: son pilote est antérieur à la version 610, et le FFmpeg pour ces pilotes n’a pas pu être téléchargé\u202f: %s. Polyfin réessaie à son prochain démarrage, ou quand les réglages de conversion sont enregistrés.",
 			"Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version 610, und das FFmpeg für solche Treiber konnte nicht heruntergeladen werden: %s. Polyfin versucht es beim nächsten Start erneut oder wenn die Konvertierungseinstellungen gespeichert werden.",
 			"La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión 610 y no se pudo descargar el FFmpeg para esos controladores: %s. Polyfin lo vuelve a intentar en su próximo inicio o cuando se guardan los ajustes de conversión.",
 			"La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione 610 e non è stato possibile scaricare l’FFmpeg per questi driver: %s. Polyfin riprova al prossimo avvio o quando vengono salvate le impostazioni di conversione.",
