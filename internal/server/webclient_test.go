@@ -3262,6 +3262,36 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 			steps: []string{"home", "wait 100", "show", "wait 100", "show"},
 			want: []string{ask, "Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]",
 				"Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]"}},
+		// A row of a playlist opens the playlist's page; an episode shows
+		// its series' poster and name, then its season and episode
+		// numbers before its name, as jellyfin-web shows one in a row.
+		"rows of playlists": {answers: [][]row{{
+			{"Id": "r8", "Name": "Mine", "Kind": "Watchlist", "PlaylistId": "p1", "Place": "Top", "Items": []row{
+				item("a1", "Alpha", row{}, true),
+				{"Id": "e6", "Name": "Pilot", "Type": "Episode", "SeriesId": "s9", "SeriesName": "Show", "SeriesPrimaryImageTag": "st",
+					"ParentIndexNumber": 1, "IndexNumber": 2, "UserData": row{}, "ImageTags": row{"Primary": "et"}},
+				{"Id": "e7", "Name": "Special", "Type": "Episode", "SeriesId": "s9", "SeriesName": "Show", "UserData": row{}, "ImageTags": row{}},
+			}},
+			{"Id": "r9", "Name": "Friday night", "Kind": "Playlist", "PlaylistId": "p2", "Place": "Bottom", "Items": []row{item("b2", "Bravo", row{}, false)}},
+		}}, steps: []string{"home", "wait 100", "cards"}, want: []string{ask,
+			"Mine → #/details?id=p1&serverId=srv: Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 407x272 taga1\")) " +
+				"Show(#/details?id=e6&serverId=srv, url(\"img s9 Primary 407x272 st\"), S1:E2 - Pilot) " +
+				"Show(#/details?id=e7&serverId=srv, icon tv, Special)",
+			"Friday night → #/details?id=p2&serverId=srv: Bravo(#/details?id=b2&serverId=srv, icon movie)",
+		}},
+		// Taken off the watchlist from the menu, a title leaves the
+		// Watchlist row as it leaves Now available, and stays in a row of
+		// another playlist.
+		"titles taken off the watchlist leave the Watchlist row": {
+			answers: [][]row{{
+				{"Id": "r8", "Name": "Mine", "Kind": "Watchlist", "PlaylistId": "p1", "Place": "Top", "Items": []row{
+					item("a1", "Alpha", row{}, true), item("b2", "Bravo", row{}, true)}},
+				{"Id": "r9", "Name": "Friday night", "Kind": "Playlist", "PlaylistId": "p2", "Place": "Bottom", "Items": []row{item("b2", "Bravo", row{}, true)}},
+			}},
+			steps: []string{"home", "wait 100", "show", "unlist b2", "render", "show"},
+			want: []string{ask, "Mine[Alpha Bravo] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 Friday night[Bravo]",
+				"Mine[Alpha] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 Friday night[Bravo]"},
+		},
 	}
 	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
@@ -3370,6 +3400,7 @@ async function run(scenario) {
         const bar = image.querySelector('.itemProgressBarForeground')
         if (bar) marks.push('progress ' + bar.style.width)
         if (card.getAttribute('data-id') !== card.querySelector('.textActionButton').getAttribute('href').slice(13, 15)) marks.push('wrong id')
+        if (card.getAttribute('data-type') === 'Episode') marks.push(card.querySelector('.cardText-secondary').textContent)
         return card.querySelector('.cardText-first').textContent + '(' + marks.join(', ') + ')'
       })
       const shaped = [title.getAttribute('is'), items.getAttribute('is'), row.querySelector('.emby-scroller').getAttribute('is')].join()
@@ -3412,7 +3443,7 @@ async function run(scenario) {
     stored.polyfinDrops = JSON.stringify(drops)
     for (const card of container.querySelectorAll('.card')) {
       const row = card.closest('.polyfinHomeRow')
-      if (ids.includes(card.getAttribute('data-id')) && /^(NowAvailable|StillWaiting)$/.test(row.getAttribute('data-polyfin-kind'))) card.parentNode.removeChild(card)
+      if (ids.includes(card.getAttribute('data-id')) && /^(NowAvailable|StillWaiting|Watchlist)$/.test(row.getAttribute('data-polyfin-kind'))) card.parentNode.removeChild(card)
     }
   }
   const ApiClient = {
