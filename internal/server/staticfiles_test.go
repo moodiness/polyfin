@@ -110,6 +110,7 @@ func staticFilesAreCompressedOnce(t *testing.T, h http.Handler, files *countingF
 }
 
 func TestWebClientFilesAreCompressedOnce(t *testing.T) {
+	t.Parallel()
 	bundle := script(40000)
 	font := randomBytes(t, 4000)
 	noise := randomBytes(t, 4000)
@@ -168,6 +169,7 @@ func TestWebClientFilesAreCompressedOnce(t *testing.T) {
 }
 
 func TestAdminFilesAreCompressedOnce(t *testing.T) {
+	t.Parallel()
 	app := script(20000)
 	icon := []byte(`<svg xmlns="http://www.w3.org/2000/svg">` + strings.Repeat(`<path d="M0 0h24v24H0z"/>`, 200) + `</svg>`)
 	files := counting(fstest.MapFS{

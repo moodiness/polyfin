@@ -30,7 +30,10 @@ import (
 type staticFiles struct {
 	files fs.FS
 	own   bool
-	mu    sync.Mutex
+	// turn is the turn the brotli copies of own files take (see
+	// brotliTurn).
+	turn chan struct{}
+	mu   sync.Mutex
 	// entries holds the files read, by name.
 	entries map[string]*staticFile
 }
@@ -58,7 +61,8 @@ type staticFile struct {
 
 // brotliTurn lets one brotli compression run at a time: each takes a core
 // for up to seconds, and memory, and none is urgent, as gzip is sent
-// meanwhile.
+// meanwhile. Tests give a server a turn of its own (see
+// Options.brotliTurn), so that none waits for another's copies.
 var brotliTurn = make(chan struct{}, 1)
 
 // newGzipFiles serves the files of files, which may change while Polyfin
@@ -69,9 +73,10 @@ func newGzipFiles(files fs.FS) *staticFiles {
 }
 
 // newOwnFiles serves Polyfin's own files: brotli and gzip, and an ETag on
-// every file, which serve then always answers with.
-func newOwnFiles(files fs.FS) *staticFiles {
-	return &staticFiles{files: files, own: true, entries: map[string]*staticFile{}}
+// every file, which serve then always answers with. Their brotli copies
+// are made in turn, which brotliTurn is but in tests.
+func newOwnFiles(files fs.FS, turn chan struct{}) *staticFiles {
+	return &staticFiles{files: files, own: true, turn: turn, entries: map[string]*staticFile{}}
 }
 
 // serve answers with the file name, whose information is info, and reports
@@ -114,7 +119,7 @@ func (s *staticFiles) serve(w http.ResponseWriter, r *http.Request, name string,
 	var encoding, tag string
 	if !ranged && file.gzip != nil {
 		if s.own && acceptsBrotli(r.Header) {
-			if body = file.brotliCopy(s.files, name); body != nil {
+			if body = file.brotliCopy(s.files, name, s.turn); body != nil {
 				encoding, tag = "br", codingTag(file.tag, "br")
 			}
 		}
@@ -245,21 +250,21 @@ func (f *staticFile) read(files fs.FS, name, contentType string) {
 }
 
 // brotliCopy returns the brotli copy of the file, nil until it is made;
-// the first call starts making it.
-func (f *staticFile) brotliCopy(files fs.FS, name string) []byte {
-	f.brotliOnce.Do(func() { go f.makeBrotli(files, name) })
+// the first call starts making it, in turn.
+func (f *staticFile) brotliCopy(files fs.FS, name string, turn chan struct{}) []byte {
+	f.brotliOnce.Do(func() { go f.makeBrotli(files, name, turn) })
 	if body := f.brotli.Load(); body != nil {
 		return *body
 	}
 	return nil
 }
 
-// makeBrotli compresses the file with brotli, in its turn, and keeps the
-// copy when it is smaller than the gzip one; a file changed since it was
-// read is left to its new version.
-func (f *staticFile) makeBrotli(files fs.FS, name string) {
-	brotliTurn <- struct{}{}
-	defer func() { <-brotliTurn }()
+// makeBrotli compresses the file with brotli, in turn, and keeps the copy
+// when it is smaller than the gzip one; a file changed since it was read
+// is left to its new version.
+func (f *staticFile) makeBrotli(files fs.FS, name string, turn chan struct{}) {
+	turn <- struct{}{}
+	defer func() { <-turn }()
 	data, err := fs.ReadFile(files, name)
 	if err != nil || etag(data) != f.tag {
 		return

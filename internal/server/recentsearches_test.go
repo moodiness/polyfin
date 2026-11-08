@@ -18,6 +18,7 @@ import (
 // It runs in Node.js, in a context that stands for the browser and
 // jellyfin-web.
 func TestSearchPageListsTheUsersRecentSearches(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

@@ -18,6 +18,7 @@ import (
 // parser must refuse a trailing comma in a call, as ES2017 brought them,
 // else the check would prove nothing.
 func TestWebClientScriptParsesAsES5(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

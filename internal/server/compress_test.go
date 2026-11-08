@@ -82,6 +82,7 @@ func varies(header http.Header) bool {
 }
 
 func TestLargeJSONIsCompressed(t *testing.T) {
+	t.Parallel()
 	body := jsonOf(8000)
 	for name, h := range map[string]http.HandlerFunc{
 		"unknown length": fixed("application/json; charset=utf-8", body),
@@ -128,6 +129,7 @@ func slicesOf(data []byte, size int) func(func([]byte) bool) {
 }
 
 func TestSmallAnswersAreNotCompressed(t *testing.T) {
+	t.Parallel()
 	body := jsonOf(600)
 	for name, h := range map[string]http.HandlerFunc{
 		"unknown length": fixed("application/json", body),
@@ -144,6 +146,7 @@ func TestSmallAnswersAreNotCompressed(t *testing.T) {
 }
 
 func TestOnlyClientsAcceptingGzipGetIt(t *testing.T) {
+	t.Parallel()
 	body := jsonOf(4000)
 	h := answering(fixed("application/json", body))
 	for acceptEncoding, want := range map[string]bool{
@@ -177,6 +180,7 @@ func TestOnlyClientsAcceptingGzipGetIt(t *testing.T) {
 }
 
 func TestMediaRangesAndEncodedAnswersPassUntouched(t *testing.T) {
+	t.Parallel()
 	text := jsonOf(4000)
 	for _, tc := range []struct {
 		name    string
@@ -215,6 +219,7 @@ func TestMediaRangesAndEncodedAnswersPassUntouched(t *testing.T) {
 // HLS playlists and segments are fetched as a title plays, whatever their
 // type: WebVTT segments are text, and stay as they are.
 func TestHLSPlaylistsAndSegmentsAreNotCompressed(t *testing.T) {
+	t.Parallel()
 	text := []byte("WEBVTT\n\n" + strings.Repeat("00:00:01.000 --> 00:00:02.000\nA line of dialogue\n\n", 100))
 	id := "0123456789abcdef0123456789abcdef"
 	for _, target := range []string{
@@ -243,6 +248,7 @@ func TestHLSPlaylistsAndSegmentsAreNotCompressed(t *testing.T) {
 // The WebSocket goes past the compression: the handler takes the
 // connection over as with no middleware.
 func TestWebSocketIsHijackedThroughCompression(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(answering(func(w http.ResponseWriter, _ *http.Request) {
 		hijacker, ok := w.(http.Hijacker)
 		if !ok {
@@ -284,6 +290,7 @@ func TestWebSocketIsHijackedThroughCompression(t *testing.T) {
 // A handler that flushes delivers what it wrote before it returns,
 // compressed or not.
 func TestFlushDeliversEarly(t *testing.T) {
+	t.Parallel()
 	first, second := []byte(`{"first":true}`), jsonOf(3000)
 	read := make(chan struct{})
 	server := httptest.NewServer(answering(func(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +342,7 @@ func TestFlushDeliversEarly(t *testing.T) {
 // A compressed answer has an ETag of its own, so that a cache never takes
 // one variant for the other, and revalidates with it.
 func TestCompressedAnswersHaveTheirOwnETag(t *testing.T) {
+	t.Parallel()
 	script := bytes.Repeat([]byte("console.log('polyfin')\n"), 200)
 	h := answering(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")

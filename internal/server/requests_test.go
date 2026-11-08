@@ -19,6 +19,8 @@ import (
 // base by the API that answers them; a connection taken over, as a
 // WebSocket's, is still taken over through the count, and counts as
 // switching protocols.
+//
+//nolint:paralleltest // counts requests in the process-wide metrics, which every other test's requests add to
 func TestRequestsCountByAPIAndStatus(t *testing.T) {
 	jellyfin := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/socket" {

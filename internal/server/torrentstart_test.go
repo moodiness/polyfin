@@ -14,6 +14,7 @@ import (
 // turn, and the line goes with the spinner. It runs in Node.js, in a context
 // that stands for the browser and jellyfin-web.
 func TestTheSpinnerTellsHowATorrentStarts(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

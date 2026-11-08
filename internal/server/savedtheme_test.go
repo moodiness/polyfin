@@ -15,6 +15,7 @@ import (
 // them from running anything opened on their own; nothing else, nor a path
 // out of the folder, under the web client's address and its base path.
 func TestSavedThemeIsServedFromItsFolderOnly(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	dir := filepath.Join(root, "themes")
 	id := "0123456789abcdef"
@@ -77,6 +78,7 @@ func TestSavedThemeIsServedFromItsFolderOnly(t *testing.T) {
 // to where it came from, without being kept; a file present is served, and
 // a name with no original answers 404.
 func TestAMissingSavedThemeFileGoesWhereItCameFrom(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	id := "0123456789abcdef"
 	if err := os.MkdirAll(filepath.Join(dir, id), 0o755); err != nil {

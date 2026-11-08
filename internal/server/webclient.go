@@ -44,8 +44,9 @@ var (
 	//go:embed webclient.min.js
 	webScriptFS embed.FS
 	// webScriptFiles serves the script as Polyfin's own files are served:
-	// in brotli or gzip, each made once, with its ETag.
-	webScriptFiles = newOwnFiles(webScriptFS)
+	// in brotli or gzip, each made once, with its ETag. The process makes
+	// its brotli copy once, in brotliTurn.
+	webScriptFiles = newOwnFiles(webScriptFS, brotliTurn)
 	// webScriptVersion is the version of the script, its ETag without
 	// quotes, which the page links it with: the script is then cached
 	// for good, and a new Polyfin's page links its new version.
