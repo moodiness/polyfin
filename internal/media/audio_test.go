@@ -7,6 +7,7 @@ import (
 )
 
 func TestParseAudioTakesMusicFilesThatParseRefuses(t *testing.T) {
+	t.Parallel()
 	output := []byte(`{"format": {"filename": "http://127.0.0.1:41234/source/abc", "format_name": "mp3", "duration": "212.4", "bit_rate": "320000"},
 		"streams": [{"index": 0, "codec_type": "audio", "codec_name": "mp3", "channels": 2, "sample_rate": "44100"},
 			{"index": 1, "codec_type": "video", "codec_name": "mjpeg", "disposition": {"attached_pic": 1}}]}`)
@@ -24,6 +25,7 @@ func TestParseAudioTakesMusicFilesThatParseRefuses(t *testing.T) {
 }
 
 func TestParseAudioRefusesWhatHoldsNoAudio(t *testing.T) {
+	t.Parallel()
 	for name, output := range map[string]string{
 		"a web page":     `{"format": {"format_name": "html"}, "streams": []}`,
 		"a silent video": `{"format": {"format_name": "mp4"}, "streams": [{"index": 0, "codec_type": "video", "codec_name": "h264"}]}`,

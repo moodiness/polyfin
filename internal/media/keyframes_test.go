@@ -15,6 +15,7 @@ import (
 // and the file's start: N/A times and other packets are left out; times
 // that go back past the reordering of frames make no keyframes.
 func TestParseKeyframesReadsKeyframePackets(t *testing.T) {
+	t.Parallel()
 	times, start, err := parseKeyframes(strings.NewReader(
 		"packet,1.483333,K__,\npacket,1.525000,___,\npacket,N/A,K__,\npacket,3.983333,K_D,\npacket,3.900000,K__\nformat,1.462000\n"))
 	if err != nil || start != 1462*time.Millisecond ||
@@ -30,6 +31,7 @@ func TestParseKeyframesReadsKeyframePackets(t *testing.T) {
 // keyframes, from the file's start, which its audio sets 21 ms before its
 // video; a file of no media is unreadable.
 func TestKeyframesOfAnMPEGTSFile(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
