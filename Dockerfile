@@ -47,21 +47,26 @@ ADD --checksum=sha256:2978d0fbe3bc24d3bef637473c55e2628262fa725600e55788a45d9a42
 # the last build of a month, kept for two years. The shared build keeps
 # ffmpeg and ffprobe from carrying a copy of every library each. curl
 # retries GitHub's passing failures, which ADD does not, then the archive
-# is checked against its pinned SHA-256.
+# is checked against its pinned SHA-256, from a file rather than a pipe.
 FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-download
 # hadolint ignore=DL3008
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl
+	&& apt-get install -y --no-install-recommends ca-certificates curl \
+	&& rm -rf /var/lib/apt/lists/*
 
 FROM ffmpeg-download AS ffmpeg-amd64
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
 	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz \
-	&& echo "01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326  /ffmpeg.tar.xz" | sha256sum -c -
+	&& echo "01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
+	&& sha256sum -c /ffmpeg.sha256 \
+	&& rm /ffmpeg.sha256
 
 FROM ffmpeg-download AS ffmpeg-arm64
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
 	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz \
-	&& echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffmpeg.tar.xz" | sha256sum -c -
+	&& echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
+	&& sha256sum -c /ffmpeg.sha256 \
+	&& rm /ffmpeg.sha256
 
 # A stage of this file, chosen by platform: no tag to give.
 # hadolint ignore=DL3006
