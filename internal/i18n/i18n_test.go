@@ -50,30 +50,8 @@ func TestIn(t *testing.T) {
 // empty, with the placeholders and the variables of the English.
 func TestTexts(t *testing.T) {
 	t.Parallel()
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	files := token.NewFileSet()
 	texts, maps := 0, 0
-	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if name := entry.Name(); path != root && (strings.HasPrefix(name, ".") || name == "node_modules" ||
-				name == "testdata" || name == "web") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		file, err := parser.ParseFile(files, path, nil, parser.SkipObjectResolution)
-		if err != nil {
-			return err
-		}
+	moduleFiles(t, func(files *token.FileSet, _ string, file *ast.File) {
 		ast.Inspect(file, func(node ast.Node) bool {
 			literal, ok := node.(*ast.CompositeLit)
 			if !ok {
@@ -100,14 +78,45 @@ func TestTexts(t *testing.T) {
 			}
 			return true
 		})
+	})
+	// Guards the walk itself: a wrong root would check nothing.
+	if texts < 100 || maps < 3 {
+		t.Fatalf("found %d texts and %d maps by language: the walk misses the module", texts, maps)
+	}
+}
+
+// moduleFiles parses every Go file of the module but tests, and calls
+// visit with each.
+func moduleFiles(t *testing.T, visit func(files *token.FileSet, path string, file *ast.File)) {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := token.NewFileSet()
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if name := entry.Name(); path != root && (strings.HasPrefix(name, ".") || name == "node_modules" ||
+				name == "testdata" || name == "web") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		file, err := parser.ParseFile(files, path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		visit(files, path, file)
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	// Guards the walk itself: a wrong root would check nothing.
-	if texts < 100 || maps < 3 {
-		t.Fatalf("found %d texts and %d maps by language: the walk misses the module", texts, maps)
 	}
 }
 
