@@ -37,6 +37,7 @@ fontname: Test_0.ttf
 `
 
 func TestScriptRoundTrip(t *testing.T) {
+	t.Parallel()
 	script := scriptHeader + scriptEvents + scriptFooter
 	crlf := "\ufeff" + strings.ReplaceAll(script, "\n", "\r\n")
 	parsed, err := ParseScript([]byte(crlf))
@@ -60,6 +61,7 @@ func TestScriptRoundTrip(t *testing.T) {
 }
 
 func TestScriptEncodingsAndOtherEventLines(t *testing.T) {
+	t.Parallel()
 	script := scriptHeader + "Comment: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,template\n" +
 		"Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,D\xe9j\xe0 \x93vu\x94\n" +
 		"Dialogue: 0,0:00:03.00,0:00:02.00,Default,,0,0,0,,Backwards\n" +
@@ -75,6 +77,7 @@ func TestScriptEncodingsAndOtherEventLines(t *testing.T) {
 }
 
 func TestScriptFrom(t *testing.T) {
+	t.Parallel()
 	parsed, err := ParseScript([]byte(scriptHeader + scriptEvents + scriptFooter))
 	if err != nil {
 		t.Fatal(err)
@@ -100,6 +103,7 @@ func TestScriptFrom(t *testing.T) {
 }
 
 func TestScriptCues(t *testing.T) {
+	t.Parallel()
 	events := `Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,Later {\b1}bold{\b0}, soft\nspace\hhard
 Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,{\i1}Line one\N{\i0}line two\N\N
 Dialogue: 0,0:00:01.00,0:00:02.00,Sign,,0,0,0,,{\p1}m 0 0 l 100 0 100 100 0 100{\p0}
@@ -141,6 +145,7 @@ Dialogue: 0,0:00:09.00,0:00:10.00,Default,,0,0,0,,{\an8}
 // Jellyfin 12.2 writes an ASS track as WebVTT with override blocks
 // removed, \N as line breaks and \h as a space: Cues gives the same text.
 func TestScriptCuesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	ass, err := os.ReadFile("testdata/ass-track.ass")
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +173,7 @@ func TestScriptCuesMatchJellyfin(t *testing.T) {
 }
 
 func TestScriptsOnly(t *testing.T) {
+	t.Parallel()
 	for _, data := range []string{"", "WEBVTT\n", "1\n00:00:01,000 --> 00:00:02,000\nHi\n", "<html>[Script Info]</html>", "\n\n[V4+ Styles]\n"} {
 		if _, err := ParseScript([]byte(data)); !errors.Is(err, ErrUnsupported) {
 			t.Errorf("%q: got %v", data, err)
@@ -179,6 +185,7 @@ func TestScriptsOnly(t *testing.T) {
 }
 
 func TestScriptsMissingParts(t *testing.T) {
+	t.Parallel()
 	standard := "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
 	line := "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hi\n"
 	for _, test := range []struct{ name, in, header, footer string }{
@@ -205,6 +212,7 @@ func TestScriptsMissingParts(t *testing.T) {
 }
 
 func TestScriptFormatInAnotherOrder(t *testing.T) {
+	t.Parallel()
 	in := "[Script Info]\n[Events]\nFormat: Start, End, Style, Text\nDialogue: 0:00:01.00,0:00:02.00,Sign,Hi, there\n"
 	script, err := ParseScript([]byte(in))
 	if err != nil {
@@ -223,6 +231,7 @@ func TestScriptFormatInAnotherOrder(t *testing.T) {
 }
 
 func TestHostileScripts(t *testing.T) {
+	t.Parallel()
 	huge := strings.Repeat("x", 8<<20)
 	in := scriptHeader + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,," + huge + "\n" +
 		"Dialogue: 0,99999999999:00:00.00,99999999999:00:01.00,Default,,0,0,0,,Overflow\n" +
@@ -245,6 +254,7 @@ func TestHostileScripts(t *testing.T) {
 }
 
 func TestMatroskaScript(t *testing.T) {
+	t.Parallel()
 	private := "\ufeff[Script Info]\r\nScriptType: v4.00+\r\n\r\n[V4+ Styles]\r\nStyle: Default,Arial,20\r\n\r\n[Events]\r\n" +
 		"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\r\n\x00"
 	blocks := []MatroskaEvent{
