@@ -23,10 +23,17 @@ import {
   WarningIcon,
   type Icon,
 } from '@phosphor-icons/react'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { fetchActivity, queryKeys, type ActivityEntry, type ActivityQuery } from '@/api'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import {
+  fetchActivity,
+  fetchStatus,
+  queryKeys,
+  type ActivityEntry,
+  type ActivityQuery,
+} from '@/api'
 import { dateTime, errorMessage, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
+import { webPlayerInPlace, webPlayerLink, webPlayerPath } from '@/jellyfinApps'
 import {
   Block,
   cx,
@@ -139,6 +146,12 @@ export function RecentActivity() {
     },
     refetchInterval: 15_000,
   })
+  const status = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  })
+  // The web player's links name the server; the API gives titles only while it is served.
+  const serverId = status.data?.serverId ?? null
   const entries = activity.data?.pages.flatMap((page) => page.items) ?? []
   const total = activity.data?.pages.at(-1)?.total ?? 0
   const needle = search.trim().toLocaleLowerCase(language)
@@ -247,7 +260,7 @@ export function RecentActivity() {
         >
           <ol className="flex flex-col gap-0.5">
             {shown.map((entry) => (
-              <ActivityRow key={entry.id} entry={entry} />
+              <ActivityRow key={entry.id} entry={entry} serverId={serverId} />
             ))}
           </ol>
           {hasNextPage && (
@@ -319,7 +332,7 @@ function useListHeight(box: RefObject<HTMLElement | null>, listed: boolean): num
   return height
 }
 
-function ActivityRow({ entry }: { entry: ActivityEntry }) {
+function ActivityRow({ entry, serverId }: { entry: ActivityEntry; serverId: string | null }) {
   const { language, t } = useI18n()
   const text = t.dashboard.activity
   const date = new Date(entry.date)
@@ -350,7 +363,9 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         }
       />
       <div className="min-w-0">
-        <p className="break-words text-ink">{entry.name}</p>
+        <p className="break-words text-ink">
+          <EntryName entry={entry} serverId={serverId} />
+        </p>
         {entry.shortOverview !== null && (
           <p className="break-words text-small text-ink-3 max-sm:text-micro">
             {entry.shortOverview}
@@ -375,5 +390,27 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         )}
       </span>
     </li>
+  )
+}
+
+/**
+ * An entry's sentence, the title it holds a link to the title's page in the web player of the
+ * server serverId, in a new tab or in place as the web player's other links.
+ */
+function EntryName({ entry, serverId }: { entry: ActivityEntry; serverId: string | null }) {
+  const { name, title } = entry
+  if (title === null || serverId === null) return name
+  return (
+    <>
+      {name.slice(0, title.start)}
+      <a
+        {...webPlayerLink(webPlayerInPlace())}
+        href={`${webPlayerPath}#/details?${new URLSearchParams({ id: title.id, serverId })}`}
+        className="focus-lit rounded-control font-medium text-link underline decoration-link/40 underline-offset-4 hover:decoration-link"
+      >
+        {name.slice(title.start, title.end)}
+      </a>
+      {name.slice(title.end)}
+    </>
   )
 }

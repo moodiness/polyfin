@@ -737,6 +737,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		ShownTitles:      lib,
 		SmartLists:       smartlists.New(pool),
 		SmartPreviews:    lib,
+		ActivityTitles:   lib,
 		// The channels Polyfin airs, built from what the Jellyfin API lists.
 		VirtualChannels: ownChannels,
 		ChannelBuilder:  jellyfinAPI,

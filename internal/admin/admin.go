@@ -87,6 +87,10 @@ type Options struct {
 	// Activity records what administrators change for the activity log;
 	// nil records nothing.
 	Activity *activity.Store
+	// ActivityTitles finds which titles the activity log names the
+	// administrator still reaches, whose words Recent activity links; nil
+	// links none.
+	ActivityTitles ActivityTitles
 	// DataDir is the folder Polyfin keeps its files in, which holds the
 	// default recordings and backups folders.
 	DataDir string

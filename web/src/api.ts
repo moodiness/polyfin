@@ -2039,6 +2039,12 @@ export type ActivityEntry = {
   shortOverview: string | null
   severity: 'Information' | 'Warning' | 'Error'
   userId: string | null
+  /**
+   * Where `name` holds the title of an item the administrator can open in the web player, from
+   * `start` to `end` in the string; null when it names none, one removed or out of their view, one
+   * written before the server kept where titles are, or when the server serves no web player.
+   */
+  title: { id: string; start: number; end: number } | null
 }
 
 export type ActivityPage = { items: ActivityEntry[]; total: number }
