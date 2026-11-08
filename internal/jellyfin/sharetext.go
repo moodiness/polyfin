@@ -91,7 +91,7 @@ var shareTexts = map[string]shareText{
 			"unknown":           "Ce lien n’existe pas. Vérifiez qu’il a été copié en entier.",
 			"expired":           "Ce lien a expiré. Demandez-en un nouveau à la personne qui l’a partagé.",
 			"revoked":           "Ce lien a été révoqué.",
-			"off":               "Ce lien ne fonctionne plus : le partage est désactivé.",
+			"off":               "Ce lien ne fonctionne plus\u202f: le partage est désactivé.",
 			"unavailable":       "Ce titre ne peut pas être lu pour le moment.",
 			"too_many_attempts": "Trop de tentatives depuis cette adresse. Réessayez dans quelques minutes.",
 			"limit":             "Le propriétaire de ce lien regarde déjà sur autant d’appareils que permis. Réessayez plus tard.",

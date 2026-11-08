@@ -32,7 +32,7 @@ const (
 // such guard.
 var remoteAccessSelf = i18n.Text{
 	"You cannot turn off your own connections from outside the local network while connected from outside it: you would be locked out. Do it from the local network.",
-	"Vous ne pouvez pas désactiver vos propres connexions depuis l’extérieur du réseau local en étant connecté depuis l’extérieur : vous seriez bloqué. Faites-le depuis le réseau local.",
+	"Vous ne pouvez pas désactiver vos propres connexions depuis l’extérieur du réseau local en étant connecté depuis l’extérieur\u202f: vous seriez bloqué. Faites-le depuis le réseau local.",
 	"Du kannst deine eigenen Verbindungen von außerhalb des lokalen Netzwerks nicht von außerhalb ausschalten: Du würdest dich aussperren. Tu es aus dem lokalen Netzwerk.",
 	"No puede desactivar sus propias conexiones desde fuera de la red local mientras está conectado desde fuera: quedaría bloqueado. Hágalo desde la red local.",
 	"Non puoi disattivare le tue connessioni dall’esterno della rete locale mentre sei connesso dall’esterno: resteresti bloccato. Fallo dalla rete locale.",
