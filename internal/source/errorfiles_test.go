@@ -113,6 +113,7 @@ func refused(err error) bool {
 // its own, before the host was found answering it, reads its file anew,
 // once the reader that held it through the recovery releases it.
 func TestAHostAnsweringAnErrorFileIsToldUntilItAnswersAFile(t *testing.T) {
+	t.Parallel()
 	const size, errorSize = 32 * blockSize, 1_822_520
 	host := &outageHost{size: size, errorSize: errorSize}
 	host.down.Store(true)
@@ -197,6 +198,7 @@ func TestAHostAnsweringAnErrorFileIsToldUntilItAnswersAFile(t *testing.T) {
 // under the size of a pack their addon announced for each, are no error
 // file, however many: a video is never that small.
 func TestRealEpisodesUnderAPackSizeAreNoErrorFile(t *testing.T) {
+	t.Parallel()
 	host := &outageHost{errorSize: 350_000_000}
 	host.down.Store(true)
 	cache := hostCache(t, t.TempDir(), host)
@@ -215,6 +217,7 @@ func TestRealEpisodesUnderAPackSizeAreNoErrorFile(t *testing.T) {
 // outage, and another file at its first byte after it. A file whose
 // count was taken back counts again once its own size is answered.
 func TestAnErrorFileLeavesTheAnnouncedSizesOn(t *testing.T) {
+	t.Parallel()
 	const size = 32 * blockSize
 	host := &outageHost{size: size, errorSize: 1_822_520}
 	cache := hostCache(t, t.TempDir(), host)
@@ -251,6 +254,7 @@ func TestAnErrorFileLeavesTheAnnouncedSizesOn(t *testing.T) {
 // blocks a previous run kept of its file, as it does when its addon
 // announced their size. The file's own answer then reads the blocks kept.
 func TestAnErrorFileLeavesTheBlocksKept(t *testing.T) {
+	t.Parallel()
 	const size, errorSize = 8_350_994_751, 1_822_520
 	for _, c := range []struct {
 		name     string
@@ -261,6 +265,7 @@ func TestAnErrorFileLeavesTheBlocksKept(t *testing.T) {
 		{"announced", Location{Size: size, Announcer: "addon"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			host := &outageHost{size: size, errorSize: errorSize}
 			dir := t.TempDir()
 			before := hostCache(t, dir, host)
