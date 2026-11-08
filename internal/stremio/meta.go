@@ -223,10 +223,40 @@ type Extras struct {
 	SeasonPosterByNumber map[string]string `json:"seasonPosterByNumber,omitempty"`
 	SeasonPosters        Posters           `json:"seasonPosters,omitempty"`
 	// Certification is a title's age rating, often the US one;
-	// CertificationLocal is that of the country of the addon's language,
-	// or the US one again when that country has none.
-	Certification      string `json:"certification,omitempty"`
-	CertificationLocal string `json:"certificationLocal,omitempty"`
+	// CertificationLocal is that of the country the addon was set up
+	// for, or the US one again when that country has none, or another
+	// database's own text; Certifications are the ratings of every
+	// country that has one, by ISO 3166-1 alpha-2 code.
+	Certification      string         `json:"certification,omitempty"`
+	CertificationLocal string         `json:"certificationLocal,omitempty"`
+	Certifications     Certifications `json:"certifications,omitempty"`
+}
+
+// Certifications are a title's ratings by country, keyed by the country's
+// ISO 3166-1 alpha-2 code in upper case.
+type Certifications map[string]string
+
+// UnmarshalJSON reads an object of ratings by country, in any case. A
+// value that is not a text, or is empty, is left out, and so is anything
+// but an object, so that the rest of the description is still read.
+func (c *Certifications) UnmarshalJSON(data []byte) error {
+	var byCountry map[string]json.RawMessage
+	if json.Unmarshal(data, &byCountry) != nil {
+		*c = nil
+		return nil
+	}
+	result := Certifications{}
+	for country, raw := range byCountry {
+		var rating string
+		if json.Unmarshal(raw, &rating) == nil && strings.TrimSpace(rating) != "" {
+			result[strings.ToUpper(strings.TrimSpace(country))] = strings.TrimSpace(rating)
+		}
+	}
+	*c = nil
+	if len(result) > 0 {
+		*c = result
+	}
+	return nil
 }
 
 // UnmarshalJSON reads Extras, whose seasonPosters some addons send as a
