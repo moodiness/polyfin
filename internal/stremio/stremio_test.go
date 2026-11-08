@@ -12,6 +12,7 @@ import (
 )
 
 func TestParseManifest(t *testing.T) {
+	t.Parallel()
 	manifest, err := ParseManifest([]byte(`{
 		"id": "org.example", "version": "1.0.0", "name": "Example",
 		"logo": "http://insecure.example/logo.png",
@@ -49,6 +50,7 @@ func TestParseManifest(t *testing.T) {
 }
 
 func TestManifestURLs(t *testing.T) {
+	t.Parallel()
 	for raw, want := range map[string]string{
 		" stremio://addon.example/abc/manifest.json ": "https://addon.example/abc/manifest.json",
 		"HTTPS://addon.example/manifest.json#x":       "https://addon.example/manifest.json",
@@ -69,6 +71,7 @@ func TestManifestURLs(t *testing.T) {
 }
 
 func TestConfinedRequestsStayOffLocalNetworks(t *testing.T) {
+	t.Parallel()
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id": "x", "name": "X", "version": "1", "resources": ["catalog"]}`))
 	}))
@@ -98,6 +101,7 @@ func TestConfinedRequestsStayOffLocalNetworks(t *testing.T) {
 // as one string for one: such a field must not cost the title, or the
 // catalog page it is on.
 func TestLooselyTypedTitles(t *testing.T) {
+	t.Parallel()
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/catalog/movie/top.json":
@@ -209,6 +213,7 @@ func TestLinksCreditPeople(t *testing.T) {
 // with their seasons. Keyed by season number instead, they keep their
 // numbers, and a poster the addon also gives by number keeps that one.
 func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
+	t.Parallel()
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/meta/series/tt1.json":
@@ -249,6 +254,7 @@ func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 // else a numeric id, as a number or a string; any other id names no one on
 // TMDB.
 func TestCastMembersTellTheirTMDBIdentifier(t *testing.T) {
+	t.Parallel()
 	var extras Extras
 	if err := unmarshal([]byte(`{"cast": [{"name": "A", "tmdb_id": 11, "id": 99}, {"name": "B", "id": "12"},
 		{"name": "C", "id": "nm0000001"}, {"name": "D"}]}`), &extras); err != nil {
@@ -316,6 +322,7 @@ func TestARateLimitNoticeOfTheTypeAskedIsNoDescription(t *testing.T) {
 // /manifest.json, the query following, as Stremio does: a token kept
 // there reaches every request.
 func TestAManifestURLsQueryFollowsEachResource(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var asked []string
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

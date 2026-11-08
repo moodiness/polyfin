@@ -14,6 +14,7 @@ import (
 )
 
 func TestHealthFollowsTheRequestsMadeToAnAddon(t *testing.T) {
+	t.Parallel()
 	var status atomic.Int32
 	status.Store(http.StatusOK)
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -68,6 +69,7 @@ func TestHealthFollowsTheRequestsMadeToAnAddon(t *testing.T) {
 // does not is a server error. While the addons of a host wait for their
 // catalogs, their health tells it, whatever answered since.
 func TestA503WithRetryAfterAsksToWait(t *testing.T) {
+	t.Parallel()
 	var retryAfter atomic.Value
 	retryAfter.Store("")
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +121,7 @@ func TestA503WithRetryAfterAsksToWait(t *testing.T) {
 // what it answered, a refusal as such, and is still ErrUnreachable to the
 // callers, with its status.
 func TestAnErrorAnswerTellsWhatTheAddonAnswered(t *testing.T) {
+	t.Parallel()
 	var status atomic.Int32
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(int(status.Load()))
@@ -147,6 +150,7 @@ func TestAnErrorAnswerTellsWhatTheAddonAnswered(t *testing.T) {
 // its JSON answer or from a short text, on one line, cut short, with what
 // looks like an address, a token or a key redacted.
 func TestARefusalTellsTheAddonsReason(t *testing.T) {
+	t.Parallel()
 	type answer struct {
 		status            int
 		contentType, body string
@@ -191,6 +195,8 @@ func TestARefusalTellsTheAddonsReason(t *testing.T) {
 
 // The metrics count an addon's requests by resource and outcome, under
 // the name the addon is listed with: a failing request moves the failures.
+//
+//nolint:paralleltest // sets the metrics package's addon names, which every request counted reads
 func TestAddonRequestsAreCountedInTheMetrics(t *testing.T) {
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/stream/") {

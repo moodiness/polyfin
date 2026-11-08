@@ -13,6 +13,7 @@ import (
 // A wave of requests to one addon reuses the connections of the wave
 // before instead of opening new ones.
 func TestWavesOfRequestsReuseConnections(t *testing.T) {
+	t.Parallel()
 	var opened atomic.Int32
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(50 * time.Millisecond)
