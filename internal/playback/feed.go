@@ -261,6 +261,9 @@ type feed struct {
 	// evicted is why the feed was ended for another stream of its source
 	// (see evict), nil while it was not.
 	evicted error
+	// closing is set once close found no reader: the feed takes none
+	// from then on (see join).
+	closing bool
 	// index finds the stream's keyframes and tables as it arrives.
 	index tsIndex
 }
@@ -345,7 +348,8 @@ func (s *Service) openFeed(ctx context.Context, version library.Version) (*feedR
 			r.Close()
 			return nil, f.err
 		}
-		// A feed evicted between its opening and this join is opened again.
+		// A feed that ended, or was closed or evicted, since it was found
+		// is opened again.
 		if r == nil {
 			continue
 		}
@@ -369,11 +373,11 @@ func (f *feed) finished() bool {
 }
 
 // join adds a reader, placed on its first read (see place); nil when the
-// feed ended.
+// feed ended, or is closing.
 func (f *feed) join(ctx context.Context, user accounts.ID) *feedReader {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.done && f.received > 0 || f.evicted != nil {
+	if f.done && f.received > 0 || f.closing || f.evicted != nil {
 		return nil
 	}
 	r := &feedReader{f: f, user: user, recording: recordingOf(ctx), ctx: ctx, from: f.received}
@@ -499,16 +503,20 @@ func (r *feedReader) Close() error {
 }
 
 // close ends the feed and its connection, which its source counts until it
-// is closed (see makeRoom).
+// is closed (see makeRoom). It decides under both locks, so that a reader
+// joining as the grace runs out either keeps the feed, or finds it closing
+// and opens the stream again.
 func (f *feed) close() {
+	st := &f.s.feeds
+	st.mu.Lock()
 	f.mu.Lock()
 	if len(f.readers) > 0 && f.evicted == nil {
 		f.mu.Unlock()
+		st.mu.Unlock()
 		return
 	}
+	f.closing = true
 	f.mu.Unlock()
-	st := &f.s.feeds
-	st.mu.Lock()
 	if st.feeds[f.version.ID] == f {
 		delete(st.feeds, f.version.ID)
 	}
