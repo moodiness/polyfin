@@ -14,6 +14,7 @@ const rfcSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 // The test vectors of RFC 6238, appendix B, for SHA-1, cut to 6 digits as
 // RFC 4226 truncates them.
 func TestCodesFollowRFC6238(t *testing.T) {
+	t.Parallel()
 	for unix, want := range map[int64]string{
 		59:          "287082",
 		1111111109:  "081804",
@@ -31,6 +32,7 @@ func TestCodesFollowRFC6238(t *testing.T) {
 // A code matches within one step either way, not two, and only after the
 // last step accepted.
 func TestMatchAllowsOneStepOfDriftAndNoReplay(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1111111111, 0)
 	step := StepAt(now)
 	for offset, want := range map[int64]bool{-2: false, -1: true, 0: true, 1: true, 2: false} {
@@ -66,6 +68,7 @@ func TestMatchAllowsOneStepOfDriftAndNoReplay(t *testing.T) {
 }
 
 func TestNewSecretsHold160RandomBits(t *testing.T) {
+	t.Parallel()
 	first, second := NewSecret(), NewSecret()
 	key, err := decode(first)
 	if err != nil || len(key) != 20 || first == second {
@@ -74,6 +77,7 @@ func TestNewSecretsHold160RandomBits(t *testing.T) {
 }
 
 func TestURI(t *testing.T) {
+	t.Parallel()
 	uri := URI("Polyfin", "Ana María", rfcSecret)
 	parsed, err := url.Parse(uri)
 	if err != nil || parsed.Scheme != "otpauth" || parsed.Host != "totp" {
