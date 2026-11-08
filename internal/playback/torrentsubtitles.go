@@ -37,8 +37,10 @@ var torrentSubtitleFormats = map[string]string{".srt": "srt", ".ass": "ass", ".s
 const maxTorrentSubtitle = 8 << 20
 
 // torrentSubtitleWait bounds the fetch of a subtitle file: the torrent's
-// start, when it stopped, and the wait for its pieces.
-const torrentSubtitleWait = torrentHeaders + torrent.PieceTimeout
+// start, when it stopped, and the wait for its pieces (see pieceWait).
+func (s *Service) torrentSubtitleWait() time.Duration {
+	return torrentHeaders + s.pieceWait()
+}
 
 // subtitleFolders are the names of the folders, in any letter case, that
 // hold a video's subtitle files beside it.
@@ -329,7 +331,7 @@ func (s *Service) TorrentSubtitle(ctx context.Context, file library.ExternalSubt
 		return data, err
 	}
 	result, err, _ := s.flight.Do("torrent subtitle "+at.Version.String()+" "+strconv.Itoa(at.Index), func() (any, error) {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), torrentSubtitleWait)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.torrentSubtitleWait())
 		defer cancel()
 		if data, ok, err := s.keptTorrentSubtitle(ctx, at); ok || err != nil {
 			return data, err

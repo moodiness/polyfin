@@ -89,12 +89,11 @@ func singleRanges(dir string, ranges *atomic.Int64) http.Handler {
 // ranges is learned with one request, once per host. A host serving
 // several ranges at once is offered the track.
 func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
-	share := trackRequests
-	trackRequests = 1
-	t.Cleanup(func() { trackRequests = share })
+	t.Parallel()
 	dir := filepath.Join("..", "container", "testdata")
 	var ranges atomic.Int64
 	s, _, version, analysis := servedBy(t, dir, "subtitles", singleRanges(dir, &ranges))
+	s.trackShare = 1
 	ctx := t.Context()
 	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 0 {
 		t.Errorf("located from a host serving a range per request: %v", located)
@@ -110,6 +109,7 @@ func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
 	}
 
 	s, _, version, analysis = subtitled(t)
+	s.trackShare = 1
 	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 2 {
 		t.Errorf("located from a host serving several ranges: %v", located)
 	}
@@ -119,6 +119,7 @@ func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
 // host's error page, leaves the index unreadable: the size the host tells
 // replaces it, and the index is read.
 func TestWrongAnalyzedSizesAreCorrected(t *testing.T) {
+	t.Parallel()
 	s, _, version, analysis := subtitled(t)
 	ctx := t.Context()
 	size := analysis.Size
@@ -136,6 +137,7 @@ func TestWrongAnalyzedSizesAreCorrected(t *testing.T) {
 }
 
 func TestTracksAreReadWholeThroughTheIndex(t *testing.T) {
+	t.Parallel()
 	s, opener, version, analysis := subtitled(t)
 	ctx := t.Context()
 	const srtStream, assStream, fontStream = 1, 2, 3
@@ -190,6 +192,7 @@ func TestTracksAreReadWholeThroughTheIndex(t *testing.T) {
 // A PGS track is read whole through the index as the SUP file FFmpeg
 // copies out of the version, for the apps that draw PGS: never as cues.
 func TestPGSTracksAreReadWholeAsSUPFiles(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join("..", "container", "testdata")
 	s, _, version, analysis := served(t, dir, "pgs")
 	ctx := t.Context()
@@ -211,6 +214,7 @@ func TestPGSTracksAreReadWholeAsSUPFiles(t *testing.T) {
 }
 
 func TestTracksOutsideAMatroskaIndexAreNotRead(t *testing.T) {
+	t.Parallel()
 	s, opener, version, analysis := subtitled(t)
 	mp4 := analysis
 	mp4.Format = "mov,mp4,m4a,3gp,3g2,mj2"
@@ -229,6 +233,7 @@ func TestTracksOutsideAMatroskaIndexAreNotRead(t *testing.T) {
 // a plain text track is read whole like SubRip, and a track FFmpeg cannot
 // read leaves the others readable.
 func TestTracksFFmpegNamesOtherwiseAreRead(t *testing.T) {
+	t.Parallel()
 	s, _, version, analysis := served(t, "testdata", "codecs")
 	ctx := t.Context()
 	const srtStream, webvttStream, asciiStream = 1, 2, 3
@@ -250,6 +255,7 @@ func TestTracksFFmpegNamesOtherwiseAreRead(t *testing.T) {
 // offered again, even after a restart. Here its first block is laced,
 // which muxers never do for subtitles.
 func TestTracksThatCannotBeReadAreNotOfferedAgain(t *testing.T) {
+	t.Parallel()
 	testdata := filepath.Join("..", "container", "testdata")
 	file, err := os.ReadFile(filepath.Join(testdata, "subtitles.mkv"))
 	if err != nil {
@@ -291,6 +297,7 @@ func TestTracksThatCannotBeReadAreNotOfferedAgain(t *testing.T) {
 // Once remuxes have extracted a version's text tracks whole, its HLS
 // subtitle segments come from them, and its index is not read for them.
 func TestExtractedTracksAreNotReadThroughTheIndex(t *testing.T) {
+	t.Parallel()
 	s, _, version, analysis := subtitled(t)
 	ctx := t.Context()
 	extracted := fmt.Sprintf(`{"covered":[[0,%d]],"tracks":{"1":[{"s":1000,"e":2500,"t":"Extracted"}]}}`, analysis.Duration.Milliseconds()+1000)
@@ -309,6 +316,7 @@ func TestExtractedTracksAreNotReadThroughTheIndex(t *testing.T) {
 
 // A slow host holds up its own track reads only.
 func TestTrackReadsWaitForTheirOwnHostOnly(t *testing.T) {
+	t.Parallel()
 	var slots hostSlots
 	ctx := t.Context()
 	for range hostTrackReads {
@@ -333,10 +341,9 @@ func TestTrackReadsWaitForTheirOwnHostOnly(t *testing.T) {
 // request for nearly every block, hundreds for a movie. Here the share
 // leaves only the check of a Cluster.
 func TestTrackReadsStopAtTheirShareOfRequests(t *testing.T) {
-	share := trackRequests
-	trackRequests = 1
-	t.Cleanup(func() { trackRequests = share })
+	t.Parallel()
 	s, opener, version, analysis := subtitled(t)
+	s.trackShare = 1
 	ctx := t.Context()
 	const srtStream = 1
 	if !s.SubtitlesLocated(ctx, version, analysis)[srtStream] {
@@ -361,6 +368,7 @@ func sameCue(a, b subtitles.Cue) bool {
 }
 
 func TestStreamsPairWithTheTracksFFmpegMadeThemFrom(t *testing.T) {
+	t.Parallel()
 	tracks := []container.Track{
 		{Number: 1, Type: trackVideo, CodecID: "V_MPEG4/ISO/AVC"},
 		{Number: 2, Type: trackAudio, CodecID: "A_AAC"},
@@ -403,6 +411,7 @@ func TestStreamsPairWithTheTracksFFmpegMadeThemFrom(t *testing.T) {
 }
 
 func TestTracksBecomeTheFilesTheirBlocksMake(t *testing.T) {
+	t.Parallel()
 	seconds := func(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
 	text := []container.Block{
 		{Start: seconds(1), Duration: seconds(1.5), Data: []byte("Hello\r\n<i>there</i>")},
@@ -458,6 +467,7 @@ func TestTracksBecomeTheFilesTheirBlocksMake(t *testing.T) {
 }
 
 func TestAttachedFilesAreFoundByNameAndOrder(t *testing.T) {
+	t.Parallel()
 	analysis := media.Analysis{Streams: []media.Stream{
 		{Index: 0, Type: "video"},
 		{Index: 1, Type: "attachment", FileName: "Sign.ttf"},

@@ -27,7 +27,8 @@ import (
 // torrent of data, analyzed as analysis, whose only peer holds its pieces
 // until released: what reads it waits, as over a swarm too slow for the
 // read. The torrent starts within 2 seconds, and runs all along, as for a
-// playback, once play is called.
+// playback, once play is called. configure, if any, completes the
+// engine's config.
 type slowTorrent struct {
 	*Service
 	version  library.Version
@@ -39,7 +40,14 @@ type slowTorrent struct {
 	play, rest func()
 }
 
-func newSlowTorrent(t *testing.T, ffprobe string, id byte, data []byte, analysis media.Analysis) slowTorrent {
+// shortPieceWait has the engine take a read waiting 3 seconds for a piece
+// as stalled, rather than 30: a read stalled twice, the source's try and
+// the one replacing it, gives up after 6 seconds.
+func shortPieceWait(c *torrent.Config) {
+	c.PieceTimeout = 3 * time.Second
+}
+
+func newSlowTorrent(t *testing.T, ffprobe string, id byte, data []byte, analysis media.Analysis, configure ...func(*torrent.Config)) slowTorrent {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, &fakeSource{}, logger)
@@ -67,8 +75,12 @@ func newSlowTorrent(t *testing.T, ffprobe string, id byte, data []byte, analysis
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
 	proxy := torrenttest.StartProxy(t, true, "", "")
-	engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return torrent.Settings{Enabled: true, Proxy: proxy.Address()} },
-		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: 2 * time.Second, Logger: slog.New(slog.DiscardHandler)})
+	config := torrent.Config{Settings: func() torrent.Settings { return torrent.Settings{Enabled: true, Proxy: proxy.Address()} },
+		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: 2 * time.Second, Logger: slog.New(slog.DiscardHandler)}
+	for _, c := range configure {
+		c(&config)
+	}
+	engine, err := torrent.New(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +163,9 @@ func TestSubtitlesOfASlowTorrentAreLocatedOnceItSends(t *testing.T) {
 	t.Parallel()
 	data, analysis := subtitledFixture(t)
 	p := newSlowTorrent(t, "ffprobe", 31, data, analysis)
+	// The read's own bound of 3 seconds rather than 30, well within a
+	// piece's wait.
+	p.locateTime = 3 * time.Second
 	p.play()
 	// The read gives up at its own bound, the peer sending nothing.
 	if located := p.SubtitlesLocated(t.Context(), p.version, p.analysis); len(located) != 0 {
@@ -168,7 +183,7 @@ func TestSubtitlesOfASlowTorrentAreLocatedOnceItSends(t *testing.T) {
 func TestASubtitleTrackOfAStalledTorrentIsReadOnceItSends(t *testing.T) {
 	t.Parallel()
 	data, analysis := subtitledFixture(t)
-	p := newSlowTorrent(t, "ffprobe", 32, data, analysis)
+	p := newSlowTorrent(t, "ffprobe", 32, data, analysis, shortPieceWait)
 	p.play()
 	const srtStream = 1
 	// Located at an earlier play: the index is not read again.
@@ -243,7 +258,7 @@ func TestAPictureTrackOfAStalledTorrentIsReadOnceItSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := newSlowTorrent(t, ffprobe, 34, data, analysis)
+	p := newSlowTorrent(t, ffprobe, 34, data, analysis, shortPieceWait)
 	p.play()
 	p.set(func(s *accounts.Settings) { s.SubtitleOCR = "played" })
 	reader := &fakeReader{languages: []string{"eng"}}
