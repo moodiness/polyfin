@@ -227,10 +227,16 @@ func (*fixedPreviews) WatchlistRowName(context.Context, accounts.User) (string, 
 	return "Mine to watch", nil
 }
 
+// SeesPlaylist lets the member see every playlist, and nobody else.
+func (*fixedPreviews) SeesPlaylist(_ context.Context, user accounts.User, _ accounts.ID) (bool, error) {
+	return user.Name == "member", nil
+}
+
 // Rows of the Watchlist, of favorite playlists and of a chosen playlist
 // are added with the playlist field, refused when their fields do not go
 // together or name no playlist, and deleted with their playlist. A member
-// sees a Watchlist row by their own Watchlist's name.
+// sees a Watchlist row by their own Watchlist's name, and a Playlist row
+// only when they may see its playlist.
 func TestPlaylistHomeRowRoutes(t *testing.T) {
 	t.Parallel()
 	var pool *pgxpool.Pool
@@ -290,6 +296,10 @@ func TestPlaylistHomeRowRoutes(t *testing.T) {
 	_, own, _ := member.call(http.MethodGet, "/account/home-rows", nil)
 	if got := rowNames(own); !slices.Equal(got, []string{"Mine to watch", "My playlists", "Friday"}) {
 		t.Errorf("the member's rows: %v", got)
+	}
+	_, own, _ = administrator.call(http.MethodGet, "/account/home-rows", nil)
+	if got := rowNames(own); !slices.Equal(got, []string{"Mine to watch", "My playlists"}) {
+		t.Errorf("the rows of an administrator who may not see the playlist: %v", got)
 	}
 	if _, err := pool.Exec(t.Context(), "DELETE FROM playlists WHERE id = $1", playlist); err != nil {
 		t.Fatal(err)

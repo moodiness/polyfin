@@ -23,11 +23,13 @@ type HomeRowChoices interface {
 
 // HomeRowPreviews tells the rows a user sees now on the web player's home
 // page, each with its first titles, as the Jellyfin API answers them to
-// the web player, and the name of their Watchlist, which names a
-// Watchlist row for them.
+// the web player, the name of their Watchlist, which names a Watchlist row
+// for them, and whether they may see a playlist, without which its
+// Playlist row is none of theirs.
 type HomeRowPreviews interface {
 	PreviewHomeRows(ctx context.Context, user accounts.User) ([]jellyfin.HomeRowPreview, error)
 	WatchlistRowName(ctx context.Context, user accounts.User) (string, error)
+	SeesPlaylist(ctx context.Context, user accounts.User, id accounts.ID) (bool, error)
 }
 
 // homeRowJSON is a row of the web player's home page (Settings › Web
@@ -499,6 +501,17 @@ func (h *handler) ownHomeRows(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, row := range rows {
+		if row.ShownTo(user.ID) && row.Kind == homerows.KindPlaylist && h.HomeRowPreviews != nil {
+			// A Playlist row shows only to those who may see its playlist.
+			sees, err := h.HomeRowPreviews.SeesPlaylist(r.Context(), user, row.Playlist)
+			if err != nil {
+				h.internalError(w, r, err)
+				return
+			}
+			if !sees {
+				continue
+			}
+		}
 		if row.ShownTo(user.ID) {
 			name := row.Name
 			if row.Kind == homerows.KindWatchlist {
