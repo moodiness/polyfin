@@ -330,16 +330,19 @@
 // rows go between them. A row is drawn as jellyfin-web draws a library's
 // row of latest items, with its classes, so that its styles, scroll
 // buttons and item actions apply, and its Kind (data-polyfin-kind): the
-// row's name opens its list (#/list?parentId= the row's Id), each card a
-// poster with the title's played mark, or count of unplayed episodes, and
-// progress, opening the title's page. When jellyfin-web draws the home
-// page anew, which empties it, the page's changes put the rows back from
-// the last answer. Every time it draws them, it leaves out the titles the
-// item menus hid meanwhile, and from the Now available and Still waiting
-// rows those they took off the watchlist, as the tenth keeps them in the
-// session storage for the user signed in (a series hidden taking its
-// items with it), and a row left without a title. Nothing else changes,
-// nor anything while the answer is awaited.
+// row's name opens its list (#/list?parentId= the row's Id), or, for a row
+// of a playlist (its PlaylistId), the playlist's page; each card a poster
+// with the title's played mark, or count of unplayed episodes, and
+// progress, opening the title's page. An episode shows as jellyfin-web
+// shows one in a row: its series' poster, the series' name, then its
+// season and episode numbers before its name. When jellyfin-web draws the
+// home page anew, which empties it, the page's changes put the rows back
+// from the last answer. Every time it draws them, it leaves out the titles
+// the item menus hid meanwhile, and from the Now available, Still waiting
+// and Watchlist rows those they took off the watchlist, as the tenth keeps
+// them in the session storage for the user signed in (a series hidden
+// taking its items with it), and a row left without a title. Nothing else
+// changes, nor anything while the answer is awaited.
 // Any error just stops it.
 //
 // Twelfth, on a movie's or an episode's page, it adds a "Share" button to
@@ -2849,12 +2852,12 @@
     return kept.length > 0 ? kept[kept.length - 1].playlist : ''
   }
   // watchlistRow tells whether an element stands in a row of the user's
-  // watchlist: Polyfin's Now available and Still waiting home rows, or the
-  // list of the watchlist playlist's page shown.
+  // watchlist: Polyfin's Now available, Still waiting and Watchlist home
+  // rows, or the list of the watchlist playlist's page shown.
   function watchlistRow(element) {
     if (!element || !element.closest) return false
     var custom = element.closest('.polyfinHomeRow')
-    if (custom) return /^(NowAvailable|StillWaiting)$/.test(custom.getAttribute('data-polyfin-kind') || '')
+    if (custom) return /^(NowAvailable|StillWaiting|Watchlist)$/.test(custom.getAttribute('data-polyfin-kind') || '')
     return opensWatchlist(location.hash) && !!element.closest('.itemsContainer') && !element.closest('.page.hide')
   }
   // opensWatchlist tells whether an address opens the page of the user's
@@ -3234,7 +3237,7 @@
     }
     return answer.rows
       .map(function (row) {
-        var watchlist = row.Kind === 'NowAvailable' || row.Kind === 'StillWaiting'
+        var watchlist = row.Kind === 'NowAvailable' || row.Kind === 'StillWaiting' || row.Kind === 'Watchlist'
         var items = (row.Items || []).filter(function (item) {
           if (
             watchlist &&
@@ -3319,13 +3322,15 @@
   function rowElement(row) {
     var api = window.ApiClient
     var server = typeof api.serverId === 'function' ? api.serverId() : ''
+    // A row of a playlist opens the playlist's page, as its card would.
+    var more = row.PlaylistId
+      ? '#/details?id=' + encodeURIComponent(row.PlaylistId) + '&serverId=' + encodeURIComponent(server)
+      : '#/list?parentId=' + encodeURIComponent(row.Id) + '&serverId=' + encodeURIComponent(server)
     var title = made('div', 'sectionTitleContainer sectionTitleContainer-cards padded-left', {}, [
-      made(
-        'a',
-        'more button-flat button-flat-mini sectionTitleTextButton emby-button',
-        { is: 'emby-linkbutton', href: '#/list?parentId=' + encodeURIComponent(row.Id) + '&serverId=' + encodeURIComponent(server) },
-        [made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]), icon('chevron_right')]
-      ),
+      made('a', 'more button-flat button-flat-mini sectionTitleTextButton emby-button', { is: 'emby-linkbutton', href: more }, [
+        made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]),
+        icon('chevron_right'),
+      ]),
     ])
     var cards = (row.Items || []).map(function (item, index) {
       return card(api, server, item, index)
@@ -3340,11 +3345,15 @@
     var attributes = { 'data-polyfin-row': row.Id, 'data-polyfin-kind': row.Kind || '' }
     return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', attributes, [title, scroller])
   }
-  // card draws a title as jellyfin-web's cards of a row of posters.
+  // card draws a title as jellyfin-web's cards of a row of posters. An
+  // episode shows its series' poster, the series' name, then its season
+  // and episode numbers before its own name, as jellyfin-web shows one.
   function card(api, server, item, index) {
     var link = '#/details?id=' + encodeURIComponent(item.Id) + '&serverId=' + encodeURIComponent(server)
     var data = item.UserData || {}
-    var tag = item.ImageTags && item.ImageTags.Primary
+    var episode = item.Type === 'Episode'
+    var poster = episode && item.SeriesId && item.SeriesPrimaryImageTag
+    var tag = poster ? item.SeriesPrimaryImageTag : item.ImageTags && item.ImageTags.Primary
     var image = made('a', 'cardImageContainer coveredImage cardContent itemAction', {
       href: link,
       'data-action': 'link',
@@ -3352,10 +3361,16 @@
       role: 'img',
     })
     if (tag) {
-      var url = api.getScaledImageUrl(item.Id, { type: 'Primary', fillHeight: 407, fillWidth: 272, quality: 96, tag: tag })
+      var url = api.getScaledImageUrl(poster ? item.SeriesId : item.Id, {
+        type: 'Primary',
+        fillHeight: 407,
+        fillWidth: 272,
+        quality: 96,
+        tag: tag,
+      })
       image.style.backgroundImage = 'url("' + url + '")'
     } else {
-      image.appendChild(icon(item.Type === 'Series' ? 'tv' : item.Type === 'BoxSet' ? 'folder' : 'movie', 'cardImageIcon'))
+      image.appendChild(icon(item.Type === 'Series' || episode ? 'tv' : item.Type === 'BoxSet' ? 'folder' : 'movie', 'cardImageIcon'))
     }
     if (data.UnplayedItemCount) {
       image.appendChild(
@@ -3399,12 +3414,16 @@
         ),
       ]),
     ])
+    var numbered =
+      item.ParentIndexNumber != null && item.IndexNumber != null
+        ? 'S' + item.ParentIndexNumber + ':E' + item.IndexNumber + ' - ' + (item.Name || '')
+        : item.Name || ''
+    var first = episode && item.SeriesName ? item.SeriesName : item.Name || ''
+    var second = episode && item.SeriesName ? numbered : item.ProductionYear ? String(item.ProductionYear) : '\u00a0'
     var name = made('div', 'cardText cardTextCentered cardText-first', {}, [
-      made('bdi', '', {}, [made('a', 'itemAction textActionButton', { href: link, 'data-action': 'link' }, [item.Name || ''])]),
+      made('bdi', '', {}, [made('a', 'itemAction textActionButton', { href: link, 'data-action': 'link' }, [first])]),
     ])
-    var year = made('div', 'cardText cardTextCentered cardText-secondary', {}, [
-      made('bdi', '', {}, [item.ProductionYear ? String(item.ProductionYear) : '\u00a0']),
-    ])
+    var year = made('div', 'cardText cardTextCentered cardText-secondary', {}, [made('bdi', '', {}, [second])])
     return made(
       'div',
       'card overflowPortraitCard card-hoverable card-withuserdata',
