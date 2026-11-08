@@ -262,7 +262,12 @@ PublicMetaDB is asked only with an API key. Create one on the PublicMetaDB websi
 
 ### How PublicMetaDB matches titles
 
-- PublicMetaDB knows titles by their TMDB identifier only: a movie's, or a series' with the season and episode numbers.
+- PublicMetaDB knows titles by their TMDB identifier only: a movie's, or a series' with the season and episode numbers TMDB gives the episode.
+- The addon may number a series' episodes otherwise than TMDB, as when it lists another cut or splits seasons differently. Polyfin then asks PublicMetaDB with TMDB's season and episode numbers, from the same pairing of TMDB's numbering with the addon's that the tracking services use (see [How Polyfin finds each title](tracking-imports.md#what-is-imported)).
+  - A series numbered alike, or one without a source for TMDB's numbering, is asked with the addon's numbers.
+  - An episode Polyfin cannot place surely among TMDB's is not asked of PublicMetaDB. The other databases, which know episodes by the addon's numbers, are still asked.
+  - The pairing is kept a week, so playing an episode does not ask TMDB each time.
+  - PublicMetaDB's answer is kept with the numbers it was asked with: once the pairing changes, the episode is asked again, and never gets another episode's segments.
 - It keeps one record per contributor and release.
 - Polyfin uses the record of a streaming release giving the most segments, the latest first.
 

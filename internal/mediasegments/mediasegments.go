@@ -131,6 +131,11 @@ type Title struct {
 	// Season and Episode number an episode within its series; both are
 	// zero for a movie.
 	Season, Episode int
+	// TMDBSeason and TMDBEpisode number the episode as TMDB does, which
+	// PublicMetaDB is asked with (see SetTMDBNumbers): TMDBEpisode is 0
+	// when TMDB numbers it Season and Episode too, -1 when no episode of
+	// TMDB is surely it, and otherwise TMDB's number, in TMDBSeason.
+	TMDBSeason, TMDBEpisode int
 	// Runtime is the title's length when known: it picks the release the
 	// segments were timed on, and ends the segments that last until the
 	// end.
@@ -138,6 +143,49 @@ type Title struct {
 }
 
 func (t Title) movie() bool { return t.Season == 0 && t.Episode == 0 }
+
+// SetTMDBNumbers sets how TMDB numbers the episode t is, from the season
+// and number TMDB gives it and whether TMDB surely has it, as
+// library.EpisodeNumbering.ToTMDB tells them.
+func (t *Title) SetTMDBNumbers(season, episode int, ok bool) {
+	switch {
+	case t.movie():
+		return
+	case !ok:
+		t.TMDBSeason, t.TMDBEpisode = 0, -1
+	case season != t.Season || episode != t.Episode:
+		t.TMDBSeason, t.TMDBEpisode = season, episode
+	default:
+		t.TMDBSeason, t.TMDBEpisode = 0, 0
+	}
+}
+
+// tmdbPlace is the season and number PublicMetaDB is asked an episode
+// with, TMDB's, and false when no episode of TMDB is surely it.
+func (t Title) tmdbPlace() (season, episode int, ok bool) {
+	switch {
+	case t.TMDBEpisode < 0:
+		return 0, 0, false
+	case t.TMDBEpisode > 0:
+		return t.TMDBSeason, t.TMDBEpisode, true
+	}
+	return t.Season, t.Episode, true
+}
+
+// askedAs names the episode PublicMetaDB is asked about, as its answer
+// is kept with (see answer.Asked); empty for a movie.
+func (t Title) askedAs() string {
+	if t.movie() {
+		return ""
+	}
+	season, episode, _ := t.tmdbPlace()
+	return placeName(season, episode)
+}
+
+// placeName names an episode's season and number: "2x3".
+func placeName(season, episode int) string {
+	return strconv.Itoa(season) + "x" + strconv.Itoa(episode)
+}
 
 // Source is a database and the base URL of its API.
 type Source struct {
@@ -197,6 +245,13 @@ func (s *Service) Asks() bool {
 	return s != nil && len(s.on(s.settings())) > 0
 }
 
+// AsksPublicMetaDB reports whether the settings have PublicMetaDB asked,
+// which knows episodes by TMDB's numbers (see Title.SetTMDBNumbers); a
+// nil service asks it not.
+func (s *Service) AsksPublicMetaDB() bool {
+	return s != nil && slices.ContainsFunc(s.used(s.settings()), func(source Source) bool { return source.Name == PublicMetaDB })
+}
+
 // on are the sources settings turn on, in the order of preference they
 // save; an empty order keeps that of the sources known.
 func (s *Service) on(settings accounts.Settings) []Source {
@@ -224,6 +279,10 @@ type mark struct {
 type answer struct {
 	Marks   []mark    `json:"marks"`
 	Expires time.Time `json:"expires"`
+	// Asked names the episode PublicMetaDB was asked about, by TMDB's
+	// numbers ("2x3", see Title.askedAs). Answers kept before it was
+	// written have none: they were asked with the episode's own numbers.
+	Asked string `json:"asked,omitempty"`
 }
 
 var (
@@ -244,13 +303,22 @@ func (s *Service) Segments(ctx context.Context, title Title) []Segment {
 	}
 	settings := s.settings()
 	sources := s.used(settings)
+	if _, _, ok := title.tmdbPlace(); !ok {
+		// No episode of TMDB is surely this one: PublicMetaDB, which
+		// knows episodes by TMDB's numbers, is not asked.
+		sources = slices.DeleteFunc(sources, func(source Source) bool { return source.Name == PublicMetaDB })
+	}
 	if len(sources) == 0 || (title.IMDb == "" && title.TMDB == "") ||
 		(!title.movie() && (title.Season < 1 || title.Episode < 1)) {
 		return nil
 	}
 	answers := s.load(ctx, title.Item)
+	forgetOtherEpisode(answers, title)
 	if stale := s.stale(sources, answers, settings.PublicMetaDBKey); len(stale) > 0 {
-		result, _, _ := s.flight.Do(title.Item.String(), func() (any, error) {
+		// The numbers PublicMetaDB is asked with are part of the key, so
+		// that a request renumbered meanwhile is not given the answers
+		// about another episode.
+		result, _, _ := s.flight.Do(title.Item.String()+"|"+title.askedAs(), func() (any, error) {
 			// The answers are kept even once the request that asked is
 			// canceled, as when an app stops waiting.
 			return s.refresh(context.WithoutCancel(ctx), title, answers, stale, settings), nil
@@ -258,6 +326,22 @@ func (s *Service) Segments(ctx context.Context, title Title) []Segment {
 		answers = result.(map[string]answer)
 	}
 	return merge(answers, sources, title.Runtime)
+}
+
+// forgetOtherEpisode drops from the answers kept about an episode
+// PublicMetaDB's, when it was asked about another episode than TMDB's
+// place of it now, as before its series' numbering was known or changed,
+// or when no episode of TMDB is surely it: it is then asked again, if at
+// all, and its segments of another episode are neither given nor kept.
+func forgetOtherEpisode(answers map[string]answer, title Title) {
+	kept, ok := answers[PublicMetaDB]
+	if !ok || title.movie() {
+		return
+	}
+	_, _, placed := title.tmdbPlace()
+	if !placed || cmp.Or(kept.Asked, placeName(title.Season, title.Episode)) != title.askedAs() {
+		delete(answers, PublicMetaDB)
+	}
 }
 
 // used are the sources whose answers count: those the settings turn on, in
@@ -347,6 +431,9 @@ func (s *Service) refresh(ctx context.Context, title Title, answers map[string]a
 				result = answer{Marks: answers[source.Name].Marks, Expires: now.Add(failedFor)}
 			case len(marks) > 0:
 				result.Expires = now.Add(foundFor)
+			}
+			if source.Name == PublicMetaDB {
+				result.Asked = title.askedAs()
 			}
 			mu.Lock()
 			fresh[source.Name] = result
@@ -595,16 +682,18 @@ func (r skipRecord) marks() []mark {
 }
 
 // askPublicMetaDB asks PublicMetaDB, which knows titles by TMDB identifier
-// only, with the server's key.
+// only, and episodes by TMDB's numbers, with the server's key. An episode
+// no episode of TMDB is surely is not asked about.
 func (s *Service) askPublicMetaDB(ctx context.Context, base string, title Title, key string) ([]mark, error) {
-	if title.TMDB == "" {
+	season, episode, placed := title.tmdbPlace()
+	if title.TMDB == "" || !placed {
 		return nil, nil
 	}
 	query := url.Values{"tmdb_id": {title.TMDB}, "media_type": {"movie"}, "perPage": {strconv.Itoa(skipRecords)}}
 	if !title.movie() {
 		query.Set("media_type", "tv")
-		query.Set("season", strconv.Itoa(title.Season))
-		query.Set("episode", strconv.Itoa(title.Episode))
+		query.Set("season", strconv.Itoa(season))
+		query.Set("episode", strconv.Itoa(episode))
 	}
 	var body struct {
 		Items []skipRecord `json:"items"`

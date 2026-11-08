@@ -1012,3 +1012,130 @@ func TestSkipDBRateLimitIsWaitedOut(t *testing.T) {
 		t.Errorf("after a failure: %+v, asked %d times", got, len(d.authorizations(skipDBPath)))
 	}
 }
+
+// introSkips is PublicMetaDB's answer of one record, timed on a streaming
+// release, giving an intro ending at seconds.
+func introSkips(seconds int) string {
+	return skipPage(`{"id":"r1","tmdb_id":1396,"media_type":"tv","source":"streaming","created":"2026-01-01T00:00:00Z",
+		"intro_start_ms":0,"intro_end_ms":` + strconv.Itoa(seconds*1000) + `,"credits_start_ms":null,"credits_end_ms":null,
+		"recap_start_ms":null,"recap_end_ms":null,"preview_start_ms":null,"preview_end_ms":null}`)
+}
+
+func TestTMDBsNumbersAreSetOnlyWhenTheyDiffer(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		season, number int
+		ok             bool
+		want           [2]int
+	}{{1, 2, true, [2]int{0, 0}}, {2, 9, true, [2]int{2, 9}}, {0, 0, false, [2]int{0, -1}}} {
+		title := episode
+		title.SetTMDBNumbers(c.season, c.number, c.ok)
+		if got := [2]int{title.TMDBSeason, title.TMDBEpisode}; got != c.want {
+			t.Errorf("TMDB's S%dE%d %v: %v, want %v", c.season, c.number, c.ok, got, c.want)
+		}
+	}
+	movie := Title{Item: accounts.ID{2}, TMDB: "550"}
+	if movie.SetTMDBNumbers(0, 0, false); movie.TMDBEpisode != 0 {
+		t.Errorf("a movie got TMDB's number %d", movie.TMDBEpisode)
+	}
+}
+
+// PublicMetaDB is asked with TMDB's numbers, and its answer is kept with
+// them: an episode asked again with other numbers, as once its series'
+// numbering is known or changes, never gets the segments of the episode
+// asked before, kept, kept from before the numbers were written, or kept
+// while PublicMetaDB fails.
+func TestPublicMetaDBAnswersNeverMixTwoEpisodes(t *testing.T) {
+	t.Parallel()
+	d := newDatabases(t)
+	s, c := service(t, d, PublicMetaDB)
+	useKey(s, goodKey)
+	asked := func(want ...string) {
+		t.Helper()
+		var got []string
+		d.mu.Lock()
+		for _, q := range d.asked[publicMetaDBPath] {
+			got = append(got, q.Get("season")+"x"+q.Get("episode"))
+		}
+		d.mu.Unlock()
+		if !slices.Equal(got, want) {
+			t.Errorf("PublicMetaDB asked about %v, want %v", got, want)
+		}
+	}
+	intro := func(seconds float64) []Segment { return []Segment{{Type: Intro, Start: 0, End: at(seconds)}} }
+	check := func(title Title, want []Segment) {
+		t.Helper()
+		if got := spans(s.Segments(t.Context(), title)); !slices.Equal(got, want) {
+			t.Errorf("TMDB's S%dE%d: got %+v, want %+v", title.TMDBSeason, title.TMDBEpisode, got, want)
+		}
+	}
+
+	// TMDB numbers the episode as the addon does.
+	d.reply(publicMetaDBPath, http.StatusOK, introSkips(12))
+	check(episode, intro(12))
+	asked("1x2")
+	// TMDB numbers it S1E3: that episode's answer replaces the one kept,
+	// which has not expired.
+	renumbered := episode
+	renumbered.SetTMDBNumbers(1, 3, true)
+	d.reply(publicMetaDBPath, http.StatusOK, introSkips(13))
+	check(renumbered, intro(13))
+	check(renumbered, intro(13))
+	asked("1x2", "1x3")
+	// No episode of TMDB is surely it: PublicMetaDB's segments go, and it
+	// is not asked.
+	unplaced := episode
+	unplaced.SetTMDBNumbers(0, 0, false)
+	check(unplaced, nil)
+	asked("1x2", "1x3")
+	// Numbered as the addon does again, while PublicMetaDB fails: the
+	// segments kept of S1E3 are not given for S1E2.
+	d.reply(publicMetaDBPath, http.StatusInternalServerError, `{"error":"down"}`)
+	check(episode, nil)
+	asked("1x2", "1x3", "1x2")
+	c.advance(time.Hour)
+	d.reply(publicMetaDBPath, http.StatusOK, introSkips(12))
+	check(episode, intro(12))
+	asked("1x2", "1x3", "1x2", "1x2")
+
+	// Answers kept before the numbers asked with were written were asked
+	// with the episode's own: they are given for those only.
+	legacy := Title{Item: accounts.ID{9}, IMDb: "tt0903747", TMDB: "1396", Season: 1, Episode: 4, Runtime: time.Hour}
+	if _, err := s.db.Exec(t.Context(), `INSERT INTO media_segments (item_id, answers) VALUES ($1, $2)`, legacy.Item,
+		`{"publicmetadb":{"marks":[{"type":"Intro","start_ms":0,"end_ms":14000}],"expires":"`+
+			c.now.Add(24*time.Hour).Format(time.RFC3339)+`"}}`); err != nil {
+		t.Fatal(err)
+	}
+	check(legacy, intro(14))
+	asked("1x2", "1x3", "1x2", "1x2")
+	legacy.SetTMDBNumbers(2, 1, true)
+	d.reply(publicMetaDBPath, http.StatusOK, introSkips(21))
+	check(legacy, intro(21))
+	asked("1x2", "1x3", "1x2", "1x2", "2x1")
+}
+
+// An episode no episode of TMDB is surely is not asked of PublicMetaDB;
+// the other databases, which know it by its own numbers, still are.
+func TestAnEpisodeTMDBLacksIsAskedOfTheOtherDatabases(t *testing.T) {
+	t.Parallel()
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.reply(publicMetaDBPath, http.StatusOK, introSkips(12))
+	s, _ := service(t, d, PublicMetaDB, TheIntroDB)
+	useKey(s, goodKey)
+	if !s.AsksPublicMetaDB() {
+		t.Error("PublicMetaDB is not asked with a key")
+	}
+	unplaced := episode
+	unplaced.SetTMDBNumbers(0, 0, false)
+	if got, want := spans(s.Segments(t.Context(), unplaced)), []Segment{{Type: Intro, Start: 0, End: at(30.5)}}; !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	if q := d.last(theIntroDBPath); q.Get("season") != "1" || q.Get("episode") != "2" || len(d.publicMetaDB()) != 0 {
+		t.Errorf("TheIntroDB asked %v, PublicMetaDB %d times", q, len(d.publicMetaDB()))
+	}
+	useKey(s, "")
+	if s.AsksPublicMetaDB() || (*Service)(nil).AsksPublicMetaDB() {
+		t.Error("PublicMetaDB is asked without a key")
+	}
+}

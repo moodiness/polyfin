@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -799,5 +800,45 @@ func TestChapterSegmentsInFrench(t *testing.T) {
 	}
 	if _, analyzed := p.handler.Playback.Analyzed(t.Context(), versions[2].ID); analyzed {
 		t.Error("the version not analyzed was analyzed")
+	}
+}
+
+// While PublicMetaDB is asked, which knows episodes by TMDB's numbers, an
+// episode is identified to the segment databases by TMDB's numbers too,
+// as its series' kept numbering pairs them.
+func TestSegmentTitlesCarryTMDBsNumbers(t *testing.T) {
+	t.Parallel()
+	p := skipping(t, mediasegments.TheIntroDB, mediasegments.PublicMetaDB)
+	if _, err := p.pool.Exec(t.Context(), `INSERT INTO episode_alignments (series, tmdb_id, episodes, places, asked_at)
+		VALUES ('tt7654321', 30, 4, '[[1,1,1,1],[1,3,1,2],[1,4,1,4]]', now())`); err != nil {
+		t.Fatal(err)
+	}
+	numbers := func() [][2]int {
+		t.Helper()
+		var got [][2]int
+		for _, id := range []string{p.episode, p.third, p.fourth} {
+			item, err := p.library.Item(t.Context(), p.user, mustID(t, id))
+			if err != nil {
+				t.Fatal(err)
+			}
+			title, err := p.handler.segmentTitle(t.Context(), p.user, item)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = append(got, [2]int{title.TMDBSeason, title.TMDBEpisode})
+		}
+		return got
+	}
+	// Without a key, PublicMetaDB is not asked, nor the numbering read.
+	if got := numbers(); fmt.Sprint(got) != "[[0 0] [0 0] [0 0]]" {
+		t.Errorf("without PublicMetaDB: %v", got)
+	}
+	// The addon's S1E2 is TMDB's S1E3; its S1E3 none of TMDB's; its S1E4
+	// is numbered alike.
+	p.setting(t, func(s *accounts.Settings) {
+		s.PublicMetaDBKey = "pm-Good4mN2pQrS7tUvWx3yZaB4cD5eF6gH7iJ8kL9mN0oP1qR2sT3uV4wXyZ5aB"
+	})
+	if got := numbers(); fmt.Sprint(got) != "[[1 3] [0 -1] [0 0]]" {
+		t.Errorf("with PublicMetaDB: %v", got)
 	}
 }
