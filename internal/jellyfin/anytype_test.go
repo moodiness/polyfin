@@ -106,7 +106,7 @@ func TestCatalogsOfAnyTypeListVideosAndLiveOnesPlayLive(t *testing.T) {
 		var result QueryResult
 		s.get(t, "/UserViews", tr.token, &result)
 		named := map[string]BaseItemDto{}
-		for _, view := range result.Items {
+		for _, view := range libraryViews(result.Items) {
 			named[view.Name] = view
 		}
 		return named

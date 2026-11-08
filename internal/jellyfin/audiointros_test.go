@@ -100,7 +100,8 @@ func newAudioSeason(t *testing.T, ffmpeg string, count int, write func(dir strin
 	var views QueryResult
 	s.get(t, "/UserViews", a.token, &views)
 	var shows QueryResult
-	if len(views.Items) != 1 || s.get(t, "/Items?ParentId="+views.Items[0].Id, a.token, &shows) != http.StatusOK || len(shows.Items) != 1 {
+	libraries := libraryViews(views.Items)
+	if len(libraries) != 1 || s.get(t, "/Items?ParentId="+libraries[0].Id, a.token, &shows) != http.StatusOK || len(shows.Items) != 1 {
 		t.Fatalf("views %+v, shows %+v", views.Items, shows.Items)
 	}
 	var list QueryResult
