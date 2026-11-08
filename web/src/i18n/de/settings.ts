@@ -1137,8 +1137,16 @@ const settings: typeof en = {
         playlist: 'Wiedergabeliste',
       },
       kindDetails: {
-        watchlist: 'Die eigene Liste jedes Mitglieds',
-        playlists: 'Die Listen, die jedes Mitglied mit ♥ markiert hat, je eine Zeile',
+        catalog: 'Die erste Seite eines Add-on-Katalogs',
+        collection: 'Die Titel einer Sammlung',
+        because: 'Titel wie die zuletzt gesehenen jedes Benutzers',
+        new: 'Titel der letzten 7 Tage',
+        available: 'Merklisten-Titel mit gefundener Version',
+        waiting: 'Merklisten-Titel noch ohne Version',
+        trakt: 'Für Benutzer, die Trakt verbunden haben',
+        picks: 'Nach dem Geschmacksprofil jedes Benutzers',
+        watchlist: 'Die eigene Merkliste jedes Benutzers',
+        playlists: 'Eine Zeile je Liste, die ein Benutzer mit ♥ markiert hat',
         playlist: 'Eine Wiedergabeliste deiner Wahl',
       },
       kindHelp: {

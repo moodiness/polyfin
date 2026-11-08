@@ -1150,8 +1150,16 @@ const settings: typeof en = {
         playlist: 'Lista de reproducción',
       },
       kindDetails: {
-        watchlist: 'La propia lista de cada miembro',
-        playlists: 'Las listas que cada miembro marcó con ♥, una fila cada una',
+        catalog: 'La primera página de un catálogo de extensiones',
+        collection: 'Los títulos de una colección',
+        because: 'Títulos como los últimos que vio cada usuario',
+        new: 'Títulos añadidos en los últimos 7 días',
+        available: 'Títulos de Para ver con una versión encontrada',
+        waiting: 'Títulos de Para ver aún sin versión',
+        trakt: 'Para usuarios que conectaron Trakt',
+        picks: 'Según el perfil de gustos de cada usuario',
+        watchlist: 'La lista Para ver de cada usuario',
+        playlists: 'Una fila por lista que cada usuario marcó con ♥',
         playlist: 'Una lista de reproducción que usted elige',
       },
       kindHelp: {

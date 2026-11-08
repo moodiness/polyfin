@@ -1139,8 +1139,16 @@ const settings: typeof en = {
         playlist: 'Playlist',
       },
       kindDetails: {
-        watchlist: 'A própria lista de cada membro',
-        playlists: 'As playlists que cada membro marcou com ♥, uma linha cada',
+        catalog: 'A primeira página de um catálogo de complementos',
+        collection: 'Os títulos de uma coleção',
+        because: 'Títulos como os últimos que cada usuário viu',
+        new: 'Títulos adicionados nos últimos 7 dias',
+        available: 'Títulos para assistir com uma versão encontrada',
+        waiting: 'Títulos para assistir ainda sem versão',
+        trakt: 'Para usuários que conectaram o Trakt',
+        picks: 'Pelo perfil de gostos de cada usuário',
+        watchlist: 'A lista para assistir de cada usuário',
+        playlists: 'Uma linha por playlist que cada usuário marcou com ♥',
         playlist: 'Uma playlist que você escolhe',
       },
       kindHelp: {
