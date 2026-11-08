@@ -488,8 +488,8 @@ func TestPictureTracksAreReadIntoText(t *testing.T) {
 }
 
 // opaqueSUP is a SUP file showing n times, a second apart from zero, the
-// same picture: the whole of a 1920 by 1080 video, opaque.
-func opaqueSUP(n int) []byte {
+// same picture: the whole of a width by height video, opaque.
+func opaqueSUP(n, width, height int) []byte {
 	segment := func(kind byte, at time.Duration, payload []byte) []byte {
 		header := make([]byte, 13, 13+len(payload))
 		header[0], header[1], header[10] = 'P', 'G', kind
@@ -497,20 +497,21 @@ func opaqueSUP(n int) []byte {
 		binary.BigEndian.PutUint16(header[11:13], uint16(len(payload)))
 		return append(header, payload...)
 	}
-	// 1920 by 1080, starting an epoch the first time, placing object 0 at
-	// 0, 0 through palette 0.
+	size := binary.BigEndian.AppendUint16(binary.BigEndian.AppendUint16(nil, uint16(width)), uint16(height))
+	// width by height, starting an epoch the first time, placing object 0
+	// at 0, 0 through palette 0.
 	composition := func(epoch bool) []byte {
-		data := []byte{0x07, 0x80, 0x04, 0x38, 0x10, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}
+		data := append(slices.Clone(size), 0x10, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0)
 		if epoch {
 			data[7] = 0x80
 		}
 		return data
 	}
-	// Object 0, first and last of its sequence, 1920 by 1080, each line a
-	// run of color 1, opaque white.
-	object := []byte{0, 0, 0, 0xc0, 0, 0, 0, 0x07, 0x80, 0x04, 0x38}
-	for range 1080 {
-		object = append(object, 0, 0xc0|1920>>8, 1920&0xff, 1, 0, 0)
+	// Object 0, first and last of its sequence, width by height, each line
+	// a run of color 1, opaque white.
+	object := append([]byte{0, 0, 0, 0xc0, 0, 0, 0}, size...)
+	for range height {
+		object = append(object, 0, 0xc0|byte(width>>8), byte(width), 1, 0, 0)
 	}
 	var sup []byte
 	for i := range n {
@@ -526,15 +527,25 @@ func opaqueSUP(n int) []byte {
 }
 
 // A track's pictures are read by batches, each dropped once read: no more
-// than ocrBatchBytes of them are held at once, however many the track
-// shows, and the text keeps them all, in order.
+// than the service's bound of them are held at once, however many the
+// track shows, and the text keeps them all, in order. The bound,
+// ocrBatchBytes, is lowered here so that a few small pictures cross it:
+// the 40 full HD pictures crossing ocrBatchBytes took up to a minute to
+// decode under the race detector on CI.
 func TestPicturesAreReadByBatches(t *testing.T) {
 	t.Parallel()
 	disk := &localDisk{dir: t.TempDir(), states: map[string]string{}}
 	p := newPictureService(t, migrated.New(t), &fakeReader{languages: []string{"eng"}}, disk, "ffmpeg")
-	// 40 pictures of some 2 MB each.
-	const shown = 40
-	if err := os.WriteFile(filepath.Join(disk.dir, "sub.sup"), opaqueSUP(shown), 0o600); err != nil {
+	// 40 pictures of 216 by 132 pixels with their margins, about 28 kB,
+	// 3 to a batch of 100 kB.
+	const shown, batchBytes = 40, 100 << 10
+	p.pictures.mu.Lock()
+	if p.pictures.batchBytes != ocrBatchBytes {
+		t.Errorf("pictures read by batches of %d bytes, want %d", p.pictures.batchBytes, ocrBatchBytes)
+	}
+	p.pictures.batchBytes = batchBytes
+	p.pictures.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(disk.dir, "sub.sup"), opaqueSUP(shown, 192, 108), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	disk.setState("sub.sup", "1 1")
@@ -548,12 +559,12 @@ func TestPicturesAreReadByBatches(t *testing.T) {
 	total := 0
 	for _, bytes := range held {
 		total += bytes
-		if bytes > ocrBatchBytes {
-			t.Errorf("a read of %d MB of pictures", bytes>>20)
+		if bytes > batchBytes {
+			t.Errorf("a read of %d bytes of pictures", bytes)
 		}
 	}
-	if len(held) < 2 || total <= ocrBatchBytes {
-		t.Errorf("%d reads of %d MB in all", len(held), total>>20)
+	if len(held) < 2 || total <= batchBytes {
+		t.Errorf("%d reads of %d bytes in all", len(held), total)
 	}
 	cues, ok := p.TextCopyCues(t.Context(), version, videoAnalysis, files, 2)
 	if !ok || len(cues) != shown {

@@ -144,6 +144,9 @@ type pictureReader struct {
 	queue   []ocrJob
 	queued  map[ocrKey]bool
 	running int
+	// batchBytes bounds the pixels of the pictures of a track held at
+	// once: ocrBatchBytes, which tests lower.
+	batchBytes int
 	// missing are the languages tracks were in without data, by their
 	// Tesseract code, with the track's code for those Tesseract has none.
 	missing map[string]bool
@@ -211,6 +214,7 @@ func (s *Service) UseTesseract(ffmpeg, dir string, reader TextReader) {
 		s.pictures.fetching = map[string]bool{}
 		s.pictures.fetchFailed = map[string]fetchFailure{}
 		s.pictures.now = time.Now
+		s.pictures.batchBytes = ocrBatchBytes
 		s.pictures.failed = cache.New[ocrKey, error](2000, ocrFailureTTL)
 		s.pictures.ready = cache.New[readyKey, readyCopies](2000, readyFor)
 		s.pictures.texts = cache.New[ocrKey, []subtitles.Cue](200, time.Hour)
@@ -633,7 +637,7 @@ func (s *Service) readPictures(ctx context.Context, job ocrJob) (string, error) 
 		return "", nil
 	}
 	s.pictures.mu.Lock()
-	reader, ffmpeg, dir := s.pictures.reader, s.pictures.ffmpeg, s.pictures.dir
+	reader, ffmpeg, dir, batchBytes := s.pictures.reader, s.pictures.ffmpeg, s.pictures.dir, s.pictures.batchBytes
 	s.pictures.mu.Unlock()
 	language := ocr.Language(track.language, s.settings().Language)
 	available, err := reader.Languages(ctx)
@@ -644,7 +648,7 @@ func (s *Service) readPictures(ctx context.Context, job ocrJob) (string, error) 
 		return cmp.Or(language, localization.LanguageCode(track.language)), nil
 	}
 	started := time.Now()
-	cues, pictures, err := s.readPictureTrack(ctx, job, ffmpeg, dir, reader, language)
+	cues, pictures, err := s.readPictureTrack(ctx, job, ffmpeg, dir, reader, language, batchBytes)
 	if err != nil {
 		return "", err
 	}
@@ -667,10 +671,10 @@ func (s *Service) readPictures(ctx context.Context, job ocrJob) (string, error) 
 }
 
 // readPictureTrack reads a track's pictures into text with the data of
-// language, by batches of at most ocrBatchBytes of pictures, each dropped
+// language, by batches of at most batchBytes of pictures, each dropped
 // once read: a track's pictures are never all held at once. It returns
 // the cues, and how many pictures there were.
-func (s *Service) readPictureTrack(ctx context.Context, job ocrJob, ffmpeg, dir string, reader TextReader, language string) ([]subtitles.Cue, int, error) {
+func (s *Service) readPictureTrack(ctx context.Context, job ocrJob, ffmpeg, dir string, reader TextReader, language string, batchBytes int) ([]subtitles.Cue, int, error) {
 	var cues []subtitles.Cue
 	var batch []ocr.Picture
 	held, pictures := 0, 0
@@ -689,7 +693,7 @@ func (s *Service) readPictureTrack(ctx context.Context, job ocrJob, ffmpeg, dir 
 	}
 	err := s.trackPictures(ctx, job, ffmpeg, dir, func(picture ocr.Picture) error {
 		size := len(picture.Image.Pix)
-		if held+size > ocrBatchBytes {
+		if held+size > batchBytes {
 			if err := readBatch(); err != nil {
 				return err
 			}
