@@ -14,6 +14,7 @@ import (
 // included, without a body, with the token as a bearer token; the answer
 // is kept whatever its status, its start only.
 func TestAsk(t *testing.T) {
+	t.Parallel()
 	var method, uri, authorization, agent string
 	var body []byte
 	tool := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +41,7 @@ func TestAsk(t *testing.T) {
 
 // A redirect is the tool's answer: the request goes nowhere else.
 func TestAskFollowsNoRedirect(t *testing.T) {
+	t.Parallel()
 	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("the redirect was followed")
 	}))
@@ -55,6 +57,7 @@ func TestAskFollowsNoRedirect(t *testing.T) {
 // A tool that does not answer in time is told as such; one that cannot
 // be reached tells why, without the address.
 func TestAskFailures(t *testing.T) {
+	t.Parallel()
 	release := make(chan struct{})
 	silent := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
 	defer silent.Close()
