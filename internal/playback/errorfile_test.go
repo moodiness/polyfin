@@ -51,6 +51,7 @@ func refusedAnswer(err error) bool {
 // the first request is refused at the first byte, whatever its addon's
 // sizes are worth, and the analysis stays kept.
 func TestAKeptAnalysisRefusesAnErrorFileAtItsFirstByte(t *testing.T) {
+	t.Parallel()
 	const size = 8_350_994_751
 	host := &outageHost{errorFile: make([]byte, errorFileSize)}
 	host.down.Store(true)
@@ -85,6 +86,7 @@ func TestAKeptAnalysisRefusesAnErrorFileAtItsFirstByte(t *testing.T) {
 // again as soon as it answers a file of its own size, without waiting out
 // the time a failed version is skipped.
 func TestVersionsRefusedForAnErrorFileAreTriedAgainOnceTheHostRecovers(t *testing.T) {
+	t.Parallel()
 	// Over ten times the error file: under a tenth of a file's size is
 	// what an error file answers (see source.ErrorFiles).
 	const size = 20 << 20
@@ -136,6 +138,7 @@ func TestVersionsRefusedForAnErrorFileAreTriedAgainOnceTheHostRecovers(t *testin
 // announced does not side with it, and the file is read, so that the
 // analysis can be corrected or made again.
 func TestAnAnalysisOfAnotherFileDoesNotRefuseTheFile(t *testing.T) {
+	t.Parallel()
 	const size = 4 << 20
 	for _, announced := range []int64{size, 0} {
 		host := &outageHost{file: make([]byte, size)}

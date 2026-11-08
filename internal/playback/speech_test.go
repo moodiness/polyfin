@@ -32,11 +32,11 @@ import (
 // file and against the audio; one already in time and one of another
 // title are left as they are.
 func TestAddonSubtitlesAreSyncedToTheVersionPlayed(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
-	t.Parallel()
 	const length = 12 * time.Minute
 	spoken := testspeech.Bursts(1, length)
 	same := func(d time.Duration) time.Duration { return d }
@@ -131,11 +131,11 @@ func TestASubtitleOfAnotherCutKeepsItsCut(t *testing.T) {
 // late subtitle is still synced; under 30 seconds each, the version has
 // no speech reference, and its subtitles are served as they are.
 func TestStretchesShortenToTheReadBudget(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
-	t.Parallel()
 	const length = 12 * time.Minute
 	spoken := testspeech.Bursts(1, length)
 	data := testspeech.Version(t, ffmpeg, spoken, length, false)
@@ -392,11 +392,11 @@ func speechLookedFor(t *testing.T, s *Service) {
 // The first play of an addon's link has its version's speech found in the
 // background: its addon subtitle, 4 seconds late, comes back in time.
 func TestALinksFirstPlayFindsItsSpeech(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
-	t.Parallel()
 	const length = 12 * time.Minute
 	spoken := testspeech.Bursts(1, length)
 	s := speechService(t, ffmpeg, &fileSource{data: testspeech.Version(t, ffmpeg, spoken, length, false)})
@@ -419,11 +419,11 @@ func TestALinksFirstPlayFindsItsSpeech(t *testing.T) {
 // for nothing to find its speech: the seeder sends nothing, and the addon
 // subtitle, 4 seconds late, is served as it is.
 func TestATorrentsFirstPlayDownloadsNothingForItsSpeech(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
-	t.Parallel()
 	const length = 12 * time.Minute
 	spoken := testspeech.Bursts(1, length)
 	data := testspeech.Version(t, ffmpeg, spoken, length, false)

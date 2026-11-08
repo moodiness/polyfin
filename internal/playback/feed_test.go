@@ -242,6 +242,7 @@ func eventually(t *testing.T, what string, cond func() bool) {
 // the analysis, FFmpeg, players. It stays open a moment after the last
 // reader left, so that a quick return finds it, then closes.
 func TestLiveStreamsShareOneConnection(t *testing.T) {
+	t.Parallel()
 	src := &liveSource{interval: 5 * time.Millisecond}
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
@@ -282,6 +283,7 @@ func TestLiveStreamsShareOneConnection(t *testing.T) {
 // classified as the stream health records it; a silent source within the
 // time given to its first bytes.
 func TestDeadLiveStreamsFailAtOnce(t *testing.T) {
+	t.Parallel()
 	path, runs := fakeProbe(t, "{}", false)
 	s := liveService(t, &liveSource{}, path)
 	var mu sync.Mutex
@@ -331,6 +333,7 @@ func TestDeadLiveStreamsFailAtOnce(t *testing.T) {
 // they come within the time the source has to answer, however long after
 // its answer.
 func TestLateFirstBytesStillPlay(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -362,6 +365,7 @@ func TestLateFirstBytesStillPlay(t *testing.T) {
 // A stream that stops sending ends its feed after feedStall, and one cut
 // mid-stream ends it at once: readers see the end rather than wait.
 func TestStalledAndCutStreamsEndTheirFeed(t *testing.T) {
+	t.Parallel()
 	s := liveService(t, &liveSource{}, "ffprobe-not-installed")
 	for n, name := range []string{"stall.ts", "reset.ts"} {
 		reader, err := s.openFeed(t.Context(), channelVersion(byte(n+1), name, accounts.ID{}))
@@ -389,6 +393,7 @@ func TestStalledAndCutStreamsEndTheirFeed(t *testing.T) {
 // others read on. The source moves on only when the test says, so neither
 // reader's speed matters.
 func TestSlowReadersAreDropped(t *testing.T) {
+	t.Parallel()
 	src := &liveSource{more: make(chan int), sent: make(chan struct{})}
 	s := liveService(t, src, "ffprobe-not-installed")
 	// The source pauses as long as the test takes between what it sends.
@@ -422,6 +427,7 @@ func TestSlowReadersAreDropped(t *testing.T) {
 // replaces their own stream, idle ones are closed first, and another
 // user's stream is never taken: the new one is refused at once.
 func TestSourceConnectionsAreKept(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
@@ -462,6 +468,7 @@ func TestSourceConnectionsAreKept(t *testing.T) {
 // closed, and the source counts it meanwhile: another stream of the source
 // waits for it rather than opening a second connection.
 func TestAStreamWaitsForAConnectionStillClosing(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	closing := make(chan struct{})
 	src := &liveSource{interval: 5 * time.Millisecond, closing: closing}
@@ -494,6 +501,7 @@ func TestAStreamWaitsForAConnectionStillClosing(t *testing.T) {
 // A provider still counting the connection Polyfin just closed refuses
 // the next one for a moment: the open is tried again.
 func TestAnOpenRefusedAfterARoomWasMadeIsTriedAgain(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
@@ -517,6 +525,7 @@ func TestAnOpenRefusedAfterARoomWasMadeIsTriedAgain(t *testing.T) {
 // A source of unknown limit that refuses a stream while another, read by
 // no one, waits out its grace has that one closed, and is asked again.
 func TestARefusalClosesStreamsNoOneReads(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
@@ -546,6 +555,7 @@ func TestARefusalClosesStreamsNoOneReads(t *testing.T) {
 // What a channel's stream holds is kept: the next start, even after a
 // restart, needs neither the source nor ffprobe.
 func TestLiveShapesAreKept(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -579,6 +589,7 @@ func TestLiveShapesAreKept(t *testing.T) {
 // An HLS playlist has no feed: it is told apart at its first bytes and
 // relayed file by file.
 func TestPlaylistsHaveNoFeed(t *testing.T) {
+	t.Parallel()
 	s := liveService(t, &liveSource{}, "ffprobe-not-installed")
 	version := channelVersion(1, "playlist.m3u8", accounts.ID{})
 	if _, err := s.openFeed(t.Context(), version); !errors.Is(err, errManifest) {
@@ -663,6 +674,7 @@ func feedOf(data []byte, junk int) *feed {
 // indicator or, without one, by their NAL units, packets split across
 // writes included.
 func TestFeedsFindTheKeyframesOfTheirStream(t *testing.T) {
+	t.Parallel()
 	marked := generatedTS(t, "libx264", true)
 	want := indicatedKeys(marked)
 	if len(want) != 4 {
@@ -706,6 +718,7 @@ func readSome(t *testing.T, r *feedReader, n int) []byte {
 // even once more came. What it reads decodes from its first bytes, with
 // FFmpeg's short probe.
 func TestReadersStartAtAKeyframe(t *testing.T) {
+	t.Parallel()
 	data := generatedTS(t, "libx264", true)
 	keys := indicatedKeys(data)
 	f := feedOf(data, 0)
@@ -761,6 +774,7 @@ func TestReadersStartAtAKeyframe(t *testing.T) {
 // found in time, where half a second of probing failed ("sample rate not
 // set") and the stream was read again.
 func TestTheShortProbeFindsLateAudio(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -784,6 +798,7 @@ func TestTheShortProbeFindsLateAudio(t *testing.T) {
 // Without a keyframe in its first keyframeWait bytes, or not MPEG-TS, a
 // feed's readers start feedJoin back, on a packet.
 func TestReadersOfStreamsWithoutKeyframesStillStart(t *testing.T) {
+	t.Parallel()
 	f := feedOf(bytes.Repeat([]byte("not a stream "), 1000), 0)
 	if !f.index.off {
 		t.Error("a stream of no packets is indexed")
@@ -836,6 +851,7 @@ func heldProbe(t *testing.T) (path, started, released string) {
 // the stream's: its health is told nothing, so the tuner shows no problem,
 // and the next start tries it again at once.
 func TestAReplacedStartIsNoFailure(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	for _, tc := range []struct {
 		name string
@@ -900,6 +916,7 @@ func TestAReplacedStartIsNoFailure(t *testing.T) {
 // is told it played once it answers, as the analysis would have told, so
 // that a tuner's problem clears on any play.
 func TestAPlayOfAStreamAnalyzedBeforeTellsItPlayed(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)

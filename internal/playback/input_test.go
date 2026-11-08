@@ -60,6 +60,7 @@ func (f fakeInputs) Identity(_ context.Context, key string) (string, string, err
 // converted. A disc whose keyframes cannot be read, as a DVD's, is cut
 // every few seconds, its video only converted.
 func TestDiscsAreCutOnTheirKeyframes(t *testing.T) {
+	t.Parallel()
 	s := newService(t, &fakeSource{}, "ffprobe-not-installed", nil)
 	keyframes := make([]time.Duration, 190)
 	for i := range keyframes {
@@ -109,6 +110,7 @@ func TestDiscsAreCutOnTheirKeyframes(t *testing.T) {
 // tells a Blu-ray image whose UDF file system it does not read so (see
 // localfiles.Service.UseProbe).
 func TestProbesInput(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")

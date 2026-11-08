@@ -19,6 +19,7 @@ import (
 // of a channel's archive share theirs; an unsearched version never uses
 // one.
 func TestLookbacksAreKeptByFile(t *testing.T) {
+	t.Parallel()
 	first := newService(t, &fakeSource{}, "ffprobe-not-installed", nil)
 	// The same database, as after a restart.
 	again := newServiceOn(t, first.db, &fakeSource{}, "ffprobe-not-installed", nil)

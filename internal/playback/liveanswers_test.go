@@ -146,6 +146,7 @@ func (l *logText) line(message string) string {
 // merely stops sending, after a page it answered and media since, tells
 // of no page. The log holds no address nor token.
 func TestALiveConversionTellsWhatItsSourceAnswered(t *testing.T) {
+	t.Parallel()
 	ffmpeg, segments := liveStream(t, 60)
 	page := []byte("<!DOCTYPE html><html><body>Access denied for secret-token</body></html>")
 	for _, tc := range []struct {

@@ -138,6 +138,7 @@ func providerVersion() library.Version {
 // by, as FFmpeg refuses a segment named .png, .jpg, .php or nothing that
 // holds MPEG-TS ("Invalid data found when processing input").
 func TestSegmentsAreReadWhateverTheirName(t *testing.T) {
+	t.Parallel()
 	ffprobe, segments := hlsSegments(t)
 	for _, tc := range []struct {
 		name   string
@@ -168,6 +169,7 @@ func TestSegmentsAreReadWhateverTheirName(t *testing.T) {
 // A picture in front of each segment's MPEG-TS, as some providers put
 // one, is skipped: FFmpeg would find the picture instead.
 func TestPicturesInFrontOfSegmentsAreSkipped(t *testing.T) {
+	t.Parallel()
 	ffprobe, segments := hlsSegments(t)
 	for _, tc := range []struct {
 		name    string
@@ -200,6 +202,7 @@ func TestPicturesInFrontOfSegmentsAreSkipped(t *testing.T) {
 // that holds no MPEG-TS after it, and a segment without a picture, are
 // relayed as they are.
 func TestRelayedSegmentsLoseThePictureInFront(t *testing.T) {
+	t.Parallel()
 	ts := bytes.Repeat(tsChunk, 4)
 	webp := []byte("RIFF\x24\x00\x00\x00WEBPVP8 \x18\x00\x00\x00" + strings.Repeat("\x10", 24))
 	for _, tc := range []struct {
@@ -279,6 +282,7 @@ func (r *records) attr(message, key string) (string, bool) {
 // nothing in time; FFmpeg's line refusing a segment by its name is kept,
 // with the file name only. The log names the stream.
 func TestHLSFilesThatAnswerNoMediaAreTold(t *testing.T) {
+	t.Parallel()
 	ffprobe, segments := hlsSegments(t)
 	page := []byte("<!DOCTYPE html><html><body>Access denied for secret-token</body></html>")
 	segmentName := func(n int) string { return "s" + strconv.Itoa(n) + ".ts" }

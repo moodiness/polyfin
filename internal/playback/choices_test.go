@@ -19,6 +19,7 @@ import (
 // An analysis that outlasts the settings' timeout is given up, of a file
 // as of a live stream, and the version is not tried again for a while.
 func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
+	t.Parallel()
 	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
@@ -64,6 +65,7 @@ func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
 // keeping its shape, at the bitrate of that height; under the cap, nothing
 // changes.
 func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
+	t.Parallel()
 	can := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true}
 	video := func(width, height int) MediaStream {
 		return MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(width), Height: new(height)}

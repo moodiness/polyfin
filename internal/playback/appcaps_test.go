@@ -51,6 +51,7 @@ func TestConversionKeepsWithinTheAppsProfile(t *testing.T) {
 			1920, 1080, "4.1", 0, 8_000_000, "baseline"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			decision := Decide(test.profile, source(test.rate), Options{EnableDirectPlay: true, Can: software})
 			v := decision.Video
 			if !decision.HLS || v == nil {

@@ -15,6 +15,7 @@ import (
 // share, and leaves the video the rest. With no limit, and where the track
 // fits its share, it is copied as before.
 func TestCopiedAudioStaysWithinTheLimit(t *testing.T) {
+	t.Parallel()
 	// Swiftfin's native player takes AAC, AC-3, ALAC, E-AC-3 and FLAC
 	// over HLS, up to 8 channels, and no Matroska file as it is.
 	profile := readDeviceProfile(t, "swiftfin-native")
@@ -58,6 +59,7 @@ func TestCopiedAudioStaysWithinTheLimit(t *testing.T) {
 // a lossy codec it takes, whose bitrate the limit bounds; with no limit it
 // keeps the app's order.
 func TestAudioConvertedUnderALimitIsLossy(t *testing.T) {
+	t.Parallel()
 	surround := AudioSource{Channels: 6, ChannelLayout: "5.1(side)"}
 	if got := ConvertAudio("flac,aac", "6", surround, 3_000_000, Tuning{}); got == nil || got.Codec != "aac" || got.Bitrate != 448_000 {
 		t.Errorf("within 3 Mb/s: %+v", got)

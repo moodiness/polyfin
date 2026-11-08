@@ -22,6 +22,7 @@ import (
 // Jellyfin's 2: conversions otherwise run as before they were settings
 // (see hls.TestDefaultSettingsKeepTheArguments).
 func TestDefaultSettingsTuneOnlyTheStereoVolume(t *testing.T) {
+	t.Parallel()
 	s := newService(t, &fakeSource{}, "ffprobe", nil)
 	if got := s.Capabilities().Tuning; !reflect.DeepEqual(got, Tuning{DownmixBoost: 2}) {
 		t.Errorf("default tuning: %+v", got)
@@ -29,6 +30,7 @@ func TestDefaultSettingsTuneOnlyTheStereoVolume(t *testing.T) {
 }
 
 func TestTuningChangesConversions(t *testing.T) {
+	t.Parallel()
 	can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
 	sdr := MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(1920), Height: new(1080)}
 	hdr := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", Width: new(3840), Height: new(2160)}
@@ -198,6 +200,7 @@ func TestTuningChangesConversions(t *testing.T) {
 // Untuned, a conversion keeps the frame rate, which it pins, decodes on
 // the GPU and lets FFmpeg choose its threads, as before the settings.
 func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
+	t.Parallel()
 	gpu := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}}
 	can := Capabilities{Encoders: []string{"libx264"}, Hardware: gpu}
 	interlaced := MediaStream{Codec: "hevc", VideoRange: "SDR", Width: new(1920), Height: new(1080), IsInterlaced: true}
@@ -216,6 +219,7 @@ func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
 // the dynamic range compression chosen; only mixed down to stereo when it
 // stands for audio the play copied.
 func TestSwitchedSourceConvertsAsThePlay(t *testing.T) {
+	t.Parallel()
 	before := media.Analysis{Streams: []media.Stream{{Index: 1, Type: "audio", Codec: "aac", Channels: 2, SampleRate: 48_000}}}
 	after := media.Analysis{Streams: []media.Stream{{Index: 1, Type: "audio", Codec: "eac3", Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44_100}}}
 	c := &carry{remux: Remux{Audio: 1, Format: hls.TS}, analysis: before}
@@ -240,6 +244,7 @@ func TestSwitchedSourceConvertsAsThePlay(t *testing.T) {
 // A conversion with a slower preset, a quality factor, HEVC and a downmix
 // to stereo, normalized, its AC-3 decoded with night compression, plays.
 func TestTunedConversionPlays(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -311,6 +316,7 @@ func TestTunedConversionPlays(t *testing.T) {
 // tuning tone maps on the processor, and so does the encoding of a
 // conversion planned with it, on NVIDIA's GPU as on Intel's.
 func TestGPUToneMappingTurnedOffReachesTheEncoding(t *testing.T) {
+	t.Parallel()
 	settings := accounts.DefaultSettings()
 	if TuningOf(settings).CPUToneMapping {
 		t.Error("the processor tone maps by default")

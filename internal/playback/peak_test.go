@@ -19,6 +19,7 @@ func peaking(c *VideoConversion, peak int64) *VideoConversion {
 // within the limit. Where the limit leaves more, and with no limit, the
 // video peaks at one and a half times its bitrate, as before.
 func TestConvertedVideoPeaksWithinTheLimit(t *testing.T) {
+	t.Parallel()
 	video := MediaStream{Codec: "hevc", BitDepth: new(10), BitRate: new(int64(15_000_000))}
 	source := bitrateSource(video, dts(6))
 	stream := media.Stream{Codec: "hevc", BitDepth: 10, Width: 1920, Height: 1080, AverageRate: 24}

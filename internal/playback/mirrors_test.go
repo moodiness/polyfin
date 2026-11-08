@@ -66,6 +66,7 @@ func mirrored(dying, other string, size int) library.Version {
 // A file relayed to a player reads on from the copy another addon lists
 // once its host goes down mid-read: the player gets the whole file.
 func TestARelayedReadGoesOnFromAMirror(t *testing.T) {
+	t.Parallel()
 	data := make([]byte, 5<<20+321)
 	_, _ = rand.Read(data)
 	hosts := &mirrorHosts{data: data, dying: "http://192.168.1.10", cut: 2<<20 + 17}
@@ -86,6 +87,7 @@ func TestARelayedReadGoesOnFromAMirror(t *testing.T) {
 // Direct play sends the player to the version's own link: a player that
 // reads the source itself cannot be carried on from a copy.
 func TestDirectPlayIgnoresMirrors(t *testing.T) {
+	t.Parallel()
 	hosts := &mirrorHosts{data: make([]byte, 1000), dying: "https://93.184.216.34", cut: 1000}
 	s := newService(t, hosts, "ffprobe", nil)
 	version := mirrored("https://93.184.216.34", "https://93.184.216.35", 1000)

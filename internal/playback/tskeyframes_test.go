@@ -23,6 +23,7 @@ import (
 // converted, as before, and is not read again either; nor is an addon's
 // MPEG-TS file read whole.
 func TestLocalMPEGTSFilesAreCutOnTheirKeyframes(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")

@@ -103,6 +103,7 @@ func codecString(codec, level string) string {
 // which then holds the bitrates. The playlist's CODECS and FRAME-RATE say
 // the same.
 func TestTheLevelHoldsWhatTheEncoderIsTold(t *testing.T) {
+	t.Parallel()
 	gpu := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}}
 	can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true, Hardware: gpu}
 	for _, c := range []struct {
@@ -140,6 +141,7 @@ func TestTheLevelHoldsWhatTheEncoderIsTold(t *testing.T) {
 			average: 24000.0 / 1001, real: 24000.0 / 1001, bitrate: 40_000_000, app: AppCaps{Levels: map[string]int{"hevc": 123}}, level: "4.1"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			video := media.Stream{Index: 0, Type: "video", Codec: c.source, Width: c.width, Height: c.height, AverageRate: c.average,
 				FrameRate: c.real, PixelFormat: "yuv420p", BitDepth: 8, Bitrate: c.bitrate, FieldOrder: c.field}
 			can := can

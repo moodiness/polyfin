@@ -52,6 +52,7 @@ func (p pausedBody) Read([]byte) (int, error) {
 // feedJoin back and dropping the probed second and a half left too few,
 // the next ones waiting for keyframes the source had not sent.
 func TestTheFirstLivePlaylistTakesItsLeadFromTheKeptStream(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")

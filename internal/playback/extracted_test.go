@@ -11,6 +11,7 @@ import (
 )
 
 func TestExtractedSubtitlesAccumulateAcrossRemuxes(t *testing.T) {
+	t.Parallel()
 	s := func(n float64) time.Duration { return time.Duration(n * float64(time.Second)) }
 	cue := func(start, end float64, lines ...string) subtitles.Cue {
 		return subtitles.Cue{Start: s(start), End: s(end), Lines: lines}
@@ -65,6 +66,7 @@ func TestExtractedSubtitlesAccumulateAcrossRemuxes(t *testing.T) {
 }
 
 func TestStoredSubtitlesAreNotHiddenByARequestTheAppGaveUp(t *testing.T) {
+	t.Parallel()
 	path, _ := fakeProbe(t, "", false)
 	s := newService(t, &fakeSource{}, path, nil)
 	version := accounts.ID{9}

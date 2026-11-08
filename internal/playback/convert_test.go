@@ -22,6 +22,7 @@ func sizeless(v *VideoConversion) *VideoConversion {
 // group before the settings' maximum, and the bitrate when it allows less
 // than all of them.
 func TestAConversionTellsWhatSetItsSize(t *testing.T) {
+	t.Parallel()
 	software := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true}
 	nvidia := software
 	nvidia.Hardware = &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
@@ -69,6 +70,7 @@ func TestAConversionTellsWhatSetItsSize(t *testing.T) {
 // A decision tells whose the bitrate limit is: the user's when the app's
 // was not lower.
 func TestADecisionTellsWhoseBitrateLimitSetTheSize(t *testing.T) {
+	t.Parallel()
 	source := MediaSource{Container: "mkv", Bitrate: 30_000_000, Streams: []MediaStream{
 		{Type: "Video", Index: 0, Codec: "h264", Profile: "High", Level: new(41.0), VideoRange: "SDR", VideoRangeType: "SDR",
 			Width: new(1920), Height: new(1080), AverageFrameRate: new(24.0), BitRate: new(int64(29_800_000))},
@@ -97,6 +99,7 @@ func TestADecisionTellsWhoseBitrateLimitSetTheSize(t *testing.T) {
 // is the lowest cap: 720p when unknown, and never above the software
 // encoder's 1080p.
 func TestTheToneMappedCapFollowsTheCapability(t *testing.T) {
+	t.Parallel()
 	amd := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}}
 	hdr := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", ColorTransfer: "smpte2084", Width: new(3840), Height: new(1600)}
 	for _, test := range []struct {
@@ -129,6 +132,7 @@ func TestTheToneMappedCapFollowsTheCapability(t *testing.T) {
 // 5. With tone mapping on the graphics card turned off,
 // every GPU leaves HDR to the processor, and profile 5 is refused.
 func TestWhereHDRIsToneMapped(t *testing.T) {
+	t.Parallel()
 	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
 	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
 	qsv := &hls.Hardware{Method: "qsv", Encoders: []string{"h264_qsv"}, ToneMapping: true}
