@@ -1240,6 +1240,7 @@ func localImageOn(t *testing.T, ffprobe, name string, share bool) (playbackSetup
 func TestLocalDiscImagesPlay(t *testing.T) {
 	t.Parallel()
 	t.Run("dvd", func(t *testing.T) {
+		t.Parallel()
 		ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
 		p, local := localImage(t, ffprobe, "dvd")
 		var version BaseItemDto
@@ -1256,11 +1257,13 @@ func TestLocalDiscImagesPlay(t *testing.T) {
 		}
 	})
 	t.Run("bluray", func(t *testing.T) {
+		t.Parallel()
 		ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 		p, local := localImage(t, ffprobe, "bluray")
 		playsCopied(t, p, local, ffmpeg, ffprobe)
 	})
 	t.Run("bluray-udf", func(t *testing.T) {
+		t.Parallel()
 		ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 		p, local := localImage(t, ffprobe, "bluray-udf")
 		playsCopied(t, p, local, ffmpeg, ffprobe)
@@ -1275,11 +1278,13 @@ func TestShareBluRaysPlayCopied(t *testing.T) {
 	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "mpegts")
 	t.Run("folder", func(t *testing.T) {
+		t.Parallel()
 		p, local := localBluRayOn(t, ffprobe, true)
 		playsCopied(t, p, local, ffmpeg, ffprobe)
 	})
 	for _, name := range []string{"bluray", "bluray-udf"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			p, local := localImageOn(t, ffprobe, name, true)
 			playsCopied(t, p, local, ffmpeg, ffprobe)
 		})
@@ -1294,12 +1299,13 @@ func TestShareBluRaysPlayCopied(t *testing.T) {
 func TestShareDVDsPlayOverHLS(t *testing.T) {
 	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "mpeg")
-	for name, open := range map[string]func() (playbackSetup, MediaSourceInfo){
-		"folder": func() (playbackSetup, MediaSourceInfo) { return localDVDOn(t, ffprobe, true) },
-		"image":  func() (playbackSetup, MediaSourceInfo) { return localImageOn(t, ffprobe, "dvd", true) },
+	for name, open := range map[string]func(*testing.T) (playbackSetup, MediaSourceInfo){
+		"folder": func(t *testing.T) (playbackSetup, MediaSourceInfo) { return localDVDOn(t, ffprobe, true) },
+		"image":  func(t *testing.T) (playbackSetup, MediaSourceInfo) { return localImageOn(t, ffprobe, "dvd", true) },
 	} {
 		t.Run(name, func(t *testing.T) {
-			p, local := open()
+			t.Parallel()
+			p, local := open(t)
 			source := playDisc(t, p, local, 8*time.Second)
 			if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video mpeg2video ", "Audio ac3 eng", "Audio ac3 fra", "Subtitle DVDSUB eng"}) {
 				t.Errorf("tracks: %q", got)

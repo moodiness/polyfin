@@ -200,6 +200,7 @@ func TestAppsRestoreABackupAsTheAdminAppDoes(t *testing.T) {
 	if pgDump == "" || pgRestore == "" {
 		t.Skip("POLYFIN_TEST_PG_DUMP and POLYFIN_TEST_PG_RESTORE name no pg_dump and pg_restore of PostgreSQL 18")
 	}
+	testdb.LockRestores(t)
 	box, err := secrets.New([]byte("0123456789abcdef0123456789abcdef"))
 	if err != nil {
 		t.Fatal(err)
