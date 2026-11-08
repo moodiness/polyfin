@@ -110,10 +110,11 @@ func TestSongsAndAlbumsCarryTheirGains(t *testing.T) {
 	token := s.signIn("listener", "web")
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
-	if len(views.Items) != 1 {
+	libraries := libraryViews(views.Items)
+	if len(libraries) != 1 {
 		t.Fatalf("libraries: %+v", views.Items)
 	}
-	records := views.Items[0].Id
+	records := libraries[0].Id
 
 	describe := func() (albums, songs map[string]float64, details float64, ok bool) {
 		t.Helper()

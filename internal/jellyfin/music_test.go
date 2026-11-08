@@ -173,7 +173,7 @@ func TestEclipseAddonPlaysInJellyfinMusicApps(t *testing.T) {
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
 	ids := map[string]string{}
-	for _, view := range views.Items {
+	for _, view := range libraryViews(views.Items) {
 		if view.CollectionType != "music" {
 			t.Errorf("%s is a %q library", view.Name, view.CollectionType)
 		}

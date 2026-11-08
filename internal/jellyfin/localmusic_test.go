@@ -71,10 +71,11 @@ func TestLocalMusicFoldersPlayInJellyfinApps(t *testing.T) {
 
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
-	if len(views.Items) != 1 || views.Items[0].Name != "Records" || views.Items[0].CollectionType != "music" {
+	libraries := libraryViews(views.Items)
+	if len(libraries) != 1 || libraries[0].Name != "Records" || libraries[0].CollectionType != "music" {
 		t.Fatalf("libraries: %+v", views.Items)
 	}
-	records := views.Items[0].Id
+	records := libraries[0].Id
 	var albums QueryResult
 	s.get(t, "/Items?ParentId="+records+"&IncludeItemTypes=MusicAlbum&Recursive=true", token, &albums)
 	if len(albums.Items) != 1 || albums.Items[0].Name != "Sine Studies" || albums.Items[0].AlbumArtist != "Tone Quartet" {
@@ -202,10 +203,11 @@ func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
 	s.user("listener", nil)
 	token := s.signIn("listener", "web")
 
-	// The playlist, listed as Jellyfin apps list playlists.
+	// The playlist, listed as Jellyfin apps list playlists, beside the
+	// user's Watchlist.
 	var lists QueryResult
 	s.get(t, "/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=SortName", token, &lists)
-	if len(lists.Items) != 1 || lists.Items[0].Name != "Sine Mix" || lists.Items[0].Type != "Playlist" || lists.TotalRecordCount != 1 {
+	if names := itemNames(lists.Items); !slices.Equal(names, []string{"Sine Mix", "Watchlist"}) || lists.Items[0].Type != "Playlist" || lists.TotalRecordCount != 2 {
 		t.Fatalf("playlists: %+v", lists.Items)
 	}
 	var entries QueryResult
