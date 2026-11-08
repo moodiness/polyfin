@@ -8,18 +8,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
-// fixedChoices offers one collection for home rows.
+// fixedChoices offers one collection and one playlist for home rows.
 type fixedChoices struct{}
 
 func (fixedChoices) HomeRowCollections(context.Context, accounts.User) ([]jellyfin.HomeRowCollection, error) {
 	id, _ := accounts.ParseID("0123456789abcdef0123456789abcdef")
 	return []jellyfin.HomeRowCollection{{ID: id, Name: "Picks", Source: "users"}}, nil
+}
+
+func (fixedChoices) HomeRowPlaylists(context.Context) ([]jellyfin.HomeRowPlaylist, error) {
+	id, _ := accounts.ParseID("fedcba9876543210fedcba9876543210")
+	return []jellyfin.HomeRowPlaylist{{ID: id, Name: "Friday night", OwnerName: "member", Access: "shared"}}, nil
 }
 
 // rowNames lists the names of the rows of an answer.
@@ -214,6 +221,83 @@ func (p *fixedPreviews) PreviewHomeRows(_ context.Context, user accounts.User) (
 			{ID: id("30000000000000000000000000000000"), Kind: library.KindEpisode, Name: "Pilot", SeriesID: id("40000000000000000000000000000000")},
 			{ID: id("50000000000000000000000000000000"), Kind: library.KindMovie, Name: "Movie", ProductionYear: 2001},
 		}}}, nil
+}
+
+func (*fixedPreviews) WatchlistRowName(context.Context, accounts.User) (string, error) {
+	return "Mine to watch", nil
+}
+
+// Rows of the Watchlist, of favorite playlists and of a chosen playlist
+// are added with the playlist field, refused when their fields do not go
+// together or name no playlist, and deleted with their playlist. A member
+// sees a Watchlist row by their own Watchlist's name.
+func TestPlaylistHomeRowRoutes(t *testing.T) {
+	t.Parallel()
+	var pool *pgxpool.Pool
+	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
+		o.HomeRows = homerows.New(d.pool)
+		o.HomeRowChoices = fixedChoices{}
+		o.HomeRowPreviews = &fixedPreviews{}
+		pool = d.pool
+	})
+	administrator := api.signedIn("administrator", true)
+	member := api.signedIn("member", false)
+	_, me, _ := member.call(http.MethodGet, "/session", nil)
+	memberID := me["user"].(map[string]any)["id"].(string)
+	status, choices, _ := administrator.call(http.MethodGet, "/home-rows/choices", nil)
+	lists, _ := choices["playlists"].([]any)
+	if status != http.StatusOK || len(lists) != 1 || lists[0].(map[string]any)["ownerName"] != "member" || lists[0].(map[string]any)["access"] != "shared" {
+		t.Fatalf("choices: %d %v", status, choices)
+	}
+	playlist := "fedcba9876543210fedcba9876543210"
+	if _, err := pool.Exec(t.Context(), "INSERT INTO playlists (id, owner_id, name) VALUES ($1, $2, 'Friday night')", playlist, memberID); err != nil {
+		t.Fatal(err)
+	}
+	for _, refused := range []map[string]any{
+		{"name": "Rows", "kind": "playlist", "place": "top", "everyone": true},
+		{"name": "Rows", "kind": "playlist", "place": "top", "playlistId": "not an identifier", "everyone": true},
+		{"name": "Rows", "kind": "playlist", "place": "top", "playlistId": "0123456789abcdef0123456789abcdef", "everyone": true},
+		{"name": "Rows", "kind": "watchlist", "place": "top", "playlistId": playlist, "everyone": true},
+		{"name": "Rows", "kind": "playlists", "place": "top", "playlistId": playlist, "everyone": true},
+		{"name": "Rows", "kind": "playlists", "place": "top", "library": true, "everyone": true},
+		{"name": "Rows", "kind": "playlists", "place": "top", "count": 11, "everyone": true},
+		{"name": "Rows", "kind": "playlists", "place": "top", "count": -1, "everyone": true},
+	} {
+		if status, body, _ := administrator.call(http.MethodPost, "/home-rows", refused); status != http.StatusBadRequest || body["error"] != "invalid_home_row" {
+			t.Errorf("%v: %d %v", refused, status, body)
+		}
+	}
+	status, watchlist, _ := administrator.call(http.MethodPost, "/home-rows", map[string]any{"name": "À regarder", "kind": "watchlist",
+		"place": "top", "everyone": true, "library": true})
+	if status != http.StatusCreated || watchlist["kind"] != "watchlist" || watchlist["playlistId"] != "" || watchlist["library"] != true {
+		t.Fatalf("a Watchlist row: %d %v", status, watchlist)
+	}
+	status, favorites, _ := administrator.call(http.MethodPost, "/home-rows", map[string]any{"name": "My playlists", "kind": "playlists",
+		"place": "bottom", "count": 10, "everyone": true})
+	if status != http.StatusCreated || favorites["count"] != 10.0 {
+		t.Fatalf("a My playlists row: %d %v", status, favorites)
+	}
+	status, chosen, _ := administrator.call(http.MethodPost, "/home-rows", map[string]any{"name": "Friday", "kind": "playlist",
+		"place": "nextup", "playlistId": playlist, "everyone": true, "library": true})
+	if status != http.StatusCreated || chosen["playlistId"] != playlist || chosen["library"] != true {
+		t.Fatalf("a playlist row: %d %v", status, chosen)
+	}
+	gone := map[string]any{"name": "Friday", "kind": "playlist", "place": "nextup", "playlistId": "0123456789abcdef0123456789abcdef", "everyone": true}
+	if status, body, _ := administrator.call(http.MethodPatch, "/home-rows/"+chosen["id"].(string), gone); status != http.StatusBadRequest ||
+		body["error"] != "invalid_home_row" {
+		t.Errorf("changed to a playlist that does not exist: %d %v", status, body)
+	}
+	_, own, _ := member.call(http.MethodGet, "/account/home-rows", nil)
+	if got := rowNames(own); !slices.Equal(got, []string{"Mine to watch", "My playlists", "Friday"}) {
+		t.Errorf("the member's rows: %v", got)
+	}
+	if _, err := pool.Exec(t.Context(), "DELETE FROM playlists WHERE id = $1", playlist); err != nil {
+		t.Fatal(err)
+	}
+	_, list, _ := administrator.call(http.MethodGet, "/home-rows", nil)
+	if got := rowNames(list); !slices.Equal(got, []string{"À regarder", "My playlists"}) {
+		t.Errorf("after the playlist is deleted: %v", got)
+	}
 }
 
 // Preview as asks for the rows of the user chosen, as their account is,

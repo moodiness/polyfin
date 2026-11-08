@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -13,26 +14,30 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 )
 
-// HomeRowChoices tells the collections a home row may list, as the Jellyfin
-// API describes them to user.
+// HomeRowChoices tells the collections and playlists a home row may list,
+// as the Jellyfin API describes them to user.
 type HomeRowChoices interface {
 	HomeRowCollections(ctx context.Context, user accounts.User) ([]jellyfin.HomeRowCollection, error)
+	HomeRowPlaylists(ctx context.Context) ([]jellyfin.HomeRowPlaylist, error)
 }
 
 // HomeRowPreviews tells the rows a user sees now on the web player's home
 // page, each with its first titles, as the Jellyfin API answers them to
-// the web player.
+// the web player, and the name of their Watchlist, which names a
+// Watchlist row for them.
 type HomeRowPreviews interface {
 	PreviewHomeRows(ctx context.Context, user accounts.User) ([]jellyfin.HomeRowPreview, error)
+	WatchlistRowName(ctx context.Context, user accounts.User) (string, error)
 }
 
 // homeRowJSON is a row of the web player's home page (Settings › Web
 // player › Home rows, see package homerows). addonId, catalogType and
 // catalogId name a catalog row's catalog; collectionId a collection
-// row's collection; count is how many rows a Because you watched row
-// makes; users are those a row not shown to everyone is shown to;
-// schedule is when it shows. shownNow, in answers only, tells whether the
-// schedule shows it now.
+// row's collection; playlistId a playlist row's playlist; count is how
+// many rows a Because you watched or a My playlists row makes; users are
+// those a row not shown to everyone is shown to; schedule is when it
+// shows. shownNow, in answers only, tells whether the schedule shows it
+// now.
 type homeRowJSON struct {
 	ID           string              `json:"id"`
 	Name         string              `json:"name"`
@@ -42,6 +47,7 @@ type homeRowJSON struct {
 	CatalogType  string              `json:"catalogType"`
 	CatalogID    string              `json:"catalogId"`
 	CollectionID string              `json:"collectionId"`
+	PlaylistID   string              `json:"playlistId"`
 	Count        int                 `json:"count"`
 	Everyone     bool                `json:"everyone"`
 	Users        []string            `json:"users"`
@@ -72,6 +78,9 @@ func newHomeRowJSON(r homerows.Row, now time.Time) homeRowJSON {
 	}
 	if r.Collection != (accounts.ID{}) {
 		result.CollectionID = r.Collection.String()
+	}
+	if r.Playlist != (accounts.ID{}) {
+		result.PlaylistID = r.Playlist.String()
 	}
 	for _, user := range r.Users {
 		result.Users = append(result.Users, user.String())
@@ -140,6 +149,7 @@ func (j homeRowJSON) row() (homerows.Row, bool) {
 	}
 	parse(j.AddonID, &r.Addon)
 	parse(j.CollectionID, &r.Collection)
+	parse(j.PlaylistID, &r.Playlist)
 	for _, raw := range j.Users {
 		var user accounts.ID
 		parse(raw, &user)
@@ -203,6 +213,15 @@ type homeRowCollectionJSON struct {
 	Source string `json:"source"`
 }
 
+// homeRowPlaylistJSON is a playlist a row may list: its owner's name, and
+// who may see it: public (everyone), shared or private (its owner).
+type homeRowPlaylistJSON struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	OwnerName string `json:"ownerName"`
+	Access    string `json:"access"`
+}
+
 // homeRowCatalogs lists the catalogs a row may list: those of the server's
 // addons that can be browsed.
 func (h *handler) homeRowCatalogs(ctx context.Context, user accounts.User) ([]library.SmartCatalog, error) {
@@ -229,9 +248,10 @@ func (h *handler) offeredHomeRow(ctx context.Context, user accounts.User, row ho
 	}), err
 }
 
-// homeRowChoices answers the catalogs and collections a row may list: the
-// catalogs of the server's addons that can be browsed, and the
-// collections the administrator sees.
+// homeRowChoices answers the catalogs, collections and playlists a row may
+// list: the catalogs of the server's addons that can be browsed, the
+// collections the administrator sees, and the playlists of the server but
+// the Watchlists.
 func (h *handler) homeRowChoices(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
 	found, err := h.homeRowCatalogs(r.Context(), user)
@@ -245,6 +265,7 @@ func (h *handler) homeRowChoices(w http.ResponseWriter, r *http.Request) {
 			CatalogID: c.Catalog.ID, CatalogName: c.Catalog.Name})
 	}
 	collections := []homeRowCollectionJSON{}
+	lists := []homeRowPlaylistJSON{}
 	if h.HomeRowChoices != nil {
 		found, err := h.HomeRowChoices.HomeRowCollections(r.Context(), user)
 		if err != nil {
@@ -254,11 +275,20 @@ func (h *handler) homeRowChoices(w http.ResponseWriter, r *http.Request) {
 		for _, c := range found {
 			collections = append(collections, homeRowCollectionJSON{ID: c.ID.String(), Name: c.Name, Source: c.Source})
 		}
+		playlists, err := h.HomeRowChoices.HomeRowPlaylists(r.Context())
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		for _, p := range playlists {
+			lists = append(lists, homeRowPlaylistJSON{ID: p.ID.String(), Name: p.Name, OwnerName: p.OwnerName, Access: p.Access})
+		}
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Catalogs    []homeRowCatalogJSON    `json:"catalogs"`
 		Collections []homeRowCollectionJSON `json:"collections"`
-	}{catalogs, collections})
+		Playlists   []homeRowPlaylistJSON   `json:"playlists"`
+	}{catalogs, collections, lists})
 }
 
 // homeRowFrom reads the row of a request's body, and answers 400 when it
@@ -459,9 +489,22 @@ func (h *handler) ownHomeRows(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	watchlistName := ""
+	if h.HomeRowPreviews != nil && slices.ContainsFunc(rows, func(row homerows.Row) bool {
+		return row.Kind == homerows.KindWatchlist && row.ShownTo(user.ID)
+	}) {
+		if watchlistName, err = h.HomeRowPreviews.WatchlistRowName(r.Context(), user); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+	}
 	for _, row := range rows {
 		if row.ShownTo(user.ID) {
-			result = append(result, ownHomeRowJSON{ID: row.ID.String(), Name: row.Name, Kind: string(row.Kind), Place: string(row.Place),
+			name := row.Name
+			if row.Kind == homerows.KindWatchlist {
+				name = cmp.Or(watchlistName, name)
+			}
+			result = append(result, ownHomeRowJSON{ID: row.ID.String(), Name: name, Kind: string(row.Kind), Place: string(row.Place),
 				Off: off[row.ID]})
 		}
 	}
