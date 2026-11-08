@@ -7,6 +7,7 @@ import "testing"
 // else its title does, by a tag, a region's name or code, or the release
 // word of a dub of its language.
 func TestAudioVariantReadsTagsAndTitles(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		language, title, want string
 	}{
