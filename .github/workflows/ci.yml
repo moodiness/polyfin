@@ -335,6 +335,22 @@ jobs:
           exit "$found"
       - name: Look for unused Go code and values never read
         run: go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 -checks U1000,SA4006,SA4009 ./...
+      - name: Look for tests that do not run in parallel, in the test files a pull request changes
+        # paralleltest and tparallel, run by golangci-lint, whose nolint
+        # comment lets a test stay sequential with its reason
+        # (docs/development.md). Each test file the pull request changes is
+        # checked whole; a test calling t.Setenv or t.Chdir passes.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE"
+          mapfile -t packages < <(git diff --name-only --diff-filter=d "$BASE" HEAD -- '*_test.go' |
+            xargs -r -n 1 dirname | sort -u | sed 's|^|./|')
+          if [ "${#packages[@]}" -eq 0 ]; then echo "No test file changed"; exit 0; fi
+          go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run \
+            --enable-only paralleltest,tparallel --new-from-rev "$BASE" --whole-files \
+            --max-issues-per-linter 0 --max-same-issues 0 "${packages[@]}"
       - name: Look for unused files, exports and dependencies of the admin app
         # knip.json: an export its own file uses is not reported.
         working-directory: web
