@@ -8,6 +8,7 @@ import (
 
 // The offer is read as written, and gone once the app offers nothing.
 func TestOffer(t *testing.T) {
+	t.Parallel()
 	folders := Folders{Data: t.TempDir()}
 	if offered, err := ReadOffer(folders); offered != nil || err != nil {
 		t.Fatalf("before any offer: %+v, %v", offered, err)
@@ -34,6 +35,7 @@ func TestOffer(t *testing.T) {
 // none is written, and one of another app, left by a crash, installs
 // nothing. Each is read once.
 func TestInstallRequest(t *testing.T) {
+	t.Parallel()
 	folders := Folders{Data: t.TempDir()}
 	if err := RequestInstall(folders, "0.47.0"); !errors.Is(err, ErrNoApp) {
 		t.Errorf("without an app: %v", err)

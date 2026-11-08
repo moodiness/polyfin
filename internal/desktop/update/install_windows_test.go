@@ -34,6 +34,7 @@ func init() {
 // would wait unseen for a click once the app has quit. The install folder
 // is kept beside it first.
 func TestInstallerIsShown(t *testing.T) {
+	t.Parallel()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

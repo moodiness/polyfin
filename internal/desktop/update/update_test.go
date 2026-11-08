@@ -111,6 +111,7 @@ func on(latest string) Found { return Found{Enabled: true, Latest: latest} }
 // A newer release the server found offers its package for this system,
 // which downloads checked against GitHub's checksum and the manifest's.
 func TestOfferAndDownload(t *testing.T) {
+	t.Parallel()
 	f := newFakeGitHub(t)
 	body := []byte("a new disk image")
 	f.publish(t, "0.43.0", "Polyfin-Desktop-0.43.0-macos-arm64.dmg", body, "", nil)
@@ -138,6 +139,7 @@ func TestOfferAndDownload(t *testing.T) {
 // pre-release while they are left out, or a release without a package
 // for this system; GitHub is not asked for the first four.
 func TestNothingOffered(t *testing.T) {
+	t.Parallel()
 	f := newFakeGitHub(t)
 	f.publish(t, "0.43.0", "Polyfin-Desktop-0.43.0-windows-x64-setup.exe", []byte("x"), "", nil)
 	f.publish(t, "0.44.0", "Polyfin-Desktop-0.44.0-macos-arm64.dmg", []byte("x"), "", map[string]any{"prerelease": true})
@@ -173,6 +175,7 @@ func TestNothingOffered(t *testing.T) {
 // A pre-release, as GitHub marks it or as its version reads, is offered
 // only while Include pre-releases is on.
 func TestPreReleasesOnlyWithTheSwitch(t *testing.T) {
+	t.Parallel()
 	f := newFakeGitHub(t)
 	f.publish(t, "0.44.0", "Polyfin-Desktop-0.44.0-macos-arm64.dmg", []byte("x"), "", map[string]any{"prerelease": true})
 	f.publish(t, "0.45.0-rc.1", "Polyfin-Desktop-0.45.0-rc.1-macos-arm64.dmg", []byte("y"), "", nil)
@@ -192,6 +195,7 @@ func TestPreReleasesOnlyWithTheSwitch(t *testing.T) {
 // expired, belongs to another version, or lists another checksum than
 // GitHub's, or that has no manifest, is refused, and offers nothing.
 func TestManifestsAreChecked(t *testing.T) {
+	t.Parallel()
 	f := newFakeGitHub(t)
 	name := "Polyfin-Desktop-0.43.0-macos-arm64.dmg"
 	body := []byte("a new disk image")
@@ -283,6 +287,7 @@ func TestManifestsAreChecked(t *testing.T) {
 
 // A manifest stays valid indented, and either of two keys may sign it.
 func TestManifestKeys(t *testing.T) {
+	t.Parallel()
 	_, first, _ := ed25519.GenerateKey(rand.Reader)
 	_, second, _ := ed25519.GenerateKey(rand.Reader)
 	keys := []ed25519.PublicKey{first.Public().(ed25519.PublicKey), second.Public().(ed25519.PublicKey)}
@@ -315,6 +320,7 @@ func TestManifestKeys(t *testing.T) {
 // it is refused, and nothing is left. An offer whose manifest expired
 // since is refused.
 func TestChecksumsAreRequired(t *testing.T) {
+	t.Parallel()
 	f := newFakeGitHub(t)
 	f.publish(t, "0.43.0", "Polyfin-Desktop-0.43.0-macos-arm64.dmg", []byte("x"), "none", nil)
 	f.publish(t, "0.44.0", "Polyfin-Desktop-0.44.0-macos-arm64.dmg", []byte("tampered"), "sha256:"+strings.Repeat("ab", 32), nil)
@@ -345,6 +351,7 @@ func TestChecksumsAreRequired(t *testing.T) {
 
 // Each system's package, as the release workflow names them.
 func TestAssetNames(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		goarch string
 		kind   Kind
@@ -376,6 +383,7 @@ func TestAssetNames(t *testing.T) {
 // The new AppImage, or bundle, takes the old one's place, which is kept
 // beside it; the data folder is elsewhere and untouched.
 func TestReplacingTheApp(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	current := filepath.Join(dir, "Polyfin.AppImage")
 	pkg := filepath.Join(dir, "updates", "new.AppImage")

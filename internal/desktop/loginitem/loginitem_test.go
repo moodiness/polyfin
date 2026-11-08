@@ -11,6 +11,7 @@ func noEnv(string) string { return "" }
 
 // macOS: a launch agent that opens the bundle at login, once.
 func TestLaunchAgent(t *testing.T) {
+	t.Parallel()
 	args := command("darwin", "/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop", noEnv)
 	if strings.Join(args, " ") != "/usr/bin/open -a /Applications/Polyfin.app --args --background" {
 		t.Errorf("bundle command = %q", args)
@@ -39,6 +40,7 @@ func TestLaunchAgent(t *testing.T) {
 
 // Windows: a value of the Run key, its executable quoted.
 func TestRunValue(t *testing.T) {
+	t.Parallel()
 	args := command("windows", `C:\Program Files\Polyfin\polyfin-desktop.exe`, noEnv)
 	if got := RunValue(args); got != `"C:\Program Files\Polyfin\polyfin-desktop.exe" --background` {
 		t.Errorf("RunValue = %q", got)
@@ -48,6 +50,7 @@ func TestRunValue(t *testing.T) {
 // Linux: an autostart entry, of the AppImage's own file when it runs from
 // one.
 func TestDesktopEntry(t *testing.T) {
+	t.Parallel()
 	env := func(name string) string {
 		if name == "APPIMAGE" {
 			return "/home/a/Apps/Polyfin Desktop.AppImage"
@@ -77,6 +80,7 @@ func TestDesktopEntry(t *testing.T) {
 
 // The file of macOS and Linux is written, found and removed.
 func TestFileItem(t *testing.T) {
+	t.Parallel()
 	item := fileItem{path: filepath.Join(t.TempDir(), "autostart", "polyfin-desktop.desktop"), content: []byte("entry")}
 	if on, err := item.Enabled(); err != nil || on {
 		t.Fatalf("Enabled before: %v, %v", on, err)
