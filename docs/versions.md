@@ -428,7 +428,8 @@ Item details and `PlaybackInfo`, so version menus, list this order.
 - The first, named after the title, is what Play starts and **Prepare playback in advance** analyzes.
 - **Versions tried when one does not work** and **Prefer versions the app plays without conversion** take the versions in this order.
 - A version pinned on the title's [Versions](#versions-of-a-title) page comes first anyway.
-- Hidden versions appear nowhere: details, `PlaybackInfo`, downloads, trickplay. Asked for by identifier, they are refused as gone.
+- Hidden versions are listed nowhere: details, `PlaybackInfo`, downloads, trickplay. `PlaybackInfo` and downloads refuse one named by identifier, as if it were gone.
+- Media URLs naming a hidden version still serve it: streams, HLS segments, subtitles and thumbnails. A play started before a rule hid its version fetches them again as it seeks, and goes on. Hide rules choose what is offered; unlike [blocks](#versions-of-a-title) and quality groups, they forbid no version.
 - Merged Live TV channels keep their own order (see [IPTV](iptv.md)).
 
 While Polyfin follows an open title page (see [Title pages](#title-pages)), its versions keep their places while the rules, source order, quality group, **Play local files first** and app stay the same.

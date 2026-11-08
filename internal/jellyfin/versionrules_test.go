@@ -234,7 +234,8 @@ func TestVersionRulesReadRemuxDB(t *testing.T) {
 }
 
 // The hide rules leave versions out of item details, PlaybackInfo and
-// downloads; when they would hide them all, they hide none.
+// downloads, but not out of streams; when they would hide them all, they
+// hide none.
 func TestVersionRulesHideVersions(t *testing.T) {
 	t.Parallel()
 	p := versionRulesOn(t, newTestServer(t, 10))
@@ -267,6 +268,12 @@ func TestVersionRulesHideVersions(t *testing.T) {
 	chrome := p.profile(t, "jellyfin-web-chrome")
 	if answer := p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": p.versions[2].ID.String()}); !answer.refused() {
 		t.Errorf("a hidden version asked for: %+v", answer)
+	}
+	// Its stream is still served: a play started before a rule hid it
+	// asks for it again as it seeks.
+	if response, _ := fetchURL(t, p.url+"/Videos/"+p.movie+"/stream?static=true&mediaSourceId="+p.versions[2].ID.String()+
+		"&ApiKey="+p.token, nil); response.StatusCode != http.StatusOK {
+		t.Errorf("stream of a hidden version: %d", response.StatusCode)
 	}
 	// Source cannot be read, ffprobe being missing in tests: FRENCH plays,
 	// alone.

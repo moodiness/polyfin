@@ -1308,7 +1308,9 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	// PlaybackInfo never offers a version above the user's bitrate limit,
 	// or taller than their quality group, as it is: this guards URLs kept
-	// from before the limit was set, or made up.
+	// from before the limit was set, or made up. The hide rules are not
+	// checked: they choose what is offered, and a play started before a
+	// rule hid its version asks for it again as it seeks.
 	if analysis, known := h.Playback.Analyzed(r.Context(), version.ID); known && overUserLimit(int64(user.MaxBitrate), analysis.Bitrate) {
 		h.Logger.Info("A version above the user's bitrate limit was refused", "addon", version.Addon)
 		w.WriteHeader(http.StatusForbidden)
