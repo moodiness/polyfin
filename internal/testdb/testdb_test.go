@@ -41,6 +41,8 @@ func rows(t *testing.T, pool *pgxpool.Pool) int {
 
 // Copies hold what prepare made, run once for all of them, and each test's
 // writes stay in its own copy, dropped when it ends.
+//
+//nolint:tparallel // the copies group waits for its parallel copies before the counts are read
 func TestCopiesShareOnePreparation(t *testing.T) {
 	t.Parallel()
 	key, prepare, runs := counted(t)
@@ -138,7 +140,10 @@ func TestOldCopiesAreSwept(t *testing.T) {
 	}
 	stale := made(old)
 	recent := made(now.Add(-time.Hour))
-	used := made(old)
+	// Dated old only once connected to: tests making their templates
+	// meanwhile, in this binary or another, sweep the old copies no
+	// connection uses, and would drop it first.
+	used := made(time.Time{})
 	undated := made(time.Time{})
 	config, err := pgx.ParseConfig(url)
 	if err != nil {
@@ -150,6 +155,9 @@ func TestOldCopiesAreSwept(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+	if err := exec(t.Context(), url, dated(pgx.Identifier{used}.Sanitize(), old)); err != nil {
+		t.Fatal(err)
+	}
 
 	key, prepare, _ := counted(t)
 	pool := Copy(t, key, prepare)
