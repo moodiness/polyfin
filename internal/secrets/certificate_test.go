@@ -12,6 +12,7 @@ import (
 // has one, its certificate staying as it is, and told when the key cannot
 // open them, in Health and in a backup about to be restored.
 func TestCertificateKeysAreStoredSecrets(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	pool := migrated.New(t)
 	if _, err := pool.Exec(ctx, `INSERT INTO acme_certificate (account_key, certificate, private_key)

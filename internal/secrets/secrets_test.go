@@ -21,6 +21,7 @@ func box(t *testing.T, key string) *Box {
 }
 
 func TestKeysAreReadAsWritten(t *testing.T) {
+	t.Parallel()
 	want := []byte("0123456789abcdef0123456789abcdef")
 	for _, text := range []string{
 		"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -39,6 +40,7 @@ func TestKeysAreReadAsWritten(t *testing.T) {
 }
 
 func TestSealedValuesOpenWithTheirKeyOnly(t *testing.T) {
+	t.Parallel()
 	b := box(t, "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 	const value = "pm-Xk9mN2pQrS7tUvWx3yZaB4cD5eF6gH7iJ8kL9mN0oP1qR2sT3uV4wXyZ5aB"
 	sealed := b.Seal(value)

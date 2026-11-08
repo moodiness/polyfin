@@ -133,6 +133,7 @@ func (l *lockedLog) reset() {
 }
 
 func TestStoredSecretsAreSealedOnceAndUnreadableOnesCountAsUnset(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	pool := migrated.New(t)
 	// A server that ran without a key: its secrets are plaintext.
