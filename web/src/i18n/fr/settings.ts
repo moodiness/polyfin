@@ -1151,8 +1151,16 @@ const settings: typeof en = {
         playlist: 'Liste de lecture',
       },
       kindDetails: {
-        watchlist: 'La propre liste de chaque membre',
-        playlists: 'Les listes que chaque membre a marquées ♥, une rangée chacune',
+        catalog: 'La première page d’un catalogue des addons',
+        collection: 'Les titres d’une collection',
+        because: 'Des titres proches des derniers vus par chaque utilisateur',
+        new: 'Les titres arrivés ces 7 derniers jours',
+        available: 'Les titres de «\u202fÀ regarder\u202f» avec une version trouvée',
+        waiting: 'Les titres de «\u202fÀ regarder\u202f» encore sans version',
+        trakt: 'Pour les utilisateurs qui ont connecté Trakt',
+        picks: 'Classés selon le profil de goûts de chacun',
+        watchlist: 'La liste «\u202fÀ regarder\u202f» de chaque utilisateur',
+        playlists: 'Une rangée par liste marquée ♥ par chaque utilisateur',
         playlist: 'Une liste de lecture que vous choisissez',
       },
       kindHelp: {

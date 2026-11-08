@@ -1122,8 +1122,16 @@ const settings = {
         playlist: 'Playlist',
       },
       kindDetails: {
-        watchlist: 'Each member’s own list',
-        playlists: 'The playlists each member marked ♥, one row each',
+        catalog: 'The first page of an addon catalog',
+        collection: 'The titles of a collection',
+        because: 'Titles like the last ones each user played',
+        new: 'Titles added in the last 7 days',
+        available: 'Watchlist titles with a version found',
+        waiting: 'Watchlist titles with no version yet',
+        trakt: 'For users who connected Trakt',
+        picks: 'Ranked by each user’s taste profile',
+        watchlist: 'Each user’s own Watchlist',
+        playlists: 'One row per playlist each user marked ♥',
         playlist: 'A playlist you choose',
       },
       kindHelp: {

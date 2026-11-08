@@ -464,10 +464,7 @@ function HomeRowModal({
             options={kinds.map((value) => ({
               value,
               label: text.kinds[value],
-              detail:
-                value === 'watchlist' || value === 'playlists' || value === 'playlist'
-                  ? text.kindDetails[value]
-                  : undefined,
+              detail: text.kindDetails[value],
             }))}
             onValue={(value) => {
               setKind(value)
