@@ -64,6 +64,7 @@ func describedThemes(t *testing.T, h http.Handler, target string) pageThemes {
 // its content, with the cookie the script names its theme in. The page no
 // longer loads a script of its own. Without the themes, it describes none.
 func TestThePageDescribesTheThemes(t *testing.T) {
+	t.Parallel()
 	themes := new(atomic.Pointer[WebThemes])
 	themes.Store(&WebThemes{Theme: accounts.WebThemeLumaaGlaass})
 	h := themesHandler(themes)
@@ -125,6 +126,7 @@ func must[T any](value T, err error) T {
 // theme, as a user may have it: at the address the page gives, cached for
 // good; at another, revalidated, so an old address gets today's text.
 func TestCustomTextsAreCachedUntilTheyChange(t *testing.T) {
+	t.Parallel()
 	themes := new(atomic.Pointer[WebThemes])
 	themes.Store(&WebThemes{Theme: accounts.WebThemeLumaaGlaass})
 	h := themesHandler(themes)
@@ -161,6 +163,7 @@ func TestCustomTextsAreCachedUntilTheyChange(t *testing.T) {
 // the theme's files, cached for good at their version; another version
 // leads to today's.
 func TestTheLumaaGlaassLoaderIsServedBesideTheTheme(t *testing.T) {
+	t.Parallel()
 	themes := new(atomic.Pointer[WebThemes])
 	themes.Store(&WebThemes{Theme: accounts.WebThemeNone})
 	h := themesHandler(themes)
@@ -195,6 +198,7 @@ type webThemeAnswer struct {
 // stylesheet before is turned off. It runs in Node.js, in a context that
 // stands for the browser, the page being parsed, and jellyfin-web.
 func TestThePageShowsEachUsersTheme(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

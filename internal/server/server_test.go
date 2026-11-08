@@ -44,6 +44,7 @@ func get(h http.Handler, target string) *httptest.ResponseRecorder {
 }
 
 func TestAdminApplicationRouting(t *testing.T) {
+	t.Parallel()
 	h := handler(database{})
 	for _, tc := range []struct {
 		target string
@@ -75,6 +76,7 @@ func TestAdminApplicationRouting(t *testing.T) {
 }
 
 func TestRootAndBareAdminRedirectToTheApplication(t *testing.T) {
+	t.Parallel()
 	h := handler(database{})
 	for _, target := range []string{"/", "/admin"} {
 		response := get(h, target)
@@ -88,6 +90,7 @@ func TestRootAndBareAdminRedirectToTheApplication(t *testing.T) {
 // address: it leads to the admin app's Quick Connect page, with the code
 // when it is one. Under /jellyfin, the Jellyfin API answers.
 func TestActivateLeadsToQuickConnect(t *testing.T) {
+	t.Parallel()
 	h := handler(database{})
 	for target, want := range map[string]string{
 		"/activate":                "/admin/me/quick-connect",
@@ -107,6 +110,7 @@ func TestActivateLeadsToQuickConnect(t *testing.T) {
 }
 
 func TestReadinessFollowsTheDatabase(t *testing.T) {
+	t.Parallel()
 	if code := get(handler(database{}), "/readyz").Code; code != http.StatusOK {
 		t.Errorf("ready database: /readyz = %d", code)
 	}
@@ -122,6 +126,7 @@ func TestReadinessFollowsTheDatabase(t *testing.T) {
 }
 
 func TestPathsReachTheirOwner(t *testing.T) {
+	t.Parallel()
 	h := handler(database{})
 	for target, want := range map[string]string{
 		"/admin/api/users":    "admin api",
@@ -144,6 +149,7 @@ func TestPathsReachTheirOwner(t *testing.T) {
 // as the base of every request: Polyfin answers there as at the root, with
 // the path the routes know. The admin app and the probes stay at the root.
 func TestJellyfinBaseAnswersAsTheRoot(t *testing.T) {
+	t.Parallel()
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "" && r.URL.Path == "/Users/Me" {
 			w.WriteHeader(http.StatusUnauthorized)

@@ -57,6 +57,7 @@ func webHandler(state setupState) http.Handler {
 }
 
 func TestRootOpensTheWebClientOnceSetUp(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		handler http.Handler
@@ -75,6 +76,7 @@ func TestRootOpensTheWebClientOnceSetUp(t *testing.T) {
 }
 
 func TestWebClientServesJellyfinWebFiles(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{})
 	for _, tc := range []struct {
 		target      string
@@ -126,6 +128,7 @@ func TestWebClientServesJellyfinWebFiles(t *testing.T) {
 // What no file answers goes to the Jellyfin API, which has routes under
 // /web/ too, as on Jellyfin.
 func TestWebClientLeavesOtherPathsToJellyfin(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{})
 	for _, target := range []string{"/web/missing.0123456789abcdef0123.js", "/web/themes", "/web/ConfigurationPages", "/web/themes/"} {
 		if response := get(h, target); response.Body.String() != "jellyfin" {
@@ -153,6 +156,7 @@ func TestWebClientLeavesOtherPathsToJellyfin(t *testing.T) {
 }
 
 func TestOnlyTheWebClientPageLoadsPolyfinScript(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{})
 	tag := string(webScriptTag)
 	for range 2 {
@@ -190,6 +194,7 @@ func TestOnlyTheWebClientPageLoadsPolyfinScript(t *testing.T) {
 // Before setup nobody can sign in to the web client: its page leads to the
 // admin app, where setup is.
 func TestWebClientPageLeadsToSetupFirst(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{required: true})
 	for _, target := range []string{"/web/", "/web/index.html"} {
 		response := get(h, target)
@@ -203,6 +208,7 @@ func TestWebClientPageLeadsToSetupFirst(t *testing.T) {
 }
 
 func TestWebClientNeedsJellyfinWebIndex(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if WebClientFiles(filepath.Join(dir, "missing")) != nil || WebClientFiles(dir) != nil || WebClientFiles("") != nil {
 		t.Fatal("a web client without jellyfin-web's index.html")
@@ -230,6 +236,7 @@ func TestWebClientNeedsJellyfinWebIndex(t *testing.T) {
 // a context that stands for the browser, without URL: the script runs before
 // jellyfin-web's polyfills, on browsers that may lack it.
 func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -345,6 +352,7 @@ process.stdout.write(JSON.stringify(results))
 // within it, before jellyfin-web follows it. Other links keep theirs. It
 // runs in Node.js, in a context that stands for the browser.
 func TestRowTitlesOpenACollectionLibraryOnItsChosenScreen(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -424,6 +432,7 @@ process.stdout.write(JSON.stringify(results))
 // runs in Node.js, in a context that stands for the browser: dialog
 // containers added to the body, as jellyfin-web adds them.
 func TestTheGenericErrorOverARefusedPlaybackIsClosed(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -554,6 +563,7 @@ process.stdout.write(JSON.stringify(results))
 // jellyfin-web: a title page whose version menu lists what the details gave
 // when it was last loaded, a clock and timers the harness moves on.
 func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -1038,6 +1048,7 @@ async function run(scenario) {
 // small document holding the title page, whose buttons jellyfin-web titled
 // "Resume" and "Play", a clock and timers the harness moves on.
 func TestPlayButtonsWaitForASource(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -1435,6 +1446,7 @@ async function run(scenario) {
 // jellyfin-web 12.2 renders in each place, at widths around MUI's lg and xl
 // breakpoints, with storage, a clock and timers the harness moves on.
 func TestHiddenLibrariesLeaveTheWebPlayerMenus(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -1848,6 +1860,7 @@ async function run(scenario) {
 // Node.js, in a context that stands for the browser, with a small document
 // whose menus the harness draws as jellyfin-web does.
 func TestMembersGetAPolyfinEntry(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -2186,6 +2199,7 @@ async function run(scenario) {
 // page and its first line of details, a clock and timers the harness moves
 // on.
 func TestTitlePagesShowTheirThreeScores(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -2439,6 +2453,7 @@ async function run(scenario) {
 // does, then sends its change. It runs in Node.js, in a context that stands
 // for the browser and jellyfin-web.
 func TestItemMenusGetPolyfinsEntries(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -3108,6 +3123,7 @@ const matchesComplex = (element, selector) => {
 // changes elsewhere or without an answer. It runs in Node.js, in a context
 // that stands for the browser and jellyfin-web.
 func TestTheHomePageGetsTheServersRows(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
@@ -3504,6 +3520,7 @@ async function run(scenario) {
 // that stands for the browser: a small document holding the title page
 // and its buttons, a clock and timers the harness moves on.
 func TestTitlePagesOfferShare(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

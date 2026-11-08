@@ -47,6 +47,7 @@ const runScript = (script, context) => {
 // listening, and, after the page changed 40 times, how many times each
 // listening part was told before the frame was drawn and after.
 func TestOnePageObserverServesTheFiveParts(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

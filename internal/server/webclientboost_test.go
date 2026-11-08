@@ -17,6 +17,7 @@ import (
 // menu gets an entry that turns it on or off and posts the choice; a video
 // that cannot be boosted now is from the next one, which a toast says.
 func TestVideosAreBoostedForTheUsersWhoAsk(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

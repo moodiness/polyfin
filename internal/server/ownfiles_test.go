@@ -43,6 +43,9 @@ func adminFiles(t *testing.T) fstest.MapFS {
 	return files
 }
 
+// ownFilesHandler serves admin, the share page's files and the web client,
+// the brotli copies of the first two made in a turn of its own: none waits
+// for another test's copies.
 func ownFilesHandler(admin fs.FS) http.Handler {
 	return New(Options{
 		Database:      database{},
@@ -54,6 +57,7 @@ func ownFilesHandler(admin fs.FS) http.Handler {
 		Web:           webFiles,
 		SetupRequired: setupState{}.SetupRequired,
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		brotliTurn:    make(chan struct{}, 1),
 	})
 }
 
@@ -82,6 +86,7 @@ func shareTargets(t *testing.T) []string {
 // at each load. The share page's files and the script, linked with their
 // version, are cached for good.
 func TestOwnFilesAreCachedForGoodOrRevalidated(t *testing.T) {
+	t.Parallel()
 	admin := adminFiles(t)
 	h := ownFilesHandler(admin)
 	targets := []string{"/admin/", "/admin/users/42"}
@@ -145,6 +150,7 @@ func unbrotli(t *testing.T, body []byte) []byte {
 // its own. Until brotli is made, gzip goes; a browser that holds the gzip
 // copy keeps it then.
 func TestOwnScriptsAndStylesComeInBrotli(t *testing.T) {
+	t.Parallel()
 	admin := adminFiles(t)
 	h := ownFilesHandler(admin)
 	files := map[string][]byte{
@@ -173,7 +179,9 @@ func TestOwnScriptsAndStylesComeInBrotli(t *testing.T) {
 			t.Errorf("%s: a browser that holds the gzip copy got %d", target, held.Code)
 		}
 		var response *httptest.ResponseRecorder
-		for deadline := time.Now().Add(time.Minute); ; time.Sleep(10 * time.Millisecond) {
+		// Long enough for a copy made beside the other tests on a loaded
+		// machine: brotli takes seconds a file under the race detector.
+		for deadline := time.Now().Add(3 * time.Minute); ; time.Sleep(10 * time.Millisecond) {
 			response = fetch(h, http.MethodGet, target, "Accept-Encoding", "gzip, deflate, br, zstd")
 			if response.Header().Get("Content-Encoding") == "br" || time.Now().After(deadline) {
 				break

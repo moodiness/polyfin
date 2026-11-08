@@ -40,6 +40,7 @@ func webScriptSource(t *testing.T) []byte {
 // writes it again with go generate ./internal/server, which runs this test
 // with -update.
 func TestTheScriptIsServedMinified(t *testing.T) {
+	t.Parallel()
 	result := api.Transform(string(webScriptSource(t)), api.TransformOptions{
 		Loader:            api.LoaderJS,
 		Target:            api.ES5,
@@ -83,6 +84,7 @@ func TestTheScriptIsServedMinified(t *testing.T) {
 // new version. At any other address it is checked again (see
 // TestOwnFilesAreCachedForGoodOrRevalidated).
 func TestThePageLinksTheScriptAtItsVersion(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{})
 	version := strings.Trim(get(h, "/web/"+webScript).Header().Get("ETag"), `"`)
 	if want := `<script src="polyfin.js?v=` + version + `"></script>`; version == "" || !strings.Contains(get(h, "/web/").Body.String(), want) {

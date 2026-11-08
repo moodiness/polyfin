@@ -24,6 +24,7 @@ import (
 // as jellyfin-web 12.4 does (itemDetails/index.js, renderTrackSelections and
 // the version menu's change), a clock and timers the harness moves on.
 func TestTitlePagesRefreshTheirTrackMenusOnceAVersionIsAnalyzed(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

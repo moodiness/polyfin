@@ -84,6 +84,7 @@ func defaultThemeFiles(t *testing.T, h http.Handler) []themeFile {
 // version, such as the one the theme's script asks for when it cannot tell
 // its own address, leads to today's files, revalidated.
 func TestDefaultThemeIsServedByPolyfin(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{})
 	files := defaultThemeFiles(t, h)
 	types := map[string]string{".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
@@ -148,6 +149,7 @@ func TestDefaultThemeIsServedByPolyfin(t *testing.T) {
 // custom CSS and script Polyfin serves for it, nor any file they load,
 // names an address elsewhere.
 func TestDefaultThemeLoadsNothingFromOutside(t *testing.T) {
+	t.Parallel()
 	h := webHandler(setupState{})
 	sources := map[string]string{"Custom CSS": accounts.LumaaGlaassCss, "Custom JavaScript": accounts.LumaaGlaassJs}
 	for _, file := range defaultThemeFiles(t, h) {
@@ -173,6 +175,7 @@ func TestDefaultThemeLoadsNothingFromOutside(t *testing.T) {
 // extension runs in Node.js, in a context that stands for the browser and
 // for the theme's main script, after the default Custom JavaScript.
 func TestDefaultThemeSettingsStartFromTheLoaderOptions(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")

@@ -94,6 +94,9 @@ type Options struct {
 	// Jellyfin API, which answers 404.
 	Metrics http.Handler
 	Logger  *slog.Logger
+	// brotliTurn is the turn the brotli copies of the admin app's and the
+	// share page's files take: brotliTurn, the process's, but in tests.
+	brotliTurn chan struct{}
 }
 
 // New returns the handler serving every Polyfin route. Answers that gain
@@ -103,6 +106,9 @@ type Options struct {
 // client answer under jellyfinBase as at the root; the admin app,
 // /healthz, /readyz and /metrics stay at the root only.
 func New(options Options) http.Handler {
+	if options.brotliTurn == nil {
+		options.brotliTurn = brotliTurn
+	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", rootOnly(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeText(w, http.StatusOK, "ok")
@@ -129,7 +135,7 @@ func New(options Options) http.Handler {
 	mux.Handle("/admin/api/", rootOnly(options.AdminAPI, options.Jellyfin))
 	// No method in the pattern: it would conflict with "/admin/api/", which
 	// must answer every method. adminApp restricts methods itself.
-	mux.Handle("/admin/", rootOnly(adminApp(options.Admin, options.Logger), options.Jellyfin))
+	mux.Handle("/admin/", rootOnly(adminApp(options.Admin, options.brotliTurn, options.Logger), options.Jellyfin))
 	// As the mux would, but at the root only.
 	mux.Handle("/admin", rootOnly(http.RedirectHandler(adminPrefix, http.StatusMovedPermanently), options.Jellyfin))
 	// Silo's TV apps tell people to open /activate, with the code in the
@@ -140,7 +146,7 @@ func New(options Options) http.Handler {
 		mux.Handle("/share/", rootOnly(options.Share, options.Jellyfin))
 	}
 	if options.ShareAssets != nil {
-		mux.Handle("GET /share/assets/", rootOnly(shareAssets(options.ShareAssets), options.Jellyfin))
+		mux.Handle("GET /share/assets/", rootOnly(shareAssets(options.ShareAssets, options.brotliTurn), options.Jellyfin))
 	}
 	if options.DLNA != nil {
 		mux.Handle("/dlna/", rootOnly(options.DLNA, options.Jellyfin))
@@ -265,10 +271,10 @@ func setUp(ctx context.Context, setupRequired func(context.Context) (bool, error
 // with an extension is a real 404, so a stale asset never loads the page.
 // The hashed files of assets/ are cached for good; the others, index.html
 // first, are checked again at each load, by their ETag. Text files go in
-// brotli or gzip to clients that take them, compressed once each (see
-// staticFiles).
-func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
-	static := newOwnFiles(files)
+// brotli, made in turn, or gzip to clients that take them, compressed once
+// each (see staticFiles).
+func adminApp(files fs.FS, turn chan struct{}, logger *slog.Logger) http.Handler {
+	static := newOwnFiles(files, turn)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -319,10 +325,10 @@ func serveIndex(w http.ResponseWriter, r *http.Request, static *staticFiles, log
 // /share/assets/. A file the page links with its version, its ETag
 // without quotes in v, is cached for good; the fonts, which the style
 // links by name, for a day; the others are checked again at each load.
-// Every file has an ETag, and text files go in brotli or gzip to clients
-// that take them, compressed once each (see staticFiles).
-func shareAssets(files fs.FS) http.Handler {
-	static := newOwnFiles(files)
+// Every file has an ETag, and text files go in brotli, made in turn, or
+// gzip to clients that take them, compressed once each (see staticFiles).
+func shareAssets(files fs.FS, turn chan struct{}) http.Handler {
+	static := newOwnFiles(files, turn)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, shareAssetsPrefix)
 		header := w.Header()

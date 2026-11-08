@@ -18,6 +18,7 @@ import (
 // the rest, then opens /web/ again. A trade refused says so and keeps
 // nothing. It runs in Node.js, in a context that stands for the browser.
 func TestTheSignInPageOffersTheProvider(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
