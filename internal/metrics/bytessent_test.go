@@ -11,6 +11,7 @@ import (
 // /metrics lists the bytes sent to apps by delivery, every delivery from
 // the start, and counts what each adds.
 func TestBytesSentAreListedByDelivery(t *testing.T) {
+	t.Parallel()
 	read := func() string {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, "/metrics", nil)

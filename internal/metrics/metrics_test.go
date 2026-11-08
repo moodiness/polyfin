@@ -13,6 +13,7 @@ import (
 // /metrics answers 404 while off, 401 without the token or with another,
 // and the metrics with it.
 func TestHandlerAnswersOnlyWithTheToken(t *testing.T) {
+	t.Parallel()
 	const token = "0123456789abcdef0123456789abcdef"
 	for _, c := range []struct {
 		name          string
@@ -52,8 +53,14 @@ func TestHandlerAnswersOnlyWithTheToken(t *testing.T) {
 // The requests of addons are counted under the name each is listed with,
 // those of addons sharing a name together, never by address; those of
 // addons removed since are no longer told.
+//
+//nolint:paralleltest // sets the package-level addon names, which every /metrics answer reads
 func TestAddonRequestsAreNamedAsListed(t *testing.T) {
 	const listed, other, gone = "https://listed.example/secret-config", "https://mirror.example/other-config", "https://gone.example/config"
+	// The requests an earlier run counted (go test -count) are forgotten
+	// first: those of addons no name is given for are no longer told.
+	AddonNames(func(context.Context) (map[string]string, error) { return nil, nil })
+	Value("polyfin_addon_request_duration_seconds", nil)
 	AddonRequest(listed, "stream", 2*time.Second, false)
 	AddonRequest(listed, "stream", 3*time.Second, false)
 	AddonRequest(listed, "catalog", 200*time.Millisecond, true)
