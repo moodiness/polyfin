@@ -35,6 +35,7 @@ func init() {
 // WindowCommand starts, such as the update's installer. Console programs,
 // such as clip, pg_ctl and the server, open no window.
 func TestWindowsShown(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	for _, c := range []struct {
 		name  string
@@ -46,6 +47,7 @@ func TestWindowsShown(t *testing.T) {
 		{"Command", func(exe string) error { return Command(ctx, exe).Run() }, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			exe := reporter(t)
 			if err := c.start(exe); err != nil {
 				t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 )
 
 func TestOpener(t *testing.T) {
+	t.Parallel()
 	for goos, want := range map[string]string{
 		"darwin": "open http://localhost:8096/admin/",
 		"linux":  "xdg-open http://localhost:8096/admin/",

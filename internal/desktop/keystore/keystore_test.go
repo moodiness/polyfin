@@ -37,6 +37,7 @@ func (f *fakeStore) Set(service, account, secret string) error {
 // The first start makes a key the server accepts and stores it; the next
 // ones read it back.
 func TestSecretKeyIsMadeOnceThenReused(t *testing.T) {
+	t.Parallel()
 	store := &fakeStore{secrets: map[string]string{}}
 	account := Account("/home/a/.local/share/polyfin")
 	key, created, err := SecretKey(store, account)
@@ -65,6 +66,7 @@ func TestSecretKeyIsMadeOnceThenReused(t *testing.T) {
 
 // A store that cannot be read, or holds a malformed key, makes no new key.
 func TestSecretKeyNeverReplacesAKey(t *testing.T) {
+	t.Parallel()
 	failing := &fakeStore{secrets: map[string]string{}, getErr: errors.New("locked")}
 	if _, _, err := SecretKey(failing, "a"); err == nil || failing.sets != 0 {
 		t.Errorf("a store that cannot be read: %v, %d writes", err, failing.sets)
@@ -86,6 +88,7 @@ func TestSecretKeyNeverReplacesAKey(t *testing.T) {
 // The key of another server replaces the one made here; a malformed one
 // is refused.
 func TestReplace(t *testing.T) {
+	t.Parallel()
 	store := &fakeStore{secrets: map[string]string{}}
 	if _, _, err := SecretKey(store, "a"); err != nil {
 		t.Fatal(err)

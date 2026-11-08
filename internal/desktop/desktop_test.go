@@ -10,6 +10,7 @@ import (
 
 // Each system's usual place for the data folder.
 func TestDataDir(t *testing.T) {
+	t.Parallel()
 	env := func(values map[string]string) func(string) string {
 		return func(name string) string { return values[name] }
 	}
@@ -95,6 +96,7 @@ func TestInstall(t *testing.T) {
 }
 
 func TestClipboardAndLanguage(t *testing.T) {
+	t.Parallel()
 	if clipboard("darwin")[0][0] != "pbcopy" || clipboard("windows")[0][0] != "clip" || len(clipboard("linux")) != 3 {
 		t.Error("clipboard programs")
 	}

@@ -14,6 +14,7 @@ import (
 // An icon that never shows is an error in the log, and the app runs on;
 // one that shows, or a quit before the time is up, is not.
 func TestAwaitTray(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&out, nil))
 	expired := make(chan time.Time, 1)
@@ -44,6 +45,8 @@ func TestAwaitTray(t *testing.T) {
 // Windows session whose notification area refuses icons, the app says at
 // once that it runs without it, not after trayWait. The library's other
 // complaints end no wait.
+//
+//nolint:paralleltest // swaps the default slog logger and the log package's output
 func TestAnIconTheLibraryGaveUpOnIsToldAtOnce(t *testing.T) {
 	previous, writer, flags := slog.Default(), log.Writer(), log.Flags()
 	defer func() {

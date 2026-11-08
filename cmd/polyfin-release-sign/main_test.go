@@ -48,6 +48,7 @@ func keyPair(t *testing.T) (string, ed25519.PublicKey) {
 // packages; renew re-dates it only once its signature checks, even after
 // it expired.
 func TestManifestVerifyAndRenew(t *testing.T) {
+	t.Parallel()
 	private, public := keyPair(t)
 	_, spare := keyPair(t)
 	keys := []ed25519.PublicKey{spare, public}

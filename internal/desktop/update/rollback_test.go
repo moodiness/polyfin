@@ -44,8 +44,10 @@ func gone(t *testing.T, paths ...string) {
 // folder such as Windows' install folder, and the database's copy back
 // in place of the new ones, which are removed, then forgets the update.
 func TestRestorePutsThePreviousBack(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []Kind{AppImage, Installer} {
 		t.Run(string(kind), func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			f := desktop.Folders{Data: filepath.Join(dir, "data")}
 			cluster := f.Cluster()
@@ -104,6 +106,7 @@ func TestRestorePutsThePreviousBack(t *testing.T) {
 // Once the new version answers, what was kept goes, but for a copy that
 // holds the running app.
 func TestConfirmRemovesWhatWasKept(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	f := desktop.Folders{Data: filepath.Join(dir, "data")}
 	app := filepath.Join(dir, "Polyfin.app")
@@ -137,6 +140,7 @@ func TestConfirmRemovesWhatWasKept(t *testing.T) {
 
 // A copy keeps folders, files with their permissions, and links.
 func TestCopyTree(t *testing.T) {
+	t.Parallel()
 	src := filepath.Join(t.TempDir(), "src")
 	write(t, map[string]string{filepath.Join(src, "a", "b"): "b"})
 	if err := os.Chmod(filepath.Join(src, "a", "b"), 0o640); err != nil {
