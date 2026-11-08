@@ -133,6 +133,12 @@ export function problemText(t: Messages, language: string, problem: HealthProble
     case 'disk':
       return text.disk(health.folders[problem.folder], formatBytes(problem.free, language))
     case 'addon':
+      if (problem.until !== undefined) {
+        return text.addonTimingOut(
+          ownedName(t, problem.name, problem.owner ?? null),
+          new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(new Date(problem.until)),
+        )
+      }
       return text.addon(
         ownedName(t, problem.name, problem.owner ?? null),
         health.failures[problem.failure] ?? problem.failure,

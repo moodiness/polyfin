@@ -143,6 +143,8 @@ const system: typeof en = {
         database: 'Die Datenbank antwortet nicht.',
         disk: (folder: string, free: string) => `Wenig Speicherplatz für ${folder}: ${free} frei.`,
         addon: (name: string, failure: string) => `${name}: ${failure}`,
+        addonTimingOut: (name: string, until: string) =>
+          `${name} antwortet nicht rechtzeitig auf Anfragen nach Versionen: Polyfins Hintergrundanfragen an seinen Server pausieren bis ${until}. Wiedergaben fragen es weiterhin. Wenn es die Versionen anderer Add-ons sammelt, schalte dort das ab, das nicht mehr antwortet, oder verkürze, wie lange es auf sie wartet; sonst schalte es ab.`,
         iptv: (name: string) => `${name}: Der letzte Download der Kanalliste ist fehlgeschlagen.`,
         tuner: (name: string) => `${name}: Der Tuner konnte einen Kanal nicht abspielen.`,
         tunerUnreachable: (name: string) => `${name}: Der Tuner antwortet nicht.`,

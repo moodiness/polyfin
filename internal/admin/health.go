@@ -39,6 +39,11 @@ type HealthSources struct {
 	// catalog of an addon for now, as it did not answer a search in time
 	// (library.Service.SearchesLeaveOut); nil tells none.
 	SearchesLeaveOut func(addon accounts.ID) bool
+	// StreamsTimingOut tells, while the background requests to an
+	// addon's server pause as it did not answer requests for streams in
+	// time, when the pause ends (library.Service.StreamsTimingOut); nil
+	// tells none.
+	StreamsTimingOut func(addon addons.Addon) (time.Time, bool)
 	// Cache keeps the sources being played. Folders are the folders of
 	// the run, which keep it, the segments and the cache, those the
 	// settings chose that could not be written into at start among them.

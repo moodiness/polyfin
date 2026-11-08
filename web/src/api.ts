@@ -5158,7 +5158,17 @@ export type HealthProblem = {
 } & (
   | { code: 'database' }
   | { code: 'disk'; folder: WorkFolderName | 'recordings' | 'backups'; free: number }
-  | { code: 'addon'; name: string; owner?: NonNullable<Owner>; failure: string }
+  /**
+   * An addon whose last request failed. `until` is set while the background requests to its server
+   * pause, as it did not answer requests for versions in time: when the pause ends.
+   */
+  | {
+      code: 'addon'
+      name: string
+      owner?: NonNullable<Owner>
+      failure: string
+      until?: string
+    }
   /** Searches leave out the addon's search catalog for a few minutes: it did not answer in time. */
   | { code: 'search_late'; name: string; owner?: NonNullable<Owner> }
   /**

@@ -142,6 +142,8 @@ const system: typeof en = {
         disk: (folder: string, free: string) =>
           `Pouco espaço restante para ${folder}: ${free} livres.`,
         addon: (name: string, failure: string) => `${name}: ${failure}`,
+        addonTimingOut: (name: string, until: string) =>
+          `${name} não responde a tempo quando versões são pedidas: as requisições em segundo plano do Polyfin ao servidor dele estão pausadas até as ${until}. As reproduções continuam consultando-o. Se ele reúne as versões de outros complementos, desative nele o que não responde mais ou encurte o tempo que ele espera por eles; caso contrário, desative-o.`,
         iptv: (name: string) => `${name}: o último download da lista de canais falhou.`,
         tuner: (name: string) => `${name}: o sintonizador não conseguiu reproduzir um canal.`,
         tunerUnreachable: (name: string) => `${name}: o sintonizador não responde.`,

@@ -144,6 +144,8 @@ const system: typeof en = {
         disk: (folder: string, free: string) =>
           `Il reste peu de place pour le dossier ${folder}\u202f: ${free} libres.`,
         addon: (name: string, failure: string) => `${name}\u202f: ${failure}`,
+        addonTimingOut: (name: string, until: string) =>
+          `${name} ne répond pas à temps quand on lui demande des versions\u202f: les requêtes de Polyfin en arrière-plan vers son serveur sont suspendues jusqu’à ${until}. Les lectures l’interrogent toujours. S’il rassemble les versions d’autres addons, désactivez-y celui qui ne répond plus, ou raccourcissez le temps qu’il leur accorde\u202f; sinon, désactivez-le.`,
         iptv: (name: string) => `${name}\u202f: le dernier téléchargement de la liste a échoué.`,
         tuner: (name: string) => `${name}\u202f: le tuner n’a pas pu lire une chaîne.`,
         tunerUnreachable: (name: string) => `${name}\u202f: le tuner ne répond pas.`,
