@@ -32,6 +32,7 @@ func samplePoster(width int) *image.RGBA {
 // Run with -update to draw the golden images again after a change of the
 // badges' look, and look at them before committing.
 func TestBadgesMatchTheGoldenImages(t *testing.T) {
+	t.Parallel()
 	full := Badges{Star: 7.84, IMDb: true, Critics: 91, Audience: 85, Status: NewSeason}
 	cases := []struct {
 		name   string
@@ -50,6 +51,7 @@ func TestBadgesMatchTheGoldenImages(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			canvas := samplePoster(c.width)
 			DrawBadges(canvas, c.badges, c.size)
 			path := filepath.Join("testdata", "badges-"+c.name+".png")
@@ -110,6 +112,7 @@ func far(a, b uint32) bool {
 
 // A poster without anything to tell is left as it is.
 func TestNoBadgesLeaveThePosterAlone(t *testing.T) {
+	t.Parallel()
 	canvas := samplePoster(300)
 	before := bytes.Clone(canvas.Pix)
 	DrawBadges(canvas, Badges{Critics: -1, Audience: -1}, BadgesLarge)
