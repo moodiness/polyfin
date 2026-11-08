@@ -282,6 +282,7 @@ func TestAppRunsAndStopsEverything(t *testing.T) {
 }
 
 func TestServerEnvironment(t *testing.T) {
+	t.Parallel()
 	o := Options{Install: desktop.Install{Dir: "/app"}, Folders: desktop.Folders{Data: "/data"}}
 	env := serverEnvironment([]string{"PATH=/usr/bin", "HOME=/home/a", "POLYFIN_DATABASE_URL=postgresql://elsewhere", "POLYFIN_FFMPEG=/opt/ffmpeg",
 		"PGHOST=elsewhere", "POLYFIN_LISTEN=:19001"}, o, "postgresql://polyfin:pw@127.0.0.1:5/polyfin", "", tools.Paths{})
@@ -318,6 +319,7 @@ func TestListen(t *testing.T) {
 }
 
 func TestSetupCode(t *testing.T) {
+	t.Parallel()
 	line := `time=2026-10-18T10:00:00Z level=WARN msg="No administrator yet: open /admin/ and create one with this setup code" setup_code=7K2M-QX4P`
 	if m := setupCode.FindStringSubmatch(line); m == nil || m[1] != "7K2M-QX4P" {
 		t.Errorf("match = %v", m)
@@ -330,6 +332,7 @@ func TestSetupCode(t *testing.T) {
 // The rebuild of the database's indexes shows while Polyfin starts, and
 // changes no other phase.
 func TestRebuildingPhase(t *testing.T) {
+	t.Parallel()
 	a := New(Options{Folders: desktop.Folders{Data: t.TempDir()}})
 	a.update(func(s *Status) { s.Phase = Starting })
 	a.rebuilding(true)
@@ -351,6 +354,7 @@ func TestRebuildingPhase(t *testing.T) {
 // Start with the computer turns on once set up, unless chosen before, and
 // the choice is kept.
 func TestStartWithComputer(t *testing.T) {
+	t.Parallel()
 	data := t.TempDir()
 	login := &fakeLogin{}
 	a := New(Options{Folders: desktop.Folders{Data: data}, Login: login})
@@ -375,6 +379,8 @@ func TestStartWithComputer(t *testing.T) {
 }
 
 // A second app on the same data folder is refused while the first runs.
+//
+//nolint:paralleltest // a child another test forks holds the lock file until it execs, keeping its lock past the release
 func TestLock(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "desktop.lock")
 	release, err := Lock(path)
@@ -397,6 +403,7 @@ func TestLock(t *testing.T) {
 }
 
 func TestRotateLogs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	big := filepath.Join(dir, "polyfin.log")
 	if err := os.WriteFile(big, make([]byte, 10<<20+1), 0o600); err != nil {

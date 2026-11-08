@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -18,15 +19,23 @@ import (
 // The tests that run PostgreSQL need its server programs, version 18:
 // POLYFIN_TEST_POSTGRES_BIN names their folder. POLYFIN_TEST_POSTGRES_PORT
 // gives them a port, else they take a free one: internal/desktop/app reads
-// it too, so a fixed port needs the two packages tested apart.
+// it too, so a fixed port needs the two packages tested apart, and the
+// tests that run PostgreSQL here run one at a time.
 func postgresBin(t *testing.T) string {
 	t.Helper()
 	bin := os.Getenv("POLYFIN_TEST_POSTGRES_BIN")
 	if bin == "" {
 		t.Skip("POLYFIN_TEST_POSTGRES_BIN is not set")
 	}
+	if os.Getenv("POLYFIN_TEST_POSTGRES_PORT") != "" {
+		fixedPort.Lock()
+		t.Cleanup(fixedPort.Unlock)
+	}
 	return bin
 }
+
+// fixedPort is held by the test whose cluster has the fixed port.
+var fixedPort sync.Mutex
 
 func testPort(t *testing.T) int {
 	t.Helper()
@@ -71,6 +80,7 @@ func query(t *testing.T, url, sql string) string {
 // The first start makes the cluster, with a password only the user reads,
 // on the loopback alone; the second reuses it and its password.
 func TestClusterIsMadeOnceAndReused(t *testing.T) {
+	t.Parallel()
 	bin := postgresBin(t)
 	data := t.TempDir()
 	ctx := context.Background()
@@ -135,6 +145,7 @@ func TestClusterIsMadeOnceAndReused(t *testing.T) {
 // A cluster left running by a crash of the app is stopped, then started
 // again.
 func TestClusterLeftRunningIsRestarted(t *testing.T) {
+	t.Parallel()
 	bin := postgresBin(t)
 	data := t.TempDir()
 	ctx := context.Background()
@@ -166,6 +177,7 @@ func TestClusterLeftRunningIsRestarted(t *testing.T) {
 // A lock file whose process number another process holds, the test's
 // own, is removed: nothing answers on its port.
 func TestRecoverRemovesAStaleLock(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -192,6 +204,7 @@ func TestRecoverRemovesAStaleLock(t *testing.T) {
 
 // Something that is not PostgreSQL on the lock's port is not the cluster.
 func TestProbeTellsNoClusterFromAnotherService(t *testing.T) {
+	t.Parallel()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -214,6 +227,7 @@ func TestProbeTellsNoClusterFromAnotherService(t *testing.T) {
 }
 
 func TestInitdbArgumentsAndURL(t *testing.T) {
+	t.Parallel()
 	args := strings.Join(initdbArgs("/data/postgresql.new", "/data/.password-1"), " ")
 	for _, want := range []string{"-U polyfin", "--pwfile=/data/.password-1", "--auth=scram-sha-256", "--encoding=UTF8", "--icu-locale=und"} {
 		if !strings.Contains(args, want) {
@@ -235,6 +249,7 @@ func TestInitdbArgumentsAndURL(t *testing.T) {
 
 // The port chosen at first start is kept while it is free.
 func TestChosenPortIsKept(t *testing.T) {
+	t.Parallel()
 	c := &Cluster{Dir: t.TempDir()}
 	first, err := c.choosePort()
 	if err != nil {

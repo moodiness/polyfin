@@ -16,6 +16,7 @@ import (
 // file, pg_ctl.log, apart from the cluster's log, which pg_ctl -l opens
 // itself; the other commands give up waiting for their output.
 func TestRunDoesNotWaitForWhatAProgramLeaves(t *testing.T) {
+	t.Parallel()
 	bin := t.TempDir()
 	script := "#!/bin/sh\necho \"pg_ctl $1\"\nsleep 60 &\n"
 	if err := os.WriteFile(filepath.Join(bin, "pg_ctl"), []byte(script), 0o755); err != nil {

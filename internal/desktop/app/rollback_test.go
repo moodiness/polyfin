@@ -113,6 +113,8 @@ func TestABrokenUpdateIsRolledBack(t *testing.T) {
 
 // A new version whose server answers /healthz keeps no previous app nor
 // copy of the database, and clears the record of an earlier return.
+//
+//nolint:paralleltest // updated sets POLYFIN_LISTEN, FAKE_POLYFIN_SERVER and APPIMAGE with t.Setenv
 func TestAGoodUpdateIsConfirmed(t *testing.T) {
 	o, image := updated(t)
 	if err := desktop.WriteRolledBack(o.Folders, desktop.RolledBack{Version: "0.42.1", Previous: "0.42.0"}); err != nil {

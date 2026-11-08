@@ -78,6 +78,7 @@ func startFakeApp(t *testing.T, mode, data string) *exec.Cmd {
 // The quit command asks the app of the data folder to quit, and returns
 // once the app's process has ended, the app's record gone.
 func TestQuit(t *testing.T) {
+	t.Parallel()
 	folders := desktop.Folders{Data: t.TempDir()}
 	app := startFakeApp(t, "listen", folders.Data)
 	if pid, _, ok := desktop.ReadInstance(folders.Instance()); !ok || pid != app.Process.Pid {
@@ -104,6 +105,8 @@ func TestQuit(t *testing.T) {
 
 // With no app on the data folder, the command says so at once, and
 // leaves no request behind.
+//
+//nolint:paralleltest // a child another test forks holds the lock file until it execs, keeping its lock past the release
 func TestQuitNothingRunning(t *testing.T) {
 	ctx := context.Background()
 	missing := desktop.Folders{Data: filepath.Join(t.TempDir(), "none")}
@@ -133,6 +136,7 @@ func TestQuitNothingRunning(t *testing.T) {
 
 // An app that does not answer still runs when the time is up.
 func TestQuitTimeout(t *testing.T) {
+	t.Parallel()
 	folders := desktop.Folders{Data: t.TempDir()}
 	startFakeApp(t, "deaf", folders.Data)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -146,6 +150,7 @@ func TestQuitTimeout(t *testing.T) {
 // the next start removes it, and one written again with the old token is
 // not the new app's.
 func TestQuitStaleRequest(t *testing.T) {
+	t.Parallel()
 	folders := desktop.Folders{Data: t.TempDir()}
 	const old = "0123456789abcdef"
 	if err := os.WriteFile(folders.Instance(), []byte("1 "+old+"\n"), 0o600); err != nil {
