@@ -113,6 +113,7 @@ func checkTimes(t *testing.T, got, want []time.Duration) {
 var keyframesForced = []string{"0.000000", "1.333333", "2.916667", "3.125000", "5.125000", "6.000000", "7.708333", "9.708333", "11.000000", "12.500000", "14.500000"}
 
 func TestKeyframes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		want []string
@@ -135,6 +136,7 @@ func TestKeyframes(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			data := fixture(t, test.name)
 			want := seconds(t, test.want...)
 
@@ -166,6 +168,7 @@ func TestKeyframes(t *testing.T) {
 }
 
 func TestKeyframesNoIndex(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data []byte
@@ -181,6 +184,7 @@ func TestKeyframesNoIndex(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			r := &memory{data: test.data}
 			_, err := Keyframes(context.Background(), r, int64(len(test.data)))
 			if !errors.Is(err, ErrNoIndex) {
@@ -194,11 +198,13 @@ func TestKeyframesNoIndex(t *testing.T) {
 }
 
 func TestKeyframesTruncated(t *testing.T) {
+	t.Parallel()
 	// Both files keep their index after the media.
 	for _, name := range []string{"forced.mkv", "tail.mp4"} {
 		data := fixture(t, name)
 		for _, size := range []int{len(data) / 8, len(data) / 2, len(data) - 100, len(data) - 1} {
 			t.Run(name+"/"+strconv.Itoa(size), func(t *testing.T) {
+				t.Parallel()
 				_, err := Keyframes(context.Background(), &memory{data: data[:size]}, int64(size))
 				if err == nil || errors.Is(err, ErrNoIndex) {
 					t.Errorf("got %v, want an error about the file", err)
@@ -212,6 +218,7 @@ func TestKeyframesTruncated(t *testing.T) {
 // Keyframes may fail, but must not panic, and what it returns must be
 // ascending.
 func TestKeyframesCorrupted(t *testing.T) {
+	t.Parallel()
 	names := []string{"forced.mkv", "front.webm", "faststart.mp4", "tail.mp4", "delayed.mp4", "trimmed.mp4"}
 	for _, name := range names {
 		original := fixture(t, name)
@@ -230,6 +237,7 @@ func TestKeyframesCorrupted(t *testing.T) {
 }
 
 func TestKeyframesCuesNotInSeekHead(t *testing.T) {
+	t.Parallel()
 	// The SeekHead's entry for the Cues becomes a Void element, as when a
 	// muxer could not come back to write it: the Cues are found right
 	// after the last Cluster.
@@ -251,6 +259,7 @@ func TestKeyframesCuesNotInSeekHead(t *testing.T) {
 }
 
 func TestKeyframesSignedCompositionOffsets(t *testing.T) {
+	t.Parallel()
 	// The first ctts version is meant for unsigned offsets, yet ffmpeg
 	// reads them as signed: the first keyframe's becomes -512 in one.
 	data := fixture(t, "negative.mp4")
@@ -273,6 +282,7 @@ func TestKeyframesSignedCompositionOffsets(t *testing.T) {
 }
 
 func TestKeyframesLargeFiles(t *testing.T) {
+	t.Parallel()
 	const gap = 40 << 30
 	tests := []struct {
 		name string
@@ -284,6 +294,7 @@ func TestKeyframesLargeFiles(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			times, err := Keyframes(context.Background(), test.file, test.file.size)
 			if err != nil {
 				t.Fatal(err)
@@ -297,6 +308,7 @@ func TestKeyframesLargeFiles(t *testing.T) {
 }
 
 func TestKeyframesHostile(t *testing.T) {
+	t.Parallel()
 	everySample := mp4File(nil, fullBox("stts", 0, u32(1, 3, 30)))
 	edited := mp4File(
 		mp4Box("edts", fullBox("elst", 0, u32(2, 500, 0xFFFFFFFF, 1<<16, 1000, 30, 1<<16))),
@@ -328,6 +340,7 @@ func TestKeyframesHostile(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			times, err := Keyframes(context.Background(), test.file, test.size)
 			if !errors.Is(err, test.err) {
 				t.Fatalf("got %v, want %v", err, test.err)

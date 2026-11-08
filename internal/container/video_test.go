@@ -35,6 +35,7 @@ func vp9Keyframe(frame []byte) bool {
 // Every keyframe the index lists is read alone and whole, the codec as a
 // decoder needs it, and its times are those the HLS keyframe index reads.
 func TestVideoFrames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		file, codec string
 		key         func([]byte) bool
@@ -48,6 +49,7 @@ func TestVideoFrames(t *testing.T) {
 		{"trimmed.mp4", "V_MPEG4/ISO/AVC", idrFrame},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
+			t.Parallel()
 			data := fixture(t, tc.file)
 			ctx := context.Background()
 			v, err := OpenVideo(ctx, &memory{data: data}, int64(len(data)))
@@ -99,6 +101,7 @@ func TestVideoFrames(t *testing.T) {
 // A source serving several ranges at once is asked for several keyframes
 // with each request; one that does not, a keyframe each.
 func TestVideoFramesBatched(t *testing.T) {
+	t.Parallel()
 	data := fixture(t, "forced.mkv")
 	ctx := context.Background()
 	v, err := OpenVideo(ctx, &memory{data: data}, int64(len(data)))
@@ -149,6 +152,7 @@ func TestVideoFramesBatched(t *testing.T) {
 }
 
 func TestVideoWithoutIndex(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	for _, name := range []string{"fragmented.mp4", "piped.mkv"} {
 		data := fixture(t, name)
