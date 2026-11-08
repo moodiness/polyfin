@@ -16,13 +16,13 @@ type noteWords struct {
 }
 
 // playNotes are the notes of each server language. The French set the
-// colon off with a no-break space, which keeps it on the line of the word
-// before; the Spanish, Italian and Portuguese agree with "version", which
-// is feminine there.
+// colon off with a narrow no-break space, which keeps it on the line of
+// the word before; the Spanish, Italian and Portuguese agree with
+// "version", which is feminine there.
 var playNotes = map[string]noteWords{
 	"en": {"(direct play)", "(direct stream)", "(converted)", "(converted: %s)", "(cannot play here)",
 		"app’s request", "HDR", "quality limit", "subtitles", "video", "audio"},
-	"fr": {"(lecture directe)", "(flux direct)", "(converti)", "(converti\u00a0: %s)", "(illisible ici)",
+	"fr": {"(lecture directe)", "(flux direct)", "(converti)", "(converti\u202f: %s)", "(illisible ici)",
 		"demande de l’app", "HDR", "limite de qualité", "sous-titres", "vidéo", "audio"},
 	"de": {"(direktes Abspielen)", "(direkter Stream)", "(konvertiert)", "(konvertiert: %s)", "(hier nicht abspielbar)",
 		"Wunsch der App", "HDR", "Qualitätslimit", "Untertitel", "Video", "Audio"},
