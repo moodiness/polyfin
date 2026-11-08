@@ -13,7 +13,7 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings, a
 - Marking a series or season played marks its released episodes.
 - Apps keeping Jellyfin's live connection (WebSocket) open hear of changes from the user's other apps at once.
 
-Users can make playlists of movies and episodes from their apps: private, shared with other users, or open to all.
+Users can make playlists of movies and episodes from their apps: private, shared with other users, or open to all (see [Playlists](#playlists)).
 
 These actions take a title off the user's lists and change nothing else:
 
@@ -25,7 +25,7 @@ These actions take a title off the user's lists and change nothing else:
 
 - A title removed from Continue Watching keeps its played state, plays and last played date. Tracking services are not told.
 - Polyfin remembers the removal date for imports from tracking services and apps (see [How the history merges with Polyfin's](tracking-imports.md#how-the-history-merges-with-polyfin-s)).
-- A hidden title leaves libraries, home rows (Latest, Continue Watching, Next Up, Upcoming), searches, similar titles, recommendations, person pages, collections and the Watchlist.
+- A hidden title leaves libraries, home rows (Latest, Continue Watching, Next Up, Upcoming), searches, similar titles, recommendations, person pages and collections. It stays in the Watchlist playlist, which leaves it out of what it lists.
 - A hidden series hides its episodes; a hidden folder, its videos.
 - A hidden title still opens and plays from a link, and its page still lists its seasons and episodes. Other users are not affected.
 
@@ -130,6 +130,17 @@ Two settings decide when a title counts as played and when a resume point is kep
 
 - These replace Jellyfin's `MaxResumePct` and `MinResumePct`, with the same defaults, 90 and 5.
 - Jellyfin takes any values; Polyfin keeps them in the ranges above.
+
+### Playlists
+
+Users make playlists of movies and episodes in their apps, with "Add to playlist", and change them there: rename, reorder, remove, delete. A playlist is private, shared with other users to view or to edit, or open to all with "Allow public access". Each user also has a [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), which their lists fill.
+
+- **A series added:** its aired episodes of regular seasons, in order. Specials and episodes not aired yet are left out.
+- **A season added:** its aired episodes, in order.
+- **Later episodes:** an episode that airs after its series or season was added is not added.
+- **Other items:** a movie or an episode is added itself.
+- **Order:** apps listing a playlist get its order. Asked for a sort (`SortBy`), as for its items in a folder view, they get that sort, and **Shuffle** gets a random order, a new one each time.
+- **Image:** each playlist gets a mosaic of its first entries, a series' poster standing for its episodes (see [Generated images](artwork-and-editing.md#generated-images)).
 
 ## Metadata language
 

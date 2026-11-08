@@ -69,7 +69,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Subtitles](subtitles.md) | Where each app's subtitles come from: addon subtitles and their sync, subtitle files from streams, local folders and torrents, text tracks inside files, ASS fonts, and picture subtitles read into text |
 | [Skip segments](skip-segments.md) | Skip buttons: which source wins, chapters, the four databases and their keys, intros and credits found in local episodes' audio, and commercials in recordings |
 | [Tracking services](tracking.md) | Connecting Trakt, Simkl, MDBList, PublicMetaDB, AniList, MyAnimeList, Last.fm and ListenBrainz, what each one is sent, the anime mapping, music scrobbling, administrator set-up, and delivery |
-| [Tracking imports and the Watchlist](tracking-imports.md) | Importing watch history and watchlists from tracking services, the Watchlist view, the Now available and Still waiting rows, and Recommended on Trakt |
+| [Tracking imports and the Watchlist](tracking-imports.md) | Importing watch history and watchlists from tracking services, the Watchlist playlist, the Now available and Still waiting rows, and Recommended on Trakt |
 
 ## Apps
 

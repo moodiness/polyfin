@@ -236,7 +236,7 @@ Choose **Plex**, then **Sign in with Plex**. **Open Plex’s sign-in page** open
 
 - **Plex Home profile**, for a Plex Home account: whose data comes over, the signed-in account first. A managed profile has no sign-in of its own, as Plex says (see Plex's support article "Managed Accounts"). A Home member signs in, picks it here with its **Profile PIN** if any, and **Use this profile** switches as Plex's apps do.
 - **Server**: the server to import from. Polyfin tries the addresses Plex gives: local network first, then remote, then Plex relays. Each is an address the server import takes. One counts only when the server answers with its own machine identifier.
-- **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, kept by Plex with the account, not a server, go to the user's [Watchlist](tracking-imports.md#the-watchlist). Like a one-off app import's library, they stay until started.
+- **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, kept by Plex with the account, not a server, go to the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), a show as its aired episodes. Like a one-off app import's library, they stay until removed.
 
 **Import my watch history** reads the server with the profile's own token, as the owner's import reads the owner, into the user's own account only:
 
@@ -247,7 +247,7 @@ Choose **Plex**, then **Sign in with Plex**. **Open Plex’s sign-in page** open
 | 0 to 10 ratings of movies, shows and episodes, with **Ratings** | Ratings, as from Letterboxd; existing ratings stay. Apps see `Likes` from 5. Season ratings have no Polyfin title and stay on Plex. |
 | Server movie and show section collections, with **Collections**, for users who may manage collections | Collections every user sees, as in the administrator's import. |
 | Profile's video playlists, with **Playlists** | The user's playlists, in order. |
-| The Watchlist, when ticked | The Watchlist. |
+| The Watchlist, when ticked | The Watchlist playlist. |
 
 An account with nothing played, in progress or rated there says so (`plex_nothing_watched`). Titles match as in the administrator's Plex import. A Watchlist item lacking identifiers in Plex's list is asked of Plex one by one, 500 at most, and listed as not found if it has none.
 
@@ -272,7 +272,7 @@ Letterboxd has no API for this, but gives members their data as a file: Settings
 
 | Option | Default | What it does |
 |---|---|---|
-| **Watchlist to my Watchlist** | On | Letterboxd watchlist movies go to the user's [Watchlist](tracking-imports.md#the-watchlist), until started, like a one-off app import's library. |
+| **Watchlist to my Watchlist** | On | Letterboxd watchlist movies go to the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), until removed, like a one-off app import's library. |
 | **Ratings** | On | Stars × 2 give the 0 to 10 rating, so 3.5 stars is 7. Apps see `Rating` and `Likes` (5 or more) as for their own ratings. A movie rated only in the diary takes its latest diary rating. |
 | **Liked movies as favorites** | Off | Liked movies become favorites. |
 
@@ -317,10 +317,10 @@ An administrator can import for a user: **Import from an app**, at the top of **
 |---|---|
 | Movies and episodes watched, with the date when the app keeps one | Played marks. |
 | Resume points of movies and episodes | Resume points, for titles not played. |
-| The library's movies and series | The [Watchlist](tracking-imports.md#the-watchlist). |
+| The library's movies and series | The [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), a series as its aired episodes. |
 | The addons ticked | The user's own addons. |
 
-An app's library is a watchlist: its titles go on the user's Watchlist, which Jellyfin apps show beside the libraries, never in favorites. A one-off import's titles stay until started. A connection's import replaces what it put there before, so a title removed from the app's library leaves at the next import, unless another list holds it. Imports set no favorites, and those earlier imports set stay.
+An app's library is a watchlist: its titles go on the user's Watchlist playlist, which Jellyfin apps list with their playlists, never in favorites. Only what is left to watch goes there: a movie the user has not started or played, and the aired episodes of a series they have not played, an episode in progress included (see [The Watchlist playlist](tracking-imports.md#the-watchlist-playlist)). A one-off import's titles stay until removed. A connection's import replaces what it put there before, so a title removed from the app's library leaves at the next import, unless another list holds it, or the user started it or added it themselves. Imports set no favorites, and those earlier imports set stay.
 
 Nothing else comes over: settings, collections, home screen layouts, and device-only data.
 
@@ -336,9 +336,9 @@ Unmatched titles are left out and the import goes on. The result lists them with
 
 - **Not an IMDb, TMDB, Kitsu or MyAnimeList identifier**: an addon's own identifier.
 - **Not in Polyfin**: no catalog lists its identifier. For `tmdb:…`, no server metadata addon describes it either, and TMDB gives it no IMDb identifier or the server has no TMDB API key.
-- **Its episodes do not match Polyfin's list**: a Stremio series (see [Stremio](#stremio)). Its watched episodes are not marked, but it still goes on the Watchlist if in the library.
+- **Its episodes do not match Polyfin's list**: a Stremio series (see [Stremio](#stremio)). Its watched episodes are not marked, but it still goes on the Watchlist playlist if in the library.
 
-Data merges as in the other imports (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)). Played marks and resume points are only added, Polyfin's later date stays, and the more recent resume point stays. Resume points follow Polyfin's thresholds (see [Played and resume thresholds](watch-state.md#played-and-resume-thresholds)): one past the played threshold marks the title played. Re-importing adds nothing twice. The result counts library titles added to the Watchlist: those not already there and not started.
+Data merges as in the other imports (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)). Played marks and resume points are only added, Polyfin's later date stays, and the more recent resume point stays. Resume points follow Polyfin's thresholds (see [Played and resume thresholds](watch-state.md#played-and-resume-thresholds)): one past the played threshold marks the title played. Re-importing adds nothing twice. The result counts library titles added to the Watchlist playlist: those new to that list and not on the playlist already.
 
 <a id="the-app-s-addons"></a><a id="the-apps-addons"></a>
 
@@ -372,8 +372,8 @@ The password is never kept. Each user has one connection per app. Signing in aga
 **The imports:**
 
 - Each interval, Polyfin re-reads the account and imports the profile chosen when connecting, by the first import's rules: played marks only added, newer resume point wins.
-- The library replaces what the connection put on the Watchlist. A title removed there leaves the Watchlist unless another list holds it.
-- Disconnecting removes from the Watchlist the titles only the connection held. Those a one-off import brought stay until started.
+- The library replaces what the connection put on the Watchlist playlist. A title removed there leaves the playlist unless another list holds it; episodes the user started or played, and entries they added or moved themselves, stay.
+- Disconnecting removes from the Watchlist playlist the titles only the connection held, by the same rule. Those a one-off import brought stay until removed.
 - Addons are chosen once, at the first import; later imports install none.
 - Nothing is ever written to the app.
 
@@ -387,7 +387,7 @@ The password is never kept. Each user has one connection per app. Signing in aga
 
 **Told when it stops:** A stopping connection is told once to the user's notification targets and to the server's that chose **Connection stopped** (see [Stopped connections](notifications.md#stopped-connections)). **System › Health** lists stopped connections by user and app. A new sign-in followed by a new refusal tells again.
 
-**Disconnecting:** **Disconnect** signs out the sessions Polyfin opened, then forgets everything kept. Those are the Stremio key got by link code or password, a Stremio profile's PIN session, and the Nuvio session. A pasted key is only forgotten, since signing it out would sign your browser out. Imported data stays, except Watchlist titles only the connection held. Deleting the user signs out the same sessions in the background (see [Deleting a user](users.md#deleting-a-user)).
+**Disconnecting:** **Disconnect** signs out the sessions Polyfin opened, then forgets everything kept. Those are the Stremio key got by link code or password, a Stremio profile's PIN session, and the Nuvio session. A pasted key is only forgotten, since signing it out would sign your browser out. Imported data stays, except Watchlist playlist entries only the connection held, as above. Deleting the user signs out the same sessions in the background (see [Deleting a user](users.md#deleting-a-user)).
 
 **Who:**
 
@@ -412,7 +412,7 @@ What comes over, per profile:
 
 - Watched: each movie and episode, with the date marked watched, older apps' dates included. A series marked watched as a whole, without its episodes, is not marked played: Polyfin counts series as played from their episodes.
 - Resume points: per movie and episode, with runtime and date, unless watched since. Those of titles from a Jellyfin or Emby server connected in Nuvio (`srv1:…`) stay in Nuvio.
-- Library: movies and series, on the Watchlist from the date Nuvio added them.
+- Library: movies and series, on the Watchlist playlist at the place the date Nuvio added them gives.
 - Addons: those on in the profile, or in the first profile for a profile using its addons. Nuvio's plugins are not addons and do not come over.
 
 Guest data, kept without an account, stays on the device. Progress Nuvio sends to Trakt or Simkl is imported from there (see [Tracking services](tracking.md)).
@@ -436,7 +436,7 @@ What comes over:
 - Watched movies: each movie Stremio counts as watched, or saw watched most of the way, with the last watched date, else the last change date, and how many times.
 - Watched episodes: Stremio stores a series' episodes as a row of bits, one per episode, in the order the user's app listed them, anchored on the last watched episode. Polyfin matches the row to the server addons' episode list in the same order: by season, episode, then release date, unnumbered episodes first. It shifts on the anchor, so episodes listed since before it still fall in place. Stremio keeps no date per episode: each takes the series' last watched date.
 - Resume points: one per title, at the last video played, movie or episode, with runtime and date, while the title shows in Continue Watching: in the library, or played without being added. A title removed from the library keeps its watched marks, not its resume point.
-- Library: movies and series, on the Watchlist from the date Stremio first kept them. Titles only played, or removed from the library, are not on it.
+- Library: movies and series, on the Watchlist playlist at the place the date Stremio first kept them gives. Titles only played, or removed from the library, are not on it.
 - Addons: those the user installed. Stremio's built-in ones are left out.
 
 Channels, TV channels and other videos do not come over.

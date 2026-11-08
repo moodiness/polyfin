@@ -1,6 +1,6 @@
 # Home rows
 
-Home rows are rows an administrator adds to the web player's home page: a catalog, a collection, the user's Watchlist, or picks made for them. This page is for administrators, and for users who want to know why a row lists what it does. It also covers the taste profile behind **Top picks for you**.
+Home rows are rows an administrator adds to the web player's home page: a catalog, a collection, the titles of the user's Watchlist playlist found available or still waited for, or picks made for them. The Watchlist playlist itself has no row: it shows on the home as any playlist does. This page is for administrators, and for users who want to know why a row lists what it does. It also covers the taste profile behind **Top picks for you**.
 
 ## The Home rows list
 
@@ -32,8 +32,8 @@ Each row has these fields:
 | **A collection** | A collection made by users, a smart list shown as a collection, or an addon's collection. |
 | **Because you watched** | One row for each of the last movies and series the user played, of the titles similar to it. |
 | **New in your libraries** | The titles that came into the catalogs of the user's libraries in the last 7 days, newest first. |
-| **Now available** | The titles of the user's [Watchlist](tracking-imports.md#the-watchlist) they have not started that versions were found for, the latest found first. |
-| **Still waiting** | The titles of the user's Watchlist they have not started that no version was found for yet, or that are not out yet, the latest added first. |
+| **Now available** | The titles of the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist) they have not started that versions were found for, the latest found first. |
+| **Still waiting** | The titles of the user's Watchlist playlist they have not started that no version was found for yet, or that are not out yet, in the playlist's order. |
 | **Recommended on Trakt** | The movies and series Trakt recommends to the user, for the users who connected Trakt only. |
 | **Top picks for you** | The movies and series of the first page of each of the user's libraries that their taste profile ranks first, without those they played. |
 
@@ -116,7 +116,7 @@ A catalog row needs the user to use the server's addons. A row without any title
 
 ## Rows as libraries in other apps
 
-No app can be given a new kind of home section. **Also a library in other apps** makes the row a library of its own too, without type, as the Watchlist is (see [Tracking](tracking.md)).
+No app can be given a new kind of home section. **Also a library in other apps** makes the row a library of its own too, without type (see [Tracking](tracking.md)).
 
 - Other apps list it among the user's libraries, and show its latest titles on their home.
 - The web player shows it too, in its libraries and with its own "Recently Added" row.

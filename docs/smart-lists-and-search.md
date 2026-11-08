@@ -167,7 +167,7 @@ A movie is out at home:
 - **Smart lists:** those with a **Home release** rule of upcoming titles list it (see [Home release rule](#home-release-rule)). The day it is out is its premiere date, and comes first in its overview: "Out at home on 2026-11-20.".
 - **Opening it:** it still opens by its identifier, from such a list or a link, with that day in its overview.
 - **Playing it:** it has no version, and its addons are not asked for streams. It does not play: jellyfin-web says "Playback of this media is not allowed.".
-- **Watchlist:** a movie of a user's Watchlist stays there. The Watchlist checks find no version of it before that day (see [Now available and Still waiting](tracking-imports.md#now-available-and-still-waiting)).
+- **Watchlist:** a movie of a user's Watchlist playlist stays there. The Watchlist checks find no version of it before that day (see [Now available and Still waiting](tracking-imports.md#now-available-and-still-waiting)).
 
 ### Movies that never wait
 

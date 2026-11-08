@@ -75,7 +75,7 @@ API details: [Version list progress for apps](jellyfin-api.md#version-list-progr
 
 ### Ratings
 
-With the **MDBList API key for ratings**, in **Settings › Content**, `CommunityRating` carries a movie's or series' IMDb rating from MDBList (0 to 10) and `CriticRating` its critics' score or audience score (0 to 100), as **Critic rating shows** chooses; an administrator's edit still wins. Listings that fit on one page, addons' collections read whole among them, sort by `SortBy=CriticRating` as by `CommunityRating`, titles without one first. The Watchlist and smart lists keep their own order (see [Smart lists](smart-lists-and-search.md#smart-lists)). See [Ratings](collections-people-and-ratings.md#ratings).
+With the **MDBList API key for ratings**, in **Settings › Content**, `CommunityRating` carries a movie's or series' IMDb rating from MDBList (0 to 10) and `CriticRating` its critics' score or audience score (0 to 100), as **Critic rating shows** chooses; an administrator's edit still wins. Listings that fit on one page, addons' collections read whole among them, sort by `SortBy=CriticRating` as by `CommunityRating`, titles without one first. Smart lists keep their own order (see [Smart lists](smart-lists-and-search.md#smart-lists)), and playlists theirs unless asked for a sort (see [Playlists](watch-state.md#playlists)). See [Ratings](collections-people-and-ratings.md#ratings).
 
 API details: [Ratings for apps](jellyfin-api.md#ratings-for-apps).
 

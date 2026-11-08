@@ -67,7 +67,7 @@ When Trakt refuses your sign-in, or the code ends without connecting, **My accou
 
 ## Imports and the Watchlist
 
-A connected Trakt, Simkl, MDBList or PublicMetaDB account can also bring your watch history into Polyfin. Trakt's watchlist and Simkl's Plan to Watch can fill your Watchlist, and Trakt can recommend titles in a home row. See [Tracking imports and the Watchlist](tracking-imports.md).
+A connected Trakt, Simkl, MDBList or PublicMetaDB account can also bring your watch history into Polyfin. Trakt's watchlist and Simkl's Plan to Watch can fill your Watchlist playlist, and Trakt can recommend titles in a home row. See [Tracking imports and the Watchlist](tracking-imports.md).
 
 ## Anime
 
@@ -175,7 +175,7 @@ Neither service follows playback. A title counts once Polyfin marks it played (*
 
 - Episodes are placed on TVDB through the mapping, as Simkl's anime are, and on the titles anime catalogs list under the entry.
 - Until the mapping is read, nothing of the list is imported.
-- **Import my AniList Plan to Watch list** and **Import my MyAnimeList Plan to Watch list**, also off, send Plan to Watch (AniList's Planning) to your Watchlist. Its usual rules apply (see [The watchlist](tracking-imports.md#the-watchlist)).
+- **Import my AniList Plan to Watch list** and **Import my MyAnimeList Plan to Watch list**, also off, send Plan to Watch (AniList's Planning) to your Watchlist playlist. Its usual rules apply (see [The Watchlist playlist](tracking-imports.md#the-watchlist-playlist)).
 - Imports only add, as for the other services (see [How the history merges with Polyfin's](tracking-imports.md#how-the-history-merges-with-polyfin-s)). They write nothing to the services.
 
 ### Ratings

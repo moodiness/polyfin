@@ -152,10 +152,9 @@ Tapping someone in a cast opens their page, with their titles that the user may 
 - **Favorites:** the heart on a title page adds the title to the user's favorites, those of Jellyfin apps, and takes it off.
   - The Favorites screen lists them by name.
   - Polyfin does not record when a title became a favorite. The apps are told the day it joined the server.
-- **Watchlist:** the watchlist button puts a movie or a series on the user's [Watchlist](tracking-imports.md#the-watchlist). For a season or an episode, it puts its series.
-  - Taking a title off removes it from every list holding it.
-  - A list read again whole, such as Trakt's watchlist, puts back a title it still holds.
-  - The Watchlist screen lists the Watchlist view, as Jellyfin apps show it. A title the user started leaves it, and shows in Continue Watching or Next Up.
+- **Watchlist:** the watchlist button puts a title on the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), as the web player's "Add to Watchlist" does: a movie or an episode itself, a series or a season as its aired episodes, at the top. A series or a season shows as on the watchlist while the playlist holds one of its episodes.
+  - Taking a movie or an episode off removes that entry; taking a series or a season off removes all its entries. Either stays off while a list still holds it; a list that newly holds it brings it back.
+  - The Watchlist screen lists the playlist, in its order, as Jellyfin apps show it. Started and played titles stay on it.
 - **History:** what the user played, the latest first.
 
 ### For You and the calendar

@@ -53,7 +53,7 @@ The root lists the user's views as Jellyfin apps see them, in this order:
 
 1. their libraries, local folders and music libraries;
 2. **Live TV**, when they have channels;
-3. the Watchlist;
+3. their Watchlist playlist, named as in Jellyfin apps, in its order, without the titles they hid;
 4. **Continue Watching** and **Next Up**.
 
 Inside them:
