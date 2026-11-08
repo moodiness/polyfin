@@ -336,6 +336,7 @@ func play(event Event, title Title, minutes float64, paused, played bool) Playba
 }
 
 func TestTitlesNeedAnIdentifier(t *testing.T) {
+	t.Parallel()
 	if _, ok := Movie(accounts.ID{1}, map[string]string{}); ok {
 		t.Error("a movie without identifiers is tracked")
 	}

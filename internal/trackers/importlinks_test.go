@@ -53,6 +53,7 @@ func (h harness) importAgain(t *testing.T, user accounts.ID, service string) Imp
 }
 
 func TestTraktTitlesNotFoundAreKeptAndLinked(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.withLinks(t)
 	user := h.user(t, "kim")
@@ -133,6 +134,7 @@ func TestTraktTitlesNotFoundAreKeptAndLinked(t *testing.T) {
 }
 
 func TestTitlesNoMappingKnowsAreKeptAndLinked(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.withLinks(t)
 	h.anime = animeMapping(t)

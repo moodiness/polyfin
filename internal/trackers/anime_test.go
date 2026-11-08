@@ -93,6 +93,7 @@ func (h harness) listAnime(t *testing.T) {
 }
 
 func TestSimklAnimeHistoryIsImportedInTVDBNumbering(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "ivy")
 	h.connected(t, user, Simkl, "simkl-ivy")
@@ -183,6 +184,7 @@ func TestSimklAnimeHistoryIsImportedInTVDBNumbering(t *testing.T) {
 }
 
 func TestTitlesAnimeAddonsNameAreSentInTVDBNumbering(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.anime = animeMapping(t)
 	h.listLongSeries(t)

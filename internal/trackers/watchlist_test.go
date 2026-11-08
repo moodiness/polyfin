@@ -44,6 +44,7 @@ func (h harness) importNow(t *testing.T, user accounts.ID, service string) Impor
 }
 
 func TestTraktWatchlistFillsTheWatchlist(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "dave")
 	h.connected(t, user, Trakt, "trakt-dave")
@@ -148,6 +149,7 @@ func TestTraktWatchlistFillsTheWatchlist(t *testing.T) {
 }
 
 func TestSimklPlanToWatchFillsTheWatchlist(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.anime = animeMapping(t)
 	user := h.user(t, "erin")
