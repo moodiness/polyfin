@@ -140,6 +140,7 @@ func exists(path string) bool {
 
 // The hours run in the server's time zone, past midnight too.
 func TestTheConversionHours(t *testing.T) {
+	t.Parallel()
 	zone := time.FixedZone("UTC-5", -5*3600)
 	at := func(hour, minute int) time.Time { return time.Date(2026, 10, 15, hour, minute, 0, 0, zone) }
 	for _, tc := range []struct {
@@ -168,6 +169,7 @@ func TestTheConversionHours(t *testing.T) {
 // A conversion outside its hours does not start, nor with the setting
 // off.
 func TestAConversionOutsideItsHoursDoesNotStart(t *testing.T) {
+	t.Parallel()
 	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
 	f, _ := conversionFixture(t, c, fakeProber{copyLength: 10 * time.Second})
 	r := f.finished(t, make([]byte, 100))
@@ -194,6 +196,7 @@ func TestAConversionOutsideItsHoursDoesNotStart(t *testing.T) {
 // Without a GPU and with the processor setting off, nothing is converted;
 // a GPU with an HEVC encoder converts whatever the processor setting.
 func TestNothingIsConvertedWithoutAGPUOrTheProcessor(t *testing.T) {
+	t.Parallel()
 	c := &fakeConverter{encoders: []string{"libx264", "libx265"}, copyBytes: 10}
 	f, _ := conversionFixture(t, c, fakeProber{copyLength: 10 * time.Second})
 	r := f.finished(t, make([]byte, 100))
@@ -218,6 +221,7 @@ func TestNothingIsConvertedWithoutAGPUOrTheProcessor(t *testing.T) {
 // A copy shorter than the original is deleted, the original kept, and the
 // recording not tried again.
 func TestAShorterCopyIsDeletedAndTheOriginalKept(t *testing.T) {
+	t.Parallel()
 	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
 	f, _ := conversionFixture(t, c, fakeProber{copyLength: 8 * time.Second})
 	original := []byte("the original recording, as it was written")
@@ -266,6 +270,7 @@ func (p notMediaProber) ProbeInput(ctx context.Context, in media.Input) (media.A
 // the pass goes on with the next recordings. Only one ffprobe cannot read
 // is kept as it was.
 func TestAnUnreadableRecordingIsTriedAgain(t *testing.T) {
+	t.Parallel()
 	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
 	f, _ := conversionFixture(t, c, fakeProber{copyLength: 10 * time.Second})
 	var recordings []Recording
@@ -366,6 +371,7 @@ func TestAnUnreadableRecordingIsTriedAgain(t *testing.T) {
 // A conversion still running at the end of its hours stops, its copy is
 // deleted, and the recording starts over next time.
 func TestAConversionStopsAtTheEndOfItsHours(t *testing.T) {
+	t.Parallel()
 	stopped := make(chan struct{})
 	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10, during: func(ctx context.Context) error {
 		<-ctx.Done()
@@ -388,6 +394,7 @@ func TestAConversionStopsAtTheEndOfItsHours(t *testing.T) {
 // A recording someone plays while it is converted is replaced once the
 // playback stops, whatever the hour.
 func TestARecordingPlayedDuringItsConversionIsReplacedAfterward(t *testing.T) {
+	t.Parallel()
 	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
 	f, playing := conversionFixture(t, c, fakeProber{copyLength: 10*time.Second - 500*time.Millisecond})
 	// The playback starts while the copy is written.
@@ -439,6 +446,7 @@ func testTools(t *testing.T) (ffmpeg, ffprobe string) {
 // A recording converted by the processor keeps its identifier, played
 // state and resume point; what playback learned of its file is forgotten.
 func TestAConvertedRecordingKeepsItsIdentifierAndResumePoint(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := testTools(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	segments, err := hls.NewManager(ffmpeg, t.TempDir(), logger)
@@ -536,6 +544,7 @@ func (r *forgettingRecorder) forgotten() []accounts.ID {
 // Recordings are converted by the HEVC encoder of whichever GPU method
 // the system offers: VideoToolbox on macOS, QSV or AMF on Windows.
 func TestEachGPUMethodsHEVCEncoderConvertsRecordings(t *testing.T) {
+	t.Parallel()
 	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
 	f, _ := conversionFixture(t, c, fakeProber{copyLength: 10 * time.Second})
 	for method, encoders := range map[string][]string{
