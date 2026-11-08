@@ -49,7 +49,9 @@ import (
 //   - a playlist the administrator chose, to the users who may see it.
 //
 // A row of a playlist lists its entries as /Playlists/{id}/Items lists
-// them to the user, in the playlist's order (see shownTitles).
+// them to the user, in the playlist's order (see shownTitles), but for a
+// series several of whose episodes it lists, shown once, as the series,
+// at its first episode's place (see groupedSeries).
 //
 // Every row leaves out what the user's listings leave out: the titles
 // parental control or blocked genres hide, the titles they hid, and the
@@ -72,7 +74,8 @@ import (
 // opens its list, /Items with the row as parentId. A row made a library
 // in other apps (homerows.Row.Library) is also listed by /UserViews, as a
 // library without type: apps give it a home row of latest items, its
-// first titles. A Because you watched row is a folder for each title it
+// first titles. A row's folder shows each user their own image of it (see
+// customRowFolder). A Because you watched row is a folder for each title it
 // follows, whose identifier holds the title's. The rows' folders are found
 // only after everything else, as an identifier nothing else knows. The
 // titles a user played are read for /UserViews only when a Because you
@@ -466,9 +469,55 @@ func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row cus
 		if err != nil || !ok {
 			return library.Page{}, cmp.Or(err, library.ErrNotFound)
 		}
-		return pageOfItems(shown, start, count), nil
+		grouped, err := h.groupedSeries(ctx, user, shown)
+		if err != nil {
+			return library.Page{}, err
+		}
+		return pageOfItems(grouped, start, count), nil
 	}
 	return library.Page{}, library.ErrNotFound
+}
+
+// groupedSeries is the titles of a row of a playlist, shown, with each
+// series several of whose episodes it lists shown once, as the series, at
+// its first episode's place; an episode alone of its series stays. A
+// series user no longer reaches leaves its episodes as they are.
+func (h *Handler) groupedSeries(ctx context.Context, user accounts.User, shown []library.Item) ([]library.Item, error) {
+	episodes := map[accounts.ID]int{}
+	var series []accounts.ID
+	for _, title := range shown {
+		if title.Kind != library.KindEpisode || title.SeriesID == (accounts.ID{}) {
+			continue
+		}
+		if episodes[title.SeriesID]++; episodes[title.SeriesID] == 2 {
+			series = append(series, title.SeriesID)
+		}
+	}
+	if len(series) == 0 {
+		return shown, nil
+	}
+	items, err := h.Library.Items(ctx, user, series)
+	if err != nil {
+		return nil, err
+	}
+	described := make(map[accounts.ID]library.Item, len(items))
+	for _, item := range items {
+		if item.Kind == library.KindSeries {
+			described[item.ID] = item
+		}
+	}
+	result := make([]library.Item, 0, len(shown))
+	placed := map[accounts.ID]bool{}
+	for _, title := range shown {
+		s, ok := described[title.SeriesID]
+		if title.Kind != library.KindEpisode || !ok || episodes[title.SeriesID] < 2 {
+			result = append(result, title)
+		} else if !placed[s.ID] {
+			placed[s.ID] = true
+			result = append(result, s)
+		}
+	}
+	return result, nil
 }
 
 // traktRowTitles lists the titles of a Recommended on Trakt row: those
@@ -638,9 +687,98 @@ func (h *Handler) PreviewHomeRows(ctx context.Context, user accounts.User) ([]Ho
 	return result, nil
 }
 
-// customRowFolder is the folder of a row.
-func customRowFolder(row customRow) library.Item {
-	return library.Item{ID: row.id, Kind: library.KindLibrary, Name: row.name}
+// customRowFolder is the folder of a row, with its image as user sees it,
+// wide as a library's: for a row of a playlist the playlist's, as its page
+// shows it (see playlistDtos), the Playlists emblem when it has nothing to
+// draw; for another row a mosaic of its first titles, a series standing
+// for its episodes (see library.Service.HomeRowImage).
+func (h *Handler) customRowFolder(ctx context.Context, user accounts.User, row customRow) (library.Item, error) {
+	item := library.Item{ID: row.id, Kind: library.KindLibrary, Name: row.name, WidePrimary: true}
+	if row.playlist == (accounts.ID{}) {
+		item.Images.Primary = h.Library.HomeRowImage(ctx, user, row.id, row.row.ID, accounts.ID{}, row.name, func() []accounts.ID {
+			page, err := h.customRowTitles(ctx, user, row, 0, customRowItems, true)
+			if err != nil {
+				return nil
+			}
+			return seriesFirst(page.Items)
+		})
+		return item, nil
+	}
+	p, err := h.Playlists.Get(ctx, row.playlist)
+	if errors.Is(err, playlists.ErrNotFound) {
+		return item, nil
+	}
+	if err != nil {
+		return library.Item{}, err
+	}
+	name, err := h.playlistName(ctx, user, p)
+	if err != nil {
+		return library.Item{}, err
+	}
+	shown := h.Library.Overridden(library.Item{ID: p.ID, Kind: library.KindMusicPlaylist, Name: name})[0]
+	// An image uploaded for the playlist is served for the folder too (see
+	// customRowUpload), but for a Watchlist row's, whose playlist differs
+	// with whoever sees it.
+	if shown.Images.Primary != "" && row.row.Kind != homerows.KindWatchlist {
+		item.Images.Primary, item.WidePrimary = shown.Images.Primary, shown.WidePrimary
+		return item, nil
+	}
+	item.Images.Primary = h.Library.HomeRowImage(ctx, user, row.id, row.row.ID, p.ID, shown.Name, func() []accounts.ID {
+		titles, err := h.playlistContents(ctx, user, p)
+		if err != nil {
+			return nil
+		}
+		entries, err := h.shownEntries(ctx, user, p, titles)
+		if err != nil {
+			return nil
+		}
+		return posterTitles(entries, titles)
+	})
+	if item.Images.Primary == "" {
+		item.Images.Primary = library.EmblemImage(viewEmblems[playlistsViewID]).URL()
+	}
+	return item, nil
+}
+
+// seriesFirst lists the IDs of titles, in order, each once, an episode
+// giving its series'.
+func seriesFirst(titles []library.Item) []accounts.ID {
+	ids := make([]accounts.ID, 0, len(titles))
+	for _, title := range titles {
+		id := title.ID
+		if title.Kind == library.KindEpisode && title.SeriesID != (accounts.ID{}) {
+			id = title.SeriesID
+		}
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// customRowUpload returns the URL of the image of type imageType uploaded
+// for the playlist whose row's folder is id: a Playlist row's, or one of
+// a My playlists row's. Image requests come without a user: the rows are
+// read only for an image nothing else answers.
+func (h *Handler) customRowUpload(ctx context.Context, id accounts.ID, imageType string) (string, bool) {
+	if h.HomeRows == nil {
+		return "", false
+	}
+	rows, err := h.HomeRows.Rows(ctx)
+	if err != nil {
+		return "", false
+	}
+	for _, row := range rows {
+		switch {
+		case row.Kind == homerows.KindPlaylist && customRowID(row.ID, accounts.ID{}) == id:
+			return h.Library.UploadedArtwork(row.Playlist, imageType)
+		case row.Kind == homerows.KindPlaylists:
+			if url, ok := h.Library.UploadedArtwork(customRowBaseline(row.ID, id), imageType); ok {
+				return url, true
+			}
+		}
+	}
+	return "", false
 }
 
 // addCustomRowViews adds to views the folders of the rows user sees that
@@ -652,7 +790,11 @@ func (h *Handler) addCustomRowViews(r *http.Request, user accounts.User, views [
 	}
 	folders := make([]library.Item, 0, len(rows))
 	for _, row := range rows {
-		folders = append(folders, customRowFolder(row))
+		folder, err := h.customRowFolder(r.Context(), user, row)
+		if err != nil {
+			return nil, err
+		}
+		folders = append(folders, folder)
 	}
 	if len(folders) == 0 {
 		return views, nil
@@ -675,7 +817,12 @@ func (h *Handler) describeCustomRow(w http.ResponseWriter, r *http.Request, user
 	if !found {
 		return false
 	}
-	dtos, err := h.folderDtos(r, user, []library.Item{customRowFolder(row)})
+	folder, err := h.customRowFolder(r.Context(), user, row)
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	dtos, err := h.folderDtos(r, user, []library.Item{folder})
 	if err != nil {
 		h.internalError(w, r, err)
 		return true
@@ -846,4 +993,14 @@ func (h *Handler) WatchlistRowName(ctx context.Context, user accounts.User) (str
 		return "", err
 	}
 	return h.playlistName(ctx, user, p)
+}
+
+// SeesPlaylist reports whether user may see playlist id, without which a
+// Playlist row of it is no row of theirs.
+func (h *Handler) SeesPlaylist(ctx context.Context, user accounts.User, id accounts.ID) (bool, error) {
+	p, err := h.Playlists.Get(ctx, id)
+	if errors.Is(err, playlists.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil && p.Visible(user.ID), err
 }

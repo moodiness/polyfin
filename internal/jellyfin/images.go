@@ -1020,6 +1020,11 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		found = library.Artwork{}
 		found.URL, found.Confined, err = h.Library.ProgramArtwork(r.Context(), id, imageType)
 	}
+	if errors.Is(err, library.ErrNotFound) {
+		if url, ok := h.customRowUpload(r.Context(), id, imageType); ok {
+			found, err, uploaded = library.Artwork{URL: url}, nil, true
+		}
+	}
 	// A badged tag stands for the image of its own tag with badges over
 	// it (see badgedTag).
 	tag, badges, preview, badged := h.badgedRequest(id, tag)

@@ -255,3 +255,49 @@ func TestPlaylistRowsAlsoLibraries(t *testing.T) {
 		t.Errorf("the guest's views: %v", got)
 	}
 }
+
+// A series several of whose episodes a row of a playlist lists shows
+// once, as the series, at its first episode's place, in the row, its
+// folder's list and its latest items; an episode alone of its series stays
+// an episode.
+func TestPlaylistRowsShowASeriesOnce(t *testing.T) {
+	t.Parallel()
+	s, member, _, watchlist, watchlistName, titles := playlistRowsServer(t)
+	var episodes QueryResult
+	s.get(t, "/Shows/"+titles.series+"/Episodes", member, &episodes)
+	if len(episodes.Items) < 2 {
+		t.Fatalf("the series' episodes: %v", itemNames(episodes.Items))
+	}
+	s.expectStatus(t, http.StatusNoContent, http.MethodPost, "/Playlists/"+watchlist+"/Items?ids="+titles.movies[1]+","+episodes.Items[1].Id+","+
+		titles.movies[0]+","+episodes.Items[0].Id, member, nil)
+	chosen := s.createPlaylist(t, member, map[string]any{"Name": "Friday night", "Ids": []string{titles.ep1, titles.movies[2]}})
+	chosenID, _ := accounts.ParseID(chosen)
+	s.addRow(t, homerows.Row{Name: "À regarder", Kind: homerows.KindWatchlist, Place: homerows.PlaceTop, Everyone: true, Library: true})
+	s.addRow(t, homerows.Row{Name: "Friday", Kind: homerows.KindPlaylist, Place: homerows.PlaceBottom, Playlist: chosenID, Everyone: true})
+
+	var series BaseItemDto
+	s.get(t, "/Items/"+titles.series, member, &series)
+	want := []string{"Movie 1", series.Name, "Movie 0"}
+	rows := s.customRowsOf(t, member)
+	mine := rowOf(t, rows, watchlistName)
+	if got := itemNames(mine.Items); !slices.Equal(got, want) || mine.Items[1].Type != "Series" || mine.Items[1].Id != titles.series {
+		t.Errorf("the Watchlist row: %v %+v", got, mine.Items)
+	}
+	friday := rowOf(t, rows, "Friday")
+	if len(friday.Items) != 2 || friday.Items[0].Type != "Episode" || friday.Items[0].Id != titles.ep1 {
+		t.Errorf("the lone episode: %+v", friday.Items)
+	}
+	var listed QueryResult
+	if status := s.get(t, "/Items?ParentId="+mine.Id, member, &listed); status != http.StatusOK || !slices.Equal(itemNames(listed.Items), want) ||
+		listed.TotalRecordCount != 3 {
+		t.Errorf("the Watchlist row's list: %d %v %d", status, itemNames(listed.Items), listed.TotalRecordCount)
+	}
+	var latest []BaseItemDto
+	if status := s.get(t, "/Items/Latest?ParentId="+mine.Id, member, &latest); status != http.StatusOK || !slices.Equal(itemNames(latest), want) {
+		t.Errorf("the Watchlist library's latest: %d %v", status, itemNames(latest))
+	}
+	// The Watchlist's own page still lists every episode.
+	if entries := s.playlistEntries(t, member, watchlist); len(entries) < 4 {
+		t.Errorf("the Watchlist's page: %v", itemNames(entries))
+	}
+}

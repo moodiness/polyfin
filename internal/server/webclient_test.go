@@ -3281,15 +3281,18 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 		}},
 		// Taken off the watchlist from the menu, a title leaves the
 		// Watchlist row as it leaves Now available, and stays in a row of
-		// another playlist.
+		// another playlist; a series, which the row shows once for its
+		// episodes, leaves it whole.
 		"titles taken off the watchlist leave the Watchlist row": {
 			answers: [][]row{{
 				{"Id": "r8", "Name": "Mine", "Kind": "Watchlist", "PlaylistId": "p1", "Place": "Top", "Items": []row{
-					item("a1", "Alpha", row{}, true), item("b2", "Bravo", row{}, true)}},
+					item("a1", "Alpha", row{}, true), item("b2", "Bravo", row{}, true),
+					{"Id": "s9", "Name": "Show", "Type": "Series", "UserData": row{}, "ImageTags": row{"Primary": "st"}}}},
 				{"Id": "r9", "Name": "Friday night", "Kind": "Playlist", "PlaylistId": "p2", "Place": "Bottom", "Items": []row{item("b2", "Bravo", row{}, true)}},
 			}},
-			steps: []string{"home", "wait 100", "show", "unlist b2", "render", "show"},
-			want: []string{ask, "Mine[Alpha Bravo] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 Friday night[Bravo]",
+			steps: []string{"home", "wait 100", "show", "unlist b2", "render", "show", "unlist s9*", "render", "show"},
+			want: []string{ask, "Mine[Alpha Bravo Show] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 Friday night[Bravo]",
+				"Mine[Alpha Show] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 Friday night[Bravo]",
 				"Mine[Alpha] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 Friday night[Bravo]"},
 		},
 	}
