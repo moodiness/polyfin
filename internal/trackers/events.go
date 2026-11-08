@@ -318,6 +318,18 @@ func (s *Service) playback(ctx context.Context, user accounts.ID, report Playbac
 		if scrobbles(service) {
 			changes = scrobbled
 		}
+		if numbersByTMDB(service) {
+			// The changes are shared by the services; those numbering
+			// episodes as TMDB does get copies naming TMDB's episode.
+			numbered := tmdbNumbered([]Title{title})
+			if len(numbered) == 0 {
+				continue
+			}
+			changes = slices.Clone(changes)
+			for i := range changes {
+				changes[i].event.Titles = numbered
+			}
+		}
 		for _, c := range changes {
 			s.queue(ctx, user, service, c)
 		}
@@ -344,15 +356,21 @@ func (s *Service) mark(ctx context.Context, user accounts.ID, mark Mark) {
 	all := titles
 	titles = slices.DeleteFunc(slices.Clone(titles), func(t Title) bool { return !t.Identified() })
 	for _, service := range services {
-		switch {
-		case animeLists(service):
+		if animeLists(service) {
 			// Unplayed marks send nothing: the lists keep a count of
 			// episodes, not a history.
 			if mark.Played {
 				s.queueProgress(ctx, user, service, all)
 			}
 			continue
-		case len(titles) == 0:
+		}
+		titles := titles
+		if numbersByTMDB(service) {
+			// Renumbered first, so that removals group episodes by
+			// TMDB's seasons.
+			titles = tmdbNumbered(titles)
+		}
+		if len(titles) == 0 {
 			continue
 		}
 		switch {
