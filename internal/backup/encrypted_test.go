@@ -26,6 +26,7 @@ const fakeDump = "PGDMP partial complete"
 // locked: it restores only once its passphrase opened it, a wrong one
 // leaving it prepared; a damaged one is dropped with its files.
 func TestEncryptedBackupsAreSentAndOpened(t *testing.T) {
+	t.Parallel()
 	h := withDestinations(t)
 	h.kept = 3
 	h.service.cfg.PgRestore = fakePgRestore(t)
@@ -141,6 +142,7 @@ func TestEncryptedBackupsAreSentAndOpened(t *testing.T) {
 // A passphrase the current key cannot decrypt reads as none: backups then
 // fail rather than be written unencrypted.
 func TestAnUnreadablePassphraseFailsTheBackup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, nil)
 	h.service.cfg.PassphraseUnreadable = func() bool { return true }
 	if err := h.service.Run(t.Context()); !errors.Is(err, ErrUnreadablePassphrase) {
@@ -166,6 +168,7 @@ func encryptedRestoring(t *testing.T) *restoring {
 // from each, opened with its passphrase and restored: what was added
 // since is gone.
 func TestAnEncryptedBackupIsRestoredFromEachDestination(t *testing.T) {
+	t.Parallel()
 	r := encryptedRestoring(t)
 	ctx := t.Context()
 	h := &harness{service: r.service}
@@ -219,6 +222,7 @@ func TestAnEncryptedBackupIsRestoredFromEachDestination(t *testing.T) {
 // setup folder, opened with its passphrase, and restored without a backup
 // first; its administrators are back.
 func TestAFreshInstallRestoresFromTheSetupPage(t *testing.T) {
+	t.Parallel()
 	r := encryptedRestoring(t)
 	ctx := t.Context()
 	source, err := accounts.Open(ctx, r.pool)

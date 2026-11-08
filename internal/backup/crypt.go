@@ -85,9 +85,9 @@ func LowerKeyCostForTests() {
 	keyCost = 1 << 10
 }
 
-// newAEAD derives the key of passphrase and salt.
-func newAEAD(passphrase string, salt []byte) (cipher.AEAD, error) {
-	key, err := scrypt.Key([]byte(passphrase), salt, keyCost, scryptR, scryptP, 32)
+// newAEAD derives the key of passphrase and salt at cost, scrypt's N.
+func newAEAD(passphrase string, salt []byte, cost int) (cipher.AEAD, error) {
+	key, err := scrypt.Key([]byte(passphrase), salt, cost, scryptR, scryptP, 32)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func newEncrypter(w io.Writer, passphrase string) (io.WriteCloser, error) {
 		return nil, err
 	}
 	header = append(header, salt...)
-	aead, err := newAEAD(passphrase, salt)
+	aead, err := newAEAD(passphrase, salt, keyCost)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +228,11 @@ func isEncrypted(path string) (bool, error) {
 // ErrDamagedBackup at the first chunk that does not open, or once the
 // last one is missing; it gives io.EOF only after the last one opened.
 func newDecrypter(r io.Reader, passphrase string) (io.Reader, error) {
+	return newDecrypterAt(r, passphrase, keyCost)
+}
+
+// newDecrypterAt is newDecrypter deriving the key at cost, scrypt's N.
+func newDecrypterAt(r io.Reader, passphrase string, cost int) (io.Reader, error) {
 	header := make([]byte, headerSize)
 	if _, err := io.ReadFull(r, header); err != nil {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
@@ -239,7 +244,7 @@ func newDecrypter(r io.Reader, passphrase string) (io.Reader, error) {
 		return nil, ErrNotABackup
 	}
 	unchecked := len(encryptedMagic) + saltSize
-	aead, err := newAEAD(passphrase, header[len(encryptedMagic):unchecked])
+	aead, err := newAEAD(passphrase, header[len(encryptedMagic):unchecked], cost)
 	if err != nil {
 		return nil, err
 	}

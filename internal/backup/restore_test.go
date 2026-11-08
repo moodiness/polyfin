@@ -94,6 +94,7 @@ func (r *restoring) count(t *testing.T, query string, args ...any) int {
 // as a before-restore backup that retention keeps; the restore is
 // recorded in the restored database, with the administrator who asked.
 func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
+	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	store, err := accounts.Open(ctx, r.pool)
@@ -190,6 +191,7 @@ func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
 // what was stored in it since, is gone, then made again empty. An uploaded
 // backup restores the same way.
 func TestARestoreOfAnOlderBackupIsMigrated(t *testing.T) {
+	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	// The schema before the destinations: the newest migration undone.
@@ -257,6 +259,7 @@ func TestARestoreOfAnOlderBackupIsMigrated(t *testing.T) {
 // A backup made by a newer Polyfin, or whose migrations differ, or a file
 // that is no backup of Polyfin, is refused before anything changes.
 func TestBackupsThisPolyfinCannotRestoreAreRefused(t *testing.T) {
+	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	if _, err := r.pool.Exec(ctx, "INSERT INTO schema_migrations (version, name, checksum) VALUES (9999, 'from_the_future', 'x')"); err != nil {
@@ -296,6 +299,7 @@ func TestBackupsThisPolyfinCannotRestoreAreRefused(t *testing.T) {
 // decrypt is flagged with their counts by kind, before anything changes;
 // it is restored only when asked anyway.
 func TestABackupMadeWithAnotherKeyIsFlagged(t *testing.T) {
+	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	other := newBox(t, []byte("fedcba9876543210fedcba9876543210"))
@@ -343,6 +347,7 @@ func TestABackupMadeWithAnotherKeyIsFlagged(t *testing.T) {
 // A restore that fails part way leaves the database as it was, and
 // records why.
 func TestAFailedRestoreLeavesTheDatabaseAsItWas(t *testing.T) {
+	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	name := r.backUp(t, time.Date(2026, 10, 1, 4, 0, 0, 0, time.Local))
@@ -381,6 +386,7 @@ func TestAFailedRestoreLeavesTheDatabaseAsItWas(t *testing.T) {
 // The script pg_restore writes is read as COPY's text format writes
 // values.
 func TestCopyValues(t *testing.T) {
+	t.Parallel()
 	for field, want := range map[string]string{
 		`plain`: "plain", `a\tb\nc\\d`: "a\tb\nc\\d", `\101\x42\r`: "AB\r", `\x`: "x", `end\`: `end\`,
 	} {
