@@ -112,6 +112,36 @@ func TestOneOffImportsOnlyAdd(t *testing.T) {
 	}
 }
 
+// A title added by hand stays when the connected app that also held it
+// no longer does, and leaves only when taken off.
+func TestATitleAddedByHandOutlastsTheImports(t *testing.T) {
+	t.Parallel()
+	h := setup(t)
+	app := Connection("stremio")
+	h.save(t, app, true, dated(1, 1), dated(2, 2))
+	if err := h.Add(t.Context(), h.user, item(1)); err != nil {
+		t.Fatal(err)
+	}
+	// Added by hand, it is the latest added; adding it again changes
+	// nothing.
+	if got := h.titles(t); !slices.Equal(got, []accounts.ID{item(1), item(2)}) {
+		t.Fatalf("after adding: %v", got)
+	}
+	if err := h.Add(t.Context(), h.user, item(1)); err != nil {
+		t.Fatal(err)
+	}
+	h.save(t, app, true)
+	if got := h.titles(t); !slices.Equal(got, []accounts.ID{item(1)}) {
+		t.Fatalf("after the app's next import: %v", got)
+	}
+	if err := h.Remove(t.Context(), h.user, item(1)); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.titles(t); len(got) != 0 {
+		t.Errorf("after taking it off: %v", got)
+	}
+}
+
 func TestStartedTitlesAreLeftOut(t *testing.T) {
 	t.Parallel()
 	h := setup(t)
