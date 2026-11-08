@@ -13,17 +13,19 @@ import (
 
 // Personal images.
 //
-// Playlists, a user's watchlist among them (see package watchlist), and
-// the smart lists shown as libraries list titles as each user sees them:
-// a playlist leaves out what the user may not reach, a list keeps what
-// they did with its titles. Each user who sees one gets their own
-// generated image of it, wide as a library's, from the first titles it
-// lists for them, chosen and kept as a collection's is (see generated.go):
-// compared with its first titles when it is listed, at most once per
-// generatedCheck, and saved when it changes. A playlist's image shows only
-// titles it still lists: one taken off gives way to the next at once (see
-// choose, strict). Changing a watchlist through the library has its
-// images compared again at its next listing (see AddToWatchlist).
+// Playlists, a user's watchlist among them (see package watchlist), the
+// smart lists shown as libraries and the folders of home rows list titles
+// as each user sees them: a playlist leaves out what the user may not
+// reach, a list keeps what they did with its titles, a row is read for
+// them. Each user who sees one gets their own generated image of it, wide
+// as a library's, from the first titles it lists for them, chosen and
+// kept as a collection's is (see generated.go): compared with its first
+// titles when it is listed, at most once per generatedCheck, and saved
+// when it changes. A playlist's image, and that of a row of a playlist,
+// shows only titles it still lists: one taken off gives way to the next
+// at once (see choose, strict). Changing a watchlist through the library
+// has its images compared again at its next listing (see
+// AddToWatchlist).
 //
 // Image requests come without a user, and a playlist's image differs with
 // whoever sees it: the image is found by its tag (see PersonalArtwork),
@@ -166,10 +168,10 @@ func (s *Service) recheckPersonal(view accounts.ID) {
 	}
 }
 
-// personalSource is what a personal image is of: a smart list, or a
-// playlist.
+// personalSource is what a personal image is of: a smart list, a
+// playlist, or a home row's folder, which may show a playlist.
 type personalSource struct {
-	smartList, playlist *accounts.ID
+	smartList, playlist, homeRow *accounts.ID
 }
 
 // personalImage returns the URL of the image of view, named name, as the
@@ -189,11 +191,11 @@ func (s *Service) personalImage(ctx context.Context, v view, id accounts.ID, nam
 		return ""
 	}
 	next, remember := s.rechoose(ctx, entry, name, find, source.playlist != nil, func(choice generatedChoice) error {
-		_, err := s.db.Exec(ctx, `INSERT INTO personal_images (user_id, view_id, smart_list_id, playlist_id, name, titles, posters, confined)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		_, err := s.db.Exec(ctx, `INSERT INTO personal_images (user_id, view_id, smart_list_id, playlist_id, home_row_id, name, titles, posters, confined)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (user_id, view_id) DO UPDATE SET name = excluded.name, titles = excluded.titles, posters = excluded.posters,
 				confined = excluded.confined, chosen_at = now()`,
-			key.user, key.view, source.smartList, source.playlist, choice.name, choice.titles, choice.posters, choice.confined)
+			key.user, key.view, source.smartList, source.playlist, source.homeRow, choice.name, choice.titles, choice.posters, choice.confined)
 		return err
 	})
 	if remember {
@@ -216,31 +218,57 @@ func (s *Service) PlaylistImage(ctx context.Context, user accounts.User, playlis
 		return ""
 	}
 	return s.personalImage(ctx, v, playlist, name, personalSource{playlist: &playlist}, func() ([]candidate, bool, bool) {
-		ids = ids[:min(len(ids), generatedReach)]
-		records, err := s.loadAll(ctx, ids)
-		if err != nil {
-			return nil, false, false
-		}
-		byID := make(map[accounts.ID]record, len(records))
-		for _, r := range records {
-			byID[r.ID] = r
-		}
-		confined := false
-		candidates := make([]candidate, 0, len(ids))
-		for _, id := range ids {
-			r, ok := byID[id]
-			if !ok {
-				continue
-			}
-			poster := ""
-			if r.Meta != nil && (strings.HasPrefix(r.Meta.Poster, "https://") || strings.HasPrefix(r.Meta.Poster, "http://")) {
-				poster = r.Meta.Poster
-				confined = confined || r.Confined
-			}
-			candidates = append(candidates, candidate{id, poster})
-		}
-		return candidates, true, confined
+		return s.posterCandidates(ctx, ids)
 	})
+}
+
+// HomeRowImage returns the URL of the image of folder, the folder of the
+// home row row, named name, as user is shown it, "" when there is none:
+// drawn from the first titles titles gives, a series standing for its
+// episodes, read only when the image is compared with them. playlist,
+// unless zero, is the playlist the row lists, whose image it shows: chosen
+// again as soon as one of its titles leaves, as a playlist's is.
+func (s *Service) HomeRowImage(ctx context.Context, user accounts.User, folder, row, playlist accounts.ID, name string, titles func() []accounts.ID) string {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return ""
+	}
+	source := personalSource{homeRow: &row}
+	if playlist != (accounts.ID{}) {
+		source.playlist = &playlist
+	}
+	return s.personalImage(ctx, v, folder, name, source, func() ([]candidate, bool, bool) {
+		return s.posterCandidates(ctx, titles())
+	})
+}
+
+// posterCandidates describes the first of ids, in order, with their
+// posters, as candidates of a personal image.
+func (s *Service) posterCandidates(ctx context.Context, ids []accounts.ID) ([]candidate, bool, bool) {
+	ids = ids[:min(len(ids), generatedReach)]
+	records, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return nil, false, false
+	}
+	byID := make(map[accounts.ID]record, len(records))
+	for _, r := range records {
+		byID[r.ID] = r
+	}
+	confined := false
+	candidates := make([]candidate, 0, len(ids))
+	for _, id := range ids {
+		r, ok := byID[id]
+		if !ok {
+			continue
+		}
+		poster := ""
+		if r.Meta != nil && (strings.HasPrefix(r.Meta.Poster, "https://") || strings.HasPrefix(r.Meta.Poster, "http://")) {
+			poster = r.Meta.Poster
+			confined = confined || r.Confined
+		}
+		candidates = append(candidates, candidate{id, poster})
+	}
+	return candidates, true, confined
 }
 
 // withSmartLibraryImage gives item, the smart list l shown as a library,

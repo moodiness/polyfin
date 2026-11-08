@@ -10,3 +10,13 @@ ALTER TABLE home_rows
     ADD CONSTRAINT home_rows_playlist_check CHECK ((kind = 'playlist') = (playlist_id IS NOT NULL)),
     ADD CONSTRAINT home_rows_playlists_library_check CHECK (kind <> 'playlists' OR NOT library);
 CREATE INDEX home_rows_playlist ON home_rows (playlist_id) WHERE playlist_id IS NOT NULL;
+
+-- A row's folder shows each user their own image of it (home_row_id),
+-- from the row's first titles, or for a row of a playlist from the
+-- playlist's (playlist_id too); it goes with the row.
+ALTER TABLE personal_images
+    ADD COLUMN home_row_id uuid REFERENCES home_rows ON DELETE CASCADE,
+    DROP CONSTRAINT personal_images_source,
+    ADD CONSTRAINT personal_images_source CHECK (
+        CASE WHEN home_row_id IS NULL THEN (smart_list_id IS NULL) <> (playlist_id IS NULL) ELSE smart_list_id IS NULL END);
+CREATE INDEX personal_images_home_row ON personal_images (home_row_id) WHERE home_row_id IS NOT NULL;
