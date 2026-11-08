@@ -75,7 +75,7 @@ func (s *Service) crashEvent(crash crashes.Report) Event {
 	ev := s.newEvent(ServerCrashed)
 	ev.Crash = &CrashJSON{At: crash.At.UTC(), Trace: crash.Trace}
 	ev.Title = s.phrase(i18n.Text{"Polyfin crashed", "Polyfin a planté", "Polyfin ist abgestürzt", "Polyfin se bloqueó", "Polyfin si è arrestato in modo anomalo", "O Polyfin travou"})
-	ev.Message = s.phrase(i18n.Text{"Polyfin stopped on an error at %s, and started again. The trace begins:", "Polyfin s’est arrêté sur une erreur le %s, puis a redémarré. La trace commence par :", "Polyfin wurde am %s durch einen Fehler beendet und neu gestartet. Der Trace beginnt mit:", "Polyfin se detuvo por un error el %s y volvió a iniciarse. El rastro empieza así:", "Polyfin si è fermato per un errore il %s ed è ripartito. La traccia inizia così:", "O Polyfin parou por um erro em %s e foi iniciado novamente. O rastreamento começa assim:"},
+	ev.Message = s.phrase(i18n.Text{"Polyfin stopped on an error at %s, and started again. The trace begins:", "Polyfin s’est arrêté sur une erreur le %s, puis a redémarré. La trace commence par\u202f:", "Polyfin wurde am %s durch einen Fehler beendet und neu gestartet. Der Trace beginnt mit:", "Polyfin se detuvo por un error el %s y volvió a iniciarse. El rastro empieza así:", "Polyfin si è fermato per un errore il %s ed è ripartito. La traccia inizia così:", "O Polyfin parou por um erro em %s e foi iniciado novamente. O rastreamento começa assim:"},
 		crash.At.In(s.zone).Format("2006-01-02 15:04"))
 	lines := strings.Split(crash.Trace, "\n")
 	ev.Message += "\n" + strings.Join(lines[:min(len(lines), crashMessageLines)], "\n")

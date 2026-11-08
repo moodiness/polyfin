@@ -159,7 +159,7 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 		}
 	}
 	if url != "" {
-		text.WriteString("\n" + s.phrase(i18n.Text{"%s: %s", "%s : %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, open, url) + "\n")
+		text.WriteString("\n" + s.phrase(i18n.Text{"%s: %s", "%s\u202f: %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, open, url) + "\n")
 	}
 	return text.String(), nil
 }

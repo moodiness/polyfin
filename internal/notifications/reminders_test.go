@@ -119,7 +119,7 @@ func TestProgrammeRemindersReachTheUsersOwnTargetsOnly(t *testing.T) {
 		programme["start"] != "2026-10-14T18:30:00Z" || programme["end"] != "2026-10-14T19:30:00Z" {
 		t.Errorf("the programme told: %v", programme)
 	}
-	if admin["title"] != "Commence à 20:30 : Example Show" || admin["message"] != "Example Show commence dans 5 minutes sur Example TV." {
+	if admin["title"] != "Commence à 20:30\u202f: Example Show" || admin["message"] != "Example Show commence dans 5 minutes sur Example TV." {
 		t.Errorf("the reminder set in French: %v", admin)
 	}
 }
