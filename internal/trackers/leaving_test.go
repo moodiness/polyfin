@@ -23,6 +23,7 @@ func (f *fakes) sentTo(service string) int {
 // tokens, as disconnecting does; the keys they typed and Last.fm's session
 // key are only forgotten, and other users' connections stay.
 func TestDeletingAUserRevokesTheirTokens(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store.OnDelete(h.Leaving)
 	gina, hugo := h.user(t, "gina"), h.user(t, "hugo")
@@ -57,6 +58,7 @@ func TestDeletingAUserRevokesTheirTokens(t *testing.T) {
 // A revocation that never answers or fails leaves the deletion done at
 // once; the failure is logged without the token.
 func TestDeletingAUserNeverWaitsForTheService(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store.OnDelete(h.Leaving)
 	ivan, jade := h.user(t, "ivan"), h.user(t, "jade")

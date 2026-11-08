@@ -73,6 +73,7 @@ func (h harness) answerRecommendations(t *testing.T) {
 // found by IMDb, TMDB or TVDB identifier, movies and shows in turn: those
 // found by none are left out.
 func TestTraktRecommendationsAreFoundByTheirIdentifiers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "rita")
 	h.connected(t, user, Trakt, "trakt-rita")
@@ -111,6 +112,7 @@ func TestTraktRecommendationsAreFoundByTheirIdentifiers(t *testing.T) {
 // hour after a read that failed, which keeps what was read before. The
 // hourly check reads again those a row asked for within a week.
 func TestTraktRecommendationsAreReadAgainWhenDue(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var clock atomic.Int64
 	clock.Store(clockStart.UnixNano())
@@ -178,6 +180,7 @@ func TestTraktRecommendationsAreReadAgainWhenDue(t *testing.T) {
 // Without a connection to Trakt that works there are no recommendations:
 // nothing is asked of Trakt, and disconnecting forgets those read.
 func TestTraktRecommendationsNeedAConnection(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "tom")
 	h.answerRecommendations(t)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestTraktCodeConnectsOnceEnteredAndKeepsTheConnectionWhenDenied(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := h.user(t, "alice")
 	h.f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusOK,
@@ -65,6 +66,7 @@ func TestTraktCodeConnectsOnceEnteredAndKeepsTheConnectionWhenDenied(t *testing.
 }
 
 func TestSimklCodeExpiresOrConnectsWithWriteAccess(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	bob := h.user(t, "bob")
 	h.f.reply("POST", "/simkl/oauth2/device", http.StatusOK, `{"device_code":"simkl-device","user_code":"WXYZ-2345",
@@ -119,6 +121,7 @@ func TestSimklCodeExpiresOrConnectsWithWriteAccess(t *testing.T) {
 }
 
 func TestCodeServicesNeedTheirApp(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "carol")
 	settings := h.store.Settings()
@@ -153,6 +156,7 @@ func TestCodeServicesNeedTheirApp(t *testing.T) {
 // without a secret, a refresh names the localhost redirect URI such apps
 // are registered with, and the API calls stay on the API host.
 func TestTraktAppWithoutSecret(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	settings := h.store.Settings()
 	settings.TraktClientSecret = ""
@@ -210,6 +214,7 @@ func TestTraktAppWithoutSecret(t *testing.T) {
 }
 
 func TestKeysAreCheckedWithTheService(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "dave")
 	h.f.on("GET", "/mdblist/user", func(r request) answer {
@@ -274,6 +279,7 @@ func TestKeysAreCheckedWithTheService(t *testing.T) {
 }
 
 func TestDisconnectingRevokesAndForgets(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "erin")
 	h.connected(t, user, Trakt, "trakt-erin")
@@ -309,6 +315,7 @@ func TestDisconnectingRevokesAndForgets(t *testing.T) {
 }
 
 func TestDeletingAUserDeletesTheirConnections(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "frank")
 	h.connected(t, user, MDBList, "mdblist-frank")
@@ -327,6 +334,7 @@ func TestDeletingAUserDeletesTheirConnections(t *testing.T) {
 }
 
 func TestARefusedAppIsNotAnOutage(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "zoe")
 	// Asking for a code with an app Trakt does not know.

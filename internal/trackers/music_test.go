@@ -115,6 +115,7 @@ func (f *fakes) waitListens(t *testing.T, n int, listenType string) []map[string
 }
 
 func TestLastFMIsConnectedThroughItsSignInPage(t *testing.T) {
+	t.Parallel()
 	h, _ := musicHarness(t)
 	alice := h.user(t, "alice")
 	sessions := 0
@@ -181,6 +182,7 @@ func TestLastFMIsConnectedThroughItsSignInPage(t *testing.T) {
 }
 
 func TestListenBrainzIsConnectedWithAValidatedToken(t *testing.T) {
+	t.Parallel()
 	h, _ := musicHarness(t)
 	alice := h.user(t, "alice")
 	h.f.on(http.MethodGet, "/listenbrainz/1/validate-token", func(r request) answer {
@@ -213,6 +215,7 @@ func TestListenBrainzIsConnectedWithAValidatedToken(t *testing.T) {
 }
 
 func TestASongIsScrobbledOnceHalfwayThrough(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	h.Listen(alice, hear(Started, tune, 0, false))
@@ -273,6 +276,7 @@ func TestASongIsScrobbledOnceHalfwayThrough(t *testing.T) {
 }
 
 func TestALongSongIsScrobbledAfterFourMinutes(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	long := tune
@@ -291,6 +295,7 @@ func TestALongSongIsScrobbledAfterFourMinutes(t *testing.T) {
 }
 
 func TestPausesAndSeeksDoNotCountAsPlayed(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	h.Listen(alice, hear(Started, tune, 0, false))
@@ -343,6 +348,7 @@ func TestPausesAndSeeksDoNotCountAsPlayed(t *testing.T) {
 }
 
 func TestShortSongsAreNotScrobbled(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	jingle := tune
@@ -360,6 +366,7 @@ func TestShortSongsAreNotScrobbled(t *testing.T) {
 }
 
 func TestFailedScrobblesAreSentAgainOnce(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	var mu sync.Mutex
@@ -402,6 +409,7 @@ func TestFailedScrobblesAreSentAgainOnce(t *testing.T) {
 }
 
 func TestARefusedSessionAsksToConnectAgain(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	h.f.on(http.MethodPost, "/lastfm/2.0/", func(r request) answer {
@@ -443,6 +451,7 @@ func TestARefusedSessionAsksToConnectAgain(t *testing.T) {
 }
 
 func TestSongsAndMoviesGoToTheirOwnServicesOnly(t *testing.T) {
+	t.Parallel()
 	h, c := musicHarness(t)
 	alice := h.connectAll(t, "alice")
 	h.connectAll(t, "bob")
@@ -478,6 +487,7 @@ func TestSongsAndMoviesGoToTheirOwnServicesOnly(t *testing.T) {
 }
 
 func TestSongOfNeedsAnArtistAndATitle(t *testing.T) {
+	t.Parallel()
 	album := accounts.ID{30}
 	track := library.Item{ID: accounts.ID{20}, Kind: library.KindTrack, Name: "A Song", Album: "An Album", AlbumID: album, ParentID: album,
 		IndexNumber: 3, Artists: []library.Credit{{Name: "The Artist"}}, AlbumArtists: []library.Credit{{Name: "the artist"}}}

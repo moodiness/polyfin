@@ -38,6 +38,7 @@ func mustJSON(v any) string {
 }
 
 func TestPlaybackIsScrobbledWithItsProgress(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.connectAll(t, "alice")
 	// A movie: started, paused at 30%, played on, past the played mark
@@ -114,6 +115,7 @@ func TestPlaybackIsScrobbledWithItsProgress(t *testing.T) {
 }
 
 func TestPlayedMarksChangeTheHistory(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.connectAll(t, "bob")
 	// A season played, as of now; a movie played on a given day.
@@ -168,6 +170,7 @@ func TestPlayedMarksChangeTheHistory(t *testing.T) {
 }
 
 func TestPublicMetaDBLooksUpTheTMDBIdentifier(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "carol")
 	h.connected(t, user, PublicMetaDB, "pm-carol")
@@ -194,6 +197,7 @@ func TestPublicMetaDBLooksUpTheTMDBIdentifier(t *testing.T) {
 }
 
 func TestOneViewingMakesOneHistoryEntry(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.connectAll(t, "dave")
 	// Trakt counts the stop at 85% watched; Simkl, as it may, does not.
@@ -229,6 +233,7 @@ func TestOneViewingMakesOneHistoryEntry(t *testing.T) {
 }
 
 func TestTraktTokensAreRefreshed(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "erin")
 	// The token expires within the day.
@@ -285,6 +290,7 @@ func TestTraktTokensAreRefreshed(t *testing.T) {
 }
 
 func TestARefusedTokenAsksTheUserToReconnect(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.connectAll(t, "frank")
 	h.f.reply("POST", "/trakt/scrobble/stop", http.StatusUnauthorized, `{}`)
@@ -341,6 +347,7 @@ func TestARefusedTokenAsksTheUserToReconnect(t *testing.T) {
 }
 
 func TestChangesAreRetriedAfterAnOutage(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "gina")
 	h.connected(t, user, MDBList, "mdblist-gina")
@@ -387,6 +394,7 @@ func TestChangesAreRetriedAfterAnOutage(t *testing.T) {
 }
 
 func TestQueuedChangesSurviveARestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "hank")
 	h.connected(t, user, Simkl, "simkl-hank")
@@ -413,6 +421,7 @@ func TestQueuedChangesSurviveARestart(t *testing.T) {
 }
 
 func TestNothingIsSentForUntrackedTitlesOrToOtherUsers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := h.connectAll(t, "alice")
 	bob := h.user(t, "bob")

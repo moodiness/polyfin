@@ -96,6 +96,7 @@ func (h harness) noWrites(t *testing.T) {
 }
 
 func TestImportIsOffByDefault(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "alice")
 	h.connected(t, user, MDBList, "mdblist-alice")
@@ -116,6 +117,7 @@ func TestImportIsOffByDefault(t *testing.T) {
 }
 
 func TestTraktHistoryIsReadPageByPage(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "bob")
 	h.connected(t, user, Trakt, "trakt-bob")
@@ -188,6 +190,7 @@ func TestTraktHistoryIsReadPageByPage(t *testing.T) {
 }
 
 func TestImportsMergeWithoutLosingAnything(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "carol")
 	h.connected(t, user, MDBList, "mdblist-carol")
@@ -270,6 +273,7 @@ func TestImportsMergeWithoutLosingAnything(t *testing.T) {
 // MDBList gives a resume point's progress as a string, and its runtime, in
 // minutes, beside the title rather than in it, as its API answers today.
 func TestMDBListResumePointsAsTheServiceGivesThem(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "gina")
 	h.connected(t, user, MDBList, "mdblist-gina")
@@ -302,6 +306,7 @@ func TestMDBListResumePointsAsTheServiceGivesThem(t *testing.T) {
 }
 
 func TestImportsOfSeveralServicesAddUp(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "dave")
 	h.connected(t, user, MDBList, "mdblist-dave")
@@ -363,6 +368,7 @@ func TestImportsOfSeveralServicesAddUp(t *testing.T) {
 }
 
 func TestImportsRunAtTheIntervalSetAndOnDemand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "erin")
 	h.connected(t, user, MDBList, "mdblist-erin")
@@ -452,6 +458,7 @@ func TestImportsRunAtTheIntervalSetAndOnDemand(t *testing.T) {
 }
 
 func TestImportsWaitAsAskedAndAtTheirPace(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.timing.importGaps = map[string]time.Duration{MDBList: 100 * time.Millisecond}
 	user := h.user(t, "frank")
@@ -503,6 +510,7 @@ func TestImportsWaitAsAskedAndAtTheirPace(t *testing.T) {
 }
 
 func TestImportsKeepToTheirUser(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := h.user(t, "alice"), h.user(t, "bob")
 	h.connected(t, alice, MDBList, "mdblist-alice")
@@ -527,6 +535,7 @@ func TestImportsKeepToTheirUser(t *testing.T) {
 }
 
 func TestSimklHistoryIsReadSinceItsLastActivity(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "gina")
 	h.connected(t, user, Simkl, "simkl-gina")
@@ -571,6 +580,7 @@ func TestSimklHistoryIsReadSinceItsLastActivity(t *testing.T) {
 }
 
 func TestAnImportWithARefusedTokenAsksToReconnect(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	user := h.user(t, "hank")
 	h.connected(t, user, MDBList, "mdblist-hank")
