@@ -268,6 +268,7 @@ func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
 		{"1080p, the version that fits unreadable", unreadableFirst, 1080, 1, -1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			probe := scriptedProbe(t, test.probe)
 			p := playingOn(t, newProbingServer(t, 10, probe.path))
 			p.setting(t, func(settings *accounts.Settings) { settings.VersionAttempts = 2 })

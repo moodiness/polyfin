@@ -187,6 +187,7 @@ func TestConversionKeepsWithinTheAppsCodecProfiles(t *testing.T) {
 		{"an optional height cap", profile(codec("h264", condition("Height", "720", false))), "MaxHeight=720"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			got := play(t, test.profile, nil)
 			if len(got.capped) != 1 || got.capped[0] != test.capped || got.resolution != "1280x720" || got.video != (sentVideo{1280, 720, "High"}) {
 				t.Errorf("%+v", got)
@@ -197,6 +198,7 @@ func TestConversionKeepsWithinTheAppsCodecProfiles(t *testing.T) {
 		})
 	}
 	t.Run("the profiles allowed", func(t *testing.T) {
+		t.Parallel()
 		only := profile(codec("h264", map[string]any{"Condition": "EqualsAny", "Property": "VideoProfile", "Value": "main|baseline", "IsRequired": false}))
 		got := play(t, only, nil)
 		if got.resolution != "1920x1080" || !strings.HasPrefix(got.codec, "avc1.4D") || got.video != (sentVideo{1920, 1080, "Main"}) {
