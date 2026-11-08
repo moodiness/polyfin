@@ -801,11 +801,11 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 			steps: slices.Concat(steps(4), []string{"push 0 5", "menu"}),
 			want:  []string{ask, ask, ask, "idle", "menu *t v1 shown"}},
 	}
-	ninety := slices.Repeat([]string{ask}, 90)
-	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
-		// Asked at 0 to 89 seconds; the 90th asks nothing, and the polling
-		// ends.
-		steps: append([]string{title}, ticks(91)...), want: append(ninety, "idle")}
+	asks := slices.Repeat([]string{ask}, 150)
+	scenarios["150 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
+		// Asked at 0 to 149 seconds; the 150th asks nothing, and the
+		// polling ends.
+		steps: append([]string{title}, ticks(151)...), want: append(asks, "idle")}
 
 	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))

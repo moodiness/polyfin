@@ -66,9 +66,9 @@
 // asks at once as the route changes, then every second while addons are
 // pending, every 10 seconds once a push came, the socket then telling the
 // changes,
-// for at most 90 seconds: a first answer, which takes at most 15 seconds,
+// for at most 150 seconds: a first answer, which takes at most 30 seconds,
 // and both follow-ups, 10 and 30 seconds later and as long each, end within
-// 85. When the page lists fewer versions than Count, or a different number
+// 130. When the page lists fewer versions than Count, or a different number
 // once no addon is pending, it asks for the title's details and lists their
 // versions in the page's version menu, in place, keeping the version picked.
 // It reloads the page's details instead, as jellyfin-web does when the page
@@ -1615,13 +1615,13 @@
     hold()
     poll(id, 0)
   }
-  // poll asks for the title's versions for 90 seconds, from scratch, first
+  // poll asks for the title's versions for 150 seconds, from scratch, first
   // after delay, then every second, or every 10 once a push came.
   function poll(id, delay) {
     clearTimeout(timer)
     timer = null
     var round = ++polls
-    var until = Date.now() + 90000
+    var until = Date.now() + 150000
     var answers = 0
     function ask() {
       timer = null
