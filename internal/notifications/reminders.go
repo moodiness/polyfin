@@ -52,7 +52,7 @@ func (s *Service) ProgrammeStarting(due reminders.Due) (title, message string) {
 		channel = say(i18n.Text{"its channel", "sa chaîne", "seinem Kanal", "su canal", "un canale", "seu canal"})
 	}
 	at := r.Start.In(s.zone).Format("15:04")
-	ev.Title = say(i18n.Text{"Starting at %s: %s", "Commence à %s : %s", "Beginnt um %s: %s", "Empieza a las %s: %s", "Inizia alle %s: %s",
+	ev.Title = say(i18n.Text{"Starting at %s: %s", "Commence à %s\u202f: %s", "Beginnt um %s: %s", "Empieza a las %s: %s", "Inizia alle %s: %s",
 		"Começa às %s: %s"}, at, r.Name)
 	ev.Message = say(i18n.Text{"%s starts in %s on %s.", "%s commence dans %s sur %s.", "%s beginnt in %s auf %s.", "%s empieza dentro de %s en %s.",
 		"%s inizia tra %s su %s.", "%s começa em %s em %s."}, r.Name, left, channel)

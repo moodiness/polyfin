@@ -283,7 +283,7 @@ func TestEmailTargetsReceiveMessagesInPlainTextAndHTML(t *testing.T) {
 	subject, _ := new(mime.WordDecoder).DecodeHeader(message.Header.Get("Subject"))
 	from, _ := mail.ParseAddress(message.Header.Get("From"))
 	date, dateErr := mail.ParseDate(message.Header.Get("Date"))
-	if subject != "Enregistrement terminé : Late <Show>" || from == nil || from.Name != "Home server" || from.Address != "polyfin@example.org" ||
+	if subject != "Enregistrement terminé\u202f: Late <Show>" || from == nil || from.Name != "Home server" || from.Address != "polyfin@example.org" ||
 		dateErr != nil || time.Since(date) > time.Minute || !strings.HasSuffix(message.Header.Get("Message-Id"), "@example.org>") ||
 		message.Header.Get("Auto-Submitted") != "auto-generated" || message.Header.Get("To") != "<sam@example.org>" {
 		t.Errorf("headers: %v (subject %q)", message.Header, subject)

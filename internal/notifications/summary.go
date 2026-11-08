@@ -604,13 +604,13 @@ func (s *Service) summaryEvent(event string, user *accounts.User, sum SummaryJSO
 	}
 	lines := []string{s.periodLine(event, sum), s.playedLine(sum)}
 	if sum.TopMonth != nil {
-		lines = append(lines, s.phrase(i18n.Text{"Most watched month: %s.", "Mois le plus regardé : %s.", "Meistgesehener Monat: %s.", "Mes con más visionado: %s.", "Mese più visto: %s.", "Mês mais assistido: %s."}, s.topMonthText(*sum.TopMonth, false)))
+		lines = append(lines, s.phrase(i18n.Text{"Most watched month: %s.", "Mois le plus regardé\u202f: %s.", "Meistgesehener Monat: %s.", "Mes con más visionado: %s.", "Mese più visto: %s.", "Mês mais assistido: %s."}, s.topMonthText(*sum.TopMonth, false)))
 	}
 	if len(sum.Movies) > 0 {
-		lines = append(lines, s.phrase(i18n.Text{"Movies: %s.", "Films : %s.", "Filme: %s.", "Películas: %s.", "Film: %s.", "Filmes: %s."}, titleNames(sum.Movies, summaryServerTop)))
+		lines = append(lines, s.phrase(i18n.Text{"Movies: %s.", "Films\u202f: %s.", "Filme: %s.", "Películas: %s.", "Film: %s.", "Filmes: %s."}, titleNames(sum.Movies, summaryServerTop)))
 	}
 	if len(sum.Series) > 0 {
-		lines = append(lines, s.phrase(i18n.Text{"Series: %s.", "Séries : %s.", "Serien: %s.", "Series: %s.", "Serie TV: %s.", "Séries: %s."}, titleNames(sum.Series, summaryServerTop)))
+		lines = append(lines, s.phrase(i18n.Text{"Series: %s.", "Séries\u202f: %s.", "Serien: %s.", "Series: %s.", "Serie TV: %s.", "Séries: %s."}, titleNames(sum.Series, summaryServerTop)))
 	}
 	if sum.NewEpisodes > 0 {
 		lines = append(lines, s.episodesHeading(sum)+".")
@@ -618,13 +618,13 @@ func (s *Service) summaryEvent(event string, user *accounts.User, sum SummaryJSO
 	switch len(sum.Users) {
 	case 0:
 	case 1:
-		lines = append(lines, s.phrase(i18n.Text{"New user: %s.", "Nouvel utilisateur : %s.", "Neuer Benutzer: %s.", "Nuevo usuario: %s.", "Nuovo utente: %s.", "Novo usuário: %s."}, sum.Users[0].Name))
+		lines = append(lines, s.phrase(i18n.Text{"New user: %s.", "Nouvel utilisateur\u202f: %s.", "Neuer Benutzer: %s.", "Nuevo usuario: %s.", "Nuovo utente: %s.", "Novo usuário: %s."}, sum.Users[0].Name))
 	default:
 		names := make([]string, 0, len(sum.Users))
 		for _, u := range sum.Users {
 			names = append(names, u.Name)
 		}
-		lines = append(lines, s.phrase(i18n.Text{"New users: %s.", "Nouveaux utilisateurs : %s.", "Neue Benutzer: %s.", "Nuevos usuarios: %s.", "Nuovi utenti: %s.", "Novos usuários: %s."}, strings.Join(names, ", ")))
+		lines = append(lines, s.phrase(i18n.Text{"New users: %s.", "Nouveaux utilisateurs\u202f: %s.", "Neue Benutzer: %s.", "Nuevos usuarios: %s.", "Nuovi utenti: %s.", "Novos usuários: %s."}, strings.Join(names, ", ")))
 	}
 	if sum.AddedFiles > 0 {
 		lines = append(lines, s.addedHeading(sum)+".")

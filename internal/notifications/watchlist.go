@@ -38,10 +38,10 @@ func (s *Service) titleAvailableEvent(user accounts.User, title library.Item) Ev
 	if title.ProductionYear > 0 {
 		name += " (" + strconv.Itoa(title.ProductionYear) + ")"
 	}
-	ev.Title = s.phrase(i18n.Text{"Versions found: %s", "Versions trouvées : %s", "Versionen gefunden: %s", "Versiones encontradas: %s",
+	ev.Title = s.phrase(i18n.Text{"Versions found: %s", "Versions trouvées\u202f: %s", "Versionen gefunden: %s", "Versiones encontradas: %s",
 		"Versioni trovate: %s", "Versões encontradas: %s"}, name)
 	ev.Message = s.phrase(i18n.Text{"Versions of %s, on your watchlist, were found. They have not been tried yet.",
-		"Des versions de %s, sur votre liste « À regarder », ont été trouvées. Elles n’ont pas encore été essayées.",
+		"Des versions de %s, sur votre liste «\u202fÀ regarder\u202f», ont été trouvées. Elles n’ont pas encore été essayées.",
 		"Versionen von %s auf deiner Merkliste wurden gefunden. Sie wurden noch nicht ausprobiert.",
 		"Se encontraron versiones de %s, de tu lista «Para ver». Todavía no se han probado.",
 		"Sono state trovate versioni di %s, nella tua lista «Da guardare». Non sono ancora state provate.",

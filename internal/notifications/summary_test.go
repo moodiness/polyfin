@@ -528,7 +528,7 @@ func TestWeeklySummaryEmail(t *testing.T) {
 	text := parts["text/plain"]
 	for _, want := range []string{"Semaine du ", "3 heures de visionnage, 2 lectures.", "Films les plus regardés\n- Late <Show> · 3 heures, 2 lectures\n  " + link,
 		"1 problème détecté par Système › Santé\n- La dernière sauvegarde a échoué. · Erreur\n  https://media.example.org/admin/system/health#backups",
-		"Ouvrir les statistiques : https://media.example.org/admin/system/statistics", "-- \nEnvoyé par Polyfin depuis Home."} {
+		"Ouvrir les statistiques\u202f: https://media.example.org/admin/system/statistics", "-- \nEnvoyé par Polyfin depuis Home."} {
 		if !strings.Contains(text, want) {
 			t.Errorf("plain text lacks %q: %q", want, text)
 		}
