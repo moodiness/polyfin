@@ -275,7 +275,8 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 ### Show as for apps
 
 - A library shown as movies and shows is a `CollectionFolder` without `CollectionType`. A movie or series catalog's library shown so lists `Movie` and `Series` items, and a title of another type as a folder or a video; `IncludeItemTypes` lists and counts the kinds asked for. Item `Id`s are those of the same titles as listed.
-- The admin API's libraries carry `showAs`, one of `showAsChoices` (`home_videos`, `listed`, `movies_and_shows`), or null while no one chose, saved with `PUT /admin/api/scopes/{scope}/libraries`. A library saved with `showAs` null keeps the one it has. `showAsChoices` is empty for the catalogs that offer none, and a `showAs` the catalog does not offer is refused with `invalid_library`.
+- An `anime` catalog's library shown as shows is a `CollectionFolder` of `CollectionType` `tvshows`, shown as movies a `movies` one. It still lists and counts exactly the kinds `IncludeItemTypes` asks for, and `/Items/Latest` keeps both kinds. Item `Id`s and user data do not change with the choice.
+- The admin API's libraries carry `showAs`, one of `showAsChoices` (`home_videos`, `listed`, `movies_and_shows`, `shows`, `movies`), or null while no one chose, saved with `PUT /admin/api/scopes/{scope}/libraries`. A library saved with `showAs` null keeps the one it has. `showAsChoices` is empty for the catalogs that offer none, and a `showAs` the catalog does not offer is refused with `invalid_library`.
 
 ### Other videos as movies and shows for apps
 
