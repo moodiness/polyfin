@@ -128,6 +128,7 @@ func runTheme(t *testing.T, steps string) []string {
 // change gets its pass at once; stop cancels the frame asked for
 // (patches/0003-pass-per-frame.patch in third_party/lumaaglaass).
 func TestTheThemeRunsOnePassPerFrame(t *testing.T) {
+	t.Parallel()
 	steps := map[string]struct {
 		steps string
 		want  []string
@@ -192,6 +193,7 @@ log.push('three batches: ' + (passes - before) + ' passes')
 	}
 	for name, test := range steps {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if got := runTheme(t, test.steps); !slices.Equal(got, test.want) {
 				t.Errorf("\n got  %q\n want %q", got, test.want)
 			}
