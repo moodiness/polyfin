@@ -102,6 +102,7 @@ var (
 // A series timer records the programmes of its title, on its channel at
 // its time of day, or on any channel, or at any time, as Jellyfin's do.
 func TestSeriesTimersMatchProgrammesByTitle(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	x, y := id(t, channelX), id(t, channelY)
 	st := SeriesTimer{Programme: Programme{Channel: x, Name: "The Show", Start: time.Date(2026, 10, 4, 20, 0, 0, 0, time.UTC)}}
@@ -135,6 +136,7 @@ func TestSeriesTimersMatchProgrammesByTitle(t *testing.T) {
 // A series timer records on the days it lists, in the server's time zone;
 // none, or all of them, is every day.
 func TestSeriesTimersKeepToTheirDays(t *testing.T) {
+	t.Parallel()
 	zone := time.FixedZone("UTC+2", 2*3600)
 	// Sunday 4 October 2026, noon in the server's time zone.
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, zone)
@@ -160,6 +162,7 @@ func TestSeriesTimersKeepToTheirDays(t *testing.T) {
 // the guide marks previously shown, and, unmarked, those airing an episode
 // it recorded, told by its numbers, else its title, else its description.
 func TestSeriesTimersRecordNewEpisodesOnly(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	x := id(t, channelX)
 	st := SeriesTimer{Programme: Programme{Channel: x, Name: "The Show"}, SeriesOptions: SeriesOptions{RecordAnyTime: true, RecordNewOnly: true}}
@@ -199,6 +202,7 @@ func TestSeriesTimersRecordNewEpisodesOnly(t *testing.T) {
 // Series timers make timers from the guide of the user who made them, and
 // keep those cancelled by hand cancelled.
 func TestSeriesTimersMakeTimersFromTheGuide(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC().Truncate(time.Minute)
@@ -258,6 +262,7 @@ func TestSeriesTimersMakeTimersFromTheGuide(t *testing.T) {
 // A recording a restart interrupted is kept, partial, and its timer
 // records the rest of the programme; one that wrote nothing is dropped.
 func TestRestartKeepsInterruptedRecordingsAsPartial(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -332,6 +337,7 @@ func TestRestartKeepsInterruptedRecordingsAsPartial(t *testing.T) {
 // Recordings older than the settings keep them go, with their files; none
 // go while the settings keep them forever.
 func TestOldRecordingsAreSwept(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -375,6 +381,7 @@ func TestOldRecordingsAreSwept(t *testing.T) {
 // available, and a timer due does not record; another folder is used at
 // once.
 func TestRecordingFollowsTheSettingsFolder(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := t.Context()
 	airing := program(t, "01000000000000000000000000000000", "Airing", id(t, channelX), time.Now().Add(-10*time.Minute))
@@ -410,6 +417,7 @@ func TestRecordingFollowsTheSettingsFolder(t *testing.T) {
 // pause it between its writes, it is not seen yet; once seen, its timer
 // is active and its file can be streamed.
 func TestRecordingStartsWithItsTimer(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := t.Context()
 	airing := program(t, "01000000000000000000000000000000", "Airing", id(t, channelX), time.Now().Add(-10*time.Minute))
@@ -472,6 +480,7 @@ func TestRecordingStartsWithItsTimer(t *testing.T) {
 // in full, past their recordings, and drops their other airings; an
 // episode recorded in part is recorded again.
 func TestSeriesTimersSkipEpisodesRecordedInFull(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	ctx := t.Context()
 	now := time.Now().UTC().Truncate(time.Minute)
