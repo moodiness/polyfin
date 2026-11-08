@@ -83,9 +83,9 @@ func TestTimeoutsInARowPauseAServersBackgroundRequests(t *testing.T) {
 }
 
 // deadAddon answers no stream request, holding each until the client gives
-// up, until it answers again. asked counts the requests that reached it:
-// on a loaded machine, one may run out of its time before it does, and
-// count as a timeout all the same.
+// up, however long it is given, until it answers again. asked counts the
+// requests that reached it: on a loaded machine, one may run out of its
+// time before it does, and count as a timeout all the same.
 type deadAddon struct {
 	answering atomic.Bool
 	asked     atomic.Int32
@@ -105,12 +105,11 @@ func (d *deadAddon) reply(w http.ResponseWriter, r *http.Request, resource strin
 }
 
 // newDeadEnv is a paceEnv whose one addon is dead, its stream requests
-// given 300 ms, room for an answer on a loaded machine, its log kept in
-// log.
+// given 2 s, room for an answer on a loaded machine, its log kept in log.
 func newDeadEnv(t *testing.T, titleCount int) (paceEnv, *deadAddon, *lockedBuffer) {
 	t.Helper()
 	e := newEnv(t)
-	e.service.client.SetTimeouts(time.Second, 300*time.Millisecond)
+	e.service.client.SetTimeouts(time.Second, 2*time.Second)
 	log := &lockedBuffer{}
 	e.service.logger = slog.New(slog.NewTextHandler(log, nil))
 	clock := newPaceClock()
@@ -179,16 +178,17 @@ func TestAnAddonThatKeepsTimingOutPausesBackgroundWork(t *testing.T) {
 	pausedAt := e.clock.Now()
 	listed := e.movies[:6]
 	done, _ := e.background(listed)
-	if e.quiet(done, len(listed)) {
-		t.Fatal("every title was listed")
-	}
+	// Once paused, the first title waiting waits for the pause to end,
+	// the others behind it.
+	eventually(t, "the background requests pausing", func() bool {
+		queued, running := e.paceState()
+		at, timed := e.clock.first()
+		return int(done.Load())+queued == len(listed) && running == 0 && timed && at.Equal(pausedAt.Add(timeoutPause))
+	})
 	sent := e.streamsSent()
 	if sent < timeoutsInARow || sent > timeoutsInARow+paceAtOnce-1 || int(done.Load()) != sent || int(dead.asked.Load()) > sent {
 		t.Fatalf("before the pause: %d requests for streams sent, %d reaching the addon, %d titles done; want %d to %d, each title done",
 			sent, dead.asked.Load(), done.Load(), timeoutsInARow, timeoutsInARow+paceAtOnce-1)
-	}
-	if at, ok := e.clock.first(); !ok || !at.Equal(pausedAt.Add(timeoutPause)) {
-		t.Errorf("the background requests wait until %v, want %v", at, pausedAt.Add(timeoutPause))
 	}
 	addon := e.installedAddon("dead")
 	if until, ok := e.service.StreamsTimingOut(addon); !ok || !until.Equal(pausedAt.Add(timeoutPause)) {
@@ -205,9 +205,8 @@ func TestAnAddonThatKeepsTimingOutPausesBackgroundWork(t *testing.T) {
 	if err != nil || len(versions) != 1 {
 		t.Fatalf("the user's request once the addon answers: %d versions, %v", len(versions), err)
 	}
-	if !e.quiet(done, len(listed)) {
-		t.Fatal("the answer did not lift the pause")
-	}
+	// The titles waiting go at once, the clock still.
+	eventually(t, "the answer lifting the pause", func() bool { return int(done.Load()) == len(listed) })
 	if _, ok := e.service.StreamsTimingOut(addon); ok {
 		t.Error("Health is still told of the pause")
 	}
