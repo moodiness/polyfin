@@ -19,6 +19,7 @@ import (
 // title gets at once what was kept of it, and every later import finds it
 // as its link names it, identifiers or not.
 func TestTitlesNotFoundAreKeptAndLinkedByHand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := h.user(t, "alice")
 	played := func(date string, count int) map[string]any {

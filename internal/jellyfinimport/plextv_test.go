@@ -228,6 +228,7 @@ func (h harness) signedIn(t *testing.T, tv *fakePlexTV, clock *fakeClock, user a
 // it; every token is signed out of Plex once the import ends, and none is
 // logged or answered.
 func TestAUserSignedInToPlexImportsTheirOwnWatchData(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, logged := plexSigningIn(t, tv)
 	p := smallPlex(t)
@@ -335,6 +336,7 @@ type userDataView struct {
 // A PIN Plex forgot, or one past its expiry, ends the sign-in: nothing can
 // be imported with it.
 func TestAnExpiredPlexSignInIsRefused(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, _ := plexSigningIn(t, tv)
 	user := h.user(t, "friend")
@@ -367,6 +369,7 @@ func TestAnExpiredPlexSignInIsRefused(t *testing.T) {
 // identifier: one that answers as another server is not it. The sign-in
 // is kept, and the account read from it with nothing played says so.
 func TestAPlexServerMustAnswerAsItself(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, _ := plexSigningIn(t, tv)
 	p := smallPlex(t)
@@ -396,6 +399,7 @@ func TestAPlexServerMustAnswerAsItself(t *testing.T) {
 // rated on the server says so; a relayed address is used when it is the
 // only one.
 func TestAPlexAccountWithNothingWatchedSaysSo(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, _ := plexSigningIn(t, tv)
 	p := smallPlex(t)
@@ -416,6 +420,7 @@ func TestAPlexAccountWithNothingWatchedSaysSo(t *testing.T) {
 // member signs in, then switches to it, with its PIN, as Plex's apps do.
 // The import then reads the profile's own data, with its own token.
 func TestAPlexHomeProfileIsImportedWithItsOwnToken(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, _ := plexSigningIn(t, tv)
 	p := smallPlex(t)
@@ -462,6 +467,7 @@ func TestAPlexHomeProfileIsImportedWithItsOwnToken(t *testing.T) {
 // owner's token: a movie's, a show's, which is the series', and an
 // episode's. A rating Polyfin has stays.
 func TestTheOwnersPlexRatingsComeWithTheAdministratorsImport(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	p := smallPlex(t)
 	owner := h.user(t, "owner")
@@ -523,6 +529,7 @@ func ownersPlex(t *testing.T, tv *fakePlexTV) *fakePlex {
 // sign-in and the profile's are signed out once the import ends; the
 // shared tokens are just dropped, and no token is logged or answered.
 func TestTheOwnersPlexSignInReadsEachAccountWithItsOwnToken(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, logged := plexSigningIn(t, tv)
 	p := ownersPlex(t, tv)
@@ -636,6 +643,7 @@ func TestTheOwnersPlexSignInReadsEachAccountWithItsOwnToken(t *testing.T) {
 // own the server is refused, before anything is read; the sign-in is
 // kept. Without the owner's sign-in, the import reads the plays as before.
 func TestThePlexSignInOfAnAccountThatDoesNotOwnTheServerIsRefused(t *testing.T) {
+	t.Parallel()
 	tv := newFakePlexTV(t)
 	h, clock, _ := plexSigningIn(t, tv)
 	p := ownersPlex(t, tv)
