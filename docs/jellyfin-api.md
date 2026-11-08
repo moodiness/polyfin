@@ -264,7 +264,7 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 ### Library menu visibility for apps
 
 - `GET /Polyfin/UserViews` lists the views `/UserViews` gives the caller, in the same order, as `{"Items": [{"Id": <the view's Id>, "HideInMenus": <true when the web player's menus leave it out>}]}`.
-- Polyfin's own Live TV, Playlists, Collections and Watchlist views are never left out.
+- Polyfin's own Live TV, Playlists and Collections views are never left out. The Watchlist is a playlist, not a view: `/UserViews` does not list it. Every user has a Watchlist playlist from the start, so `/UserViews` lists the Playlists view for everyone.
 
 ### Libraries shown as movies and shows for apps
 
@@ -315,7 +315,7 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 - The library's image is its Primary image: `/UserViews` and `/Items` give its tag in `ImageTags`, `/Items/{id}/Images/Primary` serves it, and `/Library/VirtualFolders` names the library as its `PrimaryImageItemId`.
 - The automatic image is looked up again with the catalog's pages, after **Refresh catalogs after (minutes)**. Its tag changes with the title it comes from. `/UserViews` never waits for it: until it is found, the library shows the image found last, or none.
 - A generated image's tag changes with the library's name and with the titles it shows (see [Generated images](artwork-and-editing.md#generated-images)). `/UserViews` never waits for it: it comes from the pages Polyfin keeps.
-- The Watchlist view and the smart lists shown as libraries give each user the tag of their own image, wide, with a `PrimaryImageAspectRatio` of 16:9 (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)). Image requests name no user, so `/Items/{id}/Images/Primary` finds it by the `tag` the app sends, after a restart too. Without a tag, or with a tag that is none of that view's images, it answers 404.
+- The smart lists shown as libraries, and playlists, give each user the tag of their own image, wide, with a `PrimaryImageAspectRatio` of 16:9 (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)). Image requests name no user, so `/Items/{id}/Images/Primary` finds it by the `tag` the app sends, after a restart too. Without a tag, or with a tag that is none of that list's images, it answers 404.
 - The Live TV, Replay, Collections and Playlists views give the tag of their emblem, the same for every user, served as a 1,920 × 1,080 JPEG.
 
 ### Library listings without a limit
@@ -344,7 +344,7 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 
 ### Smart lists for apps
 
-- A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none, as the Watchlist. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
+- A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
 - A list shown as a collection is a `BoxSet` in the **Collections** view, by name with the collections made by users. The view shows once such a list exists.
 - The collections listing across the server lists it, except for jellyfin-web's **Add to collection** dialog. `POST` and `DELETE /Collections/{id}/Items` answer an empty `403`.
 - The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. A list's `rules` and `exclude` are each a group of rules (`{"field": "group", "match": "all" | "any", "rules": [...]}`); a list sent without `exclude` has none. A rule's `field` is `genre`, `year`, `released`, `homeRelease`, `rating`, `votes`, `language`, `runtime`, `contentRating`, `person`, `studio`, `type`, `rank` or `state`; `released` takes `min` and `max` in days from today, negative in the past; `homeRelease` takes `value` `released`, `upcoming` or `both`, and `max` days, from 1 to 36,500. `sort` is `catalog`, `premiere`, `latestEpisode`, `seasonPremiere`, `rating`, `name` or `random`. `.../catalogs` gives the catalogs a list may draw from, the languages its rules may name and the `contentRatings` a rule may set as the highest. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description, votes, studios or home release) and `complete` (whether every catalog answered in time).
@@ -553,12 +553,22 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 - The admin API names the two watchlist kinds `available` and `waiting`. Its rows carry a `schedule`, with `startDate` and `endDate` (`YYYY-MM-DD`, empty for none), `days` (0 for Sunday to 6) and `startHour` and `endHour` (0 to 23 and 1 to 24, both null for all day), and `shownNow`.
 - `GET /admin/api/home-rows/preview/{userId}` answers the preview: `rows`, each with its folder's `id`, its `rowId`, `name`, `kind`, `place` and `titles` (`id`, `kind`, `name`, `year` and `posterId`).
 
+### Playlists for apps
+
+- `POST /Playlists`, `POST /Playlists/{id}/Items` and an `Ids` update take a series as its aired episodes of regular seasons and a season as its aired episodes, in order; other kinds are added as themselves (see [Playlists](watch-state.md#playlists)).
+- `GET /Playlists/{id}/Items` lists the entries in the playlist's order, each with its `PlaylistItemId`.
+- `/Items?ParentId=<playlist>` lists them in the playlist's order without `SortBy`, or with `SortBy=None`. With a `SortBy`, they follow it, as a folder's children do: the standard fields, and `Random`, which jellyfin-web's Shuffle asks for, a new order each time.
+- A playlist's `Name` is the viewer's: see [Watchlist for apps](#watchlist-for-apps) for the Watchlist playlist's.
+
 ### Watchlist for apps
 
-- The Watchlist view is a `CollectionFolder` without `CollectionType`, as a library of mixed content, with the same identifier on every server, listed in `/UserViews` after the Collections view.
-- `/Items?ParentId=` lists its movies and series, the latest added first, whatever `sortBy` says; `/Items/Latest?ParentId=` gives its home row.
-- `POST /Polyfin/UserItems/{itemId}/Watchlist` puts a movie or a series on the user's own list (a season or an episode stands for its series), even when another list holds it already: it then stays when that list no longer holds it. Adding it again changes nothing, its date included. `DELETE` takes it off every list. Both answer 204, and 400 for an item that is neither. The web player's "Add to Watchlist" and "Remove from Watchlist" send them (see [Card menus](web-client.md#card-menus)).
-- `GET /Polyfin/UserItems/Watchlist` answers `{"Items": [{"Id", "AddedAt"}]}`, the titles the user's lists hold, started or not, the latest added first. The web player asks it once as an item's menu opens, to choose between its two entries.
+- Each user's Watchlist is one of their playlists, a `Playlist` of `MediaType` `Video`, listed, played, shared, edited and deleted with Jellyfin's playlist routes (see [The Watchlist playlist](tracking-imports.md#the-watchlist-playlist)). `/UserViews` has no Watchlist view.
+- The titles imports and lists bring add only what is left to watch: a movie the user has not started or played, a series' or a season's aired episodes they have not played. Jellyfin's playlist routes and `POST /Polyfin/UserItems/{itemId}/Watchlist` add everything, as Jellyfin does.
+- Its `Name`, while it keeps the default one, is "Watchlist" in the viewer's language, followed by its owner's name in brackets for anyone else, such as `Watchlist (Alice)`. Setting an empty name brings the default back.
+- `POST /Playlists/{id}/Items` adds at the top unless `position` is given; an item already there keeps its place. What a user it is shared with to edit adds counts as the owner's own.
+- `/Items?ParentId=<playlist>` and `/Playlists/{id}/Items` leave out the titles the viewer hid.
+- `POST /Polyfin/UserItems/{itemId}/Watchlist` puts a movie or an episode at the top of the user's Watchlist playlist, a series its aired episodes of regular seasons, a season its own aired episodes, on the user's own list, even when another list holds them: they then stay when that list no longer holds them. A series none of whose episodes aired yet gets them once, when one airs. An item already there keeps its place. It makes the playlist again when the user deleted it. `DELETE` takes a movie or an episode off, a series all its entries, a season its own entries. Both answer 204, and 400 for an item that is none of these. The web player's "Add to Watchlist" and "Remove from Watchlist" send them (see [Card menus](web-client.md#card-menus)).
+- `GET /Polyfin/UserItems/Watchlist` answers `{"PlaylistId", "Items": [{"Id", "SeriesId", "SeasonId", "AddedAt"}]}`: the playlist's identifier, empty while the user deleted it, and its entries, started or not, in its order, each a movie or an episode, `SeriesId` and `SeasonId` an episode's series and season (both left out for a movie), and `AddedAt` the latest date a list holding it gives. A series is on the Watchlist while an entry has its `SeriesId`, a season while one has its `SeasonId`. The web player asks it once as an item's menu opens, to choose between its two entries; Silo's apps list the playlist with `/Items?ParentId=<PlaylistId>`.
 - `GET /admin/api/account/tracking` answers, for each service, `watchlist` (Trakt and Simkl) and `importWatchlist`, and `lastImport.watchlist`, the titles added. `PATCH /admin/api/account/tracking/{service}` takes `importWatchlist`, besides `importHistory`, and answers `not_found` for a service without a watchlist.
 
 ## Music, audiobooks and podcasts

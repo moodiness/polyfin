@@ -267,6 +267,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Send the month in review | On the 1st, at the hour of the weekly summary |
 | Send the year in review | On January 1st, at the hour of the weekly summary |
 | Look for versions of watchlist titles | For each title again after the hours set in **Settings › Catalogs** |
+| Add the episodes of watchlist series | At start, then every hour: the episodes of the series each user's lists brought, once they are known and one has aired (see [The Watchlist playlist](tracking-imports.md#the-watchlist-playlist)) |
 
 A task that runs every few minutes or hours first runs a few minutes after its interval, at an offset of its own, so that such tasks do not all start in the same second. The tasks that run at start still do then.
 

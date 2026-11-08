@@ -1,6 +1,6 @@
 # Tracking imports and the Watchlist
 
-This page is for users who connected a tracking service (see [Tracking services](tracking.md)). It covers importing your watch history and watchlist from those services, the Watchlist view, the Now available and Still waiting rows, and Trakt's recommendations.
+This page is for users who connected a tracking service (see [Tracking services](tracking.md)). It covers importing your watch history and watchlist from those services, the Watchlist playlist, the Now available and Still waiting rows, and Trakt's recommendations.
 
 ## Importing your watch history
 
@@ -83,57 +83,78 @@ Trakt and Simkl also keep the titles you mean to watch. A connected Trakt or Sim
 | Simkl | Plan to Watch | **Import my Simkl Plan to Watch list** |
 
 - Turned on, the list is read whole with each import of the service, whether the history switch is on or not.
-- Its movies and series go to your Watchlist. A season or an episode on the list counts for its series.
+- Its movies and series go to your Watchlist playlist. A season or an episode on the list counts for its series.
 - Titles are found as the history's are. Those not found count among the titles not found.
-- The status line tells how many titles the import added to the Watchlist.
+- The status line tells how many titles the import added to the Watchlist playlist.
 - Simkl's anime are found through the [anime mapping](tracking.md#anime). Until the mapping is read, they wait for a later import.
 
-The Watchlist view shows in every Jellyfin app beside the libraries, once your watchlist holds a title you have not started. Its row of latest items shows on the home screen. It takes its name from the server language, such as « À regarder » in French. Each user has their own, and its tile shows the posters of their own titles (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)).
+### The Watchlist playlist
 
-It lists, the latest added first, the movies and series of every list feeding it:
+Every user has a Watchlist from the start: a playlist of their own, listed with their other playlists in every Jellyfin app, so the Playlists library shows for everyone, even before they make a playlist. It is a real playlist, so every app plays it, shuffles it, reorders it and edits it as any playlist (see [Playlists](watch-state.md#playlists)).
+
+- **Its name:** "Watchlist", in the language of whoever sees it, such as « À regarder » in French (see [Language of generated names](getting-started.md#language-of-generated-names)). Rename it as any playlist; an empty name goes back to the default one.
+- **Its image:** a mosaic of its first entries, a series' poster standing for its episodes (see [Generated images](artwork-and-editing.md#generated-images)).
+- **What it holds:** movies and episodes only. A series comes as its aired episodes of regular seasons, in order, and a season as its aired episodes. Specials and episodes not aired yet are left out, and episodes aired later are not added, as in any playlist.
+- **A series not known or not aired yet:** it waits, and its episodes are added once, in the background, as soon as they are known and one has aired. The task "Add the episodes of watchlist series" does it every hour and at start.
+- **Imports add only what is left to watch:** a title a list or an import brings adds a movie you have not started or played, and the aired episodes of a series or a season you have not played, an episode in progress included. A title with nothing left to watch adds nothing, and is not waited for. It stays known to the list, so a list that newly holds it later adds it by the same rule. This holds for the episodes added later in the background too.
+- **By hand:** adding a title adds everything, as in Jellyfin: a movie you played, or a series' aired episodes, watched or not.
+- **Each item once:** adding a movie or an episode already there changes nothing and keeps its place.
+
+It is filled by every list feeding it:
 
 - Trakt's watchlist and Simkl's Plan to Watch;
 - AniList's and MyAnimeList's Plan to Watch (see [Importing the lists](tracking.md#importing-the-lists));
 - the library of a Stremio or Nuvio account (see [Importing from an app](moving-to-polyfin.md#what-comes-over-from-an-app));
 - the watchlist of a Letterboxd export (see [Letterboxd](moving-to-polyfin.md#letterboxd));
-- the Watchlist of a Plex account a user signs in with (see [Plex, signing in](moving-to-polyfin.md#plex-signing-in)).
+- the Watchlist of a Plex account a user signs in with (see [Plex, signing in](moving-to-polyfin.md#plex-signing-in));
+- what you add yourself.
 
-Parental control and blocked genres hide its titles, as everywhere.
+**Order:** new titles go at the top, the latest first within one import, by the date the list gives; a series' episodes keep their order within it. An import never moves an entry. An app that adds at a given place, or moves an entry, is followed.
 
-| When | What leaves the view |
+**What stays and what leaves:**
+
+| When | What happens |
 |---|---|
-| You start a title: a movie with a resume point or played, a series with an episode started or played | That title. It shows in **Continue Watching** or **Next Up** instead. |
-| No list holds a title any longer | That title, at the next import of the list that brought it. An import that could not read the list whole takes nothing off. |
-| A one-off app import, a Letterboxd export or a Plex Watchlist brought the title | Nothing, until you start it |
-| You turn the switch off, or disconnect the service | The titles that list alone held. Those another list holds stay. |
+| You start or finish a title | It stays. It also shows in **Continue Watching** or **Next Up**. |
+| A list read whole no longer holds a title | Its entries leave at that list's next import, unless another list holds the title. Episodes you started or played stay, and so do entries you added or moved yourself. An import that could not read the list whole takes nothing off. |
+| A one-off app import, a Letterboxd export or a Plex Watchlist brought the title | It stays until you remove it. |
+| You turn the switch off, or disconnect the service | As when the list no longer holds its titles. |
+| You remove an entry | It stays off while a list holds its title, episode by episode for a series. A list that newly holds the title, or holds it again after dropping it, brings it back. |
+| You hide a title | Its entries stay, and are left out of what apps list (see [Watch state](watch-state.md#watch-state)). Parental control and blocked genres leave titles out too, as everywhere. |
 
-You can also add and remove titles yourself:
+You can add and remove titles in every Jellyfin app, with its "Add to playlist" and its playlist editing. Besides:
 
-- **In the web player:** the ⋮ menu of a movie, a series, or a season or episode of one, has "Add to Watchlist", or "Remove from Watchlist" for a title on it (see [Card menus](web-client.md#card-menus)). The Jellyfin apps for Android and iOS show the server's web player, so they have it too.
+- **In the web player:** the ⋮ menu of a movie, an episode, a series or a season has "Add to Watchlist", or "Remove from Watchlist" for a title on it (see [Card menus](web-client.md#card-menus)). On a series or a season, adding puts its aired episodes and removing takes all its entries off; it counts as on it while any of its episodes is. The Jellyfin apps for Android and iOS show the server's web player, so they have it too.
 - **In [Silo's apps](silo-apps.md):** their watchlist button.
-- **Elsewhere:** other Jellyfin apps have no watchlist button. Change the lists where they live.
 
-| Action | What happens |
-|---|---|
-| Adding a title, or a season or episode of a series | The movie or series stays on your Watchlist until you start it or remove it, even when an import's list held it too and no longer does. |
-| Removing it | It leaves every list holding it. A list read again whole, such as Trakt's watchlist, puts back a title it still holds. |
+What you add, or move, is yours: no import takes it off.
+
+**Deleting it:** delete it as any playlist. Your own additions go with it, and the titles your lists hold count as removed, so nothing comes back until a list newly holds a title. It comes back, holding only that, at the next title added, by a list or by you.
+
+**Sharing:** share it, or open it to all, as any playlist (see [Playlists](watch-state.md#playlists)). Its rows, checks, messages and imports stay yours, and what a user it is shared with to edit adds counts as yours. While it keeps its default name, others see it with your name, such as "Watchlist (Alice)", in their own language, so that several users' Watchlists never look the same.
+
+Tracking services are not told of changes: the lists only flow into Polyfin.
 
 API details: [Watchlist for apps](jellyfin-api.md#watchlist-for-apps).
 
+**Compared with Jellyfin**
+
+- Jellyfin has no watchlist. Polyfin's is one of Jellyfin's playlists, so apps need nothing new to show it.
+
 ## Now available and Still waiting
 
-Polyfin looks for versions of the Watchlist titles each user has not started. Users then know when a title they wait for comes.
+Polyfin looks for versions of the titles of each user's Watchlist playlist they have not started: each movie, each series its lists brought, and each episode added by itself. Users then know when a title they wait for comes. The Watchlist playlist has no home row of its own: it shows on the home as any playlist does, and these two rows stay.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Look for versions of watchlist titles every (hours, 0 = never)** | **Settings › Catalogs** | 6 | How long before a title is checked again. 0 turns the checks off. |
 
-Every hour, Polyfin checks up to 20 titles of each user's Watchlist: those never checked first, then those checked longest ago.
+Every hour, Polyfin checks up to 20 titles of each user's Watchlist playlist: those never checked first, then those checked longest ago.
 
 - The scheduled task "Look for versions of watchlist titles" runs the checks. An administrator can run it by hand.
 - Disabled and ended accounts are left out.
 
-For a movie, or a series' first regular episode out, Polyfin asks the user's stream addons, as a title's page does. Those are the server's addons the user uses, and their own.
+For a movie or an episode, or a series' first regular episode out, Polyfin asks the user's stream addons, as a title's page does. Those are the server's addons the user uses, and their own.
 
 - Torrents' files count for a user who may play them.
 - A title has versions when one is neither hidden by the [version order](versions.md#version-order) settings nor taller than the user's [quality group](user-limits.md#quality-groups).
@@ -155,18 +176,18 @@ Each check records whether versions were found, and the first time they were. Th
 | Home row | Lists | Order |
 |---|---|---|
 | **Now available** | Titles that versions were found for | Latest found first |
-| **Still waiting** | Titles checked without any version, or not out yet | Latest added first |
+| **Still waiting** | Titles checked without any version, or not out yet | The Watchlist playlist's order, then the latest added first |
 
 - A title not checked yet is in neither row.
 - A title whose versions are gone goes back to **Still waiting**, at the check after the one where the addon first answered without them. As on a title's page, a shorter answer is listed with the versions of the list it replaces while Polyfin asks the addon again (see [Title pages](versions.md#title-pages)).
-- With **Also a library in other apps**, each row is a library in other apps too, as the Watchlist is.
+- With **Also a library in other apps**, each row is a library in other apps too.
 - "Versions found" is what the addons listed. A version is only tried when it plays, and may still fail.
 
 The first time versions are found for a title that earlier checks found none for, the user gets a message, once per title. It goes to their own targets that chose **Watchlist title available**: see [Watchlist titles available](notifications.md#watchlist-titles-available).
 
 **Compared with Jellyfin**
 
-- Polyfin checks the Watchlist for versions. Jellyfin has no watchlist and no such check. The rows reach other Jellyfin apps as libraries, through **Also a library in other apps**.
+- Polyfin checks the Watchlist playlist for versions. Jellyfin has no watchlist and no such check. The rows reach other Jellyfin apps as libraries, through **Also a library in other apps**.
 
 ## Recommended on Trakt
 
@@ -185,7 +206,7 @@ Trakt recommends movies and series to each of its users, from what they watched 
 
 - A user without a Trakt connection, or whose connection waits for **Connect again**, sees no such row, nor its library in other apps.
 - Disconnecting Trakt, or connecting another account, forgets the recommendations read.
-- With **Also a library in other apps** on, the row is also a library in other apps, as the Watchlist view is.
+- With **Also a library in other apps** on, the row is also a library in other apps.
 
 **Compared with Jellyfin**
 

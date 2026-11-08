@@ -165,7 +165,7 @@ Polyfin generates some names that Jellyfin apps show:
 - seasons;
 - untitled episodes;
 - the type that tells apart libraries with the same name, such as "Popular (Movies)";
-- a music addon's "My music", and the Replay and Watchlist views;
+- a music addon's "My music", the Replay view and the Watchlist playlist's default name;
 - the ending of version names that says how the app plays each, such as "(direct play)" (see [Version names](versions.md#version-names)).
 
 These names are in English, French, German, Spanish, Italian or Brazilian Portuguese. Set the language with **Language of generated names**, in **Settings › General**. It defaults to the language the setup page was in.
@@ -173,7 +173,7 @@ These names are in English, French, German, Spanish, Italian or Brazilian Portug
 A user whose **Metadata language** is one of these languages sees some names in that language instead:
 
 - the names of seasons and untitled episodes;
-- library types, "My music", and the Replay and Watchlist views.
+- library types, "My music", the Replay view and the Watchlist playlist's default name.
 
 Any Portuguese counts as Brazilian Portuguese. Other metadata languages keep the server's language, and version names always do. See [Metadata language](watch-state.md#metadata-language).
 

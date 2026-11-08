@@ -51,22 +51,22 @@ Polyfin's own views get an image of their own, with nothing to choose:
 
 | View | Its image |
 |---|---|
-| The Watchlist | Each user's own: a generated wide image of the first titles of their Watchlist, up to six, with the view's name across them |
-| A smart list shown as a library | Each user's own, the same way, from the first titles the list keeps for them |
+| A smart list shown as a library | Each user's own: a generated wide image of the first titles the list keeps for them, up to six, with the list's name across them |
+| A playlist, the [Watchlist playlist](tracking-imports.md#the-watchlist-playlist) included | Each viewer's own, the same way, from its first entries they can see, a series' poster standing for its episodes. An image uploaded with **Edit images** wins over it. |
 | Live TV, Replay, Collections and Playlists | An emblem, the same for every user and in every language: the view's sign in the colors of Polyfin's logo, without words |
 
 ![The emblems of Live TV, Replay, Collections and Playlists: a screen, a circle turning back, a pile of cases and the lines of a list, each with a play sign, in violet to cyan over a dark background](images/view-emblems.webp)
 
 **Each user's own image:**
 
-- It is drawn as other [generated images](#generated-images) are, from the titles the view lists for that user, and its tag is theirs.
-- Image requests carry no user, and the Watchlist view has the same identifier for everyone. So Polyfin finds the image by its tag, and keeps what each one shows in the database: an app asking for it after a restart still gets it.
+- It is drawn as other [generated images](#generated-images) are, from the titles the list or the playlist shows that user, and its tag is theirs.
+- Image requests carry no user, and a list or a playlist has the same identifier for everyone. So Polyfin finds the image by its tag, and keeps what each one shows in the database: an app asking for it after a restart still gets it.
 - Once the image changes, the one before it is still served until the next change, as jellyfin-web keeps the list of views it was given for a minute.
-- Polyfin compares the titles shown with the view's first titles at most once a minute for each user, when the view is listed.
+- Polyfin compares the titles shown with the first titles at most once a minute for each user, when the list or the playlist is listed.
 - A smart list's image changes as a collection's does, once half its titles have left the list's first 20.
-- The Watchlist's shows only titles still on it: one removed or started gives way to the next at once. Adding or removing a title from the web player's menu has the image compared again as the view next shows.
+- A playlist's shows only entries still on it: one removed gives way to the next at once.
 - As a library's generated image, it is drawn whatever **Generate images for collections without one** says. Users under parental control or blocking genres get none, nor do users who hid one of the titles it shows.
-- It goes with its user, and with its smart list.
+- It goes with its user, and with its smart list or its playlist.
 
 **Emblems:** Polyfin draws each once, then keeps it with the relayed artwork. An image uploaded with **Edit images** wins over it.
 
@@ -272,7 +272,7 @@ Polyfin draws these images (see [Library images](#library-images) and [Collectio
 - those of the addons' collections without a poster;
 - those of the smart lists shown as collections;
 - those of the libraries whose image is set to **Generated**;
-- each user's own image of the Watchlist and of the smart lists shown as libraries (see [Images of Polyfin's views](#images-of-polyfin-s-views)).
+- each user's own image of the smart lists shown as libraries and of the playlists they see, the Watchlist playlist included (see [Images of Polyfin's views](#images-of-polyfin-s-views)).
 
 **What it draws:**
 
