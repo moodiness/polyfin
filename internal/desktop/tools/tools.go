@@ -151,6 +151,8 @@ type Tools struct {
 	Dir      string
 	Manifest Manifest
 	Client   *http.Client
+	// retryDelays replaces defaultRetryDelays, for tests.
+	retryDelays []time.Duration
 }
 
 // folder is where the manifest's tools are unpacked.
@@ -262,10 +264,10 @@ func (t Tools) removeOthers() {
 	}
 }
 
-// retryDelays are the waits before each new attempt at a download that
-// failed in passing: a network error, a timeout, or a 5xx or 429 answer,
-// as GitHub gives during an outage.
-var retryDelays = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second, 60 * time.Second}
+// defaultRetryDelays are the waits before each new attempt at a download
+// that failed in passing: a network error, a timeout, or a 5xx or 429
+// answer, as GitHub gives during an outage.
+var defaultRetryDelays = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second, 60 * time.Second}
 
 // statusError is an answer other than 200.
 type statusError struct {
@@ -284,13 +286,17 @@ func (e statusError) transient() bool {
 // downloadRetrying is download, tried again after a passing failure. A
 // file that arrives whole but differs is refused at once.
 func (t Tools) downloadRetrying(ctx context.Context, f File, file string, report func(int64)) error {
+	delays := t.retryDelays
+	if delays == nil {
+		delays = defaultRetryDelays
+	}
 	for attempt := 0; ; attempt++ {
 		err := t.download(ctx, f, file, report)
 		var status statusError
 		switch {
 		case err == nil:
 			return nil
-		case errors.Is(err, ErrChecksum), ctx.Err() != nil, attempt == len(retryDelays),
+		case errors.Is(err, ErrChecksum), ctx.Err() != nil, attempt == len(delays),
 			errors.As(err, &status) && !status.transient():
 			return err
 		}
@@ -298,7 +304,7 @@ func (t Tools) downloadRetrying(ctx context.Context, f File, file string, report
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(retryDelays[attempt]):
+		case <-time.After(delays[attempt]):
 		}
 	}
 }
