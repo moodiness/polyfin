@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -281,19 +282,125 @@ func TestSearchFindsChannelsAndProgrammes(t *testing.T) {
 	}
 }
 
+// airingNow asks what airs now, as jellyfin-web's home does, until it
+// lists want, the programmes' names: the first answer lacks the pages
+// Polyfin does not keep yet, which it reads in the background meanwhile.
+func airingNow(t *testing.T, s testServer, token string, want ...string) {
+	t.Helper()
+	var programs QueryResult
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		s.get(t, "/LiveTv/Programs/Recommended?IsAiring=true", token, &programs)
+		if slices.Equal(programNames(programs), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("airing now: %q, want %q", programNames(programs), want)
+		}
+	}
+}
+
 // The On Now rows ask what airs now: only today's guide is read for it,
 // not the week ahead.
 func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {
 	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, token, _ := tuned(t, addon)
-	var programs QueryResult
-	s.get(t, "/LiveTv/Programs/Recommended?IsAiring=true", token, &programs)
-	if len(programs.Items) != 1 || programs.Items[0].Name != "Now" {
-		t.Fatalf("airing now: %+v", programs.Items)
-	}
+	airingNow(t, s, token, "Now")
 	if n := addon.guides.Load(); n > 2 {
 		t.Errorf("%d guide pages read for what airs now", n)
+	}
+}
+
+// jellyfin-web's home fills none of its rows before the request of its
+// Live TV section, what airs now, answers (#1042). So what airs now never
+// waits for an addon: it answers at once from the pages Polyfin keeps,
+// with the programmes of the channels kept, while an addon whose live TV
+// catalog does not answer is asked in the background, once however many
+// requests come. The other requests the home waits for answer at once too.
+func TestOnNowNeverWaitsForAnAddon(t *testing.T) {
+	t.Parallel()
+	addon := newTVAddon(t, true, "")
+	s, token, user := tuned(t, addon)
+	// The guide of the first addon, read in the background, is kept.
+	airingNow(t, s, token, "Now")
+
+	// A second addon whose channels and guide never answer, and a movie
+	// catalog that does not either.
+	var asked atomic.Int32
+	release := make(chan struct{})
+	answer := sync.OnceFunc(func() { close(release) })
+	stuck := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/manifest.json" {
+			manifest := stremio.Manifest{ID: "stuck", Name: "Stuck", Version: "1", Types: []string{"tv", "movie"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "stream"}},
+				Catalogs: []stremio.Catalog{{Type: "tv", ID: "sport", Name: "Sport", Extra: []stremio.Extra{{Name: "date"}}},
+					{Type: "movie", ID: "films", Name: "Movies"}}}
+			manifest.BehaviorHints.EpgProvider = true
+			_ = json.NewEncoder(w).Encode(manifest)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/catalog/tv/") {
+			asked.Add(1)
+		}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(stuck.Close)
+	t.Cleanup(answer)
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), stuck.URL+"/manifest.json", false); err != nil {
+		t.Fatal(err)
+	}
+
+	// What jellyfin-web's home asks before it fills its rows: the user, the
+	// home's sections, the views, and its Live TV section's programme.
+	id := user.ID.String()
+	home := []string{
+		"/Users/" + id,
+		"/DisplayPreferences/usersettings?userId=" + id + "&client=emby",
+		"/UserViews?userId=" + id,
+		"/LiveTv/Programs/Recommended?userId=" + id + "&isAiring=true&limit=1&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Thumb" +
+			"&enableImageTypes=Backdrop&enableTotalRecordCount=false&fields=ChannelInfo&fields=PrimaryImageAspectRatio",
+	}
+	for round := range 3 {
+		for _, path := range home {
+			start := time.Now()
+			status, body := s.call(http.MethodGet, path, app("tv", token), nil)
+			if took := time.Since(start); status != http.StatusOK || took > time.Second {
+				t.Fatalf("round %d, %s: %d after %v", round, path, status, took)
+			}
+			if strings.HasPrefix(path, "/LiveTv/") {
+				var programs QueryResult
+				if json.Unmarshal(body, &programs) != nil || !slices.Equal(programNames(programs), []string{"Now"}) ||
+					programs.Items[0].ChannelName != "One" {
+					t.Errorf("round %d, what airs now: %s", round, body)
+				}
+			}
+		}
+	}
+	// Its channels and today's guide are asked once each, in the
+	// background, the later requests sharing the fetches under way.
+	for deadline := time.Now().Add(2 * time.Second); asked.Load() < 2 && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	}
+	if n := asked.Load(); n != 2 {
+		t.Fatalf("the stuck catalog's pages were asked %d times, want 2", n)
+	}
+	// A listing that waits for the addon, as the Live TV page's channels
+	// do, waits for those fetches rather than asking again, and lists the
+	// channels once the addon answers.
+	listed := make(chan int, 1)
+	go func() {
+		status, _ := s.call(http.MethodGet, "/LiveTv/Channels", app("tv", token), nil)
+		listed <- status
+	}()
+	time.Sleep(200 * time.Millisecond)
+	if n := asked.Load(); n != 2 {
+		t.Errorf("the stuck catalog's pages were asked %d times by a listing that waits, want 2", n)
+	}
+	answer()
+	if status := <-listed; status != http.StatusOK {
+		t.Errorf("channels: %d", status)
 	}
 }
 
