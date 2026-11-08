@@ -141,6 +141,7 @@ Users make playlists of movies and episodes in their apps, with "Add to playlist
 - **Other items:** a movie or an episode is added itself.
 - **Order:** apps listing a playlist get its order. Asked for a sort (`SortBy`), as for its items in a folder view, they get that sort, and **Shuffle** gets a random order, a new one each time.
 - **Image:** each playlist gets a mosaic of its first entries, a series' poster standing for its episodes (see [Generated images](artwork-and-editing.md#generated-images)).
+- **On your home screen:** mark a playlist ♥ (favorite) in any app to put it on the web player's home page, as a row of its own, when your administrator added a **My playlists** row (see [Playlist rows](home-rows.md#playlist-rows)). Your own playlists, those shared with you and public ones count. Remove the ♥ to take the row away.
 
 ## Metadata language
 

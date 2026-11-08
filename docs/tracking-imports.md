@@ -99,6 +99,7 @@ Every user has a Watchlist from the start: a playlist of their own, listed with 
 - **Imports add only what is left to watch:** a title a list or an import brings adds a movie you have not started or played, and the aired episodes of a series or a season you have not played, an episode in progress included. A title with nothing left to watch adds nothing, and is not waited for. It stays known to the list, so a list that newly holds it later adds it by the same rule. This holds for the episodes added later in the background too.
 - **By hand:** adding a title adds everything, as in Jellyfin: a movie you played, or a series' aired episodes, watched or not.
 - **Each item once:** adding a movie or an episode already there changes nothing and keeps its place.
+- **Its home row:** an administrator can add a **Watchlist** row to the web player's home page, which shows each user their own Watchlist playlist, in its order and under its name for them (see [Playlist rows](home-rows.md#playlist-rows)). Each user can turn it off under **My account › Home rows**.
 
 It is filled by every list feeding it:
 
@@ -143,7 +144,7 @@ API details: [Watchlist for apps](jellyfin-api.md#watchlist-for-apps).
 
 ## Now available and Still waiting
 
-Polyfin looks for versions of the titles of each user's Watchlist playlist they have not started: each movie, each series its lists brought, and each episode added by itself. Users then know when a title they wait for comes. The Watchlist playlist has no home row of its own: it shows on the home as any playlist does, and these two rows stay.
+Polyfin looks for versions of the titles of each user's Watchlist playlist they have not started: each movie, each series its lists brought, and each episode added by itself. Users then know when a title they wait for comes. The Watchlist playlist itself can have a home row too (see [The Watchlist playlist](#the-watchlist-playlist)), and these two rows stay.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
