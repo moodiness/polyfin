@@ -805,21 +805,31 @@ func (h *Handler) excludingListing(w http.ResponseWriter, r *http.Request, user 
 // sortItems orders items by the request's sortBy and sortOrder, by name
 // when none is given, and by name among equals.
 func sortItems(r *http.Request, items []library.Item, state userState) {
+	order := sortedOrder(r, items, state)
+	sorted := make([]library.Item, len(items))
+	for i, k := range order {
+		sorted[i] = items[k]
+	}
+	copy(items, sorted)
+}
+
+// sortedOrder returns the indexes of items in the order sortItems puts
+// them in: Random shuffles them.
+func sortedOrder(r *http.Request, items []library.Item, state userState) []int {
 	keys := listQuery(r, "sortBy")
 	if len(keys) == 0 {
 		keys = []string{"SortName"}
 	}
 	orders := listQuery(r, "sortOrder")
-	descending := func(i int) bool {
-		if i < len(orders) {
-			return strings.EqualFold(orders[i], "Descending")
-		}
-		return len(orders) == 1 && strings.EqualFold(orders[0], "Descending")
+	order := make([]int, len(items))
+	for i := range order {
+		order[i] = i
 	}
-	slices.SortStableFunc(items, func(a, b library.Item) int {
+	slices.SortStableFunc(order, func(x, y int) int {
+		a, b := items[x], items[y]
 		for i, key := range keys {
 			result := compareBy(key, a, b, state)
-			if descending(i) {
+			if descendingAt(orders, i) {
 				result = -result
 			}
 			if result != 0 {
@@ -829,8 +839,19 @@ func sortItems(r *http.Request, items []library.Item, state userState) {
 		return compareBy("SortName", a, b, state)
 	})
 	if slices.ContainsFunc(keys, func(key string) bool { return strings.EqualFold(key, "Random") }) {
-		rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+		rand.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
 	}
+	return order
+}
+
+// descendingAt reports whether the sortOrder values orders sort the i-th
+// sortBy key descending: each key takes its own, and a single value
+// applies to every key.
+func descendingAt(orders []string, i int) bool {
+	if i < len(orders) {
+		return strings.EqualFold(orders[i], "Descending")
+	}
+	return len(orders) == 1 && strings.EqualFold(orders[0], "Descending")
 }
 
 func compareBy(key string, a, b library.Item, state userState) int {
