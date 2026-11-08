@@ -44,6 +44,7 @@ func get(t *testing.T, store *Store, user accounts.ID, id, client string) (map[s
 }
 
 func TestPreferencesAreKeptPerUserIDAndClient(t *testing.T) {
+	t.Parallel()
 	store, users := setup(t)
 	alice, bob := createUser(t, users, "alice"), createUser(t, users, "bob")
 	ctx := t.Context()
@@ -87,6 +88,7 @@ func TestPreferencesAreKeptPerUserIDAndClient(t *testing.T) {
 }
 
 func TestPreferencesGoWithTheirUser(t *testing.T) {
+	t.Parallel()
 	store, users := setup(t)
 	alice := createUser(t, users, "alice")
 	if err := store.Put(t.Context(), alice.ID, "home", "web", json.RawMessage(`{}`)); err != nil {
