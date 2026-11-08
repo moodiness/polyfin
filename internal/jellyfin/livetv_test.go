@@ -116,7 +116,9 @@ var liveShapes = shapeRules{
 		"IsFolder":     {"livetv-program", "livetv-guided-programs", "livetv-guided-recommended"},
 		"LocationType": {"livetv-program", "livetv-guided-programs", "livetv-guided-recommended"},
 		"ImageTags":    {"livetv-guided-programs"}, "BackdropImageTags": {"livetv-channels", "livetv-guided-programs"},
-		"PrimaryImageAspectRatio": {"livetv-channel-items"}, "Container": {"livetv-channel"},
+		// The Live TV view has an image of Polyfin's, its emblem, which is
+		// wide; Jellyfin's has none.
+		"PrimaryImageAspectRatio": {"livetv-channel-items", "livetv-view"}, "Container": {"livetv-channel"},
 		// The recorded stream had no language and its bitrate was unknown.
 		"BitRate": {"livetv-playback-info"}, "IsAVC": {"livetv-playback-info"}, "Language": {"livetv-playback-info"},
 	},

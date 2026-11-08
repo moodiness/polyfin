@@ -700,9 +700,10 @@ func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 
 // Browsing playlists.
 
-// playlistsViewItem is the Playlists view, among the user's libraries.
+// playlistsViewItem is the Playlists view, among the user's libraries,
+// with its emblem.
 func playlistsViewItem() library.Item {
-	return library.Item{ID: playlistsViewID, Kind: library.KindLibrary, Name: "Playlists", CollectionType: "playlists"}
+	return withEmblem(library.Item{ID: playlistsViewID, Kind: library.KindLibrary, Name: "Playlists", CollectionType: "playlists"})
 }
 
 // playlistsView describes the Playlists view.

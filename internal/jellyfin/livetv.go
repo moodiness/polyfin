@@ -180,10 +180,14 @@ func channelPlaceholder(item library.Item) MediaSourceInfo {
 		RequiredHttpHeaders: map[string]string{}, TranscodingSubProtocol: "http"}
 }
 
+// liveTvViewItem is the Live TV view, with its emblem.
+func liveTvViewItem() library.Item {
+	return withEmblem(library.Item{ID: liveTvViewID, Kind: library.KindLibrary, Name: "Live TV", CollectionType: "livetv"})
+}
+
 // liveTvView describes the Live TV view, a view of Jellyfin's own.
 func (h *Handler) liveTvView(r *http.Request, user accounts.User) (BaseItemDto, error) {
-	view := library.Item{ID: liveTvViewID, Kind: library.KindLibrary, Name: "Live TV", CollectionType: "livetv"}
-	dtos, err := h.folderDtos(r, user, []library.Item{view})
+	dtos, err := h.folderDtos(r, user, []library.Item{liveTvViewItem()})
 	if err != nil {
 		return BaseItemDto{}, err
 	}

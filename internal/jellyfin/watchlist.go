@@ -13,9 +13,11 @@ import (
 // addWatchlistView adds the Watchlist view to views while user's watchlist
 // holds titles they have not started (see library.WatchlistViewID): a
 // library without type, which apps give a home row of latest items, its
-// titles the latest added first. Jellyfin apps have no watchlist button:
-// the view is filled and emptied from the lists it gathers, and from
-// Silo's apps through Polyfin's own routes below.
+// titles the latest added first, with an image of its own for each user.
+// Jellyfin apps have no watchlist button: the view is filled and emptied
+// from the lists it gathers, from jellyfin-web's item menu through the
+// web client script (see package server), and from Silo's apps, through
+// Polyfin's own routes below.
 func (h *Handler) addWatchlistView(r *http.Request, user accounts.User, views []BaseItemDto) ([]BaseItemDto, error) {
 	view, err := h.Library.Item(r.Context(), user, library.WatchlistViewID)
 	if errors.Is(err, library.ErrNotFound) {
@@ -32,10 +34,11 @@ func (h *Handler) addWatchlistView(r *http.Request, user accounts.User, views []
 }
 
 // Polyfin's own routes put titles on the user's watchlist and take them
-// off, for Silo's apps (see package silo) and any app:
+// off, for Silo's apps (see package silo), the web client script and any
+// app:
 //
 //	POST /Polyfin/UserItems/{itemId}/Watchlist puts a movie or a series on
-//	  the user's watchlist, unless a list already holds it; a season or an
+//	  the user's own list, even when another list holds it; a season or an
 //	  episode stands for its series. DELETE takes it off every list.
 //	GET /Polyfin/UserItems/Watchlist lists the titles the user's lists
 //	  hold, started or not, by identifier, with the date each was added,
