@@ -212,6 +212,15 @@ type Item struct {
 	ExtraType string
 }
 
+// ParentalRating is the rating parental control judges an item by, as
+// Jellyfin does: its custom rating, else its official one.
+func (i Item) ParentalRating() string {
+	if i.CustomRating != "" {
+		return i.CustomRating
+	}
+	return i.OfficialRating
+}
+
 // Credit names an artist and the item that stands for them.
 type Credit struct {
 	ID   accounts.ID

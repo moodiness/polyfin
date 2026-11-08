@@ -21,7 +21,9 @@ import (
 // programmes of the titles a user hid are left out of their guide. Their
 // programmes are computed from the schedule each time and kept as no
 // item: one opened by its identifier is found again in the schedule (see
-// virtualProgram).
+// virtualProgram). A title's rating and genres are those its entry kept,
+// as its addon gave them, but for those an administrator sets of the
+// title, which count at once, as for the title itself.
 
 // Virtual answers for the channels Polyfin airs (see UseVirtual): every
 // channel, and the one version of each, which plays its playout.
@@ -58,8 +60,9 @@ func (s *Service) virtualChannels(ctx context.Context, v *view, user accounts.Us
 	if err != nil {
 		return err
 	}
+	set := s.overridesNow()
 	for _, c := range all {
-		if c.Enabled && v.allowsVirtual(c) {
+		if c.Enabled && v.allowsVirtual(c, set) {
 			v.virtual = append(v.virtual, c)
 		}
 	}
@@ -67,8 +70,10 @@ func (s *Service) virtualChannels(ctx context.Context, v *view, user accounts.Us
 }
 
 // allowsVirtual reports whether the user may reach every movie and episode
-// a channel airs, by the ratings and genres they had when it was saved.
-func (v view) allowsVirtual(c virtualtv.Channel) bool {
+// a channel airs, by the ratings and genres they had when it was saved,
+// but those administrators set of their titles in set, as titles are
+// judged.
+func (v view) allowsVirtual(c virtualtv.Channel, set *overrideSet) bool {
 	if !v.restricted() {
 		return true
 	}
@@ -81,7 +86,7 @@ func (v view) allowsVirtual(c virtualtv.Channel) bool {
 		if e.Kind == virtualtv.EntryEpisode {
 			kind = KindEpisode
 		}
-		if !v.allows(kind, traits{rating: e.Rating, genres: e.Genres, ratingKnown: true, genresKnown: true}) {
+		if !v.allows(kind, set.traits(e.Title, traits{rating: e.Rating, genres: e.Genres, ratingKnown: true, genresKnown: true})) {
 			return false
 		}
 	}
@@ -155,12 +160,26 @@ func (s *Service) virtualVersion(ctx context.Context, user accounts.User, id acc
 	return Version{}, false, nil
 }
 
-// virtualProgram describes a programme of a channel Polyfin airs.
-func virtualProgram(channel Item, a virtualtv.Airing) Item {
+// virtualProgram describes a programme of a channel Polyfin airs. It shows
+// its title's official and custom ratings and genres as the title does,
+// with what administrators set of it in set.
+func virtualProgram(set *overrideSet, channel Item, a virtualtv.Airing) Item {
 	start, end := a.Start, a.End
 	category := "Movie"
 	if a.Entry.Kind == virtualtv.EntryEpisode {
 		category = "Series"
+	}
+	genres, official, custom := a.Entry.Genres, a.Entry.Rating, ""
+	if o, ok := set.fields[a.Entry.Title]; ok {
+		if o.Genres != nil {
+			genres = o.Genres
+		}
+		if o.OfficialRating != nil {
+			official = *o.OfficialRating
+		}
+		if o.CustomRating != nil {
+			custom = *o.CustomRating
+		}
 	}
 	return Item{
 		ID:                itemID(programKey(channel.StremioID, a.ProgrammeID())),
@@ -168,9 +187,10 @@ func virtualProgram(channel Item, a virtualtv.Airing) Item {
 		Name:              a.Entry.Name,
 		ParentID:          channel.ID,
 		Overview:          a.Entry.Overview,
-		Genres:            append(slices.Clone(a.Entry.Genres), category),
+		Genres:            append(slices.Clone(genres), category),
 		ProductionYear:    a.Entry.Year,
-		OfficialRating:    a.Entry.Rating,
+		OfficialRating:    official,
+		CustomRating:      custom,
 		StartDate:         &start,
 		EndDate:           &end,
 		Runtime:           end.Sub(start),
@@ -190,6 +210,7 @@ func virtualProgram(channel Item, a virtualtv.Airing) Item {
 // keeps, but those of the titles the user hid.
 func (s *Service) virtualPrograms(v view, channels map[string]Item, from, to time.Time, keep func(Item) bool) []Item {
 	var programs []Item
+	set := s.overridesNow()
 	for _, c := range v.virtual {
 		channel, ok := channels[c.StremioID()]
 		if !ok {
@@ -199,7 +220,7 @@ func (s *Service) virtualPrograms(v view, channels map[string]Item, from, to tim
 			if v.hidden[a.Entry.Title] {
 				continue
 			}
-			program := virtualProgram(channel, a)
+			program := virtualProgram(set, channel, a)
 			if !keep(program) {
 				continue
 			}
@@ -235,7 +256,7 @@ func (s *Service) findVirtualProgram(ctx context.Context, v view, id accounts.ID
 				}
 				channel = &item
 			}
-			program := virtualProgram(*channel, a)
+			program := virtualProgram(s.overridesNow(), *channel, a)
 			virtualRefs.Put(id, virtualRef{channel: c.ID, start: a.Start, title: a.Entry.Title})
 			return program, true, nil
 		}

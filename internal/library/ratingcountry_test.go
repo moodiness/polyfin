@@ -162,10 +162,43 @@ func TestVirtualChannelsAreJudgedByTheRatingCountry(t *testing.T) {
 	channel := func(rating string) virtualtv.Channel {
 		return virtualtv.Channel{Enabled: true, Entries: []virtualtv.Entry{{Kind: virtualtv.EntryMovie, Runtime: time.Hour, Rating: rating}}}
 	}
-	if v.allowsVirtual(channel("VM18")) {
+	if v.allowsVirtual(channel("VM18"), &overrideSet{}) {
 		t.Error("a channel airing a VM18 movie is allowed up to 13")
 	}
-	if !v.allowsVirtual(channel("T")) {
+	if !v.allowsVirtual(channel("T"), &overrideSet{}) {
 		t.Error("a channel airing a T movie is not allowed up to 13")
+	}
+}
+
+// A virtual channel judges and shows its titles' ratings as administrators
+// set them: a series' custom rating covers its episodes, and an entry whose
+// title has no edit keeps the rating it was saved with.
+func TestVirtualChannelsFollowTheEditsOfTheirTitles(t *testing.T) {
+	t.Parallel()
+	v := view{parental: accounts.ParentalControl{MaxRating: new(13)}, country: "US"}
+	movie, series := accounts.ID{1}, accounts.ID{2}
+	episode := virtualtv.Entry{Title: series, Kind: virtualtv.EntryEpisode, Runtime: time.Hour, Rating: "TV-PG", Genres: []string{"Drama"}}
+	channel := virtualtv.Channel{Enabled: true, Entries: []virtualtv.Entry{
+		{Title: movie, Kind: virtualtv.EntryMovie, Runtime: time.Hour, Rating: "PG"}, episode}}
+	if !v.allowsVirtual(channel, &overrideSet{}) {
+		t.Fatal("a channel airing PG and TV-PG titles is not allowed up to 13")
+	}
+	custom := "TV-MA"
+	set := &overrideSet{fields: map[accounts.ID]Overrides{series: {CustomRating: &custom}}}
+	if v.allowsVirtual(channel, set) {
+		t.Error("a channel airing a series rated TV-MA by its custom rating is allowed up to 13")
+	}
+	airing := virtualtv.Airing{Entry: episode, Start: time.Unix(0, 0), End: time.Unix(3600, 0)}
+	if p := virtualProgram(set, Item{}, airing); p.OfficialRating != "TV-PG" || p.CustomRating != "TV-MA" || p.ParentalRating() != "TV-MA" {
+		t.Errorf("the episode's programme: %q %q", p.OfficialRating, p.CustomRating)
+	}
+	official := "G"
+	set = &overrideSet{fields: map[accounts.ID]Overrides{movie: {OfficialRating: &official, Genres: []string{"Family"}}}}
+	if p := virtualProgram(set, Item{}, airing); p.OfficialRating != "TV-PG" || p.CustomRating != "" {
+		t.Errorf("an episode whose series has no edit: %q %q", p.OfficialRating, p.CustomRating)
+	}
+	airing.Entry = channel.Entries[0]
+	if p := virtualProgram(set, Item{}, airing); p.OfficialRating != "G" || p.CustomRating != "" || !slices.Equal(p.Genres, []string{"Family", "Movie"}) {
+		t.Errorf("the movie's programme: %q %q %q", p.OfficialRating, p.CustomRating, p.Genres)
 	}
 }
