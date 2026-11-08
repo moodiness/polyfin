@@ -61,6 +61,22 @@ func TestPlaylistHomeRowsMigration(t *testing.T) {
 			t.Errorf("%s: accepted", statement)
 		}
 	}
+	// A row's folder has personal images of its own, of a playlist or not,
+	// which go with the row or the playlist; one of nothing is refused.
+	images := `INSERT INTO personal_images (user_id, view_id, home_row_id, playlist_id, name, titles, posters)
+		SELECT u.id, gen_random_uuid(), r.id, $2::uuid, 'Row', '{}', '{}' FROM users u, home_rows r WHERE u.name = 'alice' AND r.name = $1`
+	for _, args := range [][]any{{"New", nil}, {"Mix", playlist}, {"Picks", nil}} {
+		if _, err := pool.Exec(ctx, images, args...); err != nil {
+			t.Errorf("an image of %v: %v", args, err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO personal_images (user_id, view_id, name, titles, posters)
+		SELECT id, gen_random_uuid(), 'None', '{}', '{}' FROM users WHERE name = 'alice'`); err == nil {
+		t.Error("an image of nothing: accepted")
+	}
+	if _, err := pool.Exec(ctx, "DELETE FROM home_rows WHERE name = 'Picks'"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, "DELETE FROM playlists WHERE id = $1", playlist); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +96,12 @@ func TestPlaylistHomeRowsMigration(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(names, []string{"New", "Picks", "Watchlist", "Mine"}) {
+	if !slices.Equal(names, []string{"New", "Watchlist", "Mine"}) {
 		t.Errorf("rows: %v", names)
+	}
+	var left []string
+	if err := pool.QueryRow(ctx, "SELECT array_agg(r.name) FROM personal_images i JOIN home_rows r ON r.id = i.home_row_id").Scan(&left); err != nil ||
+		!slices.Equal(left, []string{"New"}) {
+		t.Errorf("the images left: %v %v", left, err)
 	}
 }
