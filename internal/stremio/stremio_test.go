@@ -221,7 +221,11 @@ func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 				"app_extras": {"seasonPosters": ["https://images.example/1.jpg", null, 7, "https://images.example/4.jpg"]}}}`))
 		case "/meta/series/tt2.json":
 			_, _ = w.Write([]byte(`{"meta": {"id": "tt2", "type": "series", "name": "Other",
-				"app_extras": {"seasonPosters": "https://images.example/1.jpg", "certification": "TV-14"}}}`))
+				"app_extras": {"seasonPosters": "https://images.example/1.jpg", "certification": "TV-14",
+					"certifications": {"US": "TV-14", "it": " VM14 ", "FR": "", "DE": 16, "GB": null}}}}`))
+		case "/meta/series/tt4.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt4", "type": "series", "name": "Listed",
+				"app_extras": {"certifications": ["VM14"], "certification": "TV-MA"}}}`))
 		case "/meta/series/tt3.json":
 			_, _ = w.Write([]byte(`{"meta": {"id": "tt3", "type": "series", "name": "Keyed",
 				"app_extras": {"seasonPosters": {"0": "https://images.example/s0.jpg", "1": "https://images.example/s1.jpg",
@@ -242,6 +246,15 @@ func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 	other, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt2", false)
 	if err != nil || other.Name != "Other" || other.Extras == nil || other.Extras.SeasonPosters != nil || other.Extras.Certification != "TV-14" {
 		t.Errorf("not a list: %v %+v", err, other.Extras)
+	}
+	// Ratings by country are kept by upper-case code, without those that
+	// are not texts; anything but an object is left out.
+	if other.Extras != nil && !maps.Equal(other.Extras.Certifications, Certifications{"US": "TV-14", "IT": "VM14"}) {
+		t.Errorf("certifications: %+v", other.Extras.Certifications)
+	}
+	listed, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt4", false)
+	if err != nil || listed.Extras == nil || listed.Extras.Certifications != nil || listed.Extras.Certification != "TV-MA" {
+		t.Errorf("certifications as a list: %v %+v", err, listed.Extras)
 	}
 	keyed, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt3", false)
 	want := map[string]string{"0": "https://images.example/s0.jpg", "1": "https://images.example/one.jpg"}
