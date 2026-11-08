@@ -42,7 +42,7 @@ func TestTexts(t *testing.T) {
 	if got := english.phase(s); got != "Downloading FFmpeg: 42%" {
 		t.Errorf("English = %q", got)
 	}
-	if got := french.phase(s); got != "Téléchargement de FFmpeg : 42 %" {
+	if got := french.phase(s); got != "Téléchargement de FFmpeg\u202f: 42 %" {
 		t.Errorf("French = %q", got)
 	}
 	if got := formatted(english.setupCode, "AB3D-7KQ9"); got != "Setup code: AB3D-7KQ9 (click to copy)" {
