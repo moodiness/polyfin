@@ -141,6 +141,7 @@ func nothingPending(t *testing.T, conn *net.UDPConn) {
 // reaches the app with Polyfin's HTTP port, the server's ID and name, and
 // a null EndpointAddress.
 func TestAnswersBothMessages(t *testing.T) {
+	t.Parallel()
 	s := start(t, 0)
 	conn := client(t, s.address(t, netip.MustParseAddr("127.0.0.1")))
 	want := `{"Address":"http://127.0.0.1:8096","Id":"` + serverID + `","Name":"Polyfin","EndpointAddress":null}`
@@ -167,6 +168,7 @@ func TestAnswersBothMessages(t *testing.T) {
 // Other messages get nothing, and a datagram holding both messages one
 // answer.
 func TestIgnoresOtherMessages(t *testing.T) {
+	t.Parallel()
 	s := start(t, 0)
 	to := s.address(t, netip.MustParseAddr("127.0.0.1"))
 	other, marker := client(t, to), client(t, to)
@@ -187,6 +189,7 @@ func TestIgnoresOtherMessages(t *testing.T) {
 // alike when mapped to IPv6; public addresses, shared address space
 // included, get nothing.
 func TestAnswersOnlyTheLocalNetwork(t *testing.T) {
+	t.Parallel()
 	s := &Service{options: Options{HTTP: &net.TCPAddr{Port: 8096}, ServerID: serverID, Settings: newFakeSettings().get,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), networks: func() ([]netip.Prefix, error) { return nil, nil },
 		route: func(netip.Addr) (netip.Addr, error) { return netip.MustParseAddr("192.168.1.10"), nil }}}
@@ -209,6 +212,7 @@ func TestAnswersOnlyTheLocalNetwork(t *testing.T) {
 // without a restart; an HTTP server listening on one address announces
 // that one.
 func TestTheSettingChangesTheAddress(t *testing.T) {
+	t.Parallel()
 	s := start(t, 0)
 	conn := client(t, s.address(t, netip.MustParseAddr("127.0.0.1")))
 	s.change(t, func(settings *Settings) { settings.Address, settings.Name = "http://192.168.1.10:8096", "Living room" })
@@ -239,6 +243,8 @@ func listen(t *testing.T, port int) *net.UDPConn {
 
 // Turned off, discovery answers nothing and frees its port; turned on
 // again, it listens anew, without a restart.
+//
+//nolint:paralleltest // frees its port and takes it again: a parallel test could be given it meanwhile
 func TestTheSwitchSilencesTheAnswers(t *testing.T) {
 	s := start(t, 0)
 	to := s.address(t, netip.MustParseAddr("127.0.0.1"))
@@ -261,6 +267,8 @@ func TestTheSwitchSilencesTheAnswers(t *testing.T) {
 
 // A port another program uses does not stop the start: Status tells it,
 // and a change of the settings tries the port again.
+//
+//nolint:paralleltest // frees its port and takes it again: a parallel test could be given it meanwhile
 func TestATakenPortIsReported(t *testing.T) {
 	taken := listen(t, 0)
 	port := taken.LocalAddr().(*net.UDPAddr).Port
@@ -290,6 +298,7 @@ func TestATakenPortIsReported(t *testing.T) {
 // reach: Status tells it until the setting gives the address. With host
 // networking, or outside a container, nothing is told.
 func TestStatusTellsAContainersAddress(t *testing.T) {
+	t.Parallel()
 	type answered struct {
 		inContainer bool
 		local       string
