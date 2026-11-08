@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/mosaic"
 	"github.com/moodiness/polyfin/internal/smartlists"
@@ -124,5 +126,70 @@ func TestPolyfinsViewsShowTheirEmblem(t *testing.T) {
 	}
 	if len(tags) != 4 {
 		t.Errorf("the emblems share tags: %v", tags)
+	}
+}
+
+// Home rows shown as libraries get an image, wide, for each user: a row of
+// a playlist the playlist's own, the Playlists emblem while it has nothing
+// to draw, and another row a mosaic of its first titles. The tag changes
+// with the titles, and the images are found by their tag.
+func TestRowLibrariesShowTheirImages(t *testing.T) {
+	t.Parallel()
+	g := newGenerating(t)
+	g.titlesOf(t, g.views["Top"])
+	movie := func(n int) string { return library.TitleItemID(library.KindMovie, movieID(n)).String() }
+	for _, n := range []int{3, 2, 1} {
+		g.expectStatus(t, http.StatusNoContent, http.MethodPost, "/Polyfin/UserItems/"+movie(n)+"/Watchlist", g.member, nil)
+	}
+	var held WatchlistDto
+	g.get(t, "/Polyfin/UserItems/Watchlist", g.member, &held)
+	empty := g.createPlaylist(t, g.member, map[string]any{"Name": "Nothing yet", "IsPublic": true})
+	emptyID, _ := accounts.ParseID(empty)
+	g.addRow(t, homerows.Row{Name: "Top movies", Kind: homerows.KindCatalog, Place: homerows.PlaceTop, Addon: g.addonID,
+		CatalogType: "movie", CatalogID: "top", Everyone: true, Library: true})
+	g.addRow(t, homerows.Row{Name: "To watch", Kind: homerows.KindWatchlist, Place: homerows.PlaceTop, Everyone: true, Library: true})
+	g.addRow(t, homerows.Row{Name: "Soon", Kind: homerows.KindPlaylist, Place: homerows.PlaceTop, Playlist: emptyID, Everyone: true, Library: true})
+	emblem := library.ImageTag(library.EmblemImage(mosaic.EmblemPlaylists).URL())
+
+	views := g.viewDtos(t, g.member)
+	var watchlist BaseItemDto
+	g.get(t, "/Items/"+held.PlaylistId, g.member, &watchlist)
+	top, mine, soon := views["Top movies"], views[watchlist.Name], views["Soon"]
+	if top.ImageTags["Primary"] == "" || aspectRatio(top) != 16.0/9.0 {
+		t.Errorf("the catalog row's library: %v %v", top.ImageTags, aspectRatio(top))
+	}
+	if mine.ImageTags["Primary"] == "" || mine.ImageTags["Primary"] == emblem || mine.ImageTags["Primary"] != watchlist.ImageTags["Primary"] {
+		t.Errorf("the Watchlist row's library: %v, the Watchlist's %v", mine.ImageTags, watchlist.ImageTags)
+	}
+	if soon.ImageTags["Primary"] != emblem || aspectRatio(soon) != 16.0/9.0 {
+		t.Errorf("the empty playlist's row: %v", soon.ImageTags)
+	}
+	var folder BaseItemDto
+	if g.get(t, "/Items/"+top.Id, g.member, &folder); folder.ImageTags["Primary"] != top.ImageTags["Primary"] {
+		t.Errorf("the catalog row's folder: %v", folder.ImageTags)
+	}
+	for _, view := range []BaseItemDto{top, mine, soon} {
+		status, picture, etag := g.download(t, "/Items/"+view.Id+"/Images/Primary?tag="+view.ImageTags["Primary"])
+		if status != http.StatusOK || picture.Bounds() != image.Rect(0, 0, 1920, 1080) || etag != `"`+view.ImageTags["Primary"]+`"` {
+			t.Errorf("%s's image: %d %v %s", view.Name, status, picture, etag)
+		}
+	}
+
+	// The administrator's Watchlist is empty: their row shows the emblem.
+	var theirs WatchlistDto
+	g.get(t, "/Polyfin/UserItems/Watchlist", g.administrator, &theirs)
+	var theirWatchlist BaseItemDto
+	g.get(t, "/Items/"+theirs.PlaylistId, g.administrator, &theirWatchlist)
+	if got := g.viewDtos(t, g.administrator)[theirWatchlist.Name]; got.Id == "" || got.ImageTags["Primary"] != emblem {
+		t.Errorf("the administrator's Watchlist row: %+v", got)
+	}
+
+	// A title put on the Watchlist changes its image, and the row's.
+	g.expectStatus(t, http.StatusNoContent, http.MethodPost, "/Polyfin/UserItems/"+movie(4)+"/Watchlist", g.member, nil)
+	g.later()
+	g.get(t, "/Items/"+held.PlaylistId, g.member, &watchlist)
+	if after := g.viewDtos(t, g.member)[watchlist.Name]; after.ImageTags["Primary"] == mine.ImageTags["Primary"] ||
+		after.ImageTags["Primary"] != watchlist.ImageTags["Primary"] {
+		t.Errorf("after a title came: %v, the Watchlist's %v", after.ImageTags, watchlist.ImageTags)
 	}
 }
