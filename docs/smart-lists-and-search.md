@@ -66,7 +66,7 @@ How rules combine:
 - **Latest episode aired, latest first** orders series by their latest regular episode that has aired. **Latest season premiere, latest first** orders them by the first episode of their latest season that has aired. Both use the dates in the series' descriptions.
 - For both, specials (season 0) and episodes to come do not count. A movie comes by its premiere date. A series whose description is not read yet comes last until it is. So does a series without a dated episode.
 - **Maximum titles:** from 1 to 20,000, applied after the rules and the sort. Empty, the list has no maximum but its catalogs'.
-- **Shown as:** a library or a collection. A list shown as a collection shows an image Polyfin draws from its first titles, as an addon's collection without a poster does (see [Generated images](artwork-and-editing.md#generated-images)). A list shown as a library shows none.
+- **Shown as:** a library or a collection. A list shown as a collection shows an image Polyfin draws from its first titles, as an addon's collection without a poster does (see [Generated images](artwork-and-editing.md#generated-images)). A list shown as a library shows each user an image of the first titles it keeps for them (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)).
 
 The list's page shows a preview of its titles as they stand now, before you save. It also says how many titles still wait for what their rules look at: their description, their votes or their studios.
 
