@@ -294,6 +294,8 @@ func TestWireGuardFailedDialReturnsNoConnection(t *testing.T) {
 // Tracker names are looked up through the tunnel, by its DNS, and never by
 // the system. The test stays sequential: it replaces net.DefaultResolver,
 // which parallel tests would use, with one that records what it is asked.
+//
+//nolint:paralleltest // replaces net.DefaultResolver, which parallel tests would use
 func TestWireGuardNamesNeverReachTheSystem(t *testing.T) {
 	var asked []string
 	system := net.DefaultResolver
@@ -376,6 +378,8 @@ func TestWireGuardRouteChangeStopsTheTunnel(t *testing.T) {
 // timers with the endpoint's lock held, which closing the stack takes.
 // The test tells the goroutine waiting by its stack, and runs alone for
 // that: while it runs, no other test's tunnel sends.
+//
+//nolint:paralleltest // reads every goroutine's stack, which another test's tunnel would add to
 func TestWireGuardInterfaceClosesWhileAPacketWaits(t *testing.T) {
 	t.Run("an answer to a packet received", func(t *testing.T) {
 		tun, _, err := netstack.CreateNetTUN([]netip.Addr{torrenttest.TunnelClient}, nil, 1420)
@@ -641,6 +645,7 @@ func BenchmarkWireGuardRoute(b *testing.B) {
 // writes the configuration and the source's address, then serves until
 // its standard input closes. It is skipped otherwise.
 func TestWireGuardBenchServer(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("POLYFIN_WIREGUARD_BENCH") == "" {
 		t.Skip("run by BenchmarkWireGuardRoute")
 	}
