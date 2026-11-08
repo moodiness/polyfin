@@ -117,7 +117,7 @@ const users: typeof en = {
     deleted: (name: string) => `Se ha borrado ${name}.`,
     canAddAddons: 'Puede añadir sus propias extensiones',
     canAddAddonsHelp:
-      'Permite a este usuario añadir sus propias extensiones de Stremio en su página Mis fuentes. Sin ello, sus extensiones se conservan pero no se usan.',
+      'Permite a este usuario añadir sus propias extensiones de Stremio, y crear listas inteligentes, en su página Mis fuentes. Sin ello, sus extensiones y listas inteligentes se conservan pero no se usan.',
     noPersonalAddons: 'Sin extensiones propias',
     blockedUntil: (time: string) => `Bloqueado hasta las ${time}`,
     blockedHelp:

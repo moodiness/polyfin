@@ -771,7 +771,7 @@ const settings: typeof en = {
       'Una condivisione SMB viene scansionata di nuovo pochi secondi dopo che il suo server segnala una modifica. Le cartelle WebDAV vengono rielencate ogni 2 minuti, i bucket S3, le cartelle SFTP e i remote rclone con la frequenza richiesta da ciascuna cartella, una condivisione di molte cartelle in più passaggi, e vengono scansionate di nuovo quando un elenco è cambiato. Sistema › Stato di salute indica come viene monitorata ogni condivisione, quali cartelle o condivisioni non possono esserlo e perché.',
     personalAddons: 'Consenti gli add-on personali degli utenti',
     personalAddonsHelp:
-      'Permette agli utenti di aggiungere add-on Stremio propri, oltre a quelli del server. Se disattivato, i loro add-on vengono conservati ma non usati, e le loro applicazioni Jellyfin mostrano solo gli add-on del server.',
+      'Permette agli utenti di aggiungere add-on Stremio propri, oltre a quelli del server, e di creare liste intelligenti proprie. Se disattivato, i loro add-on e le loro liste intelligenti vengono conservati ma non usati, e le loro applicazioni Jellyfin mostrano solo gli add-on del server.',
     serverImports:
       'Gli utenti possono importare la cronologia di visione da un altro server o applicazione',
     serverImportsHelp:

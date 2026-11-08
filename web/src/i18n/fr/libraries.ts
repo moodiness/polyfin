@@ -203,6 +203,8 @@ const libraries: typeof en = {
     help: 'Des listes faites de règles sur les titres des catalogues du serveur, comme «\u202fFilms français des années 1990 pas encore vus\u202f». Tous les utilisateurs les voient, parmi les bibliothèques qu’ils peuvent voir.',
     helpMine:
       'Des listes faites de règles sur les titres de vos catalogues, et de ceux du serveur tant que vous les utilisez. Vous seul les voyez.',
+    helpKept:
+      'Conservées mais pas utilisées\u202f: vos applications Jellyfin ne les montrent pas, et elles ne peuvent pas être modifiées tant que vos propres sources ne sont pas de nouveau utilisées. Vous pouvez les supprimer.',
     add: 'Ajouter une liste intelligente',
     emptyTitle: 'Aucune liste intelligente',
     emptyHow:
@@ -325,6 +327,9 @@ const libraries: typeof en = {
     deleteTitle: (name: string) => `Supprimer ${name}\u202f?`,
     deleteBody:
       'Les applications Jellyfin ne la montrent plus. Ses titres restent dans leurs catalogues.',
+    deleteLabel: (name: string) => `Supprimer ${name}`,
+    deleteKeptBody:
+      'Elle ne reviendra pas avec vos propres sources. Ses titres restent dans leurs catalogues.',
     deleted: 'Liste intelligente supprimée.',
     preview: 'Aperçu',
     previewHelp:

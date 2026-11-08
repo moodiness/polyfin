@@ -195,6 +195,8 @@ const libraries: typeof en = {
     help: 'Listas criadas a partir de regras sobre os títulos dos catálogos do servidor, como “Filmes franceses dos anos 1990 ainda não assistidos”. Todos os usuários as veem, dentro das bibliotecas que podem ver.',
     helpMine:
       'Listas criadas a partir de regras sobre os títulos dos seus catálogos, e dos do servidor enquanto você os usa. Só você as vê.',
+    helpKept:
+      'Mantidas, mas não usadas: seus aplicativos Jellyfin não as mostram, e elas não podem ser alteradas até que suas próprias fontes voltem a ser usadas. Você pode excluí-las.',
     add: 'Adicionar lista inteligente',
     emptyTitle: 'Nenhuma lista inteligente ainda',
     emptyHow:
@@ -317,6 +319,9 @@ const libraries: typeof en = {
     deleteTitle: (name: string) => `Excluir ${name}?`,
     deleteBody:
       'Os aplicativos Jellyfin deixam de exibi-la. Os títulos dela continuam nos catálogos.',
+    deleteLabel: (name: string) => `Excluir ${name}`,
+    deleteKeptBody:
+      'Ela não volta com suas próprias fontes. Os títulos dela continuam nos catálogos.',
     deleted: 'Lista inteligente excluída.',
     preview: 'Pré-visualização',
     previewHelp:

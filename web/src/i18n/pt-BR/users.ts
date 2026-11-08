@@ -114,7 +114,7 @@ const users: typeof en = {
     deleted: (name: string) => `${name} foi excluído.`,
     canAddAddons: 'Pode adicionar os próprios complementos',
     canAddAddonsHelp:
-      'Permite que este usuário adicione os próprios complementos Stremio na página Minhas fontes. Sem isso, os complementos dele são mantidos, mas não usados.',
+      'Permite que este usuário adicione os próprios complementos Stremio, e crie listas inteligentes, na página Minhas fontes. Sem isso, os complementos e as listas inteligentes dele são mantidos, mas não usados.',
     noPersonalAddons: 'Sem complementos próprios',
     blockedUntil: (time: string) => `Bloqueado até ${time}`,
     blockedHelp:

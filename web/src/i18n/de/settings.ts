@@ -761,7 +761,7 @@ const settings: typeof en = {
       'Eine SMB-Freigabe wird wenige Sekunden, nachdem ihr Server eine Änderung meldet, erneut gescannt. WebDAV-Ordner werden alle 2 Minuten neu aufgelistet, S3-Buckets, SFTP-Ordner und rclone-Remotes so oft, wie jeder Ordner es verlangt, eine Freigabe mit vielen Ordnern in mehreren Durchgängen, und erneut gescannt, wenn sich eine Auflistung geändert hat. System › Systemzustand zeigt, wie jede Freigabe überwacht wird und welche Ordner oder Freigaben nicht überwacht werden können und warum.',
     personalAddons: 'Eigene Add-ons der Benutzer erlauben',
     personalAddonsHelp:
-      'Erlaubt Benutzern, zusätzlich zu denen des Servers eigene Stremio-Add-ons hinzuzufügen. Wenn aus, werden ihre Add-ons behalten, aber nicht verwendet, und ihre Jellyfin-Apps zeigen nur die Add-ons des Servers.',
+      'Erlaubt Benutzern, zusätzlich zu denen des Servers eigene Stremio-Add-ons hinzuzufügen und eigene intelligente Listen anzulegen. Wenn aus, werden ihre Add-ons und intelligenten Listen behalten, aber nicht verwendet, und ihre Jellyfin-Apps zeigen nur die Add-ons des Servers.',
     serverImports:
       'Benutzer dürfen ihren Wiedergabeverlauf von einem anderen Server oder einer App importieren',
     serverImportsHelp:

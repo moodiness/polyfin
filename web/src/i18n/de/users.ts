@@ -117,7 +117,7 @@ const users: typeof en = {
     deleted: (name: string) => `${name} wurde gelöscht.`,
     canAddAddons: 'Darf eigene Add-ons hinzufügen',
     canAddAddonsHelp:
-      'Erlaubt diesem Benutzer, auf seiner Seite „Meine Quellen“ eigene Stremio-Add-ons hinzuzufügen. Ohne diese Berechtigung bleiben seine Add-ons erhalten, werden aber nicht verwendet.',
+      'Erlaubt diesem Benutzer, auf seiner Seite „Meine Quellen“ eigene Stremio-Add-ons hinzuzufügen und intelligente Listen anzulegen. Ohne diese Berechtigung bleiben seine Add-ons und intelligenten Listen erhalten, werden aber nicht verwendet.',
     noPersonalAddons: 'Keine eigenen Add-ons',
     blockedUntil: (time: string) => `Gesperrt bis ${time}`,
     blockedHelp:

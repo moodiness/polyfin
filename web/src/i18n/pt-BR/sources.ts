@@ -647,9 +647,9 @@ const sources: typeof en = {
       'Ativado: você recebe as fontes e bibliotecas do servidor, seguidas das suas. Desativado: você recebe apenas suas próprias fontes e bibliotecas.',
     preferenceSaved: 'Preferência salva.',
     parentalControl:
-      'O controle parental se aplica à sua conta: seus aplicativos Jellyfin mostram apenas as fontes e bibliotecas do servidor, pois elas fornecem as classificações etárias em que ele se baseia. Suas próprias fontes são mantidas, mas não são usadas.',
+      'O controle parental se aplica à sua conta: seus aplicativos Jellyfin mostram apenas as fontes e bibliotecas do servidor, pois elas fornecem as classificações etárias em que ele se baseia. Suas próprias fontes e listas inteligentes são mantidas, mas não são usadas.',
     personalAddonsOff:
-      'Um administrador desativou suas próprias fontes: seus aplicativos Jellyfin mostram apenas as fontes e bibliotecas do servidor. Suas próprias fontes são mantidas, mas não são usadas.',
+      'Um administrador desativou suas próprias fontes: seus aplicativos Jellyfin mostram apenas as fontes e bibliotecas do servidor. Suas próprias fontes e listas inteligentes são mantidas, mas não são usadas.',
     listTitle: 'Suas fontes',
   },
   usedBy: {

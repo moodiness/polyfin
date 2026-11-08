@@ -761,7 +761,7 @@ const settings: typeof en = {
       'Um compartilhamento SMB é rastreado novamente alguns segundos depois que seu servidor avisa sobre uma alteração. Pastas WebDAV são listadas novamente a cada 2 minutos, buckets S3, pastas SFTP e remotes do rclone com a frequência que cada pasta pedir, um compartilhamento com muitas pastas em várias rodadas, e rastreados novamente quando uma listagem muda. Sistema › Integridade informa como cada compartilhamento é monitorado, quais pastas ou compartilhamentos não podem ser e por quê.',
     personalAddons: 'Permitir complementos próprios dos usuários',
     personalAddonsHelp:
-      'Permite que os usuários adicionem seus próprios complementos Stremio, além dos do servidor. Quando desativado, os complementos deles são mantidos, mas não usados, e seus aplicativos Jellyfin mostram apenas os complementos do servidor.',
+      'Permite que os usuários adicionem seus próprios complementos Stremio, além dos do servidor, e criem suas próprias listas inteligentes. Quando desativado, os complementos e as listas inteligentes deles são mantidos, mas não usados, e seus aplicativos Jellyfin mostram apenas os complementos do servidor.',
     serverImports:
       'Usuários podem importar o histórico de reprodução de outro servidor ou aplicativo',
     serverImportsHelp:

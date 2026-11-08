@@ -191,6 +191,8 @@ const libraries = {
     help: 'Lists made from rules over the titles of the server’s catalogs, such as “French movies of the 1990s not watched yet”. Every user sees them, within the libraries they may see.',
     helpMine:
       'Lists made from rules over the titles of your catalogs, and of the server’s while you use them. Only you see them.',
+    helpKept:
+      'Kept but not used: your Jellyfin apps don’t show them, and they can’t be changed until your own sources are used again. You can delete them.',
     add: 'Add a smart list',
     emptyTitle: 'No smart list yet',
     emptyHow:
@@ -312,6 +314,8 @@ const libraries = {
     delete: 'Delete',
     deleteTitle: (name: string) => `Delete ${name}?`,
     deleteBody: 'Jellyfin apps no longer show it. Its titles stay in their catalogs.',
+    deleteLabel: (name: string) => `Delete ${name}`,
+    deleteKeptBody: 'It won’t come back with your own sources. Its titles stay in their catalogs.',
     deleted: 'Smart list deleted.',
     preview: 'Preview',
     previewHelp:

@@ -46,6 +46,7 @@ import {
 import { SourceStatus, SourceTile } from './parts'
 import { OwnerLabel, SourceDetail } from './SourceDetail'
 import { UsedByChip } from './UsedBy'
+import { useOwnSources } from './ownSources'
 
 /** Content's Sources (the server's, each user's), or a user's own My sources. */
 export type SourcesArea = 'content' | 'mine'
@@ -178,7 +179,9 @@ function rowMeta(t: Messages, language: string, addon: Addon): string {
  * lit, and the source's page beside it; Add a source at the top right. Without a source in the
  * address, the wide page opens the one chosen with `?source=`, else the first of the list. On a
  * phone (and under 1024 px) the list and a source's page are each a page of their own.
- * `?add=hdhomerun` (where Jellyfin's tuner setup leads) opens Add a source on its tuner tab.
+ * `?add=hdhomerun` (where Jellyfin's tuner setup leads) opens Add a source on its tuner tab. My
+ * sources offers no Add a source while the user's own sources are not used (see useOwnSources):
+ * none could be added.
  */
 export function SourcesPage({
   area,
@@ -201,6 +204,9 @@ export function SourcesPage({
   const wide = useWide()
   const [params, setParams] = useSearchParams()
   const content = area === 'content'
+  const own = useOwnSources(!content)
+  // Until the preferences are read, nothing is offered; if they cannot be, the server decides.
+  const canAdd = content || (own.used ?? own.preferences.isError)
   const addScope: Scope = content ? 'shared' : 'me'
   const listPath = content ? '/sources' : '/me/sources'
 
@@ -525,7 +531,8 @@ export function SourcesPage({
       </div>
     )
   } else if (!loading && entries.length === 0 && !open) {
-    body = (
+    // Without sources to add, My sources' notice says why the list is empty.
+    body = canAdd ? (
       <EmptyState
         icon={StackIcon}
         title={text.emptyTitle}
@@ -537,7 +544,7 @@ export function SourcesPage({
       >
         {content ? text.emptyShared : text.emptyMine}
       </EmptyState>
-    )
+    ) : null
   } else if (narrowPage) {
     body = detail
   } else {
@@ -570,9 +577,11 @@ export function SourcesPage({
       lede={content ? undefined : t.mySources.lede}
       back={narrowPage ? back : undefined}
       actions={
-        <Button icon={PlusIcon} onClick={() => setAdding(true)}>
-          {text.add}
-        </Button>
+        canAdd ? (
+          <Button icon={PlusIcon} onClick={() => setAdding(true)}>
+            {text.add}
+          </Button>
+        ) : undefined
       }
     >
       {!open && before}

@@ -118,7 +118,7 @@ const users: typeof en = {
     deleted: (name: string) => `${name} è stato eliminato.`,
     canAddAddons: 'Può aggiungere i propri add-on',
     canAddAddonsHelp:
-      'Consente a questo utente di aggiungere add-on Stremio personali dalla sua pagina Le mie origini. Senza questa opzione, i suoi add-on vengono conservati ma non utilizzati.',
+      'Consente a questo utente di aggiungere add-on Stremio personali, e di creare liste intelligenti, dalla sua pagina Le mie origini. Senza questa opzione, i suoi add-on e le sue liste intelligenti vengono conservati ma non utilizzati.',
     noPersonalAddons: 'Nessun add-on personale',
     blockedUntil: (time: string) => `Bloccato fino alle ${time}`,
     blockedHelp:

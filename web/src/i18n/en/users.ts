@@ -111,7 +111,7 @@ const users = {
     deleted: (name: string) => `${name} has been deleted.`,
     canAddAddons: 'Can add their own addons',
     canAddAddonsHelp:
-      'Lets this user add Stremio addons of their own on their My sources page. Without it, their addons are kept but not used.',
+      'Lets this user add Stremio addons of their own, and make smart lists, on their My sources page. Without it, their addons and smart lists are kept but not used.',
     noPersonalAddons: 'No own addons',
     blockedUntil: (time: string) => `Blocked until ${time}`,
     blockedHelp:
