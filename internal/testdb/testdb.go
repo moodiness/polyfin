@@ -1,5 +1,6 @@
 // Package testdb gives tests an isolated PostgreSQL schema, or a database of
-// their own, empty or copied from a template.
+// their own, empty or copied from a template, and keeps their whole-database
+// restores from running at once (see LockRestores).
 package testdb
 
 import (
