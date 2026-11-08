@@ -61,6 +61,7 @@ func marks(n int) ([]Item, []Data) {
 // Imports and app connections re-apply whole histories: marks that did
 // not change write no row, as the database audit measured with 1,598.
 func TestReapplyingUnchangedMarksWritesNoRow(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	items, data := marks(1598)
 	set := func(store *Store, items []Item) []Data {
@@ -93,6 +94,7 @@ func TestReapplyingUnchangedMarksWritesNoRow(t *testing.T) {
 // Every change is still written: a value, a value set, a value taken
 // away, a series or season learnt.
 func TestChangedMarksAreWritten(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	movie, episode := accounts.ID{1}, accounts.ID{2}
 	series, season, otherSeason := accounts.ID{10}, accounts.ID{11}, accounts.ID{12}
@@ -149,6 +151,7 @@ func TestChangedMarksAreWritten(t *testing.T) {
 
 // Taking a series off Next Up again at the same time writes nothing.
 func TestRemovingFromNextUpAgainWritesNothingNew(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	series, at := accounts.ID{10}, time.Date(2026, 9, 1, 20, 0, 0, 0, time.UTC)
 	tx, updated := inTransaction(t, store, "next_up_removed")

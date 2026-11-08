@@ -29,6 +29,7 @@ func setup(t *testing.T) (*Store, accounts.ID, accounts.ID) {
 }
 
 func TestDataIsKeptPerUser(t *testing.T) {
+	t.Parallel()
 	store, alice, bob := setup(t)
 	movie := accounts.ID{1}
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
@@ -59,6 +60,7 @@ func TestDataIsKeptPerUser(t *testing.T) {
 }
 
 func TestSeriesAndSeasonsCountTheirEpisodes(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	series, first, second := accounts.ID{10}, accounts.ID{11}, accounts.ID{12}
 	episodes := []Item{
@@ -86,6 +88,7 @@ func TestSeriesAndSeasonsCountTheirEpisodes(t *testing.T) {
 }
 
 func TestListsFollowWhatUsersDid(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	start := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	resume := func(id accounts.ID, at time.Time) {
@@ -122,6 +125,7 @@ func TestListsFollowWhatUsersDid(t *testing.T) {
 }
 
 func TestConcurrentChangesAreNotLost(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	item := []Item{{ID: accounts.ID{1}}}
 	var wg sync.WaitGroup
@@ -153,6 +157,7 @@ func entryIDs(entries []Entry) []accounts.ID {
 // it goes to were played before it and so take none; played marks and
 // favorites stay.
 func TestDataFollowsAsAnImport(t *testing.T) {
+	t.Parallel()
 	store, alice, bob := setup(t)
 	older := time.Date(2026, 9, 1, 20, 0, 0, 0, time.UTC)
 	newer := older.Add(48 * time.Hour)
@@ -230,6 +235,7 @@ func TestDataFollowsAsAnImport(t *testing.T) {
 // A title taken off Continue Watching keeps its played state, plays and
 // date, and an import brings back only a resume point set after that.
 func TestARemovedResumePointComesBackOnlyNewer(t *testing.T) {
+	t.Parallel()
 	store, alice, _ := setup(t)
 	movie := accounts.ID{1}
 	played := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
@@ -271,6 +277,7 @@ func TestARemovedResumePointComesBackOnlyNewer(t *testing.T) {
 // A point another service keeps before the resume threshold is dropped,
 // which tells it apart from one Polyfin's newer data keeps out.
 func TestAnImportedResumePointTooEarlyIsDropped(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
 	var d Data
 	if outcome := d.ImportResume(ImportedResume{Position: time.Minute, Runtime: 2 * time.Hour, At: at}, jellyfin); outcome != ResumeDropped || d.Position != 0 {
@@ -283,6 +290,7 @@ func TestAnImportedResumePointTooEarlyIsDropped(t *testing.T) {
 }
 
 func TestHiddenTitlesArePerUserLatestFirst(t *testing.T) {
+	t.Parallel()
 	store, alice, bob := setup(t)
 	first, second := accounts.ID{1}, accounts.ID{2}
 	at := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
