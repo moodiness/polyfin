@@ -266,7 +266,9 @@ func TestWireGuardHealthSeesTheTunnelComeBack(t *testing.T) {
 // A dial through the tunnel that fails returns no connection. A nil
 // *gonet.TCPConn handed on as a net.Conn is not nil: the peer dialing,
 // which closes the connections it ends up not needing, closed one and
-// panicked, which ended the server.
+// panicked, which ended the server. The port dialed is below the
+// ephemeral range: a port freed for the test could be given to any
+// listener before the server dials it, and the dial would then pass.
 func TestWireGuardFailedDialReturnsNoConnection(t *testing.T) {
 	t.Parallel()
 	server := torrenttest.StartWireGuardServer(t, nil)
@@ -275,12 +277,7 @@ func TestWireGuardFailedDialReturnsNoConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	closed, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	target := torrenttest.Through(netip.MustParseAddrPort(closed.Addr().String()))
-	closed.Close()
+	target := torrenttest.Through(netip.MustParseAddrPort("127.0.0.1:9"))
 	conn, err := route.Dial(t.Context(), target.String())
 	if err == nil {
 		conn.Close()

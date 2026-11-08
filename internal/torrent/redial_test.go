@@ -83,12 +83,18 @@ func TestAPeerThatDroppedIsDialedAgain(t *testing.T) {
 
 // A torrent that does not start counts its peers by how their dial
 // failed: one refused, one that closed the connection at the handshake.
+// The proxy answers the refusal itself, as when the peer refused, and a
+// redial would reach a port below the ephemeral range: a port freed for
+// the test could be given to any listener before the proxy dials it, and
+// the peer would then count as closed.
 func TestAStartErrorCountsWhyPeersDidNotConnect(t *testing.T) {
 	t.Parallel()
 	tor := torrenttest.Build("A Movie", 64<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(300 << 10)})
-	closing, refused := closingListener(t), freeAddress(t)
+	closing, refused := closingListener(t), netip.MustParseAddrPort("127.0.0.1:9")
+	proxy := torrenttest.StartProxy(t, false, "", "")
+	proxy.RefuseFirst(refused)
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", closing, refused)
-	e := newEngineWith(t, proxied(torrenttest.StartProxy(t, false, "", "")), func(c *Config) { c.StartTimeout = 10 * time.Second })
+	e := newEngineWith(t, proxied(proxy), func(c *Config) { c.StartTimeout = 10 * time.Second })
 	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
 	if err != nil {
 		t.Fatal(err)
@@ -122,18 +128,6 @@ func closingListener(t *testing.T) netip.AddrPort {
 		}
 	}()
 	return netip.MustParseAddrPort(listener.Addr().String())
-}
-
-// freeAddress is an address where nothing listens.
-func freeAddress(t *testing.T) netip.AddrPort {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	address := listener.Addr().String()
-	listener.Close()
-	return netip.MustParseAddrPort(address)
 }
 
 // How a dial ended is read from its error, whichever route made it.
