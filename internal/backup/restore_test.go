@@ -93,8 +93,9 @@ func (r *restoring) count(t *testing.T, query string, args ...any) int {
 // signs stream links, is the backup's. The database is backed up first,
 // as a before-restore backup that retention keeps; the restore is
 // recorded in the restored database, with the administrator who asked.
+//
+//nolint:paralleltest // restores a whole database in one transaction: two at once overflow CI's lock table
 func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
-	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	store, err := accounts.Open(ctx, r.pool)
@@ -190,8 +191,9 @@ func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
 // from there, is migrated once restored: what the newer schema added, and
 // what was stored in it since, is gone, then made again empty. An uploaded
 // backup restores the same way.
+//
+//nolint:paralleltest // restores a whole database in one transaction: two at once overflow CI's lock table
 func TestARestoreOfAnOlderBackupIsMigrated(t *testing.T) {
-	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	// The schema before the destinations: the newest migration undone.
@@ -298,8 +300,9 @@ func TestBackupsThisPolyfinCannotRestoreAreRefused(t *testing.T) {
 // A backup holding stored keys the current POLYFIN_SECRET_KEY cannot
 // decrypt is flagged with their counts by kind, before anything changes;
 // it is restored only when asked anyway.
+//
+//nolint:paralleltest // restores a whole database in one transaction: two at once overflow CI's lock table
 func TestABackupMadeWithAnotherKeyIsFlagged(t *testing.T) {
-	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	other := newBox(t, []byte("fedcba9876543210fedcba9876543210"))
@@ -346,8 +349,9 @@ func TestABackupMadeWithAnotherKeyIsFlagged(t *testing.T) {
 
 // A restore that fails part way leaves the database as it was, and
 // records why.
+//
+//nolint:paralleltest // restores a whole database in one transaction: two at once overflow CI's lock table
 func TestAFailedRestoreLeavesTheDatabaseAsItWas(t *testing.T) {
-	t.Parallel()
 	r := newRestoring(t)
 	ctx := t.Context()
 	name := r.backUp(t, time.Date(2026, 10, 1, 4, 0, 0, 0, time.Local))

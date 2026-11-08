@@ -167,8 +167,9 @@ func encryptedRestoring(t *testing.T) *restoring {
 // An encrypted backup sent to S3, SFTP and WebDAV storage is downloaded
 // from each, opened with its passphrase and restored: what was added
 // since is gone.
+//
+//nolint:paralleltest // restores a whole database in one transaction: two at once overflow CI's lock table
 func TestAnEncryptedBackupIsRestoredFromEachDestination(t *testing.T) {
-	t.Parallel()
 	r := encryptedRestoring(t)
 	ctx := t.Context()
 	h := &harness{service: r.service}
@@ -221,8 +222,9 @@ func TestAnEncryptedBackupIsRestoredFromEachDestination(t *testing.T) {
 // an encrypted backup sent from the setup page: it is written to the
 // setup folder, opened with its passphrase, and restored without a backup
 // first; its administrators are back.
+//
+//nolint:paralleltest // restores a whole database in one transaction: two at once overflow CI's lock table
 func TestAFreshInstallRestoresFromTheSetupPage(t *testing.T) {
-	t.Parallel()
 	r := encryptedRestoring(t)
 	ctx := t.Context()
 	source, err := accounts.Open(ctx, r.pool)
