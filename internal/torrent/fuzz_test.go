@@ -436,10 +436,11 @@ func FuzzPeerMessages(f *testing.F) {
 func TestPeerLimits(t *testing.T) {
 	t.Parallel()
 	s := newFuzzSwarm(t, false)
-	e := fuzzEngine(t, nil, s)
+	// Each subtest reads with an engine of its own, its upload limit its
+	// own while the subtests run together.
 	read := func(t *testing.T, mode byte, stream []byte, setup func(*torrent)) (*torrent, *peer, error) {
 		t.Helper()
-		tr, p, err := newFuzzPeer(e, s, mode, stream)
+		tr, p, err := newFuzzPeer(fuzzEngine(t, nil, s), s, mode, stream)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -458,23 +459,27 @@ func TestPeerLimits(t *testing.T) {
 	}
 
 	t.Run("a bitfield past the pieces a torrent may have", func(t *testing.T) {
+		t.Parallel()
 		_, p, err := read(t, 0, wire(msgBitfield, make([]byte, (maxPieces+7)/8+1)), nil)
 		if err == nil || !strings.Contains(err.Error(), "bitfield") || p.has != nil {
 			t.Fatalf("got %v, with %d pieces", err, len(p.has))
 		}
 	})
 	t.Run("a bitfield past the torrent's pieces", func(t *testing.T) {
+		t.Parallel()
 		if _, _, err := read(t, 1, wire(msgBitfield, []byte{0xff, 0xff}), nil); err == nil || !strings.Contains(err.Error(), "bitfield") {
 			t.Fatalf("got %v", err)
 		}
 	})
 	t.Run("a have past the pieces a torrent may have", func(t *testing.T) {
+		t.Parallel()
 		_, p, err := read(t, 0, append(wire(msgHave, u32(maxPieces-1)), wire(msgHave, u32(maxPieces))...), nil)
 		if err == nil || !strings.Contains(err.Error(), "have") || len(p.has) != maxPieces {
 			t.Fatalf("got %v, with %d pieces", err, len(p.has))
 		}
 	})
 	t.Run("metadata is answered while the peer reads", func(t *testing.T) {
+		t.Parallel()
 		_, p, err := read(t, 1|4, metadataRequests(400), func(tr *torrent) { tr.infoData = make([]byte, 4*metadataBlock) })
 		if !errors.Is(err, io.EOF) {
 			t.Fatal(err)
@@ -490,6 +495,7 @@ func TestPeerLimits(t *testing.T) {
 		}
 	})
 	t.Run("a peer that does not read", func(t *testing.T) {
+		t.Parallel()
 		requests := maxOutbox / len(extendedMessage(extMetadata, map[string]any{"msg_type": 0, "piece": 0}, nil))
 		_, p, err := read(t, 1|4, metadataRequests(requests+10), nil)
 		if !errors.Is(err, net.ErrClosed) || queuedBytes(p) > maxOutbox {

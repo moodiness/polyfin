@@ -157,6 +157,7 @@ func TestEndgameAsksOnlyWhatTheReadWaitsFor(t *testing.T) {
 func TestEndgameBounds(t *testing.T) {
 	t.Parallel()
 	t.Run("duplicates in flight", func(t *testing.T) {
+		t.Parallel()
 		s := newEndgameSwarm(t, true)
 		s.wait(0, 512<<10)
 		s.fill()
@@ -165,6 +166,7 @@ func TestEndgameBounds(t *testing.T) {
 		}
 	})
 	t.Run("blocks not asked yet", func(t *testing.T) {
+		t.Parallel()
 		s := newEndgameSwarm(t, true)
 		// The slow peer is choked: its blocks are asked of others.
 		s.t.mu.Lock()
@@ -182,6 +184,7 @@ func TestEndgameBounds(t *testing.T) {
 		}
 	})
 	t.Run("off", func(t *testing.T) {
+		t.Parallel()
 		s := newEndgameSwarm(t, false)
 		s.wait(0, 64<<10)
 		s.fill()

@@ -297,6 +297,7 @@ func TestKillSwitch(t *testing.T) {
 	}
 
 	t.Run("no route", func(t *testing.T) {
+		t.Parallel()
 		e := newEngine(t, &testSettings{s: Settings{Enabled: true}}, 64<<20)
 		defer e.Play(spec)()
 		if _, err := e.Open(context.Background(), spec); !errors.Is(err, ErrNoRoute) {
@@ -304,8 +305,12 @@ func TestKillSwitch(t *testing.T) {
 		}
 	})
 
+	// Its own proxy, which answers: the test stops the other below, while
+	// this subtest waits to run.
 	t.Run("switch off", func(t *testing.T) {
-		e := newEngine(t, &testSettings{s: Settings{Proxy: proxy.Address()}}, 64<<20)
+		t.Parallel()
+		up := torrenttest.StartProxy(t, true, "", "")
+		e := newEngine(t, &testSettings{s: Settings{Proxy: up.Address()}}, 64<<20)
 		defer e.Play(spec)()
 		if _, err := e.Open(context.Background(), spec); !errors.Is(err, ErrDisabled) {
 			t.Fatalf("got %v, want ErrDisabled", err)
@@ -318,14 +323,14 @@ func TestKillSwitch(t *testing.T) {
 	e.routeGrace = time.Second
 	settings.set(func(s *Settings) { s.DownloadMbps = 1 })
 	stop := e.Play(spec)
-	defer stop()
+	t.Cleanup(stop)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	t.Cleanup(cancel)
 	r, err := e.Open(ctx, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
+	t.Cleanup(func() { r.Close() })
 	if _, err := r.ReadAt(make([]byte, 1000), 0); err != nil {
 		t.Fatal(err)
 	}

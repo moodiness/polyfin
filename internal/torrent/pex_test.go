@@ -124,7 +124,6 @@ func TestPrivateTorrentIgnoresPeerExchange(t *testing.T) {
 func TestPeerExchangeLimits(t *testing.T) {
 	t.Parallel()
 	s := newFuzzSwarm(t, false)
-	e := fuzzEngine(t, nil, s)
 	pex := func(payload []byte) []byte { return wire(msgExtended, []byte{extPEX}, payload) }
 	read := func(t *testing.T, tr *torrent, stream []byte) (*peer, error) {
 		t.Helper()
@@ -135,8 +134,10 @@ func TestPeerExchangeLimits(t *testing.T) {
 		tr.mu.Unlock()
 		return p, p.read()
 	}
+	// Each torrent has an engine of its own, its upload limit its own
+	// while the subtests run together.
 	newTorrentOf := func(t *testing.T, mode byte) *torrent {
-		tr, _, err := newFuzzPeer(e, s, mode, nil)
+		tr, _, err := newFuzzPeer(fuzzEngine(t, nil, s), s, mode, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -146,6 +147,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 	}
 
 	t.Run("malformed or oversized", func(t *testing.T) {
+		t.Parallel()
 		v4, _ := compact(addresses(0, 2))
 		for name, payload := range map[string][]byte{
 			"oversized":               append(pexPayload(addresses(0, 1), 0), make([]byte, maxPEXMessage)...),
@@ -176,6 +178,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 		}
 	})
 	t.Run("messages read a minute", func(t *testing.T) {
+		t.Parallel()
 		tr := newTorrentOf(t, 1)
 		var stream []byte
 		for i := range 10 {
@@ -189,6 +192,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 		}
 	})
 	t.Run("peers kept a torrent", func(t *testing.T) {
+		t.Parallel()
 		tr := newTorrentOf(t, 1)
 		for k := range 3 {
 			var stream []byte
@@ -204,6 +208,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 		}
 	})
 	t.Run("flags and addresses", func(t *testing.T) {
+		t.Parallel()
 		tr := newTorrentOf(t, 1)
 		v6 := netip.MustParseAddrPort("[2001:db8::7]:6881")
 		mapped := netip.AddrPortFrom(netip.AddrFrom16(netip.MustParseAddr("10.9.9.9").As16()), 6881)
@@ -222,6 +227,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 		}
 	})
 	t.Run("peers told before the info", func(t *testing.T) {
+		t.Parallel()
 		tr := newTorrentOf(t, 0)
 		told := addresses(0, 3)
 		stream := slices.Concat(pex(pexPayload(told, 0)), pex(pexPayload(nil, 0, told[0])))
@@ -250,6 +256,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 		}
 	})
 	t.Run("a private torrent", func(t *testing.T) {
+		t.Parallel()
 		tr := newTorrentOf(t, 1)
 		info := *tr.info
 		info.Private = true
