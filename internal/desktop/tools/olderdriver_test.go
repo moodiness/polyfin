@@ -14,6 +14,7 @@ import (
 // tools folder otherwise. A download that does not match its checksum is
 // refused.
 func TestTheFFmpegForOlderDriversKeepsToItsFolder(t *testing.T) {
+	t.Parallel()
 	main := tarXZOf(t, []entry{{name: "ffmpeg-n9.0.2-linux64-gpl-shared-9.0/bin/ffmpeg", content: "the FFmpeg for API 13.1"},
 		{name: "ffmpeg-n9.0.2-linux64-gpl-shared-9.0/bin/ffprobe", content: "ffprobe"}})
 	older := tarXZOf(t, []entry{{name: "ffmpeg-n9.0.2-linux64-gpl-shared-9.0-nvenc13.0/bin/ffmpeg", content: "the FFmpeg for API 13.0"},
@@ -98,6 +99,7 @@ func fill(digit string) string {
 // drivers pinned, built from the same FFmpeg as the Docker image's: the
 // release named after its build, holding its version.
 func TestTheFFmpegForOlderDriversIsPinnedWithTheImagesBuild(t *testing.T) {
+	t.Parallel()
 	tag, rest, _ := strings.Cut(strings.TrimPrefix(btbn, "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/"), "/")
 	for _, system := range []string{"linux/amd64", "linux/arm64", "windows/amd64"} {
 		goos, goarch, _ := strings.Cut(system, "/")
