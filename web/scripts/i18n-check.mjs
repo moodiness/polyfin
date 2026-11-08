@@ -1,7 +1,10 @@
 // Checks the admin app's messages, and fails on a finding:
 // - every English message is read by the code outside the message files;
 // - every other language has the keys English has and no other, its lists
-//   as long and its functions taking as many arguments.
+//   as long and its functions taking as many arguments;
+// - French messages, and the French words of the web player's script, set
+//   : ; ? ! and « » apart with a narrow no-break space, never a plain or a
+//   no-break one (see french-spacing.mjs, which writes them so).
 //
 // It needs the compiler API of TypeScript 5, which TypeScript 7, the admin
 // app's, no longer has. Run it from web/ as
@@ -13,10 +16,10 @@
 // whole: indexes it with a variable (t.iptv.errors[code]), passes it,
 // spreads it or keeps it in another variable first. The errors the server
 // sends by code are read that way.
-import { existsSync, readdirSync, realpathSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { frenchSpacing, typescript } from './french-spacing.mjs'
 
 const web = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const i18nDir = path.join(web, 'src', 'i18n') + path.sep
@@ -29,23 +32,8 @@ const areas = readdirSync(english)
   .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
   .map((f) => f.slice(0, -3))
 
-function typescript() {
-  const dir = (process.env.PATH ?? '')
-    .split(path.delimiter)
-    .find((d) => existsSync(path.join(d, 'tsc')))
-  if (dir) {
-    const ts = createRequire(realpathSync(path.join(dir, 'tsc')))('typescript')
-    if (ts.version.startsWith('5.')) return ts
-  }
-  console.error(
-    'i18n-check needs TypeScript 5 first on PATH: npx --yes --package=typescript@5.9.3 -- node scripts/i18n-check.mjs',
-  )
-  process.exit(2)
-}
-
 // unread lists the English messages no code reads, as "file:line key".
-function unread() {
-  const ts = typescript()
+function unread(ts) {
   const config = ts.parseJsonConfigFileContent(
     ts.readConfigFile(path.join(web, 'tsconfig.json'), ts.sys.readFile).config,
     ts.sys,
@@ -234,13 +222,17 @@ async function mismatches() {
   return found
 }
 
-const notRead = unread()
+const ts = typescript('i18n-check.mjs')
+const notRead = unread(ts)
 const different = await mismatches()
+const spaced = frenchSpacing(ts)
 for (const line of notRead) console.log(`unread: ${line}`)
 for (const line of different) console.log(`differs: ${line}`)
-if (notRead.length || different.length) {
+for (const { at, key, text } of spaced)
+  console.log(`spacing: ${at} ${key}: ${JSON.stringify(text)}`)
+if (notRead.length || different.length || spaced.length) {
   console.error(
-    `${notRead.length} English messages no code reads, ${different.length} differences between languages`,
+    `${notRead.length} English messages no code reads, ${different.length} differences between languages, ${spaced.length} French texts with a wide space before a sign or inside « » (run scripts/french-spacing.mjs)`,
   )
   process.exit(1)
 }

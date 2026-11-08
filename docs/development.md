@@ -30,6 +30,19 @@ make check                    # formatting, vet and tests
 
 `internal/server/webclient.js` is the script Polyfin adds to jellyfin-web's page, written in ES5. The page loads `webclient.min.js` beside it, the same script minified, which the server embeds. After a change to `webclient.js`, run `go generate ./internal/server` to write it again: `TestTheScriptIsServedMinified` fails while it is not the source minified.
 
+### French punctuation
+
+French texts set `:`, `;`, `?`, `!` and the inside of `« »` apart with a narrow no-break space (U+202F), written `\u202f`, so that a line never breaks before the sign. After a change of French texts, run from `web/`:
+
+```sh
+npx --yes --package=typescript@5.9.3 -- node scripts/french-spacing.mjs
+```
+
+- **What it rewrites:** a plain or no-break space before these signs, or after `«`, in the strings of the admin app's French messages (`web/src/i18n/fr`), of the French words of `internal/server/webclient.js`, and of the French of each `i18n.Text` and each Go map by language, never code. It then regenerates `webclient.min.js` when the script changed.
+- **What it keeps:** a sign with no space before it (`10:30`, `http://`), and a sign a letter or a digit follows, which is syntax rather than punctuation (`Ajoutez :port`).
+- **Again:** a second run changes nothing.
+- **The checks:** the i18n check (`scripts/i18n-check.mjs`) fails on a French message or a word of the script with a plain or no-break space there, and `TestFrenchSpacing` (in `internal/i18n`) on a Go text; `go generate ./internal/i18n` rewrites the Go texts alone.
+
 ## Tests
 
 Some tests need a program or a service, and run only when a variable names it. Without it, they are skipped.

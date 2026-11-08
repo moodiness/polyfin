@@ -10,9 +10,13 @@
 //
 // TestTexts reads every such literal in the module, and fails when one
 // misses a language or a language misses a placeholder of the English.
+// TestFrenchSpacing fails when a French one sets : ; ? ! or « » apart with
+// a plain space rather than a narrow no-break one.
 package i18n
 
 import "strings"
+
+//go:generate go test -run ^TestFrenchSpacing$ -update
 
 // Languages are the languages Polyfin speaks, as BCP 47 tags, English first:
 // the default.
