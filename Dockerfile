@@ -38,30 +38,37 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags productio
 #   Polyfin release; no image build reads it.
 FROM --platform=$BUILDPLATFORM jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771 AS jellyfin-web
 
-FROM scratch AS jellyfin-web-source
-ADD --checksum=sha256:2978d0fbe3bc24d3bef637473c55e2628262fa725600e55788a45d9a42a53d44 \
-	https://github.com/jellyfin/jellyfin-web/archive/refs/tags/v12.4.tar.gz /jellyfin-web-12.4-source.tar.gz
-
-# FFmpeg 9.0 built against glibc by BtbN, which can load GPU drivers at run
-# time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
-# the last build of a month, kept for two years. The shared build keeps
-# ffmpeg and ffprobe from carrying a copy of every library each. curl
-# retries GitHub's passing failures, which ADD does not, then the archive
-# is checked against its pinned SHA-256, from a file rather than a pipe.
-FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-download
+# The downloads from GitHub: curl retries its passing failures, which ADD
+# does not, then each file is checked against its pinned SHA-256, from a
+# file rather than a pipe.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS download
 # hadolint ignore=DL3008
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates curl \
 	&& rm -rf /var/lib/apt/lists/*
 
-FROM ffmpeg-download AS ffmpeg-amd64
+FROM download AS jellyfin-web-source-download
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /jellyfin-web-12.4-source.tar.gz \
+	https://github.com/jellyfin/jellyfin-web/archive/refs/tags/v12.4.tar.gz \
+	&& echo "2978d0fbe3bc24d3bef637473c55e2628262fa725600e55788a45d9a42a53d44  /jellyfin-web-12.4-source.tar.gz" > /jellyfin-web.sha256 \
+	&& sha256sum -c /jellyfin-web.sha256
+
+# Mode 600, as ADD gave the file.
+FROM scratch AS jellyfin-web-source
+COPY --from=jellyfin-web-source-download --chmod=600 /jellyfin-web-12.4-source.tar.gz /
+
+# FFmpeg 9.0 built against glibc by BtbN, which can load GPU drivers at run
+# time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
+# the last build of a month, kept for two years. The shared build keeps
+# ffmpeg and ffprobe from carrying a copy of every library each.
+FROM download AS ffmpeg-amd64
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
 	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz \
 	&& echo "01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
 	&& sha256sum -c /ffmpeg.sha256 \
 	&& rm /ffmpeg.sha256
 
-FROM ffmpeg-download AS ffmpeg-arm64
+FROM download AS ffmpeg-arm64
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
 	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz \
 	&& echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
