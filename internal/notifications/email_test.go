@@ -255,6 +255,7 @@ func (h harness) useSMTP(t *testing.T, sink *smtpSink, password string) {
 // only once encrypted, with STARTTLS or TLS from the start, by PLAIN or by
 // LOGIN. None can be added without an SMTP server.
 func TestEmailTargetsReceiveMessagesInPlainTextAndHTML(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	inbox := Draft{Kind: Email, Name: new("Inbox"), Address: new("sam@example.org"), Events: []string{RecordingFinished}}
 	if _, err := h.Create(t.Context(), nil, inbox); err != ErrEmailUnavailable {
@@ -339,6 +340,7 @@ func TestEmailTargetsReceiveMessagesInPlainTextAndHTML(t *testing.T) {
 // to wait, as when too many messages are sent, gets the message again
 // later. The password is never logged.
 func TestEmailRefusedSignInAndBusyServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	sink := newSMTPSink(t, false, "PLAIN")
 	h.useSMTP(t, sink, "smtp-wrong-password")

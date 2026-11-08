@@ -314,6 +314,7 @@ func types(requests []received) []string {
 // publication to its server with its topic, its tags, its access token and
 // the address a click opens.
 func TestTargetsReceiveTheirFormat(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	settings := h.store.Settings()
 	settings.PublicAddress, settings.ServerName = "https://media.example.org", "Home"
@@ -406,6 +407,7 @@ func (h harness) chatServices(t *testing.T, events ...string) (telegram, gotify,
 // event and the address a click opens. A new Pushover token keeps the
 // user key.
 func TestChatServicesReceiveTheirFormat(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	settings := h.store.Settings()
 	settings.PublicAddress = "https://media.example.org"
@@ -467,6 +469,7 @@ func TestChatServicesReceiveTheirFormat(t *testing.T) {
 // refused. A message they ask to wait for is sent again once the wait is
 // over, as long as Telegram asks in its answer.
 func TestChatServicesRefusingAndRateLimiting(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	// Long enough for Telegram's wait below, short enough to wait for.
 	h.timing.giveUp = 3 * time.Second
@@ -515,6 +518,7 @@ func TestChatServicesRefusingAndRateLimiting(t *testing.T) {
 // in the database, never shown, and never logged, even when Telegram's
 // address, which holds the bot's token, cannot be reached.
 func TestChatServiceTokensAreSealedNeverShownNorLogged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.chatServices(t, RecordingFinished)
 	h.Service.telegramAPI = "http://127.0.0.1:1"
@@ -562,6 +566,7 @@ func TestChatServiceTokensAreSealedNeverShownNorLogged(t *testing.T) {
 // targets are never told, and the server's are told once per episode,
 // however many users follow its series.
 func TestNewEpisodesAreToldOncePerEpisodeOfFollowedSeries(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.add(t, &h.member, h.webhook("/member", NewEpisode))
 	h.add(t, &h.admin, h.webhook("/admin", NewEpisode))
@@ -635,6 +640,7 @@ func TestNewEpisodesAreToldOncePerEpisodeOfFollowedSeries(t *testing.T) {
 // A recording that ended is told to the targets of the user who made it
 // and to the server's, finished or failed, never to another user's.
 func TestRecordingsEndedReachTheirOwnerAndTheServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	events := []string{RecordingFinished, RecordingFailed}
 	h.add(t, &h.member, h.webhook("/member", events...))
@@ -667,6 +673,7 @@ func TestRecordingsEndedReachTheirOwnerAndTheServer(t *testing.T) {
 // restart neither tells a problem again nor forgets it, nor the page that
 // shows it, which both messages open.
 func TestHealthProblemsFoundAndSolved(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	settings := h.store.Settings()
 	settings.PublicAddress = "https://media.example.org"
@@ -750,6 +757,7 @@ func TestHealthProblemsFoundAndSolved(t *testing.T) {
 // its record (see library's leftovers.go), which the checks then forget,
 // in the middle of confirming it gone as at its end.
 func TestHealthProblemsOfARemovedSourceAreNotToldSolved(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.add(t, nil, h.webhook("/server", HealthProblem, HealthSolved))
 	addon := Problem{Key: "addon:0123456789abcdef0123456789abcdef", Severity: SeverityWarning, Text: "Addon: could not be reached"}
@@ -788,6 +796,7 @@ func TestHealthProblemsOfARemovedSourceAreNotToldSolved(t *testing.T) {
 // to administrators' own, naming who created the invite; a member may not
 // choose the event, and a user no longer an administrator stops hearing it.
 func TestUsersJoiningAreToldToAdministrators(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.add(t, nil, h.webhook("/server", UserJoined))
 	h.add(t, &h.admin, h.webhook("/admin", UserJoined))
@@ -830,6 +839,7 @@ func TestUsersJoiningAreToldToAdministrators(t *testing.T) {
 // A new version of Polyfin is told to the server's targets and to
 // administrators' own, with its release notes; members cannot choose it.
 func TestNewVersionsAreToldToAdministrators(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.add(t, nil, h.webhook("/server", NewVersion))
 	h.add(t, &h.admin, h.webhook("/admin", NewVersion))
@@ -867,6 +877,7 @@ func (h harness) problems2() func(context.Context) ([]Problem, error) {
 // as long as a target asks with Retry-After, and is given up after a
 // while: the target then shows as unreachable.
 func TestDeliveryRetriesWaitsAndGivesUp(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	// Long enough for the Retry-After below, short enough to wait for.
 	h.timing.giveUp = 2 * time.Second
@@ -917,6 +928,7 @@ func TestDeliveryRetriesWaitsAndGivesUp(t *testing.T) {
 // status, and the message is not tried again; "Send a test" tells the
 // same, and a delivered message clears it.
 func TestRefusingTargetsAreMarkedFailing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	target := h.add(t, nil, h.webhook("/gone", RecordingFinished))
 	h.targets.then("/gone", status(http.StatusNotFound))
@@ -954,6 +966,7 @@ func TestRefusingTargetsAreMarkedFailing(t *testing.T) {
 // shown but for the address's host, and never logged, whatever happens
 // to the messages sent with them.
 func TestSecretsAreSealedNeverShownNorLogged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	discordPath := "/api/webhooks/123/very-secret-webhook-token"
 	h.add(t, nil, Draft{Kind: Discord, Name: new("Channel"), Address: new(h.targets.url + discordPath), Events: []string{RecordingFinished}})
@@ -1003,6 +1016,7 @@ func TestSecretsAreSealedNeverShownNorLogged(t *testing.T) {
 // network is refused when added, unlike an administrator's, and messages
 // to one whose address now points there do not reach it.
 func TestMembersTargetsStayOnPublicAddresses(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	moved := h.add(t, &h.member, h.webhook("/moved", RecordingFinished))
 	h.checkPublic, h.confined = stremio.CheckPublic, stremio.HTTPClient(true)

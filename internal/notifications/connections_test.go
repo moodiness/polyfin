@@ -9,6 +9,7 @@ import (
 // server's, naming the app or service and the user, with the page where
 // the user connects it again, and its kind for programs.
 func TestStoppedConnectionsReachTheirUserAndTheServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	settings := h.store.Settings()
 	settings.PublicAddress = "https://media.example.org"

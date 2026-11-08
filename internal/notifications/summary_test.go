@@ -82,6 +82,7 @@ func names(list any) []string {
 // of the series they follow. Targets that did not choose the summary
 // receive none, nor a member with nothing to tell.
 func TestWeeklySummaryOfTheServerAndOfEachUser(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	settings := h.store.Settings()
@@ -222,6 +223,7 @@ func TestWeeklySummaryOfTheServerAndOfEachUser(t *testing.T) {
 // episode, and for the server no user who joined, no file added and no
 // problem.
 func TestWeeklySummaryWithNothingToTell(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.withHistory()
 	h.add(t, nil, h.webhook("/server", WeeklySummary))
@@ -257,6 +259,7 @@ func TestWeeklySummaryWithNothingToTell(t *testing.T) {
 // time zone, and starts seven days before at the same hour there, across a
 // change of daylight saving time.
 func TestWeeklySummaryWeekInTheServerTimeZone(t *testing.T) {
+	t.Parallel()
 	newYork, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		t.Skip("no time zone database:", err)
@@ -319,6 +322,7 @@ func (h harness) restarted(t *testing.T, now func() time.Time) *Service {
 // for the week before the hour. The end of the week sent is kept in the
 // database.
 func TestWeeklySummaryOncePerWeekAcrossRestarts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	paris, err := time.LoadLocation("Europe/Paris")
@@ -395,6 +399,7 @@ func TestWeeklySummaryOncePerWeekAcrossRestarts(t *testing.T) {
 // System › Schedule's task sends the summary of the last seven days now,
 // each time it runs, without changing the week the schedule sends next.
 func TestWeeklySummarySentNow(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	h.withHistory()
@@ -427,6 +432,7 @@ func TestWeeklySummarySentNow(t *testing.T) {
 // short text, with the key figures and the link to the statistics; a
 // webhook the JSON summary.
 func TestWeeklySummaryFormats(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	settings := h.store.Settings()
 	settings.PublicAddress, settings.ServerName = "https://media.example.org", "Home"
@@ -501,6 +507,7 @@ func mailParts(t *testing.T, data string) (string, map[string]string) {
 // plain text and in HTML laid out as the other emails: the week, the
 // figures, and a list for each part, each title linking to its page.
 func TestWeeklySummaryEmail(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	sink := newSMTPSink(t, false, "PLAIN LOGIN")
 	h.useSMTP(t, sink, sink.password)

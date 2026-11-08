@@ -40,6 +40,7 @@ func inParis(t *testing.T) func(string) time.Time {
 // and a year's on the 1st of January after it, in the server's time zone;
 // either is sent within the month it was due in, never later.
 func TestReviewDueOnTheFirstWithinTheMonth(t *testing.T) {
+	t.Parallel()
 	at := inParis(t)
 	paris := at("2030-01-01 00:00").Location()
 	for _, c := range []struct {
@@ -73,6 +74,7 @@ func TestReviewDueOnTheFirstWithinTheMonth(t *testing.T) {
 // starts within that month, not later. The last month and year sent are
 // kept in the database.
 func TestReviewsOnceAcrossRestarts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	at := inParis(t)
@@ -170,6 +172,7 @@ func TestReviewsOnceAcrossRestarts(t *testing.T) {
 // review and Send the year in review send the last month and year that
 // ended.
 func TestReviewsOfTheServerAndOfAMember(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	at := inParis(t)
@@ -266,6 +269,7 @@ func TestReviewsOfTheServerAndOfAMember(t *testing.T) {
 // Nothing is sent for a month or a year with nothing to tell, to the
 // server nor to a member.
 func TestReviewsWithNothingToTell(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	at := inParis(t)
@@ -290,6 +294,7 @@ func TestReviewsWithNothingToTell(t *testing.T) {
 // An email holds the whole year, in the server language: its figures, the
 // month with the most hours, and the titles linking to their pages.
 func TestYearInReviewEmail(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	sink := newSMTPSink(t, false, "PLAIN LOGIN")
 	h.useSMTP(t, sink, sink.password)

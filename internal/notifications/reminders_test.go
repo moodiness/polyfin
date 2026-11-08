@@ -47,6 +47,7 @@ func (g guideOf) Channels(context.Context, accounts.User) ([]library.Item, error
 // in the server's time zone and a link to the channel; the server's
 // targets, which cannot choose it, and administrators' never get it.
 func TestProgrammeRemindersReachTheUsersOwnTargetsOnly(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	settings := h.store.Settings()
