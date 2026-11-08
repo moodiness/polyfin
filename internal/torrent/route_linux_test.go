@@ -125,6 +125,7 @@ func TestMissingInterfaceStartsNothing(t *testing.T) {
 // (NET_ADMIN): a throwaway container provides both. It plays from a
 // seeder over TCP, then from one over uTP alone.
 func TestInterfaceGoingDown(t *testing.T) {
+	t.Parallel()
 	name := os.Getenv("POLYFIN_TEST_TORRENT_INTERFACE")
 	if name == "" {
 		t.Skip("POLYFIN_TEST_TORRENT_INTERFACE names no interface to set down")
