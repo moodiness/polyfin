@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -219,6 +220,24 @@ func TestUnwatchedFolderText(t *testing.T) {
 		p := healthProblemJSON{Code: problemFolderUnwatched, Name: "Movies", Failure: c.failure, Share: c.share}
 		if got := p.text(c.language); got != c.want {
 			t.Errorf("%s %s in %s:\n%s\nwant\n%s", c.failure, c.share, c.language, got, c.want)
+		}
+	}
+}
+
+// A host answering an error file is told with what to check: the account
+// at that service, or the service itself.
+func TestHostErrorFileText(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, time.November, 7, 20, 40, 0, 0, time.Local)
+	p := healthProblemJSON{Code: problemHostErrorFile, Host: "files.example", At: &at}
+	for language, want := range map[string]string{
+		"en": "The host files.example answers an error file instead of the videos, since 20:40. " +
+			"This often means the account at that service needs attention (a password change, a subscription, a limit reached), or that the service is down: check it on its site.",
+		"fr": "L’hôte files.example répond par un fichier d’erreur au lieu des vidéos, depuis 20:40. " +
+			"Cela signifie souvent que le compte auprès de ce service demande votre attention (un changement de mot de passe, un abonnement, une limite atteinte), ou que le service est en panne\u202f: vérifiez-le sur son site.",
+	} {
+		if got := p.text(language); got != want {
+			t.Errorf("in %s:\n%s\nwant\n%s", language, got, want)
 		}
 	}
 }
