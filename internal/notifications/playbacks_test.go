@@ -14,6 +14,7 @@ import (
 // to other users' targets, nor to targets that did not choose it, as
 // targets saved before these events existed, until they do.
 func TestPlaybacksAreToldOnceToTheirUserAndTheServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	all := []string{PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped}
 	h.add(t, &h.member, h.webhook("/member", all...))

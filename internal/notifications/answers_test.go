@@ -36,6 +36,7 @@ func discordAnswer(got map[string]any) func(w http.ResponseWriter) {
 // message, which Discord takes, as a Discord target is; other webhooks
 // still get Polyfin's event.
 func TestAWebhookTargetAtADiscordAddressIsSentDiscordsMessage(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	fake, _ := url.Parse(h.targets.url)
 	h.trusted = &http.Client{Transport: toFake{fake}}
@@ -71,6 +72,7 @@ func TestAWebhookTargetAtADiscordAddressIsSentDiscordsMessage(t *testing.T) {
 // kept as the test's result and in the log, never with its address or
 // tokens.
 func TestARefusalKeepsTheStartOfTheAnswer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	const path = "/hooks/refusing/Secret-Token-0123456789abcdef"
 	h.targets.always(path, func(w http.ResponseWriter) {
@@ -97,6 +99,7 @@ func TestARefusalKeepsTheStartOfTheAnswer(t *testing.T) {
 }
 
 func TestDiscordWebhook(t *testing.T) {
+	t.Parallel()
 	for address, want := range map[string]bool{
 		"https://discord.com/api/webhooks/1/token":            true,
 		"https://discordapp.com/api/webhooks/1/token":         true,
@@ -132,6 +135,7 @@ func leaked(text, secret string) []string {
 // a piece of a Discord webhook's token split on - or _, nor of an access
 // token, whatever its characters.
 func TestARefusalKeepsNothingOfTheSecrets(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	fake, _ := url.Parse(h.targets.url)
 	h.trusted = &http.Client{Transport: toFake{fake}}
@@ -179,6 +183,7 @@ func TestARefusalKeepsNothingOfTheSecrets(t *testing.T) {
 // or in part: a Telegram bot token, Pushover's user key and token, a
 // Gotify token, an address's path and query.
 func TestExcerptKeepsNothingOfAnyKindsSecrets(t *testing.T) {
+	t.Parallel()
 	for _, secrets := range [][]string{
 		// A made-up bot token, joined at run time so that no literal has
 		// the shape of a real one for secret scanners.

@@ -28,6 +28,7 @@ func (l *titleLibrary) Item(_ context.Context, _ accounts.User, id accounts.ID) 
 // targets that chose it, never to the server's, which cannot, nor to
 // administrators'; a title the user may no longer see is not told of.
 func TestWatchlistTitlesFoundAvailableReachTheUsersOwnTargetsOnly(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	settings := h.store.Settings()

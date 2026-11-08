@@ -13,6 +13,7 @@ import (
 // own, linking to the user's page, and to the user's own targets, with the
 // attempt that blocked it; nobody else's targets hear of it.
 func TestAccountBlockedIsToldToAdministratorsAndTheUser(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := t.Context()
 	settings := h.store.Settings()
@@ -68,6 +69,7 @@ func TestAccountBlockedIsToldToAdministratorsAndTheUser(t *testing.T) {
 // A sign-in on a new device is told to the user's own targets only: not
 // to the server's, which cannot choose it, nor to administrators'.
 func TestNewDeviceIsToldToTheUserOnly(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.Create(t.Context(), nil, h.webhook("/server", NewDevice)); !errors.Is(err, ErrInvalidEvents) {
 		t.Errorf("a server target choosing new devices: %v", err)

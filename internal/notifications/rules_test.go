@@ -23,6 +23,7 @@ func (h harness) tell(kind, title string) {
 // A target that caps its messages a minute is sent no more: the others
 // wait for the minute of the first to pass, in order, and all arrive.
 func TestRateCapSpacesTheMessages(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.timing.minute = time.Second
 	h.add(t, nil, Draft{Kind: Webhook, Name: new("Capped"), Address: new(h.targets.url + "/capped"), Events: []string{PlaybackStarted},
@@ -50,6 +51,7 @@ func TestRateCapSpacesTheMessages(t *testing.T) {
 
 // The caps and groupings are checked, and kept.
 func TestPacingIsCheckedAndKept(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	draft := h.webhook("/paced", PlaybackStarted)
 	for _, bad := range []Draft{{PerMinute: new(61)}, {PerMinute: new(-1)}, {GroupMinutes: new(1441)}, {GroupMinutes: new(-5)}} {
@@ -85,6 +87,7 @@ func deref(n *int) any {
 // then sends them as one message, each event whole for a webhook; a
 // failure goes at once. A group of one event is sent as it is.
 func TestGroupingHoldsPlaysAndSendsUrgentEventsAtOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.timing.minute = 2 * time.Second
 	h.add(t, nil, Draft{Kind: Webhook, Name: new("Grouped"), Address: new(h.targets.url + "/grouped"),
@@ -154,6 +157,7 @@ func TestGroupingHoldsPlaysAndSendsUrgentEventsAtOnce(t *testing.T) {
 // Each target keeps what came of its messages, tests included, newest
 // first, its last 100 for 30 days, for its owner only.
 func TestRecentDeliveries(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ok := h.add(t, nil, h.webhook("/ok", PlaybackStarted))
 	gone := h.add(t, nil, h.webhook("/gone", PlaybackStarted))
@@ -218,6 +222,7 @@ func TestRecentDeliveries(t *testing.T) {
 // once an hour per user and title, naming the user, the title, the app
 // and the reason. Members cannot choose it.
 func TestFailedPlaysAreToldOnceAnHour(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var mu sync.Mutex
 	now := time.Date(2026, 10, 31, 20, 0, 0, 0, time.UTC)
@@ -274,6 +279,7 @@ func TestFailedPlaysAreToldOnceAnHour(t *testing.T) {
 // The preview of a summary is the email a target receives: its subject,
 // its plain text and its HTML.
 func TestSummaryPreviewIsTheSentEmail(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	now := time.Now()
 	h.now = func() time.Time { return now }

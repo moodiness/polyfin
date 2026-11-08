@@ -27,6 +27,7 @@ const (
 // TestCrashingProcess is the server that crashes: it watches for crashes
 // as the server does, then a goroutine holding a token panics.
 func TestCrashingProcess(t *testing.T) {
+	t.Parallel()
 	dir := os.Getenv(crashDir)
 	if dir == "" {
 		t.Skip("run by TestServerCrashIsToldAtTheRestart")
@@ -57,6 +58,7 @@ func serve(token *string) {
 // administrators' own of it once, with the start of its trace and none of
 // the secrets in it, and System › Health reads it.
 func TestServerCrashIsToldAtTheRestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	dir := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestCrashingProcess$", "-test.count=1")
