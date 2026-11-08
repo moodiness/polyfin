@@ -61,7 +61,7 @@ func (h *Handler) localizationRoutes(rt *router) {
 		writeJSON(w, http.StatusOK, countries())
 	})
 	signedIn(http.MethodGet, "/Localization/ParentalRatings", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, parentalRatings())
+		writeJSON(w, http.StatusOK, parentalRatings(h.Accounts.RatingCountry()))
 	})
 	signedIn(http.MethodGet, "/Localization/Options", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, localizationOptions())
@@ -108,20 +108,33 @@ var countries = sync.OnceValue(func() []CountryInfo {
 	return result
 })
 
-// parentalRatings lists the ratings apps choose a user's limit from (see
-// localization.Ratings). Value is the score, the integer older apps
-// compare.
-var parentalRatings = sync.OnceValue(func() []ParentalRating {
-	ratings := localization.Ratings()
-	result := make([]ParentalRating, len(ratings))
-	for i, rating := range ratings {
-		result[i] = ParentalRating{Name: rating.Name}
-		if rating.Score != nil {
-			result[i].Value = &rating.Score.Score
-			result[i].RatingScore = &ParentalRatingScore{Score: rating.Score.Score, SubScore: rating.Score.SubScore}
-		}
+// parentalRatings lists the ratings apps choose a user's limit from under
+// country, the server's rating country (see localization.Ratings). Value
+// is the score, the integer older apps compare.
+func parentalRatings(country string) []ParentalRating {
+	lists := parentalRatingLists()
+	if list, ok := lists[country]; ok {
+		return list
 	}
-	return result
+	return lists[localization.DefaultRatingCountry]
+}
+
+// parentalRatingLists are the lists of parentalRatings, by rating country.
+var parentalRatingLists = sync.OnceValue(func() map[string][]ParentalRating {
+	lists := map[string][]ParentalRating{}
+	for _, country := range localization.RatingCountries() {
+		ratings := localization.Ratings(country)
+		result := make([]ParentalRating, len(ratings))
+		for i, rating := range ratings {
+			result[i] = ParentalRating{Name: rating.Name}
+			if rating.Score != nil {
+				result[i].Value = &rating.Score.Score
+				result[i].RatingScore = &ParentalRatingScore{Score: rating.Score.Score, SubScore: rating.Score.SubScore}
+			}
+		}
+		lists[country] = result
+	}
+	return lists
 })
 
 // localizationOptions lists the languages Polyfin speaks, the server

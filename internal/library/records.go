@@ -72,12 +72,15 @@ type record struct {
 	// also applies to its artwork.
 	Confined bool `json:"confined,omitempty"`
 	// Rating is the rating a description by one of the server's addons
-	// gave, empty when it gave none, at RatedAt; nil until one was read
-	// (see learnTraits). Genres are the genres the same description gave;
-	// nil until one was read since Polyfin keeps them.
-	Rating  *string    `json:"rating,omitempty"`
-	RatedAt *time.Time `json:"ratedAt,omitempty"`
-	Genres  *[]string  `json:"genres,omitempty"`
+	// gave, empty when it gave none, at RatedAt, for the rating country
+	// RatedFor (see certification), the US when empty, as for the ratings
+	// kept before; nil until one was read (see learnTraits). Genres are
+	// the genres the same description gave; nil until one was read since
+	// Polyfin keeps them.
+	Rating   *string    `json:"rating,omitempty"`
+	RatedAt  *time.Time `json:"ratedAt,omitempty"`
+	RatedFor string     `json:"ratedFor,omitempty"`
+	Genres   *[]string  `json:"genres,omitempty"`
 	// EpisodeTitle is the episode title of a programme from an XMLTV guide.
 	EpisodeTitle string `json:"episodeTitle,omitempty"`
 	// Music describes an item of an Eclipse addon (see music.go).
@@ -478,7 +481,7 @@ func inLockOrder(records []record) []*record {
 // keptData is the record an upsert stores: the new one, with the stored
 // folder, rating and genres when the new one has none.
 const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(items.data)
-	WHERE key IN ('parent', 'rating', 'ratedAt', 'genres')), '{}'::jsonb) || excluded.data`
+	WHERE key IN ('parent', 'rating', 'ratedAt', 'ratedFor', 'genres')), '{}'::jsonb) || excluded.data`
 
 // isPreloaded reports whether withPreloaded read the row of id ahead in
 // ctx.

@@ -56,7 +56,7 @@ func (s *Service) catalogChannels(ctx context.Context, c addons.LiveCatalog) ([]
 	}
 	settings := s.settings()
 	v := view{deadline: s.now(), lookups: new(atomic.Int32), held: new(atomic.Bool),
-		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
+		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, country: settings.RatingCountry}
 	src := source{addon: installed{addon: c.Addon, confined: c.Confined, shared: c.Scope.Owner == nil}, catalog: c.Catalog}
 	metas, _, err := s.window(ctx, v, src, 0, v.limit(src))
 	if err != nil {

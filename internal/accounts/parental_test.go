@@ -34,8 +34,32 @@ func TestParentalControlAllowsAsJellyfinDoes(t *testing.T) {
 		{upToR, "Movie", "R18", false, "adult only"},
 		{ParentalControl{BlockUnrated: []string{"Movie"}}, "Movie", "XXX", true, "rated, without a limit"},
 	} {
-		if got := tc.control.Allows(tc.kind, tc.rating); got != tc.allowed {
+		if got := tc.control.Allows(tc.kind, tc.rating, "US"); got != tc.allowed {
 			t.Errorf("%s (%s %q): allowed=%v", tc.justification, tc.kind, tc.rating, got)
+		}
+	}
+	// Under Italy, Italian ratings are judged by their age: VM18 is rated,
+	// above a limit of 13, and T is for all, even with unrated titles
+	// blocked. An Italian rating counts under the US too.
+	for _, tc := range []struct {
+		control               ParentalControl
+		kind, rating, country string
+		allowed               bool
+		justification         string
+	}{
+		{upToPG13, "Movie", "VM18", "IT", false, "an Italian rating above the limit"},
+		{upToPG13, "Movie", "VM14", "IT", false, "14 is above 13"},
+		{upToPG13, "Movie", "T", "IT", true, "for all, and rated"},
+		{upToPG13, "Movie", "6+", "IT", true, "below the limit"},
+		{upToPG13, "Movie", "IT-VM18", "US", false, "an Italian rating with its country, under the US"},
+		{upToPG13, "Movie", "VM18", "US", false, "known under every country"},
+		{upToPG13, "Movie", "PG-13", "IT", true, "a US rating under Italy"},
+		{upToPG13, "Movie", "", "IT", false, "unrated movies are still blocked"},
+		{ParentalControl{MaxRating: new(10)}, "Movie", "PG", "GB", true, "the British PG is for 8"},
+		{ParentalControl{MaxRating: new(8)}, "Movie", "PG", "US", false, "the US PG is for 10"},
+	} {
+		if got := tc.control.Allows(tc.kind, tc.rating, tc.country); got != tc.allowed {
+			t.Errorf("%s (%s %q in %s): allowed=%v", tc.justification, tc.kind, tc.rating, tc.country, got)
 		}
 	}
 	// Kinds Polyfin has no items of restrict nothing.

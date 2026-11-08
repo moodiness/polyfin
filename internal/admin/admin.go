@@ -735,6 +735,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
 		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
 		{accounts.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
+		{accounts.ErrInvalidRatingCountry, http.StatusBadRequest, "invalid_rating_country"},
 		{accounts.ErrInvalidCatalogLimit, http.StatusBadRequest, "invalid_catalog_limit"},
 		{accounts.ErrInvalidChannelLimit, http.StatusBadRequest, "invalid_channel_limit"},
 		{accounts.ErrInvalidPlayedPercent, http.StatusBadRequest, "invalid_played_percent"},

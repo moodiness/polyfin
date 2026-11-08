@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/i18n"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -18,8 +19,9 @@ import (
 //
 // Jellyfin apps read the server configuration whole, and its dashboard
 // saves it whole. Polyfin answers with its own settings where Jellyfin has
-// them: the server name, its language, the resume thresholds, Quick
-// Connect and the legacy authorization; everything else is a new Jellyfin
+// them: the server name, its language, the rating country
+// (MetadataCountryCode), the resume thresholds, Quick Connect and the
+// legacy authorization; everything else is a new Jellyfin
 // server's default. Saving applies those of Polyfin's settings and ignores
 // the rest.
 
@@ -152,7 +154,7 @@ func (h *Handler) serverConfiguration(w http.ResponseWriter, _ *http.Request) {
 		EnableCaseSensitiveItemIds:         true,
 		DisableLiveTvChannelUserDataName:   true,
 		PreferredMetadataLanguage:          "en",
-		MetadataCountryCode:                "US",
+		MetadataCountryCode:                settings.RatingCountry,
 		SortReplaceCharacters:              []string{".", "+", "%"},
 		SortRemoveCharacters:               []string{",", "&", "-", "{", "}", "'"},
 		SortRemoveWords:                    []string{"the", "a", "an"},
@@ -192,11 +194,12 @@ func (h *Handler) serverConfiguration(w http.ResponseWriter, _ *http.Request) {
 
 // updateServerConfiguration applies the parts of a configuration Polyfin
 // has: the server name, its language (UICulture, when Polyfin speaks it),
-// the resume thresholds, Quick Connect and the legacy authorization.
-// Unlike Jellyfin, which replaces the configuration whole, a part left out
-// is kept, as is an empty server name; MinResumeDurationSeconds is fixed.
-// Values Polyfin's settings refuse are refused, as the admin interface
-// refuses them.
+// the rating country (MetadataCountryCode, when Polyfin knows its
+// ratings), the resume thresholds, Quick Connect and the legacy
+// authorization. Unlike Jellyfin, which replaces the configuration whole, a
+// part left out is kept, as is an empty server name; MinResumeDurationSeconds
+// is fixed. Values Polyfin's settings refuse are refused, as the admin
+// interface refuses them.
 func (h *Handler) updateServerConfiguration(w http.ResponseWriter, r *http.Request) {
 	errs := bindErrors{}
 	raw, ok := requestBody(w, r, "configuration", errs)
@@ -206,6 +209,7 @@ func (h *Handler) updateServerConfiguration(w http.ResponseWriter, r *http.Reque
 	var body struct {
 		ServerName                *string
 		UICulture                 *string
+		MetadataCountryCode       *string
 		MinResumePct              *int
 		MaxResumePct              *int
 		QuickConnectAvailable     *bool
@@ -226,6 +230,11 @@ func (h *Handler) updateServerConfiguration(w http.ResponseWriter, r *http.Reque
 	if body.UICulture != nil {
 		if language := cultureLanguage(*body.UICulture); language != "" {
 			settings.Language = language
+		}
+	}
+	if body.MetadataCountryCode != nil {
+		if country := strings.ToUpper(strings.TrimSpace(*body.MetadataCountryCode)); localization.ValidRatingCountry(country) {
+			settings.RatingCountry = country
 		}
 	}
 	if body.MinResumePct != nil {

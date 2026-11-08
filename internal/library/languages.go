@@ -313,8 +313,9 @@ func (s *Service) translate(ctx context.Context, v view, items []Item) {
 // language gives of its name, overview and images (see translation).
 func translateItem(item *Item, translated stremio.Meta) {
 	var shown Item
+	// Only names and images are read: no rating needed.
 	fromMeta(&shown, translation(stremio.Meta{Name: item.Name, Description: item.Overview, Poster: item.Images.Primary,
-		PosterShape: item.PosterShape, Background: item.Images.Backdrop, Logo: item.Images.Logo, LandscapePoster: item.Images.Thumb}, translated))
+		PosterShape: item.PosterShape, Background: item.Images.Backdrop, Logo: item.Images.Logo, LandscapePoster: item.Images.Thumb}, translated), "")
 	item.Name, item.Overview = shown.Name, shown.Overview
 	if item.Kind == KindMovie || item.Kind == KindSeries {
 		item.OriginalTitle = shown.Name

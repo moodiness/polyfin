@@ -69,7 +69,7 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 	var items []Item
 	var records []record
 	for _, title := range titles {
-		item, r, err := title.title(accounts.ID{})
+		item, r, err := title.title(accounts.ID{}, v.country)
 		if err != nil {
 			continue
 		}

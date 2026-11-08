@@ -446,11 +446,11 @@ type ratingJSON struct {
 }
 
 // parentalRatings lists the ratings a user's limit can be set to, those
-// Jellyfin apps offer, without the entry for unrated titles: blocking them
-// is a choice of its own.
+// Jellyfin apps offer under the server's rating country, without the entry
+// for unrated titles: blocking them is a choice of its own.
 func (h *handler) parentalRatings(w http.ResponseWriter, _ *http.Request) {
 	var result []ratingJSON
-	for _, rating := range localization.Ratings() {
+	for _, rating := range localization.Ratings(h.Accounts.Settings().RatingCountry) {
 		if rating.Score != nil {
 			result = append(result, ratingJSON{Name: rating.Name, Score: rating.Score.Score, SubScore: rating.Score.SubScore})
 		}
@@ -477,12 +477,15 @@ type settingsJSON struct {
 	QuickConnectEnabled bool   `json:"quickConnectEnabled"`
 	LegacyAuthorization bool   `json:"legacyAuthorization"`
 	Language            string `json:"language"`
-	PrepareAhead        *bool  `json:"prepareAhead"`
-	Transcoding         *bool  `json:"transcoding"`
-	CatalogLimit        *int   `json:"catalogLimit"`
-	ChannelLimit        *int   `json:"channelLimit"`
-	UpdateCheck         *bool  `json:"updateCheck"`
-	IncludePrereleases  *bool  `json:"includePrereleases"`
+	// RatingCountry, see accounts.Settings, keeps its current value when a
+	// PUT leaves it out.
+	RatingCountry      *string `json:"ratingCountry"`
+	PrepareAhead       *bool   `json:"prepareAhead"`
+	Transcoding        *bool   `json:"transcoding"`
+	CatalogLimit       *int    `json:"catalogLimit"`
+	ChannelLimit       *int    `json:"channelLimit"`
+	UpdateCheck        *bool   `json:"updateCheck"`
+	IncludePrereleases *bool   `json:"includePrereleases"`
 	// LocalDiscovery and LocalAddress keep their current values when a
 	// PUT leaves them out; an empty address announces the interface's.
 	LocalDiscovery *bool   `json:"localDiscovery"`
@@ -901,6 +904,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		QuickConnectEnabled: settings.QuickConnectEnabled,
 		LegacyAuthorization: settings.LegacyAuthorization,
 		Language:            settings.Language,
+		RatingCountry:       &settings.RatingCountry,
 		PrepareAhead:        &settings.PrepareAhead,
 		Transcoding:         &settings.Transcoding,
 		CatalogLimit:        &settings.CatalogLimit,
@@ -1713,6 +1717,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		QuickConnectEnabled: body.QuickConnectEnabled,
 		LegacyAuthorization: body.LegacyAuthorization,
 		Language:            body.Language,
+		RatingCountry:       valueOr(body.RatingCountry, current.RatingCountry),
 		PrepareAhead:        valueOr(body.PrepareAhead, current.PrepareAhead),
 		Transcoding:         valueOr(body.Transcoding, current.Transcoding),
 		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),

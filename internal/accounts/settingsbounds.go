@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/moodiness/polyfin/internal/i18n"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/torrent"
 	"github.com/moodiness/polyfin/internal/webtheme"
 )
@@ -49,6 +50,7 @@ func DefaultSettings() Settings {
 		QuickConnectEnabled: true,
 		LegacyAuthorization: false,
 		Language:            i18n.Languages[0],
+		RatingCountry:       localization.DefaultRatingCountry,
 		PrepareAhead:        true,
 		Transcoding:         true,
 		CatalogLimit:        DefaultCatalogLimit,
@@ -290,6 +292,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"quickConnectEnabled": is(d.QuickConnectEnabled),
 		"legacyAuthorization": is(d.LegacyAuthorization),
 		"language":            choice(d.Language, anys(i18n.Languages)),
+		"ratingCountry":       choice(d.RatingCountry, anys(localization.RatingCountries())),
 		"prepareAhead":        is(d.PrepareAhead),
 		"transcoding":         is(d.Transcoding),
 		"catalogLimit":        between(MinCatalogLimit, MaxCatalogLimit, d.CatalogLimit),

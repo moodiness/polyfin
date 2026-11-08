@@ -15,7 +15,7 @@ func TestPosterShapeFollowsThePoster(t *testing.T) {
 	t.Parallel()
 	shapeOf := func(meta stremio.Meta) string {
 		var item Item
-		fromMeta(&item, meta)
+		fromMeta(&item, meta, "")
 		return item.PosterShape
 	}
 	for shape, want := range map[string]string{"landscape": stremio.ShapeLandscape, "square": stremio.ShapeSquare, "poster": "", "": "", "round": ""} {

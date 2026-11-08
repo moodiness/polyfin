@@ -52,8 +52,10 @@ func (p ParentalControl) Judges(kind string) bool {
 // UnratedKinds, rated rating, as Jellyfin decides: a title without a known
 // rating is hidden only when its kind is blocked; a rated one is allowed
 // below the highest score, and at that score up to the highest subscore.
-func (p ParentalControl) Allows(kind, rating string) bool {
-	score, rated := localization.RatingScore(rating)
+// The rating is scored under country, the server's rating country (see
+// localization.RatingScore).
+func (p ParentalControl) Allows(kind, rating, country string) bool {
+	score, rated := localization.RatingScore(rating, country)
 	if !rated {
 		return !slices.Contains(p.BlockUnrated, kind)
 	}

@@ -235,7 +235,7 @@ func replayItem(channel Item, video stremio.Video, episodeTitle string) (Item, b
 func (v view) replayable(p Item, days int, now time.Time) bool {
 	const kind = "LiveTvProgram"
 	return !p.EndDate.After(now) && !p.StartDate.Before(now.Add(-time.Duration(days)*24*time.Hour)) &&
-		!v.blocked(p.Genres) && (!v.parental.Judges(kind) || v.parental.Allows(kind, ""))
+		!v.blocked(p.Genres) && (!v.parental.Judges(kind) || v.parental.Allows(kind, "", v.country))
 }
 
 // replayProgrammes lists a Replay folder's programmes: those of its

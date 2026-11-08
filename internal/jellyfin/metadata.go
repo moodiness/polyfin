@@ -106,7 +106,7 @@ func (h *Handler) originalItem(r *http.Request, user accounts.User, id accounts.
 		if err != nil {
 			return library.Item{}, err
 		}
-		item, _ := collectionItem(c, titles[0], nil, nil)
+		item, _ := collectionItem(c, titles[0], nil, nil, h.Accounts.RatingCountry())
 		return item, nil
 	} else if !errors.Is(err, collections.ErrNotFound) {
 		return library.Item{}, err
@@ -187,7 +187,7 @@ func (h *Handler) metadataEditor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, MetadataEditorInfo{
-		ParentalRatingOptions: parentalRatings(),
+		ParentalRatingOptions: parentalRatings(h.Accounts.RatingCountry()),
 		Countries:             countries(),
 		Cultures:              editorCultures(),
 		ExternalIdInfos:       externalIDs(item),

@@ -140,7 +140,7 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 	for _, key := range s.otherStreamKeys(ctx, v, r, title, series) {
 		s.forgetLists(ctx, key)
 	}
-	if _, err := s.db.Exec(ctx, "UPDATE items SET data = data - 'rating' - 'ratedAt' - 'genres' WHERE id = $1", title.ID); err != nil {
+	if _, err := s.db.Exec(ctx, "UPDATE items SET data = data - 'rating' - 'ratedAt' - 'ratedFor' - 'genres' WHERE id = $1", title.ID); err != nil {
 		return err
 	}
 	if t, ok := ratingsTitle(Item{Kind: title.Kind, ProviderIDs: providerIDs(*title.Meta)}); ok {
@@ -196,7 +196,7 @@ func (s *Service) refreshArtwork(ctx context.Context, user accounts.User, v view
 		urls = append(urls, metaArtwork(full)...)
 	}
 	var item Item
-	fromMeta(&item, *title.Meta)
+	fromMeta(&item, *title.Meta, v.country)
 	if poster, ok := PosterAddress(s.settings().PosterTemplate, title.Kind, item.ProviderIDs); ok {
 		urls = append(urls, poster)
 	}

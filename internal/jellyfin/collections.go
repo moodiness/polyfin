@@ -653,7 +653,7 @@ func (h *Handler) collectionDtos(r *http.Request, user accounts.User, lists []co
 	state := userState{data: data, counts: map[accounts.ID]userdata.Counts{}}
 	result := make([]BaseItemDto, 0, len(lists))
 	for i, c := range lists {
-		item, played := collectionItem(c, titles[i], data, counts)
+		item, played := collectionItem(c, titles[i], data, counts, h.Accounts.RatingCountry())
 		state.counts[c.ID] = userdata.Counts{Played: played}
 		dto := h.newItemDto(item, fields, detail, state)
 		if !detail && fields.has("ChildCount") {
@@ -676,9 +676,11 @@ func (h *Handler) collectionDtos(r *http.Request, user accounts.User, lists []co
 // collectionItem describes a collection from the titles in it a user may
 // see, and counts the movies and episodes under them the user played. Like
 // Jellyfin, a collection takes its titles' genres, their least restrictive
-// rating, and the earliest premiere date or year; its poster is that of
-// its first title with one (see collectionArtwork).
-func collectionItem(c collections.Collection, titles []library.Item, data map[accounts.ID]userdata.Data, counts map[accounts.ID]userdata.Counts) (library.Item, int) {
+// rating, scored under country, the server's rating country, and the
+// earliest premiere date or year; its poster is that of its first title
+// with one (see collectionArtwork).
+func collectionItem(c collections.Collection, titles []library.Item, data map[accounts.ID]userdata.Data, counts map[accounts.ID]userdata.Counts,
+	country string) (library.Item, int) {
 	item := library.Item{ID: c.ID, Kind: library.KindCollection, Name: c.Name, ParentID: collectionsViewID,
 		Contents: &library.Contents{Children: len(titles), LastReleased: c.LastAdded}}
 	played := 0
@@ -727,16 +729,17 @@ func collectionItem(c collections.Collection, titles []library.Item, data map[ac
 		item.ProductionYear = item.PremiereDate.Year()
 	}
 	if len(ratings) > 0 {
-		item.OfficialRating = slices.MinFunc(ratings, compareRatings)
+		item.OfficialRating = slices.MinFunc(ratings, func(a, b string) int { return compareRatings(a, b, country) })
 	}
 	return item, played
 }
 
-// compareRatings orders ratings from the least restrictive, those Polyfin
-// does not know last, as Jellyfin picks a collection's rating.
-func compareRatings(a, b string) int {
+// compareRatings orders ratings from the least restrictive, scored under
+// country, those Polyfin does not know last, as Jellyfin picks a
+// collection's rating.
+func compareRatings(a, b, country string) int {
 	rank := func(rating string) (int, int) {
-		score, ok := localization.RatingScore(rating)
+		score, ok := localization.RatingScore(rating, country)
 		if !ok {
 			return 1001, 1001
 		}

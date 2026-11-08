@@ -270,9 +270,10 @@ func (h *Handler) visibleTimers(ctx context.Context, user accounts.User, timers 
 	if err != nil {
 		return nil, nil, err
 	}
+	country := h.Accounts.RatingCountry()
 	return slices.DeleteFunc(timers, func(t recordings.Timer) bool {
 		_, reached := channels[t.Channel]
-		return !reached || !recordings.Allows(user, recordings.ProgramKind, t.Rating, t.Genres)
+		return !reached || !recordings.Allows(user, country, recordings.ProgramKind, t.Rating, t.Genres)
 	}), channels, nil
 }
 
@@ -444,7 +445,7 @@ func (h *Handler) guideProgram(ctx context.Context, user accounts.User, raw stri
 	}
 	program, err := h.Library.Item(ctx, user, id)
 	if err == nil && (program.Kind != library.KindProgram || program.Channel == nil ||
-		!recordings.Allows(user, recordings.ProgramKind, program.OfficialRating, program.Genres)) {
+		!recordings.Allows(user, h.Accounts.RatingCountry(), recordings.ProgramKind, program.OfficialRating, program.Genres)) {
 		err = library.ErrNotFound
 	}
 	return program, err
@@ -499,7 +500,7 @@ func (h *Handler) timerProgramme(ctx context.Context, user accounts.User, body t
 	}
 	for _, program := range programs {
 		if program.Channel.ID == channel && program.StartDate.Sub(start).Abs() <= 3*time.Minute &&
-			recordings.Allows(user, recordings.ProgramKind, program.OfficialRating, program.Genres) {
+			recordings.Allows(user, h.Accounts.RatingCountry(), recordings.ProgramKind, program.OfficialRating, program.Genres) {
 			return recordings.ProgrammeOf(program), nil
 		}
 	}
@@ -737,10 +738,11 @@ func (h *Handler) visibleRecordings(ctx context.Context, user accounts.User, lis
 	if err != nil {
 		return nil, nil, err
 	}
+	country := h.Accounts.RatingCountry()
 	return slices.DeleteFunc(list, func(rec recordings.Recording) bool {
 		_, reached := channels[rec.Channel]
 		mine := rec.User != nil && *rec.User == user.ID && !hidden[rec.Channel]
-		return !reached && !mine || !recordings.Allows(user, recordings.RecordingKind, rec.Rating, rec.Genres)
+		return !reached && !mine || !recordings.Allows(user, country, recordings.RecordingKind, rec.Rating, rec.Genres)
 	}), channels, nil
 }
 
