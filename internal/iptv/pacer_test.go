@@ -83,8 +83,9 @@ func countCodes(codes []int, code int) int {
 }
 
 // Requests to one host are spaced by the pacer's gap, and a host that
-// asked to wait is not asked before. Not parallel: it times waits of 50
-// milliseconds, which the other tests' work would stretch.
+// asked to wait is not asked before.
+//
+//nolint:paralleltest // times waits of 50 milliseconds, which the other tests' work would stretch
 func TestPacerSpacesRequestsToAHost(t *testing.T) {
 	p := NewPacer(100 * time.Millisecond)
 	start := time.Now()

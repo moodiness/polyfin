@@ -486,13 +486,38 @@ func TestLargeLineupsStayFast(t *testing.T) {
 	if kept, err := e.service.Channel(t.Context(), addons.Shared(), addon.ID, channels[0].ID); err != nil || kept.Name != "Kept" || len(kept.Streams) != 3 {
 		t.Errorf("the edited channel after merging: %+v %v", kept, err)
 	}
-	bound("listing a page far down", 1*time.Second, func() error {
-		total, page, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: 20_000 / lineupScale, Limit: 500 / lineupScale})
+	// A page far down costs a few times what the first one does, not tens
+	// of times: the listing reads the page alone, and the database skips
+	// the channels before it. The two pages are listed in turn, five times,
+	// so that the machine's load weighs on both alike, and their fastest
+	// times are compared. Alone, the far page takes about four times as
+	// long as the first, and two and a half under the race detector.
+	listPage := func(offset int) time.Duration {
+		t.Helper()
+		start := time.Now()
+		total, page, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: offset, Limit: 500 / lineupScale})
+		took := time.Since(start)
 		if err == nil && (len(page) != 500/lineupScale || total < 20_500/lineupScale) {
 			err = fmt.Errorf("%d of %d", len(page), total)
 		}
-		return err
-	})
+		if err != nil {
+			t.Fatalf("listing the page at %d: %v", offset, err)
+		}
+		return took
+	}
+	first, far := listPage(0), listPage(20_000/lineupScale)
+	for range 4 {
+		first = min(first, listPage(0))
+		far = min(far, listPage(20_000/lineupScale))
+	}
+	if limit := time.Second * raceSlowdown; first > limit {
+		t.Errorf("listing the first page took %v, more than %v", first.Round(time.Millisecond), limit)
+	}
+	if far > 10*first {
+		t.Errorf("listing a page far down took %v, more than ten times the first page's %v", far.Round(time.Millisecond), first.Round(time.Millisecond))
+	} else {
+		t.Logf("listing the first page: %v, a page far down: %v", first.Round(time.Millisecond), far.Round(time.Millisecond))
+	}
 	bound("searching", 1*time.Second, func() error {
 		_, _, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Q: "orb", Limit: 100})
 		return err
