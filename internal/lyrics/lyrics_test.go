@@ -154,6 +154,7 @@ func song(title string) Track {
 }
 
 func TestSyncedLyricsAreAskedOnceAndReadLineByLine(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	track := song("Synced Song")
@@ -186,6 +187,7 @@ func TestSyncedLyricsAreAskedOnceAndReadLineByLine(t *testing.T) {
 }
 
 func TestPlainLyricsAreUnsynced(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	track := song("Plain Song")
@@ -206,6 +208,7 @@ func TestPlainLyricsAreUnsynced(t *testing.T) {
 }
 
 func TestTracksWithoutLyricsAreRemembered(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, c := newService(t, f)
 	unknown, instrumental, nameless := song("Unknown Song"), song("Interlude"), song("Nameless")
@@ -237,6 +240,7 @@ func TestTracksWithoutLyricsAreRemembered(t *testing.T) {
 }
 
 func TestFailuresAreRetriedLater(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, c := newService(t, f)
 	track, other := song("Flaky Song"), song("Synced Song")
@@ -274,6 +278,7 @@ func TestFailuresAreRetriedLater(t *testing.T) {
 }
 
 func TestSlowAnswersDoNotHoldRequests(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	track := song("Slow Song")
@@ -302,6 +307,7 @@ func TestSlowAnswersDoNotHoldRequests(t *testing.T) {
 }
 
 func TestLyricsTurnedOffAskNothing(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, on, _ := newService(t, f)
 	found := song("Synced Song")
@@ -333,6 +339,7 @@ func TestLyricsTurnedOffAskNothing(t *testing.T) {
 }
 
 func TestLookUpKeepsLyricsForLater(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	track := song("Synced Song")
@@ -350,6 +357,7 @@ func TestLookUpKeepsLyricsForLater(t *testing.T) {
 }
 
 func TestParseLRC(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, lrc string
 		want      []Line

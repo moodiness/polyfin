@@ -11,6 +11,7 @@ import (
 )
 
 func TestParseUploadReadsLyricsFiles(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body string
 		synced     bool
@@ -47,6 +48,7 @@ func TestParseUploadReadsLyricsFiles(t *testing.T) {
 }
 
 func TestUploadedLyricsStayWhateverTheSetting(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, on, c := newService(t, f)
 	track := song("Unknown Song")

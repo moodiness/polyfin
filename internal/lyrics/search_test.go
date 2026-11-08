@@ -111,6 +111,7 @@ func ids(results []Result) []string {
 }
 
 func TestSearchListsTheClosestLengthFirst(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	track := song("Echo Chamber")
@@ -160,6 +161,7 @@ func TestSearchListsTheClosestLengthFirst(t *testing.T) {
 }
 
 func TestSearchAsksNothingWhenOffOrUntitled(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, on, _ := newService(t, f)
 	track := song("Echo Chamber")
@@ -189,6 +191,7 @@ func TestSearchAsksNothingWhenOffOrUntitled(t *testing.T) {
 }
 
 func TestMalformedOrOversizedAnswersAreRefused(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, c := newService(t, f)
 	f.failing.Store(true)
@@ -221,6 +224,7 @@ func TestMalformedOrOversizedAnswersAreRefused(t *testing.T) {
 }
 
 func TestSearchesShareThePacingOfLookUps(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	var held []*lookup
@@ -247,6 +251,7 @@ func TestSearchesShareThePacingOfLookUps(t *testing.T) {
 }
 
 func TestChosenLyricsStay(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, on, c := newService(t, f)
 	track := song("Unknown Song")
@@ -310,6 +315,7 @@ func TestChosenLyricsStay(t *testing.T) {
 }
 
 func TestChooseRefusesWhatIsNoResult(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, _, _ := newService(t, f)
 	track := song("Echo Chamber")
@@ -393,6 +399,7 @@ func FuzzParseResultID(f *testing.F) {
 }
 
 func TestRemovedLyricsStayRemoved(t *testing.T) {
+	t.Parallel()
 	f := newFakeLRCLIB(t)
 	s, on, c := newService(t, f)
 	track := song("Synced Song")
