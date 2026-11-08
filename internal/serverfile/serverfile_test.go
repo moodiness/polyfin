@@ -12,6 +12,7 @@ import (
 // A file of the server is an absolute path of its system, or a file://
 // address of one, on Windows as elsewhere; anything else is none.
 func TestPathsAreTheServersAbsoluteOnes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		address string
 		windows bool
@@ -48,6 +49,7 @@ func TestPathsAreTheServersAbsoluteOnes(t *testing.T) {
 // was last read, or once it can no longer be read, then not again until
 // it changes.
 func TestFilesAreCheckedAndTheirChangesTold(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "guide.xml")
 	if err := os.WriteFile(path, []byte("<tv/>"), 0o600); err != nil {
