@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -32,10 +33,11 @@ const (
 	MaxRows = 20
 	// MaxNameLength bounds a row's name, in characters.
 	MaxNameLength = 100
-	// MaxCount bounds the rows a Because you watched row makes.
+	// MaxCount bounds the rows a Because you watched row, or a row of the
+	// user's favorite playlists, makes.
 	MaxCount = 10
-	// DefaultCount is how many rows a Because you watched row makes when
-	// none is chosen.
+	// DefaultCount is how many rows a Because you watched row, or a row
+	// of favorite playlists, makes when none is chosen.
 	DefaultCount = 3
 )
 
@@ -65,10 +67,19 @@ const (
 	// KindPicks lists the titles of the user's libraries their taste
 	// profile ranks first (see package taste).
 	KindPicks Kind = "picks"
+	// KindWatchlist lists the user's own Watchlist playlist, in its order.
+	KindWatchlist Kind = "watchlist"
+	// KindPlaylists makes a row for each of the playlists the user may
+	// see and made a favorite, up to the row's count.
+	KindPlaylists Kind = "playlists"
+	// KindPlaylist lists a playlist the administrator chose, to the users
+	// who may see it.
+	KindPlaylist Kind = "playlist"
 )
 
 // Kinds are the kinds of rows, in the order the admin app offers them.
-var Kinds = []Kind{KindCatalog, KindCollection, KindBecause, KindNew, KindAvailable, KindWaiting, KindTrakt, KindPicks}
+var Kinds = []Kind{KindCatalog, KindCollection, KindBecause, KindNew, KindAvailable, KindWaiting, KindTrakt, KindPicks, KindWatchlist,
+	KindPlaylists, KindPlaylist}
 
 // Place is where the web player shows a row on its home page.
 type Place string
@@ -96,13 +107,16 @@ type Row struct {
 	CatalogID   string
 	// Collection names the collection of a collection row.
 	Collection accounts.ID
-	// Count is how many rows a Because you watched row makes.
+	// Playlist names the playlist of a playlist row.
+	Playlist accounts.ID
+	// Count is how many rows a Because you watched row, or a row of
+	// favorite playlists, makes.
 	Count int
 	// Everyone shows the row to every user; otherwise only Users see it.
 	Everyone bool
 	Users    []accounts.ID
 	// Library makes the row a view of its own too, which other apps list
-	// among the user's libraries.
+	// among the user's libraries; never for a row of favorite playlists.
 	Library bool
 	// Schedule is when the row shows.
 	Schedule Schedule
@@ -174,15 +188,17 @@ func (r Row) ShowsAt(t time.Time) bool {
 }
 
 // Valid reports whether r's fields go together: a known kind and place, a
-// name, a catalog for a catalog row and a collection for a collection row,
-// and nothing of either for the other kinds, and a valid schedule.
+// name, a catalog for a catalog row, a collection for a collection row and
+// a playlist for a playlist row, and nothing of these for the other kinds,
+// no library for a row of favorite playlists, and a valid schedule.
 func (r Row) Valid() bool {
 	name := []rune(r.Name)
 	catalog := r.Addon != (accounts.ID{}) && r.CatalogType != "" && r.CatalogID != ""
 	return slices.Contains(Kinds, r.Kind) && slices.Contains(Places, r.Place) && len(name) > 0 && len(name) <= MaxNameLength &&
 		r.Count >= 1 && r.Count <= MaxCount &&
 		catalog == (r.Kind == KindCatalog) && (r.Kind == KindCatalog || r.Addon == (accounts.ID{}) && r.CatalogType == "" && r.CatalogID == "") &&
-		(r.Collection != (accounts.ID{})) == (r.Kind == KindCollection) && r.Schedule.Valid()
+		(r.Collection != (accounts.ID{})) == (r.Kind == KindCollection) && (r.Playlist != (accounts.ID{})) == (r.Kind == KindPlaylist) &&
+		!(r.Library && r.Kind == KindPlaylists) && r.Schedule.Valid()
 }
 
 // ShownTo reports whether the row is shown to user, before they turn it
@@ -219,23 +235,26 @@ func (s *Store) Row(ctx context.Context, id accounts.ID) (Row, error) {
 }
 
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Row, error) {
-	rows, _ := s.db.Query(ctx, `SELECT id, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, count, everyone, library,
-		start_date, end_date, days, start_hour, end_hour
+	rows, _ := s.db.Query(ctx, `SELECT id, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, playlist_id, count, everyone,
+		library, start_date, end_date, days, start_hour, end_hour
 		FROM home_rows `+where+` ORDER BY position, created_at, id`, args...)
 	var result []Row
 	var r Row
-	var addon, collection *accounts.ID
+	var addon, collection, playlist *accounts.ID
 	var start, end *time.Time
 	var days []int16
 	var from, to *int16
-	if _, err := pgx.ForEachRow(rows, []any{&r.ID, &r.Name, &r.Kind, &r.Place, &addon, &r.CatalogType, &r.CatalogID, &collection, &r.Count,
-		&r.Everyone, &r.Library, &start, &end, &days, &from, &to}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&r.ID, &r.Name, &r.Kind, &r.Place, &addon, &r.CatalogType, &r.CatalogID, &collection, &playlist,
+		&r.Count, &r.Everyone, &r.Library, &start, &end, &days, &from, &to}, func() error {
 		row := r
 		if addon != nil {
 			row.Addon = *addon
 		}
 		if collection != nil {
 			row.Collection = *collection
+		}
+		if playlist != nil {
+			row.Playlist = *playlist
 		}
 		if start != nil {
 			row.Schedule.Start = *start
@@ -288,17 +307,17 @@ func (s *Store) Create(ctx context.Context, r Row) (Row, error) {
 			return ErrTooMany
 		}
 		start, end, days, from, to := scheduleColumns(r.Schedule)
-		if err := tx.QueryRow(ctx, `INSERT INTO home_rows (position, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, count,
-			everyone, library, start_date, end_date, days, start_hour, end_hour)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
-			last+1, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), r.Count, r.Everyone,
-			r.Library, start, end, days, from, to).Scan(&r.ID); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO home_rows (position, name, kind, place, addon_id, catalog_type, catalog_id, collection_id,
+			playlist_id, count, everyone, library, start_date, end_date, days, start_hour, end_hour)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+			last+1, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), nullable(r.Playlist), r.Count,
+			r.Everyone, r.Library, start, end, days, from, to).Scan(&r.ID); err != nil {
 			return err
 		}
 		return setUsers(ctx, tx, r)
 	})
 	if err != nil {
-		return Row{}, err
+		return Row{}, unknownPlaylist(err)
 	}
 	return s.Row(ctx, r.ID)
 }
@@ -311,10 +330,10 @@ func (s *Store) Update(ctx context.Context, r Row) (Row, error) {
 	start, end, days, from, to := scheduleColumns(r.Schedule)
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE home_rows SET name = $2, kind = $3, place = $4, addon_id = $5, catalog_type = $6, catalog_id = $7,
-			collection_id = $8, count = $9, everyone = $10, library = $11, start_date = $12, end_date = $13, days = $14, start_hour = $15,
-			end_hour = $16 WHERE id = $1`,
-			r.ID, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), r.Count, r.Everyone, r.Library,
-			start, end, days, from, to)
+			collection_id = $8, playlist_id = $9, count = $10, everyone = $11, library = $12, start_date = $13, end_date = $14, days = $15,
+			start_hour = $16, end_hour = $17 WHERE id = $1`,
+			r.ID, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), nullable(r.Playlist), r.Count,
+			r.Everyone, r.Library, start, end, days, from, to)
 		if err != nil {
 			return err
 		}
@@ -327,9 +346,19 @@ func (s *Store) Update(ctx context.Context, r Row) (Row, error) {
 		return setUsers(ctx, tx, r)
 	})
 	if err != nil {
-		return Row{}, err
+		return Row{}, unknownPlaylist(err)
 	}
 	return s.Row(ctx, r.ID)
+}
+
+// unknownPlaylist is ErrInvalid for a row naming a playlist that does not
+// exist, or no longer does; err otherwise.
+func unknownPlaylist(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "home_rows_playlist_id_fkey" {
+		return ErrInvalid
+	}
+	return err
 }
 
 // setUsers keeps the users a row not shown to everyone is shown to; those
