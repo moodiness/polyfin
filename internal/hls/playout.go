@@ -329,10 +329,20 @@ func (p *playout) fail(err error) {
 
 // air runs FFmpeg for a piece, collecting the segments it makes, and
 // returns how long they last.
+//
+// FFmpeg writes each playlist of the run to tempList, then renames it over
+// runList. On Windows that rename fails while collect reads runList, and
+// FFmpeg goes on: the run's last playlist can stay in tempList, which is
+// read once the run ended, or the piece would lose its last segments and
+// the next one would air early. It is not read while FFmpeg runs: it may
+// be half written, and reading it would fail the rename in its turn.
 func (p *playout) air(ctx context.Context, piece PlayoutPiece, burst time.Duration) (time.Duration, error) {
 	runList := filepath.Join(p.dir, playoutRunPlaylist)
-	if err := os.Remove(runList); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return 0, err
+	tempList := runList + ".tmp"
+	for _, name := range []string{runList, tempList} {
+		if err := os.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return 0, err
+		}
 	}
 	p.mu.Lock()
 	args := piece.args(p.dir, p.number, burst, p.elapsed)
@@ -354,6 +364,7 @@ func (p *playout) air(ctx context.Context, piece PlayoutPiece, burst time.Durati
 		select {
 		case err := <-exited:
 			aired += p.collect(runList, &started)
+			aired += p.collect(tempList, &started)
 			if err != nil && ctx.Err() == nil {
 				err = fmt.Errorf("FFmpeg failed: %w: %s", err, cutAddresses(string(bytes.TrimSpace(stderr.bytes()))))
 			}
