@@ -1,6 +1,7 @@
 // Package mosaic draws the images Polyfin makes for the collections and
 // libraries that have none: the posters of their first titles side by
-// side, under a gradient, with their name written across them.
+// side, under a gradient, with their name written across them; and the
+// emblems of its views that list no titles of their own (see DrawEmblem).
 package mosaic
 
 import (

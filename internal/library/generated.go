@@ -75,17 +75,22 @@ const (
 
 // GeneratedImage is an image Polyfin draws: a poster or a wide image of
 // Name from Posters, in order, downloaded from public addresses only when
-// Confined.
+// Confined; or, with Emblem set, the wide emblem of one of Polyfin's views
+// (see EmblemImage).
 type GeneratedImage struct {
 	Wide     bool
 	Name     string
 	Posters  []string
 	Confined bool
+	Emblem   string
 }
 
 // URL stands for the image in Images: its ImageTag changes with the name,
-// the posters and the shape.
+// the posters and the shape, or the emblem.
 func (g GeneratedImage) URL() string {
+	if g.Emblem != "" {
+		return generatedScheme + "emblem?" + url.Values{"v": {generatedVersion}, "emblem": {g.Emblem}}.Encode()
+	}
 	shape := "poster"
 	if g.Wide {
 		shape = "wide"
@@ -100,6 +105,20 @@ func (g GeneratedImage) URL() string {
 // artwork is the image as Artwork returns it.
 func (g *GeneratedImage) artwork() Artwork {
 	return Artwork{URL: g.URL(), Generated: g}
+}
+
+// EmblemImage is the image of one of Polyfin's views that lists no titles
+// to draw it from, emblem one of mosaic's (see mosaic.DrawEmblem): Live
+// TV, Replay, Collections and Playlists. It is the same for every user,
+// and wide, as libraries' images are.
+func EmblemImage(emblem string) GeneratedImage {
+	return GeneratedImage{Wide: true, Emblem: emblem}
+}
+
+// EmblemArtwork is the artwork of EmblemImage(emblem).
+func EmblemArtwork(emblem string) Artwork {
+	g := EmblemImage(emblem)
+	return g.artwork()
 }
 
 // withoutGenerated drops from a description the artwork whose URL uses the
@@ -172,8 +191,10 @@ type candidate struct {
 
 // choose returns the choice an item named name keeps, given the one
 // remembered, if any, and its first titles as candidates, known when
-// known is set, and whether it changed.
-func choose(kept generatedChoice, found bool, name string, candidates []candidate, known, confined bool) (generatedChoice, bool) {
+// known is set, and whether it changed. strict chooses again as soon as
+// one of the titles shown is no longer among the candidates, rather than
+// half of them.
+func choose(kept generatedChoice, found bool, name string, candidates []candidate, known, confined, strict bool) (generatedChoice, bool) {
 	var fresh generatedChoice
 	fresh.name, fresh.confined = name, confined
 	for _, c := range candidates {
@@ -203,7 +224,7 @@ func choose(kept generatedChoice, found bool, name string, candidates []candidat
 				gone++
 			}
 		}
-		if 2*gone >= len(shown) {
+		if 2*gone >= len(shown) || strict && gone > 0 {
 			return fresh, true
 		}
 	}
@@ -277,7 +298,7 @@ func (s *Service) generatedEntryOf(ctx context.Context, id accounts.ID) (generat
 
 // generatedChoiceOf returns the choice of the image of item id, named
 // name, compared with the first titles find gives once generatedCheck has
-// passed since it last was (see choose), and whether it shows any. A
+// passed since it last was (see rechoose), and whether it shows any. A
 // choice that changes is saved.
 func (s *Service) generatedChoiceOf(ctx context.Context, id accounts.ID, name string, find func() (titles []candidate, known, confined bool)) (generatedChoice, bool) {
 	entry, err := s.generatedEntryOf(ctx, id)
@@ -287,31 +308,48 @@ func (s *Service) generatedChoiceOf(ctx context.Context, id accounts.ID, name st
 		}
 		return generatedChoice{}, false
 	}
+	next, remember := s.rechoose(ctx, entry, name, find, false, func(choice generatedChoice) error {
+		_, err := s.db.Exec(ctx, `INSERT INTO generated_images (item_id, name, titles, posters, confined) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (item_id) DO UPDATE SET name = excluded.name, titles = excluded.titles, posters = excluded.posters,
+				confined = excluded.confined, chosen_at = now()`, id, choice.name, choice.titles, choice.posters, choice.confined)
+		return err
+	})
+	if remember {
+		s.generated.mu.Lock()
+		s.generated.entries[id] = next
+		s.generated.mu.Unlock()
+	}
+	return next.choice, next.found
+}
+
+// rechoose returns entry, the choice remembered for an image named name,
+// compared with the first titles find gives once generatedCheck has passed
+// since it last was (see choose, which strict is passed to), and whether
+// it was: the entry to remember then. A choice that changes is saved
+// with save first; one that could not be is returned, not to be
+// remembered.
+func (s *Service) rechoose(ctx context.Context, entry generatedEntry, name string, find func() ([]candidate, bool, bool), strict bool,
+	save func(generatedChoice) error) (generatedEntry, bool) {
 	now := s.now()
 	if entry.found && entry.choice.name == name && now.Sub(entry.checked) < generatedCheck {
-		return entry.choice, true
+		return entry, false
 	}
 	kept := s.generated.kept.Load()
 	if !entry.found && now.Sub(entry.checked) < generatedCheck && (!entry.unknown || entry.kept == kept) {
-		return generatedChoice{}, false
+		return generatedEntry{}, false
 	}
 	titles, known, confined := find()
-	choice, changed := choose(entry.choice, entry.found, name, titles, known, confined)
+	choice, changed := choose(entry.choice, entry.found, name, titles, known, confined, strict)
 	found := entry.found || changed
 	if changed {
-		if _, err := s.db.Exec(ctx, `INSERT INTO generated_images (item_id, name, titles, posters, confined) VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (item_id) DO UPDATE SET name = excluded.name, titles = excluded.titles, posters = excluded.posters,
-				confined = excluded.confined, chosen_at = now()`, id, choice.name, choice.titles, choice.posters, choice.confined); err != nil {
+		if err := save(choice); err != nil {
 			if ctx.Err() == nil {
 				s.logger.Debug("A generated image could not be saved", "error", err)
 			}
-			return choice, found
+			return generatedEntry{choice: choice, found: found}, false
 		}
 	}
-	s.generated.mu.Lock()
-	s.generated.entries[id] = generatedEntry{choice: choice, found: found, checked: now, unknown: !found && !known, kept: kept}
-	s.generated.mu.Unlock()
-	return choice, found
+	return generatedEntry{choice: choice, found: found, checked: now, unknown: !found && !known, kept: kept}, true
 }
 
 // generatesFor reports whether collections get generated images in v.
@@ -437,14 +475,15 @@ func (s *Service) smartCollectionImages(ctx context.Context, v view, items []Ite
 		if !ok || l.search || items[i].Kind != KindCollection || items[i].Images.Primary != "" {
 			continue
 		}
-		s.generate(ctx, v, &items[i], func() ([]candidate, bool, bool) { return s.smartListCandidates(ctx, v, l.list) })
+		s.generate(ctx, v, &items[i], func() ([]candidate, bool, bool) { return s.smartListCandidates(ctx, v.unfiltered(), l.list) })
 	}
 }
 
 // smartListCandidates reads the first titles of a smart list from the
-// pages Polyfin keeps, as a user who did nothing with them yet sees them.
-func (s *Service) smartListCandidates(ctx context.Context, v view, list smartlists.List) ([]candidate, bool, bool) {
-	result, err := s.smartMatches(withKeptOnly(ctx), v.unfiltered(), list)
+// pages Polyfin keeps, as reader sees them: the unfiltered view of a user
+// who did nothing with them yet for an image everyone sees.
+func (s *Service) smartListCandidates(ctx context.Context, reader view, list smartlists.List) ([]candidate, bool, bool) {
+	result, err := s.smartMatches(withKeptOnly(ctx), reader, list)
 	if err != nil || len(result.titles) == 0 {
 		return nil, false, false
 	}

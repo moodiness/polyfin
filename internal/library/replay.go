@@ -10,6 +10,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/mosaic"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -114,7 +115,8 @@ func (s *Service) HasReplay(ctx context.Context, user accounts.User) (bool, erro
 	return len(archives) > 0, err
 }
 
-// replayView describes the Replay view, ErrNotFound for a user without it.
+// replayView describes the Replay view, ErrNotFound for a user without it,
+// with its emblem (see EmblemImage).
 func (s *Service) replayView(ctx context.Context, v view) (Item, error) {
 	archives, err := s.archives(ctx, v)
 	if err != nil {
@@ -123,7 +125,9 @@ func (s *Service) replayView(ctx context.Context, v view) (Item, error) {
 	if len(archives) == 0 {
 		return Item{}, ErrNotFound
 	}
-	return Item{ID: ReplayViewID, Kind: KindLibrary, Name: v.words.replay, CollectionType: "folders"}, nil
+	item := Item{ID: ReplayViewID, Kind: KindLibrary, Name: v.words.replay, CollectionType: "folders", WidePrimary: true}
+	item.Images.Primary = EmblemImage(mosaic.EmblemReplay).URL()
+	return item, nil
 }
 
 // replayChannels lists the user's channels that have an archive, in

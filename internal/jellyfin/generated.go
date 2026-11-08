@@ -7,10 +7,12 @@ import (
 	"image"
 	"image/jpeg"
 	"net/http"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/mosaic"
 )
@@ -25,6 +27,39 @@ import (
 // a poster and 1,920 by 1,080 for a wide image. Apps asking for smaller
 // ones get them resized, as artwork is. Its URL changes with what it
 // shows, which gives it a new tag.
+//
+// The Live TV, Replay, Collections and Playlists views show an emblem of
+// their own (see library.EmblemImage), drawn without posters.
+
+// viewEmblems are the emblems of Polyfin's views that list no titles to
+// draw an image from.
+var viewEmblems = map[accounts.ID]string{
+	liveTvViewID:         mosaic.EmblemLiveTV,
+	library.ReplayViewID: mosaic.EmblemReplay,
+	collectionsViewID:    mosaic.EmblemCollections,
+	playlistsViewID:      mosaic.EmblemPlaylists,
+}
+
+// withEmblem gives item, one of the views of viewEmblems, its emblem as
+// its Primary image, wide.
+func withEmblem(item library.Item) library.Item {
+	item.Images.Primary, item.WidePrimary = library.EmblemImage(viewEmblems[item.ID]).URL(), true
+	return item
+}
+
+// viewArtwork returns the image of type imageType of a view of Polyfin's
+// that has one of its own: an emblem, the same for everyone, or, by its
+// tag, a user's image of the Watchlist view or of a smart list shown as a
+// library (see library.Service.PersonalArtwork).
+func (h *Handler) viewArtwork(ctx context.Context, id accounts.ID, imageType, tag string) (library.Artwork, bool) {
+	if !strings.EqualFold(imageType, "Primary") {
+		return library.Artwork{}, false
+	}
+	if emblem, ok := viewEmblems[id]; ok {
+		return library.EmblemArtwork(emblem), true
+	}
+	return h.Library.PersonalArtwork(ctx, id, tag)
+}
 
 // fontsFor holds the fonts names are written with, read again when the
 // fonts folder changes (tests change it).
@@ -90,7 +125,13 @@ func (h *Handler) generatedArtwork(ctx context.Context, target string, g library
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
 		var out bytes.Buffer
-		if err := jpeg.Encode(&out, mosaic.Draw(g.Name, posters, g.Wide, h.fonts.of(h.FontsDir)), &jpeg.Options{Quality: 88}); err != nil {
+		var drawing *image.RGBA
+		if g.Emblem != "" {
+			drawing = mosaic.DrawEmblem(g.Emblem)
+		} else {
+			drawing = mosaic.Draw(g.Name, posters, g.Wide, h.fonts.of(h.FontsDir))
+		}
+		if err := jpeg.Encode(&out, drawing, &jpeg.Options{Quality: 88}); err != nil {
 			return artwork{}, downloadError{http.StatusInternalServerError, err}
 		}
 		result := artwork{body: out.Bytes(), contentType: "image/jpeg"}

@@ -998,6 +998,8 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	url, uploaded := h.Library.UploadedArtwork(id, imageType)
 	if uploaded {
 		found.URL = url
+	} else if view, ok := h.viewArtwork(r.Context(), id, imageType, tag); ok {
+		found = view
 	} else {
 		var collection bool
 		found, collection, err = h.collectionArtwork(r, id, imageType)

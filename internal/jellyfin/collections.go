@@ -236,10 +236,10 @@ func mayDeleteCollections(user accounts.User) bool {
 // Browsing collections.
 
 // collectionsViewItem is the Collections view, among the user's libraries,
-// named in the server's language.
+// named in the server's language, with its emblem.
 func (h *Handler) collectionsViewItem() library.Item {
-	return library.Item{ID: collectionsViewID, Kind: library.KindLibrary, Name: library.CollectionsName(h.Accounts.Settings().Language),
-		CollectionType: "boxsets"}
+	return withEmblem(library.Item{ID: collectionsViewID, Kind: library.KindLibrary, Name: library.CollectionsName(h.Accounts.Settings().Language),
+		CollectionType: "boxsets"})
 }
 
 // addCollectionsView adds the Collections view to views once a collection

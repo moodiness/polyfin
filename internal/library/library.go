@@ -109,6 +109,9 @@ type Service struct {
 	// generated remembers what the generated images of collections and
 	// libraries show (see generated.go).
 	generated generatedImages
+	// personal remembers what each user's images of the Watchlist view and
+	// of the smart lists shown as libraries show (see personalimages.go).
+	personal personalImages
 	// prefetches holds a place for each listing read ahead (see
 	// readAhead); readAhead turns reading ahead on.
 	prefetches chan struct{}
@@ -755,11 +758,24 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 		items = append(items, item)
 		records = append(records, libraryRecord(l, image.url))
 	}
+	smart := len(items)
 	for _, l := range v.smart {
 		if l.item.Kind == KindLibrary {
 			items = append(items, l.item)
 		}
 	}
+	// The smart lists' images are compared with their titles a few at a
+	// time (see personalimages.go).
+	var group errgroup.Group
+	group.SetLimit(generatedChecks)
+	for i := smart; i < len(items); i++ {
+		l, _ := v.smartList(items[i].ID)
+		group.Go(func() error {
+			s.withSmartLibraryImage(ctx, v, l, &items[i])
+			return nil
+		})
+	}
+	_ = group.Wait()
 	return s.overridden(items), s.save(ctx, records)
 }
 
@@ -2391,6 +2407,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	}
 	if l, ok := v.smartList(id); ok {
 		items := []Item{l.item}
+		if l.item.Kind == KindLibrary {
+			s.withSmartLibraryImage(ctx, v, l, &items[0])
+		}
 		s.smartCollectionImages(ctx, v, items)
 		return items[0], nil
 	}

@@ -64,6 +64,12 @@ func newMosaicAddon(t *testing.T) *mosaicAddon {
 			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/collection/"), ".json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": stremio.Meta{ID: id, Type: "collection",
 				Collection: &stremio.Collection{Sources: []stremio.CollectionSource{{Type: "movie", CatalogID: "top"}}}}})
+		case strings.HasPrefix(path, "/meta/movie/"):
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/movie/"), ".json")
+			var n int
+			_, _ = fmt.Sscanf(id, "tt%d", &n)
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": stremio.Meta{ID: id, Type: "movie", Name: fmt.Sprint("Movie ", n),
+				Poster: a.url + fmt.Sprintf("/p/%d.png", n)}})
 		case strings.HasPrefix(path, "/p/"):
 			var n int
 			_, _ = fmt.Sscanf(path, "/p/%d.png", &n)

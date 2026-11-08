@@ -24,7 +24,8 @@ var watchlistKinds = []Kind{KindMovie, KindSeries}
 // watchlistView describes the Watchlist view, ErrNotFound for a user whose
 // watchlist holds no title they have not started. It has no collection
 // type, as a library of mixed content: apps give it a row of latest items
-// on their home screen.
+// on their home screen. Its image is the user's own (see
+// personalimages.go).
 func (s *Service) watchlistView(ctx context.Context, v view) (Item, error) {
 	ids, err := s.watchlistIDs(ctx, v)
 	if err != nil {
@@ -33,7 +34,11 @@ func (s *Service) watchlistView(ctx context.Context, v view) (Item, error) {
 	if len(ids) == 0 {
 		return Item{}, ErrNotFound
 	}
-	return Item{ID: WatchlistViewID, Kind: KindLibrary, Name: v.words.watchlist}, nil
+	item := Item{ID: WatchlistViewID, Kind: KindLibrary, Name: v.words.watchlist}
+	if image := s.watchlistImage(ctx, v, ids); image != "" {
+		item.Images.Primary, item.WidePrimary = image, true
+	}
+	return item, nil
 }
 
 // watchlistIDs lists the titles of the user's watchlist they have not
@@ -116,15 +121,18 @@ func (s *Service) watchlistRow(ctx context.Context, user accounts.User, list fun
 }
 
 // AddToWatchlist puts a movie or a series on user's watchlist, on the list
-// of the titles they add themselves (see watchlist.Own), unless a list
-// already holds it.
+// of the titles they add themselves (see watchlist.Own), even when another
+// list holds it. The image of their Watchlist view is compared with its
+// titles again as it next shows.
 func (s *Service) AddToWatchlist(ctx context.Context, user, title accounts.ID) error {
+	defer s.recheckPersonal(user, WatchlistViewID)
 	return s.watchlist.Add(ctx, user, title)
 }
 
 // RemoveFromWatchlist takes a title off user's watchlist, off every list
-// holding it.
+// holding it, as AddToWatchlist adds it.
 func (s *Service) RemoveFromWatchlist(ctx context.Context, user, title accounts.ID) error {
+	defer s.recheckPersonal(user, WatchlistViewID)
 	return s.watchlist.Remove(ctx, user, title)
 }
 
