@@ -155,7 +155,7 @@ const notifications: typeof en = {
       programme_reminder:
         'Un programa de Televisión en vivo para el que ha creado un recordatorio en el reproductor web empieza pronto, con la antelación indicada en «Recordarme antes», y un enlace a su canal.',
       title_available:
-        'Se encontraron versiones de un título de su lista «Para ver» para el que las comprobaciones anteriores no habían encontrado ninguna: una vez por título. Una versión encontrada aún no se ha probado.',
+        'Se encontraron versiones de un título de su lista de reproducción «Para ver» para el que las comprobaciones anteriores no habían encontrado ninguna: una vez por título. Una versión encontrada aún no se ha probado.',
     },
     enabled: 'Enviar mensajes a este destino',
     create: 'Añadir',

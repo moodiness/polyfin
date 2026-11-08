@@ -749,7 +749,7 @@ const settings: typeof en = {
       `Wie oft jeder lokale Ordner erneut nach hinzugefügten, geänderten oder entfernten Dateien gescannt wird. Ordner werden außerdem beim Start, auf Anforderung und bei Änderungen an überwachten Ordnern gescannt. 0 schaltet den Zeitplan aus. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     watchlistCheckHours: 'Versionen der Titel auf Merklisten suchen alle (Stunden, 0 = nie)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `Wie oft jeder nicht begonnene Titel der Merkliste eines Benutzers erneut nach Versionen durchsucht wird, für die Startseitenzeilen „Jetzt verfügbar“ und „Noch ausstehend“ und die Nachricht, die einen Benutzer über einen verfügbaren Titel informiert. Jede Stunde werden bis zu 20 Titel jedes Benutzers geprüft, wobei seine Stream-Add-ons gefragt werden. 0 schaltet die Prüfungen aus. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+      `Wie oft jeder nicht begonnene Titel der Wiedergabeliste „Merkliste“ eines Benutzers erneut nach Versionen durchsucht wird, für die Startseitenzeilen „Jetzt verfügbar“ und „Noch ausstehend“ und die Nachricht, die einen Benutzer über einen verfügbaren Titel informiert. Jede Stunde werden bis zu 20 Titel jedes Benutzers geprüft, wobei seine Stream-Add-ons gefragt werden. 0 schaltet die Prüfungen aus. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     watchLocalFolders: 'Ordner und Freigaben auf Änderungen überwachen',
     watchLocalFoldersHelp: {
       container:
@@ -1138,9 +1138,9 @@ const settings: typeof en = {
           'Eine Zeile für jeden der zuletzt abgespielten Filme und jede der zuletzt abgespielten Serien des Benutzers, mit ähnlichen Titeln, wie sie die Filmempfehlungen liefern. Keine, solange „Ähnliche Titel“ ausgeschaltet ist.',
         new: 'Die Titel, die in den letzten 7 Tagen in die Kataloge der Bibliotheken des Benutzers gekommen sind, neueste zuerst. Polyfin zählt sie ab dem Zeitpunkt, an dem es jeden Titel zum ersten Mal in jedem Katalog gesehen hat.',
         available:
-          'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung Versionen gefunden hat, zuletzt gefundene zuerst. Eine gefundene Version wurde noch nicht ausprobiert: Ihre Wiedergabe kann noch fehlschlagen.',
+          'Die nicht begonnenen Titel der Wiedergabeliste „Merkliste“ des Benutzers, für die die letzte Prüfung Versionen gefunden hat, zuletzt gefundene zuerst. Eine gefundene Version wurde noch nicht ausprobiert: Ihre Wiedergabe kann noch fehlschlagen.',
         waiting:
-          'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung keine Version gefunden hat oder die noch nicht erschienen sind, zuletzt hinzugefügte zuerst. Ein noch nicht geprüfter Titel steht in keiner der beiden Zeilen.',
+          'Die nicht begonnenen Titel der Wiedergabeliste „Merkliste“ des Benutzers, für die die letzte Prüfung keine Version gefunden hat oder die noch nicht erschienen sind, in der Reihenfolge der Wiedergabeliste. Ein noch nicht geprüfter Titel steht in keiner der beiden Zeilen.',
         trakt:
           'Die Filme und Serien, die Trakt dem Benutzer empfiehlt, alle 12 Stunden über seine Trakt-Verbindung gelesen, ohne die aus seiner Trakt-Sammlung oder -Watchlist und ohne die, die er gesehen hat. Nur Benutzer, die Trakt unter Mein Konto › Tracking verbunden haben, sehen sie; beim ersten Mal erscheint sie, sobald Trakt geantwortet hat.',
         picks:

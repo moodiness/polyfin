@@ -2640,7 +2640,7 @@ export type TrackingService = {
    * MyAnimeList's Plan to Watch.
    */
   watchlist: boolean
-  /** Whether that watchlist is imported, with the history's imports, into the Watchlist view. */
+  /** Whether that watchlist is imported, with the history's imports, into the Watchlist playlist. */
   importWatchlist: boolean
   /** The service keeps ratings (AniList, MyAnimeList). */
   ratings: boolean
@@ -2655,7 +2655,7 @@ type TrackingImport = {
   played: number
   /** Resume points it set. */
   resumed: number
-  /** Titles it added to the Watchlist view. */
+  /** Titles it added to the Watchlist playlist. */
   watchlist: number
   /** Titles of the history and the watchlist Polyfin could not identify. */
   unmapped: number
@@ -3379,7 +3379,7 @@ export type JellyfinUserImport = {
   matched: number
   /**
    * Titles newly marked played, resume points set, titles newly marked favorite, titles rated,
-   * titles a Plex Watchlist added to the user's, and the collections and playlists created.
+   * titles a Plex Watchlist added to the user's Watchlist playlist, and the collections and playlists created.
    */
   played: number
   resumed: number
@@ -3731,7 +3731,7 @@ export type AppImportStatus = {
   endedAt: string | null
   /**
    * Titles of the profile; then titles newly marked played, resume points set, and titles of the
-   * app's library newly added to the Watchlist view.
+   * app's library newly added to the Watchlist playlist.
    */
   read: number
   played: number

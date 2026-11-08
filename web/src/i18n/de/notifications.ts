@@ -152,7 +152,7 @@ const notifications: typeof en = {
       programme_reminder:
         'Eine Live-TV-Sendung, für die du im Web-Player eine Erinnerung gesetzt hast, beginnt bald, so lange vorher, wie „Remind me before“ angibt, mit einem Link zu ihrem Kanal.',
       title_available:
-        'Für einen Titel deiner Merkliste, für den die früheren Prüfungen keine Version gefunden hatten, wurden Versionen gefunden: einmal je Titel. Eine gefundene Version wurde noch nicht ausprobiert.',
+        'Für einen Titel deiner Wiedergabeliste „Merkliste“, für den die früheren Prüfungen keine Version gefunden hatten, wurden Versionen gefunden: einmal je Titel. Eine gefundene Version wurde noch nicht ausprobiert.',
     },
     enabled: 'Nachrichten an dieses Ziel senden',
     create: 'Hinzufügen',

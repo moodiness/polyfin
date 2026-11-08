@@ -471,7 +471,7 @@ const users = {
         collection: (name: string) => `Collection “${name}”: no title found, not created.`,
         playlist: (name: string) => `Playlist “${name}”: no title found, not created.`,
       },
-      watchlist: (count: number) => `${count} added to the Watchlist`,
+      watchlist: (count: number) => `${count} added to the Watchlist playlist`,
       undated: (count: number) =>
         count === 1
           ? '1 resume point without a date, not added'
@@ -508,7 +508,7 @@ const users = {
       open: 'Import from an app',
       title: 'Import from an app',
       description:
-        'Bring a user’s watch data over from their account on an app built on addons: the movies and episodes they played with their dates, their resume points, and the app’s library, which goes to their Watchlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. Polyfin’s data is only added to, and nothing is written to the app. You need the user’s sign-in to the app; users can also import themselves, under My account.',
+        'Bring a user’s watch data over from their account on an app built on addons: the movies and episodes they played with their dates, their resume points, and the app’s library, which goes to their Watchlist playlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. Polyfin’s data is only added to, and nothing is written to the app. You need the user’s sign-in to the app; users can also import themselves, under My account.',
       user: 'Into the account of',
       userHelp: 'The Polyfin user whose watch data and addons the import adds to.',
     },

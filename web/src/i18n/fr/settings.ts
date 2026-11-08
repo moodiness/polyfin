@@ -757,7 +757,7 @@ const settings: typeof en = {
     watchlistCheckHours:
       'Chercher des versions des titres à regarder toutes les (heures, 0 = jamais)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `À quelle fréquence chaque titre non commencé de la liste «\u202fÀ regarder\u202f» d’un utilisateur est vérifié à nouveau pour trouver des versions, pour les rangées d’accueil Disponibles et Toujours en attente et le message qui prévient l’utilisateur d’un titre disponible. Chaque heure, jusqu’à 20 titres de chaque utilisateur sont vérifiés, en interrogeant ses addons de flux. 0 désactive ces vérifications. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
+      `À quelle fréquence chaque titre non commencé de la liste de lecture «\u202fÀ regarder\u202f» d’un utilisateur est vérifié à nouveau pour trouver des versions, pour les rangées d’accueil Disponibles et Toujours en attente et le message qui prévient l’utilisateur d’un titre disponible. Chaque heure, jusqu’à 20 titres de chaque utilisateur sont vérifiés, en interrogeant ses addons de flux. 0 désactive ces vérifications. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     watchLocalFolders: 'Surveiller les changements des dossiers et des partages',
     watchLocalFoldersHelp: {
       container:
@@ -1152,9 +1152,9 @@ const settings: typeof en = {
           'Une rangée pour chacun des derniers films et séries vus par l’utilisateur, avec les titres similaires, comme les recommandations de films les donnent. Aucune tant que Titres similaires est désactivé.',
         new: 'Les titres arrivés dans les catalogues des bibliothèques de l’utilisateur ces 7 derniers jours, les plus récents d’abord. Polyfin les compte depuis la première fois qu’il a vu chaque titre dans chaque catalogue.',
         available:
-          'Les titres non commencés de la liste «\u202fÀ regarder\u202f» de l’utilisateur pour lesquels la dernière vérification a trouvé des versions, les derniers trouvés d’abord. Une version trouvée n’a pas encore été essayée\u202f: sa lecture peut encore échouer.',
+          'Les titres non commencés de la liste de lecture «\u202fÀ regarder\u202f» de l’utilisateur pour lesquels la dernière vérification a trouvé des versions, les derniers trouvés d’abord. Une version trouvée n’a pas encore été essayée\u202f: sa lecture peut encore échouer.',
         waiting:
-          'Les titres non commencés de la liste «\u202fÀ regarder\u202f» de l’utilisateur pour lesquels la dernière vérification n’a trouvé aucune version, ou qui ne sont pas encore sortis, les derniers ajoutés d’abord. Un titre pas encore vérifié n’est dans aucune des deux rangées.',
+          'Les titres non commencés de la liste de lecture «\u202fÀ regarder\u202f» de l’utilisateur pour lesquels la dernière vérification n’a trouvé aucune version, ou qui ne sont pas encore sortis, dans l’ordre de la liste de lecture. Un titre pas encore vérifié n’est dans aucune des deux rangées.',
         trakt:
           'Les films et séries que Trakt recommande à l’utilisateur, lus avec sa connexion Trakt toutes les 12 heures, sans ceux de sa collection ou de sa Watchlist Trakt ni ceux qu’il a vus. Seuls les utilisateurs qui ont connecté Trakt dans Mon compte › Suivi la voient\u202f; la première fois, elle s’affiche une fois que Trakt a répondu.',
         picks:

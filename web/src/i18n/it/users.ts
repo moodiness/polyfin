@@ -518,7 +518,7 @@ const users: typeof en = {
       open: 'Importa da un’applicazione',
       title: 'Importa da un’applicazione',
       description:
-        'Trasferisci i dati di visione di un utente dal suo account su un’applicazione basata su add-on: i film e gli episodi riprodotti con le relative date, i punti di ripresa e la libreria dell’applicazione, che finisce nella sua lista «Da guardare» nelle applicazioni Jellyfin, abbinati tramite IMDb, TMDB o Kitsu. I dati di Polyfin vengono solo integrati e nulla viene scritto nell’applicazione. Ti servono le credenziali di accesso dell’utente all’applicazione; gli utenti possono anche importare da soli, in Il mio account.',
+        'Trasferisci i dati di visione di un utente dal suo account su un’applicazione basata su add-on: i film e gli episodi riprodotti con le relative date, i punti di ripresa e la libreria dell’applicazione, che finisce nella sua playlist «Da guardare» nelle applicazioni Jellyfin, abbinati tramite IMDb, TMDB o Kitsu. I dati di Polyfin vengono solo integrati e nulla viene scritto nell’applicazione. Ti servono le credenziali di accesso dell’utente all’applicazione; gli utenti possono anche importare da soli, in Il mio account.',
       user: 'Nell’account di',
       userHelp: 'L’utente Polyfin ai cui dati di visione e add-on si aggiunge l’importazione.',
     },

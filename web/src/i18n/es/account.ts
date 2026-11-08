@@ -237,9 +237,9 @@ const account: typeof en = {
         'Los servidores Plex a los que accede este perfil. Polyfin llega al elegido por las direcciones que Plex da para él.',
       owned: (name: string) => `${name} (suyo)`,
       noServers: 'Este perfil no accede a ningún servidor Plex.',
-      watchlist: 'Watchlist a mi lista «Para ver»',
+      watchlist: 'Watchlist a mi lista de reproducción «Para ver»',
       watchlistHelp:
-        'Las películas y series de su Watchlist de Plex van a su lista «Para ver» de Polyfin.',
+        'Las películas y series de su Watchlist de Plex van a su lista de reproducción «Para ver» de Polyfin, una serie como sus episodios emitidos. Solo se añade lo que aún no ha visto.',
       cancel: 'Cancelar',
     },
     letterboxd: {
@@ -254,9 +254,9 @@ const account: typeof en = {
       choose: 'Elegir el archivo',
       chooseAnother: 'Elegir otro archivo',
       tooLarge: 'Este archivo supera los 20 MB: elija el archivo ZIP que da Letterboxd.',
-      watchlist: 'Watchlist a mi lista «Para ver»',
+      watchlist: 'Watchlist a mi lista de reproducción «Para ver»',
       watchlistHelp:
-        'Las películas de su watchlist de Letterboxd se añaden a su lista «Para ver» en las aplicaciones de Jellyfin, hasta que las empiece.',
+        'Las películas de su watchlist de Letterboxd se añaden a su lista de reproducción «Para ver» en las aplicaciones de Jellyfin. Solo se añaden las que aún no ha empezado.',
       ratings: 'Valoraciones',
       ratingsHelp:
         'Sus estrellas se convierten en su valoración sobre 10: 3,5 estrellas son un 7. Las valoraciones que ya tenga en Polyfin se mantienen.',
@@ -265,9 +265,9 @@ const account: typeof en = {
       forUser: {
         watchedHelp:
           'Las películas que ha visto el usuario se marcan como vistas, en la fecha más reciente que indica su diario, tantas veces como las registre. Cada película se busca por su nombre y año en las extensiones de metadatos del servidor, y se conserva cuando estas conocen exactamente una película con ese nombre y año.',
-        watchlist: 'Watchlist a su lista «Para ver»',
+        watchlist: 'Watchlist a su lista de reproducción «Para ver»',
         watchlistHelp:
-          'Las películas de su watchlist de Letterboxd se añaden a su lista «Para ver» en las aplicaciones de Jellyfin, hasta que el usuario las empiece.',
+          'Las películas de su watchlist de Letterboxd se añaden a su lista de reproducción «Para ver» en las aplicaciones de Jellyfin. Solo se añaden las que aún no ha empezado.',
         ratingsHelp:
           'Sus estrellas se convierten en su valoración sobre 10: 3,5 estrellas son un 7. Las valoraciones que el usuario ya tenga en Polyfin se mantienen.',
         likesHelp: 'Las películas que le gustaron en Letterboxd pasan a ser sus favoritos.',
@@ -307,7 +307,7 @@ const account: typeof en = {
     },
     appImport: {
       description:
-        'Traiga lo que vio en una aplicación basada en extensiones: las películas y episodios reproducidos con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación, que pasa a su lista «Para ver» en las aplicaciones de Jellyfin, identificados por IMDb, TMDB o Kitsu. Solo se añaden a lo que Polyfin ya tiene, y no se escribe nada en la aplicación.',
+        'Traiga lo que vio en una aplicación basada en extensiones: las películas y episodios reproducidos con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación, que pasa a su lista de reproducción «Para ver» en las aplicaciones de Jellyfin, identificados por IMDb, TMDB o Kitsu. Solo se añaden a lo que Polyfin ya tiene, y no se escribe nada en la aplicación.',
       app: 'Aplicación',
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Servidor de Nuvio',
@@ -371,7 +371,7 @@ const account: typeof en = {
         'Polyfin ha encontrado un error durante la importación: el registro del servidor ofrece más detalles. Lo importado se conserva.',
       read: (count: number) => (count === 1 ? '1 título leído.' : `${count} títulos leídos.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
-        `${read === 1 ? '1 título leído' : `${read} títulos leídos`}: ${played === 1 ? '1 marcado como reproducido' : `${played} marcados como reproducidos`}, ${resumed === 1 ? '1 punto de reanudación' : `${resumed} puntos de reanudación`}, ${watchlist === 1 ? '1 añadido' : `${watchlist} añadidos`} a la lista «Para ver».`,
+        `${read === 1 ? '1 título leído' : `${read} títulos leídos`}: ${played === 1 ? '1 marcado como reproducido' : `${played} marcados como reproducidos`}, ${resumed === 1 ? '1 punto de reanudación' : `${resumed} puntos de reanudación`}, ${watchlist === 1 ? '1 añadido' : `${watchlist} añadidos`} a la lista de reproducción «Para ver».`,
       unmatchedHelp:
         'Estos títulos no se han importado: la aplicación los identifica con un identificador que Polyfin no reconoce, o ningún título de Polyfin lo tiene. En el caso de una serie, la aplicación también puede indicar los episodios vistos por su posición en una lista de episodios que las extensiones de Polyfin ordenan de otra forma.',
       reasons: {
@@ -671,7 +671,7 @@ const account: typeof en = {
           },
           toggle: (name: string, list: string) => `Importar mi ${list} de ${name}`,
           toggleHelp: (name: string, list: string) =>
-            `Coloca las películas y series de su ${list} de ${name} en la vista «Para ver» de sus aplicaciones de Jellyfin, en cada importación. Un título sale de ella en cuanto lo empieza o en cuanto ${name} deja de incluirlo. No se envía nada a ${name}.`,
+            `Coloca las películas y series de su ${list} de ${name} en la lista de reproducción «Para ver» de sus aplicaciones de Jellyfin, en cada importación, una serie como sus episodios emitidos. Solo se añade lo que aún no ha visto. Lo que empezó se queda. Un título que ${name} deja de incluir sale de ella, salvo si lo empezó o lo añadió usted. No se envía nada a ${name}.`,
           counts: (added: number, unmapped: number) =>
             `${added === 1 ? '1 añadido' : `${added} añadidos`} a «Para ver», ${unmapped === 1 ? '1 título no encontrado' : `${unmapped} títulos no encontrados`} en Polyfin.`,
           added: (added: number) =>
