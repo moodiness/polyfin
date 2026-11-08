@@ -2341,7 +2341,17 @@ export type AccountTitle = {
 
 /** What a home row of the web player lists. */
 export type HomeRowKind =
-  'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting' | 'trakt' | 'picks'
+  | 'catalog'
+  | 'collection'
+  | 'because'
+  | 'new'
+  | 'available'
+  | 'waiting'
+  | 'trakt'
+  | 'picks'
+  | 'watchlist'
+  | 'playlists'
+  | 'playlist'
 
 /** Where the web player shows a home row: at the top, after Continue Watching, after Next Up, at the bottom. */
 export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'
@@ -2362,9 +2372,10 @@ export type HomeRowSchedule = {
 
 /**
  * A row of the web player's home page (Settings › Web player › Home rows). A catalog row names its
- * catalog, a collection row its collection; `count` is how many rows Because you watched makes;
- * `users` are those a row not shown to everyone is shown to; `library` also makes it a library in
- * other apps; `shownNow` tells whether its schedule shows it now.
+ * catalog, a collection row its collection, a playlist row its playlist (`playlistId`); `count` is
+ * how many rows Because you watched or My playlists makes; `users` are those a row not shown to
+ * everyone is shown to; `library` also makes it a library in other apps, never for My playlists;
+ * `shownNow` tells whether its schedule shows it now.
  */
 export type HomeRow = {
   id: string
@@ -2375,6 +2386,7 @@ export type HomeRow = {
   catalogType: string
   catalogId: string
   collectionId: string
+  playlistId: string
   count: number
   everyone: boolean
   users: string[]
@@ -2397,16 +2409,26 @@ export type HomeRowCatalog = {
 /** A collection a home row may list: made by users, a smart list or an addon's. */
 export type HomeRowCollection = { id: string; name: string; source: 'users' | 'smart' | 'addon' }
 
+/**
+ * A playlist a home row may list, any but the Watchlists: its owner's name, and who may see it:
+ * everyone (`public`), the users it is shared with too (`shared`) or its owner only (`private`).
+ */
+export type HomeRowPlaylist = {
+  id: string
+  name: string
+  ownerName: string
+  access: 'public' | 'shared' | 'private'
+}
+
 export const fetchHomeRows = (signal?: AbortSignal) =>
   request<{ rows: HomeRow[] }>('GET', '/home-rows', undefined, signal)
 
 export const fetchHomeRowChoices = (signal?: AbortSignal) =>
-  request<{ catalogs: HomeRowCatalog[]; collections: HomeRowCollection[] }>(
-    'GET',
-    '/home-rows/choices',
-    undefined,
-    signal,
-  )
+  request<{
+    catalogs: HomeRowCatalog[]
+    collections: HomeRowCollection[]
+    playlists: HomeRowPlaylist[]
+  }>('GET', '/home-rows/choices', undefined, signal)
 
 export const createHomeRow = (draft: HomeRowDraft) => request<HomeRow>('POST', '/home-rows', draft)
 
