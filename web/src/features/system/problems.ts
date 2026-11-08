@@ -109,7 +109,8 @@ function torrentStartWhy(
 
 /**
  * That a host answers an error file instead of the videos, since a time: Health's problem, and the
- * notice on the versions from that host.
+ * notice on the versions from that host, each followed by what to check
+ * (`problems.hostErrorFileHint`).
  */
 export function hostErrorFileText(
   t: Messages,
@@ -169,7 +170,7 @@ export function problemText(t: Messages, language: string, problem: HealthProble
         text.torrentStoppedWhy[problem.failure](problem.name ?? ''),
       )
     case 'host_error_file':
-      return hostErrorFileText(t, language, problem.host, problem.at)
+      return `${hostErrorFileText(t, language, problem.host, problem.at)} ${text.hostErrorFileHint}`
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
     case 'proxy_name_unresolved':

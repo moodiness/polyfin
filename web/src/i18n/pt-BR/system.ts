@@ -188,6 +188,8 @@ const system: typeof en = {
           `Miniaturas pausadas para ${host}: ele pediu para diminuir o ritmo.`,
         hostErrorFile: (host: string, since: string) =>
           `O host ${host} responde com um arquivo de erro em vez dos vídeos, desde as ${since}.`,
+        hostErrorFileHint:
+          'Isso costuma significar que a conta nesse serviço precisa de atenção (uma troca de senha, uma assinatura, um limite atingido) ou que o serviço está fora do ar: verifique no site dele.',
         unknownProxy: (address: string) =>
           `${address} encaminha requisições (X-Forwarded-For), mas não é um proxy conhecido, então todos os clientes dele contam como ${address}. Se for o seu proxy reverso, adicione-o em Proxies conhecidos, em Configurações › Segurança.`,
         discoveryPort: (port: number) =>
