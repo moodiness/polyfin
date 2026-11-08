@@ -1131,6 +1131,10 @@ const settings: typeof en = {
       nameHelp: 'El título de la fila en la página de inicio.',
       becauseNameHelp:
         'Cada fila lleva este nombre, seguido del título al que corresponde: «Porque ha visto Película de ejemplo».',
+      watchlistNameHelp:
+        'Su nombre en esta lista. Cada usuario ve la fila con el nombre de su propia lista Para ver: el predeterminado en su idioma, o el que le dio.',
+      playlistsNameHelp:
+        'Su nombre en esta lista y en Mi cuenta. En la página de inicio, cada fila lleva el nombre de su lista de reproducción.',
       kind: 'Tipo',
       kinds: {
         catalog: 'Un catálogo',
@@ -1141,6 +1145,14 @@ const settings: typeof en = {
         waiting: 'Aún en espera',
         trakt: 'Recomendado en Trakt',
         picks: 'Recomendados para usted',
+        watchlist: 'Para ver',
+        playlists: 'Mis listas de reproducción',
+        playlist: 'Lista de reproducción',
+      },
+      kindDetails: {
+        watchlist: 'La propia lista de cada miembro',
+        playlists: 'Las listas que cada miembro marcó con ♥, una fila cada una',
+        playlist: 'Una lista de reproducción que usted elige',
       },
       kindHelp: {
         catalog:
@@ -1158,6 +1170,12 @@ const settings: typeof en = {
           'Las películas y series que Trakt recomienda al usuario, leídas con su conexión a Trakt cada 12 horas, sin las de su colección o su Watchlist de Trakt ni las que ya vio. Solo la ven los usuarios que conectaron Trakt en Mi cuenta › Seguimiento; la primera vez, aparece en cuanto Trakt responde.',
         picks:
           'Las películas y series de las bibliotecas del usuario, listas inteligentes incluidas, que su perfil de gustos sitúa primero, sin las que ya reprodujo ni las de un género que no le gusta. Mientras el perfil no lo conozca lo suficiente, los primeros títulos de las bibliotecas, los más populares primero. Cada usuario ve su perfil en Mi cuenta.',
+        watchlist:
+          'La lista Para ver de cada usuario, en su orden, con el nombre que tiene para él.',
+        playlists:
+          'Una fila por cada lista de reproducción que el usuario marcó con ♥ y puede ver, por orden de nombre, cada una con el nombre de su lista. Su lista Para ver queda fuera mientras se le muestre una fila Para ver.',
+        playlist:
+          'Una lista de reproducción que usted elige, en su orden. Solo la reciben los usuarios que pueden verla: su propietario, aquellos con quienes se comparte, o todos cuando es pública.',
       },
       defaultNames: {
         because: 'Porque ha visto',
@@ -1166,6 +1184,8 @@ const settings: typeof en = {
         waiting: 'Aún en espera',
         trakt: 'Recomendado en Trakt',
         picks: 'Recomendados para usted',
+        watchlist: 'Para ver',
+        playlists: 'Mis listas de reproducción',
       },
       catalog: 'Catálogo',
       noCatalog: 'Las extensiones del servidor no tienen ningún catálogo que mostrar.',
@@ -1176,12 +1196,25 @@ const settings: typeof en = {
         smart: 'Lista inteligente',
         addon: 'Extensión',
       },
+      playlist: 'Lista de reproducción',
+      playlistHelp:
+        'Una lista privada solo se muestra a su propietario y a aquellos con quienes se comparte, aunque la fila se muestre a todos.',
+      noPlaylist:
+        'Todavía no hay ninguna lista de reproducción. Los usuarios las crean en las apps de Jellyfin.',
+      playlistAccess: {
+        public: 'Pública',
+        shared: 'Compartida',
+        private: 'Privada',
+      },
       choose: 'Elegir…',
       unknownCatalog: 'Un catálogo que ya no está disponible',
       unknownCollection: 'Una colección que ya no está disponible',
+      unknownPlaylist: 'Una lista de reproducción que ya no está disponible',
       count: 'Filas',
       countHelp:
         'Cuántas de las últimas películas y series reproducidas tienen una fila, de 1 a 10.',
+      playlistsCountHelp:
+        'Cuántas listas marcadas con ♥ tienen fila como máximo, de 1 a 10, las primeras por nombre.',
       place: 'Posición',
       places: {
         top: 'Arriba del todo',

@@ -158,6 +158,7 @@ function ListOption({
   disabled = false,
   lang,
   compact = false,
+  detail,
   onActivate,
   onChoose,
   children,
@@ -172,6 +173,8 @@ function ListOption({
   lang?: string
   /** A 32 px row with smaller words, in the list of a compact field. */
   compact?: boolean
+  /** A line under the label, in smaller words. */
+  detail?: string
   onActivate: () => void
   onChoose: () => void
   children: ReactNode
@@ -200,7 +203,12 @@ function ListOption({
         disabled && 'cursor-not-allowed opacity-45 active:bg-transparent',
       )}
     >
-      <span className="min-w-0 flex-1 break-words">{children}</span>
+      <span className="min-w-0 flex-1 break-words">
+        {children}
+        {detail !== undefined && (
+          <span className="block text-small font-normal text-ink-3">{detail}</span>
+        )}
+      </span>
       {checked && (
         <CheckIcon
           size={rem(compact ? 15 : 17)}
@@ -218,6 +226,8 @@ export type SelectOption<T extends string | number> = {
   disabled?: boolean
   /** A `lang` attribute, for an option written in another language (a language's own name). */
   lang?: string
+  /** A line under the label in the list, saying what the option does. */
+  detail?: string
 }
 
 export type SelectProps<T extends string | number> = {
@@ -535,6 +545,7 @@ export function Select<T extends string | number>({
                 disabled={options[index].disabled}
                 lang={options[index].lang}
                 compact={size === 'compact'}
+                detail={options[index].detail}
                 onActivate={() => setActive(index)}
                 onChoose={() => choose(index)}
               >

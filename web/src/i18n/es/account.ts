@@ -110,6 +110,8 @@ const account: typeof en = {
       empty: 'Ninguna fila de inicio',
       emptyHelp:
         'El administrador no ha añadido ninguna fila para usted a la página de inicio del reproductor web.',
+      watchlistKind: 'Su lista Para ver',
+      playlistsKind: 'Una fila por cada lista que marcó con ♥',
       on: (name: string) => `${name} vuelve a estar en su página de inicio.`,
       off: (name: string) => `${name} se ha quitado de su página de inicio.`,
     },

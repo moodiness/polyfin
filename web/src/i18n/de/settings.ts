@@ -1118,6 +1118,10 @@ const settings: typeof en = {
       nameHelp: 'Der Titel der Zeile auf der Startseite.',
       becauseNameHelp:
         'Jede Zeile trägt diesen Namen, gefolgt vom Titel, auf den sie sich bezieht: „Weil du Beispielfilm gesehen hast“.',
+      watchlistNameHelp:
+        'Ihr Name in dieser Liste. Jeder Benutzer sieht die Zeile unter dem Namen seiner eigenen Merkliste: dem Standardnamen in seiner Sprache oder dem, den er ihr gab.',
+      playlistsNameHelp:
+        'Ihr Name in dieser Liste und unter Mein Konto. Auf der Startseite trägt jede Zeile den Namen ihrer Wiedergabeliste.',
       kind: 'Art',
       kinds: {
         catalog: 'Ein Katalog',
@@ -1128,6 +1132,14 @@ const settings: typeof en = {
         waiting: 'Noch ausstehend',
         trakt: 'Empfohlen auf Trakt',
         picks: 'Top-Tipps für dich',
+        watchlist: 'Merkliste',
+        playlists: 'Meine Wiedergabelisten',
+        playlist: 'Wiedergabeliste',
+      },
+      kindDetails: {
+        watchlist: 'Die eigene Liste jedes Mitglieds',
+        playlists: 'Die Listen, die jedes Mitglied mit ♥ markiert hat, je eine Zeile',
+        playlist: 'Eine Wiedergabeliste deiner Wahl',
       },
       kindHelp: {
         catalog:
@@ -1145,6 +1157,12 @@ const settings: typeof en = {
           'Die Filme und Serien, die Trakt dem Benutzer empfiehlt, alle 12 Stunden über seine Trakt-Verbindung gelesen, ohne die aus seiner Trakt-Sammlung oder -Watchlist und ohne die, die er gesehen hat. Nur Benutzer, die Trakt unter Mein Konto › Tracking verbunden haben, sehen sie; beim ersten Mal erscheint sie, sobald Trakt geantwortet hat.',
         picks:
           'Die Filme und Serien der Bibliotheken des Benutzers, intelligente Listen eingeschlossen, die sein Geschmacksprofil am höchsten einstuft, ohne die bereits abgespielten und ohne die eines Genres, das er nicht mag. Solange das Profil ihn noch nicht gut genug kennt, die ersten Titel der Bibliotheken, die beliebtesten zuerst. Jeder Benutzer sieht sein Profil unter Mein Konto.',
+        watchlist:
+          'Die eigene Merkliste jedes Benutzers, in ihrer Reihenfolge, unter dem Namen, den sie für ihn hat.',
+        playlists:
+          'Eine Zeile für jede Wiedergabeliste, die der Benutzer mit ♥ markiert hat und sehen darf, nach Namen geordnet, jede nach ihrer Liste benannt. Seine Merkliste fehlt, solange ihm eine Merkliste-Zeile gezeigt wird.',
+        playlist:
+          'Eine Wiedergabeliste deiner Wahl, in ihrer Reihenfolge. Nur Benutzer, die sie sehen dürfen, bekommen die Zeile: ihr Besitzer, die, mit denen sie geteilt ist, oder alle, wenn sie öffentlich ist.',
       },
       defaultNames: {
         because: 'Weil du gesehen hast',
@@ -1153,6 +1171,8 @@ const settings: typeof en = {
         waiting: 'Noch ausstehend',
         trakt: 'Empfohlen auf Trakt',
         picks: 'Top-Tipps für dich',
+        watchlist: 'Merkliste',
+        playlists: 'Meine Wiedergabelisten',
       },
       catalog: 'Katalog',
       noCatalog: 'Die Server-Add-ons haben keinen Katalog zum Anzeigen.',
@@ -1163,12 +1183,24 @@ const settings: typeof en = {
         smart: 'Intelligente Liste',
         addon: 'Add-on',
       },
+      playlist: 'Wiedergabeliste',
+      playlistHelp:
+        'Eine private Liste sehen nur ihr Besitzer und die, mit denen sie geteilt ist, auch wenn die Zeile allen gezeigt wird.',
+      noPlaylist: 'Es gibt noch keine Wiedergabeliste. Benutzer erstellen sie in Jellyfin-Apps.',
+      playlistAccess: {
+        public: 'Öffentlich',
+        shared: 'Geteilt',
+        private: 'Privat',
+      },
       choose: 'Auswählen…',
       unknownCatalog: 'Ein nicht mehr angebotener Katalog',
       unknownCollection: 'Eine nicht mehr angebotene Sammlung',
+      unknownPlaylist: 'Eine nicht mehr angebotene Wiedergabeliste',
       count: 'Zeilen',
       countHelp:
         'Wie viele der zuletzt abgespielten Filme und Serien eine Zeile erhalten, von 1 bis 10.',
+      playlistsCountHelp:
+        'Wie viele mit ♥ markierte Listen höchstens eine Zeile bekommen, von 1 bis 10, die ersten nach Namen.',
       place: 'Position',
       places: {
         top: 'Ganz oben',

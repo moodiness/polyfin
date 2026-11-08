@@ -110,6 +110,8 @@ const account: typeof en = {
       empty: 'Aucune rangée d’accueil',
       emptyHelp:
         'L’administrateur n’a ajouté aucune rangée pour vous à la page d’accueil du lecteur web.',
+      watchlistKind: 'Votre liste «\u202fÀ regarder\u202f»',
+      playlistsKind: 'Une rangée par liste que vous avez marquée ♥',
       on: (name: string) => `${name} est de retour sur votre page d’accueil.`,
       off: (name: string) => `${name} est retirée de votre page d’accueil.`,
     },

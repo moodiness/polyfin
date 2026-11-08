@@ -110,6 +110,8 @@ const account: typeof en = {
       empty: 'Nenhuma fileira do início',
       emptyHelp:
         'O administrador não adicionou nenhuma fileira para você à página inicial do player web.',
+      watchlistKind: 'Sua playlist Para assistir',
+      playlistsKind: 'Uma linha para cada playlist que você marcou com ♥',
       on: (name: string) => `${name} voltou à sua página inicial.`,
       off: (name: string) => `${name} foi removida da sua página inicial.`,
     },
