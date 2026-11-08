@@ -1,6 +1,6 @@
-// Package testdb gives tests an isolated PostgreSQL schema, or a database of
-// their own, empty or copied from a template, and keeps their whole-database
-// restores from running at once (see LockRestores).
+// Package testdb gives tests a PostgreSQL database of their own, empty or
+// copied from a template, and keeps their whole-database restores from
+// running at once (see LockRestores).
 package testdb
 
 import (
@@ -33,14 +33,10 @@ func URL(t testing.TB) string {
 
 // CopyURL returns the address of the database of a pool Copy returned,
 // for programs other than the test, such as pg_dump and pg_restore, to
-// reach it. It fails the test for a pool of New, whose schema they would
-// not see, and checks that the address reaches that database alone.
+// reach it. It checks that the address reaches that database alone.
 func CopyURL(t testing.TB, pool *pgxpool.Pool) string {
 	t.Helper()
 	config := pool.Config().ConnConfig
-	if _, schema := config.RuntimeParams["search_path"]; schema {
-		t.Fatal("the pool is on a schema of the shared test database, not on a database of its own")
-	}
 	address, err := url.Parse(URL(t))
 	if err != nil || address.Scheme == "" {
 		t.Fatalf("POLYFIN_TEST_DATABASE_URL is not a URL: %v", err)
@@ -63,29 +59,9 @@ func CopyURL(t testing.TB, pool *pgxpool.Pool) string {
 // packages of four tests at a time, each with a pool.
 const maxConns = 4
 
-// New returns a pool whose search_path is a fresh schema, dropped when the
-// test ends, so tests never see each other's tables.
-func New(t testing.TB) *pgxpool.Pool {
-	t.Helper()
-	url := URL(t)
-	ctx := t.Context()
-
-	schema := pgx.Identifier{"test_" + random()}.Sanitize()
-	if err := exec(ctx, url, "CREATE SCHEMA "+schema); err != nil {
-		t.Fatalf("create test schema: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := exec(context.Background(), url, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
-			t.Errorf("drop test schema: %v", err)
-		}
-	})
-	return open(t, url, func(config *pgxpool.Config) { config.ConnConfig.RuntimeParams["search_path"] = schema })
-}
-
 // Empty returns a pool on an empty database of its own, dropped when the
-// test ends. Unlike a schema of New, it keeps its advisory locks to itself,
-// and its drop takes none of the shared lock table: the tests of migrations
-// run in parallel on it.
+// test ends. It keeps its advisory locks to itself, and its drop takes none
+// of the shared lock table: the tests of migrations run in parallel on it.
 func Empty(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	return Copy(t, "empty", func(context.Context, *pgxpool.Pool) error { return nil })
