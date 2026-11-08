@@ -11,7 +11,8 @@ import (
 // The targets that chose the weekly summary receive the year in review
 // too; the others, and the month in review, stay as they were.
 func TestReviewsMigrationChoosesTheYearWhereTheWeekIs(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {

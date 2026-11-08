@@ -13,6 +13,7 @@ import (
 // former default the new one, 120 s, another value its length within the
 // new bounds.
 func TestAheadSegmentsBecomeSeconds(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +28,8 @@ func TestAheadSegmentsBecomeSeconds(t *testing.T) {
 	}
 	for segments, seconds := range map[int]int{10: 120, 1: 30, 4: 30, 20: 120, 30: 180, 60: 360} {
 		t.Run(strconv.Itoa(segments), func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if err := migrate(ctx, pool, migrations[:at]); err != nil {
 				t.Fatal(err)

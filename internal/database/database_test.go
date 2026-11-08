@@ -21,7 +21,8 @@ func step(version int, name, sql string) migration {
 }
 
 func TestMigrateCreatesAStableServerIdentity(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
@@ -43,7 +44,8 @@ func TestMigrateCreatesAStableServerIdentity(t *testing.T) {
 }
 
 func TestMigrateRefusesAnEditedMigration(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := migrate(ctx, pool, []migration{step(1, "a", "CREATE TABLE a (x int)")}); err != nil {
 		t.Fatal(err)
@@ -55,7 +57,8 @@ func TestMigrateRefusesAnEditedMigration(t *testing.T) {
 }
 
 func TestMigrateRefusesASchemaFromANewerBuild(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	newer := []migration{step(1, "a", "CREATE TABLE a (x int)"), step(2, "b", "CREATE TABLE b (x int)")}
 	if err := migrate(ctx, pool, newer); err != nil {
@@ -71,6 +74,7 @@ func TestMigrateRefusesASchemaFromANewerBuild(t *testing.T) {
 // every start, and the first of several changed migrations is the one
 // named.
 func TestSchemaErrorsNameTheSameVersionEachTime(t *testing.T) {
+	t.Parallel()
 	shipped := []migration{step(1, "a", "SELECT 1"), step(2, "b", "SELECT 2")}
 	ahead := map[int]string{1: shipped[0].checksum, 2: shipped[1].checksum}
 	for version := 3; version <= 8; version++ {
@@ -89,7 +93,8 @@ func TestSchemaErrorsNameTheSameVersionEachTime(t *testing.T) {
 }
 
 func TestMigrateRollsBackAFailedMigration(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	err := migrate(ctx, pool, []migration{
 		step(1, "a", "CREATE TABLE a (x int)"),
@@ -112,7 +117,8 @@ func TestMigrateRollsBackAFailedMigration(t *testing.T) {
 }
 
 func TestConcurrentStartsApplyEachMigrationOnce(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	// Not idempotent: a second application would fail.
 	migrations := []migration{step(1, "a", "CREATE TABLE a (x int)")}
@@ -128,6 +134,7 @@ func TestConcurrentStartsApplyEachMigrationOnce(t *testing.T) {
 }
 
 func TestLoadMigrationsRejectsBadSets(t *testing.T) {
+	t.Parallel()
 	file := &fstest.MapFile{Data: []byte("SELECT 1")}
 	for name, files := range map[string]fstest.MapFS{
 		"gap":       {"0001_a.sql": file, "0003_c.sql": file},
@@ -142,6 +149,7 @@ func TestLoadMigrationsRejectsBadSets(t *testing.T) {
 }
 
 func TestConnectFailsFastOnRejectedCredentials(t *testing.T) {
+	t.Parallel()
 	parsed, err := url.Parse(testdb.URL(t))
 	if err != nil {
 		t.Fatal(err)
@@ -156,6 +164,7 @@ func TestConnectFailsFastOnRejectedCredentials(t *testing.T) {
 }
 
 func TestConnectStopsWaitingWhenCanceled(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 1500*time.Millisecond)
 	defer cancel()
 	_, err := Connect(ctx, "postgresql://polyfin@127.0.0.1:1/polyfin?connect_timeout=1",

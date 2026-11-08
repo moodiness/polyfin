@@ -11,7 +11,8 @@ import (
 // Existing administrators may manage subtitles once each user has the
 // permission; other users may not.
 func TestAppsMigrationLetsAdministratorsManageSubtitles(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {

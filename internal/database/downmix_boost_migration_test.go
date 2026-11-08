@@ -12,6 +12,7 @@ import (
 // old default, 1, and a new server starts at 2; a server that chose
 // another volume keeps it.
 func TestDownmixBoostMigrationMovesOnlyTheOldDefault(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +36,8 @@ func TestDownmixBoostMigrationMovesOnlyTheOldDefault(t *testing.T) {
 		"the highest volume": {new(3.0), 3},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if tc.before != nil {
 				if err := migrate(ctx, pool, migrations[:at]); err != nil {

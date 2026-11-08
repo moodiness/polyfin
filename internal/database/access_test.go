@@ -11,7 +11,8 @@ import (
 // Existing administrators keep controlling other users' apps once each
 // user has their own permission; other users do not get it.
 func TestUserAccessMigrationKeepsAdministratorsInControl(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {

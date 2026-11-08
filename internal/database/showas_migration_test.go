@@ -13,6 +13,7 @@ import (
 // no choice yet, so that Polyfin may decide one for a catalog of other
 // videos from its first page.
 func TestShowAsMigrationKeepsTheChoice(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +26,7 @@ func TestShowAsMigrationKeepsTheChoice(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no library_show_as migration")
 	}
-	pool := testdb.New(t)
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := migrate(ctx, pool, migrations[:at]); err != nil {
 		t.Fatal(err)

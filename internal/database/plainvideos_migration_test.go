@@ -13,6 +13,7 @@ import (
 // their plain videos' identifiers, as new folders do; a home videos
 // folder's identifiers stay its own.
 func TestPlainVideosMigrationServesTheirIdentifiers(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +26,7 @@ func TestPlainVideosMigrationServesTheirIdentifiers(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no local_plain_videos migration")
 	}
-	pool := testdb.New(t)
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := migrate(ctx, pool, migrations[:at]); err != nil {
 		t.Fatal(err)

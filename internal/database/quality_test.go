@@ -11,7 +11,8 @@ import (
 // Existing users keep every version, Original, once users have a quality
 // group; only the groups offered can be stored.
 func TestQualityGroupsMigrationKeepsUsersOnOriginal(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {

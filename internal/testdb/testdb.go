@@ -1,5 +1,5 @@
 // Package testdb gives tests an isolated PostgreSQL schema, or a database of
-// their own copied from a template.
+// their own, empty or copied from a template.
 package testdb
 
 import (
@@ -79,6 +79,15 @@ func New(t testing.TB) *pgxpool.Pool {
 		}
 	})
 	return open(t, url, func(config *pgxpool.Config) { config.ConnConfig.RuntimeParams["search_path"] = schema })
+}
+
+// Empty returns a pool on an empty database of its own, dropped when the
+// test ends. Unlike a schema of New, it keeps its advisory locks to itself,
+// and its drop takes none of the shared lock table: the tests of migrations
+// run in parallel on it.
+func Empty(t testing.TB) *pgxpool.Pool {
+	t.Helper()
+	return Copy(t, "empty", func(context.Context, *pgxpool.Pool) error { return nil })
 }
 
 // templatePrefix starts the names of template databases; their key ends
