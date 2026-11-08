@@ -35,15 +35,15 @@ const users: typeof en = {
       'Un utilisateur désactivé ne peut plus se connecter, et tous ses appareils sont déconnectés.',
     providerOnly: 'Fournisseur d’identité uniquement',
     providerOnlyHelp:
-      'L’utilisateur se connecte avec le fournisseur d’identité configuré dans Paramètres › Sécurité, jamais avec un mot de passe : le mot de passe est refusé, et un compte créé ainsi n’en a pas besoin. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect.',
+      'L’utilisateur se connecte avec le fournisseur d’identité configuré dans Paramètres › Sécurité, jamais avec un mot de passe\u202f: le mot de passe est refusé, et un compte créé ainsi n’en a pas besoin. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect.',
     ended: 'Terminé',
     endsOn: (date: string) => `Prend fin le ${date}`,
     endedOn: (date: string) => `A pris fin le ${date}`,
     endTitle: 'Prend fin le',
     endHelp:
-      'À partir de cette date, dans le fuseau horaire du serveur, le compte est refusé comme un compte désactivé : il ne peut plus se connecter, et ses appareils sont refusés. Tout ce qu’il possède est gardé, et une date plus tardive, ou « Jamais », le rétablit.',
+      'À partir de cette date, dans le fuseau horaire du serveur, le compte est refusé comme un compte désactivé\u202f: il ne peut plus se connecter, et ses appareils sont refusés. Tout ce qu’il possède est gardé, et une date plus tardive, ou «\u202fJamais\u202f», le rétablit.',
     endAdministratorHelp:
-      'Le compte d’un administrateur ne prend jamais fin : faire d’un utilisateur un administrateur efface sa date de fin.',
+      'Le compte d’un administrateur ne prend jamais fin\u202f: faire d’un utilisateur un administrateur efface sa date de fin.',
     endDate: 'Date de fin',
     saveEnd: 'Enregistrer la date',
     endNever: 'Jamais',
@@ -74,13 +74,13 @@ const users: typeof en = {
     moreActions: (name: string) => `Autres actions pour ${name}`,
     disable: 'Désactiver',
     enable: 'Réactiver',
-    disableTitle: (name: string) => `Désactiver ${name} ?`,
+    disableTitle: (name: string) => `Désactiver ${name}\u202f?`,
     disabling: 'Désactivation…',
     disabledNow: (name: string) => `${name} a été désactivé.`,
     enabledNow: (name: string) => `${name} peut de nouveau se connecter.`,
     signOutAll: 'Déconnecter tous les appareils',
     signOutAllConfirm: (name: string) =>
-      `Déconnecter tous les appareils Jellyfin de ${name} ? Chaque application devra se reconnecter.`,
+      `Déconnecter tous les appareils Jellyfin de ${name}\u202f? Chaque application devra se reconnecter.`,
     signingOutAll: 'Déconnexion…',
     signedOutAll: (count: number) =>
       count === 0
@@ -90,18 +90,18 @@ const users: typeof en = {
           : `${count} appareils ont été déconnectés.`,
     metadataLanguageTitle: 'Langue des métadonnées',
     metadataLanguageHelp:
-      'La langue des noms, des résumés et des images des titres dans les applis de cet utilisateur, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous : le contrôle parental et les genres bloqués jugent chaque utilisateur de la même façon. Les noms que Polyfin crée lui-même la suivent quand Polyfin la parle : anglais, français, allemand, espagnol, italien ou portugais.',
+      'La langue des noms, des résumés et des images des titres dans les applis de cet utilisateur, quand l’un des addons du serveur les décrit dans cette langue\u202f; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous\u202f: le contrôle parental et les genres bloqués jugent chaque utilisateur de la même façon. Les noms que Polyfin crée lui-même la suivent quand Polyfin la parle\u202f: anglais, français, allemand, espagnol, italien ou portugais.',
     metadataLanguageNone:
       'Aucun addon du serveur n’a encore de langue. Donnez-en une à un addon sur sa page, dans Contenu › Sources.',
     webThemeTitle: 'Thème du lecteur web',
     webThemeHelp:
-      'L’apparence du lecteur web pour cet utilisateur, sur chaque navigateur où il se connecte : le thème du serveur, LumaaGlaass, l’apparence de jellyfin-web, plus légère, pour les téléviseurs et les téléphones anciens, ou le thème personnalisé tant qu’il a un texte. Les navigateurs trop anciens pour LumaaGlaass prennent d’eux-mêmes l’apparence de jellyfin-web.',
+      'L’apparence du lecteur web pour cet utilisateur, sur chaque navigateur où il se connecte\u202f: le thème du serveur, LumaaGlaass, l’apparence de jellyfin-web, plus légère, pour les téléviseurs et les téléphones anciens, ou le thème personnalisé tant qu’il a un texte. Les navigateurs trop anciens pour LumaaGlaass prennent d’eux-mêmes l’apparence de jellyfin-web.',
     webThemeChange: 'Lui permettre de le changer',
     webThemeChangeHelp:
       'Dans Mon compte › Thème du lecteur web. Désactivé, le thème choisi ici reste le sien.',
     audioRegionTitle: 'Région audio',
     audioRegionHelp:
-      'Le doublage que cet utilisateur préfère quand une langue est doublée à part pour une région, comme le français du Québec. Elle s’applique à la langue audio choisie dans ses applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est : dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',
+      'Le doublage que cet utilisateur préfère quand une langue est doublée à part pour une région, comme le français du Québec. Elle s’applique à la langue audio choisie dans ses applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est\u202f: dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',
     parentalTitle: 'Contrôle parental',
     maxRating: 'Classification maximale',
     maxRatingHelp: 'Les titres classés au-delà de cette limite sont masqués pour cet utilisateur.',
@@ -112,7 +112,7 @@ const users: typeof en = {
     devicesTitle: 'Appareils',
     delete: 'Supprimer l’utilisateur',
     deleteConfirm: (name: string) =>
-      `Supprimer ${name} ? Ses appareils seront déconnectés et cette action est irréversible.`,
+      `Supprimer ${name}\u202f? Ses appareils seront déconnectés et cette action est irréversible.`,
     deleting: 'Suppression…',
     deleted: (name: string) => `${name} a été supprimé.`,
     canAddAddons: 'Peut ajouter ses propres addons',
@@ -121,16 +121,17 @@ const users: typeof en = {
     noPersonalAddons: 'Sans addons personnels',
     blockedUntil: (time: string) => `Bloqué jusqu’à ${time}`,
     blockedHelp:
-      'Trop de mots de passe faux ont été saisis pour ce compte : il ne peut pas se connecter avant cette heure, même avec le bon mot de passe.',
+      'Trop de mots de passe faux ont été saisis pour ce compte\u202f: il ne peut pas se connecter avant cette heure, même avec le bon mot de passe.',
     unblock: 'Débloquer',
     unblocking: 'Déblocage…',
     unblocked: 'Le compte est débloqué.',
     twoStepOn: 'La connexion en deux étapes est activée.',
     twoStepHelp:
-      'Si cet utilisateur a perdu le téléphone de son application d’authentification et n’a plus de code de secours, désactivez-la : il se connecte avec son mot de passe seul, puis la configure de nouveau depuis Mon compte.',
+      'Si cet utilisateur a perdu le téléphone de son application d’authentification et n’a plus de code de secours, désactivez-la\u202f: il se connecte avec son mot de passe seul, puis la configure de nouveau depuis Mon compte.',
     turnOffTwoStep: 'Désactiver la connexion en deux étapes',
     turningOffTwoStep: 'Désactivation…',
-    turnOffTwoStepTitle: (name: string) => `Désactiver la connexion en deux étapes de ${name} ?`,
+    turnOffTwoStepTitle: (name: string) =>
+      `Désactiver la connexion en deux étapes de ${name}\u202f?`,
     turnOffTwoStepConfirm: (name: string) =>
       `${name} se connecte alors avec son mot de passe seul. Le journal d’activité indique que vous l’avez désactivée.`,
     twoStepTurnedOff: 'La connexion en deux étapes est désactivée pour cet utilisateur.',
@@ -140,7 +141,7 @@ const users: typeof en = {
       'Le nombre d’appareils de cet utilisateur qui peuvent lire en même temps. Il peut toujours se connecter sur d’autres appareils.',
     maxBitrate: 'Qualité maximale',
     maxBitrateHelp:
-      'Au-delà, la vidéo est convertie si cet utilisateur peut utiliser la conversion ; sinon, une version plus légère est lue.',
+      'Au-delà, la vidéo est convertie si cet utilisateur peut utiliser la conversion\u202f; sinon, une version plus légère est lue.',
     bitrateNoLimit: 'Pas de limite',
     bitrate4k: '40 Mbit/s (4K)',
     bitrate1080High: '20 Mbit/s (1080p, haute qualité)',
@@ -163,16 +164,16 @@ const users: typeof en = {
     liveTvManagementHelp: 'Programmer et supprimer des enregistrements.',
     localFirst: 'Lire d’abord les fichiers locaux',
     localFirstHelp:
-      'Place les versions des dossiers locaux et des partages réseau avant les autres dans les menus de versions de cet utilisateur, quoi que dise « Trier les versions par », pour que la lecture commence par elles. Les autres utilisateurs gardent l’ordre du serveur.',
+      'Place les versions des dossiers locaux et des partages réseau avant les autres dans les menus de versions de cet utilisateur, quoi que dise «\u202fTrier les versions par\u202f», pour que la lecture commence par elles. Les autres utilisateurs gardent l’ordre du serveur.',
     boostVolume: 'Augmenter le volume dans le lecteur web',
     boostVolumeHelp:
-      'Rend les vidéos plus fortes dans le lecteur web de cet utilisateur, dans un navigateur et dans les applications Jellyfin pour Android et iOS : environ 8 dB sur les passages calmes et 5 dB sur les passages forts, les crêtes tenues près de la pleine échelle. Le navigateur fait le travail, mais pour qu’il atteigne les flux des addons, le serveur envoie lui-même ces flux au lecteur web de cet utilisateur au lieu de l’envoyer à leur source, ce qui prend de la bande passante au serveur. Les lecteurs propres aux applications ne sont pas concernés, ni les flux qu’un iPhone ou un iPad lit en HLS.',
+      'Rend les vidéos plus fortes dans le lecteur web de cet utilisateur, dans un navigateur et dans les applications Jellyfin pour Android et iOS\u202f: environ 8 dB sur les passages calmes et 5 dB sur les passages forts, les crêtes tenues près de la pleine échelle. Le navigateur fait le travail, mais pour qu’il atteigne les flux des addons, le serveur envoie lui-même ces flux au lecteur web de cet utilisateur au lieu de l’envoyer à leur source, ce qui prend de la bande passante au serveur. Les lecteurs propres aux applications ne sont pas concernés, ni les flux qu’un iPhone ou un iPad lit en HLS.',
     convertSound: 'Convertir le son pour l’égaliser',
     convertSoundHelp:
-      'Le serveur convertit le son des vidéos et des chaînes de cet utilisateur et l’égalise à -16 LUFS, l’image copiée, pour que chaque application le lise plus fort et de façon égale. Le prix : rien n’est lu directement, chaque lecture prend un peu du processeur du serveur, et le son multicanal arrive à un ampli converti plutôt que dans sa piste d’origine.',
+      'Le serveur convertit le son des vidéos et des chaînes de cet utilisateur et l’égalise à -16 LUFS, l’image copiée, pour que chaque application le lise plus fort et de façon égale. Le prix\u202f: rien n’est lu directement, chaque lecture prend un peu du processeur du serveur, et le son multicanal arrive à un ampli converti plutôt que dans sa piste d’origine.',
     visibleLibrariesTitle: 'Bibliothèques visibles',
     visibleLibrariesHelp:
-      'Les bibliothèques du serveur que les applications de cet utilisateur affichent. Les bibliothèques ajoutées plus tard sont affichées. Ce choix ne bloque aucun titre : on peut toujours les trouver dans d’autres bibliothèques, par la recherche ou par un lien. Pour bloquer des titres, utilisez le contrôle parental ou les genres bloqués.',
+      'Les bibliothèques du serveur que les applications de cet utilisateur affichent. Les bibliothèques ajoutées plus tard sont affichées. Ce choix ne bloque aucun titre\u202f: on peut toujours les trouver dans d’autres bibliothèques, par la recherche ou par un lien. Pour bloquer des titres, utilisez le contrôle parental ou les genres bloqués.',
     noServerLibraries: 'Le serveur n’a pas encore de bibliothèque.',
     blockedGenresTitle: 'Genres bloqués',
     blockedGenresHelp:
@@ -193,7 +194,7 @@ const users: typeof en = {
     channelsExceptHelp: 'Les groupes et les chaînes cochés sont masqués.',
     channelGroups: 'Groupes',
     filterChannelGroups: 'Filtrer les groupes',
-    moreChannelGroups: (count: number) => `${count} de plus : filtrez pour les trouver.`,
+    moreChannelGroups: (count: number) => `${count} de plus\u202f: filtrez pour les trouver.`,
     newChannelGroup: 'Nouveau',
     noChannelGroups: 'Les sources de TV en direct du serveur n’ont encore aucune chaîne.',
     singleChannels: 'Chaînes',
@@ -202,14 +203,14 @@ const users: typeof en = {
     noTickedChannels: 'Aucune chaîne cochée.',
     goneChannel: 'Chaîne qui n’est plus listée',
     removeChannel: (name: string) => `Retirer ${name}`,
-    moreChannels: (count: number) => `${count} de plus : recherchez pour les trouver.`,
+    moreChannels: (count: number) => `${count} de plus\u202f: recherchez pour les trouver.`,
     hideNewChannelGroups: 'Masquer les chaînes des groupes ajoutés plus tard',
     hideNewChannelGroupsHelp:
-      'Les groupes qu’une source ajoute après l’enregistrement sont masqués. Ils apparaissent ici cochés, marqués « Nouveau », jusqu’au prochain enregistrement.',
+      'Les groupes qu’une source ajoute après l’enregistrement sont masqués. Ils apparaissent ici cochés, marqués «\u202fNouveau\u202f», jusqu’au prochain enregistrement.',
     allowedHoursTitle: 'Horaires autorisés',
     allowedHoursHelp:
       'Si des horaires sont définis, cet utilisateur ne peut se connecter et utiliser le serveur que pendant ces horaires, à l’heure du serveur. En dehors, ses applications sont refusées.',
-    noAllowedHours: 'Aucun horaire : cet utilisateur peut utiliser le serveur à toute heure.',
+    noAllowedHours: 'Aucun horaire\u202f: cet utilisateur peut utiliser le serveur à toute heure.',
     day: 'Jour',
     from: 'De',
     to: 'À',
@@ -231,31 +232,31 @@ const users: typeof en = {
     canManageCollections: 'Peut gérer les collections',
     canManageCollectionsHelp:
       'Permet à cet utilisateur de créer des collections de titres dans les applications Jellyfin, d’y ajouter ou d’en retirer des titres, et de les supprimer. Tous les utilisateurs voient les collections, chacun avec seulement les titres qu’il a le droit de voir.',
-    resetPinRequested: 'Réinitialisation du mot de passe demandée : code',
+    resetPinRequested: 'Réinitialisation du mot de passe demandée\u202f: code',
     resetPinValidUntil: (time: string) => `, valable jusqu’à ${time}`,
     resetPinHelp:
-      'Donnez ce code à l’utilisateur : il se connecte avec, et ce code devient son nouveau mot de passe.',
+      'Donnez ce code à l’utilisateur\u202f: il se connecte avec, et ce code devient son nouveau mot de passe.',
     canManageSubtitles: 'Peut gérer les sous-titres',
     canManageSubtitlesHelp:
       'Permet à cet utilisateur d’ajouter des fichiers de sous-titres aux titres depuis ses applications Jellyfin, et d’y chercher les sous-titres des addons.',
     canShare: 'Peut partager des titres',
     canShareHelp:
-      'Permet à cet utilisateur de donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire, depuis Mon compte ou la page d’un titre dans le lecteur web, tant que Paramètres › Sécurité › « Autoriser les liens de partage » est activé. Le désactiver révoque ses liens.',
+      'Permet à cet utilisateur de donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire, depuis Mon compte ou la page d’un titre dans le lecteur web, tant que Paramètres › Sécurité › «\u202fAutoriser les liens de partage\u202f» est activé. Le désactiver révoque ses liens.',
     remoteAccess: 'Peut se connecter depuis l’extérieur du réseau local',
     remoteAccessHelp:
       'Permet à cet utilisateur de se connecter, de parcourir et de lire depuis n’importe où. Désactivé, il ne le peut que depuis le réseau local, même administrateur, tel que les Proxys connus de Paramètres › Sécurité le définissent. Les liens qu’il partage restent lisibles partout.',
     remoteAccessUnknownProxy:
-      'La page Santé voit un proxy inverse absent des Proxys connus : tous ceux qui passent par lui semblent locaux, et cette limite ne s’applique donc pas à eux.',
+      'La page Santé voit un proxy inverse absent des Proxys connus\u202f: tous ceux qui passent par lui semblent locaux, et cette limite ne s’applique donc pas à eux.',
     openKnownProxies: 'Ouvrir les Proxys connus',
     shareLinksTitle: 'Liens partagés',
     shareLinksHelp:
-      'Les liens que cet utilisateur a créés pour partager un film ou un épisode. « Révoquer » en arrête un tout de suite.',
+      'Les liens que cet utilisateur a créés pour partager un film ou un épisode. «\u202fRévoquer\u202f» en arrête un tout de suite.',
     qualityGroup: 'Groupe de qualité',
     qualityGroupHelp:
-      'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie. Seules les versions qui conviennent sont téléchargées telles quelles ; avec « Téléchargements convertis » dans Paramètres › Conversion (transcodage), les applis qui le demandent téléchargent les autres converties.',
+      'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient\u202f; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie. Seules les versions qui conviennent sont téléchargées telles quelles\u202f; avec «\u202fTéléchargements convertis\u202f» dans Paramètres › Conversion (transcodage), les applis qui le demandent téléchargent les autres converties.',
     qualityGroupOriginal: 'D’origine (sans limite)',
     member: 'Membre',
-    lastActivityLabel: 'Dernière activité :',
+    lastActivityLabel: 'Dernière activité\u202f:',
     adminApp: 'Appli d’administration',
     active: 'Actif',
     pinRequested: 'PIN demandé',
@@ -279,7 +280,7 @@ const users: typeof en = {
     libraryHidden: 'Masquée',
     draftInvalid: 'Une section a une erreur à corriger avant d’enregistrer.',
     watching: (title: string) => `Regarde ${title}`,
-    pausedOn: (title: string) => `En pause : ${title}`,
+    pausedOn: (title: string) => `En pause\u202f: ${title}`,
     positionOf: (position: string, total: string) => `${position} sur ${total}`,
     metadataLanguageRow: 'Langue des titres',
     webThemeRow: 'Thème',
@@ -289,7 +290,7 @@ const users: typeof en = {
       open: 'Importer depuis un autre serveur',
       title: 'Importer depuis un autre serveur',
       description:
-        'Reprenez les comptes d’un serveur Jellyfin, Emby ou Plex et ce qu’ils ont regardé : noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB, et si vous le souhaitez leurs notes, les collections du serveur et leurs playlists. Les données de Polyfin sont seulement complétées, et rien n’est écrit sur l’autre serveur. Les serveurs ne donnent pas les mots de passe : vous en choisissez un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
+        'Reprenez les comptes d’un serveur Jellyfin, Emby ou Plex et ce qu’ils ont regardé\u202f: noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB, et si vous le souhaitez leurs notes, les collections du serveur et leurs playlists. Les données de Polyfin sont seulement complétées, et rien n’est écrit sur l’autre serveur. Les serveurs ne donnent pas les mots de passe\u202f: vous en choisissez un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
       serverKind: 'Serveur',
       servers: {
         jellyfin: 'Jellyfin',
@@ -303,7 +304,7 @@ const users: typeof en = {
       },
       connectTitle: (server: string) => `Se connecter à ${server}`,
       connectHelp:
-        'L’adresse, la clé et les mots de passe servent seulement à cette importation : Polyfin ne les enregistre pas.',
+        'L’adresse, la clé et les mots de passe servent seulement à cette importation\u202f: Polyfin ne les enregistre pas.',
       address: 'Adresse du serveur',
       addressHelp: (server: string) =>
         `L’adresse à laquelle ${server} s’ouvre dans un navigateur. Une adresse du réseau local fonctionne.`,
@@ -314,12 +315,12 @@ const users: typeof en = {
       withAccount: 'Un compte utilisateur',
       apiKey: 'Clé d’API',
       apiKeyHelp:
-        'Créez-en une dans le tableau de bord de Jellyfin, sous Clés API : elle lit les données de visionnage de tous les utilisateurs.',
+        'Créez-en une dans le tableau de bord de Jellyfin, sous Clés API\u202f: elle lit les données de visionnage de tous les utilisateurs.',
       embyApiKeyHelp:
-        'Créez-en une dans les paramètres d’Emby, sous Clés API : elle lit les données de visionnage de tous les utilisateurs. La clé d’un utilisateur n’est pas acceptée : Emby ne dit pas à qui elle appartient.',
+        'Créez-en une dans les paramètres d’Emby, sous Clés API\u202f: elle lit les données de visionnage de tous les utilisateurs. La clé d’un utilisateur n’est pas acceptée\u202f: Emby ne dit pas à qui elle appartient.',
       plexToken: 'Jeton Plex',
       plexTokenHelp:
-        'Le jeton du propriétaire du serveur, avec lequel Polyfin ne fait que lire le serveur. Pour le trouver, ouvrez Plex dans un navigateur, connecté avec le compte du propriétaire. Ouvrez le menu d’un film, choisissez Obtenir des infos, puis Afficher le XML : l’adresse de la page qui s’ouvre se termine par X-Plex-Token= suivi du jeton. Copiez ce qui suit.',
+        'Le jeton du propriétaire du serveur, avec lequel Polyfin ne fait que lire le serveur. Pour le trouver, ouvrez Plex dans un navigateur, connecté avec le compte du propriétaire. Ouvrez le menu d’un film, choisissez Obtenir des infos, puis Afficher le XML\u202f: l’adresse de la page qui s’ouvre se termine par X-Plex-Token= suivi du jeton. Copiez ce qui suit.',
       accountName: 'Nom d’utilisateur',
       accountNameHelp: (server: string) =>
         `Le compte d’un administrateur liste tous les utilisateurs. Polyfin se connecte comme les applis de ${server}, puis se déconnecte.`,
@@ -332,7 +333,7 @@ const users: typeof en = {
         `${server}, ${product} ${version}. Pour chaque utilisateur, choisissez le compte Polyfin dans lequel importer, ou créez-en un.`,
       changeServer: 'Changer de serveur',
       noUsers: (product: string) => `Ce serveur ${product} n’a aucun utilisateur.`,
-      lastActivityLabel: 'Dernière activité :',
+      lastActivityLabel: 'Dernière activité\u202f:',
       importAs: 'Importer dans',
       skip: 'Ne pas importer',
       newUser: 'Nouvel utilisateur',
@@ -355,10 +356,10 @@ const users: typeof en = {
         playlistsHelp:
           'Les playlists vidéo de chaque utilisateur, en playlists à lui, dans leur ordre, avec les titres trouvés.',
         plexHelp:
-          'Plex ne donne les notes et les playlists que des comptes lus avec leur propre jeton : celui du propriétaire, et ceux des autres une fois que vous vous connectez à Plex en tant que propriétaire.',
+          'Plex ne donne les notes et les playlists que des comptes lus avec leur propre jeton\u202f: celui du propriétaire, et ceux des autres une fois que vous vous connectez à Plex en tant que propriétaire.',
       },
       plexNotice:
-        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus, les points de reprise et les notes du propriétaire. Des autres comptes, il ne donne que leur historique de lecture sur ce serveur : les titres qu’ils y ont lus jusqu’au bout. Les titres qu’ils ont marqués comme vus sans les lire, ceux synchronisés depuis leur compte Plex, leurs points de reprise et leurs notes n’y figurent pas. Pour lire les données de visionnage de chaque compte, connectez-vous avec Plex en tant que propriétaire, ci-dessus. Plex n’a pas de favoris à importer.',
+        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus, les points de reprise et les notes du propriétaire. Des autres comptes, il ne donne que leur historique de lecture sur ce serveur\u202f: les titres qu’ils y ont lus jusqu’au bout. Les titres qu’ils ont marqués comme vus sans les lire, ceux synchronisés depuis leur compte Plex, leurs points de reprise et leurs notes n’y figurent pas. Pour lire les données de visionnage de chaque compte, connectez-vous avec Plex en tant que propriétaire, ci-dessus. Plex n’a pas de favoris à importer.',
       plexOwner: {
         title: 'Lire chaque compte avec Plex',
         help: 'Connectez-vous avec Plex en tant que propriétaire de ce serveur. Plex donne alors à Polyfin le jeton de chaque compte avec lequel le serveur est partagé, et Polyfin y lit ce que le compte a vu, marqué comme vu ou synchronisé, ses points de reprise et ses notes, pas seulement ses lectures ici. Les profils de votre Plex Home sont lus avec leur code PIN, quand ils en ont un.',
@@ -368,11 +369,11 @@ const users: typeof en = {
           `Connecté à Plex en tant que ${name}, propriétaire du serveur.`,
         signOut: 'Se déconnecter de Plex',
         notice:
-          'Polyfin lit chaque compte ci-dessous avec le jeton que Plex donne au propriétaire pour lui, comme les applications Plex de ce compte lisent ce serveur. Les jetons ne servent qu’à cet import : ils ne sont jamais conservés, et votre connexion à Plex est fermée à la fin de l’import.',
-        all: 'Tout : les titres vus, marqués comme vus ou synchronisés, les points de reprise et les notes.',
-        pin: 'Un profil Plex Home avec un code PIN : tout avec son code PIN, seulement ses lectures sur ce serveur sans lui.',
+          'Polyfin lit chaque compte ci-dessous avec le jeton que Plex donne au propriétaire pour lui, comme les applications Plex de ce compte lisent ce serveur. Les jetons ne servent qu’à cet import\u202f: ils ne sont jamais conservés, et votre connexion à Plex est fermée à la fin de l’import.',
+        all: 'Tout\u202f: les titres vus, marqués comme vus ou synchronisés, les points de reprise et les notes.',
+        pin: 'Un profil Plex Home avec un code PIN\u202f: tout avec son code PIN, seulement ses lectures sur ce serveur sans lui.',
         plays:
-          'Seulement ses lectures sur ce serveur, d’après l’historique de lecture de Plex : Plex ne donne pas de jeton pour ce compte.',
+          'Seulement ses lectures sur ce serveur, d’après l’historique de lecture de Plex\u202f: Plex ne donne pas de jeton pour ce compte.',
         everything: 'Tout',
         playsOnly: 'Lectures seulement',
         pinLabel: 'Code PIN du profil',
@@ -380,9 +381,9 @@ const users: typeof en = {
           `Le code PIN que ${name} demande sur Plex. Laissé vide, seules ses lectures sont lues.`,
       },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
-        `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur : Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
+        `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'}\u202f: elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur\u202f: Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
-        `${signedIn ? `Connecté avec le compte ${owner ?? 'de cet utilisateur'}` : `Cette clé appartient à ${owner ?? 'un utilisateur'}`}, qui n’est pas administrateur de ce serveur : Polyfin n’importe que ce compte. Pour lister les autres utilisateurs du serveur, connectez-vous avec le compte d’un administrateur ou une clé d’API.`,
+        `${signedIn ? `Connecté avec le compte ${owner ?? 'de cet utilisateur'}` : `Cette clé appartient à ${owner ?? 'un utilisateur'}`}, qui n’est pas administrateur de ce serveur\u202f: Polyfin n’importe que ce compte. Pour lister les autres utilisateurs du serveur, connectez-vous avec le compte d’un administrateur ou une clé d’API.`,
       serverPassword: (server: string) => `Mot de passe sur ${server}`,
       serverPasswordHelp: (user: string) =>
         `Polyfin se connecte avec le compte ${user} pour lire ses données de visionnage, puis se déconnecte. Laissez vide si le compte n’en a pas.`,
@@ -415,11 +416,11 @@ const users: typeof en = {
         jellyfin_unreachable: (server: string) =>
           `${server} est devenu injoignable pendant l’importation. Ce qui a été importé est gardé.`,
         jellyfin_key_refused: (server: string) =>
-          `${server} a refusé la clé d’API pendant l’importation : elle a peut-être été révoquée. Ce qui a été importé est gardé.`,
+          `${server} a refusé la clé d’API pendant l’importation\u202f: elle a peut-être été révoquée. Ce qui a été importé est gardé.`,
         not_jellyfin: (server: string) =>
           `Le serveur a cessé de répondre comme ${server} pendant l’importation. Ce qui a été importé est gardé.`,
         internal: () =>
-          'Polyfin a rencontré une erreur pendant l’importation : le journal du serveur donne le détail. Ce qui a été importé est gardé.',
+          'Polyfin a rencontré une erreur pendant l’importation\u202f: le journal du serveur donne le détail. Ce qui a été importé est gardé.',
         jellyfin_user_forbidden: () =>
           'Le serveur ne laisse pas cette clé lire les données de cet utilisateur. Importez-les avec une clé d’API du tableau de bord du serveur, ou avec sa propre clé.',
       },
@@ -431,7 +432,7 @@ const users: typeof en = {
             'Emby a refusé cette clé d’API. Créez-en une dans ses paramètres, sous Clés API, puis collez-la à nouveau.',
           jellyfin_sign_in_refused: 'Emby a refusé ce nom ou ce mot de passe.',
           jellyfin_sign_in_forbidden:
-            'Emby ne laisse pas ce compte se connecter : il est peut-être désactivé, ou hors de ses horaires autorisés.',
+            'Emby ne laisse pas ce compte se connecter\u202f: il est peut-être désactivé, ou hors de ses horaires autorisés.',
           jellyfin_password_refused:
             'Emby a refusé ce mot de passe. Laissez vide si le compte n’en a pas.',
           jellyfin_unreachable:
@@ -445,7 +446,7 @@ const users: typeof en = {
           jellyfin_key_refused:
             'Plex a refusé ce jeton. Copiez à nouveau le jeton du propriétaire.',
           jellyfin_key_limited:
-            'Ce jeton ne peut pas lister les comptes du serveur : ce n’est pas celui du propriétaire. Utilisez le jeton du propriétaire.',
+            'Ce jeton ne peut pas lister les comptes du serveur\u202f: ce n’est pas celui du propriétaire. Utilisez le jeton du propriétaire.',
           jellyfin_unreachable:
             'Rien n’a répondu à cette adresse. Vérifiez-la, et que Plex Media Server est bien lancé.',
           not_jellyfin:
@@ -476,31 +477,33 @@ const users: typeof en = {
           : `${count} titres ajoutés aux listes déjà importées`,
       skipped: {
         collection: (name: string) =>
-          `Collection « ${name} » : aucun titre trouvé, elle n’a pas été créée.`,
+          `Collection «\u202f${name}\u202f»\u202f: aucun titre trouvé, elle n’a pas été créée.`,
         playlist: (name: string) =>
-          `Playlist « ${name} » : aucun titre trouvé, elle n’a pas été créée.`,
+          `Playlist «\u202f${name}\u202f»\u202f: aucun titre trouvé, elle n’a pas été créée.`,
       },
       watchlist: (count: number) =>
-        count <= 1 ? `${count} ajouté à « À regarder »` : `${count} ajoutés à « À regarder »`,
+        count <= 1
+          ? `${count} ajouté à «\u202fÀ regarder\u202f»`
+          : `${count} ajoutés à «\u202fÀ regarder\u202f»`,
       undated: (count: number) =>
         count <= 1
           ? `${count} point de reprise sans date, non ajouté`
           : `${count} points de reprise sans date, non ajoutés`,
       nothingAdded: {
         up_to_date: () =>
-          'Tout ce qui a été lu était déjà dans Polyfin : il n’y avait rien à ajouter.',
+          'Tout ce qui a été lu était déjà dans Polyfin\u202f: il n’y avait rien à ajouter.',
         nothing_played: (server: string) =>
           `${server} ne liste rien de vu, en cours ni favori pour cet utilisateur.`,
         no_sections: () =>
-          'Ce serveur Plex n’a aucune bibliothèque de films ou de séries : il n’y avait rien à lire.',
+          'Ce serveur Plex n’a aucune bibliothèque de films ou de séries\u202f: il n’y avait rien à lire.',
         plex_owner_nothing_watched: () =>
           'Le propriétaire n’a rien de vu ni en cours dans les bibliothèques de films et de séries de ce serveur.',
         plex_nothing_watched: () =>
           'Ce compte n’a rien de vu, en cours ni noté dans les bibliothèques de films et de séries de ce serveur.',
         plex_no_history: () =>
-          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas. Pour tout reprendre, points de reprise compris, connectez-vous avec Plex en tant que propriétaire dans cet import, avec le code PIN d’un profil Plex Home qui en a un, ou la personne se connecte avec Plex dans Mon compte › Importer depuis un autre serveur.',
+          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur\u202f: les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas. Pour tout reprendre, points de reprise compris, connectez-vous avec Plex en tant que propriétaire dans cet import, avec le code PIN d’un profil Plex Home qui en a un, ou la personne se connecte avec Plex dans Mon compte › Importer depuis un autre serveur.',
       },
-      unmatchedHelp: 'Ces titres n’ont pas été importés : la raison dit pourquoi.',
+      unmatchedHelp: 'Ces titres n’ont pas été importés\u202f: la raison dit pourquoi.',
       kinds: {
         movie: 'Film',
         episode: 'Épisode',
@@ -519,7 +522,7 @@ const users: typeof en = {
       open: 'Importer depuis une appli',
       title: 'Importer depuis une appli',
       description:
-        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons : les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli, qui va dans « À regarder » de ses applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli ; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
+        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons\u202f: les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli, qui va dans «\u202fÀ regarder\u202f» de ses applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli\u202f; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
       user: 'Dans le compte de',
       userHelp:
         'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',
@@ -529,7 +532,7 @@ const users: typeof en = {
       open: 'Importer depuis Letterboxd',
       title: 'Importer depuis Letterboxd',
       description:
-        'Reprenez les films d’un utilisateur depuis son fichier d’export Letterboxd : les films vus avec leurs dates et leur nombre de lectures, sa watchlist, ses notes, et les films aimés en favoris si vous le choisissez. Les données de Polyfin sont seulement complétées. Les utilisateurs peuvent aussi importer le leur, sous Mon compte.',
+        'Reprenez les films d’un utilisateur depuis son fichier d’export Letterboxd\u202f: les films vus avec leurs dates et leur nombre de lectures, sa watchlist, ses notes, et les films aimés en favoris si vous le choisissez. Les données de Polyfin sont seulement complétées. Les utilisateurs peuvent aussi importer le leur, sous Mon compte.',
       user: 'Dans le compte de',
       userHelp: 'L’utilisateur de Polyfin dont l’importation complète les données de visionnage.',
     },
@@ -559,7 +562,7 @@ const users: typeof en = {
     submit: 'Créer le lien',
     creating: 'Création…',
     createdTitle: 'Lien d’invitation créé',
-    createdNotice: 'Copiez ce lien maintenant : il n’est affiché que cette fois.',
+    createdNotice: 'Copiez ce lien maintenant\u202f: il n’est affiché que cette fois.',
     copy: 'Copier le lien',
     copied: 'Lien copié.',
     done: 'Terminé',
@@ -581,7 +584,7 @@ const users: typeof en = {
       revoked: 'Révoqué',
     },
     revoke: 'Révoquer',
-    revokeTitle: 'Révoquer ce lien d’invitation ?',
+    revokeTitle: 'Révoquer ce lien d’invitation\u202f?',
     revokeConfirm:
       'Le lien cesse aussitôt de fonctionner. Les comptes déjà créés grâce à lui sont conservés.',
     revoking: 'Révocation…',
@@ -591,7 +594,7 @@ const users: typeof en = {
     tabsLabel: 'Utilisateurs et groupes',
     title: 'Groupes',
     description:
-      'Un groupe réunit les limites de la page d’un utilisateur. Ses membres le suivent : une modification du groupe les atteint tous aussitôt.',
+      'Un groupe réunit les limites de la page d’un utilisateur. Ses membres le suivent\u202f: une modification du groupe les atteint tous aussitôt.',
     listTitle: 'Groupes',
     empty: 'Aucun groupe pour le moment.',
     emptyHelp:
@@ -615,16 +618,16 @@ const users: typeof en = {
     pageHelp: 'Les changements enregistrés atteignent aussitôt les membres qui suivent le groupe.',
     updated: 'Le groupe a été mis à jour.',
     accessHelp:
-      'Les autorisations que les membres reçoivent du groupe. Leur rôle, l’écran de connexion, « Désactivé » et la date de fin restent sur leur propre page.',
+      'Les autorisations que les membres reçoivent du groupe. Leur rôle, l’écran de connexion, «\u202fDésactivé\u202f» et la date de fin restent sur leur propre page.',
     delete: 'Supprimer le groupe',
-    deleteTitle: (name: string) => `Supprimer le groupe ${name} ?`,
+    deleteTitle: (name: string) => `Supprimer le groupe ${name}\u202f?`,
     deleteConfirm:
       'Ses membres gardent les valeurs du groupe comme leurs propres réglages, que leur page peut ensuite modifier.',
     deleting: 'Suppression…',
     deleted: (name: string) => `Le groupe ${name} a été supprimé.`,
     membersTitle: 'Membres',
     membersHelp:
-      'Un membre qui ne suit plus le groupe garde ses valeurs comme ses propres réglages, marqués « Réglages propres ».',
+      'Un membre qui ne suit plus le groupe garde ses valeurs comme ses propres réglages, marqués «\u202fRéglages propres\u202f».',
     noMembers: 'Aucun membre pour le moment.',
     noMembersHelp:
       'Ajoutez des membres ici, ou choisissez le groupe dans la section Accès de la page d’un utilisateur.',
@@ -634,7 +637,7 @@ const users: typeof en = {
     addMembers: 'Ajouter des membres',
     addMembersTitle: (name: string) => `Ajouter des membres à ${name}`,
     addMembersHelp:
-      'Les utilisateurs choisis suivent le groupe : ils prennent ses valeurs à la place des leurs. Les administrateurs ne peuvent pas rejoindre un groupe.',
+      'Les utilisateurs choisis suivent le groupe\u202f: ils prennent ses valeurs à la place des leurs. Les administrateurs ne peuvent pas rejoindre un groupe.',
     noCandidates: 'Personne à ajouter.',
     noCandidatesHelp:
       'Tous les utilisateurs qui ne sont pas administrateurs sont déjà dans ce groupe.',
@@ -646,7 +649,7 @@ const users: typeof en = {
     group: 'Groupe',
     noGroup: 'Aucun groupe',
     groupHelp:
-      'Un membre suit le groupe : ses valeurs s’appliquent, et cette page les affiche en lecture seule. Le quitter les garde comme les réglages propres de l’utilisateur.',
+      'Un membre suit le groupe\u202f: ses valeurs s’appliquent, et cette page les affiche en lecture seule. Le quitter les garde comme les réglages propres de l’utilisateur.',
     administratorNoGroup:
       'Les administrateurs ne peuvent pas rejoindre un groupe, car leurs autorisations diffèrent.',
     administratorLeaves: (name: string) =>
@@ -658,13 +661,13 @@ const users: typeof en = {
       'Désactivé, l’utilisateur garde les valeurs actuelles du groupe comme les siennes, et cette page peut les modifier.',
     setByGroup: (name: string) => `Réglé par le groupe ${name}.`,
     openGroup: 'Ouvrir le groupe',
-    joinTitle: 'Rejoindre le groupe ?',
+    joinTitle: 'Rejoindre le groupe\u202f?',
     joinConfirm: (user: string, group: string) =>
-      `${user} rejoint ${group} et le suit : les valeurs du groupe remplacent les siennes dans Accès, Lecture et accès, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés.`,
+      `${user} rejoint ${group} et le suit\u202f: les valeurs du groupe remplacent les siennes dans Accès, Lecture et accès, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés.`,
     join: 'Rejoindre',
-    followAgainTitle: 'Suivre de nouveau le groupe ?',
+    followAgainTitle: 'Suivre de nouveau le groupe\u202f?',
     followAgainConfirm: (user: string, group: string) =>
-      `${user} reprend les valeurs de ${group} : ses propres réglages dans les sections du groupe sont remplacés.`,
+      `${user} reprend les valeurs de ${group}\u202f: ses propres réglages dans les sections du groupe sont remplacés.`,
     followAgain: 'Suivre le groupe',
     groupBadge: (name: string) => `Groupe ${name}`,
     groupOwnBadge: (name: string) => `Groupe ${name}, réglages propres`,
@@ -673,10 +676,10 @@ const users: typeof en = {
     noneShown: 'Aucun utilisateur ici.',
     sourcesTitle: 'Sources',
     sourcesHelp:
-      'Les sources du serveur que reçoit chaque membre, qu’il suive le groupe ou garde ses propres réglages. Chaque changement est enregistré tout de suite, dans «\u202FUtilisé par\u202F» sur la page de la source. Les sources propres des membres ne sont pas listées.',
+      'Les sources du serveur que reçoit chaque membre, qu’il suive le groupe ou garde ses propres réglages. Chaque changement est enregistré tout de suite, dans «\u202fUtilisé par\u202f» sur la page de la source. Les sources propres des membres ne sont pas listées.',
     noSources: 'Aucune source du serveur pour l’instant.',
     noSourcesHelp:
-      'Ajoutez un addon, une source IPTV ou un dossier\u202F: il pourra ensuite être donné au groupe ici.',
+      'Ajoutez un addon, une source IPTV ou un dossier\u202f: il pourra ensuite être donné au groupe ici.',
     sourceEveryone: 'Utilisée par tout le monde',
     changeWhoUses: 'Changer qui l’utilise sur sa page',
     sourceGiven: (name: string) => `Le groupe reçoit ${name}.`,
@@ -684,23 +687,23 @@ const users: typeof en = {
   },
   resetDefaults: {
     button: 'Rétablir les réglages par défaut',
-    title: (name: string) => `Rétablir les réglages par défaut de ${name} ?`,
-    groupTitle: (name: string) => `Rétablir les réglages par défaut du groupe ${name} ?`,
+    title: (name: string) => `Rétablir les réglages par défaut de ${name}\u202f?`,
+    groupTitle: (name: string) => `Rétablir les réglages par défaut du groupe ${name}\u202f?`,
     userHelp: (name: string) =>
-      `Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur, ceux que donne « Créer un utilisateur » ; les applications de ${name} déjà connectées les ont aussitôt. Son nom et son mot de passe, Administrateur, Afficher sur l’écran de connexion, Désactivé, Prend fin le, son groupe, ses propres addons, ses connexions, ses comptes de suivi et tout ce qu’il a regardé restent.`,
+      `Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur, ceux que donne «\u202fCréer un utilisateur\u202f»\u202f; les applications de ${name} déjà connectées les ont aussitôt. Son nom et son mot de passe, Administrateur, Afficher sur l’écran de connexion, Désactivé, Prend fin le, son groupe, ses propres addons, ses connexions, ses comptes de suivi et tout ce qu’il a regardé restent.`,
     ownSettingsHelp: (group: string) =>
       `Cet utilisateur reste dans le groupe ${group} avec ses propres réglages, sans le suivre.`,
     groupHelp:
       'Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur. Le nom et les membres du groupe restent.',
     followers: (count: number) =>
       count === 0
-        ? 'Aucun membre ne suit le groupe : le changement n’atteint personne.'
+        ? 'Aucun membre ne suit le groupe\u202f: le changement n’atteint personne.'
         : count === 1
           ? '1 membre suit le groupe et prend aussitôt ces réglages.'
           : `${count} membres suivent le groupe et prennent aussitôt ces réglages.`,
     changesTitle: 'Ce qui change',
     loading: 'Recherche de ce qui change…',
-    noChange: 'Rien ne change : ce sont déjà les réglages d’un nouvel utilisateur.',
+    noChange: 'Rien ne change\u202f: ce sont déjà les réglages d’un nouvel utilisateur.',
     confirm: 'Rétablir',
     resetting: 'Rétablissement…',
     done: (name: string) => `Les réglages par défaut de ${name} ont été rétablis.`,

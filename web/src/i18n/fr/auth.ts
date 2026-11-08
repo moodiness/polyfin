@@ -9,7 +9,7 @@ const auth: typeof en = {
       container:
         'Par sécurité, Polyfin a inscrit un code d’installation à usage unique dans son journal au démarrage. Lancez docker logs <conteneur> (sur Unraid, ouvrez le journal du conteneur) et repérez la ligne contenant le code d’installation.',
       computer:
-        'Par sécurité, Polyfin a inscrit un code d’installation à usage unique dans son journal au démarrage. Avec Polyfin Desktop, choisissez Code d’installation dans son menu pour le copier ; sinon, repérez la ligne contenant le code d’installation dans le journal de Polyfin.',
+        'Par sécurité, Polyfin a inscrit un code d’installation à usage unique dans son journal au démarrage. Avec Polyfin Desktop, choisissez Code d’installation dans son menu pour le copier\u202f; sinon, repérez la ligne contenant le code d’installation dans le journal de Polyfin.',
     },
     setupCode: 'Code d’installation',
     setupCodeHint: 'Format XXXX-XXXX. Majuscules et tiret facultatifs.',
@@ -22,7 +22,7 @@ const auth: typeof en = {
     createInstead: 'Créer plutôt un administrateur',
     restoreTitle: 'Restaurer une sauvegarde',
     restoreLede:
-      'Ramenez ce Polyfin à partir d’une sauvegarde de sa base de données : ses administrateurs, ses utilisateurs, ses réglages et son historique de visionnage.',
+      'Ramenez ce Polyfin à partir d’une sauvegarde de sa base de données\u202f: ses administrateurs, ses utilisateurs, ses réglages et son historique de visionnage.',
     restoreFile: 'Fichier de sauvegarde',
     restoreFileHelp:
       'Un fichier .dump ou .dump.enc fait par Polyfin, de son dossier des sauvegardes ou d’une destination.',
@@ -30,7 +30,7 @@ const auth: typeof en = {
     restoreSend: 'Envoyer et vérifier',
     restoreSending: 'Envoi et vérification…',
     restoreUnlockHelp:
-      'Cette sauvegarde est chiffrée : saisissez la phrase de passe avec laquelle elle a été faite.',
+      'Cette sauvegarde est chiffrée\u202f: saisissez la phrase de passe avec laquelle elle a été faite.',
     restoreReady: (file: string) =>
       `${file} est une sauvegarde de la base de données de Polyfin que ce Polyfin peut restaurer.`,
     restoreSteps: [
@@ -41,7 +41,7 @@ const auth: typeof en = {
     restoreRestoring:
       'Polyfin restaure la sauvegarde, puis redémarre. Cette page affiche la connexion dès qu’il répond.',
     restoreFailed:
-      'La sauvegarde n’a pas pu être restaurée : Polyfin a redémarré sans elle. Son journal dit pourquoi, et contient un nouveau code d’installation.',
+      'La sauvegarde n’a pas pu être restaurée\u202f: Polyfin a redémarré sans elle. Son journal dit pourquoi, et contient un nouveau code d’installation.',
   },
   login: {
     title: 'Connexion',
@@ -54,7 +54,7 @@ const auth: typeof en = {
     codeDescription:
       'Saisissez le code à 6 chiffres que votre application d’authentification affiche pour Polyfin.',
     code: 'Code',
-    codeHelp: 'Téléphone perdu ? Saisissez plutôt l’un de vos codes de secours.',
+    codeHelp: 'Téléphone perdu\u202f? Saisissez plutôt l’un de vos codes de secours.',
     verify: 'Vérifier',
     verifying: 'Vérification…',
     restart: 'Se connecter avec un autre compte',

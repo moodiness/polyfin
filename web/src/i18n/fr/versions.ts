@@ -7,7 +7,7 @@ const versions: typeof en = {
       'Voyez ce que devient chaque flux que les addons listent pour un film ou un épisode, tel qu’un utilisateur se le voit proposer, et épinglez ou bloquez des versions.',
     asUser: 'En tant que',
     asUserHelp:
-      'Les versions dépendent de l’utilisateur : ses propres addons, les torrents, son groupe de qualité et sa langue audio.',
+      'Les versions dépendent de l’utilisateur\u202f: ses propres addons, les torrents, son groupe de qualité et sa langue audio.',
     you: (name: string) => `${name} (vous)`,
     find: 'Trouver un titre',
     search: 'Film ou série',
@@ -16,7 +16,7 @@ const versions: typeof en = {
     searchButton: 'Chercher',
     searching: 'Recherche…',
     noTitles: 'Aucun film ni série trouvé.',
-    titlesFound: (term: string) => `Titres trouvés pour « ${term} »`,
+    titlesFound: (term: string) => `Titres trouvés pour «\u202f${term}\u202f»`,
     episodesOf: (name: string) => `Épisodes de ${name}`,
     noEpisodes: 'Aucun épisode.',
     back: 'Retour',
@@ -27,26 +27,26 @@ const versions: typeof en = {
     backToSearch: 'Versions',
     askAgain: 'Redemander aux addons',
     askedAgain: 'Les addons sont redemandés.',
-    askedLately: 'Les addons viennent d’être demandés : réessayez dans quelques secondes.',
+    askedLately: 'Les addons viennent d’être demandés\u202f: réessayez dans quelques secondes.',
     pending: (count: number) =>
       count === 1 ? '1 addon est encore demandé…' : `${count} addons sont encore demandés…`,
     pendingStopped: (count: number) =>
       count === 1
-        ? 'Rien n’a changé depuis une minute, la page ne se met donc plus à jour : 1 addon est encore demandé.'
-        : `Rien n’a changé depuis une minute, la page ne se met donc plus à jour : ${count} addons sont encore demandés.`,
+        ? 'Rien n’a changé depuis une minute, la page ne se met donc plus à jour\u202f: 1 addon est encore demandé.'
+        : `Rien n’a changé depuis une minute, la page ne se met donc plus à jour\u202f: ${count} addons sont encore demandés.`,
     checkAgain: 'Vérifier à nouveau',
     order: 'Ordre des versions',
-    orderNone: 'L’ordre des addons : « Trier les versions par » n’a aucun critère.',
-    orderBy: (criteria: string) => `Trier les versions par : ${criteria}.`,
-    group: (height: number) => `Groupe de qualité : ${height}p.`,
-    keptAll: 'Les règles de masquage cacheraient toutes les versions : aucune n’est cachée.',
+    orderNone: 'L’ordre des addons\u202f: «\u202fTrier les versions par\u202f» n’a aucun critère.',
+    orderBy: (criteria: string) => `Trier les versions par\u202f: ${criteria}.`,
+    group: (height: number) => `Groupe de qualité\u202f: ${height}p.`,
+    keptAll: 'Les règles de masquage cacheraient toutes les versions\u202f: aucune n’est cachée.',
     closest:
-      'Aucune version ne tient dans le groupe de qualité : les hauteurs les plus proches viennent d’abord.',
+      'Aucune version ne tient dans le groupe de qualité\u202f: les hauteurs les plus proches viennent d’abord.',
     pin: 'Version épinglée',
     noPin:
-      'Aucune version n’est épinglée. Une version épinglée vient en premier pour tous les utilisateurs, sur les pages des titres et en lecture, tant qu’un addon la liste ; une version choisie dans le menu des versions est toujours lue.',
+      'Aucune version n’est épinglée. Une version épinglée vient en premier pour tous les utilisateurs, sur les pages des titres et en lecture, tant qu’un addon la liste\u202f; une version choisie dans le menu des versions est toujours lue.',
     pinnedBy: (name: string) => (name === '' ? 'Épinglée' : `Épinglée par ${name}`),
-    pinMissing: 'Aucun addon ne liste ce fichier maintenant : l’ordre habituel s’applique.',
+    pinMissing: 'Aucun addon ne liste ce fichier maintenant\u202f: l’ordre habituel s’applique.',
     unpin: 'Désépingler',
     pinAction: 'Épingler',
     pinned: 'Épinglée',
@@ -76,30 +76,31 @@ const versions: typeof en = {
       group: 'Au-dessus du groupe de qualité',
     },
     stepHelp: {
-      nothing: 'Une page web, une vidéo d’un autre site ou un avis : rien que Polyfin lise.',
+      nothing: 'Une page web, une vidéo d’un autre site ou un avis\u202f: rien que Polyfin lise.',
       torrents:
         'Lire les flux torrent est désactivé, ou l’utilisateur ne peut pas lire de flux torrent (Paramètres › Torrents).',
-      duplicate: 'Le même nom de fichier et la même taille, listés avant : une seule version.',
+      duplicate: 'Le même nom de fichier et la même taille, listés avant\u202f: une seule version.',
       mirror:
-        'Le même fichier d’un autre addon, gardé comme miroir caché : une lecture reprend dessus quand la source de la version échoue.',
+        'Le même fichier d’un autre addon, gardé comme miroir caché\u202f: une lecture reprend dessus quand la source de la version échoue.',
       group:
         'Le groupe de qualité de l’utilisateur écarte les versions plus hautes tant qu’une version y tient.',
     },
     rules: {
       elsewhere: (marker: string) => `Nomme un autre titre (${marker})`,
       larger: (gigabytes: string) => `Masquer les versions de plus de ${gigabytes} Go`,
-      codec: (codec: string) => `Masquer ces codecs vidéo : ${codec}`,
-      release: (kind: string) => `Masquer les sorties de mauvaise qualité : ${kind}`,
-      words: (word: string) => `Masquer les versions dont les libellés contiennent « ${word} »`,
+      codec: (codec: string) => `Masquer ces codecs vidéo\u202f: ${codec}`,
+      release: (kind: string) => `Masquer les sorties de mauvaise qualité\u202f: ${kind}`,
+      words: (word: string) =>
+        `Masquer les versions dont les libellés contiennent «\u202f${word}\u202f»`,
       label: (text: string) =>
-        `Règles de libellés : masquer les versions reconnues par « ${text} »`,
-      other: (rule: string, detail: string) => (detail === '' ? rule : `${rule} : ${detail}`),
+        `Règles de libellés\u202f: masquer les versions reconnues par «\u202f${text}\u202f»`,
+      other: (rule: string, detail: string) => (detail === '' ? rule : `${rule}\u202f: ${detail}`),
       none: 'Caché par une règle modifiée depuis',
     },
     unstarted:
-      'N’a pas démarré récemment : les lectures qui ne choisissent pas de version la passent',
-    labelsAsRead: 'Libellés :',
-    facts: 'Ce que savent les règles :',
+      'N’a pas démarré récemment\u202f: les lectures qui ne choisissent pas de version la passent',
+    labelsAsRead: 'Libellés\u202f:',
+    facts: 'Ce que savent les règles\u202f:',
     analyzed: 'Analysée',
     multi: 'MULTI',
     tiers: { disc: 'Copie de disque', bluray: 'Blu-ray', web: 'Web', dvd: 'DVD', tv: 'TV' },
@@ -107,20 +108,20 @@ const versions: typeof en = {
     objectAudio: 'Atmos ou DTS:X',
     perMinute: (megabytes: number) => `${megabytes} Mo/min`,
     labelRules: (rules: string[], score: number) =>
-      `Règles de libellés reconnues : ${rules.map((rule) => `« ${rule} »`).join(', ')} ; score ${score > 0 ? '+' : ''}${score}`,
+      `Règles de libellés reconnues\u202f: ${rules.map((rule) => `«\u202f${rule}\u202f»`).join(', ')}\u202f; score ${score > 0 ? '+' : ''}${score}`,
     block: 'Bloquer',
     blockTitle: 'Bloquer ce fichier',
     blockScope: 'Le bloquer pour',
     scopeTitle: 'Ce titre',
     scopeEverywhere: 'Tous les titres',
     scopeHelp:
-      'Tous les titres bloque ce nom de fichier et cette taille partout où un addon les liste. Aucune version d’un fichier bloqué n’est listée ni lue ; les règles de masquage ne cachent jamais toutes les versions, un blocage si.',
+      'Tous les titres bloque ce nom de fichier et cette taille partout où un addon les liste. Aucune version d’un fichier bloqué n’est listée ni lue\u202f; les règles de masquage ne cachent jamais toutes les versions, un blocage si.',
     reason: 'Raison',
     reasonHelp: (max: number) =>
       `Pourquoi, pour l’administrateur suivant. ${max} caractères au plus.`,
     blocked: 'Bloqué',
     blockedBy: (name: string, reason: string) =>
-      [name === '' ? 'Bloqué' : `Bloqué par ${name}`, reason].filter(Boolean).join(' : '),
+      [name === '' ? 'Bloqué' : `Bloqué par ${name}`, reason].filter(Boolean).join('\u202f: '),
     blockedEverywhere: 'Pour tous les titres',
     unblock: 'Débloquer',
     blockDone: 'Fichier bloqué.',
@@ -129,7 +130,7 @@ const versions: typeof en = {
     noTitleBlocks: 'Aucun fichier n’est bloqué pour ce titre.',
     analyze: 'Analyser maintenant',
     analyzeDone: 'Version analysée.',
-    analysisFailed: (why: string) => `Elle n’a pas pu être analysée : ${why}`,
+    analysisFailed: (why: string) => `Elle n’a pas pu être analysée\u202f: ${why}`,
     decisions: 'Dernières lectures',
     decisionsHelp:
       'Ce qu’ont essayé les dernières lectures de ce titre, pour tout utilisateur. Gardées jusqu’au redémarrage.',

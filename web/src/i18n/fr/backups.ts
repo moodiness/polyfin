@@ -39,7 +39,7 @@ const backups: typeof en = {
       privateKey: 'Clé privée',
       privateKeyHelp:
         'Une clé privée OpenSSH ou PEM sans phrase de passe, dont le serveur accepte la clé publique. Laissez vide pour se connecter avec le mot de passe.',
-      privateKeySaved: 'Une clé est enregistrée : collez-en une autre pour la remplacer.',
+      privateKeySaved: 'Une clé est enregistrée\u202f: collez-en une autre pour la remplacer.',
       privateKeyRemove: 'Supprimer la clé enregistrée',
       sftpFolder: 'Dossier',
       sftpFolderHelp:
@@ -50,12 +50,12 @@ const backups: typeof en = {
       webdavPasswordHelp: 'Un mot de passe d’application, quand le serveur en propose.',
       kept: 'Sauvegardes à conserver',
       keptHelp: (min: number, max: number, byDefault: number) =>
-        `Après chaque envoi, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers ne sont jamais touchés. De ${min} à ${max} ; ${byDefault} par défaut.`,
+        `Après chaque envoi, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers ne sont jamais touchés. De ${min} à ${max}\u202f; ${byDefault} par défaut.`,
       hostKey: 'Clé d’hôte',
       hostKeyNone: 'Enregistrée à la première connexion.',
       hostKeyForget: 'Oublier',
       hostKeyForgetHelp:
-        'Oubliez la clé enregistrée quand la clé du serveur a changé volontairement : celle qu’il présente à la connexion suivante est enregistrée.',
+        'Oubliez la clé enregistrée quand la clé du serveur a changé volontairement\u202f: celle qu’il présente à la connexion suivante est enregistrée.',
       hostKeyForgotten:
         'La clé que le serveur présentera à la connexion suivante sera enregistrée.',
       create: 'Ajouter',
@@ -71,7 +71,7 @@ const backups: typeof en = {
       testFailed: (name: string) => `${name} ne fonctionne pas.`,
       edit: 'Modifier',
       delete: 'Supprimer',
-      deleteTitle: (name: string) => `Supprimer ${name} ?`,
+      deleteTitle: (name: string) => `Supprimer ${name}\u202f?`,
       deleteBody: 'Les sauvegardes n’y sont plus envoyées. Celles qui s’y trouvent restent.',
       deleted: (name: string) => `${name} supprimée.`,
       keeps: (count: number) =>
@@ -87,7 +87,7 @@ const backups: typeof en = {
       newest: 'Sauvegarde la plus récente',
       none: 'Aucune pour l’instant',
       unreadable:
-        'Son mot de passe ou sa clé ne peut pas être déchiffré avec POLYFIN_SECRET_KEY : saisissez-le à nouveau.',
+        'Son mot de passe ou sa clé ne peut pas être déchiffré avec POLYFIN_SECRET_KEY\u202f: saisissez-le à nouveau.',
       staleHelp: 'La sauvegarde la plus récente qui s’y trouve date de plus de deux jours.',
     },
     restore: {
@@ -105,7 +105,7 @@ const backups: typeof en = {
       downloadDecrypted: 'Télécharger déchiffrée',
       downloadTitle: (file: string) => `Télécharger ${file} déchiffrée`,
       downloadBody:
-        'Saisissez la phrase de passe avec laquelle cette sauvegarde a été chiffrée. Le dump est enregistré en clair sur cet ordinateur : gardez-le aussi bien que le serveur.',
+        'Saisissez la phrase de passe avec laquelle cette sauvegarde a été chiffrée. Le dump est enregistré en clair sur cet ordinateur\u202f: gardez-le aussi bien que le serveur.',
       passphrase: 'Phrase de passe des sauvegardes',
       downloading: 'Vérification de la phrase de passe…',
       upload: 'Envoyer un fichier de sauvegarde',
@@ -113,23 +113,23 @@ const backups: typeof en = {
         'Un fichier .dump de la base de données de Polyfin, fait par Polyfin ou avec pg_dump --format=custom, ou un fichier .dump.enc chiffré par Polyfin.',
       unlockTitle: (file: string) => `Ouvrir ${file}`,
       unlockBody:
-        'Cette sauvegarde est chiffrée. Saisissez la phrase de passe avec laquelle elle a été faite : Polyfin la déchiffre, en vérifie chaque partie, puis indique ce que fait sa restauration.',
+        'Cette sauvegarde est chiffrée. Saisissez la phrase de passe avec laquelle elle a été faite\u202f: Polyfin la déchiffre, en vérifie chaque partie, puis indique ce que fait sa restauration.',
       unlock: 'Ouvrir',
       unlocking: 'Déchiffrement et vérification…',
       checking: 'Vérification de la sauvegarde…',
-      confirmTitle: (file: string) => `Restaurer ${file} ?`,
+      confirmTitle: (file: string) => `Restaurer ${file}\u202f?`,
       made: (date: string) => `Faite le ${date}.`,
       from: (name: string) => `Depuis ${name}.`,
       uploaded: 'Envoyée depuis cet ordinateur.',
       steps: [
         'Polyfin sauvegarde d’abord la base de données actuelle, dans le dossier des sauvegardes, en une sauvegarde d’avant restauration qu’il ne supprime jamais.',
         'Les applis reçoivent une erreur pendant la restauration, et les lectures, conversions et enregistrements en cours s’arrêtent.',
-        'Polyfin redémarre ensuite sur la base restaurée : tout est comme au moment de la sauvegarde, utilisateurs, paramètres et historique compris.',
+        'Polyfin redémarre ensuite sur la base restaurée\u202f: tout est comme au moment de la sauvegarde, utilisateurs, paramètres et historique compris.',
         'Les applis et les administrateurs connectés depuis doivent se reconnecter, vous compris, et les liens de lecture déjà donnés ne fonctionnent plus.',
       ],
       keyTitle: 'Des clés enregistrées sont illisibles',
       keyBody:
-        'Cette sauvegarde contient des clés et des mots de passe que la POLYFIN_SECRET_KEY actuelle ne peut pas déchiffrer. Définissez la clé en place quand la sauvegarde a été faite, puis restaurez à nouveau ; ou restaurez quand même, et saisissez-les à nouveau ensuite :',
+        'Cette sauvegarde contient des clés et des mots de passe que la POLYFIN_SECRET_KEY actuelle ne peut pas déchiffrer. Définissez la clé en place quand la sauvegarde a été faite, puis restaurez à nouveau\u202f; ou restaurez quand même, et saisissez-les à nouveau ensuite\u202f:',
       kinds: {
         settings: (n: number) => (n === 1 ? '1 clé des paramètres' : `${n} clés des paramètres`),
         tracking: (n: number) => (n === 1 ? '1 connexion de suivi' : `${n} connexions de suivi`),
@@ -157,7 +157,7 @@ const backups: typeof en = {
       lastRestoreOk: (file: string, by: string) => `${file}, par ${by}`,
       lastRestoreSetup: (file: string) => `${file}, depuis la page d’installation`,
       lastRestoreFailed: (file: string) =>
-        `${file} n’a pas pu être restaurée : la base de données est restée telle quelle.`,
+        `${file} n’a pas pu être restaurée\u202f: la base de données est restée telle quelle.`,
     },
   },
 }

@@ -14,7 +14,7 @@ const livetv: typeof en = {
     catalogsLoading: 'Chargement des catalogues TV…',
     catalogsEmptyTitle: 'Aucun catalogue TV pour l’instant',
     catalogsEmpty:
-      'Installez un addon qui a un catalogue TV, ou ajoutez une source IPTV, dans Sources : ses chaînes sont listées ici.',
+      'Installez un addon qui a un catalogue TV, ou ajoutez une source IPTV, dans Sources\u202f: ses chaînes sont listées ici.',
     addSource: 'Ajouter une source',
     kinds: { stremio: 'Addon Stremio', iptv: 'Source IPTV' },
     guides: (count: number) => (count <= 1 ? `${count} guide` : `${count} guides`),
@@ -24,7 +24,7 @@ const livetv: typeof en = {
         : `Le dernier téléchargement de ${count} guides a échoué.`,
     guideNone: 'Pas de guide des programmes',
     mapped: (mapped: string, channels: string) => `${mapped} chaînes sur ${channels} avec un guide`,
-    guideLine: (position: number, message: string) => `Guide ${position} : ${message}`,
+    guideLine: (position: number, message: string) => `Guide ${position}\u202f: ${message}`,
     manage: 'Guides et correspondance',
     lineup: 'Grille et guides',
     lineupLabel: (name: string) => `Grille et guides de ${name}`,
@@ -47,7 +47,7 @@ const livetv: typeof en = {
     iptvLoading: 'Chargement des sources IPTV…',
     iptvEmptyTitle: 'Aucune source IPTV pour l’instant',
     iptvEmpty:
-      'Ajoutez une playlist M3U ou un compte Xtream Codes dans Sources : ses chaînes sont comptées ici.',
+      'Ajoutez une playlist M3U ou un compte Xtream Codes dans Sources\u202f: ses chaînes sont comptées ici.',
     kindM3u: 'Playlist M3U',
     kindXtream: 'Compte Xtream Codes',
     kindTuner: 'Tuner HDHomeRun',
@@ -83,12 +83,12 @@ const livetv: typeof en = {
     unknownChannel: 'Chaîne introuvable',
     tunersShort: 'Pas assez de tuners',
     tunersShortHelp:
-      'Plus d’enregistrements sur les chaînes de ce tuner qu’il n’a de tuners ont lieu en même temps : l’un d’eux peut échouer.',
+      'Plus d’enregistrements sur les chaînes de ce tuner qu’il n’a de tuners ont lieu en même temps\u202f: l’un d’eux peut échouer.',
     guidesOf: (name: string) => `Guides de ${name}`,
     spaceSaved: (count: number, saved: string) =>
       count === 1
-        ? `1 enregistrement converti en HEVC : ${saved} gagnés.`
-        : `${count} enregistrements convertis en HEVC : ${saved} gagnés.`,
+        ? `1 enregistrement converti en HEVC\u202f: ${saved} gagnés.`
+        : `${count} enregistrements convertis en HEVC\u202f: ${saved} gagnés.`,
   },
   ownChannels: {
     title: 'Chaînes de vos titres',
@@ -98,20 +98,20 @@ const livetv: typeof en = {
     label: 'Chaînes de vos titres',
     emptyTitle: 'Aucune chaîne à vous',
     empty:
-      'Créez-en une à partir d’une collection, d’une liste intelligente, d’une série ou de titres que vous choisissez : elle les diffuse l’un après l’autre, toute la journée.',
+      'Créez-en une à partir d’une collection, d’une liste intelligente, d’une série ou de titres que vous choisissez\u202f: elle les diffuse l’un après l’autre, toute la journée.',
     off: 'Désactivée',
     entries: (count: number, formatted: string) =>
       count === 1 ? '1 film ou épisode' : `${formatted} films et épisodes`,
     blockCount: (count: number) =>
       count === 1 ? '1 tranche horaire' : `${count} tranches horaires`,
-    now: (name: string) => `En ce moment : ${name}`,
+    now: (name: string) => `En ce moment\u202f: ${name}`,
     back: 'TV en direct',
     newTitle: 'Nouvelle chaîne',
-    lede: 'Ses titres sont lus à l’enregistrement de la chaîne, pour que son guide reste le même : relisez-les pour y ajouter ceux arrivés depuis.',
+    lede: 'Ses titres sont lus à l’enregistrement de la chaîne, pour que son guide reste le même\u202f: relisez-les pour y ajouter ceux arrivés depuis.',
     notFound: 'Cette chaîne n’existe plus.',
     name: 'Nom',
     number: 'Numéro',
-    numberHelp: 'Vide : après les autres chaînes.',
+    numberHelp: 'Vide\u202f: après les autres chaînes.',
     enabled: 'Affichée dans les applications',
     programmes: 'Programmes',
     programmesHelp:
@@ -126,8 +126,8 @@ const livetv: typeof en = {
     collection: 'Collection',
     smartList: 'Liste intelligente',
     choose: 'Choisir…',
-    noCollections: 'Aucune collection : créez-en une dans une application Jellyfin.',
-    noSmartLists: 'Aucune liste intelligente : créez-en une sous Bibliothèques.',
+    noCollections: 'Aucune collection\u202f: créez-en une dans une application Jellyfin.',
+    noSmartLists: 'Aucune liste intelligente\u202f: créez-en une sous Bibliothèques.',
     search: 'Rechercher',
     searchTitles: 'Rechercher des films et des séries',
     searchSeries: 'Rechercher une série',
@@ -159,7 +159,7 @@ const livetv: typeof en = {
     saved: 'Chaîne enregistrée',
     delete: 'Supprimer',
     deleted: 'Chaîne supprimée',
-    deleteTitle: (name: string) => `Supprimer ${name} ?`,
+    deleteTitle: (name: string) => `Supprimer ${name}\u202f?`,
     deleteBody:
       'Ses programmes quittent le guide, et les enregistrements prévus sur elle ne peuvent plus se faire.',
   },
