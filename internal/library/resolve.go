@@ -33,9 +33,12 @@ type TitleRef struct {
 	// Season and Number place an episode in its series. When Absolute,
 	// Number counts the episode among the regular episodes of its series,
 	// from the first of its first season, across its seasons (TVDB's
-	// absolute numbering), and Season is not read.
+	// absolute numbering), and Season is not read. When TMDBNumbered,
+	// they are TMDB's numbers of the episode, as aired, which the addon
+	// may number otherwise (see EpisodeNumbering).
 	Season, Number int
 	Absolute       bool
+	TMDBNumbered   bool
 	// Anime names the anime entry as anime catalogs list it, when the
 	// ref is of one.
 	Anime AnimeRef
@@ -116,9 +119,11 @@ const describedFetches = 4
 // found among the episodes Polyfin listed, else named the way the listed
 // ones of its series are. An episode numbered as TVDB's absolute
 // numbering is the one of that place among the regular episodes Polyfin
-// listed of its series, in order. The titles an anime catalog listed
-// under the ref's AnimeRef are found too, an episode by its number in the
-// entry ("kitsu:<id>:<episode>"), and only once listed. A ref nothing
+// listed of its series, in order. An episode TMDB numbers is the one the
+// addon numbers as its EpisodeNumbering tells, and none when it tells the
+// addon has none. The titles an anime catalog listed under the ref's
+// AnimeRef are found too, an episode by its number in the entry
+// ("kitsu:<id>:<episode>"), and only once listed. A ref nothing
 // designates gets no target.
 //
 // A ref Polyfin listed nothing under, which has no IMDb identifier but a
@@ -155,9 +160,11 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 		return nil, err
 	}
 	// The Stremio identifiers of the series each episode ref belongs to,
-	// and of those an anime catalog listed under its AnimeRef.
+	// and of those an anime catalog listed under its AnimeRef, and the
+	// TMDB identifiers of the series TMDB numbers refs of, 0 for unknown.
 	seriesOf := make([][]string, len(refs))
 	animeOf := make([][]string, len(refs))
+	tmdbNumbered := map[string]int{}
 	var seriesIDs []string
 	var unlisted []record
 	result := make([][]TitleTarget, len(refs))
@@ -206,6 +213,9 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 			}
 			seriesOf[i] = append(seriesOf[i], title.stremioID)
 			addSeries(title.stremioID)
+			if ref.TMDBNumbered && !ref.Absolute {
+				tmdbNumbered[title.stremioID] = cmp.Or(tmdbNumbered[title.stremioID], ref.TMDB, describedNumber(stremio.Text(title.tmdb)))
+			}
 		}
 		for _, title := range anime {
 			switch {
@@ -224,16 +234,26 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 	if err != nil {
 		return nil, err
 	}
+	numberings, err := s.numberings(ctx, tmdbNumbered, known)
+	if err != nil {
+		return nil, err
+	}
 	for i, ref := range refs {
 		for _, series := range seriesOf[i] {
 			episodes := known[series]
 			season, number := ref.Season, ref.Number
-			if ref.Absolute {
+			switch {
+			case ref.Absolute:
 				episode, ok := episodes.absolute(ref.Number)
 				if !ok {
 					continue
 				}
 				season, number = episode.season, episode.number
+			case ref.TMDBNumbered:
+				var ok bool
+				if season, number, ok = numberings[series].FromTMDB(season, number); !ok {
+					continue
+				}
 			}
 			target := TitleTarget{Series: itemID(titleKey(KindSeries, series)), Season: itemID(seasonKey(series, season)),
 				SeasonNumber: season, Number: number, Runtime: runtimes[series]}
@@ -622,12 +642,16 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 	})
 }
 
-// knownEpisode is an episode Polyfin listed.
+// knownEpisode is an episode Polyfin listed: day is the day it aired, in
+// UTC, zero when unknown, and name its name, normalized (see
+// airedName).
 type knownEpisode struct {
 	id             accounts.ID
 	videoID        string
 	season, number int
 	runtime        time.Duration
+	day            time.Time
+	name           string
 }
 
 type episodeList []knownEpisode
@@ -708,7 +732,8 @@ func (s *Service) knownEpisodes(ctx context.Context, series []string) (map[strin
 			continue
 		}
 		known[seriesID] = append(known[seriesID], knownEpisode{id: id, videoID: video.ID, season: int(video.Season),
-			number: video.EpisodeNumber(), runtime: parseRuntime(string(video.Runtime))})
+			number: video.EpisodeNumber(), runtime: parseRuntime(string(video.Runtime)), day: episodeDay(video.Released),
+			name: airedName(video.DisplayName())})
 	}
 	return known, rows.Err()
 }
