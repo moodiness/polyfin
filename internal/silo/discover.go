@@ -145,7 +145,8 @@ type calendarDay struct {
 
 // calendarFilters are the filters of the calendar Polyfin answers: the
 // series the user follows, all of them or those of their favorites or
-// watchlist. It knows of no others, popular or trending: those list
+// watchlist (a series it holds pending or by one of its episodes, or the
+// episode itself). It knows of no others, popular or trending: those list
 // nothing.
 var calendarFilters = map[string]bool{"": true, "all": true, "everything": true, "following": true, "favorites": true,
 	"watchlist": true, "popular": false, "trending": false}
@@ -208,13 +209,12 @@ func (s *Server) calendar(w http.ResponseWriter, r *http.Request, v viewer) {
 		s.jellyfinRefusal(w, r, a)
 		return
 	}
-	held := watchlisted(r)
 	byDay := map[string]int{}
 	for _, i := range result.Items {
 		if i.Type != "Episode" || i.PremiereDate == nil {
 			continue
 		}
-		if _, ok := held[i.SeriesId]; filter == "watchlist" && !ok {
+		if filter == "watchlist" && !watchlistFollows(r, i) {
 			continue
 		}
 		// Episodes have an air date, not a time: each is listed on its

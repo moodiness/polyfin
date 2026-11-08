@@ -142,14 +142,28 @@ func (c *Checker) check(ctx context.Context, user accounts.User, title accounts.
 	return err
 }
 
+// shown selects the titles t of user $1's watchlist the rows and the
+// checks follow: the ledger's titles, movies, series and the episodes the
+// user added themselves, that the playlist shows or that wait for their
+// entries (see Expand), with their latest date, and the position of their
+// first entry, null for one that waits.
+const shown = `(SELECT w.item_id, max(w.added_at) AS added_at, min(e.position) AS position
+	FROM watchlist w
+	LEFT JOIN playlists p ON p.owner_id = w.user_id AND p.watchlist
+	LEFT JOIN playlist_entries e ON e.playlist_id = p.id AND e.title_id = w.item_id
+	WHERE w.user_id = $1
+	GROUP BY w.item_id
+	HAVING min(e.position) IS NOT NULL
+		OR EXISTS (SELECT 1 FROM watchlist_pending q WHERE q.user_id = $1 AND q.item_id = w.item_id)) t`
+
 // Due lists up to limit titles of user's watchlist they have not started
 // whose last check is before before: those never checked first, then the
-// longest unchecked, the latest added first among them.
+// longest unchecked, in the watchlist's order among them.
 func (s *Store) Due(ctx context.Context, user accounts.ID, before time.Time, limit int) ([]accounts.ID, error) {
-	rows, err := s.db.Query(ctx, `SELECT w.item_id FROM watchlist w
-		LEFT JOIN watchlist_availability a ON a.user_id = w.user_id AND a.item_id = w.item_id
-		WHERE w.user_id = $1 AND (a.checked_at IS NULL OR a.checked_at < $2) AND `+unstarted+`
-		GROUP BY w.item_id, a.checked_at ORDER BY a.checked_at NULLS FIRST, max(w.added_at) DESC, w.item_id LIMIT $3`, user, before, limit)
+	rows, err := s.db.Query(ctx, `SELECT t.item_id FROM `+shown+`
+		LEFT JOIN watchlist_availability a ON a.user_id = $1 AND a.item_id = t.item_id
+		WHERE (a.checked_at IS NULL OR a.checked_at < $2) AND NOT `+started("$1", "t.item_id")+`
+		ORDER BY a.checked_at NULLS FIRST, t.position NULLS LAST, t.added_at DESC, t.item_id LIMIT $3`, user, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -192,10 +206,10 @@ func (s *Store) Record(ctx context.Context, user, title accounts.ID, available b
 // Available lists the titles of user's watchlist they have not started
 // that their last check found versions for, those found the latest first.
 func (s *Store) Available(ctx context.Context, user accounts.ID) ([]accounts.ID, error) {
-	rows, err := s.db.Query(ctx, `SELECT w.item_id FROM watchlist w
-		JOIN watchlist_availability a ON a.user_id = w.user_id AND a.item_id = w.item_id
-		WHERE w.user_id = $1 AND a.available AND `+unstarted+`
-		GROUP BY w.item_id, a.available_since ORDER BY a.available_since DESC, w.item_id`, user)
+	rows, err := s.db.Query(ctx, `SELECT t.item_id FROM `+shown+`
+		JOIN watchlist_availability a ON a.user_id = $1 AND a.item_id = t.item_id
+		WHERE a.available AND NOT `+started("$1", "t.item_id")+`
+		ORDER BY a.available_since DESC, t.item_id`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -203,13 +217,13 @@ func (s *Store) Available(ctx context.Context, user accounts.ID) ([]accounts.ID,
 }
 
 // Waiting lists the titles of user's watchlist they have not started that
-// were checked and are not available, the latest added first, as Titles
-// orders them.
+// were checked and are not available, by the position of their first
+// entry in the watchlist, else the latest added first.
 func (s *Store) Waiting(ctx context.Context, user accounts.ID) ([]accounts.ID, error) {
-	rows, err := s.db.Query(ctx, `SELECT w.item_id FROM watchlist w
-		JOIN watchlist_availability a ON a.user_id = w.user_id AND a.item_id = w.item_id
-		WHERE w.user_id = $1 AND NOT a.available AND `+unstarted+`
-		GROUP BY w.item_id ORDER BY max(w.added_at) DESC, w.item_id`, user)
+	rows, err := s.db.Query(ctx, `SELECT t.item_id FROM `+shown+`
+		JOIN watchlist_availability a ON a.user_id = $1 AND a.item_id = t.item_id
+		WHERE NOT a.available AND NOT `+started("$1", "t.item_id")+`
+		ORDER BY t.position NULLS LAST, t.added_at DESC, t.item_id`, user)
 	if err != nil {
 		return nil, err
 	}

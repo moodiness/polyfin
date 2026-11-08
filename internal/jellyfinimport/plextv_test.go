@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 // fakePlexTV answers as plex.tv and Plex's Discover service do the
@@ -188,7 +189,7 @@ func plexSigningIn(t *testing.T, tv *fakePlexTV) (harness, *fakeClock, *lockedBu
 	clock := newClock(at("2026-10-30T12:00:00Z"))
 	h.now = clock.now
 	h.plexTV = PlexTV{API: tv.url, SignIn: tv.url + "/auth", Discover: tv.url}
-	h.Service.watchlist = watchlist.New(h.pool)
+	h.Service.watchlist = watchlisttest.Store(h.pool)
 	return h, clock, logged
 }
 

@@ -24,7 +24,7 @@ func TestCollectionLibrariesGetHomeRows(t *testing.T) {
 	for _, view := range views.Items {
 		types[view.Name] = view.CollectionType
 	}
-	if len(types) != 3 || types["Groups"] != "" || types["Top"] != "movies" || types["Shows"] != "tvshows" {
+	if len(types) != 4 || types["Groups"] != "" || types["Top"] != "movies" || types["Shows"] != "tvshows" || types["Playlists"] != "playlists" {
 		t.Errorf("content types: %v", types)
 	}
 	var latest []BaseItemDto

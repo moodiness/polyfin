@@ -27,14 +27,15 @@ func (h harness) collectionsOf(t *testing.T) []collections.Collection {
 	return all
 }
 
-// playlistsOf lists the playlists user owns, by name.
+// playlistsOf lists the playlists user owns, by name, but their
+// watchlist, which every user has.
 func (h harness) playlistsOf(t *testing.T, user accounts.ID) []playlists.Playlist {
 	t.Helper()
 	visible, err := h.Service.playlists.Visible(t.Context(), user)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return slices.DeleteFunc(visible, func(p playlists.Playlist) bool { return p.Owner != user })
+	return slices.DeleteFunc(visible, func(p playlists.Playlist) bool { return p.Owner != user || p.Watchlist })
 }
 
 // itemsOf are the items refs designate, in order.

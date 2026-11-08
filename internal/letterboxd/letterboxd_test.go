@@ -22,6 +22,7 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 // exportZip zips files, by their path in the ZIP.
@@ -141,7 +142,7 @@ func newHarness(t *testing.T) harness {
 	client := stremio.NewClient("test")
 	lib := library.New(pool, addons.New(pool, client), client, logger, store.Settings)
 	titles := &fakeTitles{Service: lib, searches: map[string]int{}}
-	data, lists := userdata.New(pool), watchlist.New(pool)
+	data, lists := userdata.New(pool), watchlisttest.Store(pool)
 	links := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: titles, UserData: data,
 		Watchlist: lists, Logger: logger})
 	s := New(Options{Titles: titles, UserData: data, Watchlist: lists, Logger: logger, Links: links})
@@ -321,17 +322,6 @@ func TestImport(t *testing.T) {
 	}
 	if bay := h.dataOf(t, "tt7100007")["tt7100007"]; !bay.Favorite {
 		t.Errorf("Lantern Bay, liked, with the switch on: %+v", bay)
-	}
-
-	// Glass Orchard leaves the watchlist once started.
-	if _, err := h.data.Change(t.Context(), h.user.ID, []userdata.Item{{ID: orchard}}, func(d *userdata.Data) {
-		d.Start(time.Now(), true)
-		d.Position, d.Runtime = 10*time.Minute, time.Hour
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if listed, err := h.lists.Titles(t.Context(), h.user.ID); err != nil || len(listed) != 0 {
-		t.Errorf("watchlist once started: %v %v", listed, err)
 	}
 }
 

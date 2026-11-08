@@ -101,6 +101,7 @@ func TestALiveVideoLeftOutForAFailureIsLogged(t *testing.T) {
 	}
 	var views, live QueryResult
 	s.get(t, "/UserViews", token, &views)
+	views.Items = libraryViews(views.Items)
 	if len(views.Items) != 1 {
 		t.Fatalf("views: %+v", views.Items)
 	}

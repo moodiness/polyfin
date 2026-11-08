@@ -41,6 +41,10 @@ type Library interface {
 	Music(ctx context.Context, user accounts.User, q library.MusicQuery) ([]library.Item, error)
 	HasChannels(ctx context.Context, user accounts.User) (bool, error)
 	Channels(ctx context.Context, user accounts.User) ([]library.Item, error)
+	// WatchlistName and WatchlistTitles name the user's watchlist and
+	// list its titles, in its order.
+	WatchlistName(ctx context.Context, user accounts.User) (string, error)
+	WatchlistTitles(ctx context.Context, user accounts.User) ([]library.Item, error)
 }
 
 // Player is what the Jellyfin API's handler does for DLNA devices, as it

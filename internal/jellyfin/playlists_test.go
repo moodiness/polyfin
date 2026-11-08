@@ -152,8 +152,10 @@ func TestPlaylistsAreBrowsedInTheirView(t *testing.T) {
 	t.Parallel()
 	s, token, views := browsing(t)
 	titles := titlesForPlaylists(t, s, token, views)
-	if _, ok := views["Playlists"]; ok {
-		t.Fatal("the Playlists view shows before any playlist exists")
+	// Every member has their Watchlist playlist from the start, so the
+	// Playlists view shows at once.
+	if _, ok := views["Playlists"]; !ok {
+		t.Fatalf("no Playlists view beside the Watchlist: %v", views)
 	}
 	second := s.createPlaylist(t, token, map[string]any{"Name": "b list", "Ids": []string{titles.ep1}})
 	first := s.createPlaylist(t, token, map[string]any{"Name": "A list", "Ids": []string{titles.movies[0], titles.movies[2]}})
@@ -177,7 +179,7 @@ func TestPlaylistsAreBrowsedInTheirView(t *testing.T) {
 	for _, path := range []string{"/Items?parentId=" + view.Id, "/Items?includeItemTypes=Playlist&recursive=true"} {
 		var page QueryResult
 		s.get(t, path, token, &page)
-		if got := itemNames(page.Items); !slices.Equal(got, []string{"A list", "b list"}) || page.TotalRecordCount != 2 {
+		if got := itemNames(page.Items); !slices.Equal(got, []string{"A list", "b list", "Watchlist"}) || page.TotalRecordCount != 3 {
 			t.Errorf("%s: %v", path, got)
 			continue
 		}
@@ -225,6 +227,10 @@ func TestPlaylistSharing(t *testing.T) {
 	s.expectStatus(t, http.StatusNotFound, http.MethodGet, "/Items/"+id, guestToken, nil)
 	s.expectStatus(t, http.StatusNotFound, http.MethodPost, "/Playlists/"+id+"/Items?ids="+titles.movies[1], guestToken, nil)
 	s.expectStatus(t, http.StatusNotFound, http.MethodDelete, "/Items/"+id, guestToken, nil)
+	// Once the guest deleted their own Watchlist, they see no playlist.
+	var held WatchlistDto
+	s.get(t, "/Polyfin/UserItems/Watchlist", guestToken, &held)
+	s.expectStatus(t, http.StatusNoContent, http.MethodDelete, "/Items/"+held.PlaylistId, guestToken, nil)
 	var guestViews QueryResult
 	s.get(t, "/UserViews", guestToken, &guestViews)
 	if slices.Contains(itemNames(guestViews.Items), "Playlists") {
@@ -306,8 +312,7 @@ var playlistShapes = shapeRules{
 		"Path": {"*"}, "Container": {"*"},
 		// Metadata addons do not provide it.
 		"OriginalLanguage": {"*"},
-		// Jellyfin rates a playlist and draws its artwork from its titles;
-		// Polyfin does neither.
+		// Jellyfin rates a playlist from its titles; Polyfin does not.
 		"OfficialRating": {"playlists", "playlist-item"}, "PrimaryImageAspectRatio": {"playlist-item"},
 		// As in the views fixture: the size of a remote catalog is unknown,
 		// and Polyfin's libraries have no root folder.
@@ -316,9 +321,10 @@ var playlistShapes = shapeRules{
 	returned: map[string][]string{
 		// Polyfin gives the aspect ratio of artwork in every listing,
 		// without waiting for the field to be requested. The recorded
-		// libraries had no image; Polyfin's draw one once their titles are
-		// read (see browseShapes).
-		"PrimaryImageAspectRatio": {"playlist-items", "views-with-playlists"},
+		// libraries and playlists had no image; Polyfin's libraries draw
+		// one once their titles are read (see browseShapes), and every
+		// playlist a mosaic of its titles at once.
+		"PrimaryImageAspectRatio": {"playlist-items", "views-with-playlists", "playlists"},
 	},
 }
 

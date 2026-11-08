@@ -1311,12 +1311,18 @@ func browseCollectionLibraries(t *testing.T, told bool) {
 	for _, view := range views.Items {
 		viewIDs[view.Name] = view.Id
 	}
-	// The Jellyfin API tells Silo's apps the libraries' type as asked.
+	// The Jellyfin API tells Silo's apps the libraries' type as asked; the
+	// Playlists view, which the user's Watchlist playlist brings, is not
+	// one of them.
 	status, body := s.call(http.MethodGet, "/UserViews",
 		`MediaBrowser Client="Silo for Android", Device="Pixel", DeviceId="pixel-1", Version="1.2.3", Token="`+token+`"`, nil)
 	var silos QueryResult
-	if status != http.StatusOK || json.Unmarshal(body, &silos) != nil || len(silos.Items) != 2 {
+	if status != http.StatusOK || json.Unmarshal(body, &silos) != nil {
 		t.Fatalf("libraries in the Jellyfin API: %d %s", status, body)
+	}
+	silos.Items = slices.DeleteFunc(silos.Items, func(view BaseItemDto) bool { return view.CollectionType == "playlists" })
+	if len(silos.Items) != 2 {
+		t.Fatalf("libraries in the Jellyfin API: %v", itemNames(silos.Items))
 	}
 	for _, view := range silos.Items {
 		if want := map[bool]string{true: "boxsets"}[told]; view.CollectionType != want {

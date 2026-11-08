@@ -21,6 +21,7 @@
 package trackers
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -196,6 +197,9 @@ var (
 // Options are the dependencies of the service.
 type Options struct {
 	DB *pgxpool.Pool
+	// Watchlist keeps the watchlists the imports read, and makes their
+	// entries; nil keeps them in DB without making entries.
+	Watchlist *watchlist.Store
 	// Settings returns the server's settings, which hold the apps
 	// registered with Trakt and Simkl.
 	Settings func() accounts.Settings
@@ -416,7 +420,7 @@ func New(options Options) *Service {
 		publicMetaDBIMDb: map[string]string{},
 		anime:            options.Anime,
 		stopped:          options.Stopped,
-		watchlist:        watchlist.New(options.DB),
+		watchlist:        cmp.Or(options.Watchlist, watchlist.New(options.DB)),
 		links:            options.Links,
 	}
 }

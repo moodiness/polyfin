@@ -551,16 +551,27 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings: store.Settings, Logger: logger})
 	defer audioSegments.Close()
 	userData := userdata.New(pool)
+	// The imports fill the users' watchlists: a title a list newly holds
+	// becomes entries of their watchlist playlist, a series its aired
+	// episodes, once its episodes are known and one aired (see
+	// registerWatchlistTasks).
+	lists := watchlist.New(pool).WithEntries(func(ctx context.Context, id, title accounts.ID) (watchlist.Made, error) {
+		user, err := store.User(ctx, id)
+		if err != nil {
+			return watchlist.Made{}, err
+		}
+		return lib.WatchlistEntries(library.Background(ctx), user, title)
+	})
 	// The titles every import did not find are kept, each with what it
 	// would import, and a user may link one to its IMDb or TMDB title:
 	// the link applies at once, and again at each later import that
 	// meets the entry.
 	importTitles := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: lib, UserData: userData,
-		Watchlist: watchlist.New(pool), Logger: logger})
+		Watchlist: lists, Logger: logger})
 	// Imported watch histories find their titles in the library and add to
 	// the users' data. A connection a service stops is told to the
 	// notifications, made below, as recordings are.
-	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
+	tracking := trackers.New(trackers.Options{DB: pool, Watchlist: lists, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
 		Titles: lib, UserData: userData, Anime: animeMapping, Links: importTitles,
 		Stopped: func(user accounts.ID, service string) {
 			notifier.ConnectionStopped(user, notifications.ConnectionTracking, service)
@@ -576,7 +587,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		return err
 	}
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
-		Logger: logger, Watchlist: watchlist.New(pool), Collections: collections.New(pool), Playlists: playlists.New(pool),
+		Logger: logger, Watchlist: lists, Collections: collections.New(pool), Playlists: playlists.New(pool),
 		PlexClient: plexClient, Links: importTitles})
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
@@ -593,12 +604,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Activity: activityLog, Logger: logger, DB: pool, Secrets: box,
 		Sources:   map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio},
 		Stopped:   func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) },
-		Watchlist: watchlist.New(pool), Links: importTitles})
+		Watchlist: lists, Links: importTitles})
 	defer fromApps.Close()
 	// Letterboxd exports name their movies by name and year only: they are
 	// searched in the server's metadata addons, then merge the same way,
 	// their watchlist going on the users' watchlists.
-	fromLetterboxd := letterboxd.New(letterboxd.Options{Titles: lib, UserData: userData, Watchlist: watchlist.New(pool), Logger: logger,
+	fromLetterboxd := letterboxd.New(letterboxd.Options{Titles: lib, UserData: userData, Watchlist: lists, Logger: logger,
 		Links: importTitles})
 	defer fromLetterboxd.Close()
 	// Deleting a user signs out, in the background, the sessions Polyfin
@@ -844,7 +855,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// image relay remembers.
 	lib.UseArtworkFailures(jellyfinAPI)
 	adminOptions.Reminders = programmeReminders
-	registerWatchlistTask(registry, store, watchlist.New(pool), jellyfinAPI, notifier, logger)
+	registerWatchlistTasks(registry, store, lists, jellyfinAPI, notifier, logger)
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
@@ -1351,12 +1362,29 @@ func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Tas
 	}
 }
 
-// registerWatchlistTask registers the checks of the watchlists for
-// versions: every hour, the titles not checked for the hours set under
+// registerWatchlistTasks registers the background work on the watchlists:
+// every hour and at start, the entries of the titles that wait for them,
+// series whose episodes were learnt or aired since; and every hour, the
+// checks for versions of the titles not checked for the hours set under
 // Settings › Catalogs, telling their users of those found available once
 // the notifications read their targets.
-func registerWatchlistTask(registry *tasks.Registry, store *accounts.Store, lists *watchlist.Store, api *jellyfin.Handler,
+func registerWatchlistTasks(registry *tasks.Registry, store *accounts.Store, lists *watchlist.Store, api *jellyfin.Handler,
 	notifier *notifications.Service, logger *slog.Logger) {
+	registry.Register(tasks.Task{
+		Key:      "ExpandWatchlists",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Add the episodes of watchlist series", Description: "Adds to each user's Watchlist playlist the aired episodes of the series their lists brought, once their episodes are known and one has aired, as any playlist takes a series."},
+			"fr":    {Name: "Ajouter les épisodes des séries à regarder", Description: "Ajoute à la liste de lecture «\u202fÀ regarder\u202f» de chaque utilisateur les épisodes diffusés des séries que ses listes ont apportées, dès que leurs épisodes sont connus et que l’un d’eux est diffusé, comme toute liste de lecture prend une série."},
+			"de":    {Name: "Folgen der Serien auf Merklisten hinzufügen", Description: "Fügt der Wiedergabeliste „Merkliste“ jedes Benutzers die ausgestrahlten Folgen der Serien hinzu, die seine Listen gebracht haben, sobald ihre Folgen bekannt sind und eine ausgestrahlt wurde, wie jede Wiedergabeliste eine Serie aufnimmt."},
+			"es":    {Name: "Añadir los episodios de las series para ver", Description: "Añade a la lista de reproducción «Para ver» de cada usuario los episodios emitidos de las series que trajeron sus listas, en cuanto se conocen sus episodios y se ha emitido uno, como cualquier lista de reproducción toma una serie."},
+			"it":    {Name: "Aggiungi gli episodi delle serie da guardare", Description: "Aggiunge alla playlist «Da guardare» di ogni utente gli episodi trasmessi delle serie portate dalle sue liste, appena i loro episodi sono noti e uno è stato trasmesso, come ogni playlist prende una serie."},
+			"pt-BR": {Name: "Adicionar os episódios das séries para assistir", Description: "Adiciona à playlist “Para assistir” de cada usuário os episódios exibidos das séries trazidas por suas listas, assim que seus episódios são conhecidos e um deles foi exibido, como qualquer playlist recebe uma série."},
+		},
+		Interval: time.Hour,
+		AtStart:  true,
+		Run:      lists.ExpandAll,
+	})
 	checker := watchlist.NewChecker(watchlist.CheckerOptions{
 		Store: lists,
 		Users: store.Users,

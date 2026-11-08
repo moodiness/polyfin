@@ -13,7 +13,7 @@ var recommendedKinds = []Kind{KindMovie, KindSeries}
 // Recommended lists from start the movies and series of ids, in order, as
 // a tracking service recommends them to the user: those the user may not
 // see, by parental control or blocked genres, those they hid, and those
-// no addon describes, are left out, as the Watchlist view leaves them
+// no addon describes, are left out, as the Now available row leaves them
 // out. first describes only as many titles as the window shows, as a home
 // row does; a listing describes them all to count them.
 func (s *Service) Recommended(ctx context.Context, user accounts.User, ids []accounts.ID, start, count int, first bool) (Page, error) {

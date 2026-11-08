@@ -148,7 +148,7 @@ func TestWatchlistTitlesMoveToNowAvailableWhenVersionsAreFound(t *testing.T) {
 	if len(ids) != 5 {
 		t.Fatalf("titles: %v", ids)
 	}
-	lists := watchlist.New(s.pool)
+	lists := s.watchlistStore()
 	save := func(user accounts.ID, titles ...string) {
 		var saved []watchlist.Title
 		for i, name := range titles {
@@ -310,7 +310,7 @@ func TestWatchlistTitlesAnsweredOnlyNoticesWait(t *testing.T) {
 	for _, item := range page.Items {
 		ids[item.Name], _ = accounts.ParseID(item.Id)
 	}
-	lists := watchlist.New(s.pool)
+	lists := s.watchlistStore()
 	if _, err := lists.Save(t.Context(), member.ID, watchlist.Import, []watchlist.Title{
 		{ID: ids["Open Door"], AddedAt: new(time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))},
 		{ID: ids["Grim Night"], AddedAt: new(time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC))},
@@ -361,4 +361,82 @@ func TestWatchlistTitlesAnsweredOnlyNoticesWait(t *testing.T) {
 	addon.setStreams("tt7002", stremio.Stream{Name: "Summary", Description: "3 results filtered out"})
 	later(6 * time.Hour)
 	check("past the hours set", 2, 3, "Open Door, Grim Night")
+}
+
+// An episode put on the watchlist by itself is checked as itself: its own
+// versions are asked for, it is told of under its own identifier, and the
+// rows list it.
+func TestAWatchlistEpisodeIsCheckedAsItself(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	addon := newWaitingAddon(t)
+	installed, err := s.addons.Install(t.Context(), addons.Shared(), addon.url, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: installed.ID, CatalogType: "series", CatalogID: "shows"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.user("member", nil)
+	token := s.signIn("member", "tv")
+	var page QueryResult
+	s.get(t, "/Items?ParentId="+s.viewIDs(t, token)["Shows"], token, &page)
+	if len(page.Items) != 1 {
+		t.Fatalf("shows: %v", itemNames(page.Items))
+	}
+	s.get(t, "/Shows/"+page.Items[0].Id+"/Episodes", token, &page)
+	if len(page.Items) != 1 {
+		t.Fatalf("episodes: %v", itemNames(page.Items))
+	}
+	episode := page.Items[0]
+	if status, body := s.call(http.MethodPost, "/Polyfin/UserItems/"+episode.Id+"/Watchlist", app("tv", token), nil); status != http.StatusNoContent {
+		t.Fatalf("adding the episode: %d %s", status, body)
+	}
+	s.addRow(t, homerows.Row{Name: "Now available", Kind: homerows.KindAvailable, Place: homerows.PlaceTop, Everyone: true})
+	s.addRow(t, homerows.Row{Name: "Still waiting", Kind: homerows.KindWaiting, Place: homerows.PlaceBottom, Everyone: true})
+	now := time.Now()
+	var clock sync.Mutex
+	at := func() time.Time {
+		clock.Lock()
+		defer clock.Unlock()
+		return now
+	}
+	s.library.SetClock(at)
+	id, _ := accounts.ParseID(episode.Id)
+	tells := &told{names: map[accounts.ID]string{id: "the episode"}}
+	checker := watchlist.NewChecker(watchlist.CheckerOptions{Store: s.watchlistStore(), Users: s.store.Users, Hours: func() int { return 6 },
+		Find: s.handler.FindWatchlistVersions, Tell: tells.tell, Logger: s.handler.Logger, Now: at})
+	rows := func() []string {
+		t.Helper()
+		var rows []string
+		for _, row := range s.customRowsOf(t, token) {
+			rows = append(rows, row.Name+": "+strings.Join(itemIDs(row.Items), ", "))
+		}
+		return rows
+	}
+	// No version yet: it waits.
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := rows(), []string{"Still waiting: " + episode.Id}; !slices.Equal(got, want) {
+		t.Errorf("rows before any version: %q, want %q", got, want)
+	}
+	addon.setStreams("tt7005:1:1", stremio.Stream{Name: "Waiting\nSlow.Show.S01E01.720p", URL: "http://127.0.0.1:9/Slow.Show.S01E01.720p.mkv"})
+	clock.Lock()
+	now = now.Add(7 * time.Hour)
+	clock.Unlock()
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := tells.all(); !slices.Equal(got, []string{"member the episode"}) {
+		t.Errorf("told: %q", got)
+	}
+	if addon.requests("tt7005:1:1") != 2 {
+		t.Errorf("the episode's versions were asked for %d times", addon.requests("tt7005:1:1"))
+	}
+	if got, want := rows(), []string{"Now available: " + episode.Id}; !slices.Equal(got, want) {
+		t.Errorf("rows: %q, want %q", got, want)
+	}
 }

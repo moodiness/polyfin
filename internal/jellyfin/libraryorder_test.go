@@ -52,8 +52,9 @@ func TestLibraryOrderSavedAsListedFollowsTheServer(t *testing.T) {
 		s.get(t, "/UserViews?includeHidden=true", tokens[name], &page)
 		return itemNames(page.Items), itemIDs(page.Items)
 	}
+	// The Playlists view holds each user's watchlist playlist.
 	names, ids := listed("saver")
-	if !slices.Equal(names, []string{"Top", "Shows"}) {
+	if !slices.Equal(names, []string{"Top", "Shows", "Playlists"}) {
 		t.Fatalf("libraries before: %v", names)
 	}
 	save := func(path, token string, ordered []string) {
@@ -76,9 +77,9 @@ func TestLibraryOrderSavedAsListedFollowsTheServer(t *testing.T) {
 	// The administrator adds Groups first and moves Top last.
 	order("groups", "shows", "top")
 	for name, want := range map[string][]string{
-		"saver": {"Groups", "Shows", "Top"},
-		"other": {"Groups", "Shows", "Top"},
-		"own":   {"Shows", "Top", "Groups"},
+		"saver": {"Groups", "Shows", "Top", "Playlists"},
+		"other": {"Groups", "Shows", "Top", "Playlists"},
+		"own":   {"Shows", "Top", "Groups", "Playlists"},
 	} {
 		if got, _ := listed(name); !slices.Equal(got, want) {
 			t.Errorf("%s after the administrator's order: %v, want %v", name, got, want)

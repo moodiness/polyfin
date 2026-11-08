@@ -238,6 +238,7 @@ func TestAnimeLibraryCountsTheKindsAsked(t *testing.T) {
 	token := s.signIn("member", "tv")
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
+	views.Items = libraryViews(views.Items)
 	if len(views.Items) != 1 {
 		t.Fatalf("the views: %+v", views.Items)
 	}
@@ -698,6 +699,8 @@ func TestVirtualFoldersDescribeTheLibraries(t *testing.T) {
 	}
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
+	// The Playlists view is no virtual folder.
+	views.Items = libraryViews(views.Items)
 	if len(folders) != len(views.Items) || len(folders) == 0 {
 		t.Fatalf("got %d folders for %d views", len(folders), len(views.Items))
 	}

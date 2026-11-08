@@ -109,7 +109,7 @@ type Service struct {
 	// generated remembers what the generated images of collections and
 	// libraries show (see generated.go).
 	generated generatedImages
-	// personal remembers what each user's images of the Watchlist view and
+	// personal remembers what each user's images of their watchlists and
 	// of the smart lists shown as libraries show (see personalimages.go).
 	personal personalImages
 	// prefetches holds a place for each listing read ahead (see
@@ -195,8 +195,8 @@ type Service struct {
 	// refreshes are the refreshes of libraries' descriptions (see
 	// libraryrefresh.go).
 	refreshes libraryRefreshes
-	// watchlist holds the users' watchlists, which the Watchlist view
-	// lists (see watchlist.go).
+	// watchlist holds the users' watchlists, playlists of theirs (see
+	// watchlist.go).
 	watchlist *watchlist.Store
 	// ratings looks movies' and series' ratings up on MDBList (see
 	// ratings.go); nil, they show their addons'.
@@ -1293,9 +1293,6 @@ func (s *Service) childrenIn(ctx context.Context, v view, user accounts.User, pa
 		folders, err := s.replayFolders(ctx, v)
 		return slicePage(folders, start, count), err
 	}
-	if parent == WatchlistViewID {
-		return s.watchlistChildren(ctx, v, start, count, first)
-	}
 	r, err := s.load(ctx, parent)
 	if err != nil {
 		return Page{}, err
@@ -1894,8 +1891,8 @@ func (s *Service) upTo(ctx context.Context, user accounts.User, parent accounts.
 	if most <= count {
 		return s.Children(ctx, user, parent, start, count, genre)
 	}
-	// The Replay view and its folders, and the Watchlist view, read no
-	// catalog: they are listed whole at once.
+	// The Replay view and its folders read no catalog: they are listed
+	// whole at once.
 	if atOnce {
 		return s.Children(ctx, user, parent, start, most, genre)
 	}
@@ -1968,9 +1965,9 @@ func (s *Service) listedAddon(ctx context.Context, v view, parent accounts.ID) (
 // listingLimit is how many items a listing of parent that asks for no
 // limit gets: WholeListing, or the maximum of the library the library or
 // collection parent belongs to when lower; 0 for any other parent but the
-// Replay view and its folders, the Watchlist view and the smart lists,
-// which get WholeListing, a smart list's maximum when lower, atOnce set: a
-// smart list bounds its own wait (see smartRead).
+// Replay view and its folders and the smart lists, which get WholeListing,
+// a smart list's maximum when lower, atOnce set: a smart list bounds its
+// own wait (see smartRead).
 func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (most int, atOnce bool, err error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -1978,7 +1975,7 @@ func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent a
 	}
 	if l, ok := v.library(parent); ok {
 		most = l.maxItems
-	} else if parent == ReplayViewID || parent == WatchlistViewID {
+	} else if parent == ReplayViewID {
 		return WholeListing, true, nil
 	} else if l, ok := v.smartList(parent); ok {
 		if l.list.MaxItems > 0 {
@@ -2415,9 +2412,6 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	}
 	if id == ReplayViewID {
 		return s.replayView(ctx, v)
-	}
-	if id == WatchlistViewID {
-		return s.watchlistView(ctx, v)
 	}
 	r, err := s.loadListed(ctx, v, id)
 	if errors.Is(err, ErrNotFound) {

@@ -28,7 +28,8 @@ type words struct {
 	myMusic string
 	// replay names the Replay view (see ReplayViewID).
 	replay string
-	// watchlist names the Watchlist view (see WatchlistViewID).
+	// watchlist names a watchlist that keeps its default name (see
+	// WatchlistName).
 	watchlist string
 	// homeRelease tells, given the day, when a movie waiting for its
 	// digital release is out at home (see releases.go).
@@ -44,7 +45,7 @@ var vocabulary = map[string]words{
 		watchlist: "Watchlist", homeRelease: "Out at home on %s."},
 	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", otherEpisodes: "Autres épisodes", video: "Vidéo", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", videos: "Vidéos", collections: "Collections",
-		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay",
+		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Listes de lecture", myMusic: "Ma musique", replay: "Replay",
 		watchlist: "À regarder", homeRelease: "Sortie en vidéo le %s."},
 	"de": {season: "Staffel", specials: "Specials", episode: "Folge", otherEpisodes: "Weitere Folgen", video: "Video", chapter: "Kapitel",
 		movies: "Filme", shows: "Serien", videos: "Videos", collections: "Sammlungen",
@@ -97,6 +98,11 @@ func ChapterName(language string, number int) string {
 // CollectionsName names the Collections view in a server language.
 func CollectionsName(language string) string {
 	return vocabularyOf(language).collections
+}
+
+// PlaylistsName names the Playlists view in a server language.
+func PlaylistsName(language string) string {
+	return vocabularyOf(language).playlists
 }
 
 // contentType names the content of a catalog type for a library name, as

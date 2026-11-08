@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 type harness struct {
@@ -52,7 +54,7 @@ func newHarness(t *testing.T, configure ...func(*Options)) harness {
 	addonStore := addons.New(pool, client)
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	data := userdata.New(pool)
-	lists := watchlist.New(pool)
+	lists := watchlisttest.Store(pool)
 	personalAddons := &atomic.Bool{}
 	personalAddons.Store(true)
 	settings := func() accounts.Settings {
@@ -111,8 +113,7 @@ func (h harness) dataOf(t *testing.T, user accounts.ID, ref library.TitleRef) us
 	return got[id]
 }
 
-// watchlistOf lists user's watchlist as the Watchlist view does: the
-// titles not started, the latest added first.
+// watchlistOf lists the entries of user's watchlist playlist, in order.
 func (h harness) watchlistOf(t *testing.T, user accounts.ID) []accounts.ID {
 	t.Helper()
 	ids, err := h.watchlist.Titles(t.Context(), user)
@@ -120,6 +121,11 @@ func (h harness) watchlistOf(t *testing.T, user accounts.ID) []accounts.ID {
 		t.Fatal(err)
 	}
 	return ids
+}
+
+// sameIDs reports whether a and b hold the same identifiers, in any order.
+func sameIDs(a, b []accounts.ID) bool {
+	return len(a) == len(b) && !slices.ContainsFunc(a, func(id accounts.ID) bool { return !slices.Contains(b, id) })
 }
 
 // unfound is what user's imports from source kept of the titles they did
@@ -234,9 +240,9 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 	}
 	// Newly played: by TMDB, the episode, the anime's episode, and the
 	// movie past the threshold; the movie by IMDb was played already. Of
-	// the library, the movie played and the series started are not added
-	// to the Watchlist view.
-	if status.Read != 11 || status.Played != 4 || status.Resumed != 1 || status.Watchlist != 1 || status.UnmatchedCount != 3 {
+	// the library's three titles, the two left to watch go on the
+	// watchlist playlist; the movie by TMDB, played, adds nothing.
+	if status.Read != 11 || status.Played != 4 || status.Resumed != 1 || status.Watchlist != 2 || status.UnmatchedCount != 3 {
 		t.Errorf("counts: %+v", status)
 	}
 	reasons := map[string]string{}
@@ -268,12 +274,11 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 	})
 	check("newer here", newerHere, func(d userdata.Data) bool { return d.Position == 50*time.Minute })
 	check("nearly done", nearlyDone, func(d userdata.Data) bool { return d.Played && d.Position == 0 })
-	// The library sets no favorite: it goes on the watchlist, where the
-	// titles started are left out.
+	// The library sets no favorite: it goes on the watchlist.
 	check("series of the library", series, func(d userdata.Data) bool { return !d.Favorite })
 	check("movie of the library", listed, func(d userdata.Data) bool { return !d.Favorite })
-	if got := h.watchlistOf(t, alice.ID); len(got) != 1 || got[0] != h.idOf(t, listed).ID {
-		t.Errorf("watchlist: %v", got)
+	if got, want := h.watchlistOf(t, alice.ID), []accounts.ID{h.idOf(t, series).ID, h.idOf(t, listed).ID}; !sameIDs(got, want) {
+		t.Errorf("watchlist: %v, want %v in any order", got, want)
 	}
 
 	// Watched on in Polyfin since, then imported again: nothing is added

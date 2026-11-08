@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -67,5 +68,30 @@ func TestWatchlistTitlesFoundAvailableReachTheUsersOwnTargetsOnly(t *testing.T) 
 	if title["id"] != series.ID.String() || title["kind"] != "series" || title["name"] != "Example Show" || title["year"] != 2024.0 ||
 		ids["Imdb"] != "tt0000007" {
 		t.Errorf("the title told: %v", title)
+	}
+}
+
+// An episode of a user's watchlist found available is told as an episode,
+// named after its series with its season and number.
+func TestAWatchlistEpisodeFoundAvailableIsToldAsAnEpisode(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	ctx := t.Context()
+	episode := library.Item{ID: accounts.ID{0xa8}, Kind: library.KindEpisode, Name: "The Return", SeriesName: "Example Show",
+		ParentIndexNumber: 1, IndexNumber: 2, ProductionYear: 2024, ProviderIDs: map[string]string{"Imdb": "tt0000008"}}
+	h.Service.library = &titleLibrary{series: episode}
+	h.add(t, &h.member, h.webhook("/member", TitleAvailable))
+
+	h.WatchlistTitleAvailable(ctx, h.member, episode.ID)
+	member := h.targets.wait(t, "/member", 1)[0].body
+	title, _ := member["watchlistTitle"].(map[string]any)
+	if title["id"] != episode.ID.String() || title["kind"] != "episode" {
+		t.Errorf("the title told: %v", title)
+	}
+	if member["title"] != "Versions found: Example Show S01E02" {
+		t.Errorf("the member's message: %v", member)
+	}
+	if message, _ := member["message"].(string); !strings.Contains(message, "Example Show S01E02") {
+		t.Errorf("message: %q", message)
 	}
 }

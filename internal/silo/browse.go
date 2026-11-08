@@ -791,12 +791,15 @@ type listing struct {
 	// section is a section of Home or of a library's landing, read whole.
 	section *section
 	// whole is set for a folder listed whole, query's parent: a
-	// collection, the Watchlist view, or a row of Home or of a library's
-	// landing past its first titles.
+	// collection, the watchlist's playlist, or a row of Home or of a
+	// library's landing past its first titles.
 	whole bool
 	// view is the library asked, if any.
 	view item
 	term string
+	// none is set for a listing known to hold nothing: the watchlist of a
+	// user who deleted its playlist.
+	none bool
 }
 
 // libraryTitles reports whether the listing is a library's titles,
@@ -849,7 +852,12 @@ func (s *Server) listingAsked(w http.ResponseWriter, r *http.Request, v viewer, 
 	case "library_collection", "user_collection":
 		folder, l.whole = q.Get("collection_id"), true
 	case "watchlist":
-		folder, l.whole = watchlistView, true
+		got := watchlistOf(r)
+		if got.err != nil {
+			s.internalError(w, r, got.err)
+			return listing{}, false
+		}
+		folder, l.whole, l.none = got.playlist, true, got.playlist == ""
 	case "history":
 		if types, ok = historyTypes[q.Get("type")]; !ok {
 			validationProblem(w, "query.type", "unsupported", "This server's history lists movies and episodes.")
@@ -894,7 +902,7 @@ func (s *Server) listingAsked(w http.ResponseWriter, r *http.Request, v viewer, 
 			return listing{}, false
 		}
 	}
-	if l.whole {
+	if l.whole && !l.none {
 		if _, err := accounts.ParseID(folder); err != nil {
 			problem(w, http.StatusNotFound, "not_found", "Not found.")
 			return listing{}, false
@@ -924,6 +932,10 @@ func (s *Server) catalogOf(w http.ResponseWriter, r *http.Request, v viewer, q u
 	}
 	l, ok := s.listingAsked(w, r, v, q)
 	if !ok {
+		return
+	}
+	if l.none {
+		writeJSON(w, http.StatusOK, pageOf(nil, start, limit, 0))
 		return
 	}
 	switch {

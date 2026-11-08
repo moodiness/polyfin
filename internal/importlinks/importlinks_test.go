@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 func TestParseReadsIdentifiersAndAddresses(t *testing.T) {
@@ -143,7 +144,7 @@ func setup(t *testing.T) harness {
 		names: map[string]string{"tt0111161": "Harbor Lights", "tt0903747": "Night Shift"},
 	}
 	data := userdata.New(pool)
-	store := New(Options{DB: pool, Settings: users.Settings, Titles: f, UserData: data, Watchlist: watchlist.New(pool)})
+	store := New(Options{DB: pool, Settings: users.Settings, Titles: f, UserData: data, Watchlist: watchlisttest.Store(pool)})
 	return harness{Store: store, data: data, user: user.ID, peer: peer.ID}
 }
 

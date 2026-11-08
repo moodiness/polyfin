@@ -8,18 +8,16 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/moodiness/polyfin/internal/library"
 )
 
 // Favorites, the watchlist and the watch history.
 //
 // A user's favorites are their Jellyfin favorites, which all their apps
-// share. Their watchlist is Polyfin's (see package watchlist): Silo's apps
-// list its Watchlist view, as Jellyfin apps show it, and put titles on it
-// and take them off through Polyfin's own routes of the Jellyfin API. Their
-// history is what they played. Each is read from the Jellyfin API as the
-// user, under the same limits.
+// share. Their watchlist is Polyfin's, a playlist of theirs (see package
+// watchlist): Silo's apps list it as Jellyfin apps do, in its order, and
+// put titles on it and take them off through Polyfin's own routes of the
+// Jellyfin API. Their history is what they played. Each is read from the
+// Jellyfin API as the user, under the same limits.
 
 func (s *Server) personalRoutes() {
 	s.mux.HandleFunc("GET /api/v2/favorites", s.profiled(s.favorites))
@@ -39,38 +37,46 @@ func (s *Server) personalRoutes() {
 }
 
 // The user's watchlist, read once for a request when it first needs it:
-// the cards it describes tell whether the watchlist holds them.
+// the cards it describes tell whether the watchlist holds them, and its
+// listings name its playlist.
 
 type watchlistKey struct{}
 
 type heldTitles struct {
 	once sync.Once
-	read func() map[string]time.Time
-	held map[string]time.Time
+	read func() watchlistRead
+	got  watchlistRead
+}
+
+// watchlistRead is the user's watchlist: its playlist's identifier, empty
+// while the user has none, its entries (movies and episodes), started or
+// not, and the titles it holds pending (a series none of whose episodes
+// aired), with when each was added, and the seasons and series of its
+// episodes, with the latest of their dates. One that cannot be read holds
+// nothing, and err tells why.
+type watchlistRead struct {
+	playlist string
+	held     map[string]time.Time
+	seasons  map[string]time.Time
+	series   map[string]time.Time
+	err      error
 }
 
 // withWatchlist is r, whose cards read v's watchlist.
 func (s *Server) withWatchlist(r *http.Request, v viewer) *http.Request {
-	h := &heldTitles{read: func() map[string]time.Time { return s.readWatchlist(r, v) }}
+	h := &heldTitles{read: func() watchlistRead { return s.readWatchlist(r, v) }}
 	return r.WithContext(context.WithValue(r.Context(), watchlistKey{}, h))
 }
 
-// readWatchlist reads the titles the user's watchlist holds, started or
-// not, and when each was added. One that cannot be read holds nothing,
-// for the cards: the watchlist's own operations read it again.
-func (s *Server) readWatchlist(r *http.Request, v viewer) map[string]time.Time {
-	held, err := s.heldWatchlist(r, v)
-	if err != nil && r.Context().Err() == nil {
-		s.options.Logger.Warn("The watchlist of a Silo app's user could not be read", "error", err)
-	}
-	return held
-}
-
-func (s *Server) heldWatchlist(r *http.Request, v viewer) (map[string]time.Time, error) {
+// readWatchlist reads the user's watchlist.
+func (s *Server) readWatchlist(r *http.Request, v viewer) watchlistRead {
 	var result struct {
-		Items []struct {
-			Id      string
-			AddedAt time.Time
+		PlaylistId string
+		Items      []struct {
+			Id       string
+			SeriesId string
+			SeasonId string
+			AddedAt  time.Time
 		}
 	}
 	a, err := s.call(r, v, http.MethodGet, "/Polyfin/UserItems/Watchlist", nil, &result)
@@ -78,44 +84,50 @@ func (s *Server) heldWatchlist(r *http.Request, v viewer) (map[string]time.Time,
 		err = fmt.Errorf("the Jellyfin API answered %d", a.status)
 	}
 	if err != nil {
-		return nil, err
+		if r.Context().Err() == nil {
+			s.options.Logger.Warn("The watchlist of a Silo app's user could not be read", "error", err)
+		}
+		return watchlistRead{err: err}
 	}
-	held := make(map[string]time.Time, len(result.Items))
-	for _, title := range result.Items {
-		held[title.Id] = title.AddedAt
+	got := watchlistRead{playlist: result.PlaylistId, held: make(map[string]time.Time, len(result.Items)),
+		seasons: map[string]time.Time{}, series: map[string]time.Time{}}
+	latest := func(dates map[string]time.Time, id string, at time.Time) {
+		if id != "" && at.After(dates[id]) {
+			dates[id] = at
+		}
 	}
-	return held, nil
+	for _, entry := range result.Items {
+		got.held[entry.Id] = entry.AddedAt
+		latest(got.seasons, entry.SeasonId, entry.AddedAt)
+		latest(got.series, entry.SeriesId, entry.AddedAt)
+	}
+	return got
 }
 
-// watchlisted is the watchlist of r's user, by title.
-func watchlisted(r *http.Request) map[string]time.Time {
+// watchlistOf is the watchlist of r's user.
+func watchlistOf(r *http.Request) watchlistRead {
 	h, ok := r.Context().Value(watchlistKey{}).(*heldTitles)
 	if !ok {
-		return nil
+		return watchlistRead{}
 	}
-	h.once.Do(func() { h.held = h.read() })
-	return h.held
+	h.once.Do(func() { h.got = h.read() })
+	return h.got
 }
 
-// watchlistTitle is the title the watchlist holds for an item: a movie or
-// a series itself, the series of a season or an episode; none for others.
-func watchlistTitle(i item) string {
+// watchable tells whether the watchlist's button acts on an item: a
+// movie, an episode, a season or a series.
+func watchable(i item) bool {
 	switch i.Type {
-	case "Movie", "Series":
-		return i.Id
-	case "Season", "Episode":
-		return i.SeriesId
+	case "Movie", "Episode", "Season", "Series":
+		return true
 	}
-	return ""
+	return false
 }
 
-// inWatchlist reports whether r's user's watchlist holds an item's title.
+// inWatchlist reports whether r's user's watchlist holds an item (see
+// watchlistEntry).
 func inWatchlist(r *http.Request, i item) bool {
-	title := watchlistTitle(i)
-	if title == "" {
-		return false
-	}
-	_, ok := watchlisted(r)[title]
+	_, ok := watchlistEntry(r, i)
 	return ok
 }
 
@@ -136,14 +148,37 @@ func favoriteEntry(_ *http.Request, i item) (time.Time, bool) {
 	return time.Now(), true
 }
 
-// watchlistEntry tells whether the user's watchlist holds an item's title.
+// watchlistEntry tells whether the user's watchlist holds an item, and
+// since when: a title when it is an entry or pending, a season or a series
+// also when an episode of it is.
 func watchlistEntry(r *http.Request, i item) (time.Time, bool) {
-	title := watchlistTitle(i)
-	if title == "" {
-		return time.Time{}, false
+	got := watchlistOf(r)
+	if at, ok := got.held[i.Id]; ok {
+		return at, true
 	}
-	at, ok := watchlisted(r)[title]
+	var at time.Time
+	var ok bool
+	switch i.Type {
+	case "Season":
+		at, ok = got.seasons[i.Id]
+	case "Series":
+		at, ok = got.series[i.Id]
+	}
 	return at, ok
+}
+
+// watchlistFollows tells whether the user's watchlist holds an episode,
+// its season or its series, pending or by an episode of it, for the
+// calendar.
+func watchlistFollows(r *http.Request, i item) bool {
+	got := watchlistOf(r)
+	for _, id := range []string{i.Id, i.SeasonId, i.SeriesId} {
+		if _, ok := got.held[id]; ok && id != "" {
+			return true
+		}
+	}
+	_, ok := got.series[i.SeriesId]
+	return ok && i.SeriesId != ""
 }
 
 // membership answers whether a list holds an item, for an item the user
@@ -191,9 +226,10 @@ func (s *Server) markFavorite(favorite bool) func(http.ResponseWriter, *http.Req
 	}
 }
 
-// markWatchlist puts an item's title on the user's watchlist, or takes it
-// off every list holding it. Only movies and series, or the seasons and
-// episodes of a series, go on it.
+// markWatchlist puts an item on the user's watchlist, or takes it off, as
+// the web player's menu does: a movie or an episode itself; a season or a
+// series its aired episodes (of regular seasons, for a series), or all
+// its entries off. Other items do not go on it.
 func (s *Server) markWatchlist(add bool) func(http.ResponseWriter, *http.Request, viewer) {
 	return func(w http.ResponseWriter, r *http.Request, v viewer) {
 		i, ok := s.itemOf(w, r, v, r.PathValue("id"))
@@ -201,12 +237,12 @@ func (s *Server) markWatchlist(add bool) func(http.ResponseWriter, *http.Request
 			return
 		}
 		switch {
-		case watchlistTitle(i) != "" && add:
+		case watchable(i) && add:
 			s.change(w, r, v, http.MethodPost, "/Polyfin/UserItems/"+i.Id+"/Watchlist")
-		case watchlistTitle(i) != "":
+		case watchable(i):
 			s.change(w, r, v, http.MethodDelete, "/Polyfin/UserItems/"+i.Id+"/Watchlist")
 		case add:
-			validationProblem(w, "path.item_id", "unsupported", "Only movies and series go on the watchlist.")
+			validationProblem(w, "path.item_id", "unsupported", "Only movies, episodes, seasons and series go on the watchlist.")
 		default:
 			// No list holds it: taking it off changes nothing.
 			w.WriteHeader(http.StatusNoContent)
@@ -264,13 +300,20 @@ func (s *Server) favorites(w http.ResponseWriter, r *http.Request, v viewer) {
 		"SortBy": {"SortName"}, "SortOrder": {"Ascending"}})
 }
 
-// watchlistView identifies the Watchlist view, the same on every server.
-var watchlistView = library.WatchlistViewID.String()
-
-// watchlist lists the Watchlist view: the movies and series of the user's
-// watchlist they have not started, the latest added first.
+// watchlist lists the user's watchlist: its movies and episodes, started
+// or not, in its order; nothing while the user deleted its playlist.
 func (s *Server) watchlist(w http.ResponseWriter, r *http.Request, v viewer) {
-	s.personalList(w, r, v, url.Values{"ParentId": {watchlistView}})
+	got := watchlistOf(r)
+	switch {
+	case got.err != nil:
+		s.internalError(w, r, got.err)
+	case got.playlist == "":
+		if _, _, ok := pageAsked(w, r.URL.Query()); ok {
+			writeJSON(w, http.StatusOK, personalPage{Items: []catalogItem{}})
+		}
+	default:
+		s.personalList(w, r, v, url.Values{"ParentId": {got.playlist}})
+	}
 }
 
 // historyQuery is the Jellyfin API's listing of what the user played, of

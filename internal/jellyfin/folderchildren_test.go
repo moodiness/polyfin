@@ -41,6 +41,7 @@ func newStoreLibrary(t *testing.T) storeLibrary {
 	token := s.signIn("member", "tv")
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
+	views.Items = libraryViews(views.Items)
 	if len(views.Items) != 1 {
 		t.Fatalf("the views: %+v", views.Items)
 	}

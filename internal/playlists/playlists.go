@@ -1,6 +1,7 @@
 // Package playlists keeps the playlists users make of movies and episodes:
 // their entries in order, the users they are shared with, and whether every
-// user may see them.
+// user may see them. Each user's watchlist is a playlist too, which
+// package watchlist fills and changes (see Playlist.Watchlist).
 package playlists
 
 import (
@@ -22,7 +23,12 @@ var ErrNotFound = errors.New("playlist not found")
 type Playlist struct {
 	ID    accounts.ID
 	Owner accounts.ID
-	Name  string
+	// Name is empty for a watchlist that keeps the default name, which
+	// follows the language of whoever sees it.
+	Name string
+	// Watchlist is set for the owner's watchlist, whose entries package
+	// watchlist changes: movies and episodes, each once.
+	Watchlist bool
 	// OpenAccess lets every user see the playlist; only its owner and the
 	// users shared with to edit change it.
 	OpenAccess bool
@@ -135,11 +141,11 @@ func (s *Store) AnyVisible(ctx context.Context, user accounts.ID) (bool, error) 
 // load reads the playlists a condition on the playlists table selects, by
 // name, with their shares and entries.
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Playlist, error) {
-	rows, _ := s.db.Query(ctx, "SELECT id, owner_id, name, open_access, created_at, last_added_at FROM playlists "+
+	rows, _ := s.db.Query(ctx, "SELECT id, owner_id, coalesce(name, ''), watchlist, open_access, created_at, last_added_at FROM playlists "+
 		where+" ORDER BY lower(name), id", args...)
 	var result []Playlist
 	var p Playlist
-	if _, err := pgx.ForEachRow(rows, []any{&p.ID, &p.Owner, &p.Name, &p.OpenAccess, &p.Created, &p.LastAdded}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&p.ID, &p.Owner, &p.Name, &p.Watchlist, &p.OpenAccess, &p.Created, &p.LastAdded}, func() error {
 		result = append(result, p)
 		return nil
 	}); err != nil || len(result) == 0 {
@@ -181,11 +187,13 @@ type Changes struct {
 	Items *[]accounts.ID
 }
 
-// Update changes a playlist.
+// Update changes a playlist. A watchlist given an empty name takes the
+// default back.
 func (s *Store) Update(ctx context.Context, id accounts.ID, c Changes) error {
 	return s.change(ctx, id, func(tx pgx.Tx, owner accounts.ID) error {
 		if c.Name != nil {
-			if _, err := tx.Exec(ctx, "UPDATE playlists SET name = $2 WHERE id = $1", id, *c.Name); err != nil {
+			if _, err := tx.Exec(ctx, "UPDATE playlists SET name = CASE WHEN watchlist AND $2 = '' THEN NULL ELSE $2 END WHERE id = $1",
+				id, *c.Name); err != nil {
 				return err
 			}
 		}

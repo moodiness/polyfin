@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 // appImportAPI serves the admin API with imports from apps, the Stremio
@@ -34,7 +35,7 @@ func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *ad
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
-		data, installed, lists = userdata.New(deps.pool), deps.addons, watchlist.New(deps.pool)
+		data, installed, lists = userdata.New(deps.pool), deps.addons, watchlisttest.Store(deps.pool)
 		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3"})
 		o.Stremio = stremioimport.New(stremioimport.Options{Metas: stremiotest.SampleMetas(), Version: "1.2.3", API: fake.API,
 			Link: fake.Link})
@@ -45,17 +46,30 @@ func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *ad
 	return api, lib, data, installed, fake, lists
 }
 
-// planned is the only title of user's watchlist, the movie imdb, as the
-// Watchlist view lists it, and they have no favorite: an app import puts
-// its library on the watchlist only.
-func planned(t *testing.T, lib *library.Service, data *userdata.Store, lists *watchlist.Store, user accounts.ID, imdb string) {
+// planned fails unless user's watchlist holds the titles refs find, in
+// any order, and they have no favorite: an app import puts its library
+// on the watchlist only.
+func planned(t *testing.T, lib *library.Service, data *userdata.Store, lists *watchlist.Store, user accounts.ID, refs ...library.TitleRef) {
 	t.Helper()
-	found, err := lib.Resolve(t.Context(), []library.TitleRef{{IMDb: imdb}})
-	if err != nil || len(found[0]) == 0 {
-		t.Fatalf("%s: %v %v", imdb, found, err)
+	found, err := lib.Resolve(t.Context(), refs)
+	if err != nil {
+		t.Fatalf("%v: %v", refs, err)
 	}
-	if got, err := lists.Titles(t.Context(), user); err != nil || len(got) != 1 || got[0] != found[0][0].ID {
+	want := map[accounts.ID]bool{}
+	for i, f := range found {
+		if len(f) == 0 {
+			t.Fatalf("%v: not found", refs[i])
+		}
+		want[f[0].ID] = true
+	}
+	got, err := lists.Titles(t.Context(), user)
+	if err != nil || len(got) != len(want) {
 		t.Errorf("watchlist: %v %v", got, err)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("watchlist: %v, holding %s", got, id)
+		}
 	}
 	if favorites, err := data.Favorites(t.Context(), user); err != nil || len(favorites) != 0 {
 		t.Errorf("favorites: %+v %v", favorites, err)
@@ -139,10 +153,11 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 	}
 	done := appImportDone(t, bob, "/account/app-import")
 	// Played: the first movie, and S1E2; resumed: the second movie, S1E3
-	// and S2E1; on the watchlist: the first movie and the series, which
-	// are started, and the movie in the library only, which is added;
-	// not matched: one not found, one of another identifier.
-	if done["read"] != 9.0 || done["played"] != 2.0 || done["resumed"] != 3.0 || done["watchlist"] != 1.0 || done["unmatchedCount"] != 2.0 ||
+	// and S2E1; on the watchlist, which an import gives only what is left
+	// to watch: the series, whose episodes are not all played, and the
+	// movie in the library only; not the first movie, played; not
+	// matched: one not found, one of another identifier.
+	if done["read"] != 9.0 || done["played"] != 2.0 || done["resumed"] != 3.0 || done["watchlist"] != 2.0 || done["unmatchedCount"] != 2.0 ||
 		done["app"] != "nuvio" || done["user"].(map[string]any)["name"] != "bob" || done["startedBy"].(map[string]any)["name"] != "bob" {
 		t.Errorf("Bob's result: %v", done)
 	}
@@ -154,7 +169,7 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 	if !playedMovie(t, lib, data, bobID, "tt0000001") || playedMovie(t, lib, data, bobID, "tt0000009") {
 		t.Error("Bob's movies")
 	}
-	planned(t, lib, data, lists, bobID, "tt0000005")
+	planned(t, lib, data, lists, bobID, library.TitleRef{IMDb: "tt0000005"}, library.TitleRef{Series: true, IMDb: "tt0100"})
 	if backend.Open() != 0 {
 		t.Error("a Nuvio session is still open")
 	}
@@ -376,11 +391,12 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 	}
 	done := appImportDone(t, bob, "/account/app-import")
 	// Played: the first and the removed movie, and S1E1 to S1E3; resumed:
-	// the second movie and S2E1; on the watchlist: the first movie and the
-	// series, which are started, and the movie in the library only, which
-	// is added; reported: the series watched against an episode Polyfin's
-	// addons do not list, one of another identifier, one not found.
-	if done["read"] != 12.0 || done["played"] != 5.0 || done["resumed"] != 2.0 || done["watchlist"] != 1.0 || done["unmatchedCount"] != 3.0 {
+	// the second movie and S2E1; on the watchlist, which an import gives
+	// only what is left to watch: the series, whose S2E1 is in progress,
+	// and the movie in the library only; not the first movie, played;
+	// reported: the series watched against an episode Polyfin's addons do
+	// not list, one of another identifier, one not found.
+	if done["read"] != 12.0 || done["played"] != 5.0 || done["resumed"] != 2.0 || done["watchlist"] != 2.0 || done["unmatchedCount"] != 3.0 {
 		t.Errorf("Bob's result: %v", done)
 	}
 	// The titles not found are kept by the import, not answered with it.
@@ -392,7 +408,7 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 		playedMovie(t, lib, data, bobID, "tt0000002") {
 		t.Error("Bob's movies")
 	}
-	planned(t, lib, data, lists, bobID, "tt0000005")
+	planned(t, lib, data, lists, bobID, library.TitleRef{IMDb: "tt0000005"}, library.TitleRef{Series: true, IMDb: "tt0100"})
 }
 
 func TestStremioImportsFollowTheirPermissions(t *testing.T) {

@@ -94,7 +94,7 @@ func (h *Handler) originalItem(r *http.Request, user accounts.User, id accounts.
 	case collectionsViewID:
 		return h.collectionsViewItem(), nil
 	case playlistsViewID:
-		return playlistsViewItem(), nil
+		return h.playlistsViewItem(), nil
 	case liveTvViewID:
 		if has, err := h.Library.HasChannels(ctx, user); err != nil || !has {
 			return library.Item{}, cmpErr(err, library.ErrNotFound)
@@ -112,7 +112,8 @@ func (h *Handler) originalItem(r *http.Request, user accounts.User, id accounts.
 		return library.Item{}, err
 	}
 	if p, err := h.Playlists.Get(ctx, id); err == nil && p.Visible(user.ID) {
-		return library.Item{ID: p.ID, Kind: library.KindMusicPlaylist, Name: p.Name}, nil
+		name, err := h.playlistName(ctx, user, p)
+		return library.Item{ID: p.ID, Kind: library.KindMusicPlaylist, Name: name}, err
 	} else if err != nil && !errors.Is(err, playlists.ErrNotFound) {
 		return library.Item{}, err
 	}

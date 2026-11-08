@@ -153,7 +153,7 @@ func idleServer(t *testing.T, pool *pgxpool.Pool, sent *statements) []idleTask {
 		// No title is due.
 		{"CheckWatchlists", checker.Check, []string{
 			"SELECT id, name, ",
-			"SELECT w.item_id FROM watchlist w ",
+			"SELECT t.item_id FROM (SELECT w.item_id, max(w.added_at) AS added_at, min(e.position) AS position FROM watchlist w ",
 		}},
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -187,7 +188,7 @@ func TestAudiobookAddonsMakeBooksLibraries(t *testing.T) {
 	token, _, views := listening(t, s, addon.url)
 	var result QueryResult
 	s.get(t, "/UserViews", token, &result)
-	for _, view := range result.Items {
+	for _, view := range libraryViews(result.Items) {
 		if view.CollectionType != "books" {
 			t.Errorf("%s is a %q library", view.Name, view.CollectionType)
 		}
@@ -248,6 +249,7 @@ func TestUsersOwnMusicAddonsStayOnPublicAddresses(t *testing.T) {
 		token := s.signIn(name, "web")
 		var views QueryResult
 		s.get(t, "/UserViews", token, &views)
+		views.Items = libraryViews(views.Items)
 		if len(views.Items) != 2 {
 			t.Fatalf("%s's views: %+v", name, views.Items)
 		}
@@ -259,7 +261,7 @@ func TestUsersOwnMusicAddonsStayOnPublicAddresses(t *testing.T) {
 	s.user("other", nil)
 	var views QueryResult
 	s.get(t, "/UserViews", s.signIn("other", "web"), &views)
-	if len(views.Items) != 0 {
+	if len(libraryViews(views.Items)) != 0 {
 		t.Errorf("another user's views: %+v", views.Items)
 	}
 }
@@ -272,8 +274,9 @@ func TestHiddenMusicLibrariesAreNotListed(t *testing.T) {
 	s.store.UpdateUser(t.Context(), mustUser(t, s, "listener").ID, accounts.UserChanges{HiddenLibraries: &[]accounts.ID{hidden}}, nil)
 	var result QueryResult
 	s.get(t, "/UserViews", token, &result)
-	if len(result.Items) != 1 || result.Items[0].Name != "Top Songs" {
-		t.Errorf("views: %+v", result.Items)
+	// The Playlists view stays, for the user's watchlist playlist.
+	if got := itemNames(result.Items); !slices.Equal(got, []string{"Top Songs", "Playlists"}) {
+		t.Errorf("views: %v", got)
 	}
 	for _, path := range []string{"/Items?ParentId=" + views["New Releases"], "/Artists?ParentId=" + views["New Releases"]} {
 		if status, body := s.call(http.MethodGet, path, app("web", token), nil); status != http.StatusUnauthorized {

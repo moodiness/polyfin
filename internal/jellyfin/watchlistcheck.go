@@ -14,17 +14,18 @@ import (
 // for the watchlist checks (see watchlist.Checker). A title the user may
 // not see, by parental control, blocked genres, the libraries hidden from
 // them or their hidden titles, is watchlist.Unseen: no addon is asked. A
-// movie whose release date is to come, and a series none of whose regular
-// episodes is out, are watchlist.Unreleased. Otherwise the movie, or the
-// series' first regular episode out, is asked of the user's stream
-// addons, torrents' files included for a user who may play them (see
-// library.WatchlistVersions): it is available when one of its versions is
-// neither hidden by the version rules nor taller than the user's quality
-// group. Playback still offers these versions when no other is left, but
-// a title found only in them is not told of as available: they are what
-// the user chose not to be offered. It is background work, whose requests
-// to addons are paced (see library.Background), and builds the user's view
-// once for its reads of the library (see library.PerRequest).
+// movie whose release date is to come, a series none of whose regular
+// episodes is out, and an episode not out yet are watchlist.Unreleased.
+// Otherwise the movie or the episode, or the series' first regular
+// episode out, is asked of the user's stream addons, torrents' files
+// included for a user who may play them (see library.WatchlistVersions):
+// it is available when one of its versions is neither hidden by the
+// version rules nor taller than the user's quality group. Playback still
+// offers these versions when no other is left, but a title found only in
+// them is not told of as available: they are what the user chose not to
+// be offered. It is background work, whose requests to addons are paced
+// (see library.Background), and builds the user's view once for its reads
+// of the library (see library.PerRequest).
 func (h *Handler) FindWatchlistVersions(ctx context.Context, user accounts.User, title accounts.ID) (watchlist.Found, error) {
 	ctx = library.PerRequest(library.Background(ctx))
 	item, err := h.Library.Item(ctx, user, title)
@@ -38,13 +39,17 @@ func (h *Handler) FindWatchlistVersions(ctx context.Context, user accounts.User,
 	if err != nil {
 		return watchlist.Unknown, err
 	}
-	if hidden[title] {
+	if hidden.Hides(item) {
 		return watchlist.Unseen, nil
 	}
 	asked := title
 	switch item.Kind {
 	case library.KindMovie:
 		if item.PremiereDate != nil && item.PremiereDate.After(h.now()) {
+			return watchlist.Unreleased, nil
+		}
+	case library.KindEpisode:
+		if !item.Available {
 			return watchlist.Unreleased, nil
 		}
 	case library.KindSeries:

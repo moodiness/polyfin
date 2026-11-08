@@ -115,7 +115,7 @@ func versionSourcesOn(t *testing.T) sourcesSetup {
 	token := s.signIn("member", "tv")
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
-	for _, view := range views.Items {
+	for _, view := range libraryViews(views.Items) {
 		var page QueryResult
 		if s.get(t, "/Items?ParentId="+view.Id, token, &page); view.Name != "Shelf" && len(page.Items) == 1 {
 			p.rulesSetup = rulesSetup{playbackSetup: playbackSetup{testServer: s, token: token, user: user, movie: page.Items[0].Id}}
