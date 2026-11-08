@@ -6,6 +6,7 @@ import (
 )
 
 func TestRedactHidesAddressesAndSecrets(t *testing.T) {
+	t.Parallel()
 	for line, want := range map[string]string{
 		`url=https://user:pw@addon.example/secret/manifest.json?x=1 status=500`: `url=https://addon.example/… status=500`,
 		`msg="Get \"http://debrid.example/stream/abc\": EOF"`:                   `msg="Get \"http://debrid.example/…\": EOF"`,
@@ -21,6 +22,7 @@ func TestRedactHidesAddressesAndSecrets(t *testing.T) {
 }
 
 func TestRingKeepsTheLastLinesWithinItsCapacity(t *testing.T) {
+	t.Parallel()
 	ring := NewRing(45)
 	for _, line := range []string{"first line\n", "second line\n", "third line token=x\n"} {
 		_, _ = ring.Write([]byte(line))
@@ -39,6 +41,7 @@ func TestRingKeepsTheLastLinesWithinItsCapacity(t *testing.T) {
 }
 
 func TestSinceFollowsTheNewLinesRedacted(t *testing.T) {
+	t.Parallel()
 	ring := NewRing(1 << 10)
 	_, _ = ring.Write([]byte("one\ntwo password=hunter2\n"))
 	lines, next := ring.Since(0, 0)
