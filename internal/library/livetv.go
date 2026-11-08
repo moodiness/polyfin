@@ -257,6 +257,12 @@ type GuideQuery struct {
 	// Limit, when positive, lists the first Limit programmes kept, by
 	// start time then channel number, and reads the guide no further.
 	Limit int
+	// Kept lists the channels and Native EPG programmes of the catalog
+	// pages kept only, asking no addon, and has those missing fetched in
+	// the background for the next listing (see keptOrLater): what airs
+	// now on the home screen, which jellyfin-web waits for before it
+	// fills any of its rows, answers at once however slow an addon is.
+	Kept bool
 }
 
 // Guide lists the programmes of the user's channels that q asks for, by
@@ -271,12 +277,19 @@ type GuideQuery struct {
 // no item: one opened by its identifier is found again from the guide (see
 // unsavedProgram). Native EPG programmes, which only their addon gives
 // again, are kept as items once listed.
+//
+// A listing waits for the addons to give the pages of the catalogs and
+// days Polyfin does not keep yet, unless q.Kept.
 func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return nil, err
 	}
-	all, channelRecords := s.channels(ctx, v)
+	read := ctx
+	if q.Kept {
+		read = withKeptOrLater(ctx)
+	}
+	all, channelRecords := s.channels(read, v)
 	var wanted map[accounts.ID]bool
 	if q.Channels != nil {
 		wanted = make(map[accounts.ID]bool, len(q.Channels))
@@ -322,7 +335,7 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 	group.SetLimit(catalogFetches)
 	for _, src := range guides {
 		group.Go(func() error {
-			metas, _, err := s.window(ctx, v, src, 0, v.limit(src))
+			metas, _, err := s.window(read, v, src, 0, v.limit(src))
 			if err != nil && ctx.Err() == nil {
 				s.logger.Warn("A live TV guide could not be read", "catalog", src.catalog.ID, "date", src.date, "error", err)
 			}

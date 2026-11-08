@@ -134,6 +134,22 @@ func keptOnly(ctx context.Context) bool {
 // errNotKept reports a page a read that asks no addon does not know.
 var errNotKept = errors.New("catalog page not kept")
 
+// keptOrLater marks a context whose reads take only the pages already
+// kept, as keptOnly does, and have each page missing fetched in the
+// background for the next read (see fetchPageLater): a listing that must
+// answer at once, whatever its addons, such as what airs now on the home
+// screen (see GuideQuery.Kept).
+type keptOrLaterKey struct{}
+
+func withKeptOrLater(ctx context.Context) context.Context {
+	return context.WithValue(withKeptOnly(ctx), keptOrLaterKey{}, true)
+}
+
+func keptOrLater(ctx context.Context) bool {
+	later, _ := ctx.Value(keptOrLaterKey{}).(bool)
+	return later
+}
+
 // refreshingKey marks the context of a read that asks the addon at once
 // for the pages past their refresh age, and waits for them, instead of
 // taking them and asking again in the background (see ReadCollections).
@@ -158,12 +174,13 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // readPage returns the catalog page starting at skip: the one kept in
 // memory, else the one kept in the database, either asked for again in the
 // background once past its refresh age, else the addon's answer. A read
-// that asks no addon (see keptOnly) gets errNotKept instead of the addon's
-// answer; a read that refreshes (see withRefreshing) waits for the addon's
-// answer to a page past its refresh age, and takes the kept one if the
-// addon fails. A search's page is kept apart, for searchTTL, and never
-// refreshed: every term is a new page, seldom read again. An empty one is
-// kept emptySearchLife only.
+// that asks no addon (see keptOnly) gets errNotKept instead of the
+// addon's answer, and has the page fetched in the background when it
+// marks so (see keptOrLater); a read that refreshes (see withRefreshing)
+// waits for the addon's answer to a page past its refresh age, and takes
+// the kept one if the addon fails. A search's page is kept apart, for
+// searchTTL, and never refreshed: every term is a new page, seldom read
+// again. An empty one is kept emptySearchLife only.
 func (s *Service) readPage(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's live TV catalog is one page, which it remembers
 	// itself until its list changes; its movie and series catalogs read
@@ -202,6 +219,9 @@ func (s *Service) readPage(ctx context.Context, src source, skip int) ([]stremio
 	if keptOnly(ctx) {
 		kept, ok := s.loadPage(ctx, src, key)
 		if !ok {
+			if keptOrLater(ctx) {
+				s.fetchPageLater(ctx, src, key)
+			}
 			return nil, errNotKept
 		}
 		if !kept.fresh(s.now(), s.catalogLife()) {
@@ -209,22 +229,61 @@ func (s *Service) readPage(ctx context.Context, src source, skip int) ([]stremio
 		}
 		return kept.value, nil
 	}
-	result, err := s.shared(ctx, fmt.Sprintf("page %v", key), func(ctx context.Context) (any, error) {
-		if kept, ok := s.loadPage(ctx, src, key); ok {
-			if !kept.fresh(s.now(), s.catalogLife()) {
-				if refreshing(ctx) {
-					return s.refetchPage(ctx, src, key, kept.value)
-				}
-				s.refreshPage(ctx, src, key, kept.at)
-			}
-			return kept.value, nil
-		}
-		return s.fetchPage(ctx, src, key)
+	result, err := s.shared(ctx, pageFlight(key), func(ctx context.Context) (any, error) {
+		return s.keptOrFetchedPage(ctx, src, key)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return result.([]stremio.Meta), nil
+}
+
+// pageFlight names the fetch of key's page, which the reads that need it
+// at once share (see shared).
+func pageFlight(key pageKey) string { return fmt.Sprintf("page %v", key) }
+
+// keptOrFetchedPage returns the page of key kept in the database, asked for
+// again past its refresh age as readPage tells, else the addon's answer.
+func (s *Service) keptOrFetchedPage(ctx context.Context, src source, key pageKey) ([]stremio.Meta, error) {
+	if kept, ok := s.loadPage(ctx, src, key); ok {
+		if !kept.fresh(s.now(), s.catalogLife()) {
+			if refreshing(ctx) {
+				return s.refetchPage(ctx, src, key, kept.value)
+			}
+			s.refreshPage(ctx, src, key, kept.at)
+		}
+		return kept.value, nil
+	}
+	return s.fetchPage(ctx, src, key)
+}
+
+// fetchPageLater fetches in the background a page that a read taking only
+// the pages kept lacks (see keptOrLater), so that the next read has it. It
+// is the very fetch readPage shares (see pageFlight): a read that asks the
+// addon meanwhile waits for it rather than asking again, and a fetch under
+// way is not started twice. It runs on a context of its own, which the
+// read ending does not cancel. A page whose fetch failed is not asked for
+// again for failedRefreshWait, nor any page while its addon's host asked
+// to wait.
+func (s *Service) fetchPageLater(ctx context.Context, src source, key pageKey) {
+	if _, failed := s.failedRefreshes.Get(key); failed {
+		return
+	}
+	if _, waiting := s.catalogWaitLeft(stremio.HostOf(src.addon.addon.ManifestURL)); waiting {
+		return
+	}
+	detached := context.WithoutCancel(ctx)
+	s.flight.DoChan(pageFlight(key), func() (any, error) {
+		metas, err := s.keptOrFetchedPage(detached, src, key)
+		if err != nil {
+			s.failedRefreshes.Put(key, s.now())
+			if !errors.Is(err, stremio.ErrAskedToWait) {
+				s.logger.Debug("A catalog page could not be fetched in the background", "catalog", src.catalog.ID, "date", key.date,
+					"skip", key.skip, "error", err)
+			}
+		}
+		return metas, err
+	})
 }
 
 // emptySearchSpent reports whether kept, the page of key, is a search's
