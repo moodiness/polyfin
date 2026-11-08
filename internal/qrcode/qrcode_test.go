@@ -34,6 +34,7 @@ var polyfinMask2 = []string{
 }
 
 func TestEncodeMatchesAReferenceCode(t *testing.T) {
+	t.Parallel()
 	if got := encode([]byte("Polyfin"), 1, 2).Rows(); strings.Join(got, "\n") != strings.Join(polyfinMask2, "\n") {
 		t.Errorf("got\n%s", strings.Join(got, "\n"))
 	}
@@ -42,6 +43,7 @@ func TestEncodeMatchesAReferenceCode(t *testing.T) {
 // An otpauth address takes the smallest version that holds it, with its
 // three finder patterns.
 func TestEncodeChoosesTheSmallestVersion(t *testing.T) {
+	t.Parallel()
 	address := "otpauth://totp/Polyfin:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Polyfin"
 	code, err := Encode([]byte(address))
 	if err != nil || code.Size != 5*4+17 {
