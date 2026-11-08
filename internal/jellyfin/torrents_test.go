@@ -342,11 +342,27 @@ type torrentPlay struct {
 func newTorrentPlay(t *testing.T, ffprobe string, start time.Duration, tors []*torrenttest.Torrent, trackers []string,
 	configure ...func(*Options)) torrentPlay {
 	t.Helper()
+	return newTorrentPlayWith(t, ffprobe, torrentWaits{start: start}, tors, trackers, configure...)
+}
+
+// torrentWaits are the engine's start and piece timeouts, and how often it
+// checks its route, 0 for its defaults: a test scales the waits of a play
+// by them.
+type torrentWaits struct {
+	start, piece, routeCheck time.Duration
+}
+
+// newTorrentPlayWith starts a server as newTorrentPlay does, its engine
+// waiting for a torrent's start and its pieces as waits tells.
+func newTorrentPlayWith(t *testing.T, ffprobe string, waits torrentWaits, tors []*torrenttest.Torrent, trackers []string,
+	configure ...func(*Options)) torrentPlay {
+	t.Helper()
 	p := torrentPlay{proxy: torrenttest.StartProxy(t, true, "", "")}
 	p.testServer = newProbingServer(t, 10, ffprobe, func(options *Options, _ *pgxpool.Pool) {
 		var err error
 		p.engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: start, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: waits.start, PieceTimeout: waits.piece,
+			RouteCheck: waits.routeCheck, Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -548,8 +564,11 @@ func TestATorrentPlayAnswersOnceItsStartAndAPiecesWaitPassed(t *testing.T) {
 	ffmpeg, tor := torrentMovie(t, "A Movie")
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	const start = 2 * time.Second
-	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), start, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	const start, piece = 2 * time.Second, 10 * time.Second
+	// A piece's wait of 10 seconds: the play's wait of 12 ends well before
+	// the source, stalled twice, gives up on the held pieces.
+	p := newTorrentPlayWith(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), torrentWaits{start: start, piece: piece},
+		[]*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	p.setting(t, func(s *accounts.Settings) { s.AnalysisTimeout = accounts.MaxAnalysisTimeout })
 	picked := p.details(t)
 	// The peer tells the torrent's files, then holds every piece.
@@ -573,7 +592,7 @@ func TestATorrentPlayAnswersOnceItsStartAndAPiecesWaitPassed(t *testing.T) {
 	}()
 	// The start, a piece's wait, and a margin for a busy machine; the
 	// analysis alone was allowed 120 seconds.
-	wait := start + torrent.PieceTimeout + 30*time.Second
+	wait := start + piece + 30*time.Second
 	select {
 	case a := <-answered:
 		var failed noCompatibleStream

@@ -125,17 +125,20 @@ func TestATorrentReadAPlayGaveUpOnGoesOnForTheNext(t *testing.T) {
 // Plays that gave up waiting for a torrent version leave no goroutine
 // behind them, waiting for its analysis: the analysis goes on alone. The
 // goroutines are those of the test's own server, labeled: the plays of
-// the tests running alongside are not counted.
+// the tests running alongside are not counted. The engine's start of 2
+// seconds and piece's wait of 15 have a play wait 17 seconds.
 func TestPlaysThatGaveUpLeaveNoGoroutineBehind(t *testing.T) {
 	t.Parallel()
 	countedGoroutines(t)
 	ffmpeg, tor := slowTorrent(t)
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 2*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	p := newTorrentPlayWith(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), torrentWaits{start: 2 * time.Second, piece: 15 * time.Second},
+		[]*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	picked := p.details(t)
 	// The peer tells the torrent's files, then holds every piece: the
-	// analysis waits for a piece's wait, twice, past what a play waits.
+	// analysis waits for a piece's wait, twice, 30 seconds, past what a
+	// play waits and the 10 seconds the plays are given to leave.
 	seeder.Hold()
 	defer seeder.Release()
 	answered := make(chan string, 2)
@@ -173,9 +176,10 @@ func TestATorrentWhosePeerHoldsItsPiecesPlaysOnceItSends(t *testing.T) {
 	ffmpeg, tor := torrentMovie(t, "A Movie")
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	// The engine's own start timeout: its source stalls before a play
-	// stops waiting for it.
-	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 0, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	// The engine's own start timeout, and a piece's wait of 3 seconds: its
+	// source stalls, twice, long before a play stops waiting for it.
+	p := newTorrentPlayWith(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), torrentWaits{piece: 3 * time.Second},
+		[]*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	picked := p.details(t)
 	seeder.Hold()
 	defer seeder.Release()
@@ -183,7 +187,7 @@ func TestATorrentWhosePeerHoldsItsPiecesPlaysOnceItSends(t *testing.T) {
 	if _, code := p.play(t, picked); code != "RateLimitExceeded" {
 		t.Fatalf("PlaybackInfo answered %q after %v", code, time.Since(started))
 	}
-	if wait := torrent.StartTimeout + torrent.PieceTimeout + 30*time.Second; time.Since(started) > wait {
+	if wait := p.engine.StartTimeout() + p.engine.PieceTimeout() + 30*time.Second; time.Since(started) > wait {
 		t.Fatalf("PlaybackInfo answered after %v", time.Since(started))
 	}
 	seeder.Release()
@@ -201,13 +205,14 @@ func TestATorrentWhosePiecesKeepComingPlaysAtItsFirstPlay(t *testing.T) {
 	ffmpeg, tor := slowTorrent(t)
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	// A start of 5 seconds: the play's first wait ends 35 seconds in, and
-	// it waits at most 70 seconds.
-	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 5*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	// A start of 2 seconds and a piece's wait of 8: the play's first wait
+	// ends 10 seconds in, and it waits at most 20 seconds.
+	p := newTorrentPlayWith(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), torrentWaits{start: 2 * time.Second, piece: 8 * time.Second},
+		[]*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	picked := p.details(t)
-	// One block of 16 KiB every 400 ms, never stalling: the head and the
-	// index of the file take about 55 seconds, longer than that first wait.
-	seeder.Delay(400 * time.Millisecond)
+	// One block of 16 KiB every 110 ms, never stalling: the head and the
+	// index of the file take about 15 seconds, longer than that first wait.
+	seeder.Delay(110 * time.Millisecond)
 	if code := p.playHLS(t, picked); code != "" {
 		t.Fatalf("over a slow swarm whose pieces keep coming, PlaybackInfo answered %q", code)
 	}
@@ -296,7 +301,7 @@ func TestATorrentPlaysOverHLSThroughAProxyStall(t *testing.T) {
 	}
 }
 
-// A torrent version whose proxy freezes for 40 seconds, longer than a
+// A torrent version whose proxy freezes for 10 seconds, longer than a
 // piece's wait, as its first play's analysis reads it, plays once the
 // proxy answers again: the play waits on while the torrent waits for its
 // route within its grace, as it does while pieces come.
@@ -305,13 +310,17 @@ func TestATorrentWhoseProxyFreezesAtItsFirstPlayPlaysOnceItAnswers(t *testing.T)
 	ffmpeg, tor := slowTorrent(t)
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	// A start of 5 seconds: the play's first wait ends 35 seconds in, and
-	// it waits at most 70 seconds.
-	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 5*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	// A start of 2 seconds and a piece's wait of 8: the play's first wait
+	// ends 10 seconds in, and it waits at most 20 seconds. The route is
+	// checked every second rather than every 5, a proxy's handshake given
+	// 2 seconds rather than 10: a frozen proxy is found down within a
+	// piece's wait, as it is by default.
+	p := newTorrentPlayWith(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"),
+		torrentWaits{start: 2 * time.Second, piece: 8 * time.Second, routeCheck: time.Second}, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	picked := p.details(t)
-	// One block of 16 KiB every 100 ms: the head and the index of the file
-	// take several seconds. The proxy freezes as the first block comes.
-	seeder.Delay(100 * time.Millisecond)
+	// One block of 16 KiB every 20 ms: the head and the index of the file
+	// take a few seconds. The proxy freezes as the first block comes.
+	seeder.Delay(20 * time.Millisecond)
 	answered, done := make(chan struct{}), make(chan struct{})
 	t.Cleanup(func() { <-done })
 	go func() {
@@ -320,7 +329,7 @@ func TestATorrentWhoseProxyFreezesAtItsFirstPlayPlaysOnceItAnswers(t *testing.T)
 			time.Sleep(10 * time.Millisecond)
 		}
 		p.proxy.Freeze()
-		time.Sleep(40 * time.Second)
+		time.Sleep(10 * time.Second)
 		p.proxy.Answer()
 		close(answered)
 	}()
