@@ -38,11 +38,15 @@ const libraries = {
         home_videos: 'Home videos',
         listed: 'As listed',
         movies_and_shows: 'Movies and shows',
+        shows: 'Shows',
+        movies: 'Movies',
       },
       pill: {
         home_videos: 'Shown as home videos',
         listed: 'Shown as listed',
         movies_and_shows: 'Shown as movies and shows',
+        shows: 'Shown as shows',
+        movies: 'Shown as movies',
       },
       help: {
         home_videos:
@@ -51,6 +55,12 @@ const libraries = {
           'A movies or shows library, as the catalog’s type says: a title of the other kind counts in its total, but none of its tabs shows it.',
         titles:
           'For the Jellyfin apps that list only movies and shows: a title with several videos, or one numbered as an episode, becomes a show, its videos its episodes; a title without videos, or with one file, a movie. Titles the catalog types as movies or shows stay as they are. Played marks, resume points and favorites follow them when you save.',
+        shows:
+          'A shows library: apps fill its tabs with shows only, so the catalog’s movies count in its total but no tab shows them, and apps that copy libraries into their own take none of them. Search still finds them.',
+        movies:
+          'A movies library: apps fill its tabs with movies only, so the catalog’s shows count in its total but no tab shows them, and apps that copy libraries into their own take none of them. Search still finds them.',
+        anime:
+          'A library without a type: every app lists each title as the movie or show it is, with exact counts.',
         mixed:
           'A library without a type, as Jellyfin’s mixed movies and shows libraries: each title is listed as the movie or show it is, so its tabs also show a series a movie catalog lists, with exact counts. Played marks and favorites stay.',
       },

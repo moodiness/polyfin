@@ -40,11 +40,15 @@ const libraries: typeof en = {
         home_videos: 'Vídeos caseiros',
         listed: 'Como o catálogo',
         movies_and_shows: 'Filmes e séries',
+        shows: 'Séries',
+        movies: 'Filmes',
       },
       pill: {
         home_videos: 'Mostrada como vídeos caseiros',
         listed: 'Mostrada como o catálogo',
         movies_and_shows: 'Mostrada como filmes e séries',
+        shows: 'Mostrada como séries',
+        movies: 'Mostrada como filmes',
       },
       help: {
         home_videos:
@@ -53,6 +57,12 @@ const libraries: typeof en = {
           'Uma biblioteca de filmes ou de séries, conforme o tipo do catálogo: um título do outro tipo conta no total, mas nenhuma das suas abas o mostra.',
         titles:
           'Para os aplicativos Jellyfin que listam só filmes e séries: um título com vários vídeos, ou com um numerado como episódio, vira uma série, seus vídeos seus episódios; um título sem vídeos, ou com um só arquivo, um filme. Os títulos que o catálogo marca como filmes ou séries ficam como estão. As marcações de assistido, os pontos de retomada e os favoritos os acompanham ao salvar.',
+        shows:
+          'Uma biblioteca de séries: os apps preenchem suas abas só com séries, então os filmes do catálogo contam no total mas nenhuma aba os mostra, e os apps que copiam as bibliotecas para a sua não levam nenhum. A busca ainda os encontra.',
+        movies:
+          'Uma biblioteca de filmes: os apps preenchem suas abas só com filmes, então as séries do catálogo contam no total mas nenhuma aba as mostra, e os apps que copiam as bibliotecas para a sua não levam nenhuma. A busca ainda as encontra.',
+        anime:
+          'Uma biblioteca sem tipo: cada app lista cada título como o filme ou a série que é, com totais exatos.',
         mixed:
           'Uma biblioteca sem tipo, como as bibliotecas mistas de filmes e séries do Jellyfin: cada título aparece como o filme ou a série que é, então as suas abas mostram também uma série que um catálogo de filmes lista, com totais exatos. As marcações de assistido e os favoritos ficam.',
       },

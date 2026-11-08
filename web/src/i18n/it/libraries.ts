@@ -40,11 +40,15 @@ const libraries: typeof en = {
         home_videos: 'Video personali',
         listed: 'Come il catalogo',
         movies_and_shows: 'Film e serie',
+        shows: 'Serie',
+        movies: 'Film',
       },
       pill: {
         home_videos: 'Mostrata come video personali',
         listed: 'Mostrata come il catalogo',
         movies_and_shows: 'Mostrata come film e serie',
+        shows: 'Mostrata come serie',
+        movies: 'Mostrata come film',
       },
       help: {
         home_videos:
@@ -53,6 +57,12 @@ const libraries: typeof en = {
           'Una libreria di film o di serie, secondo il tipo del catalogo: un titolo dell’altro tipo conta nel suo totale, ma nessuna delle sue schede lo mostra.',
         titles:
           'Per le applicazioni Jellyfin che elencano solo film e serie: un titolo con più video, o con uno numerato come episodio, diventa una serie, i suoi video i suoi episodi; un titolo senza video, o con un solo file, un film. I titoli che il catalogo indica come film o serie restano come sono. Gli stati di visione, i punti di ripresa e i preferiti li seguono al salvataggio.',
+        shows:
+          'Una libreria di serie: le app ne riempiono le schede solo di serie, quindi i film del catalogo contano nel totale ma nessuna scheda li mostra, e le app che copiano le librerie nella propria non ne prendono nessuno. La ricerca li trova comunque.',
+        movies:
+          'Una libreria di film: le app ne riempiono le schede solo di film, quindi le serie del catalogo contano nel totale ma nessuna scheda le mostra, e le app che copiano le librerie nella propria non ne prendono nessuna. La ricerca le trova comunque.',
+        anime:
+          'Una libreria senza tipo: ogni app elenca ogni titolo come il film o la serie che è, con totali esatti.',
         mixed:
           'Una libreria senza tipo, come le librerie miste di film e serie di Jellyfin: ogni titolo è elencato come il film o la serie che è, quindi le sue schede mostrano anche una serie che un catalogo di film elenca, con totali esatti. Gli stati di visione e i preferiti restano.',
       },

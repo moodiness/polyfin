@@ -769,7 +769,9 @@ function LibraryForm({
                                 (shown === 'movies_and_shows'
                                   ? otherVideos
                                     ? t.libraries.showAs.help.titles
-                                    : t.libraries.showAs.help.mixed
+                                    : library.showAsChoices.includes('shows')
+                                      ? t.libraries.showAs.help.anime
+                                      : t.libraries.showAs.help.mixed
                                   : t.libraries.showAs.help[shown]) +
                                 (otherVideos && entry.showAs === null
                                   ? ' ' + t.libraries.showAs.undecided
