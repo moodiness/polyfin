@@ -414,6 +414,7 @@ Each user then picks a **Metadata language** among those languages, under **My a
 What does not change:
 
 - A title's genres, ratings, people, versions, subtitles and identifiers stay those of the addons without a language. The first is the one whose catalog listed it.
+- A title's age rating is the one for the server's **Rating country**, whatever the users' languages and whatever country the addon itself was set up for: Polyfin picks it among the ratings the addon gives (see [Rating country](user-limits.md#rating-country)).
 - Genre pages, blocked genres, parental control, hidden titles and smart lists judge every user alike.
 - Library names stay the administrator's, and generated images keep them.
 

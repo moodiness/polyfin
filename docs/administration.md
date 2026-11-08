@@ -312,7 +312,7 @@ API details: [Server logs](jellyfin-api.md#server-logs-in-the-jellyfin-api).
 - Leaving a page with unsaved changes asks first.
 - **Settings › Diagnostics** ends with the `POLYFIN_*` variables in effect, read only. Secrets are hidden, and the database URL shows its host and database only.
 
-See [Configuration](configuration.md) for the variables, and [Web player](web-client.md) for **Settings › Web player**. The identity provider, in **Settings › Security**, is on [Sign-in and security](sign-in-and-security.md#signing-in-with-an-identity-provider).
+See [Configuration](configuration.md) for the variables, and [Web player](web-client.md) for **Settings › Web player**. The identity provider, in **Settings › Security**, is on [Sign-in and security](sign-in-and-security.md#signing-in-with-an-identity-provider). **Rating country**, in **Settings › General**, is on [User limits](user-limits.md#rating-country).
 
 ## Showing a saved key
 

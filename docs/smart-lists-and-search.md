@@ -27,7 +27,7 @@ A list keeps the titles that match its rules:
 | **IMDb votes** | A title whose IMDb rating counts a number of votes within the bounds given, as MDBList tells it (see [Ratings](collections-people-and-ratings.md#ratings)). Without the server's **MDBList API key for ratings**, no title has votes. |
 | **Language** | A title whose description gives this language. |
 | **Runtime** | A title whose runtime is within the bounds given, in minutes. |
-| **Content rating** | A title rated at most this rating, such as PG-13, on the scale parental control uses (see [Parental control](user-limits.md#parental-control)). PG-13 matches PG-13, PG and G titles, and the ratings of other countries for the same ages. **is not** matches the titles rated above it. |
+| **Content rating** | A title rated at most this rating, such as PG-13, on the scale parental control uses (see [Parental control](user-limits.md#parental-control)). The ratings offered are those of the server's **Rating country** (see [Rating country](user-limits.md#rating-country)). PG-13 matches PG-13, PG and G titles, and the ratings of other countries for the same ages. **is not** matches the titles rated above it. |
 | **Actor or director** | A title that credits this person as an actor or a director, in any letter case. |
 | **Studio or network** | A title made by this studio, or a series aired on this network, in any letter case. Names are as TMDB gives them, or as an administrator set a title's studios in its metadata. Without the server's **TMDB API key**, only those an administrator set count. |
 | **Movie or series** | Movies, or series. |

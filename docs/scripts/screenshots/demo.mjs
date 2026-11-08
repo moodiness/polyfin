@@ -17,6 +17,8 @@ const movies = [
     genres: ['Thriller', 'Mystery'],
     description:
       'Seven strangers share the last sleeper out of the city. By morning, one of them has vanished.',
+    // Its age rating in each country, as metadata addons send it.
+    certifications: { US: 'R', IT: 'VM14', FR: '12', DE: 'FSK 16', GB: '15' },
   },
   {
     slug: 'amber-road',
@@ -299,6 +301,14 @@ export async function startDemo({ posterDir, images, video, certificate, rich })
           description: movie.description,
           runtime: `${movie.runtime} min`,
           released: `${movie.year}-03-14T00:00:00.000Z`,
+          ...(movie.certifications === undefined
+            ? {}
+            : {
+                app_extras: {
+                  certification: movie.certifications.US,
+                  certifications: movie.certifications,
+                },
+              }),
         }
       : {}),
   })
