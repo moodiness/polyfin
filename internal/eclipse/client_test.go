@@ -58,6 +58,7 @@ func queryAddon(t *testing.T) (*httptest.Server, func(path string) url.Values) {
 // query merged into each request's: the settings replace its parameters of
 // the same name, and the request's own (q, skip) replace both.
 func TestAManifestURLsQueryTravelsWithEveryRequest(t *testing.T) {
+	t.Parallel()
 	server, asked := queryAddon(t)
 	manifest, err := ParseManifest([]byte(`{"id":"a","name":"A","version":"1.0.0","resources":["search","stream","catalog","settings"],
 		"catalogs":[{"id":"top","type":"track","name":"Top"}],
@@ -114,6 +115,7 @@ func TestAManifestURLsQueryTravelsWithEveryRequest(t *testing.T) {
 
 // A token in the manifest URL's path stays the prefix of every request.
 func TestATokenInTheManifestURLsPathPrefixesEveryRequest(t *testing.T) {
+	t.Parallel()
 	asked := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked <- r.URL.Path + "?" + r.URL.RawQuery
