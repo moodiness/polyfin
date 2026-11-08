@@ -12,6 +12,7 @@ import (
 // A Polyfin killed outright on Windows takes its children with it: the
 // child of a helper that joined its job ends when the helper is killed.
 func TestChildrenEndWithTheParent(t *testing.T) {
+	t.Parallel()
 	parent := helperCommand("parent")
 	stdout, err := parent.StdoutPipe()
 	if err != nil {

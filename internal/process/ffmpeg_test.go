@@ -23,6 +23,7 @@ func testFFmpeg(t *testing.T) string {
 
 // FFmpeg writes its progress to pipe:3, which reads it to its end.
 func TestFFmpegWritesItsProgressToAnOutput(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command(testFFmpeg(t), "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:3",
 		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10", "-t", "1", "-f", "null", "-")
 	outputs, err := NewOutputs(cmd, 1)
@@ -46,6 +47,7 @@ func TestFFmpegWritesItsProgressToAnOutput(t *testing.T) {
 // FFmpeg recording a source that flows stops at its first interrupt and
 // ends its file, as a recording's does.
 func TestFFmpegStopsOnItsInterrupt(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "recording.ts")
 	cmd := exec.Command(testFFmpeg(t), "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:1", "-re",
 		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10", "-c:v", "mpeg2video", "-f", "mpegts", path)

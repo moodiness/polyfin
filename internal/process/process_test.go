@@ -127,6 +127,7 @@ func readAll(t *testing.T, r io.Reader) string {
 // reads what it wrote: on Windows, through the loopback addresses that
 // replace those names in its arguments.
 func TestOutputsCarryWhatTheChildWrites(t *testing.T) {
+	t.Parallel()
 	cmd := helperCommand("write", "pipe:3", "pipe:4", "pipe:1")
 	outputs, err := NewOutputs(cmd, 2)
 	if err != nil {
@@ -159,6 +160,7 @@ func TestOutputsCarryWhatTheChildWrites(t *testing.T) {
 // An output the child never opens ends with the child, as a pipe does, so
 // that whoever reads it waits for the child no longer.
 func TestOutputsEndWithAChildThatNeverOpensThem(t *testing.T) {
+	t.Parallel()
 	cmd := helperCommand("silent", "pipe:3", "pipe:4")
 	outputs, err := NewOutputs(cmd, 2)
 	if err != nil {
@@ -182,6 +184,7 @@ func TestOutputsEndWithAChildThatNeverOpensThem(t *testing.T) {
 
 // A child that cannot start leaves no output open.
 func TestOutputsOfAChildThatCannotStart(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command(filepath.Join(t.TempDir(), "missing"), "pipe:3")
 	outputs, err := NewOutputs(cmd, 1)
 	if err != nil {
@@ -201,6 +204,7 @@ func TestOutputsOfAChildThatCannotStart(t *testing.T) {
 // macOS, q on its standard input on Windows, which takes -nostdin out of
 // its arguments for FFmpeg to read it.
 func TestInterruptStopsTheChild(t *testing.T) {
+	t.Parallel()
 	cmd := helperCommand("keys", "-nostdin")
 	interrupt, err := Interruptible(cmd)
 	if err != nil {
