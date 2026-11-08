@@ -7,8 +7,9 @@ import (
 )
 
 // The imports of an app connection count in the metrics, by app and
-// outcome. Sequential: the other tests import connections to the same
-// app, which count in the same series.
+// outcome.
+//
+//nolint:paralleltest // the other tests import connections to the same app, which count in the same process-wide series
 func TestImportsCountInTheMetrics(t *testing.T) {
 	h := newConnectionHarness(t)
 	root, alice := h.user(t, "root", true), h.user(t, "alice", false)
