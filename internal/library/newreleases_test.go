@@ -12,6 +12,7 @@ import (
 // came out within it, and nothing for episodes before it, to come, marked
 // unavailable, or specials, which are often extras.
 func TestReleaseStatusTellsNewEpisodesAndSeasons(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
 	since := now.AddDate(0, 0, -newReleaseDays)
 	day := func(days int) string { return now.AddDate(0, 0, -days).Format(time.RFC3339) }
@@ -44,6 +45,7 @@ func TestReleaseStatusTellsNewEpisodesAndSeasons(t *testing.T) {
 // and leaves a title lacking one it names, or that is no movie or series,
 // to its addon's poster.
 func TestPosterAddressFillsTheTemplate(t *testing.T) {
+	t.Parallel()
 	ids := map[string]string{"Imdb": "tt0000", "Tmdb": "10"}
 	for _, c := range []struct {
 		template string

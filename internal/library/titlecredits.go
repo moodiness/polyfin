@@ -442,8 +442,8 @@ func (s *Service) resolvedPeople(ctx context.Context, lists [][]Person) [][]Pers
 
 // AwaitTitleCredits has the credits of a movie or series a user opens read
 // on TMDB, ahead of the passes, unless they are kept, waiting
-// titleCreditsWait at most. It reports whether the title shows them now,
-// which changes its people.
+// s.creditsWait at most, titleCreditsWait but in tests. It reports whether
+// the title shows them now, which changes its people.
 func (s *Service) AwaitTitleCredits(ctx context.Context, item Item) bool {
 	if !s.lookups.Enabled() {
 		return false
@@ -458,7 +458,7 @@ func (s *Service) AwaitTitleCredits(ctx context.Context, item Item) bool {
 	}
 	lookup := s.creditsLookup(key, item.ID)
 	s.lookups.Add([]tmdb.Lookup{lookup}, true)
-	s.lookups.Wait(ctx, []string{lookup.Key}, titleCreditsWait)
+	s.lookups.Wait(ctx, []string{lookup.Key}, s.creditsWait)
 	after, ok, err := s.keptOne(ctx, key)
 	return err == nil && ok && after.shows(item.ID) && !(kept && after.asked.Equal(k.asked) && k.shows(item.ID))
 }

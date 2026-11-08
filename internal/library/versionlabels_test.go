@@ -9,6 +9,7 @@ import (
 // addons write them; words of the title name no language, and labels
 // describing the video without HDR tell SDR.
 func TestLabelsTellCodecRangeAndLanguages(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		title  string
 		labels []string
@@ -42,6 +43,7 @@ func TestLabelsTellCodecRangeAndLanguages(t *testing.T) {
 // in any letter case: a title named after a tag, a tag inside a word and
 // a .ts file are none; each kind's tags are.
 func TestReleaseKindsReadTagsAfterTheTitle(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		titles []string
 		labels []string
@@ -81,6 +83,7 @@ func TestReleaseKindsReadTagsAfterTheTitle(t *testing.T) {
 // than one off. Packs and ranges holding the episode, and names without
 // markers, name none.
 func TestOtherTitleReadsSeasonsEpisodesAndYears(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                  string
 		season, episode, year int

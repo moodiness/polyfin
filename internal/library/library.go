@@ -160,6 +160,9 @@ type Service struct {
 	// keptWait how long one does when what was kept fills it (see Whole).
 	wholeWait time.Duration
 	keptWait  time.Duration
+	// creditsWait bounds how long a title's page waits for its credits
+	// (see AwaitTitleCredits).
+	creditsWait time.Duration
 	// searchGrace and searchBound bound how long a search waits for its
 	// title searches, and lateSearches are the search catalogs it leaves
 	// out, as they were late (see searchdeadline.go).
@@ -386,6 +389,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		ratingWait:     ratingWait,
 		wholeWait:      wholeListingWait,
 		keptWait:       keptListingWait,
+		creditsWait:    titleCreditsWait,
 		searchGrace:    searchGrace,
 		searchBound:    searchBound,
 		music:          eclipse.NewClient(client),

@@ -385,6 +385,7 @@ func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
 		"a collection of collections": {nestedAddon, "Genres", []string{"movie 0", "series 0", "movie 1", "series 1"}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			e := newEnv(t)
 			addon := tc.addon()
 			e.install(addons.Shared(), addon)

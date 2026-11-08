@@ -6,6 +6,7 @@ import "testing"
 // copy before the encode its words also name; the title's own words name
 // none.
 func TestReadReleaseTellsTheSourceTier(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		titles []string
 		labels []string
@@ -35,6 +36,7 @@ func TestReadReleaseTellsTheSourceTier(t *testing.T) {
 // channels, as releases write them glued to the codec or apart; DTS-HD
 // without MA is lossy, and a year or a height is no channel layout.
 func TestReadReleaseTellsTheAudioFormat(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		labels []string
 		want   AudioFormat
@@ -57,6 +59,7 @@ func TestReadReleaseTellsTheAudioFormat(t *testing.T) {
 // Labels tell a release's edition, the first named, whichever way they
 // write a director's cut; a title naming an edition names none.
 func TestReadReleaseTellsTheEdition(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		titles []string
 		labels []string
