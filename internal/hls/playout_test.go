@@ -4,6 +4,9 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -136,5 +139,93 @@ func TestPlayoutAirsPiecesInTurn(t *testing.T) {
 	m.StopPlayout("channel")
 	if _, err := m.PlayoutSegment("channel", "0.ts"); err == nil {
 		t.Fatal("a stopped playout still serves its segments")
+	}
+}
+
+// unrenamedFFmpeg writes a script that runs as FFmpeg's HLS muxer does on
+// Windows when the playout reads a run's playlist the moment FFmpeg
+// renames its last one over it: for -t seconds, it writes segments of 3
+// seconds at most, numbered from -start_number, and after each the
+// playlist listing them to a temporary file, renamed over the run's
+// playlist but for the last one, then exits cleanly.
+func unrenamedFFmpeg(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake FFmpeg is a shell script")
+	}
+	script := `#!/bin/sh
+case "$*" in *"-f hls"*) ;; *) exit 0 ;; esac
+for playlist; do :; done
+start=0; length=0
+while [ $# -gt 1 ]; do
+  case "$1" in
+    -start_number) start=$2 ;;
+    -t) length=${2%.*} ;;
+  esac
+  shift
+done
+dir=$(dirname "$playlist")
+n=$start; list=""
+while [ "$length" -gt 0 ]; do
+  d=3; [ "$length" -lt 3 ] && d=$length
+  printf 'segment' > "$dir/$n.ts"
+  list="$list#EXTINF:$d.000000,
+$n.ts
+"
+  printf '#EXTM3U\n%s' "$list" > "$playlist.tmp"
+  length=$((length-d)); n=$((n+1))
+  if [ "$length" -gt 0 ]; then mv "$playlist.tmp" "$playlist"; fi
+done
+`
+	path := filepath.Join(t.TempDir(), "ffmpeg")
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// On Windows, FFmpeg cannot rename a run's playlist over the one the
+// playout is reading, and goes on: the last playlist of a run can stay in
+// its temporary file. The playout reads it once the run ended, so that a
+// piece airs whole, and the next one is numbered on rather than airing
+// early in place of the last segment of the one before (seen on CI, where
+// TestPlayoutAirsPiecesInTurn found its 4 seconds piece aired 3).
+func TestPlayoutReadsTheLastPlaylistFFmpegCouldNotRename(t *testing.T) {
+	t.Parallel()
+	m, err := NewManager(unrenamedFFmpeg(t), t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+	lengths := []time.Duration{4 * time.Second, 6 * time.Second}
+	aired := make(chan struct{})
+	next := func(ctx context.Context, _ time.Time, _ error) (PlayoutPiece, func(), error) {
+		if len(lengths) == 0 {
+			close(aired)
+			<-ctx.Done()
+			return PlayoutPiece{}, nil, ctx.Err()
+		}
+		piece := PlayoutPiece{Slate: true, Length: lengths[0]}
+		lengths = lengths[1:]
+		return piece, func() {}, nil
+	}
+	uri := func(name string) string { return name }
+	if _, err := m.Playout(t.Context(), "channel", "Channel", next, uri, 1); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-aired:
+	case <-time.After(time.Minute):
+		t.Fatal("the two pieces did not air within a minute")
+	}
+	playlist, err := m.Playout(t.Context(), "channel", "Channel", next, uri, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:3\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-DISCONTINUITY-SEQUENCE:0\n" +
+		"#EXTINF:3.000000,\n0.ts\n#EXTINF:1.000000,\n1.ts\n#EXT-X-DISCONTINUITY\n" +
+		"#EXTINF:3.000000,\n2.ts\n#EXTINF:3.000000,\n3.ts\n"
+	if string(playlist) != want {
+		t.Fatalf("the playlist:\n%s\nwant the first piece's 4 seconds, then the second's numbered on:\n%s", playlist, want)
 	}
 }
