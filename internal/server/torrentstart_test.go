@@ -58,7 +58,7 @@ func TestTheSpinnerTellsHowATorrentStarts(t *testing.T) {
 			want:  []string{"Receiving the start: 2.4 MB from 3 peers", "at 122px 700px"}},
 		"in French": {lang: "fr-FR",
 			steps: []string{pieces, "spin", "show", found, "tick", "show"},
-			want:  []string{"Réception du début : 2,4 Mo depuis 3 pairs", "Recherche de pairs : 12 trouvés, 3 connectés"}},
+			want:  []string{"Réception du début\u202f: 2,4 Mo depuis 3 pairs", "Recherche de pairs\u202f: 12 trouvés, 3 connectés"}},
 	}
 	const harness = scriptRunner + `
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
