@@ -173,6 +173,7 @@ func spans(segments []Segment) []Segment {
 }
 
 func TestSegmentsMergeTheDatabasesByPreference(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	// TheIntroDB has an intro from the start, credits to the end, and
 	// says there is no recap and no preview.
@@ -222,6 +223,7 @@ func TestSegmentsMergeTheDatabasesByPreference(t *testing.T) {
 }
 
 func TestMoviesAreAskedAsMovies(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply("/media", http.StatusOK, `{"tmdb_id":1,"type":"movie","credits":[{"start_ms":6000000,"end_ms":null}],
 		"preview":[{"start_ms":100000,"end_ms":160000}]}`)
@@ -248,6 +250,7 @@ func TestMoviesAreAskedAsMovies(t *testing.T) {
 }
 
 func TestAnswersAreKeptUntilTheyExpire(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply("/media", http.StatusOK, `{"tmdb_id":1396,"type":"tv","season":1,"episode":2,"intro":[{"start_ms":1000,"end_ms":31000}]}`)
 	s, c := service(t, d, TheIntroDB, IntroDB)
@@ -280,6 +283,7 @@ func TestAnswersAreKeptUntilTheyExpire(t *testing.T) {
 }
 
 func TestEmptyAnswersCountAsNothingFound(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	// IntroDB answers null segments for titles it has no data on.
 	d.reply("/segments", http.StatusOK, `{"imdb_id":"tt0903747","media_type":"tv","is_movie":false,"season":1,"episode":2,
@@ -296,6 +300,7 @@ func TestEmptyAnswersCountAsNothingFound(t *testing.T) {
 }
 
 func TestAFailingDatabaseLeavesTheOtherAnswering(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply("/media", http.StatusTooManyRequests, `{"error":"Too Many Requests"}`)
 	d.reply("/segments", http.StatusOK, `{"imdb_id":"tt0903747","intro":{"start_ms":40000,"end_ms":70000},"recap":null,"outro":null}`)
@@ -337,6 +342,7 @@ func TestAFailingDatabaseLeavesTheOtherAnswering(t *testing.T) {
 }
 
 func TestNothingIsAskedWithoutDatabasesOrIdentifiers(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	s, _ := service(t, d)
 	if got := spans(s.Segments(t.Context(), episode)); got != nil {
@@ -387,6 +393,7 @@ func skipPage(records ...string) string {
 }
 
 func TestPublicMetaDBJoinsTheOtherDatabasesByPreference(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"tmdb_id":1396,"type":"tv","season":1,"episode":2,
 		"intro":[{"start_ms":null,"end_ms":30500}],"recap":[{"start_ms":null,"end_ms":0}],
@@ -434,6 +441,7 @@ func TestPublicMetaDBJoinsTheOtherDatabasesByPreference(t *testing.T) {
 }
 
 func TestPublicMetaDBIsAskedOnlyWithAKey(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
@@ -474,6 +482,7 @@ func TestPublicMetaDBIsAskedOnlyWithAKey(t *testing.T) {
 }
 
 func TestPublicMetaDBKnowsTitlesByTMDBIdentifier(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage(`{"id":"m1","tmdb_id":550,"media_type":"movie","source":"streaming",
 		"created":"2025-01-01T00:00:00Z","intro_start_ms":null,"intro_end_ms":null,
@@ -496,6 +505,7 @@ func TestPublicMetaDBKnowsTitlesByTMDBIdentifier(t *testing.T) {
 }
 
 func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(publicMetaDBPath, http.StatusUnauthorized, `{"error":"Invalid or missing API key"}`)
 	s, c := service(t, d, PublicMetaDB)
@@ -558,6 +568,7 @@ func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 }
 
 func TestARateLimitHoldsForEveryTitle(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.limit(publicMetaDBPath, "120")
 	s, c := service(t, d, TheIntroDB, PublicMetaDB)
@@ -597,6 +608,7 @@ func TestARateLimitHoldsForEveryTitle(t *testing.T) {
 }
 
 func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	// Each database has an intro of its own; PublicMetaDB also a recap.
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
@@ -644,6 +656,7 @@ func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
 }
 
 func TestOnlyTheDatabasesTurnedOnAreAsked(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
 	d.reply(introDBPath, http.StatusOK, `{"imdb_id":"tt0903747","intro":{"start_ms":40000,"end_ms":70000},"recap":null,"outro":null}`)
@@ -686,6 +699,7 @@ func TestOnlyTheDatabasesTurnedOnAreAsked(t *testing.T) {
 }
 
 func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
 	s, _ := service(t, d, TheIntroDB)
@@ -731,6 +745,7 @@ func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
 }
 
 func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
+	t.Parallel()
 	// TheIntroDB's media answers ignore a key they do not know: only a
 	// submission tells. It refuses the key before reading the body, and
 	// an empty body once the key is accepted. Submissions are /v4's alone:
@@ -806,6 +821,7 @@ const skipDBEpisode = `{"imdb_id":"tt0903747","season":1,"episode":2,"segments":
 	"intro_length_estimate_ms":30000}`
 
 func TestSkipDBGivesItsSegmentsButThoseOutOfRange(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(skipDBPath, http.StatusOK, skipDBEpisode)
 	s, _ := service(t, d, SkipDB)
@@ -858,6 +874,7 @@ func TestSkipDBGivesItsSegmentsButThoseOutOfRange(t *testing.T) {
 }
 
 func TestSkipDBTakesItsPlaceInTheOrder(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
 	d.reply(skipDBPath, http.StatusOK, skipDBEpisode)
@@ -889,6 +906,7 @@ func TestSkipDBTakesItsPlaceInTheOrder(t *testing.T) {
 // confidence in it, also once read back from the answers kept; those
 // outside 0 to 1 are none.
 func TestSegmentsTellWhereTheyComeFrom(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
 	d.reply(skipDBPath, http.StatusOK, `{"imdb_id":"tt0903747","season":1,"episode":2,"segments":{
@@ -931,6 +949,7 @@ func TestSegmentsTellWhereTheyComeFrom(t *testing.T) {
 }
 
 func TestSkipDBRateLimitIsWaitedOut(t *testing.T) {
+	t.Parallel()
 	d := newDatabases(t)
 	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
 	d.limit(skipDBPath, "60")
