@@ -9,9 +9,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -43,6 +45,12 @@ type Entry struct {
 	// one.
 	Type   string
 	ItemID *string
+	// TitleStart and TitleEnd are where Name names the item, in
+	// characters from its start: the title of a playback or a share link,
+	// which the admin app links. Both are nil for the other entries, those
+	// written before, and a name clipped.
+	TitleStart *int
+	TitleEnd   *int
 	// UserID is the user the entry is about, nil when none is.
 	UserID   *accounts.ID
 	Date     time.Time
@@ -82,11 +90,14 @@ func (s *Store) record(ctx context.Context, e Entry) {
 	if e.Severity == "" {
 		e.Severity = Information
 	}
+	if utf8.RuneCountInString(e.Name) > maxName {
+		e.TitleStart, e.TitleEnd = nil, nil
+	}
 	s.total.mu.Lock()
 	defer s.total.mu.Unlock()
-	_, err := s.db.Exec(context.WithoutCancel(ctx), `INSERT INTO activity_log (name, overview, short_overview, type, item_id, user_id, date, severity)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		clip(e.Name, 1024), clipped(e.Overview, 4096), clipped(e.ShortOverview, 1024), e.Type, e.ItemID, e.UserID, s.now(), e.Severity)
+	_, err := s.db.Exec(context.WithoutCancel(ctx), `INSERT INTO activity_log (name, overview, short_overview, type, item_id, title_start, title_end, user_id, date, severity)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		clip(e.Name, maxName), clipped(e.Overview, 4096), clipped(e.ShortOverview, 1024), e.Type, e.ItemID, e.TitleStart, e.TitleEnd, e.UserID, s.now(), e.Severity)
 	if err != nil {
 		// Whether the entry was written is not known for sure: the next
 		// listing counts them again.
@@ -96,6 +107,9 @@ func (s *Store) record(ctx context.Context, e Entry) {
 	}
 	s.total.n++
 }
+
+// maxName is the most characters a name keeps.
+const maxName = 1024
 
 func clip(s string, n int) string {
 	runes := []rune(s)
@@ -158,7 +172,7 @@ func (s *Store) Entries(ctx context.Context, q Query) (Page, error) {
 	}
 	const where = `WHERE ($1::timestamptz IS NULL OR date >= $1) AND ($2::boolean IS NULL OR (user_id IS NOT NULL) = $2)
 		AND ($3::text[] IS NULL OR type = ANY($3)) AND ($4::text[] IS NULL OR severity = ANY($4))`
-	rows, err := s.db.Query(ctx, `SELECT id, name, overview, short_overview, type, item_id, user_id, date, severity
+	rows, err := s.db.Query(ctx, `SELECT id, name, overview, short_overview, type, item_id, title_start, title_end, user_id, date, severity
 		FROM activity_log `+where+` ORDER BY date DESC, id DESC OFFSET $5 LIMIT $6`, minDate, q.HasUserID, types, severities, max(q.Start, 0), limit)
 	if err != nil {
 		return Page{}, err
@@ -212,6 +226,30 @@ func (s *Store) phrase(text i18n.Text, args ...any) string {
 	return fmt.Sprintf(text.In(s.settings().Language), args...)
 }
 
+// titleMark stands for the title in a name formatted again, to find where
+// the title lies.
+const titleMark = "\x00"
+
+// titled names an entry as phrase does, with args[title] the title of its
+// item, and tells where the name holds the title, in characters: a
+// template may place it anywhere, so the name is formatted again with a
+// mark in its place. Neither is set for an empty title.
+func (s *Store) titled(text i18n.Text, title int, args ...any) (name string, start, end *int) {
+	name = s.phrase(text, args...)
+	words, _ := args[title].(string)
+	if s == nil || words == "" {
+		return name, nil, nil
+	}
+	marked := slices.Clone(args)
+	marked[title] = titleMark
+	before, _, found := strings.Cut(s.phrase(text, marked...), titleMark)
+	if !found {
+		return name, nil, nil
+	}
+	from := utf8.RuneCountInString(before)
+	return name, &from, new(from + utf8.RuneCountInString(words))
+}
+
 func (s *Store) address(address string) *string {
 	return new(s.phrase(i18n.Text{"Address: %s", "Adresse\u202f: %s", "Adresse: %s", "Dirección: %s", "Indirizzo: %s", "Endereço: %s"}, address))
 }
@@ -247,27 +285,34 @@ func (s *Store) SignInRefusedRemote(ctx context.Context, user accounts.User, add
 // PlaybackStarted records that user started playing title, the item item,
 // on device.
 func (s *Store) PlaybackStarted(ctx context.Context, user accounts.User, title, item, device string) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s is playing %s on %s", "%s regarde %s sur %s", "%s schaut %s auf %s", "%s está viendo %s en %s", "%s sta guardando %s su %s", "%s está assistindo %s em %s"}, user.Name, title, device),
-		Type: "VideoPlayback", UserID: &user.ID, ItemID: &item})
+	s.played(ctx, i18n.Text{"%s is playing %s on %s", "%s regarde %s sur %s", "%s schaut %s auf %s", "%s está viendo %s en %s", "%s sta guardando %s su %s", "%s está assistindo %s em %s"},
+		"VideoPlayback", user, title, item, device)
 }
 
 // PlaybackStopped records that user stopped playing title on device.
 func (s *Store) PlaybackStopped(ctx context.Context, user accounts.User, title, item, device string) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s stopped playing %s on %s", "%s a arrêté %s sur %s", "%s hat %s auf %s beendet", "%s ha dejado de ver %s en %s", "%s ha smesso di guardare %s su %s", "%s parou de assistir %s em %s"}, user.Name, title, device),
-		Type: "VideoPlaybackStopped", UserID: &user.ID, ItemID: &item})
+	s.played(ctx, i18n.Text{"%s stopped playing %s on %s", "%s a arrêté %s sur %s", "%s hat %s auf %s beendet", "%s ha dejado de ver %s en %s", "%s ha smesso di guardare %s su %s", "%s parou de assistir %s em %s"},
+		"VideoPlaybackStopped", user, title, item, device)
 }
 
 // AudioStarted records that user started playing a track or an audiobook,
 // title, the item item, on device, as Jellyfin records audio.
 func (s *Store) AudioStarted(ctx context.Context, user accounts.User, title, item, device string) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s is playing %s on %s", "%s écoute %s sur %s", "%s hört %s auf %s", "%s está escuchando %s en %s", "%s sta ascoltando %s su %s", "%s está ouvindo %s em %s"}, user.Name, title, device),
-		Type: "AudioPlayback", UserID: &user.ID, ItemID: &item})
+	s.played(ctx, i18n.Text{"%s is playing %s on %s", "%s écoute %s sur %s", "%s hört %s auf %s", "%s está escuchando %s en %s", "%s sta ascoltando %s su %s", "%s está ouvindo %s em %s"},
+		"AudioPlayback", user, title, item, device)
 }
 
 // AudioStopped records that user stopped playing a track or an audiobook.
 func (s *Store) AudioStopped(ctx context.Context, user accounts.User, title, item, device string) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s has finished playing %s on %s", "%s a fini d'écouter %s sur %s", "%s hat %s auf %s fertig gehört", "%s ha terminado de escuchar %s en %s", "%s ha finito di ascoltare %s su %s", "%s terminou de ouvir %s em %s"}, user.Name, title, device),
-		Type: "AudioPlaybackStopped", UserID: &user.ID, ItemID: &item})
+	s.played(ctx, i18n.Text{"%s has finished playing %s on %s", "%s a fini d'écouter %s sur %s", "%s hat %s auf %s fertig gehört", "%s ha terminado de escuchar %s en %s", "%s ha finito di ascoltare %s su %s", "%s terminou de ouvir %s em %s"},
+		"AudioPlaybackStopped", user, title, item, device)
+}
+
+// played records that user played title, the item item, on device, as
+// text names it, an entry of type kind.
+func (s *Store) played(ctx context.Context, text i18n.Text, kind string, user accounts.User, title, item, device string) {
+	name, start, end := s.titled(text, 1, user.Name, title, device)
+	s.record(ctx, Entry{Name: name, Type: kind, UserID: &user.ID, ItemID: &item, TitleStart: start, TitleEnd: end})
 }
 
 // UserCreated records a new account.
@@ -576,15 +621,15 @@ const (
 
 // ShareLinkMade records that the user of link shared its title.
 func (s *Store) ShareLinkMade(ctx context.Context, link accounts.ShareLink) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s shared %s through a link", "%s a partagé %s par un lien", "%s hat %s per Link geteilt", "%s ha compartido %s mediante un enlace", "%s ha condiviso %s tramite un link", "%s compartilhou %s por um link"}, link.User.Name, link.Title),
-		Type: ShareLinkCreated, UserID: &link.User.ID, ItemID: new(link.Item.String())})
+	s.record(ctx, s.shared(i18n.Text{"%s shared %s through a link", "%s a partagé %s par un lien", "%s hat %s per Link geteilt", "%s ha compartido %s mediante un enlace", "%s ha condiviso %s tramite un link", "%s compartilhou %s por um link"},
+		ShareLinkCreated, link))
 }
 
 // ShareLinkRevokedBy records that by revoked link, theirs or another
 // user's.
 func (s *Store) ShareLinkRevokedBy(ctx context.Context, link accounts.ShareLink, by accounts.User) {
-	e := Entry{Name: s.phrase(i18n.Text{"The link %s shared for %s was revoked", "Le lien partagé par %s pour %s a été révoqué", "Der Link, den %s für %s geteilt hat, wurde widerrufen", "Se ha revocado el enlace que %s compartió para %s", "Il link condiviso da %s per %s è stato revocato", "O link compartilhado por %s para %s foi revogado"}, link.User.Name, link.Title),
-		Type: ShareLinkRevoked, UserID: &link.User.ID, ItemID: new(link.Item.String())}
+	e := s.shared(i18n.Text{"The link %s shared for %s was revoked", "Le lien partagé par %s pour %s a été révoqué", "Der Link, den %s für %s geteilt hat, wurde widerrufen", "Se ha revocado el enlace que %s compartió para %s", "Il link condiviso da %s per %s è stato revocato", "O link compartilhado por %s para %s foi revogado"},
+		ShareLinkRevoked, link)
 	if by.ID != link.User.ID {
 		e.ShortOverview = new(s.phrase(i18n.Text{"Revoked by %s", "Révoqué par %s", "Widerrufen von %s", "Revocado por %s", "Revocato da %s", "Revogado por %s"}, by.Name))
 	}
@@ -593,14 +638,22 @@ func (s *Store) ShareLinkRevokedBy(ctx context.Context, link accounts.ShareLink,
 
 // ShareLinkExpiredAt records that link expired.
 func (s *Store) ShareLinkExpiredAt(ctx context.Context, link accounts.ShareLink) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"The link %s shared for %s expired", "Le lien partagé par %s pour %s a expiré", "Der Link, den %s für %s geteilt hat, ist abgelaufen", "Ha caducado el enlace que %s compartió para %s", "Il link condiviso da %s per %s è scaduto", "O link compartilhado por %s para %s expirou"}, link.User.Name, link.Title),
-		Type: ShareLinkExpired, UserID: &link.User.ID, ItemID: new(link.Item.String())})
+	s.record(ctx, s.shared(i18n.Text{"The link %s shared for %s expired", "Le lien partagé par %s pour %s a expiré", "Der Link, den %s für %s geteilt hat, ist abgelaufen", "Ha caducado el enlace que %s compartió para %s", "Il link condiviso da %s per %s è scaduto", "O link compartilhado por %s para %s expirou"},
+		ShareLinkExpired, link))
 }
 
 // SharedPlayed records that a guest without an account, from address,
 // played the title of link.
 func (s *Store) SharedPlayed(ctx context.Context, link accounts.ShareLink, address string) {
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"A guest played %[2]s through the link shared by %[1]s", "Un invité a lu %[2]s grâce au lien partagé par %[1]s", "Ein Gast hat %[2]s über den von %[1]s geteilten Link abgespielt", "Un invitado ha reproducido %[2]s mediante el enlace compartido por %[1]s", "Un ospite ha riprodotto %[2]s tramite il link condiviso da %[1]s", "Um convidado reproduziu %[2]s pelo link compartilhado por %[1]s"},
-		link.User.Name, link.Title),
-		Type: SharedPlayback, UserID: &link.User.ID, ItemID: new(link.Item.String()), ShortOverview: s.address(address)})
+	e := s.shared(i18n.Text{"A guest played %[2]s through the link shared by %[1]s", "Un invité a lu %[2]s grâce au lien partagé par %[1]s", "Ein Gast hat %[2]s über den von %[1]s geteilten Link abgespielt", "Un invitado ha reproducido %[2]s mediante el enlace compartido por %[1]s", "Un ospite ha riprodotto %[2]s tramite il link condiviso da %[1]s", "Um convidado reproduziu %[2]s pelo link compartilhado por %[1]s"},
+		SharedPlayback, link)
+	e.ShortOverview = s.address(address)
+	s.record(ctx, e)
+}
+
+// shared is the entry of type kind about link, as text names its user,
+// then its title.
+func (s *Store) shared(text i18n.Text, kind string, link accounts.ShareLink) Entry {
+	name, start, end := s.titled(text, 1, link.User.Name, link.Title)
+	return Entry{Name: name, Type: kind, UserID: &link.User.ID, ItemID: new(link.Item.String()), TitleStart: start, TitleEnd: end}
 }

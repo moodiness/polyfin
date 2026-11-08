@@ -218,6 +218,8 @@ An administrator whose **Can control other users' apps** permission was taken aw
 - restarts and updates asked for, with who asked (see [Restart and updates](updates-and-restarts.md#restart-and-updates));
 - saved keys shown, and metrics tokens made, with who did it, never the key (see [Showing a saved key](#showing-a-saved-key)).
 
+In **Recent activity**, the title an entry names (the movie, episode or track of a playback, or the title of a share link) opens its page in the web player, while Polyfin serves it: in a new tab, or in place when you came from the web player or a Jellyfin app. A title removed since, or one your own view does not hold, such as a member's own source, stays plain text, and so do the entries written before Polyfin kept where their title is.
+
 ## Statistics
 
 **System › Statistics** shows how the server is used, with **Export CSV**:

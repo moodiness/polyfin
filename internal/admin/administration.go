@@ -1,14 +1,18 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // apiKeyJSON is an API key, without the key itself, which Polyfin does not
@@ -87,6 +91,24 @@ type activityEntryJSON struct {
 	ShortOverview *string   `json:"shortOverview"`
 	Severity      string    `json:"severity"`
 	UserID        *string   `json:"userId"`
+	// Title is the title the name holds, which the admin app links to the
+	// web player; null when it names none, one the administrator no longer
+	// reaches, or when Polyfin serves no web player.
+	Title *activityTitleJSON `json:"title"`
+}
+
+// activityTitleJSON is where an entry's name holds the title of an item:
+// from Start to End, in UTF-16 code units, as JavaScript counts them.
+type activityTitleJSON struct {
+	ID    string `json:"id"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+}
+
+// ActivityTitles describes the items of ids a user reaches, and leaves
+// out the others: removed, or out of their view.
+type ActivityTitles interface {
+	Items(ctx context.Context, user accounts.User, ids []accounts.ID) ([]library.Item, error)
 }
 
 // The number of activity entries one request lists, by default and at
@@ -124,6 +146,7 @@ func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	reached := h.reachedTitles(r.Context(), sessionFrom(r.Context()).User, page.Entries)
 	items := make([]activityEntryJSON, 0, len(page.Entries))
 	for _, e := range page.Entries {
 		entry := activityEntryJSON{ID: e.ID, Date: e.Date, Name: e.Name, Type: e.Type, Overview: e.Overview,
@@ -131,9 +154,65 @@ func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
 		if e.UserID != nil {
 			entry.UserID = new(e.UserID.String())
 		}
+		if id, ok := entryTitle(e); ok && reached[id] {
+			entry.Title = &activityTitleJSON{ID: id.String(), Start: utf16Index(e.Name, *e.TitleStart), End: utf16Index(e.Name, *e.TitleEnd)}
+		}
 		items = append(items, entry)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": page.Total})
+}
+
+// reachedTitles tells which of the titles the entries' names hold user
+// still reaches, while the web player they open in is served. When they
+// cannot be told, none is linked: the entries are still listed.
+func (h *handler) reachedTitles(ctx context.Context, user accounts.User, entries []activity.Entry) map[accounts.ID]bool {
+	reached := map[accounts.ID]bool{}
+	if h.ActivityTitles == nil || !h.WebClient {
+		return reached
+	}
+	var ids []accounts.ID
+	for _, e := range entries {
+		if id, ok := entryTitle(e); ok && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return reached
+	}
+	items, err := h.ActivityTitles.Items(ctx, user, ids)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			h.Logger.Warn("The titles of the activity log could not be found", "error", err)
+		}
+		return reached
+	}
+	for _, item := range items {
+		reached[item.ID] = true
+	}
+	return reached
+}
+
+// entryTitle is the item whose title e's name holds, when it holds one.
+func entryTitle(e activity.Entry) (accounts.ID, bool) {
+	if e.ItemID == nil || e.TitleStart == nil || e.TitleEnd == nil {
+		return accounts.ID{}, false
+	}
+	id, err := accounts.ParseID(*e.ItemID)
+	return id, err == nil
+}
+
+// utf16Index is how many UTF-16 code units the first n characters of s
+// take.
+func utf16Index(s string, n int) int {
+	units := 0
+	for _, r := range s {
+		if n == 0 {
+			break
+		}
+		units += utf16.RuneLen(r)
+		n--
+	}
+	return units
 }
 
 // commaList splits a comma-separated parameter, nil when empty.
