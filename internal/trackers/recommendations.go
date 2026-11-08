@@ -138,8 +138,15 @@ func (s *Service) startRecommendations(key laneKey) {
 }
 
 // readRecommendations reads the recommendations of key from Trakt, finds
-// their titles and keeps them.
+// their titles and keeps them, unless they are no longer due: a row, or
+// the hourly check, may find them due just before the read under way
+// keeps them, and start this one as that read ends.
 func (s *Service) readRecommendations(ctx context.Context, key laneKey) {
+	var due *time.Time
+	if err := s.db.QueryRow(ctx, `SELECT due_at FROM tracking_recommendations WHERE user_id = $1 AND service = $2`,
+		key.user, key.service).Scan(&due); err != nil || (due != nil && s.now().Before(*due)) {
+		return
+	}
 	conn, ok, err := s.connection(ctx, key.user, key.service)
 	if err != nil || !ok || conn.problem == ProblemReconnect || !Available(key.service, s.settings()) || s.titles == nil {
 		return
