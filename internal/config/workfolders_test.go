@@ -14,6 +14,7 @@ import (
 // subfolders; without one, the cache in the data folder holds them as
 // before.
 func TestChosenFoldersAreUsed(t *testing.T) {
+	t.Parallel()
 	dataDir, conversion, reading, cache := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 	place := filepath.Join(dataDir, "cache")
 	folders := ChooseFolders(dataDir, accounts.Settings{})
@@ -50,6 +51,7 @@ func TestChosenFoldersAreUsed(t *testing.T) {
 // one that went missing or a file, is told, and the cache in the data
 // folder takes its place; it is not created.
 func TestUnwritableFolderFallsBack(t *testing.T) {
+	t.Parallel()
 	dataDir, cache := t.TempDir(), t.TempDir()
 	missing := filepath.Join(t.TempDir(), "missing")
 	file := filepath.Join(t.TempDir(), "file")
@@ -74,6 +76,7 @@ func TestUnwritableFolderFallsBack(t *testing.T) {
 // elsewhere is removed, the relayed images that starts keep included; the
 // places still in use, and the folders chosen before, are kept.
 func TestUnusedPlacesAreCleared(t *testing.T) {
+	t.Parallel()
 	dataDir, former, cache := t.TempDir(), t.TempDir(), t.TempDir()
 	keep := func(path string) {
 		t.Helper()

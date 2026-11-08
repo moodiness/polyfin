@@ -8,11 +8,13 @@ import (
 // to the settings; the folder is not looked at on disk, and a path that is
 // not absolute is left out with a warning.
 func TestRecordingsAndBackupFoldersAreCopied(t *testing.T) {
+	t.Parallel()
 	for variable, folder := range map[string]func(Config) string{
 		"POLYFIN_RECORDINGS_DIR": func(cfg Config) string { return cfg.Environment.RecordingsFolder },
 		"POLYFIN_BACKUP_DIR":     func(cfg Config) string { return cfg.Environment.BackupFolder },
 	} {
 		t.Run(variable, func(t *testing.T) {
+			t.Parallel()
 			if cfg, err := Load(with(nil)); err != nil || folder(cfg) != "" {
 				t.Fatalf("without a folder: %q %v", folder(cfg), err)
 			}

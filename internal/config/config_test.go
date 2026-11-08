@@ -27,6 +27,7 @@ func with(values map[string]string) func(string) string {
 }
 
 func TestLoadAcceptsExplicitSettings(t *testing.T) {
+	t.Parallel()
 	// The first GPU method of this system, nvenc on Linux and Windows,
 	// videotoolbox on macOS.
 	method := accounts.HardwareAccelerations[1]
@@ -56,6 +57,7 @@ func TestLoadAcceptsExplicitSettings(t *testing.T) {
 }
 
 func TestFontsComeFromTheSystemFolderUnlessSet(t *testing.T) {
+	t.Parallel()
 	for value, want := range map[string]string{"": "/usr/share/fonts", " /fonts ": "/fonts"} {
 		cfg, err := Load(with(map[string]string{"POLYFIN_FONTS_DIR": value}))
 		if err != nil || cfg.FontsDir != want {
@@ -65,6 +67,7 @@ func TestFontsComeFromTheSystemFolderUnlessSet(t *testing.T) {
 }
 
 func TestWebClientComesFromTheImageFolderUnlessSet(t *testing.T) {
+	t.Parallel()
 	for value, want := range map[string]string{"": DefaultWebDir, " /srv/jellyfin-web ": "/srv/jellyfin-web"} {
 		cfg, err := Load(with(map[string]string{"POLYFIN_WEB_DIR": value}))
 		if err != nil || cfg.WebDir != want {
@@ -76,6 +79,7 @@ func TestWebClientComesFromTheImageFolderUnlessSet(t *testing.T) {
 // Discovery listens on Jellyfin's port unless another is set; a value that
 // is not a port stops the start.
 func TestDiscoveryPortIsJellyfinsUnlessSet(t *testing.T) {
+	t.Parallel()
 	for value, want := range map[string]int{"": 7359, " 18420 ": 18420, "65535": 65535} {
 		cfg, err := Load(with(map[string]string{"POLYFIN_DISCOVERY_PORT": value}))
 		if err != nil || cfg.DiscoveryPort != want {
@@ -93,6 +97,7 @@ func TestDiscoveryPortIsJellyfinsUnlessSet(t *testing.T) {
 // Find tuners asks HDHomeRun's port unless another is set, by broadcast
 // unless addresses are given: a host alone is asked on that port.
 func TestTunerDiscoveryFollowsItsVariables(t *testing.T) {
+	t.Parallel()
 	cfg, err := Load(with(map[string]string{}))
 	if err != nil || cfg.HDHomeRunPort != 65001 || cfg.HDHomeRunAddresses != nil {
 		t.Errorf("defaults: %d %q %v", cfg.HDHomeRunPort, cfg.HDHomeRunAddresses, err)
@@ -109,6 +114,7 @@ func TestTunerDiscoveryFollowsItsVariables(t *testing.T) {
 }
 
 func TestLoadReportsEveryInvalidSetting(t *testing.T) {
+	t.Parallel()
 	_, err := Load(env(map[string]string{
 		"POLYFIN_LISTEN":   "8096",
 		"POLYFIN_DATA_DIR": "data",
@@ -126,6 +132,7 @@ func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 // The variables copied into the settings never stop the start: a value
 // that is not valid is left out, with a warning.
 func TestCopiedVariablesOnlyWarn(t *testing.T) {
+	t.Parallel()
 	invalid := map[string]string{
 		"POLYFIN_LOG_LEVEL":      "verbose",
 		"POLYFIN_CACHE_SIZE":     "lots",
@@ -156,6 +163,7 @@ func TestCopiedVariablesOnlyWarn(t *testing.T) {
 // The variables Polyfin no longer reads are listed when they are set, with
 // the section of the settings that holds them now.
 func TestRetiredVariablesAreListed(t *testing.T) {
+	t.Parallel()
 	cfg, err := Load(with(map[string]string{"POLYFIN_CACHE_SIZE": "20GB", "POLYFIN_BACKUP_DIR": "/backups", "POLYFIN_HWACCEL": "nvenc"}))
 	if err != nil {
 		t.Fatal(err)
@@ -170,6 +178,7 @@ func TestRetiredVariablesAreListed(t *testing.T) {
 }
 
 func TestSegmentDatabasesKeepTheOrderOfPreference(t *testing.T) {
+	t.Parallel()
 	for text, want := range map[string][]string{
 		" IntroDB , theintrodb ":            {"introdb", "theintrodb"},
 		"PublicMetaDB,introdb,publicmetadb": {"publicmetadb", "introdb"},
@@ -195,6 +204,7 @@ func TestSegmentDatabasesKeepTheOrderOfPreference(t *testing.T) {
 }
 
 func TestCacheSizesReadAsPeopleWriteThem(t *testing.T) {
+	t.Parallel()
 	for text, want := range map[string]int{
 		"":            0,
 		"20GB":        20,
@@ -217,6 +227,7 @@ func TestCacheSizesReadAsPeopleWriteThem(t *testing.T) {
 }
 
 func TestLoadRejectsUnusablePorts(t *testing.T) {
+	t.Parallel()
 	for _, listen := range []string{":0", ":65536", ":http", "host:"} {
 		if _, err := Load(with(map[string]string{"POLYFIN_LISTEN": listen})); err == nil {
 			t.Errorf("POLYFIN_LISTEN=%q was accepted", listen)
@@ -227,6 +238,7 @@ func TestLoadRejectsUnusablePorts(t *testing.T) {
 // Polyfin keeps its files in POLYFIN_DATA_DIR, by default a folder of the
 // system's temporary folder.
 func TestDataFolder(t *testing.T) {
+	t.Parallel()
 	cfg, err := Load(with(nil))
 	if want := filepath.Join(os.TempDir(), "polyfin"); err != nil || cfg.DataDir != want {
 		t.Errorf("default: %q %v", cfg.DataDir, err)

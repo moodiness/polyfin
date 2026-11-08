@@ -6,6 +6,7 @@ import (
 )
 
 func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
+	t.Parallel()
 	environ := []string{
 		"POLYFIN_DATABASE_URL=postgresql://polyfin:s3cret-pw@db.internal:5432/media?sslmode=disable",
 		"POLYFIN_CACHE_SIZE=20GB",
