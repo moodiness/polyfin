@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -320,16 +321,17 @@ func TestImportsOfSeveralServicesAddUp(t *testing.T) {
 	h.f.reply("GET", "/mdblist/sync/playback", http.StatusOK, `[{"progress":40,"paused_at":"2026-10-01T00:00:00Z","type":"episode",
 		"episode":{"season":1,"number":3,"runtime":50},"show":{"ids":{"imdbid":"tt0100"}}}]`)
 	// PublicMetaDB names titles by TMDB only, and maps them to IMDb; it
-	// maps one movie two ways, which is not reliable.
+	// maps one movie two ways, which is not reliable. It writes its dates
+	// with a space between the day and the time.
 	h.f.on("GET", "/publicmetadb/api/external/watched", func(r request) answer {
 		if r.query.Get("page") == "1" {
-			return answer{status: http.StatusOK, body: `{"items":[{"tmdb_id":30,"media_type":"tv","season":1,"episode":2,"watched_at":"2026-09-02T00:00:00Z"}],
+			return answer{status: http.StatusOK, body: `{"items":[{"tmdb_id":30,"media_type":"tv","season":1,"episode":2,"watched_at":"2026-09-02 00:00:00.000Z"}],
 				"total":2,"page":1,"perPage":500,"totalPages":2}`}
 		}
 		return answer{status: http.StatusOK, body: `{"items":[{"tmdb_id":77,"media_type":"movie","watched_at":null}],"total":2,"page":2,"perPage":500,"totalPages":2}`}
 	})
 	h.f.reply("GET", "/publicmetadb/api/external/resume", http.StatusOK, `{"items":[{"tmdb_id":30,"media_type":"tv","season":1,"episode":3,
-		"position_ms":1800000,"runtime_ms":3000000,"progress":60,"updated":"2026-10-03T00:00:00Z"}],"totalPages":1}`)
+		"position_ms":1800000,"runtime_ms":3000000,"progress":60,"updated":"2026-10-03 00:00:00.000Z"}],"totalPages":1}`)
 	h.f.on("GET", "/publicmetadb/api/external/mappings", func(r request) answer {
 		if r.query.Get("tmdb_id") == "30" && r.query.Get("media_type") == "tv" && r.query.Get("id_type") == "imdb" {
 			return answer{status: http.StatusOK, body: `{"tmdb_id":30,"media_type":"tv","mappings":{"imdb":[{"value":"tt0100"}]},"total":1}`}
@@ -347,8 +349,12 @@ func TestImportsOfSeveralServicesAddUp(t *testing.T) {
 	if !got[0].Played || !got[1].Played {
 		t.Errorf("the union of the histories: %+v %+v", got[0], got[1])
 	}
+	if got[1].LastPlayed == nil || !got[1].LastPlayed.Equal(*at("2026-09-02T00:00:00Z")) {
+		t.Errorf("played date: %+v", got[1])
+	}
 	// The latest resume point wins: PublicMetaDB's.
-	if got[2].Position != 30*time.Minute || got[2].Runtime != 50*time.Minute {
+	if got[2].Position != 30*time.Minute || got[2].Runtime != 50*time.Minute || got[2].LastPlayed == nil ||
+		!got[2].LastPlayed.Equal(*at("2026-10-03T00:00:00Z")) {
 		t.Errorf("resume point: %+v", got[2])
 	}
 	if pages := h.f.sent("publicmetadb", "/api/external/watched"); len(pages) != 2 || pages[1].query.Get("perPage") != "500" ||
@@ -363,6 +369,117 @@ func TestImportsOfSeveralServicesAddUp(t *testing.T) {
 	})
 	if n := len(h.f.sent("publicmetadb", "/api/external/mappings")); n != 2 {
 		t.Errorf("%d lookups", n)
+	}
+	h.noWrites(t)
+}
+
+// TestPublicMetaDBMappingsTakeTheMajorityPolyfinDoesNotContradict imports
+// movies PublicMetaDB maps to IMDb in turn: by a plurality of
+// contributions (81); by a tie of contributions (82), the entries' votes
+// equal; by a tie their votes break (83); by a plurality Polyfin's
+// listing contradicts, which leaves the other candidate (84); by one
+// contribution TMDB's external identifiers Polyfin kept contradict (85);
+// by a tie whose reverse lookup refuses a candidate (86); and by
+// contributors all agreeing (87).
+func TestPublicMetaDBMappingsTakeTheMajorityPolyfinDoesNotContradict(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	user := h.user(t, "gina")
+	h.connected(t, user, PublicMetaDB, "pm-gina")
+	// Polyfin listed tt0000087 as TMDB's 999, and TMDB gave tt0000090 as
+	// the IMDb identifier of movie 85.
+	if _, err := h.db.Exec(t.Context(), "INSERT INTO items (id, key, kind, data) VALUES ($1, $2, 'movie', $3)", itemOf("movie|tt0000087"),
+		"movie|tt0000087", `{"kind":"movie","meta":{"id":"tt0000087","type":"movie","name":"Another movie","_tmdbId":"999"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.Exec(t.Context(), "INSERT INTO title_imdb_ids (kind, tmdb_id, imdb_id, asked_at) VALUES ('movie', 85, 'tt0000090', $1)",
+		clockStart); err != nil {
+		t.Fatal(err)
+	}
+	movies := []int{81, 82, 83, 84, 85, 86, 87}
+	var items []string
+	for _, id := range movies {
+		items = append(items, `{"tmdb_id":`+strconv.Itoa(id)+`,"media_type":"movie","watched_at":"2026-09-02 20:00:00.000Z"}`)
+	}
+	h.f.reply("GET", "/publicmetadb/api/external/watched", http.StatusOK, `{"items":[`+strings.Join(items, ",")+`],"totalPages":1}`)
+	h.f.reply("GET", "/publicmetadb/api/external/resume", http.StatusOK, `{"items":[],"totalPages":1}`)
+	mappings := map[string]string{
+		"81": `{"id":"e1","value":"tt0000081"},{"id":"e3","value":"tt0000082"},{"id":"e2","value":"tt0000081"}`,
+		"82": `{"id":"e4","value":"tt0000083"},{"id":"e5","value":"tt0000084"}`,
+		"83": `{"id":"e6","value":"tt0000085"},{"id":"e7","value":"tt0000086"}`,
+		"84": `{"id":"e8","value":"tt0000087"},{"id":"e9","value":"tt0000087"},{"id":"e10","value":"tt0000088"}`,
+		"85": `{"id":"e11","value":"tt0000089"}`,
+		"86": `{"value":"tt0000091"},{"value":"tt0000092"}`,
+		"87": `{"id":"e12","value":"tt0000093"},{"id":"e13","value":"tt0000093"}`,
+	}
+	h.f.on("GET", "/publicmetadb/api/external/mappings", func(r request) answer {
+		return answer{status: http.StatusOK, body: `{"mappings":{"imdb":[` + mappings[r.query.Get("tmdb_id")] + `]}}`}
+	})
+	// The reverse lookup of tt0000091 names another movie.
+	h.f.on("GET", "/publicmetadb/api/external/mappings/lookup", func(r request) answer {
+		if r.query.Get("id_value") == "tt0000091" {
+			return answer{status: http.StatusOK, body: `{"results":[{"tmdb_id":555,"media_type":"movie"}],"total":1}`}
+		}
+		return answer{status: http.StatusOK, body: `{"results":[],"total":0}`}
+	})
+	h.f.reply("GET", "/publicmetadb/api/external/mappings/e6/votes", http.StatusOK, `{"upvotes":3,"downvotes":0,"your_vote":0}`)
+	h.f.reply("GET", "/publicmetadb/api/external/mappings/e7/votes", http.StatusOK, `{"upvotes":1,"downvotes":1,"your_vote":0}`)
+
+	if result := h.turnOn(t, user, PublicMetaDB); result.Played != 5 || result.Unmapped != 2 {
+		t.Errorf("import: %+v", result)
+	}
+	for imdb, played := range map[string]bool{
+		"tt0000081": true, "tt0000082": false,
+		"tt0000083": false, "tt0000084": false,
+		"tt0000085": true, "tt0000086": false,
+		"tt0000087": false, "tt0000088": true,
+		"tt0000089": false,
+		"tt0000091": false, "tt0000092": true,
+		"tt0000093": true,
+	} {
+		if got := h.data(t, user, library.TitleRef{IMDb: imdb})[0]; got.Played != played {
+			t.Errorf("%s: %+v, want played %v", imdb, got, played)
+		}
+	}
+	// Votes are asked only to break a tie, and the reverse lookup only of
+	// the candidates of a mapping contributors disagree on that Polyfin
+	// does not contradict.
+	var votes []string
+	for _, entry := range []string{"e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10", "e11", "e12", "e13"} {
+		if len(h.f.sent("publicmetadb", "/api/external/mappings/"+entry+"/votes")) > 0 {
+			votes = append(votes, entry)
+		}
+	}
+	if fmt.Sprint(votes) != "[e4 e5 e6 e7]" {
+		t.Errorf("votes asked of %v", votes)
+	}
+	var looked []string
+	for _, r := range h.f.sent("publicmetadb", "/api/external/mappings/lookup") {
+		if r.query.Get("id_type") != "imdb" || r.query.Get("media_type") != "movie" {
+			t.Errorf("reverse lookup %v", r.query)
+		}
+		looked = append(looked, r.query.Get("id_value"))
+	}
+	slices.Sort(looked)
+	if want := []string{"tt0000081", "tt0000082", "tt0000083", "tt0000084", "tt0000085", "tt0000086", "tt0000088", "tt0000091", "tt0000092"}; !slices.Equal(looked, want) {
+		t.Errorf("reverse lookups of %v, want %v", looked, want)
+	}
+
+	// The decisions are kept a day: within it, PublicMetaDB is not asked
+	// again of the movies left not found; after it, it is.
+	importNow := func() ImportResult {
+		return h.imported(t, user, PublicMetaDB, func() {
+			if _, err := h.ImportNow(t.Context(), user, PublicMetaDB); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if result := importNow(); result.Unmapped != 2 || len(h.f.sent("publicmetadb", "/api/external/mappings")) != len(movies) {
+		t.Errorf("within a day: %+v, %d mappings asked", result, len(h.f.sent("publicmetadb", "/api/external/mappings")))
+	}
+	h.now = func() time.Time { return clockStart.Add(publicMetaDBMappingLife + time.Hour) }
+	if result := importNow(); result.Unmapped != 2 || len(h.f.sent("publicmetadb", "/api/external/mappings")) != len(movies)+2 {
+		t.Errorf("a day later: %+v, %d mappings asked", result, len(h.f.sent("publicmetadb", "/api/external/mappings")))
 	}
 	h.noWrites(t)
 }

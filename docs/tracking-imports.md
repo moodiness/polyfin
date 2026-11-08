@@ -44,11 +44,26 @@ Polyfin finds each title of the history this way:
 | Named by IMDb | By that identifier, as the usual metadata addons name titles: a movie `tt…`, an episode `tt…:<season>:<episode>` |
 | Listed by a catalog under its TMDB or TVDB identifier | By that identifier |
 | Known by TMDB only, or a series by TVDB only, and listed by no catalog | Polyfin asks the server's metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`). It is found by the IMDb, TMDB and, for a series, TVDB identifiers of their description, as above. Otherwise it shows under `tmdb:<id>` or `tvdb:<id>`, with its episodes as the description lists them. |
-| From PublicMetaDB, which names titles by TMDB only, and described by no addon | By the IMDb identifier PublicMetaDB maps it to, when its contributors agree on one |
+| From PublicMetaDB, which names titles by TMDB only, and described by no addon | By the IMDb identifier PublicMetaDB maps it to, chosen as [below](#when-contributors-disagree) |
 | A Simkl anime | By the identifiers and numbers the [anime mapping](tracking.md#anime) gives it |
 | Found no way | Counted as not found. The import goes on. |
 
 A title no catalog listed yet shows in your lists at once, described by the addons. Each description is kept a week, in memory and in the database, as every title's description is (see [Addons and libraries](addons-and-libraries.md)). Importing again within 6 hours asks the addons nothing. Later, the import uses the description kept, and the addon is asked again in the background.
+
+#### When contributors disagree
+
+Each PublicMetaDB contributor maps a TMDB identifier to an IMDb one, and they may disagree. Polyfin chooses this way:
+
+1. It refuses each IMDb identifier its own data names as another title:
+   - a catalog listed it under another TMDB identifier;
+   - TMDB gave Polyfin another TMDB identifier for it, or another IMDb identifier for the title;
+   - with a [TMDB key](collections-people-and-ratings.md#tmdb-key), TMDB finds it under another TMDB identifier.
+
+   When contributors disagree, it also refuses one whose reverse lookup on PublicMetaDB gives other TMDB identifiers, and not this one.
+2. Of those left, it takes the one the most contributors give. Between as many, it takes the one whose contributions have the most votes. One left alone is taken too.
+3. When a tie remains, it takes none. The title is counted as not found, and you can [link it](moving-to-polyfin.md#linking-titles-not-found) to the right title.
+
+Each choice is kept a day, so a mapping contributors correct is followed the next day.
 
 <a id="how-the-history-merges-with-polyfin-s"></a><a id="how-the-history-merges-with-polyfins"></a>
 
