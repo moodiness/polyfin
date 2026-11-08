@@ -32,6 +32,7 @@ func request(remote string, header ...string) *http.Request {
 }
 
 func TestResolve(t *testing.T) {
+	t.Parallel()
 	proxies := networks("10.0.0.0/24", "172.18.0.5/32", "fd00:1::/64")
 	for _, tc := range []struct {
 		name   string
@@ -78,6 +79,7 @@ func TestResolve(t *testing.T) {
 // The handler has Client read the address Resolve finds, under the
 // setting of the moment.
 func TestHandlerFollowsTheSetting(t *testing.T) {
+	t.Parallel()
 	var known []netip.Prefix
 	proxies := New(func() []netip.Prefix { return known }, nil)
 	var seen string
@@ -107,6 +109,7 @@ func TestHandlerFollowsTheSetting(t *testing.T) {
 // never addresses on the internet, nor known proxies, and at most
 // maxUnknown at once.
 func TestUnknownProxies(t *testing.T) {
+	t.Parallel()
 	var known []netip.Prefix
 	now := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 	proxies := New(func() []netip.Prefix { return known }, nil)
@@ -212,6 +215,7 @@ func clientOf(proxies *Proxies, remote string) string {
 // the next lookup, and its new one is no longer named as an unknown
 // proxy. A name that resolves to nothing trusts nothing, and is told.
 func TestProxyNames(t *testing.T) {
+	t.Parallel()
 	resolver := &fakeResolver{addresses: map[string][]string{"proxy": {"::ffff:172.18.0.16", "fd00::16"}}}
 	proxies := New(func() []netip.Prefix { return nil }, resolver)
 	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
@@ -263,6 +267,7 @@ func TestProxyNames(t *testing.T) {
 // A name removed from the setting stops being trusted at once, while the
 // names left are still being looked up.
 func TestRemovedProxyNamesStopAtOnce(t *testing.T) {
+	t.Parallel()
 	hold := make(chan struct{})
 	resolver := &fakeResolver{addresses: map[string][]string{"proxy": {"172.18.0.16"}, "slow": {"172.18.0.20"}},
 		started: make(chan string, 1)}
@@ -291,6 +296,7 @@ func TestRemovedProxyNamesStopAtOnce(t *testing.T) {
 // Watch looks the names up before it returns, then again as soon as the
 // settings change.
 func TestWatchFollowsTheSettings(t *testing.T) {
+	t.Parallel()
 	resolver := &fakeResolver{addresses: map[string][]string{"proxy": {"172.18.0.16"}, "other": {"172.18.0.30"}}}
 	proxies := New(func() []netip.Prefix { return nil }, resolver)
 	var mu sync.Mutex
@@ -331,6 +337,7 @@ func TestWatchFollowsTheSettings(t *testing.T) {
 // again: the request that does so is judged as things were, the next one
 // counts as the client it names.
 func TestUnknownForwarderHasTheNamesLookedUp(t *testing.T) {
+	t.Parallel()
 	resolver := &fakeResolver{addresses: map[string][]string{}}
 	proxies := New(func() []netip.Prefix { return nil }, resolver)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -359,6 +366,7 @@ func TestUnknownForwarderHasTheNamesLookedUp(t *testing.T) {
 // names looked up at most once every 10 seconds, and only while some are
 // listed.
 func TestUnknownForwardersLookUpAtMostEvery10Seconds(t *testing.T) {
+	t.Parallel()
 	resolver := &fakeResolver{addresses: map[string][]string{}}
 	proxies := New(func() []netip.Prefix { return nil }, resolver)
 	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
