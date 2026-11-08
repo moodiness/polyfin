@@ -1050,12 +1050,18 @@ func (p healthProblemJSON) text(language string) string {
 			"Um torrent parou durante a reprodução às %s: %s. Nada foi enviado por outro caminho. Verifique se a rota continua acessível; a próxima reprodução inicia o torrent de novo."},
 			p.At.Local().Format("15:04"), why.In(language))
 	case problemHostErrorFile:
-		return say(i18n.Text{"The host %s answers an error file instead of the videos, since %s.",
-			"L’hôte %s répond par un fichier d’erreur au lieu des vidéos, depuis %s.",
-			"Der Host %s liefert seit %s eine Fehlerdatei statt der Videos.",
-			"El host %s responde con un archivo de error en lugar de los vídeos, desde las %s.",
-			"L’host %s risponde con un file di errore invece dei video, dalle %s.",
-			"O host %s responde com um arquivo de erro em vez dos vídeos, desde as %s."},
+		return say(i18n.Text{"The host %s answers an error file instead of the videos, since %s. " +
+			"This often means the account at that service needs attention (a password change, a subscription, a limit reached), or that the service is down: check it on its site.",
+			"L’hôte %s répond par un fichier d’erreur au lieu des vidéos, depuis %s. " +
+				"Cela signifie souvent que le compte auprès de ce service demande votre attention (un changement de mot de passe, un abonnement, une limite atteinte), ou que le service est en panne\u202f: vérifiez-le sur son site.",
+			"Der Host %s liefert seit %s eine Fehlerdatei statt der Videos. " +
+				"Das bedeutet oft, dass das Konto bei diesem Dienst Aufmerksamkeit braucht (eine Passwortänderung, ein Abonnement, ein erreichtes Limit) oder dass der Dienst ausgefallen ist: Prüfe es auf seiner Website.",
+			"El host %s responde con un archivo de error en lugar de los vídeos, desde las %s. " +
+				"Esto suele significar que la cuenta en ese servicio requiere atención (un cambio de contraseña, una suscripción, un límite alcanzado) o que el servicio no funciona: compruébelo en su sitio.",
+			"L’host %s risponde con un file di errore invece dei video, dalle %s. " +
+				"Spesso significa che l’account presso quel servizio richiede attenzione (un cambio di password, un abbonamento, un limite raggiunto) o che il servizio non funziona: verificalo sul suo sito.",
+			"O host %s responde com um arquivo de erro em vez dos vídeos, desde as %s. " +
+				"Isso costuma significar que a conta nesse serviço precisa de atenção (uma troca de senha, uma assinatura, um limite atingido) ou que o serviço está fora do ar: verifique no site dele."},
 			p.Host, p.At.Local().Format("15:04"))
 	case problemDLNAPort:
 		return say(i18n.Text{"Polyfin cannot listen on UDP port %d, so DLNA devices on the local network do not find it by themselves. " +
