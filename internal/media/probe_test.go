@@ -15,6 +15,7 @@ import (
 )
 
 func TestParseReadsWhatTheRecordedClipsLack(t *testing.T) {
+	t.Parallel()
 	analysis, err := Parse([]byte(`{
 		"format": {"filename": "http://127.0.0.1:41234/source/abc", "format_name": "matroska,webm", "duration": "7200.5", "size": "40000000000", "bit_rate": "44444444"},
 		"streams": [
@@ -57,6 +58,7 @@ func TestParseReadsWhatTheRecordedClipsLack(t *testing.T) {
 }
 
 func TestParseRefusesWhatIsNotAVideo(t *testing.T) {
+	t.Parallel()
 	for name, output := range map[string]string{
 		"a web page":       `{"format": {"format_name": "html"}, "streams": []}`,
 		"music with cover": `{"format": {"format_name": "mp3"}, "streams": [{"index": 0, "codec_type": "audio", "codec_name": "mp3"}, {"index": 1, "codec_type": "video", "codec_name": "mjpeg", "disposition": {"attached_pic": 1}}]}`,
@@ -71,6 +73,7 @@ func TestParseRefusesWhatIsNotAVideo(t *testing.T) {
 // The clip Jellyfin's chapters were recorded from, as upstream ffprobe sees
 // it.
 func TestParseReadsChapters(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join("..", "jellyfin", "testdata", "jellyfin-12.2", "chapters", "probe.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +95,7 @@ func TestParseReadsChapters(t *testing.T) {
 
 // Probe asks ffprobe for the chapters of a source it reads over HTTP.
 func TestProbeFindsChapters(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -124,6 +128,7 @@ func TestProbeFindsChapters(t *testing.T) {
 // A live analysis reads about a second and never reconnects: a stream that
 // ends while it is read fails at once; a file's analysis reconnects.
 func TestLiveAnalysesNeverReconnect(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake ffprobe is a shell script")
 	}
@@ -160,6 +165,7 @@ func TestLiveAnalysesNeverReconnect(t *testing.T) {
 // it. Otherwise an analysis leaves it unknown, and MasteringDisplay reads
 // it from the track's first frame; other tracks never need it.
 func TestTheMasteringDisplayComesFromTheContainerOrTheFirstFrame(t *testing.T) {
+	t.Parallel()
 	analysis, err := Parse([]byte(`{"format": {"format_name": "matroska,webm"}, "streams": [
 		{"index": 0, "codec_type": "video", "codec_name": "hevc", "color_transfer": "smpte2084",
 		 "side_data_list": [{"side_data_type": "Mastering display metadata"}, {"side_data_type": "Content light level metadata"}]}]}`))
