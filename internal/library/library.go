@@ -144,6 +144,8 @@ type Service struct {
 	// after each of followUpDelays (see followUpList).
 	followUps      followUps
 	followUpDelays []time.Duration
+	// playGrace is the defaultPlayGrace but in tests (see SetPlayGrace).
+	playGrace time.Duration
 	// tracking follows titles' versions for the pages that show them, and
 	// saves stream lists (see versionTracking).
 	tracking versionTracking
@@ -376,6 +378,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		asked:          cache.New[askedKey, *asked](maxAsked, askedFor),
 		followUps:      followUps{running: map[followKey]*followUp{}},
 		followUpDelays: followUpDelays,
+		playGrace:      defaultPlayGrace,
 		ratingLookups:  make(chan struct{}, ratingFetches),
 		ratingWait:     ratingWait,
 		wholeWait:      wholeListingWait,
