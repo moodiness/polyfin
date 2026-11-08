@@ -14,8 +14,9 @@ import (
 // share a name are counted together.
 
 // addonBuckets are the bounds of the durations of addon requests, in
-// seconds; a request is given 15 seconds at most.
-var addonBuckets = []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15}
+// seconds; a request is given 15 seconds at most, a request for streams
+// 30 (see stremio.StreamTimeout).
+var addonBuckets = []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30}
 
 // maxAddonSeries bounds the series kept: past it, the requests of addons
 // not counted yet are not.
@@ -36,7 +37,7 @@ type addonSeries struct {
 type histogram struct {
 	count   uint64
 	sum     float64
-	buckets [9]uint64
+	buckets [11]uint64
 }
 
 func (h *histogram) observe(seconds float64) {

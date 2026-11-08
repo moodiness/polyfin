@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -36,6 +37,18 @@ import (
 // has its background requests paused: as long as Retry-After asks, at most
 // paceWaitMost, else paceWait. The pause is logged once. Requests users
 // wait for are still sent meanwhile.
+//
+// So does a server that does not answer timeoutsInARow requests for
+// streams in a row within stremio.StreamTimeout, the requests users wait
+// for counted too: an addon gathering other addons' streams that waits
+// for one that no longer answers would otherwise be asked again by every
+// background listing, and ask its own addons again each time. The pause
+// lasts timeoutPause, doubled at each further run of timeouts after a
+// pause, timeoutPauseMost at most. The server's first answer to a request
+// for streams, even a refusal, lifts it, and the next run pauses
+// timeoutPause again. The timeouts of requests under way when it started
+// count for nothing. It is logged once, and System › Health tells it (see
+// Service.StreamsTimingOut).
 
 // paceKind is a resource whose background requests are paced.
 type paceKind int
@@ -70,6 +83,14 @@ const (
 	// long (see noticeLife). paceWaitMost bounds every pause.
 	paceWait     = time.Minute
 	paceWaitMost = 15 * time.Minute
+	// timeoutsInARow is how many requests for streams a server leaves
+	// unanswered in a row before its background requests pause, for
+	// timeoutPause, then twice as long at each further run, at most
+	// timeoutPauseMost. One timeout alone may be a blip; with paceAtOnce
+	// requests under way, three come within two of the requests' time.
+	timeoutsInARow   = 3
+	timeoutPause     = 5 * time.Minute
+	timeoutPauseMost = 30 * time.Minute
 )
 
 // pacing holds each server's pace.
@@ -85,13 +106,29 @@ type pacing struct {
 	hosts map[string]*hostPace
 }
 
-// hostPace is a server's pace: until when its background requests pause,
-// and each kind's requests.
+// hostPace is a server's pace: until when its background requests pause
+// after a refusal, and each kind's requests. timeouts counts the requests
+// for streams it left unanswered in a row, timedOut the addons they went
+// to, slowUntil when the pause they started ends, and slowPause how long
+// that pause was, which the next run doubles; 0 once the server answered.
 type hostPace struct {
-	until time.Time
-	kinds [paceKinds]kindPace
+	until     time.Time
+	timeouts  int
+	timedOut  map[accounts.ID]bool
+	slowUntil time.Time
+	slowPause time.Duration
+	kinds     [paceKinds]kindPace
 	// changed is closed, and replaced, when a waiting request may go.
 	changed chan struct{}
+}
+
+// pausedUntil is when the pause of h's background requests ends, after a
+// refusal or timeouts; past when none runs.
+func (h *hostPace) pausedUntil() time.Time {
+	if h.slowUntil.After(h.until) {
+		return h.slowUntil
+	}
+	return h.until
 }
 
 // kindPace holds the requests of a kind sent to a server within its
@@ -173,8 +210,8 @@ func (p *pacing) wait(ctx context.Context, host string, kind paceKind, later boo
 		switch {
 		case k.queue[0] != turn:
 			// The head goes first, and wakes the next once gone.
-		case now.Before(h.until):
-			left = h.until.Sub(now)
+		case now.Before(h.pausedUntil()):
+			left = h.pausedUntil().Sub(now)
 		case k.running >= paceAtOnce:
 		case len(k.sent) >= p.rates[kind].most:
 			left = k.sent[0].Add(p.rates[kind].window).Sub(now)
@@ -244,12 +281,72 @@ func (p *pacing) refused(host string, wait time.Duration) (started bool) {
 	return !running
 }
 
-// paused reports whether host's background requests pause.
+// paused reports whether host's background requests pause, after a
+// refusal or timeouts.
 func (p *pacing) paused(host string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	h, ok := p.hosts[host]
-	return ok && p.now().Before(h.until)
+	return ok && p.now().Before(h.pausedUntil())
+}
+
+// streamsTimedOut counts a request for streams to host that addon did not
+// answer in time, and pauses host's background requests at the
+// timeoutsInARow-th in a row: for timeoutPause, or twice the last pause
+// for timeouts, timeoutPauseMost at most. It returns how long, and whether
+// a pause started. While such a pause runs, a timeout counts for nothing:
+// it is a request's sent before it started.
+func (p *pacing) streamsTimedOut(host string, addon accounts.ID) (pause time.Duration, started bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.now()
+	h := p.host(host)
+	if now.Before(h.slowUntil) {
+		return 0, false
+	}
+	if h.timedOut == nil {
+		h.timedOut = map[accounts.ID]bool{}
+	}
+	h.timedOut[addon] = true
+	if h.timeouts++; h.timeouts < timeoutsInARow {
+		return 0, false
+	}
+	pause = timeoutPause
+	if h.slowPause > 0 {
+		pause = min(2*h.slowPause, timeoutPauseMost)
+	}
+	h.timeouts, h.slowPause, h.slowUntil = 0, pause, now.Add(pause)
+	return pause, true
+}
+
+// streamsAnswered records that host answered a request for streams: its
+// run of timeouts ends, and the pause it started too, the next run
+// pausing timeoutPause again.
+func (p *pacing) streamsAnswered(host string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	h, ok := p.hosts[host]
+	if !ok || h.timeouts == 0 && h.slowPause == 0 {
+		return
+	}
+	lifted := p.now().Before(h.slowUntil)
+	h.timeouts, h.timedOut, h.slowUntil, h.slowPause = 0, nil, time.Time{}, 0
+	if lifted {
+		h.change()
+	}
+}
+
+// timingOut reports when the pause of host's background requests for
+// timeouts ends, while it runs, if addon is one of those that did not
+// answer.
+func (p *pacing) timingOut(host string, addon accounts.ID) (time.Time, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	h, ok := p.hosts[host]
+	if !ok || !p.now().Before(h.slowUntil) || !h.timedOut[addon] {
+		return time.Time{}, false
+	}
+	return h.slowUntil, true
 }
 
 // paceMark tells how a context's requests are paced: those of background
@@ -315,7 +412,8 @@ func (s *Service) turn(ctx context.Context, addon addons.Addon, kind paceKind) (
 // request makes a request of kind to a Stremio addon: background work's
 // waits for its turn unless it had it (see turn), any other is counted
 // as sent at once. A refusal for the rate pauses the server's background
-// requests (see refusedFor).
+// requests (see refusedFor), and so do requests for streams it does not
+// answer in time (see streamsOutcome).
 func request[T any](ctx context.Context, s *Service, addon addons.Addon, kind paceKind, ask func(context.Context) (T, error)) (T, error) {
 	mark := markOf(ctx)
 	switch {
@@ -335,7 +433,35 @@ func request[T any](ctx context.Context, s *Service, addon addons.Addon, kind pa
 	if wait, refused := refusal(err); refused {
 		s.refusedFor(addon, wait)
 	}
+	if kind == paceStreams {
+		s.streamsOutcome(ctx, addon, err)
+	}
 	return value, err
+}
+
+// streamsOutcome counts, for addon's server, a request for streams on ctx
+// that it did not answer in time, or that it answered, a refusal or an
+// answer that could not be read included (see pacing.streamsTimedOut),
+// and logs a pause that starts. A request ctx ended, or that failed
+// otherwise, tells nothing.
+func (s *Service) streamsOutcome(ctx context.Context, addon addons.Addon, err error) {
+	host := stremio.HostOf(addon.ManifestURL)
+	switch {
+	case err == nil, stremio.StatusOf(err) != 0, errors.Is(err, stremio.ErrInvalidResponse):
+		s.pace.streamsAnswered(host)
+	case ctx.Err() == nil && stremio.FailureOf(err) == stremio.FailureTimeout:
+		if pause, started := s.pace.streamsTimedOut(host, addon.ID); started {
+			s.logger.Info("An addon did not answer requests for streams in time: Polyfin's background requests to its server pause",
+				"addon", addon.Manifest.Name, "timeouts", timeoutsInARow, "wait", pause)
+		}
+	}
+}
+
+// StreamsTimingOut reports, while the background requests to addon's
+// server pause as it did not answer requests for streams in time (see
+// pacing), when the pause ends, for System › Health.
+func (s *Service) StreamsTimingOut(addon addons.Addon) (time.Time, bool) {
+	return s.pace.timingOut(stremio.HostOf(addon.ManifestURL), addon.ID)
 }
 
 // refusal tells whether err is an addon's refusal of a request for its

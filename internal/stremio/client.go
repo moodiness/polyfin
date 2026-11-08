@@ -24,7 +24,13 @@ import (
 )
 
 const (
+	// requestTimeout bounds a request for a manifest, a catalog page, a
+	// description, subtitles or artwork, and StreamTimeout a request for
+	// streams: an addon gathering other addons' streams answers once the
+	// slowest of them answered or its own limit for them ran out, often
+	// 15 seconds itself.
 	requestTimeout = 15 * time.Second
+	StreamTimeout  = 30 * time.Second
 	// Large configurations list hundreds of catalogs with their options.
 	maxResponseBytes = 8 << 20
 	maxRedirects     = 5
@@ -52,16 +58,28 @@ type Client struct {
 	trusted   *http.Client
 	confined  *http.Client
 	health    healthRecords
+	// timeout and streamTimeout are requestTimeout and StreamTimeout but
+	// in tests (see SetTimeouts).
+	timeout, streamTimeout time.Duration
 }
 
 // NewClient returns a client identifying itself with the Polyfin version.
 func NewClient(version string) *Client {
 	return &Client{
-		userAgent: "Polyfin/" + version,
-		trusted:   newHTTPClient(false),
-		confined:  newHTTPClient(true),
-		health:    healthRecords{byAddon: map[string]*Health{}},
+		userAgent:     "Polyfin/" + version,
+		trusted:       newHTTPClient(false),
+		confined:      newHTTPClient(true),
+		health:        healthRecords{byAddon: map[string]*Health{}},
+		timeout:       requestTimeout,
+		streamTimeout: StreamTimeout,
 	}
+}
+
+// SetTimeouts replaces, before the client is used, how long a request is
+// given, and a request for streams. Tests shorten them; the server keeps
+// requestTimeout and StreamTimeout.
+func (c *Client) SetTimeouts(request, streams time.Duration) {
+	c.timeout, c.streamTimeout = request, streams
 }
 
 // idleConnsPerHost is how many idle connections are kept to each host:
@@ -165,10 +183,10 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 	return response, nil
 }
 
-// get downloads a resource of the addon manifestURL installs, and records
-// how its answer went (see Health).
-func (c *Client) get(ctx context.Context, manifestURL, target string, confined bool) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+// get downloads a resource of the addon manifestURL installs, within
+// timeout, and records how its answer went (see Health).
+func (c *Client) get(ctx context.Context, manifestURL, target string, confined bool, timeout time.Duration) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
@@ -387,7 +405,7 @@ func parseRetryAfter(value string, now time.Time) (retryAfter, bool) {
 // kept out of errors, its outcome counted in the health of the addon of
 // manifestURL. An answer 404 is ErrNotFound.
 func (c *Client) Fetch(ctx context.Context, manifestURL, target string, confined bool) ([]byte, error) {
-	body, err := c.get(ctx, manifestURL, target, confined)
+	body, err := c.get(ctx, manifestURL, target, confined, c.timeout)
 	if status, ok := errors.AsType[httpStatus](err); ok && status == http.StatusNotFound {
 		return nil, fmt.Errorf("%w: HTTP 404", ErrNotFound)
 	}
@@ -431,7 +449,7 @@ func (c *Client) Post(ctx context.Context, target string, header http.Header, bo
 // Manifest downloads and validates an addon manifest. confined restricts
 // the request to public addresses.
 func (c *Client) Manifest(ctx context.Context, manifestURL string, confined bool) (Manifest, error) {
-	body, err := c.get(ctx, manifestURL, manifestURL, confined)
+	body, err := c.get(ctx, manifestURL, manifestURL, confined, c.timeout)
 	if errors.Is(err, ErrInvalidResponse) {
 		return Manifest{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
 	}
@@ -449,7 +467,7 @@ const maxImageBytes = 15 << 20
 // artwork server that answers 429, or 503, with a Retry-After asks to wait
 // that long, which RetryAfter reads from the error.
 func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byte, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {
