@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -239,5 +241,75 @@ func TestReleaseDatesAreTheEarliestOfEachKind(t *testing.T) {
 	}
 	if _, err := c.ReleaseDates(t.Context(), "9"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown movie: %v", err)
+	}
+}
+
+// A series' episodes are asked with its details, up to 20 seasons a
+// request, and fewer when their episodes are many; its details alone
+// tell its seasons, and serve Studios too.
+func TestSeasonEpisodesAreAppendedToTheSeriesDetails(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	var asked []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		appended := r.URL.Query().Get("append_to_response")
+		mu.Lock()
+		asked = append(asked, r.URL.Path+"?"+appended)
+		mu.Unlock()
+		if r.URL.Path != "/3/tv/1400" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		answer := map[string]any{"networks": []map[string]any{{"name": "Network"}}, "seasons": []map[string]any{
+			{"season_number": 0, "episode_count": 1, "air_date": nil}, {"season_number": 1, "episode_count": 2, "air_date": "2000-05-31"}}}
+		for name := range strings.SplitSeq(appended, ",") {
+			number, ok := strings.CutPrefix(name, "season/")
+			// Season 99 is not TMDB's: it gives nothing for it.
+			if !ok || number == "99" {
+				continue
+			}
+			answer[name] = map[string]any{"episodes": []map[string]any{
+				{"season_number": json.Number(number), "episode_number": 1, "name": "Episode " + number + ".1", "air_date": "2000-05-31"},
+			}}
+		}
+		_ = json.NewEncoder(w).Encode(answer)
+	}))
+	t.Cleanup(server.Close)
+	c := New(server.URL+"/3", Images, "test", keyed("k3y"))
+
+	seasons, err := c.SeriesSeasons(t.Context(), 1400)
+	if err != nil || len(seasons) != 2 || seasons[1] != (SeasonSummary{Season: 1, Episodes: 2, AirDate: "2000-05-31"}) || seasons[0].AirDate != "" {
+		t.Fatalf("seasons: %+v %v", seasons, err)
+	}
+	if studios, err := c.Studios(t.Context(), TV, "1400"); err != nil || len(studios) != 1 {
+		t.Errorf("studios: %v %v", studios, err)
+	}
+	// 25 seasons of 10 episodes, then one of 500 and two of 300, and one
+	// TMDB does not give.
+	var many []SeasonSummary
+	for n := range 25 {
+		many = append(many, SeasonSummary{Season: n, Episodes: 10})
+	}
+	many = append(many, SeasonSummary{Season: 25, Episodes: 500}, SeasonSummary{Season: 26, Episodes: 300}, SeasonSummary{Season: 27, Episodes: 300},
+		SeasonSummary{Season: 99, Episodes: 1})
+	episodes, err := c.SeasonEpisodes(t.Context(), 1400, many)
+	if err != nil || len(episodes) != 28 {
+		t.Fatalf("episodes: %d %v", len(episodes), err)
+	}
+	if got := episodes[26]; got != (SeasonEpisode{Season: 26, Episode: 1, Name: "Episode 26.1", AirDate: "2000-05-31"}) {
+		t.Errorf("season 26: %+v", got)
+	}
+	season := func(from, to int) string {
+		var names []string
+		for n := from; n <= to; n++ {
+			names = append(names, "season/"+strconv.Itoa(n))
+		}
+		return "/3/tv/1400?" + strings.Join(names, ",")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{"/3/tv/1400?", season(0, 19), season(20, 24), season(25, 25), season(26, 26), season(27, 27) + ",season/99"}
+	if !slices.Equal(asked, want) {
+		t.Errorf("asked %v, want %v", asked, want)
 	}
 }

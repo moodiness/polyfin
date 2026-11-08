@@ -7,10 +7,12 @@
 // package's studios.go), for the release dates of movies, which the
 // wait for their digital release and smart lists judge (see the library
 // package's releases.go), for the episode groups series may show in
-// (see the library package's episodeorder.go), for the collections
-// movies belong to, which Silo's apps show as box sets (see the boxset
-// package), and for the posters and backdrops of titles whose addon gives
-// none (see the library package's tmdbartwork.go).
+// (see the library package's episodeorder.go), for the seasons and
+// episodes of series, as TMDB numbers them, which the tracking services
+// number episodes by (see the library package's episodealign.go), for the
+// collections movies belong to, which Silo's apps show as box sets (see
+// the boxset package), and for the posters and backdrops of titles whose
+// addon gives none (see the library package's tmdbartwork.go).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
@@ -647,6 +649,80 @@ func (c *Client) EpisodeGroupOf(ctx context.Context, id string) (EpisodeGroup, e
 	var group EpisodeGroup
 	err := c.get(ctx, "/tv/episode_group/"+url.PathEscape(id), nil, &group)
 	return group, err
+}
+
+// SeasonSummary is a season of a series as the series' details list it:
+// its number (0 for the specials), how many episodes it holds, and the day
+// it first aired ("2006-01-02", empty when TMDB gives none).
+type SeasonSummary struct {
+	Season   int    `json:"season_number"`
+	Episodes int    `json:"episode_count"`
+	AirDate  string `json:"air_date"`
+}
+
+// SeriesSeasons returns the seasons the details of the series TMDB
+// identifies as id list, the specials included. It reads the series'
+// details, which Studios reads too: one answer serves both.
+func (c *Client) SeriesSeasons(ctx context.Context, id int) ([]SeasonSummary, error) {
+	var details struct {
+		Seasons []SeasonSummary `json:"seasons"`
+	}
+	err := c.get(ctx, "/tv/"+strconv.Itoa(id), nil, &details)
+	return details.Seasons, err
+}
+
+// SeasonEpisode is an episode of a series as TMDB numbers it as aired:
+// its season (0 for the specials) and number, its name, and the day it
+// aired ("2006-01-02", empty when TMDB gives none).
+type SeasonEpisode struct {
+	Season  int    `json:"season_number"`
+	Episode int    `json:"episode_number"`
+	Name    string `json:"name"`
+	AirDate string `json:"air_date"`
+}
+
+const (
+	// maxAppended bounds the seasons one request appends to a series'
+	// details, as TMDB appends at most 20 answers to one.
+	maxAppended = 20
+	// maxAppendedEpisodes bounds the episodes of the seasons one request
+	// appends, a season holding more asked alone, so that an answer stays
+	// within maxAnswer.
+	maxAppendedEpisodes = 400
+)
+
+// SeasonEpisodes returns the episodes of the seasons of the series TMDB
+// identifies as id, in the order of seasons, asked with the series'
+// details (append_to_response=season/1,…): up to maxAppended seasons a
+// request, and maxAppendedEpisodes episodes as seasons tells them. A
+// season TMDB does not give is left out.
+func (c *Client) SeasonEpisodes(ctx context.Context, id int, seasons []SeasonSummary) ([]SeasonEpisode, error) {
+	var episodes []SeasonEpisode
+	for start := 0; start < len(seasons); {
+		end, count := start, 0
+		for end < len(seasons) && end-start < maxAppended && (end == start || count+seasons[end].Episodes <= maxAppendedEpisodes) {
+			count += seasons[end].Episodes
+			end++
+		}
+		appended := make([]string, 0, end-start)
+		for _, season := range seasons[start:end] {
+			appended = append(appended, "season/"+strconv.Itoa(season.Season))
+		}
+		var answer map[string]json.RawMessage
+		if err := c.get(ctx, "/tv/"+strconv.Itoa(id), url.Values{"append_to_response": {strings.Join(appended, ",")}}, &answer); err != nil {
+			return nil, err
+		}
+		for _, name := range appended {
+			var season struct {
+				Episodes []SeasonEpisode `json:"episodes"`
+			}
+			if raw, ok := answer[name]; ok && json.Unmarshal(raw, &season) == nil {
+				episodes = append(episodes, season.Episodes...)
+			}
+		}
+		start = end
+	}
+	return episodes, nil
 }
 
 // CheckKey asks TMDB whether it accepts key: ErrKeyRefused when it does
