@@ -131,6 +131,15 @@ type Config struct {
 	// StartTimeout bounds the wait for a torrent's start (see Open); 0 for
 	// StartTimeout.
 	StartTimeout time.Duration
+	// PieceTimeout is how long a read of the engine's torrents waits for a
+	// piece before it is taken as stalled (see PieceTimeout); 0 for
+	// PieceTimeout. Tests shorten it with the waits it scales.
+	PieceTimeout time.Duration
+	// RouteCheck is how often a running torrent's route is checked; 0 for
+	// checkEvery. A SOCKS5 proxy's handshake is then bounded by twice it,
+	// and its result kept for it, as proxyTimeout and checkedFor are.
+	// Tests shorten it with the waits it scales.
+	RouteCheck time.Duration
 	// Bootstrap lists the DHT nodes, host:port, a lookup starts from
 	// besides those the addon's sources name (see BootstrapNodes); none
 	// when empty, as in tests.
@@ -214,6 +223,9 @@ func New(config Config) (*Engine, error) {
 	if config.StartTimeout == 0 {
 		config.StartTimeout = StartTimeout
 	}
+	if config.PieceTimeout == 0 {
+		config.PieceTimeout = PieceTimeout
+	}
 	s, err := newStore(config.Dir, config.Budget, config.Logger)
 	if err != nil {
 		return nil, err
@@ -221,6 +233,9 @@ func New(config Config) (*Engine, error) {
 	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, removed: make(chan struct{}), checkEvery: checkEvery, dropWait: dropWait,
 		idleTimeout: idleTimeout, routeGrace: RouteGrace, kept: map[Hash]keptRun{}, unanswered: map[*torrent]bool{}}
 	e.peerID = newPeerID()
+	if config.RouteCheck != 0 {
+		e.checkEvery, e.proxyWait, e.proxyFresh = config.RouteCheck, 2*config.RouteCheck, config.RouteCheck
+	}
 	mbps := func(n int) int64 { return int64(n) * 1_000_000 / 8 }
 	e.up = newLimiter(func() int64 { return mbps(config.Settings().UploadMbps) }, true)
 	e.down = newLimiter(func() int64 { return mbps(config.Settings().DownloadMbps) }, false)
@@ -783,6 +798,12 @@ func (e *Engine) runningOver(hash Hash, route Route) *torrent {
 // found and its info dictionary received (see Open).
 func (e *Engine) StartTimeout() time.Duration {
 	return e.config.StartTimeout
+}
+
+// PieceTimeout is how long a read of a torrent waits for a piece before it
+// is taken as stalled.
+func (e *Engine) PieceTimeout() time.Duration {
+	return e.config.PieceTimeout
 }
 
 // Ready reports why torrents cannot play now: off, without a route, or
