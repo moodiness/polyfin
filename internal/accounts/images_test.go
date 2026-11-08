@@ -25,6 +25,7 @@ func encodedPicture(t *testing.T, width, height int, alpha uint8) []byte {
 }
 
 func TestProfilePicturesAreKeptSmall(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	user := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})
 	admin := mustCreate(t, store, NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true})

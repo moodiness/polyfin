@@ -12,6 +12,7 @@ import (
 )
 
 func TestSecuritySettingsRoundTripAndStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings(); !got.PersonalAddons || got.LoginAttempts != 0 || got.InactiveDeviceDays != 0 || got.DetailedLog {
@@ -83,6 +84,7 @@ func setLoginAttempts(t *testing.T, store *Store, attempts int) {
 }
 
 func TestWrongPasswordsBlockTheAccountForAWhile(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	start := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
@@ -195,6 +197,7 @@ func TestWrongPasswordsBlockTheAccountForAWhile(t *testing.T) {
 
 // Wrong passwords sent at once all count.
 func TestWrongPasswordsSentAtOnceAllCount(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -217,6 +220,7 @@ func TestWrongPasswordsSentAtOnceAllCount(t *testing.T) {
 }
 
 func TestUnusedDevicesAreSignedOut(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	told := make(chan []ID, 10)
@@ -281,6 +285,7 @@ func TestUnusedDevicesAreSignedOut(t *testing.T) {
 }
 
 func TestDetailedLogAppliesAtOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	var out bytes.Buffer

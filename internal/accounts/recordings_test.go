@@ -9,6 +9,7 @@ import (
 // Recordings start Jellyfin's way, without padding, and are kept until
 // deleted; the paddings and the days stay in range.
 func TestRecordingSettingsStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	got := store.Settings()
@@ -57,6 +58,7 @@ func TestRecordingSettingsStayInRange(t *testing.T) {
 // Administrators may record Live TV unless that is taken away; other users
 // may not unless given it.
 func TestOnlyAdministratorsRecordByDefault(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	admin := mustCreate(t, store, NewUser{Name: "boss", Password: "correct horse", IsAdministrator: true})
 	member := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})
@@ -77,6 +79,7 @@ func TestOnlyAdministratorsRecordByDefault(t *testing.T) {
 // Recordings are not converted to HEVC by default, nor on the processor;
 // when they are, it is from 1:00 to 6:00, between two different hours.
 func TestRecordingConversionSettings(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	got := store.Settings()

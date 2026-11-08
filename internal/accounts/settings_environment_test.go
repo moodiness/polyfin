@@ -10,6 +10,7 @@ import (
 // defaults: a 10 GB cache, each render node in turn, recording and backups
 // off into the default folders.
 func TestEnvironmentSettingsDefaults(t *testing.T) {
+	t.Parallel()
 	got := newStore(t).Settings()
 	if got.CacheSizeGB != 10 || got.VAAPIDevice != "" || got.Recording || got.RecordingsFolder != "" || got.Backups || got.BackupFolder != "" {
 		t.Errorf("defaults: %+v", got)
@@ -31,6 +32,7 @@ func TestEnvironmentSettingsDefaults(t *testing.T) {
 }
 
 func TestEnvironmentSettingsAreChecked(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	base := store.Settings()
@@ -86,6 +88,7 @@ func TestEnvironmentSettingsAreChecked(t *testing.T) {
 
 // The database refuses what the settings refuse.
 func TestEnvironmentSettingsDatabaseChecks(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	for _, change := range []string{"cache_size_gb = 0", "cache_size_gb = 2001", "vaapi_device = '/dev/dri/card0'",
 		"recordings_folder = 'relative'", "recordings_folder = 'D:relative'", "backup_folder = '\\relative'", "recordings_folder = '/a' || chr(10)", "recordings_folder = '/' || repeat('a', 512)",
@@ -108,6 +111,7 @@ func TestEnvironmentSettingsDatabaseChecks(t *testing.T) {
 // The variables still set are copied once, at the first start: a folder
 // turns its feature on with it.
 func TestEnvironmentSettingsAreAdoptedOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	env := Environment{CacheSizeGB: 20, DetailedLog: true, VAAPIDevice: "/dev/dri/renderD129",
@@ -139,6 +143,7 @@ func TestEnvironmentSettingsAreAdoptedOnce(t *testing.T) {
 // Without variables, the settings keep their defaults; the detailed log
 // is copied only when POLYFIN_LOG_LEVEL asked for debug.
 func TestEnvironmentSettingsKeepTheirValuesWithoutVariables(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if err := store.AdoptEnvironment(ctx, Environment{}); err != nil {

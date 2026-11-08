@@ -32,6 +32,7 @@ var everyLimit = UserChanges{
 // Their apps already signed in have the new limits at once, and a user who
 // may no longer share loses their links.
 func TestResetLimitsGivesANewUsersAndKeepsTheRest(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	fresh := mustCreate(t, store, NewUser{Name: "fresh", Password: "correct horse"})
@@ -109,6 +110,7 @@ func TestResetLimitsGivesANewUsersAndKeepsTheRest(t *testing.T) {
 // group without following it. A group's reset reaches its followers at
 // once, apps already signed in included, and keeps its name.
 func TestResetsFollowTheGroupRules(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	fresh := mustCreate(t, store, NewUser{Name: "fresh", Password: "correct horse"})

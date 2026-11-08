@@ -10,6 +10,7 @@ import (
 // sessions are refused, and the end is returned once to be recorded; a
 // later date brings it all back, devices included, and Never too.
 func TestAnAccountIsRefusedFromItsEndDateUntilALaterOne(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -71,6 +72,7 @@ func TestAnAccountIsRefusedFromItsEndDateUntilALaterOne(t *testing.T) {
 // An administrator's account never ends: it cannot be given an end date,
 // and making a user an administrator clears theirs.
 func TestAnAdministratorNeverEnds(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	admin := mustCreate(t, store, NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true})
@@ -98,6 +100,7 @@ func TestAnAdministratorNeverEnds(t *testing.T) {
 // Each account an invite creates ends the invite's days after it is
 // created; without them, it never ends.
 func TestAnInvitesAccountsEndAfterItsDays(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()

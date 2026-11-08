@@ -8,6 +8,7 @@ import (
 // Live TV lists and guides are fetched again every 12 hours, as before
 // the setting, and every 1 to 168 hours once it is set.
 func TestLiveTvRefreshHoursStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings().LiveTvRefreshHours; got != DefaultLiveTvRefreshHours || DefaultLiveTvRefreshHours != 12 {

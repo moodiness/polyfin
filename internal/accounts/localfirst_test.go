@@ -10,6 +10,7 @@ import (
 // from a user, and goes back off with Reset to defaults, for a user and
 // for a group.
 func TestLocalFirstIsAGroupSetting(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	user, err := store.CreateUser(ctx, NewUser{Name: "sam", Password: "correct horse"})

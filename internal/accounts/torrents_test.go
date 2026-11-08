@@ -18,6 +18,7 @@ import (
 // with it, sealed once a key is set when it was stored without one, and
 // replaced by another route when the key cannot open it.
 func TestWireGuardConfigIsAStoredSecret(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	pool := migrated.New(t)
 	box, _ := secrets.New(bytes.Repeat([]byte{1}, secrets.KeySize))

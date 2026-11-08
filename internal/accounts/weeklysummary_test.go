@@ -9,6 +9,7 @@ import (
 // on a day from 0 (Sunday) to 6 (Saturday), at an hour from 0 to 23; the
 // database refuses what the store would.
 func TestWeeklySummaryDayAndHourStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings(); got.WeeklySummaryDay != 1 || got.WeeklySummaryHour != 9 {

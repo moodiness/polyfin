@@ -8,6 +8,7 @@ import (
 // A user may connect from the local network always, from outside it only
 // with remote access.
 func TestAllowedFrom(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		remote, local, allowed bool
 	}{
@@ -27,6 +28,7 @@ func TestAllowedFrom(t *testing.T) {
 // follow it, is copied into a group made from a user, and comes back with
 // Reset to defaults.
 func TestRemoteAccessIsAGroupSetting(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	user, err := store.CreateUser(ctx, NewUser{Name: "kid", Password: "correct horse"})

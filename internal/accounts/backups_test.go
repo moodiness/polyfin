@@ -9,6 +9,7 @@ import (
 // and 7 backups are kept by default, from 1 to 90; the database refuses
 // what the store would.
 func TestBackupSettingsStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings(); got.BackupHour != DefaultBackupHour || DefaultBackupHour != 4 ||
@@ -53,6 +54,7 @@ func TestBackupSettingsStayInRange(t *testing.T) {
 // Collections are never all read by default, and otherwise at an hour
 // from 0 to 23; the database refuses what the store would.
 func TestCollectionReadHourStaysInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings().CollectionReadHour; got != DefaultCollectionReadHour || DefaultCollectionReadHour != -1 {
