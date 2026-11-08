@@ -240,6 +240,7 @@ func TestRestoreRoutesWithATool(t *testing.T) {
 	if pgDump == "" || pgRestore == "" {
 		t.Skip("POLYFIN_TEST_PG_DUMP and POLYFIN_TEST_PG_RESTORE name no pg_dump and pg_restore of PostgreSQL 18")
 	}
+	testdb.LockRestores(t)
 	dir := t.TempDir()
 	api, deps, service := backupAPI(t, dir, func(c *backup.Config, d testDeps) {
 		c.PgDump, c.PgRestore, c.DatabaseURL = pgDump, pgRestore, testdb.CopyURL(t, d.pool)
