@@ -262,12 +262,13 @@ The channel is an ordinary channel for apps:
 
 - it is listed after the channels of TV catalogs, to the users with the **Live TV** permission;
 - its programmes show in the guide, in searches, in recommended programmes and as what airs now;
-- its programmes are movies or series as their category, with their episode title, season and number, and their title's image;
+- its programmes are movies or series as their category, with their episode title, season and number, and their title's image, official and custom ratings and genres, an administrator's edits of the title included;
 - recordings, timers, series timers and [reminders](#programme-reminders) work on it as on any channel.
 
 Some users do not see it:
 
-- **Parental control and blocked genres:** a user sees the channel only when these let them reach every movie and episode it airs. They are judged by the ratings and genres the titles had when the channel was saved, as a stream other users watch cannot leave a programme out. Those ratings are the ones of the **Rating country** at that time; after a change of country, they are judged in the new country's system until the channel is saved again (see [Rating country](user-limits.md#rating-country)).
+- **Parental control and blocked genres:** a user sees the channel only when these let them reach every movie and episode it airs, as a stream other users watch cannot leave a programme out. A title is judged by the rating and genres its addon gave when the channel was saved. Those ratings are the ones of the **Rating country** at that time; after a change of country, they are judged in the new country's system until the channel is saved again (see [Rating country](user-limits.md#rating-country)).
+- **Edited titles:** an administrator's edit of a title counts at once, as everywhere else: its custom rating, else its edited official rating, and its edited genres (see [Edit metadata](artwork-and-editing.md#edit-metadata)). Rating a title higher hides the channel from the users it no longer suits: its guide, what airs now, its stream, timers and reminders. Lowering the rating or clearing the edit shows them again, without saving the channel.
 - **Hidden titles:** the programmes of a title a user hid are left out of their guide.
 
 ### How a channel of your titles plays
