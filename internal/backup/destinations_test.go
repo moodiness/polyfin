@@ -63,6 +63,7 @@ func (h *harness) create(t *testing.T, draft Draft) Destination {
 // folders stay. What an interrupted upload left is deleted. Each
 // destination records its last upload and its newest backup.
 func TestBackupsAreSentToEachDestination(t *testing.T) {
+	t.Parallel()
 	h := withDestinations(t)
 	h.kept = 3
 	store := newTestS3(t, "backups", "AKIDEXAMPLE")
@@ -162,6 +163,7 @@ func TestBackupsAreSentToEachDestination(t *testing.T) {
 // A destination whose newest backup is older than two days is a problem
 // too.
 func TestAFailedUploadIsTriedAgainAtTheNextBackup(t *testing.T) {
+	t.Parallel()
 	h := withDestinations(t)
 	dav := newTestWebDAV(t, "polyfin", "dav password")
 	d := h.create(t, Draft{Kind: KindWebDAV, Address: new(dav.url), Username: new("polyfin"), Secret: new("dav password")})
@@ -204,6 +206,7 @@ func TestAFailedUploadIsTriedAgainAtTheNextBackup(t *testing.T) {
 // SFTP server's key is saved at the first connection; a server offering
 // another key afterwards is refused, until the saved key is forgotten.
 func TestDestinationTestAndHostKey(t *testing.T) {
+	t.Parallel()
 	h := withDestinations(t)
 	store := newTestS3(t, "backups", "AKIDEXAMPLE")
 	dav := newTestWebDAV(t, "polyfin", "dav password")
@@ -268,6 +271,7 @@ func TestDestinationTestAndHostKey(t *testing.T) {
 // a change leaves it out; with another POLYFIN_SECRET_KEY, it is
 // unreadable and sends nothing, saying why.
 func TestDestinationsAreChecked(t *testing.T) {
+	t.Parallel()
 	h := withDestinations(t)
 	private := newPrivateKey(t)
 	for _, test := range []struct {

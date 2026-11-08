@@ -73,9 +73,8 @@ const sealedAtTheServersCost = "5046424b454e43013af78a2c19670390433ca1688434e1e3
 // were sealed at, which the tests' lower cost does not change: a backup
 // sealed then still opens with the cost the package starts with, and
 // not with the tests' one.
-//
-// It stays sequential: it sets the package's key cost.
 func TestTheServerKeepsItsKeyCost(t *testing.T) {
+	t.Parallel()
 	sealed, err := hex.DecodeString(sealedAtTheServersCost)
 	if err != nil {
 		t.Fatal(err)
@@ -83,10 +82,11 @@ func TestTheServerKeepsItsKeyCost(t *testing.T) {
 	if _, err := decryptBytes(sealed, testPassphrase); !errors.Is(err, ErrWrongPassphrase) {
 		t.Errorf("opened at the tests' cost: %v", err)
 	}
-	lowered := keyCost
-	keyCost = serverKeyCost
-	t.Cleanup(func() { keyCost = lowered })
-	if got, err := decryptBytes(sealed, testPassphrase); err != nil || string(got) != "PGDMP sealed before the test cost\n" {
+	r, err := newDecrypterAt(bytes.NewReader(sealed), testPassphrase, serverKeyCost)
+	if err != nil {
+		t.Fatalf("opened at the server's cost: %v", err)
+	}
+	if got, err := io.ReadAll(r); err != nil || string(got) != "PGDMP sealed before the test cost\n" {
 		t.Fatalf("opened at the server's cost: %q, %v", got, err)
 	}
 }
@@ -95,6 +95,7 @@ func TestTheServerKeepsItsKeyCost(t *testing.T) {
 // with a short one; its size is told from the encrypted size, and nothing
 // of it is in the clear.
 func TestAnEncryptedBackupReadsBack(t *testing.T) {
+	t.Parallel()
 	for _, size := range []int{0, chunkSize, 2*chunkSize + 7} {
 		data := randomBytes(t, size)
 		sealed := encryptBytes(t, data, testPassphrase)
@@ -121,6 +122,7 @@ func TestAnEncryptedBackupReadsBack(t *testing.T) {
 // a chunk, their order, or the end of the file is refused, never read as
 // a shorter or different dump.
 func TestATamperedBackupIsRefused(t *testing.T) {
+	t.Parallel()
 	data := randomBytes(t, 2*chunkSize+100)
 	sealed := encryptBytes(t, data, testPassphrase)
 	if _, err := newDecrypter(bytes.NewReader(sealed), "another passphrase"); !errors.Is(err, ErrWrongPassphrase) {
