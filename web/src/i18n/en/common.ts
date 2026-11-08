@@ -230,6 +230,8 @@ const common = {
       'Known proxies must be IP addresses, networks such as 172.18.0.0/16 or host names such as traefik, one a line, 64 at most.',
     personal_addons_disabled:
       'Your own addons are turned off by an administrator. They are kept, but you cannot add, refresh or turn on any.',
+    parental_control_own_sources:
+      'Parental control applies to your account: your own sources and smart lists are kept but not used, and none can be added or changed.',
     invalid_hidden_libraries: 'The library list changed in the meantime. Reload the page.',
     invalid_blocked_genres:
       'Genres must be 1 to 100 characters long, and at most 100 can be blocked.',

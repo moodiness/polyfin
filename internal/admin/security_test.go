@@ -163,6 +163,84 @@ func TestPersonalAddonsTurnedOffAreRefused(t *testing.T) {
 	allowed("server's switch back on")
 }
 
+// Under parental control or blocked genres, a user's apps use the server's
+// addons only: their own addons and smart lists are kept, but cannot be
+// added, replaced, refreshed, turned on or changed.
+func TestOwnSourcesAndListsAreRefusedUnderParentalControl(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	manifestURL := localAddon(t)
+	// Only administrators may install addons on the local network, as the
+	// test's.
+	administrator := api.signedIn("administrator", true)
+	status, installed, _ := administrator.call(http.MethodPost, "/scopes/me/addons", map[string]string{"manifestUrl": manifestURL})
+	if status != http.StatusCreated {
+		t.Fatalf("installing an own addon: %d %v", status, installed)
+	}
+	_, shared, _ := administrator.call(http.MethodPost, "/scopes/shared/addons", map[string]string{"manifestUrl": listAddon(t)})
+	list := map[string]any{
+		"name": "Mine", "shownAs": "library", "sort": "name",
+		"catalogs": []map[string]any{{"addonId": shared["id"], "type": "movie", "id": "top"}},
+		"rules":    map[string]any{"field": "group", "match": "all", "rules": []map[string]any{}},
+	}
+	addon := "/scopes/me/addons/" + installed["id"].(string)
+	id := api.userID("administrator")
+	for _, c := range []struct {
+		what    string
+		changes accounts.UserChanges
+	}{
+		{"parental control", accounts.UserChanges{Parental: &accounts.ParentalControl{MaxRating: new(13)}}},
+		{"blocked genres", accounts.UserChanges{BlockedGenres: &[]string{"Horror"}}},
+	} {
+		status, saved, _ := administrator.call(http.MethodPost, "/scopes/me/smart-lists", list)
+		if status != http.StatusCreated {
+			t.Fatalf("%s: making a list before: %d %v", c.what, status, saved)
+		}
+		if _, err := api.store.UpdateUser(t.Context(), id, c.changes, nil); err != nil {
+			t.Fatal(err)
+		}
+		own := "/scopes/me/smart-lists/" + saved["id"].(string)
+		for _, request := range []struct {
+			method, path string
+			body         any
+		}{
+			{http.MethodPost, "/scopes/me/addons", map[string]string{"manifestUrl": manifestURL}},
+			{http.MethodPatch, addon, map[string]any{"manifestUrl": manifestURL}},
+			{http.MethodPost, addon + "/refresh", nil},
+			{http.MethodPatch, addon, map[string]any{"enabled": true}},
+			{http.MethodPost, "/scopes/me/smart-lists", list},
+			{http.MethodPut, own, list},
+		} {
+			if status, body, _ := administrator.call(request.method, request.path, request.body); status != http.StatusForbidden || body["error"] != "parental_control_own_sources" {
+				t.Errorf("%s: %s %s: %d %v", c.what, request.method, request.path, status, body)
+			}
+		}
+		// What is kept may still be turned off, listed and deleted.
+		if status, body, _ := administrator.call(http.MethodPatch, addon, map[string]any{"enabled": false}); status != http.StatusOK || body["enabled"] != false {
+			t.Errorf("%s: turning the addon off: %d %v", c.what, status, body)
+		}
+		if status, kept := administrator.read("/scopes/me/smart-lists"); status != http.StatusOK || len(kept.([]any)) != 1 {
+			t.Errorf("%s: the kept lists: %d %v", c.what, status, kept)
+		}
+		if status, _, _ := administrator.call(http.MethodDelete, own, nil); status != http.StatusNoContent {
+			t.Errorf("%s: deleting the list: %d", c.what, status)
+		}
+		// The server's addons and lists are not concerned.
+		if status, body, _ := administrator.call(http.MethodPost, "/scopes/shared/addons/"+shared["id"].(string)+"/refresh", nil); status != http.StatusOK {
+			t.Errorf("%s: refreshing a server's addon: %d %v", c.what, status, body)
+		}
+		if status, body, _ := administrator.call(http.MethodPost, "/scopes/shared/smart-lists", list); status != http.StatusCreated {
+			t.Errorf("%s: making a server's list: %d %v", c.what, status, body)
+		}
+		if _, err := api.store.UpdateUser(t.Context(), id, accounts.UserChanges{Parental: &accounts.ParentalControl{}, BlockedGenres: &[]string{}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if status, body, _ := administrator.call(http.MethodPatch, addon, map[string]any{"enabled": true}); status != http.StatusOK {
+			t.Errorf("%s: turning the addon back on once lifted: %d %v", c.what, status, body)
+		}
+	}
+}
+
 // userID is the identifier of the user named name.
 func (api testAPI) userID(name string) accounts.ID {
 	api.t.Helper()

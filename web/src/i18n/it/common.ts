@@ -241,6 +241,8 @@ const common: typeof en = {
       'I proxy noti devono essere indirizzi IP, reti come 172.18.0.0/16 o nomi host come traefik, uno per riga, al massimo 64.',
     personal_addons_disabled:
       'I tuoi add-on sono stati disattivati da un amministratore. Vengono conservati, ma non puoi aggiungerne, aggiornarli né attivarli.',
+    parental_control_own_sources:
+      'Il controllo parentale si applica al tuo account: le tue origini e liste intelligenti vengono conservate ma non usate, e non se ne possono aggiungere né modificare.',
     invalid_hidden_libraries:
       'L’elenco delle librerie è cambiato nel frattempo. Ricarica la pagina.',
     invalid_blocked_genres:
