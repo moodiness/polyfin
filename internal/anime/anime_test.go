@@ -156,6 +156,7 @@ func anidbOf(entries []IDs) []int {
 }
 
 func TestIdentifiersMapBetweenSources(t *testing.T) {
+	t.Parallel()
 	s := ready(t)
 	for _, c := range []struct {
 		source Source
@@ -194,6 +195,7 @@ func TestIdentifiersMapBetweenSources(t *testing.T) {
 }
 
 func TestAniDBEpisodesMapToTVDB(t *testing.T) {
+	t.Parallel()
 	s := ready(t)
 	for _, c := range []struct {
 		anidb, number int
@@ -231,6 +233,7 @@ func TestAniDBEpisodesMapToTVDB(t *testing.T) {
 }
 
 func TestTVDBEpisodesMapBackToAniDB(t *testing.T) {
+	t.Parallel()
 	s := ready(t)
 	for _, c := range []struct {
 		tvdb, season, number, absolute int
@@ -264,6 +267,7 @@ func TestTVDBEpisodesMapBackToAniDB(t *testing.T) {
 }
 
 func TestTitlesAreNamedAsPolyfinNamesThem(t *testing.T) {
+	t.Parallel()
 	s := ready(t)
 	for _, c := range []struct {
 		source  Source
@@ -313,6 +317,7 @@ func TestTitlesAreNamedAsPolyfinNamesThem(t *testing.T) {
 // A list put in use as the service stops keeps its state: a restart reads
 // the copies kept, fresh, and asks for nothing.
 func TestAListInUseAsTheServiceStopsKeepsItsState(t *testing.T) {
+	t.Parallel()
 	l := serveLists(t)
 	dir := t.TempDir()
 	s := newService(Options{Dir: dir, Version: "1.2.3", IDsURL: l.server.URL + "/ids.json", EpisodesURL: l.server.URL + "/episodes.xml"},
@@ -343,6 +348,7 @@ func TestAListInUseAsTheServiceStopsKeepsItsState(t *testing.T) {
 }
 
 func TestRefreshKeepsTheLastCopyAndAsksConditionally(t *testing.T) {
+	t.Parallel()
 	l := serveLists(t)
 	dir := t.TempDir()
 	first := l.start(t, dir, time.Hour)
@@ -439,6 +445,7 @@ func (l *logged) count(level slog.Level) int {
 // level each time it fails again: a server that cannot reach the lists
 // would otherwise warn several times a day.
 func TestAListFailingAgainWarnsOnce(t *testing.T) {
+	t.Parallel()
 	l := serveLists(t)
 	l.fail(http.StatusServiceUnavailable)
 	records := &logged{}
