@@ -11,6 +11,7 @@ import (
 // A folder's disk is measured on each system Polyfin runs on: room free and
 // used, and the folder the disk is mounted on, which holds the folder.
 func TestMeasureAFolder(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
