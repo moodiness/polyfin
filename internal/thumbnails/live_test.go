@@ -43,6 +43,7 @@ func longVideo(t *testing.T, ffmpeg string) []byte {
 type host struct {
 	requests atomic.Int32
 	url      string
+	client   *http.Client
 }
 
 func newHost(t *testing.T, data []byte) *host {
@@ -54,18 +55,20 @@ func newHost(t *testing.T, data []byte) *host {
 	}))
 	t.Cleanup(server.Close)
 	h.url = server.URL + "/long.mkv"
+	h.client = server.Client()
 	return h
 }
 
-type httpOpener struct{}
+// httpOpener sends requests with a host's own client.
+type httpOpener struct{ client *http.Client }
 
-func (httpOpener) Open(ctx context.Context, method, target string, header http.Header, _ bool) (*http.Response, error) {
+func (o httpOpener) Open(ctx context.Context, method, target string, header http.Header, _ bool) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil {
 		return nil, err
 	}
 	request.Header = header
-	return http.DefaultClient.Do(request)
+	return o.client.Do(request)
 }
 
 // play reads a version's file through the cache as a playback from its
@@ -94,11 +97,12 @@ func play(t *testing.T, src *source.Source, keyframes []container.Keyframe, at t
 // and a conversion on the processor holds them back. After the play, the
 // thumbnails left are read, and the kept ones are not read again.
 func TestThumbnailsDuringThePlay(t *testing.T) {
+	t.Parallel()
 	ffmpeg := testFFmpeg(t)
 	data := longVideo(t, ffmpeg)
 	origin := newHost(t, data)
 	ts := newTestService(t, ffmpeg)
-	cache, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, httpOpener{}, slog.New(slog.DiscardHandler))
+	cache, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, httpOpener{origin.client}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

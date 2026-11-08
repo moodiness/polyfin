@@ -52,6 +52,7 @@ func saveThumbnails(t *testing.T, ts *testService, version, item accounts.ID, wi
 // A title lists its versions' thumbnails by version and width; the
 // settings turning them off hide them.
 func TestTrickplayStored(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, "")
 	ctx := t.Context()
 	title, other := accounts.ID{10}, accounts.ID{11}
@@ -104,6 +105,7 @@ func TestTrickplayStored(t *testing.T) {
 // of the tag asked, else the title's version used last, as reading its
 // images uses it.
 func TestChapterImagesStored(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, "")
 	ctx := t.Context()
 	title := accounts.ID{10}
@@ -157,6 +159,7 @@ func TestChapterImagesStored(t *testing.T) {
 // Past the storage the settings give them, the versions used longest ago
 // lose their images, the others keep theirs.
 func TestStorageCapEvictsTheOldest(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, "")
 	ctx := t.Context()
 	versions := []accounts.ID{{1}, {2}, {3}}
@@ -207,6 +210,8 @@ func TestStorageCapEvictsTheOldest(t *testing.T) {
 // Keyframes are read through the index, a request each, within the
 // version's budget, paced per host, waiting while a playback reads the
 // same host.
+//
+//nolint:paralleltest // bounds another host's wait to 10 ms, which the CPU load of the package's parallel tests can exceed
 func TestPacedReads(t *testing.T) {
 	data := fixture(t, "forced.mkv")
 	src := &countingSource{data: data}
@@ -257,6 +262,8 @@ func TestPacedReads(t *testing.T) {
 // A host gets a request every interval at most, and at most so many an
 // hour: past them, requests wait, they do not fail. A paused host gets
 // none; others are not held up.
+//
+//nolint:paralleltest // bounds another host's wait to 10 ms, which the CPU load of the package's parallel tests can exceed
 func TestGatePaceAndHourlyCap(t *testing.T) {
 	g := newGate(20*time.Millisecond, 3, 300*time.Millisecond, time.Millisecond)
 	ctx := context.Background()
