@@ -56,6 +56,7 @@ var (
 // The statistics of a period sum the playbacks that started in it, per
 // user and for everyone, and leave out what a user did not play.
 func TestStatisticsSumAPeriodAndAUser(t *testing.T) {
+	t.Parallel()
 	h := newHistoryHarness(t)
 	day := 24 * time.Hour
 	h.played(t, h.alice, movie, 2*day, time.Hour, DirectPlay)
@@ -117,6 +118,7 @@ func TestStatisticsSumAPeriodAndAUser(t *testing.T) {
 // The history keeps the days the settings choose, and nothing while it is
 // turned off.
 func TestHistoryRetention(t *testing.T) {
+	t.Parallel()
 	h := newHistoryHarness(t)
 	day := 24 * time.Hour
 	settings := h.store.Settings()
@@ -151,6 +153,7 @@ func TestHistoryRetention(t *testing.T) {
 // The CSV export holds the playbacks of one user only when asked for
 // one, and writes a name that reads as a formula as text.
 func TestExportOfOneUser(t *testing.T) {
+	t.Parallel()
 	h := newHistoryHarness(t)
 	formula := movie
 	formula.Name = "=HYPERLINK(\"x\")"

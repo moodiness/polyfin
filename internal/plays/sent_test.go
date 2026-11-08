@@ -13,6 +13,7 @@ import (
 // A playback ended by another title's report hands its device's total to
 // the next. A meter that started again counts on.
 func TestPlaybacksKeepTheBytesSentForThem(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	sent := func(kind int, title Title, total int64) {
@@ -61,6 +62,7 @@ func TestPlaybacksKeepTheBytesSentForThem(t *testing.T) {
 // A guest's playback counts its own meter from nothing, and leaves no
 // total behind for its device.
 func TestGuestPlaybacksCountTheirOwnBytes(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	r := report(ReportStart, movie, 0, false, DirectStream)
@@ -80,6 +82,7 @@ func TestGuestPlaybacksCountTheirOwnBytes(t *testing.T) {
 // bytes did not pass through Polyfin; the statistics sum them, and the
 // export writes them, empty where none were sent.
 func TestHistoryKeepsTheBytesSent(t *testing.T) {
+	t.Parallel()
 	h := newHistoryHarness(t)
 	record := func(title Title, ago time.Duration, sent int64) {
 		start := h.now.Add(-ago)
