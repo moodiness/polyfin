@@ -101,7 +101,7 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 			if meta.ChannelNumber > 0 {
 				number = meta.ChannelNumber
 			}
-			item := channelItem(meta, number)
+			item := channelItem(meta, number, v.country)
 			preview := meta
 			items = append(items, item)
 			records = append(records, record{ID: item.ID, Key: channelKey(meta.ID), Kind: KindChannel, Addon: &addon,
@@ -120,10 +120,10 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 
 // channelItem describes a channel from its catalog entry. TV addons give a
 // channel's logo as its poster, or only as its logo. A tuner's channel
-// shows the tuner's number ("5.1").
-func channelItem(meta stremio.Meta, number int) Item {
+// shows the tuner's number ("5.1"). Its rating is the one country gives.
+func channelItem(meta stremio.Meta, number int, country string) Item {
 	item := Item{ID: itemID(channelKey(meta.ID)), Kind: KindChannel, Number: cmp.Or(meta.GuideNumber, strconv.Itoa(number)), Available: true}
-	fromMeta(&item, meta)
+	fromMeta(&item, meta, country)
 	item.Images = channelImages(meta)
 	// A channel has no release, runtime or credits of its own.
 	item.ProductionYear, item.PremiereDate, item.EndDate, item.Runtime, item.People = 0, nil, nil, 0, nil
@@ -209,7 +209,7 @@ func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
 	}
 	meta := *r.Meta
 	meta.GuideNumber = r.GuideNumber
-	return channelItem(meta, r.Number), nil
+	return channelItem(meta, r.Number, v.country), nil
 }
 
 // loadListed is load, which also finds a channel of one of the user's IPTV

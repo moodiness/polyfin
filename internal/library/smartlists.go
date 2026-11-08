@@ -343,7 +343,7 @@ func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.L
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()
 	}
-	titles := s.smartFacts(sources, lists)
+	titles := s.smartFacts(sources, lists, v.country)
 	if err := s.smartDescribed(ctx, v, list, titles); err != nil {
 		return nil, false, err
 	}
@@ -456,8 +456,9 @@ func (s *Service) smartReadLater(ctx context.Context, v view, src source) {
 // smartFacts merges the titles of the sources' lists, one of each in turn
 // without duplicates, as an addon's collection does, each at its best place
 // in a catalog, and tells what their listing gives of them, with
-// administrators' edits. Movies and series only are kept.
-func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta) []smartTitle {
+// administrators' edits, rated as country rates them. Movies and series
+// only are kept.
+func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta, country string) []smartTitle {
 	var titles []smartTitle
 	seen := map[string]bool{}
 	for rank := 0; ; rank++ {
@@ -472,12 +473,12 @@ func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta) []smartTi
 				continue
 			}
 			seen[meta.ID] = true
-			item, r, err := titleItem(sources[i].addon, sources[i].catalog, meta, accounts.ID{})
+			item, r, err := titleItem(sources[i].addon, sources[i].catalog, meta, accounts.ID{}, country)
 			if err != nil || item.Kind != KindMovie && item.Kind != KindSeries {
 				continue
 			}
 			r.Parent = nil
-			titles = append(titles, smartTitle{item: item, record: r, title: smartlists.Title{Rank: rank + 1}, genre: sources[i].genre})
+			titles = append(titles, smartTitle{item: item, record: r, title: smartlists.Title{Rank: rank + 1, RatingCountry: country}, genre: sources[i].genre})
 		}
 		if !added {
 			break
@@ -592,7 +593,7 @@ func (s *Service) smartDescribed(ctx context.Context, v view, list smartlists.Li
 		}
 		t.described, t.title.Described = true, true
 		var full Item
-		fromMeta(&full, meta)
+		fromMeta(&full, meta, v.country)
 		if !t.title.GenresKnown {
 			t.title.Genres, t.title.GenresKnown = full.Genres, len(full.Genres) > 0
 			t.narrow()
@@ -732,7 +733,7 @@ func (s *Service) keptDescriptions(ctx context.Context, v view, shared bool, tit
 			'released', meta->'released', 'imdbRating', meta->'imdbRating', 'language', meta->'language',
 			'runtime', meta->'runtime', 'director', meta->'director', 'cast', meta->'cast',
 			'app_extras', jsonb_build_object('cast', meta->'app_extras'->'cast', 'certification', meta->'app_extras'->'certification',
-				'certificationLocal', meta->'app_extras'->'certificationLocal'),
+				'certificationLocal', meta->'app_extras'->'certificationLocal', 'certifications', meta->'app_extras'->'certifications'),
 			'videos', CASE WHEN $4 AND jsonb_typeof(meta->'videos') = 'array' THEN (SELECT jsonb_agg(jsonb_strip_nulls(
 				jsonb_build_object('id', v->'id', 'season', v->'season', 'episode', v->'episode', 'released', v->'released')))
 				FROM jsonb_array_elements(meta->'videos') v) END))

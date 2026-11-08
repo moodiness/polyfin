@@ -166,6 +166,40 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	}
 }
 
+// The rating country defaults to the US, is kept in upper case, and is one
+// Polyfin has ratings of: anything else is refused and changes nothing.
+func TestSettingsRatingCountry(t *testing.T) {
+	t.Parallel()
+	store := newStore(t)
+	ctx := t.Context()
+	if got := store.Settings().RatingCountry; got != "US" || store.RatingCountry() != "US" {
+		t.Errorf("default rating country: %q, store %q", got, store.RatingCountry())
+	}
+	choices := SettingsBounds()["ratingCountry"].Choices
+	if !slices.Contains(choices, any("IT")) || !slices.Contains(choices, any("US")) || slices.Contains(choices, any("XX")) {
+		t.Errorf("rating country choices: %v", choices)
+	}
+	changed := store.Settings()
+	changed.RatingCountry = "it"
+	saved, err := store.UpdateSettings(ctx, changed)
+	if err != nil || saved.RatingCountry != "IT" {
+		t.Fatalf("rating country it: %q %v", saved.RatingCountry, err)
+	}
+	if store.Settings().RatingCountry != "IT" || store.RatingCountry() != "IT" {
+		t.Errorf("stored rating country: %q, store %q", store.Settings().RatingCountry, store.RatingCountry())
+	}
+	for _, country := range []string{"XX", ""} {
+		refused := store.Settings()
+		refused.RatingCountry = country
+		if _, err := store.UpdateSettings(ctx, refused); !errors.Is(err, ErrInvalidRatingCountry) {
+			t.Errorf("rating country %q: got %v", country, err)
+		}
+	}
+	if store.RatingCountry() != "IT" {
+		t.Errorf("a refused rating country changed it to %q", store.RatingCountry())
+	}
+}
+
 func TestSettingsKeepCatalogLimitsInRange(t *testing.T) {
 	t.Parallel()
 	store := newStore(t)

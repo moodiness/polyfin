@@ -72,7 +72,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 				continue
 			}
 			added = true
-			item, r, err := listed{metas[rank], sources[i]}.title(accounts.ID{})
+			item, r, err := listed{metas[rank], sources[i]}.title(accounts.ID{}, v.country)
 			if err != nil || seen[item.ID] || sameTitle(title, item) {
 				continue
 			}
@@ -80,7 +80,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 			// A title already described compares with its credits too,
 			// whichever addon described it.
 			if full, _, ok := s.describedMeta(ctx, v, r, false, inMemory); ok {
-				fromMeta(&item, full)
+				fromMeta(&item, full, v.country)
 			}
 			// Like a search result, the title keeps the folder it was last
 			// listed in.

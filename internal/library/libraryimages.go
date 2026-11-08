@@ -231,7 +231,7 @@ func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confine
 	settings := s.settings()
 	// The view generated images read the catalogs in: the scope's
 	// enabled addons, as everyone sees them.
-	v := view{catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}.unfiltered()
+	v := view{catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, country: settings.RatingCountry}.unfiltered()
 	byID := map[accounts.ID]addons.Addon{}
 	for _, addon := range list {
 		byID[addon.ID] = addon

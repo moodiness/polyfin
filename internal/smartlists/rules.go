@@ -37,8 +37,10 @@ const (
 	// minutes.
 	FieldRuntime = "runtime"
 	// FieldContentRating matches a title rated at most Value, a rating
-	// localization.RatingScore knows, on the scale parental control
-	// compares ratings on: "PG-13" matches PG-13, PG and G titles.
+	// localization.RatingScore knows in any country, on the scale parental
+	// control compares ratings on: "PG-13" matches PG-13, PG and G titles.
+	// Both ratings are read as the title's RatingCountry rates, so under
+	// Italy "PG-13" excludes a VM14 title.
 	FieldContentRating = "contentRating"
 	// FieldVotes matches a title whose IMDb rating counts from Min to Max
 	// votes, as MDBList tells them.
@@ -182,7 +184,9 @@ func (r Rule) valid(depth int, count *int) bool {
 		return plain && (r.Value == HomeReleased || r.Value == HomeUpcoming || r.Value == HomeEither) && r.Min == nil &&
 			r.Max != nil && whole(r.Max) && *r.Max >= 1 && *r.Max <= maxDays
 	case FieldContentRating:
-		_, rated := localization.RatingScore(r.Value)
+		// Every country's table is tried, so a rule is valid whatever
+		// country the server rates titles for.
+		_, rated := localization.RatingScore(r.Value, "")
 		return plain && rated && r.Min == nil && r.Max == nil
 	}
 	return false
@@ -268,6 +272,9 @@ type Title struct {
 	Runtime int
 	// ContentRating is its age rating, empty when not known.
 	ContentRating string
+	// RatingCountry is the country ContentRating is read for, US when
+	// empty.
+	RatingCountry string
 	// People are the names of the actors and directors it credits.
 	People []string
 	// Released is the day it was released, zero when not known to the
@@ -428,7 +435,7 @@ func (r Rule) judge(t Title) Verdict {
 		}
 		return verdictOf(within(float64(t.Runtime)))
 	case FieldContentRating:
-		return judgeContentRating(t.ContentRating, r.Value, missing)
+		return judgeContentRating(t.ContentRating, r.Value, t.RatingCountry, missing)
 	case FieldPerson:
 		switch {
 		case named(t.People):
@@ -526,13 +533,13 @@ func (r Rule) judgeGroup(t Title) Verdict {
 // judgeContentRating judges a rating against the highest one a rule
 // allows, as parental control does: below its score, or at its score up
 // to its subscore. A title without a rating known, or rated with one that
-// says it has none, is missing it.
-func judgeContentRating(rating, most string, missing Verdict) Verdict {
-	score, rated := localization.RatingScore(rating)
+// says it has none, is missing it. Both are scored as country rates them.
+func judgeContentRating(rating, most, country string, missing Verdict) Verdict {
+	score, rated := localization.RatingScore(rating, country)
 	if !rated {
 		return missing
 	}
-	limit, _ := localization.RatingScore(most)
+	limit, _ := localization.RatingScore(most, country)
 	if score.Score != limit.Score {
 		return verdictOf(score.Score < limit.Score)
 	}

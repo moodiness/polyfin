@@ -58,7 +58,8 @@ func (s *Service) recordArrivals(ctx context.Context, src source, skip int, meta
 	}
 	var records []record
 	for _, meta := range metas {
-		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}); err == nil {
+		// Only the record is kept, which holds no rating: no country needed.
+		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}, ""); err == nil {
 			// The listing that reads the page saves its records with their
 			// folder; these keep any folder they have.
 			r.Parent = nil
@@ -279,7 +280,7 @@ func (s *Service) CatalogTitles(ctx context.Context, user accounts.User, addon a
 	var items []Item
 	var records []record
 	for _, meta := range metas {
-		item, r, err := titleItem(entry, catalog, meta, parent)
+		item, r, err := titleItem(entry, catalog, meta, parent, v.country)
 		if err != nil {
 			continue
 		}

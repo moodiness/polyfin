@@ -498,6 +498,9 @@ type view struct {
 	// channelFilter is the user's channel rule, which hides channels of
 	// the server's sources (see channellimits.go); nil hides none.
 	channelFilter *accounts.ChannelFilter
+	// country is the server's rating country: the country whose rating a
+	// title shows and is judged by (see certification), US when empty.
+	country string
 	// listedFolders are the local folders whose libraries the user sees,
 	// by the kind of their titles, which the libraries that leave out what
 	// local folders hold leave out (see skiplocal.go).
@@ -613,7 +616,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 		scopes = append(scopes, addons.Personal(user.ID))
 	}
 	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
-		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, channelFilter: user.LiveTvChannels.Filter(),
+		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, channelFilter: user.LiveTvChannels.Filter(), country: settings.RatingCountry,
 		waitRelease: settings.WaitDigitalRelease && s.tmdb.Enabled()}
 	if user.ID != (accounts.ID{}) {
 		hidden, err := s.hiddenTitles(ctx, user.ID)
@@ -1126,9 +1129,10 @@ type listed struct {
 }
 
 // title describes a listed title as an item under parent, with the record
-// that finds it again through the catalog that listed it.
-func (l listed) title(parent accounts.ID) (Item, record, error) {
-	return titleItem(l.src.addon, l.src.catalog, l.meta, parent)
+// that finds it again through the catalog that listed it, rated as
+// country rates it.
+func (l listed) title(parent accounts.ID, country string) (Item, record, error) {
+	return titleItem(l.src.addon, l.src.catalog, l.meta, parent, country)
 }
 
 // merged interleaves several catalogs, one item of each in turn, without
@@ -1401,8 +1405,8 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		var item Item
 		var r record
 		if l.catalog.Type == "collection" {
-			item, r = collectionItem(addon, meta, l.item.ID, l.addon.confined)
-		} else if item, r, err = titleItem(l.addon, l.catalog, meta, l.item.ID); err != nil {
+			item, r = collectionItem(addon, meta, l.item.ID, l.addon.confined, v.country)
+		} else if item, r, err = titleItem(l.addon, l.catalog, meta, l.item.ID, v.country); err != nil {
 			continue
 		}
 		items, records = append(items, item), append(records, r)
@@ -1467,7 +1471,7 @@ func (s *Service) narrowedLibraryTitles(ctx context.Context, v view, l library, 
 	items := make([]Item, 0, len(metas))
 	records := make([]record, 0, len(metas))
 	for _, meta := range metas {
-		if item, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID); err == nil {
+		if item, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID, v.country); err == nil {
 			items, records = append(items, item), append(records, r)
 		}
 	}
@@ -1630,7 +1634,7 @@ func (s *Service) collectionLibraryTitles(ctx context.Context, v view, l library
 	var items []Item
 	var records []record
 	for _, title := range titles {
-		item, r, err := title.title(l.item.ID)
+		item, r, err := title.title(l.item.ID, v.country)
 		if err != nil {
 			continue
 		}
@@ -1644,10 +1648,10 @@ func (s *Service) collectionLibraryTitles(ctx context.Context, v view, l library
 	return result, s.save(ctx, records)
 }
 
-func collectionItem(addon accounts.ID, meta stremio.Meta, parent accounts.ID, confined bool) (Item, record) {
+func collectionItem(addon accounts.ID, meta stremio.Meta, parent accounts.ID, confined bool, country string) (Item, record) {
 	key := collectionKey(addon, meta.ID)
 	item := Item{ID: itemID(key), Kind: KindCollection, ParentID: parent}
-	fromMeta(&item, meta)
+	fromMeta(&item, meta, country)
 	preview := meta
 	return item, record{ID: item.ID, Key: key, Kind: KindCollection, Addon: &addon, Parent: &parent, Meta: &preview, Confined: confined}
 }
@@ -1655,8 +1659,9 @@ func collectionItem(addon accounts.ID, meta stremio.Meta, parent accounts.ID, co
 var errUnsupported = errors.New("unsupported title type")
 
 // titleItem describes a title a catalog of entry lists, as an item under
-// parent, with the record that finds it again through that catalog.
-func titleItem(entry installed, catalog stremio.Catalog, meta stremio.Meta, parent accounts.ID) (Item, record, error) {
+// parent, rated as country rates it, with the record that finds it again
+// through that catalog.
+func titleItem(entry installed, catalog stremio.Catalog, meta stremio.Meta, parent accounts.ID, country string) (Item, record, error) {
 	metaType := meta.Type
 	if metaType == "" {
 		metaType = catalog.Type
@@ -1674,7 +1679,7 @@ func titleItem(entry installed, catalog stremio.Catalog, meta stremio.Meta, pare
 		kind = KindFolder
 	}
 	item := Item{ID: itemID(key), Kind: kind, ParentID: parent, Available: true}
-	fromMeta(&item, meta)
+	fromMeta(&item, meta, country)
 	preview := meta
 	addon := entry.addon.ID
 	return item, record{ID: item.ID, Key: key, Kind: kind, Addon: &addon, CatalogType: catalog.Type, CatalogID: catalog.ID,
@@ -1717,7 +1722,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	var items []Item
 	var records []record
 	for _, title := range titles {
-		item, rec, err := title.title(r.ID)
+		item, rec, err := title.title(r.ID, v.country)
 		if err != nil {
 			continue
 		}
@@ -2085,7 +2090,7 @@ func (s *Service) completed(ctx context.Context, v view, r record, candidate ins
 		meta, _ = s.enrich(ctx, v, candidate, meta, shared, how)
 	}
 	if candidate.shared && !candidate.addon.Local() {
-		s.learnTraits(ctx, r, meta, kept.at)
+		s.learnTraits(ctx, r, meta, kept.at, v.country)
 	}
 	return shownMeta(r, s.withFileEpisodes(ctx, v, r, candidate, meta))
 }
@@ -2459,7 +2464,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 			return Item{}, ErrNotFound
 		}
 		item := Item{ID: id, Kind: KindCollection, ParentID: deref(r.Parent)}
-		fromMeta(&item, *r.Meta)
+		fromMeta(&item, *r.Meta, v.country)
 		items := []Item{item}
 		s.addGenerated(ctx, v, items, []record{r})
 		return items[0], nil
@@ -2563,7 +2568,7 @@ func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, b
 	}
 	// A restricted user's addons are the server's (see view): the
 	// description gives the rating and genres.
-	t := describedTraits(meta)
+	t := describedTraits(meta, v.country)
 	if !described {
 		t, _ = s.knownTraits(ctx, v, r)
 	}
@@ -2589,7 +2594,7 @@ func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, b
 	item := Item{ID: id, Kind: kind, ParentID: deref(r.Parent), Available: true}
 	// The user's language changes what the title shows, never the facts
 	// judged above.
-	fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta))
+	fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta), v.country)
 	item.OfficialRating = t.rating
 	switch {
 	case kind == KindSeries && len(meta.Videos) > 0:
@@ -2630,12 +2635,12 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
-	if !ok || r.shownTitle() && shownKind(meta) != KindSeries || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta))) {
+	if !ok || r.shownTitle() && shownKind(meta) != KindSeries || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta, v.country))) {
 		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
 	shown := s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta)
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
-	fromMeta(&item, shown)
+	fromMeta(&item, shown, v.country)
 	item.Contents = contents(meta, nil, s.now())
 	return item, shown, meta, nil
 }
@@ -3028,7 +3033,7 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 	listed := make([]record, 0, len(titles))
 	var translators []bool
 	for _, title := range titles {
-		item, r, err := title.title(accounts.ID{})
+		item, r, err := title.title(accounts.ID{}, v.country)
 		if err != nil {
 			continue
 		}
@@ -3291,7 +3296,8 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		confined = r.Confined || err != nil || channel.Confined
 	case r.Meta != nil:
 		var item Item
-		fromMeta(&item, *r.Meta)
+		// Only the images and identifiers are read: no rating needed.
+		fromMeta(&item, *r.Meta, "")
 		images = item.Images
 		template := s.settings().PosterTemplate
 		_, templatable := PosterAddress(template, r.Kind, item.ProviderIDs)
@@ -3304,7 +3310,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 			}
 			if full, describer, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 				listed := images
-				fromMeta(&item, full)
+				fromMeta(&item, full, "")
 				images = withLocal(item.Images, listed)
 				if listed.URL(imageType) == "" {
 					confined = confined || describer.confined

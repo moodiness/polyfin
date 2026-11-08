@@ -31,6 +31,10 @@ var ErrInvalidServerName = errors.New("invalid server name")
 // ErrInvalidLanguage reports a server language Polyfin does not speak.
 var ErrInvalidLanguage = errors.New("invalid server language")
 
+// ErrInvalidRatingCountry reports a rating country Polyfin has no ratings
+// of (see localization.RatingCountries).
+var ErrInvalidRatingCountry = errors.New("invalid rating country")
+
 // ErrInvalidCatalogLimit reports a CatalogLimit outside [MinCatalogLimit,
 // MaxCatalogLimit].
 var ErrInvalidCatalogLimit = errors.New("invalid catalog limit")
@@ -1503,6 +1507,12 @@ type Settings struct {
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of i18n.Languages.
 	Language string
+	// RatingCountry is the country whose ratings titles show and are
+	// judged by, Jellyfin's MetadataCountryCode: one of
+	// localization.RatingCountries. A title's rating is the one its
+	// description gives for that country (see library's certification),
+	// scored by that country's system (see localization.RatingScore).
+	RatingCountry string
 	// PrepareAhead analyzes the version a title would play as soon as its
 	// details open, and readies the next episode near the end of the one
 	// playing, so that playback starts at once.
@@ -2314,7 +2324,7 @@ func validWebText(text string, max int) bool {
 
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
-const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
+const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, rating_country, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
 	"include_prereleases, " +
 	"dlna, dlna_name, dlna_new_devices_user, dlna_mark_played, " +
@@ -2369,7 +2379,7 @@ var updateSettingsQuery = func() string {
 // fields points to the fields of settings, in the order of
 // settingsColumns: what a row scans into, and what an update writes.
 func (settings *Settings) fields() []any {
-	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
+	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language, &settings.RatingCountry,
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
 		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
 		&settings.IncludePrereleases,
@@ -2526,6 +2536,12 @@ func (s *Store) KnownProxies() []netip.Prefix {
 	return s.settings.Load().KnownProxies
 }
 
+// RatingCountry returns Settings().RatingCountry without copying the
+// settings: every judged title reads it.
+func (s *Store) RatingCountry() string {
+	return s.settings.Load().RatingCountry
+}
+
 // KnownProxyNames returns Settings().KnownProxyNames without copying the
 // settings.
 func (s *Store) KnownProxyNames() []string {
@@ -2638,6 +2654,10 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !i18n.Valid(settings.Language) {
 		return Settings{}, ErrInvalidLanguage
+	}
+	settings.RatingCountry = strings.ToUpper(strings.TrimSpace(settings.RatingCountry))
+	if !localization.ValidRatingCountry(settings.RatingCountry) {
+		return Settings{}, ErrInvalidRatingCountry
 	}
 	if settings.CatalogLimit < MinCatalogLimit || settings.CatalogLimit > MaxCatalogLimit {
 		return Settings{}, ErrInvalidCatalogLimit

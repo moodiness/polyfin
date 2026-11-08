@@ -206,6 +206,24 @@ func TestNewRulesJudgeWhatTitlesAre(t *testing.T) {
 	}
 }
 
+// A content rating rule reads both ratings as the title's country rates
+// them: under Italy "PG-13" keeps a T title and excludes a VM14 one.
+func TestContentRatingRuleJudgesUnderTheRatingCountry(t *testing.T) {
+	t.Parallel()
+	rule := Rule{Field: FieldContentRating, Value: "PG-13"}
+	if err := group(MatchAll, rule, Rule{Field: FieldContentRating, Value: "VM14"}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for rating, want := range map[string]Verdict{"T": Yes, "VM14": No, "VM18": No} {
+		if got := rule.Judge(Title{Described: true, ContentRating: rating, RatingCountry: "IT"}); got != want {
+			t.Errorf("%s under IT: %v, want %v", rating, got, want)
+		}
+	}
+	if got := (Rule{Field: FieldContentRating, Value: "VM14"}).Judge(Title{Described: true, ContentRating: "PG-13", RatingCountry: "IT"}); got != Yes {
+		t.Errorf("PG-13 at most VM14 under IT: %v", got)
+	}
+}
+
 // A home release rule judges a movie by the day it is out at home, and a
 // series by its premiere date: in the last days, today included, in the
 // next days, or either. Only a rule of upcoming titles, not negated, lists

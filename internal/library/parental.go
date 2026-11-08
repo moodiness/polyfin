@@ -9,17 +9,19 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // A title's rating is the certification the server's addons give in its
-// complete description. Users' own addons are not asked: a user could
-// install one that rates titles as they please. Catalog pages rarely carry
+// complete description for the server's rating country (see
+// certification). Users' own addons are not asked: a user could install
+// one that rates titles as they please. Catalog pages rarely carry
 // ratings, so listings for a user whose parental control hides titles must
 // look them up: once known, from any user's visit, a rating is kept with
-// the item and listings read it from there. A title's genres, which the
-// genres a user blocks hide, are learned the same way, from the same
-// descriptions.
+// the item, with the country it was picked for, and listings read it from
+// there. A title's genres, which the genres a user blocks hide, are
+// learned the same way, from the same descriptions.
 const (
 	// ratingWait bounds how long one request waits for the ratings of the
 	// titles it lists. Titles still unknown then are hidden from the
@@ -44,16 +46,52 @@ const (
 	ratedTTL   = 7 * 24 * time.Hour
 )
 
-// certification is the rating a title's description gives: the addon's
-// certification, else its local one.
-func certification(meta stremio.Meta) string {
+// certification is the rating a title's description gives for country,
+// the server's rating country, the one titles show and are judged by:
+//  1. its rating for that country among the addon's ratings by country,
+//     when Polyfin can score it;
+//  2. else its local certification, when it is one of that country's
+//     ratings: the addon gives no country with it;
+//  3. else its certification, the US one for most addons;
+//  4. else its local certification when Polyfin can score it.
+//
+// A local certification that is a text with its rating ahead ("PG-13 -
+// Teens 13 or older") counts by that rating alone, which is the one shown;
+// one Polyfin cannot score that way is left out.
+func certification(meta stremio.Meta, country string) string {
 	if meta.Extras == nil {
 		return ""
 	}
-	if meta.Extras.Certification != "" {
-		return meta.Extras.Certification
+	if country == "" {
+		country = localization.DefaultRatingCountry
 	}
-	return meta.Extras.CertificationLocal
+	if rating := strings.TrimSpace(meta.Extras.Certifications[country]); rating != "" {
+		if _, ok := localization.RatingScore(rating, country); ok {
+			return rating
+		}
+	}
+	local := leadingRating(meta.Extras.CertificationLocal)
+	if _, ok := localization.CountryScore(local, country); ok && local != "" {
+		return local
+	}
+	if rating := strings.TrimSpace(meta.Extras.Certification); rating != "" {
+		return rating
+	}
+	if _, ok := localization.RatingScore(local, country); ok {
+		return local
+	}
+	return ""
+}
+
+// leadingRating is the rating a certification starts with when it is
+// followed by its meaning ("PG-13 - Teens 13 or older" gives "PG-13"), else
+// the certification itself.
+func leadingRating(certification string) string {
+	certification = strings.TrimSpace(certification)
+	if rating, _, ok := strings.Cut(certification, " - "); ok {
+		return strings.TrimSpace(rating)
+	}
+	return certification
 }
 
 // unratedKind names the kind of an item as parental control does (see
@@ -110,9 +148,10 @@ type traits struct {
 	genresKnown bool
 }
 
-// describedTraits are the traits a complete description gives.
-func describedTraits(meta stremio.Meta) traits {
-	return traits{rating: certification(meta), genres: meta.Genres, ratingKnown: true, genresKnown: true}
+// describedTraits are the traits a complete description gives, its rating
+// that of country, the server's rating country (see certification).
+func describedTraits(meta stremio.Meta, country string) traits {
+	return traits{rating: certification(meta, country), genres: meta.Genres, ratingKnown: true, genresKnown: true}
 }
 
 // verdict decides whether the user may reach an item of kind with traits
@@ -128,7 +167,7 @@ func (v view) verdict(kind Kind, t traits) (allowed, decided bool) {
 	switch {
 	case t.genresKnown && v.blocked(t.genres):
 		return false, true
-	case byRating && t.ratingKnown && !v.parental.Allows(name, t.rating):
+	case byRating && t.ratingKnown && !v.parental.Allows(name, t.rating, v.country):
 		return false, true
 	case byRating && !t.ratingKnown, v.blocksGenres() && !t.genresKnown:
 		return false, false
@@ -174,7 +213,8 @@ func (v view) rates(r record) bool {
 // when they include one the user blocks, as a description may give more
 // genres. A title none of the server's addons describes has no rating,
 // and the genres of its listing. stale is set when the traits kept are old
-// enough to be asked again.
+// enough to be asked again, or were picked for another rating country:
+// they are used meanwhile, scored under the server's.
 func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, stale bool) {
 	// A home video or a plain video has no rating nor genres: it is what
 	// its folder tells, and nothing to look up.
@@ -186,20 +226,20 @@ func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, 
 		if r.Genres != nil {
 			kept.genres = *r.Genres
 		}
-		if r.RatedAt != nil && s.now().Sub(*r.RatedAt) < ratingTTL(*r.Rating) {
+		if r.RatedAt != nil && s.now().Sub(*r.RatedAt) < ratingTTL(*r.Rating) && r.ratedFor() == v.ratingCountry() {
 			return kept, false
 		}
 		if full, _, ok := s.describedMeta(ctx, v, r, true, inMemory); ok {
-			return describedTraits(full), false
+			return describedTraits(full, v.country), false
 		}
 		return kept, true
 	}
 	if full, _, ok := s.describedMeta(ctx, v, r, true, inMemory); ok {
-		return describedTraits(full), false
+		return describedTraits(full, v.country), false
 	}
 	describable := v.rates(r)
 	if v.sharedAddon(r.Addon) && r.Meta != nil {
-		if rating := certification(*r.Meta); rating != "" {
+		if rating := certification(*r.Meta, v.country); rating != "" {
 			t.rating, t.ratingKnown = rating, true
 		}
 		if !describable || v.blocked(r.Meta.Genres) {
@@ -219,22 +259,44 @@ func ratingTTL(rating string) time.Duration {
 	return ratedTTL
 }
 
+// ratedFor is the rating country r's rating was picked for, the US for the
+// ratings kept before Polyfin had one.
+func (r record) ratedFor() string {
+	if r.RatedFor == "" {
+		return localization.DefaultRatingCountry
+	}
+	return r.RatedFor
+}
+
+// ratingCountry is the server's rating country the view judges by, the US
+// for a view made without one.
+func (v view) ratingCountry() string {
+	if v.country == "" {
+		return localization.DefaultRatingCountry
+	}
+	return v.country
+}
+
 // learnTraits keeps the rating and genres a description by one of the
 // server's addons gives, none included, so that listings know them
-// without asking again. at is when the addon gave the description: a
+// without asking again, the rating picked for country, the server's
+// rating country. at is when the addon gave the description: a
 // description kept past its refresh age dates the traits as old as it
 // is, so that they are asked again (see meta).
-func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta, at time.Time) {
-	rating, genres := certification(meta), []string(meta.Genres)
+func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta, at time.Time, country string) {
+	rating, genres := certification(meta, country), []string(meta.Genres)
 	if genres == nil {
 		genres = []string{}
 	}
+	if country == "" {
+		country = localization.DefaultRatingCountry
+	}
 	// Traits confirmed recently are not written again.
 	if r.Rating != nil && *r.Rating == rating && r.Genres != nil && slices.Equal(*r.Genres, genres) &&
-		r.RatedAt != nil && at.Sub(*r.RatedAt) < unratedTTL {
+		r.RatedAt != nil && at.Sub(*r.RatedAt) < unratedTTL && r.ratedFor() == country {
 		return
 	}
-	r.Rating, r.Genres, r.RatedAt = &rating, &genres, &at
+	r.Rating, r.Genres, r.RatedAt, r.RatedFor = &rating, &genres, &at, country
 	if err := s.save(ctx, []record{r}); err != nil && ctx.Err() == nil {
 		s.logger.Warn("The rating and genres of a title could not be kept", "item", r.ID, "error", err)
 	}
@@ -329,7 +391,7 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 	judged := make(map[accounts.ID]int, len(metas))
 	for i, meta := range metas {
 		// The listing saves its records with their folder afterwards.
-		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}); err == nil {
+		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}, v.country); err == nil {
 			r.Parent = nil
 			titles = append(titles, r)
 			judged[r.ID] = i
@@ -367,29 +429,30 @@ func (s *Service) storedTraits(ctx context.Context, records []record) {
 	if len(ids) == 0 {
 		return
 	}
-	rows, err := s.db.Query(ctx, `SELECT id, data->>'rating', (data->>'ratedAt')::timestamptz, data->'genres' FROM items
-		WHERE id = ANY($1) AND data ? 'rating'`, ids)
+	rows, err := s.db.Query(ctx, `SELECT id, data->>'rating', (data->>'ratedAt')::timestamptz, coalesce(data->>'ratedFor', ''), data->'genres'
+		FROM items WHERE id = ANY($1) AND data ? 'rating'`, ids)
 	if err != nil {
 		s.logger.Debug("Stored ratings could not be read", "error", err)
 		return
 	}
 	defer rows.Close()
 	type kept struct {
-		rating string
-		at     *time.Time
-		genres *[]string
+		rating  string
+		at      *time.Time
+		country string
+		genres  *[]string
 	}
 	stored := map[accounts.ID]kept{}
 	for rows.Next() {
 		var id accounts.ID
 		var k kept
-		if rows.Scan(&id, &k.rating, &k.at, &k.genres) == nil {
+		if rows.Scan(&id, &k.rating, &k.at, &k.country, &k.genres) == nil {
 			stored[id] = k
 		}
 	}
 	for i := range records {
 		if k, ok := stored[records[i].ID]; ok && records[i].Rating == nil {
-			records[i].Rating, records[i].RatedAt, records[i].Genres = &k.rating, k.at, k.genres
+			records[i].Rating, records[i].RatedAt, records[i].RatedFor, records[i].Genres = &k.rating, k.at, k.country, k.genres
 		}
 	}
 }
@@ -434,7 +497,7 @@ func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, ind
 			}
 			// describe keeps the rating and genres it finds.
 			if meta, ok := s.describe(lookup, v, title, true); ok {
-				r.traits = new(describedTraits(meta))
+				r.traits = new(describedTraits(meta, v.country))
 			}
 		}()
 	}
@@ -460,17 +523,22 @@ func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, ind
 const refreshBatch = 500
 
 // RefreshRatings asks the server's addons again for the ratings and genres
-// kept for titles once they are old enough to be asked again, the oldest
-// first and at most refreshBatch of them, one at a time within the lookups
-// listings share, and returns how many were asked. Listings do the same
-// for the titles they list; this does it ahead, when an administrator
+// kept for titles once they are old enough to be asked again, or were
+// picked for another rating country than the server's, those first, then
+// the oldest, at most refreshBatch of them, one at a time within the
+// lookups listings share, and returns how many were asked. Listings do the
+// same for the titles they list; this does it ahead, when an administrator
 // starts it.
 func (s *Service) RefreshRatings(ctx context.Context) (int, error) {
+	v, err := s.view(ctx, accounts.User{})
+	if err != nil {
+		return 0, err
+	}
 	rows, err := s.db.Query(ctx, `SELECT id FROM items
-		WHERE data ? 'rating' AND data ? 'ratedAt' AND (data->>'ratedAt')::timestamptz <
-			CASE WHEN data->>'rating' = '' THEN $1::timestamptz ELSE $2::timestamptz END
-		ORDER BY (data->>'ratedAt')::timestamptz LIMIT $3`,
-		s.now().Add(-unratedTTL), s.now().Add(-ratedTTL), refreshBatch)
+		WHERE data ? 'rating' AND data ? 'ratedAt' AND (coalesce(data->>'ratedFor', 'US') <> $4 OR (data->>'ratedAt')::timestamptz <
+			CASE WHEN data->>'rating' = '' THEN $1::timestamptz ELSE $2::timestamptz END)
+		ORDER BY coalesce(data->>'ratedFor', 'US') = $4, (data->>'ratedAt')::timestamptz LIMIT $3`,
+		s.now().Add(-unratedTTL), s.now().Add(-ratedTTL), refreshBatch, v.ratingCountry())
 	if err != nil {
 		return 0, err
 	}
@@ -479,10 +547,6 @@ func (s *Service) RefreshRatings(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	records, err := s.loadAll(ctx, ids)
-	if err != nil {
-		return 0, err
-	}
-	v, err := s.view(ctx, accounts.User{})
 	if err != nil {
 		return 0, err
 	}

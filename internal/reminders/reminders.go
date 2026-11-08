@@ -84,6 +84,9 @@ type Guide interface {
 // Users are the accounts; accounts.Store is one.
 type Users interface {
 	User(ctx context.Context, id accounts.ID) (accounts.User, error)
+	// RatingCountry is the server's rating country (see
+	// accounts.Settings).
+	RatingCountry() string
 }
 
 // Teller tells a reminder due to the user's own targets, and returns its
@@ -285,11 +288,11 @@ func language(raw string) string {
 	return i18n.Match(strings.TrimSpace(raw))
 }
 
-// allowed reports whether user may see programme p, with the Live TV
-// permission at now: as scheduled programmes, by parental control and
-// blocked genres.
-func allowed(user accounts.User, rating string, genres []string) bool {
-	return recordings.Allows(user, recordings.ProgramKind, rating, genres)
+// allowed reports whether user may see a programme rated rating, of
+// genres: as scheduled programmes, by parental control and blocked genres,
+// the rating scored under the server's rating country.
+func (s *Service) allowed(user accounts.User, rating string, genres []string) bool {
+	return recordings.Allows(user, s.users.RatingCountry(), recordings.ProgramKind, rating, genres)
 }
 
 // program finds a programme of user's guide that they may see.
@@ -305,7 +308,7 @@ func (s *Service) program(ctx context.Context, user accounts.User, id accounts.I
 		return library.Item{}, err
 	}
 	if program.Kind != library.KindProgram || program.Channel == nil || program.StartDate == nil || program.EndDate == nil ||
-		!allowed(user, program.OfficialRating, program.Genres) {
+		!s.allowed(user, program.OfficialRating, program.Genres) {
 		return library.Item{}, ErrNotFound
 	}
 	return program, nil
@@ -535,7 +538,7 @@ func (s *Service) List(ctx context.Context, user accounts.User) ([]Reminder, []S
 	reminders := []Reminder{}
 	next := map[accounts.ID]time.Time{}
 	for _, r := range waiting {
-		if !reached[r.Channel] || !allowed(user, r.Rating, r.Genres) {
+		if !reached[r.Channel] || !s.allowed(user, r.Rating, r.Genres) {
 			continue
 		}
 		if r.Series == nil {

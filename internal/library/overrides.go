@@ -786,7 +786,7 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	var results []RemoteResult
 	var records []record
 	for _, title := range titles[:min(len(titles), limit)] {
-		item, r, err := title.title(accounts.ID{})
+		item, r, err := title.title(accounts.ID{}, v.country)
 		if err != nil {
 			continue
 		}

@@ -281,7 +281,8 @@ type smartCatalogJSON struct {
 
 // smartCatalogs answers the catalogs a scope's lists may draw from, the
 // languages their rules may name, by ISO 639-1 code, and the content
-// ratings, those apps offer as a user's limit.
+// ratings, those apps offer as a user's limit under the server's rating
+// country.
 func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok {
@@ -302,7 +303,7 @@ func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 			CatalogType: c.Catalog.Type, CatalogID: c.Catalog.ID, CatalogName: c.Catalog.Name, Genres: genres})
 	}
 	ratings := []string{}
-	for _, rating := range localization.Ratings() {
+	for _, rating := range localization.Ratings(h.Accounts.Settings().RatingCountry) {
 		if rating.Score != nil {
 			ratings = append(ratings, rating.Name)
 		}

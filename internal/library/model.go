@@ -463,8 +463,9 @@ func providerIDs(meta stremio.Meta) map[string]string {
 	return ids
 }
 
-// fromMeta fills an item with a title's or collection's metadata.
-func fromMeta(item *Item, meta stremio.Meta) {
+// fromMeta fills an item with a title's or collection's metadata, rated
+// as country rates it.
+func fromMeta(item *Item, meta stremio.Meta, country string) {
 	// Some addons wrap names in direction marks, which would upset sorting.
 	item.Name = strings.TrimFunc(meta.Name, func(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) })
 	if item.Kind == KindMovie || item.Kind == KindSeries {
@@ -489,7 +490,7 @@ func fromMeta(item *Item, meta stremio.Meta) {
 	item.Runtime = parseRuntime(string(meta.Runtime))
 	item.Language = strings.TrimSpace(meta.Language)
 	item.CommunityRating = parseRating(string(meta.ImdbRating))
-	item.OfficialRating = certification(meta)
+	item.OfficialRating = certification(meta, country)
 	switch strings.ToLower(meta.Status) {
 	case "ended", "canceled", "cancelled":
 		item.Status = "Ended"

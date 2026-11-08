@@ -311,7 +311,7 @@ func (h *Handler) startupConfiguration(w http.ResponseWriter, _ *http.Request) {
 		UICulture                 string
 		MetadataCountryCode       string
 		PreferredMetadataLanguage string
-	}{settings.ServerName, uiCulture(settings.Language), "US", "en"})
+	}{settings.ServerName, uiCulture(settings.Language), settings.RatingCountry, "en"})
 }
 
 // startupUser names the first user: Polyfin's earliest administrator, as

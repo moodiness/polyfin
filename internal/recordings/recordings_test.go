@@ -550,3 +550,18 @@ func TestSeriesTimersSkipEpisodesRecordedInFull(t *testing.T) {
 		t.Errorf("timers once the recording is deleted: %v", got)
 	}
 }
+
+// Ratings are judged by the server's rating country: under Italy, VM18 is
+// for adults only, past a limit of 13, while VM14 passes a limit of 14.
+func TestAllowsJudgesByTheRatingCountry(t *testing.T) {
+	t.Parallel()
+	thirteen, fourteen := 13, 14
+	user := accounts.User{Parental: accounts.ParentalControl{MaxRating: &thirteen}}
+	if Allows(user, "IT", ProgramKind, "VM18", nil) {
+		t.Error("VM18 allowed under Italy for a limit of 13")
+	}
+	user.Parental.MaxRating = &fourteen
+	if !Allows(user, "IT", ProgramKind, "VM14", nil) {
+		t.Error("VM14 refused under Italy for a limit of 14")
+	}
+}

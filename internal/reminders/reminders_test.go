@@ -381,3 +381,26 @@ func TestRemindersNeedLiveTvAndFollowParentalControl(t *testing.T) {
 		t.Errorf("told a user who may not watch: %q", names(told))
 	}
 }
+
+// A programme is judged by the server's rating country: under Italy, VM18
+// is for adults only, past a limit of 13.
+func TestRemindersJudgeRatingsByTheRatingCountry(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	settings := f.store.Settings()
+	settings.RatingCountry = "IT"
+	if _, err := f.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	adults := program(channelX, "Late Movie", day.Add(time.Hour))
+	adults.OfficialRating = "VM18"
+	f.guide.set(adults)
+	limit := 13
+	user, err := f.store.UpdateUser(t.Context(), f.user.ID, accounts.UserChanges{Parental: &accounts.ParentalControl{MaxRating: &limit}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Create(t.Context(), user, adults.ID, false, ""); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a reminder of a VM18 programme under a limit of 13: %v", err)
+	}
+}
