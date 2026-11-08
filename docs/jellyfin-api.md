@@ -807,6 +807,7 @@ Channels, the programme guide, recordings and HDHomeRun tuners use Jellyfin's Li
 - Programmes from either guide give apps their episode title and their season and episode numbers, as Jellyfin's do.
 - XMLTV programmes the guide marks previously shown, and not new, are repeats (`IsRepeat`), as Jellyfin reads XMLTV guides.
 - `/LiveTv/GuideInfo` still answers the seven days Jellyfin's guide spans.
+- `/LiveTv/Programs/Recommended?isAiring=true` answers from the channel and guide pages Polyfin keeps, and never waits for an addon. A page it lacks is fetched in the background, once for every request that needs it meanwhile, and listed from the next request. jellyfin-web's home fills none of its rows before this request answers (see [On Now](live-tv.md#on-now)).
 
 ### Programme reminder routes
 

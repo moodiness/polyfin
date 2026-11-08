@@ -425,6 +425,16 @@ XMLTV programmes appear wherever Native EPG programmes do, with the same filters
 
 API details: [Programme guide fields for apps](jellyfin-api.md#programme-guide-fields-for-apps).
 
+### On Now
+
+jellyfin-web's home page shows a Live TV section, with what airs now (On Now), to users with the **Live TV** permission. It fills none of its other rows, Continue Watching, Next Up and each library's latest titles, before that section has its answer.
+
+So what airs now never waits for an addon:
+
+- **What it lists:** the programmes of the channels and guide days Polyfin keeps, and those of IPTV sources and of channels of your titles.
+- **What it lacks:** a catalog never read yet, a day's Native EPG guide not read yet, or a catalog whose addon does not answer. Polyfin reads them in the background, and they show from the next load of the page, once read.
+- **Other pages:** the guide, the list of channels and the Live TV page's other rows still wait for a catalog or a guide day not read yet, as before.
+
 ## Programme reminders
 
 A user with the **Live TV** permission can be told before a programme starts, without recording it.
