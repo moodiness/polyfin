@@ -323,6 +323,8 @@ Polyfin keeps your changes apart from what the addons say. Your changes win for 
 - in search: a renamed title is also found by its new name;
 - in parental control, which judges a title by the custom rating set, else the official rating, and by the genres set, as Jellyfin does.
 
+The official rating the editor starts from is the one for the server's **Rating country**, such as `VM14` for Italy. A rating you type is judged in that country's system first, so type one of its ratings, a plain age such as `14`, or a rating with its country, such as `US-R` (see [How the rating of a title is found](user-limits.md#how-the-rating-of-a-title-is-found)).
+
 A series' name and ratings show on its seasons and episodes.
 
 Polyfin keeps these fields:

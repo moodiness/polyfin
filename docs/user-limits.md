@@ -6,20 +6,34 @@ This page is for administrators. It covers the limits you set on each user: rati
 
 The **Parental control** section of a user's page, under **Users**, limits them to titles up to a **Maximum rating**. **Block unrated movies** and **Block unrated shows** hide unrated movies or shows.
 
+**Maximum rating** lists the levels of the server's **Rating country** (see [Rating country](#rating-country)), from the youngest audience to the oldest, after **No limit**. Each level names the ratings shown at it: for Italy, T, 6+, BA, VM12, "VM14 / 14+", "VM18 / 18+", XXX and Banned. The limit is kept as an age, so it holds when the country changes: an Italian "VM14 / 14+" limit becomes "TV-14" in the US list. A limit the country has no level for, set under another country or by an app, stays as it is and is shown by its age, such as "Age 13".
+
 - Administrators' Jellyfin apps can set the same limit from their user settings.
 - A followed group sets it for its members; an app changing it detaches the member (see [User groups](users.md#user-groups)).
+
+A limited user's apps show only the server's addons, libraries and smart lists, and they cannot turn the server's addons off. Their own addons and smart lists are kept but unused: **My sources** offers no way to add any, and adding or changing one is refused (403 `parental_control_own_sources`; see [Users' own addons](sign-in-and-security.md#users-own-addons)).
 
 <a id="how-a-title-s-rating-is-found"></a><a id="how-a-titles-rating-is-found"></a>
 
 ### How the rating of a title is found
 
-- A title's rating is the certification the server's metadata addon gives: usually the US one, else the local one.
-- Polyfin also reads French, German and British ratings, and plain ages ("12", "16+").
+A title has one rating, which apps show and parental control judges: the rating of the server's **Rating country**, as the server's metadata addon gives it.
+
+- When the addon gives a rating for each country, Polyfin takes the one of the rating country.
+- Otherwise, it takes the addon's local rating when that rating belongs to the rating country's system, else the US one, else the local one.
+- The rating is shown as the addon gives it, such as `VM14`, without a country prefix.
+- Polyfin judges it by the rating country's system first, then the US one, then the other countries' systems. Plain ages ("12", "16+") count everywhere, and a prefixed rating such as `IT-VM14` or `de:FSK 16` is judged in its own country.
 - An unknown rating counts as none.
 - Users' own addons never rate titles.
 - Seasons and episodes follow their series.
 
-A limited user's apps show only the server's addons, libraries and smart lists, and they cannot turn the server's addons off. Their own addons and smart lists are kept but unused: **My sources** offers no way to add any, and adding or changing one is refused (403 `parental_control_own_sources`; see [Users' own addons](sign-in-and-security.md#users-own-addons)).
+### Rating country
+
+**Rating country**, in **Settings › General**, picks the country whose ratings Polyfin shows and judges. It is the United States by default, and the country names are in the admin app's language. Jellyfin apps read it as the server's `MetadataCountryCode`.
+
+- **Picking a country:** choose the one whose ratings your users know. A title then shows that country's rating in every app, and **Maximum rating** lists that country's ratings.
+- **The countries offered:** Argentina, Australia, Austria, Belgium, Brazil, Canada, the Czech Republic, Denmark, Finland, France, Germany, Ireland, Italy, Japan, Mexico, the Netherlands, New Zealand, Norway, Poland, Portugal, South Korea, Spain, Sweden, Switzerland, the United Kingdom and the United States, the countries whose rating systems Polyfin knows.
+- **Changing it:** limits keep their age, but a title may be rated for younger or older viewers in the new country, so a change can loosen or tighten what a limited user sees. Titles opened afterwards show the new country's rating at once. The ratings Polyfin keeps for listings are asked again from the addon over time, and judged in the new country's system until then.
 
 ### What a limited user sees
 

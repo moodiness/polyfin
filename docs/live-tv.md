@@ -267,7 +267,7 @@ The channel is an ordinary channel for apps:
 
 Some users do not see it:
 
-- **Parental control and blocked genres:** a user sees the channel only when these let them reach every movie and episode it airs. They are judged by the ratings and genres the titles had when the channel was saved, as a stream other users watch cannot leave a programme out.
+- **Parental control and blocked genres:** a user sees the channel only when these let them reach every movie and episode it airs. They are judged by the ratings and genres the titles had when the channel was saved, as a stream other users watch cannot leave a programme out. Those ratings are the ones of the **Rating country** at that time; after a change of country, they are judged in the new country's system until the channel is saved again (see [Rating country](user-limits.md#rating-country)).
 - **Hidden titles:** the programmes of a title a user hid are left out of their guide.
 
 ### How a channel of your titles plays
