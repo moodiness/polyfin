@@ -82,6 +82,7 @@ func hasChange(changes []Change, where, what string) bool {
 }
 
 func TestASchemaChangeBehindARefIsReported(t *testing.T) {
+	t.Parallel()
 	after := contract()
 	at(after, "components", "schemas", "Person", "properties", "name")["type"] = "integer"
 
@@ -97,6 +98,7 @@ func TestASchemaChangeBehindARefIsReported(t *testing.T) {
 }
 
 func TestARenamedAnswerFieldIsReported(t *testing.T) {
+	t.Parallel()
 	after := contract()
 	schema := at(after, "paths", "/api/v2/item-summaries", "get", "responses", "200", "content", "application/json", "schema")
 	schema["required"] = []any{"name"}
@@ -114,6 +116,7 @@ func TestARenamedAnswerFieldIsReported(t *testing.T) {
 }
 
 func TestANewRequiredParameterIsReported(t *testing.T) {
+	t.Parallel()
 	after := contract()
 	get := at(after, "paths", "/api/v2/items/{item_id}", "get")
 	get["parameters"] = append(get["parameters"].([]any),
@@ -126,6 +129,7 @@ func TestANewRequiredParameterIsReported(t *testing.T) {
 }
 
 func TestAnUnchangedContractChangesNothing(t *testing.T) {
+	t.Parallel()
 	// Documentation alone changes nothing the apps send or read.
 	after := contract()
 	at(after, "components", "schemas", "Person", "properties", "name")["description"] = "Their name."
@@ -139,6 +143,7 @@ func TestAnUnchangedContractChangesNothing(t *testing.T) {
 }
 
 func TestAnOperationPolyfinDoesNotServeIsIgnored(t *testing.T) {
+	t.Parallel()
 	after := contract()
 	at(after, "components", "schemas", "AdminPerson", "properties")["email"] = object{"type": "integer"}
 	at(after, "paths", "/api/v2/admin/people", "get")["parameters"] = []any{
