@@ -58,6 +58,7 @@ import {
   selectedGroup,
   useParentalRatings,
   userSaved,
+  withLimit,
 } from './shared'
 
 /**
@@ -306,7 +307,11 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
   const [blockMovies, setBlockMovies] = useState(savedMovies)
   const [blockShows, setBlockShows] = useState(savedShows)
 
-  const groups = ratings.data === undefined ? [] : groupRatings(ratings.data)
+  // A saved limit the rating country has no rating for stays a choice, named by its age.
+  const groups =
+    ratings.data === undefined
+      ? []
+      : withLimit(groupRatings(ratings.data), initial, t.users.ratingAge)
   const selected = selectedGroup(groups, { ...limit, blockUnrated: [] })
   const savedSelected = selectedGroup(groups, initial)
 

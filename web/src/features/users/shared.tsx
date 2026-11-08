@@ -162,6 +162,23 @@ export function groupRatings(ratings: ParentalRating[]): RatingGroup[] {
   return groups
 }
 
+/**
+ * The groups with the limit itself added in its place, named by `ageName`, when no group matches
+ * it: a limit set under another rating country, or by an app, stays shown as it is.
+ */
+export function withLimit(
+  groups: RatingGroup[],
+  control: Pick<ParentalControl, 'maxRating' | 'maxSubRating'>,
+  ageName: (age: number) => string,
+): RatingGroup[] {
+  const { maxRating, maxSubRating } = control
+  if (maxRating === null) return groups
+  if (groups.some((g) => g.score === maxRating && g.subScore === maxSubRating)) return groups
+  const at = groups.findIndex((g) => g.score > maxRating)
+  const limit = { name: ageName(maxRating), score: maxRating, subScore: maxSubRating }
+  return at === -1 ? [...groups, limit] : [...groups.slice(0, at), limit, ...groups.slice(at)]
+}
+
 /** The group matching the limit exactly, else the last one whose score fits under it. */
 export function selectedGroup(groups: RatingGroup[], control: ParentalControl): number {
   const { maxRating, maxSubRating } = control
@@ -190,7 +207,7 @@ function useRatingLimit(parentalControl: ParentalControl): string | null {
   const limited = parentalControl.maxRating !== null
   const ratings = useParentalRatings(limited)
   if (!limited || ratings.data === undefined) return null
-  const groups = groupRatings(ratings.data)
+  const groups = withLimit(groupRatings(ratings.data), parentalControl, t.users.ratingAge)
   const group = groups[selectedGroup(groups, parentalControl)]
   return group === undefined ? null : t.users.ratingLimit(group.name)
 }

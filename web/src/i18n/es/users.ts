@@ -104,11 +104,12 @@ const users: typeof en = {
     parentalTitle: 'Control parental',
     maxRating: 'Clasificación máxima',
     maxRatingHelp:
-      'Los títulos con una clasificación superior a este límite se ocultan a este usuario.',
+      'Las clasificaciones del País de las clasificaciones del servidor, elegido en Ajustes › General. Los títulos con una clasificación superior a este límite en ese país se ocultan a este usuario.',
     noLimit: 'Sin límite',
     blockUnratedMovies: 'Bloquear películas sin clasificar',
     blockUnratedShows: 'Bloquear series sin clasificar',
     ratingLimit: (rating: string) => `Hasta ${rating}`,
+    ratingAge: (age: number) => `${age} años`,
     devicesTitle: 'Dispositivos',
     delete: 'Borrar usuario',
     deleteConfirm: (name: string) =>

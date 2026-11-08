@@ -59,6 +59,9 @@ const settings: typeof en = {
     language: 'Sprache generierter Namen',
     languageHelp:
       'Polyfin benennt in Jellyfin-Apps einiges selbst: Staffeln („Staffel 1“, „Specials“), Folgen ohne Titel und den Typ, der an Bibliotheken mit gleichem Namen angehängt wird („Beliebt (Filme)“).',
+    ratingCountry: 'Freigabeland',
+    ratingCountryHelp:
+      'Polyfin zeigt und beurteilt die Altersfreigabe jedes Titels für dieses Land: Apps zeigen die dortige Freigabe, etwa VM14 in Italien, und die Altersgrenzen der Benutzer werden aus seinen Freigaben gewählt. Eine Änderung kann Grenzen lockern oder verschärfen, da ein Titel dort für jüngere oder ältere Zuschauer freigegeben sein kann. Titel werden nach und nach neu gelesen, ihre Freigaben ändern sich also allmählich.',
     legacyAuthorization: 'Veraltete Autorisierung erlauben',
     legacyAuthorizationHelp:
       'Akzeptiert die alten X-Emby-*-Header, den Parameter api_key und das Emby-Schema für Apps, die sie noch brauchen. Standardmäßig aus, wie in Jellyfin 12.4.',

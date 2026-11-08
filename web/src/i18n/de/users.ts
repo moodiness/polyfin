@@ -104,11 +104,12 @@ const users: typeof en = {
     parentalTitle: 'Kindersicherung',
     maxRating: 'Maximale Altersfreigabe',
     maxRatingHelp:
-      'Titel mit einer Altersfreigabe über dieser Grenze werden für diesen Benutzer ausgeblendet.',
+      'Die Altersfreigaben des Freigabelands des Servers, festgelegt unter Einstellungen › Allgemein. Titel mit einer Freigabe über dieser Grenze in diesem Land werden für diesen Benutzer ausgeblendet.',
     noLimit: 'Keine Begrenzung',
     blockUnratedMovies: 'Filme ohne Altersfreigabe sperren',
     blockUnratedShows: 'Serien ohne Altersfreigabe sperren',
     ratingLimit: (rating: string) => `Bis ${rating}`,
+    ratingAge: (age: number) => `Alter ${age}`,
     devicesTitle: 'Geräte',
     delete: 'Benutzer löschen',
     deleteConfirm: (name: string) =>

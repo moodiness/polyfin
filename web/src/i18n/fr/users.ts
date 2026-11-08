@@ -104,11 +104,13 @@ const users: typeof en = {
       'Le doublage que cet utilisateur préfère quand une langue est doublée à part pour une région, comme le français du Québec. Elle s’applique à la langue audio choisie dans ses applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est\u202f: dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',
     parentalTitle: 'Contrôle parental',
     maxRating: 'Classification maximale',
-    maxRatingHelp: 'Les titres classés au-delà de cette limite sont masqués pour cet utilisateur.',
+    maxRatingHelp:
+      'Les classifications du Pays des classifications du serveur, choisi dans Paramètres › Général. Les titres classés au-delà de cette limite dans ce pays sont masqués pour cet utilisateur.',
     noLimit: 'Aucune limite',
     blockUnratedMovies: 'Bloquer les films non classés',
     blockUnratedShows: 'Bloquer les séries non classées',
     ratingLimit: (rating: string) => `Jusqu’à ${rating}`,
+    ratingAge: (age: number) => `${age} ans`,
     devicesTitle: 'Appareils',
     delete: 'Supprimer l’utilisateur',
     deleteConfirm: (name: string) =>

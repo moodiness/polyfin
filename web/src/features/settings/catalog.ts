@@ -56,6 +56,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'general',
+    anchor: 'rating-country',
+    label: (t) => s(t).ratingCountry,
+    help: (t) => s(t).ratingCountryHelp,
+    codes: ['invalid_rating_country'],
+  },
+  {
+    section: 'general',
     anchor: 'quick-connect',
     label: (t) => s(t).quickConnect,
     help: (t) => s(t).quickConnectHelp,

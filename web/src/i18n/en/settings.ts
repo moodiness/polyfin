@@ -56,6 +56,9 @@ const settings = {
     language: 'Language of generated names',
     languageHelp:
       'Polyfin names some things itself in Jellyfin apps: seasons (“Season 1”, “Specials”), episodes without a title, and the type added to libraries that share a name (“Popular (Movies)”).',
+    ratingCountry: 'Rating country',
+    ratingCountryHelp:
+      'Polyfin shows and judges each title’s rating for this country: apps show its rating there, such as VM14 in Italy, and users’ age limits are picked among its ratings. Changing it can loosen or tighten limits, since a title may be rated for younger or older viewers there. Titles are read again over time, so their ratings change gradually.',
     legacyAuthorization: 'Allow legacy authorization',
     legacyAuthorizationHelp:
       'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.4.',
