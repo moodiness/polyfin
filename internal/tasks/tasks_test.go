@@ -22,6 +22,7 @@ func waitFor(t *testing.T, done func() bool) {
 }
 
 func TestTasksRunAtStartOnTheirIntervalAndByHand(t *testing.T) {
+	t.Parallel()
 	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var periodic, manual atomic.Int32
 	registry.Register(Task{Key: "Sweep", Category: CategoryMaintenance, AtStart: true, Interval: 20 * time.Millisecond,
@@ -65,6 +66,7 @@ func TestTasksRunAtStartOnTheirIntervalAndByHand(t *testing.T) {
 }
 
 func TestATaskRunsOnceAtATimeAndStopsWhenCancelled(t *testing.T) {
+	t.Parallel()
 	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var runs atomic.Int32
 	registry.Register(Task{Key: "Wait", Text: map[string]Text{"en": {Name: "Wait"}},
@@ -84,6 +86,7 @@ func TestATaskRunsOnceAtATimeAndStopsWhenCancelled(t *testing.T) {
 // An interval task first runs its stagger after its interval, so that
 // tasks of one interval do not run in the same second.
 func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
+	t.Parallel()
 	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for _, key := range []string{"Hourly", "AlsoHourly"} {
 		registry.Register(Task{Key: key, Interval: time.Hour, Text: map[string]Text{"en": {Name: key}},
@@ -114,6 +117,7 @@ func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
 // A task's stagger depends on its key alone, the same in every run of the
 // server, and stays under 5 minutes and under half its interval.
 func TestStaggersAreStableAndBounded(t *testing.T) {
+	t.Parallel()
 	if got, want := stagger("WarmLibraries", time.Hour), time.Duration(267227399570); got != want {
 		t.Errorf("stagger of WarmLibraries: %v, want %v", got, want)
 	}
@@ -137,6 +141,7 @@ func TestStaggersAreStableAndBounded(t *testing.T) {
 // day's run; an hour changed to one already past today runs tomorrow,
 // without running now.
 func TestADailyTaskRunsAtItsHour(t *testing.T) {
+	t.Parallel()
 	zone := time.FixedZone("Server", 2*60*60)
 	// The registry's clock stands 50 ms before 04:00 until the test moves
 	// it.
@@ -192,6 +197,7 @@ func TestADailyTaskRunsAtItsHour(t *testing.T) {
 // A daily task whose hour is negative runs by hand only, and tells no hour
 // nor next run; once given an hour, it runs at it.
 func TestADailyTaskWithoutAnHourRunsByHandOnly(t *testing.T) {
+	t.Parallel()
 	zone := time.FixedZone("Server", 2*60*60)
 	// The registry's clock is 50 ms before 23:00, the hour -1 would be
 	// taken for, a day's -1st hour.
@@ -228,6 +234,7 @@ func TestADailyTaskWithoutAnHourRunsByHandOnly(t *testing.T) {
 }
 
 func TestNextDaily(t *testing.T) {
+	t.Parallel()
 	paris, err := time.LoadLocation("Europe/Paris")
 	if err != nil {
 		t.Fatal(err)
@@ -251,6 +258,7 @@ func TestNextDaily(t *testing.T) {
 }
 
 func TestATaskCannotHaveAnIntervalAndADailyHour(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		if recover() == nil {
 			t.Error("no panic")
