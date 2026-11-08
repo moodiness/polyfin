@@ -15,13 +15,15 @@ import (
 // ContradictedIMDb reports which of candidates, IMDb identifiers a source
 // gives for the movie or series ref names by its TMDB identifier,
 // Polyfin's own data says are another title's:
-//   - a title listed under the candidate with another TMDB identifier;
+//   - a title listed under the candidate with another TMDB identifier, or
+//     listed as the other kind (a movie for a series, a series for a
+//     movie);
 //   - a TMDB identifier learnt for the candidate (TMDB's external
 //     identifiers kept, the credits and box sets looked up) that is
 //     another one, or an IMDb identifier learnt for ref's TMDB identifier
 //     that is another one;
 //   - with a TMDB key, TMDB finding the candidate under another TMDB
-//     identifier.
+//     identifier, or finding it only as the other kind.
 //
 // A candidate Polyfin knows nothing of is not contradicted. TMDB failing
 // fails the whole, so that nothing is decided without it.
@@ -30,14 +32,15 @@ func (s *Service) ContradictedIMDb(ctx context.Context, ref TitleRef, candidates
 	if ref.TMDB <= 0 || len(candidates) == 0 {
 		return contradicted, nil
 	}
-	kind, tmdbKind := KindMovie, tmdb.Movie
+	kind, tmdbKind, otherKind := KindMovie, tmdb.Movie, tmdb.TV
 	if ref.kind() == KindSeries {
-		kind, tmdbKind = KindSeries, tmdb.TV
+		kind, tmdbKind, otherKind = KindSeries, tmdb.TV, tmdb.Movie
 	}
 	own := strconv.Itoa(ref.TMDB)
-	refs := make([]TitleRef, len(candidates))
-	for i, imdb := range candidates {
-		refs[i] = TitleRef{Series: kind == KindSeries, IMDb: imdb}
+	// Both kinds are looked up, so that a listing of the other kind shows.
+	refs := make([]TitleRef, 0, 2*len(candidates))
+	for _, imdb := range candidates {
+		refs = append(refs, TitleRef{Series: true, IMDb: imdb}, TitleRef{IMDb: imdb})
 	}
 	listed, err := s.knownTitles(ctx, refs)
 	if err != nil {
@@ -45,7 +48,7 @@ func (s *Service) ContradictedIMDb(ctx context.Context, ref TitleRef, candidates
 	}
 	for _, title := range listed {
 		tmdbID := cmp.Or(title.tmdb, strings.TrimPrefix(title.stremioID, "tmdb:"))
-		if title.kind != kind || tmdbID == title.stremioID || tmdbID == own {
+		if title.kind == kind && (tmdbID == title.stremioID || tmdbID == own) || title.kind != KindMovie && title.kind != KindSeries {
 			continue
 		}
 		for _, imdb := range candidates {
@@ -86,6 +89,13 @@ func (s *Service) ContradictedIMDb(ctx context.Context, ref TitleRef, candidates
 			continue
 		}
 		found, err := s.tmdb.FindByIMDb(ctx, tmdbKind, imdb)
+		if errors.Is(err, tmdb.ErrNotFound) {
+			// Found only as the other kind, it is another title.
+			if _, err = s.tmdb.FindByIMDb(ctx, otherKind, imdb); err == nil {
+				contradicted[imdb] = true
+				continue
+			}
+		}
 		switch {
 		case errors.Is(err, tmdb.ErrNotFound):
 		case err != nil:
