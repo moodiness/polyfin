@@ -191,6 +191,8 @@ const system: typeof en = {
           `Miniaturas en pausa para ${host}: ha pedido reducir la velocidad.`,
         hostErrorFile: (host: string, since: string) =>
           `El host ${host} responde con un archivo de error en lugar de los vídeos, desde las ${since}.`,
+        hostErrorFileHint:
+          'Esto suele significar que la cuenta en ese servicio requiere atención (un cambio de contraseña, una suscripción, un límite alcanzado) o que el servicio no funciona: compruébelo en su sitio.',
         unknownProxy: (address: string) =>
           `${address} reenvía solicitudes (X-Forwarded-For) pero no es un proxy conocido, así que todos sus clientes cuentan como ${address}. Si es su proxy inverso, añádalo a «Proxies conocidos» en Ajustes › Seguridad.`,
         discoveryPort: (port: number) =>

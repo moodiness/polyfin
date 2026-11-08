@@ -190,6 +190,8 @@ const system: typeof en = {
           `Miniatures en pause pour ${host}\u202f: la source a demandé de ralentir.`,
         hostErrorFile: (host: string, since: string) =>
           `L’hôte ${host} répond par un fichier d’erreur au lieu des vidéos, depuis ${since}.`,
+        hostErrorFileHint:
+          'Cela signifie souvent que le compte auprès de ce service demande votre attention (un changement de mot de passe, un abonnement, une limite atteinte), ou que le service est en panne\u202f: vérifiez-le sur son site.',
         unknownProxy: (address: string) =>
           `${address} transmet des requêtes (X-Forwarded-For) sans être un proxy connu\u202f: tous ses clients comptent donc comme ${address}. Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.`,
         discoveryPort: (port: number) =>

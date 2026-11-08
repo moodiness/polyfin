@@ -190,6 +190,8 @@ const system: typeof en = {
           `Vorschaubilder für ${host} pausiert: Der Host hat um Verlangsamung gebeten.`,
         hostErrorFile: (host: string, since: string) =>
           `Der Host ${host} liefert seit ${since} eine Fehlerdatei statt der Videos.`,
+        hostErrorFileHint:
+          'Das bedeutet oft, dass das Konto bei diesem Dienst Aufmerksamkeit braucht (eine Passwortänderung, ein Abonnement, ein erreichtes Limit) oder dass der Dienst ausgefallen ist: Prüfe es auf seiner Website.',
         unknownProxy: (address: string) =>
           `${address} leitet Anfragen weiter (X-Forwarded-For), ist aber kein bekannter Proxy, daher zählen alle seine Clients als ${address}. Wenn es dein Reverse-Proxy ist, füge ihn unter Einstellungen › Sicherheit zu „Bekannte Proxys“ hinzu.`,
         discoveryPort: (port: number) =>

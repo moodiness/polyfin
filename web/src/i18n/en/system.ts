@@ -183,6 +183,8 @@ const system = {
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         hostErrorFile: (host: string, since: string) =>
           `The host ${host} answers an error file instead of the videos, since ${since}.`,
+        hostErrorFileHint:
+          'This often means the account at that service needs attention (a password change, a subscription, a limit reached), or that the service is down: check it on its site.',
         unknownProxy: (address: string) =>
           `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
         discoveryPort: (port: number) =>
