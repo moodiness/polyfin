@@ -132,6 +132,9 @@ func newCreditsEnv(t *testing.T, key string, passCheck time.Duration) creditsEnv
 	e := creditsEnv{env: newEnv(t), tmdb: newFakeCreditsTMDB(t)}
 	client := tmdb.New(e.tmdb.URL+"/3", e.tmdb.URL+"/img/", "test", e.users.Settings)
 	e.service.UseTMDB(client)
+	// A title's page waits for its credits as long as the lookups take on
+	// a loaded machine: no test here reads them late.
+	e.service.creditsWait = time.Minute
 	e.queue = tmdb.NewQueue(client, tmdb.QueueOptions{Interval: time.Millisecond, PassCheck: passCheck})
 	t.Cleanup(e.queue.Close)
 	e.setting(func(s *accounts.Settings) { s.TMDBKey, s.Language = key, "fr" })

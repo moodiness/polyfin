@@ -224,6 +224,7 @@ func TestFollowUpsNeverShortenAList(t *testing.T) {
 		{"same answer", 3, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			e := newFollowEnv(t, 20*time.Millisecond, 20*time.Millisecond)
 			e.replies <- 3
 			e.replies <- tc.second
@@ -564,6 +565,7 @@ func TestCarriedIdentitiesAreNeverShared(t *testing.T) {
 			[]stremio.Stream{stream("B", "https://cdn.example/b.mkv", "", 0), a2}, []int{-1, 0}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			carried := carryIdentities(tc.answer, tc.before)
 			seen := map[string]bool{}
 			for i, stream := range carried {

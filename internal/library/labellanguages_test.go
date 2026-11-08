@@ -9,6 +9,7 @@ import (
 // by a language tag split in two words, or by the flag of a country other
 // than the one the language is named after; each also names the language.
 func TestLabelsTellRegionalVariants(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		title     string
 		label     string
@@ -46,6 +47,7 @@ func TestLabelsTellRegionalVariants(t *testing.T) {
 // word saying subtitles, or before one that follows them, or in a tag for
 // a subtitled release. MULTi-SUBS names no several audio languages.
 func TestLabelsTellSubtitlesApartFromAudio(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		title     string
 		label     string

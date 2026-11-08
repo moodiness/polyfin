@@ -7,6 +7,7 @@ import "testing"
 // it: movies, series, collections, live TV, Eclipse's music rows, and its
 // own home videos and extras.
 func TestAnyOtherTypeListsVideos(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		stremioType, collection string
 		kind                    Kind
