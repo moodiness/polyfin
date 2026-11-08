@@ -9,6 +9,7 @@ import (
 )
 
 func TestALifetimeChangeAppliesToKeptEntries(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	lifetime := 10 * time.Minute
 	c := NewLasting[string, int](10, func() time.Duration { return lifetime }, func() time.Time { return now })
@@ -42,6 +43,7 @@ func TestALifetimeChangeAppliesToKeptEntries(t *testing.T) {
 }
 
 func TestNewKeepsEntriesForItsTTL(t *testing.T) {
+	t.Parallel()
 	c := New[string, int](1, time.Hour)
 	c.Put("first", 1)
 	c.Put("second", 2)
@@ -58,6 +60,7 @@ func TestNewKeepsEntriesForItsTTL(t *testing.T) {
 }
 
 func TestUpdateReplacesWhatIsKeptAsChangeDecides(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	c := NewLasting[string, int](10, func() time.Duration { return 10 * time.Minute }, func() time.Time { return now })
 	// larger keeps value over a smaller kept one, and only over a kept one.
@@ -133,6 +136,7 @@ func keeps(c *Cache[string, string], keys ...string) []string {
 }
 
 func TestBeyondItsBytesACacheEvictsTheLeastRecentlyUsed(t *testing.T) {
+	t.Parallel()
 	c := newClock(time.Hour).sized(10)
 	c.Put("a", "aaaa")
 	c.Put("b", "bbbb")
@@ -150,6 +154,7 @@ func TestBeyondItsBytesACacheEvictsTheLeastRecentlyUsed(t *testing.T) {
 }
 
 func TestDeleteFuncForgetsWhatItReports(t *testing.T) {
+	t.Parallel()
 	c := newClock(time.Hour).sized(100)
 	c.Put("a", "kept")
 	c.Put("b", "dropped")
@@ -161,6 +166,7 @@ func TestDeleteFuncForgetsWhatItReports(t *testing.T) {
 }
 
 func TestASizedCacheKeepsItsCapacity(t *testing.T) {
+	t.Parallel()
 	c := NewLasting[string, string](2, func() time.Duration { return time.Hour }, time.Now).Sized(100, func(value string) int { return len(value) })
 	c.Put("a", "a")
 	c.Put("b", "b")
@@ -171,6 +177,7 @@ func TestASizedCacheKeepsItsCapacity(t *testing.T) {
 }
 
 func TestAValueLargerThanTheBytesIsNotKept(t *testing.T) {
+	t.Parallel()
 	c := newClock(time.Hour).sized(10)
 	c.Put("a", "aaaa")
 	c.Put("b", "bbbb")
@@ -197,6 +204,7 @@ func TestAValueLargerThanTheBytesIsNotKept(t *testing.T) {
 }
 
 func TestAReplacedValueCountsForItsNewSize(t *testing.T) {
+	t.Parallel()
 	c := newClock(time.Hour).sized(10)
 	c.Put("a", "aa")
 	c.Put("b", "bbbb")
@@ -217,6 +225,7 @@ func TestAReplacedValueCountsForItsNewSize(t *testing.T) {
 }
 
 func TestExpiredEntriesAreDroppedAsOthersAreStored(t *testing.T) {
+	t.Parallel()
 	k := newClock(10 * time.Minute)
 	c := k.sized(1000)
 	c.Put("a", "aaaa")
@@ -248,6 +257,7 @@ func TestExpiredEntriesAreDroppedAsOthersAreStored(t *testing.T) {
 }
 
 func TestAShorterLifetimeDropsOlderEntriesAtTheNextPut(t *testing.T) {
+	t.Parallel()
 	k := newClock(time.Hour)
 	c := k.sized(1000)
 	for _, key := range []string{"a", "b", "c"} {
@@ -266,6 +276,7 @@ func TestAShorterLifetimeDropsOlderEntriesAtTheNextPut(t *testing.T) {
 }
 
 func TestUpdateKeepsTheBytesCounted(t *testing.T) {
+	t.Parallel()
 	k := newClock(10 * time.Minute)
 	c := k.sized(10)
 	add := func(more string) func(string, bool) (string, bool) {
@@ -300,6 +311,7 @@ func TestUpdateKeepsTheBytesCounted(t *testing.T) {
 }
 
 func TestJSONSizeIsTheLengthOfTheEncoding(t *testing.T) {
+	t.Parallel()
 	value := struct {
 		Name   string
 		Tags   []string
