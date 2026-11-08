@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ulikunitz/xz"
 )
@@ -71,7 +72,7 @@ type Progress func(done, total int64)
 
 // btbn is the release of the builds the Docker image takes (Dockerfile):
 // the shared builds, whose ffmpeg and ffprobe load the same libraries.
-const btbn = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-"
+const btbn = "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-"
 
 // macOS has no build there: these are static builds made for macOS, with
 // VideoToolbox, one archive per program.
@@ -220,7 +221,7 @@ func (t Tools) Ensure(ctx context.Context, progress Progress) (Paths, error) {
 	defer os.RemoveAll(building)
 	for i, f := range t.Manifest.Files {
 		archive := filepath.Join(downloads, fmt.Sprintf("%d.%s", i, f.Format))
-		if err := t.download(ctx, f, archive, report); err != nil {
+		if err := t.downloadRetrying(ctx, f, archive, report); err != nil {
 			return Paths{}, err
 		}
 		done += f.Size
@@ -261,6 +262,47 @@ func (t Tools) removeOthers() {
 	}
 }
 
+// retryDelays are the waits before each new attempt at a download that
+// failed in passing: a network error, a timeout, or a 5xx or 429 answer,
+// as GitHub gives during an outage.
+var retryDelays = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second, 60 * time.Second}
+
+// statusError is an answer other than 200.
+type statusError struct {
+	url  string
+	code int
+}
+
+func (e statusError) Error() string {
+	return fmt.Sprintf("download %s: the download failed (HTTP %d)", e.url, e.code)
+}
+
+func (e statusError) transient() bool {
+	return e.code >= 500 || e.code == http.StatusTooManyRequests
+}
+
+// downloadRetrying is download, tried again after a passing failure. A
+// file that arrives whole but differs is refused at once.
+func (t Tools) downloadRetrying(ctx context.Context, f File, file string, report func(int64)) error {
+	for attempt := 0; ; attempt++ {
+		err := t.download(ctx, f, file, report)
+		var status statusError
+		switch {
+		case err == nil:
+			return nil
+		case errors.Is(err, ErrChecksum), ctx.Err() != nil, attempt == len(retryDelays),
+			errors.As(err, &status) && !status.transient():
+			return err
+		}
+		report(0)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryDelays[attempt]):
+		}
+	}
+}
+
 // download writes f to file, checking its size and checksum as it goes.
 func (t Tools) download(ctx context.Context, f File, file string, report func(int64)) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, f.URL, nil)
@@ -277,7 +319,7 @@ func (t Tools) download(ctx context.Context, f File, file string, report func(in
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s: status %d", f.URL, response.StatusCode)
+		return statusError{url: f.URL, code: response.StatusCode}
 	}
 	out, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {

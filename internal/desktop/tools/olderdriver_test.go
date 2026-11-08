@@ -98,7 +98,7 @@ func fill(digit string) string {
 // drivers pinned, built from the same FFmpeg as the Docker image's: the
 // release named after its build, holding its version.
 func TestTheFFmpegForOlderDriversIsPinnedWithTheImagesBuild(t *testing.T) {
-	tag, rest, _ := strings.Cut(strings.TrimPrefix(btbn, "https://github.com/BtbN/FFmpeg-Builds/releases/download/"), "/")
+	tag, rest, _ := strings.Cut(strings.TrimPrefix(btbn, "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/"), "/")
 	for _, system := range []string{"linux/amd64", "linux/arm64", "windows/amd64"} {
 		goos, goarch, _ := strings.Cut(system, "/")
 		m, ok, err := OlderDriverManifest(goos, goarch)
