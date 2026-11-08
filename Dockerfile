@@ -45,14 +45,23 @@ ADD --checksum=sha256:2978d0fbe3bc24d3bef637473c55e2628262fa725600e55788a45d9a42
 # FFmpeg 9.0 built against glibc by BtbN, which can load GPU drivers at run
 # time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
 # the last build of a month, kept for two years. The shared build keeps
-# ffmpeg and ffprobe from carrying a copy of every library each.
-FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-amd64
-ADD --checksum=sha256:01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326 \
-	https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz /ffmpeg.tar.xz
+# ffmpeg and ffprobe from carrying a copy of every library each. curl
+# retries GitHub's passing failures, which ADD does not, then the archive
+# is checked against its pinned SHA-256.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-download
+# hadolint ignore=DL3008
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates curl
 
-FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-arm64
-ADD --checksum=sha256:706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a \
-	https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz /ffmpeg.tar.xz
+FROM ffmpeg-download AS ffmpeg-amd64
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
+	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz \
+	&& echo "01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326  /ffmpeg.tar.xz" | sha256sum -c -
+
+FROM ffmpeg-download AS ffmpeg-arm64
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
+	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz \
+	&& echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffmpeg.tar.xz" | sha256sum -c -
 
 # A stage of this file, chosen by platform: no tag to give.
 # hadolint ignore=DL3006
