@@ -8,9 +8,9 @@
 // what that list holds: a title it no longer holds leaves the watchlist,
 // unless another list still holds it; so does what a list held once it is
 // no longer read (see Drop). A one-off app import, which has no next
-// import, only adds (see Import). Jellyfin apps have no watchlist button;
-// Silo's apps have one, which adds to the user's own list (see Own) and
-// takes a title off every list.
+// import, only adds (see Import). Silo's apps have a watchlist button, and
+// jellyfin-web's item menu has entries Polyfin adds: both add to the
+// user's own list (see Own) and take a title off every list.
 //
 // The titles the user started, a movie with a resume point or played, a
 // series with an episode started or played, are left out when the
@@ -40,8 +40,8 @@ func Tracking(service string) string { return "tracking:" + service }
 func Connection(app string) string { return "app:" + app }
 
 // Own is the list of the titles users put on their watchlist themselves,
-// from Silo's apps: what they add stays until they start it or take it
-// off.
+// from Silo's apps or the web player's menu: what they add stays until
+// they start it or take it off, whatever the lists imported do.
 const Own = "own"
 
 // Title is a movie or series a list holds, by its item, and when the list
@@ -154,11 +154,11 @@ func (s *Store) Titles(ctx context.Context, user accounts.ID) ([]accounts.ID, er
 	return pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
 }
 
-// Add puts title on user's own list (see Own), unless a list already holds
-// it: adding a title already on the watchlist changes nothing.
+// Add puts title on user's own list (see Own), the latest added, even when
+// another list already holds it: the title then stays when that list no
+// longer does. Adding a title the own list holds changes nothing.
 func (s *Store) Add(ctx context.Context, user, title accounts.ID) error {
-	_, err := s.db.Exec(ctx, `INSERT INTO watchlist (user_id, item_id, list, added_at)
-		SELECT $1, $2, $3, now() WHERE NOT EXISTS (SELECT 1 FROM watchlist WHERE user_id = $1 AND item_id = $2)
+	_, err := s.db.Exec(ctx, `INSERT INTO watchlist (user_id, item_id, list, added_at) VALUES ($1, $2, $3, now())
 		ON CONFLICT (user_id, item_id, list) DO NOTHING`, user, title, Own)
 	return err
 }
