@@ -2,11 +2,13 @@ package trackers
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -277,10 +279,17 @@ func usable(ref library.TitleRef) bool {
 	return (ref.IMDb != "" || ref.TMDB > 0 || ref.TVDB > 0) && (!ref.Episode || ref.Season >= 0 && ref.Number > 0)
 }
 
-// date reads an RFC 3339 date, nil when there is none.
+// spaceDate is RFC 3339 with a space between the day and the time, as
+// PublicMetaDB writes its dates.
+const spaceDate = "2006-01-02 15:04:05.999999999Z07:00"
+
+// date reads an RFC 3339 date, or one written with a space between the day
+// and the time, nil when there is none.
 func date(text string) *time.Time {
-	if t, err := time.Parse(time.RFC3339, text); err == nil {
-		return &t
+	for _, layout := range []string{time.RFC3339, spaceDate} {
+		if t, err := time.Parse(layout, text); err == nil {
+			return &t
+		}
 	}
 	return nil
 }
@@ -646,49 +655,182 @@ func (r *reader) readPublicMetaDB(ctx context.Context) (watchHistory, string, er
 	return h, "", nil
 }
 
+// publicMetaDBMappingLife is how long the IMDb identifier mapPublicMetaDB
+// took for a TMDB one, or none, is kept: a mapping contributors correct
+// is seen within a day.
+const publicMetaDBMappingLife = 24 * time.Hour
+
+// imdbDecision is the IMDb identifier mapPublicMetaDB took for a TMDB
+// identifier, empty for none, kept until a time.
+type imdbDecision struct {
+	imdb  string
+	until time.Time
+}
+
+// imdbCandidate is an IMDb identifier PublicMetaDB maps a TMDB one to:
+// the distinct contributions giving it, the identifiers of their entries
+// when the answer gives them, and the entries' net votes once asked.
+type imdbCandidate struct {
+	imdb          string
+	contributions int
+	entries       []string
+	votes         int
+}
+
 // mapPublicMetaDB asks PublicMetaDB the IMDb identifier it maps the TMDB
-// identifier of ref to, when it maps it to exactly one. Answers are kept
-// for the life of the server.
+// identifier of ref to, as decidePublicMetaDB decides it. A decision is
+// kept for publicMetaDBMappingLife; a request that failed decides
+// nothing, and is asked again the next time.
 func (s *Service) mapPublicMetaDB(ctx context.Context, r *reader, ref library.TitleRef) string {
 	mediaType := "movie"
 	if ref.Episode {
 		mediaType = "tv"
 	}
 	cacheKey := mediaType + ":" + strconv.Itoa(ref.TMDB)
+	now := s.now()
 	s.mu.Lock()
-	imdb, cached := s.publicMetaDBIMDb[cacheKey]
+	decision, cached := s.publicMetaDBIMDb[cacheKey]
 	s.mu.Unlock()
-	if cached {
-		return imdb
+	if cached && now.Before(decision.until) {
+		return decision.imdb
 	}
+	imdb, err := s.decidePublicMetaDB(ctx, r, ref, mediaType)
+	if err != nil {
+		if ctx.Err() == nil {
+			s.logger.Debug("The IMDb identifier PublicMetaDB maps a title to was not decided: it is asked again the next time",
+				"tmdb", ref.TMDB, "type", mediaType, "error", err)
+		}
+		return ""
+	}
+	s.mu.Lock()
+	s.publicMetaDBIMDb[cacheKey] = imdbDecision{imdb: imdb, until: now.Add(publicMetaDBMappingLife)}
+	s.mu.Unlock()
+	return imdb
+}
+
+// decidePublicMetaDB returns the IMDb identifier PublicMetaDB's
+// contributors map the TMDB identifier of ref to, of mediaType, empty
+// when none is reliable. Each contributor gives one, and they may
+// disagree. A candidate is refused when Polyfin's own data contradicts it
+// (see Titles.ContradictedIMDb), or, when contributors disagree, when
+// PublicMetaDB's reverse lookup of it names other TMDB identifiers and
+// not ref's. Of those left, the one given by the most distinct
+// contributions is taken, a tie going to the most net votes of their
+// entries, asked an entry at a time when the answer gives their
+// identifiers; one left alone is taken too. A tie that remains takes
+// none: the title stays not found, for its user to link.
+func (s *Service) decidePublicMetaDB(ctx context.Context, r *reader, ref library.TitleRef, mediaType string) (string, error) {
 	answer, err := r.get(ctx, "/api/external/mappings", url.Values{"tmdb_id": {strconv.Itoa(ref.TMDB)}, "media_type": {mediaType}, "id_type": {"imdb"}})
 	if err != nil {
-		return ""
+		return "", err
 	}
 	var mappings struct {
 		Mappings struct {
 			IMDb []struct {
+				ID    string `json:"id"`
 				Value string `json:"value"`
 			} `json:"imdb"`
 		} `json:"mappings"`
 	}
 	_ = json.Unmarshal(answer.body, &mappings)
-	agreed := true
+	var candidates []imdbCandidate
+	entries := map[string]bool{}
 	for _, m := range mappings.Mappings.IMDb {
-		switch {
-		case !strings.HasPrefix(m.Value, "tt"):
-		case imdb == "":
-			imdb = m.Value
-		case imdb != m.Value:
-			// Contributors disagree: it is not reliable.
-			agreed = false
+		if !strings.HasPrefix(m.Value, "tt") || m.ID != "" && entries[m.ID] {
+			continue
+		}
+		i := slices.IndexFunc(candidates, func(c imdbCandidate) bool { return c.imdb == m.Value })
+		if i < 0 {
+			i, candidates = len(candidates), append(candidates, imdbCandidate{imdb: m.Value})
+		}
+		candidates[i].contributions++
+		if m.ID != "" {
+			entries[m.ID] = true
+			candidates[i].entries = append(candidates[i].entries, m.ID)
 		}
 	}
-	if !agreed {
-		imdb = ""
+	if len(candidates) == 0 {
+		return "", nil
 	}
-	s.mu.Lock()
-	s.publicMetaDBIMDb[cacheKey] = imdb
-	s.mu.Unlock()
-	return imdb
+	contested := len(candidates) > 1
+	ids := make([]string, len(candidates))
+	for i, c := range candidates {
+		ids[i] = c.imdb
+	}
+	contradicted, err := s.titles.ContradictedIMDb(ctx, ref, ids)
+	if err != nil {
+		return "", err
+	}
+	if contested {
+		for _, c := range candidates {
+			if contradicted[c.imdb] {
+				continue
+			}
+			answer, err := r.get(ctx, "/api/external/mappings/lookup", url.Values{"id_type": {"imdb"}, "id_value": {c.imdb}, "media_type": {mediaType}})
+			if err != nil {
+				return "", err
+			}
+			if found := lookedUpTMDB(answer.body, mediaType); len(found) > 0 && !slices.Contains(found, ref.TMDB) {
+				contradicted[c.imdb] = true
+			}
+		}
+	}
+	candidates = slices.DeleteFunc(candidates, func(c imdbCandidate) bool { return contradicted[c.imdb] })
+	switch len(candidates) {
+	case 0:
+		return "", nil
+	case 1:
+		return candidates[0].imdb, nil
+	}
+	// Sorted stably, the answer's order breaks the ties left.
+	slices.SortStableFunc(candidates, func(a, b imdbCandidate) int { return cmp.Compare(b.contributions, a.contributions) })
+	if candidates[0].contributions > candidates[1].contributions {
+		return candidates[0].imdb, nil
+	}
+	n := 1
+	for n < len(candidates) && candidates[n].contributions == candidates[0].contributions {
+		n++
+	}
+	tied := candidates[:n]
+	for i := range tied {
+		for _, entry := range tied[i].entries {
+			votes, err := r.mappingVotes(ctx, entry)
+			if err != nil {
+				return "", err
+			}
+			tied[i].votes += votes
+		}
+	}
+	slices.SortStableFunc(tied, func(a, b imdbCandidate) int { return cmp.Compare(b.votes, a.votes) })
+	if tied[0].votes > tied[1].votes {
+		return tied[0].imdb, nil
+	}
+	return "", nil
+}
+
+// mappingVotes returns the net votes of PublicMetaDB's mapping entry:
+// its upvotes less its downvotes.
+func (r *reader) mappingVotes(ctx context.Context, entry string) (int, error) {
+	answer, err := r.get(ctx, "/api/external/mappings/"+url.PathEscape(entry)+"/votes", url.Values{"all": {"true"}})
+	if err != nil {
+		return 0, err
+	}
+	type counts struct {
+		Up   int `json:"upvotes"`
+		Down int `json:"downvotes"`
+	}
+	// The counts come at the top, or under "vote" or "total_votes".
+	var votes struct {
+		counts
+		Vote  *counts `json:"vote"`
+		Total *counts `json:"total_votes"`
+	}
+	_ = json.Unmarshal(answer.body, &votes)
+	net := votes.counts
+	if votes.Total != nil {
+		net = *votes.Total
+	} else if votes.Vote != nil {
+		net = *votes.Vote
+	}
+	return net.Up - net.Down, nil
 }

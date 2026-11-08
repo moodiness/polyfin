@@ -523,20 +523,30 @@ func (s *Service) publicMetaDBTMDB(ctx context.Context, key string, settings acc
 	if res := classify(PublicMetaDB, r); res.outcome != delivered {
 		return 0, res
 	}
+	if found := lookedUpTMDB(r.body, title.mediaType()); len(found) > 0 {
+		return found[0], result{}
+	}
+	// PublicMetaDB does not know the title.
+	return 0, result{outcome: refused, status: r.status}
+}
+
+// lookedUpTMDB reads the TMDB identifiers of mediaType ("movie", "tv")
+// that PublicMetaDB's reverse lookup gives, in its order.
+func lookedUpTMDB(body []byte, mediaType string) []int {
 	var answer struct {
 		Results []struct {
 			TMDB      int    `json:"tmdb_id"`
 			MediaType string `json:"media_type"`
 		} `json:"results"`
 	}
-	_ = json.Unmarshal(r.body, &answer)
-	for _, found := range answer.Results {
-		if found.TMDB > 0 && found.MediaType == title.mediaType() {
-			return found.TMDB, result{}
+	_ = json.Unmarshal(body, &answer)
+	var found []int
+	for _, result := range answer.Results {
+		if result.TMDB > 0 && result.MediaType == mediaType {
+			found = append(found, result.TMDB)
 		}
 	}
-	// PublicMetaDB does not know the title.
-	return 0, result{outcome: refused, status: r.status}
+	return found
 }
 
 // checkKey asks service whether key is valid, and returns the account name

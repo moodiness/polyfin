@@ -17,9 +17,12 @@ import (
 )
 
 // Titles finds the items of titles named by other services' identifiers
-// (see library.Service.Resolve).
+// (see library.Service.Resolve), and tells which IMDb identifiers a
+// service gives for a title Polyfin's own data contradicts (see
+// library.Service.ContradictedIMDb).
 type Titles interface {
 	Resolve(ctx context.Context, refs []library.TitleRef) ([][]library.TitleTarget, error)
+	ContradictedIMDb(ctx context.Context, ref library.TitleRef, candidates []string) (map[string]bool, error)
 }
 
 // ErrImportOff reports an import asked of a service whose history is not

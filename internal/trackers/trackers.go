@@ -360,8 +360,8 @@ type Service struct {
 	// user (see recommendations.go).
 	recommending map[laneKey]bool
 	// publicMetaDBIMDb caches the IMDb identifiers PublicMetaDB maps TMDB
-	// identifiers to (see mapPublicMetaDB).
-	publicMetaDBIMDb map[string]string
+	// identifiers to, as decided (see mapPublicMetaDB).
+	publicMetaDBIMDb map[string]imdbDecision
 	// anime maps anime between identifiers and numberings.
 	anime *anime.Service
 	// stopped is told as a connection stops (see Options.Stopped).
@@ -417,7 +417,7 @@ func New(options Options) *Service {
 
 		recommending: map[laneKey]bool{},
 
-		publicMetaDBIMDb: map[string]string{},
+		publicMetaDBIMDb: map[string]imdbDecision{},
 		anime:            options.Anime,
 		stopped:          options.Stopped,
 		watchlist:        cmp.Or(options.Watchlist, watchlist.New(options.DB)),
