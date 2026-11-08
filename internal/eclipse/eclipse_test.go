@@ -7,6 +7,7 @@ import (
 )
 
 func TestManifestsAreToldApartFromStremioOnes(t *testing.T) {
+	t.Parallel()
 	for manifest, want := range map[string]bool{
 		`{"id":"a","name":"A","version":"1","resources":["search","stream"]}`:                                    true,
 		`{"id":"a","name":"A","version":"1","resources":["stream"],"types":["track","album"]}`:                   true,
@@ -22,6 +23,7 @@ func TestManifestsAreToldApartFromStremioOnes(t *testing.T) {
 }
 
 func TestAddonsWithASearchOfferMyMusic(t *testing.T) {
+	t.Parallel()
 	catalogs := func(manifest string) []string {
 		t.Helper()
 		m, err := ParseManifest([]byte(manifest))
@@ -46,6 +48,7 @@ func TestAddonsWithASearchOfferMyMusic(t *testing.T) {
 }
 
 func TestSettingsReduceToOneValueAndTravelAsQuery(t *testing.T) {
+	t.Parallel()
 	m, err := ParseManifest([]byte(`{"id":"a","name":"A","version":"1.0.0","resources":["search","stream","settings"],
 		"settings":[
 			{"key":"quality","type":"select","label":"Quality","perNetwork":true,"default":{"wifi":"high","cellular":"low"},
