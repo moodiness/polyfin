@@ -213,7 +213,7 @@ func (s *Store) phrase(text i18n.Text, args ...any) string {
 }
 
 func (s *Store) address(address string) *string {
-	return new(s.phrase(i18n.Text{"Address: %s", "Adresse : %s", "Adresse: %s", "Dirección: %s", "Indirizzo: %s", "Endereço: %s"}, address))
+	return new(s.phrase(i18n.Text{"Address: %s", "Adresse\u202f: %s", "Adresse: %s", "Dirección: %s", "Indirizzo: %s", "Endereço: %s"}, address))
 }
 
 // SignedIn records that user signed in from address, from a Jellyfin app
@@ -363,7 +363,7 @@ func (s *Store) GroupChanged(ctx context.Context, group accounts.Group, sections
 		}
 		names = append(names, section)
 	}
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"Group %s was changed: %s", "Groupe %s modifié : %s", "Gruppe %s wurde geändert: %s", "Se ha modificado el grupo %s: %s", "Gruppo %s modificato: %s", "Grupo %s alterado: %s"}, group.Name, strings.Join(names, ", ")),
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"Group %s was changed: %s", "Groupe %s modifié\u202f: %s", "Gruppe %s wurde geändert: %s", "Se ha modificado el grupo %s: %s", "Gruppo %s modificato: %s", "Grupo %s alterado: %s"}, group.Name, strings.Join(names, ", ")),
 		Type: "GroupChanged"})
 }
 
@@ -392,7 +392,7 @@ func (s *Store) GroupMemberRemoved(ctx context.Context, user accounts.User, grou
 func (s *Store) GroupMemberDetached(ctx context.Context, user accounts.User, group, app string) {
 	name := s.phrase(i18n.Text{"%s no longer follows the group %s", "%s ne suit plus le groupe %s", "%s folgt der Gruppe %s nicht mehr", "%s ya no sigue el grupo %s", "%s non segue più il gruppo %s", "%s não segue mais o grupo %s"}, user.Name, group)
 	if app != "" {
-		name = s.phrase(i18n.Text{"%s no longer follows the group %s: changed from %s", "%s ne suit plus le groupe %s : modifié depuis %s", "%s folgt der Gruppe %s nicht mehr: geändert in %s", "%s ya no sigue el grupo %s: cambiado desde %s", "%s non segue più il gruppo %s: modificato da %s", "%s não segue mais o grupo %s: alterado em %s"},
+		name = s.phrase(i18n.Text{"%s no longer follows the group %s: changed from %s", "%s ne suit plus le groupe %s\u202f: modifié depuis %s", "%s folgt der Gruppe %s nicht mehr: geändert in %s", "%s ya no sigue el grupo %s: cambiado desde %s", "%s non segue più il gruppo %s: modificato da %s", "%s não segue mais o grupo %s: alterado em %s"},
 			user.Name, group, app)
 	}
 	s.record(ctx, Entry{Name: name, Type: "GroupMemberDetached", UserID: &user.ID})
