@@ -5,6 +5,7 @@ import "testing"
 // SettingsChanged is closed by the next change of the settings, once the
 // new settings are those read, and a new channel waits for the one after.
 func TestSettingsChangedTellsTheNextChange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	changed := store.SettingsChanged()
 	if again := store.SettingsChanged(); again != changed {

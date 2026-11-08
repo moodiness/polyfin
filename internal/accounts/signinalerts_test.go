@@ -10,6 +10,7 @@ import (
 // with the account blocked until the end of the block; another block
 // after it ends is reported again.
 func TestTheWrongPasswordThatBlocksIsReportedOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	start := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
@@ -59,6 +60,7 @@ func TestTheWrongPasswordThatBlocksIsReportedOnce(t *testing.T) {
 // the account's first; a device it used before is not, even once signed
 // out. Each account has its own devices.
 func TestDevicesNeverUsedAreUnfamiliar(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})

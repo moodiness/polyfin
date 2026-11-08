@@ -10,6 +10,7 @@ import (
 // at one of the intervals offered, from 15 minutes to 24 hours; the
 // database refuses what the store would.
 func TestImportIntervalIsOneOfTheChoices(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings().ImportEvery(); got != 6*time.Hour {

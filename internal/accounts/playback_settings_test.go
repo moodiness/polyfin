@@ -13,6 +13,7 @@ import (
 // analysis, three versions tried, the first version that plays, and
 // conversions neither counted nor scaled down.
 func TestPlaybackChoicesDefaults(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	got := store.Settings()
 	if !got.PrepareAhead || got.AnalysisTimeout != 20 || got.VersionAttempts != 3 || got.PreferDirectPlay || got.MaxConversions != 0 || got.MaxConversionHeight != 0 {
@@ -32,6 +33,7 @@ func TestPlaybackChoicesDefaults(t *testing.T) {
 }
 
 func TestPlaybackChoicesStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	for _, tc := range []struct {
@@ -93,6 +95,7 @@ func TestPlaybackChoicesStayInRange(t *testing.T) {
 // spaces or trailing slashes; the database refuses what does not start
 // with http.
 func TestRemuxDBSettings(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings(); got.RemuxDB || got.RemuxDBURL != DefaultRemuxDBURL || DefaultRemuxDBURL != "https://remuxdb.1632022.xyz" {
@@ -143,6 +146,7 @@ func TestRemuxDBSettings(t *testing.T) {
 // expressions valid and small, and a hiding rule scores nothing; and the
 // database refuses what the store refuses.
 func TestVersionRulesSettings(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	got := store.Settings()

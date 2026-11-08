@@ -12,6 +12,7 @@ import (
 // lines left out, read again by a new start, and refused when one is not
 // an HTTP, HTTPS or UDP announce URL, or when there are too many.
 func TestTorrentTrackersAreSaved(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	changed := store.Settings()

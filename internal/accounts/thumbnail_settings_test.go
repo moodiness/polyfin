@@ -9,6 +9,7 @@ import (
 // Thumbnails and chapter images read the sources, so both start off, with
 // Jellyfin's interval and width, and 2 GB for them.
 func TestThumbnailSettingsStartOff(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	got := store.Settings()
 	if got.Trickplay || got.ChapterImages || got.TrickplayInterval != 10 || got.TrickplayWidth != 320 || got.ThumbnailStorageGB != 2 {
@@ -27,6 +28,7 @@ func TestThumbnailSettingsStartOff(t *testing.T) {
 }
 
 func TestThumbnailSettingsStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	for _, tc := range []struct {

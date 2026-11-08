@@ -11,6 +11,7 @@ import (
 // were settings, but the stereo mix at Jellyfin's volume, 2, the ahead
 // limit at 120 s, and the administrator's setup keeps them.
 func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	check := func(when string, got Settings) {
 		t.Helper()
@@ -35,6 +36,7 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 }
 
 func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	for _, tc := range []struct {
@@ -149,6 +151,7 @@ func otherSystemsMethod() string {
 // auto and none: NVIDIA and VAAPI on Linux, VideoToolbox on macOS, and
 // NVIDIA, Intel's QSV and AMD's AMF on Windows.
 func TestEachSystemOffersItsGPUMethods(t *testing.T) {
+	t.Parallel()
 	for system, want := range map[string][]string{
 		"linux":   {"auto", "nvenc", "vaapi", "none"},
 		"darwin":  {"auto", "videotoolbox", "none"},
@@ -165,6 +168,7 @@ func TestEachSystemOffersItsGPUMethods(t *testing.T) {
 // reads as auto, which tries this system's, and saving the settings then
 // keeps auto.
 func TestAnotherSystemsGPUMethodReadsAsAuto(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if _, err := store.db.Exec(ctx, "UPDATE settings SET hardware_acceleration = $1", otherSystemsMethod()); err != nil {

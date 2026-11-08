@@ -13,6 +13,7 @@ import (
 // again by a new start, matched whatever the case, and emptied; an empty,
 // too long or unprintable name, or too many, are refused.
 func TestCollectionLibraryAppsAreSaved(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings().CollectionLibraryApps; got == nil || len(got) != 0 {

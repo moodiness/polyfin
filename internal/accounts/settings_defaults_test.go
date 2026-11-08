@@ -14,6 +14,7 @@ import (
 // The Go defaults are those of the columns: a server set up anew, and a
 // row the database fills with its defaults, both hold DefaultSettings.
 func TestDefaultSettingsAreTheColumnDefaults(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings(); !reflect.DeepEqual(got, DefaultSettings()) {
@@ -49,6 +50,7 @@ func boundField(settings *Settings, name string) (reflect.Value, bool) {
 // entry, its default is DefaultSettings', its bounds and choices are
 // accepted, and what lies past them is refused.
 func TestSettingsBoundsAreThoseChecked(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	base := store.Settings()
@@ -230,6 +232,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 }
 
 func TestEnvironmentIsAdoptedOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	method := HardwareAccelerations[1]
@@ -286,6 +289,7 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 // turned off from the environment; POLYFIN_SEGMENTS=none turns them all
 // off.
 func TestEnvironmentFillsOnlyWhatFollowedIt(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if _, err := store.db.Exec(ctx, "UPDATE settings SET hardware_acceleration = 'none', "+
@@ -303,6 +307,7 @@ func TestEnvironmentFillsOnlyWhatFollowedIt(t *testing.T) {
 }
 
 func TestSegmentSourcesStayValid(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	for _, tc := range []struct {

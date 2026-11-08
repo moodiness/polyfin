@@ -30,6 +30,7 @@ func twoStepOn(t *testing.T, store *Store, user User, now time.Time) (string, []
 }
 
 func TestTwoStepTurnsOnOnlyWithAConfirmedCode(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -81,6 +82,7 @@ func TestTwoStepTurnsOnOnlyWithAConfirmedCode(t *testing.T) {
 
 // Codes are accepted a step either way of now, not two, and each once.
 func TestTwoStepCodesWithinDriftAndOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	start := time.Unix(1_800_000_000, 0)
@@ -116,6 +118,7 @@ func TestTwoStepCodesWithinDriftAndOnce(t *testing.T) {
 }
 
 func TestRecoveryCodesAreSingleUseAndVoidedByNewOnes(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -161,6 +164,7 @@ func TestRecoveryCodesAreSingleUseAndVoidedByNewOnes(t *testing.T) {
 
 // A password reset by PIN changes the password alone.
 func TestPasswordResetPINKeepsTwoStep(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -186,6 +190,7 @@ func TestPasswordResetPINKeepsTwoStep(t *testing.T) {
 }
 
 func TestNeedsTwoStep(t *testing.T) {
+	t.Parallel()
 	required := Settings{TwoStepAdministrators: true}
 	for _, tc := range []struct {
 		user     User
@@ -208,6 +213,7 @@ func TestNeedsTwoStep(t *testing.T) {
 // still lets its user in with a recovery code, and can be turned off. A
 // secret stored without a key is sealed once one is set.
 func TestTwoStepSecretsAreSealed(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	pool := migrated.New(t)
 	plain, err := Open(ctx, pool)
@@ -276,6 +282,7 @@ func TestTwoStepSecretsAreSealed(t *testing.T) {
 }
 
 func TestCheckPassword(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
 	for password, want := range map[string]bool{"correct horse": true, "wrong horse": false, strings.Repeat("a", 300): false} {

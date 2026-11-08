@@ -17,6 +17,7 @@ func lastActivity(t *testing.T, store *Store, user ID) *time.Time {
 }
 
 func TestAdminAppUseIsActivityOnceAMinute(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -79,6 +80,7 @@ func TestAdminAppUseIsActivityOnceAMinute(t *testing.T) {
 }
 
 func TestActivityNeverMovesBackwards(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -149,6 +151,7 @@ func TestActivityNeverMovesBackwards(t *testing.T) {
 }
 
 func TestRefusedAdminSessionsRecordNothing(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	store.now = time.Now
@@ -192,6 +195,7 @@ func lastActivityApp(t *testing.T, store *Store, user ID) string {
 }
 
 func TestActivityIsWrittenWithItsApp(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -243,6 +247,7 @@ func TestActivityIsWrittenWithItsApp(t *testing.T) {
 }
 
 func TestAdminAppActivityIsTheAdminApps(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -274,6 +279,7 @@ func TestAdminAppActivityIsTheAdminApps(t *testing.T) {
 }
 
 func TestActivityAppNeverMovesWithoutTheTime(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	store.now = time.Now

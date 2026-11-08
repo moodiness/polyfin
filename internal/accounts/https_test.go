@@ -10,6 +10,7 @@ import (
 // requires what it serves with, Let's Encrypt the agreement to its terms,
 // and the host names are kept in lower case, once each.
 func TestHTTPSSettings(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	base := store.Settings()

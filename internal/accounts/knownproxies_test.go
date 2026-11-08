@@ -13,6 +13,7 @@ import (
 // host names, kept as they are compared, and refused when one is none of
 // them or when there are too many.
 func TestParseKnownProxies(t *testing.T) {
+	t.Parallel()
 	proxies, names, err := ParseKnownProxies([]string{" 192.168.1.10 ", "Traefik", "172.18.0.7/16", "2001:db8::1", "fd00::/8",
 		"::ffff:10.0.0.0/104", "192.168.1.10/32", "proxy.example.org", "my_proxy-1", "traefik"})
 	if err != nil {
@@ -46,6 +47,7 @@ func TestParseKnownProxies(t *testing.T) {
 // Known proxies are saved, read again by a new start, and emptied; their
 // addresses and names hold 64 entries at most together.
 func TestKnownProxiesAreSaved(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	changed := store.Settings()

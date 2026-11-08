@@ -9,6 +9,7 @@ import (
 // the credit of plays again and whole-file preloading; custom keeps the
 // values set one by one.
 func TestSourceCachePresetsSetTheLimits(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	settings := store.Settings()

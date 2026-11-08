@@ -39,6 +39,7 @@ func mustUser(t *testing.T, store *Store, id ID) User {
 }
 
 func TestNewGroupsStartAsANewUserOrCopyOne(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	plain := mustCreate(t, store, NewUser{Name: "plain", Password: "correct horse"})
@@ -82,6 +83,7 @@ func TestNewGroupsStartAsANewUserOrCopyOne(t *testing.T) {
 }
 
 func TestGroupChangesReachEveryFollowingMemberAtOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group := kidsGroup(t, store)
@@ -132,6 +134,7 @@ func TestGroupChangesReachEveryFollowingMemberAtOnce(t *testing.T) {
 }
 
 func TestDetachedMembersKeepTheirValuesAndFollowingAgainRestoresTheGroups(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group := kidsGroup(t, store)
@@ -173,6 +176,7 @@ func TestDetachedMembersKeepTheirValuesAndFollowingAgainRestoresTheGroups(t *tes
 }
 
 func TestChangesFromAppsDetachOnlyWhenAGroupSettingDiffers(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group := kidsGroup(t, store)
@@ -200,6 +204,7 @@ func TestChangesFromAppsDetachOnlyWhenAGroupSettingDiffers(t *testing.T) {
 }
 
 func TestAdministratorsNeverJoinAGroup(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group := kidsGroup(t, store)
@@ -238,6 +243,7 @@ func TestAdministratorsNeverJoinAGroup(t *testing.T) {
 }
 
 func TestDeletingAGroupLeavesItsMembersLimitsUnchanged(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group := kidsGroup(t, store)
@@ -271,6 +277,7 @@ func TestDeletingAGroupLeavesItsMembersLimitsUnchanged(t *testing.T) {
 }
 
 func TestInvitesNamingAGroupPutTheirAccountsInIt(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group := kidsGroup(t, store)
@@ -301,6 +308,7 @@ func TestInvitesNamingAGroupPutTheirAccountsInIt(t *testing.T) {
 }
 
 func TestTurningDownloadsOffKeepsMembersFollowing(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	group, err := store.CreateGroup(ctx, "Kids", nil)

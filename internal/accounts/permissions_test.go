@@ -6,6 +6,7 @@ import (
 )
 
 func TestConversionsCombineTheServersSwitchAndTheUsers(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	user := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})
@@ -58,6 +59,7 @@ func TestConversionsCombineTheServersSwitchAndTheUsers(t *testing.T) {
 }
 
 func TestTurningDownloadsOffForEveryone(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -106,6 +108,7 @@ func TestTurningDownloadsOffForEveryone(t *testing.T) {
 }
 
 func TestPersonalAddonsNeedTheServersSwitchAndTheUsers(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	user := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})

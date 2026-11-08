@@ -10,6 +10,7 @@ import (
 // who follow it, are copied into a group made from a user, and go back off
 // with Reset to defaults.
 func TestSoundOptionsAreGroupSettings(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	user, err := store.CreateUser(ctx, NewUser{Name: "sam", Password: "correct horse"})

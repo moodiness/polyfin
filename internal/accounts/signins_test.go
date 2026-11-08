@@ -8,6 +8,7 @@ import (
 )
 
 func TestResolvedTokensAreKeptBriefly(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -36,6 +37,7 @@ func TestResolvedTokensAreKeptBriefly(t *testing.T) {
 }
 
 func TestActivityIsWrittenOnceAMinuteFromRememberedTokens(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -98,6 +100,7 @@ func TestActivityIsWrittenOnceAMinuteFromRememberedTokens(t *testing.T) {
 }
 
 func TestEveryChangeIsSeenFromTheNextRequest(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	type signed struct {
@@ -224,6 +227,7 @@ func TestEveryChangeIsSeenFromTheNextRequest(t *testing.T) {
 }
 
 func TestRevokedAPIKeysStopAtOnce(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -274,6 +278,7 @@ func TestRevokedAPIKeysStopAtOnce(t *testing.T) {
 }
 
 func TestALookupStartedBeforeAChangeKeepsNothing(t *testing.T) {
+	t.Parallel()
 	var c signIns
 	now := time.Now()
 	generation := c.current()
@@ -293,6 +298,7 @@ func TestALookupStartedBeforeAChangeKeepsNothing(t *testing.T) {
 }
 
 func TestRememberedTokensAreBounded(t *testing.T) {
+	t.Parallel()
 	var c signIns
 	now := time.Now()
 	for i := range maxSignIns {

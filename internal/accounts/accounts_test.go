@@ -53,6 +53,7 @@ func signedIn(ctx context.Context, store *Store, token string) bool {
 }
 
 func TestAuthenticateMatchesNamesWithoutCaseAndHidesDisabledAccounts(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "Alice", Password: "correct horse"})
@@ -80,6 +81,7 @@ func TestAuthenticateMatchesNamesWithoutCaseAndHidesDisabledAccounts(t *testing.
 }
 
 func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	mustCreate(t, store, NewUser{Name: "Alice", Password: "correct horse"})
@@ -100,6 +102,7 @@ func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
 }
 
 func TestCreateUsersCreatesAllOrNone(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	// Two names that differ by case only: the second is taken.
@@ -122,6 +125,7 @@ func TestCreateUsersCreatesAllOrNone(t *testing.T) {
 }
 
 func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if got := store.Settings(); got.Language != "en" || !got.PrepareAhead ||
@@ -163,6 +167,7 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 }
 
 func TestSettingsKeepCatalogLimitsInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	for _, tc := range []struct {
@@ -202,6 +207,7 @@ func TestSettingsKeepCatalogLimitsInRange(t *testing.T) {
 }
 
 func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	defaults := store.Settings()
@@ -272,6 +278,7 @@ func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
 }
 
 func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ given, want string }{{"fr", "fr"}, {"en", "en"}, {"de", "de"}, {"pt-BR", "pt-BR"}, {"nl", "en"}, {"", "en"}} {
 		store := newStore(t)
 		if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "correct horse", tc.given); err != nil {
@@ -299,6 +306,7 @@ func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
 }
 
 func TestTheLastEnabledAdministratorIsProtected(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	admin, err := store.CreateFirstAdministrator(ctx, "admin", "correct horse", "")
@@ -337,6 +345,7 @@ func TestTheLastEnabledAdministratorIsProtected(t *testing.T) {
 }
 
 func TestSigningInAgainFromADeviceReplacesOnlyItsToken(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -369,6 +378,7 @@ func TestSigningInAgainFromADeviceReplacesOnlyItsToken(t *testing.T) {
 }
 
 func TestNewPasswordSignsOutEverywhereExceptTheCurrentSession(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -399,6 +409,7 @@ func TestNewPasswordSignsOutEverywhereExceptTheCurrentSession(t *testing.T) {
 // Every way a device can be signed out tells of it, once, with the
 // devices it signed out only.
 func TestSignedOutDevicesAreToldOf(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	var told [][]ID
@@ -456,6 +467,7 @@ func TestSignedOutDevicesAreToldOf(t *testing.T) {
 }
 
 func TestAdminSessionsExpireAndRenew(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
@@ -479,6 +491,7 @@ func TestAdminSessionsExpireAndRenew(t *testing.T) {
 }
 
 func TestPasswordHashes(t *testing.T) {
+	t.Parallel()
 	hash := hashPassword("correct horse")
 	if ok, err := verifyPassword("correct horse", hash); !ok || err != nil {
 		t.Fatalf("right password refused: %v", err)

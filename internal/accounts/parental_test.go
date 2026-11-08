@@ -7,6 +7,7 @@ import (
 )
 
 func TestParentalControlAllowsAsJellyfinDoes(t *testing.T) {
+	t.Parallel()
 	upToPG13 := ParentalControl{MaxRating: new(13), BlockUnrated: []string{"Movie"}}
 	upToR := ParentalControl{MaxRating: new(17), MaxSubRating: new(0)}
 	for _, tc := range []struct {
@@ -45,6 +46,7 @@ func TestParentalControlAllowsAsJellyfinDoes(t *testing.T) {
 }
 
 func TestParentalControlIsStoredNormalized(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	user := mustCreate(t, store, NewUser{Name: "child", Password: "correct horse"})
 	if user.Parental.Restricted() || user.Parental.BlockUnrated == nil {
