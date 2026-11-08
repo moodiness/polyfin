@@ -15,7 +15,7 @@ Adding a source takes two steps: the **Account**, then **What to import** and it
 
 Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
 
-- A user may add their own sources only with **Allow users' own addons** on, and the user's **Can add their own addons** (see [Users](users.md)).
+- A user may add their own sources only with **Allow users' own addons** on, the user's **Can add their own addons**, and no parental control or blocked genres (see [Users' own addons](sign-in-and-security.md#users-own-addons)).
 - Only an administrator's source may reach a local network address, or read a file of the server (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
 
 ### M3U playlists

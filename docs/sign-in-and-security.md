@@ -194,7 +194,7 @@ API details: [Identity provider sign-in](jellyfin-api.md#identity-provider-sign-
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Allow users' own addons** | **Settings › Security** | On | Lets users add their own addons under **My sources**. |
+| **Allow users' own addons** | **Settings › Security** | On | Lets users add their own addons and make their own smart lists under **My sources**. |
 | **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows under **My account** the imports from a Jellyfin, Emby or Plex server, a Letterboxd export and an app (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history) and [Importing from an app](moving-to-polyfin.md#importing-from-an-app)). |
 | **Allow share links** | **Settings › Security** | Off | Lets users with **Can share titles** give a movie or episode to someone without an account, through an expiring link (see [Share links](invite-and-share-links.md#share-links)). Off, every link is refused but kept. |
 | **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often apps users stay connected to, and watch histories from tracking services, are imported again (see [How often connected accounts are imported](moving-to-polyfin.md#how-often-connected-accounts-are-imported)). |
@@ -217,14 +217,13 @@ Users also make their own smart lists under **My sources**, with **Add a smart l
 - Only they see it, as one of their libraries or in the Collections view.
 - Rules on what was played, started or marked favorite follow what they did, in their lists as in the server's.
 
-The **Access** section of a user's page under **Users** also holds **Can add their own addons**, on by default. While it or **Allow users' own addons** is off:
+The **Access** section of a user's page under **Users** also holds **Can add their own addons**, on by default. It covers the user's own smart lists too. While it or **Allow users' own addons** is off, or while parental control or blocked genres apply to the user (see [Parental control](user-limits.md#parental-control)):
 
-- the user's own addons are kept but not used;
-- their apps show only the server's addons, libraries and smart lists. Their own smart lists are kept but hidden, and cannot be made or changed;
-- **My sources** says why;
-- their addons cannot be added, replaced, refreshed or turned on (403 `personal_addons_disabled`).
+- the user's own addons and smart lists are kept but not used: their apps show only the server's addons, libraries and smart lists;
+- **My sources** says why. It offers neither **Add a source** nor **Add a smart list**, and lists the kept smart lists with **Delete** only;
+- their addons and smart lists cannot be added, changed, refreshed or turned on: 403 `personal_addons_disabled` while a switch is off, `parental_control_own_sources` under parental control or blocked genres. They can still be turned off, removed or deleted.
 
-The addons come back once both are on. See [Addons and libraries](addons-and-libraries.md).
+They come back once both switches are on, and parental control and blocked genres no longer apply. See [Addons and libraries](addons-and-libraries.md).
 
 ### Blocking after wrong passwords
 

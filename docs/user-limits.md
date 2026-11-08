@@ -19,7 +19,7 @@ The **Parental control** section of a user's page, under **Users**, limits them 
 - Users' own addons never rate titles.
 - Seasons and episodes follow their series.
 
-A limited user's apps show only the server's addons and libraries. Their own addons are kept but unused, and they cannot turn the server's addons off.
+A limited user's apps show only the server's addons, libraries and smart lists, and they cannot turn the server's addons off. Their own addons and smart lists are kept but unused: **My sources** offers no way to add any, and adding or changing one is refused (403 `parental_control_own_sources`; see [Users' own addons](sign-in-and-security.md#users-own-addons)).
 
 ### What a limited user sees
 
