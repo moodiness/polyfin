@@ -246,25 +246,44 @@
 //     page and says so in a toast, as jellyfin-web's own;
 //   "Show this title again", in its place for a title the user hid, its
 //     series hidden counting for a season or an episode, which deletes
-//     /Polyfin/UserItems/{id}/Hidden.
+//     /Polyfin/UserItems/{id}/Hidden;
+//   "Add to Watchlist", for a movie or a series, or a season or an episode
+//     of one, which stands for its series, that is not on the user's
+//     watchlist, as /Polyfin/UserItems/Watchlist lists it. It posts to
+//     /Polyfin/UserItems/{id}/Watchlist and says so in a toast;
+//   "Remove from Watchlist", in its place for a title on the watchlist,
+//     its series counting for a season or an episode, which deletes
+//     /Polyfin/UserItems/{id}/Watchlist, takes the cards of the title off
+//     the rows of the watchlist and says so in a toast. A row of the
+//     watchlist is one of Polyfin's Now available and Still waiting home
+//     rows (see the eleventh), the home's section whose title opens the
+//     Watchlist view (its Id is d135aa5987b567b0d7eb66dff339ad22 on every
+//     server: #/mixed?topParentId= it, or #/list?parentId= it in
+//     jellyfin-web's legacy layouts), or the page of that view shown; the
+//     title's cards elsewhere stay.
 // As the button is pressed or the card right-clicked, before jellyfin-web
 // opens its menu, the script asks for the item (ApiClient.getItem), the
-// hidden titles and, for a card with a resume point, Continue Watching;
-// the first action sheet that opens within 10 seconds, no other click
-// coming between, gets the entries once the answers come. An entry closes
-// the menu as Back does, then acts. jellyfin-web 12.4 keeps the answers of
-// its rows for a minute, in memory and in the browser's IndexedDB, and
-// draws a row from such an answer, asking nothing, when the change's
-// UserDataChanged message refreshes it or when the page loads again within
-// that minute. The script keeps what its entries took off in the
-// browser's session storage, for the server and user, for 2 minutes, and
-// has every row's answers (their fetchData) leave out, meanwhile, the item
-// taken off Continue Watching from rows whose items all resume, unless
-// played since its last play then, the episodes of a series taken off Next
-// Up from the Next Up lists, unless played since, and the titles hidden,
-// with what is in them, from every row. Nothing is kept longer: an older
-// answer is asked again, and Polyfin's leaves them out. Its words follow
-// jellyfin-web's language, as the third's. Any error just stops it.
+// hidden titles, the titles of the watchlist and, for a card with a resume
+// point, Continue Watching; the first action sheet that opens within 10
+// seconds, no other click coming between, gets the entries once the
+// answers come. An entry closes the menu as Back does, then acts.
+// jellyfin-web 12.4 keeps the answers of its rows for a minute, in memory
+// and in the browser's IndexedDB, and draws a row from such an answer,
+// asking nothing, when the change's UserDataChanged message refreshes it
+// or when the page loads again within that minute. The script keeps what
+// its entries took off in the browser's session storage, for the server
+// and user, for 2 minutes, and has every row's answers (their fetchData)
+// leave out, meanwhile, the item taken off Continue Watching from rows
+// whose items all resume, unless played since its last play then, the
+// episodes of a series taken off Next Up from the Next Up lists, unless
+// played since, the titles hidden, with what is in them, from every row,
+// and the titles taken off the watchlist from the rows of the watchlist.
+// For as long, after a title is put on the watchlist or taken off, the
+// rows of the watchlist ask Polyfin each time they draw, as the home's
+// rows do after a played mark (see below), so that a title put on it
+// shows there. Nothing is kept longer: an older answer is asked again,
+// and Polyfin's leaves them out. Its words follow jellyfin-web's
+// language, as the third's. Any error just stops it.
 //
 // With the tenth, it also has the home page's Next Up, Continue Watching
 // and Continue Listening rows (the home's rows that jellyfin-web refreshes
@@ -304,15 +323,17 @@
 // fills the sections .section0 to .section9 it made first, in place: the
 // rows go between them. A row is drawn as jellyfin-web draws a library's
 // row of latest items, with its classes, so that its styles, scroll
-// buttons and item actions apply: the row's name opens its list
-// (#/list?parentId= the row's Id), each card a poster with the title's
-// played mark, or count of unplayed episodes, and progress, opening the
-// title's page. When jellyfin-web draws the home page anew, which empties
-// it, the page's changes put the rows back from the last answer. Every
-// time it draws them, it leaves out the titles the item
-// menus hid meanwhile, as the tenth keeps them in the session storage for
-// the user signed in (a series taking its items with it), and a row left
-// without a title. Nothing else changes, nor anything while the answer is awaited.
+// buttons and item actions apply, and its Kind (data-polyfin-kind): the
+// row's name opens its list (#/list?parentId= the row's Id), each card a
+// poster with the title's played mark, or count of unplayed episodes, and
+// progress, opening the title's page. When jellyfin-web draws the home
+// page anew, which empties it, the page's changes put the rows back from
+// the last answer. Every time it draws them, it leaves out the titles the
+// item menus hid meanwhile, and from the Now available and Still waiting
+// rows those they took off the watchlist, as the tenth keeps them in the
+// session storage for the user signed in (a series hidden taking its
+// items with it), and a row left without a title. Nothing else changes,
+// nor anything while the answer is awaited.
 // Any error just stops it.
 //
 // Twelfth, on a movie's or an episode's page, it adds a "Share" button to
@@ -1311,6 +1332,10 @@
       show: 'Show this title again',
       hidden: 'This title is hidden from your lists.',
       shown: 'This title is back in your lists.',
+      addWatchlist: 'Add to Watchlist',
+      removeWatchlist: 'Remove from Watchlist',
+      addedWatchlist: 'This title is on your Watchlist.',
+      removedWatchlist: 'This title is off your Watchlist.',
     },
     fr: {
       searching: 'Recherche des sources…',
@@ -1323,6 +1348,10 @@
       show: 'Afficher de nouveau ce titre',
       hidden: 'Ce titre est masqué de vos listes.',
       shown: 'Ce titre est de retour dans vos listes.',
+      addWatchlist: 'Ajouter à «\u202fÀ regarder\u202f»',
+      removeWatchlist: 'Retirer de «\u202fÀ regarder\u202f»',
+      addedWatchlist: 'Ce titre est dans «\u202fÀ regarder\u202f».',
+      removedWatchlist: 'Ce titre n’est plus dans «\u202fÀ regarder\u202f».',
     },
     de: {
       searching: 'Quellen werden gesucht…',
@@ -1335,6 +1364,10 @@
       show: 'Diesen Titel wieder einblenden',
       hidden: 'Dieser Titel ist in deinen Listen ausgeblendet.',
       shown: 'Dieser Titel ist wieder in deinen Listen.',
+      addWatchlist: 'Zur Merkliste hinzufügen',
+      removeWatchlist: 'Von der Merkliste entfernen',
+      addedWatchlist: 'Dieser Titel ist auf deiner Merkliste.',
+      removedWatchlist: 'Dieser Titel ist nicht mehr auf deiner Merkliste.',
     },
     es: {
       searching: 'Buscando fuentes…',
@@ -1347,6 +1380,10 @@
       show: 'Volver a mostrar este título',
       hidden: 'Este título está oculto en sus listas.',
       shown: 'Este título vuelve a estar en sus listas.',
+      addWatchlist: 'Añadir a «Para ver»',
+      removeWatchlist: 'Quitar de «Para ver»',
+      addedWatchlist: 'Este título está en «Para ver».',
+      removedWatchlist: 'Este título ya no está en «Para ver».',
     },
     it: {
       searching: 'Ricerca delle origini…',
@@ -1359,6 +1396,10 @@
       show: 'Mostra di nuovo questo titolo',
       hidden: 'Questo titolo è nascosto dai tuoi elenchi.',
       shown: 'Questo titolo è di nuovo nei tuoi elenchi.',
+      addWatchlist: 'Aggiungi a «Da guardare»',
+      removeWatchlist: 'Rimuovi da «Da guardare»',
+      addedWatchlist: 'Questo titolo è in «Da guardare».',
+      removedWatchlist: 'Questo titolo non è più in «Da guardare».',
     },
     pt: {
       searching: 'Procurando fontes…',
@@ -1371,6 +1412,10 @@
       show: 'Mostrar este título novamente',
       hidden: 'Este título está oculto nas suas listas.',
       shown: 'Este título voltou para as suas listas.',
+      addWatchlist: 'Adicionar a “Para assistir”',
+      removeWatchlist: 'Remover de “Para assistir”',
+      addedWatchlist: 'Este título está em “Para assistir”.',
+      removedWatchlist: 'Este título saiu de “Para assistir”.',
     },
   }
   function say(key) {
@@ -2397,8 +2442,9 @@
     return String(id).replace(/-/g, '').toLowerCase()
   }
   // askFacts asks for what the entries of the item's menu depend on: its
-  // type and series, whether the user hid it or its series, whether its
-  // card stands in a Continue Watching row, and in which Next Up it does.
+  // type and series, whether the user hid it or its series, whether it or
+  // its series is on the user's watchlist, whether its card stands in a
+  // Continue Watching row, and in which Next Up it does.
   function askFacts(api, id, card) {
     var user = api.getCurrentUserId()
     var row = card && card.getAttribute('data-positionticks') ? card.closest('.itemsContainer') : null
@@ -2406,33 +2452,42 @@
     var resume = row
       ? api.getJSON(api.getUrl('UserItems/Resume', { userId: user, Limit: 100, MediaTypes: 'Video', EnableImages: false }))
       : null
-    return Promise.all([api.getItem(user, id), api.getJSON(api.getUrl('Polyfin/UserItems/Hidden')), resume]).then(
-      function (answers) {
-        var item = answers[0] || {}
-        var series = item.SeriesId ? plainId(item.SeriesId) : ''
-        function listed(answer) {
-          var ids = {}
-          ;((answer && answer.Items) || []).forEach(function (listed) {
-            ids[plainId(listed.Id)] = true
-          })
-          return ids
-        }
-        var hidden = listed(answers[1])
-        var resumable = listed(answers[2])
-        var cards = row ? row.querySelectorAll('.card[data-id]') : []
-        return {
-          series: series,
-          hideable: /^(Movie|Video|Series)$/.test(item.Type) || (/^(Season|Episode)$/.test(item.Type) && !!series),
-          hidden: !!(hidden[id] || (series && hidden[series])),
-          resume:
-            cards.length > 0 &&
-            Array.prototype.every.call(cards, function (other) {
-              return resumable[plainId(other.getAttribute('data-id'))]
-            }),
-          nextUp: item.Type === 'Episode' && series ? nextUp : '',
-        }
+    var asked = [
+      api.getItem(user, id),
+      api.getJSON(api.getUrl('Polyfin/UserItems/Hidden')),
+      resume,
+      api.getJSON(api.getUrl('Polyfin/UserItems/Watchlist')),
+    ]
+    return Promise.all(asked).then(function (answers) {
+      var item = answers[0] || {}
+      var series = item.SeriesId ? plainId(item.SeriesId) : ''
+      function listed(answer) {
+        var ids = {}
+        ;((answer && answer.Items) || []).forEach(function (listed) {
+          ids[plainId(listed.Id)] = true
+        })
+        return ids
       }
-    )
+      var hidden = listed(answers[1])
+      var resumable = listed(answers[2])
+      var watchlist = listed(answers[3])
+      var cards = row ? row.querySelectorAll('.card[data-id]') : []
+      return {
+        series: series,
+        hideable: /^(Movie|Video|Series)$/.test(item.Type) || (/^(Season|Episode)$/.test(item.Type) && !!series),
+        hidden: !!(hidden[id] || (series && hidden[series])),
+        // The watchlist holds movies and series, a season or an episode
+        // standing for its series.
+        watchable: /^(Movie|Series)$/.test(item.Type) || (/^(Season|Episode)$/.test(item.Type) && !!series),
+        watchlisted: !!(watchlist[id] || (series && watchlist[series])),
+        resume:
+          cards.length > 0 &&
+          Array.prototype.every.call(cards, function (other) {
+            return resumable[plainId(other.getAttribute('data-id'))]
+          }),
+        nextUp: item.Type === 'Episode' && series ? nextUp : '',
+      }
+    })
   }
   // extendMenu adds the entries to the item menu a dialog container holds,
   // when it opens for the item aimed at, once Polyfin answered.
@@ -2475,7 +2530,7 @@
           scroller.appendChild(
             menuItem(container, model, 'visibility', say('show'), function () {
               act(entry.id, 'DELETE', 'Hidden', function () {
-                forgetHidden([entry.id, facts.series])
+                forgetDrops('hidden', [entry.id, facts.series])
                 toast(say('shown'))
               })
             })
@@ -2494,6 +2549,34 @@
                 if (entry.card && cards.indexOf(entry.card) < 0) cards.push(entry.card)
                 dropCards(cards)
                 toast(say('hidden'))
+              })
+            })
+          )
+        }
+        // The watchlist holds the series of a season or an episode: what
+        // the entries keep is the title the watchlist holds.
+        var watched = facts.series || entry.id
+        if (facts.watchable && facts.watchlisted) {
+          scroller.appendChild(
+            menuItem(container, model, 'bookmark_remove', say('removeWatchlist'), function () {
+              act(entry.id, 'DELETE', 'Watchlist', function () {
+                keepDrop({ kind: 'watchlist', id: watched })
+                var cards = Array.prototype.filter.call(document.querySelectorAll('.card[data-id]'), function (card) {
+                  return plainId(card.getAttribute('data-id')) === watched && watchlistRow(card)
+                })
+                if (entry.card && cards.indexOf(entry.card) < 0 && watchlistRow(entry.card)) cards.push(entry.card)
+                dropCards(cards)
+                toast(say('removedWatchlist'))
+              })
+            })
+          )
+        } else if (facts.watchable) {
+          scroller.appendChild(
+            menuItem(container, model, 'bookmark_add', say('addWatchlist'), function () {
+              act(entry.id, 'POST', 'Watchlist', function () {
+                forgetDrops('watchlist', [watched])
+                keepDrop({ kind: 'watchlisted', id: watched })
+                toast(say('addedWatchlist'))
               })
             })
           )
@@ -2558,8 +2641,10 @@
   // session storage under dropsKey for dropsKept: jellyfin-web keeps its
   // answers for a minute. Each names the server and user it is for, and
   // the item: taken off Continue Watching (resume), with its last play
-  // then, hidden (hidden), a series standing for what is in it, or a series
-  // taken off Next Up (nextup), with when.
+  // then, hidden (hidden), a series standing for what is in it, a series
+  // taken off Next Up (nextup), with when, or a title taken off the
+  // watchlist (watchlist). A title put on the watchlist (watchlisted) takes
+  // nothing off: it has the watchlist's rows ask Polyfin.
   var dropsKey = 'polyfinDrops'
   var dropsKept = 120000
   var drops = []
@@ -2594,15 +2679,24 @@
     drops.push(drop)
     saveDrops()
   }
-  function forgetHidden(ids) {
+  // forgetDrops forgets the drops of a kind for the items ids.
+  function forgetDrops(kind, ids) {
     drops = drops.filter(function (drop) {
-      return !(drop && drop.kind === 'hidden' && ids.indexOf(drop.id) >= 0)
+      return !(drop && drop.kind === kind && ids.indexOf(drop.id) >= 0)
     })
     saveDrops()
   }
+  // watchlistChanged tells whether the user signed in put a title on the
+  // watchlist, or took one off, within dropsKept.
+  function watchlistChanged() {
+    var viewer = viewerKey()
+    return liveDrops().some(function (drop) {
+      return drop.viewer === viewer && (drop.kind === 'watchlist' || drop.kind === 'watchlisted')
+    })
+  }
   // screened is a row's answer without what the drops of the user signed
   // in take off; the answer itself is left as it is. row is the element
-  // that asked, which tells a Next Up list.
+  // that asked, which tells a Next Up list and a row of the watchlist.
   function screened(answer, row) {
     var viewer = viewerKey()
     var mine = liveDrops().filter(function (drop) {
@@ -2614,6 +2708,10 @@
       mine.some(function (drop) {
         return drop.kind === 'nextup'
       }) && nextUpRow(row) === 'list'
+    var watchlist =
+      mine.some(function (drop) {
+        return drop.kind === 'watchlist'
+      }) && watchlistRow(row)
     var resumes =
       items.length > 0 &&
       items.every(function (item) {
@@ -2631,6 +2729,8 @@
             var since = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
             return nextUp && !!item.SeriesId && plainId(item.SeriesId) === drop.id && since <= drop.at
           }
+          if (drop.kind === 'watchlist') return watchlist && plainId(item.Id) === drop.id
+          if (drop.kind !== 'resume') return false
           var played = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
           return resumes && plainId(item.Id) === drop.id && played <= drop.last
         })
@@ -2654,6 +2754,28 @@
     if (/[?&]type=nextup(?:&|$)/i.test(location.hash) && element.closest('.itemsContainer')) return 'list'
     return ''
   }
+  // The Watchlist view, the same on every server.
+  var watchlistView = 'd135aa5987b567b0d7eb66dff339ad22'
+  // watchlistRow tells whether an element stands in a row of the user's
+  // watchlist: Polyfin's Now available and Still waiting home rows, the
+  // home's section whose title opens the Watchlist view (its latest
+  // items), or the Watchlist view's page shown.
+  function watchlistRow(element) {
+    if (!element || !element.closest) return false
+    var custom = element.closest('.polyfinHomeRow')
+    if (custom) return /^(NowAvailable|StillWaiting)$/.test(custom.getAttribute('data-polyfin-kind') || '')
+    var section = element.closest('.verticalSection')
+    var link = section && section.querySelector && section.querySelector('.sectionTitleContainer a[href]')
+    if (link) return opensWatchlist(link.getAttribute('href'))
+    return opensWatchlist(location.hash) && !element.closest('.page.hide')
+  }
+  // opensWatchlist tells whether an address opens the Watchlist view, as
+  // jellyfin-web opens a library without a CollectionType: #/mixed, or
+  // #/list in its legacy layouts.
+  function opensWatchlist(address) {
+    var match = /^#!?\/(?:mixed|list)\?(?:[^#]*&)?(?:topParentId|parentId)=([^&#]*)/i.exec(address || '')
+    return !!match && plainId(match[1]) === watchlistView
+  }
   // Every row's fetchData goes through screened, as jellyfin-web sets it on
   // the row: rows are divs, and the script runs before jellyfin-web.
   if (typeof HTMLDivElement === 'function') {
@@ -2668,7 +2790,8 @@
         fetchers.set(this, function () {
           var row = this
           listen()
-          var refreshed = row && playedRow(row) && Date.now() < freshUntil
+          var refreshed =
+            row && ((playedRow(row) && Date.now() < freshUntil) || (watchlistRow(row) && watchlistChanged()))
           var answer = refreshed ? unstale(fetch, row, arguments) : fetch.apply(row, arguments)
           if (!answer || typeof answer.then !== 'function') return answer
           return answer.then(function (got) {
@@ -2992,20 +3115,24 @@
     return sections
   }
   // shownRows returns the rows of the answer without the titles the item
-  // menus hid meanwhile (see the tenth): those the tenth keeps in the
-  // session storage under polyfinDrops for the user signed in, until they
-  // expire, a hidden series taking its items with it. A row left without
-  // a title is left out. Storage that fails, or holds anything else, hides
-  // nothing.
+  // menus hid meanwhile (see the tenth), and without those they took off
+  // the watchlist in the rows of the watchlist (Now available and Still
+  // waiting): those the tenth keeps in the session storage under
+  // polyfinDrops for the user signed in, until they expire, a hidden series
+  // taking its items with it. A row left without a title is left out.
+  // Storage that fails, or holds anything else, hides nothing.
   function shownRows() {
     var api = window.ApiClient
     var viewer = (typeof api.serverId === 'function' ? api.serverId() : '') + '/' + (api.getCurrentUserId() || '')
     var hidden = {}
+    var unlisted = {}
     try {
       var drops = JSON.parse(window.sessionStorage.getItem('polyfinDrops'))
       if (Array.isArray(drops)) {
         drops.forEach(function (drop) {
-          if (drop && drop.kind === 'hidden' && drop.viewer === viewer && drop.until > Date.now()) hidden[drop.id] = true
+          if (!drop || drop.viewer !== viewer || !(drop.until > Date.now())) return
+          if (drop.kind === 'hidden') hidden[drop.id] = true
+          if (drop.kind === 'watchlist') unlisted[drop.id] = true
         })
       }
     } catch (error) {}
@@ -3016,7 +3143,9 @@
     }
     return answer.rows
       .map(function (row) {
+        var watchlist = row.Kind === 'NowAvailable' || row.Kind === 'StillWaiting'
         var items = (row.Items || []).filter(function (item) {
+          if (watchlist && unlisted[plain(item.Id)]) return false
           return !hidden[plain(item.Id)] && !(item.SeriesId && hidden[plain(item.SeriesId)])
         })
         return Object.assign({}, row, { Items: items })
@@ -3087,7 +3216,8 @@
     return made('span', 'material-icons ' + (className ? className + ' ' : '') + name, { 'aria-hidden': 'true' })
   }
   // rowElement draws a row as jellyfin-web draws a library's row of
-  // latest items.
+  // latest items, with its Kind, which tells the tenth a row of the
+  // watchlist.
   function rowElement(row) {
     var api = window.ApiClient
     var server = typeof api.serverId === 'function' ? api.serverId() : ''
@@ -3109,7 +3239,8 @@
       { is: 'emby-scroller', 'data-centerfocus': 'true' },
       [items]
     )
-    return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', { 'data-polyfin-row': row.Id }, [title, scroller])
+    var attributes = { 'data-polyfin-row': row.Id, 'data-polyfin-kind': row.Kind || '' }
+    return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', attributes, [title, scroller])
   }
   // card draws a title as jellyfin-web's cards of a row of posters.
   function card(api, server, item, index) {
