@@ -513,7 +513,7 @@ const users: typeof en = {
       open: 'Aus einer App importieren',
       title: 'Aus einer App importieren',
       description:
-        'Übernimm die Wiedergabedaten eines Benutzers aus seinem Konto in einer App, die auf Add-ons basiert: die abgespielten Filme und Folgen mit Datum, die Fortsetzungspunkte und die Bibliothek der App, die in Jellyfin-Apps in seine Merkliste kommt, zugeordnet über IMDb, TMDB oder Kitsu. Die Daten in Polyfin werden nur ergänzt, und in die App wird nichts geschrieben. Du brauchst die Anmeldedaten des Benutzers für die App. Benutzer können auch selbst importieren, unter „Mein Konto“.',
+        'Übernimm die Wiedergabedaten eines Benutzers aus seinem Konto in einer App, die auf Add-ons basiert: die abgespielten Filme und Folgen mit Datum, die Fortsetzungspunkte und die Bibliothek der App, die in Jellyfin-Apps in seine Wiedergabeliste „Merkliste“ kommt, zugeordnet über IMDb, TMDB oder Kitsu. Die Daten in Polyfin werden nur ergänzt, und in die App wird nichts geschrieben. Du brauchst die Anmeldedaten des Benutzers für die App. Benutzer können auch selbst importieren, unter „Mein Konto“.',
       user: 'In das Konto von',
       userHelp: 'Der Polyfin-Benutzer, dessen Wiedergabedaten und Add-ons der Import ergänzt.',
     },

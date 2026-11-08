@@ -511,7 +511,7 @@ const users: typeof en = {
       open: 'Importar de um aplicativo',
       title: 'Importar de um aplicativo',
       description:
-        'Traga os dados de visualização de um usuário a partir da conta dele em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, os pontos de retomada e a biblioteca do aplicativo, que vai para a lista “Para assistir” dele nos aplicativos Jellyfin, identificados por IMDb, TMDB ou Kitsu. Os dados do Polyfin são apenas complementados, e nada é gravado no aplicativo. Você precisa do login do usuário no aplicativo; os usuários também podem importar por conta própria, em Minha conta.',
+        'Traga os dados de visualização de um usuário a partir da conta dele em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, os pontos de retomada e a biblioteca do aplicativo, que vai para a playlist “Para assistir” dele nos aplicativos Jellyfin, identificados por IMDb, TMDB ou Kitsu. Os dados do Polyfin são apenas complementados, e nada é gravado no aplicativo. Você precisa do login do usuário no aplicativo; os usuários também podem importar por conta própria, em Minha conta.',
       user: 'Para a conta de',
       userHelp:
         'O usuário do Polyfin a cujos dados de visualização e complementos a importação será adicionada.',

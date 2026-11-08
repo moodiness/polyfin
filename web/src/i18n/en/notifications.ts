@@ -147,7 +147,7 @@ const notifications = {
       programme_reminder:
         'A Live TV programme you set a reminder for in the web player starts soon, as long before as Remind me before says, with a link to its channel.',
       title_available:
-        'Versions were found for a title of your Watchlist that the earlier checks found none for: once per title. A version found has not been tried yet.',
+        'Versions were found for a title of your Watchlist playlist that the earlier checks found none for: once per title. A version found has not been tried yet.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

@@ -154,7 +154,7 @@ const notifications: typeof en = {
       programme_reminder:
         'Un programma della Diretta TV per cui hai impostato un promemoria nel lettore web inizia a breve, con l’anticipo indicato in Remind me before, con un link al suo canale.',
       title_available:
-        'Sono state trovate versioni di un titolo della tua lista «Da guardare» per cui i controlli precedenti non ne avevano trovata nessuna: una volta per titolo. Una versione trovata non è ancora stata provata.',
+        'Sono state trovate versioni di un titolo della tua playlist «Da guardare» per cui i controlli precedenti non ne avevano trovata nessuna: una volta per titolo. Una versione trovata non è ancora stata provata.',
     },
     enabled: 'Invia messaggi a questa destinazione',
     create: 'Aggiungi',

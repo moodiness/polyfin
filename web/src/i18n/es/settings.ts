@@ -755,7 +755,7 @@ const settings: typeof en = {
       `Frecuencia con la que se vuelve a escanear cada carpeta local en busca de archivos añadidos, modificados o eliminados. Las carpetas también se escanean al iniciar, cuando usted lo solicita y cuando cambian las vigiladas. 0 desactiva la programación. De ${r.min} a ${r.max}; ${r.default} por defecto.`,
     watchlistCheckHours: 'Buscar versiones de los títulos para ver cada (horas, 0 = nunca)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `Frecuencia con la que se vuelve a buscar versiones de cada título no empezado de la lista «Para ver» de un usuario, para las filas de inicio «Ya disponible» y «Aún en espera» y el mensaje que avisa a un usuario de un título disponible. Cada hora se comprueban hasta 20 títulos de cada usuario, preguntando a sus extensiones de streams. 0 desactiva las comprobaciones. De ${r.min} a ${r.max}; ${r.default} por defecto.`,
+      `Frecuencia con la que se vuelve a buscar versiones de cada título no empezado de la lista de reproducción «Para ver» de un usuario, para las filas de inicio «Ya disponible» y «Aún en espera» y el mensaje que avisa a un usuario de un título disponible. Cada hora se comprueban hasta 20 títulos de cada usuario, preguntando a sus extensiones de streams. 0 desactiva las comprobaciones. De ${r.min} a ${r.max}; ${r.default} por defecto.`,
     watchLocalFolders: 'Vigilar los cambios en carpetas y recursos compartidos',
     watchLocalFoldersHelp: {
       container:
@@ -1151,9 +1151,9 @@ const settings: typeof en = {
           'Una fila por cada una de las últimas películas y series que reprodujo el usuario, con los títulos similares, tal como los ofrecen las recomendaciones de películas. Ninguna mientras «Títulos similares» esté desactivado.',
         new: 'Los títulos que llegaron a los catálogos de las bibliotecas del usuario en los últimos 7 días, de más reciente a más antiguo. Polyfin los cuenta desde la primera vez que vio cada título en cada catálogo.',
         available:
-          'Los títulos no empezados de la lista «Para ver» del usuario para los que la última comprobación encontró versiones, de la última encontrada a la primera. Una versión encontrada aún no se ha probado: su reproducción todavía puede fallar.',
+          'Los títulos no empezados de la lista de reproducción «Para ver» del usuario para los que la última comprobación encontró versiones, de la última encontrada a la primera. Una versión encontrada aún no se ha probado: su reproducción todavía puede fallar.',
         waiting:
-          'Los títulos no empezados de la lista «Para ver» del usuario para los que la última comprobación no encontró ninguna versión, o que aún no se han estrenado, del último añadido al primero. Un título aún no comprobado no está en ninguna de las dos filas.',
+          'Los títulos no empezados de la lista de reproducción «Para ver» del usuario para los que la última comprobación no encontró ninguna versión, o que aún no se han estrenado, en el orden de la lista de reproducción. Un título aún no comprobado no está en ninguna de las dos filas.',
         trakt:
           'Las películas y series que Trakt recomienda al usuario, leídas con su conexión a Trakt cada 12 horas, sin las de su colección o su Watchlist de Trakt ni las que ya vio. Solo la ven los usuarios que conectaron Trakt en Mi cuenta › Seguimiento; la primera vez, aparece en cuanto Trakt responde.',
         picks:

@@ -234,9 +234,9 @@ const account: typeof en = {
         'Os servidores Plex que este perfil acessa. O Polyfin alcança o escolhido pelos endereços que o Plex informa.',
       owned: (name: string) => `${name} (seu)`,
       noServers: 'Este perfil não acessa nenhum servidor Plex.',
-      watchlist: 'Watchlist para a minha lista “Para assistir”',
+      watchlist: 'Watchlist para a minha playlist “Para assistir”',
       watchlistHelp:
-        'Os filmes e séries da sua Watchlist do Plex vão para a sua lista “Para assistir” no Polyfin.',
+        'Os filmes e séries da sua Watchlist do Plex vão para a sua playlist “Para assistir” no Polyfin, uma série como os episódios já exibidos. Só entra o que você ainda não assistiu.',
       cancel: 'Cancelar',
     },
     letterboxd: {
@@ -251,9 +251,9 @@ const account: typeof en = {
       choose: 'Escolher o arquivo',
       chooseAnother: 'Escolher outro arquivo',
       tooLarge: 'Este arquivo é maior que 20 MB: escolha o arquivo ZIP gerado pelo Letterboxd.',
-      watchlist: 'Watchlist para a minha lista “Para assistir”',
+      watchlist: 'Watchlist para a minha playlist “Para assistir”',
       watchlistHelp:
-        'Os filmes da sua watchlist do Letterboxd vão para a sua lista “Para assistir” nos aplicativos Jellyfin, até você começar a assisti-los.',
+        'Os filmes da sua watchlist do Letterboxd vão para a sua playlist “Para assistir” nos aplicativos Jellyfin. Só entram os que você ainda não começou.',
       ratings: 'Avaliações',
       ratingsHelp:
         'Suas estrelas viram sua avaliação de 0 a 10: 3,5 estrelas equivalem a 7. Uma avaliação que você já tem no Polyfin é mantida.',
@@ -262,9 +262,9 @@ const account: typeof en = {
       forUser: {
         watchedHelp:
           'Os filmes que a pessoa assistiu são marcados como reproduzidos, na data mais recente do diário dela, tantas vezes quanto ele os registra. Cada filme é pesquisado pelo nome e ano nos complementos de metadados do servidor, e mantido quando eles conhecem exatamente um filme com esse nome e ano.',
-        watchlist: 'Watchlist para a lista “Para assistir” da pessoa',
+        watchlist: 'Watchlist para a playlist “Para assistir” da pessoa',
         watchlistHelp:
-          'Os filmes da watchlist do Letterboxd da pessoa vão para a lista “Para assistir” dela nos aplicativos Jellyfin, até ela começar a assisti-los.',
+          'Os filmes da watchlist do Letterboxd da pessoa vão para a playlist “Para assistir” dela nos aplicativos Jellyfin. Só entram os que ela ainda não começou.',
         ratingsHelp:
           'As estrelas da pessoa viram a avaliação dela de 0 a 10: 3,5 estrelas equivalem a 7. Uma avaliação que ela já tem no Polyfin é mantida.',
         likesHelp: 'Os filmes que a pessoa curtiu no Letterboxd viram favoritos dela.',
@@ -306,7 +306,7 @@ const account: typeof en = {
     },
     appImport: {
       description:
-        'Traga o que você assistiu em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, seus pontos de retomada e a biblioteca do aplicativo, que vai para a sua lista “Para assistir” nos aplicativos Jellyfin, identificados por IMDb, TMDB ou Kitsu. Eles apenas complementam o que o Polyfin já tem, e nada é gravado no aplicativo.',
+        'Traga o que você assistiu em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, seus pontos de retomada e a biblioteca do aplicativo, que vai para a sua playlist “Para assistir” nos aplicativos Jellyfin, identificados por IMDb, TMDB ou Kitsu. Eles apenas complementam o que o Polyfin já tem, e nada é gravado no aplicativo.',
       app: 'Aplicativo',
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Backend do Nuvio',
@@ -668,7 +668,7 @@ const account: typeof en = {
           },
           toggle: (name: string, list: string) => `Importar minha ${list} do ${name}`,
           toggleHelp: (name: string, list: string) =>
-            `Coloca os filmes e séries da sua ${list} do ${name} na visualização “Para assistir” dos seus aplicativos Jellyfin, a cada importação. Um título sai dela assim que você começa a assisti-lo ou quando o ${name} deixa de listá-lo. Nada é enviado de volta ao ${name}.`,
+            `Coloca os filmes e séries da sua ${list} do ${name} na playlist “Para assistir” dos seus aplicativos Jellyfin, a cada importação, uma série como os episódios já exibidos. Só entra o que você ainda não assistiu. O que você começou fica. Um título que o ${name} deixa de listar sai dela, a menos que você tenha começado a assisti-lo ou o adicionado você mesmo. Nada é enviado de volta ao ${name}.`,
           counts: (added: number, unmapped: number) =>
             `${added} adicionado${added === 1 ? '' : 's'} a “Para assistir”, ${unmapped === 1 ? '1 título não encontrado' : `${unmapped} títulos não encontrados`} no Polyfin.`,
           added: (added: number) =>

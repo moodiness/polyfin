@@ -759,7 +759,7 @@ const settings: typeof en = {
       `Ogni quanto ciascuna cartella locale viene scansionata di nuovo per individuare file aggiunti, modificati o rimossi. Le cartelle vengono scansionate anche all’avvio, su richiesta e quando quelle monitorate cambiano. 0 disattiva la pianificazione. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     watchlistCheckHours: 'Cerca versioni dei titoli da guardare ogni (ore, 0 = mai)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `Ogni quanto ciascun titolo non iniziato della lista «Da guardare» di un utente viene controllato di nuovo per trovarne versioni, per le righe iniziali «Ora disponibili» e «Ancora in attesa» e per il messaggio che avvisa l’utente di un titolo disponibile. Ogni ora vengono controllati fino a 20 titoli di ogni utente, chiedendo ai suoi add-on di flussi. 0 disattiva i controlli. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+      `Ogni quanto ciascun titolo non iniziato della playlist «Da guardare» di un utente viene controllato di nuovo per trovarne versioni, per le righe iniziali «Ora disponibili» e «Ancora in attesa» e per il messaggio che avvisa l’utente di un titolo disponibile. Ogni ora vengono controllati fino a 20 titoli di ogni utente, chiedendo ai suoi add-on di flussi. 0 disattiva i controlli. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     watchLocalFolders: 'Monitora le modifiche di cartelle e condivisioni',
     watchLocalFoldersHelp: {
       container:
@@ -1153,9 +1153,9 @@ const settings: typeof en = {
           'Una riga per ciascuno degli ultimi film e serie TV riprodotti dall’utente, con i titoli simili, come li propongono i consigli sui film. Nessuna finché «Titoli simili» è disattivato.',
         new: 'I titoli arrivati nei cataloghi delle librerie dell’utente negli ultimi 7 giorni, dal più recente. Polyfin li conta dal momento in cui ha visto per la prima volta ogni titolo in ogni catalogo.',
         available:
-          'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo ha trovato versioni, dagli ultimi trovati. Una versione trovata non è ancora stata provata: la sua riproduzione può ancora non riuscire.',
+          'I titoli non iniziati della playlist «Da guardare» dell’utente per cui l’ultimo controllo ha trovato versioni, dagli ultimi trovati. Una versione trovata non è ancora stata provata: la sua riproduzione può ancora non riuscire.',
         waiting:
-          'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo non ha trovato alcuna versione, o non ancora usciti, dagli ultimi aggiunti. Un titolo non ancora controllato non è in nessuna delle due righe.',
+          'I titoli non iniziati della playlist «Da guardare» dell’utente per cui l’ultimo controllo non ha trovato alcuna versione, o non ancora usciti, nell’ordine della playlist. Un titolo non ancora controllato non è in nessuna delle due righe.',
         trakt:
           'I film e le serie che Trakt consiglia all’utente, letti con la sua connessione a Trakt ogni 12 ore, senza quelli della sua collezione o Watchlist di Trakt né quelli che ha già visto. La vedono solo gli utenti che hanno collegato Trakt in Il mio account › Monitoraggio; la prima volta appare appena Trakt ha risposto.',
         picks:

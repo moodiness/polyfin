@@ -749,7 +749,7 @@ const settings: typeof en = {
       `Com que frequência cada pasta local é rastreada novamente em busca de arquivos adicionados, alterados ou removidos. As pastas também são rastreadas na inicialização, quando você solicita e quando as pastas monitoradas mudam. 0 desativa o agendamento. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     watchlistCheckHours: 'Procurar versões dos títulos para assistir a cada (horas, 0 = nunca)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `Com que frequência cada título não iniciado da lista “Para assistir” de um usuário é verificado novamente em busca de versões, para as linhas iniciais “Já disponível” e “Ainda aguardando” e a mensagem que avisa o usuário de um título disponível. A cada hora, até 20 títulos de cada usuário são verificados, consultando os complementos de streams dele. 0 desativa as verificações. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+      `Com que frequência cada título não iniciado da playlist “Para assistir” de um usuário é verificado novamente em busca de versões, para as linhas iniciais “Já disponível” e “Ainda aguardando” e a mensagem que avisa o usuário de um título disponível. A cada hora, até 20 títulos de cada usuário são verificados, consultando os complementos de streams dele. 0 desativa as verificações. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     watchLocalFolders: 'Monitorar alterações em pastas e compartilhamentos',
     watchLocalFoldersHelp: {
       container:
@@ -1140,9 +1140,9 @@ const settings: typeof en = {
           'Uma linha para cada um dos últimos filmes e séries que o usuário reproduziu, com os títulos semelhantes a ele, como as recomendações de filmes os apresentam. Nenhuma enquanto Títulos semelhantes estiver desativado.',
         new: 'Os títulos que entraram nos catálogos das bibliotecas do usuário nos últimos 7 dias, dos mais recentes aos mais antigos. O Polyfin os conta a partir do momento em que viu cada título pela primeira vez em cada catálogo.',
         available:
-          'Os títulos não iniciados da lista “Para assistir” do usuário para os quais a última verificação encontrou versões, dos últimos encontrados aos primeiros. Uma versão encontrada ainda não foi testada: a reprodução dela ainda pode falhar.',
+          'Os títulos não iniciados da playlist “Para assistir” do usuário para os quais a última verificação encontrou versões, dos últimos encontrados aos primeiros. Uma versão encontrada ainda não foi testada: a reprodução dela ainda pode falhar.',
         waiting:
-          'Os títulos não iniciados da lista “Para assistir” do usuário para os quais a última verificação não encontrou nenhuma versão, ou que ainda não foram lançados, dos últimos adicionados aos primeiros. Um título ainda não verificado não está em nenhuma das duas linhas.',
+          'Os títulos não iniciados da playlist “Para assistir” do usuário para os quais a última verificação não encontrou nenhuma versão, ou que ainda não foram lançados, na ordem da playlist. Um título ainda não verificado não está em nenhuma das duas linhas.',
         trakt:
           'Os filmes e séries que o Trakt recomenda ao usuário, lidos com a conexão dele ao Trakt a cada 12 horas, sem os da coleção ou da Watchlist dele no Trakt nem os que ele já assistiu. Só os usuários que conectaram o Trakt em Minha conta › Acompanhamento a veem; na primeira vez, ela aparece assim que o Trakt responde.',
         picks:

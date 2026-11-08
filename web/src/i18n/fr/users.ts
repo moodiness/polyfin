@@ -522,7 +522,7 @@ const users: typeof en = {
       open: 'Importer depuis une appli',
       title: 'Importer depuis une appli',
       description:
-        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons\u202f: les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli, qui va dans «\u202fÀ regarder\u202f» de ses applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli\u202f; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
+        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons\u202f: les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli, qui va dans la liste de lecture «\u202fÀ regarder\u202f» de ses applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli\u202f; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
       user: 'Dans le compte de',
       userHelp:
         'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',

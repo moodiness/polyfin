@@ -240,7 +240,8 @@ const account = {
       owned: (name: string) => `${name} (yours)`,
       noServers: 'This profile reaches no Plex server.',
       watchlist: 'Watchlist to my Watchlist',
-      watchlistHelp: 'The movies and shows of your Plex Watchlist go to your Watchlist in Polyfin.',
+      watchlistHelp:
+        'The movies and shows of your Plex Watchlist go to your Watchlist playlist in Polyfin, a series as its aired episodes. Only what you have not watched yet is added.',
       cancel: 'Cancel',
     },
     /** My account › Import from another server, with Letterboxd's export file. */
@@ -258,7 +259,7 @@ const account = {
       tooLarge: 'This file is larger than 20 MB: choose the ZIP file Letterboxd gives.',
       watchlist: 'Watchlist to my Watchlist',
       watchlistHelp:
-        'The movies of your Letterboxd watchlist go to your Watchlist in Jellyfin apps, until you start them.',
+        'The movies of your Letterboxd watchlist go to your Watchlist playlist in Jellyfin apps. Only those you have not started are added.',
       ratings: 'Ratings',
       ratingsHelp:
         'Your stars become your rating out of 10: 3.5 stars is 7. A rating you already have in Polyfin stays.',
@@ -270,7 +271,7 @@ const account = {
           'The movies they watched are marked played, on the latest date their diary gives, as many times as it logs them. Each movie is searched by its name and year in the server’s metadata addons, and kept when they know exactly one movie of that name and year.',
         watchlist: 'Watchlist to their Watchlist',
         watchlistHelp:
-          'The movies of their Letterboxd watchlist go to their Watchlist in Jellyfin apps, until they start them.',
+          'The movies of their Letterboxd watchlist go to their Watchlist playlist in Jellyfin apps. Only those they have not started are added.',
         ratingsHelp:
           'Their stars become their rating out of 10: 3.5 stars is 7. A rating they already have in Polyfin stays.',
         likesHelp: 'The movies they liked on Letterboxd become their favorites.',
@@ -294,7 +295,7 @@ const account = {
       summary: (movies: number, added: string) =>
         `${movies === 1 ? '1 movie' : `${movies} movies`}: ${added}.`,
       played: (count: number) => `${count} marked played`,
-      addedToWatchlist: (count: number) => `${count} added to the Watchlist`,
+      addedToWatchlist: (count: number) => `${count} added to the Watchlist playlist`,
       rated: (count: number) => `${count} rated`,
       favorites: (count: number) => `${count} made favorites`,
       unmatchedHelp:
@@ -307,7 +308,7 @@ const account = {
     },
     appImport: {
       description:
-        'Bring over what you watched in an app built on addons: the movies and episodes you played with their dates, your resume points, and the app’s library, which goes to your Watchlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. They only add to what Polyfin already has, and nothing is written to the app.',
+        'Bring over what you watched in an app built on addons: the movies and episodes you played with their dates, your resume points, and the app’s library, which goes to your Watchlist playlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. They only add to what Polyfin already has, and nothing is written to the app.',
       app: 'App',
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Nuvio backend',
@@ -370,7 +371,7 @@ const account = {
         'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
       read: (count: number) => (count === 1 ? '1 title read.' : `${count} titles read.`),
       counts: (read: number, played: number, resumed: number, watchlist: number) =>
-        `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${watchlist} added to the Watchlist.`,
+        `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${watchlist} added to the Watchlist playlist.`,
       unmatchedHelp:
         'These titles were not imported: the app names them by an identifier Polyfin does not match, or no Polyfin title has it. For a series, the app may also tell the episodes watched by their place in a list of episodes that Polyfin’s addons list otherwise.',
       reasons: {
@@ -657,10 +658,10 @@ const account = {
           },
           toggle: (name: string, list: string) => `Import my ${name} ${list}`,
           toggleHelp: (name: string, list: string) =>
-            `Puts the movies and series of your ${name} ${list} in the Watchlist view of your Jellyfin apps, with each import. A title leaves it once you start it, or once ${name} no longer lists it. Nothing is sent back to ${name}.`,
+            `Puts the movies and series of your ${name} ${list} in your Watchlist playlist in Jellyfin apps, with each import, a series as its aired episodes. Only what you have not watched yet is added. What you started stays. A title ${name} no longer lists leaves it, unless you started it or added it yourself. Nothing is sent back to ${name}.`,
           counts: (added: number, unmapped: number) =>
-            `${added} added to the Watchlist, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
-          added: (added: number) => `${added} added to the Watchlist.`,
+            `${added} added to the Watchlist playlist, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
+          added: (added: number) => `${added} added to the Watchlist playlist.`,
         },
         ratings: {
           toggle: 'Sync my ratings',

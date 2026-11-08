@@ -742,7 +742,7 @@ const settings = {
       `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup, when you ask, and when watched ones change. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     watchlistCheckHours: 'Look for versions of watchlist titles every (hours, 0 = never)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `How often each title of a user’s Watchlist they have not started is checked again for versions, for the Now available and Still waiting home rows and the message telling a user of a title found available. Each hour, up to 20 titles of each user are checked, asking their stream addons. 0 turns the checks off. From ${r.min} to ${r.max}; ${r.default} by default.`,
+      `How often each title of a user’s Watchlist playlist they have not started is checked again for versions, for the Now available and Still waiting home rows and the message telling a user of a title found available. Each hour, up to 20 titles of each user are checked, asking their stream addons. 0 turns the checks off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     watchLocalFolders: 'Watch folders and shares for changes',
     watchLocalFoldersHelp: {
       container:
@@ -1123,9 +1123,9 @@ const settings = {
           'One row for each of the last movies and series the user played, of the titles similar to it, as movie recommendations give them. None while Similar titles is off.',
         new: 'The titles that came into the catalogs of the user’s libraries in the last 7 days, newest first. Polyfin counts them from the time it first saw each title in each catalog.',
         available:
-          'The titles of the user’s Watchlist they have not started that the last check found versions for, the latest found first. A version found has not been tried yet: it may still fail to play.',
+          'The titles of the user’s Watchlist playlist they have not started that the last check found versions for, the latest found first. A version found has not been tried yet: it may still fail to play.',
         waiting:
-          'The titles of the user’s Watchlist they have not started that the last check found no version for, or that are not out yet, the latest added first. A title not checked yet is in neither row.',
+          'The titles of the user’s Watchlist playlist they have not started that the last check found no version for, or that are not out yet, in the playlist’s order. A title not checked yet is in neither row.',
         trakt:
           'The movies and series Trakt recommends to the user, read with their Trakt connection every 12 hours, without those in their Trakt collection or Watchlist and those they played. Only users who connected Trakt in My account › Tracking see it; the first time, it shows once Trakt has answered.',
         picks:

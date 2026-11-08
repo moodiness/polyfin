@@ -515,7 +515,7 @@ const users: typeof en = {
       open: 'Importar desde una aplicación',
       title: 'Importar desde una aplicación',
       description:
-        'Traiga los datos de visionado de un usuario desde su cuenta en una aplicación basada en extensiones: las películas y episodios que ha reproducido con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación, que pasa a su lista «Para ver» en las aplicaciones de Jellyfin, identificados mediante IMDb, TMDB o Kitsu. A los datos de Polyfin solo se les añade información, y no se escribe nada en la aplicación. Necesita los datos de inicio de sesión del usuario en la aplicación; los usuarios también pueden importarlos ellos mismos, en «Mi cuenta».',
+        'Traiga los datos de visionado de un usuario desde su cuenta en una aplicación basada en extensiones: las películas y episodios que ha reproducido con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación, que pasa a su lista de reproducción «Para ver» en las aplicaciones de Jellyfin, identificados mediante IMDb, TMDB o Kitsu. A los datos de Polyfin solo se les añade información, y no se escribe nada en la aplicación. Necesita los datos de inicio de sesión del usuario en la aplicación; los usuarios también pueden importarlos ellos mismos, en «Mi cuenta».',
       user: 'En la cuenta de',
       userHelp:
         'El usuario de Polyfin a cuyos datos de visionado y extensiones se añade la importación.',

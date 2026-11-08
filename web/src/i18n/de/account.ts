@@ -238,7 +238,7 @@ const account: typeof en = {
       noServers: 'Dieses Profil greift auf keinen Plex-Server zu.',
       watchlist: 'Watchlist in meine Merkliste',
       watchlistHelp:
-        'Die Filme und Serien deiner Plex-Watchlist kommen in deine Merkliste in Polyfin.',
+        'Die Filme und Serien deiner Plex-Watchlist kommen in deine Wiedergabeliste „Merkliste“ in Polyfin, eine Serie als ihre ausgestrahlten Folgen. Nur was du noch nicht gesehen hast, wird hinzugefügt.',
       cancel: 'Abbrechen',
     },
     letterboxd: {
@@ -255,7 +255,7 @@ const account: typeof en = {
       tooLarge: 'Diese Datei ist größer als 20 MB: Wähle die ZIP-Datei von Letterboxd aus.',
       watchlist: 'Watchlist in meine Merkliste',
       watchlistHelp:
-        'Die Filme deiner Letterboxd-Watchlist kommen in deine Merkliste in den Jellyfin-Apps, bis du sie startest.',
+        'Die Filme deiner Letterboxd-Watchlist kommen in deine Wiedergabeliste „Merkliste“ in den Jellyfin-Apps. Nur die, die du noch nicht begonnen hast, werden hinzugefügt.',
       ratings: 'Bewertungen',
       ratingsHelp:
         'Deine Sterne werden zu deiner Bewertung von 10: 3,5 Sterne ergeben 7. Eine Bewertung, die du in Polyfin bereits hast, bleibt erhalten.',
@@ -266,7 +266,7 @@ const account: typeof en = {
           'Die gesehenen Filme werden als gesehen markiert, mit dem letzten Datum aus dem Tagebuch und so oft, wie es sie verzeichnet. Jeder Film wird anhand von Name und Jahr in den Metadaten-Add-ons des Servers gesucht und übernommen, wenn diese genau einen Film mit diesem Namen und Jahr kennen.',
         watchlist: 'Watchlist in die Merkliste des Benutzers',
         watchlistHelp:
-          'Die Filme der Letterboxd-Watchlist kommen in die Merkliste des Benutzers in den Jellyfin-Apps, bis sie gestartet werden.',
+          'Die Filme der Letterboxd-Watchlist kommen in die Wiedergabeliste „Merkliste“ des Benutzers in den Jellyfin-Apps. Nur die, die er noch nicht begonnen hat, werden hinzugefügt.',
         ratingsHelp:
           'Die Sterne werden zur Bewertung von 10: 3,5 Sterne ergeben 7. Eine bereits vorhandene Bewertung in Polyfin bleibt erhalten.',
         likesHelp: 'Die auf Letterboxd gelikten Filme werden zu Favoriten des Benutzers.',
@@ -303,7 +303,7 @@ const account: typeof en = {
     },
     appImport: {
       description:
-        'Übernimm, was du in einer App auf Basis von Add-ons geschaut hast: die abgespielten Filme und Folgen mit ihren Daten, deine Fortsetzungspunkte und die Bibliothek der App, die in Jellyfin-Apps in deine Merkliste kommt, zugeordnet über IMDb, TMDB oder Kitsu. Sie ergänzen nur, was Polyfin bereits hat, und in die App wird nichts geschrieben.',
+        'Übernimm, was du in einer App auf Basis von Add-ons geschaut hast: die abgespielten Filme und Folgen mit ihren Daten, deine Fortsetzungspunkte und die Bibliothek der App, die in Jellyfin-Apps in deine Wiedergabeliste „Merkliste“ kommt, zugeordnet über IMDb, TMDB oder Kitsu. Sie ergänzen nur, was Polyfin bereits hat, und in die App wird nichts geschrieben.',
       app: 'App',
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Nuvio-Backend',
@@ -668,7 +668,7 @@ const account: typeof en = {
           },
           toggle: (name: string, list: string) => `Meine ${name}-${list} importieren`,
           toggleHelp: (name: string, list: string) =>
-            `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Ansicht „Merkliste“ deiner Jellyfin-Apps. Ein Titel verschwindet daraus, sobald du ihn startest oder sobald ${name} ihn nicht mehr aufführt. Nichts wird an ${name} zurückgesendet.`,
+            `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Wiedergabeliste „Merkliste“ deiner Jellyfin-Apps, eine Serie als ihre ausgestrahlten Folgen. Nur was du noch nicht gesehen hast, wird hinzugefügt. Was du begonnen hast, bleibt. Ein Titel, den ${name} nicht mehr aufführt, verschwindet daraus, außer du hast ihn begonnen oder selbst hinzugefügt. Nichts wird an ${name} zurückgesendet.`,
           counts: (added: number, unmapped: number) =>
             `${added} zur Merkliste hinzugefügt, ${unmapped === 1 ? '1 Titel' : `${unmapped} Titel`} nicht in Polyfin gefunden.`,
           added: (added: number) => `${added} zur Merkliste hinzugefügt.`,
