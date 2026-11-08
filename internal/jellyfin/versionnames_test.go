@@ -57,7 +57,7 @@ func TestVersionNamesSayHowTheyPlay(t *testing.T) {
 	details("another device", phone, first, second)
 
 	p.setting(t, func(s *accounts.Settings) { s.Language = "fr" })
-	details("in French", p.token, first+" (converti\u00a0: audio)", second+" (lecture directe)")
+	details("in French", p.token, first+" (converti\u202f: audio)", second+" (lecture directe)")
 	p.setting(t, func(s *accounts.Settings) { s.Language, s.Transcoding = "en", false })
 	details("without conversion", p.token, first+" (cannot play here)", second+" (direct play)")
 	p.setting(t, func(s *accounts.Settings) { s.Transcoding, s.NameHowVersionsPlay = true, false })
