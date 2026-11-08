@@ -61,6 +61,7 @@ func openMemory(t *testing.T, data []byte) *Matroska {
 }
 
 func TestMatroskaSubtitles(t *testing.T) {
+	t.Parallel()
 	data := fixture(t, "subtitles.mkv")
 	r := &memory{data: data}
 	m, err := OpenMatroska(context.Background(), r, int64(len(data)))
@@ -178,6 +179,7 @@ func checkBlocks(t *testing.T, got, want []Block) {
 }
 
 func TestMatroskaOpenNotMatroska(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"tail.mp4", "README.md"} {
 		data := fixture(t, name)
 		if _, err := OpenMatroska(context.Background(), &memory{data: data}, int64(len(data))); !errors.Is(err, ErrNoIndex) {
@@ -352,6 +354,7 @@ func groupBlock(track uint64, time, duration uint64, data string) testBlock {
 }
 
 func TestMatroskaTrackDescriptions(t *testing.T) {
+	t.Parallel()
 	private := []byte("[Script Info]\nScriptType: v4.00+\n")
 	// An integer of 9 bytes, which no integer element may be.
 	tooLong := make([]byte, 9)
@@ -401,6 +404,7 @@ func TestMatroskaTrackDescriptions(t *testing.T) {
 }
 
 func TestKeyframesSkipTheTrackEntriesAfterTheVideo(t *testing.T) {
+	t.Parallel()
 	cues := ebmlElement(idCues, cuePoint(0, 1), cuePoint(2000, 1))
 	broken := ebmlElement(idTrackEntry, ebmlUint(idTrackNumber, 2), ebmlElement(idTrackType, make([]byte, 9)))
 	// Remuxes need the video's keyframes only: a TrackEntry after it that
@@ -417,6 +421,7 @@ func TestKeyframesSkipTheTrackEntriesAfterTheVideo(t *testing.T) {
 }
 
 func TestMatroskaSubtitleBlocks(t *testing.T) {
+	t.Parallel()
 	ms := time.Millisecond
 	zlibTrack := subtitleTrack(1, "S_TEXT/UTF8", nil,
 		contentEncodings(contentEncodingElement(0, scopeFrames, 0, ebmlUint(idContentCompAlgo, 0))))
@@ -482,6 +487,7 @@ func TestMatroskaSubtitleBlocks(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			data := test.file.build()
 			m := openMemory(t, data)
 			blocks, err := m.SubtitleBlocks(context.Background(), &fetcher{data: data}, 1)
@@ -494,6 +500,7 @@ func TestMatroskaSubtitleBlocks(t *testing.T) {
 }
 
 func TestMatroskaClusterHeadersAreLearned(t *testing.T) {
+	t.Parallel()
 	data := testFile{tracks: [][]byte{subtitleTrack(1, "S_TEXT/UTF8", nil)}, clusters: []testCluster{
 		{sizeLength: 8, blocks: []testBlock{groupBlock(1, 1000, 100, "One."), groupBlock(1, 2000, 100, "Two.")}},
 		{sizeLength: 8, blocks: []testBlock{groupBlock(1, 3000, 100, "Three.")}},
@@ -516,6 +523,7 @@ func TestMatroskaClusterHeadersAreLearned(t *testing.T) {
 }
 
 func TestMatroskaSubtitleBlocksAreGrouped(t *testing.T) {
+	t.Parallel()
 	track := subtitleTrack(1, "S_TEXT/UTF8", nil)
 	var spread, packed []testCluster
 	// A block every 150 KiB, as a movie's, one per Cluster.
@@ -542,6 +550,7 @@ func TestMatroskaSubtitleBlocksAreGrouped(t *testing.T) {
 		{"packed", packed, 900, 2 + 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			data := testFile{tracks: [][]byte{track}, clusters: test.clusters}.build()
 			f := &fetcher{data: data, delay: 2 * time.Millisecond}
 			blocks, err := openMemory(t, data).SubtitleBlocks(context.Background(), f, 1)
@@ -601,6 +610,7 @@ func (f *rangeFetcher) FetchRanges(ctx context.Context, ranges []Range) ([][]byt
 }
 
 func TestMatroskaSubtitleBlocksAreBatched(t *testing.T) {
+	t.Parallel()
 	// 1300 blocks a Cluster each, too far apart to share a range: with
 	// reads of 4 KiB sharing a range within 1 KiB, blocks 8 KiB apart
 	// stand for a movie's, MBs apart.
@@ -638,6 +648,7 @@ func TestMatroskaSubtitleBlocksAreBatched(t *testing.T) {
 }
 
 func TestMatroskaSubtitleBlocksFail(t *testing.T) {
+	t.Parallel()
 	plain := subtitleTrack(1, "S_TEXT/UTF8", nil)
 	zlibTrack := subtitleTrack(1, "S_TEXT/UTF8", nil,
 		contentEncodings(contentEncodingElement(0, scopeFrames, 0, ebmlUint(idContentCompAlgo, 0))))
@@ -685,6 +696,7 @@ func TestMatroskaSubtitleBlocksFail(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			data := test.file.build()
 			blocks, err := openMemory(t, data).SubtitleBlocks(context.Background(), &fetcher{data: data}, 1)
 			if !errors.Is(err, ErrUnreadable) || test.err != nil && !errors.Is(err, test.err) {
@@ -700,6 +712,8 @@ func TestMatroskaSubtitleBlocksFail(t *testing.T) {
 // TestMatroskaDecompressionBombs reads tracks of hundreds of blocks of a
 // few bytes, each decoding to a MiB: the read fails once the frames
 // decoded exceed the bound, without holding them all.
+//
+//nolint:paralleltest // counts process-wide allocations (runtime.MemStats), which tests running at once would add to
 func TestMatroskaDecompressionBombs(t *testing.T) {
 	inflating := deflate(make([]byte, maxBlock))
 	settings := make([]byte, maxBlock-100)
@@ -763,6 +777,7 @@ func (f *failing) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 }
 
 func TestMatroskaHostErrorsAreNotUnreadable(t *testing.T) {
+	t.Parallel()
 	data := testFile{tracks: [][]byte{subtitleTrack(1, "S_TEXT/UTF8", nil)}, clusters: []testCluster{
 		{blocks: []testBlock{groupBlock(1, 1000, 100, "One."), groupBlock(1, 2000, 100, "Two.")}},
 		{padding: 100 << 10, blocks: []testBlock{groupBlock(1, 3000, 100, "Three.")}},
@@ -792,6 +807,7 @@ func TestMatroskaHostErrorsAreNotUnreadable(t *testing.T) {
 }
 
 func TestMatroskaSubtitleLocations(t *testing.T) {
+	t.Parallel()
 	// Track 1's blocks are all listed, track 2's not at all, track 3 has
 	// a CueTrackPositions without a relative position, track 4 is not a
 	// subtitle track.
@@ -823,6 +839,7 @@ func TestMatroskaSubtitleLocations(t *testing.T) {
 }
 
 func TestMatroskaAttachments(t *testing.T) {
+	t.Parallel()
 	track := subtitleTrack(1, "S_TEXT/ASS", nil)
 	// A description and a UID, which are not read, come with the first.
 	file := func(name, mime string, data []byte, more ...[]byte) []byte {
@@ -883,6 +900,7 @@ func TestMatroskaAttachments(t *testing.T) {
 // every few: reading its tracks, blocks and attachments may fail, but must
 // not panic.
 func TestMatroskaCorrupted(t *testing.T) {
+	t.Parallel()
 	original := fixture(t, "subtitles.mkv")
 	data := slices.Clone(original)
 	for i := 0; i < len(data); i += 7 {

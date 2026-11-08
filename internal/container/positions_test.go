@@ -11,9 +11,11 @@ import (
 // Cluster holding it in a Matroska file, the sample in an MP4 file. Its
 // times are those the HLS keyframe index reads, whatever the codec.
 func TestKeyframeOffsets(t *testing.T) {
+	t.Parallel()
 	cluster := []byte{0x1F, 0x43, 0xB6, 0x75}
 	for _, file := range []string{"forced.mkv", "subtitles.mkv", "hevc.mkv", "front.webm", "faststart.mp4", "tail.mp4", "trimmed.mp4"} {
 		t.Run(file, func(t *testing.T) {
+			t.Parallel()
 			data := fixture(t, file)
 			ctx := context.Background()
 			keyframes, err := KeyframeOffsets(ctx, &memory{data: data}, int64(len(data)))
