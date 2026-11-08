@@ -234,10 +234,12 @@ type Library struct {
 	// ShowAs is how an enabled library shows its catalog's titles, one of
 	// ShowAsChoices: ShowAsHomeVideos or ShowAsMoviesAndShows for a
 	// catalog of other videos, ShowAsListed or ShowAsMoviesAndShows for a
-	// catalog of movies or series. Empty while none is chosen, or for a
-	// catalog that takes none: a catalog of other videos is then shown as
-	// home videos until Polyfin decides from its first page (see
-	// DecidedShowAs and Store.DecideShowAs), the others as listed.
+	// catalog of movies or series, ShowAsMoviesAndShows, ShowAsShows or
+	// ShowAsMovies for an anime catalog. Empty while none is chosen, or
+	// for a catalog that takes none: a catalog of other videos is then
+	// shown as home videos until Polyfin decides from its first page (see
+	// DecidedShowAs and Store.DecideShowAs), an anime catalog as movies
+	// and shows, the others as listed.
 	ShowAs        string
 	ShowAsChoices []string
 	// Image is how an enabled library finds the image apps show on its
@@ -276,25 +278,32 @@ func Skippable(addon Addon, catalog stremio.Catalog) bool {
 // library without a type, as Jellyfin's mixed libraries: a catalog of
 // other videos as movies and series made of its titles (see
 // library.shownTitle), a catalog of movies or series as each title's own
-// kind.
+// kind. ShowAsShows and ShowAsMovies show those of an anime catalog, each
+// as its own kind, in a library of shows or of movies, whose tabs apps
+// fill with series only or movies only.
 const (
 	ShowAsHomeVideos     = "home_videos"
 	ShowAsListed         = "listed"
 	ShowAsMoviesAndShows = "movies_and_shows"
+	ShowAsShows          = "shows"
+	ShowAsMovies         = "movies"
 )
 
 // ShowAsChoices lists the ways a library of a catalog of addon may show
 // its titles, the default first: home videos or movies and shows for a
 // catalog of OtherVideos; as listed or movies and shows for a catalog of
-// movies or series of an addon, not of a local folder, an IPTV source or
-// a music addon, which have their own; none for any other.
+// movies or series, and movies and shows, shows or movies for an anime
+// catalog, of an addon, not of a local folder, an IPTV source or a music
+// addon, which have their own; none for any other.
 func ShowAsChoices(addon Addon, catalog stremio.Catalog) []string {
+	stremioAddon := !addon.Local() && !addon.IPTV() && !addon.HasMusic()
 	switch {
 	case OtherVideos(addon, catalog):
 		return []string{ShowAsHomeVideos, ShowAsMoviesAndShows}
-	case !addon.Local() && !addon.IPTV() && !addon.HasMusic() &&
-		slices.Contains([]string{"movie", "anime.movie", "series", "anime.series"}, catalog.Type):
+	case stremioAddon && slices.Contains([]string{"movie", "anime.movie", "series", "anime.series"}, catalog.Type):
 		return []string{ShowAsListed, ShowAsMoviesAndShows}
+	case stremioAddon && catalog.Type == "anime":
+		return []string{ShowAsMoviesAndShows, ShowAsShows, ShowAsMovies}
 	}
 	return nil
 }

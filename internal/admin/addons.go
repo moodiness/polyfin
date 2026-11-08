@@ -347,8 +347,9 @@ type libraryJSON struct {
 	// ShowAs is how an enabled library shows its catalog's titles, one of
 	// ShowAsChoices (see addons.Library.ShowAs), null while none is chosen:
 	// a catalog of other videos then shows as home videos until Polyfin
-	// decides from its first page, the others as listed. ShowAsChoices is
-	// empty for a catalog that takes none.
+	// decides from its first page, an anime catalog as movies and shows,
+	// the others as listed. ShowAsChoices is empty for a catalog that
+	// takes none.
 	ShowAs        *string  `json:"showAs"`
 	ShowAsChoices []string `json:"showAsChoices"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog

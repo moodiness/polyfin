@@ -195,12 +195,10 @@ func checkNarrowedListings(t *testing.T, s testServer, token, view, unread strin
 	}
 }
 
-// A library of an anime catalog, whose type does not tell its titles'
-// kind, lists and counts only the kinds asked for, as Jellyfin counts a
-// mixed library's items of the types asked for, so that apps page
-// through movies or series to their end.
-func TestAnimeLibraryCountsTheKindsAsked(t *testing.T) {
-	t.Parallel()
+// animeCatalog serves an addon of one anime catalog, "mixed", of three
+// series and two movies, and returns its manifest's address.
+func animeCatalog(t *testing.T) string {
+	t.Helper()
 	titles := []stremio.Meta{
 		{ID: "kitsu:1", Type: "anime.series", Name: "Series One"},
 		{ID: "kitsu:2", Type: "anime.movie", Name: "Movie One"},
@@ -225,9 +223,88 @@ func TestAnimeLibraryCountsTheKindsAsked(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// A library of an anime catalog shown as shows or as movies has that type
+// in apps, which then ask it for series or for movies only; it still
+// lists and counts exactly each kind asked for, keeps the other kind in
+// its latest titles, and its items keep their ids and played state when
+// an administrator switches between the choices.
+func TestAnimeLibraryShowAs(t *testing.T) {
+	t.Parallel()
+	manifest := animeCatalog(t)
 	s := newTestServer(t, 10)
 	s.user("member", nil)
-	addon, err := s.addons.Install(t.Context(), addons.Shared(), server.URL+"/manifest.json", false)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), manifest, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	var played string
+	ids := map[string]string{}
+	for _, choice := range []struct{ showAs, collectionType string }{
+		{"", ""}, {addons.ShowAsShows, "tvshows"}, {addons.ShowAsMovies, "movies"}, {addons.ShowAsMoviesAndShows, ""},
+	} {
+		if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+			{AddonID: addon.ID, CatalogType: "anime", CatalogID: "mixed", ShowAs: choice.showAs}}); err != nil {
+			t.Fatal(err)
+		}
+		var views QueryResult
+		s.get(t, "/UserViews", token, &views)
+		views.Items = libraryViews(views.Items)
+		if len(views.Items) != 1 || views.Items[0].CollectionType != choice.collectionType {
+			t.Fatalf("%q: the views: %+v", choice.showAs, views.Items)
+		}
+		view := views.Items[0].Id
+		checkNarrowedListings(t, s, token, view, "", map[string][]string{
+			"Series": {"Series One", "Series Two", "Series Three"},
+			"Movie":  {"Movie One", "Movie Two"},
+		})
+		var latest []BaseItemDto
+		s.get(t, "/Items/Latest?ParentId="+view+"&Limit=10", token, &latest)
+		// Latest leaves out the movie played, as Jellyfin does.
+		kinds, movies := map[string]int{}, 2
+		for _, item := range latest {
+			kinds[item.Type]++
+		}
+		if played != "" {
+			movies = 1
+		}
+		if kinds["Series"] != 3 || kinds["Movie"] != movies {
+			t.Errorf("%q: the latest: %v", choice.showAs, itemNames(latest))
+		}
+		var all QueryResult
+		s.get(t, "/Items?ParentId="+view+"&Recursive=true&IncludeItemTypes=Movie,Series", token, &all)
+		for _, item := range all.Items {
+			if id, ok := ids[item.Name]; ok && id != item.Id {
+				t.Errorf("%q: %s is now %s, was %s", choice.showAs, item.Name, item.Id, id)
+			}
+			ids[item.Name] = item.Id
+			if item.Name == "Movie One" && played != "" && !item.UserData.Played {
+				t.Errorf("%q: %s is no longer played", choice.showAs, item.Name)
+			}
+		}
+		if len(all.Items) != 5 {
+			t.Errorf("%q: the titles: %v", choice.showAs, itemNames(all.Items))
+		}
+		if played == "" {
+			played = ids["Movie One"]
+			s.expectStatus(t, http.StatusOK, http.MethodPost, "/UserPlayedItems/"+played, token, nil)
+		}
+	}
+}
+
+// A library of an anime catalog, whose type does not tell its titles'
+// kind, lists and counts only the kinds asked for, as Jellyfin counts a
+// mixed library's items of the types asked for, so that apps page
+// through movies or series to their end.
+func TestAnimeLibraryCountsTheKindsAsked(t *testing.T) {
+	t.Parallel()
+	manifest := animeCatalog(t)
+	s := newTestServer(t, 10)
+	s.user("member", nil)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), manifest, false)
 	if err != nil {
 		t.Fatal(err)
 	}
