@@ -35,11 +35,13 @@ func markScope(kind library.Kind) trackers.Scope {
 // mapping gives, when it knows them, and keep the entry for AniList and
 // MyAnimeList. An episode of a series the mapping numbers in part as
 // TVDB's absolute numbering gets its absolute number, from the episodes
-// Polyfin lists of its series. It is called in the background.
+// Polyfin lists of its series. Episodes also carry TMDB's numbers, which
+// services numbering as TMDB does are sent. It is called in the background.
 func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(context.Context) []trackers.Title {
 	return func(ctx context.Context) []trackers.Title {
 		series := map[accounts.ID]map[string]string{}
 		episodes := map[accounts.ID][]library.Item{}
+		numberings := map[accounts.ID]library.EpisodeNumbering{}
 		var titles []trackers.Title
 		for _, item := range items {
 			if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
@@ -64,6 +66,15 @@ func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(c
 					series[item.SeriesID] = ids
 				}
 				title, ok = trackers.Episode(item.ID, ids, item.ParentIndexNumber, item.IndexNumber)
+				if ok && !isAnime {
+					numbering, loaded := numberings[item.SeriesID]
+					if !loaded {
+						// An error leaves the zero numbering: TMDB's alike.
+						numbering, _ = h.Library.TMDBNumbering(ctx, item.SeriesID)
+						numberings[item.SeriesID] = numbering
+					}
+					title.SetTMDBNumbers(numbering.ToTMDB(title.Season, title.Number))
+				}
 			}
 			switch {
 			case ok && isAnime:
