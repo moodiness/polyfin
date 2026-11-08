@@ -129,6 +129,31 @@ func scrobbles(service string) bool {
 	return service != PublicMetaDB && !animeLists(service) && !Music(service)
 }
 
+// numbersByTMDB reports whether service numbers the episodes of a series
+// as TMDB does, which may differ from the numbers the addon gives them.
+func numbersByTMDB(service string) bool {
+	return service == PublicMetaDB || service == Trakt || service == MDBList
+}
+
+// tmdbNumbered returns titles as a service numbering episodes as TMDB does
+// takes them: the episodes TMDB numbers differently get TMDB's season and
+// number, and those not surely among TMDB's are left out. The
+// titles returned hold no TMDB numbers; titles itself is left as it is.
+func tmdbNumbered(titles []Title) []Title {
+	numbered := make([]Title, 0, len(titles))
+	for _, title := range titles {
+		switch {
+		case title.TMDBNumber < 0:
+			continue
+		case title.TMDBNumber > 0:
+			title.Season, title.Number = title.TMDBSeason, title.TMDBNumber
+		}
+		title.TMDBSeason, title.TMDBNumber = 0, 0
+		numbered = append(numbered, title)
+	}
+	return numbered
+}
+
 // imports reports whether Polyfin reads the watch history of service.
 func imports(service string) bool {
 	return known(service) && !Music(service)
@@ -506,6 +531,13 @@ type Title struct {
 	Season   int  `json:"season,omitempty"`
 	Number   int  `json:"number,omitempty"`
 	Absolute int  `json:"absolute,omitempty"`
+	// TMDBSeason and TMDBNumber are how TMDB numbers the episode, for the
+	// services numbering episodes as TMDB does: TMDBNumber is 0 when TMDB
+	// numbers it Number in season Season too, -1 when it is not surely
+	// among TMDB's episodes, which those services are then not sent, and
+	// otherwise TMDB's number, in season TMDBSeason.
+	TMDBSeason int `json:"tmdbSeason,omitempty"`
+	TMDBNumber int `json:"tmdbNumber,omitempty"`
 	// Series is set for a series, which only ratings name.
 	Series bool `json:"series,omitempty"`
 	// Anime names the entry, and its episode, an anime addon gives the
@@ -526,6 +558,23 @@ type AnimeID struct {
 // AniList and MyAnimeList take.
 func (t Title) Identified() bool {
 	return t.IMDb != "" || t.TMDB != 0 || t.TVDB != 0
+}
+
+// SetTMDBNumbers sets how TMDB numbers the episode t is, from TMDB's
+// season and number for it, ok false when it is not surely among TMDB's
+// episodes. Titles other than episodes are left as they are.
+func (t *Title) SetTMDBNumbers(season, number int, ok bool) {
+	if !t.Episode {
+		return
+	}
+	switch {
+	case !ok:
+		t.TMDBSeason, t.TMDBNumber = 0, -1
+	case season != t.Season || number != t.Number:
+		t.TMDBSeason, t.TMDBNumber = season, number
+	default:
+		t.TMDBSeason, t.TMDBNumber = 0, 0
+	}
 }
 
 var imdbPattern = regexp.MustCompile(`^tt\d+$`)

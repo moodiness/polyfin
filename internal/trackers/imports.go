@@ -510,22 +510,30 @@ func refLabel(ref library.TitleRef) importlinks.Label {
 
 // merge finds the titles of h and adds them to the user's data: played
 // marks, then resume points of the titles still unplayed. The titles
-// linked by hand are named by their links. It returns what the import
-// keeps of the titles it did not find.
+// linked by hand are named by their links. The episodes of a service
+// numbering them as TMDB does are found by TMDB's numbers. It returns
+// what the import keeps of the titles it did not find.
 func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, linked importlinks.Linked,
 	result *ImportResult) ([]importlinks.Entry, error) {
 	key := r.key
+	tmdbNumbers := numbersByTMDB(key.service)
+	named := func(ref library.TitleRef) library.TitleRef {
+		if tmdbNumbers {
+			ref.TMDBNumbered = ref.Episode && !ref.Absolute
+		}
+		return ref
+	}
 	refs := make([]library.TitleRef, 0, len(h.watched)+len(h.resumes))
 	entries := make([]importlinks.Entry, 0, len(h.watched)+len(h.resumes))
 	for _, w := range h.watched {
 		ref, e := keptTitle(linked, w.ref, w.unmapped)
 		e.Played, e.PlayedAt = true, w.at
-		refs, entries = append(refs, ref), append(entries, e)
+		refs, entries = append(refs, named(ref)), append(entries, e)
 	}
 	for _, point := range h.resumes {
 		ref, e := keptTitle(linked, point.ref, point.unmapped)
 		e.Resume = &userdata.ImportedResume{Percent: point.percent, Position: point.position, Runtime: point.runtime, At: point.at}
-		refs, entries = append(refs, ref), append(entries, e)
+		refs, entries = append(refs, named(ref)), append(entries, e)
 	}
 	targets, err := s.resolve(ctx, r, refs)
 	if err != nil {
