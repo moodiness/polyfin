@@ -13,8 +13,9 @@ import (
 // Health and its problems, polled every few seconds, decrypt the stored
 // secrets once: again once a secret is sealed to be stored, after an
 // administrator's write, which may have removed one, or after
-// secretsKeptFor; a read alone does not. Not parallel: secrets.Changes
-// counts the secrets other tests seal.
+// secretsKeptFor; a read alone does not.
+//
+//nolint:paralleltest // secrets.Changes counts the secrets every test of the process seals
 func TestHealthChecksTheSecretsAgainOnlyAfterAChange(t *testing.T) {
 	var inspected atomic.Int64
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {

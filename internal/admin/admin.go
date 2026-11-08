@@ -246,6 +246,10 @@ type Options struct {
 	// Live TV sources, which users' and groups' channel rules name; nil
 	// lists none.
 	ChannelChoices ChannelChoices
+	// renderNodesPattern matches the render nodes listed, as filepath.Glob
+	// reads it; empty is defaultRenderNodes. Tests point it at a folder of
+	// their own.
+	renderNodesPattern string
 }
 
 type handler struct {
@@ -278,6 +282,9 @@ func New(options Options) http.Handler {
 	}
 	if h.Health.Started.IsZero() {
 		h.Health.Started = time.Now()
+	}
+	if h.renderNodesPattern == "" {
+		h.renderNodesPattern = defaultRenderNodes
 	}
 	// Starting counts as a restart: a restart is refused within a minute
 	// of start-up as within a minute of the last one, which the process
