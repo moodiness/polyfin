@@ -55,7 +55,14 @@ export function ServerActionButtons({
           {text.updateNow}
         </Button>
       )}
-      <Button size="sm" icon={PowerIcon} onClick={() => onOpen('restart')}>
+      {/* Red as its confirmation's button: it stops playbacks and recordings. */}
+      <Button
+        size="sm"
+        variant="danger"
+        className="bg-danger/14"
+        icon={PowerIcon}
+        onClick={() => onOpen('restart')}
+      >
         {text.restart}
       </Button>
     </>
