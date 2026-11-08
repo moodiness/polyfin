@@ -335,13 +335,28 @@ func (s *Service) CachedVersions(ctx context.Context, user accounts.User, id acc
 // it waits for the addons whose streams are not remembered, as Versions
 // does, but lists a stale list as it is (see staleLists) while its addon is
 // asked again in the background, for a play not to wait for an addon when
-// the versions it lists, already analyzed, can start at once. complete
-// reports whether no list was stale; when none of the versions plays, the
-// caller waits for the new answers with Versions, which joins the requests
-// under way.
+// the versions it lists, already analyzed, can start at once. Once it has a
+// version to play, it waits for each further addon's answer no more than
+// the play's grace (see defaultPlayGrace): an addon that answers later is
+// left out of this play, and its answer is kept for the next ones and the
+// title's page. complete reports whether no list was stale and no addon was
+// left out; when none of the versions plays, the caller waits for the new
+// answers with Versions, which joins the requests under way.
 func (s *Service) VersionsToPlay(ctx context.Context, user accounts.User, id accounts.ID) (versions []Version, complete bool, err error) {
 	return s.versionsOf(ctx, user, id, staleNow)
 }
+
+// defaultPlayGrace is how long a play that has a version to play waits for
+// the next addon to answer: as long again for each one that does. An addon
+// usually answers within a few seconds of the others; one that never
+// answers would otherwise hold every first play of a title for the whole
+// stremio.StreamTimeout.
+const defaultPlayGrace = 5 * time.Second
+
+// SetPlayGrace replaces, before the service is used, how long a play that
+// has a version to play waits for the next addon's answer (see
+// VersionsToPlay). Tests shorten it; the server keeps defaultPlayGrace.
+func (s *Service) SetPlayGrace(grace time.Duration) { s.playGrace = grace }
 
 // listing is how far versionsOf and subtitlesOf go for the addons whose
 // lists for a title are not remembered, or stale (see staleLists).
@@ -353,9 +368,10 @@ const (
 	// askLater asks them in the background, for later requests (see
 	// VersionsNow), and lists a stale list meanwhile.
 	askLater
-	// staleNow waits for the addons whose lists are not remembered, and
-	// lists a stale list as it is while its addon is asked again in the
-	// background, as askLater does (see VersionsToPlay).
+	// staleNow waits for the addons whose lists are not remembered, but
+	// for those still asked a play's grace after it has a version to play
+	// (see VersionsToPlay), and lists a stale list as it is while its
+	// addon is asked again in the background, as askLater does.
 	staleNow
 	// waitAll asks them, those of stale lists included, and waits for
 	// their answers.
@@ -432,21 +448,30 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // and returns the addons whose streams are not known, or are asked again:
 // for knownOnly, those whose lists are not remembered; for askLater, those
 // and those whose lists are stale, but those that failed lately (see
-// failedFor); for staleNow, those whose lists are stale; for waitAll,
-// none. Torrents' files are listed only with torrents set, for a user who
-// may play them (see accounts.Settings.TorrentsAllowed).
+// failedFor); for staleNow, those whose lists are stale, and those a play
+// went on without (see VersionsToPlay); for waitAll, none. Torrents' files
+// are listed only with torrents set, for a user who may play them (see
+// accounts.Settings.TorrentsAllowed).
 func (s *Service) listVersions(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([]Version, []streamSource) {
-	lists, unknown := s.gatherStreams(ctx, t, serving, mode)
+	lists, unknown := s.gatherStreams(ctx, t, serving, mode, torrents)
 	return s.buildVersions(t, serving, lists, torrents, s.versionChoices(ctx), nil), unknown
 }
 
 // gatherStreams gathers the lists of streams serving give for t, as far as
 // mode goes (see listVersions), each at the place of its source, nil for
-// a source whose list is not known.
-func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamSource, mode listing) ([][]stremio.Stream, []streamSource) {
+// a source whose list is not known. torrents tells whether the user may
+// play torrents' files, for a play to tell whether it has a version to
+// play (see VersionsToPlay).
+func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([][]stremio.Stream, []streamSource) {
 	lists := make([][]stremio.Stream, len(serving))
 	var unknown []streamSource
-	var wg sync.WaitGroup
+	// asked holds the sources asked, whose answers come on answers.
+	type answer struct {
+		source  int
+		streams []stremio.Stream
+	}
+	answers := make(chan answer, len(serving))
+	asked := map[int]bool{}
 	for i, entry := range serving {
 		// An IPTV source's or a local folder's streams are Polyfin's own:
 		// reading them asks no addon.
@@ -471,16 +496,57 @@ func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamS
 			lists[i] = l.items
 			unknown = append(unknown, entry)
 		case mode == waitAll || mode == staleNow:
-			wg.Go(func() {
+			asked[i] = true
+			go func() {
 				// A failure, or an answer of notices alone, is logged where
 				// the addon is asked, once (see askStreamsOf).
-				lists[i], _ = s.streams(ctx, entry.installed, entry.contentType, entry.id)
-			})
+				streams, _ := s.streams(ctx, entry.installed, entry.contentType, entry.id)
+				answers <- answer{i, streams}
+			}()
 		default:
 			unknown = append(unknown, entry)
 		}
 	}
-	wg.Wait()
+	// A play waits for the next answer a grace at most once it has a
+	// version to play; anything else waits for them all.
+	playable := func(streams []stremio.Stream) bool {
+		return mode == staleNow && slices.ContainsFunc(streams, func(stream stremio.Stream) bool {
+			return stream.Playable() || torrents && stream.Torrent()
+		})
+	}
+	var grace *time.Timer
+	if slices.ContainsFunc(lists, playable) {
+		grace = time.NewTimer(s.playGrace)
+	}
+	var late <-chan time.Time
+	for len(asked) > 0 {
+		if grace != nil {
+			late = grace.C
+		}
+		select {
+		case a := <-answers:
+			delete(asked, a.source)
+			lists[a.source] = a.streams
+			switch {
+			case grace != nil:
+				grace.Reset(s.playGrace)
+			case playable(a.streams):
+				grace = time.NewTimer(s.playGrace)
+			}
+		case <-late:
+			// The addons still asked are left out of this play: their
+			// answers are kept for the next ones, and told to the title's
+			// page (see askStreams).
+			for i := range asked {
+				unknown = append(unknown, serving[i])
+			}
+			s.logger.Debug("A play goes on without the addons that did not answer yet", "addons", len(asked), "grace", s.playGrace)
+			clear(asked)
+		}
+	}
+	if grace != nil {
+		grace.Stop()
+	}
 	return lists, unknown
 }
 

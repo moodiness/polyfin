@@ -367,7 +367,8 @@ func (s *Service) ExplainVersions(ctx context.Context, user accounts.User, id ac
 			tracked.titles.Put(listedTitle{source.contentType, source.id}, t.item)
 		}
 	}
-	lists, unknown := s.gatherStreams(ctx, t, serving, askLater)
+	torrents := s.settings().TorrentsAllowed(user)
+	lists, unknown := s.gatherStreams(ctx, t, serving, askLater, torrents)
 	var explained VersionsExplained
 	var embedded *SourceExplained
 	if len(t.embedded) > 0 {
@@ -400,7 +401,7 @@ func (s *Service) ExplainVersions(ctx context.Context, user accounts.User, id ac
 		}
 		explained.Sources[source].Streams = append(explained.Sources[source].Streams, listed)
 	}
-	explained.Versions = s.buildVersions(t, serving, lists, s.settings().TorrentsAllowed(user), choices, note)
+	explained.Versions = s.buildVersions(t, serving, lists, torrents, choices, note)
 	if embedded != nil {
 		explained.Sources = slices.Insert(explained.Sources, 0, *embedded)
 	}
