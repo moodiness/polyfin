@@ -113,10 +113,30 @@ func newServiceOn(t *testing.T, pool *pgxpool.Pool, opener source.Opener, ffprob
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
+	// A warm Plan started reads its version into the cache in the
+	// background (see warm): it is stopped, and waited for, before the
+	// cache closes. Left running, it would open the version's source again
+	// in the closed cache and write its blocks into the test's folder as
+	// it is removed.
+	t.Cleanup(func() {
+		for {
+			s.warmMu.Lock()
+			for _, run := range s.warming {
+				run.cancel()
+			}
+			left := len(s.warming)
+			s.warmMu.Unlock()
+			if left == 0 {
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	})
 	return s
 }
 
 func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		version  library.Version
@@ -133,6 +153,7 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 		{"source with Polyfin's user agent, relayed", library.Version{URL: "https://93.184.216.34/movie.mkv", UserAgent: "Browser/1"}, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			origin := &fakeSource{body: []byte("\x1a\x45\xdf\xa3")}
 			s := newService(t, origin, "ffprobe", nil)
 			tc.version.ID = accounts.ID{1}
@@ -173,6 +194,7 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 }
 
 func TestServeRefusesSourcesThatDoNotAnswer(t *testing.T) {
+	t.Parallel()
 	origin := &fakeSource{status: http.StatusNotFound}
 	s := newService(t, origin, "ffprobe", nil)
 	version := library.Version{ID: accounts.ID{2}, URL: "https://93.184.216.34/gone.mkv"}
@@ -191,6 +213,7 @@ func TestServeRefusesSourcesThatDoNotAnswer(t *testing.T) {
 }
 
 func TestExpiredLinksAreRenewedBeforeServing(t *testing.T) {
+	t.Parallel()
 	const old, fresh = "https://93.184.216.34/old.mkv", "https://93.184.216.34/new.mkv"
 	for _, relay := range []bool{false, true} {
 		origin := &fakeSource{body: []byte("\x1a\x45\xdf\xa3"), expired: map[string]bool{old: true}}
@@ -244,6 +267,7 @@ func fakeProbe(t *testing.T, output string, fail bool) (string, func() int) {
 }
 
 func TestAnalysesAreKept(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -274,6 +298,7 @@ func TestAnalysesAreKept(t *testing.T) {
 }
 
 func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -331,6 +356,7 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 // and is kept, as the play promised: the caller is told it stopped
 // waiting, and nothing is kept as the version's failure.
 func TestAnAnalysisWhoseCallerLeftBeforeItStartedStillRuns(t *testing.T) {
+	t.Parallel()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -360,6 +386,7 @@ func TestAnAnalysisWhoseCallerLeftBeforeItStartedStillRuns(t *testing.T) {
 }
 
 func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
+	t.Parallel()
 	clip := `{"format": {"filename": "http://127.0.0.1/x", "format_name": "mov,mp4", "duration": "30.000000"},
 		"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 3840, "height": 2160}]}`
 	path, runs := fakeProbe(t, clip, false)
@@ -383,6 +410,7 @@ func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 }
 
 func TestUnreadableVersionsAreNotAnalyzedAgain(t *testing.T) {
+	t.Parallel()
 	path, runs := fakeProbe(t, "", true)
 	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
 	version := library.Version{ID: accounts.ID{4}, URL: "https://93.184.216.34/page.html"}
@@ -397,6 +425,7 @@ func TestUnreadableVersionsAreNotAnalyzedAgain(t *testing.T) {
 }
 
 func TestSessionsFollowReports(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	sessions := NewSessions(func() time.Time { return now })
 	device, user, item := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
