@@ -351,14 +351,17 @@ function ServerState({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 pl-4 max-md:flex-col max-md:items-stretch max-md:pl-0">
         <div className="min-w-0 flex-1 basis-[14rem] text-small text-ink-3 max-md:basis-auto">
           {data !== undefined && (
-            <p className="figures">
+            <p className="figures text-lead">
               {text.uptime}{' '}
-              {formatSpan(
-                (Date.parse(data.checkedAt) - Date.parse(data.process.startedAt)) / 1000,
-                language,
-              )}
+              <strong className="font-semibold text-ink">
+                {formatSpan(
+                  (Date.parse(data.checkedAt) - Date.parse(data.process.startedAt)) / 1000,
+                  language,
+                )}
+              </strong>
               {' · '}
-              {text.version} {data.process.version}
+              {text.version}{' '}
+              <strong className="font-semibold text-ink">{data.process.version}</strong>
             </p>
           )}
           {status.data !== undefined && (
