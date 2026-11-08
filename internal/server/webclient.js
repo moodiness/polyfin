@@ -247,20 +247,26 @@
 //   "Show this title again", in its place for a title the user hid, its
 //     series hidden counting for a season or an episode, which deletes
 //     /Polyfin/UserItems/{id}/Hidden;
-//   "Add to Watchlist", for a movie or a series, or a season or an episode
-//     of one, which stands for its series, that is not on the user's
-//     watchlist, as /Polyfin/UserItems/Watchlist lists it. It posts to
-//     /Polyfin/UserItems/{id}/Watchlist and says so in a toast;
+//   "Add to Watchlist", for a movie, an episode, a season or a series
+//     that is not on the user's watchlist playlist, as
+//     /Polyfin/UserItems/Watchlist lists its entries and the titles it
+//     holds pending (a series none of whose episodes aired): a title is
+//     on it when it is an entry or pending, a season or a series also
+//     when an entry is an episode of it (its SeasonId or SeriesId). It
+//     posts the title to /Polyfin/UserItems/{id}/Watchlist, which puts a
+//     movie or an episode at the top of the playlist, a season or a series
+//     its aired episodes, and makes the playlist again when the user
+//     deleted it; and says so in a toast;
 //   "Remove from Watchlist", in its place for a title on the watchlist,
-//     its series counting for a season or an episode, which deletes
-//     /Polyfin/UserItems/{id}/Watchlist, takes the cards of the title off
-//     the rows of the watchlist and says so in a toast. A row of the
-//     watchlist is one of Polyfin's Now available and Still waiting home
-//     rows (see the eleventh), the home's section whose title opens the
-//     Watchlist view (its Id is d135aa5987b567b0d7eb66dff339ad22 on every
-//     server: #/mixed?topParentId= it, or #/list?parentId= it in
-//     jellyfin-web's legacy layouts), or the page of that view shown; the
-//     title's cards elsewhere stay.
+//     which deletes /Polyfin/UserItems/{id}/Watchlist: a movie or an
+//     episode goes off, a season or a series takes every entry of it off.
+//     It takes the cards of the title, and of its entries, off the rows of
+//     the watchlist and says so in a toast. A row of the watchlist is one
+//     of Polyfin's Now available and Still waiting home rows (see the
+//     eleventh), or the list of the user's watchlist playlist on its page
+//     (#/details?id= it, its Id the PlaylistId /Polyfin/UserItems/Watchlist
+//     gives, empty while the user has none); the title's cards elsewhere
+//     stay.
 // As the button is pressed or the card right-clicked, before jellyfin-web
 // opens its menu, the script asks for the item (ApiClient.getItem), the
 // hidden titles, the titles of the watchlist and, for a card with a resume
@@ -2442,9 +2448,10 @@
     return String(id).replace(/-/g, '').toLowerCase()
   }
   // askFacts asks for what the entries of the item's menu depend on: its
-  // type and series, whether the user hid it or its series, whether it or
-  // its series is on the user's watchlist, whether its card stands in a
-  // Continue Watching row, and in which Next Up it does.
+  // type and series, whether the user hid it or its series, whether it is
+  // on the user's watchlist and which entries stand for it there, whether
+  // its card stands in a Continue Watching row, and in which Next Up it
+  // does.
   function askFacts(api, id, card) {
     var user = api.getCurrentUserId()
     var row = card && card.getAttribute('data-positionticks') ? card.closest('.itemsContainer') : null
@@ -2470,16 +2477,44 @@
       }
       var hidden = listed(answers[1])
       var resumable = listed(answers[2])
-      var watchlist = listed(answers[3])
+      var watchlist = answers[3] || {}
+      if (answers[3]) learnWatchlist(answers[3])
+      // A movie, an episode, a season or a series is acted on itself: a
+      // season or a series stands for its entries (whole). A title Polyfin
+      // holds pending, a series none of whose episodes aired, is listed by
+      // its own Id.
+      var whole = item.Type === 'Series' ? 'series' : item.Type === 'Season' ? 'season' : ''
+      var entries = (watchlist.Items || []).map(function (held) {
+        return {
+          id: plainId(held.Id),
+          series: held.SeriesId ? plainId(held.SeriesId) : '',
+          season: held.SeasonId ? plainId(held.SeasonId) : '',
+        }
+      })
+      var held = entries.filter(function (held) {
+        return held.id === id || (!!whole && held[whole] === id)
+      })
       var cards = row ? row.querySelectorAll('.card[data-id]') : []
       return {
         series: series,
         hideable: /^(Movie|Video|Series)$/.test(item.Type) || (/^(Season|Episode)$/.test(item.Type) && !!series),
         hidden: !!(hidden[id] || (series && hidden[series])),
-        // The watchlist holds movies and series, a season or an episode
-        // standing for its series.
-        watchable: /^(Movie|Series)$/.test(item.Type) || (/^(Season|Episode)$/.test(item.Type) && !!series),
-        watchlisted: !!(watchlist[id] || (series && watchlist[series])),
+        // The watchlist's entries are movies and episodes: a movie or an
+        // episode is on it when it is an entry, a season or a series when
+        // an episode of it is.
+        watchable: /^(Movie|Series|Season|Episode)$/.test(item.Type),
+        watchlisted: held.length > 0,
+        watchlist: {
+          title: id,
+          whole: whole,
+          series: whole === 'series' ? id : series,
+          season: whole === 'season' ? id : item.SeasonId ? plainId(item.SeasonId) : '',
+          ids: [id].concat(
+            held.map(function (held) {
+              return held.id
+            })
+          ),
+        },
         resume:
           cards.length > 0 &&
           Array.prototype.every.call(cards, function (other) {
@@ -2553,16 +2588,24 @@
             })
           )
         }
-        // The watchlist holds the series of a season or an episode: what
-        // the entries keep is the title the watchlist holds.
-        var watched = facts.series || entry.id
+        // A movie or an episode goes on the watchlist and off it itself; a
+        // season or a series puts its aired episodes on, and takes every
+        // entry of it off.
+        var listing = facts.watchlist
         if (facts.watchable && facts.watchlisted) {
           scroller.appendChild(
             menuItem(container, model, 'bookmark_remove', say('removeWatchlist'), function () {
-              act(entry.id, 'DELETE', 'Watchlist', function () {
-                keepDrop({ kind: 'watchlist', id: watched })
-                var cards = Array.prototype.filter.call(document.querySelectorAll('.card[data-id]'), function (card) {
-                  return plainId(card.getAttribute('data-id')) === watched && watchlistRow(card)
+              act(listing.title, 'DELETE', 'Watchlist', function () {
+                keepDrop({
+                  kind: 'watchlist',
+                  id: listing.title,
+                  series: listing.series,
+                  season: listing.season,
+                  whole: listing.whole,
+                  playlist: knownWatchlist(),
+                })
+                var cards = Array.prototype.filter.call(document.querySelectorAll('.card[data-id], .listItem[data-id]'), function (card) {
+                  return listing.ids.indexOf(plainId(card.getAttribute('data-id'))) >= 0 && watchlistRow(card)
                 })
                 if (entry.card && cards.indexOf(entry.card) < 0 && watchlistRow(entry.card)) cards.push(entry.card)
                 dropCards(cards)
@@ -2573,10 +2616,23 @@
         } else if (facts.watchable) {
           scroller.appendChild(
             menuItem(container, model, 'bookmark_add', say('addWatchlist'), function () {
-              act(entry.id, 'POST', 'Watchlist', function () {
-                forgetDrops('watchlist', [watched])
-                keepDrop({ kind: 'watchlisted', id: watched })
+              act(listing.title, 'POST', 'Watchlist', function () {
+                forgetUnlisted(listing)
+                var drop = { kind: 'watchlisted', id: listing.title, playlist: knownWatchlist() }
+                keepDrop(drop)
                 toast(say('addedWatchlist'))
+                // A watchlist the user deleted is made again by the add:
+                // its page is known once Polyfin gives its Id.
+                if (drop.playlist) return
+                var api = window.ApiClient
+                api.getJSON(api.getUrl('Polyfin/UserItems/Watchlist')).then(
+                  quietly(function (answer) {
+                    learnWatchlist(answer)
+                    drop.playlist = knownWatchlist()
+                    saveDrops()
+                  }),
+                  function () {}
+                )
               })
             })
           )
@@ -2643,8 +2699,11 @@
   // the item: taken off Continue Watching (resume), with its last play
   // then, hidden (hidden), a series standing for what is in it, a series
   // taken off Next Up (nextup), with when, or a title taken off the
-  // watchlist (watchlist). A title put on the watchlist (watchlisted) takes
-  // nothing off: it has the watchlist's rows ask Polyfin.
+  // watchlist (watchlist), with the Id of the watchlist playlist: a movie
+  // or an episode, with its series and season, or a season or a series
+  // with every entry of it (whole: season or series). A title put on the
+  // watchlist (watchlisted), with that Id too, takes nothing off: it has
+  // the watchlist's rows ask Polyfin.
   var dropsKey = 'polyfinDrops'
   var dropsKept = 120000
   var drops = []
@@ -2685,6 +2744,25 @@
       return !(drop && drop.kind === kind && ids.indexOf(drop.id) >= 0)
     })
     saveDrops()
+  }
+  // forgetUnlisted forgets the drops of the watchlist that a title put
+  // back on it undoes: the title's own, those of the season or series it
+  // is in, and for a season or a series those of what is in it.
+  function forgetUnlisted(listing) {
+    drops = drops.filter(function (drop) {
+      if (!drop || drop.kind !== 'watchlist') return true
+      if (drop.id === listing.title) return false
+      if (drop.whole && (drop.id === listing.series || drop.id === listing.season)) return false
+      return !(listing.whole && (drop.series === listing.title || drop.season === listing.title))
+    })
+    saveDrops()
+  }
+  // unlists tells whether a drop of the watchlist takes an item off: the
+  // item itself, or what is in a season or a series taken off whole.
+  function unlists(drop, item) {
+    if (plainId(item.Id) === drop.id) return true
+    var whole = drop.whole === 'series' ? item.SeriesId : drop.whole === 'season' ? item.SeasonId : ''
+    return !!whole && plainId(whole) === drop.id
   }
   // watchlistChanged tells whether the user signed in put a title on the
   // watchlist, or took one off, within dropsKept.
@@ -2729,7 +2807,7 @@
             var since = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
             return nextUp && !!item.SeriesId && plainId(item.SeriesId) === drop.id && since <= drop.at
           }
-          if (drop.kind === 'watchlist') return watchlist && plainId(item.Id) === drop.id
+          if (drop.kind === 'watchlist') return watchlist && unlists(drop, item)
           if (drop.kind !== 'resume') return false
           var played = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
           return resumes && plainId(item.Id) === drop.id && played <= drop.last
@@ -2754,27 +2832,37 @@
     if (/[?&]type=nextup(?:&|$)/i.test(location.hash) && element.closest('.itemsContainer')) return 'list'
     return ''
   }
-  // The Watchlist view, the same on every server.
-  var watchlistView = 'd135aa5987b567b0d7eb66dff339ad22'
+  // The Id of the watchlist playlist of the user signed in, as
+  // /Polyfin/UserItems/Watchlist last gave it, empty while they have none;
+  // until it is asked, as the drops of the watchlist kept it, for a page
+  // loaded again.
+  var watchlistPlaylist = null
+  function learnWatchlist(answer) {
+    watchlistPlaylist = { viewer: viewerKey(), id: answer && answer.PlaylistId ? plainId(answer.PlaylistId) : '' }
+  }
+  function knownWatchlist() {
+    var viewer = viewerKey()
+    if (watchlistPlaylist && watchlistPlaylist.viewer === viewer) return watchlistPlaylist.id
+    var kept = liveDrops().filter(function (drop) {
+      return drop.viewer === viewer && drop.playlist
+    })
+    return kept.length > 0 ? kept[kept.length - 1].playlist : ''
+  }
   // watchlistRow tells whether an element stands in a row of the user's
-  // watchlist: Polyfin's Now available and Still waiting home rows, the
-  // home's section whose title opens the Watchlist view (its latest
-  // items), or the Watchlist view's page shown.
+  // watchlist: Polyfin's Now available and Still waiting home rows, or the
+  // list of the watchlist playlist's page shown.
   function watchlistRow(element) {
     if (!element || !element.closest) return false
     var custom = element.closest('.polyfinHomeRow')
     if (custom) return /^(NowAvailable|StillWaiting)$/.test(custom.getAttribute('data-polyfin-kind') || '')
-    var section = element.closest('.verticalSection')
-    var link = section && section.querySelector && section.querySelector('.sectionTitleContainer a[href]')
-    if (link) return opensWatchlist(link.getAttribute('href'))
-    return opensWatchlist(location.hash) && !element.closest('.page.hide')
+    return opensWatchlist(location.hash) && !!element.closest('.itemsContainer') && !element.closest('.page.hide')
   }
-  // opensWatchlist tells whether an address opens the Watchlist view, as
-  // jellyfin-web opens a library without a CollectionType: #/mixed, or
-  // #/list in its legacy layouts.
+  // opensWatchlist tells whether an address opens the page of the user's
+  // watchlist playlist: #/details?id= it.
   function opensWatchlist(address) {
-    var match = /^#!?\/(?:mixed|list)\?(?:[^#]*&)?(?:topParentId|parentId)=([^&#]*)/i.exec(address || '')
-    return !!match && plainId(match[1]) === watchlistView
+    var match = /^#!?\/details\?(?:[^#]*&)?id=([^&#]*)/i.exec(address || '')
+    var playlist = knownWatchlist()
+    return !!match && !!playlist && plainId(match[1]) === playlist
   }
   // Every row's fetchData goes through screened, as jellyfin-web sets it on
   // the row: rows are divs, and the script runs before jellyfin-web.
@@ -2878,7 +2966,7 @@
       var row = card.closest('.itemsContainer')
       card.remove()
       var section = row && row.closest('.verticalSection')
-      if (section && !row.querySelector('.card')) section.classList.add('hide')
+      if (section && !row.querySelector('.card, .listItem')) section.classList.add('hide')
     })
   }
   // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
@@ -3119,13 +3207,15 @@
   // the watchlist in the rows of the watchlist (Now available and Still
   // waiting): those the tenth keeps in the session storage under
   // polyfinDrops for the user signed in, until they expire, a hidden series
-  // taking its items with it. A row left without a title is left out.
+  // taking its items with it, as a season or a series taken off the
+  // watchlist takes its episodes. A row left without a title is left out.
   // Storage that fails, or holds anything else, hides nothing.
   function shownRows() {
     var api = window.ApiClient
     var viewer = (typeof api.serverId === 'function' ? api.serverId() : '') + '/' + (api.getCurrentUserId() || '')
     var hidden = {}
     var unlisted = {}
+    var unlistedWhole = { series: {}, season: {} }
     try {
       var drops = JSON.parse(window.sessionStorage.getItem('polyfinDrops'))
       if (Array.isArray(drops)) {
@@ -3133,6 +3223,7 @@
           if (!drop || drop.viewer !== viewer || !(drop.until > Date.now())) return
           if (drop.kind === 'hidden') hidden[drop.id] = true
           if (drop.kind === 'watchlist') unlisted[drop.id] = true
+          if (drop.kind === 'watchlist' && unlistedWhole[drop.whole]) unlistedWhole[drop.whole][drop.id] = true
         })
       }
     } catch (error) {}
@@ -3145,7 +3236,14 @@
       .map(function (row) {
         var watchlist = row.Kind === 'NowAvailable' || row.Kind === 'StillWaiting'
         var items = (row.Items || []).filter(function (item) {
-          if (watchlist && unlisted[plain(item.Id)]) return false
+          if (
+            watchlist &&
+            (unlisted[plain(item.Id)] ||
+              (item.SeriesId && unlistedWhole.series[plain(item.SeriesId)]) ||
+              (item.SeasonId && unlistedWhole.season[plain(item.SeasonId)]))
+          ) {
+            return false
+          }
           return !hidden[plain(item.Id)] && !(item.SeriesId && hidden[plain(item.SeriesId)])
         })
         return Object.assign({}, row, { Items: items })

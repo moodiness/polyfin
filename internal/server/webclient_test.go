@@ -2433,8 +2433,8 @@ async function run(scenario) {
 // "Remove from Next Up" for an episode's card in Next Up, whose series
 // then leaves Next Up's answers kept, unless played since, "Hide this
 // title" for a title, or a season or an episode of one, "Show this title
-// again" for a hidden one, and "Add to Watchlist" for a movie or a series,
-// or a season or an episode of one, in the page's language (the watchlist's
+// again" for a hidden one, and "Add to Watchlist" for a movie, an episode
+// or a series, or a season of one, in the page's language (the watchlist's
 // entries are tested on their own below). An entry closes the menu as Back
 // does, then sends its change. It runs in Node.js, in a context that stands
 // for the browser and jellyfin-web.
@@ -2672,18 +2672,21 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
 	}
 }
 
-// The item menus get "Add to Watchlist" for a movie or a series, or a
-// season or an episode of one, and "Remove from Watchlist" in its place for
-// a title on the user's watchlist, an episode's or a season's series
-// counting, as one request to /Polyfin/UserItems/Watchlist per menu tells.
-// Add posts the title to /Polyfin/UserItems/{id}/Watchlist, Remove deletes
-// it there and takes the title's cards off the rows of the watchlist (the
-// home's row of the Watchlist view, Polyfin's Now available and Still
-// waiting, the view's page), not off the others; the next menu for the
+// The item menus get "Add to Watchlist" for a movie, an episode or a
+// series, or a season standing for its series, and "Remove from
+// Watchlist" in its place for a title on the user's watchlist playlist, as
+// one request to /Polyfin/UserItems/Watchlist per menu tells: a movie or
+// an episode when it is an entry, a series when an entry is an episode of
+// it. Add posts the title to /Polyfin/UserItems/{id}/Watchlist, Remove
+// deletes it there, a series taking every entry of it, and takes the
+// cards of what went off the rows of the watchlist (Polyfin's Now
+// available and Still waiting, the watchlist playlist's page), not off
+// the others, nor off another playlist's page; the next menu for the
 // title offers the other entry. For two minutes after either, the rows of
-// the watchlist ask Polyfin anew, and leave out what Remove took off. It
-// runs in Node.js, in a context that stands for the browser and
-// jellyfin-web.
+// the watchlist ask Polyfin anew, and leave out what Remove took off,
+// until the title is put back. A watchlist the user deleted is made again
+// by Add, and its page known. It runs in Node.js, in a context that stands
+// for the browser and jellyfin-web.
 func TestItemMenusPutTitlesOnTheWatchlist(t *testing.T) {
 	t.Parallel()
 	node, err := exec.LookPath("node")
@@ -2692,13 +2695,16 @@ func TestItemMenusPutTitlesOnTheWatchlist(t *testing.T) {
 	}
 	const (
 		page     = "0123456789abcdef0123456789abcdef"
+		list     = "fedcba9876543210fedcba9876543210"
+		remade   = "00112233445566778899aabbccddeeff"
+		another  = "abababababababababababababababab"
 		hide     = "Hide this title (visibility_off) | "
 		add      = "Add to Watchlist (bookmark_add)"
 		remove   = "Remove from Watchlist (bookmark_remove)"
 		added    = "toast This title is on your Watchlist."
 		removed  = "toast This title is off your Watchlist."
-		others   = " | Movies[m1 m2 v1] | Shows[s1 n1 e1] | Others[p1 b1 a1]"
-		view     = "#/mixed?topParentId=d135aa5987b567b0d7eb66dff339ad22&collectionType=mixed"
+		home     = "Movies[m1 m2 v1] | Shows[s1 n1 n2 e1 e2] | Others[p1 b1 a1]"
+		others   = " | " + home
 		frAdd    = "Ajouter à «\u202fÀ regarder\u202f»"
 		frRemove = "Retirer de «\u202fÀ regarder\u202f»"
 	)
@@ -2706,61 +2712,101 @@ func TestItemMenusPutTitlesOnTheWatchlist(t *testing.T) {
 		Hash      string   `json:"hash"`
 		Language  string   `json:"language"`
 		Watchlist []string `json:"watchlist"`
+		Available []string `json:"available"`
+		Page      []string `json:"page"`
+		Deleted   bool     `json:"deleted"`
+		Pending   []string `json:"pending"`
 		Steps     []string `json:"steps"`
 		want      []string
 	}
-	// The home page shows the Watchlist view's row of latest items, the
-	// rows of two libraries, Polyfin's Now available and Trending (a
-	// catalog), and a row of other kinds; a route of a library's page
-	// shows that page, its cards those of the watchlist, over the home
-	// page, hidden. Each step logs: a menu's entries, with their icons,
-	// and how many times the watchlist was asked as it opened; what
+	// The home page shows the rows of two libraries, Polyfin's Now
+	// available (the watchlist's titles, or Available) and Trending (a
+	// catalog), and a row of other kinds. A playlist's page (#/details?id=
+	// it) shows its entries as a list (the watchlist's, or Page) over the
+	// home page, hidden. Each step logs: a menu's entries, with their
+	// icons, and how many times the watchlist was asked as it opened; what
 	// pressing an entry did; the cards of each row; what each row with a
 	// fetchData draws from the answer jellyfin-web kept, and whether it
 	// asked Polyfin anew.
 	scenarios := map[string]scenario{
-		"a movie off the watchlist": {Watchlist: []string{"s1"},
-			Steps: []string{"menu Movies m1", "press Add to Watchlist", "menu Movies m1", "rows", "later", "rows"},
+		"a movie": {Watchlist: []string{"e1"},
+			Steps: []string{"menu Movies m1", "press Add to Watchlist", "menu Movies m1", "press Remove from Watchlist", "menu Movies m1"},
 			want: []string{hide + add + ", asked 1", "back, POST Polyfin/UserItems/m1/Watchlist, " + added, hide + remove + ", asked 1",
-				"Watchlist[s1] (asked anew)" + others, "Watchlist[s1]" + others}},
-		"a series on the watchlist, from the watchlist's row": {Watchlist: []string{"s1", "m2"},
-			Steps: []string{"menu Watchlist s1", "press Remove from Watchlist", "cards", "rows", "menu Shows s1", "later", "rows"},
+				"back, DELETE Polyfin/UserItems/m1/Watchlist, " + removed, hide + add + ", asked 1"}},
+		// An episode is on the watchlist itself; its season and its series
+		// as soon as one of their episodes is.
+		"a series one of whose episodes is on the watchlist": {Watchlist: []string{"e1"},
+			Steps: []string{"menu Shows s1", "menu Shows n1", "menu Shows n2", "menu Shows e1", "menu Shows e2", "press Add to Watchlist", "menu Shows e2"},
+			want: []string{hide + remove + ", asked 1", hide + remove + ", asked 1", hide + add + ", asked 1", hide + remove + ", asked 1", hide + add + ", asked 1",
+				"back, POST Polyfin/UserItems/e2/Watchlist, " + added, hide + remove + ", asked 1"}},
+		"a series put on the watchlist": {
+			Steps: []string{"menu Shows s1", "press Add to Watchlist", "menu Shows e1", "menu Shows e2", "menu Shows n2", "menu Shows s1"},
+			want: []string{hide + add + ", asked 1", "back, POST Polyfin/UserItems/s1/Watchlist, " + added,
+				hide + remove + ", asked 1", hide + remove + ", asked 1", hide + remove + ", asked 1", hide + remove + ", asked 1"}},
+		// A season puts its own episodes, not the series' others.
+		"a season put on the watchlist": {
+			Steps: []string{"menu Shows n1", "press Add to Watchlist", "menu Shows e1", "menu Shows e2", "menu Shows n2", "menu Shows s1"},
+			want: []string{hide + add + ", asked 1", "back, POST Polyfin/UserItems/n1/Watchlist, " + added,
+				hide + remove + ", asked 1", hide + add + ", asked 1", hide + add + ", asked 1", hide + remove + ", asked 1"}},
+		// Remove on a season takes its entries off, not the series' others;
+		// an episode of it put back is no longer left out.
+		"a season taken off on the watchlist's page": {Hash: "#/details?id=" + list, Watchlist: []string{"e1", "e2", "m1"}, Available: []string{"s1"},
+			Steps: []string{"menu Shows n1", "press Remove from Watchlist", "rows", "menu Shows s1", "menu Shows e1", "press Add to Watchlist", "rows"},
 			want: []string{hide + remove + ", asked 1",
-				"back, DELETE Polyfin/UserItems/s1/Watchlist, card s1 off Watchlist, card s1 off Now available, " + removed,
-				"Watchlist[m2] | Movies[m1 m2 v1] | Shows[s1 n1 e1] | Now available[m2] | Trending[m1 s1] | Others[p1 b1 a1]",
-				"Watchlist[m2] (asked anew)" + others, hide + add + ", asked 1", "Watchlist[s1 m2]" + others}},
-		"an episode whose series is on the watchlist": {Watchlist: []string{"s1"},
-			Steps: []string{"menu Shows e1", "press Remove from Watchlist", "menu Shows e1", "menu Shows n1", "cards"},
+				"back, DELETE Polyfin/UserItems/n1/Watchlist, card e1 off Playlist, " + removed,
+				"Playlist[e2 m1] (asked anew)" + others, hide + remove + ", asked 1", hide + add + ", asked 1",
+				"back, POST Polyfin/UserItems/e1/Watchlist, " + added, "Playlist[e1 e2 m1] (asked anew)" + others}},
+		// Remove on a series takes every entry of it off the watchlist's
+		// page, and the series off Now available; the movie stays.
+		"a series taken off on the watchlist's page": {Hash: "#/details?id=" + list + "&serverId=srv", Watchlist: []string{"e1", "m1", "e2"}, Available: []string{"s1", "m1"},
+			Steps: []string{"menu Shows s1", "press Remove from Watchlist", "cards", "rows", "menu Shows e1", "menu Shows s1", "later", "rows"},
 			want: []string{hide + remove + ", asked 1",
-				"back, DELETE Polyfin/UserItems/e1/Watchlist, card s1 off Watchlist, card s1 off Now available, " + removed,
-				hide + add + ", asked 1", hide + add + ", asked 1",
-				"Watchlist[] | Movies[m1 m2 v1] | Shows[s1 n1 e1] | Now available[] | Trending[m1 s1] | Others[p1 b1 a1]"}},
-		"a season off the watchlist": {
-			Steps: []string{"menu Shows n1", "press Add to Watchlist", "menu Shows e1", "menu Shows s1"},
-			want:  []string{hide + add + ", asked 1", "back, POST Polyfin/UserItems/n1/Watchlist, " + added, hide + remove + ", asked 1", hide + remove + ", asked 1"}},
-		// Put back on the watchlist within the two minutes, the title is no
-		// longer left out of its rows.
-		"taken off, then put back": {Watchlist: []string{"s1"},
-			Steps: []string{"menu Watchlist s1", "press Remove from Watchlist", "rows", "menu Shows s1", "press Add to Watchlist", "rows"},
+				"back, DELETE Polyfin/UserItems/s1/Watchlist, card e1 off Playlist, card e2 off Playlist, card s1 off Now available, " + removed,
+				"Playlist[m1] | Movies[m1 m2 v1] | Shows[s1 n1 n2 e1 e2] | Now available[m1] | Trending[m1 s1 s3] | Others[p1 b1 a1]",
+				"Playlist[m1] (asked anew)" + others, hide + add + ", asked 1", hide + add + ", asked 1",
+				"Playlist[e1 m1 e2]" + others}},
+		// Remove on an episode takes only that episode off; its series
+		// stays on the watchlist while another episode of it is.
+		"an episode taken off on the watchlist's page": {Hash: "#/details?id=" + list, Watchlist: []string{"e1", "e2"}, Available: []string{"s1"},
+			Steps: []string{"menu Playlist e1", "press Remove from Watchlist", "rows", "menu Shows s1", "menu Shows e1"},
 			want: []string{hide + remove + ", asked 1",
-				"back, DELETE Polyfin/UserItems/s1/Watchlist, card s1 off Watchlist, card s1 off Now available, " + removed,
-				"Watchlist[] (asked anew)" + others, hide + add + ", asked 1", "back, POST Polyfin/UserItems/s1/Watchlist, " + added,
-				"Watchlist[s1] (asked anew)" + others}},
-		"the Watchlist view's page": {Hash: view, Watchlist: []string{"m1", "s1"},
-			Steps: []string{"menu Page m1", "press Remove from Watchlist", "rows"},
+				"back, DELETE Polyfin/UserItems/e1/Watchlist, card e1 off Playlist, " + removed,
+				"Playlist[e2] (asked anew)" + others, hide + remove + ", asked 1", hide + add + ", asked 1"}},
+		// Put back within the two minutes, what was taken off is no longer
+		// left out: an episode of a series taken off, a series whose
+		// episodes were.
+		"a series taken off, then an episode of it put back": {Hash: "#/details?id=" + list, Watchlist: []string{"e1", "e2"}, Available: []string{"s1"},
+			Steps: []string{"menu Shows s1", "press Remove from Watchlist", "rows", "menu Shows e1", "press Add to Watchlist", "rows"},
 			want: []string{hide + remove + ", asked 1",
-				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Page, card m1 off Watchlist, card m1 off Now available, " + removed,
-				"Page[s1] (asked anew) | Watchlist[s1] (asked anew)" + others}},
-		"the Watchlist view's page in a legacy layout": {Hash: "#/list?parentId=d135aa5987b567b0d7eb66dff339ad22&serverId=srv", Watchlist: []string{"m1"},
-			Steps: []string{"menu Page m1", "press Remove from Watchlist", "rows"},
+				"back, DELETE Polyfin/UserItems/s1/Watchlist, card e1 off Playlist, card e2 off Playlist, card s1 off Now available, " + removed,
+				"Playlist[] (asked anew)" + others, hide + add + ", asked 1", "back, POST Polyfin/UserItems/e1/Watchlist, " + added,
+				"Playlist[e1 e2] (asked anew)" + others}},
+		"episodes taken off, then their series put back": {Hash: "#/details?id=" + list, Watchlist: []string{"e1", "e2", "m1"},
+			Steps: []string{"menu Playlist e1", "press Remove from Watchlist", "menu Playlist e2", "press Remove from Watchlist", "rows",
+				"menu Shows s1", "press Add to Watchlist", "rows"},
+			want: []string{hide + remove + ", asked 1", "back, DELETE Polyfin/UserItems/e1/Watchlist, card e1 off Playlist, card e1 off Now available, " + removed,
+				hide + remove + ", asked 1", "back, DELETE Polyfin/UserItems/e2/Watchlist, card e2 off Playlist, card e2 off Now available, " + removed,
+				"Playlist[m1] (asked anew)" + others, hide + add + ", asked 1", "back, POST Polyfin/UserItems/s1/Watchlist, " + added,
+				"Playlist[e1 e2 m1] (asked anew)" + others}},
+		// Another playlist's page is not the watchlist's: its cards stay.
+		"another playlist's page": {Hash: "#/details?id=" + another, Watchlist: []string{"m1"}, Page: []string{"m1", "m2"},
+			Steps: []string{"menu Playlist m1", "press Remove from Watchlist", "rows"},
 			want: []string{hide + remove + ", asked 1",
-				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Page, card m1 off Watchlist, card m1 off Now available, " + removed,
-				"Page[] (asked anew) | Watchlist[] (asked anew)" + others}},
-		"another library's page": {Hash: "#/mixed?topParentId=f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3&collectionType=mixed", Watchlist: []string{"m1"},
-			Steps: []string{"menu Page m1", "press Remove from Watchlist", "rows"},
-			want: []string{hide + remove + ", asked 1",
-				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Watchlist, card m1 off Now available, " + removed,
-				"Page[m1] | Watchlist[] (asked anew)" + others}},
+				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Now available, " + removed,
+				"Playlist[m1 m2]" + others}},
+		// The user deleted the watchlist: Add makes it again, under a new
+		// Id, whose page is then the watchlist's.
+		"a deleted watchlist": {Hash: "#/details?id=" + remade, Deleted: true, Page: []string{"m1", "m2"},
+			Steps: []string{"menu Movies m1", "rows", "press Add to Watchlist", "rows", "menu Playlist m1", "press Remove from Watchlist"},
+			want: []string{hide + add + ", asked 1", "Playlist[m1 m2]" + others, "back, POST Polyfin/UserItems/m1/Watchlist, " + added,
+				"Playlist[m1 m2] (asked anew)" + others, hide + remove + ", asked 1",
+				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Playlist, " + removed}},
+		// A series none of whose episodes aired is held pending, by its own
+		// Id: it shows as on the watchlist, and Remove takes it off.
+		"a series added before any episode aired": {Pending: []string{"s3"},
+			Steps: []string{"menu Trending s3", "press Remove from Watchlist", "menu Trending s3", "press Add to Watchlist", "menu Trending s3"},
+			want: []string{hide + remove + ", asked 1", "back, DELETE Polyfin/UserItems/s3/Watchlist, " + removed,
+				hide + add + ", asked 1", "back, POST Polyfin/UserItems/s3/Watchlist, " + added, hide + remove + ", asked 1"}},
 		"a title's page": {Hash: "#/details?id=" + page,
 			Steps: []string{"menu details", "press Add to Watchlist", "menu details"},
 			want:  []string{hide + add + ", asked 1", "back, POST Polyfin/UserItems/" + page + "/Watchlist, " + added, hide + remove + ", asked 1"}},
@@ -2770,12 +2816,12 @@ func TestItemMenusPutTitlesOnTheWatchlist(t *testing.T) {
 		"in French": {Language: "fr", Watchlist: []string{"m1"},
 			Steps: []string{"menu Movies m1", "press " + frRemove, "menu Movies m2", "press " + frAdd},
 			want: []string{"Masquer ce titre (visibility_off) | " + frRemove + " (bookmark_remove), asked 1",
-				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Watchlist, card m1 off Now available, toast Ce titre n’est plus dans «\u202fÀ regarder\u202f».",
+				"back, DELETE Polyfin/UserItems/m1/Watchlist, card m1 off Now available, toast Ce titre n’est plus dans «\u202fÀ regarder\u202f».",
 				"Masquer ce titre (visibility_off) | " + frAdd + " (bookmark_add), asked 1",
 				"back, POST Polyfin/UserItems/m2/Watchlist, toast Ce titre est dans «\u202fÀ regarder\u202f»."}},
 	}
 	const harness = scriptRunner + `
-const { script, scenarios, page } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const { script, scenarios, page, list, remade } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 // matches tells whether an element matches a compound selector: a tag,
 // classes, an id and attributes; anything else matches nothing.
@@ -2876,12 +2922,21 @@ const matchesComplex = (element, selector) => {
     }
     const location = { href: 'http://polyfin.test/web/' + (scenario.hash || '#/home'), hash: scenario.hash || '#/home', replace: () => {} }
     const history = { pushState: () => {}, replaceState: () => {}, back: () => did.push('back') }
-    // What Polyfin knows: the titles, and the user's watchlist, which
-    // holds the series of a season or an episode.
+    // What Polyfin knows: the titles, and the user's watchlist playlist,
+    // whose entries are movies and episodes: a series or a season puts
+    // its episodes, a series takes all its entries off. Its Id is given
+    // as a GUID, empty while the user has none; one is made by an add.
     const items = { m1: { Type: 'Movie' }, m2: { Type: 'Movie' }, s1: { Type: 'Series' }, n1: { Type: 'Season', SeriesId: 's1' },
-      e1: { Type: 'Episode', SeriesId: 's1' }, v1: { Type: 'Video' }, p1: { Type: 'Person' }, b1: { Type: 'BoxSet' }, a1: { Type: 'MusicAlbum' } }
+      n2: { Type: 'Season', SeriesId: 's1' }, e1: { Type: 'Episode', SeriesId: 's1', SeasonId: 'n1' }, e2: { Type: 'Episode', SeriesId: 's1', SeasonId: 'n2' },
+      s3: { Type: 'Series' }, v1: { Type: 'Video' }, p1: { Type: 'Person' }, b1: { Type: 'BoxSet' }, a1: { Type: 'MusicAlbum' } }
     items[page] = { Type: 'Movie' }
-    const watchlist = new Set(scenario.watchlist || [])
+    const episodes = { s1: ['e1', 'e2'], n1: ['e1'], n2: ['e2'], s3: [] }
+    const guid = (id) => id.replace(/^(.{8})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4-').toUpperCase()
+    let playlist = scenario.deleted ? '' : guid(list)
+    let entries = [...(scenario.watchlist || [])]
+    // The titles Polyfin holds pending: a series none of whose episodes
+    // aired.
+    let pending = [...(scenario.pending || [])]
     let asked = 0
     const ApiClient = {
       getCurrentUserId: () => 'u1',
@@ -2893,15 +2948,25 @@ const matchesComplex = (element, selector) => {
       getJSON: (url) => {
         if (url !== 'Polyfin/UserItems/Watchlist') return Promise.resolve(url.endsWith('/Ratings') ? { Pending: false } : { Items: [] })
         asked++
-        return Promise.resolve({ Items: [...watchlist].map((id) => ({ Id: id, AddedAt: '2026-11-01T20:00:00.0000000Z' })) })
+        return Promise.resolve({ PlaylistId: playlist, Items: entries.map((id) => Object.assign({ Id: id, AddedAt: '2026-11-01T20:00:00.0000000Z' },
+          items[id].SeriesId ? { SeriesId: items[id].SeriesId, SeasonId: items[id].SeasonId } : {}))
+          .concat(pending.map((id) => ({ Id: id, Pending: true, AddedAt: '2026-11-01T20:00:00.0000000Z' }))) })
       },
       ajax: (request) => {
         did.push(request.type + ' ' + request.url)
         const change = /^Polyfin\/UserItems\/(\w+)\/Watchlist$/.exec(request.url)
         if (change) {
-          const title = items[change[1]].SeriesId || change[1]
-          if (request.type === 'POST') watchlist.add(title)
-          if (request.type === 'DELETE') watchlist.delete(title)
+          const id = change[1]
+          const its = episodes[id] || [id]
+          if (request.type === 'POST' && its.length === 0 && !pending.includes(id)) pending.push(id)
+          if (request.type === 'POST' && its.length > 0) {
+            if (!playlist) playlist = guid(remade)
+            entries = its.filter((one) => !entries.includes(one)).concat(entries)
+          }
+          if (request.type === 'DELETE') {
+            pending = pending.filter((one) => one !== id)
+            entries = entries.filter((one) => !(its.includes(one) || (items[id].Type === 'Series' && items[one].SeriesId === id)))
+          }
         }
         return Promise.resolve(undefined)
       },
@@ -2921,8 +2986,8 @@ const matchesComplex = (element, selector) => {
     // The rows, drawn once the script runs, as jellyfin-web sets their
     // fetchData then: each draws again from the answer it kept, unless
     // asked as if that answer were older than a minute.
-    const card = (id) => {
-      const made = new Element('div', 'card', { 'data-id': id })
+    const card = (id, list) => {
+      const made = new Element('div', list ? 'listItem' : 'card', { 'data-id': id })
       made.appendChild(new Element('button', 'cardOverlayButton', { 'data-action': 'menu' }))
       made.remove = () => {
         did.push('card ' + id + ' off ' + made.closest('.itemsContainer').getAttribute('data-name'))
@@ -2930,11 +2995,11 @@ const matchesComplex = (element, selector) => {
       }
       return made
     }
-    const itemsOf = (rowName, ids, fetched) => {
+    const itemsOf = (rowName, ids, fetched, list) => {
       const container = new Element('div', 'itemsContainer', { 'data-name': rowName })
-      ids.forEach((id) => container.appendChild(card(id)))
+      ids.forEach((id) => container.appendChild(card(id, list)))
       if (fetched) {
-        const kept = { Items: ids.map((id) => ({ Id: id, SeriesId: items[id].SeriesId })) }
+        const kept = { Items: ids.map((id) => ({ Id: id, SeriesId: items[id].SeriesId, SeasonId: items[id].SeasonId })) }
         container.fetchData = function () {
           this.anew = clock.now() - now > 60000
           return Promise.resolve(JSON.parse(JSON.stringify(kept)))
@@ -2949,15 +3014,15 @@ const matchesComplex = (element, selector) => {
       return made
     }
     const titles = scenario.watchlist || []
-    if (scenario.hash && !scenario.hash.startsWith('#/details')) {
-      body.appendChild(new Element('div', 'page libraryPage')).appendChild(itemsOf('Page', titles, true))
+    // A playlist's page lists its entries, as jellyfin-web draws them.
+    if (scenario.hash && scenario.hash !== '#/details?id=' + page) {
+      body.appendChild(new Element('div', 'page itemDetailPage')).appendChild(itemsOf('Playlist', scenario.page || titles, true, true))
     }
     const home = body.appendChild(new Element('div', 'page homePage' + (scenario.hash ? ' hide' : '')))
-    home.appendChild(section('Watchlist', '#/mixed?topParentId=d135aa5987b567b0d7eb66dff339ad22&collectionType=mixed&tab=1', titles))
     home.appendChild(section('Movies', '#/movies?topParentId=f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1&collectionType=movies&tab=1', ['m1', 'm2', 'v1']))
-    home.appendChild(section('Shows', '#/tv?topParentId=f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2&collectionType=tvshows&tab=1', ['s1', 'n1', 'e1']))
-    home.appendChild(section('Now available', '#/list?parentId=r6&serverId=srv', titles, 'NowAvailable'))
-    home.appendChild(section('Trending', '#/list?parentId=r1&serverId=srv', ['m1', 's1'], 'Catalog'))
+    home.appendChild(section('Shows', '#/tv?topParentId=f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2&collectionType=tvshows&tab=1', ['s1', 'n1', 'n2', 'e1', 'e2']))
+    home.appendChild(section('Now available', '#/list?parentId=r6&serverId=srv', scenario.available || titles, 'NowAvailable'))
+    home.appendChild(section('Trending', '#/list?parentId=r1&serverId=srv', ['m1', 's1', 's3'], 'Catalog'))
     home.appendChild(section('Others', '#/list?parentId=f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3&serverId=srv', ['p1', 'b1', 'a1']))
     const fire = (type, event) => { for (const listener of listeners[type] || []) listener(event) }
     let menu = []
@@ -2968,7 +3033,7 @@ const matchesComplex = (element, selector) => {
         const [rowName, id] = [step.slice(5, step.lastIndexOf(' ')), step.slice(step.lastIndexOf(' ') + 1)]
         const target = step === 'menu details' ? new Element('button', 'btnMoreCommands')
           : body.querySelectorAll('.itemsContainer').find((row) => row.getAttribute('data-name') === rowName)
-            .querySelectorAll('.card').find((c) => c.getAttribute('data-id') === id).querySelector('button')
+            .querySelectorAll('.card, .listItem').find((c) => c.getAttribute('data-id') === id).querySelector('button')
         const before = asked
         fire('click', { type: 'click', target })
         const container = new Element('div', 'dialogContainer')
@@ -2995,7 +3060,7 @@ const matchesComplex = (element, selector) => {
         body.querySelectorAll('.toastContainer').forEach((holder) => holder.remove())
         log.push(did.concat(toasts).join(', '))
       } else if (step === 'cards') {
-        log.push(body.querySelectorAll('.itemsContainer').map((row) => row.getAttribute('data-name') + '[' + row.querySelectorAll('.card').map((c) => c.getAttribute('data-id')).join(' ') + ']').join(' | '))
+        log.push(body.querySelectorAll('.itemsContainer').map((row) => row.getAttribute('data-name') + '[' + row.querySelectorAll('.card, .listItem').map((c) => c.getAttribute('data-id')).join(' ') + ']').join(' | '))
       } else if (step === 'rows') {
         const drawn = []
         for (const row of body.querySelectorAll('.itemsContainer')) {
@@ -3013,7 +3078,7 @@ const matchesComplex = (element, selector) => {
   process.stdout.write(JSON.stringify(results))
 })().catch((error) => { process.stdout.write(JSON.stringify({ harness: [String(error.stack)] })) })
 `
-	input, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": scenarios, "page": page})
+	input, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": scenarios, "page": page, "list": list, "remade": remade})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
 	command.Stdin = strings.NewReader(string(input))
 	output, err := command.Output()
@@ -3054,6 +3119,13 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 			item["ImageTags"] = row{"Primary": "tag" + id}
 		}
 		return item
+	}
+	episodeOf := func(id, name, series, season string) row {
+		episode := item(id, name, row{}, true)
+		episode["Type"] = "Episode"
+		episode["SeriesId"] = series
+		episode["SeasonId"] = season
+		return episode
 	}
 	trending := row{"Id": "r1", "Name": "Trending", "Place": "Top", "Items": []row{
 		item("a1", "Alpha", row{"Played": true}, true),
@@ -3152,6 +3224,20 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 			want: []string{ask, "Trending[Alpha Bravo] s0 s1 Now available[Alpha Bravo] s2 s3 s4 s5 s6 s7 s8 s9 Still waiting[Charlie]",
 				"Trending[Alpha Bravo] s0 s1 Now available[Alpha] s2 s3 s4 s5 s6 s7 s8 s9",
 				"Trending[Alpha Bravo] s0 s1 Now available[Alpha] s2 s3 s4 s5 s6 s7 s8 s9"},
+		},
+		// A series or a season taken off takes off the episodes of it the
+		// rows hold, as the watchlist loses every entry of it; an episode
+		// taken off takes only itself, and leaves its series.
+		"a series, a season and an episode taken off the watchlist from the menu": {
+			answers: [][]row{{trending,
+				{"Id": "r6", "Name": "Now available", "Kind": "NowAvailable", "Place": "AfterResume", "Items": []row{
+					item("d4", "Delta", row{}, true), episodeOf("e5", "Echo", "d4", "d5"), item("f6", "Foxtrot", row{}, true), episodeOf("h8", "Hotel", "g7", "g8"),
+					episodeOf("i9", "India", "k1", "j0"), episodeOf("l2", "Lima", "k1", "m3"),
+				}},
+				{"Id": "r7", "Name": "Still waiting", "Kind": "StillWaiting", "Place": "Bottom", "Items": []row{item("g7", "Golf", row{}, true)}}}},
+			steps: []string{"home", "wait 100", "show", "unlist d4* h8 j0^", "render", "show"},
+			want: []string{ask, "Trending[Alpha Bravo] s0 s1 Now available[Delta Echo Foxtrot Hotel India Lima] s2 s3 s4 s5 s6 s7 s8 s9 Still waiting[Golf]",
+				"Trending[Alpha Bravo] s0 s1 Now available[Foxtrot Lima] s2 s3 s4 s5 s6 s7 s8 s9 Still waiting[Golf]"},
 		},
 		// The rows drawn are found by their places, not by the order of the
 		// list: listed in another order than their places', with other
@@ -3297,10 +3383,16 @@ async function run(scenario) {
     for (const card of container.querySelectorAll('.card')) if (ids.includes(card.getAttribute('data-id'))) card.parentNode.removeChild(card)
   }
   // unlist does what the menu's Remove from Watchlist does: it keeps the
-  // title, then takes its cards off the rows of the watchlist.
+  // title, a series marked with * or a season with ^ standing for every
+  // entry of it, then takes its cards off the rows of the watchlist.
   const unlist = (ids) => {
     const drops = JSON.parse(stored.polyfinDrops || '[]')
-    for (const id of ids) drops.push({ kind: 'watchlist', id, viewer: 'srv/user', until: 1e12 })
+    ids = ids.map((id) => {
+      const whole = id.endsWith('*') ? 'series' : id.endsWith('^') ? 'season' : ''
+      if (whole) id = id.slice(0, -1)
+      drops.push({ kind: 'watchlist', id, whole, viewer: 'srv/user', until: 1e12 })
+      return id
+    })
     stored.polyfinDrops = JSON.stringify(drops)
     for (const card of container.querySelectorAll('.card')) {
       const row = card.closest('.polyfinHomeRow')
