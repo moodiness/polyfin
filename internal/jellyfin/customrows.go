@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/trackers"
 )
 
@@ -38,7 +40,16 @@ import (
 //     they have not started that versions were found for, and those still
 //     without (see library.WatchlistAvailable);
 //   - Top picks for you: the titles of the user's libraries their taste
-//     profile ranks first (see taste.go).
+//     profile ranks first (see taste.go);
+//   - the user's Watchlist, named as the user sees it (see playlistName);
+//   - My playlists: one row for each playlist the user may see and made a
+//     favorite, up to the row's count, by name as the user sees them,
+//     accents aside, each named after its playlist; without the user's
+//     Watchlist while a Watchlist row shows to them too;
+//   - a playlist the administrator chose, to the users who may see it.
+//
+// A row of a playlist lists its entries as /Playlists/{id}/Items lists
+// them to the user, in the playlist's order (see shownTitles).
 //
 // Every row leaves out what the user's listings leave out: the titles
 // parental control or blocked genres hide, the titles they hid, and the
@@ -97,28 +108,37 @@ var customRowKinds = map[homerows.Kind]string{
 	homerows.KindWaiting:    "StillWaiting",
 	homerows.KindTrakt:      "Trakt",
 	homerows.KindPicks:      "TopPicks",
+	homerows.KindWatchlist:  "Watchlist",
+	homerows.KindPlaylists:  "FavoritePlaylists",
+	homerows.KindPlaylist:   "Playlist",
 }
 
 // CustomRowDto is a row of GET /Polyfin/HomeRows: its folder's Id, its
 // Name, its Place (Top, AfterResume, AfterNextUp or Bottom), its Kind
 // (Catalog, Collection, BecauseYouWatched, New, NowAvailable, StillWaiting
 // or TopPicks) and its first Items.
-// A Recommended on Trakt row's Kind is Trakt.
+// A Recommended on Trakt row's Kind is Trakt. A row of a playlist is of
+// Kind Watchlist, FavoritePlaylists or Playlist, and PlaylistId names its
+// playlist, whose page its name opens.
 type CustomRowDto struct {
-	Id    string
-	Name  string
-	Place string
-	Kind  string
-	Items []BaseItemDto
+	Id         string
+	Name       string
+	Place      string
+	Kind       string
+	PlaylistId string `json:",omitempty"`
+	Items      []BaseItemDto
 }
 
 // customRow is a row as a user sees it: one of a Because you watched row
-// for each title it follows (baseline), named after it.
+// for each title it follows (baseline), named after it; one of a My
+// playlists row for each playlist, named after it. playlist is the
+// playlist a row of playlists lists.
 type customRow struct {
 	row      homerows.Row
 	id       accounts.ID
 	name     string
 	baseline accounts.ID
+	playlist accounts.ID
 }
 
 // customRowID identifies the folder of a row, or of the row of a title a
@@ -140,9 +160,9 @@ func customRowBaseline(row, id accounts.ID) accounts.ID {
 
 // customRows lists the rows user sees that keep accepts, every one when
 // keep is nil, in order, a Because you watched row as one for each title
-// it follows; none for a request made with an API key, none of them
-// while Similar titles is off, and no Recommended on Trakt row without a
-// Trakt connection.
+// it follows and a My playlists row as one for each playlist; none for a
+// request made with an API key, none of them while Similar titles is off,
+// and no Recommended on Trakt row without a Trakt connection.
 func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(homerows.Row) bool) ([]customRow, error) {
 	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
 		return nil, nil
@@ -151,6 +171,7 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(
 	if err != nil {
 		return nil, err
 	}
+	watchlistShown := slices.ContainsFunc(rows, isWatchlistRow)
 	if keep != nil {
 		rows = slices.DeleteFunc(rows, func(row homerows.Row) bool { return !keep(row) })
 	}
@@ -164,8 +185,10 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(
 			rows = slices.DeleteFunc(rows, isTrakt)
 		}
 	}
-	return h.userCustomRows(ctx, user, rows)
+	return h.userCustomRows(ctx, user, rows, watchlistShown)
 }
+
+func isWatchlistRow(row homerows.Row) bool { return row.Kind == homerows.KindWatchlist }
 
 // traktRowShown reports whether user sees the Recommended on Trakt rows
 // shown to them: whether they have a Trakt connection that works.
@@ -176,12 +199,17 @@ func (h *Handler) traktRowShown(ctx context.Context, user accounts.User) (bool, 
 	return h.Trackers.Recommends(ctx, user.ID)
 }
 
-// userCustomRows is customRows for rows, the user's rows.
-func (h *Handler) userCustomRows(ctx context.Context, user accounts.User, rows []homerows.Row) ([]customRow, error) {
-	most := 0
+// userCustomRows is customRows for rows, the user's rows; watchlistShown
+// tells whether a Watchlist row shows to them, which keeps their
+// Watchlist out of the My playlists rows.
+func (h *Handler) userCustomRows(ctx context.Context, user accounts.User, rows []homerows.Row, watchlistShown bool) ([]customRow, error) {
+	most, mostLists := 0, 0
 	for _, row := range rows {
-		if row.Kind == homerows.KindBecause {
+		switch row.Kind {
+		case homerows.KindBecause:
 			most = max(most, row.Count)
+		case homerows.KindPlaylists:
+			mostLists = max(mostLists, row.Count)
 		}
 	}
 	var baselines []library.Item
@@ -191,22 +219,83 @@ func (h *Handler) userCustomRows(ctx context.Context, user accounts.User, rows [
 			return nil, err
 		}
 	}
+	var favorites []playlists.Playlist
+	if mostLists > 0 {
+		var err error
+		if favorites, err = h.favoritePlaylists(ctx, user, watchlistShown); err != nil {
+			return nil, err
+		}
+	}
 	var result []customRow
 	for _, row := range rows {
-		if row.Kind != homerows.KindBecause {
+		switch row.Kind {
+		case homerows.KindBecause:
+			for _, title := range baselines[:min(row.Count, len(baselines))] {
+				result = append(result, customRow{row: row, id: customRowID(row.ID, title.ID), name: row.Name + " " + title.Name, baseline: title.ID})
+			}
+		case homerows.KindPlaylists:
+			for _, p := range favorites[:min(row.Count, len(favorites))] {
+				result = append(result, customRow{row: row, id: customRowID(row.ID, p.ID), name: p.Name, playlist: p.ID})
+			}
+		case homerows.KindWatchlist:
+			p, err := h.Playlists.Watchlist(ctx, user.ID)
+			if errors.Is(err, playlists.ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			name, err := h.playlistName(ctx, user, p)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, customRow{row: row, id: customRowID(row.ID, accounts.ID{}), name: name, playlist: p.ID})
+		case homerows.KindPlaylist:
+			p, err := h.Playlists.Get(ctx, row.Playlist)
+			if errors.Is(err, playlists.ErrNotFound) || err == nil && !p.Visible(user.ID) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, customRow{row: row, id: customRowID(row.ID, accounts.ID{}), name: row.Name, playlist: p.ID})
+		default:
 			result = append(result, customRow{row: row, id: customRowID(row.ID, accounts.ID{}), name: row.Name})
-			continue
-		}
-		for _, title := range baselines[:min(row.Count, len(baselines))] {
-			result = append(result, customRow{row: row, id: customRowID(row.ID, title.ID), name: row.Name + " " + title.Name, baseline: title.ID})
 		}
 	}
 	return result, nil
 }
 
+// favoritePlaylists lists the playlists user may see and made a favorite,
+// named as they see them and in that order, accents aside; without those
+// that have no entry, which would make no row, and without their own
+// Watchlist when withoutWatchlist is set.
+func (h *Handler) favoritePlaylists(ctx context.Context, user accounts.User, withoutWatchlist bool) ([]playlists.Playlist, error) {
+	visible, err := h.Playlists.Visible(ctx, user.ID)
+	if err != nil || len(visible) == 0 {
+		return nil, err
+	}
+	ids := make([]accounts.ID, len(visible))
+	for i, p := range visible {
+		ids[i] = p.ID
+	}
+	data, err := h.UserData.Get(ctx, user.ID, ids)
+	if err != nil {
+		return nil, err
+	}
+	visible = slices.DeleteFunc(visible, func(p playlists.Playlist) bool {
+		return !data[p.ID].Favorite || len(p.Entries) == 0 || withoutWatchlist && p.Watchlist && p.Owner == user.ID
+	})
+	if err := h.namePlaylists(ctx, user, visible); err != nil {
+		return nil, err
+	}
+	return visible, nil
+}
+
 // customRowOf returns the row of user whose folder is id. The titles the
 // user played are read only when id names one of them for a Because you
-// watched row.
+// watched row, and their favorite playlists only when it names a playlist
+// they may see for a My playlists row.
 func (h *Handler) customRowOf(ctx context.Context, user accounts.User, id accounts.ID) (customRow, bool, error) {
 	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
 		return customRow{}, false, nil
@@ -215,38 +304,53 @@ func (h *Handler) customRowOf(ctx context.Context, user accounts.User, id accoun
 	if err != nil {
 		return customRow{}, false, err
 	}
-	var because []homerows.Row
+	watchlistShown := slices.ContainsFunc(rows, isWatchlistRow)
+	var because, lists []homerows.Row
 	var baselines []accounts.ID
 	similar := h.Accounts.Settings().SimilarTitles
 	for _, row := range rows {
 		switch {
+		case row.Kind == homerows.KindPlaylists:
+			p, err := h.Playlists.Get(ctx, customRowBaseline(row.ID, id))
+			if err != nil && !errors.Is(err, playlists.ErrNotFound) {
+				return customRow{}, false, err
+			}
+			if err == nil && p.Visible(user.ID) {
+				lists = append(lists, row)
+			}
 		case row.Kind != homerows.KindBecause:
 			if customRowID(row.ID, accounts.ID{}) != id {
 				continue
 			}
 			shown := true
-			if row.Kind == homerows.KindTrakt {
+			switch row.Kind {
+			case homerows.KindTrakt:
 				if shown, err = h.traktRowShown(ctx, user); err != nil {
 					return customRow{}, false, err
 				}
+			case homerows.KindWatchlist, homerows.KindPlaylist:
+				result, err := h.userCustomRows(ctx, user, []homerows.Row{row}, watchlistShown)
+				if err != nil || len(result) == 0 {
+					return customRow{}, false, err
+				}
+				return result[0], true, nil
 			}
 			return customRow{row: row, id: id, name: row.Name}, shown, nil
 		case similar:
 			because, baselines = append(because, row), append(baselines, customRowBaseline(row.ID, id))
 		}
 	}
-	if len(because) == 0 {
+	if len(because) > 0 {
+		played, err := h.playedTitles(ctx, user, baselines)
+		if err != nil {
+			return customRow{}, false, err
+		}
+		because = slices.DeleteFunc(because, func(row homerows.Row) bool { return !played[customRowBaseline(row.ID, id)] })
+	}
+	if len(because)+len(lists) == 0 {
 		return customRow{}, false, nil
 	}
-	played, err := h.playedTitles(ctx, user, baselines)
-	if err != nil {
-		return customRow{}, false, err
-	}
-	because = slices.DeleteFunc(because, func(row homerows.Row) bool { return !played[customRowBaseline(row.ID, id)] })
-	if len(because) == 0 {
-		return customRow{}, false, nil
-	}
-	result, err := h.userCustomRows(ctx, user, because)
+	result, err := h.userCustomRows(ctx, user, append(lists, because...), watchlistShown)
 	if err != nil {
 		return customRow{}, false, err
 	}
@@ -357,6 +461,12 @@ func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row cus
 		return h.Library.WatchlistWaiting(ctx, user, start, count, first)
 	case homerows.KindPicks:
 		return h.topPicksRow(ctx, user, start, count)
+	case homerows.KindWatchlist, homerows.KindPlaylists, homerows.KindPlaylist:
+		_, shown, ok, err := h.shownTitles(ctx, user, row.playlist)
+		if err != nil || !ok {
+			return library.Page{}, cmp.Or(err, library.ErrNotFound)
+		}
+		return pageOfItems(shown, start, count), nil
 	}
 	return library.Page{}, library.ErrNotFound
 }
@@ -456,8 +566,12 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 	fields := requestedFields(r)
 	result := []CustomRowDto{}
 	for i, row := range rows {
-		result = append(result, CustomRowDto{Id: row.id.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
-			Kind: customRowKinds[row.row.Kind], Items: h.listDtos(r, user, titles[i], fields, state)})
+		dto := CustomRowDto{Id: row.id.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
+			Kind: customRowKinds[row.row.Kind], Items: h.listDtos(r, user, titles[i], fields, state)}
+		if row.playlist != (accounts.ID{}) {
+			dto.PlaylistId = row.playlist.String()
+		}
+		result = append(result, dto)
 	}
 	writeJSON(w, http.StatusOK, struct{ Items []CustomRowDto }{result})
 }
@@ -676,4 +790,60 @@ func (h *Handler) HomeRowCollections(ctx context.Context, user accounts.User) ([
 		result = append(result, HomeRowCollection{ID: item.ID, Name: item.Name, Source: "addon"})
 	}
 	return result, nil
+}
+
+// HomeRowPlaylist is a playlist a playlist row may list: its owner's
+// name, and who may see it: everyone (Access "public"), the users it is
+// shared with too ("shared"), or its owner only ("private").
+type HomeRowPlaylist struct {
+	ID        accounts.ID
+	Name      string
+	OwnerName string
+	Access    string
+}
+
+// HomeRowPlaylists lists the playlists the admin app offers for a
+// playlist row: every playlist of the server but the Watchlists, by name.
+func (h *Handler) HomeRowPlaylists(ctx context.Context) ([]HomeRowPlaylist, error) {
+	all, err := h.Playlists.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	owners := map[accounts.ID]string{}
+	result := make([]HomeRowPlaylist, 0, len(all))
+	for _, p := range all {
+		if p.Watchlist {
+			continue
+		}
+		owner, known := owners[p.Owner]
+		if !known {
+			found, err := h.Accounts.User(ctx, p.Owner)
+			if err != nil {
+				return nil, err
+			}
+			owner, owners[p.Owner] = found.Name, found.Name
+		}
+		access := "private"
+		switch {
+		case p.OpenAccess:
+			access = "public"
+		case len(p.Shares) > 0:
+			access = "shared"
+		}
+		result = append(result, HomeRowPlaylist{ID: p.ID, Name: p.Name, OwnerName: owner, Access: access})
+	}
+	return result, nil
+}
+
+// WatchlistRowName is the name of user's Watchlist as they see it, which
+// names a Watchlist row for them; empty once they deleted it.
+func (h *Handler) WatchlistRowName(ctx context.Context, user accounts.User) (string, error) {
+	p, err := h.Playlists.Watchlist(ctx, user.ID)
+	if errors.Is(err, playlists.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return h.playlistName(ctx, user, p)
 }

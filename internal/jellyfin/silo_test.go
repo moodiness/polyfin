@@ -1469,3 +1469,40 @@ func itemIDOf(t *testing.T, s testServer, token, library, name string) string {
 	t.Fatalf("no %s in %s", name, library)
 	return ""
 }
+
+// Silo's apps show a Watchlist row on Home as the web player does, named
+// as the user sees their Watchlist, with its page, in the Watchlist's
+// order.
+func TestSiloAppsShowPlaylistRows(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	var held WatchlistDto
+	p.get(t, "/Polyfin/UserItems/Watchlist", p.token, &held)
+	if status, data := p.call(http.MethodPost, "/Playlists/"+held.PlaylistId+"/Items?ids="+p.remote+","+p.movie, app("tv", p.token), nil); status != http.StatusNoContent {
+		t.Fatalf("adding to the Watchlist: %d %s", status, data)
+	}
+	var watchlist BaseItemDto
+	p.get(t, "/Items/"+held.PlaylistId, p.token, &watchlist)
+	p.addRow(t, homerows.Row{Name: "À regarder", Kind: homerows.KindWatchlist, Place: homerows.PlaceBottom, Everyone: true})
+	allowSilo(t, p.testServer)
+	a := servingSilo(t, p.testServer)
+	token, profile := a.signIn(t, "member")
+	type homeSection struct {
+		ID    string     `json:"id"`
+		Title string     `json:"title"`
+		Items []siloCard `json:"items"`
+	}
+	var home struct {
+		Sections []homeSection `json:"sections"`
+	}
+	a.get(t, "/api/v2/home/sections", token, profile, &home)
+	i := slices.IndexFunc(home.Sections, func(s homeSection) bool { return s.Title == watchlist.Name })
+	if i < 0 || !slices.Equal(cardTitles(home.Sections[i].Items), []string{"Remote", "Movie"}) {
+		t.Fatalf("Home: %+v", home.Sections)
+	}
+	var page siloPage
+	a.get(t, "/api/v2/catalog?source=section&section_id="+home.Sections[i].ID, token, profile, &page)
+	if got := cardTitles(page.Items); !slices.Equal(got, []string{"Remote", "Movie"}) {
+		t.Errorf("the row's page: %v", got)
+	}
+}
