@@ -65,10 +65,12 @@ type Programme struct {
 	Name     string
 	Overview string
 	Genres   []string
-	Rating   string
-	Image    string
-	Start    time.Time
-	End      time.Time
+	// Rating is the one parental control judges the programme by (see
+	// library.Item.ParentalRating).
+	Rating string
+	Image  string
+	Start  time.Time
+	End    time.Time
 	// Season, Episode and EpisodeTitle are the episode the programme airs,
 	// when its guide numbers or names it; numbers count from 1.
 	Season       int
@@ -80,7 +82,7 @@ type Programme struct {
 func ProgrammeOf(item library.Item) Programme {
 	id := item.ID
 	p := Programme{Program: &id, Name: item.Name, Overview: item.Overview, Genres: slices.Clone(item.Genres),
-		Rating: item.OfficialRating, Image: item.Images.Primary, Season: max(item.ParentIndexNumber, 0), Episode: max(item.IndexNumber, 0),
+		Rating: item.ParentalRating(), Image: item.Images.Primary, Season: max(item.ParentIndexNumber, 0), Episode: max(item.IndexNumber, 0),
 		EpisodeTitle: item.EpisodeTitle}
 	if item.Channel != nil {
 		p.Channel = item.Channel.ID

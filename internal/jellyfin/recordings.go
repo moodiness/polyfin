@@ -445,7 +445,7 @@ func (h *Handler) guideProgram(ctx context.Context, user accounts.User, raw stri
 	}
 	program, err := h.Library.Item(ctx, user, id)
 	if err == nil && (program.Kind != library.KindProgram || program.Channel == nil ||
-		!recordings.Allows(user, h.Accounts.RatingCountry(), recordings.ProgramKind, program.OfficialRating, program.Genres)) {
+		!recordings.Allows(user, h.Accounts.RatingCountry(), recordings.ProgramKind, program.ParentalRating(), program.Genres)) {
 		err = library.ErrNotFound
 	}
 	return program, err
@@ -500,7 +500,7 @@ func (h *Handler) timerProgramme(ctx context.Context, user accounts.User, body t
 	}
 	for _, program := range programs {
 		if program.Channel.ID == channel && program.StartDate.Sub(start).Abs() <= 3*time.Minute &&
-			recordings.Allows(user, h.Accounts.RatingCountry(), recordings.ProgramKind, program.OfficialRating, program.Genres) {
+			recordings.Allows(user, h.Accounts.RatingCountry(), recordings.ProgramKind, program.ParentalRating(), program.Genres) {
 			return recordings.ProgrammeOf(program), nil
 		}
 	}

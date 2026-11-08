@@ -109,7 +109,7 @@ func (s *Service) follow(ctx context.Context, w watched, now time.Time) {
 		return
 	}
 	program, ok := moved(w.Reminder, programs)
-	if !ok || !s.allowed(user, program.OfficialRating, program.Genres) || !program.StartDate.After(now) {
+	if !ok || !s.allowed(user, program.ParentalRating(), program.Genres) || !program.StartDate.After(now) {
 		if due {
 			s.giveUp(ctx, w.Reminder, "its programme is gone from the guide, started or not allowed")
 		}
@@ -249,7 +249,7 @@ func (s *Service) refreshSeries(ctx context.Context, owner accounts.ID, series S
 	timer := seriesTimer(series)
 	made := 0
 	for _, program := range programs {
-		if !recordings.Matches(timer, program, nil, now) || !program.StartDate.After(now) || !s.allowed(user, program.OfficialRating, program.Genres) {
+		if !recordings.Matches(timer, program, nil, now) || !program.StartDate.After(now) || !s.allowed(user, program.ParentalRating(), program.Genres) {
 			continue
 		}
 		r := reminderOf(user.ID, program, series.Language)
