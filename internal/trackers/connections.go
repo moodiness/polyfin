@@ -470,11 +470,19 @@ func (s *Service) poll(p *pending) {
 				"user_id", p.user.String(), "service", p.service)
 			return
 		case approved:
-			select {
-			case <-p.done:
+			// The code ends before the connection is saved, in the same step
+			// as the check that it still waits: a status after the saving
+			// would otherwise show the connection with its code.
+			key := laneKey{p.user, p.service}
+			s.mu.Lock()
+			current := s.pending[key] == p
+			if current {
+				delete(s.pending, key)
+			}
+			s.mu.Unlock()
+			if !current {
 				// Disconnected or started again meanwhile.
 				return
-			default:
 			}
 			c := connection{token: t.AccessToken, refresh: t.RefreshToken, expires: s.expiry(t), connectedAt: s.now().UTC().Truncate(time.Second)}
 			account := t.account
