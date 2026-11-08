@@ -68,6 +68,8 @@ func allocated(f func()) uint64 {
 // A PGS track's pictures are drawn within its video, and at most UHD
 // video, whatever its objects declare: what lies past it allocates
 // nothing. Pictures upscaled stop short of the bound too.
+//
+//nolint:paralleltest // counts the process's allocations, which parallel tests would add to
 func TestPGSPicturesStayWithinTheScreen(t *testing.T) {
 	dot := []byte{1, 0, 0}
 	for _, c := range []struct {
@@ -122,6 +124,8 @@ func TestPGSPicturesStayWithinTheScreen(t *testing.T) {
 
 // A VobSub subpicture is drawn within the video its index tells, a DVD's
 // at least, whatever area it declares.
+//
+//nolint:paralleltest // counts the process's allocations, which parallel tests would add to
 func TestVobSubPicturesStayWithinTheScreen(t *testing.T) {
 	// A transparent subpicture over 4096 by 4096 pixels, its lines empty:
 	// at 4, both fields' lines, then its control sequence at 8.
