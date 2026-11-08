@@ -51,13 +51,15 @@ Each row has these fields:
 
 The three playlist kinds list a playlist's entries as `/Playlists/{id}/Items` lists them to the user: titles hidden from them and those above their parental control are left out. Each row shows as many titles as the other rows, and its name opens the playlist's page. A playlist without any title the user may see makes no row.
 
+A series with several entries in the playlist, such as five episodes of it, shows once, as the series, at its first entry's place: its poster opens the series. A series with a single entry stays that episode. The web player, other apps and the row's library all list the row this way; the playlist's own page still lists every entry.
+
 - **Watchlist:** each user sees their own Watchlist playlist, under the name it has for them: the default in their language, such as "Watchlist" or « À regarder », or the name they gave it. The **Name** field names the row in the list only.
 - **My playlists:** favorites choose the rows. A user marks a playlist ♥ (favorite) in any Jellyfin app, and it gets a row of its own, named after it.
   - Only playlists the user may see count: their own, those shared with them and public ones.
   - The rows go in name order, without regard to case or accents, up to **Rows**: 3 by default, 10 at most.
   - Their Watchlist playlist is left out while a **Watchlist** row is shown to them, so that it never shows twice.
   - The **Name** field names the row in the list and in **My account › Home rows**, where one switch turns all of them off.
-- **Playlist:** **Playlist** lists every playlist of the server but the Watchlists, each with its owner and whether it is **Public**, **Shared** or **Private**. The row's name follows the playlist's until you type one. It shows only to the users it is shown to who may see the playlist: its owner, those it is shared with, or all of them when it is public.
+- **Playlist:** **Playlist** lists every playlist of the server but the Watchlists, each with its owner and whether it is **Public**, **Shared** or **Private**. The row's name follows the playlist's until you type one. It shows only to the users it is shown to who may see the playlist: its owner, those it is shared with, or all of them when it is public. **My account › Home rows** leaves it out for the others.
 
 Deleting the chosen playlist deletes its row.
 
@@ -139,7 +141,9 @@ No app can be given a new kind of home section. **Also a library in other apps**
 - The web player shows it too, in its libraries and with its own "Recently Added" row.
 - A **Because you watched** row is then one library for each title it follows.
 - A **Watchlist** or **Playlist** row is a library of its playlist's titles, for each user who sees the row. **My playlists** cannot be one: the form does not offer it.
-- The library has no image of its own, whatever the row's kind.
+- The library has an image, as the user sees it:
+  - a **Watchlist** or **Playlist** row takes its playlist's image: the mosaic of its first titles, or the Playlists emblem when it has nothing to draw;
+  - any other kind gets a mosaic of the row's first titles, as collections and smart lists shown as libraries do.
 
 API details: [Home rows](jellyfin-api.md#home-rows-for-apps).
 
