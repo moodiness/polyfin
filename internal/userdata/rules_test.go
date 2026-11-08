@@ -14,6 +14,7 @@ var jellyfin = Thresholds{Resume: 5, Played: 90}
 // a resume point or completes the item, and a start dates it unless the
 // item was played and keeps a resume point.
 func TestPlaybackReportsFollowJellyfin(t *testing.T) {
+	t.Parallel()
 	const long, short = 6 * time.Minute, time.Minute
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	played := Data{Played: true, PlayCount: 1}
@@ -54,6 +55,7 @@ func TestPlaybackReportsFollowJellyfin(t *testing.T) {
 			Data{Position: long / 2, LastPlayed: &now}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			data := tc.before
 			tc.report(&data)
 			if data.Played != tc.want.Played || data.PlayCount != tc.want.PlayCount || data.Position != tc.want.Position ||
@@ -65,6 +67,7 @@ func TestPlaybackReportsFollowJellyfin(t *testing.T) {
 }
 
 func TestThresholdsChooseWhatIsKeptAndPlayed(t *testing.T) {
+	t.Parallel()
 	const long, short = time.Hour, time.Minute
 	for _, tc := range []struct {
 		name       string
@@ -91,6 +94,7 @@ func TestThresholdsChooseWhatIsKeptAndPlayed(t *testing.T) {
 			Data{Played: true, Runtime: short}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var data Data
 			data.Reach(tc.position, tc.runtime, tc.thresholds)
 			if data != tc.want {
@@ -101,6 +105,7 @@ func TestThresholdsChooseWhatIsKeptAndPlayed(t *testing.T) {
 }
 
 func TestPlayedPercentage(t *testing.T) {
+	t.Parallel()
 	if percent, ok := (Data{Position: 90 * time.Second, Runtime: 6 * time.Minute}).PlayedPercentage(); !ok || percent != 25 {
 		t.Errorf("a quarter in: %v %v", percent, ok)
 	}
@@ -117,6 +122,7 @@ func TestPlayedPercentage(t *testing.T) {
 // These cases are what a Jellyfin 12.2 server did when users marked items
 // played or unplayed from an app.
 func TestPlayedMarksFollowJellyfin(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	earlier := time.Date(2018, 3, 3, 0, 0, 0, 0, time.UTC)
 	older := time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -142,6 +148,7 @@ func TestPlayedMarksFollowJellyfin(t *testing.T) {
 			func(d *Data) { d.MarkUnplayed() }, Data{Favorite: true, Rating: new(10.0)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			data := tc.before
 			tc.mark(&data)
 			if data.Played != tc.want.Played || data.PlayCount != tc.want.PlayCount || data.Position != tc.want.Position ||
@@ -154,6 +161,7 @@ func TestPlayedMarksFollowJellyfin(t *testing.T) {
 }
 
 func TestRatingsReadAsLikes(t *testing.T) {
+	t.Parallel()
 	var d Data
 	if d.Likes() != nil {
 		t.Error("an unrated item is liked or disliked")

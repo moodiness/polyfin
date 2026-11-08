@@ -10,6 +10,7 @@ import (
 )
 
 func TestNextUpRemovalsArePerUserAndGoWithTheUser(t *testing.T) {
+	t.Parallel()
 	pool := migrated.New(t)
 	users, err := accounts.Open(t.Context(), pool)
 	if err != nil {
