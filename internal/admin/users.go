@@ -1592,7 +1592,7 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 	body.RecordingsFolderDefault = accounts.DefaultRecordingsFolder(h.DataDir)
 	body.BackupFolderDefault = accounts.DefaultBackupFolder(h.DataDir)
 	body.CacheFolderDefault = accounts.DefaultCacheFolder(h.DataDir)
-	body.RenderNodes = renderNodes()
+	body.RenderNodes = renderNodes(h.renderNodesPattern)
 	body.ConversionHardware = conversionHardwareJSON{Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
 		if hw := encoder.Hardware(); hw != nil {
@@ -1989,13 +1989,13 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, answer)
 }
 
-// renderNodesPattern matches the render nodes VAAPI may open.
-var renderNodesPattern = "/dev/dri/renderD*"
+// defaultRenderNodes matches the render nodes VAAPI may open.
+const defaultRenderNodes = "/dev/dri/renderD*"
 
-// renderNodes lists the render nodes the server has, sorted; none is an
+// renderNodes lists the render nodes pattern matches, sorted; none is an
 // empty list.
-func renderNodes() []string {
-	nodes, _ := filepath.Glob(renderNodesPattern)
+func renderNodes(pattern string) []string {
+	nodes, _ := filepath.Glob(pattern)
 	if nodes == nil {
 		return []string{}
 	}

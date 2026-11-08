@@ -15,21 +15,20 @@ var environmentSettings = []string{"cacheSizeGb", "vaapiDevice", "recording", "r
 
 // The settings that were options of the environment are answered with the
 // default folders under the data folder and the render nodes found, which
-// a PUT ignores; a PUT saves them, and keeps those it leaves out. Not
-// parallel: it points renderNodesPattern, which other tests' settings read,
-// at its own folder.
+// a PUT ignores; a PUT saves them, and keeps those it leaves out.
 func TestSettingsFromTheEnvironment(t *testing.T) {
+	t.Parallel()
 	nodes := t.TempDir()
 	for _, name := range []string{"renderD129", "renderD128", "card0"} {
 		if err := os.WriteFile(filepath.Join(nodes, name), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	pattern := renderNodesPattern
-	renderNodesPattern = filepath.Join(nodes, "renderD*")
-	t.Cleanup(func() { renderNodesPattern = pattern })
 	var dataDir string
-	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { dataDir = o.DataDir })
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		dataDir = o.DataDir
+		o.renderNodesPattern = filepath.Join(nodes, "renderD*")
+	})
 	administrator := api.signedIn("administrator", true)
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	want := map[string]any{"cacheSizeGb": 10.0, "vaapiDevice": "", "recording": false, "recordingsFolder": "", "backups": false, "backupFolder": "",
