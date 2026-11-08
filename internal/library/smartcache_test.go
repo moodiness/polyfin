@@ -37,7 +37,11 @@ func TestTheTitlesKeptForSmartListsStayWithinTheirBound(t *testing.T) {
 	// Every catalog is read whole before it is kept, however slow the
 	// test machine.
 	e.service.smartWait = time.Minute
-	e.install(addons.Shared(), largeAddon(2000))
+	// Five pages a catalog: the bounds below are set from what one list's
+	// titles take, whatever their number, while each listing reads, counts
+	// or sorts them all, several times slower under the race detector.
+	const count = 500
+	e.install(addons.Shared(), largeAddon(count))
 	installed, err := e.addons.Addons(t.Context(), addons.Shared())
 	if err != nil || len(installed) != 1 {
 		t.Fatalf("addons: %v %v", installed, err)
@@ -56,9 +60,9 @@ func TestTheTitlesKeptForSmartListsStayWithinTheirBound(t *testing.T) {
 			group(smartlists.MatchAll, smartlists.Rule{Field: smartlists.FieldType, Value: "movie"}), smartlists.SortCatalog, 0),
 		e.makeList(nil, "Everything", addon, []string{"movie/all", "series/shows"}, group(smartlists.MatchAll), smartlists.SortName, 0),
 		e.makeList(nil, "First ones", addon, []string{"movie/all", "series/shows"},
-			group(smartlists.MatchAll, smartlists.Rule{Field: smartlists.FieldRank, Max: new(500.0)}), smartlists.SortCatalog, 0),
+			group(smartlists.MatchAll, smartlists.Rule{Field: smartlists.FieldRank, Max: new(float64(count / 4))}), smartlists.SortCatalog, 0),
 	}
-	totals := []int{2000, 4000, 1000}
+	totals := []int{count, 2 * count, count / 2}
 	listAll := func() {
 		t.Helper()
 		for _, user := range users {
@@ -77,9 +81,9 @@ func TestTheTitlesKeptForSmartListsStayWithinTheirBound(t *testing.T) {
 		t.Fatalf("kept: %d entries, %d bytes", kept.Len(), kept.Bytes())
 	}
 	// Each title counts at least what its description takes in the page
-	// caches: every list keeps the 4,000 titles of its catalogs, its rules
+	// caches: every list keeps the titles of both its catalogs, its rules
 	// being applied at each listing.
-	if each := kept.Bytes() / (3 * 4000); each < smartTitleSize+2*cache.JSONSize(titles("movie", 1, "Drama")[0]) {
+	if each := kept.Bytes() / (3 * 2 * count); each < smartTitleSize+2*cache.JSONSize(titles("movie", 1, "Drama")[0]) {
 		t.Errorf("%d bytes counted for each title", each)
 	}
 
