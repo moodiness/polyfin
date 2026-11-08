@@ -232,6 +232,51 @@ func TestUserDataUploadsReachTrackingServicesAsPlayedMarks(t *testing.T) {
 	}
 }
 
+func TestTrackedEpisodesCarryTMDBsNumbers(t *testing.T) {
+	t.Parallel()
+	fakes := newTrackerFakes(t)
+	var tracker *trackers.Service
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, pool *pgxpool.Pool) {
+		tracker = trackers.New(trackers.Options{DB: pool, Settings: options.Accounts.Settings, Version: "test", Logger: options.Logger,
+			URLs: map[string]string{trackers.MDBList: fakes.url + "/mdblist"}})
+		options.Trackers = tracker
+	})
+	t.Cleanup(tracker.Close)
+	tr := trackingOn(t, s)
+	member, err := s.store.Authenticate(t.Context(), "member", "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := s.library.Item(t.Context(), member, mustID(t, tr.episodes[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The addon's S2E8 of the same series, which TMDB numbers S2E9, and
+	// its S1E2, which TMDB numbers none.
+	later, unpaired := first, first
+	later.ParentIndexNumber, later.IndexNumber = 2, 8
+	unpaired.ParentIndexNumber, unpaired.IndexNumber = 1, 2
+	numbers := func() [][2]int {
+		t.Helper()
+		var got [][2]int
+		for _, title := range s.handler.trackedTitles(member, []library.Item{first, later, unpaired})(t.Context()) {
+			got = append(got, [2]int{title.TMDBSeason, title.TMDBNumber})
+		}
+		return got
+	}
+	// Without a source, the series keeps its numbers.
+	if got := numbers(); fmt.Sprint(got) != "[[0 0] [0 0] [0 0]]" {
+		t.Errorf("without a numbering: %v", got)
+	}
+	if _, err := s.pool.Exec(t.Context(), `INSERT INTO episode_alignments (series, tmdb_id, episodes, places, asked_at)
+		VALUES ('tt0100', 30, $1, '[[1,1,1,1],[2,9,2,8]]', now())`, len(tr.episodes)); err != nil {
+		t.Fatal(err)
+	}
+	if got := numbers(); fmt.Sprint(got) != "[[0 0] [2 9] [0 -1]]" {
+		t.Errorf("with TMDB's numbering: %v", got)
+	}
+}
+
 func TestEpisodesGetTheirAbsoluteNumber(t *testing.T) {
 	t.Parallel()
 	episode := func(season, number int) library.Item {
