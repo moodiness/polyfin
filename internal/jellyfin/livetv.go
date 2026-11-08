@@ -554,6 +554,8 @@ func (q *programQuery) readChannels() {
 // programs lists programmes of the user's guides that match the query,
 // by start time; recommended lists, like Jellyfin, those airing or about
 // to, by channel. Without a guide, the lists are empty, as Jellyfin's.
+// Those airing now (On Now) never wait for an addon (see
+// library.GuideQuery.Kept).
 func (h *Handler) programs(recommended bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q, ok := readProgramQuery(w, r)
@@ -609,6 +611,11 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		byName := slices.ContainsFunc(q.SortBy, func(s string) bool { return strings.EqualFold(s, "SortName") })
 		descending := slices.ContainsFunc(q.SortOrder, func(s string) bool { return strings.EqualFold(s, "Descending") })
 		guide := library.GuideQuery{From: from, To: to, Keep: func(p library.Item) bool { return q.keeps(p, now) }}
+		// What airs now, as recommended (On Now), is read from the pages
+		// Polyfin keeps, those missing fetched for the next time:
+		// jellyfin-web's home waits for this request before it fills any
+		// of its rows.
+		guide.Kept = recommended && airing
 		if len(q.ChannelIds) > 0 {
 			guide.Channels = slices.Collect(maps.Keys(q.channels))
 		}
