@@ -247,25 +247,49 @@ func TestInitdbArgumentsAndURL(t *testing.T) {
 	}
 }
 
-// The port chosen at first start is kept while it is free.
+// The port chosen at first start is kept while it is free, and another is
+// chosen once it is taken. Between two choices, another test, of this
+// package or of another one running at the same time, may be given the
+// chosen port, if only to try it as choosePort does: the choice is then
+// made again, in a folder of its own. A cluster that never keeps its
+// port fails every try.
 func TestChosenPortIsKept(t *testing.T) {
 	t.Parallel()
+	for attempt := 1; !chosenPortIsKept(t); attempt++ {
+		if attempt == 5 {
+			t.Fatal("the chosen port was not kept at any of 5 tries")
+		}
+	}
+}
+
+// chosenPortIsKept checks that a cluster keeps the port it chose, then
+// leaves it once taken. It reports false when the port changed between
+// two choices, or was taken before the test could take it, which another
+// program using the port meanwhile explains.
+func chosenPortIsKept(t *testing.T) bool {
+	t.Helper()
 	c := &Cluster{Dir: t.TempDir()}
 	first, err := c.choosePort()
 	if err != nil {
 		t.Fatal(err)
 	}
 	second, err := c.choosePort()
-	if err != nil || second != first {
-		t.Fatalf("second port %d, %v; first %d", second, err, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second != first {
+		t.Logf("second port %d; first %d", second, first)
+		return false
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(first)))
 	if err != nil {
-		t.Skipf("the port was taken meanwhile: %v", err)
+		t.Logf("port %d taken meanwhile: %v", first, err)
+		return false
 	}
 	defer listener.Close()
 	third, err := c.choosePort()
 	if err != nil || third == first {
 		t.Fatalf("a taken port was kept: %d, %v", third, err)
 	}
+	return true
 }
