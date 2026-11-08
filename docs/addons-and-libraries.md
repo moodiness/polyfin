@@ -58,7 +58,7 @@ An addon gives each catalog, and each title, a Stremio type. The type decides wh
 | --- | --- | --- |
 | `movie`, `anime.movie` | Movies; or each title as its own type tells (see [Show as](#show-as)) | `movies`; none (mixed) when shown as movies and shows |
 | `series`, `anime.series` | Shows, with their seasons and episodes; or each title as its own type tells | `tvshows`; none (mixed) when shown as movies and shows |
-| `anime` | Shows, or movies for its `anime.movie` titles | none (mixed) |
+| `anime` | Each title as its own type tells: movies for its `movie` and `anime.movie` titles, shows for the others | none (mixed); `tvshows` or `movies` when shown as shows or as movies (see [Show as](#show-as)) |
 | `other`, `channel` | Folders of videos, or videos; or shows and movies (see [Show as](#show-as)) | `homevideos`; none (mixed) when shown as movies and shows |
 | `collection` | Collections (see [Collections from addons](collections-people-and-ratings.md#collections-from-addons)) | none (mixed) |
 | `tv` | Live TV channels, not a library (see [Live TV](live-tv.md)) | |
@@ -85,7 +85,8 @@ API details: [Libraries of mixed kinds](jellyfin-api.md#libraries-of-mixed-kinds
 | --- | --- | --- |
 | `other`, `channel` and any type Polyfin has no particular use for | **Home videos** or **Movies and shows** | **Movies and shows** when the catalog's first titles are all movies and series, else **Home videos** |
 | `movie`, `anime.movie`, `series`, `anime.series` | **As listed** or **Movies and shows** | **As listed** |
-| `anime`, `collection`, `tv`, a music addon's, a local folder's, an IPTV source's | None | |
+| `anime` | **Movies and shows**, **Shows** or **Movies** | **Movies and shows** |
+| `collection`, `tv`, a music addon's, a local folder's, an IPTV source's | None | |
 
 What each choice shows:
 
@@ -93,8 +94,11 @@ What each choice shows:
 - **Movies and shows, for other videos:** the titles as the movies and shows their videos make (see [Other videos as movies and shows](#other-videos-as-movies-and-shows)). Titles the catalog already types as movies or series stay what they are.
 - **As listed:** a movie catalog as a movies library, a series catalog as a shows library. A title of the other kind, such as a series a movie catalog also lists, is still that series when opened, searched or played. But no tab of the library shows it: jellyfin-web asks a movies library for movies only. The count of its movies includes the series.
 - **Movies and shows, for movies or series:** the library has no type, as Jellyfin's libraries of mixed movies and shows. Each title shows as its own type tells. jellyfin-web's **Folders** tab and its tab of movies and shows list a movie catalog's series with its movies. Apps that ask for movies or series alone get each kind with its own count (see [What catalogs list](#what-catalogs-list)).
+- **Movies and shows, for anime:** the library has no type, as it had before the choice existed. Every app lists each title as the movie or show it is, and apps that copy libraries into their own take both kinds.
+- **Shows, for anime:** a shows library. Apps ask it for shows only, so the catalog's movies are in no tab, genre or filter of the library, though its count includes them. Apps that copy libraries into their own take none of its movies. Search, Continue Watching and the home screen's latest titles still show them. Suited to a catalog of series.
+- **Movies, for anime:** a movies library. Apps ask it for movies only, so the catalog's shows are in no tab, genre or filter of the library, though its count includes them. Apps that copy libraries into their own take none of its shows. Search, Continue Watching and the home screen's latest titles still show them. Suited to a catalog of movies.
 
-The titles are the same items in both choices. Switching changes nothing of what users watched, rated or hid.
+The titles are the same items in every choice. Switching changes nothing of what users watched, rated or hid.
 
 #### When no one chose
 
@@ -115,7 +119,7 @@ Polyfin decides once, rather than at each listing, so that a library keeps its t
 - **Turning movies into series, or the reverse:** addons describe and stream a title by its type. A title typed `movie`, asked as a series, finds nothing, unless another addon describes it so. A title typed wrongly is an error in its addon, to report to its author. **Movies and shows** lists each title as its own type tells.
 - **Each title as a collection:** it would lose its seasons and Next Up. Apps that leave collection libraries out of their home screen would leave it out.
 - **Music, books, photos or music videos for a video catalog:** such libraries list audio, books, images, or artists and albums. A video catalog has none, so their views would stay empty.
-- **Other catalogs:** `anime` libraries are mixed already. Local folders choose what they hold under **It holds** (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)). Collection, live TV, music and IPTV catalogs have their own settings.
+- **Other catalogs:** local folders choose what they hold under **It holds** (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)). Collection, live TV, music and IPTV catalogs have their own settings.
 
 **Compared with Jellyfin**
 
