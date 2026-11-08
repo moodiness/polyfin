@@ -7,20 +7,21 @@ const libraries: typeof en = {
       'Choisissez quels catalogues des addons du serveur apparaissent comme bibliothèques dans les applications Jellyfin, pour tous les utilisateurs.',
     shownTitle: 'Affichées dans les applications Jellyfin',
     shownHelp:
-      'Les bibliothèques apparaissent dans cet ordre. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple « Populaires (Films) ».',
+      'Les bibliothèques apparaissent dans cet ordre. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple «\u202fPopulaires (Films)\u202f».',
     shownHelpMine:
-      'Les bibliothèques apparaissent dans cet ordre, après celles du serveur si vous les utilisez. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple « Populaires (Films) ».',
+      'Les bibliothèques apparaissent dans cet ordre, après celles du serveur si vous les utilisez. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple «\u202fPopulaires (Films)\u202f».',
     defaultHelp:
-      'À l’installation d’un addon, ses catalogues de collections deviennent des bibliothèques : chacune affiche ses collections (par exemple des genres ou des décennies), qui s’ouvrent sur leurs films et séries. Un addon sans collections voit ses catalogues de films, de séries et de TV devenir des bibliothèques. Polyfin ne le fait que jusqu’à ce que le serveur compte 20 bibliothèques en tout, celles de tous les addons comprises. Ce n’est qu’un point de départ : activez autant de catalogues que vous voulez. Chaque bibliothèque ajoute une rangée à l’écran d’accueil des applications Jellyfin, sauf les catalogues TV, dont les chaînes apparaissent dans la TV en direct.',
+      'À l’installation d’un addon, ses catalogues de collections deviennent des bibliothèques\u202f: chacune affiche ses collections (par exemple des genres ou des décennies), qui s’ouvrent sur leurs films et séries. Un addon sans collections voit ses catalogues de films, de séries et de TV devenir des bibliothèques. Polyfin ne le fait que jusqu’à ce que le serveur compte 20 bibliothèques en tout, celles de tous les addons comprises. Ce n’est qu’un point de départ\u202f: activez autant de catalogues que vous voulez. Chaque bibliothèque ajoute une rangée à l’écran d’accueil des applications Jellyfin, sauf les catalogues TV, dont les chaînes apparaissent dans la TV en direct.',
     manyWarning:
       'Plus de 20 bibliothèques peuvent alourdir l’écran d’accueil des applications Jellyfin.',
-    noAddons: 'Ajoutez d’abord une source : ses catalogues s’afficheront ici.',
-    shownEmpty: 'Aucune bibliothèque : les applications Jellyfin n’affichent rien de ces addons.',
+    noAddons: 'Ajoutez d’abord une source\u202f: ses catalogues s’afficheront ici.',
+    shownEmpty:
+      'Aucune bibliothèque\u202f: les applications Jellyfin n’affichent rien de ces addons.',
     name: 'Nom dans les applications',
     nameHelp: 'Laissez-le vide pour utiliser le nom du catalogue.',
     options: 'Options',
     optionsLabel: (name: string) => `Options de ${name}`,
-    appName: (name: string) => `Affichée dans les applications sous le nom « ${name} ».`,
+    appName: (name: string) => `Affichée dans les applications sous le nom «\u202f${name}\u202f».`,
     liveTv: 'Ses chaînes apparaissent dans la TV en direct des applications Jellyfin.',
     iptvVod: 'D’une source IPTV.',
     iptvVodLink: 'Ses options d’import',
@@ -28,7 +29,7 @@ const libraries: typeof en = {
     missing: 'Plus disponible',
     hideInMenus: 'Masquer dans la barre du haut du lecteur web',
     hideInMenusHelp:
-      'Elle garde sa rangée sur l’accueil. Le menu latéral du lecteur web la masque aussi ; les autres applis Jellyfin la listent toujours. S’applique au prochain chargement du lecteur web.',
+      'Elle garde sa rangée sur l’accueil. Le menu latéral du lecteur web la masque aussi\u202f; les autres applis Jellyfin la listent toujours. S’applique au prochain chargement du lecteur web.',
     hiddenInMenus: 'Masquée dans la barre du haut',
     skipLocal: 'Omettre les titres que contiennent les dossiers locaux',
     skipLocalHelp:
@@ -50,11 +51,11 @@ const libraries: typeof en = {
         home_videos:
           'Chaque titre est un dossier de ses vidéos, ou une seule vidéo, comme dans une bibliothèque de vidéos personnelles. Les applis qui ne listent que des films et des séries laissent la bibliothèque de côté.',
         listed:
-          'Une bibliothèque de films ou de séries, selon le type du catalogue : un titre de l’autre sorte compte dans son total, mais aucun de ses onglets ne le montre.',
+          'Une bibliothèque de films ou de séries, selon le type du catalogue\u202f: un titre de l’autre sorte compte dans son total, mais aucun de ses onglets ne le montre.',
         titles:
-          'Pour les applis Jellyfin qui ne listent que des films et des séries : un titre avec plusieurs vidéos, ou une seule numérotée comme épisode, devient une série, ses vidéos ses épisodes ; un titre sans vidéo, ou avec un seul fichier, un film. Les titres que le catalogue type comme films ou séries restent tels quels. Les vidéos vues, les reprises et les favoris les suivent à l’enregistrement.',
+          'Pour les applis Jellyfin qui ne listent que des films et des séries\u202f: un titre avec plusieurs vidéos, ou une seule numérotée comme épisode, devient une série, ses vidéos ses épisodes\u202f; un titre sans vidéo, ou avec un seul fichier, un film. Les titres que le catalogue type comme films ou séries restent tels quels. Les vidéos vues, les reprises et les favoris les suivent à l’enregistrement.',
         mixed:
-          'Une bibliothèque sans type, comme les bibliothèques mixtes de films et séries de Jellyfin : chaque titre est listé comme le film ou la série qu’il est, donc ses onglets montrent aussi une série qu’un catalogue de films liste, avec des totaux exacts. Les vidéos vues et les favoris restent.',
+          'Une bibliothèque sans type, comme les bibliothèques mixtes de films et séries de Jellyfin\u202f: chaque titre est listé comme le film ou la série qu’il est, donc ses onglets montrent aussi une série qu’un catalogue de films liste, avec des totaux exacts. Les vidéos vues et les favoris restent.',
       },
       undecided:
         'Polyfin l’affiche comme films et séries dès qu’il lit la première page du catalogue, si chaque titre y est un film ou une série.',
@@ -62,34 +63,34 @@ const libraries: typeof en = {
     removeLabel: (name: string) => `Retirer ${name}`,
     moreActions: (name: string) => `Autres actions pour ${name}`,
     userOrders: {
-      help: 'Un utilisateur qui a ordonné les bibliothèques dans Paramètres › Accueil du lecteur web garde cet ordre, jusqu’à « Appliquer cet ordre à tous les utilisateurs » ou son propre « Rétablir mes préférences ».',
+      help: 'Un utilisateur qui a ordonné les bibliothèques dans Paramètres › Accueil du lecteur web garde cet ordre, jusqu’à «\u202fAppliquer cet ordre à tous les utilisateurs\u202f» ou son propre «\u202fRétablir mes préférences\u202f».',
       apply: 'Appliquer cet ordre à tous les utilisateurs',
-      saveFirst: 'Enregistrez d’abord la liste : c’est l’ordre enregistré qui est appliqué.',
-      title: 'Appliquer cet ordre à tous les utilisateurs ?',
+      saveFirst: 'Enregistrez d’abord la liste\u202f: c’est l’ordre enregistré qui est appliqué.',
+      title: 'Appliquer cet ordre à tous les utilisateurs\u202f?',
       counting: 'Décompte des utilisateurs qui ont leur propre ordre…',
-      none: 'Tous les utilisateurs suivent déjà cet ordre : aucun n’a ordonné les bibliothèques dans Paramètres › Accueil du lecteur web.',
+      none: 'Tous les utilisateurs suivent déjà cet ordre\u202f: aucun n’a ordonné les bibliothèques dans Paramètres › Accueil du lecteur web.',
       some: (count: number) =>
-        `${count === 1 ? '1 utilisateur a ordonné' : `${count} utilisateurs ont ordonné`} les bibliothèques dans Paramètres › Accueil du lecteur web. Leur ordre est oublié, et leurs applis listent les bibliothèques dans cet ordre, celui enregistré ; le lecteur web en une minute au plus. Leurs autres réglages restent.`,
+        `${count === 1 ? '1 utilisateur a ordonné' : `${count} utilisateurs ont ordonné`} les bibliothèques dans Paramètres › Accueil du lecteur web. Leur ordre est oublié, et leurs applis listent les bibliothèques dans cet ordre, celui enregistré\u202f; le lecteur web en une minute au plus. Leurs autres réglages restent.`,
       applied: (count: number) =>
         count === 0
           ? 'Tous les utilisateurs suivent cet ordre.'
           : count === 1
-            ? 'Cet ordre s’applique désormais à tous : l’ordre propre d’un utilisateur a été oublié.'
-            : `Cet ordre s’applique désormais à tous : l’ordre propre de ${count} utilisateurs a été oublié.`,
+            ? 'Cet ordre s’applique désormais à tous\u202f: l’ordre propre d’un utilisateur a été oublié.'
+            : `Cet ordre s’applique désormais à tous\u202f: l’ordre propre de ${count} utilisateurs a été oublié.`,
     },
     refresh: {
       start: 'Actualiser les descriptions',
       stop: 'Arrêter l’actualisation',
       queued: 'En attente d’actualiser ses descriptions',
       running: (done: string, titles: string) =>
-        `Actualisation des descriptions : ${done} sur ${titles}`,
+        `Actualisation des descriptions\u202f: ${done} sur ${titles}`,
       done: (done: string, failed: number, figure: string) =>
         failed === 0
-          ? `Descriptions actualisées : ${done}`
-          : `Descriptions actualisées : ${done}, ${figure} non décrites`,
+          ? `Descriptions actualisées\u202f: ${done}`
+          : `Descriptions actualisées\u202f: ${done}, ${figure} non décrites`,
       stopped: (done: string, titles: string) => `Actualisation arrêtée à ${done} sur ${titles}`,
       failed: 'Ses descriptions n’ont pas pu être actualisées',
-      started: (name: string) => `${name} : ses descriptions sont relues, 30 par minute.`,
+      started: (name: string) => `${name}\u202f: ses descriptions sont relues, 30 par minute.`,
       progress: (name: string) => `Actualisation de ${name}`,
     },
     removedLive: (name: string) => `${name} a été retiré des bibliothèques.`,
@@ -107,7 +108,7 @@ const libraries: typeof en = {
       `${name} a été ajouté comme bibliothèque n° ${position}.`,
     notBrowsable: 'Indisponible',
     notBrowsableHelp:
-      'Nécessite une recherche ou une autre valeur : il ne peut pas devenir une bibliothèque.',
+      'Nécessite une recherche ou une autre valeur\u202f: il ne peut pas devenir une bibliothèque.',
     availableEmpty: 'Tous les catalogues sont déjà affichés.',
     noMatch: 'Aucun catalogue ne correspond à ce filtre.',
     saved: 'Bibliothèques enregistrées.',
@@ -119,7 +120,7 @@ const libraries: typeof en = {
     listLabel: 'Bibliothèques, dans l’ordre des applications',
     shownEmptyTitle: 'Aucune bibliothèque pour l’instant',
     shownEmptyHow:
-      'Ajoutez des catalogues depuis la liste ci-dessous : chacun devient une bibliothèque.',
+      'Ajoutez des catalogues depuis la liste ci-dessous\u202f: chacun devient une bibliothèque.',
     noAddonsTitle: 'Aucun catalogue pour l’instant',
     addSource: 'Ajouter une source',
     defaultTitle: 'Comment les premières bibliothèques sont choisies',
@@ -139,7 +140,7 @@ const libraries: typeof en = {
     },
     image: {
       label: 'Image dans les applications',
-      edit: (name: string, state: string) => `Image de ${name} : ${state}`,
+      edit: (name: string, state: string) => `Image de ${name}\u202f: ${state}`,
       choices: {
         none: 'Aucune',
         automatic: 'Automatique',
@@ -149,7 +150,7 @@ const libraries: typeof en = {
       help: {
         none: 'Les applications affichent cette bibliothèque sans image, comme avant.',
         automatic:
-          'Polyfin la prend dans le catalogue : l’arrière-plan d’un de ses premiers titres, sinon une affiche.',
+          'Polyfin la prend dans le catalogue\u202f: l’arrière-plan d’un de ses premiers titres, sinon une affiche.',
         generated:
           'Polyfin la dessine avec les affiches des premiers titres du catalogue, ou des premières collections d’une bibliothèque de collections, et le nom de la bibliothèque, une fois qu’il les a lus.',
         custom:
@@ -159,9 +160,9 @@ const libraries: typeof en = {
         'Les utilisateurs sous contrôle parental ou qui bloquent des genres ne la voient pas.',
       notFound: {
         automatic:
-          'Rien trouvé dans ce catalogue pour l’instant : les applications n’affichent pas d’image.',
+          'Rien trouvé dans ce catalogue pour l’instant\u202f: les applications n’affichent pas d’image.',
         generated:
-          'Aucune affiche lue dans ce catalogue pour l’instant : les applications n’affichent pas d’image. Polyfin la dessine une fois la bibliothèque ouverte dans une application.',
+          'Aucune affiche lue dans ce catalogue pour l’instant\u202f: les applications n’affichent pas d’image. Polyfin la dessine une fois la bibliothèque ouverte dans une application.',
       },
       noImage: 'Aucune image',
       upload: 'Envoyer une image',
@@ -170,7 +171,7 @@ const libraries: typeof en = {
       addressHelp: 'Polyfin la télécharge une fois et en garde une copie.',
       useAddress: 'Utiliser cette adresse',
       remove: 'Retirer l’image',
-      removeTitle: (name: string) => `Retirer l’image de ${name} ?`,
+      removeTitle: (name: string) => `Retirer l’image de ${name}\u202f?`,
       removeToNone:
         'L’image envoyée est supprimée. Les applications affichent cette bibliothèque sans image.',
       removeToAutomatic:
@@ -190,16 +191,16 @@ const libraries: typeof en = {
       genreHelp: 'Affiche seulement les titres de ce genre.',
       maxItems: 'Nombre maximum de titres',
       maxHelp: (max: string, where: string) =>
-        `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite des catalogues dans ${where}. De 1 à ${max}. Vide : cette limite s’applique.`,
+        `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite des catalogues dans ${where}. De 1 à ${max}. Vide\u202f: cette limite s’applique.`,
       maxHelpMine: (max: string) =>
-        `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite du serveur. De 1 à ${max}. Vide : la limite du serveur s’applique.`,
+        `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite du serveur. De 1 à ${max}. Vide\u202f: la limite du serveur s’applique.`,
       maxRange: (max: string) => `Saisissez un nombre entier de 1 à ${max}, ou laissez vide.`,
       maxBadge: (count: string) => `${count} max`,
     },
   },
   smartLists: {
     title: 'Listes intelligentes',
-    help: 'Des listes faites de règles sur les titres des catalogues du serveur, comme « Films français des années 1990 pas encore vus ». Tous les utilisateurs les voient, parmi les bibliothèques qu’ils peuvent voir.',
+    help: 'Des listes faites de règles sur les titres des catalogues du serveur, comme «\u202fFilms français des années 1990 pas encore vus\u202f». Tous les utilisateurs les voient, parmi les bibliothèques qu’ils peuvent voir.',
     helpMine:
       'Des listes faites de règles sur les titres de vos catalogues, et de ceux du serveur tant que vous les utilisez. Vous seul les voyez.',
     add: 'Ajouter une liste intelligente',
@@ -223,20 +224,20 @@ const libraries: typeof en = {
     shownAsChoices: { library: 'Une bibliothèque', collection: 'Une collection' },
     shownAsHelp: {
       library:
-        'Une bibliothèque à part entière dans les applications Jellyfin, avec sa rangée sur l’écran d’accueil : une bibliothèque de films ou de séries quand tous ses catalogues sont d’un même type.',
+        'Une bibliothèque à part entière dans les applications Jellyfin, avec sa rangée sur l’écran d’accueil\u202f: une bibliothèque de films ou de séries quand tous ses catalogues sont d’un même type.',
       collection:
         'Une collection dans la vue Collections, à côté de celles créées par les utilisateurs. Les applications ne peuvent pas y ajouter ni en retirer de titres.',
     },
     catalogs: 'Catalogues',
     catalogsHelp:
-      'Ses titres viennent de ces catalogues, chacun lu jusqu’à son maximum : celui de la bibliothèque quand le catalogue en est une, sinon Titres lus par catalogue de films et séries.',
+      'Ses titres viennent de ces catalogues, chacun lu jusqu’à son maximum\u202f: celui de la bibliothèque quand le catalogue en est une, sinon Titres lus par catalogue de films et séries.',
     catalogFilter: 'Filtrer les catalogues',
     catalogFilterPlaceholder: 'Nom du catalogue ou de l’addon',
     serverBadge: 'Serveur',
-    noCatalogs: 'Aucun catalogue pour l’instant : ajoutez d’abord une source.',
+    noCatalogs: 'Aucun catalogue pour l’instant\u202f: ajoutez d’abord une source.',
     noCatalogMatch: 'Aucun catalogue ne correspond à ce filtre.',
     catalogsGone:
-      'Les catalogues dont cette liste tirait ses titres ont disparu, supprimés avec leurs addons ou retirés par eux. Choisissez-en d’autres : d’ici là, elle ne liste rien.',
+      'Les catalogues dont cette liste tirait ses titres ont disparu, supprimés avec leurs addons ou retirés par eux. Choisissez-en d’autres\u202f: d’ici là, elle ne liste rien.',
     rules: 'Règles',
     rulesHelp: 'Sans règle, la liste garde tous les titres de ses catalogues.',
     exclude: 'Exclusions',
@@ -294,15 +295,15 @@ const libraries: typeof en = {
       favorite: 'Favori',
     } as Record<string, string>,
     stateHelp:
-      'Les règles vu, commencé et favori suivent ce qu’a fait chaque utilisateur : chacun voit sa propre liste.',
+      'Les règles vu, commencé et favori suivent ce qu’a fait chaque utilisateur\u202f: chacun voit sa propre liste.',
     describedHelp:
-      'La langue d’un titre, et sa durée, sa classification, ses personnes et sa date de sortie quand son catalogue ne les donne pas, viennent avec sa description, que Polyfin lit en arrière-plan : un titre pas encore décrit est écarté jusqu’à ce qu’il le soit. Un titre à qui manque ce que regarde une règle ne suit ni la règle ni son contraire.',
+      'La langue d’un titre, et sa durée, sa classification, ses personnes et sa date de sortie quand son catalogue ne les donne pas, viennent avec sa description, que Polyfin lit en arrière-plan\u202f: un titre pas encore décrit est écarté jusqu’à ce qu’il le soit. Un titre à qui manque ce que regarde une règle ne suit ni la règle ni son contraire.',
     votesHelp:
       'Les votes IMDb viennent de MDBList, avec la clé d’API MDBList des notes dans Paramètres › Contenu, cherchés en arrière-plan. Sans cette clé, aucun titre n’a de votes.',
     studioHelp:
-      'Les studios et les chaînes viennent de TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchés en arrière-plan et gardés : la liste grandit à mesure qu’ils arrivent. Sans cette clé, seuls comptent les studios qu’un administrateur a donnés dans les métadonnées d’un titre.',
+      'Les studios et les chaînes viennent de TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchés en arrière-plan et gardés\u202f: la liste grandit à mesure qu’ils arrivent. Sans cette clé, seuls comptent les studios qu’un administrateur a donnés dans les métadonnées d’un titre.',
     homeReleaseHelp:
-      'La sortie en vidéo d’un film est sa première sortie numérique ou physique, sinon 90 jours après sa sortie en salles, selon TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchée en arrière-plan et gardée : la liste grandit à mesure qu’elles arrivent. Celle d’une série est sa date de première diffusion. Avec « Attendre la sortie numérique », un film pas encore sorti n’apparaît que dans les listes avec une règle de titres à venir.',
+      'La sortie en vidéo d’un film est sa première sortie numérique ou physique, sinon 90 jours après sa sortie en salles, selon TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchée en arrière-plan et gardée\u202f: la liste grandit à mesure qu’elles arrivent. Celle d’une série est sa date de première diffusion. Avec «\u202fAttendre la sortie numérique\u202f», un film pas encore sorti n’apparaît que dans les listes avec une règle de titres à venir.',
     sort: 'Tri',
     sorts: {
       catalog: 'Comme ses catalogues les listent, un de chaque tour à tour',
@@ -314,14 +315,14 @@ const libraries: typeof en = {
       random: 'Au hasard, tiré à nouveau chaque jour',
     } as Record<string, string>,
     episodeSortHelp:
-      'Les séries viennent selon leur dernier épisode régulier diffusé, ou le début de leur dernière saison, comme le dit leur description, sans les épisodes spéciaux ni ceux à venir ; les films selon leur date de sortie. Une série dont la description n’est pas encore lue vient en dernier jusqu’à ce qu’elle le soit.',
+      'Les séries viennent selon leur dernier épisode régulier diffusé, ou le début de leur dernière saison, comme le dit leur description, sans les épisodes spéciaux ni ceux à venir\u202f; les films selon leur date de sortie. Une série dont la description n’est pas encore lue vient en dernier jusqu’à ce qu’elle le soit.',
     maxItems: 'Nombre maximum de titres',
-    maxHelp: (max: string) => `De 1 à ${max}. Vide : pas de maximum.`,
+    maxHelp: (max: string) => `De 1 à ${max}. Vide\u202f: pas de maximum.`,
     create: 'Créer la liste',
     created: 'Liste intelligente créée.',
     saved: 'Liste intelligente enregistrée.',
     delete: 'Supprimer',
-    deleteTitle: (name: string) => `Supprimer ${name} ?`,
+    deleteTitle: (name: string) => `Supprimer ${name}\u202f?`,
     deleteBody:
       'Les applications Jellyfin ne la montrent plus. Ses titres restent dans leurs catalogues.',
     deleted: 'Liste intelligente supprimée.',
@@ -333,10 +334,10 @@ const libraries: typeof en = {
     firstOf: (shown: string, listed: string) => `Les ${shown} premiers sur ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 titre attend encore ce que regardent ses règles : sa description, ses votes ou ses studios. La liste grandit à mesure qu’ils arrivent.'
-        : `${count} titres attendent encore ce que regardent leurs règles : leur description, leurs votes ou leurs studios. La liste grandit à mesure qu’ils arrivent.`,
+        ? '1 titre attend encore ce que regardent ses règles\u202f: sa description, ses votes ou ses studios. La liste grandit à mesure qu’ils arrivent.'
+        : `${count} titres attendent encore ce que regardent leurs règles\u202f: leur description, leurs votes ou leurs studios. La liste grandit à mesure qu’ils arrivent.`,
     incomplete:
-      'Certains catalogues n’ont pas répondu à temps : la liste montre ce qui a été lu jusqu’ici, et lit le reste.',
+      'Certains catalogues n’ont pas répondu à temps\u202f: la liste montre ce qui a été lu jusqu’ici, et lit le reste.',
     previewEmpty: 'Aucun titre ne suit ces règles pour l’instant.',
     previewNeedsCatalog: 'Choisissez au moins un catalogue pour voir la liste.',
     previewLabel: 'Titres de la liste',
@@ -381,7 +382,7 @@ const libraries: typeof en = {
     lookup: {
       no_key:
         'Ajoutez une clé TMDB dans Paramètres › Contenu pour lister les ordres de cette série.',
-      unknown: 'TMDB ne connaît pas cette série : elle reste dans l’ordre de diffusion.',
+      unknown: 'TMDB ne connaît pas cette série\u202f: elle reste dans l’ordre de diffusion.',
       failed:
         'TMDB n’a pas pu être joint pour lister les ordres de cette série. Réessayez dans un instant.',
     },
@@ -392,7 +393,7 @@ const libraries: typeof en = {
     specialsLast: 'En dernier',
     specialsHidden: 'Masqués',
     specialsSummary: { last: 'Épisodes spéciaux en dernier', hidden: 'Épisodes spéciaux masqués' },
-    saved: (name: string) => `${name} : ordre des épisodes enregistré.`,
+    saved: (name: string) => `${name}\u202f: ordre des épisodes enregistré.`,
   },
 }
 

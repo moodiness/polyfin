@@ -67,7 +67,7 @@ const nav: typeof en = {
     escape: 'Échap',
     choose: 'choisir',
     open: 'ouvrir',
-    empty: (query: string) => `Rien ne correspond à «\u202F${query}\u202F».`,
+    empty: (query: string) => `Rien ne correspond à «\u202f${query}\u202f».`,
     groups: {
       pages: 'Pages',
       settings: 'Réglages',

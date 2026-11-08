@@ -5,25 +5,25 @@ const settings: typeof en = {
   settings: {
     tracking: {
       description:
-        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList, PublicMetaDB, AniList et MyAnimeList depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde ; Last.fm et ListenBrainz reçoivent les morceaux qu’il écoute. Trakt, Simkl, AniList, MyAnimeList et Last.fm ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList, PublicMetaDB et ListenBrainz n’ont besoin de rien.',
+        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList, PublicMetaDB, AniList et MyAnimeList depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde\u202f; Last.fm et ListenBrainz reçoivent les morceaux qu’il écoute. Trakt, Simkl, AniList, MyAnimeList et Last.fm ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList, PublicMetaDB et ListenBrainz n’ont besoin de rien.',
       traktSetup:
-        'Créez une application sur developer.trakt.tv, dans My Apps : liez votre compte GitHub, que Trakt demande à tout développeur, puis créez une application de type Development, du nom de votre choix, avec l’adresse de redirection ci-dessous. Dans ses Members, ajoutez le nom d’utilisateur Trakt de chaque utilisateur qui s’y connectera, 16 au plus (vous pouvez toujours vous connecter vous-même). Copiez ensuite ici son client ID, et son client secret si Trakt en affiche un.',
+        'Créez une application sur developer.trakt.tv, dans My Apps\u202f: liez votre compte GitHub, que Trakt demande à tout développeur, puis créez une application de type Development, du nom de votre choix, avec l’adresse de redirection ci-dessous. Dans ses Members, ajoutez le nom d’utilisateur Trakt de chaque utilisateur qui s’y connectera, 16 au plus (vous pouvez toujours vous connecter vous-même). Copiez ensuite ici son client ID, et son client secret si Trakt en affiche un.',
       traktOlderApps:
-        'Les applications créées avant octobre 2026 fonctionnent toujours avec leur client secret et leur adresse de redirection, urn:ietf:wg:oauth:2.0:oob ; liez-leur votre compte GitHub avant le 1er janvier 2027, sinon Trakt ne laissera plus les utilisateurs s’y connecter. Un compte Trakt gratuit ne connecte qu’une application tierce à la fois : un utilisateur qui en a déjà connecté une autre la déconnecte sur Trakt, dans Settings › Connected apps, ou passe à Trakt VIP.',
+        'Les applications créées avant octobre 2026 fonctionnent toujours avec leur client secret et leur adresse de redirection, urn:ietf:wg:oauth:2.0:oob\u202f; liez-leur votre compte GitHub avant le 1er janvier 2027, sinon Trakt ne laissera plus les utilisateurs s’y connecter. Un compte Trakt gratuit ne connecte qu’une application tierce à la fois\u202f: un utilisateur qui en a déjà connecté une autre la déconnecte sur Trakt, dans Settings › Connected apps, ou passe à Trakt VIP.',
       redirectUri: 'Adresse de redirection (redirect URI) à saisir dans l’application',
       traktClientId: 'Client ID Trakt',
       traktClientIdHelp:
         'Laissez vide pour désactiver Trakt. Les utilisateurs peuvent se connecter une fois le client ID enregistré.',
       traktClientSecret: 'Client secret Trakt',
       traktClientSecretHelp:
-        'Facultatif : seules les applications créées avant octobre 2026 en ont un.',
+        'Facultatif\u202f: seules les applications créées avant octobre 2026 en ont un.',
       simklSetup:
-        'Créez une application sur simkl.com, dans Settings, Developer, Create new app, du type « TV, devices & command line » (l’AUTH V2 de Simkl ; elle n’a pas besoin d’adresse de redirection, et les client ID des anciennes applications AUTH V1 sont refusés). Donnez-lui le nom de votre choix, puis copiez ici son client ID.',
+        'Créez une application sur simkl.com, dans Settings, Developer, Create new app, du type «\u202fTV, devices & command line\u202f» (l’AUTH V2 de Simkl\u202f; elle n’a pas besoin d’adresse de redirection, et les client ID des anciennes applications AUTH V1 sont refusés). Donnez-lui le nom de votre choix, puis copiez ici son client ID.',
       simklClientId: 'Client ID Simkl',
       simklClientIdHelp:
         'Laissez vide pour désactiver Simkl. Aucun client secret n’est nécessaire.',
       lastFmSetup:
-        'Créez un compte d’API sur last.fm, à l’adresse last.fm/api/account/create. Donnez-lui le nom de votre choix et laissez son adresse de rappel (callback URL) vide : les utilisateurs autorisent Polyfin sur Last.fm, et Polyfin demande lui-même leur session à Last.fm. Copiez ensuite ici sa clé d’API et son secret partagé.',
+        'Créez un compte d’API sur last.fm, à l’adresse last.fm/api/account/create. Donnez-lui le nom de votre choix et laissez son adresse de rappel (callback URL) vide\u202f: les utilisateurs autorisent Polyfin sur Last.fm, et Polyfin demande lui-même leur session à Last.fm. Copiez ensuite ici sa clé d’API et son secret partagé.',
       lastFmApiKey: 'Clé d’API Last.fm',
       lastFmApiKeyHelp:
         'Laissez vide pour désactiver Last.fm. Les utilisateurs peuvent se connecter une fois la clé d’API et le secret partagé enregistrés.',
@@ -38,7 +38,7 @@ const settings: typeof en = {
       aniListClientSecretHelp:
         'Affiché sur la page de l’application sur anilist.co, sous le client ID.',
       myAnimeListSetup:
-        'Créez une application sur myanimelist.net, dans Account Settings, API, Create ID, du type « web ». Donnez-lui le nom de votre choix, et comme adresse de redirection l’adresse ci-dessous : MyAnimeList y renvoie le navigateur des utilisateurs une fois Polyfin autorisé. Seul leur navigateur doit pouvoir l’atteindre. Copiez ensuite ici son client ID et son client secret.',
+        'Créez une application sur myanimelist.net, dans Account Settings, API, Create ID, du type «\u202fweb\u202f». Donnez-lui le nom de votre choix, et comme adresse de redirection l’adresse ci-dessous\u202f: MyAnimeList y renvoie le navigateur des utilisateurs une fois Polyfin autorisé. Seul leur navigateur doit pouvoir l’atteindre. Copiez ensuite ici son client ID et son client secret.',
       myAnimeListRedirectHelp:
         'L’adresse publique de ce serveur, dans Paramètres › Notifications, sinon l’adresse que vous utilisez maintenant.',
       myAnimeListClientId: 'Client ID MyAnimeList',
@@ -55,10 +55,10 @@ const settings: typeof en = {
       `De ${r.min} à ${r.max} caractères, affiché dans les applications Jellyfin.`,
     quickConnect: 'Autoriser Quick Connect',
     quickConnectHelp:
-      'Permet aux applications TV et mobiles de se connecter avec un code autorisé ici : 6 chiffres pour les applications Jellyfin, 8 pour les applications TV de Silo tant que les applications de Silo sont autorisées.',
+      'Permet aux applications TV et mobiles de se connecter avec un code autorisé ici\u202f: 6 chiffres pour les applications Jellyfin, 8 pour les applications TV de Silo tant que les applications de Silo sont autorisées.',
     language: 'Langue des noms générés',
     languageHelp:
-      'Polyfin nomme lui-même certains éléments dans les applications Jellyfin : les saisons (« Saison 1 », « Épisodes spéciaux »), les épisodes sans titre et le type ajouté aux bibliothèques de même nom (« Populaires (Films) »).',
+      'Polyfin nomme lui-même certains éléments dans les applications Jellyfin\u202f: les saisons («\u202fSaison 1\u202f», «\u202fÉpisodes spéciaux\u202f»), les épisodes sans titre et le type ajouté aux bibliothèques de même nom («\u202fPopulaires (Films)\u202f»).',
     legacyAuthorization: 'Autoriser l’authentification héritée',
     legacyAuthorizationHelp:
       'Accepte les anciens en-têtes X-Emby-*, le paramètre api_key et le schéma Emby pour les applications qui en ont encore besoin. Désactivé par défaut, comme dans Jellyfin 12.4.',
@@ -67,36 +67,36 @@ const settings: typeof en = {
       'Permet aux applications de Silo pour iPhone, iPad, Apple TV, Mac et Android de se connecter et de lire, par l’API de Silo sous /api/v2, comme les applications Jellyfin, dans les limites de chaque utilisateur. Désactivé, cette API ne répond rien.',
     updateCheck: 'Rechercher les nouvelles versions',
     updateCheckHelp:
-      'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications « Nouvelle version ». Désactivé, Polyfin ne contacte jamais GitHub.',
+      'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications «\u202fNouvelle version\u202f». Désactivé, Polyfin ne contacte jamais GitHub.',
     includePrereleases: 'Inclure les préversions',
     includePrereleasesHelp:
-      'La recherche des nouvelles versions et les mises à jour de Polyfin Desktop tiennent aussi compte des préversions, comme 1.4.0-rc.1 : une préversion plus récente s’affiche sur l’Accueil et dans Système › Santé, et Polyfin Desktop propose de l’installer. Les préversions servent à essayer ce qui arrive, et peuvent avoir des bogues. Désactivé, seules les versions publiées comptent.',
+      'La recherche des nouvelles versions et les mises à jour de Polyfin Desktop tiennent aussi compte des préversions, comme 1.4.0-rc.1\u202f: une préversion plus récente s’affiche sur l’Accueil et dans Système › Santé, et Polyfin Desktop propose de l’installer. Les préversions servent à essayer ce qui arrive, et peuvent avoir des bogues. Désactivé, seules les versions publiées comptent.',
     restartConfirmed: 'Polyfin est redémarré quand il s’arrête',
     restartConfirmedHelp:
-      'Activez-le une fois que le conteneur de Polyfin a une politique de redémarrage qui le relance, comme unless-stopped, always ou on-failure, ou que son gestionnaire de services le fait. Polyfin ne peut pas voir la politique de redémarrage de son conteneur sans le socket Docker, qui ne lui est jamais donné : tant que c’est désactivé, Redémarrer sur l’Accueil avertit que Polyfin pourrait ne pas revenir.',
+      'Activez-le une fois que le conteneur de Polyfin a une politique de redémarrage qui le relance, comme unless-stopped, always ou on-failure, ou que son gestionnaire de services le fait. Polyfin ne peut pas voir la politique de redémarrage de son conteneur sans le socket Docker, qui ne lui est jamais donné\u202f: tant que c’est désactivé, Redémarrer sur l’Accueil avertit que Polyfin pourrait ne pas revenir.',
     updateToolUrl: 'Adresse de l’outil de mise à jour',
     updateToolUrlHelp:
-      'L’API de mise à jour d’un outil que vous faites tourner à côté de Polyfin pour mettre à jour son conteneur, comme http://updater:8080/v1/update. « Mettre à jour maintenant », sur l’Accueil, lui envoie une requête POST sans corps. Vide, ce bouton est masqué.',
+      'L’API de mise à jour d’un outil que vous faites tourner à côté de Polyfin pour mettre à jour son conteneur, comme http://updater:8080/v1/update. «\u202fMettre à jour maintenant\u202f», sur l’Accueil, lui envoie une requête POST sans corps. Vide, ce bouton est masqué.',
     updateToolToken: 'Jeton de l’outil de mise à jour',
     updateToolTokenHelp:
       'Envoyé dans un en-tête Authorization: Bearer avec chaque requête, si l’outil en demande un. Stocké chiffré, comme les autres secrets.',
     localDiscovery: 'Répondre à la découverte sur le réseau local',
     localDiscoveryHelp:
-      'Les applications Jellyfin et Emby qui cherchent des serveurs sur le réseau local trouvent Polyfin et l’affichent, sans qu’il faille saisir son adresse. Elles le demandent sur le port UDP 7359, et Polyfin ne répond qu’aux adresses du réseau local. S’applique tout de suite, sans redémarrage. Avec Docker, il faut le réseau de l’hôte ou le port 7359/udp publié : voir la documentation d’installation.',
+      'Les applications Jellyfin et Emby qui cherchent des serveurs sur le réseau local trouvent Polyfin et l’affichent, sans qu’il faille saisir son adresse. Elles le demandent sur le port UDP 7359, et Polyfin ne répond qu’aux adresses du réseau local. S’applique tout de suite, sans redémarrage. Avec Docker, il faut le réseau de l’hôte ou le port 7359/udp publié\u202f: voir la documentation d’installation.',
     localAddress: 'Adresse sur le réseau local',
     localAddressHelp:
-      'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application : c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
+      'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application\u202f: c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
     torrents: {
       description:
-        'Certains addons listent des torrents plutôt que des liens. Polyfin peut les lire : il ne rejoint l’essaim d’un torrent que pendant qu’une lecture le lit, et garde tout son trafic sur une seule route, une interface réseau comme celle d’un VPN, un proxy SOCKS5, ou un tunnel WireGuard que Polyfin fait tourner lui-même. Rien n’est jamais envoyé par un autre chemin. Les morceaux sont gardés dans l’Espace disque des fichiers en lecture, dans Paramètres › Lecture.',
+        'Certains addons listent des torrents plutôt que des liens. Polyfin peut les lire\u202f: il ne rejoint l’essaim d’un torrent que pendant qu’une lecture le lit, et garde tout son trafic sur une seule route, une interface réseau comme celle d’un VPN, un proxy SOCKS5, ou un tunnel WireGuard que Polyfin fait tourner lui-même. Rien n’est jamais envoyé par un autre chemin. Les morceaux sont gardés dans l’Espace disque des fichiers en lecture, dans Paramètres › Lecture.',
       play: 'Lire les flux torrent',
       playHelp:
-        'Désactivé par défaut. Lire un torrent le télécharge auprès d’autres pairs, et partage ce qui a été téléchargé tant que la limite d’envoi le permet : vous répondez de ce que ce serveur télécharge et partage. Les utilisateurs ont aussi besoin de Peut lire les flux torrent, sur leur page dans Utilisateurs. Demande une route.',
+        'Désactivé par défaut. Lire un torrent le télécharge auprès d’autres pairs, et partage ce qui a été téléchargé tant que la limite d’envoi le permet\u202f: vous répondez de ce que ce serveur télécharge et partage. Les utilisateurs ont aussi besoin de Peut lire les flux torrent, sur leur page dans Utilisateurs. Demande une route.',
       route: 'Route',
       routeHelp:
-        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Quand elle ne fonctionne pas, les versions torrent restent listées mais ne démarrent pas : une lecture les passe, et un torrent déjà en lecture continue pendant une courte coupure. Système › Santé dit pourquoi.',
+        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Quand elle ne fonctionne pas, les versions torrent restent listées mais ne démarrent pas\u202f: une lecture les passe, et un torrent déjà en lecture continue pendant une courte coupure. Système › Santé dit pourquoi.',
       routeHelpNoInterface:
-        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS : un proxy SOCKS5 ou un tunnel WireGuard porte les torrents. Quand la route ne fonctionne pas, les versions torrent restent listées mais ne démarrent pas : une lecture les passe, et un torrent déjà en lecture continue pendant une courte coupure. Système › Santé dit pourquoi.',
+        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS\u202f: un proxy SOCKS5 ou un tunnel WireGuard porte les torrents. Quand la route ne fonctionne pas, les versions torrent restent listées mais ne démarrent pas\u202f: une lecture les passe, et un torrent déjà en lecture continue pendant une courte coupure. Système › Santé dit pourquoi.',
       routes: {
         interface: 'Interface réseau',
         proxy: 'Proxy SOCKS5',
@@ -104,7 +104,7 @@ const settings: typeof en = {
       },
       interface: 'Interface réseau des torrents',
       interfaceHelp:
-        'Son nom, comme wg0. Chaque socket des torrents y est lié, et les noms des trackers sont résolus par elle. Linux seulement. Sous Docker, le conteneur doit voir l’interface : voir la documentation des torrents.',
+        'Son nom, comme wg0. Chaque socket des torrents y est lié, et les noms des trackers sont résolus par elle. Linux seulement. Sous Docker, le conteneur doit voir l’interface\u202f: voir la documentation des torrents.',
       proxy: 'Proxy SOCKS5 des torrents',
       proxyHelp:
         'Son adresse et son port, comme 10.0.0.2:1080. Les pairs et les trackers HTTP passent par son CONNECT. Les trackers UDP, le DHT et uTP ont besoin de son UDP ASSOCIATE, et restent désactivés sans lui. À travers un proxy, aucun pair ne peut se connecter à Polyfin.',
@@ -116,14 +116,14 @@ const settings: typeof en = {
       wireGuardHelp:
         'Collez le .conf que votre fournisseur de VPN donne pour WireGuard. Polyfin fait tourner le tunnel lui-même, pour les seuls torrents, sans rien à configurer sur ce système. Les noms des trackers sont résolus à travers le tunnel par ses serveurs DNS, jamais autrement. Aucun pair ne peut se connecter à Polyfin. Stockée chiffrée quand POLYFIN_SECRET_KEY est définie, et jamais réaffichée.',
       wireGuardSaved: (endpoint: string, addresses: string) =>
-        `Une configuration est enregistrée : serveur ${endpoint}, adresses ${addresses}.`,
+        `Une configuration est enregistrée\u202f: serveur ${endpoint}, adresses ${addresses}.`,
       wireGuardDns: (servers: string) =>
         `Les noms des trackers sont résolus par ${servers}, à travers le tunnel.`,
       wireGuardNoDns:
-        'Elle ne nomme aucun serveur DNS : les trackers désignés par un nom d’hôte ne sont pas joints, ceux désignés par une adresse le sont.',
+        'Elle ne nomme aucun serveur DNS\u202f: les trackers désignés par un nom d’hôte ne sont pas joints, ceux désignés par une adresse le sont.',
       wireGuardReplace: 'Collez une autre configuration pour remplacer celle enregistrée.',
       wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
-        const where = problem.line > 0 ? `Ligne ${problem.line} : ` : ''
+        const where = problem.line > 0 ? `Ligne ${problem.line}\u202f: ` : ''
         const expected: Record<string, string> = {
           PrivateKey: 'une clé de 32 octets en base64',
           PublicKey: 'une clé de 32 octets en base64',
@@ -155,39 +155,39 @@ const settings: typeof en = {
           case 'no_ipv4':
             return `${where}Address doit contenir une adresse IPv4, qu’utilisent les trackers UDP et le DHT.`
           case 'not_all':
-            return `${where}AllowedIPs doit contenir 0.0.0.0/0 : les pairs d’un torrent sont partout.`
+            return `${where}AllowedIPs doit contenir 0.0.0.0/0\u202f: les pairs d’un torrent sont partout.`
           default:
             return `${where}${problem.key} doit être ${expected[problem.key] ?? 'valide'}.`
         }
       },
       downloadLimit: 'Limite de téléchargement (Mbit/s, 0 = aucune)',
-      downloadLimitHelp: (r: RangeText) => `De 0 à ${r.max} ; ${r.default} par défaut.`,
+      downloadLimitHelp: (r: RangeText) => `De 0 à ${r.max}\u202f; ${r.default} par défaut.`,
       uploadLimit: 'Limite d’envoi (Mbit/s, 0 = aucun partage)',
       uploadLimitHelp: (r: RangeText) =>
-        `Les pairs favorisent ceux qui partagent en retour : le démarrage peut être plus lent à 0. Le partage s’arrête à la fin de la lecture. De 0 à ${r.max} ; ${r.default} par défaut.`,
+        `Les pairs favorisent ceux qui partagent en retour\u202f: le démarrage peut être plus lent à 0. Le partage s’arrête à la fin de la lecture. De 0 à ${r.max}\u202f; ${r.default} par défaut.`,
       atOnce: 'Torrents simultanés (0 = aucune limite)',
       atOnceHelp: (r: RangeText) =>
-        `Combien de torrents peuvent tourner en même temps, pour tous les utilisateurs ensemble. À la limite, un titre lit une autre de ses versions qui n’est pas un torrent, ou est dit illisible pour le moment ; une place se libère quand un torrent s’arrête, 30 secondes après sa lecture, ou aussitôt quand le même appareil ou utilisateur lit un autre titre. De 0 à ${r.max} ; ${r.default} par défaut.`,
+        `Combien de torrents peuvent tourner en même temps, pour tous les utilisateurs ensemble. À la limite, un titre lit une autre de ses versions qui n’est pas un torrent, ou est dit illisible pour le moment\u202f; une place se libère quand un torrent s’arrête, 30 secondes après sa lecture, ou aussitôt quand le même appareil ou utilisateur lit un autre titre. De 0 à ${r.max}\u202f; ${r.default} par défaut.`,
       trackers: 'Trackers ajoutés à chaque torrent',
       trackersHelp: (r: RangeText) =>
-        `Des URL d’annonce, une par ligne, comme udp://tracker.example:1337/announce. Polyfin leur demande les pairs de chaque torrent, en plus des trackers que nomme son addon : un torrent que l’addon liste sans aucun n’est alors pas laissé au seul DHT. HTTP, HTTPS et UDP ; ${r.max} au plus. Un torrent privé ne demande qu’à ses propres trackers. Vide par défaut : Polyfin n’est livré avec aucune liste.`,
+        `Des URL d’annonce, une par ligne, comme udp://tracker.example:1337/announce. Polyfin leur demande les pairs de chaque torrent, en plus des trackers que nomme son addon\u202f: un torrent que l’addon liste sans aucun n’est alors pas laissé au seul DHT. HTTP, HTTPS et UDP\u202f; ${r.max} au plus. Un torrent privé ne demande qu’à ses propres trackers. Vide par défaut\u202f: Polyfin n’est livré avec aucune liste.`,
     },
     dlna: {
       title: 'DLNA',
       description:
-        'Les téléviseurs, amplificateurs, consoles et lecteurs du réseau local qui n’ont pas d’application Jellyfin peuvent parcourir et lire les bibliothèques en DLNA. Un appareil ne peut pas se connecter : chacun montre les bibliothèques de l’utilisateur choisi pour lui, avec les limites de cet utilisateur.',
+        'Les téléviseurs, amplificateurs, consoles et lecteurs du réseau local qui n’ont pas d’application Jellyfin peuvent parcourir et lire les bibliothèques en DLNA. Un appareil ne peut pas se connecter\u202f: chacun montre les bibliothèques de l’utilisateur choisi pour lui, avec les limites de cet utilisateur.',
       share: 'Partager les bibliothèques en DLNA',
       shareHelp:
-        'Annonce Polyfin aux appareils du réseau local sur le port UDP 1900, et ne répond qu’à eux. S’applique tout de suite, sans redémarrage. Dans Docker, il faut le réseau de l’hôte ou un réseau qui donne au conteneur sa propre adresse : voir la documentation DLNA.',
+        'Annonce Polyfin aux appareils du réseau local sur le port UDP 1900, et ne répond qu’à eux. S’applique tout de suite, sans redémarrage. Dans Docker, il faut le réseau de l’hôte ou un réseau qui donne au conteneur sa propre adresse\u202f: voir la documentation DLNA.',
       name: 'Nom sur le réseau',
       nameHelp: 'Le nom sous lequel les appareils listent Polyfin. Vide, le nom du serveur.',
       newDevicesUser: 'Montrer aux nouveaux appareils les bibliothèques de',
       newDevicesUserHelp:
-        'L’utilisateur dont un appareil vu pour la première fois montre les bibliothèques. Avec « Personne », un nouvel appareil voit un serveur vide jusqu’à ce que vous lui choisissiez un utilisateur ci-dessous.',
+        'L’utilisateur dont un appareil vu pour la première fois montre les bibliothèques. Avec «\u202fPersonne\u202f», un nouvel appareil voit un serveur vide jusqu’à ce que vous lui choisissiez un utilisateur ci-dessous.',
       noOne: 'Personne',
       markPlayed: 'Marquer comme vu ce que lisent les appareils DLNA',
       markPlayedHelp:
-        'Les appareils ne donnent pas leur position : un titre compte comme vu une fois que l’appareil en a lu plus que « Marqué comme vu après (%) ». Les appareils lisent en avance : un titre peut donc être marqué trop tôt.',
+        'Les appareils ne donnent pas leur position\u202f: un titre compte comme vu une fois que l’appareil en a lu plus que «\u202fMarqué comme vu après (%)\u202f». Les appareils lisent en avance\u202f: un titre peut donc être marqué trop tôt.',
       devices: 'Appareils',
       devicesEmpty: 'Aucun appareil n’a encore rien demandé.',
       device: 'Appareil',
@@ -212,7 +212,7 @@ const settings: typeof en = {
       devicesLabel: 'Appareils DLNA',
       automatic: 'Automatique',
       deviceSaved: (name: string) => `${name} enregistré.`,
-      forgetTitle: (name: string) => `Oublier ${name} ?`,
+      forgetTitle: (name: string) => `Oublier ${name}\u202f?`,
       forgetBody:
         'Polyfin oublie l’utilisateur, le blocage et le profil choisis pour lui. S’il demande à nouveau quelque chose, c’est un nouvel appareil, qui montre les bibliothèques de l’utilisateur choisi pour les nouveaux appareils.',
       forgotten: (name: string) => `${name} oublié.`,
@@ -227,54 +227,54 @@ const settings: typeof en = {
       replacing: 'Remplacement…',
       profileAdded: (name: string) => `Profil ${name} ajouté.`,
       profileReplaced: (name: string) => `Profil ${name} remplacé.`,
-      removeTitle: (name: string) => `Supprimer le profil ${name} ?`,
+      removeTitle: (name: string) => `Supprimer le profil ${name}\u202f?`,
       removeBody:
         'Les appareils auxquels il est imposé reçoivent de nouveau un profil choisi d’après ce qu’ils envoient.',
       profileRemoved: (name: string) => `Profil ${name} supprimé.`,
     },
     metrics: 'Exposer les métriques',
     metricsHelp:
-      'Sert les métriques de Polyfin à Prometheus à l’adresse /metrics : lectures, conversions, requêtes aux addons, imports, notifications, requêtes HTTP, analyses de dossiers, base de données, espace disque et processus. Elles ne nomment aucun utilisateur, titre, adresse ni appareil. Prometheus envoie le jeton des métriques avec chaque requête ; sans lui, /metrics répond 401, et tant que cette option est désactivée, 404.',
+      'Sert les métriques de Polyfin à Prometheus à l’adresse /metrics\u202f: lectures, conversions, requêtes aux addons, imports, notifications, requêtes HTTP, analyses de dossiers, base de données, espace disque et processus. Elles ne nomment aucun utilisateur, titre, adresse ni appareil. Prometheus envoie le jeton des métriques avec chaque requête\u202f; sans lui, /metrics répond 401, et tant que cette option est désactivée, 404.',
     metricsToken: 'Jeton des métriques',
     metricsTokenHelp:
-      'Créé par Polyfin la première fois que les métriques sont activées. Prometheus l’envoie comme jeton Bearer : la documentation d’administration donne une configuration de collecte.',
+      'Créé par Polyfin la première fois que les métriques sont activées. Prometheus l’envoie comme jeton Bearer\u202f: la documentation d’administration donne une configuration de collecte.',
     metricsTokenPending: 'Polyfin crée le jeton des métriques à l’enregistrement.',
     newMetricsToken: 'Créer un nouveau jeton',
-    newMetricsTokenTitle: 'Créer un nouveau jeton des métriques ?',
+    newMetricsTokenTitle: 'Créer un nouveau jeton des métriques\u202f?',
     newMetricsTokenConfirm:
-      'Le jeton actuel cesse aussitôt de fonctionner : Prometheus a besoin du nouveau pour lire les métriques.',
+      'Le jeton actuel cesse aussitôt de fonctionner\u202f: Prometheus a besoin du nouveau pour lire les métriques.',
     newMetricsTokenMade: 'Nouveau jeton des métriques créé',
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
     prepareAhead: 'Préparer la lecture à l’avance',
     prepareAheadHelp:
-      'Polyfin lit le fichier dès que la page d’un titre s’ouvre, et prépare l’épisode suivant vers la fin de celui en cours, pour que la lecture démarre tout de suite. Il liste aussi à l’avance les versions des titres de « Continuer de regarder » et « À suivre », pour que leur page les affiche aussitôt. En contrepartie, vos sources reçoivent un peu plus de demandes, y compris pour les titres ouverts mais pas regardés.',
+      'Polyfin lit le fichier dès que la page d’un titre s’ouvre, et prépare l’épisode suivant vers la fin de celui en cours, pour que la lecture démarre tout de suite. Il liste aussi à l’avance les versions des titres de «\u202fContinuer de regarder\u202f» et «\u202fÀ suivre\u202f», pour que leur page les affiche aussitôt. En contrepartie, vos sources reçoivent un peu plus de demandes, y compris pour les titres ouverts mais pas regardés.',
     transcoding: 'Conversion (transcodage)',
     transcodingHelp:
       'Convertit l’image et le son pour les applications qui ne savent pas lire un fichier tel quel. Si cette option est désactivée, les fichiers sont lus tels quels ou simplement présentés autrement, sans toucher à l’image ni au son. Un titre qu’une application ne peut pas lire ainsi ne démarrera pas sur cette application, comme un enregistrement converti en HEVC sur une application qui ne lit pas le HEVC.',
     analysisTimeout: 'Temps max pour analyser une version',
     analysisTimeoutHelp: (r: RangeText) =>
-      `Avant une première lecture, Polyfin analyse le fichier ou la chaîne pour savoir comment le lire. Si la source ne répond pas dans ce délai, en secondes, Polyfin abandonne cette version et passe à la suivante. Un nombre plus petit passe plus vite à la suivante, mais peut abandonner des sources lentes qui auraient marché. Une chaîne est analysée 8 secondes au plus. De ${r.min} à ${r.max} secondes ; ${r.default} par défaut.`,
+      `Avant une première lecture, Polyfin analyse le fichier ou la chaîne pour savoir comment le lire. Si la source ne répond pas dans ce délai, en secondes, Polyfin abandonne cette version et passe à la suivante. Un nombre plus petit passe plus vite à la suivante, mais peut abandonner des sources lentes qui auraient marché. Une chaîne est analysée 8 secondes au plus. De ${r.min} à ${r.max} secondes\u202f; ${r.default} par défaut.`,
     versionAttempts: 'Versions essayées quand une ne marche pas',
     versionAttemptsHelp: (r: RangeText) =>
-      `Quand une application lit un titre sans choisir de version, Polyfin essaie les versions dans l’ordre jusqu’à en trouver une qui marche, sans en analyser plus que ce nombre. Les versions déjà analysées sont aussi essayées, car elles ne coûtent rien. Un nombre plus grand trouve plus souvent une version qui marche, mais un titre qui ne se lit pas met plus longtemps à le dire. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Quand une application lit un titre sans choisir de version, Polyfin essaie les versions dans l’ordre jusqu’à en trouver une qui marche, sans en analyser plus que ce nombre. Les versions déjà analysées sont aussi essayées, car elles ne coûtent rien. Un nombre plus grand trouve plus souvent une version qui marche, mais un titre qui ne se lit pas met plus longtemps à le dire. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
-      'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. Dès qu’une application a lu quelque chose depuis le démarrage du serveur, ses menus de versions placent aussi ces versions en premier, pour que la lecture commence par la version que montre le menu. Les utilisateurs qui ont « Lire d’abord les fichiers locaux » gardent leurs fichiers locaux en premier. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+      'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. Dès qu’une application a lu quelque chose depuis le démarrage du serveur, ses menus de versions placent aussi ces versions en premier, pour que la lecture commence par la version que montre le menu. Les utilisateurs qui ont «\u202fLire d’abord les fichiers locaux\u202f» gardent leurs fichiers locaux en premier. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées\u202f; rien ne change une fois qu’elles sont connues.',
     nameHowVersionsPlay: 'Dire dans le nom des versions comment elles se lisent',
     nameHowVersionsPlayHelp:
-      'Le nom des versions finit par la façon dont l’appli lit chacune : « (lecture directe) », « (flux direct) » quand elle est copiée sans conversion, « (converti : raison) » avec la demande de l’appli, HDR, la limite de qualité, les sous-titres, la vidéo ou l’audio pour raison, ou « (illisible ici) ». Polyfin le décide pour le profil d’appareil envoyé par l’appli à sa dernière lecture, ou avant cela dans les capacités de sa session : les noms ne disent rien avant la première lecture d’un appareil, sauf si ses capacités portaient un profil, ni après un redémarrage, et rien pour une version pas encore analysée ni décrite par RemuxDB. Les noms sont dans la langue des noms générés. Rien n’est lu pour cela.',
+      'Le nom des versions finit par la façon dont l’appli lit chacune\u202f: «\u202f(lecture directe)\u202f», «\u202f(flux direct)\u202f» quand elle est copiée sans conversion, «\u202f(converti\u202f: raison)\u202f» avec la demande de l’appli, HDR, la limite de qualité, les sous-titres, la vidéo ou l’audio pour raison, ou «\u202f(illisible ici)\u202f». Polyfin le décide pour le profil d’appareil envoyé par l’appli à sa dernière lecture, ou avant cela dans les capacités de sa session\u202f: les noms ne disent rien avant la première lecture d’un appareil, sauf si ses capacités portaient un profil, ni après un redémarrage, et rien pour une version pas encore analysée ni décrite par RemuxDB. Les noms sont dans la langue des noms générés. Rien n’est lu pour cela.',
     versionOrderGroup: 'Ordre des versions',
     versionOrder: {
       label: 'Trier les versions par',
-      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe ; les versions à égalité gardent l’ordre des addons. La première version est celle que lance « Lire », et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier : son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli, sinon la Langue audio par défaut : les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Dans Mon compte, un utilisateur peut aussi préférer une région audio, comme le français du Québec : parmi les versions dans sa langue, celles de cette région d’abord, puis celles de région inconnue. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
-      none: 'Aucun : les versions gardent l’ordre des addons.',
+      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe\u202f; les versions à égalité gardent l’ordre des addons. La première version est celle que lance «\u202fLire\u202f», et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier\u202f: son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli, sinon la Langue audio par défaut\u202f: les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Dans Mon compte, un utilisateur peut aussi préférer une région audio, comme le français du Québec\u202f: parmi les versions dans sa langue, celles de cette région d’abord, puis celles de région inconnue. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
+      none: 'Aucun\u202f: les versions gardent l’ordre des addons.',
       add: 'Ajouter un critère',
-      remove: (name: string) => `Retirer « ${name} »`,
+      remove: (name: string) => `Retirer «\u202f${name}\u202f»`,
       criterion: (position: number) => `Critère ${position}`,
       sourceTiesOnly: (position: number) =>
-        `« Source, dans l’ordre ci-dessous » est le critère ${position} : il ne range que les versions à égalité selon les critères au-dessus, si bien que les versions d’un dossier placé en tête de l’ordre des sources peuvent passer après d’autres. Remontez-le au critère 1 pour mettre en premier les versions d’une source.`,
+        `«\u202fSource, dans l’ordre ci-dessous\u202f» est le critère ${position}\u202f: il ne range que les versions à égalité selon les critères au-dessus, si bien que les versions d’un dossier placé en tête de l’ordre des sources peuvent passer après d’autres. Remontez-le au critère 1 pour mettre en premier les versions d’une source.`,
       criteria: {
         language: 'Langue audio préférée',
         'resolution-high': 'Résolution, la plus haute d’abord',
@@ -286,19 +286,19 @@ const settings: typeof en = {
         'hdr-last': 'HDR et Dolby Vision en dernier',
         source: 'Source, dans l’ordre ci-dessous',
         'size-per-minute': 'Taille par minute de durée, selon le réglage ci-dessous',
-        tier: 'Source : copie de disque, Blu-ray, web, DVD, puis TV',
-        audio: 'Audio : sans perte et Atmos d’abord, puis le plus de canaux',
+        tier: 'Source\u202f: copie de disque, Blu-ray, web, DVD, puis TV',
+        audio: 'Audio\u202f: sans perte et Atmos d’abord, puis le plus de canaux',
         edition: 'Édition, dans l’ordre ci-dessous',
         labels: 'Score des règles de libellés, le plus haut d’abord',
       },
     },
     versionCodecOrder: {
       label: 'Ordre des codecs vidéo',
-      help: 'L’ordre dans lequel le critère « Codec vidéo » range les versions.',
+      help: 'L’ordre dans lequel le critère «\u202fCodec vidéo\u202f» range les versions.',
     },
     versionSourceOrder: {
       label: 'Ordre des sources',
-      help: 'L’ordre dans lequel le critère « Source » range les versions : les addons et dossiers du serveur qui donnent des versions de films et d’épisodes. Une source ajoutée plus tard passe en dernier tant que vous ne la déplacez pas, et les addons propres aux utilisateurs viennent après les sources du serveur. Cela ne change que l’ordre des versions : les descriptions, les sous-titres et les résultats de recherche suivent l’ordre de Contenu › Sources.',
+      help: 'L’ordre dans lequel le critère «\u202fSource\u202f» range les versions\u202f: les addons et dossiers du serveur qui donnent des versions de films et d’épisodes. Une source ajoutée plus tard passe en dernier tant que vous ne la déplacez pas, et les addons propres aux utilisateurs viennent après les sources du serveur. Cela ne change que l’ordre des versions\u202f: les descriptions, les sous-titres et les résultats de recherche suivent l’ordre de Contenu › Sources.',
       none: 'Aucune source du serveur ne donne encore de versions de films ou d’épisodes.',
       dragHandle: (name: string) => `Déplacer ${name}`,
     },
@@ -314,7 +314,7 @@ const settings: typeof en = {
     },
     versionMbPerMinute: 'Taille par minute visée (Mo, 0 = la plus grande)',
     versionMbPerMinuteHelp: (r: RangeText) =>
-      `Le critère Taille par minute met en premier les versions les plus proches de ce nombre de mégaoctets par minute de durée, par exemple 50 pour un bon encodage 1080p ; 0 met la plus grande en premier. La durée est celle de la version une fois analysée, sinon celle du titre. Jusqu’à ${r.max} ; ${r.default} par défaut.`,
+      `Le critère Taille par minute met en premier les versions les plus proches de ce nombre de mégaoctets par minute de durée, par exemple 50 pour un bon encodage 1080p\u202f; 0 met la plus grande en premier. La durée est celle de la version une fois analysée, sinon celle du titre. Jusqu’à ${r.max}\u202f; ${r.default} par défaut.`,
     versionCodecs: {
       av1: 'AV1',
       hevc: 'HEVC (H.265)',
@@ -326,16 +326,16 @@ const settings: typeof en = {
     },
     hideVersionsLarger: 'Masquer les versions de plus de (Go, 0 = sans limite)',
     hideVersionsLargerHelp: (r: RangeText) =>
-      `Les versions dont on sait qu’elles sont plus grosses ne sont listées nulle part : ni sur la page des titres, ni à la lecture, ni dans les téléchargements. Si cette règle et les suivantes masquaient toutes les versions d’un titre, aucune n’est masquée. Jusqu’à ${r.max} Go ; ${r.default} par défaut.`,
+      `Les versions dont on sait qu’elles sont plus grosses ne sont listées nulle part\u202f: ni sur la page des titres, ni à la lecture, ni dans les téléchargements. Si cette règle et les suivantes masquaient toutes les versions d’un titre, aucune n’est masquée. Jusqu’à ${r.max} Go\u202f; ${r.default} par défaut.`,
     hiddenVersionCodecs: 'Masquer ces codecs vidéo',
     hiddenVersionCodecsHelp:
       'Les versions dont on sait qu’elles sont dans ces codecs ne sont listées nulle part.',
     hiddenVersionWords: 'Masquer les versions dont les libellés contiennent',
     hiddenVersionWordsHelp: (r: RangeText) =>
-      `Un mot ou une expression par ligne, cherché sans tenir compte des majuscules dans le nom, la description et le nom de fichier d’une version : pour les addons qui disent dans leurs libellés qu’un fichier n’est pas encore prêt à être lu. Jusqu’à ${r.max} lignes ; aucun par défaut.`,
+      `Un mot ou une expression par ligne, cherché sans tenir compte des majuscules dans le nom, la description et le nom de fichier d’une version\u202f: pour les addons qui disent dans leurs libellés qu’un fichier n’est pas encore prêt à être lu. Jusqu’à ${r.max} lignes\u202f; aucun par défaut.`,
     hiddenReleases: 'Masquer les sorties de mauvaise qualité',
     hiddenReleasesHelp:
-      'Les versions que leur nom ou leur nom de fichier désigne comme l’un de ces genres ne sont listées nulle part. Une étiquette compte comme un mot entier, après les mots du titre lui-même, sans tenir compte des majuscules : un film nommé « Cam » n’est pas une copie caméra, ni un fichier .ts un telesync. Aucun par défaut.',
+      'Les versions que leur nom ou leur nom de fichier désigne comme l’un de ces genres ne sont listées nulle part. Une étiquette compte comme un mot entier, après les mots du titre lui-même, sans tenir compte des majuscules\u202f: un film nommé «\u202fCam\u202f» n’est pas une copie caméra, ni un fichier .ts un telesync. Aucun par défaut.',
     releaseKinds: {
       cam: 'Copies caméra (CAM, HDCAM)',
       telesync: 'Telesyncs (TS, HDTS, TELESYNC)',
@@ -346,8 +346,8 @@ const settings: typeof en = {
     versionLabelRules: {
       label: 'Règles de libellés',
       help: (max: string) =>
-        `Chaque règle lit le nom, la description et le nom de fichier d’une version, sans tenir compte de la casse : un mot trouvé n’importe où, ou une expression régulière. Une règle masque les versions qu’elle reconnaît, après les règles de masquage ci-dessus et jamais toutes les versions d’un titre, ou ajoute son score, de −100 à 100, au leur. Le critère Score des règles de libellés met le plus haut en premier ; sans lui, le score range les versions après les autres critères. Jusqu’à ${max} règles ; aucune par défaut.`,
-      none: 'Aucune règle : les libellés ne comptent pas.',
+        `Chaque règle lit le nom, la description et le nom de fichier d’une version, sans tenir compte de la casse\u202f: un mot trouvé n’importe où, ou une expression régulière. Une règle masque les versions qu’elle reconnaît, après les règles de masquage ci-dessus et jamais toutes les versions d’un titre, ou ajoute son score, de −100 à 100, au leur. Le critère Score des règles de libellés met le plus haut en premier\u202f; sans lui, le score range les versions après les autres critères. Jusqu’à ${max} règles\u202f; aucune par défaut.`,
+      none: 'Aucune règle\u202f: les libellés ne comptent pas.',
       add: 'Ajouter une règle',
       remove: (position: number) => `Supprimer la règle ${position}`,
       text: (position: number) => `Mot ou expression de la règle ${position}`,
@@ -361,7 +361,7 @@ const settings: typeof en = {
     },
     syncAddonSubtitles: 'Recaler les sous-titres des addons',
     syncAddonSubtitlesHelp:
-      'Cale les sous-titres des addons sur la version lue, quand ils arrivent trop tôt, trop tard, ou défilent plus vite ou plus lentement qu’elle. À la première lecture d’une version, Polyfin repère en arrière-plan quand on y parle : grâce à un sous-titre texte du fichier, sinon dans trois passages de son audio, en lisant au plus 300 Mo du fichier d’un addon. Les versions torrent sont laissées de côté, car il faudrait les télécharger depuis leur essaim. Ensuite, un sous-titre qui colle nettement mieux décalé ou accéléré arrive recalé, son nom finissant par « (recalé) ».',
+      'Cale les sous-titres des addons sur la version lue, quand ils arrivent trop tôt, trop tard, ou défilent plus vite ou plus lentement qu’elle. À la première lecture d’une version, Polyfin repère en arrière-plan quand on y parle\u202f: grâce à un sous-titre texte du fichier, sinon dans trois passages de son audio, en lisant au plus 300 Mo du fichier d’un addon. Les versions torrent sont laissées de côté, car il faudrait les télécharger depuis leur essaim. Ensuite, un sous-titre qui colle nettement mieux décalé ou accéléré arrive recalé, son nom finissant par «\u202f(recalé)\u202f».',
     remuxDb: 'Décrire les versions grâce à RemuxDB',
     remuxDbHelp:
       'Affiche les pistes audio, de sous-titres et vidéo d’une version avant sa première lecture, telles que RemuxDB les a trouvées dans le même fichier. Quand les détails d’un titre s’ouvrent, Polyfin interroge RemuxDB, une base communautaire, avec l’identifiant IMDb du titre, et retrouve les versions par le nom de leur fichier. La lecture analyse toujours chaque version.',
@@ -370,21 +370,21 @@ const settings: typeof en = {
     playbackHistoryGroup: 'Historique de lecture',
     playbackHistory: 'Garder un historique de lecture',
     playbackHistoryHelp:
-      'Garde chaque vidéo lue, avec qui l’a lue, sur quelle appli et comment, pour Système › Statistiques et les statistiques de chacun dans Mon compte. Désactivé, plus rien n’est gardé ; ce qui l’est reste jusqu’à être trop ancien.',
+      'Garde chaque vidéo lue, avec qui l’a lue, sur quelle appli et comment, pour Système › Statistiques et les statistiques de chacun dans Mon compte. Désactivé, plus rien n’est gardé\u202f; ce qui l’est reste jusqu’à être trop ancien.',
     playbackHistoryDays: 'Jours de conservation de l’historique de lecture',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Les lectures plus anciennes sont supprimées. La vérification a lieu chaque jour. De ${r.min} à ${r.max}, ${r.default} par défaut.`,
     defaultLanguagesGroup: 'Langues par défaut',
     defaultAudioLanguage: 'Langue audio par défaut',
     defaultAudioLanguageHelp:
-      'Pour les utilisateurs qui n’ont choisi aucune langue audio dans leur appli, Polyfin lit la piste audio dans cette langue quand une version en a une, et place d’abord les versions connues dans cette langue quand les versions sont triées par langue. Le choix d’un utilisateur l’emporte toujours, et son appli continue de l’afficher tel qu’il l’a laissé. Cette langue passe avant la piste que le fichier marque par défaut, même pour les utilisateurs dont l’appli lit la piste par défaut quelle que soit sa langue, un réglage activé tant qu’ils ne le désactivent pas ; un fichier sans elle lit sa piste marquée. Aucune par défaut.',
+      'Pour les utilisateurs qui n’ont choisi aucune langue audio dans leur appli, Polyfin lit la piste audio dans cette langue quand une version en a une, et place d’abord les versions connues dans cette langue quand les versions sont triées par langue. Le choix d’un utilisateur l’emporte toujours, et son appli continue de l’afficher tel qu’il l’a laissé. Cette langue passe avant la piste que le fichier marque par défaut, même pour les utilisateurs dont l’appli lit la piste par défaut quelle que soit sa langue, un réglage activé tant qu’ils ne le désactivent pas\u202f; un fichier sans elle lit sa piste marquée. Aucune par défaut.',
     defaultSubtitleLanguage: 'Langue des sous-titres par défaut',
     defaultSubtitleLanguageHelp:
       'Pour les utilisateurs qui n’ont choisi aucune langue de sous-titres dans leur appli, Polyfin affiche des sous-titres dans cette langue selon le mode de sous-titres de chacun. Le choix d’un utilisateur l’emporte toujours, et son appli continue de l’afficher tel qu’il l’a laissé. Aucune par défaut.',
     noDefaultLanguage: 'Aucune',
     publicAddress: 'Adresse publique',
     publicAddressHelp:
-      'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien. Quand elle commence par https://, « Rediriger HTTP vers HTTPS », dans Paramètres › Sécurité, mène à son port, 443 quand elle n’en indique pas.',
+      'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle\u202f; vide, les messages n’ont pas de lien. Quand elle commence par https://, «\u202fRediriger HTTP vers HTTPS\u202f», dans Paramètres › Sécurité, mène à son port, 443 quand elle n’en indique pas.',
     email: 'E-mail',
     emailHelp:
       'Les cibles e-mail passent par ce serveur SMTP. On peut les ajouter une fois un serveur et une adresse d’expéditeur enregistrés.',
@@ -407,7 +407,7 @@ const settings: typeof en = {
     smtpFromNameHelp: 'Affiché avec l’adresse. Vide, c’est le nom du serveur.',
     weeklySummary: 'Résumé de la semaine',
     weeklySummaryHelp:
-      'Les cibles qui ont choisi « Résumé de la semaine » dans leurs Événements le reçoivent une fois par semaine : les cibles du serveur et des administrateurs la semaine du serveur, les autres leur propre semaine. Rien n’est envoyé pour une semaine sans rien à dire. Système › Planning l’envoie tout de suite.',
+      'Les cibles qui ont choisi «\u202fRésumé de la semaine\u202f» dans leurs Événements le reçoivent une fois par semaine\u202f: les cibles du serveur et des administrateurs la semaine du serveur, les autres leur propre semaine. Rien n’est envoyé pour une semaine sans rien à dire. Système › Planning l’envoie tout de suite.',
     weeklySummaryDay: 'Envoyer le résumé de la semaine le',
     weeklySummaryDayHelp: (day: string) => `${day} par défaut.`,
     weeklySummaryHour: 'Envoyer le résumé de la semaine à',
@@ -415,15 +415,15 @@ const settings: typeof en = {
       `Dans le fuseau horaire du serveur. Les bilans du mois et de l’année sont aussi envoyés à cette heure, le 1er. ${hour} par défaut.`,
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
     maxConversionsHelp: (r: RangeText) =>
-      `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites\u202f: 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     maxConversionHeight: 'Qualité max des vidéos converties',
     maxConversionHeightHelp:
-      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p, et quand il convertit du HDR en SDR, à « Qualité max du HDR converti par le processeur », sous Conversion (transcodage) › HDR.',
+      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K\u202f; le processeur s’arrête à 1080p, et quand il convertit du HDR en SDR, à «\u202fQualité max du HDR converti par le processeur\u202f», sous Conversion (transcodage) › HDR.',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Téléchargements convertis',
     convertedDownloadsHelp:
-      'Les applis qui le demandent, comme Streamyfin, enregistrent un titre dans la qualité choisie par l’utilisateur : Polyfin envoie une copie plus légère, faite pendant que l’appli la télécharge et jamais gardée sur le serveur. Sinon, elles enregistrent le fichier tel quel. Chaque téléchargement compte dans « Conversions vidéo en même temps » quand il convertit, et comme une des « Lectures en même temps » de l’utilisateur. L’utilisateur doit pouvoir télécharger, et utiliser la conversion (transcodage) quand l’image ou le son sont convertis. Un téléchargement interrompu recommence du début. Désactivé par défaut.',
+      'Les applis qui le demandent, comme Streamyfin, enregistrent un titre dans la qualité choisie par l’utilisateur\u202f: Polyfin envoie une copie plus légère, faite pendant que l’appli la télécharge et jamais gardée sur le serveur. Sinon, elles enregistrent le fichier tel quel. Chaque téléchargement compte dans «\u202fConversions vidéo en même temps\u202f» quand il convertit, et comme une des «\u202fLectures en même temps\u202f» de l’utilisateur. L’utilisateur doit pouvoir télécharger, et utiliser la conversion (transcodage) quand l’image ou le son sont convertis. Un téléchargement interrompu recommence du début. Désactivé par défaut.',
     conversion: {
       description:
         'Quand une application ne sait pas lire un fichier tel quel, Polyfin le convertit avec FFmpeg. Ces réglages disent comment, pour les films, les séries et la TV en direct. Les valeurs par défaut conviennent à la plupart des serveurs.',
@@ -439,7 +439,7 @@ const settings: typeof en = {
       },
       subtitleOcr: 'Lire en texte les sous-titres en images',
       subtitleOcrHelp:
-        'Les sous-titres PGS et de DVD (VobSub) sont des images, et beaucoup d’applications ne prennent que du texte : pour elles, Polyfin incruste la piste dans l’image, ce qui demande une conversion. Activé, Tesseract lit une fois chaque piste en images, en arrière-plan, pour en faire une copie en texte, listée comme une piste de plus marquée « (OCR) », qui se lit sans conversion. Tant que la copie n’est pas prête, la piste est incrustée comme avant. La piste en images reste : l’italique, les couleurs et les positions sont perdus, et des polices travaillées peuvent être mal lues. « À la lecture » lit les pistes d’une version la première fois qu’une application qui ne sait pas les afficher la lit ; « Aussi après les analyses des bibliothèques » lit aussi les pistes des nouveaux fichiers locaux. Désactivé par défaut.',
+        'Les sous-titres PGS et de DVD (VobSub) sont des images, et beaucoup d’applications ne prennent que du texte\u202f: pour elles, Polyfin incruste la piste dans l’image, ce qui demande une conversion. Activé, Tesseract lit une fois chaque piste en images, en arrière-plan, pour en faire une copie en texte, listée comme une piste de plus marquée «\u202f(OCR)\u202f», qui se lit sans conversion. Tant que la copie n’est pas prête, la piste est incrustée comme avant. La piste en images reste\u202f: l’italique, les couleurs et les positions sont perdus, et des polices travaillées peuvent être mal lues. «\u202fÀ la lecture\u202f» lit les pistes d’une version la première fois qu’une application qui ne sait pas les afficher la lit\u202f; «\u202fAussi après les analyses des bibliothèques\u202f» lit aussi les pistes des nouveaux fichiers locaux. Désactivé par défaut.',
       subtitleOcrChoices: {
         off: 'Désactivé',
         played: 'À la lecture',
@@ -447,29 +447,29 @@ const settings: typeof en = {
       },
       subtitleOcrTracks: 'Pistes de sous-titres en images lues en même temps',
       subtitleOcrTracksHelp: (r: RangeText) =>
-        `Chaque piste est lue par un processus Tesseract, sur un cœur du processeur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+        `Chaque piste est lue par un processus Tesseract, sur un cœur du processeur. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
       subtitleOcrDownload: 'Télécharger automatiquement les données des langues manquantes',
       subtitleOcrDownloadHelp:
         'La première fois qu’une piste est dans une langue sans données Tesseract, Polyfin télécharge le fichier de la langue depuis les données officielles de Tesseract dans le dossier que nomme POLYFIN_TESSDATA_DIR, le vérifie, puis lit la piste. Un téléchargement qui échoue est retenté une heure plus tard au plus tôt, et Système › Santé dit pourquoi. Désactivé, Santé propose un bouton Télécharger pour chaque langue manquante.',
       hardwareAcceleration: 'Carte graphique pour convertir',
       hardwareAccelerationHelp:
-        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Chaque système propose les siennes : NVIDIA et VAAPI sous Linux, VideoToolbox sous macOS, NVIDIA, Intel et AMD sous Windows. Sans carte qui fonctionne, le processeur convertit. Un changement s’applique dès l’enregistrement, sans redémarrer.',
+        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Chaque système propose les siennes\u202f: NVIDIA et VAAPI sous Linux, VideoToolbox sous macOS, NVIDIA, Intel et AMD sous Windows. Sans carte qui fonctionne, le processeur convertit. Un changement s’applique dès l’enregistrement, sans redémarrer.',
       vaapiDevice: 'Carte graphique pour VAAPI',
       vaapiDeviceHelp:
         'Le nœud de rendu sur lequel VAAPI convertit la vidéo, quand plusieurs cartes graphiques le pourraient. Chacune à son tour par défaut, la première qui fonctionne.',
       vaapiDeviceEach: 'Chacune à son tour',
       vaapiDeviceMissing: (path: string) => `${path} (introuvable)`,
       hardware: {
-        auto: 'Automatique : la première qui fonctionne, dans l’ordre ci-dessous',
+        auto: 'Automatique\u202f: la première qui fonctionne, dans l’ordre ci-dessous',
         nvenc: 'NVIDIA (NVENC)',
         vaapi: 'AMD ou Intel (VAAPI)',
         videotoolbox: 'VideoToolbox',
         qsv: 'Intel (QSV)',
         amf: 'AMD (AMF)',
-        none: 'Aucune : le processeur seul',
+        none: 'Aucune\u202f: le processeur seul',
       },
       detected: 'Trouvé sur ce serveur',
-      noGpu: 'Aucune carte graphique n’est utilisée : le processeur convertit la vidéo.',
+      noGpu: 'Aucune carte graphique n’est utilisée\u202f: le processeur convertit la vidéo.',
       gpu: 'Carte graphique',
       gpuNames: {
         cuda: 'NVIDIA',
@@ -481,7 +481,7 @@ const settings: typeof en = {
       encoders: 'Encodeurs de la carte',
       gpuToneMapping: 'HDR vers SDR sur la carte',
       processorToneMappingHint:
-        'Le HDR est alors converti par le processeur, jusqu’à « Qualité max du HDR converti par le processeur ».',
+        'Le HDR est alors converti par le processeur, jusqu’à «\u202fQualité max du HDR converti par le processeur\u202f».',
       qualityFactor: 'Accepte un niveau de qualité',
       processor: 'Encodeurs du processeur',
       processorToneMapping: 'HDR vers SDR sur le processeur',
@@ -493,30 +493,30 @@ const settings: typeof en = {
         notTimed: 'La vitesse de la carte n’est pas encore mesurée, ou n’a pas pu l’être.',
         keepsUp: (gpu: string) => `La carte convertit le HDR à ${gpu} la vitesse de lecture.`,
         processorFaster: (gpu: string, processor: string) =>
-          `La carte convertit le HDR à ${gpu} la vitesse de lecture, trop lentement ; le processeur suit, à ${processor}.`,
+          `La carte convertit le HDR à ${gpu} la vitesse de lecture, trop lentement\u202f; le processeur suit, à ${processor}.`,
         lowerHeight: (gpu: string, low: string, processor: string | null) =>
-          `La carte convertit le HDR en 1080p à ${gpu} la vitesse de lecture, trop lentement, et en 720p à ${low}${processor ? ` ; le processeur à ${processor}, trop lentement lui aussi` : ''}.`,
+          `La carte convertit le HDR en 1080p à ${gpu} la vitesse de lecture, trop lentement, et en 720p à ${low}${processor ? `\u202f; le processeur à ${processor}, trop lentement lui aussi` : ''}.`,
         noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
-          `Aucun ne suit la lecture : la carte convertit le HDR en 1080p à ${gpu} la vitesse de lecture et en 720p à ${low}${processor ? `, le processeur à ${processor}` : ''}. Les titres HDR peuvent s’interrompre pendant leur conversion.`,
+          `Aucun ne suit la lecture\u202f: la carte convertit le HDR en 1080p à ${gpu} la vitesse de lecture et en 720p à ${low}${processor ? `, le processeur à ${processor}` : ''}. Les titres HDR peuvent s’interrompre pendant leur conversion.`,
         turnedOff: 'Le HDR vers SDR sur la carte est désactivé dans les paramètres.',
       },
       ffmpeg: 'FFmpeg',
       ffmpegShipped: 'Celui que Polyfin fournit',
       ffmpegOlderDrivers: 'Pour les pilotes NVIDIA antérieurs à 610',
       ffmpegOlderDownloading:
-        'Téléchargement du FFmpeg pour les pilotes NVIDIA antérieurs à 610, dont NVENC a besoin ici : le processeur convertit la vidéo en attendant.',
+        'Téléchargement du FFmpeg pour les pilotes NVIDIA antérieurs à 610, dont NVENC a besoin ici\u202f: le processeur convertit la vidéo en attendant.',
       ffmpegOlderFailed: (error: string) =>
-        `Le FFmpeg pour les pilotes NVIDIA antérieurs à 610, dont NVENC a besoin ici, n’a pas pu être téléchargé : ${error}`,
+        `Le FFmpeg pour les pilotes NVIDIA antérieurs à 610, dont NVENC a besoin ici, n’a pas pu être téléchargé\u202f: ${error}`,
       ffmpegOlderUnusable: (error: string) =>
-        `NVENC n’encode pas non plus avec le FFmpeg pour les pilotes NVIDIA antérieurs à 610 : ${error}`,
+        `NVENC n’encode pas non plus avec le FFmpeg pour les pilotes NVIDIA antérieurs à 610\u202f: ${error}`,
       yes: 'Oui',
       no: 'Non',
       none: 'Aucun',
       hardwareDecoding: 'Lire ces formats avec la carte graphique',
       hardwareDecodingHelp:
-        'La carte lit (décode) elle-même ces formats, ce qui laisse le processeur libre. Décochez-en un si ses vidéos se convertissent mal ou pas du tout : le processeur le lira alors. Les autres formats sont tentés sur la carte. HEVC 10 bits a besoin de HEVC.',
+        'La carte lit (décode) elle-même ces formats, ce qui laisse le processeur libre. Décochez-en un si ses vidéos se convertissent mal ou pas du tout\u202f: le processeur le lira alors. Les autres formats sont tentés sur la carte. HEVC 10 bits a besoin de HEVC.',
       hardwareDecodingNoGpu:
-        'Aucune carte graphique n’est utilisée : le processeur lit tous les formats.',
+        'Aucune carte graphique n’est utilisée\u202f: le processeur lit tous les formats.',
       codecs: {
         h264: 'H.264',
         hevc: 'HEVC',
@@ -528,7 +528,7 @@ const settings: typeof en = {
       },
       encoderPreset: 'Vitesse d’encodage',
       encoderPresetHelp:
-        'Plus lent donne une meilleure image pour la même taille, mais demande plus de puissance. Si les vidéos converties saccadent, choisissez plus rapide. Automatique garde le choix de Polyfin : très rapide sur le processeur, moyen sur les cartes NVIDIA, celui de la carte sur les autres.',
+        'Plus lent donne une meilleure image pour la même taille, mais demande plus de puissance. Si les vidéos converties saccadent, choisissez plus rapide. Automatique garde le choix de Polyfin\u202f: très rapide sur le processeur, moyen sur les cartes NVIDIA, celui de la carte sur les autres.',
       presets: {
         auto: 'Automatique',
         veryslow: 'Très lent (meilleure image)',
@@ -544,16 +544,16 @@ const settings: typeof en = {
       h264Quality: 'Qualité H.264 (0 = selon le débit)',
       hevcQuality: 'Qualité HEVC (0 = selon le débit)',
       qualityHelp: (r: RangeText) =>
-        `Un nombre plus petit donne une meilleure image, mais plus de données ; le débit reste le maximum. 0 vise seulement le débit. Jellyfin utilise 23 pour H.264 et 28 pour HEVC. 0, ou de ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+        `Un nombre plus petit donne une meilleure image, mais plus de données\u202f; le débit reste le maximum. 0 vise seulement le débit. Jellyfin utilise 23 pour H.264 et 28 pour HEVC. 0, ou de ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
       qualityIgnored:
-        'Cette carte graphique n’accepte pas de niveau de qualité : elle continue de viser le débit.',
+        'Cette carte graphique n’accepte pas de niveau de qualité\u202f: elle continue de viser le débit.',
       allowHevcEncoding: 'Autoriser la conversion en HEVC',
       allowHevcEncodingHelp:
         'HEVC demande moins de données que H.264 pour la même image, mais plus de puissance pour le créer. Si cette option est activée, les applications qui citent HEVC en premier le reçoivent. Sinon, seules les applications qui ne lisent pas H.264 reçoivent du HEVC.',
       noHevcEncoder: 'FFmpeg ne sait pas créer de HEVC sur ce serveur.',
       adaptiveQuality: 'Plusieurs qualités lors de la conversion',
       adaptiveQualityHelp:
-        'Les vidéos converties proposent aussi jusqu’à deux qualités inférieures, comme 720p et 480p sous 1080p. Les applications qui savent changer de qualité y passent quand leur connexion ralentit, au lieu de s’arrêter pour charger. Une qualité que l’application quitte reste convertie 10 secondes, pour qu’y revenir ne reparte pas de zéro, et toutes comptent pour une seule conversion. Les vidéos copiées, la TV en direct et la musique gardent une seule qualité. Le « réseau local » est celui des codes PIN de réinitialisation du mot de passe, à travers les proxys connus. Désactivé par défaut.',
+        'Les vidéos converties proposent aussi jusqu’à deux qualités inférieures, comme 720p et 480p sous 1080p. Les applications qui savent changer de qualité y passent quand leur connexion ralentit, au lieu de s’arrêter pour charger. Une qualité que l’application quitte reste convertie 10 secondes, pour qu’y revenir ne reparte pas de zéro, et toutes comptent pour une seule conversion. Les vidéos copiées, la TV en direct et la musique gardent une seule qualité. Le «\u202fréseau local\u202f» est celui des codes PIN de réinitialisation du mot de passe, à travers les proxys connus. Désactivé par défaut.',
       adaptiveQualities: {
         off: 'Désactivé',
         remote: 'En dehors du réseau local',
@@ -563,7 +563,7 @@ const settings: typeof en = {
       toneMappingHelp:
         'Garde les bonnes couleurs et la bonne luminosité des vidéos HDR sur les écrans qui n’affichent que le SDR. Si cette option est désactivée, les vidéos HDR converties paraissent ternes, et les vidéos Dolby Vision sans couche HDR10 ne sont pas converties.',
       toneMappingUnavailable:
-        'Ni la carte graphique ni FFmpeg ne savent le faire sur ce serveur : les vidéos HDR ne sont converties que si cette option est désactivée.',
+        'Ni la carte graphique ni FFmpeg ne savent le faire sur ce serveur\u202f: les vidéos HDR ne sont converties que si cette option est désactivée.',
       toneMappingAlgorithm: 'Méthode de conversion HDR',
       toneMappingAlgorithmHelp:
         'La façon de ramener les parties claires au SDR. Automatique utilise BT.2390 sur les cartes NVIDIA et Hable sur le processeur. Les cartes Intel et VideoToolbox ont leur propre méthode et ignorent ce choix.',
@@ -578,25 +578,25 @@ const settings: typeof en = {
       },
       gpuToneMappingSetting: 'Convertir le HDR sur la carte graphique',
       gpuToneMappingSettingHelp:
-        'Les cartes NVIDIA, les cartes Intel (par VAAPI sous Linux, QSV sous Windows) et VideoToolbox sous macOS convertissent elles-mêmes le HDR en SDR, jusqu’en 4K. Désactivez cette option si leurs couleurs semblent fausses : le processeur s’en charge alors, en qualité moindre. Les cartes Intel ne prennent que les vidéos HDR10 qui portent les informations de leur écran de mastering, et VideoToolbox le HDR10 et le HLG ; le processeur convertit les autres, et le Dolby Vision sans couche HDR10 n’est converti que sur les cartes NVIDIA. Les cartes AMD ne le font jamais : leur pilote Linux a échoué ou s’est bloqué à chaque façon essayée par Polyfin, et le filtre AMF de FFmpeg sous Windows ne convertit pas le HDR.',
+        'Les cartes NVIDIA, les cartes Intel (par VAAPI sous Linux, QSV sous Windows) et VideoToolbox sous macOS convertissent elles-mêmes le HDR en SDR, jusqu’en 4K. Désactivez cette option si leurs couleurs semblent fausses\u202f: le processeur s’en charge alors, en qualité moindre. Les cartes Intel ne prennent que les vidéos HDR10 qui portent les informations de leur écran de mastering, et VideoToolbox le HDR10 et le HLG\u202f; le processeur convertit les autres, et le Dolby Vision sans couche HDR10 n’est converti que sur les cartes NVIDIA. Les cartes AMD ne le font jamais\u202f: leur pilote Linux a échoué ou s’est bloqué à chaque façon essayée par Polyfin, et le filtre AMF de FFmpeg sous Windows ne convertit pas le HDR.',
       gpuToneMappingUnavailable:
-        'La carte graphique de ce serveur ne sait pas le faire : le processeur convertit le HDR en SDR.',
+        'La carte graphique de ce serveur ne sait pas le faire\u202f: le processeur convertit le HDR en SDR.',
       processorToneMappingHeight: 'Qualité max du HDR converti par le processeur',
       processorToneMappingHeightHelp:
-        'Convertir le HDR en SDR est un gros travail pour le processeur : environ quatre fois l’encodage lui-même en 1080p. Automatique mesure ce serveur au démarrage : 1080p s’il convertit au moins une fois et demie plus vite que la lecture, sinon 720p, utilisé aussi tant que la mesure n’est pas finie. Au-delà de 1080p, le choix ne compte que si une carte graphique encode la vidéo : seul, le processeur s’arrête à 1080p.',
+        'Convertir le HDR en SDR est un gros travail pour le processeur\u202f: environ quatre fois l’encodage lui-même en 1080p. Automatique mesure ce serveur au démarrage\u202f: 1080p s’il convertit au moins une fois et demie plus vite que la lecture, sinon 720p, utilisé aussi tant que la mesure n’est pas finie. Au-delà de 1080p, le choix ne compte que si une carte graphique encode la vidéo\u202f: seul, le processeur s’arrête à 1080p.',
       toneMappingHeightAuto: 'Automatique (mesuré au démarrage)',
       height4k: '4K',
-      measuredHeight: (height: number) => `Mesuré : ${height}p`,
+      measuredHeight: (height: number) => `Mesuré\u202f: ${height}p`,
       upToHeight: (height: number) => `jusqu’en ${height}p`,
       toneMappingPeak: 'Luminosité max en nits (0 = celle de la vidéo)',
       toneMappingDesat: 'Désaturation des zones claires (0 = aucune)',
       toneMappingPeakHelp: (peak: RangeText, desat: RangeText) =>
-        `Seulement quand le processeur convertit le HDR en SDR : une carte graphique qui le fait les ignore. La luminosité max remplace le niveau le plus clair annoncé par la vidéo : 0, ou de ${peak.min} à ${peak.max} ; ${peak.default} par défaut. La désaturation atténue la couleur des parties très claires : de ${desat.min} à ${desat.max} ; ${desat.default} par défaut.`,
+        `Seulement quand le processeur convertit le HDR en SDR\u202f: une carte graphique qui le fait les ignore. La luminosité max remplace le niveau le plus clair annoncé par la vidéo\u202f: 0, ou de ${peak.min} à ${peak.max}\u202f; ${peak.default} par défaut. La désaturation atténue la couleur des parties très claires\u202f: de ${desat.min} à ${desat.max}\u202f; ${desat.default} par défaut.`,
       processorCannotToneMap:
         'FFmpeg ne sait pas convertir le HDR sur le processeur de ce serveur.',
       deinterlaceMethod: 'Méthode de désentrelacement',
       deinterlaceMethodHelp:
-        'Les émissions de télé et les DVD sont souvent entrelacés, ce qui fait apparaître des lignes en peigne une fois converti. Yadif est rapide ; Bwdif est un peu plus net.',
+        'Les émissions de télé et les DVD sont souvent entrelacés, ce qui fait apparaître des lignes en peigne une fois converti. Yadif est rapide\u202f; Bwdif est un peu plus net.',
       noBwdif: 'FFmpeg n’a pas Bwdif sur ce serveur.',
       deinterlacers: { yadif: 'Yadif', bwdif: 'Bwdif' },
       deinterlaceDoubleRate: 'Doubler le nombre d’images par seconde',
@@ -604,7 +604,7 @@ const settings: typeof en = {
         'Crée une image à partir de chaque demi-image, pour des mouvements plus fluides dans le sport et les émissions de télé. Seulement pour les vidéos jusqu’à 30 images par seconde.',
       downmixAlgorithm: 'Mixage en stéréo',
       downmixAlgorithmHelp:
-        'La façon de ramener le son multicanal sur deux enceintes. Dave750 et le mode nuit gardent les voix claires ; RFC 7845 et AC-4 suivent des normes.',
+        'La façon de ramener le son multicanal sur deux enceintes. Dave750 et le mode nuit gardent les voix claires\u202f; RFC 7845 et AC-4 suivent des normes.',
       downmixes: {
         None: 'Le mixage de FFmpeg',
         Dave750: 'Dave750',
@@ -614,13 +614,13 @@ const settings: typeof en = {
       },
       downmixBoost: 'Volume du mixage stéréo',
       downmixBoostHelp: (r: RangeText) =>
-        `Un mixage en stéréo sonne souvent moins fort : le volume est multiplié par ce nombre, et 1 ne change rien. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin. Au-dessus de 1, un limiteur évite que les scènes fortes saturent.`,
+        `Un mixage en stéréo sonne souvent moins fort\u202f: le volume est multiplié par ce nombre, et 1 ne change rien. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut, comme dans Jellyfin. Au-dessus de 1, un limiteur évite que les scènes fortes saturent.`,
       normalizeConvertedAudio: 'Égaliser le volume des vidéos converties',
       normalizeConvertedAudioHelp:
-        'Ramène le son des films, épisodes et chaînes que le serveur convertit à un même volume, -16 LUFS : les titres discrets sont joués plus fort et les titres forts moins fort, avec un limiteur après. Activé, le volume du mixage stéréo ne change plus le niveau. La lecture directe, le son envoyé tel quel et la musique ne changent jamais. Désactivé par défaut.',
+        'Ramène le son des films, épisodes et chaînes que le serveur convertit à un même volume, -16 LUFS\u202f: les titres discrets sont joués plus fort et les titres forts moins fort, avec un limiteur après. Activé, le volume du mixage stéréo ne change plus le niveau. La lecture directe, le son envoyé tel quel et la musique ne changent jamais. Désactivé par défaut.',
       dynamicRangeCompression: 'Dynamique du son Dolby converti',
       dynamicRangeCompressionHelp:
-        'La façon dont les pistes AC-3 et E-AC-3 (Dolby Digital et Dolby Digital Plus) que le serveur convertit appliquent la compression qu’elles contiennent, qui remonte les passages calmes et baisse les passages forts. « Telle qu’encodée » est la façon dont FFmpeg et Jellyfin les décodent. La lecture directe et le son envoyé tel quel restent à l’application.',
+        'La façon dont les pistes AC-3 et E-AC-3 (Dolby Digital et Dolby Digital Plus) que le serveur convertit appliquent la compression qu’elles contiennent, qui remonte les passages calmes et baisse les passages forts. «\u202fTelle qu’encodée\u202f» est la façon dont FFmpeg et Jellyfin les décodent. La lecture directe et le son envoyé tel quel restent à l’application.',
       dynamicRangeCompressions: {
         encoded: 'Telle qu’encodée',
         none: 'Aucune (dynamique complète)',
@@ -639,28 +639,28 @@ const settings: typeof en = {
               : '5.1',
       audioBitratePerChannel: 'Débit audio par canal en kb/s (0 = automatique)',
       audioBitratePerChannelHelp: (r: RangeText) =>
-        `Automatique donne les débits de Jellyfin : 128 kb/s en mono, 384 kb/s en stéréo et 640 kb/s en 5.1, moins sous une limite de débit basse. 0, ou de ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+        `Automatique donne les débits de Jellyfin\u202f: 128 kb/s en mono, 384 kb/s en stéréo et 640 kb/s en 5.1, moins sous une limite de débit basse. 0, ou de ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
       encodingThreads: 'Threads du processeur par conversion (0 = automatique)',
       encodingThreadsHelp: (r: RangeText) =>
-        `Limite la part du processeur qu’une conversion utilise, pour laisser de la place au reste. De ${r.min} à ${r.max} ; 0 laisse FFmpeg choisir.`,
+        `Limite la part du processeur qu’une conversion utilise, pour laisser de la place au reste. De ${r.min} à ${r.max}\u202f; 0 laisse FFmpeg choisir.`,
       aheadSeconds: 'Secondes préparées à l’avance',
       aheadSecondsHelp: (r: RangeText) =>
-        `Polyfin prépare une vidéo au plus ce nombre de secondes au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes et garde leur connexion occupée, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+        `Polyfin prépare une vidéo au plus ce nombre de secondes au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes et garde leur connexion occupée, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
       keepConvertedVideo: 'Garder la vidéo convertie quand la piste audio change',
       keepConvertedVideoHelp:
-        'Convertit l’image et le son à part : choisir une autre piste audio dans le lecteur ne prépare que le nouveau son, l’image déjà convertie continue, et la nouvelle piste démarre plus vite. L’image est gardée 30 secondes après l’arrêt du lecteur, et compte pendant ce temps pour une conversion.',
+        'Convertit l’image et le son à part\u202f: choisir une autre piste audio dans le lecteur ne prépare que le nouveau son, l’image déjà convertie continue, et la nouvelle piste démarre plus vite. L’image est gardée 30 secondes après l’arrêt du lecteur, et compte pendant ce temps pour une conversion.',
       fastStart: 'Démarrer plus vite les lectures de sources distantes',
       fastStartHelp:
-        'Quand une lecture réemballée ou convertie du lien d’un addon ou d’un torrent commence par un long segment, comme avec une image clé toutes les 10 secondes, ce segment est découpé en segments de 2 secondes convertis rapidement en 720p au plus : l’image s’affiche plus tôt, un peu moins nette pendant ces secondes, puis la lecture continue comme d’habitude. S’applique aux lectures suivantes.',
+        'Quand une lecture réemballée ou convertie du lien d’un addon ou d’un torrent commence par un long segment, comme avec une image clé toutes les 10 secondes, ce segment est découpé en segments de 2 secondes convertis rapidement en 720p au plus\u202f: l’image s’affiche plus tôt, un peu moins nette pendant ces secondes, puis la lecture continue comme d’habitude. S’applique aux lectures suivantes.',
     },
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',
     catalogLimitHelp: (r: RangeText) =>
-      `Certains catalogues sont presque sans fin : Polyfin arrête donc de lire un catalogue après ce nombre de titres. Un nombre plus élevé affiche plus de titres, mais les listes se chargent plus lentement et l’addon reçoit plus de demandes. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Certains catalogues sont presque sans fin\u202f: Polyfin arrête donc de lire un catalogue après ce nombre de titres. Un nombre plus élevé affiche plus de titres, mais les listes se chargent plus lentement et l’addon reçoit plus de demandes. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     channelLimit: 'Chaînes lues par catalogue de TV en direct',
     channelLimitHelp: (r: RangeText) =>
-      `Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
-    skipButtons: 'Boutons « Passer l’intro » et « Passer le générique »',
+      `Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
+    skipButtons: 'Boutons «\u202fPasser l’intro\u202f» et «\u202fPasser le générique\u202f»',
     skipButtonsHelp:
       'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
     publicMetaDbKey: 'Clé PublicMetaDB',
@@ -671,7 +671,7 @@ const settings: typeof en = {
       'Relève la limite quotidienne de TheIntroDB et inclut vos propres contributions. La lecture fonctionne sans elle.',
     segmentSources: {
       label: 'Sources de repères',
-      help: 'Pour chaque type de passage (intro, résumé, générique, aperçu), la première source activée de cette liste qui le connaît l’emporte ; les suivantes complètent. Les sources désactivées ne sont jamais consultées.',
+      help: 'Pour chaque type de passage (intro, résumé, générique, aperçu), la première source activée de cette liste qui le connaît l’emporte\u202f; les suivantes complètent. Les sources désactivées ne sont jamais consultées.',
       turnOn: (name: string) => `Consulter ${name}`,
       needsKey: 'Clé requise',
     },
@@ -686,16 +686,16 @@ const settings: typeof en = {
       'Une collection d’un addon sans affiche, et une liste intelligente affichée comme une collection, montrent les affiches de leurs premiers titres avec leur nom, dessinées par Polyfin une fois leurs titres lus. Les utilisateurs sous contrôle parental ou qui bloquent des genres ne les voient pas. Si cette option est désactivée, elles n’ont pas d’image. Les bibliothèques réglées sur une image générée la gardent.',
     tmdbKey: 'Clé d’API TMDB',
     tmdbKeyHelp:
-      'Facultatif : Polyfin ne fournit aucune clé. Une clé d’API ou un jeton d’accès en lecture d’un compte TMDB apporte les photos et biographies des personnes, la distribution et l’équipe de chaque titre depuis TMDB dans l’ordre du générique avec photos, des pages de personnes listant chaque titre des bibliothèques où elles sont créditées et les titres pour lesquels TMDB les connaît le mieux, au-delà des bibliothèques, les affiches des films et séries dont l’addon n’en donne aucune, les coffrets dans les applications de Silo et les images de TMDB dans « Modifier les images » de jellyfin-web, que Polyfin relaie. Elle sert aussi à trouver les fichiers d’un dossier local dont la recherche échoue auprès de tous les addons de métadonnées. Sans clé, TMDB n’est jamais consulté.',
+      'Facultatif\u202f: Polyfin ne fournit aucune clé. Une clé d’API ou un jeton d’accès en lecture d’un compte TMDB apporte les photos et biographies des personnes, la distribution et l’équipe de chaque titre depuis TMDB dans l’ordre du générique avec photos, des pages de personnes listant chaque titre des bibliothèques où elles sont créditées et les titres pour lesquels TMDB les connaît le mieux, au-delà des bibliothèques, les affiches des films et séries dont l’addon n’en donne aucune, les coffrets dans les applications de Silo et les images de TMDB dans «\u202fModifier les images\u202f» de jellyfin-web, que Polyfin relaie. Elle sert aussi à trouver les fichiers d’un dossier local dont la recherche échoue auprès de tous les addons de métadonnées. Sans clé, TMDB n’est jamais consulté.',
     waitDigitalRelease: 'Attendre la sortie numérique',
     waitDigitalReleaseHelp:
-      'Un film des catalogues des addons n’apparaît qu’une fois sorti en vidéo : sa première sortie numérique ou physique, selon TMDB, sinon 90 jours après sa sortie en salles. D’ici là, il est absent des bibliothèques, des rangées de l’accueil, des recherches, des titres similaires et des pages des personnes, n’a aucune version et ne se lit pas ; les listes intelligentes avec une règle de titres à venir le montrent, avec ce jour. Un film que TMDB ne connaît pas, ou sorti depuis plus d’un an, reste affiché. Nécessite la clé d’API TMDB.',
+      'Un film des catalogues des addons n’apparaît qu’une fois sorti en vidéo\u202f: sa première sortie numérique ou physique, selon TMDB, sinon 90 jours après sa sortie en salles. D’ici là, il est absent des bibliothèques, des rangées de l’accueil, des recherches, des titres similaires et des pages des personnes, n’a aucune version et ne se lit pas\u202f; les listes intelligentes avec une règle de titres à venir le montrent, avec ce jour. Un film que TMDB ne connaît pas, ou sorti depuis plus d’un an, reste affiché. Nécessite la clé d’API TMDB.',
     mdblistRatingsKey: 'Clé d’API MDBList des notes',
     mdblistRatingsKeyHelp:
       'Facultatif. Avec la clé d’un compte MDBList, les films et les séries affichent leur note IMDb, le score des critiques et celui du public donnés par MDBList, cherchés en arrière-plan et gardés pour tous les utilisateurs. Les clés MDBList des utilisateurs pour le suivi ne servent jamais à cela. Sans clé, MDBList n’est jamais consulté.',
     criticRatingShows: 'La note critique affiche',
     criticRatingShowsHelp:
-      'Les applications Jellyfin n’ont qu’un champ pour une note critique, de 0 à 100 : il affiche le score des critiques ou celui du public. Sur la fiche d’un titre, le lecteur web affiche les deux, avec la note IMDb.',
+      'Les applications Jellyfin n’ont qu’un champ pour une note critique, de 0 à 100\u202f: il affiche le score des critiques ou celui du public. Sur la fiche d’un titre, le lecteur web affiche les deux, avec la note IMDb.',
     criticRatingChoices: { critics: 'Score des critiques', audience: 'Score du public' },
     posterBadges: 'Badges sur les affiches',
     posterBadgesHelp:
@@ -711,8 +711,8 @@ const settings: typeof en = {
       badged: 'Avec les badges',
       card: 'Sur une petite carte',
       another: 'Un autre titre',
-      none: 'Aucun film ni aucune série de vos bibliothèques n’est encore connu : ouvrez d’abord une bibliothèque dans le lecteur web.',
-      nothing: 'Ce titre n’a ni note ni nouvel épisode : son affiche ne montre aucun badge.',
+      none: 'Aucun film ni aucune série de vos bibliothèques n’est encore connu\u202f: ouvrez d’abord une bibliothèque dans le lecteur web.',
+      nothing: 'Ce titre n’a ni note ni nouvel épisode\u202f: son affiche ne montre aucun badge.',
     },
     posterTemplate: 'Modèle d’adresse des affiches',
     posterTemplateHelp:
@@ -725,7 +725,7 @@ const settings: typeof en = {
       'Les applications montent ou baissent chaque chanson, ou chaque album, au même volume, d’après les balises ReplayGain des chansons locales ou leur volume mesuré. Les chansons elles-mêmes ne changent pas. Si cette option est désactivée, les applications ne reçoivent aucun gain et rien n’est mesuré.',
     measureLoudness: 'Mesurer le volume des chansons sans gain',
     measureLoudnessHelp:
-      'FFmpeg mesure le volume des chansons sans balise ReplayGain, deux à la fois à la priorité la plus basse, une seule fois chacune : les chansons locales après une analyse, celles des addons après leur première lecture. Les chansons de plus de 15 minutes et les livres audio ne sont jamais mesurés.',
+      'FFmpeg mesure le volume des chansons sans balise ReplayGain, deux à la fois à la priorité la plus basse, une seule fois chacune\u202f: les chansons locales après une analyse, celles des addons après leur première lecture. Les chansons de plus de 15 minutes et les livres audio ne sont jamais mesurés.',
     measureLoudnessChoices: {
       off: 'Non',
       local: 'Chansons locales',
@@ -733,31 +733,31 @@ const settings: typeof en = {
     },
     playedPercent: 'Marqué comme vu après (%)',
     playedPercentHelp: (r: RangeText) =>
-      `Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin.`,
+      `Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut, comme dans Jellyfin.`,
     resumePercent: 'Point de reprise gardé après (%)',
     resumePercentHelp: (r: RangeText) =>
-      `L’endroit où la lecture s’est arrêtée est gardé, pour reprendre de là, dès qu’il dépasse cette part de la durée du titre. Ce nombre doit être plus petit que celui de « Marqué comme vu après ». De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin. Un titre de moins de 5 minutes est marqué comme vu dès qu’il dépasse ce point.`,
+      `L’endroit où la lecture s’est arrêtée est gardé, pour reprendre de là, dès qu’il dépasse cette part de la durée du titre. Ce nombre doit être plus petit que celui de «\u202fMarqué comme vu après\u202f». De ${r.min} à ${r.max}\u202f; ${r.default} par défaut, comme dans Jellyfin. Un titre de moins de 5 minutes est marqué comme vu dès qu’il dépasse ce point.`,
     versionListMinutes: 'Garder les listes de versions pendant (minutes)',
     versionListMinutesHelp: (r: RangeText) =>
-      `Combien de temps Polyfin utilise les versions et les sous-titres que les addons donnent pour un titre avant de leur redemander. Une liste plus ancienne s’affiche quand même tout de suite quand on rouvre le titre, le temps que Polyfin redemande. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Combien de temps Polyfin utilise les versions et les sous-titres que les addons donnent pour un titre avant de leur redemander. Une liste plus ancienne s’affiche quand même tout de suite quand on rouvre le titre, le temps que Polyfin redemande. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     catalogRefreshMinutes: 'Rafraîchir les catalogues après (minutes)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
-      `L’âge qu’une page de catalogue lue auprès d’un addon, guide de la TV en direct compris, peut atteindre avant que Polyfin la relise. Les applis ne l’attendent jamais : une page plus ancienne s’affiche quand même tout de suite pendant que Polyfin la relit en arrière-plan, et elle est gardée un jour de plus. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De ${r.min} à ${r.max} (un jour) ; ${r.default} par défaut.`,
+      `L’âge qu’une page de catalogue lue auprès d’un addon, guide de la TV en direct compris, peut atteindre avant que Polyfin la relise. Les applis ne l’attendent jamais\u202f: une page plus ancienne s’affiche quand même tout de suite pendant que Polyfin la relit en arrière-plan, et elle est gardée un jour de plus. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De ${r.min} à ${r.max} (un jour)\u202f; ${r.default} par défaut.`,
     collectionReadHour: 'Lire toutes les collections chaque jour',
     collectionReadHourNever: 'Jamais',
     collectionReadHourHelp:
-      'Lit toutes les collections des bibliothèques de collections du serveur à cette heure, l’une après l’autre, puis les catalogues des listes intelligentes du serveur, pour qu’elles s’ouvrent tout de suite. Cela demande beaucoup de pages aux addons : laissez-le désactivé pour un addon que vous partagez avec d’autres.',
+      'Lit toutes les collections des bibliothèques de collections du serveur à cette heure, l’une après l’autre, puis les catalogues des listes intelligentes du serveur, pour qu’elles s’ouvrent tout de suite. Cela demande beaucoup de pages aux addons\u202f: laissez-le désactivé pour un addon que vous partagez avec d’autres.',
     collectionLibraryApps: 'Applis qui présentent les bibliothèques de collections par collection',
     collectionLibraryAppsHelp:
-      'Les bibliothèques de collections sont présentées aux applis comme des bibliothèques de contenu mixte, pour que jellyfin-web et Streamyfin leur donnent une rangée sur l’accueil. Les applis cochées apprennent qu’elles contiennent des collections, comme la vue Collections de Jellyfin : les applis qui listent une bibliothèque selon son type affichent alors ses collections, puis les titres d’une collection une fois ouverte, plutôt que les titres de toutes ses collections mélangés. jellyfin-web et Streamyfin écartent ces bibliothèques des rangées de leur accueil : ne les cochez donc pas. La liste montre les applis qui se sont connectées à ce serveur.',
+      'Les bibliothèques de collections sont présentées aux applis comme des bibliothèques de contenu mixte, pour que jellyfin-web et Streamyfin leur donnent une rangée sur l’accueil. Les applis cochées apprennent qu’elles contiennent des collections, comme la vue Collections de Jellyfin\u202f: les applis qui listent une bibliothèque selon son type affichent alors ses collections, puis les titres d’une collection une fois ouverte, plutôt que les titres de toutes ses collections mélangés. jellyfin-web et Streamyfin écartent ces bibliothèques des rangées de leur accueil\u202f: ne les cochez donc pas. La liste montre les applis qui se sont connectées à ce serveur.',
     collectionLibraryAppsNone: 'Aucune appli ne s’est encore connectée à ce serveur.',
     localScanHours: 'Analyser les dossiers locaux toutes les (heures, 0 = jamais)',
     localScanHoursHelp: (r: RangeText) =>
-      `À quelle fréquence chaque dossier local est analysé à nouveau pour trouver les fichiers ajoutés, modifiés ou supprimés. Les dossiers sont aussi analysés au démarrage, à la demande, et quand ceux qui sont surveillés changent. 0 désactive cette planification. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `À quelle fréquence chaque dossier local est analysé à nouveau pour trouver les fichiers ajoutés, modifiés ou supprimés. Les dossiers sont aussi analysés au démarrage, à la demande, et quand ceux qui sont surveillés changent. 0 désactive cette planification. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     watchlistCheckHours:
       'Chercher des versions des titres à regarder toutes les (heures, 0 = jamais)',
     watchlistCheckHoursHelp: (r: RangeText) =>
-      `À quelle fréquence chaque titre non commencé de la liste « À regarder » d’un utilisateur est vérifié à nouveau pour trouver des versions, pour les rangées d’accueil Disponibles et Toujours en attente et le message qui prévient l’utilisateur d’un titre disponible. Chaque heure, jusqu’à 20 titres de chaque utilisateur sont vérifiés, en interrogeant ses addons de flux. 0 désactive ces vérifications. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `À quelle fréquence chaque titre non commencé de la liste «\u202fÀ regarder\u202f» d’un utilisateur est vérifié à nouveau pour trouver des versions, pour les rangées d’accueil Disponibles et Toujours en attente et le message qui prévient l’utilisateur d’un titre disponible. Chaque heure, jusqu’à 20 titres de chaque utilisateur sont vérifiés, en interrogeant ses addons de flux. 0 désactive ces vérifications. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     watchLocalFolders: 'Surveiller les changements des dossiers et des partages',
     watchLocalFoldersHelp: {
       container:
@@ -776,47 +776,47 @@ const settings: typeof en = {
       'Sous Mon compte, chaque utilisateur peut importer ses films et épisodes vus, ses points de reprise et ses favoris depuis un serveur Jellyfin, Emby ou Plex, ou depuis son compte Stremio ou Nuvio, en s’y connectant avec ses propres identifiants, et ses films vus depuis un export Letterboxd. Sinon, ces sections sont masquées. Un administrateur peut toujours importer pour un utilisateur, sous Utilisateurs.',
     importEveryMinutes: 'Importer les comptes connectés toutes les',
     importEveryMinutesHelp:
-      'Tous les combien Polyfin importe de nouveau les comptes Stremio et Nuvio auxquels les utilisateurs restent connectés, et les historiques qu’ils importent depuis les services de suivi. Un changement s’applique tout de suite : chaque prochaine importation a lieu ce délai après la dernière. Chaque importation relit tout le compte : un intervalle court envoie plus de requêtes à ces services et, pour Stremio, dont les conditions interdisent l’extraction automatisée, rend cette zone grise plus marquée. 6 heures par défaut.',
+      'Tous les combien Polyfin importe de nouveau les comptes Stremio et Nuvio auxquels les utilisateurs restent connectés, et les historiques qu’ils importent depuis les services de suivi. Un changement s’applique tout de suite\u202f: chaque prochaine importation a lieu ce délai après la dernière. Chaque importation relit tout le compte\u202f: un intervalle court envoie plus de requêtes à ces services et, pour Stremio, dont les conditions interdisent l’extraction automatisée, rend cette zone grise plus marquée. 6 heures par défaut.',
     shareLinks: 'Autoriser les liens de partage',
     shareLinksHelp:
-      'Les utilisateurs qui ont « Peut partager des titres », sur leur page sous Utilisateurs, peuvent donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire après 1 heure à 30 jours. L’invité regarde dans un navigateur, en 1080p au plus et dans le groupe de qualité de l’utilisateur, et compte parmi les lectures simultanées de l’utilisateur. Sinon, aucun lien ne peut être créé et tous les liens sont refusés, sans être supprimés. Désactivé par défaut.',
+      'Les utilisateurs qui ont «\u202fPeut partager des titres\u202f», sur leur page sous Utilisateurs, peuvent donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire après 1 heure à 30 jours. L’invité regarde dans un navigateur, en 1080p au plus et dans le groupe de qualité de l’utilisateur, et compte parmi les lectures simultanées de l’utilisateur. Sinon, aucun lien ne peut être créé et tous les liens sont refusés, sans être supprimés. Désactivé par défaut.',
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
     loginAttemptsHelp: (r: RangeText) =>
       `Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de ${r.min} à ${r.max}.`,
     twoStepAdministrators: 'Exiger la connexion en deux étapes des administrateurs',
     twoStepAdministratorsHelp:
-      'Les administrateurs se connectent à cette appli d’administration avec un code d’une application d’authentification après leur mot de passe. Celui qui ne l’a pas configurée le fait juste après son mot de passe, avant d’obtenir une session. Son mot de passe seul ne le connecte alors plus à aucune appli Jellyfin : il utilise Quick Connect, approuvé ici. Les sessions et appareils déjà connectés le restent. Désactivé par défaut.',
+      'Les administrateurs se connectent à cette appli d’administration avec un code d’une application d’authentification après leur mot de passe. Celui qui ne l’a pas configurée le fait juste après son mot de passe, avant d’obtenir une session. Son mot de passe seul ne le connecte alors plus à aucune appli Jellyfin\u202f: il utilise Quick Connect, approuvé ici. Les sessions et appareils déjà connectés le restent. Désactivé par défaut.',
     inactiveDeviceDays: 'Déconnecter les appareils inutilisés depuis (jours, 0 = jamais)',
     inactiveDeviceDaysHelp: (r: RangeText) =>
       `Les applications Jellyfin qui n’ont pas servi depuis ce nombre de jours sont déconnectées et doivent se reconnecter. La vérification a lieu toutes les heures. La connexion à cette page d’administration n’est pas concernée. De ${r.min} à ${r.max}.`,
     knownProxies: 'Proxys connus',
     knownProxiesHelp: (r: RangeText) =>
-      `Les proxys inverses placés devant Polyfin, un par ligne : une adresse IP, un réseau comme 172.18.0.0/16, ou un nom d’hôte comme le nom d’un conteneur sur un réseau Docker (traefik), jusqu’à ${r.max}. Un nom est résolu chaque minute et chaque adresse à laquelle il correspond est reconnue : ne listez que des noms que votre propre réseau résout. Une requête de l’un d’eux vient du client que nomme son en-tête X-Forwarded-For ou X-Real-IP : c’est cette adresse qui limite les connexions échouées, qui s’affiche pour les appareils et qui indique le réseau local. Venant de toute autre adresse, X-Forwarded-For et X-Real-IP sont ignorés. Laissez vide si rien ne se trouve devant Polyfin.`,
+      `Les proxys inverses placés devant Polyfin, un par ligne\u202f: une adresse IP, un réseau comme 172.18.0.0/16, ou un nom d’hôte comme le nom d’un conteneur sur un réseau Docker (traefik), jusqu’à ${r.max}. Un nom est résolu chaque minute et chaque adresse à laquelle il correspond est reconnue\u202f: ne listez que des noms que votre propre réseau résout. Une requête de l’un d’eux vient du client que nomme son en-tête X-Forwarded-For ou X-Real-IP\u202f: c’est cette adresse qui limite les connexions échouées, qui s’affiche pour les appareils et qui indique le réseau local. Venant de toute autre adresse, X-Forwarded-For et X-Real-IP sont ignorés. Laissez vide si rien ne se trouve devant Polyfin.`,
     provider: {
       title: 'Fournisseur d’identité',
       intro:
-        'Les utilisateurs peuvent se connecter à cette application d’administration et au lecteur web avec un fournisseur OpenID Connect, qui demande alors sa propre connexion en deux étapes : Polyfin ne redemande pas de code. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect, approuvé depuis une session ouverte par lui. Enregistrez Polyfin chez le fournisseur comme client confidentiel, ou comme client public sans secret, avec l’URI de redirection ci-dessous.',
+        'Les utilisateurs peuvent se connecter à cette application d’administration et au lecteur web avec un fournisseur OpenID Connect, qui demande alors sa propre connexion en deux étapes\u202f: Polyfin ne redemande pas de code. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect, approuvé depuis une session ouverte par lui. Enregistrez Polyfin chez le fournisseur comme client confidentiel, ou comme client public sans secret, avec l’URI de redirection ci-dessous.',
       redirectUri: 'URI de redirection',
       redirectUriHelp:
         'L’adresse où le fournisseur renvoie les navigateurs, construite à partir de l’adresse publique. Enregistrez-la chez le fournisseur telle quelle.',
       noPublicAddress:
-        'Indiquez d’abord l’adresse publique dans Paramètres › Notifications : la connexion y commence et y finit, et le fournisseur y renvoie les navigateurs.',
+        'Indiquez d’abord l’adresse publique dans Paramètres › Notifications\u202f: la connexion y commence et y finit, et le fournisseur y renvoie les navigateurs.',
       issuer: 'Émetteur',
       issuerHelp:
         'L’émetteur (issuer) du fournisseur, exactement comme le donne son document de découverte, comme https://id.example.org ou https://id.example.org/realms/home. Polyfin lit son /.well-known/openid-configuration. Vide désactive la connexion.',
       name: 'Nom du bouton',
       nameHelp:
-        'Ce que disent les boutons de connexion après « Se connecter avec ». Vide affiche le nom d’hôte de l’émetteur.',
+        'Ce que disent les boutons de connexion après «\u202fSe connecter avec\u202f». Vide affiche le nom d’hôte de l’émetteur.',
       clientId: 'ID client',
       clientIdHelp:
         'L’ID que le fournisseur a donné au client de Polyfin. Vide désactive la connexion.',
       clientSecret: 'Secret client',
       clientSecretHelp:
-        'Le secret d’un client confidentiel ; laissez vide pour un client public. Il est conservé chiffré avec POLYFIN_SECRET_KEY et n’est plus jamais affiché.',
+        'Le secret d’un client confidentiel\u202f; laissez vide pour un client public. Il est conservé chiffré avec POLYFIN_SECRET_KEY et n’est plus jamais affiché.',
       userClaim: 'Claim qui nomme l’utilisateur',
       userClaimHelp:
-        'Le claim du jeton d’identité comparé aux noms des comptes, sans tenir compte de la casse, la première fois que quelqu’un se connecte : preferred_username par défaut. L’e-mail vérifié vient ensuite. Les connexions suivantes retrouvent le même compte, quoi que dise alors le claim.',
+        'Le claim du jeton d’identité comparé aux noms des comptes, sans tenir compte de la casse, la première fois que quelqu’un se connecte\u202f: preferred_username par défaut. L’e-mail vérifié vient ensuite. Les connexions suivantes retrouvent le même compte, quoi que dise alors le claim.',
       createAccounts: 'Créer les comptes',
       createAccountsHelp:
         'Une personne qu’aucun compte ne désigne en reçoit un, nommé d’après le claim, sinon l’e-mail, avec les permissions d’un nouveau compte, qui se connecte par le fournisseur uniquement. Désactivé, elle est refusée. Désactivé par défaut.',
@@ -825,22 +825,22 @@ const settings: typeof en = {
         'Le claim qui liste les groupes ou rôles d’une personne, comme groups. Avec une valeur ci-dessous, celui dont le claim la contient devient administrateur en se connectant. Polyfin demande le scope groups quand le claim est groups et que le fournisseur le propose.',
       adminValue: 'Valeur des administrateurs',
       adminValueHelp:
-        'Le groupe ou rôle qui fait les administrateurs, comme polyfin-admins. Le quitter ensuite ne refait pas d’un administrateur un membre : changez-le sur la page Utilisateurs.',
+        'Le groupe ou rôle qui fait les administrateurs, comme polyfin-admins. Le quitter ensuite ne refait pas d’un administrateur un membre\u202f: changez-le sur la page Utilisateurs.',
     },
     https: {
       title: 'HTTPS',
       intro:
-        'Polyfin peut servir HTTPS lui-même, sur un port à part, sans proxy inverse devant lui. HTTP continue de fonctionner sur son port quoi qu’il arrive à HTTPS : un port impossible à ouvrir, ou un certificat impossible à lire ou à renouveler, s’affiche dans Système › Santé. Les changements s’appliquent tout de suite, sans redémarrage.',
+        'Polyfin peut servir HTTPS lui-même, sur un port à part, sans proxy inverse devant lui. HTTP continue de fonctionner sur son port quoi qu’il arrive à HTTPS\u202f: un port impossible à ouvrir, ou un certificat impossible à lire ou à renouveler, s’affiche dans Système › Santé. Les changements s’appliquent tout de suite, sans redémarrage.',
       mode: 'Servir HTTPS',
       modeHelp:
-        'Fichiers de certificat : un certificat qu’obtient un autre outil, relu quand il change. Let’s Encrypt : un certificat que Polyfin obtient et renouvelle lui-même, pour des noms d’hôte publics qui pointent vers ce serveur. Désactivé par défaut.',
+        'Fichiers de certificat\u202f: un certificat qu’obtient un autre outil, relu quand il change. Let’s Encrypt\u202f: un certificat que Polyfin obtient et renouvelle lui-même, pour des noms d’hôte publics qui pointent vers ce serveur. Désactivé par défaut.',
       modes: { off: 'Désactivé', files: 'Fichiers de certificat', letsencrypt: 'Let’s Encrypt' },
       port: 'Port HTTPS',
       portHelp: (r: RangeText) =>
-        `Le port TCP sur lequel HTTPS écoute dans le conteneur : publiez-le, comme 8096 l’est pour HTTP. L’utilisateur du conteneur ne peut pas écouter sous 1024 : pour joindre Polyfin sur 443, redirigez 443 vers ce port sur le routeur ou dans les ports du conteneur, et réglez l’adresse publique, dans Paramètres › Notifications, sur https:// et le nom d’hôte, sans port. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme Jellyfin.`,
+        `Le port TCP sur lequel HTTPS écoute dans le conteneur\u202f: publiez-le, comme 8096 l’est pour HTTP. L’utilisateur du conteneur ne peut pas écouter sous 1024\u202f: pour joindre Polyfin sur 443, redirigez 443 vers ce port sur le routeur ou dans les ports du conteneur, et réglez l’adresse publique, dans Paramètres › Notifications, sur https:// et le nom d’hôte, sans port. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut, comme Jellyfin.`,
       redirect: 'Rediriger HTTP vers HTTPS',
       redirectHelp:
-        'Les requêtes venues d’internet en HTTP reçoivent une redirection permanente (308) vers la même adresse en HTTPS, sur le port par lequel internet joint HTTPS : le port de l’adresse publique, dans Paramètres › Notifications, quand elle commence par https://, 443 quand elle n’en indique pas, sinon le port HTTPS. Le réseau local, les vérifications de Let’s Encrypt, et les requêtes qu’un proxy connu a reçues en HTTPS restent en HTTP. Ne s’applique que tant que HTTPS est servi. Désactivé par défaut.',
+        'Les requêtes venues d’internet en HTTP reçoivent une redirection permanente (308) vers la même adresse en HTTPS, sur le port par lequel internet joint HTTPS\u202f: le port de l’adresse publique, dans Paramètres › Notifications, quand elle commence par https://, 443 quand elle n’en indique pas, sinon le port HTTPS. Le réseau local, les vérifications de Let’s Encrypt, et les requêtes qu’un proxy connu a reçues en HTTPS restent en HTTP. Ne s’applique que tant que HTTPS est servi. Désactivé par défaut.',
       certificate: 'Certificat',
       certificateHelp:
         'Le chemin dans le conteneur du fichier PEM du certificat avec sa chaîne, comme /certs/fullchain.pem. L’enregistrement vérifie qu’il peut être lu. Polyfin le relit dans la minute qui suit un changement, et garde le dernier bon certificat tant qu’un changement ne peut pas être lu.',
@@ -849,7 +849,7 @@ const settings: typeof en = {
         'Le chemin dans le conteneur de la clé privée RSA ou ECDSA du certificat, en fichier PEM, comme /certs/privkey.pem. L’enregistrement vérifie qu’elle correspond au certificat.',
       hosts: 'Noms d’hôte',
       hostsHelp: (r: RangeText) =>
-        `Les noms publics qui pointent vers ce serveur, un par ligne, comme media.example.org, jusqu’à ${r.max}. Un seul certificat les contient tous. Les noms résolus seulement sur le réseau local, et les jokers, demandent le défi DNS-01, auquel Polyfin ne répond pas : utilisez pour eux des fichiers de certificat obtenus par un autre outil.`,
+        `Les noms publics qui pointent vers ce serveur, un par ligne, comme media.example.org, jusqu’à ${r.max}. Un seul certificat les contient tous. Les noms résolus seulement sur le réseau local, et les jokers, demandent le défi DNS-01, auquel Polyfin ne répond pas\u202f: utilisez pour eux des fichiers de certificat obtenus par un autre outil.`,
       email: 'E-mail',
       emailHelp: 'Facultatif. Let’s Encrypt peut écrire à cette adresse au sujet du compte.',
       terms: 'J’accepte les conditions d’utilisation de Let’s Encrypt',
@@ -857,27 +857,27 @@ const settings: typeof en = {
         'Let’s Encrypt ne délivre de certificats qu’une fois ses conditions d’utilisation, sur letsencrypt.org/repository, acceptées.',
       challenge: 'Défi',
       challengeHelp:
-        'La façon dont Let’s Encrypt vérifie que les noms pointent vers ce serveur. HTTP-01 : Polyfin répond sur son port HTTP, que le port 80 d’internet doit joindre. TLS-ALPN-01 : Polyfin répond sur son port HTTPS, que le port 443 d’internet doit joindre. Le certificat, sa clé et la clé du compte sont gardés dans la base de données, les clés chiffrées avec POLYFIN_SECRET_KEY, et le certificat est renouvelé quand il lui reste un tiers de sa durée.',
+        'La façon dont Let’s Encrypt vérifie que les noms pointent vers ce serveur. HTTP-01\u202f: Polyfin répond sur son port HTTP, que le port 80 d’internet doit joindre. TLS-ALPN-01\u202f: Polyfin répond sur son port HTTPS, que le port 443 d’internet doit joindre. Le certificat, sa clé et la clé du compte sont gardés dans la base de données, les clés chiffrées avec POLYFIN_SECRET_KEY, et le certificat est renouvelé quand il lui reste un tiers de sa durée.',
       challenges: {
         'http-01': 'HTTP-01 (port 80 vers le port HTTP)',
         'tls-alpn-01': 'TLS-ALPN-01 (port 443 vers le port HTTPS)',
       },
       useAddress: (address: string) => `Utiliser ${address}`,
       offeredAddress:
-        'Les adresses auxquelles Let’s Encrypt sert HTTPS, dans Paramètres › Sécurité : sans port une fois que le routeur redirige 443 vers le port HTTPS. « Rediriger HTTP vers HTTPS » mène au port de l’adresse choisie.',
+        'Les adresses auxquelles Let’s Encrypt sert HTTPS, dans Paramètres › Sécurité\u202f: sans port une fois que le routeur redirige 443 vers le port HTTPS. «\u202fRediriger HTTP vers HTTPS\u202f» mène au port de l’adresse choisie.',
     },
     detailedLog: 'Journal détaillé (pour diagnostiquer un problème)',
     detailedLogHelp:
       'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',
     saved: 'Paramètres enregistrés.',
     thumbnailsHelp:
-      'Des images tirées des titres eux-mêmes, après leur visionnage. Pour les faire, Polyfin lit de petits morceaux du fichier à la source, doucement, quand personne ne regarde depuis cette source : au plus 60 demandes par titre, une toutes les 3 secondes, et 120 par heure et par source, jamais le fichier entier. Une source qui demande de ralentir ne reçoit plus de demande d’images pendant 2 heures. Désactivé par défaut.',
+      'Des images tirées des titres eux-mêmes, après leur visionnage. Pour les faire, Polyfin lit de petits morceaux du fichier à la source, doucement, quand personne ne regarde depuis cette source\u202f: au plus 60 demandes par titre, une toutes les 3 secondes, et 120 par heure et par source, jamais le fichier entier. Une source qui demande de ralentir ne reçoit plus de demande d’images pendant 2 heures. Désactivé par défaut.',
     trickplay: 'Miniatures quand on avance dans un titre',
     trickplayHelp:
-      'Les applications montrent une petite image du moment visé dans la barre de lecture. Polyfin les fait une fois le titre regardé, et pour l’épisode suivant quand la lecture est préparée à l’avance. Les films longs ont des miniatures plus espacées : quelques minutes plutôt que quelques secondes.',
+      'Les applications montrent une petite image du moment visé dans la barre de lecture. Polyfin les fait une fois le titre regardé, et pour l’épisode suivant quand la lecture est préparée à l’avance. Les films longs ont des miniatures plus espacées\u202f: quelques minutes plutôt que quelques secondes.',
     trickplayInterval: 'Une miniature toutes les (secondes, au moins)',
     trickplayIntervalHelp: (r: RangeText) =>
-      `Tous les combien la barre de lecture change d’image. Polyfin lit au plus 60 images par titre : un titre de plus de 10 minutes environ a une image par pas, ses pas répartis sur toute sa durée : environ 1 minute pour un épisode d’une heure, 2 minutes pour un film de 2 heures. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme Jellyfin.`,
+      `Tous les combien la barre de lecture change d’image. Polyfin lit au plus 60 images par titre\u202f: un titre de plus de 10 minutes environ a une image par pas, ses pas répartis sur toute sa durée\u202f: environ 1 minute pour un épisode d’une heure, 2 minutes pour un film de 2 heures. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut, comme Jellyfin.`,
     trickplayWidth: 'Largeur des miniatures',
     trickplayWidthHelp:
       'Des miniatures plus larges sont plus nettes sur un grand écran, mais prennent plus de place. Un changement fait de nouvelles miniatures à la prochaine lecture d’un titre.',
@@ -887,14 +887,14 @@ const settings: typeof en = {
       'Les applications montrent une image pour chaque chapitre d’un titre, dans sa liste de scènes. Polyfin prend l’image lue la plus proche du début de chaque chapitre, avec les mêmes lectures que les miniatures, une fois le titre regardé.',
     thumbnailStorage: 'Place pour les images (Go)',
     thumbnailStorageHelp: (r: RangeText) =>
-      `Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées\u202f; elles sont refaites si le titre est relu. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     cacheSize: 'Espace disque des fichiers en cours de lecture (Go)',
     cacheSizeHelp: (r: RangeText) =>
-      `L’espace que Polyfin peut utiliser pour garder les parties des fichiers lus, afin que les retours en arrière et les reprises ne les téléchargent pas à nouveau. Les parties lues dans les 30 dernières secondes sont gardées même au-delà. De ${r.min} à ${r.max} Go ; ${r.default} par défaut.`,
+      `L’espace que Polyfin peut utiliser pour garder les parties des fichiers lus, afin que les retours en arrière et les reprises ne les téléchargent pas à nouveau. Les parties lues dans les 30 dernières secondes sont gardées même au-delà. De ${r.min} à ${r.max} Go\u202f; ${r.default} par défaut.`,
     sourceCacheGroup: 'Fichiers en cours de lecture',
     sourceCachePreset: 'Espace disque et conservation',
     sourceCachePresetHelp: (free: string) =>
-      `La part des fichiers lus que Polyfin garde sur le disque, et combien de temps, d’un démarrage à l’autre : un titre relu, ou repris après un redémarrage, est alors lu depuis le disque plutôt que depuis sa source. Un préréglage règle les champs ci-dessous ; en changer un le fait passer à « Personnalisé ». ${free}`,
+      `La part des fichiers lus que Polyfin garde sur le disque, et combien de temps, d’un démarrage à l’autre\u202f: un titre relu, ou repris après un redémarrage, est alors lu depuis le disque plutôt que depuis sa source. Un préréglage règle les champs ci-dessous\u202f; en changer un le fait passer à «\u202fPersonnalisé\u202f». ${free}`,
     sourceCacheFree: (free: string) =>
       `${free} libres sur le disque du dossier des fichiers en cours de lecture.`,
     sourceCachePresetNames: {
@@ -906,44 +906,44 @@ const settings: typeof en = {
     },
     sourceCachePresetChoice: (name: string, size: string, days: number) =>
       days > 0
-        ? `${name} : ${size} Go, gardés ${days} jours`
-        : `${name} : ${size} Go, vidé à chaque démarrage`,
+        ? `${name}\u202f: ${size} Go, gardés ${days} jours`
+        : `${name}\u202f: ${size} Go, vidé à chaque démarrage`,
     sourceCacheDays: 'Garder les parties lues (jours)',
     sourceCacheDaysHelp: (r: RangeText) =>
-      `Combien de temps une partie d’un fichier est gardée après sa dernière lecture, redémarrages compris. 0 ne garde rien après un redémarrage : chaque démarrage vide le cache. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Combien de temps une partie d’un fichier est gardée après sa dernière lecture, redémarrages compris. 0 ne garde rien après un redémarrage\u202f: chaque démarrage vide le cache. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     sourceCacheCreditDays: 'Jours de plus par nouvelle lecture',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
-      `Un titre relu, 6 heures ou plus après sa dernière lecture, garde ses parties ce nombre de jours de plus pour chaque lecture après la première, 8 au plus, et elles laissent la place après celles des titres lus une seule fois. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Un titre relu, 6 heures ou plus après sa dernière lecture, garde ses parties ce nombre de jours de plus pour chaque lecture après la première, 8 au plus, et elles laissent la place après celles des titres lus une seule fois. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     preloadGroup: 'Préchargement des épisodes suivants',
     preloadNextEpisodes: 'Précharger les épisodes suivants',
     preloadNextEpisodesHelp:
-      'Tant que rien n’est en lecture, lit à l’avance les épisodes suivants des séries que chaque utilisateur a lues ou commencées ces 14 derniers jours, 5 séries par utilisateur au plus : la première version que Lecture choisirait, ses 128 premiers Mio et sa fin, ou le fichier entier. Il s’arrête dès qu’une lecture commence, et lit au plus un quart de l’espace disque ci-dessus toutes les 15 minutes. Les torrents ne sont jamais préchargés.',
+      'Tant que rien n’est en lecture, lit à l’avance les épisodes suivants des séries que chaque utilisateur a lues ou commencées ces 14 derniers jours, 5 séries par utilisateur au plus\u202f: la première version que Lecture choisirait, ses 128 premiers Mio et sa fin, ou le fichier entier. Il s’arrête dès qu’une lecture commence, et lit au plus un quart de l’espace disque ci-dessus toutes les 15 minutes. Les torrents ne sont jamais préchargés.',
     preloadEpisodes: 'Épisodes par série',
-    preloadEpisodesHelp: (r: RangeText) => `De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    preloadEpisodesHelp: (r: RangeText) => `De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     preloadMbps: 'Limite de débit (Mbit/s)',
     preloadMbpsHelp: (r: RangeText) =>
-      `Le débit moyen du préchargement, qui laisse le reste de la connexion au foyer. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Le débit moyen du préchargement, qui laisse le reste de la connexion au foyer. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     preloadReserveGb: 'Espace libre à garder (Go)',
     preloadReserveGbHelp: (r: RangeText) =>
-      `Le préchargement s’arrête avant que le disque du dossier des fichiers en cours de lecture ait moins que cet espace libre. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Le préchargement s’arrête avant que le disque du dossier des fichiers en cours de lecture ait moins que cet espace libre. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     preloadWholeFiles: 'Précharger les fichiers entiers',
     preloadWholeFilesHelp:
-      'Lit les épisodes entiers plutôt que leur début et leur fin, pour un grand disque. Le préréglage « Grand » l’active ; le changer fait passer le préréglage à « Personnalisé ».',
+      'Lit les épisodes entiers plutôt que leur début et leur fin, pour un grand disque. Le préréglage «\u202fGrand\u202f» l’active\u202f; le changer fait passer le préréglage à «\u202fPersonnalisé\u202f».',
     workFolders: {
       conversionFolder: 'Dossier de conversion',
       conversionFolderHelp:
-        'Où sont écrits les segments des fichiers convertis ou présentés autrement pendant leur lecture : les écritures les plus intenses, auxquelles conviennent un disque rapide ou un dossier en mémoire. Il demande la place des segments de toutes les conversions en cours.',
+        'Où sont écrits les segments des fichiers convertis ou présentés autrement pendant leur lecture\u202f: les écritures les plus intenses, auxquelles conviennent un disque rapide ou un dossier en mémoire. Il demande la place des segments de toutes les conversions en cours.',
       readingFolder: 'Dossier des fichiers en cours de lecture',
       readingFolderHelp:
-        'Où sont gardées les parties des fichiers des addons et les morceaux des torrents en cours de lecture, dans l’espace disque ci-dessus : souvent plusieurs Go, auxquels convient un grand disque.',
+        'Où sont gardées les parties des fichiers des addons et les morceaux des torrents en cours de lecture, dans l’espace disque ci-dessus\u202f: souvent plusieurs Go, auxquels convient un grand disque.',
       cacheFolder: 'Dossier du cache',
       cacheFolderHelp:
         'Où sont gardées les images relayées, jusqu’à 1 Go, d’un démarrage à l’autre, avec les guides et les sous-titres en images en cours de lecture.',
       where: {
         container:
-          'Un dossier du conteneur de Polyfin, où est monté un disque ou un dossier en mémoire ; vide, le cache de son volume de données, indiqué. Polyfin doit pouvoir y écrire. Un nouveau dossier s’applique au prochain démarrage de Polyfin ; l’ancien est laissé tel quel.',
+          'Un dossier du conteneur de Polyfin, où est monté un disque ou un dossier en mémoire\u202f; vide, le cache de son volume de données, indiqué. Polyfin doit pouvoir y écrire. Un nouveau dossier s’applique au prochain démarrage de Polyfin\u202f; l’ancien est laissé tel quel.',
         computer:
-          'Un dossier de l’ordinateur où tourne Polyfin ; vide, le cache de son dossier de données, indiqué. Polyfin doit pouvoir y écrire. Un nouveau dossier s’applique au prochain démarrage de Polyfin ; l’ancien est laissé tel quel.',
+          'Un dossier de l’ordinateur où tourne Polyfin\u202f; vide, le cache de son dossier de données, indiqué. Polyfin doit pouvoir y écrire. Un nouveau dossier s’applique au prochain démarrage de Polyfin\u202f; l’ancien est laissé tel quel.',
       },
     },
     recordingsTitle: 'Enregistrements',
@@ -960,19 +960,19 @@ const settings: typeof en = {
     },
     recordingPrePadding: 'Commencer les enregistrements avant (minutes)',
     recordingPrePaddingHelp: (r: RangeText) =>
-      `Combien de minutes avant l’émission un enregistrement commence. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Combien de minutes avant l’émission un enregistrement commence. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     recordingPostPadding: 'Continuer les enregistrements après (minutes)',
     recordingPostPaddingHelp: (r: RangeText) =>
-      `Combien de minutes après l’émission un enregistrement continue. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Combien de minutes après l’émission un enregistrement continue. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     recordingRetentionDays: 'Garder les enregistrements (jours, 0 = toujours)',
     recordingRetentionDaysHelp: (r: RangeText) =>
       `Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De ${r.min} à ${r.max}.`,
     recordingCommercials: 'Trouver les publicités des enregistrements',
     recordingCommercialsHelp:
-      'Quand un enregistrement se termine, Polyfin le lit en arrière-plan, un enregistrement à la fois, pour trouver les moments à la fois noirs et silencieux, et prend les courts passages entre eux pour des coupures publicitaires. Les applications proposent alors de les passer, selon ce que chaque utilisateur a choisi dans les réglages de lecture de son application, quand les boutons « Passer l’intro » et « Passer le générique » sont activés. Les enregistrements de plus de 4 heures ne sont pas lus.',
+      'Quand un enregistrement se termine, Polyfin le lit en arrière-plan, un enregistrement à la fois, pour trouver les moments à la fois noirs et silencieux, et prend les courts passages entre eux pour des coupures publicitaires. Les applications proposent alors de les passer, selon ce que chaque utilisateur a choisi dans les réglages de lecture de son application, quand les boutons «\u202fPasser l’intro\u202f» et «\u202fPasser le générique\u202f» sont activés. Les enregistrements de plus de 4 heures ne sont pas lus.',
     convertRecordings: 'Convertir les enregistrements terminés en HEVC',
     convertRecordingsHelp:
-      'Les enregistrements terminés sont convertis en HEVC, un à la fois, aux heures ci-dessous, pour prendre moins de place. L’image garde sa taille ; l’audio et les sous-titres sont copiés tels quels. La conversion utilise la « Carte graphique pour convertir », avec la « Qualité HEVC » et la « Méthode de désentrelacement » de Conversion (transcodage), et compte parmi les « Conversions vidéo en même temps » : elle attend tant que des lectures les occupent toutes. Elle ne commence qu’avec la place libre pour une copie aussi grande que l’enregistrement. La copie ne remplace l’enregistrement que si elle dure aussi longtemps, contient les mêmes pistes, se décode jusqu’au bout et est plus petite ; sinon elle est supprimée, et l’enregistrement gardé tel quel et pas réessayé. Un enregistrement en cours de lecture est remplacé une fois la lecture arrêtée ; son état vu, ses points de reprise et ses publicités restent. Les applications qui ne lisent pas le HEVC reçoivent l’enregistrement converti à la lecture : avec « Conversion (transcodage) » désactivée, elles ne peuvent pas le lire. Désactivé par défaut.',
+      'Les enregistrements terminés sont convertis en HEVC, un à la fois, aux heures ci-dessous, pour prendre moins de place. L’image garde sa taille\u202f; l’audio et les sous-titres sont copiés tels quels. La conversion utilise la «\u202fCarte graphique pour convertir\u202f», avec la «\u202fQualité HEVC\u202f» et la «\u202fMéthode de désentrelacement\u202f» de Conversion (transcodage), et compte parmi les «\u202fConversions vidéo en même temps\u202f»\u202f: elle attend tant que des lectures les occupent toutes. Elle ne commence qu’avec la place libre pour une copie aussi grande que l’enregistrement. La copie ne remplace l’enregistrement que si elle dure aussi longtemps, contient les mêmes pistes, se décode jusqu’au bout et est plus petite\u202f; sinon elle est supprimée, et l’enregistrement gardé tel quel et pas réessayé. Un enregistrement en cours de lecture est remplacé une fois la lecture arrêtée\u202f; son état vu, ses points de reprise et ses publicités restent. Les applications qui ne lisent pas le HEVC reçoivent l’enregistrement converti à la lecture\u202f: avec «\u202fConversion (transcodage)\u202f» désactivée, elles ne peuvent pas le lire. Désactivé par défaut.',
     convertRecordingsBetween: 'Convertir entre',
     convertRecordingsAnd: 'et',
     convertRecordingsBetweenHelp: (from: string, until: string) =>
@@ -984,7 +984,7 @@ const settings: typeof en = {
       'Sans carte graphique qui encode le HEVC, les enregistrements sont convertis par le processeur avec x265, à sa priorité la plus basse. C’est lent, et le processeur reste occupé pendant les heures ci-dessus. Sans carte graphique et avec ce réglage désactivé, rien n’est converti. Désactivé par défaut.',
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
-      `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt : après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt\u202f: après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     backupsFolder: (folder: string) =>
       `Les sauvegardes de la base de données sont enregistrées dans ${folder}.`,
     backups: 'Sauvegarder la base de données chaque jour',
@@ -993,32 +993,32 @@ const settings: typeof en = {
     backupFolderLabel: 'Dossier des sauvegardes',
     backupFolderHelp: {
       container:
-        'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base : montez-en un à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire.',
+        'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base\u202f: montez-en un à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire.',
       computer:
-        'Un dossier de l’ordinateur où tourne Polyfin, celui indiqué s’il est vide, dans son dossier de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base : indiquez ici un dossier d’un tel disque. Polyfin doit pouvoir y écrire.',
+        'Un dossier de l’ordinateur où tourne Polyfin, celui indiqué s’il est vide, dans son dossier de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base\u202f: indiquez ici un dossier d’un tel disque. Polyfin doit pouvoir y écrire.',
     },
     backupHour: 'Sauvegarder chaque jour à',
     backupHourHelp: (hour: string) => `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
     backupsKept: 'Sauvegardes à conserver',
     backupsKeptHelp: (r: RangeText) =>
-      `Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      `Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     backupPassphrase: 'Phrase de passe des sauvegardes',
     backupPassphraseHelp: (min: number) =>
       `Chiffre chaque sauvegarde à mesure qu’elle est écrite, dans le dossier et sur chaque destination, qui ne peut donc pas la lire. Au moins ${min} caractères. Elle est gardée chiffrée et n’est plus jamais affichée.`,
     backupPassphraseNew:
-      'Gardez cette phrase de passe ailleurs que sur ce serveur, par exemple dans un gestionnaire de mots de passe : une phrase de passe perdue, ce sont des sauvegardes perdues. Personne ne peut les restaurer sans elle, Polyfin compris. Vérifiez-la avec l’œil avant d’enregistrer. Les sauvegardes déjà faites restent telles quelles.',
+      'Gardez cette phrase de passe ailleurs que sur ce serveur, par exemple dans un gestionnaire de mots de passe\u202f: une phrase de passe perdue, ce sont des sauvegardes perdues. Personne ne peut les restaurer sans elle, Polyfin compris. Vérifiez-la avec l’œil avant d’enregistrer. Les sauvegardes déjà faites restent telles quelles.',
     backupPassphraseRemoved:
       'Les sauvegardes faites à partir de maintenant ne sont pas chiffrées. Celles déjà faites demandent toujours cette phrase de passe pour être restaurées.',
     lastBackup: 'Dernière sauvegarde',
     backupDestinations: 'Destinations',
     backupDestinationsHelp:
-      'Chaque sauvegarde est aussi envoyée à ces endroits, sous le même nom de fichier, une fois écrite dans le dossier : stockages compatibles S3, serveurs SFTP ou WebDAV. Un envoi qui échoue est retenté à la sauvegarde suivante.',
+      'Chaque sauvegarde est aussi envoyée à ces endroits, sous le même nom de fichier, une fois écrite dans le dossier\u202f: stockages compatibles S3, serveurs SFTP ou WebDAV. Un envoi qui échoue est retenté à la sauvegarde suivante.',
     webPlayerHelp:
-      'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le thème et le script s’appliquent au prochain chargement d’une page du lecteur web ; le lecteur web garde le message de connexion jusqu’à une minute.',
+      'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le thème et le script s’appliquent au prochain chargement d’une page du lecteur web\u202f; le lecteur web garde le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',
     webTheme: 'Thème du serveur',
     webThemeHelp:
-      'L’apparence du lecteur web pour les utilisateurs qui gardent celle du serveur ; chacun peut avoir la sienne, sur sa page dans Utilisateurs. LumaaGlaass est le thème fourni avec Polyfin. L’apparence de jellyfin-web n’a ni CSS ni script personnalisé, et chacun en choisit le thème d’affichage dans Paramètres › Affichage. Personnalisé utilise votre CSS et votre JavaScript ci-dessous, conservés pendant qu’un autre thème est choisi.',
+      'L’apparence du lecteur web pour les utilisateurs qui gardent celle du serveur\u202f; chacun peut avoir la sienne, sur sa page dans Utilisateurs. LumaaGlaass est le thème fourni avec Polyfin. L’apparence de jellyfin-web n’a ni CSS ni script personnalisé, et chacun en choisit le thème d’affichage dans Paramètres › Affichage. Personnalisé utilise votre CSS et votre JavaScript ci-dessous, conservés pendant qu’un autre thème est choisi.',
     webThemeChoices: {
       lumaaglaass: 'LumaaGlaass',
       none: 'L’apparence de jellyfin-web',
@@ -1027,49 +1027,49 @@ const settings: typeof en = {
     webThemeReload: 'Après un changement, rechargez les pages ouvertes du lecteur web.',
     webThemeTexts: {
       lumaaglaass:
-        'Ce que Polyfin sert pour LumaaGlaass, affiché ici sans pouvoir être modifié. Choisissez Personnalisé, ou « Modifier comme personnalisé », pour écrire le vôtre.',
+        'Ce que Polyfin sert pour LumaaGlaass, affiché ici sans pouvoir être modifié. Choisissez Personnalisé, ou «\u202fModifier comme personnalisé\u202f», pour écrire le vôtre.',
       none: 'L’apparence de jellyfin-web ne sert ni CSS ni JavaScript personnalisé. Choisissez Personnalisé pour écrire le vôtre.',
     },
     editAsCustom: 'Modifier comme personnalisé',
-    editAsCustomTitle: 'Remplacer vos textes personnalisés ?',
+    editAsCustomTitle: 'Remplacer vos textes personnalisés\u202f?',
     editAsCustomConfirm:
       'Votre CSS et votre JavaScript personnalisés sont remplacés par ceux de LumaaGlaass, et le thème devient Personnalisé. Enregistrer la page garde le changement.',
     themeCopy: 'Garder une copie dans Polyfin',
     themeCopyHelp: (depth: number, file: string, total: string, files: number) =>
-      `Enregistre les feuilles de style, scripts, polices et images que les textes personnalisés chargent d’ailleurs, comme un thème sur un CDN, dans le dossier de données de Polyfin, et fait charger ces fichiers depuis Polyfin : le thème fonctionne alors sans joindre son CDN. Suit @import, url() et les adresses que nomment les scripts, sur ${depth} niveaux, depuis des adresses d’internet uniquement, jusqu’à ${file} par fichier, et ${total} et ${files} fichiers en tout.`,
+      `Enregistre les feuilles de style, scripts, polices et images que les textes personnalisés chargent d’ailleurs, comme un thème sur un CDN, dans le dossier de données de Polyfin, et fait charger ces fichiers depuis Polyfin\u202f: le thème fonctionne alors sans joindre son CDN. Suit @import, url() et les adresses que nomment les scripts, sur ${depth} niveaux, depuis des adresses d’internet uniquement, jusqu’à ${file} par fichier, et ${total} et ${files} fichiers en tout.`,
     themeCopySaved: (files: number, size: string, date: string) =>
       `Une copie de ${files === 1 ? 'un fichier' : `${files} fichiers`}, ${size}, enregistrée le ${date}.`,
     themeCopyFiles: 'Fichiers enregistrés',
     themeCopyUnsaved: (count: number) =>
       count === 1
-        ? 'Une adresse n’a pas pu être enregistrée ; elle reste chargée d’ailleurs :'
-        : `${count} adresses n’ont pas pu être enregistrées ; elles restent chargées d’ailleurs :`,
+        ? 'Une adresse n’a pas pu être enregistrée\u202f; elle reste chargée d’ailleurs\u202f:'
+        : `${count} adresses n’ont pas pu être enregistrées\u202f; elles restent chargées d’ailleurs\u202f:`,
     themeCopyMissing: (count: number) =>
       count === 1
         ? 'Un fichier de la copie manque dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Les navigateurs le chargent en attendant depuis son adresse d’origine, ce qui demande internet. Mettez la copie à jour pour le télécharger de nouveau.'
         : `${count} fichiers de la copie manquent dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour pour les télécharger de nouveau.`,
     themeCopyOutside: (count: number) =>
       count === 1
-        ? 'Les textes personnalisés chargent une adresse d’ailleurs :'
-        : `Les textes personnalisés chargent ${count} adresses d’ailleurs :`,
+        ? 'Les textes personnalisés chargent une adresse d’ailleurs\u202f:'
+        : `Les textes personnalisés chargent ${count} adresses d’ailleurs\u202f:`,
     themeCopyStillOutside: (count: number) =>
       count === 1
-        ? 'Une adresse ajoutée depuis la copie est chargée d’ailleurs ; mettez la copie à jour pour l’enregistrer aussi :'
-        : `${count} adresses ajoutées depuis la copie sont chargées d’ailleurs ; mettez la copie à jour pour les enregistrer aussi :`,
+        ? 'Une adresse ajoutée depuis la copie est chargée d’ailleurs\u202f; mettez la copie à jour pour l’enregistrer aussi\u202f:'
+        : `${count} adresses ajoutées depuis la copie sont chargées d’ailleurs\u202f; mettez la copie à jour pour les enregistrer aussi\u202f:`,
     themeCopyNothing: 'Les textes personnalisés ne chargent rien d’ailleurs.',
     themeCopyKeep: 'Garder une copie dans Polyfin',
     themeCopyUpdate: 'Mettre la copie à jour',
     themeCopyRemove: 'Supprimer la copie',
-    themeCopyRemoveTitle: 'Supprimer la copie ?',
+    themeCopyRemoveTitle: 'Supprimer la copie\u202f?',
     themeCopyRemoveConfirm:
       'Ses fichiers sont effacés, et les textes personnalisés les chargent de nouveau depuis leurs adresses d’origine.',
     themeCopyKept:
       'Copie enregistrée. Rechargez les pages ouvertes du lecteur web dans une minute.',
     themeCopyRemoved:
       'Copie supprimée. Rechargez les pages ouvertes du lecteur web dans une minute.',
-    themeCopyFailed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite :',
+    themeCopyFailed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite\u202f:',
     themeCopySaveFirst:
-      'Enregistrez d’abord vos changements : la copie est faite à partir des textes enregistrés.',
+      'Enregistrez d’abord vos changements\u202f: la copie est faite à partir des textes enregistrés.',
     themeCopyKinds: {
       stylesheet: 'feuille de style',
       script: 'script',
@@ -1100,16 +1100,16 @@ const settings: typeof en = {
       'Ce script s’exécute dans le navigateur de chaque utilisateur qui ouvre le lecteur web de ce serveur, avec son compte. Il peut lire ce qu’il voit et agir à sa place.',
     loginDisclaimer: 'Message de connexion',
     loginDisclaimerHelp:
-      'Affiché sous le formulaire de connexion du lecteur web. Texte, Markdown ou HTML ; le lecteur web retire le HTML dangereux.',
+      'Affiché sous le formulaire de connexion du lecteur web. Texte, Markdown ou HTML\u202f; le lecteur web retire le HTML dangereux.',
     addVersionsToOpenPage: 'Ajouter les versions à la page ouverte d’un titre',
     addVersionsToOpenPageHelp:
-      'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version ; les autres apparaissent à la prochaine ouverture de la page.',
+      'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version\u202f; les autres apparaissent à la prochaine ouverture de la page.',
     posterRatings: 'Afficher les notes sur les affiches',
     posterRatingsHelp:
       'Affiche la note en étoiles d’un film ou d’une série sur son affiche dans le lecteur web quand le pointeur ou le focus y arrive, avec les scores des critiques et du public tant qu’une clé d’API MDBList des notes est définie dans Paramètres › Contenu. Pour tous les utilisateurs. Tant que Badges sur les affiches est activé dans Paramètres › Contenu, les badges s’affichent à la place.',
     homeRows: 'Rangées d’accueil',
     homeRowsHelp:
-      'Les rangées que le lecteur web ajoute à sa page d’accueil, à leur place, pour tous les utilisateurs ou pour ceux choisis. Chaque utilisateur peut désactiver une rangée dans Mon compte › Rangées d’accueil ; les sections propres au lecteur web restent dans ses Paramètres › Accueil. Chaque rangée laisse de côté ce que l’utilisateur ne peut pas voir : les titres au-dessus de son contrôle parental, les genres bloqués, les titres masqués et les bibliothèques qui lui sont masquées.',
+      'Les rangées que le lecteur web ajoute à sa page d’accueil, à leur place, pour tous les utilisateurs ou pour ceux choisis. Chaque utilisateur peut désactiver une rangée dans Mon compte › Rangées d’accueil\u202f; les sections propres au lecteur web restent dans ses Paramètres › Accueil. Chaque rangée laisse de côté ce que l’utilisateur ne peut pas voir\u202f: les titres au-dessus de son contrôle parental, les genres bloqués, les titres masqués et les bibliothèques qui lui sont masquées.',
     homeRow: {
       loading: 'Chargement des rangées d’accueil…',
       empty: 'Aucune rangée d’accueil',
@@ -1119,7 +1119,7 @@ const settings: typeof en = {
       editTitle: (name: string) => `Modifier ${name}`,
       edit: 'Modifier',
       delete: 'Supprimer',
-      deleteTitle: (name: string) => `Supprimer ${name} ?`,
+      deleteTitle: (name: string) => `Supprimer ${name}\u202f?`,
       deleteBody:
         'La rangée quitte la page d’accueil de chaque utilisateur, et sa bibliothèque quitte les autres applis.',
       deleted: (name: string) => `${name} est supprimée.`,
@@ -1131,7 +1131,7 @@ const settings: typeof en = {
       name: 'Nom',
       nameHelp: 'Le titre de la rangée sur la page d’accueil.',
       becauseNameHelp:
-        'Chaque rangée porte ce nom, suivi du titre qu’elle suit : « Parce que vous avez regardé Film exemple ».',
+        'Chaque rangée porte ce nom, suivi du titre qu’elle suit\u202f: «\u202fParce que vous avez regardé Film exemple\u202f».',
       kind: 'Type',
       kinds: {
         catalog: 'Un catalogue',
@@ -1147,16 +1147,16 @@ const settings: typeof en = {
         catalog:
           'La première page d’un catalogue des addons du serveur, bibliothèque ou non, comme un catalogue des tendances. Les utilisateurs qui n’utilisent pas les addons du serveur, ou à qui sa bibliothèque est masquée, ne la voient pas.',
         collection:
-          'Les titres d’une collection : une collection faite par les utilisateurs, une liste intelligente affichée comme collection, ou une collection d’un addon.',
+          'Les titres d’une collection\u202f: une collection faite par les utilisateurs, une liste intelligente affichée comme collection, ou une collection d’un addon.',
         because:
           'Une rangée pour chacun des derniers films et séries vus par l’utilisateur, avec les titres similaires, comme les recommandations de films les donnent. Aucune tant que Titres similaires est désactivé.',
         new: 'Les titres arrivés dans les catalogues des bibliothèques de l’utilisateur ces 7 derniers jours, les plus récents d’abord. Polyfin les compte depuis la première fois qu’il a vu chaque titre dans chaque catalogue.',
         available:
-          'Les titres non commencés de la liste « À regarder » de l’utilisateur pour lesquels la dernière vérification a trouvé des versions, les derniers trouvés d’abord. Une version trouvée n’a pas encore été essayée : sa lecture peut encore échouer.',
+          'Les titres non commencés de la liste «\u202fÀ regarder\u202f» de l’utilisateur pour lesquels la dernière vérification a trouvé des versions, les derniers trouvés d’abord. Une version trouvée n’a pas encore été essayée\u202f: sa lecture peut encore échouer.',
         waiting:
-          'Les titres non commencés de la liste « À regarder » de l’utilisateur pour lesquels la dernière vérification n’a trouvé aucune version, ou qui ne sont pas encore sortis, les derniers ajoutés d’abord. Un titre pas encore vérifié n’est dans aucune des deux rangées.',
+          'Les titres non commencés de la liste «\u202fÀ regarder\u202f» de l’utilisateur pour lesquels la dernière vérification n’a trouvé aucune version, ou qui ne sont pas encore sortis, les derniers ajoutés d’abord. Un titre pas encore vérifié n’est dans aucune des deux rangées.',
         trakt:
-          'Les films et séries que Trakt recommande à l’utilisateur, lus avec sa connexion Trakt toutes les 12 heures, sans ceux de sa collection ou de sa Watchlist Trakt ni ceux qu’il a vus. Seuls les utilisateurs qui ont connecté Trakt dans Mon compte › Suivi la voient ; la première fois, elle s’affiche une fois que Trakt a répondu.',
+          'Les films et séries que Trakt recommande à l’utilisateur, lus avec sa connexion Trakt toutes les 12 heures, sans ceux de sa collection ou de sa Watchlist Trakt ni ceux qu’il a vus. Seuls les utilisateurs qui ont connecté Trakt dans Mon compte › Suivi la voient\u202f; la première fois, elle s’affiche une fois que Trakt a répondu.',
         picks:
           'Les films et séries des bibliothèques de l’utilisateur, listes intelligentes comprises, que son profil de goûts classe en premier, sans ceux qu’il a vus ni ceux d’un genre qu’il n’aime pas. Tant que le profil ne le connaît pas assez, les premiers titres des bibliothèques, les plus populaires d’abord. Chaque utilisateur voit son profil dans Mon compte.',
       },
@@ -1185,8 +1185,8 @@ const settings: typeof en = {
       place: 'Place',
       places: {
         top: 'En haut',
-        resume: 'Après « Continuer de regarder »',
-        nextup: 'Après « À suivre »',
+        resume: 'Après «\u202fContinuer de regarder\u202f»',
+        nextup: 'Après «\u202fÀ suivre\u202f»',
         bottom: 'En bas',
       },
       placeHelp:
@@ -1200,7 +1200,7 @@ const settings: typeof en = {
       rowsCount: (count: number) => (count === 1 ? '1 rangée' : `${count} rangées`),
       library: 'Aussi une bibliothèque dans les autres applis',
       libraryHelp:
-        'On ne peut pas donner aux autres applis un nouveau type de section d’accueil : la rangée devient aussi une bibliothèque, sans type, qu’elles affichent parmi les bibliothèques de l’utilisateur, avec une rangée de ses derniers titres sur leur accueil.',
+        'On ne peut pas donner aux autres applis un nouveau type de section d’accueil\u202f: la rangée devient aussi une bibliothèque, sans type, qu’elles affichent parmi les bibliothèques de l’utilisateur, avec une rangée de ses derniers titres sur leur accueil.',
       libraryBadge: 'Bibliothèque',
       moveLabel: 'Déplacer',
       schedule: 'Calendrier',
@@ -1208,17 +1208,17 @@ const settings: typeof en = {
         'Quand la rangée s’affiche, dans le fuseau horaire du serveur. Laissée telle quelle, elle s’affiche tout le temps.',
       startDate: 'Du',
       endDate: 'Au',
-      datesHelp: 'Les deux dates sont incluses ; chacune peut rester vide.',
+      datesHelp: 'Les deux dates sont incluses\u202f; chacune peut rester vide.',
       dateOrder: 'La date de fin ne peut pas précéder la date de début.',
       days: 'Jours',
-      daysHelp: 'Aucun choisi : tous les jours.',
+      daysHelp: 'Aucun choisi\u202f: tous les jours.',
       hours: 'Heures',
       allDay: 'Toute la journée',
       someHours: 'Certaines heures',
       startHour: 'De',
       endHour: 'À',
       hoursHelp:
-        'Une fin avant le début passe minuit, et cette nuit appartient au jour où elle commence : de 22:00 à 02:00 le vendredi se termine le samedi à 02:00.',
+        'Une fin avant le début passe minuit, et cette nuit appartient au jour où elle commence\u202f: de 22:00 à 02:00 le vendredi se termine le samedi à 02:00.',
       libraryDatesOnly:
         'Une rangée qui est aussi une bibliothèque ne suit que ses dates, pour ne pas apparaître et disparaître d’heure en heure dans les autres applis.',
       scheduled: 'Programmée',
@@ -1234,7 +1234,7 @@ const settings: typeof en = {
     },
     codeSize: (used: number, max: number) =>
       `${used} Ko sur ${max >= 1024 ? `${max / 1024} Mo` : `${max} Ko`}`,
-    codeKeys: 'Tab insère des espaces ; appuyez sur Échap puis Tab pour quitter le champ.',
+    codeKeys: 'Tab insère des espaces\u202f; appuyez sur Échap puis Tab pour quitter le champ.',
   },
   settingsPage: {
     searchHint: 'Par nom ou par description.',
@@ -1243,7 +1243,7 @@ const settings: typeof en = {
       variables: 'Variables d’environnement',
     },
     variablesHelp:
-      'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin : modifiez-les là, puis redémarrez le conteneur. Les variables qui réglaient d’autres options sont copiées une fois dans les paramètres, au premier démarrage de cette version, puis ne sont plus lues : modifiez celles-ci dans les paramètres. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
+      'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin\u202f: modifiez-les là, puis redémarrez le conteneur. Les variables qui réglaient d’autres options sont copiées une fois dans les paramètres, au premier démarrage de cette version, puis ne sont plus lues\u202f: modifiez celles-ci dans les paramètres. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
     value: 'Valeur utilisée',
     defaultValue: 'Par défaut',
     setValue: 'Définie',
@@ -1279,7 +1279,7 @@ const settings: typeof en = {
       music: 'Musique',
       thresholds: 'Seuils de lecture',
     },
-    leaveTitle: 'Partir sans enregistrer ?',
+    leaveTitle: 'Partir sans enregistrer\u202f?',
     leaveBody:
       'Les modifications de cette section ne sont pas encore enregistrées. Elles seront perdues si vous partez.',
     leave: 'Partir sans enregistrer',

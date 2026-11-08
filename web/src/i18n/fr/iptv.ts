@@ -8,25 +8,25 @@ const iptv: typeof en = {
     never: 'Jamais',
     errors: {
       unreachable:
-        'Le dernier téléchargement a échoué : impossible de joindre le serveur. Les chaînes précédentes sont gardées.',
+        'Le dernier téléchargement a échoué\u202f: impossible de joindre le serveur. Les chaînes précédentes sont gardées.',
       private_network:
-        'Le dernier téléchargement a échoué : cette adresse est sur un réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
+        'Le dernier téléchargement a échoué\u202f: cette adresse est sur un réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
       too_large:
-        'Le dernier téléchargement a échoué : la liste est trop grande. Les chaînes précédentes sont gardées.',
+        'Le dernier téléchargement a échoué\u202f: la liste est trop grande. Les chaînes précédentes sont gardées.',
       malformed:
-        'Le dernier téléchargement a échoué : le serveur n’a pas renvoyé de liste de chaînes, ou a refusé les identifiants. Les chaînes précédentes sont gardées.',
+        'Le dernier téléchargement a échoué\u202f: le serveur n’a pas renvoyé de liste de chaînes, ou a refusé les identifiants. Les chaînes précédentes sont gardées.',
       rate_limited:
-        'Le dernier téléchargement a échoué : le serveur a demandé à Polyfin de ralentir. Il est réessayé dans quelques minutes ; les chaînes précédentes sont gardées.',
+        'Le dernier téléchargement a échoué\u202f: le serveur a demandé à Polyfin de ralentir. Il est réessayé dans quelques minutes\u202f; les chaînes précédentes sont gardées.',
       file_unreadable:
-        'Le dernier téléchargement a échoué : le fichier a disparu, ou Polyfin ne peut plus le lire. Les chaînes précédentes sont gardées.',
+        'Le dernier téléchargement a échoué\u202f: le fichier a disparu, ou Polyfin ne peut plus le lire. Les chaînes précédentes sont gardées.',
       file_refused:
-        'Le dernier téléchargement a échoué : seuls les administrateurs peuvent utiliser un fichier du serveur. Les chaînes précédentes sont gardées.',
+        'Le dernier téléchargement a échoué\u202f: seuls les administrateurs peuvent utiliser un fichier du serveur. Les chaînes précédentes sont gardées.',
     },
   },
   lineup: {
     open: 'Ouvrir la source',
     description:
-      'Ce que cette source importe et comment les applis Jellyfin l’affichent : ses chaînes de TV en direct, avec leur ordre, leurs noms et leurs guides des programmes, et ses films et séries.',
+      'Ce que cette source importe et comment les applis Jellyfin l’affichent\u202f: ses chaînes de TV en direct, avec leur ordre, leurs noms et leurs guides des programmes, et ses films et séries.',
     backMine: 'Retour à mes sources',
     notFoundTitle: 'Source introuvable',
     reset: 'Réinitialiser',
@@ -34,8 +34,8 @@ const iptv: typeof en = {
     openMapping: 'Ouvrir la correspondance',
     archivedNotice: (count: number, formatted: string) =>
       count === 1
-        ? 'Une chaîne garde ses programmes passés : les applis Jellyfin les lisent depuis Replay.'
-        : `${formatted} chaînes gardent leurs programmes passés : les applis Jellyfin les lisent depuis Replay.`,
+        ? 'Une chaîne garde ses programmes passés\u202f: les applis Jellyfin les lisent depuis Replay.'
+        : `${formatted} chaînes gardent leurs programmes passés\u202f: les applis Jellyfin les lisent depuis Replay.`,
     openArchived: 'Les voir',
     channelsEmpty: 'Aucune chaîne pour l’instant',
     channelsEmptyHelp:
@@ -44,19 +44,19 @@ const iptv: typeof en = {
     dragHandle: (name: string) => `Déplacer ${name}`,
     guideErrors: {
       unreachable:
-        'La dernière récupération a échoué : impossible de télécharger le guide. Vérifiez l’adresse et réessayez.',
+        'La dernière récupération a échoué\u202f: impossible de télécharger le guide. Vérifiez l’adresse et réessayez.',
       private_network:
-        'La dernière récupération a échoué : ce guide se trouve à une adresse du réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
-      too_large: 'La dernière récupération a échoué : le guide dépasse 300 Mo.',
-      malformed: 'La dernière récupération a échoué : ce fichier n’est pas un guide XMLTV.',
+        'La dernière récupération a échoué\u202f: ce guide se trouve à une adresse du réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
+      too_large: 'La dernière récupération a échoué\u202f: le guide dépasse 300 Mo.',
+      malformed: 'La dernière récupération a échoué\u202f: ce fichier n’est pas un guide XMLTV.',
       channels_unreachable:
-        'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
+        'La dernière récupération a échoué\u202f: l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
       rate_limited:
-        'La dernière récupération a échoué : le serveur a demandé à Polyfin de ralentir. Elle est réessayée dans quelques minutes.',
+        'La dernière récupération a échoué\u202f: le serveur a demandé à Polyfin de ralentir. Elle est réessayée dans quelques minutes.',
       file_unreadable:
-        'La dernière récupération a échoué : le fichier a disparu, ou Polyfin ne peut plus le lire.',
+        'La dernière récupération a échoué\u202f: le fichier a disparu, ou Polyfin ne peut plus le lire.',
       file_refused:
-        'La dernière récupération a échoué : seuls les administrateurs peuvent utiliser un fichier du serveur.',
+        'La dernière récupération a échoué\u202f: seuls les administrateurs peuvent utiliser un fichier du serveur.',
     } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
@@ -100,7 +100,7 @@ const iptv: typeof en = {
     },
     tuner: {
       title: 'Tuner',
-      help: 'Le tuner lit autant de chaînes à la fois qu’il a de tuners. Plusieurs spectateurs d’une même chaîne partagent un tuner ; un enregistrement prend le tuner d’une chaîne seulement regardée.',
+      help: 'Le tuner lit autant de chaînes à la fois qu’il a de tuners. Plusieurs spectateurs d’une même chaîne partagent un tuner\u202f; un enregistrement prend le tuner d’une chaîne seulement regardée.',
       model: 'Modèle',
       device: 'Identifiant de l’appareil',
       tuners: 'Tuners',
@@ -111,7 +111,7 @@ const iptv: typeof en = {
           : 'Toutes les chaînes du tuner sont gardées.',
       scan: 'Rechercher les chaînes',
       scanHelp:
-        'Le tuner parcourt à nouveau ses fréquences, ce qui prend quelques minutes et occupe ses tuners ; ses chaînes sont relues à la fin de la recherche.',
+        'Le tuner parcourt à nouveau ses fréquences, ce qui prend quelques minutes et occupe ses tuners\u202f; ses chaînes sont relues à la fin de la recherche.',
       scanning: 'Recherche…',
       scanStarted: 'Le tuner a commencé à rechercher les chaînes.',
       scanDone: 'La recherche est finie et les chaînes du tuner ont été relues.',
@@ -123,7 +123,7 @@ const iptv: typeof en = {
     },
     options: {
       title: 'Options d’import',
-      help: 'Enregistrer reconstruit la grille et les bibliothèques à partir des listes déjà téléchargées ; seul un type de titres tout juste activé est téléchargé. Les noms, l’ordre, les déplacements, les numéros, les chaînes activées et la correspondance des guides sont gardés pour chaque chaîne encore présente.',
+      help: 'Enregistrer reconstruit la grille et les bibliothèques à partir des listes déjà téléchargées\u202f; seul un type de titres tout juste activé est téléchargé. Les noms, l’ordre, les déplacements, les numéros, les chaînes activées et la correspondance des guides sont gardés pour chaque chaîne encore présente.',
       categoriesMode: 'Catégories',
       categoriesModeHelp:
         'Les groupes du fournisseur, ou une catégorie par pays trouvé dans les noms.',
@@ -167,12 +167,12 @@ const iptv: typeof en = {
     vod: {
       libraries: 'Bibliothèques',
       librariesHelp:
-        'Une bibliothèque Films et une bibliothèque Séries, la catégorie de chaque titre devenant son genre ; ou une bibliothèque par catégorie du fournisseur. Avec beaucoup de catégories, cela fait beaucoup de bibliothèques : vous choisissez celles que montrent les applis Jellyfin dans Bibliothèques.',
-      librariesType: 'Une par type : Films, Séries',
+        'Une bibliothèque Films et une bibliothèque Séries, la catégorie de chaque titre devenant son genre\u202f; ou une bibliothèque par catégorie du fournisseur. Avec beaucoup de catégories, cela fait beaucoup de bibliothèques\u202f: vous choisissez celles que montrent les applis Jellyfin dans Bibliothèques.',
+      librariesType: 'Une par type\u202f: Films, Séries',
       librariesCategory: 'Une par catégorie du fournisseur',
       enrichment: 'Décrire les titres avec les addons de métadonnées',
       enrichmentHelp:
-        'Quand un film ou une série a un identifiant TMDB ou IMDb, l’ouvrir demande à l’addon de métadonnées du serveur sa description, ses images et sa classification : une requête par titre, la première fois qu’il est ouvert, puis gardée. Sinon, les titres n’affichent que ce que donne le fournisseur, sans classification : les utilisateurs qui bloquent les titres non classés ne les voient pas.',
+        'Quand un film ou une série a un identifiant TMDB ou IMDb, l’ouvrir demande à l’addon de métadonnées du serveur sa description, ses images et sa classification\u202f: une requête par titre, la première fois qu’il est ouvert, puis gardée. Sinon, les titres n’affichent que ce que donne le fournisseur, sans classification\u202f: les utilisateurs qui bloquent les titres non classés ne les voient pas.',
     },
     vodExclusions: {
       title: 'Catégories à importer',
@@ -209,7 +209,7 @@ const iptv: typeof en = {
     },
     exclusions: {
       title: 'Catégories à importer',
-      help: 'Les catégories décochées ne sont pas importées. Groupes et pays peuvent être décochés tous les deux : une entrée dans l’un ou l’autre est laissée de côté.',
+      help: 'Les catégories décochées ne sont pas importées. Groupes et pays peuvent être décochés tous les deux\u202f: une entrée dans l’un ou l’autre est laissée de côté.',
       by: 'Afficher',
       byGroup: 'Par groupe',
       byCountry: 'Par pays',
@@ -244,7 +244,7 @@ const iptv: typeof en = {
       disableListed: 'Désactiver celles affichées',
       bulkDone: (count: number) =>
         count === 1 ? '1 catégorie modifiée.' : `${count} catégories modifiées.`,
-      empty: 'Pas encore de catégorie : la liste n’a pas été téléchargée.',
+      empty: 'Pas encore de catégorie\u202f: la liste n’a pas été téléchargée.',
       noMatch: 'Aucune catégorie ne correspond.',
       createTitle: 'Nouvelle catégorie',
       createHelp: 'Une catégorie à vous, pour regrouper des chaînes de n’importe quelle catégorie.',
@@ -253,7 +253,7 @@ const iptv: typeof en = {
       created: (name: string) => `${name} a été créée, en fin de liste.`,
       enabledLabel: (name: string) => `Afficher ${name}`,
       custom: 'À vous',
-      providerName: (name: string) => `Nom du fournisseur : ${name}`,
+      providerName: (name: string) => `Nom du fournisseur\u202f: ${name}`,
       channelCounts: (enabled: string, total: string) => `${enabled} chaînes activées sur ${total}`,
       channels: 'Chaînes',
       channelsLabel: (name: string) => `Chaînes de ${name}`,
@@ -262,7 +262,7 @@ const iptv: typeof en = {
       deleteLabel: (name: string) => `Supprimer ${name}`,
       resetNameLabel: (name: string) => `Reprendre le nom du fournisseur pour ${name}`,
       deleteConfirm: (name: string) =>
-        `Supprimer ${name} ? Ses chaînes retournent dans leur catégorie d’origine.`,
+        `Supprimer ${name}\u202f? Ses chaînes retournent dans leur catégorie d’origine.`,
     },
     channels: {
       title: 'Chaînes',
@@ -288,7 +288,7 @@ const iptv: typeof en = {
       notArchived: 'Sans archive',
       archiveDays: (days: number) => (days === 1 ? 'Replay, 1 jour' : `Replay, ${days} jours`),
       archiveHelp:
-        'Le fournisseur garde aussi longtemps les programmes passés de cette chaîne : les applis Jellyfin les lisent depuis Replay.',
+        'Le fournisseur garde aussi longtemps les programmes passés de cette chaîne\u202f: les applis Jellyfin les lisent depuis Replay.',
       manual: 'Guide choisi à la main',
       streamCount: (count: number) => `${count} flux`,
       selectPage: 'Sélectionner cette page',
@@ -308,7 +308,7 @@ const iptv: typeof en = {
       title: 'Modifier par mot-clé',
       help: 'Active ou désactive toutes les chaînes dont le nom, le nom du fournisseur ou l’identifiant de guide contient un mot, après les avoir comptées.',
       label: 'Mot-clé',
-      hint: 'Au moins 2 caractères, par exemple « 4K » ou « Sport ».',
+      hint: 'Au moins 2 caractères, par exemple «\u202f4K\u202f» ou «\u202fSport\u202f».',
       inCategory: 'Seulement dans la catégorie choisie plus haut',
       count: 'Compter',
       counting: 'Comptage…',
@@ -323,7 +323,7 @@ const iptv: typeof en = {
       notShownInApps: 'Non affichée dans les applis Jellyfin',
       numberNow: (number: string) => `numéro ${number}`,
       name: 'Nom',
-      providerValue: (value: string) => `Fournisseur : ${value}`,
+      providerValue: (value: string) => `Fournisseur\u202f: ${value}`,
       resetName: 'Reprendre le nom du fournisseur',
       logo: 'Adresse du logo',
       logoHint: 'Une adresse d’image https://.',
@@ -333,7 +333,7 @@ const iptv: typeof en = {
       providerCategory: '(du fournisseur)',
       movedHint: 'Déplacée depuis la catégorie du fournisseur.',
       number: 'Numéro fixe',
-      numberHint: 'De 1 à 99 999. Vide : la numérotation de la grille s’applique.',
+      numberHint: 'De 1 à 99 999. Vide\u202f: la numérotation de la grille s’applique.',
       numberInvalid: 'Saisissez un nombre entier de 1 à 99 999, ou laissez vide.',
       saved: 'Chaîne enregistrée.',
       guideTitle: 'Guide des programmes',
@@ -342,7 +342,7 @@ const iptv: typeof en = {
     },
     streams: {
       title: 'Flux',
-      help: 'Les applis lisent le premier flux activé ; les suivants sont essayés s’il échoue.',
+      help: 'Les applis lisent le premier flux activé\u202f; les suivants sont essayés s’il échoue.',
       provider: 'Du fournisseur',
       custom: 'À vous',
       unnamed: 'Flux',
@@ -352,7 +352,7 @@ const iptv: typeof en = {
       addTitle: 'Ajouter un flux',
       url: 'Adresse du flux',
       urlHint:
-        'Une adresse http(s). Elle peut contenir un identifiant : elle n’est jamais affichée en entier.',
+        'Une adresse http(s). Elle peut contenir un identifiant\u202f: elle n’est jamais affichée en entier.',
       label: 'Libellé',
       labelHint: 'Jusqu’à 32 caractères.',
       defaultLabel: 'Perso',
@@ -371,7 +371,7 @@ const iptv: typeof en = {
     },
     guides: {
       title: 'Guides',
-      help: 'Guides XMLTV, dans l’ordre : une chaîne prend ses programmes du premier guide qui l’a. Les adresses peuvent contenir un identifiant : elles ne sont jamais affichées en entier.',
+      help: 'Guides XMLTV, dans l’ordre\u202f: une chaîne prend ses programmes du premier guide qui l’a. Les adresses peuvent contenir un identifiant\u202f: elles ne sont jamais affichées en entier.',
       channels: 'Chaînes',
       mapped: 'Avec un guide',
       unmapped: 'Sans guide',
@@ -382,7 +382,7 @@ const iptv: typeof en = {
       addressOrFile: 'Adresse ou fichier du guide',
       addressOrFileHint:
         'Fichier XMLTV, compressé (.gz) ou non, par son adresse ou son chemin sur le serveur. 10 guides au plus.',
-      tooMany: 'Ce catalogue a 10 guides : retirez-en un pour en ajouter un autre.',
+      tooMany: 'Ce catalogue a 10 guides\u202f: retirez-en un pour en ajouter un autre.',
       add: 'Ajouter',
       remove: 'Retirer',
       removeLabel: (url: string) => `Retirer le guide ${url}`,
@@ -408,7 +408,7 @@ const iptv: typeof en = {
       unmapped: 'Associer les chaînes sans guide',
       remap: 'Refaire toutes les chaînes',
       remapConfirm:
-        'Refaire la correspondance de toutes les chaînes ? Celles choisies à la main, « sans guide » compris, sont perdues.',
+        'Refaire la correspondance de toutes les chaînes\u202f? Celles choisies à la main, «\u202fsans guide\u202f» compris, sont perdues.',
       running: 'Association…',
       done: (changed: string, mapped: string, channels: string) =>
         `${changed} modifiées. ${mapped} chaînes sur ${channels} ont un guide.`,
@@ -435,7 +435,7 @@ const iptv: typeof en = {
       noGuideLabel: (name: string) => `Pas de guide pour ${name}`,
       backToAutomatic: 'Revenir à l’automatique',
       automaticLabel: (name: string) => `Associer ${name} automatiquement à nouveau`,
-      changed: (name: string, guide: string) => `${name} : ${guide}.`,
+      changed: (name: string, guide: string) => `${name}\u202f: ${guide}.`,
     },
     picker: {
       title: (name: string) => `Chaîne de guide pour ${name}`,
@@ -443,17 +443,17 @@ const iptv: typeof en = {
       guide: 'Guide',
       allGuides: 'Tous les guides',
       guideN: (position: number) => `Guide ${position}`,
-      alsoNamed: (names: string) => `Aussi : ${names}`,
+      alsoNamed: (names: string) => `Aussi\u202f: ${names}`,
       now: (title: string, start: string, end: string) =>
-        `En ce moment : ${title} (${start}–${end})`,
+        `En ce moment\u202f: ${title} (${start}–${end})`,
       nothingNow: 'Rien en ce moment',
       choose: 'Choisir',
       chooseLabel: (name: string) => `Choisir ${name}`,
       empty: 'Aucune chaîne de guide ne correspond.',
-      noGuides: 'Ce catalogue n’a pas encore de guide : ajoutez-en un dans Guides.',
+      noGuides: 'Ce catalogue n’a pas encore de guide\u202f: ajoutez-en un dans Guides.',
     },
     catalog: {
-      title: (name: string, addon: string) => `${name} (${addon}) : guides`,
+      title: (name: string, addon: string) => `${name} (${addon})\u202f: guides`,
       titleLoading: 'Guides',
       description:
         'Les guides XMLTV de ce catalogue de TV en direct, et la chaîne de guide de chacune de ses chaînes.',

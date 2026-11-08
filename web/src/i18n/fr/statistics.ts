@@ -4,7 +4,7 @@ const statistics: typeof en = {
   statistics: {
     title: 'Statistiques',
     description:
-      'Comment le serveur est utilisé : heures regardées, titres, applis et appareils, et comment les vidéos arrivent aux applis. Les morceaux et les livres audio ne sont pas comptés.',
+      'Comment le serveur est utilisé\u202f: heures regardées, titres, applis et appareils, et comment les vidéos arrivent aux applis. Les morceaux et les livres audio ne sont pas comptés.',
     period: 'Période',
     periods: { '7d': '7 jours', '30d': '30 jours', year: 'Année', all: 'Tout' },
     user: 'Utilisateur',
@@ -12,8 +12,8 @@ const statistics: typeof en = {
     exportCsv: 'Exporter en CSV',
     historyOff: {
       server:
-        'L’historique de lecture est désactivé : les nouvelles lectures ne sont pas comptées.',
-      own: 'L’historique de lecture est désactivé sur ce serveur : les nouvelles lectures ne sont pas comptées.',
+        'L’historique de lecture est désactivé\u202f: les nouvelles lectures ne sont pas comptées.',
+      own: 'L’historique de lecture est désactivé sur ce serveur\u202f: les nouvelles lectures ne sont pas comptées.',
     },
     openSettings: 'Ouvrir Paramètres › Lecture',
     empty: 'Aucune lecture sur cette période',
@@ -42,14 +42,14 @@ const statistics: typeof en = {
     },
     hours: 'Heures les plus chargées',
     hoursHelp: 'Heures regardées à chaque heure de la semaine, dans votre fuseau horaire.',
-    hoursCell: (day: string, hour: string, time: string) => `${day} ${hour} : ${time}`,
+    hoursCell: (day: string, hour: string, time: string) => `${day} ${hour}\u202f: ${time}`,
     plays: (count: number) => (count <= 1 ? `${count} lecture` : `${count} lectures`),
     users: (count: number) => (count <= 1 ? `${count} utilisateur` : `${count} utilisateurs`),
     share: (percent: string) => `${percent} des lectures`,
     none: 'Aucun sur cette période.',
     unknownApp: 'Appli inconnue',
     unknownDevice: 'Appareil inconnu',
-    bar: (label: string, time: string) => `${label} : ${time}`,
+    bar: (label: string, time: string) => `${label}\u202f: ${time}`,
     history: 'Lectures récentes',
     historyEmpty: 'Aucune lecture sur cette période.',
     columns: {
