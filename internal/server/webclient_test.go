@@ -2685,6 +2685,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
 // runs in Node.js, in a context that stands for the browser and
 // jellyfin-web.
 func TestItemMenusPutTitlesOnTheWatchlist(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
