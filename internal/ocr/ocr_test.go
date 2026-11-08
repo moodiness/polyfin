@@ -117,6 +117,7 @@ func wantText(t *testing.T, cues []subtitles.Cue, want []testsubtitles.Caption, 
 }
 
 func TestPGSPicturesKeepTheirTimes(t *testing.T) {
+	t.Parallel()
 	sup := testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: captions}.PGS()
 	pictures, err := pgsPictures(sup)
 	if err != nil {
@@ -137,6 +138,7 @@ func TestPGSPicturesKeepTheirTimes(t *testing.T) {
 }
 
 func TestVobSubPicturesAreUpscaled(t *testing.T) {
+	t.Parallel()
 	idx, sub := testsubtitles.Captions{CanvasWidth: 720, CanvasHeight: 480, Size: 22, Shown: captions}.VobSub("en")
 	pictures, err := vobsubPictures([]byte(idx), sub)
 	if err != nil {
@@ -156,6 +158,7 @@ func TestVobSubPicturesAreUpscaled(t *testing.T) {
 }
 
 func TestTesseractReadsPGS(t *testing.T) {
+	t.Parallel()
 	reader := tesseract(t)
 	pictures, err := pgsPictures(testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: captions}.PGS())
 	if err != nil {
@@ -169,6 +172,7 @@ func TestTesseractReadsPGS(t *testing.T) {
 }
 
 func TestTesseractReadsVobSub(t *testing.T) {
+	t.Parallel()
 	reader := tesseract(t)
 	idx, sub := testsubtitles.Captions{CanvasWidth: 720, CanvasHeight: 480, Size: 22, Shown: captions}.VobSub("en")
 	pictures, err := vobsubPictures([]byte(idx), sub)
@@ -185,6 +189,7 @@ func TestTesseractReadsVobSub(t *testing.T) {
 // TestTesseractReadsWithTheDataFolder reads French with the data of
 // DataDir, the program's own folder lacking it.
 func TestTesseractReadsWithTheDataFolder(t *testing.T) {
+	t.Parallel()
 	reader := tesseract(t)
 	languages, err := reader.Languages(context.Background())
 	if err != nil {
@@ -206,6 +211,7 @@ func TestTesseractReadsWithTheDataFolder(t *testing.T) {
 }
 
 func TestDataFolderLanguages(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"fra.traineddata", "osd.traineddata", "notes.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -218,6 +224,7 @@ func TestDataFolderLanguages(t *testing.T) {
 }
 
 func TestLanguage(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ code, fallback, want string }{
 		{"fre", "en", "fra"},
 		{"fra", "en", "fra"},

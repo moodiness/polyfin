@@ -35,6 +35,7 @@ func dataServer(t *testing.T, served map[string][]byte, listed map[string][]byte
 }
 
 func TestDownloadKeepsTheCheckedFile(t *testing.T) {
+	t.Parallel()
 	data := []byte("Finnish model")
 	server, files := dataServer(t, map[string][]byte{"fin.traineddata": data}, map[string][]byte{"fin": data})
 	// The folder is created when missing.
@@ -57,6 +58,7 @@ func TestDownloadKeepsTheCheckedFile(t *testing.T) {
 }
 
 func TestDownloadRefusesAFileOfAnotherChecksum(t *testing.T) {
+	t.Parallel()
 	server, files := dataServer(t, map[string][]byte{"fin.traineddata": []byte("Finnish model, altered"), "est.traineddata": []byte("Estonian")},
 		map[string][]byte{"fin": []byte("Finnish model"), "est": []byte("Estonien")})
 	dir := t.TempDir()
@@ -73,6 +75,7 @@ func TestDownloadRefusesAFileOfAnotherChecksum(t *testing.T) {
 }
 
 func TestDownloadNamesWhatFailed(t *testing.T) {
+	t.Parallel()
 	data := []byte("Finnish model")
 	server, files := dataServer(t, map[string][]byte{}, map[string][]byte{"fin": data})
 	d := &Downloader{Dir: t.TempDir(), URL: server.URL, Files: files}
