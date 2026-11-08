@@ -197,6 +197,8 @@ A torrent's route gave no answer, and its peers no byte, for a minute. This is a
 
 A host answers the same small file, such as an error video, for several different files, each far larger, as a provider's host does while its service is down. This is a warning naming the host, never the link, and since when, as "The host files.example answers an error file instead of the videos, since 20:40" (see [Hosts answering an error file](reading-the-sources.md#hosts-answering-an-error-file)).
 
+It then says what to check: "This often means the account at that service needs attention (a password change, a subscription, a limit reached), or that the service is down: check it on its site". A changed password, an expired subscription or a daily limit makes some services answer every link with such a video.
+
 - It shows from the third file answered with that size within 10 minutes. One file answered with another size is no problem.
 - It goes as soon as the host answers a file of its own size, and the versions refused meanwhile are tried again at once.
 - **Content › Versions** shows it too, on the versions from that host.
