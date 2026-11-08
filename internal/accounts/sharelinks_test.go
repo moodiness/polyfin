@@ -30,6 +30,7 @@ func newShareLink(user User) NewShareLink {
 // administrators included; off, no link is made, and those made are
 // refused without being deleted.
 func TestShareLinksAreOffByDefault(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	if store.Settings().ShareLinks {
@@ -70,6 +71,7 @@ func TestShareLinksAreOffByDefault(t *testing.T) {
 // or another link's ID are unknown; a user who loses the permission, or is
 // disabled, loses their links.
 func TestShareLinkTokensAndRevocations(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	user := sharer(t, store)
@@ -131,6 +133,7 @@ func TestShareLinkTokensAndRevocations(t *testing.T) {
 // A link expires at its time and is recorded once; share_played tells of
 // a link at most once an hour.
 func TestShareLinksExpireAndNotifyOnceAnHour(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
@@ -177,6 +180,7 @@ func TestShareLinksExpireAndNotifyOnceAnHour(t *testing.T) {
 // While share links are off, the links that expire are neither recorded
 // nor deleted; they are recorded once share links are on again.
 func TestExpiredShareLinksWaitWhileShareLinksAreOff(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
 	now := time.Now()
