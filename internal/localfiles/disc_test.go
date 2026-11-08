@@ -17,6 +17,7 @@ import (
 // A share's discs are read as a local folder's: one movie per disc, a disc
 // at the share's root named after the address's last folder.
 func TestShareDiscsAreOneMovie(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {
@@ -93,6 +94,7 @@ func (e env) reads(id accounts.ID) map[string]read {
 // when it only numbers the disc. Its other streams and files are left out;
 // a file beside BDMV is a movie of its own.
 func TestDiscsAreOneMovie(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, _ := e.folder(KindMovies, map[string]int{
 		"Movie (2001)/BDMV/STREAM/00000.m2ts":        30,
@@ -192,6 +194,7 @@ func (e env) folderPath(addon addons.Addon) string {
 // A disc at a folder's root is named after the folder; a disc in a shows
 // folder is left out, its streams being no one episode.
 func TestDiscsAtTheRootAndInShows(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := filepath.Join(t.TempDir(), "The General (1926)")
 	write(t, filepath.Join(dir, "BDMV", "STREAM", "00000.m2ts"), 10)
@@ -230,6 +233,7 @@ func TestDiscsAtTheRootAndInShows(t *testing.T) {
 // own unit, whatever its state; its next scan leaves a row per disc, read
 // as its disc, and moves a link made on a stream to its disc.
 func TestDiscsReplaceTheirStreamsOnUpgrade(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, nil)
 	files := map[string]int{

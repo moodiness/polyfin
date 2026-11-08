@@ -21,6 +21,8 @@ import (
 // the changes of folders added since. It runs when POLYFIN_TEST_SMB names a
 // share the user may write to (see TestSMBSharesAreScannedAndRead): it
 // works in a folder of its own, removed after.
+//
+//nolint:paralleltest // writes in the share TestSMBSharesAreScannedAndRead scans
 func TestSMBShareTellsOfChanges(t *testing.T) {
 	raw := os.Getenv("POLYFIN_TEST_SMB")
 	if raw == "" {

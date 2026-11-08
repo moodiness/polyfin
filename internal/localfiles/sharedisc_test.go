@@ -19,6 +19,7 @@ import (
 // before its in time to that of the first entry point at or after its out
 // time, or the clip's end.
 func TestClipRange(t *testing.T) {
+	t.Parallel()
 	points := []epEntry{{pts: 900, spn: 4}, {pts: 90900, spn: 157}, {pts: 180900, spn: 313}, {pts: 270900, spn: 470}}
 	const size = 100 * alignedUnit
 	for _, tc := range []struct {
@@ -57,6 +58,8 @@ func writeFiles(t *testing.T, dir string, files map[string][]byte) {
 // clips' bytes from its play items' in times to their out times, which a
 // seek reads as well, with keyframes read from the clips' EP maps on the
 // share. A DVD on a share is left out.
+//
+//nolint:paralleltest // swaps the package's minMovie, which every scan of a disc reads
 func TestShareDiscsAreTitles(t *testing.T) {
 	defer func(old time.Duration) { minMovie = old }(minMovie)
 	minMovie = 20 * time.Second
@@ -192,6 +195,7 @@ func TestShareDiscsAreTitles(t *testing.T) {
 // cell ending before it starts, a title the disc does not list, a set
 // without VOBs.
 func TestBrokenDVDTitlesFail(t *testing.T) {
+	t.Parallel()
 	locate := func(name string, start, end int64) ([]titlePiece, error) {
 		return []titlePiece{{rel: name, at: start, n: end - start}}, nil
 	}

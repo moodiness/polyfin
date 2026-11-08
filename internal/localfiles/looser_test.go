@@ -43,6 +43,7 @@ func chosen(title string, year int, exact bool, titles ...candidate) string {
 // year before or after is kept, flagged; two such titles keep none, nor
 // does a year two apart, nor a unit matched by the exact rule only.
 func TestYearOffByOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		year   int
@@ -68,6 +69,7 @@ func TestYearOffByOne(t *testing.T) {
 // are read alike in the file's name and in the titles found, both ways,
 // and with a year one off too.
 func TestNumeralsReadAlike(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		file  string
 		year  int
@@ -99,6 +101,7 @@ func TestNumeralsReadAlike(t *testing.T) {
 // with other Roman letters, and numbers written in words elsewhere than
 // after "Part".
 func TestNumeralsFalseFriends(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ file, title string }{
 		{"1", "I"},
 		{"10", "X"},
@@ -121,6 +124,7 @@ func TestNumeralsFalseFriends(t *testing.T) {
 // keeps, and a looser rule keeps a title only when it is the only one left:
 // the year one off and the numerals are tried together, both only after.
 func TestExactBeforeLooser(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		file   string

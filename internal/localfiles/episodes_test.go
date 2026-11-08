@@ -21,6 +21,7 @@ import (
 // replaying another's parts and the extras; the episodes come in the order
 // of their numbers, at most maxDiscEpisodes.
 func TestChooseEpisodes(t *testing.T) {
+	t.Parallel()
 	part := func(source string, from, to uint64, minutes int) titlePart {
 		return titlePart{key: source, length: time.Duration(minutes) * time.Minute, source: source, from: from, to: to}
 	}
@@ -74,6 +75,7 @@ func TestChooseEpisodes(t *testing.T) {
 // its season folder's, else the one its name gives, else 1; its number
 // among the season's discs is the one its name gives.
 func TestPlaceOfDiscs(t *testing.T) {
+	t.Parallel()
 	for disc, want := range map[string]discPlace{
 		"Show/Season 2/Disc 3":             {season: 2, number: 3},
 		"Show/Season 2/Box/DISC04":         {season: 2, number: 4},
@@ -149,6 +151,7 @@ func writeShowDiscs(t *testing.T, dir string) {
 // given stay through scans, play as movie discs' titles do, and suggest
 // the next disc's; a disc named after its episodes is numbered in order.
 func TestShowDiscsAreEpisodes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	writeShowDiscs(t, dir)
@@ -299,6 +302,7 @@ func TestShowDiscsAreEpisodes(t *testing.T) {
 // A show's discs on a share are read as on a local folder: the same
 // episodes, numbered by an image's name.
 func TestShareShowDiscsAreEpisodes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {

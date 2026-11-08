@@ -423,6 +423,7 @@ func writeUDF(t *testing.T, path string, files map[string][]byte, layout udfLayo
 // 2.50 through its metadata partition, 2.01 without: its folders, any
 // case, and its files, whose bytes are those written.
 func TestUDFImagesAreRead(t *testing.T) {
+	t.Parallel()
 	files := blurayFiles(t)
 	for name, layout := range map[string]udfLayout{"2.50": {metadata: true}, "2.01": {}} {
 		image := buildUDF(files, layout)
@@ -469,6 +470,7 @@ func readerOf(data []byte) io.ReaderAt { return strings.NewReader(string(data)) 
 // no anchor; and images with random bytes overwritten neither panic nor
 // hang.
 func TestHostileUDFImagesFail(t *testing.T) {
+	t.Parallel()
 	disc := blurayFiles(t)
 	files := map[string][]byte{
 		"BDMV/PLAYLIST/00000.mpls": disc["BDMV/PLAYLIST/00000.mpls"],
@@ -583,6 +585,7 @@ func TestHostileUDFImagesFail(t *testing.T) {
 // Blu-ray disc, UDF 2.50 with a metadata partition, for the tests of other
 // packages; POLYFIN_UPDATE_FIXTURES=1 writes it again.
 func TestUDFFixtureIsTheBuildersImage(t *testing.T) {
+	t.Parallel()
 	image := buildUDF(blurayFiles(t), udfLayout{metadata: true})
 	fixture := filepath.Join("testdata", "bluray-udf.iso.gz")
 	if os.Getenv("POLYFIN_UPDATE_FIXTURES") == "1" {

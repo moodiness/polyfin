@@ -6,6 +6,7 @@ import "testing"
 // of a NAS, Linux's, and those Windows makes at a drive's root, which a
 // drive of movies added whole holds.
 func TestSystemFoldersAreSkipped(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{KindMovies, KindShows, KindMusic, KindHomeVideos} {
 		for _, name := range []string{".hidden", "@eaDir", "#recycle", "lost+found", "$RECYCLE.BIN", "$Recycle.Bin", "System Volume Information"} {
 			if !skippedIn(kind, name) {
@@ -21,6 +22,7 @@ func TestSystemFoldersAreSkipped(t *testing.T) {
 // Movie files are read the usual ways, a folder per movie completing a
 // file's name, and the identifiers written in names are kept.
 func TestMovieNamesAreRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		path         string
 		title        string
@@ -53,6 +55,7 @@ func TestMovieNamesAreRead(t *testing.T) {
 // numbers the disc, the folder's own at the root; its version is named
 // alike.
 func TestDiscNamesAreRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		path, root   string
 		unit, title  string
@@ -101,6 +104,7 @@ func TestDiscNamesAreRead(t *testing.T) {
 // Episodes are read from their file's name, the show from its folder, and
 // a file holding several episodes covers them all.
 func TestEpisodeNamesAreRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		path                         string
 		show                         string
@@ -142,6 +146,7 @@ func TestEpisodeNamesAreRead(t *testing.T) {
 
 // Titles compare without case, accents nor punctuation.
 func TestTitlesFold(t *testing.T) {
+	t.Parallel()
 	if fold("Les Misérables") != fold("les miserables") || fold("Sherlock Jr.") != fold("Sherlock Jr") || fold("Mr. & Mrs.") != "mr and mrs" ||
 		fold("Night of the Living Dead") == fold("Dawn of the Dead") {
 		t.Errorf("folded: %q %q", fold("Les Misérables"), fold("Mr. & Mrs."))

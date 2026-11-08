@@ -70,6 +70,8 @@ func dvdFiles(t *testing.T) map[string][]byte {
 // so, libbluray choosing its title, as it was before UDF was read. Other
 // images, and a UDF volume without a file system, are no disc's, and are
 // not handed to FFmpeg.
+//
+//nolint:paralleltest // swaps the package's minMovie, which every scan of a disc reads
 func TestReadImage(t *testing.T) {
 	defer func(old time.Duration) { minMovie = old }(minMovie)
 	dir := t.TempDir()
@@ -176,6 +178,7 @@ func TestReadImage(t *testing.T) {
 // while its size and modification time stay; images of no disc are left
 // out, and so are a shows folder's; a share's are read on the share.
 func TestDiscImagesAreMovies(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	unpackImage(t, "bluray", filepath.Join(dir, "The General (1926).iso"))
@@ -314,6 +317,8 @@ func TestDiscImagesAreMovies(t *testing.T) {
 // its titles, and their keyframes. One whose UDF partition is sparable is
 // one movie when FFmpeg reads it, libbluray choosing its title, without
 // keyframes.
+//
+//nolint:paralleltest // swaps the package's minMovie, which every scan of a disc reads
 func TestImageMoviesAreTitles(t *testing.T) {
 	defer func(old time.Duration) { minMovie = old }(minMovie)
 	minMovie = 20 * time.Second

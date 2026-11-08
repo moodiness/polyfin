@@ -57,6 +57,7 @@ func writeCLPI(times ...uint64) []byte {
 // units of 90 kHz: those of the test disc's clips, an I-frame a second
 // from 600 seconds, and those written, across coarse entries.
 func TestReadEPMap(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	unpackBluRay(t, dir)
 	for clip, want := range map[string]struct {
@@ -113,6 +114,7 @@ func TestReadEPMap(t *testing.T) {
 // just before an item's in time starts it, one at its out time is the
 // next item's.
 func TestTitleKeyframesFollowThePlayItems(t *testing.T) {
+	t.Parallel()
 	ticks := func(seconds float64) uint64 { return uint64(seconds * 90000) }
 	p := playlist{clips: []clipPart{
 		{clip: "00001", in: 600 * 45000, out: 700 * 45000},
@@ -146,6 +148,8 @@ func TestTitleKeyframesFollowThePlayItems(t *testing.T) {
 // The keyframes of a Blu-ray disc's title are read from its folder, any
 // case, or from its image; a DVD's are not, nor those of a disc whose
 // clips' information is missing.
+//
+//nolint:paralleltest // swaps the package's minMovie, which every scan of a disc reads
 func TestDiscKeyframes(t *testing.T) {
 	// The disc's 30-second playlist is a title of its own.
 	defer func(old time.Duration) { minMovie = old }(minMovie)

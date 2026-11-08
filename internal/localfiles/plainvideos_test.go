@@ -10,6 +10,7 @@ import (
 // A file whose name could not be read, stored by a scan before plain
 // videos, is stored again by the next scan, which lists it as one.
 func TestUnreadableFilesBecomePlainVideos(t *testing.T) {
+	t.Parallel()
 	e := newEnvWith(t)
 	addon, _ := e.folder(KindMovies, map[string]int{"[Group].mkv": 10})
 	if got := e.files(addon.ID); got["[Group].mkv"] != "unmatched: "+reasonUnreadableName {

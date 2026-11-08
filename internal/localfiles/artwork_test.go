@@ -34,6 +34,7 @@ func sideImagesOf(names ...string) sideImages {
 // those after its name. Of each type, the name Jellyfin prefers comes
 // first, in any letter case, empty files left out.
 func TestMovieArtworkNames(t *testing.T) {
+	t.Parallel()
 	files := []imagedFile{
 		{path: "Alone (2001)/Alone (2001).mkv", unit: "Alone (2001)/Alone (2001).mkv", title: "tt1"},
 		{path: "Versions (2002)/Versions (2002) - 1080p.mkv", unit: "Versions (2002)/Versions (2002) - 1080p.mkv", title: "tt2"},
@@ -95,6 +96,7 @@ func TestMovieArtworkNames(t *testing.T) {
 // "season-specials"), even a season without files, then in its season
 // folder. Episodes at the folder's top, without a show folder, have none.
 func TestShowArtworkNames(t *testing.T) {
+	t.Parallel()
 	season := func(n int) *int { return &n }
 	files := []imagedFile{
 		{path: "Show (2001)/Season 01/Show - S01E01.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
@@ -135,6 +137,7 @@ func TestShowArtworkNames(t *testing.T) {
 // files that are no episode have none, and other images beside an episode
 // are not its image.
 func TestEpisodeArtworkNames(t *testing.T) {
+	t.Parallel()
 	season := func(n int) *int { return &n }
 	files := []imagedFile{
 		{path: "Show (2001)/Season 01/Show - S01E01.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
@@ -218,6 +221,7 @@ func writeImage(t *testing.T, path string, data []byte, at time.Time) {
 // UseArtwork turns it off and on at once, and a link made by hand gives a
 // unit's artwork to its title without a scan.
 func TestMovieArtworkIsKeptAndServed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
@@ -314,6 +318,7 @@ func TestMovieArtworkIsKeptAndServed(t *testing.T) {
 
 // A shows folder's artwork is its shows' and their seasons'.
 func TestShowArtworkIsKept(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	dir := t.TempDir()
@@ -341,6 +346,7 @@ func TestShowArtworkIsKept(t *testing.T) {
 // file holds; a scan notices one added, replaced or removed, the folder's
 // UseArtwork turns them off and on, and other images are not theirs.
 func TestEpisodeArtworkIsKept(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	dir := t.TempDir()
@@ -418,6 +424,7 @@ func TestEpisodeArtworkIsKept(t *testing.T) {
 
 // An episode's image on a share is kept and read from the share.
 func TestShareEpisodeArtwork(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	season := filepath.Join(dir, "shows", "The Lone Ranger (1949)", "Season 01")
@@ -444,6 +451,7 @@ func TestShareEpisodeArtwork(t *testing.T) {
 // Of the images several folders hold for a title, the folder listed first
 // among the sources gives each type; a disabled folder gives none.
 func TestArtworkOfSeveralFolders(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	add := func(name, poster string, backdrop bool) addons.Addon {
@@ -494,6 +502,7 @@ func TestArtworkOfSeveralFolders(t *testing.T) {
 // A share's images are kept as a local folder's, and read from the share
 // by ranges.
 func TestShareArtwork(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)

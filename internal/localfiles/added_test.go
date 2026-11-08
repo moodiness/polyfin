@@ -11,6 +11,7 @@ import (
 // keeps when it was added, and the files found before this was kept are
 // never counted.
 func TestAddedFilesAreCountedWhenFirstFound(t *testing.T) {
+	t.Parallel()
 	addedWhenFirstFound(t, newEnv(t))
 }
 
@@ -18,8 +19,10 @@ func TestAddedFilesAreCountedWhenFirstFound(t *testing.T) {
 // for are taken from: the database's clock, another machine's at times,
 // behind the server's or ahead, does not move them out of the windows.
 func TestAddedFilesAreCountedWhateverTheDatabaseClock(t *testing.T) {
+	t.Parallel()
 	for name, ahead := range map[string]time.Duration{"database behind": 500 * time.Millisecond, "database ahead": -2 * time.Minute} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			e := newEnv(t)
 			e.service.now = func() time.Time { return time.Now().Add(ahead) }
 			addedWhenFirstFound(t, e)

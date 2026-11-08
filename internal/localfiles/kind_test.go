@@ -45,6 +45,7 @@ func (e env) libraryOf(id accounts.ID) (accounts.ID, string) {
 // are given and stay. Turned back to home videos, its videos are the same
 // titles.
 func TestFolderKindChanges(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, _ := e.folder(KindHomeVideos, map[string]int{"Nosferatu (1922).mkv": 10, "The General (1926).mkv": 11, "Beach.mkv": 12})
 	users, err := accounts.Open(t.Context(), e.pool)
@@ -167,6 +168,8 @@ func TestFolderKindChanges(t *testing.T) {
 // A change of what a folder holds, its kind or its path, counts in the
 // metrics as the one scan that follows: the folder held meanwhile is no
 // scan.
+//
+//nolint:paralleltest // reads the process-wide scan metrics, which every scan moves
 func TestFolderChangeCountsOneScan(t *testing.T) {
 	e := newEnv(t)
 	addon, _ := e.folder(KindHomeVideos, map[string]int{"Nosferatu (1922).mkv": 10})
@@ -193,6 +196,7 @@ func TestFolderChangeCountsOneScan(t *testing.T) {
 // A change of what a folder holds stops its scan under way, and scans it
 // again as the new kind.
 func TestFolderKindChangeStopsTheScan(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	sealer, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {
