@@ -5,6 +5,7 @@ import "testing"
 // Versions are ordered as Semantic Versioning orders them, a pre-release
 // before its version; what is not a version is never newer, nor older.
 func TestVersionsAreComparedInSemanticOrder(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		version, current string
 		newer            bool

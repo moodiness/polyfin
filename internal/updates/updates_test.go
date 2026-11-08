@@ -157,6 +157,7 @@ func check(t *testing.T, c *Checker) {
 // version, an older one or no release at all neither shows nor is told.
 // The request names Polyfin and its version.
 func TestNewerEqualAndOlderReleases(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	check(t, h.Checker)
 	if _, ok := h.Available(); ok || len(h.told()) != 0 {
@@ -196,6 +197,7 @@ func TestNewerEqualAndOlderReleases(t *testing.T) {
 // A release GitHub marks as a pre-release, or whose tag is one, is left
 // out: what was found before stays.
 func TestPreReleasesAreIgnored(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	check(t, h.Checker)
@@ -221,6 +223,7 @@ func TestPreReleasesAreIgnored(t *testing.T) {
 // the latest release. Turned off, the latest release shows again at once,
 // and the list of releases is no longer asked.
 func TestPreReleasesOnlyWithTheSwitch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	h.github.releases([3]any{"v1.7.0", false, true}, [3]any{"v1.6.0-rc.2", true, false}, [3]any{"v1.6.0-beta.1", false, false},
@@ -270,6 +273,7 @@ func TestPreReleasesOnlyWithTheSwitch(t *testing.T) {
 
 // Wake has Run check at once, rather than at its next time.
 func TestWakeChecksAtOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	h.timing = timing{first: time.Hour, every: time.Hour, retry: time.Hour}
@@ -293,6 +297,7 @@ func TestWakeChecksAtOnce(t *testing.T) {
 
 // A development build asks nothing and never tells a new version.
 func TestDevelopmentBuildsAreNeverNotified(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{"dev", ""} {
 		h := newHarness(t, version)
 		h.github.release("v99.0.0", false)
@@ -307,6 +312,7 @@ func TestDevelopmentBuildsAreNeverNotified(t *testing.T) {
 // 429, or an answer that cannot be read, changes nothing: the release
 // found before still shows, and nothing is told.
 func TestFailedRequestsChangeNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	check(t, h.Checker)
@@ -348,6 +354,7 @@ func TestFailedRequestsChangeNothing(t *testing.T) {
 // found before at once; a later version is told in turn, and none once
 // Polyfin runs it.
 func TestOneNotificationPerVersionAcrossRestarts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	check(t, h.Checker)
@@ -379,6 +386,7 @@ func TestOneNotificationPerVersionAcrossRestarts(t *testing.T) {
 // With Check for new versions off, nothing is asked, nothing is told, and
 // a release found before no longer shows; turned on again, it shows.
 func TestSettingOffAsksNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	h.enabled.Store(false)
@@ -407,6 +415,7 @@ func TestSettingOffAsksNothing(t *testing.T) {
 // Run checks shortly after it starts, and again once a day, while the
 // setting is on; off, it asks nothing, and looks again sooner.
 func TestRunChecksAfterStartAndDaily(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t, "1.4.0")
 	h.github.release("v1.5.0", false)
 	h.enabled.Store(false)
