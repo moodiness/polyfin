@@ -638,7 +638,7 @@ func pickSkips(records []skipRecord) []mark {
 			continue
 		}
 		// An unreadable date counts as the oldest.
-		c.created, _ = time.Parse(time.RFC3339, record.Created)
+		c.created = created(record.Created)
 		if best == nil || cmp.Or(
 			-compareBool(c.streaming, best.streaming),
 			-cmp.Compare(len(c.marks), len(best.marks)),
@@ -652,6 +652,18 @@ func pickSkips(records []skipRecord) []mark {
 		return nil
 	}
 	return best.marks
+}
+
+// created reads a record's creation date: RFC 3339, or with a space between
+// the day and the time, as PublicMetaDB writes it. It is the zero time when
+// unreadable.
+func created(text string) time.Time {
+	for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05.999999999Z07:00"} {
+		if t, err := time.Parse(layout, text); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 // compareBool orders false before true.

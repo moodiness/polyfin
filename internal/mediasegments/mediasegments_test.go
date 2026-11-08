@@ -504,6 +504,32 @@ func TestPublicMetaDBKnowsTitlesByTMDBIdentifier(t *testing.T) {
 	}
 }
 
+func TestTheLatestRecordWinsWithDatesWrittenWithASpace(t *testing.T) {
+	t.Parallel()
+	// PublicMetaDB writes its dates with a space between the day and the
+	// time. The two records give as many segments: the newer one, m2,
+	// wins although m1 has the smaller identifier.
+	record := func(id, created string, creditsStart int) string {
+		return `{"id":"` + id + `","tmdb_id":550,"media_type":"movie","source":"streaming","created":"` + created + `",
+			"intro_start_ms":null,"intro_end_ms":null,"credits_start_ms":` + strconv.Itoa(creditsStart) + `,
+			"credits_end_ms":8300000,"recap_start_ms":null,"recap_end_ms":null,"preview_start_ms":null,"preview_end_ms":null}`
+	}
+	movie := Title{Item: accounts.ID{2}, IMDb: "tt0137523", TMDB: "550"}
+	want := []Segment{{Type: Outro, Start: at(7950), End: at(8300)}}
+	for _, records := range [][]string{
+		{record("m1", "2025-01-01 00:00:00.000Z", 7900000), record("m2", "2026-03-04 05:06:07.890Z", 7950000)},
+		{record("m2", "2026-03-04 05:06:07Z", 7950000), record("m1", "2025-01-01 00:00:00+02:00", 7900000)},
+	} {
+		d := newDatabases(t)
+		d.reply(publicMetaDBPath, http.StatusOK, skipPage(records...))
+		s, _ := service(t, d, PublicMetaDB)
+		useKey(s, goodKey)
+		if got := spans(s.Segments(t.Context(), movie)); !slices.Equal(got, want) {
+			t.Errorf("got %+v, want %+v", got, want)
+		}
+	}
+}
+
 func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 	t.Parallel()
 	d := newDatabases(t)
