@@ -31,6 +31,7 @@ func grayAt(img image.Image, place, width, height int) uint8 {
 // peak bandwidth the bits of the largest tile over the seconds its 100
 // places cover.
 func TestTilePacking(t *testing.T) {
+	t.Parallel()
 	const width, height, count = 240, 136, 105
 	tiler := newTiler(count, 10*time.Second)
 	for i := range count {

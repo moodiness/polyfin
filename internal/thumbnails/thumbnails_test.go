@@ -196,6 +196,7 @@ var (
 // its chapter images, from its keyframes alone, read paced through its
 // index and decoded by FFmpeg.
 func TestGenerateFromMatroska(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, testFFmpeg(t))
 	data := fixture(t, "forced.mkv")
 	ts.source = &countingSource{data: data}
@@ -371,6 +372,7 @@ func referenceFrame(t *testing.T, ffmpeg, file string, at float64, width int) im
 // thumbnails are stretched over its runtime, one per keyframe the budget
 // lets read, each showing the one read nearest its time.
 func TestGenerateWithinTheBudget(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, testFFmpeg(t))
 	ts.budget = 5
 	ts.source = &countingSource{data: fixture(t, "forced.mkv")}
@@ -421,6 +423,7 @@ func TestGenerateWithinTheBudget(t *testing.T) {
 // A host asking to slow down stops the version at once, with nothing
 // kept, and pauses every image of that host; other hosts go on.
 func TestSlowDownPausesTheHost(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, testFFmpeg(t))
 	// The size and the index are read; the first keyframe is refused.
 	ts.source = &countingSource{data: fixture(t, "forced.mkv"), slowDownAt: 3}
@@ -477,6 +480,7 @@ func TestSlowDownPausesTheHost(t *testing.T) {
 // Images wait for the playback that asked for them to stop, and for
 // every playback from the same host to end.
 func TestGenerateWaitsForPlaybacks(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, testFFmpeg(t))
 	ts.mu.Lock()
 	ts.source = &countingSource{data: fixture(t, "forced.mkv")}
@@ -529,6 +533,7 @@ func TestGenerateWaitsForPlaybacks(t *testing.T) {
 // playbacks for a check, waits for that playback all the same: the
 // playbacks read before it started do not let the version through.
 func TestQueuedDuringACheckWaitsForItsPlayback(t *testing.T) {
+	t.Parallel()
 	ts := newTestService(t, "")
 	var mu sync.Mutex
 	viewer, watcher := accounts.ID{7}, accounts.ID{8}
@@ -596,6 +601,7 @@ var hevcKeyframes = []float64{0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 5
 // its keyframe's time, not to its place in the reads, nor in what the
 // decoder outputs.
 func TestImagesFollowTheKeyframesTimes(t *testing.T) {
+	t.Parallel()
 	ffmpeg := testFFmpeg(t)
 	data := fixture(t, "hevc.mkv")
 	analysis := media.Analysis{Format: "matroska,webm", Duration: 60 * time.Second,
@@ -612,6 +618,7 @@ func TestImagesFollowTheKeyframesTimes(t *testing.T) {
 		{"several ranges a request, a small budget", true, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			ts := newTestService(t, ffmpeg)
 			ts.budget = tc.budget
 			counting := &countingSource{data: data}
@@ -707,9 +714,11 @@ var oddAnswers = map[string]error{
 // images are made. Two in a row fail the version, which is left alone for a
 // while, its host not paused.
 func TestOddAnswersAreAskedOnceMore(t *testing.T) {
+	t.Parallel()
 	ffmpeg := testFFmpeg(t)
 	for name, answer := range oddAnswers {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			ts := newTestService(t, ffmpeg)
 			ts.analysis = forcedAnalysis
 			ctx := t.Context()
@@ -758,6 +767,7 @@ func TestOddAnswersAreAskedOnceMore(t *testing.T) {
 // A link the source says expired is renewed, once a generation, and asked
 // again.
 func TestExpiredLinksAreRenewedOnce(t *testing.T) {
+	t.Parallel()
 	ffmpeg := testFFmpeg(t)
 	ts := newTestService(t, ffmpeg)
 	ts.analysis = forcedAnalysis

@@ -18,6 +18,7 @@ func secondsOf(values ...float64) []time.Duration {
 // coarse to fine: however many the budget lets through, they cover the
 // whole runtime.
 func TestChooseKeyframes(t *testing.T) {
+	t.Parallel()
 	keyframes := make([]time.Duration, 3600)
 	for i := range keyframes {
 		keyframes[i] = time.Duration(i) * time.Second
@@ -53,6 +54,7 @@ func TestChooseKeyframes(t *testing.T) {
 // Every thumbnail shows the keyframe read nearest its time, the earlier
 // of two as near, whatever the order they were read in.
 func TestShownCoversEveryThumbnail(t *testing.T) {
+	t.Parallel()
 	read := secondsOf(30, 0, 14, 6)
 	asked := make([]time.Duration, 8)
 	for i := range asked {
@@ -75,6 +77,7 @@ func TestShownCoversEveryThumbnail(t *testing.T) {
 // keyframe; a longer version spreads them over its runtime, one per read,
 // in whole seconds, rather than repeating images.
 func TestTheStepGrowsWithTheRuntime(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		duration time.Duration
 		reads    int
