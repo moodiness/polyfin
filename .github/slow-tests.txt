@@ -1,7 +1,10 @@
-# Tests allowed over 30 s in CI's race jobs, which fail on any other
-# (scripts/test-times.py): one a line, the package as go test prints it,
-# the test, then why after a #. A job's summary lists the tests of this file
-# now under 30 s, whose lines can go.
+# Tests allowed over 30 s in CI's race jobs (scripts/test-times.py): one a
+# line, the package as go test prints it, the test, then why after a #.
+# Only a test a pull request adds fails its job over 30 s; any other gets a
+# warning. So a line here is for a new test slow on purpose, or silences
+# the warning of an existing one: all the lines below are of the latter.
+# A job's summary lists the tests of this file now under 30 s, whose lines
+# can go.
 #
 # These wait in real time, by design, for a torrent's start and its pieces'
 # timeouts: a 2026-11-07 run of the whole suite took 30.8 to 124.5 s each.
