@@ -1,6 +1,7 @@
 package library
 
 import (
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -80,6 +81,12 @@ func TestADeadPhotoGivesWayToTMDBsThenToNone(t *testing.T) {
 
 	e.clock.advance(deadPhotoFor + time.Second)
 	photos("a day later", addonPhoto)
+	// The title's page, opened a day later, had the addon describe the
+	// title again in the background, crediting Dana with the same photo:
+	// that refresh ends before the addon gives a new one, which it would
+	// otherwise replace.
+	refresh := fmt.Sprintf("refresh meta %v", metaKey{e.addonID("a"), "movie", "tt1"})
+	_, _, _ = e.service.flight.Do(refresh, func() (any, error) { return nil, nil })
 
 	// A new photo from the addon is not dead.
 	if err := e.service.PhotoFailed(t.Context(), dana, addonPhoto); err != nil {

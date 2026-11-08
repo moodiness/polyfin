@@ -185,6 +185,13 @@ func titles(kind string, count int, genres ...string) []stremio.Meta {
 	return result
 }
 
+// The tests hash passwords at a small cost (see
+// accounts.LowerPasswordCostForTests): every env creates its users.
+func TestMain(m *testing.M) {
+	accounts.LowerPasswordCostForTests()
+	m.Run()
+}
+
 type env struct {
 	t       *testing.T
 	service *Service

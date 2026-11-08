@@ -64,6 +64,9 @@ func cinemaAddon() *fakeAddon {
 func smartEnv(t *testing.T) (env, *fakeAddon, accounts.ID) {
 	t.Helper()
 	e := newEnv(t)
+	// Every catalog is read whole before a listing answers and keeps its
+	// titles, however slow the test machine.
+	e.service.smartWait = time.Minute
 	addon := cinemaAddon()
 	e.install(addons.Shared(), addon)
 	list, err := e.addons.Addons(t.Context(), addons.Shared())
