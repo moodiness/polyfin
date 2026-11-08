@@ -103,6 +103,7 @@ func (wt *watchTest) watchedAs(id accounts.ID, how, why string) {
 // the last one; so does a change it could not tell (ENUM_DIR). A change
 // in a folder a scan skips does not.
 func TestShareNotifyScansAfterQuiet(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -136,6 +137,7 @@ func TestShareNotifyScansAfterQuiet(t *testing.T) {
 // meanwhile was not told. One that cannot be set up leaves the share
 // polled, with why, and found changed by its polls.
 func TestShareNotifyRearms(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -167,6 +169,7 @@ func TestShareNotifyRearms(t *testing.T) {
 
 // A server that refuses change notifications leaves the share polled.
 func TestShareNotifyUnsupported(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -182,6 +185,7 @@ func TestShareNotifyUnsupported(t *testing.T) {
 // poll found is let go: the share is scanned, and polled again every few
 // minutes. Watching a share's root, the watch is split first.
 func TestShareNotifySilentFallsBackToPolling(t *testing.T) {
+	t.Parallel()
 	for _, root := range []bool{false, true} {
 		dir := t.TempDir()
 		write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
@@ -232,6 +236,7 @@ func TestShareNotifySilentFallsBackToPolling(t *testing.T) {
 // a poll found, as Samba misses those made on its own disk, is kept, and
 // the share listed again every few minutes too.
 func TestShareNotifyMissedDeepChange(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -270,6 +275,7 @@ func TestShareNotifyMissedDeepChange(t *testing.T) {
 // A WebDAV share is polled, with why; turned off, the watches end, and
 // no share is watched.
 func TestShareNotifyWebDAVAndOff(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -304,6 +310,7 @@ func TestShareNotifyWebDAVAndOff(t *testing.T) {
 
 // A change in a folder a scan skips is no change.
 func TestRelevantChange(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		paths []string
 		want  bool

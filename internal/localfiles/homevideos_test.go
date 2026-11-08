@@ -19,6 +19,7 @@ import (
 )
 
 func TestHomeVideoNames(t *testing.T) {
+	t.Parallel()
 	entries := map[string]entry{}
 	for _, rel := range []string{"Beach.mp4", "Birthday 2019/clip.mp4", "Birthday 2019/clip.en.srt", "Trip/day 1.mov", "Trip/day 2.mov",
 		"Trip/Evening/fire.mkv"} {
@@ -44,6 +45,7 @@ func TestHomeVideoNames(t *testing.T) {
 }
 
 func TestHomeVideoDates(t *testing.T) {
+	t.Parallel()
 	modified := time.Date(2024, time.March, 3, 9, 0, 0, 0, time.UTC)
 	created := time.Date(2019, time.June, 2, 15, 30, 0, 0, time.UTC)
 	premiered := time.Date(2019, time.June, 1, 0, 0, 0, 0, time.UTC)
@@ -67,6 +69,7 @@ func TestHomeVideoDates(t *testing.T) {
 }
 
 func TestReadVideoProbe(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, json string
 		created    string
@@ -128,6 +131,7 @@ func (e env) homeTitles(id accounts.ID) map[string]stremio.Meta {
 // the poster beside it or a frame of it; nothing is asked of the metadata
 // addons, nothing is unmatched, and identifiers stay through scans.
 func TestHomeVideosFolders(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
@@ -274,6 +278,7 @@ func videoBytes(t *testing.T, path string, size int, seed, last byte) {
 // the same contents, or a video of another's size whose end differs. A
 // video recognized is not counted as added again.
 func TestHomeVideosFollowTheirFiles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {

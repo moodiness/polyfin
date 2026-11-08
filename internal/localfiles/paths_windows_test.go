@@ -8,6 +8,7 @@ import (
 // On Windows, a local folder is a drive's folder or a share's, with
 // backslashes or slashes, a drive's root among them but the system's.
 func TestWindowsFolderPaths(t *testing.T) {
+	t.Parallel()
 	for path, want := range map[string]string{
 		`D:\Movies`:             `D:\Movies`,
 		` d:/Movies/Classics/ `: `d:\Movies\Classics`,

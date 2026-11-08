@@ -7,6 +7,7 @@ import "testing"
 // On Linux and macOS, a local folder is an absolute path other than /; a
 // Windows path is none.
 func TestUnixFolderPaths(t *testing.T) {
+	t.Parallel()
 	for path, want := range map[string]string{
 		"/media/movies":             "/media/movies",
 		" /media/movies/classics/ ": "/media/movies/classics",

@@ -96,6 +96,7 @@ func (e env) albumTitles(id accounts.ID) map[string]eclipse.Album {
 }
 
 func TestNamesCompleteTags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		path   string
 		tags   trackInfo
@@ -135,6 +136,7 @@ func TestNamesCompleteTags(t *testing.T) {
 // image beside them. It answers as an Eclipse addon: its row of albums,
 // album and artist pages, searches and streams.
 func TestMusicFoldersAreReadAndGrouped(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
@@ -238,6 +240,7 @@ func TestMusicFoldersAreReadAndGrouped(t *testing.T) {
 // A rescan reads again the tracks whose files changed, forgets those gone
 // and the artwork of albums gone, and reads no other.
 func TestMusicRescans(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
@@ -279,6 +282,7 @@ func TestMusicRescans(t *testing.T) {
 // A share's tracks are read from the share, their tags and covers through
 // the loopback server.
 func TestShareMusic(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
@@ -317,6 +321,7 @@ func TestShareMusic(t *testing.T) {
 // album artist is its artist as written. Its lyrics are its lyrics tag's,
 // an ID3 tag's too.
 func TestArtistsAndLyricsTags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                  string
 		tags                  string
@@ -355,6 +360,7 @@ func TestArtistsAndLyricsTags(t *testing.T) {
 // or backslashes; those leading out of it are left out. Its title is its
 // #PLAYLIST line's, else its name.
 func TestM3UPlaylistsAreRead(t *testing.T) {
+	t.Parallel()
 	text := "#EXTM3U\n#PLAYLIST:Evening Mix\n#EXTINF:123,Ann - Evening\nEvening.flac\n\n  ../Other/Night.mp3  \n/media/music/Ann/Debut/Morning.flac\n" +
 		"/srv/real/Ann/Debut/Noon.flac\nfile:///media/music/Ann/Debut/Dusk%20Song.flac\nAnn\\Live\\Encore.flac\n/elsewhere/Song.flac\n" +
 		"../../../outside.flac\nhttps://radio.example/stream.mp3\nC:\\Music\\Song.flac\n"
@@ -374,6 +380,7 @@ func TestM3UPlaylistsAreRead(t *testing.T) {
 // playlist's absolute lines give in any letter case, with backslashes or
 // slashes, as paths or file: addresses.
 func TestM3UPlaylistsOfAWindowsFolder(t *testing.T) {
+	t.Parallel()
 	text := "D:\\Music\\Ann\\Debut\\Morning.flac\nd:/music/Ann/Debut/Noon.flac\nfile:///D:/Music/Ann/Debut/Dusk%20Song.flac\n" +
 		"\\\\nas\\media\\Music\\Ann\\Live\\Encore.flac\nfile://nas/media/Music/Ann/Live/Bis.flac\nE:\\Music\\Ann\\Song.flac\nD:Ann\\Song.flac\n" +
 		"D:\\Music\\..\\Other\\Song.flac\nEvening.flac\n"
@@ -394,6 +401,7 @@ func TestM3UPlaylistsOfAWindowsFolder(t *testing.T) {
 // An artist's folder holds the folders of their albums, and of no album
 // of another artist or of several.
 func TestArtistFolders(t *testing.T) {
+	t.Parallel()
 	got := artistFolders(map[string][]string{
 		"Ann/Debut/01.flac":       {"ann"},
 		"Ann/Live/CD2/01.flac":    {"ann"},
@@ -416,6 +424,7 @@ func TestArtistFolders(t *testing.T) {
 // lyrics file's, else its lyrics tag's; an artist's picture is the image
 // in their folder. Rescans read them again when they change.
 func TestMusicPlaylistsArtistsLyricsAndPictures(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
@@ -561,6 +570,7 @@ func TestMusicPlaylistsArtistsLyricsAndPictures(t *testing.T) {
 
 // The tracks a scan first finds count among the files added, by album.
 func TestAddedTracksAreCountedByAlbum(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)

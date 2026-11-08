@@ -133,6 +133,7 @@ func movieTitles(dir string) ([]dvdChoice, error) {
 // size; the IFO files tell how long each title plays. Each other title as
 // long as a movie is one too.
 func TestDVDMainTitle(t *testing.T) {
+	t.Parallel()
 	titles, err := movieTitles(filepath.Join("testdata", "dvd", "VIDEO_TS"))
 	if err != nil || !slices.Equal(titles, []dvdChoice{{title: 2, set: 2}}) {
 		t.Errorf("the test DVD: %v %v", titles, err)
@@ -167,6 +168,7 @@ func TestDVDMainTitle(t *testing.T) {
 // short extra is left out. A disc of more movies than maxDiscTitles keeps
 // its main title only.
 func TestDVDTitlesAreItsMovies(t *testing.T) {
+	t.Parallel()
 	cells := func(set uint32, seconds ...int) []ifoCell {
 		var list []ifoCell
 		for i, s := range seconds {
@@ -207,6 +209,7 @@ func TestDVDTitlesAreItsMovies(t *testing.T) {
 // read is its largest set. A VOB out of a VIDEO_TS folder is a video of
 // its own.
 func TestDVDsAreOneMovie(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	copyDVD(t, filepath.Join(dir, "The General (1926)"), false)
@@ -314,6 +317,7 @@ func TestDVDsAreOneMovie(t *testing.T) {
 // folder is left out; one on a share is read as a local one is, its IFO
 // files read on the share.
 func TestDVDsAtTheRootInShowsAndOnShares(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := filepath.Join(t.TempDir(), "The General (1926)")
 	copyDVD(t, dir, false)
@@ -373,6 +377,7 @@ func TestDVDsAtTheRootInShowsAndOnShares(t *testing.T) {
 // entry stays the one a DVD of one movie has, and the titles keep their
 // links through scans.
 func TestDVDMoviesAreTitles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	disc := filepath.Join(dir, "Nosferatu (1922)", "VIDEO_TS")

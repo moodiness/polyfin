@@ -20,6 +20,7 @@ import (
 // language, title and flags in any order and case. A VobSub pair is its
 // .idx file, with the .sub file of the same name.
 func TestSubtitleFilesBelongToTheirVideo(t *testing.T) {
+	t.Parallel()
 	read := func(kind string, videos, subtitles []string) map[string]sidecar {
 		entries := map[string]entry{}
 		for _, rel := range videos {
@@ -140,6 +141,7 @@ func (e env) opened(key string) string {
 // offered with their streams and read as their videos are; a rescan finds
 // those added, changed and removed, and a video's go with it.
 func TestSubtitleFilesAreOfferedWithTheirVideo(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, map[string]int{"Night of the Living Dead (1968).mkv": 10})
 	at := time.Now()
@@ -195,6 +197,7 @@ func TestSubtitleFilesAreOfferedWithTheirVideo(t *testing.T) {
 // with the .sub extension. A changed .sub file changes the pair; one
 // removed takes its pair with it.
 func TestPictureSubtitleFilesAreOffered(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, map[string]int{"Night of the Living Dead (1968).mkv": 10})
 	at := time.Now().Truncate(time.Second)
@@ -237,6 +240,7 @@ func TestPictureSubtitleFilesAreOffered(t *testing.T) {
 // A WebDAV share's subtitle files are listed with its folders and read
 // from the share, a VobSub pair's language from its .idx file there.
 func TestShareSubtitleFiles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {

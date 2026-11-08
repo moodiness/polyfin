@@ -15,6 +15,7 @@ import (
 // unmatched, so that an administrator sees it; linked, it is a title, and
 // rescans keep it so. Unlinked, a file named as an extra is one again.
 func TestLinksWinOverExtrasNames(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	for rel, size := range map[string]int{

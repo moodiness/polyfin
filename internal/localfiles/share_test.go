@@ -58,6 +58,7 @@ func (e env) fileKey(id accounts.ID, rel string) string {
 // is, its password stored sealed, and its files read from the share with
 // byte ranges.
 func TestWebDAVFoldersAreScannedAndRead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {
@@ -160,6 +161,7 @@ func TestMPEGTSFilesOfEachExtensionAreRead(t *testing.T) {
 // right one is entered; a share that cannot be reached keeps the files
 // found before.
 func TestUnreadableSharesKeepTheirFiles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "Night of the Living Dead (1968).mkv"), 10)
@@ -241,6 +243,7 @@ func (r *relay) cut() {
 // names a share holding video files, its user and password in the
 // address: smb://user:password@host:port/share/folder.
 func TestSMBSharesAreScannedAndRead(t *testing.T) {
+	t.Parallel()
 	raw := os.Getenv("POLYFIN_TEST_SMB")
 	if raw == "" {
 		t.Skip("POLYFIN_TEST_SMB is not set")

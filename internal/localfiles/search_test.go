@@ -97,6 +97,7 @@ func failing(status int) func(http.ResponseWriter, int, map[string]string) bool 
 // year, on the first page of the search catalog only, as Stremio apps
 // search: an addon that fails the pages past the first fails nothing.
 func TestScanSearchesTheFirstPageOnly(t *testing.T) {
+	t.Parallel()
 	addon := &searchAddon{name: "Meta", extra: []stremio.Extra{{Name: "search"}, {Name: "skip"}},
 		answer: func(w http.ResponseWriter, _ int, extra map[string]string) bool {
 			if extra["skip"] != "" {
@@ -128,8 +129,10 @@ func TestScanSearchesTheFirstPageOnly(t *testing.T) {
 // as it asks, or a moment when it does not say, and searches again: every
 // file is matched in that scan.
 func TestScanWaitsOutRateLimits(t *testing.T) {
+	t.Parallel()
 	for _, after := range []string{"1", ""} {
 		t.Run("Retry-After "+after, func(t *testing.T) {
+			t.Parallel()
 			addon := &searchAddon{name: "Meta", extra: []stremio.Extra{{Name: "search", IsRequired: true}},
 				answer: func(w http.ResponseWriter, n int, _ map[string]string) bool {
 					if n > 2 {
@@ -170,6 +173,7 @@ func TestScanWaitsOutRateLimits(t *testing.T) {
 // matched, and one it does not find is left unmatched as a failed search,
 // which the failing addon might have found, not as a title not found.
 func TestOneFailingSearchAddonFailsNoOther(t *testing.T) {
+	t.Parallel()
 	broken := &searchAddon{name: "Broken", extra: []stremio.Extra{{Name: "search", IsRequired: true}}, answer: failing(http.StatusInternalServerError)}
 	meta := &searchAddon{name: "Meta", extra: []stremio.Extra{{Name: "search", IsRequired: true}}}
 	e := newEnvWith(t, broken.start(t), meta.start(t))
@@ -201,6 +205,7 @@ func (w *warnings) lines() []string {
 // A failed search tells, on each file it leaves unmatched, the addon that
 // failed and why, and the log tells it once per scan, as a warning.
 func TestSearchFailureTold(t *testing.T) {
+	t.Parallel()
 	addon := &searchAddon{name: "Broken", extra: []stremio.Extra{{Name: "search", IsRequired: true}}, answer: failing(http.StatusServiceUnavailable)}
 	e := newEnvWith(t, addon.start(t))
 	logs := &warnings{}
@@ -235,6 +240,7 @@ func TestSearchFailureTold(t *testing.T) {
 // later and later while it fails, and is matched once the addon answers,
 // without anyone asking.
 func TestFailedSearchesAreTriedAgain(t *testing.T) {
+	t.Parallel()
 	var down sync.Mutex
 	failingNow := true
 	addon := &searchAddon{name: "Meta", extra: []stremio.Extra{{Name: "search", IsRequired: true}},

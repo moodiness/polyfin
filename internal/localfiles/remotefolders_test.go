@@ -92,6 +92,7 @@ func remoteCases(t *testing.T, dir string) []remoteCase {
 // from the storage: a seek reads only the blocks missing, and those read
 // before need the storage no more.
 func TestRemoteFoldersAreScannedAndRead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {
@@ -119,6 +120,7 @@ func TestRemoteFoldersAreScannedAndRead(t *testing.T) {
 	}
 	for _, c := range remoteCases(t, dir) {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			addon, err := e.service.Add(t.Context(), c.wrong)
 			if err != nil {
 				t.Fatal(err)
@@ -204,6 +206,7 @@ func TestRemoteFoldersAreScannedAndRead(t *testing.T) {
 // A bucket's folders are listed page by page: a folder holding more than
 // a page lists whole.
 func TestBucketListingsArePaged(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for i := range 7 {
 		write(t, filepath.Join(dir, "movies", "Movie "+string(rune('A'+i))+" (1950).mkv"), 10)
@@ -246,6 +249,7 @@ func TestBucketListingsArePaged(t *testing.T) {
 // An rclone instance that does not know the remote answers that it is
 // missing; a path that is a file is no folder.
 func TestRcloneRemoteMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
 	_, server := serveRclone(t, "media", dir, "rc", "secret")
@@ -286,6 +290,7 @@ func must[T any](v T, err error) T {
 // its files, until an administrator accepts it. A wrong password is
 // refused.
 func TestSFTPHostKeys(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
@@ -346,7 +351,10 @@ func TestSFTPHostKeys(t *testing.T) {
 // A file added to a bucket, an SFTP folder or an rclone remote is found
 // by the next listing round, the share polled as such; one listed only
 // at its scans is not watched.
+//
+//nolint:paralleltest,tparallel // its subtests change files in the one folder all their polls list
 func TestRemoteFoldersArePolled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	_, s3Server := serveS3(t, dir, "media", "AKIDTEST", "secret")
@@ -395,6 +403,8 @@ func TestRemoteFoldersArePolled(t *testing.T) {
 
 // A disc image on a bucket is matched and plays as on any share: its
 // main title as one MPEG-TS file, read from the image by ranges.
+//
+//nolint:paralleltest // swaps the package's minMovie, which every scan of a disc reads
 func TestBucketDiscImages(t *testing.T) {
 	defer func(old time.Duration) { minMovie = old }(minMovie)
 	minMovie = 20 * time.Second

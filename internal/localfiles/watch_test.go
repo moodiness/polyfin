@@ -234,6 +234,7 @@ func one(id accounts.ID, root string) func(context.Context) ([]watchFolder, erro
 func testID(b byte) accounts.ID { return accounts.ID{15: b} }
 
 func TestWatchScansAfterFilesAdded(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	id := testID(1)
 	wt := newNotifyTest(t, one(id, root))
@@ -255,6 +256,7 @@ func TestWatchScansAfterFilesAdded(t *testing.T) {
 // may register its own watch of the folder over the one just added, which
 // the fake's Remove stands for (see rewatchCreated).
 func TestWatchRewatchesCreatedFolders(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	id := testID(1)
 	fake := newFakeWatcher()
@@ -283,6 +285,7 @@ func TestWatchRewatchesCreatedFolders(t *testing.T) {
 }
 
 func TestWatchScansOnceAfterBurst(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	id := testID(1)
 	fake := newFakeWatcher()
@@ -301,6 +304,7 @@ func TestWatchScansOnceAfterBurst(t *testing.T) {
 }
 
 func TestWatchScansAfterRemoveAndRename(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	write(t, filepath.Join(root, "The General (1926).mkv"), 10)
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
@@ -349,6 +353,7 @@ func TestWatchScansAfterRemoveAndRename(t *testing.T) {
 }
 
 func TestWatchIgnoresOtherFiles(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	id := testID(1)
 	wt := newNotifyTest(t, one(id, root))
@@ -364,6 +369,7 @@ func TestWatchIgnoresOtherFiles(t *testing.T) {
 // The folders of extras are watched as the title's folder is: an extra
 // added in one, or a theme song beside a title, starts a scan.
 func TestWatchScansAfterExtrasChanges(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Extras", "Restoration.mkv"), 10)
@@ -384,6 +390,7 @@ func TestWatchScansAfterExtrasChanges(t *testing.T) {
 // An NFO file added, changed or removed beside a video starts a scan, its
 // identifiers matching the video's title.
 func TestWatchScansAfterNFOChanges(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -408,6 +415,7 @@ func TestWatchScansAfterNFOChanges(t *testing.T) {
 // A subtitle file added or removed beside a video starts a scan, whatever
 // its format, a VobSub pair's .sub file too.
 func TestWatchScansAfterSubtitleChanges(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -433,6 +441,7 @@ func TestWatchScansAfterSubtitleChanges(t *testing.T) {
 // An image added, replaced or removed beside a video starts a scan, as
 // any image may be a title's artwork.
 func TestWatchScansAfterArtworkChanges(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -460,6 +469,7 @@ func TestWatchScansAfterArtworkChanges(t *testing.T) {
 // like a movie's extras too, which its scans read; any other file does
 // not.
 func TestWatchScansAfterMusicChanges(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "Band", "Extras"), 0o755); err != nil {
 		t.Fatal(err)
@@ -484,6 +494,7 @@ func TestWatchScansAfterMusicChanges(t *testing.T) {
 }
 
 func TestWatchFolderBack(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	root := filepath.Join(parent, "movies")
 	write(t, filepath.Join(root, "The General (1926).mkv"), 10)
@@ -510,6 +521,7 @@ func TestWatchFolderBack(t *testing.T) {
 }
 
 func TestWatchable(t *testing.T) {
+	t.Parallel()
 	on := accounts.DefaultSettings()
 	if !on.WatchLocalFolders {
 		t.Fatal("folders are not watched by default")
@@ -537,6 +549,7 @@ func TestWatchable(t *testing.T) {
 }
 
 func TestWatchNothingWhenOff(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	settings := accounts.DefaultSettings()
 	settings.WatchLocalFolders = false
@@ -560,6 +573,7 @@ func TestWatchNothingWhenOff(t *testing.T) {
 
 // Shares are polled, never given to the system's watcher.
 func TestWatchPollsShares(t *testing.T) {
+	t.Parallel()
 	settings := accounts.DefaultSettings()
 	installed := []addons.Addon{
 		{ID: testID(1), Kind: addons.KindLocal, ManifestURL: "smb://nas.local/media", Enabled: true},
@@ -587,6 +601,7 @@ func TestWatchPollsShares(t *testing.T) {
 }
 
 func TestWatchLimit(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
@@ -620,6 +635,7 @@ func TestWatchLimit(t *testing.T) {
 }
 
 func TestWatchFailureReasons(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	id := testID(1)
 	for _, c := range failureReasons {
@@ -632,6 +648,7 @@ func TestWatchFailureReasons(t *testing.T) {
 }
 
 func TestWatchLimitKeepsSchedule(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, map[string]int{"Nosferatu (1922)/Nosferatu (1922).mkv": 10})
 	fake := newFakeWatcher()
@@ -663,6 +680,7 @@ func TestWatchLimitKeepsSchedule(t *testing.T) {
 }
 
 func TestWatchFindsNewFile(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, map[string]int{"Nosferatu (1922).mkv": 10})
 	w := newWatcher(e.service.ctx, e.service.logger, e.service.watchable, e.service.watchScan, openNotifyWatcher, e.service, e.service.wg.Go)

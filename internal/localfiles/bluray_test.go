@@ -90,6 +90,7 @@ func writeMPLS(t *testing.T, path string, items ...mplsItem) {
 
 // A playlist file tells the clips it plays, in order, and for how long.
 func TestReadPlaylist(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	unpackBluRay(t, dir)
 	for name, want := range map[string]playlist{
@@ -140,6 +141,7 @@ func TestReadPlaylist(t *testing.T) {
 // to be movies that play mostly clips of their own; another cut of a movie
 // counts once, and a disc of decoy playlists keeps its main title.
 func TestDiscTitles(t *testing.T) {
+	t.Parallel()
 	list := func(number int, parts ...clipPart) playlist {
 		p := playlist{number: number, clips: parts}
 		for _, part := range parts {
@@ -205,6 +207,8 @@ func TestDiscTitles(t *testing.T) {
 // plays its playlist through the bluray protocol, sized as the clips it
 // plays. A disc whose playlists cannot be read, or are too short for
 // FFmpeg, plays its largest stream.
+//
+//nolint:paralleltest // swaps the package's minMovie, which every scan of a disc reads
 func TestDiscPlaylistsAreTitles(t *testing.T) {
 	defer func(old time.Duration) { minMovie = old }(minMovie)
 	minMovie = 20 * time.Second
@@ -314,6 +318,7 @@ func TestDiscPlaylistsAreTitles(t *testing.T) {
 // playlist at the next scan, keeping its link; so is a share's, its
 // playlists read on the share.
 func TestDiscStreamsBecomePlaylists(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	disc := filepath.Join(dir, "Box", "DISC01")

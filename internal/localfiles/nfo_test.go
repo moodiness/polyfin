@@ -14,6 +14,7 @@ import (
 )
 
 func TestReadNFO(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, text, imdb, tmdb string
 	}{
@@ -54,6 +55,7 @@ func TestReadNFO(t *testing.T) {
 }
 
 func TestReadNFOTitlePlotAndDate(t *testing.T) {
+	t.Parallel()
 	day := func(text string) *time.Time {
 		at, _ := time.Parse(time.DateOnly, text)
 		return &at
@@ -133,6 +135,7 @@ func (e env) matches(id accounts.ID) map[string]string {
 // the movie's, a disc's movie.nfo and a show's tvshow.nfo match their unit
 // when no link nor name does, before the search.
 func TestNFOFilesMatchTheirUnits(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := t.TempDir()
 	at := time.Now()
@@ -241,6 +244,7 @@ func TestNFOFilesMatchTheirUnits(t *testing.T) {
 // its unit again at the next scan; removed, it leaves the unit to the
 // search. A folder gaining a second movie is no longer the first's own.
 func TestNFOChangesMatchAgain(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, map[string]int{
 		"Mystery Reel.mkv":     10,
@@ -302,6 +306,7 @@ func TestNFOChangesMatchAgain(t *testing.T) {
 // A WebDAV folder's NFO files are listed with its folders and read only
 // once new or changed, as a local folder's.
 func TestShareNFOFiles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {

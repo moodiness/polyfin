@@ -75,6 +75,7 @@ func near(gain *float64, want float64) bool {
 // the album tag its tracks agree on. The tracks read before gains were are
 // read again by the next scan, once.
 func TestReplayGainTagsAreRead(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
@@ -201,6 +202,7 @@ func (e env) rescan(id accounts.ID) {
 // minutes never are. An album's gain is its tracks' loudness together
 // once each is known. With measuring off, FFmpeg never runs.
 func TestLocalTracksAreMeasured(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)

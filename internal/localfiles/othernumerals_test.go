@@ -8,6 +8,7 @@ import "testing"
 // and numbers written in words elsewhere than after "Part" have no other
 // form.
 func TestOtherNumerals(t *testing.T) {
+	t.Parallel()
 	for title, want := range map[string]string{
 		"Harbor Lights 2":           "Harbor Lights II",
 		"Harbor Lights II":          "Harbor Lights 2",
