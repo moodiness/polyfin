@@ -6,6 +6,7 @@ import (
 )
 
 func TestLanguagesCompareWhicheverCodeNamesThem(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		a, b string
 		same bool
@@ -32,6 +33,7 @@ func TestLanguagesCompareWhicheverCodeNamesThem(t *testing.T) {
 // A title's language, as addons give it, names languages by code or by
 // name, in English, in French or in the language itself.
 func TestLanguagesAreReadFromTheirCodesAndNames(t *testing.T) {
+	t.Parallel()
 	for text, want := range map[string]string{
 		"fr":                          "fre",
 		"French":                      "fre",
@@ -47,6 +49,7 @@ func TestLanguagesAreReadFromTheirCodesAndNames(t *testing.T) {
 }
 
 func TestEveryLanguageHasACode(t *testing.T) {
+	t.Parallel()
 	for _, language := range Languages() {
 		if len(language.Bibliographic) != 3 || language.Name == "" || LanguageCode(language.Bibliographic) != language.Bibliographic {
 			t.Errorf("language %+v", language)
@@ -60,6 +63,7 @@ func TestEveryLanguageHasACode(t *testing.T) {
 }
 
 func TestCountriesAreTheAssignedCodes(t *testing.T) {
+	t.Parallel()
 	codes := map[string]Country{}
 	for _, country := range Countries() {
 		codes[country.Alpha2] = country
