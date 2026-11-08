@@ -10,6 +10,7 @@ import (
 // The requests to S3-compatible storage are signed as AWS's example of
 // Signature Version 4 for a GET of a bucket's objects.
 func TestSignature(t *testing.T) {
+	t.Parallel()
 	key := Key{Access: "AKIAIOSFODNN7EXAMPLE", Secret: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", Region: "us-east-1"}
 	request, err := http.NewRequest(http.MethodGet, "https://examplebucket.s3.amazonaws.com/", nil)
 	if err != nil {
