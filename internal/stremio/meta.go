@@ -407,7 +407,7 @@ func extraPath(extra []ExtraValue) string {
 // Catalog lists one page of a catalog.
 func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogID string, extra []ExtraValue, confined bool) ([]Meta, error) {
 	target := ResourceURL(manifestURL, "/catalog/"+encodeComponent(catalogType)+"/"+encodeComponent(catalogID)+extraPath(extra)+".json")
-	body, err := c.get(ctx, manifestURL, target, confined)
+	body, err := c.get(ctx, manifestURL, target, confined, c.timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -452,7 +452,7 @@ func unmarshal(data []byte, v any) error {
 // identifier that says the addon refused the request for its rate is,
 // whatever its type, and ErrRateLimited too.
 func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, confined bool) (Meta, error) {
-	body, err := c.get(ctx, manifestURL, ResourceURL(manifestURL, "/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json"), confined)
+	body, err := c.get(ctx, manifestURL, ResourceURL(manifestURL, "/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json"), confined, c.timeout)
 	if err != nil {
 		return Meta{}, err
 	}

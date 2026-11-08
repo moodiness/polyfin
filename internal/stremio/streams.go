@@ -167,9 +167,9 @@ func (m Manifest) ServesType(resource, contentType string) bool {
 }
 
 // Streams lists the streams an addon offers for a title, or for an episode
-// by its video identifier.
+// by its video identifier, waiting StreamTimeout for its answer.
 func (c *Client) Streams(ctx context.Context, manifestURL, streamType, id string, confined bool) ([]Stream, error) {
-	body, err := c.get(ctx, manifestURL, ResourceURL(manifestURL, "/stream/"+encodeComponent(streamType)+"/"+encodeComponent(id)+".json"), confined)
+	body, err := c.get(ctx, manifestURL, ResourceURL(manifestURL, "/stream/"+encodeComponent(streamType)+"/"+encodeComponent(id)+".json"), confined, c.streamTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (c *Client) Streams(ctx context.Context, manifestURL, streamType, id string
 // match (filename, videoSize, videoHash), when known.
 func (c *Client) Subtitles(ctx context.Context, manifestURL, subtitlesType, id string, extra []ExtraValue, confined bool) ([]Subtitle, error) {
 	target := ResourceURL(manifestURL, "/subtitles/"+encodeComponent(subtitlesType)+"/"+encodeComponent(id)+extraPath(extra)+".json")
-	body, err := c.get(ctx, manifestURL, target, confined)
+	body, err := c.get(ctx, manifestURL, target, confined, c.timeout)
 	if err != nil {
 		return nil, err
 	}
