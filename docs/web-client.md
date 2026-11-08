@@ -177,6 +177,8 @@ The script adds Polyfin's entries to the ⋮ menus of cards and of a title's pag
 | "Remove from Next Up" | An episode's card in a Next Up list | The series leaves the user's Next Up until one of its episodes is played or a new one comes out. A message says so. |
 | "Hide this title" | A movie, a home video or a series; a season or an episode, which hides its series; a video of a folder, which hides its folder | The title leaves the user's lists, its cards leave the page, and a message says so. |
 | "Show this title again" | In its place, on a title the user hid | The title comes back. |
+| "Add to Watchlist" | A movie or a series, or a season or an episode of one, which stands for its series, that the user's Watchlist does not hold | The title goes on the user's [Watchlist](tracking-imports.md#the-watchlist) until they start it or remove it, and a message says so. |
+| "Remove from Watchlist" | In its place, on a title the Watchlist holds | The title leaves every list feeding the Watchlist. Its cards leave the Watchlist's rows and page, and Now available and Still waiting, but no other row. A message says so. |
 
 - **Next Up lists:** the home page's Next Up, the Next Up page its title opens, the Next Up of a TV library's tab, and the Next Up of a series' page.
   - A removed card leaves the lists at once.
@@ -185,6 +187,7 @@ The script adds Polyfin's entries to the ⋮ menus of cards and of a title's pag
 - **Folders of videos:** see [Folders of videos](addons-and-libraries.md#folders-of-videos).
 - **Words:** they follow the web player's language, as above.
 - **Watch state:** see [Watch state](watch-state.md#watch-state) for what the entries change.
+- **Watchlist rows:** for 2 minutes after either Watchlist entry, the Watchlist's rows ask Polyfin again rather than drawing what jellyfin-web keeps. A title just added shows there when the row is next drawn. The home's "My media" draws its tiles from what jellyfin-web keeps of the user's views, for up to a minute: a Watchlist view that was empty may take that long to show there.
 
 On a phone or a tablet, the home page's cards have no ⋮, and a long press on a card selects it. Select the card with a long press, then press the ⋮ at the top. With one card selected, that menu has the same entries, which leave the selection once pressed.
 

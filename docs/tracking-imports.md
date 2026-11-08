@@ -88,7 +88,7 @@ Trakt and Simkl also keep the titles you mean to watch. A connected Trakt or Sim
 - The status line tells how many titles the import added to the Watchlist.
 - Simkl's anime are found through the [anime mapping](tracking.md#anime). Until the mapping is read, they wait for a later import.
 
-The Watchlist view shows in every Jellyfin app beside the libraries, once your watchlist holds a title you have not started. Its row of latest items shows on the home screen. It takes its name from the server language, such as « À regarder » in French. Each user has their own.
+The Watchlist view shows in every Jellyfin app beside the libraries, once your watchlist holds a title you have not started. Its row of latest items shows on the home screen. It takes its name from the server language, such as « À regarder » in French. Each user has their own, and its tile shows the posters of their own titles (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)).
 
 It lists, the latest added first, the movies and series of every list feeding it:
 
@@ -107,11 +107,16 @@ Parental control and blocked genres hide its titles, as everywhere.
 | A one-off app import, a Letterboxd export or a Plex Watchlist brought the title | Nothing, until you start it |
 | You turn the switch off, or disconnect the service | The titles that list alone held. Those another list holds stay. |
 
-Jellyfin apps have no watchlist button, so the view is not edited from them. Change the lists where they live, or use [Silo's apps](silo-apps.md):
+You can also add and remove titles yourself:
 
-- their watchlist button puts a title on your Watchlist until you start it;
-- it takes a title off every list holding it;
-- a list read again whole, such as Trakt's watchlist, puts back a title it still holds.
+- **In the web player:** the ⋮ menu of a movie, a series, or a season or episode of one, has "Add to Watchlist", or "Remove from Watchlist" for a title on it (see [Card menus](web-client.md#card-menus)). The Jellyfin apps for Android and iOS show the server's web player, so they have it too.
+- **In [Silo's apps](silo-apps.md):** their watchlist button.
+- **Elsewhere:** other Jellyfin apps have no watchlist button. Change the lists where they live.
+
+| Action | What happens |
+|---|---|
+| Adding a title, or a season or episode of a series | The movie or series stays on your Watchlist until you start it or remove it, even when an import's list held it too and no longer does. |
+| Removing it | It leaves every list holding it. A list read again whole, such as Trakt's watchlist, puts back a title it still holds. |
 
 API details: [Watchlist for apps](jellyfin-api.md#watchlist-for-apps).
 
