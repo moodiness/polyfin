@@ -62,6 +62,7 @@ func TestRecordingPartsJoinWithoutATemporaryFolder(t *testing.T) {
 // Recordings take live slots: a user recording userLives channels plays
 // none live and records no more, and the server runs serverLives in all.
 func TestRecordingsCountTowardLiveLimits(t *testing.T) {
+	t.Parallel()
 	m, err := NewManager("ffmpeg-not-installed", t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +168,7 @@ func heldSoFar(ffprobe, path string) time.Duration {
 // FFmpeg waiting for the next segment, a second ends that wait. The file
 // holds every segment read.
 func TestARecordingWhoseSourceStallsStopsAtOnce(t *testing.T) {
+	t.Parallel()
 	ffmpeg, _ := tools(t)
 	dir := t.TempDir()
 	out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10:duration=3",
@@ -215,6 +217,7 @@ func TestARecordingWhoseSourceStallsStopsAtOnce(t *testing.T) {
 // A recording whose source flows stops at the first interrupt, FFmpeg
 // writing what it holds.
 func TestARecordingWhoseSourceFlowsStopsAtTheFirstInterrupt(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	source := filepath.Join(t.TempDir(), "source.ts")
 	out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10:duration=30",

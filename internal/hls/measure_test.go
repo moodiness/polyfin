@@ -109,6 +109,7 @@ func measuringManager(t *testing.T, times chainTimes) (*Manager, *fakeRunner) {
 // owner's GPU, and any other mix; a GPU chain that fails, or HDR frames
 // Vulkan did not decode, keep the memory path.
 func TestTheFasterChainIsKeptForEachKind(t *testing.T) {
+	t.Parallel()
 	nvidia := Hardware{Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}, ToneMapping: true}
 	vaapi := Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}}
 	for _, tc := range []struct {
@@ -184,6 +185,7 @@ func TestTheFasterChainIsKeptForEachKind(t *testing.T) {
 // A chain wins only when it converted, and faster than the other, or the
 // other failed.
 func TestTheGPUChainWinsOnlyWhenFaster(t *testing.T) {
+	t.Parallel()
 	failed := errors.New("failed")
 	for _, tc := range []struct {
 		t    timing
@@ -208,6 +210,7 @@ func TestTheGPUChainWinsOnlyWhenFaster(t *testing.T) {
 // Conversions starting while the chains are timed go through memory; the
 // chosen GPU then switches to what the timing found.
 func TestConversionsGoThroughMemoryUntilTimed(t *testing.T) {
+	t.Parallel()
 	m, f := measuringManager(t, chainTimes{sdrMemory: time.Second, sdrGPU: time.Second / 2, hdrMemory: time.Second, hdrGPU: time.Second / 2})
 	release := make(chan struct{})
 	timed := f.run

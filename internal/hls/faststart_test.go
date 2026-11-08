@@ -20,6 +20,7 @@ import (
 // segment playing where it starts is cut every 2 seconds, its last part up
 // to 4 seconds long, and the segments around it keep their times.
 func TestAFastStartCutsALongSegmentIntoShortOnes(t *testing.T) {
+	t.Parallel()
 	for name, c := range map[string]struct {
 		keyframes  []time.Duration
 		duration   time.Duration
@@ -48,6 +49,7 @@ func TestAFastStartCutsALongSegmentIntoShortOnes(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			plan, ok := NewPlan(c.keyframes, c.duration).FastFrom(c.at)
 			if ok != c.fastStarts || !slices.Equal(plan.starts, c.starts) || plan.fastFrom != c.from || plan.fastTo != c.to {
 				t.Fatalf("%v: starts %v, fast from %d to %d", ok, plan.starts, plan.fastFrom, plan.fastTo)
@@ -68,6 +70,7 @@ func TestAFastStartCutsALongSegmentIntoShortOnes(t *testing.T) {
 // the play, and where they end, with a discontinuity; in fragmented MP4,
 // each kind of segment has its initialization segment.
 func TestPlaylistsMarkTheFastSegments(t *testing.T) {
+	t.Parallel()
 	uri := func(n int) string { return strconv.Itoa(n) }
 	for name, c := range map[string]struct {
 		at     time.Duration
@@ -79,6 +82,7 @@ func TestPlaylistsMarkTheFastSegments(t *testing.T) {
 		"resumed, in fragmented MP4":        {12 * time.Second, FMP4, "map -1, 0, discontinuity, map -2, 1, 2, 3, 4, 5, discontinuity, map -1, 6"},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			plan, _ := NewPlan(seconds(0, 10, 20), 30*time.Second).FastFrom(c.at)
 			var b bytes.Buffer
 			if err := WriteMedia(&b, plan, c.format, uri); err != nil {
@@ -138,6 +142,7 @@ func fastSource(t *testing.T, ffmpeg, ffprobe string) (string, []time.Duration) 
 // in the last segment gets its fast segments there, and the copied
 // segment before them when it goes back.
 func TestFastSegmentsAreConvertedThenTheVideoIsCopied(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	input, keyframes := fastSource(t, ffmpeg, ffprobe)
 	for _, c := range []struct {
@@ -145,6 +150,7 @@ func TestFastSegmentsAreConvertedThenTheVideoIsCopied(t *testing.T) {
 		at     time.Duration
 	}{{FMP4, 0}, {TS, 0}, {FMP4, 12 * time.Second}, {TS, 12 * time.Second}} {
 		t.Run(c.format.Extension()+" from "+c.at.String(), func(t *testing.T) {
+			t.Parallel()
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)

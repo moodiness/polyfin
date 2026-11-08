@@ -147,6 +147,7 @@ func TestProgressiveStreamsPlay(t *testing.T) {
 			2 * time.Second, 160, 4},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			open := func(context.Context) (Remux, func(), error) {
 				return Remux{Input: input, Video: 0, Audio: 1, Format: c.format, Encode: c.encode}, func() {}, nil
 			}

@@ -60,6 +60,7 @@ func (x *extraction) texts(stream int, from, to time.Duration) []string {
 	return slices.Compact(texts)
 }
 
+//nolint:paralleltest // its cues must come within the 500 ms settle after the video, which the package's parallel FFmpeg load exceeds
 func TestSubtitlesAreExtractedWhileRemuxing(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
 	video, keyframes := source(t, ffmpeg, ffprobe, "aac")

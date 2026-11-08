@@ -69,6 +69,7 @@ func TestPlayoutPieceStartsAtItsOffset(t *testing.T) {
 // asking for the next where the one before ended, and its playlist starts
 // a discontinuity at the second.
 func TestPlayoutAirsPiecesInTurn(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	path, _ := source(t, ffmpeg, ffprobe, "aac")
 	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))

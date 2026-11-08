@@ -35,6 +35,7 @@ func (b *syncBuffer) String() string {
 // names of the files it read, never their addresses on the loopback
 // interface, which hold the source's.
 func TestALiveEncodingThatFailsTellsWhatItsSourceAnswered(t *testing.T) {
+	t.Parallel()
 	ffmpeg, _ := tools(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

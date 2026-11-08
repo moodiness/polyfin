@@ -82,6 +82,7 @@ func (k *keptPlayback) opener(key Key) Opener {
 // The variants of a kept video each convert with their own FFmpeg, and
 // one audio FFmpeg serves them all.
 func TestOneAudioServesEveryVariant(t *testing.T) {
+	t.Parallel()
 	k := newKeptPlayback(t, TS)
 	first := k.key("web-1", 1)
 	lower := first
@@ -222,8 +223,10 @@ func (s streams) starts() (video, audio float64) {
 // before. The old session's second stop leaves the new one playing, and
 // the kept video counts once toward the conversions at once.
 func TestTrackChangeKeepsTheConvertedVideo(t *testing.T) {
+	t.Parallel()
 	for _, format := range []Format{FMP4, TS} {
 		t.Run(format.Extension(), func(t *testing.T) {
+			t.Parallel()
 			k := newKeptPlayback(t, format)
 			old := k.key("web-1", 1)
 			for n := range 3 {
@@ -274,8 +277,10 @@ func TestTrackChangeKeepsTheConvertedVideo(t *testing.T) {
 // switch, and consecutive joined segments decode as one stream, their
 // audio following on without a gap.
 func TestJoinedSegmentsStartWithTheirVideo(t *testing.T) {
+	t.Parallel()
 	for _, format := range []Format{FMP4, TS} {
 		t.Run(format.Extension(), func(t *testing.T) {
+			t.Parallel()
 			k := newKeptPlayback(t, format)
 			check := func(key Key, from int) {
 				t.Helper()
@@ -328,6 +333,7 @@ func TestJoinedSegmentsStartWithTheirVideo(t *testing.T) {
 // playback takes a kept video over. Another conversion on the same device
 // ends the video kept there.
 func TestOnlyTheSamePlaybackTakesKeptVideoOver(t *testing.T) {
+	t.Parallel()
 	k := newKeptPlayback(t, TS)
 	k.m.LimitConversions(func() int { return 0 })
 	first := k.key("web-1", 1)
@@ -367,6 +373,7 @@ func TestOnlyTheSamePlaybackTakesKeptVideoOver(t *testing.T) {
 // Kept video no session takes over stops once kept long enough, and its
 // segments, video and audio, are removed.
 func TestUnclaimedKeptVideoStops(t *testing.T) {
+	t.Parallel()
 	k := newKeptPlayback(t, FMP4)
 	k.m.keepFor.Store(int64(time.Second))
 	key := k.key("web-1", 1)
@@ -399,6 +406,7 @@ func TestUnclaimedKeptVideoStops(t *testing.T) {
 // With kept video off, a new session for another track converts the video
 // again, its own, as an encoding of the session.
 func TestTrackChangeConvertsAgainWithoutKeeping(t *testing.T) {
+	t.Parallel()
 	k := newKeptPlayback(t, TS)
 	k.m.KeepVideo(func() bool { return false })
 	first := k.key("web-1", 1)
@@ -417,6 +425,7 @@ func TestTrackChangeConvertsAgainWithoutKeeping(t *testing.T) {
 
 // The joined program map's CRC is MPEG-TS's.
 func TestProgramMapCRC(t *testing.T) {
+	t.Parallel()
 	// A PAT as FFmpeg writes it: program 1 at PID 0x1000.
 	section := []byte{0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00, 0x00, 0x01, 0xf0, 0x00}
 	if got, want := mpegCRC(section), []byte{0x2a, 0xb1, 0x04, 0xb2}; !bytes.Equal(got32(got), want) {

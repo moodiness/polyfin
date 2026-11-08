@@ -35,6 +35,7 @@ func inputsAndFilters(t *testing.T, args []string) ([]string, string) {
 // filters keep the frames going through memory. Every GPU, tone mapping
 // and burning combination, files and live alike.
 func TestGPUPipelines(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	nvidiaInMemory := &Hardware{Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}}
 	nvidiaResident := &Hardware{Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}, Resident: true,
@@ -188,6 +189,7 @@ func TestGPUPipelines(t *testing.T) {
 // The GPU frames go through: NVENC takes CUDA frames as they are, with
 // no format filter in memory between.
 func TestResidentChainsLeaveNoMemoryFilter(t *testing.T) {
+	t.Parallel()
 	for _, hw := range []*Hardware{
 		{Method: "cuda", Encoders: []string{"hevc_nvenc"}, Resident: true},
 		{Method: "vaapi", Device: "/dev/dri/renderD129", Encoders: []string{"hevc_vaapi"}, Resident: true},

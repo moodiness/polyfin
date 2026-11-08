@@ -13,6 +13,8 @@ import (
 
 // A conversion on the processor counts while it runs, and the segments it
 // makes count; one FFmpeg fails counts as failed.
+//
+//nolint:paralleltest // reads the process-wide metrics counters, which the conversions of other tests move too
 func TestConversionsCountInTheMetrics(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
 	input, video, audio := unindexedSource(t, ffmpeg, ffprobe, "second.ts", "-c:v", "libx264", "-preset", "veryfast", "-g", "24", "-c:a", "aac")

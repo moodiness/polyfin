@@ -12,6 +12,7 @@ import (
 // HEVC at the source's size with the settings' quality and deinterlacing,
 // on the GPU chosen or with libx265; the source's bitrate caps the copy's.
 func TestAFileConversionKeepsItsTracks(t *testing.T) {
+	t.Parallel()
 	software := FileConversion{Input: "in.ts", Output: "out.mkv", Video: VideoEncoding{Encoder: "libx265", Width: 720, Height: 576,
 		FrameRate: 50, Deinterlace: true, Deinterlacer: "bwdif", DoubleRate: true, Bitrate: 6_000_000}}.args()
 	for _, want := range [][]string{
@@ -53,6 +54,7 @@ func TestAFileConversionKeepsItsTracks(t *testing.T) {
 // A file conversion counts as one of the conversions at once, and waits
 // while playbacks fill them.
 func TestAFileConversionWaitsForAFreeConversion(t *testing.T) {
+	t.Parallel()
 	m := &Manager{done: make(chan struct{}), encodings: map[Key]*encoding{}, slotWait: 10 * time.Millisecond}
 	m.LimitConversions(func() int { return 1 })
 	playback := Key{Session: "s", User: "u", Version: "v", Converts: true}

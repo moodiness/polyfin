@@ -17,6 +17,7 @@ import (
 // one more than userLives stops their oldest, and the server refuses one
 // past serverLives.
 func TestLiveEncodingsAreCapped(t *testing.T) {
+	t.Parallel()
 	m, err := NewManager("ffmpeg-not-installed", t.TempDir(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +111,7 @@ printf 'segment' > "$dir/$start.ts"
 // short backoff, numbering segments on with a discontinuity, and the
 // playlist never says the stream ended.
 func TestInterruptedLiveStreamsAreReadAgain(t *testing.T) {
+	t.Parallel()
 	ffmpeg, runs := fakeLiveFFmpeg(t)
 	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 	if err != nil {
@@ -196,6 +198,7 @@ done
 // player, which starts at its first segment, stays ahead of FFmpeg; the
 // next ones are answered at once.
 func TestTheFirstLivePlaylistWaitsForALead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		minSegments int
@@ -207,6 +210,7 @@ func TestTheFirstLivePlaylistWaitsForALead(t *testing.T) {
 		{"an app asking for three", 3, 2, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			ffmpeg, release := heldLiveFFmpeg(t)
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
@@ -258,6 +262,7 @@ func TestTheFirstLivePlaylistWaitsForALead(t *testing.T) {
 // The backoff between quick runs grows from a second to four, and a
 // stream read again too often gives up.
 func TestLiveRestartsBackOffAndGiveUp(t *testing.T) {
+	t.Parallel()
 	for quick, want := range []time.Duration{time.Second, time.Second, 2 * time.Second, 4 * time.Second, 4 * time.Second} {
 		if got := liveBackoff(quick); got != want {
 			t.Errorf("after %d quick runs: %s, want %s", quick, got, want)

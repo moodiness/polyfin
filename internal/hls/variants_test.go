@@ -102,6 +102,7 @@ func (v *variants) current() map[int]bool {
 // a keyframe; the segments made stay; and the variants count once toward
 // the conversions at once.
 func TestEachVariantRunsItsOwnFFmpeg(t *testing.T) {
+	t.Parallel()
 	v := newVariants(t)
 	// No variant is left long enough to stop.
 	v.m.linger.Store(int64(time.Hour))
@@ -164,6 +165,7 @@ func TestEachVariantRunsItsOwnFFmpeg(t *testing.T) {
 // and neither variant's FFmpeg starts again. Once the app keeps to one,
 // the other's FFmpeg stops after the linger, and its segments stay.
 func TestSwitchingBackAndForthKeepsBothVariantsRunning(t *testing.T) {
+	t.Parallel()
 	v := newVariants(t)
 	v.m.linger.Store(int64(time.Hour))
 	for n := range 2 {
