@@ -427,7 +427,9 @@ func shortName(words []string, short string) bool {
 }
 
 // segmentTitle identifies a movie or an episode to the segment databases:
-// an episode by its series' identifiers and its numbers.
+// an episode by its series' identifiers and its numbers, and, while
+// PublicMetaDB is asked, by TMDB's numbers too (see
+// library.Service.TMDBNumbering, which keeps them).
 func (h *Handler) segmentTitle(ctx context.Context, user accounts.User, item library.Item) (mediasegments.Title, error) {
 	title := mediasegments.Title{Item: item.ID, Runtime: item.Runtime}
 	ids := item.ProviderIDs
@@ -438,6 +440,11 @@ func (h *Handler) segmentTitle(ctx context.Context, user accounts.User, item lib
 		}
 		ids = series.ProviderIDs
 		title.Season, title.Episode = item.ParentIndexNumber, item.IndexNumber
+		if h.Segments.AsksPublicMetaDB() {
+			// An error leaves the zero numbering: TMDB's alike.
+			numbering, _ := h.Library.TMDBNumbering(ctx, item.SeriesID)
+			title.SetTMDBNumbers(numbering.ToTMDB(title.Season, title.Episode))
+		}
 	}
 	title.IMDb, title.TMDB = ids["Imdb"], ids["Tmdb"]
 	return title, nil
