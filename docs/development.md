@@ -105,6 +105,7 @@ A test calls `t.Parallel()` first, and so does each of its subtests: a package's
 - A test that changes state other tests read, such as a package variable, stays sequential and says why.
 - So does a test that times waits of a few milliseconds.
 - A test that counts goroutines labels its own with `runtime/pprof` labels, and counts those alone. So it runs in parallel too (see `TestPlaysThatGaveUpLeaveNoGoroutineBehind`).
+- A test that restores a whole database calls `testdb.LockRestores(t)` after `t.Parallel()`, and runs in parallel: a restore holds thousands of entries of the test server's shared lock table until it commits, and two at once, from any package, overflow CI's (`out of shared memory`). The lock lets one restore run at a time across every test binary.
 - A test calling `t.Setenv` or `t.Chdir` cannot run in parallel, and needs no reason.
 
 On a pull request, CI checks the lines it changes in test files with the `paralleltest` and `tparallel` linters: a new test runs in parallel or says why not, and a change inside an older test asks nothing of the rest of its file. A test that stays sequential gives its reason on the line above it, in the comment golangci-lint reads:
