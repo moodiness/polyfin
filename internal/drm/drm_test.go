@@ -18,6 +18,7 @@ const (
 // Lists give ClearKey keys in several forms; each reads as the same keys,
 // by key ID, as FFmpeg takes them.
 func TestKeysAsListsGiveThem(t *testing.T) {
+	t.Parallel()
 	one := []Key{{ID: kid, Value: key}}
 	two := []Key{{ID: kid, Value: key}, {ID: kid2, Value: key2}}
 	for _, tc := range []struct {
@@ -52,6 +53,7 @@ func TestKeysAsListsGiveThem(t *testing.T) {
 // temporary licence; the licence answers a JSON Web Key set, whose
 // symmetric keys of 16 bytes are read.
 func TestClearKeyLicence(t *testing.T) {
+	t.Parallel()
 	var request struct {
 		Kids []string `json:"kids"`
 		Type string   `json:"type"`
@@ -74,6 +76,7 @@ func TestClearKeyLicence(t *testing.T) {
 // ClearKey is the only licence Polyfin decrypts with; any other type is
 // unsupported, as a server has no content decryption module.
 func TestLicenceTypes(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"org.w3.clearkey", "ClearKey"} {
 		if p := (&Protection{License: LicenseType(name), Keys: []Key{{ID: kid, Value: key}}}); p.Unsupported() || !p.Decrypted() {
 			t.Errorf("%s: unsupported %v, decrypted %v", name, p.Unsupported(), p.Decrypted())
