@@ -14,6 +14,8 @@ It covers what is sent, how users connect and import, and what an administrator 
 
 Trakt, Simkl, MDBList and PublicMetaDB get only movies and episodes known by an IMDb, TMDB or TVDB identifier. An episode is sent by its series' identifiers, with its season and episode numbers.
 
+PublicMetaDB, Trakt and MDBList number episodes as TMDB does. When TMDB numbers an episode otherwise than the addon, Polyfin sends it to them with TMDB's numbers, so what is imported back marks the same episode. An episode Polyfin cannot place surely among TMDB's is not sent to them. Simkl gets the addon's numbers. See [How Polyfin finds each title](tracking-imports.md#what-is-imported).
+
 - An addon may name an anime by its Kitsu, MyAnimeList or AniDB identifier: `kitsu:<id>`, `mal:<id>`, `anidb:<id>`, and `kitsu:<id>:<episode>` for an episode. Such a title is sent by the identifiers the [anime mapping](#anime) gives:
   - a movie, by its IMDb and TMDB identifiers;
   - an episode, by its series' TVDB and IMDb identifiers, with its season and episode on TVDB.

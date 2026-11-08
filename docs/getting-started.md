@@ -88,7 +88,8 @@ A **TMDB API key**, in **Settings › Content**, adds to what metadata addons gi
 
 - people's photos and biographies, and each title's cast and crew;
 - posters for movies and series whose addon gives none;
-- matches for a local folder's files whose search every metadata addon fails.
+- matches for a local folder's files whose search every metadata addon fails;
+- TMDB's episode numbering, for the tracking services and PublicMetaDB's skip segments, when no addon gives it.
 
 The key does not replace a metadata addon. See [Addons and libraries](addons-and-libraries.md) for more.
 
