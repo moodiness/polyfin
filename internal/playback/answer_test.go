@@ -44,6 +44,7 @@ func (h answeringHost) Open(ctx context.Context, method, target string, _ http.H
 // error with a page, fails its analysis with what it answered: its kind,
 // status and type, never its address nor its body.
 func TestAnalysisTellsWhatTheSourceAnswered(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -62,6 +63,7 @@ func TestAnalysisTellsWhatTheSourceAnswered(t *testing.T) {
 		{"a refusal with a page", answeringHost{http.StatusForbidden, "text/html", page}, []string{"HTTP 403", "a web page", "text/html"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s := newService(t, tc.host, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), nil)
 			version := library.Version{ID: accounts.ID{1}, URL: "https://93.184.216.34/stream/secret-path", Addon: "Sport"}
 			_, err := s.Analyze(t.Context(), version)

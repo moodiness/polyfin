@@ -40,6 +40,7 @@ func (p playoutChannels) Versions(context.Context, accounts.ID) ([]library.Versi
 // in: the movie is black for 90 seconds then white, and the first segment
 // of its playout is white.
 func TestPlayoutTunedLateStartsThatFarIn(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")

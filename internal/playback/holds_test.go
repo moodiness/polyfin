@@ -24,6 +24,7 @@ func replayVersion(n byte, source accounts.ID) library.Version {
 // long as its programme; another title's such file keeps no length, which
 // is not the title's to guess.
 func TestReplaysLastAsLongAsTheirProgramme(t *testing.T) {
+	t.Parallel()
 	s := newService(t, &fileSource{data: bytes.Repeat(tsChunk, 4)}, "ffprobe-not-installed", nil)
 	probe := func(media.Prober, context.Context, string) (media.Analysis, error) {
 		return media.Analysis{Format: "mpegts"}, nil
@@ -46,6 +47,7 @@ func TestReplaysLastAsLongAsTheirProgramme(t *testing.T) {
 // ffprobe would read it: neither the title path nor the live one plays a
 // finite playlist, and the refusal says why.
 func TestReplaysAnsweredByAPlaylistAreRefused(t *testing.T) {
+	t.Parallel()
 	s := newService(t, &fileSource{data: []byte("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg0.ts\n#EXT-X-ENDLIST\n")}, "ffprobe-not-installed", nil)
 	probe := func(media.Prober, context.Context, string) (media.Analysis, error) {
 		return media.Analysis{Format: "hls", Duration: 4 * time.Second}, nil
@@ -62,6 +64,7 @@ func TestReplaysAnsweredByAPlaylistAreRefused(t *testing.T) {
 // any more, is shared by the requests of its play, and keeps its place
 // from channels until its play ends.
 func TestReplaysHoldTheirSourceConnections(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
@@ -107,6 +110,7 @@ func TestReplaysHoldTheirSourceConnections(t *testing.T) {
 // Two requests of a replay that come together, while no room can be
 // made, both fail: the second waits for the first to know.
 func TestRequestsOfAReplayThatComeTogetherShareItsRefusal(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")

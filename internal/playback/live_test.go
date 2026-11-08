@@ -12,6 +12,7 @@ import (
 // left in it itself: every address must become a link, or the playlist is
 // refused, in each form FFmpeg's HLS demuxer reads.
 func TestPlaylistsNamingAddressesPolyfinCannotRelayAreRefused(t *testing.T) {
+	t.Parallel()
 	base, _ := url.Parse("https://tv.example/live/channel.m3u8")
 	link := func(target, _ string) string { return "LINK(" + target + ")" }
 	for name, playlist := range map[string]string{

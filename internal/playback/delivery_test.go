@@ -46,6 +46,7 @@ func (c *changingSource) Open(ctx context.Context, method, target string, header
 // rather than at the settings' timeout: the version's failure, kept, is
 // what its host answered.
 func TestAnalysesStopWhenTheirSourceFails(t *testing.T) {
+	t.Parallel()
 	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
@@ -79,6 +80,7 @@ func TestAnalysesStopWhenTheirSourceFails(t *testing.T) {
 // The keyframe index of a Matroska file is read while it is analyzed, not
 // after: an HLS play finds it read.
 func TestMatroskaIndexesAreReadDuringTheAnalysis(t *testing.T) {
+	t.Parallel()
 	skipWithoutShell(t)
 	data, err := os.ReadFile(filepath.Join("testdata", "codecs.mkv"))
 	if err != nil {
@@ -120,6 +122,7 @@ func TestMatroskaIndexesAreReadDuringTheAnalysis(t *testing.T) {
 // the next play; one the file does not have is not read again for a
 // while.
 func TestOnlyLastingIndexFailuresAreKept(t *testing.T) {
+	t.Parallel()
 	s := newService(t, &fakeSource{status: http.StatusNotFound}, "ffprobe", nil)
 	failing := library.Version{ID: accounts.ID{24}, URL: "https://93.184.216.34/gone.mkv"}
 	if _, err := s.keyframes(t.Context(), failing, media.Analysis{}); !errors.Is(err, source.ErrUnavailable) {
@@ -146,6 +149,7 @@ func TestOnlyLastingIndexFailuresAreKept(t *testing.T) {
 // before a player is sent to it; the player goes to the addon's link, never
 // where it redirected the server.
 func TestPlayersAreSentToSourcesThatAnsweredLately(t *testing.T) {
+	t.Parallel()
 	host := &fileSource{data: make([]byte, 1000)}
 	s := newService(t, host, "ffprobe", nil)
 	version := library.Version{ID: accounts.ID{26}, URL: "https://93.184.216.34/movie.mkv"}
@@ -176,6 +180,7 @@ func TestPlayersAreSentToSourcesThatAnsweredLately(t *testing.T) {
 // A link that could not be renewed is not kept as the file's failure:
 // the version is still offered.
 func TestFailedRenewalsAreNotTheFilesFailure(t *testing.T) {
+	t.Parallel()
 	const link = "https://93.184.216.34/old.mkv"
 	origin := &fakeSource{expired: map[string]bool{link: true}}
 	s := newService(t, origin, "ffprobe", func(context.Context, library.Version) (library.Version, error) {
@@ -200,6 +205,7 @@ func TestFailedRenewalsAreNotTheFilesFailure(t *testing.T) {
 // read before take no request, ranges and the delivery's headers are the
 // player's. A live stream is relayed as it comes.
 func TestRelayedFilesGoThroughTheCache(t *testing.T) {
+	t.Parallel()
 	data := make([]byte, 3<<20)
 	for i := range data {
 		data[i] = byte(i)
@@ -240,6 +246,7 @@ func TestRelayedFilesGoThroughTheCache(t *testing.T) {
 // the second segment's keyframe; from later, the head FFmpeg probes and
 // the segment playing then, within the budget.
 func TestWarmSpans(t *testing.T) {
+	t.Parallel()
 	keyframes := []container.Keyframe{{Time: 0, Offset: 1000}, {Time: 6 * time.Second, Offset: 30 << 20},
 		{Time: 12 * time.Second, Offset: 60 << 20}, {Time: 18 * time.Second, Offset: 100 << 20}, {Time: 24 * time.Second, Offset: 300 << 20}}
 	times := make([]time.Duration, len(keyframes))
@@ -285,6 +292,7 @@ func plan0End(plan hls.Plan, keyframes []container.Keyframe) int64 {
 // Plan warms the first segment once; Warm from another start replaces a
 // warm under way, and is not repeated.
 func TestPlanWarmsTheFirstSegment(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join("testdata", "codecs.mkv"))
 	if err != nil {
 		t.Fatal(err)
@@ -330,6 +338,7 @@ func TestPlanWarmsTheFirstSegment(t *testing.T) {
 // A source failing while a remux reads it has the version kept as failed,
 // so that the next PlaybackInfo plays another.
 func TestSourcesFailingDuringARemuxFailTheirVersion(t *testing.T) {
+	t.Parallel()
 	s := newService(t, &fakeSource{status: http.StatusNotFound}, "ffprobe", nil)
 	version := library.Version{ID: accounts.ID{32}, URL: "https://93.184.216.34/gone.mkv"}
 	src := s.OpenSource(version)
@@ -363,6 +372,7 @@ func (busyHost) Open(ctx context.Context, method, target string, _ http.Header, 
 // before a player is sent to it keep it as failed, so that it is offered
 // again at the next play rather than hidden for 15 minutes.
 func TestVersionsAreNeverHiddenForARateLimit(t *testing.T) {
+	t.Parallel()
 	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {

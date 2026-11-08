@@ -10,6 +10,7 @@ import (
 )
 
 func TestGrantsRoundTripAndResistForgery(t *testing.T) {
+	t.Parallel()
 	signer := NewSigner([]byte("a secret of the server, 32 bytes"))
 	grant := Grant{Version: accounts.ID{1, 2, 3}, User: accounts.ID{9, 8, 7}, Relay: true}
 	first, second := signer.Sign(grant), signer.Sign(grant)
@@ -41,6 +42,7 @@ func TestGrantsRoundTripAndResistForgery(t *testing.T) {
 // before they named devices, so that the addresses given out before still
 // play.
 func TestGrantsNameTheirDevice(t *testing.T) {
+	t.Parallel()
 	signer := NewSigner([]byte("a secret of the server, 32 bytes"))
 	given := Grant{Version: accounts.ID{1, 2, 3}, User: accounts.ID{9, 8, 7}, Device: accounts.ID{4, 5, 6}}
 	token := signer.Sign(given)

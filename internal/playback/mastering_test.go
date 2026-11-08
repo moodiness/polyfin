@@ -41,6 +41,7 @@ func fakeFrameProbe(t *testing.T, fails bool) (path string, runs func() int) {
 // tone map it, and keeps the answer; a frame that cannot be read leaves
 // the version on the processor without being read again at once.
 func TestTheMasteringDisplayIsLearnedOnceForIntel(t *testing.T) {
+	t.Parallel()
 	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
 	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
 	onCPU := func(hw *hls.Hardware) *VideoConversion {
@@ -88,6 +89,7 @@ func TestTheMasteringDisplayIsLearnedOnceForIntel(t *testing.T) {
 // A version read from its input has ffprobe read the input itself for its
 // first frame, as for its analysis (see LocalInputs).
 func TestTheMasteringDisplayOfAnInput(t *testing.T) {
+	t.Parallel()
 	skipWithoutShell(t)
 	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
 	conversion := &VideoConversion{Codec: "h264", Encoder: "h264_vaapi", ToneMap: true, ToneMapOnCPU: true, Hardware: intel}

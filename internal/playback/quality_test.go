@@ -9,6 +9,7 @@ import (
 // copied: it is converted down, reported as Jellyfin reports a profile's
 // height limit; video that fits plays as before.
 func TestVideoTallerThanTheGroupIsConvertedDown(t *testing.T) {
+	t.Parallel()
 	// H.264 and AAC in MP4 at 1080p, which Chrome plays as it is.
 	source := MediaSource{
 		Container: "mov,mp4,m4a,3gp,3g2,mj2",

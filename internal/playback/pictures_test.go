@@ -433,6 +433,7 @@ func TestPictureTracksAreReadIntoText(t *testing.T) {
 		{"a loose VOB's track", nil, "disc.vob"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			analysis, err := media.Prober{Path: ffprobe, Timeout: time.Minute}.Probe(t.Context(), filepath.Join(dir, c.video))
 			if err != nil {
 				t.Fatal(err)
@@ -671,6 +672,7 @@ func TestTextCopiesOfProgramStreamsMatchTheirHLSVideo(t *testing.T) {
 		"a DVD's title": {ID: accounts.ID{2}, URL: p.LocalInputs(disk) + "title"},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			p.analyses.Put(version.ID, analysis)
 			// The test's sources serve no bytes: the program stream's lack of
 			// an index is known.

@@ -30,6 +30,7 @@ var (
 // that tone maps. Dolby Vision profile 5, which only NVIDIA's GPUs tone
 // map, and HDR the processor cannot tone map stay on the GPU, at 720p.
 func TestHDRFollowsThePathTheTimingsChose(t *testing.T) {
+	t.Parallel()
 	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
 	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
 	qsv := &hls.Hardware{Method: "qsv", Encoders: []string{"h264_qsv"}, ToneMapping: true}
@@ -90,6 +91,7 @@ func TestHDRFollowsThePathTheTimingsChose(t *testing.T) {
 // encoder, the GPU still decoding, when the processor is faster, and
 // libplacebo at 720p when the GPU keeps up only there.
 func TestFFmpegFollowsWhereHDRIsToneMapped(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake FFmpeg is a shell script")
 	}
@@ -147,6 +149,7 @@ func TestFFmpegFollowsWhereHDRIsToneMapped(t *testing.T) {
 // Why a conversion tone maps HDR on the processor reaches its encoding,
 // whose log line tells it.
 func TestTheEncodingTellsWhyItToneMapsOnTheProcessor(t *testing.T) {
+	t.Parallel()
 	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
 	hdr := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", ColorTransfer: "smpte2084", Width: new(3840), Height: new(2160)}
 	tuning := Tuning{CPUToneMapping: true}

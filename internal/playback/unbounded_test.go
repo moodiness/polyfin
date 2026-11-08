@@ -71,6 +71,7 @@ func TestUnboundedSourcesAreToldAtTheirAnswer(t *testing.T) {
 		{"a live playlist of a known size", heldStream{head: []byte("#EXTM3U\n#EXTINF:4,\n1.ts\n"), size: 24, held: held}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s := newService(t, tc.stream, "ffprobe", nil)
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()

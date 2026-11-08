@@ -30,6 +30,7 @@ func dts(channels int) MediaStream {
 // 7.1 source too, which AAC keeps as 5.1, and for one mixed down to
 // stereo the stereo's.
 func TestConvertedAudioGetsJellyfinsBitrates(t *testing.T) {
+	t.Parallel()
 	video := MediaStream{Codec: "h264", BitDepth: new(8), BitRate: new(int64(4_000_000))}
 	options := Options{EnableDirectPlay: true, EnableDirectStream: true, Can: Capabilities{Encoders: []string{"libx264"}}}
 	for _, test := range []struct {
@@ -55,6 +56,7 @@ func TestConvertedAudioGetsJellyfinsBitrates(t *testing.T) {
 // Under a bitrate limit, converted audio gets at most Jellyfin's share of
 // it, and the video what the limit leaves.
 func TestUnderALimitConvertedAudioTakesItsShare(t *testing.T) {
+	t.Parallel()
 	video := MediaStream{Codec: "h264", BitDepth: new(8), BitRate: new(int64(20_000_000))}
 	for _, test := range []struct {
 		limit, audio int64
@@ -80,6 +82,7 @@ func TestUnderALimitConvertedAudioTakesItsShare(t *testing.T) {
 // Audio bitrate per channel, when set, wins over the automatic bitrates and
 // over the share of a limit.
 func TestTheAudioBitrateSetWins(t *testing.T) {
+	t.Parallel()
 	video := MediaStream{Codec: "h264", BitDepth: new(8), BitRate: new(int64(20_000_000))}
 	can := Capabilities{Encoders: []string{"libx264"}, Tuning: Tuning{AudioBitrate: 256_000}}
 	for _, limit := range []int64{0, 3_000_000} {
@@ -98,6 +101,7 @@ func TestTheAudioBitrateSetWins(t *testing.T) {
 // settings' maximum make it, the share of the source's it keeps. A source
 // of unknown bitrate gets its height's usual bitrate.
 func TestConvertedVideoKeepsTheSourcesBitrate(t *testing.T) {
+	t.Parallel()
 	aac := MediaStream{Codec: "aac", Channels: new(2), BitRate: new(int64(256_000))}
 	hevc10 := MediaStream{Codec: "hevc", BitDepth: new(10), BitRate: new(int64(15_000_000))}
 	for _, test := range []struct {
@@ -131,6 +135,7 @@ func TestConvertedVideoKeepsTheSourcesBitrate(t *testing.T) {
 // A limit caps converted video at what it leaves once the audio sent is
 // taken off, and the qualities offered to step down to halve from it.
 func TestConvertedVideoFollowsTheLimit(t *testing.T) {
+	t.Parallel()
 	aac := MediaStream{Codec: "aac", Channels: new(2), BitRate: new(int64(256_000))}
 	hevc := MediaStream{Codec: "hevc", BitDepth: new(10), BitRate: new(int64(15_000_000))}
 	options := Options{MaxStreamingBitrate: 12_000_000, EnableDirectPlay: true, EnableDirectStream: true,

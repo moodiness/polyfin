@@ -12,6 +12,7 @@ import (
 // tallest whose bitrate is at most half of the quality above, down to
 // 360p, keeping its codec, encoder, tone mapping and shape.
 func TestConversionsStepDownTheLadder(t *testing.T) {
+	t.Parallel()
 	software := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true}
 	nvidia := Capabilities{Encoders: []string{"libx264"}, Hardware: &hls.Hardware{Method: "cuda", Encoders: []string{"hevc_nvenc"}, ToneMapping: true}}
 	sdr := func(width, height int) MediaStream {
@@ -64,6 +65,7 @@ func TestConversionsStepDownTheLadder(t *testing.T) {
 // A remux's variant converts to its step; one past the steps has none,
 // and a copy has only the first.
 func TestRemuxVariantsAreTheSteps(t *testing.T) {
+	t.Parallel()
 	first := ConvertVideo("h264", Limits{}, MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(1920), Height: new(1080)},
 		Capabilities{Encoders: []string{"libx264"}})
 	remux := Remux{ConvertVideo: first}

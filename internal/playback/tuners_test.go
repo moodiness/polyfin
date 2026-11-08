@@ -33,6 +33,7 @@ func reads(r *feedReader) error {
 // proxy acting as a tuner does once its connections are all in use, is
 // busy: no fault of the tuner's. Another source's 503 stays a refusal.
 func TestATunersPlainUnavailableIsBusy(t *testing.T) {
+	t.Parallel()
 	path, _ := fakeProbe(t, "{}", false)
 	s := liveService(t, &liveSource{}, path)
 	tuner, provider := accounts.ID{7}, accounts.ID{8}
@@ -65,6 +66,7 @@ func TestATunersPlainUnavailableIsBusy(t *testing.T) {
 // channel take one tuner; with every tuner taken by other users' channels,
 // another channel is refused at once.
 func TestTwoUsersOnOneChannelTakeOneTuner(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	s, src := tunerService(t, iptv.Limit{Connections: 1, Tuners: true})
 	alice, bob := ForUser(t.Context(), accounts.ID{1}), ForUser(t.Context(), accounts.ID{2})
@@ -96,6 +98,7 @@ func TestTwoUsersOnOneChannelTakeOneTuner(t *testing.T) {
 // watches it, and never another recording's: one that finds every tuner
 // recording fails, and so does a viewer's channel.
 func TestARecordingTakesAWatchedChannelsTuner(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	s, _ := tunerService(t, iptv.Limit{Connections: 2, Tuners: true})
 	alice, bob := ForUser(t.Context(), accounts.ID{1}), ForUser(t.Context(), accounts.ID{2})
@@ -145,6 +148,7 @@ func TestARecordingTakesAWatchedChannelsTuner(t *testing.T) {
 // a recording takes no stream another user watches, and fails as refused,
 // not for want of a tuner; one of a channel watched shares its stream.
 func TestIPTVRecordingsKeepTheirConnectionRules(t *testing.T) {
+	t.Parallel()
 	source := accounts.ID{7}
 	s, src := tunerService(t, iptv.Limit{Connections: 1})
 	alice := ForUser(t.Context(), accounts.ID{1})

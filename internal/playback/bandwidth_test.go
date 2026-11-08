@@ -14,6 +14,7 @@ import (
 // channels. Within 3 Mb/s, the first quality's BANDWIDTH is then exactly
 // the limit, and every lower quality's below it.
 func TestMasterBandwidthCountsTheAudioSent(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		audio    media.Stream
