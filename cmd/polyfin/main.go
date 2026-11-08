@@ -773,6 +773,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,
+			StreamsTimingOut: lib.StreamsTimingOut,
 			Cache:            sources,
 			Folders:          work,
 			Encoder:          segments,

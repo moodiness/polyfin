@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/notifications"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/torrent"
 )
@@ -142,8 +143,11 @@ const (
 // or for the NVIDIA driver version NVENC needs, with Failure, the
 // failure's code, for an addon or a local folder, or why a local folder
 // is not watched, and Share, the kind of network share a folder is
-// ("smb", "webdav"); Host for paused thumbnails, and with At for a host
-// answering an error file since then; Address
+// ("smb", "webdav"); Until, for an addon whose server's background
+// requests pause as it did not answer requests for streams in time, when
+// the pause ends, To its page for the server's; Host for paused
+// thumbnails, and with At for a host answering an error file since then;
+// Address
 // for an address that sends forwarded headers without being a known
 // proxy, or for a container's address discovery announces; Port for the
 // UDP port discovery cannot listen on, or the TCP port HTTPS cannot; Task,
@@ -187,6 +191,7 @@ type healthProblemJSON struct {
 	Error     string           `json:"error,omitempty"`
 	Expires   *time.Time       `json:"expires,omitempty"`
 	At        *time.Time       `json:"at,omitempty"`
+	Until     *time.Time       `json:"until,omitempty"`
 	Peers     *peerCountsJSON  `json:"peers,omitempty"`
 	// Grace, for a route that does not answer while torrents play, is the
 	// seconds they go on for, the most (see torrent.RouteGrace).
@@ -303,9 +308,25 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			}
 			if addon.Stremio() || addon.Eclipse() {
 				if h.Health.Addons != nil {
-					if health, ok := h.Health.Addons.Health(addon.ManifestURL); ok && health.Failure != "" {
+					failure := ""
+					if health, ok := h.Health.Addons.Health(addon.ManifestURL); ok {
+						failure = health.Failure
+					}
+					// While its server's background requests pause for its
+					// timeouts, the addon did not answer in time, whatever
+					// it answered since but streams.
+					var until *time.Time
+					if h.Health.StreamsTimingOut != nil {
+						if end, ok := h.Health.StreamsTimingOut(addon); ok {
+							failure, until = stremio.FailureTimeout, &end
+						}
+					}
+					if failure != "" {
 						p := warning("addon:"+addon.ID.String(), problemAddon, "addons")
-						p.Name, p.Owner, p.Failure = addon.Manifest.Name, scope.Owner, health.Failure
+						p.Name, p.Owner, p.Failure, p.Until = addon.Manifest.Name, scope.Owner, failure, until
+						if until != nil && scope.Owner == nil {
+							p.To = "/sources/shared/" + addon.ID.String()
+						}
 						add(p)
 					}
 				}
@@ -765,6 +786,21 @@ func (p healthProblemJSON) text(language string) string {
 			"Wenig Speicherplatz für %s: %s frei.", "Queda poco espacio para %s: %s libres.", "Poco spazio rimasto per %s: %s liberi.", "Pouco espaço restante para %s: %s livres."},
 			diskFolders[p.Folder].In(language), gigabytes(*p.Free, language))
 	case problemAddon:
+		if p.Until != nil {
+			return say(i18n.Text{"%s does not answer in time when asked for versions: Polyfin’s background requests to its server pause until %s. Plays still ask it. " +
+				"If it gathers other addons’ versions, turn off the one that no longer answers there, or shorten how long it waits for them; otherwise turn it off.",
+				"%s ne répond pas à temps quand on lui demande des versions\u202f: les requêtes de Polyfin en arrière-plan vers son serveur sont suspendues jusqu’à %s. Les lectures l’interrogent toujours. " +
+					"S’il rassemble les versions d’autres addons, désactivez-y celui qui ne répond plus, ou raccourcissez le temps qu’il leur accorde\u202f; sinon, désactivez-le.",
+				"%s antwortet nicht rechtzeitig auf Anfragen nach Versionen: Polyfins Hintergrundanfragen an seinen Server pausieren bis %s. Wiedergaben fragen es weiterhin. " +
+					"Wenn es die Versionen anderer Add-ons sammelt, schalte dort das ab, das nicht mehr antwortet, oder verkürze, wie lange es auf sie wartet; sonst schalte es ab.",
+				"%s no responde a tiempo cuando se le piden versiones: las solicitudes en segundo plano de Polyfin a su servidor se pausan hasta las %s. Las reproducciones siguen consultándola. " +
+					"Si reúne las versiones de otras extensiones, desactive allí la que ya no responde o acorte el tiempo que las espera; si no, desactívela.",
+				"%s non risponde in tempo quando gli si chiedono le versioni: le richieste in background di Polyfin al suo server sono in pausa fino alle %s. Le riproduzioni lo interrogano comunque. " +
+					"Se raccoglie le versioni di altri add-on, disattiva lì quello che non risponde più o accorcia il tempo che li attende; altrimenti disattivalo.",
+				"%s não responde a tempo quando versões são pedidas: as requisições em segundo plano do Polyfin ao servidor dele estão pausadas até as %s. As reproduções continuam consultando-o. " +
+					"Se ele reúne as versões de outros complementos, desative nele o que não responde mais ou encurte o tempo que ele espera por eles; caso contrário, desative-o."},
+				name, p.Until.Local().Format("15:04"))
+		}
 		failure, known := addonFailures[p.Failure]
 		if !known {
 			return say(i18n.Text{"%s: %s", "%s\u202f: %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, name, p.Failure)

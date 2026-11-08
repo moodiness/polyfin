@@ -139,6 +139,8 @@ const system = {
         disk: (folder: string, free: string) =>
           `Little space left for the ${folder}: ${free} free.`,
         addon: (name: string, failure: string) => `${name}: ${failure}`,
+        addonTimingOut: (name: string, until: string) =>
+          `${name} does not answer in time when asked for versions: Polyfin’s background requests to its server pause until ${until}. Plays still ask it. If it gathers other addons’ versions, turn off the one that no longer answers there, or shorten how long it waits for them; otherwise turn it off.`,
         iptv: (name: string) => `${name}: the last channel list download failed.`,
         tuner: (name: string) => `${name}: the tuner failed to play a channel.`,
         tunerUnreachable: (name: string) => `${name}: the tuner does not answer.`,
