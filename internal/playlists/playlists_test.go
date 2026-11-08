@@ -45,6 +45,7 @@ func items(t *testing.T, store *Store, id accounts.ID) []accounts.ID {
 }
 
 func TestEntriesKeepTheirIdentityThroughChanges(t *testing.T) {
+	t.Parallel()
 	store, users := setup(t)
 	owner := createUser(t, users, "owner")
 	ctx := t.Context()
@@ -111,6 +112,7 @@ func TestEntriesKeepTheirIdentityThroughChanges(t *testing.T) {
 }
 
 func TestSharesAndVisibility(t *testing.T) {
+	t.Parallel()
 	store, users := setup(t)
 	owner, guest, other := createUser(t, users, "owner"), createUser(t, users, "guest"), createUser(t, users, "other")
 	ctx := t.Context()
