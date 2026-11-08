@@ -20,6 +20,7 @@ func near(got, want float64) bool {
 // window has passed, and the second one window after the drop. Another
 // key's bytes count in the total only.
 func TestMeterFollowsAStreamAndItsDrop(t *testing.T) {
+	t.Parallel()
 	c := &clock{now: time.Unix(1_700_000_000, 0)}
 	ms := New()
 	ms.now = c.read
@@ -74,6 +75,7 @@ func TestMeterFollowsAStreamAndItsDrop(t *testing.T) {
 // A meter nothing holds is forgotten once it counted nothing for an hour;
 // one held is kept, and so are its bytes.
 func TestMetersForgetIdleMeters(t *testing.T) {
+	t.Parallel()
 	c := &clock{now: time.Unix(1_700_000_000, 0)}
 	ms := New()
 	ms.now = c.read
@@ -101,6 +103,8 @@ func TestMetersForgetIdleMeters(t *testing.T) {
 }
 
 // Adding never allocates: it runs on every write of a playback.
+//
+//nolint:paralleltest // testing.AllocsPerRun counts the allocations of the whole process
 func TestAddDoesNotAllocate(t *testing.T) {
 	m := New().Hold("play")
 	if allocs := testing.AllocsPerRun(1000, func() { m.Add(32 << 10) }); allocs != 0 {
