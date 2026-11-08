@@ -15,6 +15,7 @@ import (
 // a server upgraded with both still empty gets what a new server gets, and
 // a server that set either keeps both as they were, never half a theme.
 func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +35,7 @@ func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
 		}
 		return css, js
 	}
-	fresh := testdb.New(t)
+	fresh := testdb.Empty(t)
 	if err := migrate(t.Context(), fresh, beforeThemeChoice(t, migrations)); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +50,8 @@ func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
 		"both":       {"a {}", "b()", "a {}", "b()"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if err := migrate(ctx, pool, migrations[:at]); err != nil {
 				t.Fatal(err)
@@ -72,6 +74,7 @@ func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
 // keeps both as they were, never a stylesheet and a script from two
 // versions of the theme.
 func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -91,12 +94,12 @@ func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 		}
 		return css, js
 	}
-	pinned := testdb.New(t)
+	pinned := testdb.Empty(t)
 	if err := migrate(t.Context(), pinned, migrations[:at]); err != nil {
 		t.Fatal(err)
 	}
 	pinnedCss, pinnedJs := read(t, pinned)
-	fresh := testdb.New(t)
+	fresh := testdb.Empty(t)
 	if err := migrate(t.Context(), fresh, beforeThemeChoice(t, migrations)); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +114,8 @@ func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 		"emptied":    {"", "", "", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if err := migrate(ctx, pool, migrations[:at]); err != nil {
 				t.Fatal(err)
@@ -133,6 +137,7 @@ func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 // script was still the previous default: a server that changed its script
 // keeps it, and the stylesheet is never touched.
 func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -152,13 +157,13 @@ func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
 		}
 		return css, js
 	}
-	before := testdb.New(t)
+	before := testdb.Empty(t)
 	if err := migrate(t.Context(), before, migrations[:at]); err != nil {
 		t.Fatal(err)
 	}
 	themeCss, carouselJs := read(t, before)
 	// Up to this migration only: later ones move the theme on again.
-	fresh := testdb.New(t)
+	fresh := testdb.Empty(t)
 	if err := migrate(t.Context(), fresh, migrations[:at+1]); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +181,8 @@ func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
 		"emptied":       {"", "", "", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if err := migrate(ctx, pool, migrations[:at]); err != nil {
 				t.Fatal(err)
@@ -199,6 +205,7 @@ func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
 // a CDN at its main branch. A server that changed either keeps both, never
 // a stylesheet and a script from two versions of the theme.
 func TestThemeBundledMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -218,13 +225,13 @@ func TestThemeBundledMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 		}
 		return css, js
 	}
-	before := testdb.New(t)
+	before := testdb.Empty(t)
 	if err := migrate(t.Context(), before, migrations[:at]); err != nil {
 		t.Fatal(err)
 	}
 	cdnCss, cdnJs := read(t, before)
 	// Up to this migration only: later ones may move the theme on again.
-	fresh := testdb.New(t)
+	fresh := testdb.Empty(t)
 	if err := migrate(t.Context(), fresh, migrations[:at+1]); err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +254,8 @@ func TestThemeBundledMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 		"emptied":       {"", "", "", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if err := migrate(ctx, pool, migrations[:at]); err != nil {
 				t.Fatal(err)
@@ -282,6 +290,7 @@ func beforeThemeChoice(t *testing.T, migrations []migration) []migration {
 // chooses jellyfin-web's own look, and any other keeps its texts as
 // Custom, the theme it had.
 func TestThemeChoiceMigrationChoosesWhatTheTextsLoaded(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -301,7 +310,7 @@ func TestThemeChoiceMigrationChoosesWhatTheTextsLoaded(t *testing.T) {
 		}
 		return theme, css, js
 	}
-	before := testdb.New(t)
+	before := testdb.Empty(t)
 	if err := migrate(t.Context(), before, migrations[:at]); err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +318,7 @@ func TestThemeChoiceMigrationChoosesWhatTheTextsLoaded(t *testing.T) {
 	if err := before.QueryRow(t.Context(), "SELECT custom_css, custom_js FROM settings").Scan(&bundledCss, &bundledJs); err != nil {
 		t.Fatal(err)
 	}
-	fresh := testdb.New(t)
+	fresh := testdb.Empty(t)
 	if err := migrate(t.Context(), fresh, migrations[:at+1]); err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +334,8 @@ func TestThemeChoiceMigrationChoosesWhatTheTextsLoaded(t *testing.T) {
 		"own theme":     {"@import url('https://themes.example/a.css');", "b()", "custom", "@import url('https://themes.example/a.css');", "b()"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			if err := migrate(ctx, pool, migrations[:at]); err != nil {
 				t.Fatal(err)

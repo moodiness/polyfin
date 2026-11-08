@@ -64,7 +64,8 @@ func trigramsAvailable(t *testing.T, pool *pgxpool.Pool) bool {
 // On a server with pg_trgm, the migration makes every index, and runs
 // again cleanly once the extension and the indexes exist.
 func TestSearchIndexesMigrationRunsAgain(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	if !trigramsAvailable(t, pool) {
 		t.Skip("the test server has no pg_trgm")
 	}
@@ -90,6 +91,7 @@ func TestSearchIndexesMigrationRunsAgain(t *testing.T) {
 // views the migration reads are shadowed, in a schema searched before
 // pg_catalog, to tell it so.
 func TestSearchIndexesMigrationWithoutTrigrams(t *testing.T) {
+	t.Parallel()
 	for name, shadow := range map[string][]string{
 		"missing": {
 			"CREATE VIEW pg_available_extensions AS SELECT * FROM pg_catalog.pg_available_extensions WHERE name <> 'pg_trgm'",
@@ -105,7 +107,8 @@ func TestSearchIndexesMigrationWithoutTrigrams(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			pool := testdb.New(t)
+			t.Parallel()
+			pool := testdb.Empty(t)
 			ctx := t.Context()
 			before, search := searchIndexes(t)
 			if err := migrate(ctx, pool, before); err != nil {

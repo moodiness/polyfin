@@ -13,6 +13,7 @@ import (
 // nothing tells those taken from a web client, which could outlive its
 // sign-out, from those opened with a password.
 func TestAdminSessionDeviceMigrationEndsEarlierSessions(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +26,7 @@ func TestAdminSessionDeviceMigrationEndsEarlierSessions(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no admin_session_device migration")
 	}
-	pool := testdb.New(t)
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := migrate(ctx, pool, migrations[:at]); err != nil {
 		t.Fatal(err)

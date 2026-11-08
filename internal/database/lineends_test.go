@@ -11,6 +11,7 @@ import (
 // schema_migrations, are then the same in a Polyfin built on Windows as in
 // the Docker image, and a backup restores from one to the other.
 func TestMigrationsEndTheirLinesWithLF(t *testing.T) {
+	t.Parallel()
 	err := fs.WalkDir(embedded, "migrations", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err

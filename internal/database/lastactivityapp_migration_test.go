@@ -12,6 +12,7 @@ import (
 // most recently active device's; those without a device, or never
 // active, have none.
 func TestLastActivityAppMigrationTakesTheLatestDevice(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +25,7 @@ func TestLastActivityAppMigrationTakesTheLatestDevice(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no last_activity_app migration")
 	}
-	pool := testdb.New(t)
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := migrate(ctx, pool, migrations[:at]); err != nil {
 		t.Fatal(err)

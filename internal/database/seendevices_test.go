@@ -11,7 +11,8 @@ import (
 // The devices signed in when the migration runs count as seen, so that
 // updating tells no sign-in on a new device.
 func TestSeenDevicesMigrationCountsTheDevicesSignedIn(t *testing.T) {
-	pool := testdb.New(t)
+	t.Parallel()
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {

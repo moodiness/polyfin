@@ -17,6 +17,7 @@ import (
 // both, a user's favorite and an administrator's edit; each name then
 // points to that person. People of no known identifier stay as they were.
 func TestPeopleOfATMDBIdentifierMoveToIt(t *testing.T) {
+	t.Parallel()
 	files, err := fs.Sub(embedded, "migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +30,7 @@ func TestPeopleOfATMDBIdentifierMoveToIt(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no title_credits migration")
 	}
-	pool := testdb.New(t)
+	pool := testdb.Empty(t)
 	ctx := t.Context()
 	if err := migrate(ctx, pool, migrations[:at]); err != nil {
 		t.Fatal(err)
