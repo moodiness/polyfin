@@ -94,7 +94,7 @@ A test calls `t.Parallel()` first, and so does each of its subtests: a package's
 - A test that counts goroutines labels its own with `runtime/pprof` labels, and counts those alone. So it runs in parallel too (see `TestPlaysThatGaveUpLeaveNoGoroutineBehind`).
 - A test calling `t.Setenv` or `t.Chdir` cannot run in parallel, and needs no reason.
 
-On a pull request, CI checks each test file it changes, whole, with the `paralleltest` and `tparallel` linters. A test that stays sequential gives its reason on the line above it, in the comment golangci-lint reads:
+On a pull request, CI checks the lines it changes in test files with the `paralleltest` and `tparallel` linters: a new test runs in parallel or says why not, and a change inside an older test asks nothing of the rest of its file. A test that stays sequential gives its reason on the line above it, in the comment golangci-lint reads:
 
 ```go
 // What the test checks.
@@ -107,7 +107,7 @@ func TestSomething(t *testing.T) {
 
 ```sh
 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --enable-only paralleltest,tparallel \
-  --new-from-rev origin/main --whole-files ./internal/lyrics/
+  --new-from-rev origin/main ./internal/lyrics/
 ```
 
 ### Password and key costs in tests
