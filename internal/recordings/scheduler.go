@@ -689,7 +689,7 @@ func (s *Service) refreshSeries(ctx context.Context, st SeriesTimer) {
 	matched := []accounts.ID{}
 	country := s.users.Settings().RatingCountry
 	for _, item := range programs {
-		if !Matches(st, item, recorded, now) || !Allows(user, country, programKind, item.OfficialRating, item.Genres) {
+		if !Matches(st, item, recorded, now) || !Allows(user, country, programKind, item.ParentalRating(), item.Genres) {
 			continue
 		}
 		p := ProgrammeOf(item)

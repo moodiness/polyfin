@@ -308,7 +308,7 @@ func (s *Service) program(ctx context.Context, user accounts.User, id accounts.I
 		return library.Item{}, err
 	}
 	if program.Kind != library.KindProgram || program.Channel == nil || program.StartDate == nil || program.EndDate == nil ||
-		!s.allowed(user, program.OfficialRating, program.Genres) {
+		!s.allowed(user, program.ParentalRating(), program.Genres) {
 		return library.Item{}, ErrNotFound
 	}
 	return program, nil
@@ -317,7 +317,7 @@ func (s *Service) program(ctx context.Context, user accounts.User, id accounts.I
 // reminderOf describes the reminder of a programme.
 func reminderOf(user accounts.ID, program library.Item, lang string) Reminder {
 	return Reminder{User: user, Program: program.ID, Channel: program.Channel.ID, ChannelName: program.Channel.Name,
-		Name: strings.TrimSpace(program.Name), Genres: nonNil(program.Genres), Rating: program.OfficialRating, Start: *program.StartDate,
+		Name: strings.TrimSpace(program.Name), Genres: nonNil(program.Genres), Rating: program.ParentalRating(), Start: *program.StartDate,
 		End: *program.EndDate, Language: lang}
 }
 
