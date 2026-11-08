@@ -52,12 +52,13 @@ func newHeldAddon(t *testing.T, name string, broken bool) *heldAddon {
 				http.Error(w, "unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			stream := func(height string, size int64) stremio.Stream {
+			// Its files announce no size, as scriptedAddon's do.
+			stream := func(height string) stremio.Stream {
 				file := name + "." + height + ".mkv"
 				return stremio.Stream{Name: name + " " + height, URL: server.URL + "/files/" + file,
-					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number(size)}}
+					BehaviorHints: stremio.StreamBehavior{Filename: file}}
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{stream("1080p", 3_000_000_000), stream("720p", 1_000_000_000)}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{stream("1080p"), stream("720p")}})
 		case strings.HasPrefix(path, "/files/"):
 			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
@@ -330,11 +331,15 @@ func newScriptedAddon(t *testing.T, name string) *scriptedAddon {
 			case <-closing:
 				return
 			}
+			// Its files announce no size: announced far larger than the one
+			// short answer they all give, they would be their host's error
+			// file (see source.ErrorFiles), refused or analyzed by whichever
+			// of a read and ffprobe ends first.
 			streams := make([]stremio.Stream, n)
 			for i := range streams {
 				file := fmt.Sprintf("%s.%d.mkv", name, i+1)
 				streams[i] = stremio.Stream{Name: fmt.Sprintf("%s %d", name, i+1), URL: server.URL + "/files/" + file,
-					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number(1_000_000_000 * (i + 1))}}
+					BehaviorHints: stremio.StreamBehavior{Filename: file}}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
 		case strings.HasPrefix(path, "/files/"):
@@ -466,9 +471,17 @@ func TestPlaybackInfoPlaysExpiredVersionsWhileTheAddonIsAskedAgain(t *testing.T)
 // versions.
 func TestPlaybackInfoWaitsForTheAnswerWhenNoExpiredVersionPlays(t *testing.T) {
 	t.Parallel()
-	// The three versions listed before cannot be read; another can.
-	h, gathering := expiredOnProbe(t, scriptedProbe(t, "[ $n -gt 3 ] || { echo 'Invalid data found when processing input' >&2; exit 1; }\nexec cat \"$0.json\"\n"))
+	// The three versions listed before cannot be read; another can. A run
+	// that fails tells so in "$0.failed".
+	probe := scriptedProbe(t, "[ $n -gt 3 ] || { echo >> \"$0.failed\"; echo 'Invalid data found when processing input' >&2; exit 1; }\nexec cat \"$0.json\"\n")
+	h, gathering := expiredOnProbe(t, probe)
 	answered := h.askPlaybackInfo(t, "")
+	// Their three analyses fail first, however slow the probe is to start:
+	// the new version's is the fourth run.
+	eventually(t, "the versions listed before to fail", func() bool {
+		failed, _ := os.ReadFile(probe.path + ".failed")
+		return bytes.Count(failed, []byte("\n")) == 3
+	})
 	select {
 	case got := <-answered:
 		t.Fatalf("PlaybackInfo answered from the expired versions: %d %q %+v", got.status, got.code, got.info.MediaSources)
