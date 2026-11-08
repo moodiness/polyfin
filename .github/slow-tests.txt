@@ -11,10 +11,8 @@
 # 42417985281, took 30.4 to 44.0 s each under the race detector.
 github.com/moodiness/polyfin/internal/jellyfin TestShareBluRaysPlayCopied # plays three Blu-ray discs (folder, ISO, UDF) through FFmpeg from a WebDAV share, whole and from a seek
 github.com/moodiness/polyfin/internal/jellyfin TestARecordingTakingTheViewersTunerAnswers503 # FFmpeg converts a live 5.1 channel until a recording takes its tuner, waited for up to 2 min
-github.com/moodiness/polyfin/internal/jellyfin TestLocalEpisodesShareTheirCredits # makes six episodes' audio with FFmpeg and finds their shared 60 s credits in it
 github.com/moodiness/polyfin/internal/jellyfin TestProgrammeIsRecordedAndPlays # records a live stream with FFmpeg for at least 30 s of real time, then plays the file
 github.com/moodiness/polyfin/internal/jellyfin TestLocalMPEGTSFilesPlayConvertedUntilTheirKeyframesAreRead # encodes a 750 s MPEG-TS file with FFmpeg, plays it converted, then copied
 github.com/moodiness/polyfin/internal/thumbnails TestThumbnailsDuringThePlay # encodes a long video with FFmpeg and makes thumbnails over 10 minutes of play
 github.com/moodiness/polyfin/internal/thumbnails TestImagesFollowTheKeyframesTimes # decodes HEVC keyframes with FFmpeg, once for each read order and budget
 github.com/moodiness/polyfin/internal/iptv TestLargeLineupsStayFast # a line-up of 5,400 entries under the race detector (54,000 without), on purpose: its time bounds are the test
-github.com/moodiness/polyfin/internal/library TestTheTitlesKeptForSmartListsStayWithinTheirBound # 2,000-title catalogs read for 3 lists and 5 users; 4.8 s without the race detector, slow only under it and its package's 223 parallel tests: for #999
