@@ -113,9 +113,11 @@ type Service struct {
 	extractedMu sync.Mutex
 	extractions *cache.Cache[accounts.ID, *extracted]
 	// locations are the subtitle streams versions' indexes list, and
-	// unlocated the versions whose index could not be read.
-	locations *cache.Cache[accounts.ID, []int]
-	unlocated *cache.Cache[accounts.ID, error]
+	// unlocated the versions whose index could not be read. locateTime is
+	// locateTime, which tests shorten.
+	locations  *cache.Cache[accounts.ID, []int]
+	unlocated  *cache.Cache[accounts.ID, error]
+	locateTime time.Duration
 	// numbered are the container's own numbers of versions' tracks, by
 	// FFmpeg index (see ContainerTracks), and unnumbered the versions whose
 	// numbers could not be read.
@@ -123,11 +125,13 @@ type Service struct {
 	unnumbered *cache.Cache[accounts.ID, error]
 	// tracks are subtitle tracks read whole through indexes, untracked
 	// those that could not be, and trackReads and hostReads bound the
-	// reads under way, over every host and from each.
+	// reads under way, over every host and from each. trackShare is
+	// trackRequests, which tests lower.
 	tracks     *cache.Cache[trackKey, Track]
 	untracked  *cache.Cache[trackKey, error]
 	trackReads chan struct{}
 	hostReads  hostSlots
+	trackShare int
 	// rangeHosts tells, by host, whether it serves several ranges with one
 	// request.
 	rangeHosts *cache.Cache[string, bool]
@@ -206,11 +210,13 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
 		locations:   cache.New[accounts.ID, []int](2000, time.Hour),
 		unlocated:   cache.New[accounts.ID, error](2000, failureTTL),
+		locateTime:  locateTime,
 		numbered:    cache.New[accounts.ID, map[int]uint64](2000, time.Hour),
 		unnumbered:  cache.New[accounts.ID, error](2000, failureTTL),
 		tracks:      cache.New[trackKey, Track](100, time.Hour).Sized(maxKeptTracks, func(t Track) int { return len(t.Data) }),
 		untracked:   cache.New[trackKey, error](2000, failureTTL),
 		trackReads:  make(chan struct{}, maxTrackReads),
+		trackShare:  trackRequests,
 		rangeHosts:  cache.New[string, bool](500, 24*time.Hour),
 		trackCues:   cache.New[trackKey, []subtitles.Cue](50, time.Hour),
 		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
@@ -352,7 +358,7 @@ var errNoTorrents = errors.New("this server plays no torrent")
 // torrentLocation is where the source cache reads a torrent's file: from
 // its swarm, which the playbacks reading it join (see source.Location's
 // Playing) and nothing else. A swarm is given longer than a host to
-// answer (see torrent.StartTimeout and torrent.PieceTimeout): the engine
+// answer (see torrent.StartTimeout and pieceWait): the engine
 // tells why a torrent did not start before the cache stops waiting. Its
 // blocks are not kept across restarts, as its pieces are not.
 func (s *Service) torrentLocation(version library.Version) source.Location {
@@ -362,7 +368,7 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 	}
 	engine := s.torrents
 	location := source.Location{URL: version.URL, Size: version.Size, Announcer: version.Addon, Transient: true,
-		HeaderTimeout: torrentHeaders, StallTimeout: torrent.PieceTimeout,
+		HeaderTimeout: torrentHeaders, StallTimeout: s.pieceWait(),
 		Opener: source.FileOpener(func(ctx context.Context, _ string) (source.RandomFile, int64, error) {
 			if err != nil {
 				return nil, 0, err
@@ -398,6 +404,16 @@ func torrentSpec(version library.Version) (torrent.Spec, error) {
 // engine's own bound on its start.
 const torrentHeaders = torrent.StartTimeout + 15*time.Second
 
+// pieceWait is how long a read of a torrent waits for a piece before it is
+// taken as stalled: the engine's (see torrent.Engine.PieceTimeout), or
+// torrent.PieceTimeout without one.
+func (s *Service) pieceWait() time.Duration {
+	if s.torrents == nil {
+		return torrent.PieceTimeout
+	}
+	return s.torrents.PieceTimeout()
+}
+
 // TorrentPlayCheck is how often a wait for a torrent past its start and a
 // piece looks whether the torrent still receives its pieces (see
 // TorrentReceiving).
@@ -419,7 +435,7 @@ func (s *Service) TorrentPlayWait() time.Duration {
 	if s.torrents == nil {
 		return 0
 	}
-	return s.torrents.StartTimeout() + torrent.PieceTimeout
+	return s.torrents.StartTimeout() + s.torrents.PieceTimeout()
 }
 
 // TorrentPlayMost bounds how long a play waits for a torrent version whose
@@ -463,10 +479,10 @@ func (s *Service) torrentPatience(ctx context.Context, version library.Version) 
 }
 
 // torrentGrace is how long a wait for a torrent goes on before it looks
-// whether the torrent receives its pieces: its start, 15 seconds and a
-// piece's wait, 105 seconds by default.
+// whether the torrent receives its pieces: its start, then a piece's wait
+// and a half, 105 seconds by default.
 func (s *Service) torrentGrace() time.Duration {
-	return s.torrents.StartTimeout() + 15*time.Second + torrent.PieceTimeout
+	return s.torrents.StartTimeout() + s.torrents.PieceTimeout()*3/2
 }
 
 // torrentWaited reports whether a wait for the torrent of version begun at
@@ -483,9 +499,9 @@ func (s *Service) torrentWaited(version library.Version, since time.Time) bool {
 
 // TorrentReceiving reports whether the torrent of a torrent version
 // receives its pieces: a byte of them arrived within a piece's wait, the
-// time a read waits before it is taken as stalled (see
-// torrent.PieceTimeout), or its route, found down within a piece's wait,
-// is still within its grace (see torrent.Engine.Received).
+// time a read waits before it is taken as stalled (see pieceWait), or its
+// route, found down within a piece's wait, is still within its grace (see
+// torrent.Engine.Received).
 func (s *Service) TorrentReceiving(version library.Version) bool {
 	if version.Torrent == nil || s.torrents == nil {
 		return false
@@ -494,7 +510,7 @@ func (s *Service) TorrentReceiving(version library.Version) bool {
 	if err != nil {
 		return false
 	}
-	return time.Since(s.torrents.Received(hash)) < torrent.PieceTimeout
+	return time.Since(s.torrents.Received(hash)) < s.torrents.PieceTimeout()
 }
 
 // TorrentProgress tells how the start of a torrent version's torrent goes

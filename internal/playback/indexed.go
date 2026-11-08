@@ -210,7 +210,7 @@ func (s *Service) locate(ctx context.Context, version library.Version, analysis 
 	if !errors.Is(err, pgx.ErrNoRows) {
 		s.logger.Warn("Reading a subtitle index failed", "error", err)
 	}
-	ctx, cancel := context.WithTimeout(ctx, locateTime)
+	ctx, cancel := context.WithTimeout(ctx, s.locateTime)
 	defer cancel()
 	located, err := s.readLocations(ctx, version, analysis)
 	if err != nil {
@@ -267,7 +267,7 @@ func (s *Service) readLocations(ctx context.Context, version library.Version, an
 		if err != nil {
 			return nil, err
 		}
-		if requests > trackRequests {
+		if requests > s.trackShare {
 			costly = append(costly, stream)
 		} else {
 			located = append(located, stream)
@@ -491,7 +491,7 @@ func (s *Service) readBlocks(ctx context.Context, version library.Version, analy
 	if _, indexed := indexedCodecs[track.CodecID]; !ok || !indexed || !track.Decodable {
 		return Track{}, ErrNotLocated
 	}
-	blocks, err := m.SubtitleBlocks(ctx, &boundedFetcher{src: src, left: int64(trackRequests)}, track.Number)
+	blocks, err := m.SubtitleBlocks(ctx, &boundedFetcher{src: src, left: int64(s.trackShare)}, track.Number)
 	s.noteRanges(version, src)
 	if err != nil {
 		return Track{}, err
@@ -520,7 +520,7 @@ var errTrackRequests = errors.New("reading the subtitle track would take its hos
 // would take a request for nearly every block, hundreds for a movie, which
 // providers answer with 429 and which slows the video they serve too:
 // such a track is left to remuxes, unless it has few blocks.
-var trackRequests = 64
+const trackRequests = 64
 
 // boundedFetcher fails the requests of a read past its share.
 type boundedFetcher struct {
