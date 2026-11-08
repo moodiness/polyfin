@@ -27,7 +27,9 @@ const (
 // in its order, a series' by season and number. Specials, and episodes
 // that have not aired yet, are left out. A collection lists its titles as
 // a collection row does; a smart list as its library or collection does.
-// It lists at most virtualtv.MaxEntries.
+// It lists at most virtualtv.MaxEntries. Entries keep the ratings and
+// genres the addons give, apart from administrators' edits, which the
+// library applies to the channel's programmes as they stand.
 func (h *Handler) ChannelEntries(ctx context.Context, user accounts.User, source virtualtv.Source) ([]virtualtv.Entry, error) {
 	if err := source.Validate(); err != nil {
 		return nil, err
@@ -65,6 +67,10 @@ func (h *Handler) ChannelEntries(ctx context.Context, user accounts.User, source
 		}
 		switch title.Kind {
 		case library.KindMovie, library.KindVideo:
+			var err error
+			if title.OfficialRating, title.Genres, err = h.unedited(ctx, user, title); err != nil {
+				return nil, err
+			}
 			entries = append(entries, movieEntry(title))
 		case library.KindSeries, library.KindSeason, library.KindEpisode:
 			more, err := h.episodeEntries(ctx, user, title, series)
@@ -100,6 +106,9 @@ func (h *Handler) episodeEntries(ctx context.Context, user accounts.User, title 
 		if series, err = h.Library.Item(ctx, user, seriesID); err != nil {
 			return nil, err
 		}
+		if series.OfficialRating, series.Genres, err = h.unedited(ctx, user, series); err != nil {
+			return nil, err
+		}
 		kept[seriesID] = series
 	}
 	episodes := []library.Item{title}
@@ -128,6 +137,16 @@ func (h *Handler) episodeEntries(ctx context.Context, user accounts.User, title 
 			Overview: e.Overview, Image: image, Year: series.ProductionYear, Rating: series.OfficialRating, Genres: slices.Clip(series.Genres)})
 	}
 	return entries, nil
+}
+
+// unedited returns a title's official rating and genres as its addon
+// gives them, apart from an administrator's edits.
+func (h *Handler) unedited(ctx context.Context, user accounts.User, title library.Item) (string, []string, error) {
+	if o := h.Library.Overrides(title.ID); o.OfficialRating == nil && o.Genres == nil {
+		return title.OfficialRating, title.Genres, nil
+	}
+	original, err := h.Library.Original(ctx, user, title.ID)
+	return original.OfficialRating, original.Genres, err
 }
 
 // ChannelTitles finds the movies and series whose name holds term, for a
