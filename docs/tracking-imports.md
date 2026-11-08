@@ -55,11 +55,11 @@ A title no catalog listed yet shows in your lists at once, described by the addo
 Each PublicMetaDB contributor maps a TMDB identifier to an IMDb one, and they may disagree. Polyfin chooses this way:
 
 1. It refuses each IMDb identifier its own data names as another title:
-   - a catalog listed it under another TMDB identifier;
+   - a catalog listed it under another TMDB identifier, or as a movie for a series (a series for a movie);
    - TMDB gave Polyfin another TMDB identifier for it, or another IMDb identifier for the title;
-   - with a [TMDB key](collections-people-and-ratings.md#tmdb-key), TMDB finds it under another TMDB identifier.
+   - with a [TMDB key](collections-people-and-ratings.md#tmdb-key), TMDB finds it under another TMDB identifier, or only as a movie for a series (a series for a movie).
 
-   When contributors disagree, it also refuses one whose reverse lookup on PublicMetaDB gives other TMDB identifiers, and not this one.
+   When contributors disagree, it also refuses one whose reverse lookup on PublicMetaDB gives other TMDB identifiers and not this one, or gives only titles of the other kind.
 2. Of those left, it takes the one the most contributors give. Between as many, it takes the one whose contributions have the most votes. One left alone is taken too.
 3. When a tie remains, it takes none. The title is counted as not found, and you can [link it](moving-to-polyfin.md#linking-titles-not-found) to the right title.
 

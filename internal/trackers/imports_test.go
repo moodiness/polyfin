@@ -484,6 +484,60 @@ func TestPublicMetaDBMappingsTakeTheMajorityPolyfinDoesNotContradict(t *testing.
 	h.noWrites(t)
 }
 
+// TestPublicMetaDBTieOnASeriesRefusesAMovieIdentifier decides the mapping
+// of series 42509 contributors split between tt1910272, the series, and
+// tt2967286, a movie of it (TMDB's 225745): Polyfin takes the series when
+// it knows the other is a movie, by a listing or by PublicMetaDB's
+// reverse lookup, and leaves the tie to a manual link otherwise.
+func TestPublicMetaDBTieOnASeriesRefusesAMovieIdentifier(t *testing.T) {
+	t.Parallel()
+	for _, variant := range []struct {
+		name, want string
+		listed     bool
+		lookup     string
+	}{
+		{name: "listed as a movie", want: "tt1910272", listed: true},
+		{name: "looked up as a movie", want: "tt1910272", lookup: `{"results":[{"tmdb_id":225745,"media_type":"movie"}],"total":1}`},
+		{name: "known of nothing"},
+	} {
+		t.Run(variant.name, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			user := h.user(t, "steins")
+			h.connected(t, user, PublicMetaDB, "pm-steins")
+			if variant.listed {
+				if _, err := h.db.Exec(t.Context(), "INSERT INTO items (id, key, kind, data) VALUES ($1, $2, 'movie', $3)", itemOf("movie|tt2967286"),
+					"movie|tt2967286", `{"kind":"movie","meta":{"id":"tt2967286","type":"movie","name":"The movie","_tmdbId":"225745"}}`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			h.f.on("GET", "/publicmetadb/api/external/mappings", func(r request) answer {
+				if r.query.Get("tmdb_id") != "42509" || r.query.Get("media_type") != "tv" {
+					return answer{status: http.StatusOK, body: `{"mappings":{"imdb":[]}}`}
+				}
+				return answer{status: http.StatusOK, body: `{"tmdb_id":42509,"media_type":"tv","mappings":{"imdb":[` +
+					`{"id":"s1","value":"tt1910272","created":"2026-01-16 10:00:00.000Z"},` +
+					`{"id":"s2","value":"tt2967286","created":"2026-04-08 10:00:00.000Z"}]},"total":2}`}
+			})
+			h.f.on("GET", "/publicmetadb/api/external/mappings/lookup", func(r request) answer {
+				if r.query.Get("id_value") == "tt2967286" && variant.lookup != "" {
+					return answer{status: http.StatusOK, body: variant.lookup}
+				}
+				return answer{status: http.StatusOK, body: `{"results":[],"total":0}`}
+			})
+			h.f.reply("GET", "/publicmetadb/api/external/mappings/s1/votes", http.StatusOK, `{"upvotes":0,"downvotes":0}`)
+			h.f.reply("GET", "/publicmetadb/api/external/mappings/s2/votes", http.StatusOK, `{"upvotes":0,"downvotes":0}`)
+
+			r := &reader{s: h.Service, key: laneKey{user, PublicMetaDB}, token: "pm-steins", settings: h.settings()}
+			ref := library.TitleRef{Episode: true, TMDB: 42509, Season: 1, Number: 1}
+			if got, err := h.decidePublicMetaDB(t.Context(), r, ref, "tv"); err != nil || got != variant.want {
+				t.Errorf("%q %v, want %q", got, err, variant.want)
+			}
+			h.noWrites(t)
+		})
+	}
+}
+
 func TestImportsRunAtTheIntervalSetAndOnDemand(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)

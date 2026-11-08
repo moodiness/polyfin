@@ -714,11 +714,12 @@ func (s *Service) mapPublicMetaDB(ctx context.Context, r *reader, ref library.Ti
 // disagree. A candidate is refused when Polyfin's own data contradicts it
 // (see Titles.ContradictedIMDb), or, when contributors disagree, when
 // PublicMetaDB's reverse lookup of it names other TMDB identifiers and
-// not ref's. Of those left, the one given by the most distinct
-// contributions is taken, a tie going to the most net votes of their
-// entries, asked an entry at a time when the answer gives their
-// identifiers; one left alone is taken too. A tie that remains takes
-// none: the title stays not found, for its user to link.
+// not ref's, or only titles of the other kind. Of those left, the one
+// given by the most distinct contributions is taken, a tie going to the
+// most net votes of their entries, asked an entry at a time when the
+// answer gives their identifiers; one left alone is taken too. A tie
+// that remains takes none: the title stays not found, for its user to
+// link.
 func (s *Service) decidePublicMetaDB(ctx context.Context, r *reader, ref library.TitleRef, mediaType string) (string, error) {
 	answer, err := r.get(ctx, "/api/external/mappings", url.Values{"tmdb_id": {strconv.Itoa(ref.TMDB)}, "media_type": {mediaType}, "id_type": {"imdb"}})
 	if err != nil {
@@ -770,7 +771,10 @@ func (s *Service) decidePublicMetaDB(ctx context.Context, r *reader, ref library
 			if err != nil {
 				return "", err
 			}
-			if found := lookedUpTMDB(answer.body, mediaType); len(found) > 0 && !slices.Contains(found, ref.TMDB) {
+			// A candidate the lookup gives as other titles of the kind, or
+			// only as titles of the other kind, is refused.
+			found := lookedUpTMDB(answer.body, mediaType)
+			if len(found) > 0 && !slices.Contains(found, ref.TMDB) || len(found) == 0 && len(lookedUpTMDB(answer.body, otherMediaType(mediaType))) > 0 {
 				contradicted[c.imdb] = true
 			}
 		}
@@ -806,6 +810,14 @@ func (s *Service) decidePublicMetaDB(ctx context.Context, r *reader, ref library
 		return tied[0].imdb, nil
 	}
 	return "", nil
+}
+
+// otherMediaType is "tv" for "movie", and "movie" for "tv".
+func otherMediaType(mediaType string) string {
+	if mediaType == "tv" {
+		return "movie"
+	}
+	return "tv"
 }
 
 // mappingVotes returns the net votes of PublicMetaDB's mapping entry:
