@@ -353,7 +353,11 @@ func TestConnectionsLingerWhileAReaderIsAttached(t *testing.T) {
 }
 
 // A connection that stops sending bytes is closed after a while and
-// opened again, as one more try: the reader gets the file.
+// opened again, as one more try: the reader gets the file. A stall right
+// after one fails the source, so the stall limit leaves the connection
+// opened again room to pause on a loaded machine: at 200 ms, it stalled
+// in turn on CI. The file still comes well before the 10 s of the limit
+// outside tests.
 func TestStalledConnectionsAreOpenedAgain(t *testing.T) {
 	t.Parallel()
 	data := randomData(3 * blockSize)
@@ -372,14 +376,14 @@ func TestStalledConnectionsAreOpenedAgain(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	cache := newCache(t, 1<<30)
-	cache.stallTimeout = 200 * time.Millisecond
+	cache.stallTimeout = time.Second
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	started := time.Now()
 	if got := streamAll(t, s, 0); !bytes.Equal(got, data) {
 		t.Fatal("content differs")
 	}
-	if took := time.Since(started); requests.Load() != 2 || took > 2*time.Second {
+	if took := time.Since(started); requests.Load() != 2 || took > 5*time.Second {
 		t.Errorf("%d requests in %v", requests.Load(), took)
 	}
 }
@@ -428,7 +432,9 @@ func TestSilentHostsFailTheSource(t *testing.T) {
 
 // A host that stops answering in the middle of a file, its connection
 // silent and new ones unanswered, fails the source within seconds: the
-// stall, then a short wait for a new connection's headers.
+// stall, then a short wait for a new connection's headers, well before
+// the 15 s of a first connection's. The stall limit leaves the first
+// connection room to pause on a loaded machine before it is silent.
 func TestHostsThatStopAnsweringFailWithinSeconds(t *testing.T) {
 	t.Parallel()
 	data := randomData(8 * blockSize)
@@ -445,7 +451,7 @@ func TestHostsThatStopAnsweringFailWithinSeconds(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	cache := newCache(t, 1<<30)
-	cache.stallTimeout, cache.recoveryTimeout = 300*time.Millisecond, 200*time.Millisecond
+	cache.stallTimeout, cache.recoveryTimeout = time.Second, 200*time.Millisecond
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	r := s.NewReader()
@@ -455,7 +461,7 @@ func TestHostsThatStopAnsweringFailWithinSeconds(t *testing.T) {
 	}
 	started := time.Now()
 	_, err := r.ReadAt(t.Context(), make([]byte, 10), 5*blockSize)
-	if !errors.Is(err, ErrUnavailable) || time.Since(started) > 2*time.Second {
+	if !errors.Is(err, ErrUnavailable) || time.Since(started) > 5*time.Second {
 		t.Fatalf("%v after %v", err, time.Since(started))
 	}
 	if requests.Load() != 2 {
