@@ -659,7 +659,13 @@ func (s *Service) Overridden(items ...Item) []Item {
 // overriddenTraits returns the traits parental control judges a title by
 // once what administrators set of it applies: its rating and genres.
 func (s *Service) overriddenTraits(id accounts.ID, t traits) traits {
-	o, ok := s.overridesNow().fields[id]
+	return s.overridesNow().traits(id, t)
+}
+
+// traits returns the traits parental control judges the title id by,
+// those of t but for the rating and genres administrators set of it.
+func (set *overrideSet) traits(id accounts.ID, t traits) traits {
+	o, ok := set.fields[id]
 	if !ok {
 		return t
 	}
