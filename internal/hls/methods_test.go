@@ -40,6 +40,7 @@ func encodersTried(r *recordingRunner) []string {
 // computer without a GPU, converts on the processor. A method of another
 // system finds nothing and runs nothing.
 func TestEachSystemDetectsOnlyItsMethods(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		system string
 		tried  []string
@@ -93,6 +94,7 @@ func TestEachSystemDetectsOnlyItsMethods(t *testing.T) {
 // that encodes. VideoToolbox's and QSV's tone mapping is proved on an x265
 // HDR10 sample through the chain conversions use; AMF's is never tried.
 func TestEachMethodIsDetectedOnItsDevice(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, system, want string
 		failing            []string
@@ -161,6 +163,7 @@ func TestEachMethodIsDetectedOnItsDevice(t *testing.T) {
 // the processor decodes, brought down to memory to burn subtitles), and
 // everything else goes through memory, where QSV and AMF take NV12.
 func TestDesktopGPUPipelines(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	vt := &Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox", "hevc_videotoolbox"}, ToneMapping: true, Resident: true,
 		Deinterlacers: []string{"yadif_videotoolbox"}}
@@ -274,6 +277,7 @@ func TestDesktopGPUPipelines(t *testing.T) {
 // and on each GPU, burned subtitles or not; tone mapped frames are left
 // to the tone mapping, which tags them BT.709.
 func TestConvertedFramesAreTaggedWithTheSourcesColors(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	gpu := func(method string, encoder string) *Hardware {
 		return &Hardware{Method: method, Encoders: []string{encoder}, Resident: true, ToneMapping: true}
@@ -320,6 +324,7 @@ func TestConvertedFramesAreTaggedWithTheSourcesColors(t *testing.T) {
 // set or not. Presets follow x264's names. Every H.264 encoder, x264 as
 // the GPUs', encodes the High profile the master playlist announces.
 func TestEachEncoderFamilyTakesItsOptions(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	for _, tc := range []struct {
 		name       string
@@ -372,6 +377,7 @@ func TestEachEncoderFamilyTakesItsOptions(t *testing.T) {
 // (vaapi_encode_h264.c, vaapi_encode_h265.c), and x264, x265 and NVENC
 // either. VideoToolbox's HEVC encoder and QSV's take none.
 func TestEachEncoderSpellsLevelsItsWay(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	level := func(args []string) string {
 		for i, a := range args {
@@ -413,6 +419,7 @@ func TestEachEncoderSpellsLevelsItsWay(t *testing.T) {
 // Recordings are converted to HEVC by each method at the quality factor of
 // x265, VideoToolbox's on its own scale, decoded as conversions are.
 func TestFileConversionsOnEachMethod(t *testing.T) {
+	t.Parallel()
 	vt := &Hardware{Method: "videotoolbox", Encoders: []string{"hevc_videotoolbox"}, Resident: true}
 	qsv := &Hardware{Method: "qsv", Encoders: []string{"hevc_qsv"}}
 	amf := &Hardware{Method: "amf", Encoders: []string{"hevc_amf"}}
@@ -447,6 +454,7 @@ func TestFileConversionsOnEachMethod(t *testing.T) {
 // Work that only decodes, such as thumbnails, decodes on each method's
 // GPU into memory, and the metrics name each method.
 func TestEachMethodDecodesAndIsCounted(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		hw     *Hardware
 		inputs []string
@@ -478,6 +486,7 @@ func TestEachMethodDecodesAndIsCounted(t *testing.T) {
 // deinterlacer FFmpeg lists that fails on the GPU, as yadif_videotoolbox
 // may, is left out: interlaced video then goes through memory.
 func TestVideoToolboxChainsAreTimed(t *testing.T) {
+	t.Parallel()
 	m, f := measuringManager(t, chainTimes{sdrMemory: time.Second, sdrGPU: time.Second / 2, brokenDeinterlacers: []string{"yadif_videotoolbox"}})
 	m.can = capabilities{encoders: everyEncoder, filters: everyFilter}
 	hw := m.measure(t.Context(), Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox", "hevc_videotoolbox"}})

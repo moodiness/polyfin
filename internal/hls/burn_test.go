@@ -16,6 +16,7 @@ import (
 )
 
 func TestImageSubtitlesAreBurnedIn(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	video, keyframes := source(t, ffmpeg, ffprobe, "aac")
 	dir := t.TempDir()
@@ -42,6 +43,7 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 	}{{"software", "", false}, {"nvenc", "nvenc", false}, {"vaapi", "vaapi", false}, {"videotoolbox", "videotoolbox", false},
 		{"nvenc tone mapped", "nvenc", true}, {"videotoolbox tone mapped", "videotoolbox", true}} {
 		t.Run(variant.name, func(t *testing.T) {
+			t.Parallel()
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)
@@ -72,6 +74,7 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 // are burned in as an image track is; a run started while a subtitle is
 // shown shows it.
 func TestImageSubtitleFilesAreBurnedIn(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	video, keyframes := source(t, ffmpeg, ffprobe, "aac")
 	dir := t.TempDir()
@@ -95,6 +98,7 @@ func TestImageSubtitleFilesAreBurnedIn(t *testing.T) {
 	}
 	for _, file := range []string{"rectangle.sup", "rectangle.idx"} {
 		t.Run(file, func(t *testing.T) {
+			t.Parallel()
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)

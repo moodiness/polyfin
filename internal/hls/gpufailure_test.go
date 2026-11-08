@@ -69,6 +69,7 @@ func logLine(log string, parts ...string) string {
 // System › Health, for as long as NVENC is the choice or among those
 // Automatic tried.
 func TestAnNVIDIADriverTooOldIsLoggedAndTold(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ system, want, level string }{
 		{"windows", "auto", "level=INFO"},
 		{"linux", "nvenc", "level=WARN"},
@@ -94,6 +95,7 @@ func TestAnNVIDIADriverTooOldIsLoggedAndTold(t *testing.T) {
 // follows with the minimum driver too, is logged with FFmpeg's reason,
 // and tells no driver too old.
 func TestOtherNVENCFailuresAreLoggedOnly(t *testing.T) {
+	t.Parallel()
 	var log bytes.Buffer
 	m := failingFFmpeg(t, "linux", noEncodeLibrary, &log)
 	m.SelectHardware("auto", "/dev/dri/renderD128")
@@ -119,6 +121,7 @@ ffmpeg: libX11.so.6.tramp.S:42: _libX11_so_6_tramp_resolve: Assertion ` + "`0 &&
 // with libva, and on amd64 whatever the system, FFmpeg's own reason is
 // logged.
 func TestVAAPIIsNotOfferedOnArm64WithoutLibva(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake FFmpeg is a shell script")
 	}

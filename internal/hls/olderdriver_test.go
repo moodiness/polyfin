@@ -119,6 +119,7 @@ func logged(t *testing.T, log *lockedLog, parts ...string) {
 // that FFmpeg, which the Manager runs while that GPU is chosen. No driver
 // is then told too old.
 func TestAnOlderNVIDIADriverTakesTheFFmpegForOlderDrivers(t *testing.T) {
+	t.Parallel()
 	var log lockedLog
 	m := failingFFmpeg(t, "linux", driverTooOld, &log)
 	defer m.Close()
@@ -147,6 +148,7 @@ func TestAnOlderNVIDIADriverTakesTheFFmpegForOlderDrivers(t *testing.T) {
 
 // Downloaded already, the FFmpeg for older drivers is taken at once.
 func TestTheFFmpegForOlderDriversDownloadedIsTakenAtOnce(t *testing.T) {
+	t.Parallel()
 	var log lockedLog
 	m := failingFFmpeg(t, "windows", driverTooOld, &log)
 	defer m.Close()
@@ -161,6 +163,7 @@ func TestTheFFmpegForOlderDriversDownloadedIsTakenAtOnce(t *testing.T) {
 // A driver older than 570, whose API the FFmpeg for older drivers does not
 // take either, downloads nothing: the driver needed is that FFmpeg's.
 func TestADriverOlderThan570NeedsDriver570(t *testing.T) {
+	t.Parallel()
 	var log lockedLog
 	m := failingFFmpeg(t, "linux", driverOlderThan570, &log)
 	defer m.Close()
@@ -175,6 +178,7 @@ func TestADriverOlderThan570NeedsDriver570(t *testing.T) {
 // A download that fails is told, and tried again when the GPU is chosen
 // again, as when the settings are saved.
 func TestAFailedDownloadIsToldAndTriedAgain(t *testing.T) {
+	t.Parallel()
 	var log lockedLog
 	m := failingFFmpeg(t, "linux", driverTooOld, &log)
 	defer m.Close()
@@ -198,6 +202,7 @@ func TestAFailedDownloadIsToldAndTriedAgain(t *testing.T) {
 
 // NVENC failing with the FFmpeg for older drivers too is told with why.
 func TestNVENCFailingWithTheFFmpegForOlderDriversIsTold(t *testing.T) {
+	t.Parallel()
 	var log lockedLog
 	m := failingFFmpeg(t, "linux", driverTooOld, &log)
 	defer m.Close()

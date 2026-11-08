@@ -24,6 +24,7 @@ func contains(args []string, want ...string) bool {
 // Each setting changes the FFmpeg command line of conversions as it says,
 // for every encoder, in files and live alike.
 func TestSettingsChangeTheArguments(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan([]time.Duration{0, 6 * time.Second}, 12*time.Second)
 	nvidia := &Hardware{Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}}
 	nvidiaToneMapping := &Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
@@ -134,6 +135,7 @@ func TestSettingsChangeTheArguments(t *testing.T) {
 // player: counted in time, the 2 s first segment lets fewer seconds
 // through than its count would.
 func TestSegmentsAheadFollowTheSettings(t *testing.T) {
+	t.Parallel()
 	ffmpeg, _ := tools(t)
 	input := filepath.Join(t.TempDir(), "long.mkv")
 	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24",
@@ -192,6 +194,7 @@ func TestSegmentsAheadFollowTheSettings(t *testing.T) {
 // The ahead limit is a length of picture past the end of the segment
 // asked for: at least the next segment, 120 s unless set.
 func TestAheadLimitCountsTime(t *testing.T) {
+	t.Parallel()
 	m := &Manager{}
 	// Segments start at 0, 2, 6, 10 s, then every 4 s to 600 s.
 	var keyframes []time.Duration

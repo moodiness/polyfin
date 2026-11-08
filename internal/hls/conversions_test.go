@@ -13,6 +13,7 @@ import (
 // of a version counts once, whatever its play sessions, and copies never
 // count.
 func TestConversionsAreLimited(t *testing.T) {
+	t.Parallel()
 	m, err := NewManager("ffmpeg-not-installed", t.TempDir(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)

@@ -10,6 +10,7 @@ import (
 // bitrate, and to one and a half times its bitrate without one, with a
 // quality factor too.
 func TestEveryEncoderPeaksAtItsMaxRate(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	gpu := map[string]*Hardware{
 		"nvenc": {Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}},

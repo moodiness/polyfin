@@ -26,6 +26,7 @@ func seconds(values ...float64) []time.Duration {
 }
 
 func TestSegmentsStartOnKeyframesFFmpegCanSeekTo(t *testing.T) {
+	t.Parallel()
 	for name, c := range map[string]struct {
 		keyframes []time.Duration
 		duration  time.Duration
@@ -54,6 +55,7 @@ func TestSegmentsStartOnKeyframesFFmpegCanSeekTo(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			plan := NewPlan(c.keyframes, c.duration)
 			if !slices.Equal(plan.starts, c.starts) {
 				t.Fatalf("starts %v, want %v", plan.starts, c.starts)
@@ -72,6 +74,7 @@ func TestSegmentsStartOnKeyframesFFmpegCanSeekTo(t *testing.T) {
 // everywhere: 2 s, then every 4 s, the last segment at least 1 s long; the
 // playlists' target duration is the longest segment, rounded up.
 func TestGridAndTargetDurationFollowTheSegments(t *testing.T) {
+	t.Parallel()
 	grid := NewGridPlan(13 * time.Second)
 	if !grid.Grid() || !slices.Equal(grid.starts, seconds(0, 2, 6, 10)) || grid.TargetDuration() != 4 {
 		t.Errorf("grid %v, target %d", grid.starts, grid.TargetDuration())
@@ -88,6 +91,7 @@ func TestGridAndTargetDurationFollowTheSegments(t *testing.T) {
 }
 
 func TestPlaylistsListEverySegment(t *testing.T) {
+	t.Parallel()
 	plan := NewPlan(seconds(0, 6.5, 13), 20*time.Second)
 	var media bytes.Buffer
 	if err := WriteMedia(&media, plan, FMP4, func(n int) string { return "hls1/main/" + strconv.Itoa(n) + ".mp4?a=b" }); err != nil {
@@ -121,6 +125,7 @@ hls1/main/2.mp4?a=b
 }
 
 func TestSubtitleRenditionsFollowHLSRules(t *testing.T) {
+	t.Parallel()
 	var master bytes.Buffer
 	err := WriteMaster(&master, []Variant{{Bandwidth: 1_000_000, URI: "main.m3u8"}}, []Rendition{
 		{Name: "French", Language: "fr", URI: "s0.m3u8"},
@@ -150,6 +155,7 @@ main.m3u8
 // its own bandwidth, size, codecs and media playlist, sharing the
 // subtitles; the playlist tells that every segment starts on a keyframe.
 func TestVariantsAreListedInOrder(t *testing.T) {
+	t.Parallel()
 	var master bytes.Buffer
 	err := WriteMaster(&master, []Variant{
 		{Bandwidth: 15_640_000, Codecs: "avc1.640028,mp4a.40.2", Width: 1920, Height: 1080, FrameRate: 24, Range: "SDR", URI: "main.m3u8?a=b"},
@@ -229,6 +235,7 @@ func probePackets(t *testing.T, ffprobe, path string) []packet {
 }
 
 func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	// AAC starts before zero, with its priming; the MP4 header of E-AC-3
 	// needs its first packet; converted audio is decoded from where FFmpeg
@@ -252,6 +259,7 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 				name = "video converted to H.264 in " + format.Extension()
 			}
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
 				m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 				if err != nil {
 					t.Fatal(err)
@@ -386,6 +394,7 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 }
 
 func TestHDRIsConvertedToSDR(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	// Video tagged as HDR10: BT.2020 primaries and the PQ transfer.
 	input := filepath.Join(t.TempDir(), "hdr.mkv")
@@ -403,6 +412,7 @@ func TestHDRIsConvertedToSDR(t *testing.T) {
 			name = "processor"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)
@@ -443,6 +453,7 @@ func TestHDRIsConvertedToSDR(t *testing.T) {
 // video keeps the source's colors all the same, on the processor and on a
 // GPU, and claims none the source does not state.
 func TestConvertedVideoKeepsTheSourcesColors(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	if encoders, _ := exec.Command(ffmpeg, "-hide_banner", "-encoders").Output(); !bytes.Contains(encoders, []byte(" libx265 ")) {
 		t.Skip("FFmpeg has no libx265 to make the source with")
@@ -466,6 +477,7 @@ func TestConvertedVideoKeepsTheSourcesColors(t *testing.T) {
 			name = "processor"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)
@@ -537,6 +549,7 @@ func TestConvertedVideoKeepsTheSourcesColors(t *testing.T) {
 }
 
 func TestARemuxThatFailsReportsItsError(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
 	input, keyframes := source(t, ffmpeg, ffprobe, "aac")
 	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))

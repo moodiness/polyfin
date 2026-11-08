@@ -14,6 +14,7 @@ import (
 // VideoToolbox and Intel's GPU, from an x265 sample carrying its
 // mastering display. A GPU keeping up is timed once.
 func TestASlowGPUHDRChainIsTimedLower(t *testing.T) {
+	t.Parallel()
 	nvidia := Hardware{Method: "cuda", Encoders: []string{"h264_nvenc", "hevc_nvenc"}, ToneMapping: true}
 	videoToolbox := Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox", "hevc_videotoolbox"}, ToneMapping: true}
 	intel := Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
@@ -67,6 +68,7 @@ func TestASlowGPUHDRChainIsTimedLower(t *testing.T) {
 // else to the GPU at 720p when it keeps up there, else to the faster of
 // the two, the GPU then at 720p.
 func TestWhereHDRGoesFollowsTheTimings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                string
 		gpu, low, processor float64
@@ -102,6 +104,7 @@ func TestWhereHDRGoesFollowsTheTimings(t *testing.T) {
 // 720p, and the processor's tone mapping at 1.25x once the GPU is timed.
 // HDR then goes to the processor, the GPU still encoding.
 func TestASlowGPUHandsHDRToAFasterProcessor(t *testing.T) {
+	t.Parallel()
 	r := &recordingRunner{answer: func(args []string) (time.Duration, error) {
 		if strings.HasSuffix(args[len(args)-1], ".mkv") {
 			return 5 * time.Second, nil
