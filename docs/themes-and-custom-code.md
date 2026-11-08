@@ -111,12 +111,14 @@ API details: [Web player theme loading](jellyfin-api.md#web-player-theme-loading
 
 ## LumaaGlaass
 
-The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `43dc3e0` of its repository (October 11, 2026, after its version 1.1.0), with three patches of Polyfin's. The theme is updated with Polyfin's releases.
+The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `89b25b5` of its repository (November 8, 2026, after its version 1.1.0), with three patches of Polyfin's. The theme is updated with Polyfin's releases.
 
 - **Served by Polyfin:** the web player serves the theme's files itself, under `/web/polyfin/themes/lumaaglaass/`. No browser loads them from elsewhere, and the theme works on a server cut off from the internet.
 - **Cached:** their address carries a version that changes with them. A browser keeps each file for a year, and gets the new ones with the Polyfin release that brings them.
 - **Made, not stored:** Polyfin makes the CSS and script that load the files. A new copy of the theme changes them by itself.
 - **Each user's choices:** each user chooses the theme's appearance and features on the LumaaGlaass page of the web player's settings menu. The choices are saved with their account, on every device.
+  - **Quick recipes:** buttons on the page fill the theme's variables in one click, such as "Taller home banner", "Shorter home banner", "Bigger posters" and "Smaller posters". "Save" keeps them.
+  - **For every user:** on their own LumaaGlaass page, an administrator also gets "Delete for every user". It deletes the theme's saved settings of every account, after one confirmation, and says how many it deleted. Each account then starts again from the defaults. Other users never see the button.
 - **jellyfin-web's Dark theme:** the theme needs it. It is the default.
 - **Upgraded servers:** a server upgraded from a version without a theme chooses it from its two texts:
   - **LumaaGlaass** when they still loaded the bundled theme, which empties them;
@@ -127,6 +129,8 @@ The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass
 
 The theme's home carousel is the large rotating artwork above the home rows. It is off by default: the home starts with its rows, over a still background.
 
+- **Pausing it:** a pause button before the dots stops the slides until it is pressed again or the page is loaded again. The carousel also waits while the pointer is over it, while a finger touches it and while keyboard focus is inside it. When the system asks for reduced motion, the carousel never moves by itself, and the button is hidden.
+- **Play:** the banner's "Play" opens the title's page, or a series' next episode, where the user starts playback.
 - **Turning it on:** a user turns it on with "Home carousel" on the LumaaGlaass page, then "Save". An administrator can do it for another user from that user's settings.
 - **The defaults:** the page starts from the options of the theme's script, `window.LumaaGlaassOptions`. `homeCarousel: false` there is the default for every user who never saved it. The options it leaves out keep the theme's own recommended values.
 - **Changing them for the whole server:** use **Edit as Custom**, and change them in **Custom JavaScript**.
@@ -140,7 +144,7 @@ The theme's home carousel is the large rotating artwork above the home rows. It 
 
 The patches are in [`third_party/lumaaglaass`](../third_party/lumaaglaass), with the theme's license:
 
-- The LumaaGlaass page takes the options of the script's loader as its defaults. The theme's own page ignores them.
+- The LumaaGlaass page's "Recommended" profile takes the options of the script's loader, as the defaults of a user who never saved do. The theme's own profile ignores them, so it would turn the carousel on.
 - The theme's script, pasted rather than loaded, takes its extensions from Polyfin. Otherwise it would take them from the main branch of the theme's repository.
 - The theme's script goes over the page once per frame, rather than after each of jellyfin-web's changes to it, which made the web player slower to start and to change pages.
 
@@ -188,7 +192,7 @@ In **Custom JavaScript**, the bundled theme's loader with the address of the the
 - **Privacy:** the CDN sees the address of every browser that opens the web player.
 - **Offline:** a browser that cannot reach the CDN shows the web player's own look.
 - **Delays:** the CDN takes up to 12 hours to serve a change to the theme. A browser keeps the files it loaded for up to 7 days.
-- **The carousel:** without Polyfin's patches, the LumaaGlaass page ignores `homeCarousel` in the options, so users who never saved it get the carousel on. `homeCarousel: false` hides it for every user only with `preferences: false`, which also removes the LumaaGlaass page.
+- **The carousel:** without Polyfin's patches, users who never saved also start with `homeCarousel: false`, but the "Recommended" profile of the LumaaGlaass page turns the carousel on.
 - **Coming back:** to come back to the bundled copy, choose **LumaaGlaass**. The **Custom** texts stay for later.
 
 ## Use another theme
