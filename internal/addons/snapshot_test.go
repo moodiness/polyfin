@@ -16,6 +16,7 @@ import (
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // queryCounter counts the statements a pool sends.
@@ -28,30 +29,30 @@ func (c *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.T
 
 func (c *queryCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
+// sameDatabase returns another pool on the database of pool, a database
+// of its own, its configuration adjusted by configure.
+func sameDatabase(t *testing.T, pool *pgxpool.Pool, configure func(*pgxpool.Config)) *pgxpool.Pool {
+	t.Helper()
+	config, err := pgxpool.ParseConfig(testdb.CopyURL(t, pool))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configure(config)
+	same, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(same.Close)
+	return same
+}
+
 // countedStore returns a store whose statements are counted, and a pool
-// on the same schema that writes behind its back.
+// on the same database that writes behind its back.
 func countedStore(t *testing.T) (*Store, *queryCounter, *pgxpool.Pool) {
 	t.Helper()
-	other := testdb.New(t)
-	if err := database.Migrate(t.Context(), other); err != nil {
-		t.Fatal(err)
-	}
-	var schema string
-	if err := other.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
-		t.Fatal(err)
-	}
-	config, err := pgxpool.ParseConfig(testdb.URL(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.ConnConfig.RuntimeParams["search_path"] = schema
+	other := migrated.New(t)
 	counter := &queryCounter{}
-	config.ConnConfig.Tracer = counter
-	pool, err := pgxpool.NewWithConfig(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := sameDatabase(t, other, func(config *pgxpool.Config) { config.ConnConfig.Tracer = counter })
 	return New(pool, stremio.NewClient("test")), counter, other
 }
 
@@ -82,6 +83,7 @@ func eventually(t *testing.T, what string, done func() bool) {
 }
 
 func TestWatchedStoreAnswersFromMemory(t *testing.T) {
+	t.Parallel()
 	store, counter, _ := countedStore(t)
 	addon := newFakeAddon(t, catalogs("movie", 3))
 	installed, err := store.Install(t.Context(), Shared(), addon.url("a"), false)
@@ -126,7 +128,8 @@ func TestWatchedStoreAnswersFromMemory(t *testing.T) {
 // their own, and the database notifies every change on one channel: a
 // change in another schema never has the store read its own again.
 func TestWatchedStoreIgnoresOtherSchemas(t *testing.T) {
-	store, counter, _ := countedStore(t)
+	t.Parallel()
+	store, counter, other := countedStore(t)
 	addon := newFakeAddon(t, catalogs("movie", 3))
 	if _, err := store.Install(t.Context(), Shared(), addon.url("a"), false); err != nil {
 		t.Fatal(err)
@@ -135,7 +138,15 @@ func TestWatchedStoreIgnoresOtherSchemas(t *testing.T) {
 	if _, err := store.Libraries(t.Context(), Shared()); err != nil {
 		t.Fatal(err)
 	}
-	neighbour, _ := newStore(t)
+	// A neighbour keeps its tables in another schema of the same database.
+	if _, err := other.Exec(t.Context(), "CREATE SCHEMA neighbour"); err != nil {
+		t.Fatal(err)
+	}
+	neighbourPool := sameDatabase(t, other, func(config *pgxpool.Config) { config.ConnConfig.RuntimeParams["search_path"] = "neighbour" })
+	if err := database.Migrate(t.Context(), neighbourPool); err != nil {
+		t.Fatal(err)
+	}
+	neighbour := New(neighbourPool, stremio.NewClient("test"))
 	counter.queries.Store(0)
 	if _, err := neighbour.Install(t.Context(), Shared(), addon.url("b"), false); err != nil {
 		t.Fatal(err)
@@ -153,6 +164,7 @@ func TestWatchedStoreIgnoresOtherSchemas(t *testing.T) {
 }
 
 func TestEveryWriteOfTheStoreIsReadAtOnce(t *testing.T) {
+	t.Parallel()
 	store, users := newStore(t)
 	// No notification can help: only the store's own writes tell it.
 	store.watching.Store(true)
@@ -284,6 +296,7 @@ func TestEveryWriteOfTheStoreIsReadAtOnce(t *testing.T) {
 }
 
 func TestChangesMadeElsewhereReachTheSnapshot(t *testing.T) {
+	t.Parallel()
 	store, _, other := countedStore(t)
 	ctx := t.Context()
 	source, err := store.Create(ctx, Shared(), KindM3U, "https://list.example/a.m3u", func(accounts.ID) stremio.Manifest {
@@ -336,6 +349,7 @@ func TestChangesMadeElsewhereReachTheSnapshot(t *testing.T) {
 }
 
 func TestStoreFollowsChangesAgainAfterLosingTheDatabase(t *testing.T) {
+	t.Parallel()
 	store, _, other := countedStore(t)
 	ctx := t.Context()
 	addon := newFakeAddon(t, catalogs("movie", 1))
@@ -368,6 +382,7 @@ func TestStoreFollowsChangesAgainAfterLosingTheDatabase(t *testing.T) {
 }
 
 func TestUnwatchedStoreReadsTheDatabase(t *testing.T) {
+	t.Parallel()
 	store, _, other := countedStore(t)
 	ctx := t.Context()
 	addon := newFakeAddon(t, catalogs("movie", 1))
