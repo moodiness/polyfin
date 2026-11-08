@@ -142,7 +142,8 @@ func (s usedBySetup) reload(t *testing.T, user accounts.User) accounts.User {
 	return reloaded
 }
 
-// views lists the names of the libraries token's apps show.
+// views lists the names of the libraries token's apps show, but the
+// Playlists view of the user's watchlist.
 func (s usedBySetup) views(t *testing.T, token string) []string {
 	t.Helper()
 	var views QueryResult
@@ -150,7 +151,7 @@ func (s usedBySetup) views(t *testing.T, token string) []string {
 		t.Fatalf("views: %d", status)
 	}
 	var names []string
-	for _, view := range views.Items {
+	for _, view := range libraryViews(views.Items) {
 		names = append(names, view.Name)
 	}
 	return names

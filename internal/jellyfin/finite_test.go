@@ -56,6 +56,7 @@ func TestRatingsThatAreNotFiniteNumbersAreNone(t *testing.T) {
 	admin := s.signIn("admin", "dashboard")
 	var views QueryResult
 	s.get(t, "/UserViews", admin, &views)
+	views.Items = libraryViews(views.Items)
 	if len(views.Items) != 1 {
 		t.Fatalf("views: %v", itemNames(views.Items))
 	}

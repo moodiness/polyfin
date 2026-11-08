@@ -13,10 +13,10 @@ import (
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
-// watchlistOf lists user's watchlist as the Watchlist view does.
+// watchlistOf lists the entries of user's watchlist playlist, in order.
 func (h harness) watchlistOf(t *testing.T, user accounts.ID) []accounts.ID {
 	t.Helper()
-	ids, err := watchlist.New(h.db).Titles(t.Context(), user)
+	ids, err := h.watchlist.Titles(t.Context(), user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestTraktWatchlistFillsTheWatchlist(t *testing.T) {
 
 	// Turned off, nothing is imported, and what the list alone held
 	// leaves: a one-off app import holds the second movie too.
-	if _, err := watchlist.New(h.db).Save(t.Context(), user, watchlist.Import, []watchlist.Title{{ID: h.idOf(t, second)}}, false); err != nil {
+	if _, err := h.watchlist.Save(t.Context(), user, watchlist.Import, []watchlist.Title{{ID: h.idOf(t, second)}}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.SetWatchlistImport(t.Context(), user, Trakt, false); err != nil {

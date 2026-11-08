@@ -147,6 +147,7 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
+	views.Items = libraryViews(views.Items)
 	if len(views.Items) != 1 || views.Items[0].CollectionType != "livetv" || views.Items[0].Type != "UserView" {
 		t.Fatalf("views: a live TV catalog must give the Live TV view and no library: %+v", views.Items)
 	}

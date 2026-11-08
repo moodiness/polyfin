@@ -233,7 +233,8 @@ func TestAPIKeysBrowseForTheUserTheyName(t *testing.T) {
 	if got := count("/Library/MediaFolders"); got != 3 {
 		t.Errorf("media folders: %d", got)
 	}
-	if got := count("/UserViews?userId=" + memberID.String()); got != 2 {
+	// The member's libraries, and the Playlists view of their watchlist.
+	if got := count("/UserViews?userId=" + memberID.String()); got != 3 {
 		t.Errorf("member's views through the key: %d", got)
 	}
 	if got := count("/Library/MediaFolders?isHidden=true"); got != 0 {

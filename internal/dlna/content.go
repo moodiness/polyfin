@@ -38,10 +38,11 @@ func randomUUID() string {
 // The objects a device browses are named by an ID that tells what they
 // are: the root, the lists of the user, or an item with how it is listed.
 const (
-	rootID   = "0"
-	resumeID = "resume"
-	nextUpID = "nextup"
-	liveTvID = "livetv"
+	rootID      = "0"
+	resumeID    = "resume"
+	nextUpID    = "nextup"
+	liveTvID    = "livetv"
+	watchlistID = "watchlist"
 	// The prefixes of items: a library or folder listed through the
 	// catalogs, a series, a season (series.season), a music folder, and a
 	// leaf, which plays.
@@ -131,8 +132,8 @@ func (s *Service) list(id string) object {
 
 // roots lists what the root shows the user: their views as Jellyfin apps
 // see them, their libraries and local folders, music included, Live TV
-// when they have channels, the Watchlist, then Continue Watching and Next
-// Up.
+// when they have channels, their watchlist, then Continue Watching and
+// Next Up.
 func (s *Service) roots(ctx context.Context, user accounts.User) ([]object, error) {
 	libraries, err := s.options.Library.Libraries(ctx, user)
 	if err != nil {
@@ -149,15 +150,13 @@ func (s *Service) roots(ctx context.Context, user accounts.User) ([]object, erro
 	} else if has {
 		objects = append(objects, s.list(liveTvID))
 	}
-	watchlist, err := s.options.Library.Item(ctx, user, library.WatchlistViewID)
-	switch {
-	case err == nil:
-		o, _ := objectOf(library.Item{ID: watchlist.ID, Kind: library.KindLibrary, Name: watchlist.Name}, rootID)
-		objects = append(objects, o)
-	case !errors.Is(err, library.ErrNotFound):
+	name, err := s.options.Library.WatchlistName(ctx, user)
+	if err != nil {
 		return nil, err
 	}
-	return append(objects, s.list(resumeID), s.list(nextUpID)), nil
+	watchlist := s.list(watchlistID)
+	watchlist.title = name
+	return append(objects, watchlist, s.list(resumeID), s.list(nextUpID)), nil
 }
 
 // window returns the part of a list a request asks for.
@@ -201,6 +200,8 @@ func (s *Service) children(ctx context.Context, user accounts.User, id string, s
 		return whole(s.options.Player.NextUp(ctx, user))
 	case id == liveTvID:
 		return whole(s.options.Library.Channels(ctx, user))
+	case id == watchlistID:
+		return whole(s.options.Library.WatchlistTitles(ctx, user))
 	}
 	prefix, rest := id[:1], id[1:]
 	switch prefix {

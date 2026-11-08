@@ -143,15 +143,16 @@ func TestSharesAndVisibility(t *testing.T) {
 		t.Errorf("a changed share does not come last: %+v", p.Shares)
 	}
 
+	// A stranger sees their own watchlist alone, then the open playlist.
 	stranger := createUser(t, users, "stranger")
-	if lists, _ := store.Visible(ctx, stranger.ID); len(lists) != 0 {
-		t.Errorf("a private playlist is visible to a stranger")
+	if lists, _ := store.Visible(ctx, stranger.ID); len(lists) != 1 || !lists[0].Watchlist || lists[0].Owner != stranger.ID {
+		t.Errorf("a private playlist is visible to a stranger: %+v", lists)
 	}
 	if err := store.Update(ctx, id, Changes{OpenAccess: new(true)}); err != nil {
 		t.Fatal(err)
 	}
-	if visible, _ := store.AnyVisible(ctx, stranger.ID); !visible {
-		t.Errorf("an open playlist is not visible to everyone")
+	if lists, _ := store.Visible(ctx, stranger.ID); len(lists) != 2 || lists[0].ID != id {
+		t.Errorf("an open playlist is not visible to everyone: %+v", lists)
 	}
 
 	if err := store.Delete(ctx, id); err != nil {
@@ -162,5 +163,47 @@ func TestSharesAndVisibility(t *testing.T) {
 	}
 	if err := store.Add(ctx, id, []accounts.ID{item(1)}, 0); !errors.Is(err, ErrNotFound) {
 		t.Errorf("adding to a deleted playlist: %v", err)
+	}
+}
+
+// Every user has their watchlist from their creation, under the default
+// name, which an empty name brings back; an ordinary playlist keeps the
+// name it is given.
+func TestEveryUserHasAWatchlistUnderTheDefaultName(t *testing.T) {
+	t.Parallel()
+	store, users := setup(t)
+	ctx := t.Context()
+	alice := createUser(t, users, "alice")
+	lists, err := store.Visible(ctx, alice.ID)
+	if err != nil || len(lists) != 1 || !lists[0].Watchlist || lists[0].Name != "" || lists[0].Owner != alice.ID {
+		t.Fatalf("a new user's playlists: %+v %v", lists, err)
+	}
+	watchlist := lists[0].ID
+	name := func(id accounts.ID) string {
+		t.Helper()
+		p, err := store.Get(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Name
+	}
+	if err := store.Update(ctx, watchlist, Changes{Name: new("To watch")}); err != nil || name(watchlist) != "To watch" {
+		t.Errorf("renamed: %q %v", name(watchlist), err)
+	}
+	if err := store.Update(ctx, watchlist, Changes{Name: new("")}); err != nil || name(watchlist) != "" {
+		t.Errorf("an empty name: %q %v", name(watchlist), err)
+	}
+	mix, err := store.Create(ctx, Draft{Owner: alice.ID, Name: "Mix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(ctx, mix, Changes{Name: new("")}); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := store.Get(ctx, mix); err != nil || p.Watchlist || p.Name != "" {
+		t.Errorf("an ordinary playlist named empty: %+v %v", p, err)
+	}
+	if lists, _ := store.Visible(ctx, alice.ID); len(lists) != 2 {
+		t.Errorf("one watchlist for each user: %+v", lists)
 	}
 }

@@ -3,6 +3,7 @@ package notifications
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -10,9 +11,10 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 )
 
-// TitleJSON is the movie or series of a user's watchlist that versions
-// were found for: its item as Jellyfin apps know it, of Kind "movie" or
-// "series", its name, its year, 0 when unknown, and its provider IDs.
+// TitleJSON is the movie, series or episode of a user's watchlist that
+// versions were found for: its item as Jellyfin apps know it, of Kind
+// "movie", "series" or "episode", its name, its year, 0 when unknown, and
+// its provider IDs.
 type TitleJSON struct {
 	ID          string            `json:"id"`
 	Kind        string            `json:"kind"`
@@ -22,20 +24,26 @@ type TitleJSON struct {
 }
 
 // titleAvailableEvent tells user that versions were found for title, of
-// their watchlist.
+// their watchlist. An episode is named after its series, with its season
+// and number.
 func (s *Service) titleAvailableEvent(user accounts.User, title library.Item) Event {
 	ev := s.newEvent(TitleAvailable)
 	ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 	kind := "movie"
-	if title.Kind == library.KindSeries {
+	switch title.Kind {
+	case library.KindSeries:
 		kind = "series"
+	case library.KindEpisode:
+		kind = "episode"
 	}
 	ev.WatchlistTitle = &TitleJSON{ID: title.ID.String(), Kind: kind, Name: title.Name, Year: title.ProductionYear, ProviderIDs: title.ProviderIDs}
 	if ev.WatchlistTitle.ProviderIDs == nil {
 		ev.WatchlistTitle.ProviderIDs = map[string]string{}
 	}
 	name := title.Name
-	if title.ProductionYear > 0 {
+	if title.Kind == library.KindEpisode && title.SeriesName != "" {
+		name = fmt.Sprintf("%s S%02dE%02d", title.SeriesName, title.ParentIndexNumber, title.IndexNumber)
+	} else if title.ProductionYear > 0 {
 		name += " (" + strconv.Itoa(title.ProductionYear) + ")"
 	}
 	ev.Title = s.phrase(i18n.Text{"Versions found: %s", "Versions trouvées\u202f: %s", "Versionen gefunden: %s", "Versiones encontradas: %s",
@@ -51,9 +59,10 @@ func (s *Service) titleAvailableEvent(user accounts.User, title library.Item) Ev
 }
 
 // WatchlistTitleAvailable tells user, on their own targets only, that
-// versions were found for title, a movie or series of their watchlist (see
-// watchlist.Checker): callers tell it once per title. A title the user may
-// no longer see is not told of. The message is sent in the background.
+// versions were found for title, a movie, series or episode of their
+// watchlist (see watchlist.Checker): callers tell it once per title. A
+// title the user may no longer see is not told of. The message is sent in
+// the background.
 func (s *Service) WatchlistTitleAvailable(ctx context.Context, user accounts.User, title accounts.ID) {
 	item, err := s.library.Item(ctx, user, title)
 	if err != nil {

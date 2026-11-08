@@ -154,15 +154,15 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 }
 
 // counted reports whether the videos an item holds are counted from their
-// own data: a folder's, and a season of an episode order's.
+// own data: a folder's, a playlist's, and a season of an episode order's.
 func counted(item library.Item) bool {
-	return item.Contents != nil && (item.Kind == library.KindFolder || item.Kind == library.KindSeason && item.EpisodeGroup != "")
+	return item.Contents != nil && (item.Kind == library.KindFolder || item.Kind == kindPlaylist || item.Kind == library.KindSeason && item.EpisodeGroup != "")
 }
 
 // of describes what the user did with item. Series and seasons count
-// their played episodes, and folders their played videos; a partly
-// watched episode or video counts as unplayed. Other folders only show
-// that they are not played.
+// their played episodes, and folders and playlists their played videos; a
+// partly watched episode or video counts as unplayed. Other folders only
+// show that they are not played.
 func (s userState) of(item library.Item) UserItemData {
 	result := UserItemData{Key: hyphenated(item.ID), ItemId: item.ID.String()}
 	data := s.data[item.ID]
@@ -179,7 +179,7 @@ func (s userState) of(item library.Item) UserItemData {
 		if percent, ok := data.PlayedPercentage(); ok {
 			result.PlayedPercentage = new(percent)
 		}
-	case library.KindSeries, library.KindSeason, library.KindCollection, library.KindFolder:
+	case library.KindSeries, library.KindSeason, library.KindCollection, library.KindFolder, kindPlaylist:
 		result.PlayedPercentage = new(0.0)
 		contents := item.Contents
 		if contents == nil {
@@ -227,7 +227,8 @@ func stored(item library.Item) userdata.Item {
 }
 
 // userDataItem binds the item a user data endpoint acts on and the user it
-// acts for. A version stands for its title. ok is false once w was
+// acts for. A version stands for its title; a playlist the user sees is
+// described as an item too (see playlistItem). ok is false once w was
 // answered.
 func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErrors) (accounts.User, library.Item, bool) {
 	id := b.pathID(r, "itemId")
@@ -238,6 +239,9 @@ func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErr
 	item, err := h.Library.Item(r.Context(), user, id)
 	if errors.Is(err, library.ErrNotFound) {
 		item, err = h.title(r.Context(), user, id)
+	}
+	if errors.Is(err, library.ErrNotFound) {
+		item, err = h.playlistItem(r.Context(), user, id)
 	}
 	if err != nil {
 		h.browseError(w, r, err)
@@ -337,6 +341,8 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 	case library.KindAlbum, library.KindMusicPlaylist:
 		// As Jellyfin marks a folder's tracks.
 		return h.Library.Music(ctx, user, library.MusicQuery{Parent: item.ID})
+	case kindPlaylist:
+		return h.playlistMarkTargets(ctx, user, item)
 	case library.KindSeries:
 		episodes, err = h.Library.Episodes(ctx, user, item.ID, nil)
 	case library.KindSeason:

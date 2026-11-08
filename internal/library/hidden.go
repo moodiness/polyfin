@@ -11,11 +11,12 @@ import (
 
 // Each user may hide movies, series and folders of videos from their lists
 // (see userdata.HiddenTitle). A hidden title leaves that user's libraries,
-// home rows, searches, similar titles, person pages, collections and
-// Watchlist, as the genres a user blocks do, and a hidden series takes its
-// seasons and episodes with it, a hidden folder its videos. Unlike a
-// blocked title, it still opens by its identifier: its page, with its
-// seasons and episodes, and its playback. Other users are not affected.
+// home rows, searches, similar titles, person pages, collections and the
+// listing of their watchlist, which still holds it, as the genres a user
+// blocks do, and a hidden series takes its seasons and episodes with it,
+// a hidden folder its videos. Unlike a blocked title, it still opens by
+// its identifier: its page, with its seasons and episodes, and its
+// playback. Other users are not affected.
 
 // HiddenTitles is the set of titles a user hid, by item.
 type HiddenTitles map[accounts.ID]bool

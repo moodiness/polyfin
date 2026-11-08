@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 // request is a request one of the fake services received.
@@ -245,7 +246,7 @@ func newService(pool *pgxpool.Pool, store *accounts.Store, f *fakes, log io.Writ
 			LastFM: f.url + "/lastfm/2.0/", ListenBrainz: f.url + "/listenbrainz", AniList: f.url + "/anilist/", MyAnimeList: f.url + "/myanimelist"},
 		AuthURLs: map[string]string{Trakt: f.url + "/trakt-auth", AniList: f.url + "/anilist-auth", MyAnimeList: f.url + "/myanimelist-auth"},
 		Titles:   library.New(pool, addons.New(pool, client), client, logger, store.Settings),
-		UserData: userdata.New(pool)})
+		UserData: userdata.New(pool), Watchlist: watchlisttest.Store(pool)})
 	s.now = func() time.Time { return clockStart }
 	s.timing.gaps = map[string]time.Duration{}
 	s.timing.sharedGaps = map[string]time.Duration{}

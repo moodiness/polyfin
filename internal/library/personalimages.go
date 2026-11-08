@@ -13,26 +13,26 @@ import (
 
 // Personal images.
 //
-// The Watchlist view and the smart lists shown as libraries list titles of
-// each user's own: their watchlist, or what a list keeps of what they did
-// with its titles. Each user gets their own generated image of them, wide
-// as a library's, from the first titles the view lists for them, chosen
-// and kept as a collection's is (see generated.go): compared with the
-// view's first titles when it is listed, at most once per generatedCheck,
-// and saved when it changes. The Watchlist's image shows only titles it
-// still lists: one taken off, or started, gives way to the next at once
-// (see choose, strict). Adding or removing a title through Polyfin's
-// routes has the user's Watchlist image compared again at its next
-// listing (see AddToWatchlist).
+// Playlists, a user's watchlist among them (see package watchlist), and
+// the smart lists shown as libraries list titles as each user sees them:
+// a playlist leaves out what the user may not reach, a list keeps what
+// they did with its titles. Each user who sees one gets their own
+// generated image of it, wide as a library's, from the first titles it
+// lists for them, chosen and kept as a collection's is (see generated.go):
+// compared with its first titles when it is listed, at most once per
+// generatedCheck, and saved when it changes. A playlist's image shows only
+// titles it still lists: one taken off gives way to the next at once (see
+// choose, strict). Changing a watchlist through the library has its
+// images compared again at its next listing (see AddToWatchlist).
 //
-// Image requests come without a user, and the Watchlist view's identifier
-// is the same for every user: the image is found by its tag (see
-// PersonalArtwork), which its URL gives. What each image shows is kept in
-// the database, so that a tag given before a restart is still answered;
-// it goes with its user, and with its smart list. As a library's generated
-// image, it is drawn whatever Settings.GenerateImages says, and not shown
-// to a user under parental control or blocking genres, nor when it shows
-// a title the user hid.
+// Image requests come without a user, and a playlist's image differs with
+// whoever sees it: the image is found by its tag (see PersonalArtwork),
+// which its URL gives. What each image shows is kept in the database, so
+// that a tag given before a restart is still answered; it goes with its
+// user, its playlist and its smart list. As a library's generated image,
+// it is drawn whatever Settings.GenerateImages says, and not shown to a
+// user under parental control or blocking genres, nor when it shows a
+// title the user hid.
 
 // personalKey names a user's image of a view.
 type personalKey struct {
@@ -152,23 +152,30 @@ func (s *Service) loadPersonal(ctx context.Context) error {
 	return nil
 }
 
-// recheckPersonal has user's image of view compared with its first titles
-// at its next listing.
-func (s *Service) recheckPersonal(user, view accounts.ID) {
+// recheckPersonal has every user's image of view compared with its first
+// titles at its next listing.
+func (s *Service) recheckPersonal(view accounts.ID) {
 	p := &s.personal
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if entry, ok := p.entries[personalKey{user, view}]; ok {
-		entry.checked = time.Time{}
-		p.entries[personalKey{user, view}] = entry
+	for key, entry := range p.entries {
+		if key.view == view {
+			entry.checked = time.Time{}
+			p.entries[key] = entry
+		}
 	}
+}
+
+// personalSource is what a personal image is of: a smart list, or a
+// playlist.
+type personalSource struct {
+	smartList, playlist *accounts.ID
 }
 
 // personalImage returns the URL of the image of view, named name, as the
 // user of v is shown it, "" when there is none: from the first titles find
-// gives, compared as rechoose does, strict for the Watchlist. list is the
-// smart list the view is, nil for the Watchlist.
-func (s *Service) personalImage(ctx context.Context, v view, id accounts.ID, name string, list *accounts.ID,
+// gives, compared as rechoose does, strict for a watchlist.
+func (s *Service) personalImage(ctx context.Context, v view, id accounts.ID, name string, source personalSource,
 	find func() ([]candidate, bool, bool)) string {
 	if v.user == (accounts.ID{}) || v.restricted() {
 		return ""
@@ -181,11 +188,12 @@ func (s *Service) personalImage(ctx context.Context, v view, id accounts.ID, nam
 		}
 		return ""
 	}
-	next, remember := s.rechoose(ctx, entry, name, find, list == nil, func(choice generatedChoice) error {
-		_, err := s.db.Exec(ctx, `INSERT INTO personal_images (user_id, view_id, smart_list_id, name, titles, posters, confined)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+	next, remember := s.rechoose(ctx, entry, name, find, source.playlist != nil, func(choice generatedChoice) error {
+		_, err := s.db.Exec(ctx, `INSERT INTO personal_images (user_id, view_id, smart_list_id, playlist_id, name, titles, posters, confined)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (user_id, view_id) DO UPDATE SET name = excluded.name, titles = excluded.titles, posters = excluded.posters,
-				confined = excluded.confined, chosen_at = now()`, key.user, key.view, list, choice.name, choice.titles, choice.posters, choice.confined)
+				confined = excluded.confined, chosen_at = now()`,
+			key.user, key.view, source.smartList, source.playlist, choice.name, choice.titles, choice.posters, choice.confined)
 		return err
 	})
 	if remember {
@@ -199,10 +207,15 @@ func (s *Service) personalImage(ctx context.Context, v view, id accounts.ID, nam
 	return next.choice.image(true)
 }
 
-// watchlistImage returns the URL of the Watchlist view's image for the
-// user of v, whose titles are ids, "" when there is none.
-func (s *Service) watchlistImage(ctx context.Context, v view, ids []accounts.ID) string {
-	return s.personalImage(ctx, v, WatchlistViewID, v.words.watchlist, nil, func() ([]candidate, bool, bool) {
+// PlaylistImage returns the URL of the image of playlist, named name, as
+// user is shown it, whose first titles are ids, a series standing for its
+// episodes: "" when there is none.
+func (s *Service) PlaylistImage(ctx context.Context, user accounts.User, playlist accounts.ID, name string, ids []accounts.ID) string {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return ""
+	}
+	return s.personalImage(ctx, v, playlist, name, personalSource{playlist: &playlist}, func() ([]candidate, bool, bool) {
 		ids = ids[:min(len(ids), generatedReach)]
 		records, err := s.loadAll(ctx, ids)
 		if err != nil {
@@ -235,7 +248,7 @@ func (s *Service) watchlistImage(ctx context.Context, v view, ids []accounts.ID)
 // for them.
 func (s *Service) withSmartLibraryImage(ctx context.Context, v view, l smartList, item *Item) {
 	list := l.list.ID
-	image := s.personalImage(ctx, v, l.item.ID, s.shownName(l.item.ID, l.item.Name), &list, func() ([]candidate, bool, bool) {
+	image := s.personalImage(ctx, v, l.item.ID, s.shownName(l.item.ID, l.item.Name), personalSource{smartList: &list}, func() ([]candidate, bool, bool) {
 		return s.smartListCandidates(ctx, v, l.list)
 	})
 	if image != "" {
@@ -244,8 +257,8 @@ func (s *Service) withSmartLibraryImage(ctx context.Context, v view, l smartList
 }
 
 // PersonalArtwork returns the image of view id whose tag is tag, when it
-// is one of the images users are shown of the Watchlist view or of a
-// smart list shown as a library (see personal images).
+// is one of the images users are shown of a watchlist or of a smart list
+// shown as a library (see personal images).
 func (s *Service) PersonalArtwork(ctx context.Context, id accounts.ID, tag string) (Artwork, bool) {
 	if tag == "" {
 		return Artwork{}, false

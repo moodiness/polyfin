@@ -567,44 +567,41 @@ func TestTheLibraryLeavesTheWatchlistWhenNoListHoldsIt(t *testing.T) {
 		}
 		return []Profile{{ID: "1", Name: "Main", Entries: entries}}
 	}
-	// A one-off import brings 1 and 2; a connection 2, 3 and 4.
+	// A one-off import brings 1 and 2; a connection 2, 3, 4 and 5.
 	h.imported(t, alice, alice, Account{App: "stremio", Profiles: library(1, 2)}, Choice{Profile: "1"})
 	const secret = "kept-secret-0123456789abcdef"
 	h.source.set(func(f *fakeSource) { f.accepted[secret] = true })
-	c := h.connected(t, alice, alice, Account{Profiles: library(2, 3, 4)}, SignIn{Secret: secret}, Choice{Profile: "1"})
-	if c.LastImport == nil || c.LastImport.Watchlist != 2 {
+	c := h.connected(t, alice, alice, Account{Profiles: library(2, 3, 4, 5)}, SignIn{Secret: secret}, Choice{Profile: "1"})
+	if c.LastImport == nil || c.LastImport.Watchlist != 3 {
 		t.Errorf("first import of the connection: %+v", c.LastImport)
 	}
-	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(4), movie(3), movie(2), movie(1)}) {
+	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(5), movie(4), movie(3), movie(2), movie(1)}) {
 		t.Fatalf("watchlist: %v", got)
 	}
 
 	// Taken off the app's library, 3 leaves at the next import; 2 stays,
 	// as the one-off import brought it too.
-	h.source.set(func(f *fakeSource) { f.account = Account{Profiles: library(4)} })
+	h.source.set(func(f *fakeSource) { f.account = Account{Profiles: library(4, 5)} })
 	if c := h.importedNow(t, alice); c.LastImport == nil || c.LastImport.Watchlist != 0 || c.LastImport.Problem != "" {
 		t.Errorf("next import: %+v", c.LastImport)
 	}
-	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(4), movie(2), movie(1)}) {
+	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(5), movie(4), movie(2), movie(1)}) {
 		t.Fatalf("after the next import: %v", got)
 	}
-	// A one-off import's title leaves once started.
-	if _, err := h.data.Change(t.Context(), alice.ID, []userdata.Item{{ID: movie(1)}}, func(d *userdata.Data) { d.Played = true }); err != nil {
+	// Started, a title stays on the playlist.
+	if _, err := h.data.Change(t.Context(), alice.ID, []userdata.Item{{ID: movie(4)}}, func(d *userdata.Data) { d.Played = true }); err != nil {
 		t.Fatal(err)
-	}
-	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(4), movie(2)}) {
-		t.Errorf("after one started: %v", got)
 	}
 	// No import set a favorite.
 	if favorites, err := h.data.Favorites(t.Context(), alice.ID); err != nil || len(favorites) != 0 {
 		t.Errorf("favorites: %+v %v", favorites, err)
 	}
-	// Disconnected, what the connection alone held leaves; the one-off
-	// import's title stays.
+	// Disconnected, what the connection alone held leaves but the title
+	// started; the one-off import's titles stay.
 	if err := h.Disconnect(t.Context(), alice.ID, "stremio"); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(2)}) {
+	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(4), movie(2), movie(1)}) {
 		t.Errorf("after disconnecting: %v", got)
 	}
 }

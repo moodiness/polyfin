@@ -49,14 +49,19 @@ func withEmblem(item library.Item) library.Item {
 
 // viewArtwork returns the image of type imageType of a view of Polyfin's
 // that has one of its own: an emblem, the same for everyone, or, by its
-// tag, a user's image of the Watchlist view or of a smart list shown as a
-// library (see library.Service.PersonalArtwork).
+// tag, a user's image of a watchlist or of a smart list shown as a
+// library (see library.Service.PersonalArtwork). A playlist with nothing
+// to draw shows the Playlists emblem (see playlistDtos), which its tag
+// names whatever the playlist.
 func (h *Handler) viewArtwork(ctx context.Context, id accounts.ID, imageType, tag string) (library.Artwork, bool) {
 	if !strings.EqualFold(imageType, "Primary") {
 		return library.Artwork{}, false
 	}
 	if emblem, ok := viewEmblems[id]; ok {
 		return library.EmblemArtwork(emblem), true
+	}
+	if tag != "" && tag == library.ImageTag(library.EmblemImage(mosaic.EmblemPlaylists).URL()) {
+		return library.EmblemArtwork(mosaic.EmblemPlaylists), true
 	}
 	return h.Library.PersonalArtwork(ctx, id, tag)
 }

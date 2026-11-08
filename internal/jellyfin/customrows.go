@@ -59,8 +59,8 @@ import (
 // Each row is a folder of its own, a library without type, by an
 // identifier of its own (customRowID): its name, in the web player,
 // opens its list, /Items with the row as parentId. A row made a library
-// in other apps (homerows.Row.Library) is also listed by /UserViews, as
-// the Watchlist view is: apps give it a home row of latest items, its
+// in other apps (homerows.Row.Library) is also listed by /UserViews, as a
+// library without type: apps give it a home row of latest items, its
 // first titles. A Because you watched row is a folder for each title it
 // follows, whose identifier holds the title's. The rows' folders are found
 // only after everything else, as an identifier nothing else knows. The

@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/watchlist/watchlisttest"
 )
 
 // newMovieSearchAddon serves a metadata addon whose movie search finds the
@@ -167,7 +168,7 @@ func TestLetterboxdImport(t *testing.T) {
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
-		data, lists, store = userdata.New(deps.pool), watchlist.New(deps.pool), deps.addons
+		data, lists, store = userdata.New(deps.pool), watchlisttest.Store(deps.pool), deps.addons
 		o.Letterboxd = letterboxd.New(letterboxd.Options{Titles: lib, UserData: data, Watchlist: lists, Logger: logger})
 		t.Cleanup(o.Letterboxd.Close)
 	})

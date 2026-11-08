@@ -88,27 +88,29 @@ func mayControl(controller accounts.User, owner accounts.ID) bool {
 	return controller.ID == owner || controller.RemoteControl
 }
 
-// remotePlay asks a session to play items, now or queued.
+// remotePlay asks a session to play items, now or queued. A playlist is
+// sent as the titles it shows the caller, as Jellyfin translates the items
+// of a play command, so that an app told to play one plays its entries.
 func (h *Handler) remotePlay(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	raw, _ := queryParam(r, "playCommand")
 	command := b.enum("playCommand", raw, playCommands)
 	// Like the identifiers of other lists, those that do not parse are
 	// skipped; a request left with none has nothing to play.
-	items := []string{}
+	var ids []accounts.ID
 	for _, value := range listQuery(r, "itemIds") {
 		if id, ok := parseGUID(value); ok {
-			items = append(items, id.String())
+			ids = append(ids, id)
 		}
 	}
-	if len(items) == 0 {
+	if len(ids) == 0 {
 		b.add("itemIds", "The itemIds field is required.")
 	}
+	caller := callerFrom(r.Context()).User
 	request := PlayRequest{
-		ItemIds:             items,
 		StartPositionTicks:  b.ticks(r, "startPositionTicks"),
 		PlayCommand:         command,
-		ControllingUserId:   callerFrom(r.Context()).User.ID.String(),
+		ControllingUserId:   caller.ID.String(),
 		AudioStreamIndex:    b.optionalInt32(r, "audioStreamIndex"),
 		SubtitleStreamIndex: b.optionalInt32(r, "subtitleStreamIndex"),
 		MediaSourceId:       query(r, "mediaSourceId"),
@@ -117,6 +119,17 @@ func (h *Handler) remotePlay(w http.ResponseWriter, r *http.Request) {
 	if len(b) > 0 {
 		validationProblem(w, b)
 		return
+	}
+	if command != "PlayInstantMix" {
+		var err error
+		if ids, err = h.playItems(r.Context(), caller, ids); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+	}
+	request.ItemIds = make([]string, len(ids))
+	for i, id := range ids {
+		request.ItemIds[i] = id.String()
 	}
 	h.command(w, r, "Play", request)
 }

@@ -88,7 +88,7 @@ func (v view) smartList(id accounts.ID) (smartList, bool) {
 
 // smartItem describes a list as apps see it: a collection, or a library of
 // movies or series when every catalog it draws from holds them, else a
-// library without type, as the Watchlist is, which apps give a home row.
+// library without type, which apps give a home row.
 func smartItem(l smartlists.List) Item {
 	item := Item{ID: SmartListItemID(l.ID), Name: l.Name}
 	if l.ShownAs == smartlists.ShownAsCollection {

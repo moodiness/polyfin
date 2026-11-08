@@ -84,9 +84,10 @@ func TestTitlesNotFoundAreKeptAndLinked(t *testing.T) {
 	check("home video, linked", library.TitleRef{IMDb: "tt0000099"}, func(d userdata.Data) bool {
 		return !d.Played && d.Position == 30*time.Minute
 	})
+	// The linked movie, on the app's library, is played: with nothing
+	// left to watch, it adds nothing to the watchlist playlist.
 	if got := h.watchlistOf(t, alice.ID); len(got) != 0 {
-		// Played, the movie is left out of the Watchlist view.
-		t.Errorf("watchlist: %v", got)
+		t.Errorf("watchlist: %v, want none", got)
 	}
 
 	// The next import finds them through their links: the movie played

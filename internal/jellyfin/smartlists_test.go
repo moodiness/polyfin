@@ -45,7 +45,7 @@ func (s testServer) listingNames(t *testing.T, token, path string) []string {
 }
 
 // A smart list shown as a library is a view, with its home row: one
-// without type when it draws from movies and series, as the Watchlist. It
+// without type when it draws from movies and series. It
 // keeps its own order, and a title the user plays leaves a list of titles
 // not played.
 func TestASmartListShownAsALibraryIsAViewWithAHomeRow(t *testing.T) {

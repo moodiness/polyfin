@@ -665,6 +665,10 @@ func (s *Server) catalogFilters(w http.ResponseWriter, r *http.Request, v viewer
 	if !ok {
 		return
 	}
+	if l.none {
+		writeJSON(w, http.StatusOK, options)
+		return
+	}
 	sc, a, err := s.scopeOf(r, v, l, filter{})
 	if err == nil && a.ok() {
 		var titles []item

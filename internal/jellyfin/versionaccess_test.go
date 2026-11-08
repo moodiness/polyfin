@@ -99,7 +99,7 @@ func accessOn(t *testing.T) accessSetup {
 	var views QueryResult
 	token := s.signIn("member", "access-setup")
 	s.get(t, "/UserViews", token, &views)
-	for _, view := range views.Items {
+	for _, view := range libraryViews(views.Items) {
 		var page QueryResult
 		if s.get(t, "/Items?ParentId="+view.Id, token, &page); len(page.Items) == 1 {
 			a.movie = page.Items[0].Id

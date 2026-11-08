@@ -2,77 +2,32 @@ package library
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
-// Watchlist is a view of Polyfin's own, beside the libraries: the movies
-// and series on the user's watchlists that they have not started, the
-// latest added first (see package watchlist). Each user has their own;
-// it shows while it holds titles. Its titles are described as they are
-// anywhere, and those the user may not see, by parental control or
-// blocked genres, are left out, as are those the user hid.
+// Each user's watchlist is a playlist of theirs (see package watchlist),
+// which Jellyfin apps list with their playlists. The library lists its
+// titles in the Now available and Still waiting rows, names it in the
+// language of whoever sees it while it keeps the default name, and draws
+// its image (see personalimages.go). Changing it through these methods
+// has its image compared with its titles again as it next shows.
 
-// WatchlistViewID identifies the Watchlist view, the same on every server.
-var WatchlistViewID = itemID("view|watchlist")
+// watchlistKinds are what a watchlist holds.
+var watchlistKinds = []Kind{KindMovie, KindSeries, KindEpisode}
 
-// watchlistKinds are what the view lists.
-var watchlistKinds = []Kind{KindMovie, KindSeries}
-
-// watchlistView describes the Watchlist view, ErrNotFound for a user whose
-// watchlist holds no title they have not started. It has no collection
-// type, as a library of mixed content: apps give it a row of latest items
-// on their home screen. Its image is the user's own (see
-// personalimages.go).
-func (s *Service) watchlistView(ctx context.Context, v view) (Item, error) {
-	ids, err := s.watchlistIDs(ctx, v)
-	if err != nil {
-		return Item{}, err
-	}
-	if len(ids) == 0 {
-		return Item{}, ErrNotFound
-	}
-	item := Item{ID: WatchlistViewID, Kind: KindLibrary, Name: v.words.watchlist}
-	if image := s.watchlistImage(ctx, v, ids); image != "" {
-		item.Images.Primary, item.WidePrimary = image, true
-	}
-	return item, nil
-}
-
-// watchlistIDs lists the titles of the user's watchlist they have not
-// started nor hidden, the latest added first; none for a request made
-// with an API key.
-func (s *Service) watchlistIDs(ctx context.Context, v view) ([]accounts.ID, error) {
-	if v.user == (accounts.ID{}) {
-		return nil, nil
-	}
-	ids, err := s.watchlist.Titles(ctx, v.user)
-	return slices.DeleteFunc(ids, func(id accounts.ID) bool { return v.hidden[id] }), err
-}
-
-// watchlistChildren lists the titles of the Watchlist view from start. A
-// home row's, first, describes only as many as it shows; a listing
-// describes them all, to count those the user may see. A view emptied
-// since the app showed it lists nothing.
-func (s *Service) watchlistChildren(ctx context.Context, v view, start, count int, first bool) (Page, error) {
-	if v.user == (accounts.ID{}) {
-		return Page{}, ErrNotFound
-	}
-	ids, err := s.watchlistIDs(ctx, v)
-	if err != nil {
-		return Page{}, err
-	}
-	return s.watchlistPage(ctx, v, ids, start, count, first)
-}
-
-// watchlistPage describes the titles ids of a watchlist from start, as
-// watchlistChildren does.
+// watchlistPage describes the titles ids of a watchlist from start,
+// without those the user may not see, by parental control or blocked
+// genres, nor those they hid. A home row's, first, describes only as many
+// as it shows; a listing describes them all, to count those the user may
+// see.
 func (s *Service) watchlistPage(ctx context.Context, v view, ids []accounts.ID, start, count int, first bool) (Page, error) {
 	if !first {
 		items, err := s.itemsOf(ctx, v, ids, watchlistKinds)
-		return slicePage(items, start, count), err
+		return slicePage(v.hidden.Without(items), start, count), err
 	}
 	want := start + count
 	var items []Item
@@ -83,7 +38,7 @@ func (s *Service) watchlistPage(ctx context.Context, v view, ids []accounts.ID, 
 		if err != nil {
 			return Page{}, err
 		}
-		items, from = append(items, described...), to
+		items, from = append(items, v.hidden.Without(described)...), to
 	}
 	page := slicePage(items, start, count)
 	page.More = from < len(ids)
@@ -93,9 +48,9 @@ func (s *Service) watchlistPage(ctx context.Context, v view, ids []accounts.ID, 
 // WatchlistAvailable lists, from start, the titles of the user's
 // watchlist they have not started that the last check found versions for
 // (see watchlist.Store.Available), those found the latest first: the Now
-// available home row. WatchlistWaiting lists those it found none for, the
-// latest added first: the Still waiting row. Both leave out what the
-// Watchlist view leaves out, and list nothing for a request made with an
+// available home row. WatchlistWaiting lists those it found none for, in
+// the watchlist's order: the Still waiting row. Both leave out the titles
+// the user may not see or hid, and list nothing for a request made with an
 // API key. A home row's, first, describes only as many titles as it shows.
 func (s *Service) WatchlistAvailable(ctx context.Context, user accounts.User, start, count int, first bool) (Page, error) {
 	return s.watchlistRow(ctx, user, s.watchlist.Available, start, count, first)
@@ -120,25 +75,163 @@ func (s *Service) watchlistRow(ctx context.Context, user accounts.User, list fun
 	return s.watchlistPage(ctx, v, ids, start, count, first)
 }
 
-// AddToWatchlist puts a movie or a series on user's watchlist, on the list
-// of the titles they add themselves (see watchlist.Own), even when another
-// list holds it. The image of their Watchlist view is compared with its
-// titles again as it next shows.
-func (s *Service) AddToWatchlist(ctx context.Context, user, title accounts.ID) error {
-	defer s.recheckPersonal(user, WatchlistViewID)
-	return s.watchlist.Add(ctx, user, title)
+// WatchlistName is the default name of a watchlist, in the language of
+// user, who sees it: theirs when Polyfin speaks it, else the server's.
+func (s *Service) WatchlistName(ctx context.Context, user accounts.User) (string, error) {
+	v, err := s.view(ctx, user)
+	return v.words.watchlist, err
 }
 
-// RemoveFromWatchlist takes a title off user's watchlist, off every list
-// holding it, as AddToWatchlist adds it.
-func (s *Service) RemoveFromWatchlist(ctx context.Context, user, title accounts.ID) error {
-	defer s.recheckPersonal(user, WatchlistViewID)
-	return s.watchlist.Remove(ctx, user, title)
+// WatchlistTitles describes the titles of user's watchlist, started or
+// not, in its order, without those the user may not see or hid; none for
+// a request made with an API key.
+func (s *Service) WatchlistTitles(ctx context.Context, user accounts.User) ([]Item, error) {
+	v, err := s.view(ctx, user)
+	if err != nil || v.user == (accounts.ID{}) {
+		return nil, err
+	}
+	ids, err := s.watchlist.Titles(ctx, v.user)
+	if err != nil {
+		return nil, err
+	}
+	page, err := s.watchlistPage(ctx, v, ids, 0, len(ids), false)
+	return page.Items, err
 }
 
-// WatchlistHeld lists the titles user's watchlist holds, started or not,
-// the latest added first: those started are left out of the Watchlist
-// view only.
-func (s *Service) WatchlistHeld(ctx context.Context, user accounts.ID) ([]watchlist.Title, error) {
+// Watchlist returns the identifier of user's watchlist, and false when
+// they deleted it and nothing was added since.
+func (s *Service) Watchlist(ctx context.Context, user accounts.ID) (accounts.ID, bool, error) {
+	return s.watchlist.Playlist(ctx, user)
+}
+
+// PlaylistEpisodes lists the episodes a playlist takes for a series, or
+// for one of its seasons when seasonID is set, as Jellyfin's playlists
+// take them: those aired, in the series' order; for a whole series, those
+// of its regular seasons only, without the specials.
+func (s *Service) PlaylistEpisodes(ctx context.Context, user accounts.User, seriesID accounts.ID, seasonID *accounts.ID) ([]Item, error) {
+	episodes, err := s.Episodes(ctx, user, seriesID, seasonID)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(episodes, func(e Item) bool { return !e.Available || seasonID == nil && e.ParentIndexNumber <= 0 }), nil
+}
+
+// WatchlistEntries tells what title, of user's watchlist, makes there
+// (see watchlist.Entries): only what is left to watch, as the titles
+// lists and imports hold make entries through it, never those added by
+// hand. A movie makes itself unless user started or played it; an
+// episode itself unless played; a series or a season those of the
+// episodes PlaylistEpisodes lists, once one aired, that user has not
+// played, keeping one in progress. A title with nothing left to watch is
+// Known without Items. A title the user cannot reach waits; one no
+// playlist holds makes nothing.
+func (s *Service) WatchlistEntries(ctx context.Context, user accounts.User, title accounts.ID) (watchlist.Made, error) {
+	item, err := s.Item(ctx, user, title)
+	if errors.Is(err, ErrNotFound) {
+		return watchlist.Made{}, nil
+	}
+	if err != nil {
+		return watchlist.Made{}, err
+	}
+	var episodes []Item
+	switch item.Kind {
+	case KindMovie, KindEpisode:
+		data, err := s.userData.Get(ctx, user.ID, []accounts.ID{item.ID})
+		if err != nil {
+			return watchlist.Made{}, err
+		}
+		made := watchlist.Made{Known: true}
+		if item.Kind == KindEpisode {
+			made.Series = item.SeriesID
+		}
+		if d := data[item.ID]; !d.Played && (item.Kind == KindEpisode || d.Position == 0) {
+			made.Items = []accounts.ID{item.ID}
+		}
+		return made, nil
+	case KindSeries:
+		episodes, err = s.PlaylistEpisodes(ctx, user, item.ID, nil)
+	case KindSeason:
+		episodes, err = s.PlaylistEpisodes(ctx, user, item.SeriesID, &item.ID)
+	default:
+		return watchlist.Made{Known: true}, nil
+	}
+	if err != nil || len(episodes) == 0 {
+		return watchlist.Made{}, err
+	}
+	ids := make([]accounts.ID, len(episodes))
+	for i, e := range episodes {
+		ids[i] = e.ID
+	}
+	data, err := s.userData.Get(ctx, user.ID, ids)
+	if err != nil {
+		return watchlist.Made{}, err
+	}
+	made := watchlist.Made{Series: episodes[0].SeriesID, Known: true}
+	for _, id := range ids {
+		if !data[id].Played {
+			made.Items = append(made.Items, id)
+		}
+	}
+	return made, nil
+}
+
+// watchlistChanged has the images of user's watchlist compared with its
+// titles again as they next show.
+func (s *Service) watchlistChanged(ctx context.Context, user accounts.ID) {
+	if playlist, ok, err := s.watchlist.Playlist(ctx, user); err == nil && ok {
+		s.recheckPersonal(playlist)
+	}
+}
+
+// AddToWatchlist puts groups on user's watchlist, on the list of the
+// titles they add themselves (see watchlist.Store.Add): the entries it
+// does not hold at position, the first being 0.
+func (s *Service) AddToWatchlist(ctx context.Context, user accounts.ID, groups []watchlist.Group, position int) error {
+	defer s.watchlistChanged(ctx, user)
+	return s.watchlist.Add(ctx, user, groups, position)
+}
+
+// RemoveFromWatchlist takes items and the episodes of series off user's
+// watchlist (see watchlist.Store.Remove).
+func (s *Service) RemoveFromWatchlist(ctx context.Context, user accounts.ID, items, series []accounts.ID) error {
+	defer s.watchlistChanged(ctx, user)
+	return s.watchlist.Remove(ctx, user, items, series)
+}
+
+// RemoveWatchlistEntries takes entries off user's watchlist, as
+// RemoveFromWatchlist takes their items off.
+func (s *Service) RemoveWatchlistEntries(ctx context.Context, user accounts.ID, entries []accounts.ID) error {
+	defer s.watchlistChanged(ctx, user)
+	return s.watchlist.RemoveEntries(ctx, user, entries)
+}
+
+// MoveInWatchlist places entry of user's watchlist just before the entry
+// before, or last (see watchlist.Store.Move).
+func (s *Service) MoveInWatchlist(ctx context.Context, user, entry, before accounts.ID) error {
+	defer s.watchlistChanged(ctx, user)
+	return s.watchlist.Move(ctx, user, entry, before)
+}
+
+// ReplaceWatchlist makes groups all user's watchlist holds, in order (see
+// watchlist.Store.Replace).
+func (s *Service) ReplaceWatchlist(ctx context.Context, user accounts.ID, groups []watchlist.Group) error {
+	defer s.watchlistChanged(ctx, user)
+	return s.watchlist.Replace(ctx, user, groups)
+}
+
+// DeleteWatchlist deletes user's watchlist (see watchlist.Store.Delete).
+func (s *Service) DeleteWatchlist(ctx context.Context, user accounts.ID) error {
+	return s.watchlist.Delete(ctx, user)
+}
+
+// WatchlistHeld lists the entries of user's watchlist, started or not, in
+// its order.
+func (s *Service) WatchlistHeld(ctx context.Context, user accounts.ID) ([]watchlist.Held, error) {
 	return s.watchlist.Held(ctx, user)
+}
+
+// WatchlistPending lists the titles of user's watchlist that wait for
+// their entries, the latest first (see watchlist.Store.Pending).
+func (s *Service) WatchlistPending(ctx context.Context, user accounts.ID) ([]watchlist.Held, error) {
+	return s.watchlist.Pending(ctx, user)
 }

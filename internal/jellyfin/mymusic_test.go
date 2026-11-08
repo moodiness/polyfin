@@ -17,15 +17,16 @@ func TestMyMusicListsWhatEachUserPlayedOrMarkedFavorite(t *testing.T) {
 	addon.rowless = true
 	token, _, views := listening(t, s, addon.url)
 	// An addon without rows gets My music as its library, named in the
-	// server's language.
+	// server's language, next to the Playlists view of the user's
+	// watchlist.
 	mine := views[eclipse.MyMusicName]
-	if len(views) != 1 || mine == "" {
+	if len(views) != 2 || mine == "" || views["Playlists"] == "" {
 		t.Fatalf("views: %v", views)
 	}
 	s.setting(t, func(settings *accounts.Settings) { settings.Language = "fr" })
 	var french QueryResult
-	if s.get(t, "/UserViews", token, &french); len(french.Items) != 1 || french.Items[0].Name != "Ma musique" {
-		t.Errorf("in French: %+v", french.Items)
+	if s.get(t, "/UserViews", token, &french); !slices.Equal(itemNames(french.Items), []string{"Ma musique", "Listes de lecture"}) {
+		t.Errorf("in French: %v", itemNames(french.Items))
 	}
 	s.setting(t, func(settings *accounts.Settings) { settings.Language = "en" })
 	list := func(token, path string) []string {
