@@ -243,13 +243,17 @@ func eventually(t *testing.T, what string, cond func() bool) {
 // reader left, so that a quick return finds it, then closes.
 func TestLiveStreamsShareOneConnection(t *testing.T) {
 	t.Parallel()
-	src := &liveSource{interval: 5 * time.Millisecond}
+	src := &liveSource{interval: time.Millisecond}
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	path, runs := fakeProbe(t, string(probe), false)
 	s := liveService(t, src, path)
+	// Its readers wait for the stream's first keyframeWait bytes, a second
+	// at this pace: bytes late meanwhile, slowed by the race detector or
+	// other tests, must not end it as stalled.
+	s.feeds.times.stall = time.Minute
 	version := channelVersion(1, "1.ts", accounts.ID{9})
 	if _, err := s.AnalyzeLive(t.Context(), version); err != nil {
 		t.Fatal(err)
@@ -271,12 +275,46 @@ func TestLiveStreamsShareOneConnection(t *testing.T) {
 	if open, opened, _ := src.counts(); open != 1 || opened != 1 || runs() != 1 {
 		t.Errorf("connections open %d, opened %d, analyses %d: want one connection for all", open, opened, runs())
 	}
+	left := time.Now()
 	_ = first.Close()
 	_ = second.Close()
-	if open, _, _ := src.counts(); open != 1 {
-		t.Errorf("the connection closed with no grace")
-	}
 	eventually(t, "the connection to close after the grace", func() bool { open, _, _ := src.counts(); return open == 0 })
+	if waited := time.Since(left); waited < shortLiveTimes.grace {
+		t.Errorf("the connection closed %s after the last reader left, before its grace", waited)
+	}
+}
+
+// A reader that joins a stream as its grace runs out keeps it open: the
+// stream closes once no one reads it, never under a reader that joined.
+func TestAStreamJoinedAsItsGraceRunsOutStaysOpen(t *testing.T) {
+	t.Parallel()
+	src := &liveSource{interval: 5 * time.Millisecond}
+	s := liveService(t, src, "ffprobe-not-installed")
+	s.feeds.times.stall = time.Minute
+	version := channelVersion(1, "1.ts", accounts.ID{})
+	left, err := s.openFeed(t.Context(), version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A start finds the stream, as openFeed does, as its last reader
+	// leaves; the streams' lock, held until it joins, keeps closing the
+	// stream waiting once its grace ran out.
+	s.feeds.mu.Lock()
+	f := s.feeds.feeds[version.ID]
+	_ = left.Close()
+	time.Sleep(2 * shortLiveTimes.grace)
+	joined := f.join(t.Context(), accounts.ID{})
+	s.feeds.mu.Unlock()
+	if joined == nil {
+		t.Fatal("the running stream took no reader")
+	}
+	// Closing the stream had its turn.
+	time.Sleep(2 * shortLiveTimes.grace)
+	if open, opened, _ := src.counts(); open != 1 || opened != 1 || f.finished() {
+		t.Errorf("connections open %d, opened %d: the stream closed under the reader that joined it", open, opened)
+	}
+	_ = joined.Close()
+	eventually(t, "the connection to close once its reader left", func() bool { open, _, _ := src.counts(); return open == 0 })
 }
 
 // Each kind of dead answer fails within a second, before any analysis,
