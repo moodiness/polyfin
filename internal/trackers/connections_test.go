@@ -1,12 +1,16 @@
 package trackers
 
 import (
+	"bytes"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestTraktCodeConnectsOnceEnteredAndKeepsTheConnectionWhenDenied(t *testing.T) {
@@ -388,5 +392,94 @@ func TestARefusedAppIsNotAnOutage(t *testing.T) {
 	}
 	if strings.Contains(h.log.String(), "trakt-secret") || strings.Contains(h.log.String(), "simkl-client") {
 		t.Errorf("log: %s", h.log.String())
+	}
+}
+
+// holdingLog holds the line that tells a connection was saved, which
+// comes once it is, until the test lets it go: the time a status in
+// between takes to read is as long as the test wants.
+type holdingLog struct {
+	saved, release chan struct{}
+	once           sync.Once
+}
+
+func (l *holdingLog) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("A user connected a tracking service")) {
+		l.once.Do(func() { close(l.saved) })
+		<-l.release
+	}
+	return len(p), nil
+}
+
+func TestASavedConnectionNeverShowsItsCode(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		service string
+		answer  func(f *fakes)
+	}{
+		{Trakt, func(f *fakes) {
+			f.reply("POST", "/trakt-auth/oauth/device/code", http.StatusOK,
+				`{"device_code":"device-1","user_code":"ABCD1234","verification_url":"https://trakt.example/activate","expires_in":600,"interval":1}`)
+			f.reply("POST", "/trakt-auth/oauth/device/token", http.StatusOK, `{"access_token":"trakt-access","refresh_token":"trakt-refresh"}`)
+		}},
+		{Simkl, func(f *fakes) {
+			f.reply("POST", "/simkl/oauth2/device", http.StatusOK,
+				`{"device_code":"simkl-device","user_code":"WXYZ-2345","verification_uri":"https://simkl.example/pin","expires_in":900,"interval":1}`)
+			f.reply("POST", "/simkl/oauth2/token", http.StatusOK, `{"access_token":"simkl-access","scope":"media:read media:write"}`)
+		}},
+		{LastFM, func(f *fakes) {
+			f.on(http.MethodGet, "/lastfm/2.0/", func(r request) answer {
+				if r.query.Get("method") == "auth.getToken" {
+					return answer{status: http.StatusOK, body: `{"token":"request-token"}`}
+				}
+				return answer{status: http.StatusOK, body: `{"session":{"name":"alice-fm","key":"session-key"}}`}
+			})
+		}},
+		{AniList, func(f *fakes) {
+			f.reply("POST", "/anilist-auth/token", http.StatusOK, `{"access_token":"anilist-token","expires_in":31536000}`)
+		}},
+		{MyAnimeList, func(f *fakes) {
+			f.reply("POST", "/myanimelist-auth/token", http.StatusOK, `{"access_token":"mal-token","refresh_token":"mal-refresh"}`)
+		}},
+	} {
+		t.Run(test.service, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			log := &holdingLog{saved: make(chan struct{}), release: make(chan struct{})}
+			h.logger = slog.New(slog.NewTextHandler(log, nil))
+			// Registered after the harness, it runs before the service closes.
+			release := sync.OnceFunc(func() { close(log.release) })
+			t.Cleanup(release)
+			alice := h.user(t, "alice")
+			test.answer(h.f)
+			if status, err := h.StartCode(t.Context(), alice, test.service); err != nil || status.Code == nil {
+				t.Fatalf("waiting: %+v %v", status, err)
+			}
+			// A paste service connects with the code the user pastes back.
+			exchanged := make(chan error, 1)
+			if ByPaste(test.service) {
+				go func() {
+					_, err := h.Exchange(t.Context(), alice, test.service, "the-code")
+					exchanged <- err
+				}()
+			} else {
+				exchanged <- nil
+			}
+			select {
+			case <-log.saved:
+			case <-time.After(10 * time.Second):
+				t.Fatal("the connection was never saved")
+			}
+			if status := h.status(t, alice, test.service); !status.Connected || status.Code != nil {
+				t.Errorf("saved: %+v %+v", status, status.Code)
+			}
+			release()
+			if err := <-exchanged; err != nil {
+				t.Errorf("exchange: %v", err)
+			}
+			if status := h.status(t, alice, test.service); !status.Connected || status.Code != nil {
+				t.Errorf("connected: %+v %+v", status, status.Code)
+			}
+		})
 	}
 }
