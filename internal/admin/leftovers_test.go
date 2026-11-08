@@ -72,7 +72,7 @@ func TestRemovingASourceCountsWhatIsLostAndFlagsTheListsEmptied(t *testing.T) {
 	}
 	for language, text := range map[string]string{
 		"en": "The smart list Tops lists nothing: the catalogs it drew from are gone. Choose other catalogs for it.",
-		"fr": "La liste intelligente Tops ne liste rien : les catalogues dont elle tirait ses titres ont disparu. Choisissez-lui d’autres catalogues.",
+		"fr": "La liste intelligente Tops ne liste rien\u202f: les catalogues dont elle tirait ses titres ont disparu. Choisissez-lui d’autres catalogues.",
 	} {
 		if got := want.text(language); got != text {
 			t.Errorf("%s: %q", language, got)

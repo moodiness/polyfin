@@ -184,7 +184,7 @@ func TestBackupDestinationProblemsOnHealth(t *testing.T) {
 		t.Errorf("backup status: %v", backupBody["destinations"])
 	}
 	text := healthProblemJSON{Code: problemDestinationFailed, Name: "https://nas.lan/dav/"}
-	if got := text.text("fr"); got != "https://nas.lan/dav/ : le dernier envoi des sauvegardes de la base de données a échoué." {
+	if got := text.text("fr"); got != "https://nas.lan/dav/\u202f: le dernier envoi des sauvegardes de la base de données a échoué." {
 		t.Errorf("notification: %q", got)
 	}
 
