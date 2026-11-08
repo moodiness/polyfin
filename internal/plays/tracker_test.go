@@ -56,6 +56,7 @@ func equal(a, b []string) bool {
 // A playback counts the time it plays, not its pauses, and tells each
 // change of state once, however many reports repeat it.
 func TestPausesAreNotCountedAndEachChangeIsToldOnce(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	tracker.Report(report(ReportStart, movie, 0, false, ""))
@@ -93,6 +94,7 @@ func TestPausesAreNotCountedAndEachChangeIsToldOnce(t *testing.T) {
 // its last report, once it has not reported for StaleAfter, with nothing
 // counted after it.
 func TestAStalePlaybackEndsAtItsLastReport(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	tracker.Report(report(ReportStart, movie, 0, false, ""))
@@ -126,6 +128,7 @@ func TestAStalePlaybackEndsAtItsLastReport(t *testing.T) {
 // Time between reports counts up to maxGap: an app put to sleep while
 // playing, which reports again hours later, does not count the hours.
 func TestGapsBetweenReportsAreCapped(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	tracker.Report(report(ReportStart, movie, 0, false, ""))
@@ -139,6 +142,7 @@ func TestGapsBetweenReportsAreCapped(t *testing.T) {
 // A playback keeps the method that converted most, whatever the reports
 // that follow, which may leave the method out.
 func TestTheMethodIsKept(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	tracker.Report(report(ReportStart, movie, 0, false, DirectStream))
@@ -164,6 +168,7 @@ func TestTheMethodIsKept(t *testing.T) {
 
 // Another title reported by the same device ends the one it played.
 func TestAnotherTitleEndsThePlaybackBefore(t *testing.T) {
+	t.Parallel()
 	c := newClock()
 	tracker, told := c.tracker(t)
 	tracker.Report(report(ReportStart, movie, 0, false, ""))
