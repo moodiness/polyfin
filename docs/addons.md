@@ -237,6 +237,18 @@ An address may have a `?` part after `manifest.json`, where some addons keep you
 
 For an Eclipse addon, a setting replaces a parameter of the address with the same name. The request's own parameters (`q`, `skip`) replace both.
 
+### How long Polyfin waits for an addon
+
+| Request | Answered within |
+|---|---|
+| Streams (`/stream/…`) | 30 seconds |
+| Anything else: manifest, catalog pages, descriptions, subtitles, artwork, Eclipse requests | 15 seconds |
+
+- **Why streams get longer:** an addon that gathers other addons' streams answers once the slowest of them answered, or once its own limit for them ran out, often 15 seconds itself.
+- **No answer in time:** the request fails, and Health says "did not answer in time" (see below).
+- **A play** does not wait that long for an addon once another gave a version to play (see [How Play waits for addons](versions.md#how-play-waits-for-addons)).
+- **Repeated timeouts:** an addon that leaves 3 stream requests in a row unanswered has Polyfin's background requests paused (see [Addons that do not answer in time](#addons-that-do-not-answer-in-time)).
+
 ### What the log and Health say
 
 An addon that answers with an error was reached. The log and **System › Health** tell what it answered:
@@ -246,7 +258,7 @@ An addon that answers with an error was reached. The log and **System › Health
 | Answers `401`, `403` or another error but `404` and `429` | refused the request | `addon refused the request: HTTP 403`, with the addon's reason when it gives one: `addon refused the request: HTTP 403 (Unavailable)` |
 | Answers `429`, or `503` with `Retry-After` | asked to slow down (too many requests) | `addon asked to slow down: HTTP 429`, or `addon asked to wait: HTTP 503, retry after 30s` |
 | Answers `500` or another server error | answered with a server error | `addon failed: HTTP 502` |
-| Does not answer | could not be reached, or did not answer in time | `addon unreachable: ...` |
+| Does not answer | could not be reached, or did not answer in time (30 seconds for streams, 15 for anything else) | `addon unreachable: ...` |
 
 The reason of a refusal is the `error` or `message` of the addon's JSON answer. A short plain-text answer is the reason too. Polyfin puts it on one line and cuts it at 120 characters. It replaces with `<redacted>` anything that looks like an address, a token or a key.
 
@@ -353,6 +365,20 @@ After a refusal for its rate, an addon's server gets no background request for a
 - **The log:** it says once per pause, at Info, `An addon refused a request for its rate: Polyfin's background requests to its server pause`, with the addon and the wait.
 
 There is nothing to set. An addon without limits only has Polyfin's background work spread over a few more seconds. A home page with 20 titles of Continue Watching and Next Up has them listed within about half a minute from one such addon, with their follow-ups after.
+
+### Addons that do not answer in time
+
+An addon that leaves 3 requests for streams in a row unanswered within 30 seconds, background requests and users' alike, has its server's background requests paused. An addon gathering other addons' streams that waits for one that no longer answers would otherwise be asked again by every listing ahead, and ask its own addons again each time, until they refuse it.
+
+- **The pause:** 5 minutes, then twice as long each time 3 more go unanswered after a pause: 10, 20, then 30 minutes at most. The requests under way when it started count for nothing.
+- **Lifted:** by the server's first answer to a stream request, even a refusal. The next run of timeouts pauses 5 minutes again.
+- **Meanwhile:** as after a refusal, users' requests still go: opening a title, a play, **Ask addons again**, **Try again**, [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) and **Analyze now**. Background descriptions from the server wait too, and watchlist checks skip the addon.
+- **Health:** a warning names the addon and when the pause ends, with a link to its page (see [Addon not answering in time](health.md#addon-not-answering-in-time)).
+- **The log:** it says once per pause, at Info, `An addon did not answer requests for streams in time: Polyfin's background requests to its server pause`, with the addon and the wait.
+
+Continue Watching and Next Up listed ahead asked an addon that never answers 8 times a minute, as fast as the pace lets them. They now ask it 4 times, then wait for the pause to end.
+
+What to do: if the addon gathers other addons' streams, turn off there the one that no longer answers, or lower how long it waits for them. Otherwise, turn the addon off.
 
 ## The order of sources
 

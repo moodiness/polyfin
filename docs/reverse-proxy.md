@@ -45,9 +45,9 @@ The admin app uses no WebSocket: it asks the server again every few seconds.
 
 A torrent version's first play over a slow swarm can keep the app's PlaybackInfo request waiting for up to 3 minutes (see [Torrents](torrents.md#deadlines)). The request sends nothing until it answers.
 
-That wait starts once the versions are listed, and the request can last longer from its start. With the default settings, it lasts about 4 minutes at most:
+That wait starts once the versions are listed, and the request can last longer from its start. With the default settings, it lasts about 5 minutes at most:
 
-- the addons' answers listing the versions, 15 seconds at most each;
+- the addons' answers listing the versions, 30 seconds at most each, and 5 seconds at most after one gave a version to play (see [How Play waits for addons](versions.md#how-play-waits-for-addons));
 - the versions of the list kept, analyzed, 20 seconds (**Maximum time to analyze a version**) for each 3 of them;
 - when none of those plays, the addons asked again, then the torrents' 3 minutes, and a version analyzed meanwhile.
 
@@ -58,7 +58,7 @@ A larger **Maximum time to analyze a version**, or more **Versions tried when on
 | Traefik, Caddy | As long as it takes, by default |
 | nginx | 60 seconds without a byte (`proxy_read_timeout`), then it closes the response |
 
-With nginx, set `proxy_read_timeout` to `300s` or more for Polyfin, or such a play fails at the proxy. Raise it further with those two settings.
+With nginx, set `proxy_read_timeout` to `360s` or more for Polyfin, or such a play fails at the proxy. Even without torrents, a play whose addons answer late can take more than its 60 seconds. Raise it further with those two settings.
 
 ## HTTPS and the public address
 
