@@ -65,8 +65,8 @@ func readEPEntries(data []byte) ([]epEntry, error) {
 	if len(data) < 20 || string(data[:4]) != "HDMV" {
 		return nil, errNotClip
 	}
-	cpi := int(binary.BigEndian.Uint32(data[16:]))
-	if cpi < 20 || cpi+6 > len(data) || binary.BigEndian.Uint32(data[cpi:]) == 0 || data[cpi+5]&0x0F != 1 {
+	cpi, ok := offsetIn(data, 0, binary.BigEndian.Uint32(data[16:]))
+	if !ok || cpi < 20 || cpi+6 > len(data) || binary.BigEndian.Uint32(data[cpi:]) == 0 || data[cpi+5]&0x0F != 1 {
 		return nil, fmt.Errorf("%w: no EP map", errNotClip)
 	}
 	// The EP map: a reserved byte, the number of streams it maps, then
@@ -87,9 +87,23 @@ func readEPEntries(data []byte) ([]epEntry, error) {
 			continue
 		}
 		coarse, fine := int(fields>>18&0xFFFF), int(fields&0x3FFFF)
-		return epEntries(data, epMap+int(binary.BigEndian.Uint32(data[at+8:])), coarse, fine)
+		start, ok := offsetIn(data, epMap, binary.BigEndian.Uint32(data[at+8:]))
+		if !ok {
+			return nil, fmt.Errorf("%w: the EP map is cut short", errNotClip)
+		}
+		return epEntries(data, start, coarse, fine)
 	}
 	return nil, fmt.Errorf("%w: the EP map maps no video", errNotClip)
+}
+
+// offsetIn returns the offset n bytes past base, an offset within data,
+// and whether it is within data too. A corrupt file's offset, up to 2^32,
+// would wrap negative as an int on 32-bit targets.
+func offsetIn(data []byte, base int, n uint32) (int, bool) {
+	if uint64(n) > uint64(len(data)-base) {
+		return 0, false
+	}
+	return base + int(n), true
 }
 
 // epEntries reads a stream's entry points, whose entries start at start:
@@ -102,8 +116,8 @@ func epEntries(data []byte, start, coarse, fine int) ([]epEntry, error) {
 	if start+4 > len(data) || start+4+coarse*8 > len(data) || coarse == 0 && fine > 0 {
 		return nil, fmt.Errorf("%w: the EP map is cut short", errNotClip)
 	}
-	fines := start + int(binary.BigEndian.Uint32(data[start:]))
-	if fines+fine*4 > len(data) {
+	fines, ok := offsetIn(data, start, binary.BigEndian.Uint32(data[start:]))
+	if !ok || fines+fine*4 > len(data) {
 		return nil, fmt.Errorf("%w: the EP map is cut short", errNotClip)
 	}
 	entry := func(c int) (first int, high uint64, spn uint32) {
