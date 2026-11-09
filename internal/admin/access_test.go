@@ -49,7 +49,7 @@ func TestAdministratorsSetPlaybackAndAccessLimits(t *testing.T) {
 		{map[string]any{"maxPlaybacks": -1}, "invalid_max_playbacks"},
 		{map[string]any{"maxPlaybacks": 21}, "invalid_max_playbacks"},
 		{map[string]any{"maxBitrate": -1}, "invalid_max_bitrate"},
-		{map[string]any{"maxBitrate": 2_147_483_648}, "invalid_max_bitrate"},
+		{map[string]any{"maxBitrate": int64(2_147_483_648)}, "invalid_max_bitrate"},
 		{map[string]any{"syncPlay": "Sometimes"}, "invalid_sync_play"},
 		{map[string]any{"syncPlay": "none"}, "invalid_sync_play"},
 	} {
