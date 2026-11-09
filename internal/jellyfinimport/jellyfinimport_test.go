@@ -43,11 +43,13 @@ type fakeJellyfin struct {
 	users    []map[string]any
 	// items are each user's items by filter (IsPlayed, IsResumable,
 	// IsFavorite, Likes), or, without one, by type (BoxSet, Playlist);
-	// series, the identifiers of the series by their id; children, the
-	// titles of each collection by its id, and entries, the entries of
-	// each playlist by its id.
+	// series, the identifiers of the series by their id, and orders their
+	// DisplayOrder; children, the titles of each collection by its id, or
+	// the episodes of each series, and entries, the entries of each
+	// playlist by its id.
 	items    map[string]map[string][]map[string]any
 	series   map[string]map[string]string
+	orders   map[string]string
 	children map[string][]map[string]any
 	entries  map[string][]map[string]any
 	// refused are the users whose items answer 401, as after the key was
@@ -228,7 +230,7 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 		if ids := query.Get("Ids"); ids != "" {
 			for _, id := range strings.Split(ids, ",") {
 				if providers, ok := f.series[id]; ok {
-					all = append(all, map[string]any{"Id": id, "Type": "Series", "ProviderIds": providers})
+					all = append(all, map[string]any{"Id": id, "Type": "Series", "ProviderIds": providers, "DisplayOrder": f.orders[id]})
 				}
 			}
 		} else if inPlaylist {
@@ -304,12 +306,13 @@ func (f *fakeJellyfin) sent() []*http.Request {
 
 type harness struct {
 	*Service
-	pool  *pgxpool.Pool
-	store *accounts.Store
-	lib   *library.Service
-	data  *userdata.Store
-	links *importlinks.Store
-	f     *fakeJellyfin
+	pool   *pgxpool.Pool
+	store  *accounts.Store
+	lib    *library.Service
+	data   *userdata.Store
+	links  *importlinks.Store
+	addons *addons.Store
+	f      *fakeJellyfin
 }
 
 // newHarness is a service on a fresh database reading a fake Jellyfin
@@ -323,14 +326,15 @@ func newHarness(t *testing.T) harness {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	client := stremio.NewClient("test")
-	lib := library.New(pool, addons.New(pool, client), client, logger, store.Settings)
+	installed := addons.New(pool, client)
+	lib := library.New(pool, installed, client, logger, store.Settings)
 	data := userdata.New(pool)
 	links := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: lib, UserData: data, Logger: logger})
 	s := New(Options{Settings: store.Settings, Titles: lib, UserData: data, Links: links, Version: "1.2.3", Logger: logger,
 		Collections: collections.New(pool), Playlists: playlists.New(pool)})
 	s.timing.gap, s.timing.retryFirst, s.timing.pageSize = 0, time.Millisecond, 2
 	t.Cleanup(s.Close)
-	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, links: links, f: newFakeJellyfin(t)}
+	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, links: links, addons: installed, f: newFakeJellyfin(t)}
 }
 
 // kept lists what user's list of kind keeps of the titles imports did not

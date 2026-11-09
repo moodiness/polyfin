@@ -18,6 +18,13 @@
 // stays. Running an import again adds nothing twice. The server is only
 // read, but for the sessions signing in opens and the import ends.
 //
+// The server numbers episodes as its own metadata and episode order do,
+// which may differ from the addon's. Each episode is placed among those
+// the addon lists by its own TMDB or TVDB identifier, else by the day it
+// aired and its name, against the episodes the server holds of its
+// series, read once per series; one placed on none is kept not found,
+// for a link by hand (see library.SourceEpisodes).
+//
 // The titles not found are kept in each user's list of the server's kind,
 // jellyfin, emby or plex, with what the import would have brought of them,
 // and a title linked there by hand is found as its link names it, now and
@@ -125,10 +132,11 @@ type Extras struct {
 	Ratings, Collections, Playlists, Watchlist bool
 }
 
-// Titles finds the items of titles named by other services' identifiers
-// (see library.Service.Resolve).
+// Titles finds the items of titles named by other services' identifiers,
+// placing the episodes a server holds among the addon's (see
+// library.Service.ResolveFromSource).
 type Titles interface {
-	Resolve(ctx context.Context, refs []library.TitleRef) ([][]library.TitleTarget, error)
+	ResolveFromSource(ctx context.Context, refs []library.TitleRef) ([][]library.TitleTarget, []bool, error)
 }
 
 // Options are the dependencies of the service.
@@ -307,12 +315,15 @@ const (
 // home video, or an episode not numbered, or no Polyfin title has its
 // identifiers, or a Plex history names it while no library section lists
 // it any longer, or Plex numbers the episode in another order than
-// TheTVDB's usual one, which its numbers cannot be trusted in.
+// TheTVDB's usual one, which its numbers cannot be trusted in, or the
+// episode's series is found but none of its episodes is surely the one
+// the server numbers so (see library.SourceEpisodes).
 const (
 	ReasonNoIdentifier      = "no_identifier"
 	ReasonNotFound          = "not_found"
 	ReasonNotInLibrary      = "not_in_library"
 	ReasonOtherEpisodeOrder = "other_episode_order"
+	ReasonEpisodeNotPlaced  = "episode_not_placed"
 )
 
 // The reasons the import of a user that ended without a problem added
@@ -728,8 +739,8 @@ func (s *Service) launch(status *Status, own *client, sessions map[string]*clien
 	for _, session := range sessions {
 		session.retries = s.timing.retries
 	}
-	r := &run{s: s, status: status, client: own, sessions: sessions, series: map[string]map[string]string{}, plex: plex,
-		plexSignOut: plexSignOut}
+	r := &run{s: s, status: status, client: own, sessions: sessions, series: map[string]map[string]string{},
+		sources: map[string]*library.SourceEpisodes{}, plex: plex, plexSignOut: plexSignOut}
 	go func() {
 		defer s.wg.Done()
 		defer stop()

@@ -478,10 +478,11 @@ func (c *client) embyKey(ctx context.Context) error {
 	return ErrUserKey
 }
 
-// date reads a date as Jellyfin writes them, nil when there is none.
-// Jellyfin writes a missing date as the zero year.
+// date reads a date as Jellyfin writes them, or a day as Plex writes
+// them, nil when there is none. Jellyfin writes a missing date as the
+// zero year.
 func date(text string) *time.Time {
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05"} {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", time.DateOnly} {
 		if t, err := time.Parse(layout, text); err == nil {
 			if t.Year() <= 1 {
 				return nil
@@ -508,6 +509,11 @@ type itemJSON struct {
 	IndexNumber       *int
 	IndexNumberEnd    *int
 	RunTimeTicks      int64
+	// PremiereDate is the day an episode aired, as the server keeps it:
+	// for Jellyfin, midnight where the server is, in UTC. DisplayOrder is
+	// the order a series is shown in, empty or Aired as aired.
+	PremiereDate string
+	DisplayOrder string
 	// MediaType is a playlist's: Audio for music, Video for movies and
 	// episodes.
 	MediaType string
@@ -611,11 +617,12 @@ func (c *client) playlist(ctx context.Context, user, id string, found func(itemJ
 	}, found)
 }
 
-// providers reads the identifiers of the items ids name, as user sees
-// them: the series of episodes, whose own identifiers are the episodes'.
-func (c *client) providers(ctx context.Context, user string, ids []string) (map[string]map[string]string, error) {
+// providers reads the items ids name, as user sees them, with their
+// identifiers: the series of episodes, whose own identifiers are the
+// episodes', and whose DisplayOrder Jellyfin and Emby give with them.
+func (c *client) providers(ctx context.Context, user string, ids []string) (map[string]itemJSON, error) {
 	path := "/Users/" + url.PathEscape(user) + "/Items"
-	result := make(map[string]map[string]string, len(ids))
+	result := make(map[string]itemJSON, len(ids))
 	for start := 0; start < len(ids); start += idsPerRequest {
 		batch := ids[start:min(start+idsPerRequest, len(ids))]
 		query := url.Values{
@@ -629,10 +636,27 @@ func (c *client) providers(ctx context.Context, user string, ids []string) (map[
 			return nil, err
 		}
 		for _, item := range page.Items {
-			result[item.ID] = item.ProviderIDs
+			result[item.ID] = item
 		}
 	}
 	return result, nil
+}
+
+// episodesOf reads the episodes the server holds of the series id, as
+// user sees them, with their identifiers and the day they aired, handing
+// each to found. Emby gives that day when its fields name it.
+func (c *client) episodesOf(ctx context.Context, user, id string, found func(itemJSON)) error {
+	fields := "ProviderIds"
+	if c.kind == Emby {
+		fields += ",PremiereDate"
+	}
+	return c.pages(ctx, "/Users/"+url.PathEscape(user)+"/Items", url.Values{
+		"ParentId":         {id},
+		"Recursive":        {"true"},
+		"IncludeItemTypes": {"Episode"},
+		"Fields":           {fields},
+		"EnableUserData":   {"false"},
+	}, found)
 }
 
 // idsPerRequest bounds the items a request names, which keeps its URL
