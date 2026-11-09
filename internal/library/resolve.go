@@ -42,6 +42,12 @@ type TitleRef struct {
 	// Anime names the anime entry as anime catalogs list it, when the
 	// ref is of one.
 	Anime AnimeRef
+	// Source, for an episode another media server numbers, lists the
+	// episodes that server holds of the series: the episode is the one
+	// of them Season and Number name, placed among the addon's as the
+	// comment on episodes another media server holds tells. Refs of one
+	// series share it.
+	Source *SourceEpisodes
 	// Name is the title's name as the other service gives it, the series'
 	// for an episode; empty when it gives none. It names the record of a
 	// title Polyfin had none of until its addons describe it.
@@ -121,10 +127,12 @@ const describedFetches = 4
 // numbering is the one of that place among the regular episodes Polyfin
 // listed of its series, in order. An episode TMDB numbers is the one the
 // addon numbers as its EpisodeNumbering tells, and none when it tells the
-// addon has none. The titles an anime catalog listed under the ref's
-// AnimeRef are found too, an episode by its number in the entry
-// ("kitsu:<id>:<episode>"), and only once listed. A ref nothing
-// designates gets no target.
+// addon has none. An episode another media server numbers (Source) is
+// the one of the addon's it is placed on, as the comment on episodes
+// another media server holds tells, and none when it is placed on none.
+// The titles an anime catalog listed under the ref's AnimeRef are found
+// too, an episode by its number in the entry ("kitsu:<id>:<episode>"),
+// and only once listed. A ref nothing designates gets no target.
 //
 // A ref Polyfin listed nothing under, which has no IMDb identifier but a
 // TMDB one, or for a series a TVDB one, is the title the server's
@@ -147,17 +155,28 @@ const describedFetches = 4
 // already kept is left as it is, and a later listing replaces these with
 // full ones.
 func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget, error) {
+	targets, _, err := s.ResolveFromSource(ctx, refs)
+	return targets, err
+}
+
+// ResolveFromSource finds the items each ref designates as Resolve does,
+// and reports the episode refs with a Source that no episode the addon
+// lists of a series found is surely (see the comment on episodes another
+// media server holds): they have no target, and none was recorded for
+// them.
+func (s *Service) ResolveFromSource(ctx context.Context, refs []TitleRef) ([][]TitleTarget, []bool, error) {
+	unplaced := make([]bool, len(refs))
 	titles, err := s.knownTitles(ctx, refs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	refs, titles, described, err := s.describeUnlisted(ctx, refs, titles)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	refs, titles, err = s.imdbFromTMDB(ctx, refs, titles, described)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// The Stremio identifiers of the series each episode ref belongs to,
 	// and of those an anime catalog listed under its AnimeRef, and the
@@ -228,16 +247,34 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 		}
 	}
 	if len(seriesIDs) == 0 {
-		return result, s.saveNew(ctx, unlisted)
+		return result, unplaced, s.saveNew(ctx, unlisted)
 	}
 	known, err := s.knownEpisodes(ctx, seriesIDs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	numberings, err := s.numberings(ctx, tmdbNumbered, known)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	var sourced []string
+	for i, ref := range refs {
+		if ref.Source == nil || ref.Absolute || ref.TMDBNumbered {
+			continue
+		}
+		for _, series := range seriesOf[i] {
+			if !slices.Contains(sourced, series) {
+				sourced = append(sourced, series)
+			}
+		}
+	}
+	var lists map[string]addonList
+	if len(sourced) > 0 {
+		if lists, err = s.addonLists(ctx, sourced, known, videos); err != nil {
+			return nil, nil, err
+		}
+	}
+	placements := map[sourceKey]placement{}
 	for i, ref := range refs {
 		for _, series := range seriesOf[i] {
 			episodes := known[series]
@@ -254,6 +291,21 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 				if season, number, ok = numberings[series].FromTMDB(season, number); !ok {
 					continue
 				}
+			case ref.Source != nil:
+				key := sourceKey{series, ref.Source}
+				p, placed := placements[key]
+				if !placed {
+					p = placeSource(lists[series].episodes, ref.Source)
+					placements[key] = p
+				}
+				place, ok := p.place(season, number)
+				// An episode the addon's description does not list is not
+				// made up.
+				if !ok || lists[series].described && !lists[series].lists(place) {
+					unplaced[i] = true
+					continue
+				}
+				season, number = place.season, place.number
 			}
 			target := TitleTarget{Series: itemID(titleKey(KindSeries, series)), Season: itemID(seasonKey(series, season)),
 				SeasonNumber: season, Number: number, Runtime: runtimes[series]}
@@ -295,8 +347,10 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 				SeasonNumber: episode.season, Number: episode.number, Runtime: cmp.Or(episode.runtime, runtimes[series]), Anime: true}
 			result[i] = append(result[i], target)
 		}
+		// A ref another series it belongs to places is found.
+		unplaced[i] = unplaced[i] && len(result[i]) == 0
 	}
-	return result, s.saveNew(ctx, unlisted)
+	return result, unplaced, s.saveNew(ctx, unlisted)
 }
 
 // listedAmong finds among titles the movies or series r names: found by
@@ -652,8 +706,8 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 }
 
 // knownEpisode is an episode Polyfin listed: day is the day it aired, in
-// UTC, zero when unknown, and name its name, normalized (see
-// airedName).
+// UTC, zero when unknown, name its name, normalized (see airedName), and
+// tmdb and tvdb its own identifiers, zero when the addon gave none.
 type knownEpisode struct {
 	id             accounts.ID
 	videoID        string
@@ -661,6 +715,7 @@ type knownEpisode struct {
 	runtime        time.Duration
 	day            time.Time
 	name           string
+	tmdb, tvdb     int
 }
 
 type episodeList []knownEpisode
@@ -742,7 +797,7 @@ func (s *Service) knownEpisodes(ctx context.Context, series []string) (map[strin
 		}
 		known[seriesID] = append(known[seriesID], knownEpisode{id: id, videoID: video.ID, season: int(video.Season),
 			number: video.EpisodeNumber(), runtime: parseRuntime(string(video.Runtime)), day: episodeDay(video.Released),
-			name: airedName(video.DisplayName())})
+			name: airedName(video.DisplayName()), tmdb: video.MoviedbID.ID(), tvdb: video.TvdbID.ID()})
 	}
 	return known, rows.Err()
 }
