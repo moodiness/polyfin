@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -184,10 +185,22 @@ func TestAppRunsAndStopsEverything(t *testing.T) {
 	t.Setenv("POLYFIN_SECRET_KEY", "from the environment, left out")
 	manifest, toolsDir := readyTools(t, data)
 	keys := &fakeKeys{secrets: map[string]string{}}
+	// The app opens the setup from its own goroutine.
+	var mu sync.Mutex
 	var opened []string
+	openedNow := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(opened)
+	}
 	login := &fakeLogin{}
 	a := New(Options{Version: "0.42.0", Install: inst, Folders: desktop.Folders{Data: data}, Keys: keys, Tools: manifest,
-		DatabasePort: databasePort(t), Login: login, OpenSetup: true, Open: func(u string) error { opened = append(opened, u); return nil }})
+		DatabasePort: databasePort(t), Login: login, OpenSetup: true, Open: func(u string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			opened = append(opened, u)
+			return nil
+		}})
 	a.Start()
 	t.Cleanup(func() { a.Stop(context.Background()) })
 	status := waitFor(t, a, "running", func(s Status) bool { return s.Phase == Running && s.SetupCode != "" })
@@ -197,8 +210,8 @@ func TestAppRunsAndStopsEverything(t *testing.T) {
 	if runs, _ := os.ReadFile(filepath.Join(data, "fake-runs")); len(runs) != 2 {
 		t.Errorf("the server ran %d times, want 2: once ending by itself, then again", len(runs))
 	}
-	waitFor(t, a, "setup opened", func(Status) bool { return len(opened) > 0 })
-	if opened[0] != "http://127.0.0.1:"+port+"/admin/" {
+	waitFor(t, a, "setup opened", func(Status) bool { return len(openedNow()) > 0 })
+	if opened := openedNow(); opened[0] != "http://127.0.0.1:"+port+"/admin/" {
 		t.Errorf("opened %v", opened)
 	}
 	if login.on {
@@ -278,7 +291,7 @@ func TestAppRunsAndStopsEverything(t *testing.T) {
 	if len(keys.secrets) != 1 || keys.secrets[keystore.Service+keystore.Account(data)] != key {
 		t.Error("the second start made another key")
 	}
-	waitFor(t, a, "setup opened again", func(Status) bool { return len(opened) >= 1 })
+	waitFor(t, a, "setup opened again", func(Status) bool { return len(openedNow()) >= 1 })
 }
 
 func TestServerEnvironment(t *testing.T) {
