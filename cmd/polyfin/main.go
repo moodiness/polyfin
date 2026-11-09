@@ -402,6 +402,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
 	registerTasks(registry, store, activityLog, lib, channels, logger)
+	registry.Register(emptySourceCacheTask(sources, store.Settings, logger))
 	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		return err
@@ -1358,6 +1359,30 @@ func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Tas
 			forgotten, err := lib.ForgetVersionLists(ctx)
 			logger.Info("Version lists forgotten", "lists", forgotten)
 			return err
+		},
+	}
+}
+
+// emptySourceCacheTask empties the cache of files being read, but for the
+// files being read, and logs the bytes it freed: the tasks tell no more
+// of a run than how it ended. It runs every day at the hour settings
+// give, never by default, and whenever an administrator starts it.
+func emptySourceCacheTask(sources *source.Cache, settings func() accounts.Settings, logger *slog.Logger) tasks.Task {
+	return tasks.Task{
+		Key:      "EmptySourceCache",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Empty the cache of files being read", Description: "Removes the parts of files kept in the cache of files being read, but those of the files being read now and those read in the last 30 seconds; the torrents playing keep their pieces. The disk space and the days set under Settings › Playback already bound the cache, so emptying it is rarely needed, and what is played again afterwards is downloaded again. Runs every day at the hour set there, never by default."},
+			"fr":    {Name: "Vider le cache des fichiers lus", Description: "Supprime les parties de fichiers gardées dans le cache des fichiers en cours de lecture, sauf celles des fichiers lus en ce moment et celles lues dans les 30 dernières secondes\u202f; les torrents en cours de lecture gardent leurs morceaux. L’espace disque et les jours choisis dans Paramètres › Lecture bornent déjà le cache\u202f: le vider est rarement utile, et ce qui est relu ensuite est téléchargé à nouveau. S’exécute chaque jour à l’heure choisie là, jamais par défaut."},
+			"de":    {Name: "Cache der gelesenen Dateien leeren", Description: "Entfernt die im Cache der gelesenen Dateien behaltenen Teile, außer denen der gerade gelesenen Dateien und denen, die in den letzten 30 Sekunden gelesen wurden; laufende Torrents behalten ihre Stücke. Speicherplatz und Tage unter Einstellungen › Wiedergabe begrenzen den Cache bereits, daher ist das Leeren selten nötig, und was danach erneut abgespielt wird, wird erneut heruntergeladen. Läuft jeden Tag zu der dort festgelegten Stunde, standardmäßig nie."},
+			"es":    {Name: "Vaciar la caché de archivos en lectura", Description: "Borra las partes de archivos conservadas en la caché de archivos en lectura, salvo las de los archivos que se están leyendo y las leídas en los últimos 30 segundos; los torrents en reproducción conservan sus piezas. El espacio en disco y los días elegidos en Ajustes › Reproducción ya limitan la caché, así que vaciarla rara vez hace falta, y lo que se reproduce de nuevo después se vuelve a descargar. Se ejecuta cada día a la hora elegida allí, nunca por defecto."},
+			"it":    {Name: "Svuota la cache dei file in lettura", Description: "Elimina le parti di file conservate nella cache dei file in lettura, tranne quelle dei file letti in questo momento e quelle lette negli ultimi 30 secondi; i torrent in riproduzione conservano i loro pezzi. Lo spazio su disco e i giorni scelti in Impostazioni › Riproduzione limitano già la cache, quindi svuotarla serve di rado, e ciò che viene riprodotto di nuovo in seguito viene scaricato di nuovo. Viene eseguita ogni giorno all’ora scelta lì, mai in modo predefinito."},
+			"pt-BR": {Name: "Esvaziar o cache de arquivos em leitura", Description: "Exclui as partes de arquivos mantidas no cache de arquivos em leitura, exceto as dos arquivos sendo lidos agora e as lidas nos últimos 30 segundos; os torrents em reprodução mantêm suas partes. O espaço em disco e os dias definidos em Configurações › Reprodução já limitam o cache, então esvaziá-lo raramente é necessário, e o que for reproduzido de novo depois é baixado de novo. É executada todos os dias na hora definida ali, nunca por padrão."},
+		},
+		Daily: func() int { return settings().SourceCacheEmptyHour },
+		Run: func(context.Context) error {
+			logger.Info("The cache of files being read was emptied", "freed_bytes", sources.Empty())
+			return nil
 		},
 	}
 }

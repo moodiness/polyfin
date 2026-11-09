@@ -90,6 +90,7 @@ A title played again, or resumed after a restart or update, reads its kept parts
 |---|---|---|---|
 | **Keep parts read for (days)** | **Settings › Playback** | 3 (0 to 365) | Days a part is kept after its last read, restarts included. 0 empties the cache at each start. |
 | **Extra days for each play again** | **Settings › Playback** | 1 (0 to 30) | Added for each play of a title after the first. |
+| **Empty the cache each day** | **Settings › Playback** | Never (or an hour, 0 to 23) | Empties the cache at this hour of the server's time zone, but the parts of the files being read then. |
 
 - **Kept:** addon, S3, SFTP and rclone files, by version, whatever link the addon gives next.
 - **Not kept:** torrent files, whose pieces are removed on stop by design (see [Torrents](torrents.md)), and files of unknown size, such as live video.
@@ -97,6 +98,7 @@ A title played again, or resumed after a restart or update, reads its kept parts
 - **Plays again:** a playback 6 hours or more after the last counts. Each, 8 at most, adds the extra days.
 - **Removal order:** titles played once go before titles played again, whether the disk is full or days run out. When full, the oldest-read parts go first, extra days counted; parts read in the last 30 seconds stay. Expired parts go at start and hourly.
 - **Crashes:** each file's record of parts is saved 30 seconds after a change, and at stop once parts reach disk. After a crash, the last 30 seconds of reads are fetched again; an unclaimed part is never served.
+- **Emptying:** the task "Empty the cache of files being read", under **System › Schedule**, removes every kept part at once, but those of the files being read and those read in the last 30 seconds. The pieces of the torrents playing stay. It runs by hand, or every day at the hour of **Empty the cache each day**. It is rarely needed: the disk space and the days above already bound the cache, and what is played again afterwards is downloaded again. The log tells the bytes it freed (`The cache of files being read was emptied`, at Info).
 - **Health:** **System › Health › Source cache** shows space used, retention, files open and kept, and **Read from the disk**: the share of bytes FFmpeg, ffprobe and apps read since start that were read before or kept from before. Fetched bytes count as not from disk on first read, even if read ahead or preloaded, so a first play shows close to 0%.
 
 API details: [Source cache in the admin API](jellyfin-api.md#source-cache-in-the-admin-api).

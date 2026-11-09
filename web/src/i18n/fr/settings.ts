@@ -917,6 +917,10 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Jours de plus par nouvelle lecture',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Un titre relu, 6 heures ou plus après sa dernière lecture, garde ses parties ce nombre de jours de plus pour chaque lecture après la première, 8 au plus, et elles laissent la place après celles des titres lus une seule fois. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
+    sourceCacheEmptyHour: 'Vider le cache chaque jour',
+    sourceCacheEmptyHourNever: 'Jamais',
+    sourceCacheEmptyHourHelp:
+      'Supprime à cette heure les parties gardées, sauf celles des fichiers en cours de lecture. C’est rarement utile\u202f: l’espace disque et les jours ci-dessus bornent déjà le cache, et ce qui est relu ensuite est téléchargé à nouveau. Système › Planning le vide tout de suite, quelle que soit l’heure.',
     preloadGroup: 'Préchargement des épisodes suivants',
     preloadNextEpisodes: 'Précharger les épisodes suivants',
     preloadNextEpisodesHelp:

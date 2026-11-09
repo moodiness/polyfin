@@ -412,6 +412,8 @@ const common: typeof en = {
     unlock_failed: 'Das Backup konnte nicht entschlüsselt werden.',
     invalid_collection_read_hour:
       'Wähle aus der Liste die Uhrzeit, zu der Sammlungen eingelesen werden, oder „Nie“.',
+    invalid_source_cache_empty_hour:
+      'Wähle aus der Liste die Uhrzeit, zu der der Cache geleert wird, oder „Nie“.',
     invalid_collection_library_apps:
       'Wähle aus der Liste die Apps, die Sammlungsbibliotheken nach Sammlung anzeigen.',
     invalid_remuxdb_url:

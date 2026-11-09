@@ -829,11 +829,13 @@ type settingsJSON struct {
 	// cacheSizeGb, sourceCacheDays, sourceCacheCreditDays and
 	// preloadWholeFiles as SourceCachePresetLimits tell; a PUT setting one
 	// of them to another value without a preset makes it custom.
-	// ReadingFree is the space free on the disk of the folder for files
-	// being read, null when unknown; a PUT ignores it and the limits.
+	// sourceCacheEmptyHour is the hour the cache is emptied each day, -1
+	// never. ReadingFree is the space free on the disk of the folder for
+	// files being read, null when unknown; a PUT ignores it and the limits.
 	SourceCachePreset       *string                          `json:"sourceCachePreset"`
 	SourceCacheDays         *int                             `json:"sourceCacheDays"`
 	SourceCacheCreditDays   *int                             `json:"sourceCacheCreditDays"`
+	SourceCacheEmptyHour    *int                             `json:"sourceCacheEmptyHour"`
 	PreloadNextEpisodes     *bool                            `json:"preloadNextEpisodes"`
 	PreloadEpisodes         *int                             `json:"preloadEpisodes"`
 	PreloadMbps             *int                             `json:"preloadMbps"`
@@ -1107,6 +1109,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SourceCachePreset:       &settings.SourceCachePreset,
 		SourceCacheDays:         &settings.SourceCacheDays,
 		SourceCacheCreditDays:   &settings.SourceCacheCreditDays,
+		SourceCacheEmptyHour:    &settings.SourceCacheEmptyHour,
 		PreloadNextEpisodes:     &settings.PreloadNextEpisodes,
 		PreloadEpisodes:         &settings.PreloadEpisodes,
 		PreloadMbps:             &settings.PreloadMbps,
@@ -1919,6 +1922,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SourceCachePreset:     valueOr(body.SourceCachePreset, current.SourceCachePreset),
 		SourceCacheDays:       valueOr(body.SourceCacheDays, current.SourceCacheDays),
 		SourceCacheCreditDays: valueOr(body.SourceCacheCreditDays, current.SourceCacheCreditDays),
+		SourceCacheEmptyHour:  valueOr(body.SourceCacheEmptyHour, current.SourceCacheEmptyHour),
 		PreloadNextEpisodes:   valueOr(body.PreloadNextEpisodes, current.PreloadNextEpisodes),
 		PreloadEpisodes:       valueOr(body.PreloadEpisodes, current.PreloadEpisodes),
 		PreloadMbps:           valueOr(body.PreloadMbps, current.PreloadMbps),

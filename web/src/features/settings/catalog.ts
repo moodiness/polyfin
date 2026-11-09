@@ -236,6 +236,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'source-cache-empty-hour',
+    label: (t) => s(t).sourceCacheEmptyHour,
+    help: (t) => s(t).sourceCacheEmptyHourHelp,
+    keywords: ['cache', 'empty', 'clear', 'schedule'],
+    codes: ['invalid_source_cache_empty_hour'],
+  },
+  {
+    section: 'playback',
     anchor: 'reading-folder',
     label: (t) => s(t).workFolders.readingFolder,
     help: (t) => `${s(t).workFolders.readingFolderHelp} ${anyServer(s(t).workFolders.where)}`,

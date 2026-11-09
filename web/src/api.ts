@@ -573,6 +573,8 @@ export type Settings = {
   sourceCacheDays: number
   /** Extra days a title played again keeps its parts, for each play after the first. */
   sourceCacheCreditDays: number
+  /** Hour of the server's time zone the cache of files being read is emptied at each day, but for the files being read, 0 to 23; -1 never. */
+  sourceCacheEmptyHour: number
   /** Whether the next episodes of the series users watch are read ahead while nothing plays. */
   preloadNextEpisodes: boolean
   /** Episodes preloaded per series. */

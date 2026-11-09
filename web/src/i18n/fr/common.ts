@@ -405,6 +405,8 @@ const common: typeof en = {
     unlock_failed: 'La sauvegarde n’a pas pu être déchiffrée.',
     invalid_collection_read_hour:
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
+    invalid_source_cache_empty_hour:
+      'Choisissez dans la liste l’heure à laquelle vider le cache, ou Jamais.',
     invalid_collection_library_apps:
       'Choisissez dans la liste les applis qui présentent les bibliothèques de collections par collection.',
     invalid_remuxdb_url:

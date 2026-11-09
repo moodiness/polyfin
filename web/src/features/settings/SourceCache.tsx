@@ -1,5 +1,5 @@
 import { sourceCachePresets, type Settings, type SourceCachePreset } from '@/api'
-import { formatBytes } from '@/format'
+import { formatBytes, formatHour } from '@/format'
 import { useI18n } from '@/i18n'
 import { SettingRow } from '@/ui'
 import { SettingsGroup } from './parts'
@@ -8,9 +8,10 @@ import WorkFolderRow from './WorkFolders'
 
 /**
  * The source cache, under Settings › Playback: its preset with the free space of the folder for
- * files being read, the size, days and credit the preset sets, the folder itself, and the
- * next-episode preloading. Choosing a preset sets its values; changing one of them, or whole-file
- * preloading, makes it custom, as the server does for a value saved alone.
+ * files being read, the size, days and credit the preset sets, the hour it is emptied at each day,
+ * the folder itself, and the next-episode preloading. Choosing a preset sets its values; changing
+ * one of them, or whole-file preloading, makes it custom, as the server does for a value saved
+ * alone.
  */
 export default function SourceCache({
   form,
@@ -100,6 +101,23 @@ export default function SourceCache({
           {...number('source-cache-credit', form.sourceCacheCreditDays, (value) =>
             custom({ sourceCacheCreditDays: Math.trunc(value) }),
           )}
+        />
+        <SettingRow
+          kind="choice"
+          anchor="source-cache-empty-hour"
+          label={s.sourceCacheEmptyHour}
+          help={s.sourceCacheEmptyHourHelp}
+          error={error('source-cache-empty-hour')}
+          value={form.sourceCacheEmptyHour}
+          options={[
+            { value: -1, label: s.sourceCacheEmptyHourNever },
+            ...Array.from({ length: 24 }, (_, hour) => ({
+              value: hour,
+              label: formatHour(hour, language),
+            })),
+          ]}
+          onChange={(sourceCacheEmptyHour) => update({ sourceCacheEmptyHour })}
+          saved={saved.sourceCacheEmptyHour}
         />
         <WorkFolderRow
           folder="readingFolder"

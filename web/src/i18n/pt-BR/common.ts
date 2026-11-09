@@ -389,6 +389,8 @@ const common: typeof en = {
     unlock_failed: 'Não foi possível descriptografar o backup.',
     invalid_collection_read_hour:
       'Escolha na lista o horário em que as coleções são lidas, ou Nunca.',
+    invalid_source_cache_empty_hour:
+      'Escolha na lista o horário em que o cache é esvaziado, ou Nunca.',
     invalid_collection_library_apps:
       'Escolha na lista os aplicativos que exibem as bibliotecas de coleções por coleção.',
     invalid_remuxdb_url:

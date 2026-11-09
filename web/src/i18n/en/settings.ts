@@ -901,6 +901,10 @@ const settings = {
     sourceCacheCreditDays: 'Extra days for each play again',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `A title played again, 6 hours or more after its last play, keeps its parts this many days longer for each play after the first, 8 at most, and they make room after those of titles played once. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    sourceCacheEmptyHour: 'Empty the cache each day',
+    sourceCacheEmptyHourNever: 'Never',
+    sourceCacheEmptyHourHelp:
+      'At this hour, removes the parts kept of the files played, but those of the files being read then. It is rarely needed: the disk space and the days above already bound the cache, and what is played again afterwards is downloaded again. System › Schedule empties it at once, whatever the hour.',
     preloadGroup: 'Next-episode preloading',
     preloadNextEpisodes: 'Preload the next episodes',
     preloadNextEpisodesHelp:
