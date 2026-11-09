@@ -132,8 +132,8 @@ type Meta struct {
 	BehaviorHints   *MetaBehavior `json:"behaviorHints,omitempty"`
 	// TmdbFromMoviedb is Polyfin's own mark, kept with the description,
 	// that TmdbID was read from its moviedb_id (see described.ids),
-	// which a metadata addon may give wrong: an addon's own mark is never
-	// taken.
+	// which a metadata addon may give wrong, and which the library checks
+	// on TMDB while a key is saved: an addon's own mark is never taken.
 	TmdbFromMoviedb bool `json:"_tmdbIdFromMoviedb,omitempty"`
 	// ChannelNumber and GuideID describe a channel of Polyfin's own IPTV
 	// sources: the number its provider gives it, 0 for none, and its

@@ -378,15 +378,26 @@ func (s *Service) lookUpIMDb(ctx context.Context, t tmdbTitle) error {
 		return err
 	}
 	imdb, err := s.tmdb.IMDbID(ctx, t.kind, t.id)
-	var id *string
+	found := true
 	switch {
-	case err == nil && imdbID.MatchString(imdb):
-		id = &imdb
-	case err != nil && !errors.Is(err, tmdb.ErrNotFound):
+	case errors.Is(err, tmdb.ErrNotFound):
+		found = false
+	case err != nil:
 		return err
 	}
-	_, err = s.db.Exec(ctx, `INSERT INTO title_imdb_ids (kind, tmdb_id, imdb_id, asked_at) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (kind, tmdb_id) DO UPDATE SET imdb_id = excluded.imdb_id, asked_at = excluded.asked_at`,
-		string(t.kind), t.id, id, s.now())
+	return s.keepIMDb(ctx, t, imdb, found)
+}
+
+// keepIMDb keeps TMDB's IMDb identifier of a title, as its external
+// identifiers or its find give it, none when imdb is no IMDb identifier;
+// found is false when TMDB does not know the title.
+func (s *Service) keepIMDb(ctx context.Context, t tmdbTitle, imdb string, found bool) error {
+	var id *string
+	if found && imdbID.MatchString(imdb) {
+		id = &imdb
+	}
+	_, err := s.db.Exec(ctx, `INSERT INTO title_imdb_ids (kind, tmdb_id, imdb_id, found, asked_at) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (kind, tmdb_id) DO UPDATE SET imdb_id = excluded.imdb_id, found = excluded.found, asked_at = excluded.asked_at`,
+		string(t.kind), t.id, id, found, s.now())
 	return err
 }

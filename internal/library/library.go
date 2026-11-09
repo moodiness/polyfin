@@ -251,6 +251,9 @@ type Service struct {
 	// titleCredits remembers the credits of titles TMDB gives, as kept
 	// (see titlecredits.go).
 	titleCredits titleCreditsMemory
+	// moviedbChecks are the verdicts on the TMDB identifiers addons give
+	// as moviedb_id (see tmdbidcheck.go).
+	moviedbChecks moviedbChecks
 	// saved remembers the records saves stored that left their items as
 	// they are (see records.go).
 	saved savedRecords
@@ -1688,6 +1691,7 @@ func (s *Service) titleItem(entry installed, catalog stremio.Catalog, meta strem
 		kind = KindFolder
 	}
 	item := Item{ID: itemID(key), Kind: kind, ParentID: parent, Available: true}
+	s.checkMeta(&meta, metaType, false)
 	s.fromMeta(&item, meta, country)
 	preview := meta
 	addon := entry.addon.ID
@@ -2033,6 +2037,7 @@ func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id s
 			return s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
 		})
 		withoutGenerated(&meta)
+		s.checkMeta(&meta, metaType, true)
 		return meta, failedAt(addon, "", err)
 	case addon.addon.Local():
 		if s.local == nil {

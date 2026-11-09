@@ -134,11 +134,10 @@ func (o Overrides) apply(item *Item) {
 // describes, those set laid over its source's (see sourceIDs). The TMDB
 // identifier a title shows is, first to last:
 //  1. the one an administrator set;
-//  2. a correction of the source's, once one is made: it rewrites the
-//     description kept, which ranks it below the edit and above the rest;
-//  3. the source's _tmdbId, or the identifier a "tmdb:" title is, which
+//  2. the source's _tmdbId, or the identifier a "tmdb:" title is, which
 //     is never set;
-//  4. the source's moviedb_id.
+//  3. the source's moviedb_id, as its check corrected it (see
+//     tmdbidcheck.go), which corrects the description as it enters.
 func (o Overrides) identifiers(meta stremio.Meta) map[string]string {
 	ids := sourceIDs(meta)
 	o.laidOver(ids, meta.ID)

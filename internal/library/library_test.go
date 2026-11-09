@@ -31,8 +31,12 @@ type fakeAddon struct {
 	// rawMetas, "type/id" → a complete meta as the addon writes it, answers
 	// before metas, for what stremio.Meta does not keep, such as links.
 	rawMetas map[string]string
-	streams  map[string][]stremio.Stream
-	pageSize int
+	// rawCatalogs, "type/id" → a catalog's metas as the addon writes them
+	// (a JSON array), answers before catalogs, on its first page only, for
+	// what stremio.Meta does not keep, such as moviedb_id.
+	rawCatalogs map[string]string
+	streams     map[string][]stremio.Stream
+	pageSize    int
 	// byPerson answers a search with the whole catalog, as a people search
 	// finds titles by someone's name rather than by theirs.
 	byPerson bool
@@ -84,6 +88,7 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mu.Lock()
 		items := a.catalogs[parts[1]+"/"+catalogID]
+		rawCatalog, isRawCatalog := a.rawCatalogs[parts[1]+"/"+catalogID]
 		gate, gated, hold := a.catalogGate, a.gated, a.hold
 		if hold != nil {
 			hold.arrived++
@@ -117,6 +122,13 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if genre := extra.Get("genre"); genre != "" && genre != "None" {
 			items = slices.DeleteFunc(slices.Clone(items), func(m stremio.Meta) bool { return !slices.Contains(m.Genres, genre) })
+		}
+		if isRawCatalog {
+			if extra.Get("skip") != "" && extra.Get("skip") != "0" {
+				rawCatalog = "[]"
+			}
+			_, _ = io.WriteString(w, `{"metas":`+rawCatalog+`}`)
+			return
 		}
 		skip, _ := strconv.Atoi(extra.Get("skip"))
 		size := a.pageSize
