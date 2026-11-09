@@ -47,7 +47,7 @@ func manyVersionsAddon(t *testing.T, n int, subtitles chan struct{}) string {
 			for i := 1; i <= n; i++ {
 				file := fmt.Sprintf("Movie.%d.mkv", i)
 				streams = append(streams, stremio.Stream{Name: fmt.Sprintf("Version %d", i), URL: server.URL + "/files/" + file,
-					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number(1_000_000 * i)}})
+					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number64(1_000_000 * i)}})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
 		case strings.HasPrefix(path, "/subtitles/movie/tt4000"):
@@ -383,7 +383,7 @@ func newListsAddon(t *testing.T) *listsAddon {
 			// versions announced far larger is a host's error file.
 			for i, name := range names {
 				streams[i] = stremio.Stream{Name: name, URL: server.URL + "/files/" + name + ".mkv",
-					BehaviorHints: stremio.StreamBehavior{Filename: name + ".mkv", VideoSize: stremio.Number(len(mediaBytes))}}
+					BehaviorHints: stremio.StreamBehavior{Filename: name + ".mkv", VideoSize: stremio.Number64(len(mediaBytes))}}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
 		case strings.HasPrefix(path, "/files/"):

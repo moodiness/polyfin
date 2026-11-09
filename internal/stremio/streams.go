@@ -59,10 +59,10 @@ type Stream struct {
 type StreamBehavior struct {
 	// BingeGroup names streams of the same kind across episodes, so that
 	// the next episode can be played from the same source.
-	BingeGroup string `json:"bingeGroup,omitempty"`
-	Filename   string `json:"filename,omitempty"`
-	VideoSize  Number `json:"videoSize,omitempty"`
-	VideoHash  string `json:"videoHash,omitempty"`
+	BingeGroup string   `json:"bingeGroup,omitempty"`
+	Filename   string   `json:"filename,omitempty"`
+	VideoSize  Number64 `json:"videoSize,omitempty"`
+	VideoHash  string   `json:"videoHash,omitempty"`
 	// ProxyHeaders are the headers the stream must be requested with.
 	ProxyHeaders *ProxyHeaders `json:"proxyHeaders,omitempty"`
 	NotWebReady  bool          `json:"notWebReady,omitempty"`

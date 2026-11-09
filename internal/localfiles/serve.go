@@ -247,7 +247,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 			filename = strings.TrimSuffix(path.Base(base), ext) + " - title " + strconv.Itoa(number) + ext
 		}
 		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: s.address(file, rel),
-			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}, nil
+			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number64(size)}}, nil
 	})
 	if err != nil || len(files) == 0 {
 		return streams, err

@@ -537,7 +537,7 @@ func TestVersionsKeepTheirIdentifiersAcrossAnAddonsAnswers(t *testing.T) {
 func TestCarriedIdentitiesAreNeverShared(t *testing.T) {
 	t.Parallel()
 	stream := func(name, link, filename string, size int) stremio.Stream {
-		return stremio.Stream{Name: name, URL: link, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}
+		return stremio.Stream{Name: name, URL: link, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number64(size)}}
 	}
 	a1 := stream("A", "https://cdn.example/a.mkv?token=1", "", 0)
 	a2 := stream("A", "https://cdn.example/a.mkv?token=2", "", 0)

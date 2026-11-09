@@ -63,7 +63,7 @@ func streamingAddon(t *testing.T) string {
 				{Name: "Source 2160p", Description: "REMUX\nHEVC", URL: server.URL + "/files/remux.mkv",
 					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.2160p.mkv", VideoSize: 52_341}},
 				{Name: "Source 1080p", Description: "WEB-DL", URL: server.URL + "/files/web.mp4",
-					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.1080p.mp4", VideoSize: stremio.Number(len(mediaBytes))}},
+					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.1080p.mp4", VideoSize: stremio.Number64(len(mediaBytes))}},
 				{Name: "Statistics", ExternalURL: "https://addon.example/"},
 			}})
 		case path == "/subtitles/movie/tt1000.json":

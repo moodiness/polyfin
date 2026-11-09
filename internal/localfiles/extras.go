@@ -476,7 +476,7 @@ func (s *Service) extraStreams(ctx context.Context, source accounts.ID, id, fold
 		return nil, err
 	}
 	stream := stremio.Stream{Name: folderName, Description: formatSize(size), URL: s.files + item.String() + strings.ToLower(path.Ext(rel)),
-		BehaviorHints: stremio.StreamBehavior{Filename: path.Base(rel), VideoSize: stremio.Number(size)}}
+		BehaviorHints: stremio.StreamBehavior{Filename: path.Base(rel), VideoSize: stremio.Number64(size)}}
 	subtitles, err := s.fileSubtitles(ctx, []accounts.ID{item})
 	if err != nil {
 		return nil, err

@@ -47,7 +47,7 @@ func TestAddonSubtitlesComeSyncedAfterAFirstPlay(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": meta})
 		case path == "/stream/movie/tt1000.json":
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "Speaking 1080p", URL: server.URL + "/files/version.mkv",
-				BehaviorHints: stremio.StreamBehavior{Filename: "Movie.mkv", VideoSize: stremio.Number(len(version))}}}})
+				BehaviorHints: stremio.StreamBehavior{Filename: "Movie.mkv", VideoSize: stremio.Number64(len(version))}}}})
 		case path == "/subtitles/movie/tt1000.json":
 			_ = json.NewEncoder(w).Encode(map[string]any{"subtitles": []stremio.Subtitle{
 				{ID: "late", URL: server.URL + "/files/late.srt", Lang: "eng"},

@@ -499,10 +499,10 @@ func (c *Client) Catalog(ctx context.Context, addon Addon, catalog Catalog, skip
 // Stream resolves where a track plays from.
 func (c *Client) Stream(ctx context.Context, addon Addon, id string) (Stream, error) {
 	var raw struct {
-		URL       string         `json:"url"`
-		Format    string         `json:"format"`
-		Quality   string         `json:"quality"`
-		ExpiresAt stremio.Number `json:"expiresAt"`
+		URL       string           `json:"url"`
+		Format    string           `json:"format"`
+		Quality   string           `json:"quality"`
+		ExpiresAt stremio.Number64 `json:"expiresAt"`
 		Chapters  []struct {
 			Title     string  `json:"title"`
 			StartTime float64 `json:"startTime"`
