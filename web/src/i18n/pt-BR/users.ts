@@ -37,6 +37,7 @@ const users: typeof en = {
     ended: 'Encerrada',
     endsOn: (date: string) => `Encerra em ${date}`,
     endedOn: (date: string) => `Encerrada em ${date}`,
+    endMoment: (date: string, time: string) => `${date} às ${time}`,
     endTitle: 'Encerra em',
     endHelp:
       'A partir desta data, no fuso horário do servidor, a conta é recusada como uma conta desativada: ela não consegue entrar, e seus dispositivos são recusados. Tudo o que ela tem é mantido, e uma data posterior, ou “Nunca”, a reativa.',
@@ -542,7 +543,7 @@ const users: typeof en = {
     never: 'Nunca',
     accountsEnd: 'Encerramento das contas',
     accountsEndHelp:
-      'Cada conta criada pelo link é encerrada esta quantidade de dias após ser criada.',
+      'Cada conta criada pelo link é encerrada exatamente esta quantidade de dias após ser criada, no mesmo horário, assim como se conta a expiração do link.',
     accountsEndAfter: (days: number) =>
       days === 1
         ? 'As contas são encerradas após 1 dia'

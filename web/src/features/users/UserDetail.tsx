@@ -33,7 +33,7 @@ import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
 import { sourceName, TitlesNotFoundDialog } from '@/features/imports/TitlesNotFound'
-import { errorMessage, formatDate, languageOptions } from '@/format'
+import { errorMessage, languageOptions } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Avatar,
@@ -58,6 +58,7 @@ import PasswordModal from './PasswordModal'
 import { DraftForm, useDraftPart } from './draft'
 import { Band, PageSection, posterUrl, useWatching, WatchingLink } from './rows'
 import {
+  accountEnd,
   clockTime,
   LastActivity,
   refreshIfGone,
@@ -196,6 +197,7 @@ function UserPage({ user }: { user: User }) {
     />
   )
 
+  const end = accountEnd(user, t, language)
   const item = watching?.item ?? null
   const art = item?.posterId && artFailed !== item.posterId ? item.posterId : null
   const head = (
@@ -219,11 +221,7 @@ function UserPage({ user }: { user: User }) {
           <span>
             <LastActivity user={user} />
           </span>
-          {user.endsOn !== null && (
-            <span>
-              {(user.ended ? t.users.endedOn : t.users.endsOn)(formatDate(user.endsOn, language))}
-            </span>
-          )}
+          {end !== null && <span>{(user.ended ? t.users.endedOn : t.users.endsOn)(end)}</span>}
         </>
       }
       extra={
@@ -514,11 +512,11 @@ function AccessSection({ user }: { user: User }) {
       ) : (
         <OpenRow
           label={t.users.endTitle}
-          value={user.endsOn === null ? t.users.endNever : formatDate(user.endsOn, language)}
+          value={accountEnd(user, t, language) ?? t.users.endNever}
           help={t.users.endHelp}
         >
           <EndChoice
-            key={user.endsOn ?? ''}
+            key={user.endsAt ?? user.endsOn ?? ''}
             user={user}
             pending={access.isPending}
             onSave={(endsOn) => change({ endsOn })}
@@ -636,7 +634,10 @@ function GroupRow({
   )
 }
 
-/** When the account ends: a date, saved with its button, or Never, which clears it. */
+/**
+ * When the account ends: a date, saved with its button, or Never, which clears it. Either replaces
+ * the exact end an invite link set, which the date field leaves empty: only these buttons change it.
+ */
 function EndChoice({
   user,
   pending,
@@ -669,7 +670,7 @@ function EndChoice({
       <Button size="sm" disabled={!savable} onClick={() => onSave(end)}>
         {t.users.saveEnd}
       </Button>
-      {user.endsOn !== null && (
+      {(user.endsOn !== null || user.endsAt !== null) && (
         <Button size="sm" variant="ghost" disabled={pending} onClick={() => onSave(null)}>
           {t.users.endNever}
         </Button>

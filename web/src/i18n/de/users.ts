@@ -38,6 +38,7 @@ const users: typeof en = {
     ended: 'Beendet',
     endsOn: (date: string) => `Endet am ${date}`,
     endedOn: (date: string) => `Beendet am ${date}`,
+    endMoment: (date: string, time: string) => `${date} um ${time}`,
     endTitle: 'Endet am',
     endHelp:
       'Ab diesem Datum (in der Zeitzone des Servers) wird das Konto wie ein deaktiviertes abgewiesen: Es kann sich nicht anmelden, und seine Geräte werden abgewiesen. Alles, was es hat, bleibt erhalten, und ein späteres Datum oder „Nie“ stellt es wieder her.',
@@ -542,7 +543,7 @@ const users: typeof en = {
     never: 'Nie',
     accountsEnd: 'Kontoende',
     accountsEndHelp:
-      'Jedes über den Link erstellte Konto endet diese Anzahl von Tagen nach seiner Erstellung.',
+      'Jedes über den Link erstellte Konto endet genau diese Anzahl von Tagen nach seiner Erstellung, zur selben Uhrzeit, so wie der Ablauf des Links gezählt wird.',
     accountsEndAfter: (days: number) =>
       days === 1 ? 'Konten enden nach 1 Tag' : `Konten enden nach ${days} Tagen`,
     model: 'Einstellungen von',
