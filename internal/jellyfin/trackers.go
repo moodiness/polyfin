@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strconv"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -32,7 +33,8 @@ func markScope(kind library.Kind) trackers.Scope {
 // episodes among items that they can know: episodes by their series'
 // identifiers, loaded once per series. Those an anime addon names by
 // their Kitsu, MyAnimeList or AniDB identifier go by those the anime
-// mapping gives, when it knows them, and keep the entry for AniList and
+// mapping gives, when it knows them, with the TMDB and TVDB identifiers an
+// administrator set winning over them, and keep the entry for AniList and
 // MyAnimeList. An episode of a series the mapping numbers in part as
 // TVDB's absolute numbering gets its absolute number, from the episodes
 // Polyfin lists of its series. Episodes also carry TMDB's numbers, which
@@ -55,6 +57,7 @@ func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(c
 			switch {
 			case isAnime && anime.Identified():
 				title, ok = anime, true
+				h.withEditedIDs(&title, cmp.Or(item.SeriesID, item.ID))
 			case item.Kind == library.KindMovie:
 				title, ok = trackers.Movie(item.ID, item.ProviderIDs)
 			default:
@@ -97,6 +100,21 @@ func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(c
 			}
 		}
 		return titles
+	}
+}
+
+// withEditedIDs sets on title, which the anime mapping identified, the
+// TMDB and TVDB identifiers an administrator set of the movie or series
+// holder: an edit wins over every source of them (see
+// library.Overrides.TmdbID). Only an episode is sent with its series' TVDB
+// identifier.
+func (h *Handler) withEditedIDs(title *trackers.Title, holder accounts.ID) {
+	edit := h.Library.Overrides(holder)
+	if edit.TmdbID != nil {
+		title.TMDB, _ = strconv.Atoi(*edit.TmdbID)
+	}
+	if edit.TvdbID != nil && title.Episode {
+		title.TVDB, _ = strconv.Atoi(*edit.TvdbID)
 	}
 }
 

@@ -27,10 +27,11 @@ import (
 //
 // jellyfin-web's Edit metadata, Edit images and Identify dialogs, for
 // administrators. Edits are kept apart from what addons say and win over
-// it for every user (see library.Overrides); people and provider
-// identifiers stay the addons', but an IMDb identifier typed for a movie
-// or series of the local folders, which links its files to that title.
-// Edit images searches TMDB and the server's addons for images (see
+// it for every user (see library.Overrides); people stay the addons', and
+// so do provider identifiers but a movie's or series' TMDB and TVDB ones,
+// which are edits as the other fields, and an IMDb identifier typed for a
+// movie or series of the local folders, which links its files to that
+// title. Edit images searches TMDB and the server's addons for images (see
 // remoteimages.go). Polyfin's metadata providers are the server's addons:
 // Identify finds titles by their identifiers and names through them, and
 // TMDB with the server's key, and binds the titles of local folders to
@@ -260,9 +261,9 @@ func (d *flexibleDate) UnmarshalJSON(raw []byte) error {
 }
 
 // itemUpdate is the BaseItemDto the metadata editor sends, of which
-// Polyfin keeps the fields below; the others, people and provider
-// identifiers among them, are the addons', but the IMDb identifier of a
-// movie or series of the local folders (see updateItem).
+// Polyfin keeps the fields below; the others, people among them, are the
+// addons', and so are the provider identifiers but those updateItem
+// keeps.
 type itemUpdate struct {
 	Name            *string
 	OriginalTitle   *string
@@ -283,7 +284,12 @@ type itemUpdate struct {
 	DisplayOrder    *string
 }
 
-// updateItem keeps an administrator's edit of an item's metadata. An IMDb
+// updateItem keeps an administrator's edit of an item's metadata. A
+// movie's or series' TMDB identifier, and a series' TVDB one, are kept as
+// the other fields (see library.Overrides.TmdbID): jellyfin-web sends
+// every field on each save, and one left as its source gives it, or
+// emptied, follows the source; a value that is no identifier is left out,
+// as jellyfin-web shows no error, and the other fields are kept. An IMDb
 // identifier changed on a movie or series of the local folders, a plain
 // video or a title their files were matched to, links its files to that
 // title, as Identify does (see library.Service.Identify): Jellyfin keeps
@@ -317,6 +323,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		OfficialRating: request.OfficialRating, CustomRating: request.CustomRating,
 		CommunityRating: request.CommunityRating.value, CriticRating: request.CriticRating.value,
 		PremiereDate: request.PremiereDate.value, EndDate: request.EndDate.value, DisplayOrder: request.DisplayOrder,
+		TmdbID: providerID(request.ProviderIds, "Tmdb"), TvdbID: providerID(request.ProviderIds, "Tvdb"),
 	}
 	if request.Studios != nil {
 		edit.Studios = []string{}
@@ -344,6 +351,17 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// providerID is the value ids give the provider identifier key, nil when
+// they give none: those not sent stay as they were.
+func providerID(ids map[string]string, key string) *string {
+	for name, value := range ids {
+		if strings.EqualFold(name, key) {
+			return &value
+		}
+	}
+	return nil
 }
 
 // changedIMDb is the IMDb identifier an edit of a movie or series gives in
