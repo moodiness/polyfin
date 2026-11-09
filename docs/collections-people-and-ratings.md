@@ -374,6 +374,7 @@ The key is kept with the server's other secrets (see [Configuration](configurati
 | **Wait for the digital release** | Hides movies until TMDB says they are out (see [Movies waiting for their digital release](smart-lists-and-search.md#movies-waiting-for-their-digital-release)) | No movie waits; the switch is greyed out |
 | Episode orders | TMDB's episode groups (see [Episode orders](artwork-and-editing.md#episode-orders)) | Every series shows as aired |
 | **Identify** | Turns TMDB and TVDB identifiers into IMDb ones (see [Identify](artwork-and-editing.md#identify)) | TMDB and TVDB identifiers are not turned into IMDb ones |
+| TMDB identifiers from `moviedb_id` | Checked against TMDB in the background; a wrong one is corrected or dropped (see [Where the other identifiers come from](addons.md#where-the-other-identifiers-come-from)) | Used as the addon gives them |
 | Silo's apps | Box sets, from the TMDB collections of movies (see [Box sets](silo-apps.md#box-sets)) | No box sets |
 
 ### How Health explains it
