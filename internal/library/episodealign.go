@@ -61,26 +61,37 @@ import (
 const alignmentFresh = 7 * 24 * time.Hour
 
 // EpisodeNumbering pairs the episodes of a series as its addon numbers
-// them with TMDB's numbering of them. Its zero value numbers them alike.
+// them with TMDB's numbering of them. Its zero value numbers them alike,
+// for want of a source (see Sourced).
 type EpisodeNumbering struct {
 	// toAddon and toTMDB hold the pairs, each way, of a series numbered
 	// otherwise; both are nil for one numbered alike.
 	toAddon, toTMDB map[episodePlace]episodePlace
+	// sourced tells that one of TMDB's numbering's sources told it.
+	sourced bool
 }
 
-// numberingOf makes the numbering of the pairs (see alignmentRow.places):
-// nil for a series numbered alike.
+// numberingOf makes the numbering a source told of the pairs (see
+// alignmentRow.places): nil for a series numbered alike.
 func numberingOf(places [][4]int) EpisodeNumbering {
 	if places == nil {
-		return EpisodeNumbering{}
+		return EpisodeNumbering{sourced: true}
 	}
-	n := EpisodeNumbering{toAddon: make(map[episodePlace]episodePlace, len(places)), toTMDB: make(map[episodePlace]episodePlace, len(places))}
+	n := EpisodeNumbering{toAddon: make(map[episodePlace]episodePlace, len(places)), toTMDB: make(map[episodePlace]episodePlace, len(places)),
+		sourced: true}
 	for _, p := range places {
 		at, as := episodePlace{p[0], p[1]}, episodePlace{p[2], p[3]}
 		n.toAddon[at], n.toTMDB[as] = as, at
 	}
 	return n
 }
+
+// Sourced reports whether one of the sources of TMDB's numbering told
+// it (see the package's comment on episode numberings), a series Polyfin
+// names by its TMDB identifier included: false for a numbering taken
+// alike for want of one, such as a series of an addon that gives no
+// TMDB identifiers, on a server without a key for TMDB.
+func (n EpisodeNumbering) Sourced() bool { return n.sourced }
 
 // FromTMDB returns the season and number the addon gives the episode
 // TMDB numbers so, and false when none of the addon's is surely it.
@@ -435,7 +446,7 @@ var errUnaligned = errors.New("TMDB's numbering of a series' episodes could not 
 func (s *Service) numbering(ctx context.Context, server func() (view, error), series string, tmdbID int, imdb string,
 	listed episodeList) (EpisodeNumbering, error) {
 	if strings.HasPrefix(series, "tmdb:") {
-		return EpisodeNumbering{}, nil
+		return EpisodeNumbering{sourced: true}, nil
 	}
 	if places, ok := tmdbVideoPlaces(listed); ok {
 		return numberingOf(places), nil
