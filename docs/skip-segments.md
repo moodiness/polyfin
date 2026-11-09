@@ -267,6 +267,7 @@ PublicMetaDB is asked only with an API key. Create one on the PublicMetaDB websi
   - A series numbered alike, or one without a source for TMDB's numbering, is asked with the addon's numbers.
   - Except a series whose TMDB identifier is the `moviedb_id` of its description (see [Where the other identifiers come from](addons.md#where-the-other-identifiers-come-from)): without a source for TMDB's numbering, its episodes are not asked of PublicMetaDB, as the addon that gives that identifier may number them otherwise. The other databases are still asked. A movie, and a series whose TMDB identifier comes from `_tmdbId` or a `tmdb:<id>` identifier, are not concerned.
   - Titles already kept get the `moviedb_id` of their description as it is read again. A library's [description refresh](addons-and-libraries.md#library-description-refresh) reads them all at once.
+  - A title whose TMDB identifier an administrator [edited](artwork-and-editing.md#edit-metadata) is asked by the edited one. The edit drops the answers kept for the movie, or for all the series' episodes, so they are asked again.
   - An episode Polyfin cannot place surely among TMDB's is not asked of PublicMetaDB. The other databases, which know episodes by the addon's numbers, are still asked.
   - The pairing is kept a week, so playing an episode does not ask TMDB each time.
   - PublicMetaDB's answer is kept with the numbers it was asked with: once the pairing changes, the episode is asked again, and never gets another episode's segments.

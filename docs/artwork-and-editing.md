@@ -333,11 +333,20 @@ Polyfin keeps these fields:
 - genres, tags and studios;
 - official and custom ratings, community and critic ratings;
 - premiere and end dates, production year;
-- a series' display order (see [Episode orders](#episode-orders)).
+- a series' display order (see [Episode orders](#episode-orders));
+- a movie's or series' TMDB identifier, and a series' TVDB identifier, from the External IDs fields.
 
 - **Back to the addon:** a field left empty, or set back to the addon's value, follows the addon again. The addon's later changes then show.
-- **Not kept:** people, provider identifiers and the editor's other fields (locks, content type, date added). They stay the addons'.
-- **Local folders:** an IMDb identifier typed for a movie or show of a local folder links its files to that title instead (see [Identify in the web player](unmatched-files.md#identify-in-the-web-player)).
+- **Not kept:** people and the editor's other fields (locks, content type, date added). They stay the addons'.
+- **Local folders:** an IMDb identifier typed for a movie or show of a local folder links its files to that title instead (see [Identify in the web player](unmatched-files.md#identify-in-the-web-player)). Typed for a title only addons list, it changes nothing.
+
+**TMDB and TVDB identifiers:**
+
+- They are kept for a title of any source, local folders included. An emptied field, or the source's own identifier, follows the source again, so resetting a field brings the source's back.
+- A value that is not a positive whole number, or a TVDB identifier typed for a movie, is ignored: an identifier already set stays, and the other fields still save.
+- A title known by its TMDB identifier (`tmdb:…`) keeps that one, and a title known by its TVDB identifier (`tvdb:…`) keeps that one: those fields are read-only.
+- Seasons and episodes have no identifiers to edit.
+- Everything follows the identifiers set, for every user: the links and identifiers apps show, the [poster address template](#poster-address-template), ratings, TMDB people and artwork, skip segment lookups, the tracking services and imports.
 
 ### Episode orders
 
