@@ -504,6 +504,7 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 
 - Downloading an image from an address Polyfin did not list for the item and image type answers `400`. An upload of another image type, or of anything that is not a JPEG, PNG or WebP picture, answers `400`; Jellyfin keeps any uploaded image file as sent.
 - Applying an **Identify** result to a title only addons list fails as a failed identification does in Jellyfin (`500`). Applied to a title of a local folder, it answers `204` as Jellyfin does.
+- `POST /Items/{id}` keeps `ProviderIds.Tmdb` of a movie or series and `ProviderIds.Tvdb` of a series, for every source (see [Edit metadata](artwork-and-editing.md#edit-metadata)). An empty value, or the source's own, removes the edit. A value that is not a positive whole number within a 32-bit integer, or a movie's `Tvdb`, is ignored, the other fields still save, and the answer is `204`. A `tmdb:` title's `Tmdb` and a `tvdb:` title's `Tvdb` stay as they are. Seasons' and episodes' identifiers are not kept.
 - Creating a collection with a missing name, or an identifier that is not one: Jellyfin creates the collection and then fails with `500`; Polyfin answers `400` and changes nothing.
 
 ### Extras and theme media for apps

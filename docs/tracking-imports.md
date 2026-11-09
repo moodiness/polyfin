@@ -43,6 +43,7 @@ Polyfin finds each title of the history this way:
 |---|---|
 | Named by IMDb | By that identifier, as the usual metadata addons name titles: a movie `tt…`, an episode `tt…:<season>:<episode>` |
 | Listed by a catalog under its TMDB or TVDB identifier, or whose description gives it | By that identifier. A description gives it as `_tmdbId` or `moviedb_id`, and for a series `_tvdbId` or `tvdb_id` (see [Where the other identifiers come from](addons.md#where-the-other-identifiers-come-from)). So a title PublicMetaDB names by TMDB only is found among those listed, without mapping it to IMDb. |
+| Whose TMDB or TVDB identifier an administrator [edited](artwork-and-editing.md#edit-metadata) | By the edited identifier, no longer by the one it replaced |
 | Known by TMDB only, or a series by TVDB only, and listed by no catalog | Polyfin asks the server's metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`). It is found by the IMDb, TMDB and, for a series, TVDB identifiers of their description, as above. Otherwise it shows under `tmdb:<id>` or `tvdb:<id>`, with its episodes as the description lists them. |
 | From PublicMetaDB, which names titles by TMDB only, and described by no addon | By the IMDb identifier PublicMetaDB maps it to, chosen as [below](#when-contributors-disagree) |
 | A Simkl anime | By the identifiers and numbers the [anime mapping](tracking.md#anime) gives it |
@@ -52,6 +53,8 @@ Polyfin finds each title of the history this way:
 A title the service names by its IMDb identifier is never found as a listed title with another IMDb identifier, even when both have the same TMDB or TVDB identifier. An addon may give a title another title's TMDB identifier, and an import never takes a mark back.
 
 Titles already kept get the `moviedb_id` and `tvdb_id` of their description as it is read again. A library's [description refresh](addons-and-libraries.md#library-description-refresh) reads them all at once.
+
+What Polyfin sends to the tracking services carries a title's edited TMDB and TVDB identifiers, anime titles included, in place of the anime mapping's. Events already queued keep the identifier they were queued with.
 
 A title no catalog listed yet shows in your lists at once, described by the addons. Each description is kept a week, in memory and in the database, as every title's description is (see [Addons and libraries](addons-and-libraries.md)). Importing again within 6 hours asks the addons nothing. Later, the import uses the description kept, and the addon is asked again in the background.
 
