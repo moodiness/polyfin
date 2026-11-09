@@ -121,6 +121,9 @@ type Item struct {
 	// Status is "Continuing" or "Ended" for series.
 	Status      string
 	ProviderIDs map[string]string
+	// TMDBFromMoviedb tells that the Tmdb of ProviderIDs is the moviedb_id
+	// of the title's description (see stremio.Meta.TmdbFromMoviedb).
+	TMDBFromMoviedb bool
 	// ProductionLocations is a person's place of birth, as Jellyfin gives
 	// it (see persondetails.go).
 	ProductionLocations []string
@@ -507,7 +510,7 @@ func fromMeta(item *Item, meta stremio.Meta, country string) {
 	default:
 		item.Status = "Continuing"
 	}
-	item.ProviderIDs = providerIDs(meta)
+	item.ProviderIDs, item.TMDBFromMoviedb = providerIDs(meta), meta.TmdbFromMoviedb
 	item.Images = Images{Primary: meta.Poster, Backdrop: meta.Background, Logo: meta.Logo, Thumb: meta.LandscapePoster}
 	item.PosterShape = meta.Shape()
 	item.People = people(meta)

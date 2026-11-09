@@ -429,7 +429,11 @@ func shortName(words []string, short string) bool {
 // segmentTitle identifies a movie or an episode to the segment databases:
 // an episode by its series' identifiers and its numbers, and, while
 // PublicMetaDB is asked, by TMDB's numbers too (see
-// library.Service.TMDBNumbering, which keeps them).
+// library.Service.TMDBNumbering, which keeps them). PublicMetaDB is not
+// asked for an episode of a series whose TMDB identifier is the
+// moviedb_id of its description when nothing tells TMDB's numbering of
+// it: the addon that gives it may number the series otherwise, and have
+// PublicMetaDB asked for another episode.
 func (h *Handler) segmentTitle(ctx context.Context, user accounts.User, item library.Item) (mediasegments.Title, error) {
 	title := mediasegments.Title{Item: item.ID, Runtime: item.Runtime}
 	ids := item.ProviderIDs
@@ -441,9 +445,13 @@ func (h *Handler) segmentTitle(ctx context.Context, user accounts.User, item lib
 		ids = series.ProviderIDs
 		title.Season, title.Episode = item.ParentIndexNumber, item.IndexNumber
 		if h.Segments.AsksPublicMetaDB() {
-			// An error leaves the zero numbering: TMDB's alike.
+			// An error leaves the zero numbering: TMDB's alike, unsourced.
 			numbering, _ := h.Library.TMDBNumbering(ctx, item.SeriesID)
-			title.SetTMDBNumbers(numbering.ToTMDB(title.Season, title.Episode))
+			if series.TMDBFromMoviedb && !numbering.Sourced() {
+				title.SetTMDBNumbers(0, 0, false)
+			} else {
+				title.SetTMDBNumbers(numbering.ToTMDB(title.Season, title.Episode))
+			}
 		}
 	}
 	title.IMDb, title.TMDB = ids["Imdb"], ids["Tmdb"]
