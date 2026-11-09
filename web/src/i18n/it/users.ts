@@ -512,6 +512,7 @@ const users: typeof en = {
         not_found: 'Non presente in Polyfin',
         not_in_library: 'Non più nelle librerie di Plex',
         other_episode_order: 'Numerato secondo un altro ordine degli episodi di TheTVDB',
+        episode_not_placed: 'Numerato diversamente: nessun episodio corrisponde con certezza',
       },
     },
     appImport: {

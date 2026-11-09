@@ -503,6 +503,7 @@ const users = {
         not_found: 'Not in Polyfin',
         not_in_library: 'No longer in Plex’s libraries',
         other_episode_order: 'Numbered in another of TheTVDB’s episode orders',
+        episode_not_placed: 'Numbered otherwise: no episode surely matches',
       },
     },
     appImport: {
