@@ -678,9 +678,9 @@ func TestKnownLookupsReadItemsThroughIndexes(t *testing.T) {
 	// identifiers: a condition on it, unlike one on nil (NULL), would let
 	// a small partial index (items_person_tmdb) stand for it, read whole.
 	fewTitles, fewTitlesArgs := knownTitlesQuery([]string{"movie|tt1000001", "movie|tmdb:100001"}, []string{"tt1000001"}, []string{"100001"},
-		[]string{})
+		[]string{}, nil)
 	batchTitles, batchTitlesArgs := knownTitlesQuery(ids("movie|tt%d", 1000000, 150), ids("tt%d", 1000000, 150),
-		ids("%d", 100000, 150), ids("%d", 300000, 50))
+		ids("%d", 100000, 150), ids("%d", 300000, 50), nil)
 	for _, c := range []struct {
 		name, query string
 		args        []any // none for the generic plan

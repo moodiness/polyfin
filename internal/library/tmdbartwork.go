@@ -299,7 +299,7 @@ func (s *Service) TMDBArtwork(ctx context.Context, id accounts.ID, imageType str
 	if err != nil || r.Meta == nil || r.Kind != KindMovie && r.Kind != KindSeries {
 		return Artwork{}, false
 	}
-	ids := providerIDs(*r.Meta)
+	ids := s.providerIDs(r.ID, *r.Meta)
 	if _, templated := PosterAddress(s.settings().PosterTemplate, r.Kind, ids); templated && strings.EqualFold(imageType, "Primary") {
 		return Artwork{}, false
 	}

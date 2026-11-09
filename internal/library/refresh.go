@@ -143,7 +143,7 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 	if _, err := s.db.Exec(ctx, "UPDATE items SET data = data - 'rating' - 'ratedAt' - 'ratedFor' - 'genres' WHERE id = $1", title.ID); err != nil {
 		return err
 	}
-	if t, ok := ratingsTitle(Item{Kind: title.Kind, ProviderIDs: providerIDs(*title.Meta)}); ok {
+	if t, ok := ratingsTitle(Item{Kind: title.Kind, ProviderIDs: s.providerIDs(title.ID, *title.Meta)}); ok {
 		if err := s.ratings.Forget(ctx, t); err != nil {
 			return err
 		}
@@ -195,8 +195,8 @@ func (s *Service) refreshArtwork(ctx context.Context, user accounts.User, v view
 	if full, _, ok := s.describedMeta(ctx, v, title, false, inDatabase); ok {
 		urls = append(urls, metaArtwork(full)...)
 	}
-	var item Item
-	fromMeta(&item, *title.Meta, v.country)
+	item := Item{ID: title.ID, Kind: title.Kind}
+	s.fromMeta(&item, *title.Meta, v.country)
 	if poster, ok := PosterAddress(s.settings().PosterTemplate, title.Kind, item.ProviderIDs); ok {
 		urls = append(urls, poster)
 	}

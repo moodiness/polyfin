@@ -473,7 +473,7 @@ func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta, country s
 				continue
 			}
 			seen[meta.ID] = true
-			item, r, err := titleItem(sources[i].addon, sources[i].catalog, meta, accounts.ID{}, country)
+			item, r, err := s.titleItem(sources[i].addon, sources[i].catalog, meta, accounts.ID{}, country)
 			if err != nil || item.Kind != KindMovie && item.Kind != KindSeries {
 				continue
 			}
@@ -592,8 +592,8 @@ func (s *Service) smartDescribed(ctx context.Context, v view, list smartlists.Li
 			continue
 		}
 		t.described, t.title.Described = true, true
-		var full Item
-		fromMeta(&full, meta, v.country)
+		full := Item{ID: t.record.ID, Kind: t.record.Kind}
+		s.fromMeta(&full, meta, v.country)
 		if !t.title.GenresKnown {
 			t.title.Genres, t.title.GenresKnown = full.Genres, len(full.Genres) > 0
 			t.narrow()
@@ -678,7 +678,7 @@ func (s *Service) smartReleases(ctx context.Context, v view, list smartlists.Lis
 	var all []releaseKey
 	for i, t := range titles {
 		if t.item.Kind == KindMovie && t.record.Meta != nil && enabled {
-			keys[i] = releaseKeys(providerIDs(*t.record.Meta))
+			keys[i] = releaseKeys(s.providerIDs(t.record.ID, *t.record.Meta))
 			all = append(all, keys[i]...)
 		}
 	}

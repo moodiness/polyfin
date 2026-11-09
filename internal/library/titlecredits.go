@@ -474,7 +474,7 @@ func (s *Service) refreshTitleCredits(ctx context.Context, title record) error {
 	if !s.lookups.Enabled() || title.Meta == nil {
 		return nil
 	}
-	key, ok := titleCreditsKey(title.Kind, providerIDs(*title.Meta))
+	key, ok := titleCreditsKey(title.Kind, s.providerIDs(title.ID, *title.Meta))
 	if !ok {
 		return nil
 	}
@@ -495,6 +495,30 @@ func (s *Service) refreshTitleCredits(ctx context.Context, title record) error {
 // creditsLookup is the lookup of a title's credits for the item title.
 func (s *Service) creditsLookup(key creditsKey, title accounts.ID) tmdb.Lookup {
 	return tmdb.Lookup{Key: key.lookup(title), Run: func(ctx context.Context) error { return s.lookUpCredits(ctx, key, title) }}
+}
+
+// creditsMoved drops the movie or series (kind) title from the titles
+// its TMDB credits were saved on, under the key of its identifiers old,
+// and has its credits looked up under the key of its identifiers now,
+// which replace the people recorded for it (see titleTMDBChanged).
+func (s *Service) creditsMoved(ctx context.Context, title accounts.ID, kind Kind, old, now map[string]string) error {
+	from, had := titleCreditsKey(kind, old)
+	to, has := titleCreditsKey(kind, now)
+	if had && has && from == to {
+		return nil
+	}
+	if had {
+		_, err := s.db.Exec(ctx, `UPDATE title_credits SET titles = array_remove(titles, $4::uuid)
+			WHERE kind = $1 AND provider = $2 AND id = $3`, string(from.kind), from.provider, from.id, title)
+		s.forgetCredits(from)
+		if err != nil {
+			return err
+		}
+	}
+	if has && s.lookups.Enabled() {
+		s.lookups.Add([]tmdb.Lookup{s.creditsLookup(to, title)}, true)
+	}
+	return nil
 }
 
 // lookUpCredits reads a title's credits from TMDB, unless they are kept

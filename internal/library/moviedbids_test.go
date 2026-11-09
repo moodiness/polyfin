@@ -52,7 +52,7 @@ func TestProviderIDsOfDescribedIdentifiers(t *testing.T) {
 	t.Parallel()
 	metas := described(t, shawshankDescribed, survivorDescribed, itDescribed)
 	for i, want := range []string{"map[Imdb:tt0111161 Tmdb:278]", "map[Imdb:tt0239195 Tmdb:14658 Tvdb:76733]", "map[Imdb:tt0099864 Tvdb:113981]"} {
-		if got := fmt.Sprint(providerIDs(metas[i])); got != want {
+		if got := fmt.Sprint(sourceIDs(metas[i])); got != want {
 			t.Errorf("%s: %s, want %s", metas[i].Name, got, want)
 		}
 	}

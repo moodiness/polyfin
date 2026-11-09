@@ -481,7 +481,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 		}
 		more = total > len(titles)
 		for _, title := range titles {
-			item, rec, err := title.title(accounts.ID{}, v.country)
+			item, rec, err := title.title(s, accounts.ID{}, v.country)
 			if err != nil || seen[item.ID] {
 				continue
 			}
@@ -557,7 +557,7 @@ func (s *Service) titleItems(ctx context.Context, v view, records []record, kind
 		if _, own := v.addon(deref(r.Addon)); own {
 			item.ParentID = deref(r.Parent)
 		}
-		fromMeta(&item, meta, v.country)
+		s.fromMeta(&item, meta, v.country)
 		items = append(items, item)
 	}
 	return items

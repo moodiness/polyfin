@@ -465,10 +465,11 @@ func (s *Service) describeUnlisted(ctx context.Context, refs []TitleRef, titles 
 		} else if imdbID.MatchString(meta.ID) {
 			ref.IMDb = meta.ID
 		}
-		if tmdb := describedNumber(meta.TmdbID); tmdb > 0 && ref.TMDB == 0 {
+		ids := s.providerIDs(itemID(titleKey(asked[j].kind, asked[j].id)), meta)
+		if tmdb := describedNumber(stremio.Text(ids["Tmdb"])); tmdb > 0 && ref.TMDB == 0 {
 			ref.TMDB = tmdb
 		}
-		if tvdb := describedNumber(meta.TvdbID); tvdb > 0 && ref.TVDB == 0 && ref.kind() == KindSeries {
+		if tvdb := describedNumber(stremio.Text(ids["Tvdb"])); tvdb > 0 && ref.TVDB == 0 && ref.kind() == KindSeries {
 			ref.TVDB = tvdb
 		}
 		completed = append(completed, *ref)
@@ -626,26 +627,28 @@ func (t knownTitle) matches(ref TitleRef) bool {
 
 // knownTitlesQuery returns the statement that reads the movies and series
 // listed under one of keys, or with one of the IMDb (imdbs), TMDB (tmdbs)
-// or TVDB (tvdbs) identifiers, and its arguments. Each identifier is
-// compared with the very expression of its index and statistics
-// (items_title_*), so that PostgreSQL looks each one up and combines them
-// in one read of the table: each title once, in the order of the table,
-// which decides the title found first when several match a ref. A kind of
-// identifier with none to look up, nil or empty, gets no condition:
-// PostgreSQL takes a comparison with an empty array for false, and false
-// lets any partial index of items stand for it, read whole
-// (items_person_tmdb, for one).
-func knownTitlesQuery(keys, imdbs, tmdbs, tvdbs []string) (string, []any) {
+// or TVDB (tvdbs) identifiers, or whose items are among edited, and its
+// arguments. Each identifier is compared with the very expression of its
+// index and statistics (items_title_*), so that PostgreSQL looks each one
+// up and combines them in one read of the table: each title once, in the
+// order of the table, which decides the title found first when several
+// match a ref. A kind of identifier with none to look up, nil or empty,
+// gets no condition: PostgreSQL takes a comparison with an empty array for
+// false, and false lets any partial index of items stand for it, read
+// whole (items_person_tmdb, for one).
+func knownTitlesQuery(keys, imdbs, tmdbs, tvdbs []string, edited []accounts.ID) (string, []any) {
 	var query strings.Builder
 	query.Grow(256)
-	query.WriteString(`SELECT kind, key, data->'meta' FROM items WHERE kind IN ('movie', 'series') AND (key = ANY($1)`)
-	args := make([]any, 1, 4)
+	query.WriteString(`SELECT id, kind, key, data->'meta' FROM items WHERE kind IN ('movie', 'series') AND (key = ANY($1)`)
+	args := make([]any, 1, 5)
 	args[0] = keys
 	for _, by := range [...]struct {
 		expression string
-		ids        []string
-	}{{`data->'meta'->>'imdb_id'`, imdbs}, {`data->'meta'->>'_tmdbId'`, tmdbs}, {`data->'meta'->>'_tvdbId'`, tvdbs}} {
-		if len(by.ids) == 0 {
+		ids        any
+		count      int
+	}{{`data->'meta'->>'imdb_id'`, imdbs, len(imdbs)}, {`data->'meta'->>'_tmdbId'`, tmdbs, len(tmdbs)},
+		{`data->'meta'->>'_tvdbId'`, tvdbs, len(tvdbs)}, {`id`, edited, len(edited)}} {
+		if by.count == 0 {
 			continue
 		}
 		args = append(args, by.ids)
@@ -661,9 +664,12 @@ func knownTitlesQuery(keys, imdbs, tmdbs, tvdbs []string) (string, []any) {
 
 // knownTitles loads the movies and series Polyfin listed under one of the
 // identifiers of refs, or that an anime catalog listed under their
-// AnimeRef.
+// AnimeRef. A title whose TMDB or TVDB identifier an administrator set is
+// known by that one, and no longer by its source's (see providerIDs).
 func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitle, error) {
+	set := s.overridesNow()
 	var keys, imdbs, tmdbs, tvdbs []string
+	var edited []accounts.ID
 	for _, ref := range refs {
 		kind := ref.kind()
 		if ref.IMDb != "" {
@@ -672,10 +678,12 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 		if ref.TMDB > 0 {
 			id := strconv.Itoa(ref.TMDB)
 			keys, tmdbs = append(keys, titleKey(kind, "tmdb:"+id)), append(tmdbs, id)
+			edited = append(edited, set.identified["Tmdb:"+id]...)
 		}
 		if ref.TVDB > 0 && kind == KindSeries {
 			id := strconv.Itoa(ref.TVDB)
 			keys, tvdbs = append(keys, titleKey(kind, "tvdb:"+id)), append(tvdbs, id)
+			edited = append(edited, set.identified["Tvdb:"+id]...)
 		}
 		for _, id := range ref.Anime.ids() {
 			keys = append(keys, titleKey(kind, id))
@@ -684,23 +692,27 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 	if len(keys) == 0 {
 		return nil, nil
 	}
-	query, args := knownTitlesQuery(keys, imdbs, tmdbs, tvdbs)
+	query, args := knownTitlesQuery(keys, imdbs, tmdbs, tvdbs, edited)
 	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (knownTitle, error) {
+		var id accounts.ID
 		var kind, key string
 		var raw []byte
-		if err := row.Scan(&kind, &key, &raw); err != nil {
+		if err := row.Scan(&id, &kind, &key, &raw); err != nil {
 			return knownTitle{}, err
 		}
 		title := knownTitle{kind: Kind(kind), stremioID: strings.TrimPrefix(key, kind+"|")}
 		var meta stremio.Meta
 		if len(raw) > 0 && json.Unmarshal(raw, &meta) == nil {
-			title.imdb, title.tmdb, title.tvdb = meta.ImdbID, strings.TrimSpace(string(meta.TmdbID)), strings.TrimSpace(string(meta.TvdbID))
-			title.runtime = parseRuntime(string(meta.Runtime))
+			title.imdb, title.runtime = meta.ImdbID, parseRuntime(string(meta.Runtime))
 		}
+		// The identifiers set win, as wherever titles' identifiers are read.
+		meta.ID = title.stremioID
+		ids := set.fields[id].identifiers(meta)
+		title.tmdb, title.tvdb = strings.TrimSpace(ids["Tmdb"]), strings.TrimSpace(ids["Tvdb"])
 		return title, nil
 	})
 }

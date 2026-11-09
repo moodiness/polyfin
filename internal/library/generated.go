@@ -445,7 +445,7 @@ func (s *Service) collectionCandidates(ctx context.Context, v view, r record) ([
 	}
 	candidates := make([]candidate, 0, len(titles))
 	for _, title := range titles {
-		if item, _, err := title.title(r.ID, v.country); err == nil {
+		if item, _, err := title.title(s, r.ID, v.country); err == nil {
 			candidates = append(candidates, candidate{item.ID, title.meta.Poster})
 		}
 	}
@@ -535,12 +535,12 @@ func (s *Service) libraryCandidates(ctx context.Context, v view, l library) ([]c
 	candidates := make([]candidate, 0, len(metas))
 	for _, meta := range metas {
 		if l.catalog.Type != "collection" {
-			if item, _, err := titleItem(l.addon, l.catalog, meta, l.item.ID, v.country); err == nil {
+			if item, _, err := s.titleItem(l.addon, l.catalog, meta, l.item.ID, v.country); err == nil {
 				candidates = append(candidates, candidate{item.ID, meta.Poster})
 			}
 			continue
 		}
-		item, r := collectionItem(addon, meta, l.item.ID, l.addon.confined, v.country)
+		item, r := s.collectionItem(addon, meta, l.item.ID, l.addon.confined, v.country)
 		poster := meta.Poster
 		if poster == "" && s.settings().GenerateImages {
 			choice, ok := s.generatedChoiceOf(ctx, item.ID, s.shownName(item.ID, item.Name), func() ([]candidate, bool, bool) {

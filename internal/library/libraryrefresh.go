@@ -334,7 +334,7 @@ func (s *Service) refreshedTitles(ctx context.Context, l library) ([]record, err
 			}
 			// Only the record is kept, which holds no rating: no country
 			// needed.
-			_, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID, "")
+			_, r, err := s.titleItem(l.addon, l.catalog, meta, l.item.ID, "")
 			if err != nil || seen[r.ID] {
 				continue
 			}

@@ -253,7 +253,7 @@ func (s *Service) held(ctx context.Context, v view, records []record) (held map[
 	var keys []releaseKey
 	for _, r := range records {
 		if s.waits(v, r) {
-			if k := releaseKeys(providerIDs(*r.Meta)); len(k) > 0 {
+			if k := releaseKeys(s.providerIDs(r.ID, *r.Meta)); len(k) > 0 {
 				waiting, keys = append(waiting, r), append(keys, k...)
 			}
 		}
@@ -268,7 +268,7 @@ func (s *Service) held(ctx context.Context, v view, records []record) (held map[
 	now := s.now()
 	var unknown, stale []releaseKey
 	for _, r := range waiting {
-		k := releaseKeys(providerIDs(*r.Meta))
+		k := releaseKeys(s.providerIDs(r.ID, *r.Meta))
 		switch known, ok := keptRelease(kept, k); {
 		case !ok:
 			unknown = append(unknown, k[0])
@@ -302,7 +302,7 @@ func (s *Service) held(ctx context.Context, v view, records []record) (held map[
 	}
 	held = map[accounts.ID]time.Time{}
 	for _, r := range waiting {
-		known, ok := keptRelease(kept, releaseKeys(providerIDs(*r.Meta)))
+		known, ok := keptRelease(kept, releaseKeys(s.providerIDs(r.ID, *r.Meta)))
 		switch {
 		case !ok:
 			held[r.ID], pending = time.Time{}, true
@@ -346,7 +346,7 @@ func (s *Service) releasedMetas(ctx context.Context, v view, src source, metas [
 	}
 	var movies []record
 	for _, meta := range metas {
-		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}, v.country); err == nil && r.Kind == KindMovie {
+		if _, r, err := s.titleItem(src.addon, src.catalog, meta, accounts.ID{}, v.country); err == nil && r.Kind == KindMovie {
 			movies = append(movies, r)
 		}
 	}
