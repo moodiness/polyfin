@@ -39,8 +39,8 @@ var (
 
 // Invite is an invite link, which lets guests create a member account for
 // themselves: at most MaxUses of them, until ExpiresAt (never when nil),
-// unless it is revoked. Each account it creates ends AccountDays after it
-// is created, never when 0.
+// unless it is revoked. Each account it creates ends AccountDays of 24
+// hours after it is created, to the minute, never when 0.
 type Invite struct {
 	ID        ID
 	MaxUses   int
@@ -272,10 +272,10 @@ func (s *Store) InviteByToken(ctx context.Context, token string) (Invite, error)
 // account copies the settings of the invite's model, or takes those of a
 // new user, hidden from the sign-in screen; it is never an administrator.
 // It joins and follows the invite's group, if it names one. It ends the
-// invite's AccountDays after today, in the server's time zone. The invite
-// is locked meanwhile: two guests on its last use create one account, and
-// the other gets ErrInviteUsedUp. It returns the invite as it was before
-// this use, with InviteByToken's errors.
+// invite's AccountDays of 24 hours from now, to the minute (User.EndsAt).
+// The invite is locked meanwhile: two guests on its last use create one
+// account, and the other gets ErrInviteUsedUp. It returns the invite as
+// it was before this use, with InviteByToken's errors.
 func (s *Store) AcceptInvite(ctx context.Context, token, name, password string) (User, Invite, error) {
 	var user User
 	var invite Invite
@@ -308,8 +308,8 @@ func (s *Store) AcceptInvite(ctx context.Context, token, name, password string) 
 			}
 		}
 		if invite.AccountDays > 0 {
-			user, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ends_on = $2 WHERE id = $1 RETURNING "+userColumns,
-				user.ID, Day(s.now()).AddDate(0, 0, invite.AccountDays)))
+			user, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ends_at = $2 WHERE id = $1 RETURNING "+userColumns,
+				user.ID, s.now().Add(time.Duration(invite.AccountDays)*24*time.Hour)))
 			if err != nil {
 				return err
 			}

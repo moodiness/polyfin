@@ -406,11 +406,11 @@ func TestPastedKeysAreNeverSignedOut(t *testing.T) {
 func TestTheSettingPausesMembersConnections(t *testing.T) {
 	t.Parallel()
 	h := newConnectionHarness(t)
-	root, bob, carol := h.user(t, "root", true), h.user(t, "bob", false), h.user(t, "carol", false)
+	root, bob, carol, dave := h.user(t, "root", true), h.user(t, "bob", false), h.user(t, "carol", false), h.user(t, "dave", false)
 	account := Account{Profiles: []Profile{{ID: "1"}}}
 	h.source.set(func(f *fakeSource) {
 		f.account = account
-		f.accepted["root's"], f.accepted["bob's"], f.accepted["carol's"] = true, true, true
+		f.accepted["root's"], f.accepted["bob's"], f.accepted["carol's"], f.accepted["dave's"] = true, true, true, true
 	})
 	h.connected(t, root, root, account, SignIn{Secret: "root's", Owned: true}, Choice{Profile: "1"})
 	// An administrator connects Bob's account for him.
@@ -419,7 +419,12 @@ func TestTheSettingPausesMembersConnections(t *testing.T) {
 		t.Errorf("Bob's connection: %+v", c)
 	}
 	h.connected(t, carol, carol, account, SignIn{Secret: "carol's", Owned: true}, Choice{Profile: "1"})
+	h.connected(t, dave, dave, account, SignIn{Secret: "dave's", Owned: true}, Choice{Profile: "1"})
 	if _, err := h.pool.Exec(t.Context(), "UPDATE users SET is_disabled = true WHERE id = $1", carol.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Dave's account reached the exact end an invite link gave it.
+	if _, err := h.pool.Exec(t.Context(), "UPDATE users SET ends_at = '2000-01-01 00:00Z' WHERE id = $1", dave.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,7 +437,7 @@ func TestTheSettingPausesMembersConnections(t *testing.T) {
 	h.aged(t, 7*time.Hour)
 
 	// The setting off pauses Bob's connection, not the administrator's;
-	// a disabled user's never runs.
+	// a disabled user's never runs, nor an ended one's.
 	h.imports.Store(false)
 	if c := h.connectionOf(t, bob); !c.Paused || c.NextImport != nil {
 		t.Errorf("Bob's paused connection: %+v", c)
@@ -448,7 +453,7 @@ func TestTheSettingPausesMembersConnections(t *testing.T) {
 	h.imports.Store(true)
 	h.importDue()
 	h.idle(t)
-	if h.source.readsWith("bob's") != 1 || h.source.readsWith("carol's") != 0 {
+	if h.source.readsWith("bob's") != 1 || h.source.readsWith("carol's") != 0 || h.source.readsWith("dave's") != 0 {
 		t.Errorf("reads with the setting on: %v", h.source.reads)
 	}
 }

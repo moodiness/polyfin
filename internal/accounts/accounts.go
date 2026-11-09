@@ -119,6 +119,11 @@ type User struct {
 	// from that date in the server's time zone, it is refused as a
 	// disabled one is (see Ended). An administrator's never ends.
 	EndsOn *time.Time
+	// EndsAt is the exact time the account ends, nil for none: an invite
+	// link with an account end gives it to the accounts it creates (see
+	// Invite.AccountDays), and a date set since replaces it. An account
+	// has EndsOn or EndsAt, never both.
+	EndsAt *time.Time
 	// CanShare lets the user give a movie or an episode to someone without
 	// an account, through a share link, while the server allows them
 	// (Settings.ShareLinks). Losing it revokes the user's links.
@@ -232,9 +237,10 @@ type UserChanges struct {
 	QualityGroup *int
 	// UseSharedAddons, see User.
 	UseSharedAddons *bool
-	// EndsOn sets the date the account ends, the zero time for never; an
-	// administrator's cannot be set (ErrAdministratorEnds), and making a
-	// user an administrator clears theirs. See User.
+	// EndsOn sets the date the account ends, the zero time for never, and
+	// clears its exact end (User.EndsAt); an administrator's cannot be set
+	// (ErrAdministratorEnds), and making a user an administrator clears
+	// both. See User.
 	EndsOn *time.Time
 	// CanShare, see User.
 	CanShare *bool
@@ -369,7 +375,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, ends_at, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
 	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume, " +
 	"boost_volume, convert_sound, interface_size"
 
@@ -382,7 +388,7 @@ func (user *User) fields() []any {
 		&user.PersonalAddons, &user.UseSharedAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
-		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
+		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.EndsAt, &user.CanShare,
 		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
 		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
 		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize}
@@ -788,10 +794,11 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		}
 	}
 	// An administrator's account never ends, so that the last one is
-	// never locked out: making a user one clears their end date.
-	endsOn := current.EndsOn
+	// never locked out: making a user one clears their end. A date set,
+	// or never, replaces an exact end, which no other change touches.
+	endsOn, endsAt := current.EndsOn, current.EndsAt
 	if changes.EndsOn != nil {
-		endsOn = endDate(*changes.EndsOn)
+		endsOn, endsAt = endDate(*changes.EndsOn), nil
 	}
 	administrator := current.IsAdministrator
 	if changes.IsAdministrator != nil {
@@ -801,7 +808,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		if changes.EndsOn != nil && endsOn != nil {
 			return User{}, nil, ErrAdministratorEnds
 		}
-		endsOn = nil
+		endsOn, endsAt = nil, nil
 	}
 	membership, err := groupMembership(ctx, tx, current, administrator, changes, u)
 	if err != nil {
@@ -840,7 +847,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			quality_group = coalesce($26, quality_group),
 			use_shared_addons = coalesce($27, use_shared_addons),
 			ends_on = $28,
-			end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28,
+			ends_at = $45,
+			end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28 AND ends_at IS NOT DISTINCT FROM $45,
 			can_share = coalesce($29, can_share),
 			group_id = $30,
 			follow_group = $31,
@@ -867,7 +875,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
 		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
 		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess, u.channels, changes.LocalFirst,
-		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound, changes.InterfaceSize))
+		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound, changes.InterfaceSize, endsAt))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}

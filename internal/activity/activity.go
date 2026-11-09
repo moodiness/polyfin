@@ -342,8 +342,9 @@ func (s *Store) UserChanged(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"User %s was changed", "Utilisateur %s modifié", "Benutzer %s wurde geändert", "Se ha modificado el usuario %s", "Utente %s modificato", "Usuário %s alterado"}, user.Name), Type: "UserPolicyUpdated", UserID: &user.ID})
 }
 
-// AccountEnded records that user's account reached its end date, from
-// which it is refused as a disabled one is. Jellyfin has no such entry.
+// AccountEnded records that user's account reached its end, date or exact
+// time, from which it is refused as a disabled one is. Jellyfin has no
+// such entry.
 func (s *Store) AccountEnded(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"The account of %s ended", "Le compte de %s a pris fin", "Das Konto von %s ist abgelaufen", "La cuenta de %s ha finalizado", "L’account di %s è scaduto", "A conta de %s foi encerrada"}, user.Name), Type: "UserEnded",
 		UserID: &user.ID})
