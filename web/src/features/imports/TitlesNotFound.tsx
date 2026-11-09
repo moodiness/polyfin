@@ -227,6 +227,7 @@ function TitleRow({
 
   const places = titles
     .filter((title) => title.kind === 'episode')
+    .sort((a, b) => a.season - b.season || a.episode - b.episode)
     .map((title) => formatEpisode(title.season, title.episode))
   const reasons = [...new Set(titles.map((title) => reasonLabel(t, source, title.reason)))]
   const details = [

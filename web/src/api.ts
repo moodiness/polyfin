@@ -3983,8 +3983,8 @@ export type ImportTitleLink = {
  * movies and series. `reason` is the source's own: for an app `other_identifier`, `not_found` or
  * `episode_list`; for a tracking service `not_found` (no title has its identifiers) or
  * `not_mapped` (Polyfin could not identify it); for the import by name and year `not_found`,
- * `ambiguous` or `search_failed`; for a server `no_identifier`, `not_found`, `not_in_library` or
- * `other_episode_order`.
+ * `ambiguous` or `search_failed`; for a server `no_identifier`, `not_found`, `not_in_library`,
+ * `other_episode_order` or `episode_not_placed`.
  */
 export type ImportTitle = {
   key: string
