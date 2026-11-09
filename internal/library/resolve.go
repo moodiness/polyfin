@@ -541,7 +541,10 @@ type knownTitle struct {
 }
 
 // matches reports whether the title is the one ref names, by one of their
-// identifiers.
+// identifiers. When ref names an IMDb identifier, a title with another
+// IMDb identifier is not it, whatever its TMDB or TVDB identifier: an
+// addon may give a title another title's (see stremio.Meta's
+// TmdbFromMoviedb), and a mark taken once is never taken back.
 func (t knownTitle) matches(ref TitleRef) bool {
 	tmdb, tvdb := "", ""
 	if ref.TMDB > 0 {
@@ -550,9 +553,15 @@ func (t knownTitle) matches(ref TitleRef) bool {
 	if ref.TVDB > 0 && ref.kind() == KindSeries {
 		tvdb = strconv.Itoa(ref.TVDB)
 	}
+	imdb := t.imdb
+	if imdb == "" && imdbID.MatchString(t.stremioID) {
+		imdb = t.stremioID
+	}
 	switch {
 	case ref.IMDb != "" && (t.stremioID == ref.IMDb || t.imdb == ref.IMDb):
 		return true
+	case ref.IMDb != "" && imdb != "":
+		return false
 	case tmdb != "" && (t.stremioID == "tmdb:"+tmdb || t.tmdb == tmdb):
 		return true
 	case tvdb != "" && (t.stremioID == "tvdb:"+tvdb || t.tvdb == tvdb):
