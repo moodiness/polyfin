@@ -85,7 +85,14 @@ Polyfin remembers each created list's source, by the server's and the list's ide
 
 ### How titles are matched
 
-Titles are found as an [imported watch history](tracking-imports.md#importing-your-watch-history) finds them: by Jellyfin's IMDb identifier, as the usual metadata addons name titles, or by TMDB, or TVDB for series, when a catalog listed them so. Episodes are found by their series' identifiers and season and episode numbers. A multi-episode file counts for each episode.
+Titles are found as an [imported watch history](tracking-imports.md#importing-your-watch-history) finds them: by Jellyfin's IMDb identifier, as the usual metadata addons name titles, or by TMDB, or TVDB for series, when a catalog listed them so. Episodes are found by their series' identifiers, then placed among the episodes the metadata addon lists for that series:
+
+1. By the episode's own TMDB or TVDB identifier. An identifier that names two episodes, or one episode several of the server's episodes share, places none.
+2. Else by the day it aired and its name, against all the server's episodes of that series, read once per import. The server's time is rounded to the nearest day, as Jellyfin keeps local midnight in UTC. As for a [tracking import](tracking-imports.md#importing-your-watch-history): episodes released the same day on both sides, as many on each, pair in order; then the same name within a day; then the only one within a day. A series whose episodes agree keeps its numbers.
+3. Else by its season and episode numbers, when the addon's episode at those numbers aired within a day of it.
+4. Else, in a series numbered otherwise (some episode placed at other numbers, or a series whose display order is not as aired, such as DVD), the episode is not found, to link by hand. A series with nothing to tell, no identifiers nor dates, keeps its numbers.
+
+An import never creates an episode the addon does not list. When no addon describes the series, Polyfin's listed episodes stand in. A multi-episode file counts for each episode.
 
 A title no catalog listed yet shows in the user's lists at once, described by the addons. One known only by TMDB, or a series only by TVDB, is asked of the metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`). It is found by the other identifiers they give, else shows under `tmdb:<id>` or `tvdb:<id>`.
 
@@ -93,6 +100,7 @@ An unmatched title is left out and the import goes on. Each user's result counts
 
 - **No IMDb, TMDB or TVDB identifier**: a home video, or an episode Jellyfin did not number.
 - **Not in Polyfin**: no IMDb identifier, no catalog lists its TMDB or TVDB one, and no server metadata addon describes it by TMDB, or a series by TVDB.
+- **Numbered otherwise: no episode surely matches**: the series is numbered otherwise on the server, and neither identifiers nor the day it aired and its name place the episode.
 
 Plex adds two more (see [Plex](#plex)).
 
@@ -204,7 +212,7 @@ With the owner's account, Plex gives Polyfin each shared account's token for thi
 
 Transparency: these tokens read only the server's libraries, as the accounts' own Plex apps do, and write nothing. They live in memory for this import only, never stored, logged nor answered. Once the import ends, the owner's and Home profiles' sign-ins are signed out of Plex. Shared accounts' tokens come from the server's sharing, not sign-ins, so they are just dropped. Without the sign-in, the import works as before.
 
-Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; episodes by their show's identifiers and season and episode numbers. Items an older Plex agent matched have no `Guid` list. Their `guid` names the identifier instead: `com.plexapp.agents.imdb://tt…`, `com.plexapp.agents.themoviedb://…`, `com.plexapp.agents.thetvdb://…`, or an agent's own scheme with `://tvdb-…`, `://tmdb-…` or `://imdb-tt…`. Two more reasons list titles as not found:
+Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; episodes by their show's identifiers, then placed as above, by their own identifiers, then by `originallyAvailableAt` and name. Items an older Plex agent matched have no `Guid` list. Their `guid` names the identifier instead: `com.plexapp.agents.imdb://tt…`, `com.plexapp.agents.themoviedb://…`, `com.plexapp.agents.thetvdb://…`, or an agent's own scheme with `://tvdb-…`, `://tmdb-…` or `://imdb-tt…`. Two more reasons list titles as not found:
 
 - **No longer in Plex's libraries**: a history names it, but no library section lists it, so it has no identifier.
 - **Numbered in another of TheTVDB's episode orders**: an episode of a show an older agent matched as `tvdb2-`, `tvdb3-`…, not TheTVDB's usual numbers. The show is known, but marking the episode by its numbers could mark the wrong one.
@@ -492,7 +500,7 @@ Each row shows the title's name, or the identifiers the source names it by when 
 | `kind_mismatch` | The title found is of another kind, such as a movie for a series, or a TMDB address of a series for a movie. |
 | `target_not_found` | No title has that TMDB id. |
 
-**The link applies at once:** what the title would import is added, as the import adds it (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)). The row then shows the title found, with its year, and who linked it. The link applies again whenever a later import of the same source meets the same title; a series' episodes are found in the linked series by their season and episode numbers. Links are per account and per import: a link made in the Trakt list does not apply to Simkl.
+**The link applies at once:** what the title would import is added, as the import adds it (see [How the data merges with Polyfin data](#how-the-data-merges-with-polyfin-data)). The row then shows the title found, with its year, and who linked it. The link applies again whenever a later import of the same source meets the same title; a series' episodes are found in the linked series by their season and episode numbers. From a server import, they are placed as the import places them (see [How titles are matched](#how-titles-are-matched)): by their identifiers, then the day they aired and their name, never by bare numbers when the import could not place them. Links are per account and per import: a link made in the Trakt list does not apply to Simkl.
 
 **Remove the link** stops it: later imports leave the title out again. Marks already set stay, as the row says.
 
