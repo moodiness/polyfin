@@ -491,7 +491,7 @@ func (s *Service) readBlocks(ctx context.Context, version library.Version, analy
 	if _, indexed := indexedCodecs[track.CodecID]; !ok || !indexed || !track.Decodable {
 		return Track{}, ErrNotLocated
 	}
-	blocks, err := m.SubtitleBlocks(ctx, &boundedFetcher{src: src, left: int64(s.trackShare)}, track.Number)
+	blocks, err := m.SubtitleBlocks(ctx, newBoundedFetcher(src, s.trackShare), track.Number)
 	s.noteRanges(version, src)
 	if err != nil {
 		return Track{}, err
@@ -522,14 +522,22 @@ var errTrackRequests = errors.New("reading the subtitle track would take its hos
 // such a track is left to remuxes, unless it has few blocks.
 const trackRequests = 64
 
-// boundedFetcher fails the requests of a read past its share.
+// boundedFetcher fails the requests of a read past its share. left is a
+// typed atomic, which the compiler aligns on 32-bit targets too: a raw
+// int64 there sat at offset 4, and atomic.AddInt64 panicked on it.
 type boundedFetcher struct {
 	src  *source.Source
-	left int64
+	left atomic.Int64
+}
+
+func newBoundedFetcher(src *source.Source, share int) *boundedFetcher {
+	f := &boundedFetcher{src: src}
+	f.left.Store(int64(share))
+	return f
 }
 
 func (f *boundedFetcher) take() error {
-	if atomic.AddInt64(&f.left, -1) < 0 {
+	if f.left.Add(-1) < 0 {
 		return errTrackRequests
 	}
 	return nil

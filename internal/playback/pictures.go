@@ -808,7 +808,7 @@ func (s *Service) pictureBlocks(ctx context.Context, version library.Version, an
 	if !ok || !track.Decodable {
 		return container.Track{}, nil, ErrNotLocated
 	}
-	blocks, err := m.SubtitleBlocks(ctx, &boundedFetcher{src: src, left: int64(s.trackShare)}, track.Number)
+	blocks, err := m.SubtitleBlocks(ctx, newBoundedFetcher(src, s.trackShare), track.Number)
 	s.noteRanges(version, src)
 	return track, blocks, err
 }
