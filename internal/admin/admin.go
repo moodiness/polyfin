@@ -839,6 +839,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidProvider, http.StatusBadRequest, "invalid_provider"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidSourceCache, http.StatusBadRequest, "invalid_source_cache"},
+		{accounts.ErrInvalidSourceCacheEmptyHour, http.StatusBadRequest, "invalid_source_cache_empty_hour"},
 		{accounts.ErrInvalidPreload, http.StatusBadRequest, "invalid_preload"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},

@@ -907,6 +907,10 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Dias a mais por nova reprodução',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Um título reproduzido de novo, 6 horas ou mais após a última reprodução, mantém suas partes esse número de dias a mais para cada reprodução após a primeira, no máximo 8, e elas abrem espaço depois das dos títulos reproduzidos uma vez só. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+    sourceCacheEmptyHour: 'Esvaziar o cache diariamente',
+    sourceCacheEmptyHourNever: 'Nunca',
+    sourceCacheEmptyHourHelp:
+      'Exclui neste horário as partes mantidas, exceto as dos arquivos sendo lidos no momento. Raramente é necessário: o espaço em disco e os dias acima já limitam o cache, e o que for reproduzido de novo depois é baixado de novo. Sistema › Agenda o esvazia na hora, qualquer que seja o horário.',
     preloadGroup: 'Pré-carregamento dos próximos episódios',
     preloadNextEpisodes: 'Pré-carregar os próximos episódios',
     preloadNextEpisodesHelp:

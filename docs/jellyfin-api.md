@@ -1007,7 +1007,7 @@ Also:
 
 ### Source cache in the admin API
 
-- `GET /admin/api/health` gives the cache as `cache`: `used`, `limit`, `sources` (files open), `kept` (files with parts kept), `hits` and `misses` (bytes read since the start that were read before or kept from before the start, and bytes read for the first time since they were fetched), `days` and `torrents`. `GET /admin/api/settings` gives `sourceCachePreset`, `sourceCacheDays`, `sourceCacheCreditDays`, each preset's values as `sourceCachePresetLimits`, and `readingFree`, the bytes free on the disk of the folder for files being read. A `PUT` that sets `cacheSizeGb`, `sourceCacheDays`, `sourceCacheCreditDays` or `preloadWholeFiles` to another value than its preset's, without a preset, makes it `custom`.
+- `GET /admin/api/health` gives the cache as `cache`: `used`, `limit`, `sources` (files open), `kept` (files with parts kept), `hits` and `misses` (bytes read since the start that were read before or kept from before the start, and bytes read for the first time since they were fetched), `days` and `torrents`. `GET /admin/api/settings` gives `sourceCachePreset`, `sourceCacheDays`, `sourceCacheCreditDays`, `sourceCacheEmptyHour` (the hour the cache is emptied each day, `-1` for never), each preset's values as `sourceCachePresetLimits`, and `readingFree`, the bytes free on the disk of the folder for files being read. A `PUT` that sets `cacheSizeGb`, `sourceCacheDays`, `sourceCacheCreditDays` or `preloadWholeFiles` to another value than its preset's, without a preset, makes it `custom`; `sourceCacheEmptyHour` leaves the preset as it is.
 
 ### Local network discovery in the admin API
 

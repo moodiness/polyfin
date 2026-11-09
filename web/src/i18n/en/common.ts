@@ -375,6 +375,8 @@ const common = {
     unlock_failed: 'The backup could not be decrypted.',
     invalid_collection_read_hour:
       'Choose the hour collections are read at, or Never, from the list.',
+    invalid_source_cache_empty_hour:
+      'Choose the hour the cache is emptied at, or Never, from the list.',
     invalid_collection_library_apps:
       'Choose the apps that show collection libraries by collection from the list.',
     invalid_remuxdb_url:

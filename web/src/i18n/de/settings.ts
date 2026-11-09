@@ -909,6 +909,10 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Zusätzliche Tage je erneuter Wiedergabe',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Ein Titel, der 6 Stunden oder mehr nach seiner letzten Wiedergabe erneut abgespielt wird, behält seine Teile für jede Wiedergabe nach der ersten so viele Tage länger, höchstens 8-mal, und sie machen erst nach denen einmal abgespielter Titel Platz. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    sourceCacheEmptyHour: 'Cache täglich leeren',
+    sourceCacheEmptyHourNever: 'Nie',
+    sourceCacheEmptyHourHelp:
+      'Entfernt zu dieser Uhrzeit die behaltenen Teile, außer denen der gerade gelesenen Dateien. Das ist selten nötig: Speicherplatz und Tage oben begrenzen den Cache bereits, und was danach erneut abgespielt wird, wird erneut heruntergeladen. System › Zeitplan leert ihn sofort, unabhängig von der Uhrzeit.',
     preloadGroup: 'Vorladen der nächsten Folgen',
     preloadNextEpisodes: 'Nächste Folgen vorladen',
     preloadNextEpisodesHelp:

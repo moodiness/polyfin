@@ -915,6 +915,10 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Días extra por cada nueva reproducción',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Un título reproducido de nuevo, 6 horas o más después de su última reproducción, conserva sus partes estos días más por cada reproducción tras la primera, 8 como máximo, y dejan sitio después de las de los títulos reproducidos una sola vez. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    sourceCacheEmptyHour: 'Vaciar la caché cada día',
+    sourceCacheEmptyHourNever: 'Nunca',
+    sourceCacheEmptyHourHelp:
+      'Borra a esta hora las partes conservadas, salvo las de los archivos que se estén leyendo. Rara vez hace falta: el espacio en disco y los días de arriba ya limitan la caché, y lo que se reproduzca de nuevo después se vuelve a descargar. Sistema › Programación la vacía al instante, sea cual sea la hora.',
     preloadGroup: 'Precarga de los siguientes episodios',
     preloadNextEpisodes: 'Precargar los siguientes episodios',
     preloadNextEpisodesHelp:

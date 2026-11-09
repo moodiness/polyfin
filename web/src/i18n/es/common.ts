@@ -404,6 +404,8 @@ const common: typeof en = {
     unlock_failed: 'No se pudo descifrar la copia de seguridad.',
     invalid_collection_read_hour:
       'Elija en la lista la hora a la que se leen las colecciones, o «Nunca».',
+    invalid_source_cache_empty_hour:
+      'Elija en la lista la hora a la que se vacía la caché, o «Nunca».',
     invalid_collection_library_apps:
       'Elija en la lista las aplicaciones que muestran las bibliotecas de colecciones por colección.',
     invalid_remuxdb_url:

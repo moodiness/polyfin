@@ -1268,11 +1268,13 @@ const (
 
 // ErrInvalidSourceCache reports a SourceCachePreset not among
 // SourceCachePresets, or a SourceCacheDays or SourceCacheCreditDays out of
-// their bounds; ErrInvalidPreload a PreloadEpisodes, PreloadMbps or
+// their bounds; ErrInvalidSourceCacheEmptyHour a SourceCacheEmptyHour
+// outside [-1, 23]; ErrInvalidPreload a PreloadEpisodes, PreloadMbps or
 // PreloadReserveGB out of theirs.
 var (
-	ErrInvalidSourceCache = errors.New("invalid source cache retention")
-	ErrInvalidPreload     = errors.New("invalid next-episode preloading")
+	ErrInvalidSourceCache          = errors.New("invalid source cache retention")
+	ErrInvalidSourceCacheEmptyHour = errors.New("invalid source cache empty hour")
+	ErrInvalidPreload              = errors.New("invalid next-episode preloading")
 )
 
 // The presets of the source cache (see Settings.SourceCachePreset): Off
@@ -1308,13 +1310,15 @@ var SourceCachePresetLimits = map[string]SourceCacheLimits{
 }
 
 // The bounds and defaults of SourceCacheDays and SourceCacheCreditDays,
-// and of the next-episode preloading's PreloadEpisodes, PreloadMbps and
+// the default of SourceCacheEmptyHour, never, and the bounds and defaults
+// of the next-episode preloading's PreloadEpisodes, PreloadMbps and
 // PreloadReserveGB.
 const (
 	MaxSourceCacheDays           = 365
 	DefaultSourceCacheDays       = 3
 	MaxSourceCacheCreditDays     = 30
 	DefaultSourceCacheCreditDays = 1
+	DefaultSourceCacheEmptyHour  = -1
 	MinPreloadEpisodes           = 1
 	MaxPreloadEpisodes           = 3
 	DefaultPreloadEpisodes       = 1
@@ -1955,6 +1959,11 @@ type Settings struct {
 	// SourceCacheCreditDays is how many days longer it keeps those of a
 	// title for each time it was played again.
 	SourceCacheDays, SourceCacheCreditDays int
+	// SourceCacheEmptyHour is the hour of the server's time zone, 0 to 23,
+	// at which the source cache is emptied each day, but for the files
+	// being read; -1 never. Administrators may empty it by hand whatever
+	// the hour.
+	SourceCacheEmptyHour int
 	// PreloadNextEpisodes has the source cache read ahead the next
 	// PreloadEpisodes episodes of the series the users watch lately, while
 	// nothing plays, at PreloadMbps megabits a second at most, as long as
@@ -2364,7 +2373,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"poster_ratings, poster_badges, poster_badge_size, poster_template, " +
 	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
 	"provider_admin_claim, provider_admin_value, " +
-	"source_cache_preset, source_cache_days, source_cache_credit_days, " +
+	"source_cache_preset, source_cache_days, source_cache_credit_days, source_cache_empty_hour, " +
 	"preload_next_episodes, preload_episodes, preload_mbps, preload_reserve_gb, preload_whole_files"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
@@ -2436,7 +2445,7 @@ func (settings *Settings) fields() []any {
 		&settings.PosterRatings, &settings.PosterBadges, &settings.PosterBadgeSize, &settings.PosterTemplate,
 		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
 		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue,
-		&settings.SourceCachePreset, &settings.SourceCacheDays, &settings.SourceCacheCreditDays,
+		&settings.SourceCachePreset, &settings.SourceCacheDays, &settings.SourceCacheCreditDays, &settings.SourceCacheEmptyHour,
 		&settings.PreloadNextEpisodes, &settings.PreloadEpisodes, &settings.PreloadMbps, &settings.PreloadReserveGB, &settings.PreloadWholeFiles}
 }
 
@@ -2904,6 +2913,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	settings.CollectionLibraryApps = apps
 	if err := settings.applySourceCachePreset(); err != nil {
 		return Settings{}, err
+	}
+	if settings.SourceCacheEmptyHour < -1 || settings.SourceCacheEmptyHour > 23 {
+		return Settings{}, ErrInvalidSourceCacheEmptyHour
 	}
 	if settings.CacheSizeGB < MinCacheSizeGB || settings.CacheSizeGB > MaxCacheSizeGB {
 		return Settings{}, ErrInvalidCacheSize

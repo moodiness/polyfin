@@ -394,6 +394,8 @@ const common: typeof en = {
     unlock_failed: 'Impossibile decifrare il backup.',
     invalid_collection_read_hour:
       'Scegli dall’elenco l’orario di lettura delle collezioni, oppure Mai.',
+    invalid_source_cache_empty_hour:
+      'Scegli dall’elenco l’orario in cui svuotare la cache, oppure Mai.',
     invalid_collection_library_apps:
       'Scegli dall’elenco le applicazioni che mostrano le librerie di collezioni per collezione.',
     invalid_remuxdb_url:

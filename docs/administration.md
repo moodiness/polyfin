@@ -263,6 +263,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Back up the database | Every day at the hour set in **Settings › Backups**, while backups are on |
 | Build taste profiles | Every hour, for the users whose watch data, hidden titles or access changed, and once a day for every user |
 | Clean the playback history | For the playbacks older than the days to keep set in **Settings › Playback** |
+| Empty the cache of files being read | Every day at the hour set in **Settings › Playback**; never by default. Rarely needed, as the cache's size and days already bound it (see [Keeping the files read across restarts](reading-the-sources.md#keeping-the-files-read-across-restarts)) |
 | Send the weekly summary | At the day and hour set in **Settings › Notifications** |
 | Send the month in review | On the 1st, at the hour of the weekly summary |
 | Send the year in review | On January 1st, at the hour of the weekly summary |
