@@ -109,6 +109,25 @@ func TestReadEPMap(t *testing.T) {
 	}
 }
 
+// A corrupt clip information file whose offsets point past its end, by
+// up to 2^32 bytes, is no clip: on 32-bit targets such an offset wraps
+// negative as an int, and was read before the file's start.
+func TestReadEPMapRefusesOffsetsPastTheFile(t *testing.T) {
+	t.Parallel()
+	// Where writeCLPI puts the offsets of the CPI, of the video's entries
+	// from the EP map, and of its fine entries from those.
+	const cpi, videoStart, fineStart = 16, 40 + 6 + 2 + 12 + 8, 40 + 6 + 2 + 2*12 + 4
+	for _, at := range []int{cpi, videoStart, fineStart} {
+		for _, offset := range []uint32{0x7FFFFFFC, 0x80000000, 0xFFFFFFF0, 0xFFFFFFFF} {
+			data := writeCLPI(600*90000, 603*90000)
+			binary.BigEndian.PutUint32(data[at:], offset)
+			if _, err := readEPMap(data); !errors.Is(err, errNotClip) {
+				t.Errorf("offset %#x at %d: %v", offset, at, err)
+			}
+		}
+	}
+}
+
 // A title's keyframes are its play items' entry points, each item's from
 // its in time to its out time, after the items before it: an entry point
 // just before an item's in time starts it, one at its out time is the
