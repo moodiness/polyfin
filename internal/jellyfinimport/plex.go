@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // A Plex Media Server is read with its owner's token, in JSON, with GET
@@ -64,6 +66,8 @@ type plexItemJSON struct {
 	Duration     int64    `json:"duration"`
 	ViewedAt     int64    `json:"viewedAt"`
 	AccountID    int      `json:"accountID"`
+	// OriginallyAvailableAt is the day an episode aired, YYYY-MM-DD.
+	OriginallyAvailableAt string `json:"originallyAvailableAt"`
 	// PlaylistType is a playlist's kind: video, audio or photo.
 	PlaylistType string `json:"playlistType"`
 }
@@ -103,6 +107,22 @@ func (p plexItemJSON) providers() map[string]string {
 		}
 	}
 	return providers
+}
+
+// episodeProviders are an episode's own identifiers, of its Guid list:
+// the guid of an episode an older agent matched names its show's.
+func (p plexItemJSON) episodeProviders() map[string]string {
+	if len(p.Guid) == 0 {
+		return nil
+	}
+	return p.providers()
+}
+
+// held are the episodes p, an episode of a library section, holds (see
+// heldEpisodes).
+func (p plexItemJSON) held() []library.SourceEpisode {
+	return heldEpisodes(itemJSON{Name: p.Title, ParentIndexNumber: p.ParentIndex, IndexNumber: p.Index, ProviderIDs: p.episodeProviders(),
+		PremiereDate: p.OriginallyAvailableAt})
 }
 
 // otherEpisodeOrder tells an item an older Plex agent numbered in one of
@@ -160,7 +180,9 @@ func (p plexContainerJSON) items() []plexItemJSON {
 // plexLibrary is what an import reads of a Plex server's library sections
 // once: the movies and shows by their rating key, with their identifiers
 // and the token's account's data, the sections of shows, and how many
-// sections of movies and shows there are, and their keys.
+// sections of movies and shows there are, and their keys; and the
+// episodes of the sections of shows, with their own identifiers and the
+// day they aired, and the token's account's data.
 type plexLibrary struct {
 	movies, shows map[string]plexItemJSON
 	// movieOrder and showOrder list the movies and shows in the order
@@ -168,6 +190,7 @@ type plexLibrary struct {
 	movieOrder, showOrder []string
 	showSections, keys    []string
 	sections              int
+	episodes              []plexItemJSON
 }
 
 // plexConnect reads which Plex Media Server the address leads to, then,
@@ -279,6 +302,13 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 			return nil, err
 		}
 	}
+	for _, section := range lib.showSections {
+		err := c.plexList(ctx, "/library/sections/"+url.PathEscape(section)+"/all", url.Values{"type": {"4"}, "includeGuids": {"1"}},
+			func(item plexItemJSON) { lib.episodes = append(lib.episodes, item) })
+		if err != nil {
+			return nil, err
+		}
+	}
 	c.plex = lib
 	return lib, nil
 }
@@ -340,14 +370,9 @@ func (c *client) plexWatched(ctx context.Context, user string, own, ratings bool
 			rated(itemJSON{ID: show.RatingKey, Name: show.Title, Type: "Series", ProductionYear: show.Year, ProviderIDs: show.providers()},
 				show.UserRating)
 		}
-		episode := func(p plexItemJSON) {
+		for _, p := range lib.episodes {
 			h.source.listed++
 			add(p)
-		}
-		for _, section := range lib.showSections {
-			if err := c.plexList(ctx, "/library/sections/"+url.PathEscape(section)+"/all", url.Values{"type": {"4"}}, episode); err != nil {
-				return h, err
-			}
 		}
 		return h, nil
 	}

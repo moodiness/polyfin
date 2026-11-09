@@ -48,8 +48,11 @@ type run struct {
 	client   *client
 	sessions map[string]*client
 	// series are the identifiers of the series read, by their Jellyfin
-	// identifier: every user sees them the same.
-	series map[string]map[string]string
+	// identifier: every user sees them the same. sources are the episodes
+	// the server holds of them, which place each episode read among the
+	// addon's (see library.SourceEpisodes).
+	series  map[string]map[string]string
+	sources map[string]*library.SourceEpisodes
 	// plex is a user's own import from Plex, nil for the others.
 	plex *ownPlex
 	// plexSignOut are the tokens of the sign-ins to Plex the import took
@@ -261,26 +264,10 @@ func (r *run) read(ctx context.Context, i int, c *client, user string) (history,
 	extras := r.status.Extras
 	found := func() { r.update(i, func(u *UserStatus) { u.Read++ }) }
 	if c.kind == Plex {
-		own := r.plex != nil || c != r.client || user == plexOwner
-		h, err := c.plexWatched(ctx, user, own, extras.Ratings, r.series, found)
-		if err != nil {
-			return h, err
+		h, err := r.readPlex(ctx, c, user, found)
+		if c.plex != nil {
+			r.plexSources(c.plex)
 		}
-		if extras.Collections && !r.plexCollections {
-			r.plexCollections = true
-			if h.collections, err = r.client.plexCollections(ctx, r.series, found); err != nil {
-				return h, err
-			}
-		}
-		if extras.Playlists && own {
-			if h.playlists, err = c.plexPlaylists(ctx, r.series, found); err != nil {
-				return h, err
-			}
-		}
-		if r.plex == nil || !r.plex.watchlist || r.s.watchlist == nil {
-			return h, nil
-		}
-		h.watchlist, err = r.s.plexWatchlist(ctx, r.plex.account, found)
 		return h, err
 	}
 	var h history
@@ -347,9 +334,115 @@ func (r *run) read(ctx context.Context, i int, c *client, user string) (history,
 	}
 	for _, id := range missing {
 		// A series the server did not return has no identifier to match.
-		r.series[id] = providers[id]
+		series, ok := providers[id]
+		r.series[id] = series.ProviderIDs
+		if !ok {
+			continue
+		}
+		source := &library.SourceEpisodes{OtherOrder: otherOrder(series.DisplayOrder)}
+		r.sources[id] = source
+		err := c.episodesOf(ctx, user, id, func(item itemJSON) { source.Episodes = append(source.Episodes, heldEpisodes(item)...) })
+		if err != nil {
+			return h, err
+		}
+	}
+	// The episodes read are held too, when the series' list left them out.
+	for _, items := range all {
+		for _, item := range items {
+			if source := r.sources[item.SeriesID]; source != nil && item.Type == "Episode" {
+				for _, e := range heldEpisodes(item) {
+					if !slices.ContainsFunc(source.Episodes, func(held library.SourceEpisode) bool {
+						return held.Season == e.Season && held.Number == e.Number
+					}) {
+						source.Episodes = append(source.Episodes, e)
+					}
+				}
+			}
+		}
 	}
 	return h, nil
+}
+
+// readPlex reads, with c, the watch data of the Plex account user, as
+// read tells.
+func (r *run) readPlex(ctx context.Context, c *client, user string, found func()) (history, error) {
+	extras := r.status.Extras
+	own := r.plex != nil || c != r.client || user == plexOwner
+	h, err := c.plexWatched(ctx, user, own, extras.Ratings, r.series, found)
+	if err != nil {
+		return h, err
+	}
+	if extras.Collections && !r.plexCollections {
+		r.plexCollections = true
+		if h.collections, err = r.client.plexCollections(ctx, r.series, found); err != nil {
+			return h, err
+		}
+	}
+	if extras.Playlists && own {
+		if h.playlists, err = c.plexPlaylists(ctx, r.series, found); err != nil {
+			return h, err
+		}
+	}
+	if r.plex == nil || !r.plex.watchlist || r.s.watchlist == nil {
+		return h, nil
+	}
+	h.watchlist, err = r.s.plexWatchlist(ctx, r.plex.account, found)
+	return h, err
+}
+
+// plexSources records the episodes lib lists of the shows read that have
+// none recorded yet. Plex tells no show's order: its episodes' own
+// identifiers and days place them.
+func (r *run) plexSources(lib *plexLibrary) {
+	fresh := map[string]bool{}
+	for _, p := range lib.episodes {
+		show := p.show()
+		if _, read := r.series[show]; !read {
+			continue
+		}
+		source := r.sources[show]
+		switch {
+		case source == nil:
+			source = &library.SourceEpisodes{}
+			r.sources[show], fresh[show] = source, true
+		case !fresh[show]:
+			continue
+		}
+		source.Episodes = append(source.Episodes, p.held()...)
+	}
+}
+
+// otherOrder tells whether a series' DisplayOrder is another order than
+// as aired: Jellyfin leaves it empty for that, or names TheTVDB's
+// "aired" or "official" order; Emby names it Aired.
+func otherOrder(order string) bool {
+	switch strings.ToLower(strings.TrimSpace(order)) {
+	case "", "aired", "official", "default":
+		return false
+	}
+	return true
+}
+
+// heldEpisodes are the episodes item, an episode, holds, as the server
+// numbers them: its own, with its identifiers and name, and the next ones
+// of a file holding several, aired the same day.
+func heldEpisodes(item itemJSON) []library.SourceEpisode {
+	numbers := episodeNumbers(item)
+	episodes := make([]library.SourceEpisode, 0, len(numbers))
+	var aired time.Time
+	if at := date(item.PremiereDate); at != nil {
+		aired = *at
+	}
+	for i, number := range numbers {
+		e := library.SourceEpisode{Season: *item.ParentIndexNumber, Number: number, Aired: aired}
+		if i == 0 {
+			e.Name = item.Name
+			e.TMDB, _ = strconv.Atoi(provider(item.ProviderIDs, "Tmdb"))
+			e.TVDB, _ = strconv.Atoi(provider(item.ProviderIDs, "Tvdb"))
+		}
+		episodes = append(episodes, e)
+	}
+	return episodes
 }
 
 // rated sorts out the items read, each once: those with a rating, which
@@ -441,7 +534,8 @@ func identified(providers map[string]string, series bool) (library.TitleRef, boo
 
 // refs names the titles item is: a movie or a series by its identifiers,
 // an episode by its series' and its numbers, every episode of a file
-// holding several. None means it cannot be matched; known is false for an
+// holding several, with the episodes the server holds of its series,
+// which place it. None means it cannot be matched; known is false for an
 // episode whose series was not read.
 func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
 	if item.unmatchable != "" {
@@ -468,7 +562,7 @@ func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
 		if !ok || len(numbers) == 0 {
 			return nil, true
 		}
-		ref.Episode, ref.Season, ref.Name = true, *item.ParentIndexNumber, item.SeriesName
+		ref.Episode, ref.Season, ref.Name, ref.Source = true, *item.ParentIndexNumber, item.SeriesName, r.sources[item.SeriesID]
 		for _, number := range numbers {
 			ref.Number = number
 			refs = append(refs, ref)
@@ -551,8 +645,9 @@ func (r *run) title(item itemJSON) (string, importlinks.Label) {
 
 // linkedRefs names the titles item is by the link its title was given by
 // hand among linked: the movie or the series linked, or, for an episode,
-// the series' episodes of item's numbers. It reports false when the title
-// has no link, or one of another kind, or the episode no number.
+// the series' episodes of item's numbers, placed as refs places them. It
+// reports false when the title has no link, or one of another kind, or
+// the episode no number.
 func (r *run) linkedRefs(linked importlinks.Linked, item itemJSON) ([]library.TitleRef, bool) {
 	key, label := r.title(item)
 	if _, ok := linked[key]; !ok || key == "" {
@@ -569,6 +664,7 @@ func (r *run) linkedRefs(linked importlinks.Linked, item itemJSON) ([]library.Ti
 		if !ok {
 			return nil, false
 		}
+		ref.Source = r.sources[item.SeriesID]
 		refs = append(refs, ref)
 	}
 	return refs, len(refs) > 0
@@ -624,14 +720,41 @@ func (r *run) unfound(h history, noMatch []itemJSON, reasons map[string]string) 
 		case e.Kind != importlinks.KindEpisode:
 			kept = append(kept, *e)
 		default:
-			for _, number := range episodeNumbers(item) {
+			held := r.held(item, e.Reason)
+			for i, number := range episodeNumbers(item) {
 				each := *e
 				each.Episode = number
+				each.Held = held[i]
 				kept = append(kept, each)
 			}
 		}
 	}
 	return kept
+}
+
+// held are the episodes item, an episode not found for reason, holds, as
+// its server holds them, for a link to place them (see importlinks.Held):
+// one for each of its numbers, nil for an episode of a series whose
+// episodes the import did not read.
+func (r *run) held(item itemJSON, reason string) []*importlinks.Held {
+	numbers := episodeNumbers(item)
+	held := make([]*importlinks.Held, len(numbers))
+	source := r.sources[item.SeriesID]
+	if source == nil {
+		return held
+	}
+	own := heldEpisodes(item)
+	for i, number := range numbers {
+		e := own[i]
+		if j := slices.IndexFunc(source.Episodes, func(s library.SourceEpisode) bool {
+			return s.Season == e.Season && s.Number == number
+		}); j >= 0 {
+			e = source.Episodes[j]
+		}
+		held[i] = &importlinks.Held{TMDB: e.TMDB, TVDB: e.TVDB, Aired: e.Aired, Name: e.Name,
+			Otherwise: source.OtherOrder || reason == ReasonEpisodeNotPlaced || reason == ReasonOtherEpisodeOrder}
+	}
+	return held
 }
 
 // mark is a played mark an import adds: at the latest date Jellyfin
@@ -703,12 +826,21 @@ func (r *run) merge(ctx context.Context, i int, h history, whole bool) error {
 		}
 	}
 	targets := make([][]library.TitleTarget, 0, len(refs))
+	unplaced := make([]bool, 0, len(refs))
 	for start := 0; start < len(refs); start += batch {
-		found, err := r.s.titles.Resolve(ctx, refs[start:min(start+batch, len(refs))])
+		found, notPlaced, err := r.s.titles.ResolveFromSource(ctx, refs[start:min(start+batch, len(refs))])
 		if err != nil {
 			return err
 		}
-		targets = append(targets, found...)
+		targets, unplaced = append(targets, found...), append(unplaced, notPlaced...)
+	}
+	// notFound is why the refs of sp found nothing: an episode placed on
+	// none of the addon's, or a title not found.
+	notFound := func(sp span) string {
+		if slices.Contains(unplaced[sp.start:sp.end], true) {
+			return ReasonEpisodeNotPlaced
+		}
+		return ReasonNotFound
 	}
 	// targetsOf lists the items the j-th item of list l designates,
 	// reporting it when it has identifiers that none matched, and counting
@@ -724,7 +856,7 @@ func (r *run) merge(ctx context.Context, i int, h history, whole bool) error {
 		case len(all) > 0:
 			matched++
 		case sp.end > sp.start:
-			report(lists[l][j], ReasonNotFound)
+			report(lists[l][j], notFound(sp))
 		}
 		return all
 	}
