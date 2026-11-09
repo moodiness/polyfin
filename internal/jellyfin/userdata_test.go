@@ -118,7 +118,7 @@ func TestPlaybackReportsMoveTheResumePoint(t *testing.T) {
 	if data := tr.userData(t, tr.movie); data.PlayCount != 1 || data.LastPlayedDate == nil || data.Played || data.PlaybackPositionTicks != 0 {
 		t.Errorf("after starting: %+v", data)
 	}
-	tr.report(t, "/Sessions/Playing/Progress", map[string]any{"ItemId": tr.movie, "PositionTicks": 27_000_000_000})
+	tr.report(t, "/Sessions/Playing/Progress", map[string]any{"ItemId": tr.movie, "PositionTicks": int64(27_000_000_000)})
 	data := tr.userData(t, tr.movie)
 	if data.PlaybackPositionTicks != 27_000_000_000 || data.PlayedPercentage == nil || *data.PlayedPercentage != 50 {
 		t.Errorf("halfway: %+v", data)
@@ -126,7 +126,7 @@ func TestPlaybackReportsMoveTheResumePoint(t *testing.T) {
 	if resume := tr.list(t, "/UserItems/Resume?mediaTypes=Video"); !slices.Equal(resume, []string{tr.movie}) {
 		t.Errorf("resume: %v", resume)
 	}
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": 52_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": int64(52_000_000_000)})
 	if data := tr.userData(t, tr.movie); !data.Played || data.PlaybackPositionTicks != 0 || data.PlayCount != 1 || data.PlayedPercentage != nil {
 		t.Errorf("stopped near the end: %+v", data)
 	}
@@ -272,7 +272,7 @@ func TestNextUpFollowsTheFurthestPlayedEpisode(t *testing.T) {
 	}
 	// An episode under way is next up, unless resumable ones are left out:
 	// then the series is.
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[2], "PositionTicks": 10_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[2], "PositionTicks": int64(10_000_000_000)})
 	if got := nextUp("enableResumable=false"); len(got) != 0 {
 		t.Errorf("without resumable episodes: %v", got)
 	}
@@ -342,7 +342,7 @@ func TestNextUpFollowsARewatch(t *testing.T) {
 		// The second episode, played, keeps a resume point from an older
 		// play.
 		if status, body := tr.call(http.MethodPost, "/UserItems/"+tr.episodes[1]+"/UserData", app("tv", tr.token),
-			map[string]any{"PlaybackPositionTicks": 10_000_000_000}); status != http.StatusOK {
+			map[string]any{"PlaybackPositionTicks": int64(10_000_000_000)}); status != http.StatusOK {
 			t.Fatalf("a resume point: %d %s", status, body)
 		}
 		played(t, tr, tr.episodes[0], 4)
@@ -717,7 +717,7 @@ func TestUserDataCanBeReadAndChanged(t *testing.T) {
 	// Apps upload what was played offline as it is: a position near the end
 	// stays a position.
 	status, body := tr.call(http.MethodPost, "/UserItems/"+tr.movie+"/UserData", app("tv", tr.token),
-		map[string]any{"PlaybackPositionTicks": 52_000_000_000, "IsFavorite": true, "PlayedPercentage": 12.5, "LastPlayedDate": nil})
+		map[string]any{"PlaybackPositionTicks": int64(52_000_000_000), "IsFavorite": true, "PlayedPercentage": 12.5, "LastPlayedDate": nil})
 	var data UserItemData
 	if status != http.StatusOK {
 		t.Fatalf("update: %d %s", status, body)

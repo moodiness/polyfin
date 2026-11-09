@@ -152,9 +152,9 @@ func TestAppSocketsAreKeptAliveAndToldOfTheirUsersData(t *testing.T) {
 	other.quiet(t)
 
 	// Positions reported while playing are not pushed; the stop is.
-	tr.report(t, "/Sessions/Playing/Progress", map[string]any{"ItemId": tr.movie, "PositionTicks": 27_000_000_000})
+	tr.report(t, "/Sessions/Playing/Progress", map[string]any{"ItemId": tr.movie, "PositionTicks": int64(27_000_000_000)})
 	member.quiet(t)
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": 30_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": int64(30_000_000_000)})
 	change = member.changed(t)
 	if list := change.UserDataList; !slices.Equal(ids(list), []string{tr.movie}) || list[0].PlaybackPositionTicks != 30_000_000_000 {
 		t.Errorf("after the stop: %+v", list)

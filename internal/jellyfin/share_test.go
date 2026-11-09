@@ -259,7 +259,7 @@ func TestGuestsLeaveTheSharersResumePointAlone(t *testing.T) {
 	t.Parallel()
 	s := sharing(t)
 	if status, _ := s.call(http.MethodPost, "/Sessions/Playing/Stopped", app("tv", s.token),
-		map[string]any{"ItemId": s.movie, "PositionTicks": 36_000_000_000}); status != http.StatusNoContent {
+		map[string]any{"ItemId": s.movie, "PositionTicks": int64(36_000_000_000)}); status != http.StatusNoContent {
 		t.Fatalf("the sharer's report: %d", status)
 	}
 	resume := func() UserItemData {
