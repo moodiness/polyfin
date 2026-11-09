@@ -359,6 +359,25 @@ func (c *Cache) expire() {
 	}
 }
 
+// Empty evicts every chunk the cache keeps but those of the sources being
+// read now and those read lately (see protectedFor), as an administrator
+// asks, and returns the bytes it freed. The states kept of the sources
+// stop claiming the chunks evicted, as when the limit evicts them (see
+// evict). The pieces of the torrents playing, which Share counts, stay.
+func (c *Cache) Empty() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	before := c.used
+	protected := c.now().Add(-protectedFor)
+	for key, use := range c.chunks {
+		if s := c.sources[key.source]; s != nil && s.refs > 0 || !use.touched.Before(protected) {
+			continue
+		}
+		c.evict(key, use)
+	}
+	return before - c.used
+}
+
 // sweep expires chunks every sweepEvery, until stop is closed.
 func (c *Cache) sweep(stop <-chan struct{}) {
 	ticker := time.NewTicker(sweepEvery)

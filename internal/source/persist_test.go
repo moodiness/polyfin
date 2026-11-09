@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -236,6 +239,109 @@ func TestPlaysAgainCreditTheirChunks(t *testing.T) {
 	if has(again, 0) {
 		t.Fatal("the credit outlived its day")
 	}
+}
+
+// Emptying the cache removes the chunks of the sources no one reads that
+// were not read lately, and keeps the others: the cache then counts what
+// its folder holds, and a restart, after a crash or a close, reads back
+// that alone, without a request.
+func TestEmptyKeepsWhatIsReadNow(t *testing.T) {
+	t.Parallel()
+	o, server := newOrigin(t, 2*blockSize+123)
+	size := int64(len(o.data))
+	location := Location{URL: server.URL + "/file"}
+	dir := t.TempDir()
+	c := keptCache(t, dir, 1<<30)
+	var mu sync.Mutex
+	clock := time.Now()
+	c.now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return clock
+	}
+	read := func(id byte) *Source {
+		t.Helper()
+		s := c.Open(accounts.ID{id}, location, nil)
+		if got := readAll(t, s); !bytes.Equal(got, o.data) {
+			t.Fatal("content differs")
+		}
+		return s
+	}
+	// 1 is open, 2 read again lately, 3 and 4 read an hour ago.
+	open := read(1)
+	var released []*Source
+	for id := byte(2); id <= 4; id++ {
+		s := read(id)
+		s.Release()
+		released = append(released, s)
+	}
+	mu.Lock()
+	clock = clock.Add(time.Hour)
+	mu.Unlock()
+	read(2).Release()
+	for _, s := range append(released, open) {
+		c.save(s)
+	}
+
+	if freed := c.Empty(); freed != 2*size {
+		t.Errorf("freed %d bytes, want %d", freed, 2*size)
+	}
+	if usage := c.Usage(); usage.Used != 2*size || usage.Kept != 2 || usage.Used != chunkBytes(t, dir) {
+		t.Errorf("after emptying: %+v, %d bytes on disk", usage, chunkBytes(t, dir))
+	}
+	for id := byte(3); id <= 4; id++ {
+		if _, err := os.Stat(filepath.Join(dir, accounts.ID{id}.String()+".blocks")); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("the folder of source %d stays: %v", id, err)
+		}
+	}
+
+	requests := o.requests.Load()
+	restarted := func(dir string) {
+		t.Helper()
+		after := keptCache(t, dir, 1<<30)
+		if usage := after.Usage(); usage.Used != 2*size || usage.Kept != 2 || usage.Used != chunkBytes(t, dir) {
+			t.Errorf("after a restart: %+v, %d bytes on disk", usage, chunkBytes(t, dir))
+		}
+		for id := byte(1); id <= 2; id++ {
+			s := after.Open(accounts.ID{id}, location, nil)
+			if got := readAll(t, s); !bytes.Equal(got, o.data) {
+				t.Errorf("source %d read back differs", id)
+			}
+			s.Release()
+		}
+		if n := o.requests.Load(); n != requests {
+			t.Errorf("the source was asked %d more times", n-requests)
+		}
+	}
+	// A crash leaves the folder as it is.
+	crashed := t.TempDir()
+	if err := os.CopyFS(crashed, os.DirFS(dir)); err != nil {
+		t.Fatal(err)
+	}
+	restarted(crashed)
+	open.Release()
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restarted(dir)
+}
+
+// chunkBytes is the bytes of the chunks in a cache's folder.
+func chunkBytes(t *testing.T, dir string) int64 {
+	t.Helper()
+	var total int64
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || entry.Name() == stateFile {
+			return err
+		}
+		info, err := entry.Info()
+		total += info.Size()
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return total
 }
 
 // A preload averages the rate it is given, and stops once the disk would
