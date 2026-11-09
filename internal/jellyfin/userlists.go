@@ -729,6 +729,11 @@ func (h *Handler) stateListing(w http.ResponseWriter, r *http.Request, user acco
 	}
 	keep, inRange := itemTypeFilter(r), letterRange(r)
 	items = slices.DeleteFunc(items, func(item library.Item) bool { return !keep(item) || !inRange(sortName(item)) })
+	items, err = h.Library.RatingFiltered(r.Context(), user, items)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	state, err := h.userState(r.Context(), user, items)
 	if err != nil {
 		h.internalError(w, r, err)

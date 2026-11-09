@@ -378,6 +378,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	parent, hasParent := b.guid(r, "parentId")
 	var categories programQuery
 	readCategories(b, r, &categories)
+	r = r.WithContext(library.WithRatingFilter(r.Context(), ratingFilterOf(b, r)))
 	user, ok := h.viewer(w, r, b, unknownListingUser)
 	if !ok {
 		return
@@ -401,6 +402,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		found, err := h.Library.Items(r.Context(), user, wanted)
+		if err == nil {
+			found, err = h.Library.RatingFiltered(r.Context(), user, found)
+		}
 		if err != nil {
 			h.internalError(w, r, err)
 			return
@@ -440,6 +444,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			if plain, understood, err = h.Library.PlainSearch(r.Context(), user, term); understood {
 				found = append([]library.Item{plain}, found...)
 			}
+		}
+		if err == nil {
+			found, err = h.Library.RatingFiltered(r.Context(), user, found)
 		}
 		if err != nil {
 			h.browseError(w, r, err)
