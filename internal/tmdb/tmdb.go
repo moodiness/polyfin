@@ -11,8 +11,10 @@
 // episodes of series, as TMDB numbers them, which the tracking services
 // number episodes by (see the library package's episodealign.go), for the
 // collections movies belong to, which Silo's apps show as box sets (see
-// the boxset package), and for the posters and backdrops of titles whose
-// addon gives none (see the library package's tmdbartwork.go).
+// the boxset package), for the posters and backdrops of titles whose
+// addon gives none (see the library package's tmdbartwork.go), and for
+// the check of the TMDB identifiers metadata addons give as moviedb_id
+// (see the library package's tmdbidcheck.go).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
@@ -225,28 +227,61 @@ func (c *Client) FindByTVDB(ctx context.Context, kind Kind, tvdb string) (string
 	return c.find(ctx, kind, tvdb, "tvdb_id")
 }
 
+// Found is what TMDB's find gives for an identifier of another source: the
+// TMDB identifier of the first movie and of the first series, each 0 for
+// none.
+type Found struct {
+	Movie, TV int
+}
+
+// Of is the identifier found of kind, 0 for none.
+func (f Found) Of(kind Kind) int {
+	if kind == TV {
+		return f.TV
+	}
+	return f.Movie
+}
+
+// FoundByIMDb returns the movie and the series TMDB's find gives for an
+// IMDb identifier: one answer holds both kinds, which FindByIMDb shares.
+func (c *Client) FoundByIMDb(ctx context.Context, imdb string) (Found, error) {
+	return c.found(ctx, imdb, "imdb_id")
+}
+
 // find returns the TMDB identifier of the title of kind TMDB's find gives
 // for an identifier of another source ("imdb_id", "tvdb_id").
 func (c *Client) find(ctx context.Context, kind Kind, id, source string) (string, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
+	found, err := c.found(ctx, id, source)
+	if err != nil {
+		return "", err
+	}
+	if found.Of(kind) == 0 {
 		return "", ErrNotFound
 	}
-	var found struct {
+	return strconv.Itoa(found.Of(kind)), nil
+}
+
+// found returns what TMDB's find gives for an identifier of another source.
+func (c *Client) found(ctx context.Context, id, source string) (Found, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Found{}, ErrNotFound
+	}
+	var answer struct {
 		Movies []struct{ ID int } `json:"movie_results"`
 		Series []struct{ ID int } `json:"tv_results"`
 	}
-	if err := c.get(ctx, "/find/"+url.PathEscape(id), url.Values{"external_source": {source}}, &found); err != nil {
-		return "", err
+	if err := c.get(ctx, "/find/"+url.PathEscape(id), url.Values{"external_source": {source}}, &answer); err != nil {
+		return Found{}, err
 	}
-	results := found.Movies
-	if kind == TV {
-		results = found.Series
+	var found Found
+	if len(answer.Movies) > 0 && answer.Movies[0].ID > 0 {
+		found.Movie = answer.Movies[0].ID
 	}
-	if len(results) == 0 || results[0].ID <= 0 {
-		return "", ErrNotFound
+	if len(answer.Series) > 0 && answer.Series[0].ID > 0 {
+		found.TV = answer.Series[0].ID
 	}
-	return strconv.Itoa(results[0].ID), nil
+	return found, nil
 }
 
 // TitleImages returns the images of the movie or series of kind TMDB
@@ -568,8 +603,8 @@ func (c *Client) SearchTitles(ctx context.Context, kind Kind, name string, year 
 }
 
 // IMDbID returns the IMDb identifier of the movie or series (kind) TMDB
-// identifies as id, from its external identifiers; ErrNotFound when TMDB
-// gives none.
+// identifies as id, from its external identifiers: empty when TMDB gives
+// none, and ErrNotFound when TMDB does not know the title.
 func (c *Client) IMDbID(ctx context.Context, kind Kind, id int) (string, error) {
 	var ids struct {
 		IMDb string `json:"imdb_id"`
@@ -577,10 +612,33 @@ func (c *Client) IMDbID(ctx context.Context, kind Kind, id int) (string, error) 
 	if err := c.get(ctx, "/"+string(kind)+"/"+strconv.Itoa(id)+"/external_ids", nil, &ids); err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(ids.IMDb) == "" {
-		return "", ErrNotFound
-	}
 	return strings.TrimSpace(ids.IMDb), nil
+}
+
+// TitleYear returns the year the movie or series (kind) TMDB identifies as
+// id was first released or aired, 0 when TMDB gives no date; ErrNotFound
+// when TMDB does not know the title. It reads the title's details, which
+// Studios reads too: one answer serves both.
+func (c *Client) TitleYear(ctx context.Context, kind Kind, id int) (int, error) {
+	var details struct {
+		Released string `json:"release_date"`
+		Aired    string `json:"first_air_date"`
+	}
+	if err := c.get(ctx, "/"+string(kind)+"/"+strconv.Itoa(id), nil, &details); err != nil {
+		return 0, err
+	}
+	date := details.Released
+	if kind == TV {
+		date = details.Aired
+	}
+	if len(date) < 4 {
+		return 0, nil
+	}
+	year, err := strconv.Atoi(date[:4])
+	if err != nil {
+		return 0, nil
+	}
+	return year, nil
 }
 
 // GroupSummary is one of a series' episode groups, as TMDB lists them:
