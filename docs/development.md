@@ -124,6 +124,24 @@ go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --enab
   --new-from-rev origin/main ./internal/lyrics/
 ```
 
+### Building for 32-bit targets
+
+No image or desktop package is built for 32-bit targets. Polyfin is kept building there, and safe on its playback path, by a CI job that runs beside the others, "32-bit build and playback tests, and 64-bit atomics":
+
+- **Build:** it builds the server for 32-bit ARM (`GOARCH=arm GOARM=7`), and vets every package for 386, tests included. A test's constant past 2^31 where an `int` goes is written `int64(...)`.
+- **Tests:** it runs the tests of the playback path as 386 binaries, which the runner runs natively, without FFmpeg: `internal/container`, `source`, `media`, `hls`, `subtitles`, `stremio`, `localfiles`, `remuxdb` and `playback`.
+- **Atomics:** it checks every package with one rule of golangci-lint's forbidigo, in `.github/golangci-atomics.yml`: no raw 64-bit function of `sync/atomic`, such as `atomic.AddInt64` or `atomic.LoadUint64`. On a 32-bit target, such a call panics when its value is not 8-byte aligned, as a field after a pointer is not. `atomic.Int64` and `atomic.Uint64` take their place: the compiler aligns them.
+
+A size or offset past 2 GiB is an `int64` on every target, never an `int`; an addon's is decoded as a `stremio.Number64`. The same checks:
+
+```sh
+GOOS=linux GOARCH=arm GOARM=7 go build ./...
+GOOS=linux GOARCH=386 go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --config .github/golangci-atomics.yml ./...
+```
+
+`GOARCH=386 go test ./internal/playback` runs the tests on Linux on amd64; elsewhere, build them with `GOOS=linux GOARCH=386 go test -c` and run them in a `linux/386` container.
+
 ### Password and key costs in tests
 
 The tests of `internal/accounts`, `internal/admin`, `internal/backup` and `internal/jellyfin` hash passwords and derive backup keys at a small fraction of the server's cost.
