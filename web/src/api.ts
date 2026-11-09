@@ -127,7 +127,12 @@ export type User = {
   convertSound: boolean
   /** The date the account ends, YYYY-MM-DD in the server's time zone; null for never. */
   endsOn: string | null
-  /** Whether the end date has come: the account is refused as a disabled one is. */
+  /**
+   * The exact time the account ends, as an invite link sets it, instead of a date; null for none.
+   * At most one of endsOn and endsAt is set.
+   */
+  endsAt: string | null
+  /** Whether the end has come: the account is refused as a disabled one is. */
   ended: boolean
   /** The group the user belongs to; null for none. Administrators never belong to one. */
   groupId: string | null
@@ -996,7 +1001,7 @@ export type UserPatch = Partial<{
   localFirst: boolean
   boostVolume: boolean
   convertSound: boolean
-  /** YYYY-MM-DD, or null for never. */
+  /** YYYY-MM-DD, or null for never; either clears endsAt. */
   endsOn: string | null
   /** Joins this group and takes its values; '' leaves the group, keeping them as own settings. */
   groupId: string

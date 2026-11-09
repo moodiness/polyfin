@@ -35,6 +35,7 @@ const users = {
     ended: 'Ended',
     endsOn: (date: string) => `Ends on ${date}`,
     endedOn: (date: string) => `Ended on ${date}`,
+    endMoment: (date: string, time: string) => `${date} at ${time}`,
     endTitle: 'Ends on',
     endHelp:
       'From this date, in the server’s time zone, the account is refused as a disabled one is: it cannot sign in, and its devices are refused. Everything it has stays, and a later date, or Never, brings it back.',
@@ -537,7 +538,8 @@ const users = {
     after: (days: number) => (days === 1 ? 'After 1 day' : `After ${days} days`),
     never: 'Never',
     accountsEnd: 'Accounts end',
-    accountsEndHelp: 'Each account the link creates ends this many days after it is created.',
+    accountsEndHelp:
+      'Each account the link creates ends exactly this many days after its creation, at the same time of day, as the link’s expiry counts.',
     accountsEndAfter: (days: number) =>
       days === 1 ? 'Accounts end after 1 day' : `Accounts end after ${days} days`,
     model: 'Settings of',

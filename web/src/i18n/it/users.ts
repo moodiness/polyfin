@@ -39,6 +39,7 @@ const users: typeof en = {
     ended: 'Scaduto',
     endsOn: (date: string) => `Scade il ${date}`,
     endedOn: (date: string) => `Scaduto il ${date}`,
+    endMoment: (date: string, time: string) => `${date} alle ${time}`,
     endTitle: 'Scade il',
     endHelp:
       'A partire da questa data, nel fuso orario del server, l’account viene rifiutato come se fosse disabilitato: non può accedere e i suoi dispositivi vengono rifiutati. Tutto ciò che contiene viene conservato, e una data successiva, oppure «Mai», lo ripristina.',
@@ -547,7 +548,7 @@ const users: typeof en = {
     never: 'Mai',
     accountsEnd: 'Fine degli account',
     accountsEndHelp:
-      'Ogni account creato dal link termina questo numero di giorni dopo la sua creazione.',
+      'Ogni account creato dal link termina esattamente questo numero di giorni dopo la sua creazione, alla stessa ora, come si conta la scadenza del link.',
     accountsEndAfter: (days: number) =>
       days === 1
         ? 'Gli account terminano dopo 1 giorno'

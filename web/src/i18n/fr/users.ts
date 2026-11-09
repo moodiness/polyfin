@@ -39,6 +39,7 @@ const users: typeof en = {
     ended: 'Terminé',
     endsOn: (date: string) => `Prend fin le ${date}`,
     endedOn: (date: string) => `A pris fin le ${date}`,
+    endMoment: (date: string, time: string) => `${date} à ${time}`,
     endTitle: 'Prend fin le',
     endHelp:
       'À partir de cette date, dans le fuseau horaire du serveur, le compte est refusé comme un compte désactivé\u202f: il ne peut plus se connecter, et ses appareils sont refusés. Tout ce qu’il possède est gardé, et une date plus tardive, ou «\u202fJamais\u202f», le rétablit.',
@@ -553,7 +554,7 @@ const users: typeof en = {
     never: 'Jamais',
     accountsEnd: 'Fin des comptes',
     accountsEndHelp:
-      'Chaque compte que le lien crée prend fin ce nombre de jours après sa création.',
+      'Chaque compte que le lien crée prend fin exactement ce nombre de jours après sa création, à la même heure, comme se compte l’expiration du lien.',
     accountsEndAfter: (days: number) =>
       days === 1
         ? 'Les comptes prennent fin après 1 jour'

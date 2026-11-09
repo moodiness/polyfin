@@ -20,7 +20,7 @@ import {
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { errorMessage, formatDate } from '@/format'
+import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Avatar,
@@ -38,7 +38,7 @@ import {
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
 import { CreateInviteModal, InviteLinks } from './InviteLinks'
-import { LastActivity, UserState, useRestrictions, UsersArea } from './shared'
+import { accountEnd, LastActivity, UserState, useRestrictions, UsersArea } from './shared'
 import UserActions from './UserActions'
 
 /** The users the list shows: every one, those in no group, or the members of one group. */
@@ -210,6 +210,7 @@ function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
   const restrictions = useRestrictions(user)
+  const end = accountEnd(user, t, language)
   const tags = [
     user.id === self.id && <Badge key="you">{t.users.you}</Badge>,
     user.isAdministrator && (
@@ -249,10 +250,10 @@ function UserRow({ user }: { user: User }) {
             <UserState user={user} />
           </span>
           <LastActivity user={user} />
-          {user.endsOn !== null && (
+          {end !== null && (
             <span>
               {' · '}
-              {(user.ended ? t.users.endedOn : t.users.endsOn)(formatDate(user.endsOn, language))}
+              {(user.ended ? t.users.endedOn : t.users.endsOn)(end)}
             </span>
           )}
           {restrictions.length > 0 && <span> · {restrictions.join(' · ')}</span>}

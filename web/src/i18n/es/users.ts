@@ -39,6 +39,7 @@ const users: typeof en = {
     ended: 'Finalizada',
     endsOn: (date: string) => `Finaliza el ${date}`,
     endedOn: (date: string) => `Finalizó el ${date}`,
+    endMoment: (date: string, time: string) => `${date} a las ${time}`,
     endTitle: 'Finaliza el',
     endHelp:
       'A partir de esta fecha, en la zona horaria del servidor, la cuenta se rechaza igual que una cuenta desactivada: no puede iniciar sesión y sus dispositivos se rechazan. Todo lo que tiene se conserva, y una fecha posterior, o «Nunca», la restablece.',
@@ -545,7 +546,7 @@ const users: typeof en = {
     never: 'Nunca',
     accountsEnd: 'Fin de las cuentas',
     accountsEndHelp:
-      'Cada cuenta que crea el enlace finaliza este número de días después de su creación.',
+      'Cada cuenta que crea el enlace finaliza exactamente este número de días después de su creación, a la misma hora, como se cuenta la caducidad del enlace.',
     accountsEndAfter: (days: number) =>
       days === 1
         ? 'Las cuentas finalizan después de 1 día'

@@ -16,7 +16,8 @@ import {
 } from '@/api'
 import { SubAreaContext } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { useI18n } from '@/i18n'
+import { formatDate } from '@/format'
+import { useI18n, type Messages } from '@/i18n'
 import { RelativeTime, scaledPx, StatusPill, Tabs } from '@/ui'
 
 /** PageLayout claims the words; there is nothing to show above a page in their place. */
@@ -139,6 +140,20 @@ export function clockTime(iso: string, language: string) {
   return new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(
     new Date(iso),
   )
+}
+
+/**
+ * When the account ends, as "October 20, 2026": its date, or for the exact end an invite link set,
+ * its date and time in the reader's time zone, "November 9, 2026 at 18:40"; null for never.
+ */
+export function accountEnd(user: User, t: Messages, language: string): string | null {
+  if (user.endsAt !== null) {
+    const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(
+      new Date(user.endsAt),
+    )
+    return t.users.endMoment(date, clockTime(user.endsAt, language))
+  }
+  return user.endsOn === null ? null : formatDate(user.endsOn, language)
 }
 
 /** A quality group as people name video of that height: 4K, else its lines, 1080p. */
