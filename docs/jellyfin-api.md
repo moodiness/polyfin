@@ -343,6 +343,16 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 - Delete a collection with `DELETE /Items/{id}`, as in Jellyfin. Users without permission get 401.
 - A missing name, or a title the user may not see, answers 400.
 
+### Filters by age rating for apps
+
+`/Items` and `/Users/{userId}/Items` narrow their titles by age rating as Jellyfin does, on top of the user's [parental control](user-limits.md#parental-control). One of Jellyfin's official apps sends `maxOfficialRating` for its screensaver's age limit, and apps' filters send `officialRatings`.
+
+- A title is judged by the rating parental control judges it by: its rating for the server's [Rating country](user-limits.md#rating-country), or the one an administrator set, the custom rating first. Seasons and episodes are judged by their series' rating, as Jellyfin's inherit it ([BaseItem.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/BaseItem.cs#L724-L742)).
+- `maxOfficialRating` and `minOfficialRating` keep the titles rated at most, or at least, that rating, scored under the Rating country, and the titles without a rating ([BaseItemRepository.TranslateQuery.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/BaseItemRepository.TranslateQuery.cs#L690-L707)). A rating Polyfin cannot score filters nothing. Unlike Jellyfin, a `maxOfficialRating` above the user's own limit never shows them more.
+- `hasParentalRating=false` keeps only the titles without a rating, unless a lowest or highest rating applies, asked or the user's own, or the user's parental control hides some unrated titles; `hasParentalRating=true` changes nothing ([L709-L758](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/BaseItemRepository.TranslateQuery.cs#L709-L758)).
+- `officialRatings`, separated by `|`, keeps the titles whose official rating is one of them, and `hasOfficialRating` those with or without one. The official rating is the one the title shows, not the custom rating. Seasons and episodes have none, unless an administrator rated them or their series.
+- The filters apply to a folder's listing, titles asked by `ids`, searches and listings by what the user did. `TotalRecordCount` counts the titles kept, and a listing pages through them, as a limited user's listing does (see [Ratings looked up for limited users](user-limits.md#ratings-looked-up-for-limited-users)).
+
 ### Smart lists for apps
 
 - A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
