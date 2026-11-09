@@ -210,6 +210,36 @@ See [Backups](backups.md) for:
 - the destinations they are also sent to: S3-compatible storage, SFTP or WebDAV;
 - how to restore one from the admin app.
 
+### A light PostgreSQL
+
+`compose.yaml` starts PostgreSQL with settings that keep it small:
+
+| Setting | `compose.yaml` | PostgreSQL's default |
+| --- | --- | --- |
+| `shared_buffers` | `32MB` | `128MB` |
+| `max_connections` | `20` | `100` |
+| `max_locks_per_transaction` | `512` | `64` |
+| `max_worker_processes` | `2` | `8` |
+| `max_parallel_workers` | `0` | `8` |
+| `autovacuum_max_workers` | `1` | `3` |
+| `max_wal_size` | `256MB` | `1GB` |
+| `jit` | `off` | `on` |
+
+- **Measured** in `docker stats`, with a database of 132,000 items: 62 MiB rather than 233 MiB after a workload, and 22 MiB rather than 106 MiB idle. Searches and lookups ran as fast.
+- **What Polyfin needs:** no parallel query nor extra workers. A restore of a backup takes about 6,150 locks in one transaction, hence the 512 locks per connection (see [What a restore does](backups.md#what-a-restore-does)).
+- **The pool:** Polyfin opens 10 connections at most, whatever the number of CPUs. With the one that follows the changes of addons, and pg_dump's during a backup, that makes 12 of the 20. To set another bound, add `pool_max_conns` to `POLYFIN_DATABASE_URL`, such as `postgresql://polyfin:password@postgres:5432/polyfin?pool_max_conns=6`. Keep `max_connections` a few above it.
+- **Polyfin Desktop:** its own database has the same settings, clusters made by older versions included.
+
+To apply them to an existing PostgreSQL container:
+
+- **With Compose:** copy the `command` of the `postgres` service from the current `compose.yaml` into yours, then run `docker compose up -d`. PostgreSQL restarts with its data, and Polyfin reconnects.
+- **With `docker run`, or on Unraid:** add the `-c` options after the image's name, such as `-c shared_buffers=32MB -c max_connections=20`. On Unraid, they go in the PostgreSQL container's Post Arguments, in the advanced view of its template.
+- **A PostgreSQL that other services share:** their needs count too. Keep its settings if unsure, and add `pool_max_conns` to Polyfin's URL if it allows few connections.
+
+Check them with `docker compose exec postgres psql -U polyfin -c 'SHOW shared_buffers'`.
+
+Polyfin does not support SQLite instead of PostgreSQL (see [discussion #1061](https://github.com/moodiness/polyfin/discussions/1061)). Its queries rely on PostgreSQL's JSON indexes, arrays and row locks, and SQLite's single writer would hold playback progress back behind long imports, for a smaller saving than these settings give: most of PostgreSQL's memory is its cache.
+
 ### Folders for conversion, files being read and the cache
 
 The segments being played, the files being read and the cache go to Polyfin's data volume by default. **Conversion folder**, **Folder for files being read** and **Cache folder** can name other folders (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)).

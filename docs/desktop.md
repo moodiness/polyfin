@@ -195,6 +195,7 @@ To reach the database with your own tools:
 
 - **Address:** `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free. The port is in `postgresql/polyfin.port`.
 - **User:** `polyfin`, with the password in `polyfin.password`.
+- **Settings:** light ones, appended to `postgresql/postgresql.conf`, with 20 connections at most (see [A light PostgreSQL](installation.md#a-light-postgresql)). A setting written below them, or with `ALTER SYSTEM`, wins.
 
 ## The secret key
 
