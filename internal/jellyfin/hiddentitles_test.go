@@ -16,7 +16,7 @@ func TestRemovingFromContinueWatchingKeepsThePlayedState(t *testing.T) {
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.movie+"?datePlayed=2026-01-02T03:04:05Z")
 	for _, id := range []string{tr.movie, tr.episodes[0]} {
 		tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": id, "PositionTicks": 0})
-		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": id, "PositionTicks": 12_000_000_000})
+		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": id, "PositionTicks": int64(12_000_000_000)})
 	}
 	before := tr.userData(t, tr.movie)
 	if !before.Played || before.PlayCount != 2 || before.PlaybackPositionTicks == 0 || before.LastPlayedDate == nil {
@@ -47,7 +47,7 @@ func TestRemovingFromContinueWatchingKeepsThePlayedState(t *testing.T) {
 
 	// Playing it again sets a resume point as usual.
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.movie, "PositionTicks": 0})
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": 20_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": int64(20_000_000_000)})
 	if got := resume(); !slices.Equal(got, []string{tr.movie}) {
 		t.Errorf("resume after playing again: %v", got)
 	}
@@ -168,7 +168,7 @@ func TestHidingASeriesLeavesItsEpisodesOutOfTheHomeRows(t *testing.T) {
 	tr := newTracking(t)
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.episodes[0])
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.episodes[2], "PositionTicks": 0})
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[2], "PositionTicks": 12_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[2], "PositionTicks": int64(12_000_000_000)})
 	if got := tr.list(t, "/Shows/NextUp"); !slices.Equal(got, tr.episodes[1:2]) {
 		t.Fatalf("next up: %v", got)
 	}

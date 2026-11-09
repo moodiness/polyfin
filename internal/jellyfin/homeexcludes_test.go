@@ -41,7 +41,7 @@ func TestHomeScreenSectionsLeaveOutTheExcludedLibraries(t *testing.T) {
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.episodes[0])
 	for _, id := range []string{tr.movie, tr.episodes[2]} {
 		tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": id, "PositionTicks": 0})
-		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": id, "PositionTicks": 12_000_000_000})
+		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": id, "PositionTicks": int64(12_000_000_000)})
 	}
 	tr.testServer.user("other", nil)
 	other := tr.signIn("other", "phone")

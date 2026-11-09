@@ -22,7 +22,7 @@ func TestRemovingFromContinueWatchingTakesOffNextUpWhenChosen(t *testing.T) {
 	underWay := func() {
 		t.Helper()
 		tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 0})
-		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 6_000_000_000})
+		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": int64(6_000_000_000)})
 	}
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.episodes[0]+"?datePlayed=2025-01-01T00:00:00Z")
 	underWay()

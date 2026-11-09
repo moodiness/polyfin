@@ -151,7 +151,7 @@ func TestUsersTrackingServicesHearOfTheirMoviesAndEpisodes(t *testing.T) {
 
 	// The movie runs 1h30: started, stopped past the played mark.
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.movie, "PositionTicks": 0})
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": 52_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.movie, "PositionTicks": int64(52_000_000_000)})
 	// The first season marked played; marking it again counts no new play.
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.seasons[0])
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.seasons[0])

@@ -75,7 +75,7 @@ func TestRemovingFromNextUpHoldsUntilANewerPlay(t *testing.T) {
 		t.Errorf("after the third removal: %v", got)
 	}
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 0})
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 6_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": int64(6_000_000_000)})
 	if got := nextUp(""); !slices.Equal(got, tr.episodes[1:2]) {
 		t.Errorf("after a play: %v", got)
 	}
@@ -243,7 +243,7 @@ func TestRemovingFromNextUpTakesARewatchOff(t *testing.T) {
 	}
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 0})
 	// Played again past the start: the play is dated now.
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 6_000_000_000})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": int64(6_000_000_000)})
 	if got := nextUp(""); len(got) == 0 {
 		t.Errorf("after a newer play: %v", got)
 	}

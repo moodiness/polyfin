@@ -190,7 +190,7 @@ func rowsOnServer(t *testing.T, s testServer, held bool) rowsSetup {
 	}
 	for _, movie := range page.Items {
 		// Ten minutes of 1h30 leave a resume point.
-		send(http.MethodPost, "/Sessions/Playing/Stopped", map[string]any{"ItemId": movie.Id, "PositionTicks": 6_000_000_000}, http.StatusNoContent)
+		send(http.MethodPost, "/Sessions/Playing/Stopped", map[string]any{"ItemId": movie.Id, "PositionTicks": int64(6_000_000_000)}, http.StatusNoContent)
 	}
 	s.get(t, "/Items?ParentId="+ids["Shows"]+"&Limit=100", token, &page)
 	if len(page.Items) != rowTitles {

@@ -112,7 +112,7 @@ func TestCollectionLibraryTitlesAnswerTheUserFilters(t *testing.T) {
 	send("/UserPlayedItems/"+ids["movie 1"], nil, http.StatusOK)
 	send("/UserFavoriteItems/"+ids["series 2"], nil, http.StatusOK)
 	send("/Sessions/Playing", map[string]any{"ItemId": ids["movie 2"], "PositionTicks": 0}, http.StatusNoContent)
-	send("/Sessions/Playing/Progress", map[string]any{"ItemId": ids["movie 2"], "PositionTicks": 27_000_000_000}, http.StatusNoContent)
+	send("/Sessions/Playing/Progress", map[string]any{"ItemId": ids["movie 2"], "PositionTicks": int64(27_000_000_000)}, http.StatusNoContent)
 
 	// listed reads a listing page by page, two titles at a time, and
 	// checks that every page has the same total, which counts the titles.

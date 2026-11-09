@@ -228,7 +228,7 @@ func TestSiloAppsFilterAPage(t *testing.T) {
 	}
 	// Alpha is half watched, Zeta on the watchlist.
 	if status, _ := f.call(http.MethodPost, "/UserItems/"+itemIDOf(t, f.testServer, f.account, f.views["Films"], "Alpha")+"/UserData",
-		app("tv", f.account), map[string]any{"PlaybackPositionTicks": 27_000_000_000}); status != http.StatusOK {
+		app("tv", f.account), map[string]any{"PlaybackPositionTicks": int64(27_000_000_000)}); status != http.StatusOK {
 		t.Fatalf("a resume point: %d", status)
 	}
 	if status, data := f.do(t, http.MethodPut, "/api/v2/watchlist/"+itemIDOf(t, f.testServer, f.account, f.views["Films"], "Zeta"),
