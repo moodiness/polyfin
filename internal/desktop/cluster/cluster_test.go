@@ -174,6 +174,132 @@ func TestClusterLeftRunningIsRestarted(t *testing.T) {
 
 }
 
+// lightValues are the settings light gives, as current_setting shows them.
+var lightValues = map[string]string{
+	"shared_buffers": "32MB", "max_connections": "20", "max_locks_per_transaction": "512", "max_worker_processes": "2",
+	"max_parallel_workers": "0", "autovacuum_max_workers": "1", "max_wal_size": "256MB", "jit": "off",
+}
+
+func checkLight(t *testing.T, c *Cluster) {
+	t.Helper()
+	for name, want := range lightValues {
+		if got := query(t, c.URL(), "SELECT current_setting('"+name+"')"); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+	conf, err := os.ReadFile(filepath.Join(c.Dir, "postgresql.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(conf), lightMark); n != 1 {
+		t.Errorf("postgresql.conf holds the light settings %d times", n)
+	}
+}
+
+// A new cluster is light. A cluster made before the light settings, left
+// running by a crash of the app, is stopped, gets them, and starts again
+// with its data.
+func TestClusterIsLightNewOrOlder(t *testing.T) {
+	t.Parallel()
+	bin := postgresBin(t)
+	data := t.TempDir()
+	ctx := context.Background()
+	c := newCluster(t, bin, data)
+	if _, err := c.Prepare(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	checkLight(t, c)
+	execute(t, c.URL(), "CREATE TABLE kept AS SELECT 'there' AS word")
+	if err := c.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// An older version made it: its postgresql.conf lacks the light
+	// settings, and the crash of the app left it running.
+	path := filepath.Join(c.Dir, "postgresql.conf")
+	conf, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(string(conf), light, "", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	older := newCluster(t, bin, data)
+	if _, err := older.Prepare(ctx); err != nil {
+		t.Fatal(err)
+	}
+	olderURL := startedByHand(t, older)
+	stopAtEnd(t, older)
+	if got := query(t, olderURL, "SELECT current_setting('max_connections')"); got != "100" {
+		t.Fatalf("the older cluster runs with max_connections %q", got)
+	}
+
+	next := newCluster(t, bin, data)
+	if _, err := next.Prepare(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := next.Start(ctx); err != nil {
+		t.Fatalf("Start over an older running cluster: %v", err)
+	}
+	stopAtEnd(t, next)
+	checkLight(t, next)
+	if got := query(t, next.URL(), "SELECT word FROM kept"); got != "there" {
+		t.Errorf("kept = %q", got)
+	}
+}
+
+// startedByHand starts c with pg_ctl alone, on the port it keeps, as an
+// older version would, and returns its URL.
+func startedByHand(t *testing.T, c *Cluster) string {
+	t.Helper()
+	port, err := c.choosePort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.port = port
+	if err := c.run(context.Background(), "pg_ctl", "start", "-D", c.Dir, "-l", c.Log, "-w", "-o", "-p "+strconv.Itoa(port)); err != nil {
+		t.Fatal(err)
+	}
+	return c.URL()
+}
+
+// lighten appends the light settings once, keeps the file's mode, and
+// leaves no file beside it.
+func TestLightenAppendsOnce(t *testing.T) {
+	t.Parallel()
+	c := &Cluster{Dir: t.TempDir()}
+	path := filepath.Join(c.Dir, "postgresql.conf")
+	older := "max_connections = 100\n" + settings
+	if err := os.WriteFile(path, []byte(older), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := c.lighten(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conf, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(conf) != older+light {
+		t.Errorf("postgresql.conf =\n%s", conf)
+	}
+	if info, err := os.Stat(path); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
+		t.Errorf("mode: %v, %v", info, err)
+	}
+	if _, err := os.Stat(path + ".new"); !os.IsNotExist(err) {
+		t.Errorf("a file is left beside: %v", err)
+	}
+	// The settings come last: they win over the older lines.
+	if !strings.HasSuffix(string(conf), "jit = off\n") {
+		t.Error("the light settings are not last")
+	}
+}
+
 // A lock file whose process number another process holds, the test's
 // own, is removed: nothing answers on its port.
 func TestRecoverRemovesAStaleLock(t *testing.T) {
