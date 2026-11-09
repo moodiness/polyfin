@@ -381,6 +381,7 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 	for i := range metas {
 		withoutGenerated(&metas[i])
 	}
+	s.checkMetas(metas, src.catalog.Type, true)
 	kept := fetched[[]stremio.Meta]{metas, asked}
 	s.pagesOf(key).Put(key, kept)
 	s.generated.kept.Add(1)
@@ -444,6 +445,7 @@ func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetche
 	if err := json.Unmarshal(data, &kept.value); err != nil {
 		return kept, false
 	}
+	s.checkMetas(kept.value, key.catalogType, true)
 	s.pages.Put(key, kept)
 	return kept, true
 }
@@ -624,6 +626,7 @@ func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (f
 	if err := json.Unmarshal(data, &kept.value); err != nil || !kept.value.Describes(key.metaType, key.id) {
 		return kept, false
 	}
+	s.checkMeta(&kept.value, key.metaType, true)
 	s.metas.Put(key, kept)
 	return kept, true
 }

@@ -87,12 +87,14 @@ const (
 const CreditsPassMost = 2000
 
 // UseTitleCredits sets the queue titles' credits are read in, and titles'
-// artwork (see tmdbartwork.go), and starts the credits' passes; it is
-// called before the service is used, after UseTMDB. Without it, titles
-// show the addons' people and artwork.
+// artwork (see tmdbartwork.go) and the checks of the TMDB identifiers
+// addons give as moviedb_id (see tmdbidcheck.go), and starts the passes
+// of both; it is called before the service is used, after UseTMDB.
+// Without it, titles show the addons' people, artwork and identifiers.
 func (s *Service) UseTitleCredits(q *tmdb.Queue) {
 	s.lookups = q
 	q.Pass("title credits", s.creditsPass)
+	q.Pass("moviedb_id checks", s.moviedbChecksPass)
 }
 
 // creditsKey identifies a title as TMDB is asked about its credits, and as
@@ -442,25 +444,30 @@ func (s *Service) resolvedPeople(ctx context.Context, lists [][]Person) [][]Pers
 
 // AwaitTitleCredits has the credits of a movie or series a user opens read
 // on TMDB, ahead of the passes, unless they are kept, waiting
-// s.creditsWait at most, titleCreditsWait but in tests. It reports whether
-// the title shows them now, which changes its people.
+// s.creditsWait at most, titleCreditsWait but in tests, and first the
+// check of its TMDB identifier, when it is its moviedb_id (see
+// tmdbidcheck.go), so that its credits are read by the right one. It
+// reports whether the title shows them now, or another TMDB identifier,
+// which changes its people.
 func (s *Service) AwaitTitleCredits(ctx context.Context, item Item) bool {
 	if !s.lookups.Enabled() {
 		return false
 	}
-	key, ok := titleCreditsKey(item.Kind, item.ProviderIDs)
+	deadline := time.Now().Add(s.creditsWait)
+	ids, corrected := s.awaitMoviedbCheck(ctx, item, s.creditsWait)
+	key, ok := titleCreditsKey(item.Kind, ids)
 	if !ok {
-		return false
+		return corrected
 	}
 	k, kept, err := s.keptOne(ctx, key)
 	if err != nil || kept && !k.due(s.now(), s.creditsLanguage(), item.ID) {
-		return false
+		return corrected
 	}
 	lookup := s.creditsLookup(key, item.ID)
 	s.lookups.Add([]tmdb.Lookup{lookup}, true)
-	s.lookups.Wait(ctx, []string{lookup.Key}, s.creditsWait)
+	s.lookups.Wait(ctx, []string{lookup.Key}, time.Until(deadline))
 	after, ok, err := s.keptOne(ctx, key)
-	return err == nil && ok && after.shows(item.ID) && !(kept && after.asked.Equal(k.asked) && k.shows(item.ID))
+	return corrected || err == nil && ok && after.shows(item.ID) && !(kept && after.asked.Equal(k.asked) && k.shows(item.ID))
 }
 
 // refreshTitleCredits has the TMDB credits of a movie or series refreshed
