@@ -295,7 +295,7 @@ func (s *Service) translate(ctx context.Context, v view, items []Item) {
 		found := false
 		for _, entry := range translators {
 			if meta, ok := s.keptDescription(ctx, entry, metaKey{entry.addon.ID, item.StremioType, item.StremioID}, inMemory); ok {
-				translateItem(item, meta)
+				s.translateItem(item, meta)
 				found = true
 				break
 			}
@@ -311,10 +311,10 @@ func (s *Service) translate(ctx context.Context, v view, items []Item) {
 
 // translateItem gives a listed title what its description in a user's
 // language gives of its name, overview and images (see translation).
-func translateItem(item *Item, translated stremio.Meta) {
+func (s *Service) translateItem(item *Item, translated stremio.Meta) {
 	var shown Item
 	// Only names and images are read: no rating needed.
-	fromMeta(&shown, translation(stremio.Meta{Name: item.Name, Description: item.Overview, Poster: item.Images.Primary,
+	s.fromMeta(&shown, translation(stremio.Meta{Name: item.Name, Description: item.Overview, Poster: item.Images.Primary,
 		PosterShape: item.PosterShape, Background: item.Images.Backdrop, Logo: item.Images.Logo, LandscapePoster: item.Images.Thumb}, translated), "")
 	item.Name, item.Overview = shown.Name, shown.Overview
 	if item.Kind == KindMovie || item.Kind == KindSeries {

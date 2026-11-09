@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +27,9 @@ import (
 // user, wherever the item shows (see overridden), and parental control
 // judges titles by the ratings and genres set (see overriddenTraits). A
 // field cleared, or set back to the value it would have otherwise, follows
-// the addon again. People and provider identifiers are the addons' only.
+// the addon again. People are the addons' only, and so are provider
+// identifiers but a movie's or series' TMDB and TVDB ones, which every
+// reader of them takes with the edit (see providerIDs).
 
 // UploadedImageTypes are the image types an administrator may upload for
 // an item.
@@ -69,13 +73,19 @@ type Overrides struct {
 	DisplayOrder *string `json:"displayOrder,omitempty"`
 	EpisodeGroup *string `json:"episodeGroup,omitempty"`
 	Specials     *string `json:"specials,omitempty"`
+	// TmdbID and TvdbID are a movie's or series' TMDB identifier and a
+	// series' TVDB one, as decimal text (see providerNumber), which win
+	// over every source of them (see identifiers). The identifier a
+	// "tmdb:" or "tvdb:" title is, its identity, is never set.
+	TmdbID *string `json:"tmdbId,omitempty"`
+	TvdbID *string `json:"tvdbId,omitempty"`
 }
 
 func (o Overrides) empty() bool {
 	return o.Name == nil && o.OriginalTitle == nil && o.SortName == nil && o.Overview == nil && o.Taglines == nil &&
 		o.Genres == nil && o.Tags == nil && o.Studios == nil && o.OfficialRating == nil && o.CustomRating == nil &&
 		o.CommunityRating == nil && o.CriticRating == nil && o.PremiereDate == nil && o.EndDate == nil && o.ProductionYear == nil &&
-		o.DisplayOrder == nil && o.EpisodeGroup == nil && o.Specials == nil
+		o.DisplayOrder == nil && o.EpisodeGroup == nil && o.Specials == nil && o.TmdbID == nil && o.TvdbID == nil
 }
 
 // apply sets the fields overridden on item.
@@ -120,6 +130,62 @@ func (o Overrides) apply(item *Item) {
 	}
 }
 
+// identifiers returns the provider identifiers of the title meta
+// describes, those set laid over its source's (see sourceIDs). The TMDB
+// identifier a title shows is, first to last:
+//  1. the one an administrator set;
+//  2. a correction of the source's, once one is made: it rewrites the
+//     description kept, which ranks it below the edit and above the rest;
+//  3. the source's _tmdbId, or the identifier a "tmdb:" title is, which
+//     is never set;
+//  4. the source's moviedb_id.
+func (o Overrides) identifiers(meta stremio.Meta) map[string]string {
+	ids := sourceIDs(meta)
+	o.laidOver(ids, meta.ID)
+	return ids
+}
+
+// identify gives item, a movie or series fromMeta filled from meta, the
+// identifiers set, keeping its source's apart, and a TMDB identifier set
+// is no moviedb_id.
+func (o Overrides) identify(item *Item, meta stremio.Meta) {
+	if o.TmdbID == nil && o.TvdbID == nil {
+		return
+	}
+	item.sourceIDs, item.ProviderIDs = item.ProviderIDs, maps.Clone(item.ProviderIDs)
+	o.laidOver(item.ProviderIDs, meta.ID)
+	if o.TmdbID != nil {
+		item.TMDBFromMoviedb = false
+	}
+}
+
+// laidOver sets the identifiers set in ids, those of the title of the
+// Stremio identifier stremioID, but its identity.
+func (o Overrides) laidOver(ids map[string]string, stremioID string) {
+	if o.TmdbID != nil && !strings.HasPrefix(stremioID, "tmdb:") {
+		ids["Tmdb"] = *o.TmdbID
+	}
+	if o.TvdbID != nil && !strings.HasPrefix(stremioID, "tvdb:") {
+		ids["Tvdb"] = *o.TvdbID
+	}
+}
+
+// providerNumber returns a TMDB or TVDB identifier typed as Polyfin keeps
+// it: decimal digits, spaces around them aside, of a positive number
+// within PostgreSQL's integer, which the tables keyed by them hold, with
+// no leading zero; false for any other text.
+func providerNumber(text string) (string, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" || strings.Trim(text, "0123456789") != "" {
+		return "", false
+	}
+	n, err := strconv.ParseInt(text, 10, 32)
+	if err != nil || n <= 0 {
+		return "", false
+	}
+	return strconv.FormatInt(n, 10), true
+}
+
 // parentalRating is the rating set that parental control judges a title
 // by, as Jellyfin does: the custom rating, else the official one.
 func (o Overrides) parentalRating() (string, bool) {
@@ -135,7 +201,10 @@ func (o Overrides) parentalRating() (string, bool) {
 // against returns the overrides an edit makes of an item whose addon gives
 // base, current being those set before. Text left empty, lists emptied and
 // values equal to the addon's follow the addon; lists not sent (nil) stay
-// as they were.
+// as they were. A TMDB or TVDB identifier left empty, or equal to the
+// source's, follows the source too; one that is no identifier (see
+// providerNumber), the identity of a "tmdb:" or "tvdb:" title, and a
+// movie's TVDB identifier change nothing.
 func (o Overrides) against(base Item, current Overrides) Overrides {
 	text := func(value *string, addon string) *string {
 		if value == nil {
@@ -216,6 +285,33 @@ func (o Overrides) against(base Item, current Overrides) Overrides {
 		}
 		result.Specials = current.Specials
 	}
+	// The source's identifiers, which an edit is made against, are those
+	// base shows but for the identifiers set.
+	source := base.ProviderIDs
+	if base.sourceIDs != nil {
+		source = base.sourceIDs
+	}
+	identifier := func(value *string, provider string, editable bool, kept *string) *string {
+		switch {
+		case !editable:
+			return nil
+		case value == nil:
+			return kept
+		case strings.TrimSpace(*value) == "":
+			return nil
+		}
+		id, ok := providerNumber(*value)
+		if !ok {
+			return kept
+		}
+		if own, ok := providerNumber(source[provider]); ok && own == id {
+			return nil
+		}
+		return &id
+	}
+	title := base.Kind == KindMovie || base.Kind == KindSeries
+	result.TmdbID = identifier(o.TmdbID, "Tmdb", title && !strings.HasPrefix(base.StremioID, "tmdb:"), current.TmdbID)
+	result.TvdbID = identifier(o.TvdbID, "Tvdb", base.Kind == KindSeries && !strings.HasPrefix(base.StremioID, "tvdb:"), current.TvdbID)
 	return result
 }
 
@@ -225,6 +321,23 @@ func (o Overrides) against(base Item, current Overrides) Overrides {
 type overrideSet struct {
 	fields map[accounts.ID]Overrides
 	images map[accounts.ID]map[string]string
+	// identified are the items whose TMDB or TVDB identifier is set, by
+	// "Tmdb:" or "Tvdb:" and the identifier, which imports find titles by
+	// (see knownTitles).
+	identified map[string][]accounts.ID
+}
+
+// index lists the items by the identifiers set of them.
+func (set *overrideSet) index() {
+	set.identified = map[string][]accounts.ID{}
+	for id, o := range set.fields {
+		if o.TmdbID != nil {
+			set.identified["Tmdb:"+*o.TmdbID] = append(set.identified["Tmdb:"+*o.TmdbID], id)
+		}
+		if o.TvdbID != nil {
+			set.identified["Tvdb:"+*o.TvdbID] = append(set.identified["Tvdb:"+*o.TvdbID], id)
+		}
+	}
 }
 
 // overridesNow returns the overrides, loaded on first use. If they cannot
@@ -293,6 +406,7 @@ func (s *Service) loadOverrides(ctx context.Context) (*overrideSet, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	set.index()
 	s.overrides.Store(set)
 	return set, nil
 }
@@ -317,6 +431,7 @@ func (s *Service) changeOverrides(ctx context.Context, write func(*overrideSet) 
 		next.images[id] = images
 	}
 	change(next)
+	next.index()
 	s.overrides.Store(next)
 	return nil
 }
@@ -328,9 +443,33 @@ func (s *Service) Overrides(id accounts.ID) Overrides {
 
 // SaveOverrides keeps an administrator's edit of an item whose addon
 // describes it as base (see Original): the fields of requested that differ
-// from the addon's, the others following the addon again.
+// from the addon's, the others following the addon again. A movie's or
+// series' TMDB identifier changed drops or asks again what was learnt by
+// the one it showed (see titleTMDBChanged).
 func (s *Service) SaveOverrides(ctx context.Context, base Item, requested Overrides) error {
-	return s.changeOwnOverrides(ctx, base.ID, func(current Overrides) Overrides { return requested.against(base, current) })
+	var saved Overrides
+	err := s.changeOwnOverrides(ctx, base.ID, func(current Overrides) Overrides {
+		saved = requested.against(base, current)
+		return saved
+	})
+	if err != nil {
+		return err
+	}
+	if base.Kind != KindMovie && base.Kind != KindSeries {
+		return nil
+	}
+	now := maps.Clone(base.ProviderIDs)
+	if base.sourceIDs != nil {
+		now = maps.Clone(base.sourceIDs)
+	}
+	if now == nil {
+		now = map[string]string{}
+	}
+	saved.laidOver(now, base.StremioID)
+	if now["Tmdb"] == base.ProviderIDs["Tmdb"] {
+		return nil
+	}
+	return s.titleTMDBChanged(ctx, base, base.ProviderIDs, now)
 }
 
 // changeOwnOverrides keeps the overrides of the item id that change
@@ -792,7 +931,7 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	var results []RemoteResult
 	var records []record
 	for _, title := range titles[:min(len(titles), limit)] {
-		item, r, err := title.title(accounts.ID{}, v.country)
+		item, r, err := title.title(s, accounts.ID{}, v.country)
 		if err != nil {
 			continue
 		}

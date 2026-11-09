@@ -555,7 +555,7 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 	// TMDB's credits of the title, while it shows them, stay (see
 	// titlecredits.go).
 	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && s.givesCredits(ctx, addon, kind, key.metaType, key.id) &&
-		!s.creditedByTMDB(ctx, itemID(titleKey(kind, key.id)), kind, providerIDs(meta)) {
+		!s.creditedByTMDB(ctx, itemID(titleKey(kind, key.id)), kind, s.providerIDs(itemID(titleKey(kind, key.id)), meta)) {
 		if err := s.saveCredits(ctx, itemID(titleKey(kind, key.id)), people(meta), addon.confined); err != nil {
 			s.logger.Debug("The people of a title could not be recorded", "addon", addon.addon.Manifest.Name, "error", err)
 		}

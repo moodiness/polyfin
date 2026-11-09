@@ -603,7 +603,7 @@ func (s *Service) TMDBNumbering(ctx context.Context, seriesID accounts.ID) (Epis
 	series := strings.TrimPrefix(r.Key, string(KindSeries)+"|")
 	tmdbID, imdb := 0, series
 	if r.Meta != nil {
-		tmdbID = describedNumber(r.Meta.TmdbID)
+		tmdbID = describedNumber(stremio.Text(s.providerIDs(r.ID, *r.Meta)["Tmdb"]))
 		imdb = cmp.Or(r.Meta.ImdbID, imdb)
 	}
 	known, err := s.knownEpisodes(ctx, []string{series})

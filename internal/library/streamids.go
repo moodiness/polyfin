@@ -120,7 +120,7 @@ func (s *Service) streamRequests(ctx context.Context, v view, t target) []stream
 		}
 	}
 	if series != nil {
-		ids = withMissing(ids, providerIDs(*series))
+		ids = withMissing(ids, s.providerIDs(itemID(titleKey(KindSeries, series.ID)), *series))
 	}
 	var requests []streamRequest
 	add := func(id string) {
@@ -247,7 +247,7 @@ func (s *Service) animeEntry(t target, imdb, tmdb, tvdbID string, series *stremi
 // the series' complete description, nil when unknown.
 func (s *Service) otherStreamKeys(ctx context.Context, v view, r, title record, described *stremio.Meta) []streamKey {
 	var targets []target
-	ids := providerIDs(*title.Meta)
+	ids := s.providerIDs(title.ID, *title.Meta)
 	episode := func(video stremio.Video) target {
 		return target{kind: KindEpisode, metaType: title.Meta.Type, id: video.ID, season: int(video.Season), episode: video.EpisodeNumber(),
 			ids: ids, described: described, holder: &title}
@@ -258,7 +258,7 @@ func (s *Service) otherStreamKeys(ctx context.Context, v view, r, title record, 
 		if full, _, ok := s.describedMeta(ctx, v, title, false, inDatabase); ok {
 			meta = full
 		}
-		targets = append(targets, target{kind: KindMovie, metaType: meta.Type, id: meta.ID, ids: providerIDs(meta)})
+		targets = append(targets, target{kind: KindMovie, metaType: meta.Type, id: meta.ID, ids: s.providerIDs(title.ID, meta)})
 	case KindEpisode:
 		if r.Video != nil {
 			targets = append(targets, episode(*r.Video))

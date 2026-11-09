@@ -263,7 +263,7 @@ func (s *Service) folder(ctx context.Context, v view, id accounts.ID) (Item, str
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	item := Item{ID: id, Kind: otherKind(meta), ParentID: deref(r.Parent), Available: true}
-	fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta), v.country)
+	s.fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta), v.country)
 	item.OfficialRating = certification(meta, v.country)
 	if item.Kind == KindFolder {
 		item.Contents = folderContents(meta, s.now())
@@ -417,7 +417,7 @@ func (s *Service) otherLibraryVideos(ctx context.Context, v view, l library, src
 	titles := make([]Item, 0, len(metas))
 	records := make([]record, 0, len(metas))
 	for _, meta := range metas {
-		if item, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID, v.country); err == nil {
+		if item, r, err := s.titleItem(l.addon, l.catalog, meta, l.item.ID, v.country); err == nil {
 			titles, records = append(titles, item), append(records, r)
 		}
 	}

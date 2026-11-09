@@ -632,7 +632,7 @@ func (s *Service) described(ctx context.Context, kind, id string, n name, by str
 		m.imdb = meta.ImdbID
 	}
 	if m.tmdb == "" {
-		m.tmdb = string(meta.TmdbID)
+		m.tmdb = s.titles.ProviderIDs(titleKind(kind), meta)["Tmdb"]
 	}
 	return m
 }

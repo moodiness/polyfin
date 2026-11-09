@@ -177,7 +177,7 @@ func (s *Service) listedTMDB(ctx context.Context, v view, listed []record) map[t
 			kind = tmdb.TV
 		}
 		ids = append(ids, r.ID)
-		provided := providerIDs(*r.Meta)
+		provided := s.providerIDs(r.ID, *r.Meta)
 		if id, err := strconv.Atoi(provided["Tmdb"]); err == nil && id > 0 {
 			shown[tmdbTitle{kind, id}] = true
 		}

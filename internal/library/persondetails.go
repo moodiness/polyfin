@@ -580,19 +580,10 @@ func (s *Service) titlesKnownIn(ctx context.Context, r record) ([]personTitle, e
 		if title.Meta == nil || title.Kind != KindMovie && title.Kind != KindSeries {
 			continue
 		}
-		titles = append(titles, personTitle{series: title.Kind == KindSeries, tmdb: metaTMDB(*title.Meta),
+		titles = append(titles, personTitle{series: title.Kind == KindSeries, tmdb: strings.TrimSpace(s.providerIDs(title.ID, *title.Meta)["Tmdb"]),
 			name: strings.TrimSpace(title.Meta.Name), year: metaYear(*title.Meta)})
 	}
 	return titles, nil
-}
-
-// metaTMDB is the TMDB identifier a description gives a title, empty for
-// none.
-func metaTMDB(meta stremio.Meta) string {
-	if id, ok := strings.CutPrefix(meta.ID, "tmdb:"); ok {
-		return id
-	}
-	return strings.TrimSpace(string(meta.TmdbID))
 }
 
 // metaYear is the year a description gives a title, 0 when it gives none.

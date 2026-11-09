@@ -96,6 +96,10 @@ type Titles interface {
 	// maps one's episodes to the catalog's (see numbering.go).
 	EpisodeGroupsOf(ctx context.Context, meta stremio.Meta) ([]tmdb.GroupSummary, error)
 	FileOrder(ctx context.Context, meta stremio.Meta, group string) (map[[2]int]library.OrderPlace, error)
+	// ProviderIDs returns the provider identifiers of the movie or series
+	// of kind that meta describes, with what administrators set of them
+	// (see library.Service.ProviderIDs).
+	ProviderIDs(kind library.Kind, meta stremio.Meta) map[string]string
 }
 
 // Service stores the local folders, scans them and answers for them as

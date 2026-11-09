@@ -119,10 +119,16 @@ type Item struct {
 	CriticRating  *float64
 	CustomRating  string
 	// Status is "Continuing" or "Ended" for series.
-	Status      string
+	Status string
+	// ProviderIDs are the external identifiers of a title, an
+	// administrator's edit laid over its source's (see providerIDs), and
+	// sourceIDs its source's alone when an edit changed them, nil
+	// otherwise: what an edit is made against (see Overrides.against).
 	ProviderIDs map[string]string
+	sourceIDs   map[string]string
 	// TMDBFromMoviedb tells that the Tmdb of ProviderIDs is the moviedb_id
-	// of the title's description (see stremio.Meta.TmdbFromMoviedb).
+	// of the title's description (see stremio.Meta.TmdbFromMoviedb): never
+	// one an administrator set.
 	TMDBFromMoviedb bool
 	// ProductionLocations is a person's place of birth, as Jellyfin gives
 	// it (see persondetails.go).
@@ -451,9 +457,14 @@ func parseYears(text string) (first, last int) {
 	return first, last
 }
 
-// providerIDs collects the external identifiers of a title, under the names
-// Jellyfin uses.
-func providerIDs(meta stremio.Meta) map[string]string {
+// sourceIDs collects the external identifiers a title's source gives it,
+// under the names Jellyfin uses: the identifier of its kind its Stremio
+// identifier is, then those of its description, whose TMDB identifier is
+// its _tmdbId, else its moviedb_id (see stremio.Meta.TmdbFromMoviedb).
+// Only providerIDs and fromMeta read them, to lay administrators' edits
+// over them: every other reader of a title's identifiers, of a
+// description's TmdbID and TvdbID among them, goes through those.
+func sourceIDs(meta stremio.Meta) map[string]string {
 	ids := map[string]string{}
 	add := func(name, value string) {
 		if value != "" && ids[name] == "" {
@@ -475,9 +486,25 @@ func providerIDs(meta stremio.Meta) map[string]string {
 	return ids
 }
 
+// providerIDs returns the external identifiers of the movie or series of
+// the item id, which meta describes, under the names Jellyfin uses: every
+// reader of a title's identifiers takes them from here, or from an item
+// fromMeta filled. An administrator's edit wins over every source (see
+// Overrides.TmdbID and identified).
+func (s *Service) providerIDs(id accounts.ID, meta stremio.Meta) map[string]string {
+	return s.overridesNow().fields[id].identifiers(meta)
+}
+
+// ProviderIDs returns the external identifiers of the movie or series of
+// kind that meta describes, as providerIDs does.
+func (s *Service) ProviderIDs(kind Kind, meta stremio.Meta) map[string]string {
+	return s.providerIDs(itemID(titleKey(kind, meta.ID)), meta)
+}
+
 // fromMeta fills an item with a title's or collection's metadata, rated
-// as country rates it.
-func fromMeta(item *Item, meta stremio.Meta, country string) {
+// as country rates it, and a movie's or series' provider identifiers with
+// what administrators set of them (see providerIDs).
+func (s *Service) fromMeta(item *Item, meta stremio.Meta, country string) {
 	// Some addons wrap names in direction marks, which would upset sorting.
 	item.Name = strings.TrimFunc(meta.Name, func(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) })
 	if item.Kind == KindMovie || item.Kind == KindSeries {
@@ -510,7 +537,10 @@ func fromMeta(item *Item, meta stremio.Meta, country string) {
 	default:
 		item.Status = "Continuing"
 	}
-	item.ProviderIDs, item.TMDBFromMoviedb = providerIDs(meta), meta.TmdbFromMoviedb
+	item.ProviderIDs, item.sourceIDs, item.TMDBFromMoviedb = sourceIDs(meta), nil, meta.TmdbFromMoviedb
+	if item.Kind == KindMovie || item.Kind == KindSeries {
+		s.overridesNow().fields[item.ID].identify(item, meta)
+	}
 	item.Images = Images{Primary: meta.Poster, Backdrop: meta.Background, Logo: meta.Logo, Thumb: meta.LandscapePoster}
 	item.PosterShape = meta.Shape()
 	item.People = people(meta)

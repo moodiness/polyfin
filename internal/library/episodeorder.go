@@ -511,7 +511,7 @@ func (s *Service) episodeGroup(ctx context.Context, meta stremio.Meta, groupType
 // seriesGroups returns the TMDB identifier of a series described by meta,
 // by the one it gives, else by its IMDb one, and its episode groups.
 func (s *Service) seriesGroups(ctx context.Context, meta stremio.Meta) (int, []tmdb.GroupSummary, error) {
-	ids := providerIDs(meta)
+	ids := s.providerIDs(itemID(titleKey(KindSeries, meta.ID)), meta)
 	id := ids["Tmdb"]
 	if id == "" {
 		if ids["Imdb"] == "" {

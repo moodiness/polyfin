@@ -275,7 +275,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			meta = &full
 		}
 		t := target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name,
-			ids: providerIDs(*meta)}
+			ids: s.providerIDs(r.ID, *meta)}
 		if r.Kind == KindMovie {
 			t.year = metaYear(*meta)
 		}
@@ -307,7 +307,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		}
 		t := target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
 			name: series.Meta.Name, videoName: r.Video.DisplayName(), season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series,
-			ids: providerIDs(*series.Meta)}
+			ids: s.providerIDs(series.ID, *series.Meta)}
 		s.embed(ctx, v, &t, false)
 		return t, v, nil
 	default:

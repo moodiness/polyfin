@@ -15,7 +15,7 @@ func TestPosterShapeFollowsThePoster(t *testing.T) {
 	t.Parallel()
 	shapeOf := func(meta stremio.Meta) string {
 		var item Item
-		fromMeta(&item, meta, "")
+		(&Service{}).fromMeta(&item, meta, "")
 		return item.PosterShape
 	}
 	for shape, want := range map[string]string{"landscape": stremio.ShapeLandscape, "square": stremio.ShapeSquare, "poster": "", "": "", "round": ""} {
@@ -26,17 +26,17 @@ func TestPosterShapeFollowsThePoster(t *testing.T) {
 
 	wide := Item{Images: Images{Primary: "wide.jpg"}, PosterShape: stremio.ShapeLandscape}
 	translated := wide
-	translateItem(&translated, stremio.Meta{Name: "Translated", Poster: "translated.jpg"})
+	(&Service{}).translateItem(&translated, stremio.Meta{Name: "Translated", Poster: "translated.jpg"})
 	if translated.Images.Primary != "translated.jpg" || translated.PosterShape != "" {
 		t.Errorf("a translated poster without a shape: %+v", translated)
 	}
 	translated = wide
-	translateItem(&translated, stremio.Meta{Name: "Translated", Poster: "square.jpg", PosterShape: "square"})
+	(&Service{}).translateItem(&translated, stremio.Meta{Name: "Translated", Poster: "square.jpg", PosterShape: "square"})
 	if translated.PosterShape != stremio.ShapeSquare {
 		t.Errorf("a translated square poster: %q", translated.PosterShape)
 	}
 	translated = wide
-	translateItem(&translated, stremio.Meta{Name: "Translated"})
+	(&Service{}).translateItem(&translated, stremio.Meta{Name: "Translated"})
 	if translated.Images.Primary != "wide.jpg" || translated.PosterShape != stremio.ShapeLandscape {
 		t.Errorf("a translation without a poster: %+v", translated)
 	}

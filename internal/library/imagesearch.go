@@ -130,7 +130,7 @@ func (s *Service) addonImages(ctx context.Context, v view, title record) ([]Addo
 				return nil
 			}
 			meta := kept.value
-			found[i] = described{ids: providerIDs(meta), ok: true, images: AddonImages{
+			found[i] = described{ids: s.providerIDs(title.ID, meta), ok: true, images: AddonImages{
 				Addon: candidate.addon.Manifest.Name,
 				Images: Images{Primary: remoteImage(meta.Poster), Backdrop: remoteImage(meta.Background),
 					Logo: remoteImage(meta.Logo), Thumb: remoteImage(meta.LandscapePoster)},
@@ -140,7 +140,7 @@ func (s *Service) addonImages(ctx context.Context, v view, title record) ([]Addo
 		})
 	}
 	_ = g.Wait()
-	ids := providerIDs(*title.Meta)
+	ids := s.providerIDs(title.ID, *title.Meta)
 	var images []AddonImages
 	for _, d := range found {
 		if !d.ok {
