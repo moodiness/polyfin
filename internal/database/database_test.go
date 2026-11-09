@@ -173,3 +173,67 @@ func TestConnectStopsWaitingWhenCanceled(t *testing.T) {
 		t.Fatalf("expected the wait to end with the context, got %v", err)
 	}
 }
+
+// The pool keeps to maxConns whatever the number of CPUs, and the URL's
+// pool_max_conns, in either form, sets another bound. Neither reaches
+// PostgreSQL as a setting.
+func TestPoolIsCappedUnlessTheURLSaysOtherwise(t *testing.T) {
+	t.Parallel()
+	for connection, want := range map[string]int32{
+		"postgresql://polyfin:secret@db:5432/polyfin":                                   maxConns,
+		"postgresql://polyfin:secret@db:5432/polyfin?sslmode=disable":                   maxConns,
+		"postgresql://polyfin:secret@db:5432/polyfin?pool_max_conns=3":                  3,
+		"postgresql://polyfin:secret@db:5432/polyfin?sslmode=disable&pool_max_conns=40": 40,
+		"host=db user=polyfin dbname=polyfin pool_max_conns=5":                          5,
+		"host=db user=polyfin dbname=polyfin":                                           maxConns,
+	} {
+		config, err := poolConfig(connection)
+		if err != nil {
+			t.Fatalf("%s: %v", connection, err)
+		}
+		if config.MaxConns != want {
+			t.Errorf("%s: MaxConns = %d, want %d", connection, config.MaxConns, want)
+		}
+		if _, ok := config.ConnConfig.RuntimeParams["pool_max_conns"]; ok {
+			t.Errorf("%s: pool_max_conns is sent as a setting", connection)
+		}
+		if got := config.ConnConfig.RuntimeParams["application_name"]; got != "polyfin" {
+			t.Errorf("%s: application_name = %q", connection, got)
+		}
+	}
+	for _, connection := range []string{"postgresql://db/polyfin?pool_max_conns=0", "postgresql://db/polyfin?pool_max_conns=many"} {
+		if _, err := poolConfig(connection); err == nil {
+			t.Errorf("%s was accepted", connection)
+		}
+	}
+}
+
+// The pool Connect opens has the bound, and a URL's own.
+func TestConnectCapsThePool(t *testing.T) {
+	t.Parallel()
+	address := testdb.URL(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pool, err := Connect(t.Context(), address, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if got := pool.Stat().MaxConns(); got != maxConns {
+		t.Errorf("MaxConns = %d, want %d", got, maxConns)
+	}
+	parsed, err := url.Parse(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	query.Set("pool_max_conns", "2")
+	parsed.RawQuery = query.Encode()
+	small, err := Connect(t.Context(), parsed.String(), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer small.Close()
+	if got := small.Stat().MaxConns(); got != 2 {
+		t.Errorf("MaxConns with pool_max_conns=2 = %d", got)
+	}
+}

@@ -20,6 +20,15 @@ const (
 	maxRetryDelay = 30 * time.Second
 )
 
+// maxConns bounds the pool when the URL sets no pool_max_conns. pgx would
+// allow one connection for each CPU, 32 on a large NAS, more than a light
+// PostgreSQL's max_connections of 20 holds. Polyfin's load fits in fewer:
+// about 7 at once on a busy server. With the connection that listens to
+// the changes of addons, and pg_dump's during a backup, Polyfin uses 12
+// at most, which leaves room for an administrator's session and the
+// connections PostgreSQL keeps for superusers.
+const maxConns = 10
+
 // Connect opens a connection pool and waits until PostgreSQL accepts it.
 //
 // A database container often starts after Polyfin (Unraid starts containers
@@ -27,12 +36,10 @@ const (
 // ends. Rejected credentials and missing databases are configuration errors
 // that waiting cannot fix: they are returned immediately.
 func Connect(ctx context.Context, url string, logger *slog.Logger) (*pgxpool.Pool, error) {
-	config, err := pgxpool.ParseConfig(url)
+	config, err := poolConfig(url)
 	if err != nil {
-		// pgconn redacts the password from parse errors.
-		return nil, fmt.Errorf("invalid database URL: %w", err)
+		return nil, err
 	}
-	config.ConnConfig.RuntimeParams["application_name"] = "polyfin"
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, err
@@ -62,6 +69,28 @@ func Connect(ctx context.Context, url string, logger *slog.Logger) (*pgxpool.Poo
 		}
 		delay = min(delay*2, maxRetryDelay)
 	}
+}
+
+// poolConfig reads the database URL into the pool's configuration, maxConns
+// connections at most unless the URL's pool_max_conns sets another bound.
+func poolConfig(url string) (*pgxpool.Config, error) {
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		// pgconn redacts the password from parse errors.
+		return nil, fmt.Errorf("invalid database URL: %w", err)
+	}
+	config.ConnConfig.RuntimeParams["application_name"] = "polyfin"
+	// pgxpool takes pool_max_conns out of the settings it parses, and
+	// gives the same bound whether the URL set it or not: the URL is
+	// read again to tell.
+	connConfig, err := pgconn.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("invalid database URL: %w", err)
+	}
+	if _, set := connConfig.RuntimeParams["pool_max_conns"]; !set {
+		config.MaxConns = maxConns
+	}
+	return config, nil
 }
 
 // permanent reports server answers that will not change by retrying.
