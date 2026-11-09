@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -64,7 +65,9 @@ func TestAnAdministratorEndsAnAccountFromItsPage(t *testing.T) {
 }
 
 // An invite link's account end is listed with it and given to each account
-// it creates; 0 days is refused, as only null says never.
+// it creates, as an exact time a day after it joined, answered as endsAt
+// beside a null endsOn and kept by an unrelated change; a date set since
+// replaces it. 0 days is refused, as only null says never.
 func TestAnInviteGivesItsAccountsTheirEnd(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
@@ -77,11 +80,32 @@ func TestAnInviteGivesItsAccountsTheirEnd(t *testing.T) {
 	if listed := api.invites(t, administrator); len(listed) != 1 || listed[0]["accountsEndInDays"] != 1.0 {
 		t.Errorf("invites list: %v", listed)
 	}
+	// The database keeps microseconds.
+	before := time.Now().Add(-time.Millisecond)
 	if status, body, _ := api.browser().call(http.MethodPost, "/invite/"+token, map[string]any{"name": "guest", "password": "battery staple"}); status != http.StatusCreated {
 		t.Fatalf("joining: %d %v", status, body)
 	}
+	after := time.Now().Add(time.Millisecond)
 	guest, err := api.store.Authenticate(t.Context(), "guest", "battery staple")
-	if want := accounts.Day(time.Now()).AddDate(0, 0, 1); err != nil || guest.EndsOn == nil || !guest.EndsOn.Equal(want) {
-		t.Errorf("the guest ends on %v (%v), want %v", guest.EndsOn, err, want)
+	if err != nil || guest.EndsOn != nil || guest.EndsAt == nil ||
+		guest.EndsAt.Before(before.Add(24*time.Hour)) || guest.EndsAt.After(after.Add(24*time.Hour)) {
+		t.Fatalf("the guest ends on %v at %v (%v), want at a day after joining, %v", guest.EndsOn, guest.EndsAt, err, before.Add(24*time.Hour))
+	}
+	patch := func(change map[string]any) map[string]any {
+		t.Helper()
+		status, body, _ := administrator.call(http.MethodPatch, "/users/"+guest.ID.String(), change)
+		if status != http.StatusOK {
+			t.Fatalf("changing the guest with %v: %d %v", change, status, body)
+		}
+		return body
+	}
+	body := patch(map[string]any{"isHidden": false})
+	endsAt, err := time.Parse(time.RFC3339Nano, fmt.Sprint(body["endsAt"]))
+	if err != nil || !endsAt.Equal(*guest.EndsAt) || body["endsOn"] != nil || body["ended"] != false {
+		t.Errorf("after an unrelated change: endsOn %v, endsAt %v, ended %v, want endsAt %v", body["endsOn"], body["endsAt"], body["ended"], guest.EndsAt)
+	}
+	date := accounts.Day(time.Now()).AddDate(0, 0, 3).Format(time.DateOnly)
+	if body := patch(map[string]any{"endsOn": date}); body["endsOn"] != date || body["endsAt"] != nil {
+		t.Errorf("a date set: endsOn %v, endsAt %v", body["endsOn"], body["endsAt"])
 	}
 }

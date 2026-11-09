@@ -557,8 +557,9 @@ func (s *Service) importDue() {
 	settings := s.settings()
 	now := s.now()
 	rows, err := s.db.Query(s.ctx, `SELECT c.user_id, c.app FROM app_connections c JOIN users u ON u.id = c.user_id
-		WHERE c.problem IS NULL AND NOT u.is_disabled AND (u.ends_on IS NULL OR u.ends_on > $3) AND (u.is_administrator OR $1)
-			AND coalesce(c.last_import_at, c.connected_at) <= $2`, settings.ServerImports, now.Add(-settings.ImportEvery()), accounts.Day(now))
+		WHERE c.problem IS NULL AND NOT u.is_disabled AND (u.ends_on IS NULL OR u.ends_on > $3) AND (u.ends_at IS NULL OR u.ends_at > $4)
+			AND (u.is_administrator OR $1)
+			AND coalesce(c.last_import_at, c.connected_at) <= $2`, settings.ServerImports, now.Add(-settings.ImportEvery()), accounts.Day(now), now)
 	if err != nil {
 		if s.ctx.Err() == nil {
 			s.logger.Warn("The app connections due could not be read", "error", err)

@@ -61,10 +61,13 @@ type userJSON struct {
 	AudioRegion  string   `json:"audioRegion"`
 	AudioRegions []string `json:"audioRegions"`
 	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
-	// zone, null for never; Ended is set once it has come, and the account
-	// is refused as a disabled one is.
-	EndsOn *string `json:"endsOn"`
-	Ended  bool    `json:"ended"`
+	// zone, null for never; EndsAt is the exact time it ends instead, as an
+	// invite link sets it, null for none, so at most one of them is set.
+	// Ended is set once the end has come, and the account is refused as a
+	// disabled one is.
+	EndsOn *string    `json:"endsOn"`
+	EndsAt *time.Time `json:"endsAt"`
+	Ended  bool       `json:"ended"`
 	// GroupID and GroupName are the user's group, null for none;
 	// FollowGroup tells whether they follow it, set without a group.
 	GroupID     *string `json:"groupId"`
@@ -340,6 +343,7 @@ func newUserJSON(user accounts.User) userJSON {
 		AudioRegions:     localization.AudioVariants,
 		// When the account ends.
 		EndsOn:       endsOn(user),
+		EndsAt:       user.EndsAt,
 		Ended:        user.Ended(time.Now()),
 		FollowGroup:  user.FollowGroup || user.GroupID == nil,
 		TwoStep:      user.TwoStep,
@@ -1391,7 +1395,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		// The settings a group holds, see userJSON; refused while the user
 		// follows their group, unless followGroup turns that off.
 		limitChanges
-		// EndsOn, see userJSON: a date, or null for never.
+		// EndsOn, see userJSON: a date, or null for never; either clears
+		// the exact end (endsAt), which no other change touches.
 		EndsOn json.RawMessage `json:"endsOn"`
 		// GroupID is the group the user joins and follows, empty for none;
 		// FollowGroup has them follow it, or keep its values as their own.
