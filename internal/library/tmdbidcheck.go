@@ -510,6 +510,9 @@ func (s *Service) forgetMoviedb(ctx context.Context, title record, c moviedbChec
 // stored took from moviedb_id, those not checked yet, and corrects those
 // a verdict found wrong.
 func (s *Service) moviedbChecksPass(ctx context.Context) error {
+	// The overrides may need reading from the database: before the rows
+	// hold a connection, never while.
+	edits := s.overridesNow().fields
 	rows, err := s.db.Query(ctx, `SELECT id, jsonb_strip_nulls(jsonb_build_object('id', m->'id', 'type', m->'type',
 			'imdb_id', m->'imdb_id', '_tmdbId', m->'_tmdbId', '_tmdbIdFromMoviedb', m->'_tmdbIdFromMoviedb',
 			'releaseInfo', m->'releaseInfo', 'year', m->'year'))
@@ -521,7 +524,6 @@ func (s *Service) moviedbChecksPass(ctx context.Context) error {
 	checks := map[moviedbCheck]bool{}
 	var id accounts.ID
 	var meta stremio.Meta
-	edits := s.overridesNow().fields
 	if _, err := pgx.ForEachRow(rows, []any{&id, &meta}, func() error {
 		if c, ok := moviedbCheckOf(&meta, ""); ok && edits[id].TmdbID == nil {
 			checks[c] = true
