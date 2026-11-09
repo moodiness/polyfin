@@ -71,7 +71,7 @@ func enriched(own, addon stremio.Meta) stremio.Meta {
 	result.Runtime = cmp.Or(addon.Runtime, own.Runtime)
 	result.ImdbRating = cmp.Or(addon.ImdbRating, own.ImdbRating)
 	result.ImdbID = cmp.Or(own.ImdbID, addon.ImdbID)
-	result.TmdbID = cmp.Or(own.TmdbID, addon.TmdbID)
+	result.TmdbID, result.TmdbFromMoviedb = cmp.Or(own.TmdbID, addon.TmdbID), own.TmdbID == "" && addon.TmdbFromMoviedb
 	result.TvdbID = cmp.Or(own.TvdbID, addon.TvdbID)
 	for _, names := range []struct{ into, from *stremio.Names }{{&result.Cast, &addon.Cast}, {&result.Director, &addon.Director},
 		{&result.Writer, &addon.Writer}} {

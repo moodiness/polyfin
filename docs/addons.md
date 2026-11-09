@@ -168,7 +168,10 @@ Anime databases make each season, or part of a season, an entry of its own. Its 
 
 **A title named by IMDb or TMDB:**
 
-- It has the identifiers its description gives: `imdb_id`, and TMDB's when the addon gives it. Episodes keep the same season and number.
+- It has the identifiers its description gives: `imdb_id`, TMDB's and, for a series, TVDB's. Episodes keep the same season and number.
+  - TMDB's comes from `_tmdbId`, else from `moviedb_id`. A series' TVDB identifier comes from `_tvdbId`, else from `tvdb_id`. Each may be a number or a text. A title named `tmdb:<id>` or `tvdb:<id>` keeps that identifier.
+  - A `moviedb_id` that is not a positive number is left out. So is one equal to a TVDB identifier of the description: a metadata addon was seen to copy a series' TVDB identifier there, which names another title on TMDB. A movie's `tvdb_id` is left out too.
+  - Titles already kept get these identifiers as their descriptions are read again. A library's [description refresh](addons-and-libraries.md#library-description-refresh) reads them all at once.
 - A movie's anime entry is the one the mapping gives for its IMDb or TMDB identifier.
 - An episode's anime entry is the one that holds its TVDB season and number, as for [AniList and MyAnimeList](tracking.md#finding-the-entry).
 - The series' TVDB identifier comes from its description. Otherwise it comes from its IMDb identifier's entries, when they agree.
