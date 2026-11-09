@@ -29,6 +29,16 @@ func (t *Text) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ID is the positive whole number t holds, as addons write identifiers
+// either way, and 0 when it holds none.
+func (t Text) ID() int {
+	id, err := strconv.Atoi(strings.TrimSpace(string(t)))
+	if err != nil || id < 0 {
+		return 0
+	}
+	return id
+}
+
 // Number decodes a JSON number or numeric string.
 type Number int
 
@@ -120,6 +130,11 @@ type Meta struct {
 	Collection      *Collection   `json:"collection,omitempty"`
 	Extras          *Extras       `json:"app_extras,omitempty"`
 	BehaviorHints   *MetaBehavior `json:"behaviorHints,omitempty"`
+	// TmdbFromMoviedb is Polyfin's own mark, kept with the description,
+	// that TmdbID was read from its moviedb_id (see described.ids),
+	// which a metadata addon may give wrong: an addon's own mark is never
+	// taken.
+	TmdbFromMoviedb bool `json:"_tmdbIdFromMoviedb,omitempty"`
 	// ChannelNumber and GuideID describe a channel of Polyfin's own IPTV
 	// sources: the number its provider gives it, 0 for none, and its
 	// channel in XMLTV guides; GuideNumber is a tuner's number of the
@@ -329,6 +344,49 @@ func (m CastMember) PersonTMDB() string {
 type described struct {
 	Meta
 	Links links `json:"links"`
+	// MoviedbID and TVDBID are the TMDB and TVDB identifiers a metadata
+	// addon may give in place of _tmdbId and _tvdbId (see ids).
+	MoviedbID Text `json:"moviedb_id"`
+	TVDBID    Text `json:"tvdb_id"`
+}
+
+// meta is the meta described, its cast, directors and writers read from
+// its links when it gives no list of them, and its identifiers completed
+// (see ids).
+func (d described) meta() Meta {
+	meta := d.Meta
+	d.Links.credit(&meta)
+	d.ids(&meta)
+	return meta
+}
+
+// ids fills meta's TMDB identifier from moviedb_id, and a series' TVDB
+// one from tvdb_id, when neither its Stremio identifier ("tmdb:<id>",
+// "tvdb:<id>") nor _tmdbId or _tvdbId gives it: these win, as an addon
+// that writes them means them. A moviedb_id that is not a positive number
+// is left out, and so is one equal to a TVDB identifier the description
+// gives, as an addon was seen to copy a series' TVDB identifier there,
+// which names another title on TMDB. A movie's tvdb_id is left out, as
+// nothing uses TVDB's identifiers of movies.
+func (d described) ids(meta *Meta) {
+	meta.TmdbFromMoviedb = false
+	tvdb := d.TVDBID.ID()
+	if meta.Type == "series" && tvdb > 0 && meta.TvdbID == "" && !strings.HasPrefix(meta.ID, "tvdb:") {
+		meta.TvdbID = Text(strconv.Itoa(tvdb))
+	}
+	tmdb := d.MoviedbID.ID()
+	if tmdb == 0 || meta.TmdbID != "" || strings.HasPrefix(meta.ID, "tmdb:") {
+		return
+	}
+	tvdbs := [3]int{tvdb, meta.TvdbID.ID()}
+	if rest, ok := strings.CutPrefix(meta.ID, "tvdb:"); ok {
+		id, _, _ := strings.Cut(rest, ":")
+		tvdbs[2] = Text(id).ID()
+	}
+	if slices.Contains(tvdbs[:], tmdb) {
+		return
+	}
+	meta.TmdbID, meta.TmdbFromMoviedb = Text(strconv.Itoa(tmdb)), true
 }
 
 // link is one of a meta's links, which Stremio apps list by category.
@@ -386,13 +444,12 @@ func (l links) credit(meta *Meta) {
 	}
 }
 
-// decodeMeta decodes a meta an addon sends, as unmarshal does, its cast,
-// directors and writers read from its links when it gives no list of them.
+// decodeMeta decodes a meta an addon sends, as unmarshal does, as
+// described.meta completes it.
 func decodeMeta(data []byte, meta *Meta) error {
 	var decoded described
 	err := unmarshal(data, &decoded)
-	*meta = decoded.Meta
-	decoded.Links.credit(meta)
+	*meta = decoded.meta()
 	return err
 }
 
@@ -502,9 +559,7 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 		return Meta{}, fmt.Errorf("%w: meta: asked for %s %q, the addon described %s %q", ErrInvalidResponse, metaType, id,
 			response.Meta.Type, response.Meta.Name)
 	}
-	meta := response.Meta.Meta
-	response.Meta.Links.credit(&meta)
-	return meta, nil
+	return response.Meta.meta(), nil
 }
 
 // Describes reports whether m may describe the title of type metaType
