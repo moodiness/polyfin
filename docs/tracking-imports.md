@@ -42,12 +42,16 @@ Polyfin finds each title of the history this way:
 | The title | How Polyfin finds it |
 |---|---|
 | Named by IMDb | By that identifier, as the usual metadata addons name titles: a movie `tt…`, an episode `tt…:<season>:<episode>` |
-| Listed by a catalog under its TMDB or TVDB identifier | By that identifier |
+| Listed by a catalog under its TMDB or TVDB identifier, or whose description gives it | By that identifier. A description gives it as `_tmdbId` or `moviedb_id`, and for a series `_tvdbId` or `tvdb_id` (see [Where the other identifiers come from](addons.md#where-the-other-identifiers-come-from)). So a title PublicMetaDB names by TMDB only is found among those listed, without mapping it to IMDb. |
 | Known by TMDB only, or a series by TVDB only, and listed by no catalog | Polyfin asks the server's metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`). It is found by the IMDb, TMDB and, for a series, TVDB identifiers of their description, as above. Otherwise it shows under `tmdb:<id>` or `tvdb:<id>`, with its episodes as the description lists them. |
 | From PublicMetaDB, which names titles by TMDB only, and described by no addon | By the IMDb identifier PublicMetaDB maps it to, chosen as [below](#when-contributors-disagree) |
 | A Simkl anime | By the identifiers and numbers the [anime mapping](tracking.md#anime) gives it |
 | An episode from PublicMetaDB, Trakt or MDBList | These number episodes as TMDB does, and the addon may number them otherwise. Polyfin pairs TMDB's numbering with the addon's. It reads TMDB's numbering from, in order: the addon's own TMDB video identifiers; a server addon that describes the series by its TMDB identifier; with a [TMDB key](getting-started.md#add-a-metadata-addon-and-a-stream-addon), TMDB's seasons. Episodes are paired by the day they aired, within a day: those released together on both sides, as many on each, by their order; then by name, specials included; then the only one aired that day. A series both number alike keeps its numbers. In a series numbered otherwise, an episode Polyfin cannot place surely is counted as not found, for a manual link: no other episode is guessed. Without any source, the numbers are taken as they are. The pairs are kept a week, or until the addon lists another count of episodes. |
 | Found no way | Counted as not found. The import goes on. |
+
+A title the service names by its IMDb identifier is never found as a listed title with another IMDb identifier, even when both have the same TMDB or TVDB identifier. An addon may give a title another title's TMDB identifier, and an import never takes a mark back.
+
+Titles already kept get the `moviedb_id` and `tvdb_id` of their description as it is read again. A library's [description refresh](addons-and-libraries.md#library-description-refresh) reads them all at once.
 
 A title no catalog listed yet shows in your lists at once, described by the addons. Each description is kept a week, in memory and in the database, as every title's description is (see [Addons and libraries](addons-and-libraries.md)). Importing again within 6 hours asks the addons nothing. Later, the import uses the description kept, and the addon is asked again in the background.
 
