@@ -186,6 +186,10 @@ type Video struct {
 	Overview  string `json:"overview,omitempty"`
 	Available *bool  `json:"available,omitempty"`
 	Runtime   Text   `json:"runtime,omitempty"`
+	// MoviedbID and TvdbID are the episode's own TMDB and TVDB
+	// identifiers, as metadata addons give them, a number or a string.
+	MoviedbID Text `json:"moviedb_id,omitempty"`
+	TvdbID    Text `json:"tvdb_id,omitempty"`
 	// StartTime and EndTime, ISO 8601, make a video a programme of a
 	// channel's guide; Genres are its categories.
 	StartTime string `json:"startTime,omitempty"`
