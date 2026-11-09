@@ -179,14 +179,34 @@ type itemChange struct {
 // the later date with the larger play count, resume points under the
 // thresholds the settings give, of the titles still unplayed, the rating
 // where the user has none, and the watchlist, a movie or a series, never
-// an episode. Nothing the user's data holds is taken back.
+// an episode. The episodes a server import kept as its server holds them
+// are placed among the series' as that import places them, against those
+// of the entries' series that it kept. Nothing the user's data holds is
+// taken back.
 func (s *Store) Apply(ctx context.Context, user accounts.ID, entries []Entry, link Link) error {
 	if len(entries) == 0 {
 		return nil
 	}
+	sources := map[string]*library.SourceEpisodes{}
+	for _, e := range entries {
+		if e.Held == nil {
+			continue
+		}
+		source := sources[e.Key]
+		if source == nil {
+			source = &library.SourceEpisodes{}
+			sources[e.Key] = source
+		}
+		source.Episodes = append(source.Episodes, library.SourceEpisode{Season: e.Season, Number: e.Episode, TMDB: e.Held.TMDB,
+			TVDB: e.Held.TVDB, Aired: e.Held.Aired, Name: e.Held.Name})
+		source.OtherOrder = source.OtherOrder || e.Held.Otherwise
+	}
 	refs := make([]library.TitleRef, len(entries))
 	for i, e := range entries {
 		refs[i] = link.ref(e.Label)
+		if e.Held != nil {
+			refs[i].Source = sources[e.Key]
+		}
 	}
 	targets, err := s.titles.Resolve(ctx, refs)
 	if err != nil {
