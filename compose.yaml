@@ -9,6 +9,19 @@ services:
     environment:
       POSTGRES_USER: polyfin
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    # Light settings: about 60 MiB under load rather than 230, as fast for
+    # Polyfin, whose pool keeps within max_connections (see "A light
+    # PostgreSQL" in docs/installation.md).
+    command: >-
+      postgres
+      -c shared_buffers=32MB
+      -c max_connections=20
+      -c max_locks_per_transaction=512
+      -c max_worker_processes=2
+      -c max_parallel_workers=0
+      -c autovacuum_max_workers=1
+      -c max_wal_size=256MB
+      -c jit=off
     # PostgreSQL 18 keeps its versioned data directory below this path.
     volumes:
       - postgres_data:/var/lib/postgresql
