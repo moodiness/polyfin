@@ -4,16 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
@@ -419,4 +423,32 @@ func TestAnEditedTMDBIdentifierIsNotChecked(t *testing.T) {
 	}
 	e.shows("tt0099864", "IT", "1234")
 	e.shows("tt3581920", "The Last of Us", "100088")
+}
+
+// The pass reads the overrides before its rows hold a connection: on a
+// pool of one, reading them while the rows held it would wait for that
+// connection until the read gave up, and the administrators' edits would
+// go unread.
+func TestMoviedbChecksPassHoldsOneConnectionAtATime(t *testing.T) {
+	t.Parallel()
+	config := migrated.New(t).Config()
+	config.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	client := stremio.NewClient("test")
+	service := New(pool, addons.New(pool, client), client, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		func() accounts.Settings { return accounts.Settings{} })
+	started := time.Now()
+	if err := service.moviedbChecksPass(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if service.overrides.Load() == nil {
+		t.Error("the overrides were not read")
+	}
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Errorf("the pass took %v", elapsed)
+	}
 }
