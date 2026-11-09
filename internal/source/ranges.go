@@ -311,10 +311,12 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 			covered = append(covered, i)
 		}
 	}
-	length := end - start + 1
-	if alone && len(covered)+past != len(m.asked) || length > m.budget {
+	// The budget bounds the part before its length is counted: a part
+	// told as bytes 0-9223372036854775807 would overflow it.
+	if alone && len(covered)+past != len(m.asked) || end-start >= m.budget {
 		return fmt.Errorf("%w: a part of range %q", container.ErrMultiRangeUnsupported, value)
 	}
+	length := end - start + 1
 	m.budget -= length
 	if len(covered) == 0 {
 		return nil
