@@ -4,7 +4,8 @@
 // server and stopped after it. A cluster a crash of the app left running is
 // stopped, and the lock file of one that crashed is cleared, before it
 // starts again. The indexes of a database whose collation version changed
-// with an update are rebuilt as it starts.
+// with an update are rebuilt as it starts. Its settings keep it light,
+// clusters made by older versions included.
 package cluster
 
 import (
@@ -59,6 +60,28 @@ const settings = `
 # loopback, with the password of polyfin.password.
 listen_addresses = '127.0.0.1'
 unix_socket_directories = ''
+`
+
+// lightMark starts light, which tells a cluster that has it.
+const lightMark = "# Polyfin Desktop: a light cluster."
+
+// light keeps the cluster small: little shared memory, few connections
+// and background workers, no parallel query, which Polyfin does not
+// need, and no JIT compilation. The server's pool stays within
+// max_connections. A restore of a backup takes about 6,150 locks in one
+// transaction, which the lock table, max_locks_per_transaction for each
+// process, holds with room to spare. It is appended to postgresql.conf
+// when the cluster is made, and at the first start of a cluster made
+// before it.
+const light = "\n" + lightMark + `
+shared_buffers = 32MB
+max_connections = 20
+max_locks_per_transaction = 512
+max_worker_processes = 2
+max_parallel_workers = 0
+autovacuum_max_workers = 1
+max_wal_size = 256MB
+jit = off
 `
 
 // Cluster is a PostgreSQL cluster in Dir, run with the programs of Bin.
@@ -145,7 +168,7 @@ func (c *Cluster) initialize(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = conf.WriteString(settings)
+	_, err = conf.WriteString(settings + light)
 	if closeErr := conf.Close(); err == nil {
 		err = closeErr
 	}
@@ -193,6 +216,9 @@ func (c *Cluster) Start(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(c.Log), 0o700); err != nil {
 		return err
 	}
+	if err := c.lighten(); err != nil {
+		return fmt.Errorf("set the database's light settings: %w", err)
+	}
 	c.logger().Info("Starting the database", "port", port)
 	err = c.run(ctx, "pg_ctl", "start", "-D", c.Dir, "-l", c.Log, "-w", "-t", seconds(startWait),
 		"-o", "-p "+strconv.Itoa(port))
@@ -206,6 +232,43 @@ func (c *Cluster) Start(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// lighten appends light to the postgresql.conf of a cluster made before
+// it. It runs once nothing runs the cluster, after recover: the settings
+// apply from the start that follows. The file is written beside, then
+// renamed into place, so that an interrupted write leaves it as it was.
+func (c *Cluster) lighten() error {
+	path := filepath.Join(c.Dir, "postgresql.conf")
+	conf, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(string(conf), lightMark) {
+		return nil
+	}
+	c.logger().Info("Setting the database's light settings")
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	building := path + ".new"
+	file, err := os.OpenFile(building, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(append(conf, light...))
+	if err == nil {
+		err = file.Sync()
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(building)
+		return err
+	}
+	return os.Rename(building, path)
 }
 
 // Stop stops the cluster, ending its connections, and waits until it has
