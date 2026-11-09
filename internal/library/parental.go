@@ -303,15 +303,16 @@ func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta, 
 }
 
 // visible keeps the records of the items the user's parental control and
-// blocked genres let them reach, in order. Seasons and episodes are judged
-// by their series, and the videos of a folder by their folder. The
-// ratings and genres of titles not known yet are
+// blocked genres let them reach, and the request's rating filter keeps (see
+// ratingfilter.go), in order. Seasons and episodes are judged by their
+// series, and the videos of a folder by their folder. The ratings and
+// genres of titles not known yet are
 // looked up, until the request's deadline; those still unknown then are
 // left out. held reports that some were left out only because their lookup
 // did not answer in time or could not start, the request's lookups being
 // spent.
 func (s *Service) visible(ctx context.Context, v view, records []record) (kept []record, held bool) {
-	if !v.restricted() || len(records) == 0 {
+	if !v.narrows() || len(records) == 0 {
 		return records, false
 	}
 	titles := make([]record, len(records))
@@ -319,9 +320,9 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 		titles[i] = r
 		var holder accounts.ID
 		switch {
-		case (r.Kind == KindSeason || r.Kind == KindEpisode) && v.judges(r.Kind):
+		case (r.Kind == KindSeason || r.Kind == KindEpisode) && v.screens(r.Kind):
 			holder = r.seriesItemID()
-		case r.folderVideo() && v.judges(r.Kind):
+		case r.folderVideo() && v.screens(r.Kind):
 			holder = r.folderItemID()
 		}
 		if holder != (accounts.ID{}) {
@@ -334,13 +335,14 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 	allowed := make([]bool, len(records))
 	var unknown, stale []int
 	for i, r := range titles {
-		if !v.judges(r.Kind) {
+		if !v.screens(r.Kind) {
 			allowed[i] = true
 			continue
 		}
 		t, old := s.knownTraits(ctx, v, r)
+		official := s.officialRating(records[i], t.rating)
 		t = s.overriddenTraits(r.ID, t)
-		if ok, decided := v.verdict(r.Kind, t); decided {
+		if ok, decided := v.listVerdict(r.Kind, t, official); decided {
 			allowed[i] = ok
 			if old {
 				stale = append(stale, i)
@@ -352,7 +354,9 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 	found, pending := s.lookUpTraits(ctx, v, titles, unknown)
 	for i, t := range found {
 		if t != nil {
-			allowed[unknown[i]] = v.allows(titles[unknown[i]].Kind, s.overriddenTraits(titles[unknown[i]].ID, *t))
+			at := unknown[i]
+			ok, decided := v.listVerdict(titles[at].Kind, s.overriddenTraits(titles[at].ID, *t), s.officialRating(records[at], t.rating))
+			allowed[at] = ok && decided
 		}
 		held = held || pending[i]
 	}
@@ -384,7 +388,7 @@ func (v view) withoutWait() view {
 func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []stremio.Meta) ([]stremio.Meta, bool) {
 	metas = v.unhiddenMetas(src, metas)
 	metas, waiting := s.releasedMetas(ctx, v, src, metas)
-	if !v.restricted() || len(metas) == 0 {
+	if !v.narrows() || len(metas) == 0 {
 		return metas, waiting
 	}
 	var titles []record

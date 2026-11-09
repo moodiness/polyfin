@@ -521,6 +521,8 @@ type view struct {
 	// hidden are the titles the user hid, which listings leave out (see
 	// hidden.go).
 	hidden HiddenTitles
+	// query is the request's rating filter (see ratingfilter.go).
+	query ratingQuery
 	// withheld are the server's enabled addons the user does not use (see
 	// addons.UsedBy), in order: the view holds nothing of theirs, and the
 	// titles only they know are out of the user's reach (see withholds).
@@ -570,18 +572,19 @@ func (v view) limit(src source) int {
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	views, _ := ctx.Value(requestViewsKey{}).(*requestViews)
 	if views == nil || time.Since(views.started) > viewReuse {
-		return s.buildView(ctx, user)
+		v, err := s.buildView(ctx, user)
+		return v.withRatingFilter(ctx), err
 	}
 	views.mu.Lock()
 	defer views.mu.Unlock()
 	if v, ok := views.views[user.ID]; ok {
-		return v, nil
+		return v.withRatingFilter(ctx), nil
 	}
 	v, err := s.buildView(ctx, user)
 	if err == nil {
 		views.views[user.ID] = v
 	}
-	return v, err
+	return v.withRatingFilter(ctx), err
 }
 
 // viewSources reports which addons a user's view holds: the server's, the
@@ -951,9 +954,9 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // with errCutShort and why (see cutShort).
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	// An IPTV source's movies and series are paged and counted from its
-	// stored lists, whole, but for a restricted user, or one who hid
-	// titles, whose listing leaves those titles out as it reads.
-	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.restricted() && len(v.hidden) == 0 && src.date == "" {
+	// stored lists, whole, but for a restricted user, one who hid titles,
+	// or a listing narrowed by rating, which leaves titles out as it reads.
+	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.narrows() && len(v.hidden) == 0 && src.date == "" {
 		return s.iptv.CatalogWindow(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, start, count)
 	}
 	var collected []stremio.Meta
@@ -967,7 +970,7 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	more := true
 	limit := v.limit(src)
 	reach := limit
-	if v.restricted() {
+	if v.narrows() {
 		reach = min(limit, hiddenReach*(start+count))
 	}
 	// skipped counts the titles left out as local folders hold them.
@@ -1315,9 +1318,15 @@ func (s *Service) childrenIn(ctx context.Context, v view, user accounts.User, pa
 		return s.folderChildren(ctx, v, parent, start, count)
 	case KindSeries:
 		seasons, err := s.Seasons(ctx, user, parent)
+		if err == nil {
+			seasons, err = s.ratingFiltered(ctx, v, seasons)
+		}
 		return slicePage(seasons, start, count), err
 	case KindSeason:
 		episodes, err := s.Episodes(ctx, user, r.seriesItemID(), &parent)
+		if err == nil {
+			episodes, err = s.ratingFiltered(ctx, v, episodes)
+		}
 		return slicePage(episodes, start, count), err
 	case KindReplayFolder:
 		programmes, err := s.replayProgrammes(ctx, v, r)
