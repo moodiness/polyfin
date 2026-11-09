@@ -90,7 +90,7 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 
 ### Account end dates for apps
 
-- `GET /admin/api/users` and `PATCH /admin/api/users/{id}` answer `endsOn`, a `YYYY-MM-DD` date in the server's time zone or null for never, and `ended`, true once that date has come. `PATCH` takes `endsOn`, a date or null; anything else is 400 `invalid_ends_on`, and a date for an administrator, or for a user made one in the same change, is 409 `administrator_cannot_end`.
+- `GET /admin/api/users` and `PATCH /admin/api/users/{id}` answer `endsOn`, a `YYYY-MM-DD` date in the server's time zone or null for never, `endsAt`, the exact time an invite link gave the account to end (RFC 3339) or null, and `ended`, true once either has come. At most one of `endsOn` and `endsAt` is set. `PATCH` takes `endsOn`, a date or null, which clears `endsAt`; anything else is 400 `invalid_ends_on`, and a date for an administrator, or for a user made one in the same change, is 409 `administrator_cannot_end`. A change without `endsOn` keeps `endsAt` as it is.
 - An ended account signs in as a disabled one does: 403 from `/Users/AuthenticateByName`, Quick Connect and `POST /admin/api/session` (`account_disabled`), and `denied` to a Silo TV's poll. Its access tokens answer 401, and its policy's `IsDisabled` is true.
 
 ### Visible libraries for apps

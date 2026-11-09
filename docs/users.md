@@ -192,8 +192,9 @@ API details: [Resetting to defaults](jellyfin-api.md#resetting-to-defaults-for-a
 
 - The date follows the server's time zone.
 - The default, **Never**, clears it.
+- An account an invite link created with **Accounts end** ends instead at an exact time, that many days of 24 hours after its creation, to the minute (see [Invite links](invite-and-share-links.md#invite-links)). A date saved here, or **Never**, replaces that time; other changes to the account keep it.
 
-From that date the account is refused like a disabled one, but signs out less:
+From its end the account is refused like a disabled one, but signs out less:
 
 | | Disabled | Ended |
 |---|---|---|
@@ -202,8 +203,8 @@ From that date the account is refused like a disabled one, but signs out less:
 | What the account has | Kept | Kept, its devices included |
 | Undo | Turn **Disabled** off | A later date, or **Never**: the account comes back as it was |
 
-- **Users** shows each end date, as "Ends on October 20, 2026", and **Ended** once passed, as does the user's page.
-- An hourly scheduled task logs each ended account once, within the hour, as "The account of sam ended" (see [Scheduled tasks](administration.md#scheduled-tasks)). Given a later date, it is logged again on reaching it.
+- **Users** shows each end date, as "Ends on October 20, 2026", and **Ended** once passed, as does the user's page. An exact end shows its time too, in your browser's time zone, as "Ends on November 9, 2026 at 6:40 PM".
+- An hourly scheduled task logs each ended account once, within the hour, as "The account of sam ended" (see [Scheduled tasks](administration.md#scheduled-tasks)). Given a later end, it is logged again on reaching it.
 - Jellyfin apps see an ended account as disabled. Jellyfin has no end date: an app sending back the policy it read leaves **Disabled** off, and only the admin app changes the date.
 - An administrator's account never ends, so the last administrator is never locked out. Administrators cannot get an end date, and becoming one clears it.
 - Live TV recordings, new episode notifications, the weekly summary and imports from an app stop, as for a disabled account.

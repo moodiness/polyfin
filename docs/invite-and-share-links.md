@@ -10,7 +10,7 @@ An invite link lets people create their own accounts, so nobody has to choose an
 |---|---|---|---|
 | **Accounts it may create** | 1 to 100 | 1 | How many accounts the link creates: one link can serve a whole family. |
 | **Expires** | 1, 7, 30 or 90 days, or **Never** | 7 days | When the link stops working. |
-| **Accounts end** | **Never**, or 1, 7, 30 or 90 days after each is created | **Never** | Gives each account that end date (see [Ending an account](users.md#ending-an-account)). |
+| **Accounts end** | **Never**, or 1, 7, 30 or 90 days after each is created | **Never** | Ends each account exactly that many days of 24 hours after its creation, at the same time of day, as the link's own expiry counts (see [Ending an account](users.md#ending-an-account)). |
 | **Settings of** | a user, or a new user | | Whose settings the new accounts copy, as with **Create a user**. |
 | **Group** | **No group**, or a group | **No group** | A group the new accounts join and follow (see [User groups](users.md#user-groups)). |
 
