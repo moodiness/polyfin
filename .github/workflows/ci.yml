@@ -583,6 +583,43 @@ jobs:
       - *keep-test-times
       - *save-go-caches
 
+  thirtytwo:
+    # 32-bit targets, for which no image or desktop package is built, kept
+    # building and safe on the playback path (docs/installation.md): the
+    # server built for 32-bit ARM, every package vetted for 386, the
+    # playback path's tests run as 386 binaries, which the runner runs
+    # natively, without FFmpeg, whose tests skip; and no raw 64-bit atomic
+    # anywhere, as one panics on a 32-bit target when its value is not
+    # 8-byte aligned (#1086).
+    name: 32-bit build and playback tests, and 64-bit atomics
+    needs: tested
+    if: needs.tested.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env: *test-environment
+    services: *test-services
+    steps:
+      - *checkout
+      - *setup-go
+      - *find-go-caches
+      - *restore-go-caches
+      - name: Build for 32-bit ARM, and vet every package for 386
+        run: |
+          GOOS=linux GOARCH=arm GOARM=7 go build ./...
+          GOOS=linux GOARCH=386 go vet ./...
+      - name: Test the playback path as 386 binaries
+        env:
+          GOARCH: "386"
+        run: |
+          go test ./internal/container ./internal/source ./internal/media ./internal/hls ./internal/subtitles \
+            ./internal/stremio ./internal/localfiles ./internal/remuxdb ./internal/playback
+      - name: Look for raw 64-bit atomics
+        # forbidigo alone, through its own configuration, which tells why.
+        run: |
+          go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run \
+            --config .github/golangci-atomics.yml --max-issues-per-linter 0 --max-same-issues 0 ./...
+      - *save-go-caches
+
   windows:
     # polyfin serve on Windows, as the desktop version runs it: the per-system
     # code (disk space, folder watching, process control, FFmpeg's outputs)
@@ -807,7 +844,7 @@ jobs:
   publish:
     name: Publish multi-platform image to GHCR
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [tested, check, race, jellyfin, image]
+    needs: [tested, check, race, jellyfin, thirtytwo, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

@@ -1,0 +1,18 @@
+# The one rule CI's 32-bit job checks with golangci-lint (ci.yml): no raw
+# 64-bit atomic function of sync/atomic. On a 32-bit target such a call
+# panics unless its value is 8-byte aligned, which a field after a pointer
+# or a 32-bit field is not (#1086); the typed atomic.Int64 and
+# atomic.Uint64, which the compiler aligns, take their place. The types
+# are analyzed, so that an aliased import is caught too.
+version: "2"
+linters:
+  default: none
+  enable:
+    - forbidigo
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^atomic\.(Add|Load|Store|Swap|CompareAndSwap|And|Or)(Int64|Uint64)$
+          pkg: ^sync/atomic$
+          msg: a raw 64-bit atomic panics on 32-bit targets unless aligned; use atomic.Int64 or atomic.Uint64
