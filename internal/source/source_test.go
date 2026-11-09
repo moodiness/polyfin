@@ -769,6 +769,13 @@ func TestFetchRangesUnsupported(t *testing.T) {
 			w.WriteHeader(http.StatusPartialContent)
 			return 1 << 30
 		},
+		// One part told as the largest range there is, whose length
+		// overflows: refused, not allocated.
+		"one part of an overflowing range": func(w http.ResponseWriter) int64 {
+			w.Header().Set("Content-Range", "bytes 0-9223372036854775807/*")
+			w.WriteHeader(http.StatusPartialContent)
+			return 1 << 30
+		},
 		"another multipart type": func(w http.ResponseWriter) int64 {
 			w.Header().Set("Content-Type", "multipart/mixed; boundary=x")
 			w.WriteHeader(http.StatusPartialContent)
