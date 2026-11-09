@@ -25,6 +25,7 @@ Both run the same server, with the same admin app and apps. A backup moves from 
 
 - Docker with Compose v2.
 - The image, `ghcr.io/moodiness/polyfin`, is published for linux/amd64 and linux/arm64.
+- 32-bit systems get no image, and binaries you build yourself for them are best effort: CI builds the server for 32-bit ARM and tests its playback path as 386 binaries (see [Building for 32-bit targets](development.md#building-for-32-bit-targets)).
 
 ### Steps
 
