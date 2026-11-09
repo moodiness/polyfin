@@ -12,31 +12,32 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
 )
 
-// boundDevice reads the interface a socket is bound to (SO_BINDTODEVICE).
+// boundDevice reads the interface a socket is bound to (SO_BINDTODEVICE),
+// through x/sys, which knows the socketcall that 386 has instead of a
+// getsockopt system call.
 func boundDevice(t *testing.T, conn syscall.Conn) string {
 	t.Helper()
 	raw, err := conn.SyscallConn()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var name [syscall.IFNAMSIZ]byte
-	size := uint32(len(name))
-	var errno syscall.Errno
+	var name string
+	var getErr error
 	if err := raw.Control(func(fd uintptr) {
-		_, _, errno = syscall.Syscall6(syscall.SYS_GETSOCKOPT, fd, syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE,
-			uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(&size)), 0)
+		name, getErr = unix.GetsockoptString(int(fd), unix.SOL_SOCKET, unix.SO_BINDTODEVICE)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if errno != 0 {
-		t.Fatal(errno)
+	if getErr != nil {
+		t.Fatal(getErr)
 	}
-	return string(bytes.TrimRight(name[:size], "\x00"))
+	return name
 }
 
 func TestInterfaceRouteBindsEverySocket(t *testing.T) {
