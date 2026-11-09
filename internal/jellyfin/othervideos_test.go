@@ -51,7 +51,7 @@ func newStoreAddon(t *testing.T, clip string) *storeAddon {
 	var server *httptest.Server
 	stream := func(name, file string) stremio.Stream {
 		return stremio.Stream{Name: "Boxcloud", Description: name + "\n" + file, URL: server.URL + "/files/" + file,
-			BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number(info.Size()), BingeGroup: "boxcloud|store"}}
+			BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number64(info.Size()), BingeGroup: "boxcloud|store"}}
 	}
 	download := func() stremio.Meta {
 		meta := stremio.Meta{ID: storeDownload, Type: "other", Name: "Holiday clips", Description: "A download", Released: "2024-08-02T10:00:00.000Z"}

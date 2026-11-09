@@ -43,7 +43,7 @@ func fastServer(t *testing.T) (failoverSetup, string) {
 	clip := fastClip(t, ffmpeg)
 	host, _ := steadyHost(t, clip)
 	p := failoverServer(t, ffprobe, failoverAddon(t, "catalog", []stremio.Stream{{Name: "Long", URL: host.URL + "/clip.mp4",
-		BehaviorHints: stremio.StreamBehavior{Filename: "Fast.2026.1080p.mp4", VideoSize: stremio.Number(len(clip))}}}))
+		BehaviorHints: stremio.StreamBehavior{Filename: "Fast.2026.1080p.mp4", VideoSize: stremio.Number64(len(clip))}}}))
 	p.setting(t, func(settings *accounts.Settings) { settings.FastStart = true })
 	return p, ffmpeg
 }

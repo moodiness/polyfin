@@ -286,9 +286,9 @@ func failoverPlayOf(t *testing.T, colour, grey []byte, container, profile string
 	second, requests := steadyHost(t, grey)
 	p := failoverServer(t, ffprobe,
 		failoverAddon(t, "catalog", []stremio.Stream{{Name: "Colour", URL: first.URL + "/colour." + container,
-			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Colour." + container, VideoSize: stremio.Number(len(colour))}}}),
+			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Colour." + container, VideoSize: stremio.Number64(len(colour))}}}),
 		failoverAddon(t, "other", []stremio.Stream{{Name: "Grey", URL: second.URL + "/grey." + container,
-			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Grey." + container, VideoSize: stremio.Number(len(grey))}}}))
+			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Grey." + container, VideoSize: stremio.Number64(len(grey))}}}))
 	body := map[string]any{"MediaSourceId": p.movie, "EnableDirectPlay": false}
 	for key, value := range more {
 		body[key] = value
@@ -445,7 +445,7 @@ func TestAPlayGoesOnFromNoUnindexedFile(t *testing.T) {
 		urls[name] = host.URL + "/" + name
 	}
 	stream := func(name, url, filename string, data []byte) []stremio.Stream {
-		return []stremio.Stream{{Name: name, URL: url, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(len(data))}}}
+		return []stremio.Stream{{Name: name, URL: url, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number64(len(data))}}}
 	}
 	p := failoverServer(t, ffprobe,
 		failoverAddon(t, "catalog", stream("Colour", first.URL+"/colour.mp4", "Failover.2026.1080p.Colour.mp4", colour)),
@@ -501,7 +501,7 @@ func TestARepackagedPlayGoesOnFromAMirror(t *testing.T) {
 	clip := failoverClip(t, ffmpeg, false, 48)
 	first := newDyingHost(t, clip, len(clip)/2)
 	second, requests := steadyHost(t, clip)
-	hints := stremio.StreamBehavior{Filename: "Failover.2026.1080p.mp4", VideoSize: stremio.Number(len(clip))}
+	hints := stremio.StreamBehavior{Filename: "Failover.2026.1080p.mp4", VideoSize: stremio.Number64(len(clip))}
 	p := failoverServer(t, ffprobe,
 		failoverAddon(t, "catalog", []stremio.Stream{{Name: "First", URL: first.URL + "/clip.mp4", BehaviorHints: hints}}),
 		failoverAddon(t, "other", []stremio.Stream{{Name: "Copy", URL: second.URL + "/token/clip.mp4", BehaviorHints: hints}}))

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -39,17 +40,50 @@ func (t Text) ID() int {
 	return id
 }
 
-// Number decodes a JSON number or numeric string.
+// Number decodes a JSON number or numeric string. It is 0 when it holds
+// none, or one out of int's range, which is 32 bits on 32-bit targets.
 type Number int
 
 func (n *Number) UnmarshalJSON(data []byte) error {
+	value, err := decodeWhole(data, math.MinInt, math.MaxInt)
+	*n = Number(value)
+	return err
+}
+
+// Number64 decodes a JSON number or numeric string into 64 bits on every
+// target, for the byte sizes and times addons send, which Number cannot
+// hold on 32-bit targets past 2 GiB. It is 0 when it holds none, or one
+// out of range.
+type Number64 int64
+
+func (n *Number64) UnmarshalJSON(data []byte) error {
+	value, err := decodeWhole(data, math.MinInt64, math.MaxInt64)
+	*n = Number64(value)
+	return err
+}
+
+// decodeWhole decodes a JSON number or numeric string into a whole number
+// from low to high, truncating a fraction, and 0 for anything else: Go
+// leaves the conversion of a float out of an integer's range to the
+// target. A whole number is decoded exactly, past float64's 2^53 too.
+func decodeWhole(data []byte, low, high int64) (int64, error) {
 	var text Text
 	if err := text.UnmarshalJSON(data); err != nil {
-		return err
+		return 0, err
 	}
-	value, _ := strconv.ParseFloat(strings.TrimSpace(string(text)), 64)
-	*n = Number(value)
-	return nil
+	written := strings.TrimSpace(string(text))
+	if value, err := strconv.ParseInt(written, 10, 64); err == nil {
+		if value < low || value > high {
+			return 0, nil
+		}
+		return value, nil
+	}
+	value, err := strconv.ParseFloat(written, 64)
+	// -float64(low) is 2^31 or 2^63, exactly, the first value past high.
+	if err != nil || math.IsNaN(value) || value < float64(low) || value >= -float64(low) {
+		return 0, nil
+	}
+	return int64(value), nil
 }
 
 // Names decodes a list of names, such as genres or directors: a JSON
