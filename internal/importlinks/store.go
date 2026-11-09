@@ -3,6 +3,7 @@ package importlinks
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -27,7 +28,8 @@ func (e Entry) place() place {
 
 // merge adds to e what o, the same entry read again, brings: the played
 // mark at the later date with the most plays, the newer resume point, the
-// watchlist and the rating when e has none, and o's label and reason.
+// watchlist and the rating when e has none, and o's label, reason and
+// episode as the server holds it, else e's.
 func (e Entry) merge(o Entry) Entry {
 	merged := o
 	merged.Name, merged.IDs = cmp.Or(o.Name, e.Name), cmp.Or(o.IDs, e.IDs)
@@ -44,6 +46,7 @@ func (e Entry) merge(o Entry) Entry {
 	if e.Rating != nil {
 		merged.Rating = e.Rating
 	}
+	merged.Held = cmp.Or(o.Held, e.Held)
 	return merged
 }
 
@@ -105,9 +108,16 @@ func (s *Store) Save(ctx context.Context, user accounts.ID, source string, entri
 			if e.Watchlist != "" {
 				list = &e.Watchlist
 			}
+			var held []byte
+			if e.Held != nil {
+				var err error
+				if held, err = json.Marshal(e.Held); err != nil {
+					return err
+				}
+			}
 			batch.Queue(`INSERT INTO import_unfound (user_id, source, entry_key, season, episode, kind, name, year, ids, reason, played,
-					played_at, plays, resume_percent, resume_position_ms, resume_runtime_ms, resume_at, watchlist, added_at, rating, seen_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+					played_at, plays, resume_percent, resume_position_ms, resume_runtime_ms, resume_at, watchlist, added_at, rating, seen_at, held)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 				ON CONFLICT (user_id, source, entry_key, season, episode) DO UPDATE SET kind = excluded.kind,
 					name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE import_unfound.name END,
 					year = coalesce(excluded.year, import_unfound.year),
@@ -120,9 +130,10 @@ func (s *Store) Save(ctx context.Context, user accounts.ID, source string, entri
 					resume_at = CASE WHEN `+newerResume+` THEN excluded.resume_at ELSE import_unfound.resume_at END,
 					watchlist = coalesce(excluded.watchlist, import_unfound.watchlist),
 					added_at = CASE WHEN excluded.watchlist IS NOT NULL THEN excluded.added_at ELSE import_unfound.added_at END,
-					rating = coalesce(import_unfound.rating, excluded.rating), seen_at = excluded.seen_at`,
+					rating = coalesce(import_unfound.rating, excluded.rating), seen_at = excluded.seen_at,
+					held = coalesce(excluded.held, import_unfound.held)`,
 				user, source, e.Key, e.Season, e.Episode, e.Kind, e.Name, year, e.IDs, e.Reason, e.Played, e.PlayedAt, e.Plays, percent,
-				position, runtime, resumeAt, list, e.AddedAt, e.Rating, now)
+				position, runtime, resumeAt, list, e.AddedAt, e.Rating, now, held)
 		}
 		return tx.SendBatch(ctx, batch).Close()
 	})
@@ -140,7 +151,7 @@ type Row struct {
 
 // entryColumns are the columns of an entry u, scanned by scanEntry.
 const entryColumns = `u.entry_key, u.season, u.episode, u.kind, u.name, u.year, u.ids, u.reason, u.played, u.played_at, u.plays,
-	u.resume_percent, u.resume_position_ms, u.resume_runtime_ms, u.resume_at, u.watchlist, u.added_at, u.rating`
+	u.resume_percent, u.resume_position_ms, u.resume_runtime_ms, u.resume_at, u.watchlist, u.added_at, u.rating, u.held`
 
 // scanEntry reads an entry, then what extra scans.
 func scanEntry(row pgx.Row, extra ...any) (Entry, error) {
@@ -150,8 +161,9 @@ func scanEntry(row pgx.Row, extra ...any) (Entry, error) {
 	var position, runtime *int64
 	var resumeAt *time.Time
 	var list *string
+	var held []byte
 	if err := row.Scan(append([]any{&e.Key, &e.Season, &e.Episode, &e.Kind, &e.Name, &year, &e.IDs, &e.Reason, &e.Played, &e.PlayedAt,
-		&e.Plays, &percent, &position, &runtime, &resumeAt, &list, &e.AddedAt, &e.Rating}, extra...)...); err != nil {
+		&e.Plays, &percent, &position, &runtime, &resumeAt, &list, &e.AddedAt, &e.Rating, &held}, extra...)...); err != nil {
 		return e, err
 	}
 	if year != nil {
@@ -171,6 +183,12 @@ func scanEntry(row pgx.Row, extra ...any) (Entry, error) {
 	}
 	if list != nil {
 		e.Watchlist = *list
+	}
+	if len(held) > 0 {
+		e.Held = &Held{}
+		if err := json.Unmarshal(held, e.Held); err != nil {
+			return e, err
+		}
 	}
 	return e, nil
 }

@@ -94,6 +94,24 @@ type Entry struct {
 	// Rating is the user's rating, from 0 to 10, nil when none or when
 	// the import does not bring ratings.
 	Rating *float64
+	// Held is the episode as the server a server import read holds it,
+	// nil for the other entries.
+	Held *Held
+}
+
+// Held is an episode as the server a server import read holds it, which
+// places it among the addon's episodes when its entry is linked, as the
+// import places episodes (see library.SourceEpisodes): its own TMDB and
+// TVDB identifiers, zero when unknown, the time it aired, zero when
+// unknown, and its name. Otherwise tells that its series is shown
+// numbered otherwise, or that the import placed it on none of the
+// addon's: no link places it by its numbers alone.
+type Held struct {
+	TMDB      int       `json:"tmdb,omitempty"`
+	TVDB      int       `json:"tvdb,omitempty"`
+	Aired     time.Time `json:"aired,omitzero"`
+	Name      string    `json:"name,omitempty"`
+	Otherwise bool      `json:"otherwise,omitempty"`
 }
 
 // Link is the title an entry was linked to: a movie or a series, by its
