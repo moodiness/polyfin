@@ -216,9 +216,10 @@ type Options struct {
 	// no page.
 	Versions Versions
 	Titles   Titles
-	// VersionLists forgets an addon's version lists once its address is
-	// replaced; nil forgets none.
-	VersionLists VersionLists
+	// AddonCaches forgets an addon's version lists once its address is
+	// replaced, and makes what it gave old on Refresh everything; nil
+	// forgets none.
+	AddonCaches AddonCaches
 	// Restart stops Polyfin as a signal does, for its container's restart
 	// policy, its service manager or Polyfin Desktop to start it again; it
 	// returns at once. Nil offers no restart.
@@ -572,6 +573,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/order", h.signedIn(h.reorderAddons))
 	mux.Handle("PATCH /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.updateAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh", h.signedIn(h.refreshAddon))
+	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh-all", h.signedIn(h.refreshAddonAll))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.removeAddon))
 	mux.Handle("GET /admin/api/scopes/{scope}/addons/{id}/removal", h.signedIn(h.addonRemoval))
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))

@@ -73,7 +73,7 @@ func TestReplacingAnAddressForgetsThatAddonsVersionLists(t *testing.T) {
 	var lib *library.Service
 	var pool *pgxpool.Pool
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
-		lib, pool = o.VersionLists.(*library.Service), deps.pool
+		lib, pool = o.AddonCaches.(*library.Service), deps.pool
 		// No follow-ups: the addons are asked only as the title is listed.
 		lib.SetFollowUps()
 	})
