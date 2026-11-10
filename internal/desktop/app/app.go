@@ -222,7 +222,8 @@ func (a *App) problem(p Problem, err error) {
 }
 
 // Start starts the cluster and the server in the background, unless they
-// run already.
+// run already. A run that ended, stopped or failed, lets Start start
+// again.
 func (a *App) Start() {
 	a.mu.Lock()
 	if a.done != nil {
@@ -236,8 +237,12 @@ func (a *App) Start() {
 	a.mu.Unlock()
 	a.update(func(*Status) {})
 	go func() {
-		defer close(done)
 		a.run(ctx)
+		cancel()
+		a.mu.Lock()
+		a.cancel, a.done = nil, nil
+		a.mu.Unlock()
+		close(done)
 	}()
 }
 
@@ -254,13 +259,7 @@ func (a *App) Stop(ctx context.Context) {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		return
 	}
-	a.mu.Lock()
-	if a.done == done {
-		a.cancel, a.done = nil, nil
-	}
-	a.mu.Unlock()
 }
 
 // Listen is the server's address, from POLYFIN_LISTEN as the server reads
@@ -291,6 +290,9 @@ func (a *App) run(ctx context.Context) {
 		Log: filepath.Join(a.o.Folders.Log(), "postgresql.log"), Port: a.o.DatabasePort, Logger: a.logger,
 		Rebuilding: a.rebuilding}
 	server, err := a.prepare(ctx, db)
+	// failed tells a start that failed: its phase is told once everything
+	// stopped, the stop's own phase shown meanwhile.
+	failed := err != nil && ctx.Err() == nil
 	var rollBack bool
 	defer func() {
 		a.update(func(s *Status) { s.Phase = Stopping })
@@ -306,17 +308,18 @@ func (a *App) run(ctx context.Context) {
 			a.goBack(server.lastExit())
 		}
 		a.update(func(s *Status) {
-			if s.Phase != Failed {
+			if failed {
+				s.Phase = Failed
+			} else if s.Phase != Failed {
 				s.Phase = Stopped
 			}
 			s.SetupCode = ""
 		})
 	}()
 	if err != nil {
-		if ctx.Err() == nil {
+		if failed {
 			a.logger.Error("Polyfin could not start", "error", err)
 			a.problem(StartFailed, err)
-			a.update(func(s *Status) { s.Phase = Failed })
 		}
 		return
 	}

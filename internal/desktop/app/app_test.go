@@ -391,6 +391,48 @@ func TestStartWithComputer(t *testing.T) {
 	}
 }
 
+// A start that fails, here for the programs the install folder lacks, is
+// told once everything stopped: the app ends failed, with the problem and
+// why. Start then starts again.
+func TestAFailedStartIsToldAndStartsAgain(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	var phases []Phase
+	a := New(Options{Install: desktop.Install{Dir: t.TempDir()}, Folders: desktop.Folders{Data: t.TempDir()}, Changed: func(s Status) {
+		mu.Lock()
+		defer mu.Unlock()
+		phases = append(phases, s.Phase)
+	}})
+	for try := range 2 {
+		a.Start()
+		a.mu.Lock()
+		done := a.done
+		a.mu.Unlock()
+		if done != nil {
+			select {
+			case <-done:
+			case <-time.After(time.Minute):
+				t.Fatalf("start %d never ended", try)
+			}
+		}
+		if s := a.Status(); s.Phase != Failed || !s.Has(StartFailed) || !strings.Contains(s.Detail, "lacks") {
+			t.Fatalf("start %d ended %+v", try, s)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	starts, previous := 0, Phase("")
+	for _, phase := range phases {
+		if phase == Starting && previous != Starting {
+			starts++
+		}
+		previous = phase
+	}
+	if starts != 2 {
+		t.Errorf("phases %v: %d starts, want 2", phases, starts)
+	}
+}
+
 // A second app on the same data folder is refused while the first runs.
 //
 //nolint:paralleltest // a child another test forks holds the lock file until it execs, keeping its lock past the release
