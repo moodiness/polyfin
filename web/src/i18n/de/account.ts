@@ -667,10 +667,14 @@ const account: typeof en = {
             simkl: 'Plan-to-Watch-Liste',
             anilist: 'Plan-to-Watch-Liste',
             myanimelist: 'Plan-to-Watch-Liste',
+            publicmetadb: 'Watchlist',
           },
           toggle: (name: string, list: string) => `Meine ${name}-${list} importieren`,
           toggleHelp: (name: string, list: string) =>
             `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Wiedergabeliste „Merkliste“ deiner Jellyfin-Apps, eine Serie als ihre ausgestrahlten Folgen. Nur was du noch nicht gesehen hast, wird hinzugefügt. Was du begonnen hast, bleibt. Ein Titel, den ${name} nicht mehr aufführt, verschwindet daraus, außer du hast ihn begonnen oder selbst hinzugefügt. Nichts wird an ${name} zurückgesendet.`,
+          syncToggle: (name: string, list: string) => `Meine ${name}-${list} synchronisieren`,
+          syncHelp: (name: string, list: string) =>
+            `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Wiedergabeliste „Merkliste“ deiner Jellyfin-Apps, eine Serie als ihre ausgestrahlten Folgen. Filme und Serien, die du selbst zur Merkliste hinzufügst oder daraus entfernst, werden an sie gesendet. Eine Serie verschwindet dort erst, wenn keine ihrer Folgen mehr übrig ist. Einträge verschieben, einen Titel ansehen oder die Wiedergabeliste löschen ändert dort nichts.`,
           counts: (added: number, unmapped: number) =>
             `${added} zur Merkliste hinzugefügt, ${unmapped === 1 ? '1 Titel' : `${unmapped} Titel`} nicht in Polyfin gefunden.`,
           added: (added: number) => `${added} zur Merkliste hinzugefügt.`,

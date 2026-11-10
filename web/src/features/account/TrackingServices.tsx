@@ -719,8 +719,14 @@ function HistoryImport({
           <SettingRow
             kind="switch"
             nested
-            label={text.watchlist.toggle(name, list)}
-            help={text.watchlist.toggleHelp(name, list)}
+            label={(service.watchlistSent ? text.watchlist.syncToggle : text.watchlist.toggle)(
+              name,
+              list,
+            )}
+            help={(service.watchlistSent ? text.watchlist.syncHelp : text.watchlist.toggleHelp)(
+              name,
+              list,
+            )}
             checked={service.importWatchlist}
             disabled={busy}
             onChange={(on) => {
