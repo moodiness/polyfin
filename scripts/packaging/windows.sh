@@ -71,8 +71,8 @@ package_x64() {
 		-v "$edb:/downloads/postgresql.zip:ro" -v "$redist:/downloads/vc_redist.x64.exe:ro" \
 		-e VERSION="$VERSION" -e SETUP="$setup" -e OWNER="$(id -u):$(id -g)" -e POLYFIN_PACKAGING_CACHE=/tmp/cache \
 		"$DEBIAN_IMAGE" bash -euo pipefail -c '
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends unzip cabextract nsis > /dev/null
+apt-get update -qq -o Acquire::Retries=5 -o APT::Update::Error-Mode=any
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 unzip cabextract nsis > /dev/null
 install=/stage/install
 
 unzip -q /downloads/postgresql.zip "pgsql/bin/*" "pgsql/lib/*" "pgsql/share/*" "pgsql/server_license.txt" \

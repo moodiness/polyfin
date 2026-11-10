@@ -40,11 +40,13 @@ FROM --platform=$BUILDPLATFORM jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985
 
 # The downloads from GitHub: curl retries its passing failures, which ADD
 # does not, then each file is checked against its pinned SHA-256, from a
-# file rather than a pipe.
+# file rather than a pipe. apt, here and in every stage, retries its own
+# downloads, and its update fails on an index it could not fetch rather
+# than going on without it.
 FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS download
 # hadolint ignore=DL3008
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl \
+RUN apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& apt-get install -y --no-install-recommends -o Acquire::Retries=5 ca-certificates curl \
 	&& rm -rf /var/lib/apt/lists/*
 
 FROM download AS jellyfin-web-source-download
@@ -91,8 +93,8 @@ RUN echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffm
 # hadolint ignore=DL3006
 FROM ffmpeg-${TARGETARCH} AS ffmpeg-unpack
 # hadolint ignore=DL3008
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends xz-utils \
+RUN apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& apt-get install -y --no-install-recommends -o Acquire::Retries=5 xz-utils \
 	&& mkdir /ffmpeg \
 	&& tar -xJf /ffmpeg.tar.xz -C /ffmpeg --strip-components=1
 
@@ -106,16 +108,16 @@ COPY --from=ffmpeg-unpack /ffmpeg/lib/ /lib/
 # every platform, so it is made natively.
 FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS certificates
 # hadolint ignore=DL3008
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates
+RUN apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& apt-get install -y --no-install-recommends -o Acquire::Retries=5 ca-certificates
 
 # DejaVu, the fallback fonts apps load to render subtitles whose own fonts
 # are missing, for Latin, Greek and Cyrillic. Fonts are the same on every
 # platform, so they are installed natively.
 FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS fonts
 # hadolint ignore=DL3008
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends fonts-dejavu-core
+RUN apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& apt-get install -y --no-install-recommends -o Acquire::Retries=5 fonts-dejavu-core
 
 # What Polyfin Desktop's packages take from the image, for
 # scripts/packaging/files.sh: jellyfin-web, unmodified, with its license
@@ -201,8 +203,8 @@ ARG TARGETARCH
 WORKDIR /debs
 # hadolint ignore=DL3008
 RUN if [ "$TARGETARCH" != "$(dpkg --print-architecture)" ]; then dpkg --add-architecture "$TARGETARCH"; fi \
-	&& apt-get update \
-	&& apt-get download "tini:$TARGETARCH" \
+	&& apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& apt-get download -o Acquire::Retries=5 "tini:$TARGETARCH" \
 	&& dpkg-deb -x /debs/tini_*.deb /tini \
 	&& test -x /tini/usr/bin/tini
 
@@ -225,13 +227,13 @@ ARG TARGETARCH
 WORKDIR /debs
 # hadolint ignore=DL3008
 RUN if [ "$TARGETARCH" != "$(dpkg --print-architecture)" ]; then dpkg --add-architecture "$TARGETARCH"; fi \
-	&& apt-get update \
+	&& apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
 	&& dpkg-query -W -f "\${Package}\n" > /installed \
 	&& mkdir -p /debs/partial /tesseract \
-	&& apt-get install -y --download-only --no-install-recommends -o Dir::Cache::Archives=/debs/ \
+	&& apt-get install -y --download-only --no-install-recommends -o Acquire::Retries=5 -o Dir::Cache::Archives=/debs/ \
 		"libtesseract5:$TARGETARCH" tesseract-ocr-osd tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu \
 		tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld \
-	&& apt-get download "tesseract-ocr:$TARGETARCH" \
+	&& apt-get download -o Acquire::Retries=5 "tesseract-ocr:$TARGETARCH" \
 	&& for deb in /debs/*.deb; do \
 		case "$(dpkg-deb -f "$deb" Architecture)" in "$TARGETARCH" | all) ;; *) continue ;; esac; \
 		if ! grep -qxF "$(dpkg-deb -f "$deb" Package)" /installed; then dpkg-deb -x "$deb" /tesseract; fi; \
@@ -254,8 +256,8 @@ FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee
 # Packages are left unpinned so that each build gets Debian's security fixes.
 # hadolint ignore=DL3008
 RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources \
-	&& apt-get update \
-	&& apt-get install -y --no-install-recommends libva2 libva-drm2 mesa-va-drivers intel-media-va-driver-non-free \
+	&& apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& apt-get install -y --no-install-recommends -o Acquire::Retries=5 libva2 libva-drm2 mesa-va-drivers intel-media-va-driver-non-free \
 		libvulkan1 libegl1 libxext6 \
 	&& rm -rf /var/lib/apt/lists/*
 

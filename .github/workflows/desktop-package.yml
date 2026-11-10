@@ -188,8 +188,8 @@ jobs:
       - name: Install the tools the Linux checks use
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils squashfs-tools fuse3
+          sudo apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 desktop-file-utils squashfs-tools fuse3
       - name: Show whether the session has a notification area
         # The app's icon needs explorer.exe in its session; the smoke expects
         # the icon, or the app saying it runs without it, accordingly.
