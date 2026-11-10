@@ -219,7 +219,7 @@ An administrator whose **Can control other users' apps** permission was taken aw
 - playback start and stop;
 - users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
 - user groups created, changed or deleted. A change names the sections changed, as "Group Kids was changed: Access, Allowed hours" (see [User groups](users.md#user-groups));
-- members added to a group, removed, or no longer following it, as "sam no longer follows the group Kids: changed from Jellyfin Web";
+- members added to a group, removed, no longer following it in some sections, or following them again, as "sam no longer follows the group Kids for Playback and access: changed from Jellyfin Web";
 - the settings of a user or a group reset to their defaults, naming the administrator, as "alex reset the settings of sam to their defaults" (see [Resetting settings to their defaults](users.md#resetting-settings-to-their-defaults));
 - settings saved, and the order of the libraries applied to every user (see [The order of libraries](addons-and-libraries.md#the-order-of-libraries));
 - addons installed or removed;

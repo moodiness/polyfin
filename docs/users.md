@@ -86,16 +86,30 @@ As on a user's page, the **Access** switches save at once, and the group's name 
 
 ### Following the group
 
-**Follow the group**, in the **Access** section of a member's page, is on by default. While it is on:
+A member follows their group section by section. Each of the seven sections of their page, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**, starts with a **Values** row: **From the group Kids**, the default, or **Own for this user**.
 
-- the group's sections show its values read only, with "Set by the group Kids.";
+In a section that takes its values from the group:
+
+- the rows show the group's values read only, with "Set by the group Kids.";
 - a group change reaches the member at once, as saving their page would;
 - their signed-in apps get the new limits from their next request, downloads and allowed hours included;
-- a member who may no longer share titles loses their share links.
+- a member whose **Access** follows a group that may not share titles loses their share links.
 
-Turned off, the member stays in the group, listed as **Own settings**. They keep the group's current values, their page can change them, and later group changes pass them by. Turned back on, after asking, they take the group's values again.
+In a section that is **Own for this user**, the member keeps the group's current values, their page can change them, and later group changes to that section pass them by. The other sections keep following.
 
-Leaving with **No group**, or deleting the group, works like turning **Follow the group** off: members keep its values. An invite link naming a deleted group creates accounts in no group.
+- **Changing:** the **Values** row is a change like the others, saved with the dock's **Save**. Going back to **From the group** shows the group's values, each marked with the member's own one, before saving. In **Access**, which saves at once, going back asks first.
+- **Everywhere:** **Follow the group everywhere**, in **Access**, makes every section follow again, after asking. It shows when at least one section is own.
+- **Listed:** the member shows as **Group Kids, own settings** on their page and in **Users**. The group's **Members** list names their own sections, as "Own: Playback and access, Visible libraries".
+
+Leaving with **No group**, or deleting the group, keeps the members' values as their own. Joining or moving to another group follows it everywhere. An invite link naming a deleted group creates accounts in no group.
+
+#### Giving one member more or less
+
+A section is the smallest unit a member can keep as their own. For example:
+
+- **Live TV for one member:** make **Playback and access** own for them, and turn **Live TV** on or off. Their other playback settings, such as the quality, then stop following the group too.
+- **A library for one member:** make **Visible libraries** own, and show or hide it. The group's later changes to its hidden libraries then pass them by.
+- **A source for one member:** a Live TV or anime source, such as an IPTV source, a tuner or an addon, can be given to single members without making any section their own. List the members by name in the source's **Used by**, beside or without their group (see [Server sources a group uses](#server-sources-a-group-uses)). They keep following the group for everything else. A member cannot lose that way a source their group gets.
 
 **Turn off downloads for everyone** (see [Transcoding](transcoding.md)) also turns **Can download** off on every group, so members keep following.
 
@@ -122,15 +136,15 @@ The rules are the source's, wherever they are changed:
 
 ### Groups and Jellyfin apps
 
-- `GET /Users` and `GET /Users/{id}` show the values that apply to a member: the group's while they follow it.
+- `GET /Users` and `GET /Users/{id}` show the values that apply to a member: the group's in the sections they follow.
 - `POST /Users/{id}/Policy`, from an administrator's app, changes fields no group holds as for any user, such as `IsAdministrator`, `IsDisabled` and `IsHidden`.
-- Sending a group-held field with a value other than the group's detaches the member, like turning **Follow the group** off. The policy is kept whole; nothing sent is lost.
-- The activity log then says, for example, "sam no longer follows the group Kids: changed from Jellyfin Web".
+- Sending a group-held field with a value other than the group's makes its section **Own for this user**, and only that section: the member keeps following the group in the others. The policy is kept whole; nothing sent is lost.
+- The activity log then says, for example, "sam no longer follows the group Kids for Playback and access: changed from Jellyfin Web".
 - A policy sent back as read, with only `IsDisabled` changed for instance, leaves the member following.
-- A hidden library the server no longer has is not a change, as apps cannot name it.
-- Jellyfin has no groups: apps show neither the group nor **Follow the group**.
+- A hidden library the server no longer has is not a change while **Visible libraries** follows the group, as apps cannot name it.
+- Jellyfin has no groups: apps show neither the group nor the sections a member follows.
 
-The activity log records groups created, changed (naming the sections) and deleted, and members added, removed or no longer following (see [Activity log](administration.md#activity-log)).
+The activity log records groups created, changed (naming the sections) and deleted, and members added, removed, no longer following or following again, naming the sections (see [Activity log](administration.md#activity-log)).
 
 API details: [User groups](jellyfin-api.md#user-groups-for-apps).
 
@@ -148,8 +162,8 @@ An administrator can put a user's or group's limits back to a new user's setting
 - Kept: name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, **Metadata language**, **Web player theme**, **Audio region**, the user's own addons, connections and tracking accounts, and everything they watched.
 - Signed-in apps get the new limits from their next request, as after saving.
 - A new user may not share titles, so the user loses their share links (see [Share links](invite-and-share-links.md#share-links)).
-- A member following their group has no button: the group's page resets them.
-- A member with **Own settings** gets a new user's settings and stays in the group, not following.
+- A member following their group everywhere has no button: the group's page resets them.
+- A member with own sections gets a new user's settings in those sections only. The sections that follow the group keep its values, and the own ones stay own.
 - The activity log records it, as "alex reset the settings of sam to their defaults".
 
 <a id="a-group-s-limits"></a><a id="a-groups-limits"></a>
@@ -159,7 +173,7 @@ An administrator can put a user's or group's limits back to a new user's setting
 **Reset to defaults**, at the top of a group's page, gives the group's sections the values **Create a group** gives from a new user's settings.
 
 - It asks first, listing what changes and how many members follow the group, as they get the change at once.
-- Members with **Own settings** keep theirs.
+- Members keep their values in the sections that are own for them.
 - The group keeps its name and members.
 - The activity log records "alex reset the settings of the group Kids to their defaults".
 
