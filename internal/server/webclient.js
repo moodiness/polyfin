@@ -293,11 +293,37 @@
 //     group, paused meanwhile, stays paused once all are, until someone
 //     presses Play. Polyfin starts a queue only when every member may play
 //     it, the group then waiting (State Waiting), which GET /SyncPlay/{id}
-//     checks before the pause. A toast then tells how the others join. A
-//     title without a known version, as /Polyfin/Items/{id}/Versions
-//     tells, a queue the group refused, and SyncPlay refused (403, the
-//     user's access asked again telling None or Join only) each get a
-//     toast instead.
+//     checks before the pause. It then opens the picker of the people to
+//     invite (below). A title without a known version, as
+//     /Polyfin/Items/{id}/Versions tells, a queue the group refused, and
+//     SyncPlay refused (403, the user's access asked again telling None
+//     or Join only) each get a toast instead. Used again in a group that
+//     plays the title, as the socket's PlayQueue updates tell, the entry
+//     only opens the picker again.
+//     The picker lists the people GET /Polyfin/SyncPlay/Invitees gives:
+//     those the session's group may invite now, who have a web player
+//     open and could join and play the title. It is a dialog over the
+//     dimmed page, with a box to tick for each, Invite and Skip; Escape
+//     or a click beside it skips, Tab and the arrows move between its
+//     controls, Enter also ticks a box. Invite posts each person picked
+//     to /Polyfin/SyncPlay/Invitations ({GroupId, UserId}) and says in a
+//     toast who was invited, who was invited less than a minute ago
+//     (429), and whether any failed. Skip, or nobody to invite, says in a
+//     toast how the others join from their own device; a picker opened
+//     again says nobody can be invited instead, and skips silently.
+//     An invitation reaches the invitee's web players as a
+//     PolyfinSyncPlayInvite message on the socket, State Invited, with
+//     its Id, GroupId, HostName, and the title's ItemName and SeriesName.
+//     It shows a prompt at the top right of the page, across the bottom
+//     on a narrow screen, which leaves the page usable: who invites, the
+//     title, Join, focused, and Not now. Join joins the group with
+//     Jellyfin's POST /SyncPlay/Join, jellyfin-web then following the
+//     group as when its SyncPlay menu joins one; Not now, or Escape,
+//     posts /Polyfin/SyncPlay/Invitations/{Id}/Decline. Another
+//     invitation replaces the prompt; a message of the same Id telling it
+//     ended (Joined, Declined, Expired or Ended) closes it, as joining or
+//     declining on another of the user's devices does, and it goes by
+//     itself after the 5 minutes an invitation lasts.
 // As the button is pressed or the card right-clicked, before jellyfin-web
 // opens its menu, the script asks for the item (ApiClient.getItem), the
 // hidden titles, the titles of the watchlist, for a card with a resume
@@ -1335,9 +1361,9 @@
   // That event only fires for the socket of jellyfin-apiclient itself,
   // which jellyfin-web opens no more since 12.0: its socket is its SDK's,
   // whose messages ApiClient.subscribe gives by type, any type
-  // (ServerConnections.js). So UserDataChanged, PolyfinVersions and
-  // SyncPlayGroupUpdate are heard there when jellyfin-web has it, through
-  // the message event otherwise.
+  // (ServerConnections.js). So UserDataChanged, PolyfinVersions,
+  // SyncPlayGroupUpdate and PolyfinSyncPlayInvite are heard there when
+  // jellyfin-web has it, through the message event otherwise.
   // It also hears the answers of the played marks the page sends, as
   // markPlayed and markUnplayed give them: what the user did with the item
   // afterwards. They come at once, before the socket's message. And it
@@ -1362,15 +1388,22 @@
         heardGroup(message)
       } catch (error) {}
     }
+    function heardInvite(message) {
+      try {
+        invited(message)
+      } catch (error) {}
+    }
     if (typeof api.subscribe === 'function') {
       api.subscribe(['UserDataChanged'], heardData)
       api.subscribe(['PolyfinVersions'], heardVersions)
       api.subscribe(['SyncPlayGroupUpdate'], heardSyncPlay)
+      api.subscribe(['PolyfinSyncPlayInvite'], heardInvite)
     } else {
       var callbacks = (api._callbacks = api._callbacks || {})
       ;(callbacks.message = callbacks.message || []).push(function (event, message) {
         if (message && message.MessageType === 'UserDataChanged') heardData(message)
         else if (message && message.MessageType === 'SyncPlayGroupUpdate') heardSyncPlay(message)
+        else if (message && message.MessageType === 'PolyfinSyncPlayInvite') heardInvite(message)
         else heardVersions(message)
       })
     }
@@ -1450,6 +1483,19 @@
       togetherSearching: 'Sources for this title are still being looked for. Try again in a moment.',
       togetherRefused: 'Not everyone in your SyncPlay group can play this title.',
       togetherFailed: 'Watch together could not start. Try again.',
+      inviteIntro: 'Your SyncPlay group is ready, paused. Choose whom to invite: a prompt to join shows in their web player. Press Play once they are in.',
+      inviteMore: 'Choose whom to invite to your SyncPlay group: a prompt to join shows in their web player.',
+      inviteSend: 'Invite',
+      inviteSkip: 'Skip',
+      inviteNobody: 'Nobody else can be invited to this title right now.',
+      invitedSent: 'Invitation sent to {names}. Press Play once they are in.',
+      invitedMore: 'Invitation sent to {names}.',
+      invitedSoon: 'Invited less than a minute ago already: {names}.',
+      inviteFailed: 'The invitation could not be sent. Try again.',
+      invitePrompt: '{host} invites you to watch together.',
+      inviteJoin: 'Join',
+      inviteLater: 'Not now',
+      joinFailed: 'The group could not be joined. Try again from the SyncPlay button (the people icon at the top).',
     },
     fr: {
       searching: 'Recherche des sources…',
@@ -1474,6 +1520,20 @@
       togetherSearching: 'Les sources de ce titre sont encore recherchées. Réessayez dans un instant.',
       togetherRefused: 'Certains membres de votre groupe SyncPlay ne peuvent pas lire ce titre.',
       togetherFailed: 'Impossible de lancer «\u202fRegarder ensemble\u202f». Réessayez.',
+      inviteIntro:
+        'Votre groupe SyncPlay est prêt, en pause. Choisissez qui inviter\u202f: une invitation à le rejoindre s’affiche dans leur lecteur web. Appuyez sur Lire une fois qu’ils sont là.',
+      inviteMore: 'Choisissez qui inviter dans votre groupe SyncPlay\u202f: une invitation à le rejoindre s’affiche dans leur lecteur web.',
+      inviteSend: 'Inviter',
+      inviteSkip: 'Passer',
+      inviteNobody: 'Personne d’autre ne peut être invité à ce titre pour le moment.',
+      invitedSent: 'Invitation envoyée à {names}. Appuyez sur Lire une fois qu’ils sont là.',
+      invitedMore: 'Invitation envoyée à {names}.',
+      invitedSoon: 'Déjà invités il y a moins d’une minute\u202f: {names}.',
+      inviteFailed: 'L’invitation n’a pas pu être envoyée. Réessayez.',
+      invitePrompt: '{host} vous invite à regarder ensemble.',
+      inviteJoin: 'Rejoindre',
+      inviteLater: 'Pas maintenant',
+      joinFailed: 'Impossible de rejoindre le groupe. Réessayez depuis le bouton SyncPlay (l’icône de personnes en haut).',
     },
     de: {
       searching: 'Quellen werden gesucht…',
@@ -1498,6 +1558,20 @@
       togetherSearching: 'Für diesen Titel werden noch Quellen gesucht. Versuche es gleich noch einmal.',
       togetherRefused: 'Nicht alle in deiner SyncPlay-Gruppe können diesen Titel abspielen.',
       togetherFailed: '„Gemeinsam ansehen“ konnte nicht starten. Versuche es erneut.',
+      inviteIntro:
+        'Deine SyncPlay-Gruppe ist bereit und pausiert. Wähle aus, wen du einladen möchtest: Im Web-Player der Eingeladenen erscheint eine Einladung zum Beitreten. Drücke auf Abspielen, sobald alle da sind.',
+      inviteMore: 'Wähle aus, wen du in deine SyncPlay-Gruppe einladen möchtest: Im Web-Player der Eingeladenen erscheint eine Einladung zum Beitreten.',
+      inviteSend: 'Einladen',
+      inviteSkip: 'Überspringen',
+      inviteNobody: 'Gerade kann niemand sonst zu diesem Titel eingeladen werden.',
+      invitedSent: 'Einladung an {names} gesendet. Drücke auf Abspielen, sobald alle da sind.',
+      invitedMore: 'Einladung an {names} gesendet.',
+      invitedSoon: 'Schon vor weniger als einer Minute eingeladen: {names}.',
+      inviteFailed: 'Die Einladung konnte nicht gesendet werden. Versuche es erneut.',
+      invitePrompt: '{host} lädt dich zum gemeinsamen Ansehen ein.',
+      inviteJoin: 'Beitreten',
+      inviteLater: 'Nicht jetzt',
+      joinFailed: 'Der Gruppe konnte nicht beigetreten werden. Versuche es erneut über die Schaltfläche Synchronwiedergabe (das Personen-Symbol oben).',
     },
     es: {
       searching: 'Buscando fuentes…',
@@ -1522,6 +1596,20 @@
       togetherSearching: 'Todavía se están buscando fuentes para este título. Vuelva a intentarlo en un momento.',
       togetherRefused: 'No todos en su grupo de SyncPlay pueden reproducir este título.',
       togetherFailed: '«Ver juntos» no pudo empezar. Vuelva a intentarlo.',
+      inviteIntro:
+        'Su grupo de SyncPlay está listo, en pausa. Elija a quién invitar: verán una invitación para unirse en su reproductor web. Pulse Reproducir cuando estén todos.',
+      inviteMore: 'Elija a quién invitar a su grupo de SyncPlay: verán una invitación para unirse en su reproductor web.',
+      inviteSend: 'Invitar',
+      inviteSkip: 'Omitir',
+      inviteNobody: 'Ahora mismo no se puede invitar a nadie más a este título.',
+      invitedSent: 'Invitación enviada a {names}. Pulse Reproducir cuando estén todos.',
+      invitedMore: 'Invitación enviada a {names}.',
+      invitedSoon: 'Ya invitados hace menos de un minuto: {names}.',
+      inviteFailed: 'No se pudo enviar la invitación. Vuelva a intentarlo.',
+      invitePrompt: '{host} le invita a ver juntos.',
+      inviteJoin: 'Unirse',
+      inviteLater: 'Ahora no',
+      joinFailed: 'No se pudo unir al grupo. Vuelva a intentarlo desde el botón Reproducción sincronizada (el icono de personas de arriba).',
     },
     it: {
       searching: 'Ricerca delle origini…',
@@ -1546,6 +1634,20 @@
       togetherSearching: 'Le origini di questo titolo sono ancora in ricerca. Riprova tra un momento.',
       togetherRefused: 'Non tutti nel tuo gruppo SyncPlay possono riprodurre questo titolo.',
       togetherFailed: '«Guarda insieme» non è riuscito ad avviarsi. Riprova.',
+      inviteIntro:
+        'Il tuo gruppo SyncPlay è pronto, in pausa. Scegli chi invitare: nel loro lettore web compare un invito a unirsi. Premi Riproduci quando ci sono tutti.',
+      inviteMore: 'Scegli chi invitare nel tuo gruppo SyncPlay: nel loro lettore web compare un invito a unirsi.',
+      inviteSend: 'Invita',
+      inviteSkip: 'Salta',
+      inviteNobody: 'Al momento nessun altro può essere invitato a questo titolo.',
+      invitedSent: 'Invito inviato a {names}. Premi Riproduci quando ci sono tutti.',
+      invitedMore: 'Invito inviato a {names}.',
+      invitedSoon: 'Già invitati meno di un minuto fa: {names}.',
+      inviteFailed: 'Impossibile inviare l’invito. Riprova.',
+      invitePrompt: '{host} ti invita a guardare insieme.',
+      inviteJoin: 'Unisciti',
+      inviteLater: 'Non ora',
+      joinFailed: 'Impossibile unirsi al gruppo. Riprova dal pulsante Sincronizza Riproduzione (l’icona delle persone in alto).',
     },
     pt: {
       searching: 'Procurando fontes…',
@@ -1570,6 +1672,20 @@
       togetherSearching: 'Ainda estamos procurando fontes para este título. Tente novamente em instantes.',
       togetherRefused: 'Nem todos no seu grupo do SyncPlay podem reproduzir este título.',
       togetherFailed: '“Assistir juntos” não conseguiu começar. Tente novamente.',
+      inviteIntro:
+        'Seu grupo do SyncPlay está pronto, em pausa. Escolha quem convidar: um convite para entrar aparece no player web dessas pessoas. Toque em Reproduzir quando todos estiverem lá.',
+      inviteMore: 'Escolha quem convidar para o seu grupo do SyncPlay: um convite para entrar aparece no player web dessas pessoas.',
+      inviteSend: 'Convidar',
+      inviteSkip: 'Pular',
+      inviteNobody: 'Ninguém mais pode ser convidado para este título agora.',
+      invitedSent: 'Convite enviado para {names}. Toque em Reproduzir quando todos estiverem lá.',
+      invitedMore: 'Convite enviado para {names}.',
+      invitedSoon: 'Já convidados há menos de um minuto: {names}.',
+      inviteFailed: 'Não foi possível enviar o convite. Tente novamente.',
+      invitePrompt: '{host} convida você para assistir juntos.',
+      inviteJoin: 'Entrar',
+      inviteLater: 'Agora não',
+      joinFailed: 'Não foi possível entrar no grupo. Tente novamente pelo botão Reprodução sincronizada (o ícone de pessoas no topo).',
     },
   }
   function say(key) {
@@ -2880,18 +2996,22 @@
     api.ajax(request).then(quietly(done), function () {})
   }
   // The SyncPlay group the page's session is in, as the socket's
-  // SyncPlayGroupUpdate messages tell it, with the user signed in then.
-  // Polyfin takes a session out of its group as its socket closes, as a
-  // page loaded again or another user signing in does.
+  // SyncPlayGroupUpdate messages tell it, with the user signed in then,
+  // and the title it plays, as its PlayQueue updates tell. Polyfin takes a
+  // session out of its group as its socket closes, as a page loaded again
+  // or another user signing in does.
   var syncGroup = null
   function heardGroup(message) {
     var update = message && message.Data
     if (!update) return
     if (update.Type === 'GroupJoined' && update.GroupId) {
       var api = window.ApiClient
-      syncGroup = { user: api ? api.getCurrentUserId() : '', id: String(update.GroupId) }
+      syncGroup = { user: api ? api.getCurrentUserId() : '', id: String(update.GroupId), item: '' }
     } else if (/^(GroupLeft|NotInGroup|GroupDoesNotExist)$/.test(update.Type)) {
       syncGroup = null
+    } else if (update.Type === 'PlayQueue' && syncGroup && update.Data) {
+      var playing = (update.Data.Playlist || [])[update.Data.PlayingItemIndex]
+      syncGroup.item = playing && playing.ItemId ? plainId(playing.ItemId) : ''
     }
   }
   // Those waiting for jellyfin-web's next ping of its SyncPlay group.
@@ -2912,12 +3032,17 @@
     })
   }
   // watchTogether starts the title id in a SyncPlay group of host, the
-  // user signed in, paused at its start (see the header), and says how the
-  // others join, or why it could not.
+  // user signed in, paused at its start (see the header), and opens the
+  // picker of the people to invite, or says why it could not. In a group
+  // that plays the title already, it only opens the picker again.
   function watchTogether(id, host) {
     var api = window.ApiClient
     var user = api.getCurrentUserId()
     var group = syncGroup && syncGroup.user === user ? syncGroup.id : ''
+    if (group && syncGroup.item === id) {
+      pickInvitees(true)
+      return
+    }
     function send(method, path, body) {
       var request = { type: method, url: api.getUrl(path) }
       if (body) {
@@ -2970,7 +3095,7 @@
         return send('POST', 'SyncPlay/Pause')
       })
       .then(function () {
-        toast(say('togetherStarted'), 10000)
+        return pickInvitees(false)
       })
       .catch(function (error) {
         if (error && error.refused) return toast(say(error.refused))
@@ -2988,6 +3113,292 @@
         )
       })
       .catch(function () {})
+  }
+  // The invitations to watch together (see the header): the picker of the
+  // people the session's group may invite, and the prompt an invitation
+  // shows, each with the element it is and the one focused before.
+  var picker = null
+  var prompt = null
+  // inviteLasts is how long an invitation lasts, as Polyfin keeps it.
+  var inviteLasts = 300000
+  // pickInvitees asks whom the session's group may invite, and opens the
+  // picker with them; again when the entry opens it for a group under
+  // way. With nobody to invite, it says how the others join instead.
+  function pickInvitees(again) {
+    var api = window.ApiClient
+    return api.getJSON(api.getUrl('Polyfin/SyncPlay/Invitees')).then(
+      function (answer) {
+        var people = (answer && answer.Items) || []
+        if (people.length && answer.GroupId) openPicker(String(answer.GroupId), people, again)
+        else if (again) toast(say('inviteNobody'))
+        else toast(say('togetherStarted'), 10000)
+      },
+      function () {
+        if (again) toast(say('inviteFailed'))
+        else toast(say('togetherStarted'), 10000)
+      }
+    )
+  }
+  // closeInvite takes the picker or the prompt off the page, and gives the
+  // focus back when it held it.
+  function closeInvite(shown) {
+    if (!shown) return
+    clearTimeout(shown.timer)
+    var focused = document.activeElement
+    var held = !!focused && typeof shown.node.contains === 'function' && shown.node.contains(focused)
+    if (shown.node.parentNode) shown.node.parentNode.removeChild(shown.node)
+    if (held && shown.restore && typeof shown.restore.focus === 'function') shown.restore.focus()
+  }
+  function inviteButton(className, text) {
+    var made = element('button', 'emby-button raised ' + className, text)
+    made.setAttribute('type', 'button')
+    return made
+  }
+  // inviteKeys keeps the keyboard in a dialog: Tab and the arrows move
+  // between its controls, as a remote's arrows do, Enter ticks a box, and
+  // Escape runs leave. jellyfin-web hears none of these keys meanwhile.
+  function inviteKeys(dialog, leave) {
+    dialog.addEventListener(
+      'keydown',
+      quietly(function (event) {
+        var key = event.key
+        var focused = document.activeElement
+        if (key === 'Escape' || key === 'Esc') {
+          leave()
+        } else if (key === 'Enter' && focused && focused.type === 'checkbox') {
+          focused.click()
+        } else if (key === 'Tab' || /^(Arrow)?(Up|Down|Left|Right)$/.test(key)) {
+          var stops = Array.prototype.filter.call(dialog.querySelectorAll('input, button'), function (stop) {
+            return !stop.disabled
+          })
+          var at = stops.indexOf(focused)
+          var back = key === 'Tab' ? !!event.shiftKey : /Up|Left/.test(key)
+          var next = stops[(at + (back ? stops.length - 1 : 1) + (at < 0 && back ? 1 : 0)) % stops.length]
+          if (next) next.focus()
+        } else {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+      })
+    )
+  }
+  // openPicker lists people, whom the group may invite, each with a box to
+  // tick, Invite, and Skip, which says how the others join instead.
+  function openPicker(group, people, again) {
+    closeInvite(picker)
+    inviteStyle()
+    var send = inviteButton('button-submit polyfinInviteSend', say('inviteSend'))
+    var skip = inviteButton('button-cancel polyfinInviteSkip', say('inviteSkip'))
+    send.disabled = true
+    var boxes = people.map(function (person) {
+      var box = document.createElement('input')
+      box.setAttribute('type', 'checkbox')
+      box.type = 'checkbox'
+      box.addEventListener(
+        'change',
+        quietly(function () {
+          send.disabled = !boxes.some(function (other) {
+            return other.checked
+          })
+        })
+      )
+      return box
+    })
+    var list = element(
+      'div',
+      'polyfinInviteList',
+      people.map(function (person, i) {
+        return element('label', 'polyfinInvitee', [boxes[i], element('span', 'polyfinInviteName', String(person.Name || ''))])
+      })
+    )
+    var heading = element('h2', 'polyfinInviteTitle', say('watchTogether'))
+    heading.id = 'polyfinInviteTitle'
+    var text = element('p', 'polyfinInviteText', say(again ? 'inviteMore' : 'inviteIntro'))
+    text.id = 'polyfinInviteText'
+    var dialog = element('div', 'polyfinInvite', [heading, text, list, element('div', 'polyfinInviteButtons', [skip, send])])
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    dialog.setAttribute('aria-labelledby', 'polyfinInviteTitle')
+    dialog.setAttribute('aria-describedby', 'polyfinInviteText')
+    var backdrop = element('div', 'polyfinInviteBackdrop', [dialog])
+    var shown = (picker = { node: backdrop, restore: document.activeElement, timer: null })
+    function leave() {
+      if (picker !== shown) return
+      picker = null
+      closeInvite(shown)
+      if (!again) toast(say('togetherStarted'), 10000)
+    }
+    skip.addEventListener('click', quietly(leave))
+    backdrop.addEventListener(
+      'click',
+      quietly(function (event) {
+        if (event.target === backdrop) leave()
+      })
+    )
+    send.addEventListener(
+      'click',
+      quietly(function () {
+        var chosen = people.filter(function (person, i) {
+          return boxes[i].checked
+        })
+        if (picker !== shown || !chosen.length) return
+        picker = null
+        closeInvite(shown)
+        sendInvites(group, chosen, again)
+      })
+    )
+    inviteKeys(dialog, leave)
+    document.body.appendChild(backdrop)
+    boxes[0].focus()
+  }
+  // sendInvites invites people to the group, one by one, and says who was
+  // invited, who was invited less than a minute ago, and whether any
+  // invitation failed.
+  function sendInvites(group, people, again) {
+    var api = window.ApiClient
+    var outcomes = []
+    Promise.all(
+      people.map(function (person, i) {
+        var request = {
+          type: 'POST',
+          url: api.getUrl('Polyfin/SyncPlay/Invitations'),
+          data: JSON.stringify({ GroupId: group, UserId: person.Id }),
+          contentType: 'application/json',
+        }
+        return api.ajax(request).then(
+          function () {
+            outcomes[i] = 'sent'
+          },
+          function (error) {
+            outcomes[i] = error && error.status === 429 ? 'soon' : 'failed'
+          }
+        )
+      })
+    ).then(
+      quietly(function () {
+        function names(outcome) {
+          return people
+            .filter(function (person, i) {
+              return outcomes[i] === outcome
+            })
+            .map(function (person) {
+              return person.Name
+            })
+            .join(', ')
+        }
+        var sent = names('sent')
+        var soon = names('soon')
+        if (sent) toast(say(again ? 'invitedMore' : 'invitedSent').replace('{names}', sent), again ? 0 : 10000)
+        if (soon) toast(say('invitedSoon').replace('{names}', soon))
+        if (outcomes.indexOf('failed') >= 0) toast(say('inviteFailed'))
+      })
+    )
+  }
+  // invited hears a PolyfinSyncPlayInvite: an invitation shows a prompt in
+  // place of any other; its end, joined, declined, expired or its group
+  // ended, closes its prompt.
+  function invited(message) {
+    var invite = message && message.Data
+    if (!invite || !invite.Id) return
+    if (invite.State === 'Invited') {
+      showPrompt(invite)
+    } else if (prompt && prompt.id === String(invite.Id)) {
+      closeInvite(prompt)
+      prompt = null
+    }
+  }
+  // showPrompt shows an invitation: who sent it, the title, Join, which
+  // joins its group as jellyfin-web's SyncPlay menu does, and Not now. It
+  // goes once the invitation lasted, should no end be heard.
+  function showPrompt(invite) {
+    closeInvite(prompt)
+    prompt = null
+    inviteStyle()
+    var id = String(invite.Id)
+    var join = inviteButton('button-submit polyfinInviteJoin', say('inviteJoin'))
+    var later = inviteButton('button-cancel polyfinInviteLater', say('inviteLater'))
+    var heading = element('h2', 'polyfinInviteTitle', say('watchTogether'))
+    heading.id = 'polyfinPromptTitle'
+    var text = element('p', 'polyfinInviteText', say('invitePrompt').replace('{host}', String(invite.HostName || '')))
+    text.id = 'polyfinPromptText'
+    var parts = [heading, text]
+    if (invite.ItemName) {
+      var name = String(invite.ItemName)
+      parts.push(
+        element(
+          'p',
+          'polyfinInviteItem',
+          invite.SeriesName ? [element('span', 'polyfinInviteSeries', String(invite.SeriesName)), element('span', '', name)] : name
+        )
+      )
+    }
+    parts.push(element('div', 'polyfinInviteButtons', [later, join]))
+    var card = element('div', 'polyfinInvite polyfinInvitePrompt', parts)
+    card.setAttribute('role', 'alertdialog')
+    card.setAttribute('aria-labelledby', 'polyfinPromptTitle')
+    card.setAttribute('aria-describedby', 'polyfinPromptText')
+    var shown = (prompt = { id: id, node: card, restore: document.activeElement, timer: null })
+    function done() {
+      if (prompt !== shown) return false
+      prompt = null
+      closeInvite(shown)
+      return true
+    }
+    shown.timer = setTimeout(quietly(done), inviteLasts)
+    function answer(path, body, failed) {
+      var api = window.ApiClient
+      var request = { type: 'POST', url: api.getUrl(path) }
+      if (body) {
+        request.data = JSON.stringify(body)
+        request.contentType = 'application/json'
+      }
+      api.ajax(request).then(null, quietly(failed))
+    }
+    join.addEventListener(
+      'click',
+      quietly(function () {
+        if (!done()) return
+        answer('SyncPlay/Join', { GroupId: invite.GroupId }, function () {
+          toast(say('joinFailed'))
+        })
+      })
+    )
+    function decline() {
+      if (done()) answer('Polyfin/SyncPlay/Invitations/' + id + '/Decline', null, function () {})
+    }
+    later.addEventListener('click', quietly(decline))
+    inviteKeys(card, decline)
+    document.body.appendChild(card)
+    join.focus()
+  }
+  // inviteStyle adds the look of the picker and the prompt, once: a panel
+  // in the middle of a dimmed page for the picker; at the top right for
+  // the prompt, which leaves the page usable, across the bottom on a
+  // narrow screen. Their buttons are jellyfin-web's own.
+  function inviteStyle() {
+    if (document.getElementById('polyfinInviteStyle')) return
+    var sheet = document.createElement('style')
+    sheet.id = 'polyfinInviteStyle'
+    sheet.textContent =
+      '.polyfinInviteBackdrop{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1100;display:flex;align-items:center;' +
+      'justify-content:center;padding:1em;box-sizing:border-box;background:rgba(0,0,0,.6)}' +
+      '.polyfinInvite{box-sizing:border-box;width:26em;max-width:100%;max-height:100%;overflow:auto;padding:1.5em;' +
+      'border-radius:.3em;background:#202020;color:#fff;box-shadow:0 .2em .8em rgba(0,0,0,.6);text-align:left}' +
+      '.polyfinInviteTitle{margin:0 0 .6em;font-size:1.3em;font-weight:500}' +
+      '.polyfinInviteText{margin:0 0 1em;line-height:1.4}' +
+      '.polyfinInviteList{margin:0 0 1.2em;max-height:40vh;overflow:auto}' +
+      '.polyfinInvitee{display:flex;align-items:center;padding:.5em .2em;cursor:pointer}' +
+      '.polyfinInvitee input{flex:none;width:1.3em;height:1.3em;margin:0 .8em 0 0;accent-color:#00a4dc;cursor:pointer}' +
+      '.polyfinInviteName{overflow-wrap:anywhere}' +
+      '.polyfinInviteItem{margin:0 0 1.2em;font-weight:600;overflow-wrap:anywhere}' +
+      '.polyfinInviteSeries{display:block;font-weight:400;opacity:.8}' +
+      '.polyfinInviteButtons{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;margin:-.25em}' +
+      '.polyfinInviteButtons .emby-button{flex:0 1 auto;width:auto;min-width:6em;margin:.25em!important}' +
+      '.polyfinInviteButtons .emby-button[disabled]{opacity:.45;cursor:default}' +
+      '.polyfinInvitePrompt{position:fixed;top:4.5em;right:1em;z-index:1100;width:24em;max-width:calc(100% - 2em)}' +
+      '@media (max-width:40em){.polyfinInvitePrompt{top:auto;right:.5em;bottom:.5em;left:.5em;width:auto;max-width:none}}'
+    document.head.appendChild(sheet)
   }
   // What the entries took off (see the header), kept in the browser's
   // session storage under dropsKey for dropsKept: jellyfin-web keeps its
