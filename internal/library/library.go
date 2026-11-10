@@ -810,9 +810,10 @@ func (s *Service) HiddenInMenus(ctx context.Context, user accounts.User) ([]acco
 }
 
 // LibraryID is the item of a library in Jellyfin apps, which keeps its
-// identifier when its catalog's type changes (see addons.Library.KeyType).
+// identifier when its catalog's type or identifier changes (see
+// addons.Library.Key).
 func LibraryID(l addons.Library) accounts.ID {
-	return itemID(libraryKey(l.AddonID, cmp.Or(l.KeyType, l.Catalog.Type), l.Catalog.ID))
+	return itemID(libraryKey(l.AddonID, cmp.Or(l.Key.Type, l.Catalog.Type), cmp.Or(l.Key.ID, l.Catalog.ID)))
 }
 
 // ServerLibrary is one of the server's libraries, with the genres its

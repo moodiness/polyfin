@@ -212,13 +212,13 @@ func TestEveryWriteOfTheStoreIsReadAtOnce(t *testing.T) {
 	}
 	// A manifest refreshed shows its new catalogs and loses the old.
 	addon.catalogs.Store([]stremio.Catalog{{Type: "movie", ID: "movie-1"}, {Type: "series", ID: "new"}})
-	if _, err := store.Refresh(ctx, Shared(), installed.ID, false); err != nil {
+	if _, _, err := store.Refresh(ctx, Shared(), installed.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if list, libraries := read(); len(list[0].Manifest.Catalogs) != 2 || len(libraries) != 2 || libraries[1].Catalog.ID != "new" {
 		t.Errorf("after Refresh: %v %v", list, libraries)
 	}
-	if _, err := store.Replace(ctx, Shared(), installed.ID, addon.url("b"), false); err != nil {
+	if _, _, err := store.Replace(ctx, Shared(), installed.ID, addon.url("b"), false); err != nil {
 		t.Fatal(err)
 	}
 	if found, err := store.Find(ctx, installed.ID); err != nil || found.ManifestURL != addon.url("b") {

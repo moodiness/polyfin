@@ -131,7 +131,7 @@ func TestRefreshForgetsOnlyVanishedCatalogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	addon.catalogs.Store(append(catalogs("movie", 2)[1:], stremio.Catalog{Type: "movie", ID: "movie-2", Name: "two"}, stremio.Catalog{Type: "movie", ID: "new"}))
-	if _, err := store.Refresh(t.Context(), Shared(), installed.ID, false); err != nil {
+	if _, _, err := store.Refresh(t.Context(), Shared(), installed.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	libraries, _ := store.Libraries(t.Context(), Shared())
@@ -252,7 +252,7 @@ func TestLibrariesKeepAGenreAndAMaximum(t *testing.T) {
 
 	// A genre the addon no longer offers lists the whole catalog.
 	addon.catalogs.Store([]stremio.Catalog{{Type: "movie", ID: "top", Name: "Top", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Comedy"}}}}, plain, channels, sets})
-	if _, err := store.Refresh(t.Context(), Shared(), installed.ID, false); err != nil {
+	if _, _, err := store.Refresh(t.Context(), Shared(), installed.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	current, _ = store.Libraries(t.Context(), Shared())

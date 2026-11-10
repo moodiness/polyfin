@@ -375,8 +375,10 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	// A removal deletes, in its transaction, what the addon brought to the
-	// library and settings beyond its own tables.
+	// library and settings beyond its own tables; a manifest that renames
+	// catalogs has what names them follow, in its own.
 	addonStore.SetCleanup(lib.CleanRemoved)
+	addonStore.SetCarry(lib.CarryRenamed)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
 	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and

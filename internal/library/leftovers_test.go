@@ -359,7 +359,7 @@ func TestTheCleanupClearsWhatADroppedCatalogLeft(t *testing.T) {
 	dropped.manifest.Catalogs = slices.DeleteFunc(dropped.manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "series" })
 	server := httptest.NewServer(dropped)
 	t.Cleanup(server.Close)
-	if _, err := e.addons.Replace(ctx, addons.Shared(), id, server.URL+"/manifest.json", false); err != nil {
+	if _, _, err := e.addons.Replace(ctx, addons.Shared(), id, server.URL+"/manifest.json", false); err != nil {
 		t.Fatal(err)
 	}
 	cleaned, err := e.service.CleanUpRemoved(ctx)
@@ -408,7 +408,7 @@ func TestTheCleanupWaitsForAChangeOfTheAddons(t *testing.T) {
 	dropped.manifest.Catalogs = slices.DeleteFunc(dropped.manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "series" })
 	server := httptest.NewServer(dropped)
 	t.Cleanup(server.Close)
-	if _, err := e.addons.Replace(ctx, addons.Shared(), id, server.URL+"/manifest.json", false); err != nil {
+	if _, _, err := e.addons.Replace(ctx, addons.Shared(), id, server.URL+"/manifest.json", false); err != nil {
 		t.Fatal(err)
 	}
 

@@ -137,7 +137,8 @@ func addonLeftovers(ctx context.Context, tx pgx.Tx, addon addons.Addon) (leftove
 // liveLibraryKey is the key of the library item of an installed addon's
 // catalog (see LibraryID).
 func liveLibraryKey(addon addons.Addon, catalog stremio.Catalog) string {
-	return libraryKey(addon.ID, cmp.Or(addon.LibraryKeyTypes[catalog.ID], catalog.Type), catalog.ID)
+	key := addon.LibraryKey(catalog.Type, catalog.ID)
+	return libraryKey(addon.ID, key.Type, key.ID)
 }
 
 // CleanUpRemoved cleans what addons and catalogs found gone left, as
@@ -231,16 +232,21 @@ func goneLeftovers(ctx context.Context, tx pgx.Tx, installed []addons.Addon) (le
 		return l, err
 	}
 	for _, item := range libraries {
-		// library|<addon>|<key type>|<catalog>
+		// library|<addon>|<key type>|<key catalog>, the catalog's type and
+		// identifier as they were when the library was made (see
+		// addons.Addon.LibraryKeys).
 		parts := strings.SplitN(item.key, "|", 4)
 		if len(parts) != 4 || live.libraries[item.key] {
 			continue
 		}
+		catalog := droppedCatalog{catalogType: cmp.Or(item.catalogType, parts[2]), catalogID: cmp.Or(item.catalogID, parts[3])}
 		addon, installed := live.installed(parts[1])
-		if !installed {
+		catalog.addon = addon
+		switch {
+		case !installed:
 			gone(addon)
-		} else {
-			dropped(droppedCatalog{addon: addon, catalogType: cmp.Or(item.catalogType, parts[2]), catalogID: parts[3]})
+		case !live.offers(addon, catalog.catalogType, catalog.catalogID):
+			dropped(catalog)
 		}
 		l.libraries = append(l.libraries, item.id)
 	}
@@ -282,6 +288,21 @@ func goneLeftovers(ctx context.Context, tx pgx.Tx, installed []addons.Addon) (le
 			gone(addon)
 		case !live.offers(addon, catalogType, catalogID):
 			dropped(droppedCatalog{addon: addon, catalogType: catalogType, catalogID: catalogID})
+		}
+		return nil
+	}); err != nil {
+		return l, err
+	}
+	// Catalog home rows name catalogs of installed addons: the foreign key
+	// deletes those of an addon removed.
+	rows, err = tx.Query(ctx, "SELECT DISTINCT addon_id, catalog_type, catalog_id FROM home_rows WHERE kind = 'catalog'")
+	if err != nil {
+		return l, err
+	}
+	var rowAddon accounts.ID
+	if _, err := pgx.ForEachRow(rows, []any{&rowAddon, &catalogType, &catalogID}, func() error {
+		if !live.offers(rowAddon, catalogType, catalogID) {
+			dropped(droppedCatalog{addon: rowAddon, catalogType: catalogType, catalogID: catalogID})
 		}
 		return nil
 	}); err != nil {
@@ -330,24 +351,26 @@ func goneLeftovers(ctx context.Context, tx pgx.Tx, installed []addons.Addon) (le
 	return l, nil
 }
 
-// keyedItem is an item found by its key.
+// keyedItem is an item found by its key, with the catalog it names, if
+// any.
 type keyedItem struct {
 	id          accounts.ID
 	key         string
 	catalogType string
+	catalogID   string
 }
 
 // keyedItems returns the items whose key starts with prefix, found by the
 // index of the keys: they lie from prefix to the key keyRangeEnd gives.
 func keyedItems(ctx context.Context, db pgx.Tx, prefix string) ([]keyedItem, error) {
-	rows, err := db.Query(ctx, `SELECT id, key, coalesce(data->>'catalogType', '') FROM items
+	rows, err := db.Query(ctx, `SELECT id, key, coalesce(data->>'catalogType', ''), coalesce(data->>'catalogId', '') FROM items
 		WHERE key >= $1 AND key < $2 AND starts_with(key, $1)`, prefix, keyRangeEnd(prefix))
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (keyedItem, error) {
 		var item keyedItem
-		err := row.Scan(&item.id, &item.key, &item.catalogType)
+		err := row.Scan(&item.id, &item.key, &item.catalogType, &item.catalogID)
 		return item, err
 	})
 }
@@ -447,7 +470,7 @@ func cleanLeftovers(ctx context.Context, tx pgx.Tx, l leftovers) (Cleaned, error
 		droppedAddons, droppedJSON = append(droppedAddons, c.addon.String()), append(droppedJSON, string(encoded))
 		droppedTypes, droppedIDs = append(droppedTypes, c.catalogType), append(droppedIDs, c.catalogID)
 		guideKeys = append(guideKeys, "guide:"+c.addon.String()+":"+c.catalogType+":"+c.catalogID)
-		droppedGroups = append(droppedGroups, c.addon.String()+"/"+c.catalogID+"/")
+		droppedGroups = append(droppedGroups, channelGroupPrefix(c.addon.String(), c.catalogID))
 	}
 	views := nonNil(slices.Concat(l.libraries, l.collections))
 	viewHexes := make([]string, 0, len(views))
@@ -476,9 +499,13 @@ func cleanLeftovers(ctx context.Context, tx pgx.Tx, l leftovers) (Cleaned, error
 			WHERE channel_id = ANY($1) AND NOT record_any_channel ORDER BY id FOR UPDATE)`, []any{l.channels}},
 		{&cleaned.Rows, `DELETE FROM programme_series_reminders WHERE id IN (SELECT id FROM programme_series_reminders
 			WHERE channel_id = ANY($1) ORDER BY id FOR UPDATE)`, []any{l.channels}},
-		// What names its libraries and collections.
+		// What names its libraries, collections and catalogs. A catalog
+		// home row on a catalog gone would list nothing.
 		{&cleaned.Rows, `DELETE FROM home_rows WHERE id IN (SELECT id FROM home_rows
 			WHERE kind = 'collection' AND collection_id = ANY($1) ORDER BY id FOR UPDATE)`, []any{l.collections}},
+		{&cleaned.Rows, `DELETE FROM home_rows WHERE id IN (SELECT id FROM home_rows WHERE kind = 'catalog'
+			AND (addon_id, catalog_type, catalog_id) IN (SELECT a::uuid, t, c FROM unnest($1::text[], $2::text[], $3::text[]) d(a, t, c))
+			ORDER BY id FOR UPDATE)`, []any{droppedAddons, droppedTypes, droppedIDs}},
 		{&cleaned.Rows, `UPDATE users SET hidden_libraries = ARRAY(SELECT x FROM unnest(hidden_libraries) x WHERE x <> ALL($1))
 			WHERE id IN (SELECT id FROM users WHERE hidden_libraries && $1 ORDER BY id FOR UPDATE)`, []any{views}},
 		{&cleaned.Rows, `UPDATE user_groups SET hidden_libraries = ARRAY(SELECT x FROM unnest(hidden_libraries) x WHERE x <> ALL($1))
@@ -572,11 +599,18 @@ func pruneChannelRules(ctx context.Context, tx pgx.Tx, addonHexes, droppedGroups
 		return slices.Contains(addonHexes, group) || strings.HasPrefix(entry, iptv.IDPrefix) && slices.Contains(addonHexes, source) ||
 			slices.ContainsFunc(droppedGroups, func(prefix string) bool { return strings.HasPrefix(entry, prefix) }) || slices.Contains(channels, entry)
 	}
-	var pruned int64
+	return editChannelRules(ctx, tx, func(entries []string) []string { return slices.DeleteFunc(slices.Clone(entries), stale) })
+}
+
+// editChannelRules has edit change the lists of channel groups and
+// channels of the Live TV channel limits of users and groups, and returns
+// how many limits changed. edit returns a list of its own, or the same.
+func editChannelRules(ctx context.Context, tx pgx.Tx, edit func(entries []string) []string) (int64, error) {
+	var changed int64
 	for _, table := range []string{"users", "user_groups"} {
 		rows, err := tx.Query(ctx, "SELECT id, live_tv_channels FROM "+table+" WHERE live_tv_channels->>'mode' <> 'all' ORDER BY id")
 		if err != nil {
-			return pruned, err
+			return changed, err
 		}
 		var ids []accounts.ID
 		var rawRules []string
@@ -586,34 +620,32 @@ func pruneChannelRules(ctx context.Context, tx pgx.Tx, addonHexes, droppedGroups
 			ids, rawRules = append(ids, id), append(rawRules, raw)
 			return nil
 		}); err != nil {
-			return pruned, err
+			return changed, err
 		}
 		for i := range ids {
 			var rule accounts.ChannelRule
 			if err := json.Unmarshal([]byte(rawRules[i]), &rule); err != nil {
-				return pruned, err
+				return changed, err
 			}
-			kept := rule
-			kept.Groups = slices.DeleteFunc(slices.Clone(rule.Groups), stale)
-			kept.KnownGroups = slices.DeleteFunc(slices.Clone(rule.KnownGroups), stale)
-			kept.Channels = slices.DeleteFunc(slices.Clone(rule.Channels), stale)
-			if len(kept.Groups) == len(rule.Groups) && len(kept.KnownGroups) == len(rule.KnownGroups) && len(kept.Channels) == len(rule.Channels) {
+			edited := rule
+			edited.Groups, edited.KnownGroups, edited.Channels = edit(rule.Groups), edit(rule.KnownGroups), edit(rule.Channels)
+			if slices.Equal(edited.Groups, rule.Groups) && slices.Equal(edited.KnownGroups, rule.KnownGroups) && slices.Equal(edited.Channels, rule.Channels) {
 				continue
 			}
-			encoded, err := json.Marshal(kept)
+			encoded, err := json.Marshal(edited)
 			if err != nil {
-				return pruned, err
+				return changed, err
 			}
 			// A limit changed meanwhile is left as it was saved.
 			tag, err := tx.Exec(ctx, "UPDATE "+table+" SET live_tv_channels = $2::jsonb WHERE id = $1 AND live_tv_channels = $3::jsonb", ids[i],
 				string(encoded), rawRules[i])
 			if err != nil {
-				return pruned, err
+				return changed, err
 			}
-			pruned += tag.RowsAffected()
+			changed += tag.RowsAffected()
 		}
 	}
-	return pruned, nil
+	return changed, nil
 }
 
 // forgetLeftovers forgets, once their cleanup is stored, what memory keeps

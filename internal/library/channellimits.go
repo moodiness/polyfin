@@ -31,7 +31,7 @@ import (
 
 // channelGroup returns the key of a channel's group and its name.
 func channelGroup(src source, meta stremio.Meta) (key, name string) {
-	prefix := src.addon.addon.ID.String() + "/" + src.catalog.ID + "/"
+	prefix := channelGroupPrefix(src.addon.addon.ID.String(), src.catalog.ID)
 	genre := ""
 	if len(meta.Genres) > 0 {
 		genre = strings.TrimSpace(meta.Genres[0])

@@ -54,6 +54,37 @@ type addonJSON struct {
 	// because the scope had that many already, though some would have
 	// (see addons.Addon.EnabledByDefault); 0 otherwise.
 	LibraryLimit int `json:"libraryLimit,omitempty"`
+	// Libraries tells, in the answer to Refresh, Refresh everything or a
+	// new address only, which libraries followed their catalog's new
+	// identifier and which were removed with their catalog.
+	Libraries *catalogChangesJSON `json:"libraries,omitempty"`
+}
+
+// catalogChangesJSON is what a manifest downloaded again did to an
+// addon's libraries (see addons.CatalogChanges).
+type catalogChangesJSON struct {
+	Followed []changedLibraryJSON `json:"followed"`
+	Removed  []changedLibraryJSON `json:"removed"`
+}
+
+// changedLibraryJSON is a library that followed its catalog's new
+// identifier, NewID, or was removed with its catalog, NewID empty.
+type changedLibraryJSON struct {
+	Name        string `json:"name"`
+	CatalogType string `json:"catalogType"`
+	CatalogID   string `json:"catalogId"`
+	NewID       string `json:"newId,omitempty"`
+}
+
+func newCatalogChangesJSON(changes addons.CatalogChanges) *catalogChangesJSON {
+	list := func(libraries []addons.ChangedLibrary) []changedLibraryJSON {
+		result := make([]changedLibraryJSON, 0, len(libraries))
+		for _, l := range libraries {
+			result = append(result, changedLibraryJSON{Name: l.Name, CatalogType: l.CatalogType, CatalogID: l.CatalogID, NewID: l.NewID})
+		}
+		return result
+	}
+	return &catalogChangesJSON{Followed: list(changes.Followed), Removed: list(changes.Removed)}
 }
 
 // usedByJSON is who uses a server addon (see addons.UsedBy): Mode
@@ -727,6 +758,13 @@ func addonError(w http.ResponseWriter, err error) bool {
 }
 
 func (h *handler) answerAddon(w http.ResponseWriter, r *http.Request, scope addons.Scope, status int, addon addons.Addon, err error) {
+	h.answerAddonChanges(w, r, scope, status, addon, nil, err)
+}
+
+// answerAddonChanges answers with the addon and, unless nil, what its
+// manifest downloaded again did to its libraries.
+func (h *handler) answerAddonChanges(w http.ResponseWriter, r *http.Request, scope addons.Scope, status int, addon addons.Addon,
+	changes *addons.CatalogChanges, err error) {
 	if addonError(w, err) {
 		return
 	}
@@ -738,6 +776,9 @@ func (h *handler) answerAddon(w http.ResponseWriter, r *http.Request, scope addo
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	if changes != nil {
+		result.Libraries = newCatalogChangesJSON(*changes)
 	}
 	writeJSON(w, status, result)
 }
@@ -858,9 +899,12 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var addon addons.Addon
+	var changes *addons.CatalogChanges
 	var err error
 	if body.ManifestURL != nil {
-		if addon, err = h.Addons.Replace(r.Context(), scope, id, *body.ManifestURL, confined(r)); err == nil {
+		var replaced addons.CatalogChanges
+		if addon, replaced, err = h.Addons.Replace(r.Context(), scope, id, *body.ManifestURL, confined(r)); err == nil {
+			changes = &replaced
 			h.forgetVersionLists(r.Context(), addon)
 		}
 	}
@@ -879,7 +923,7 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 			h.usedByChanged(r.Context(), addon)
 		}
 	}
-	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+	h.answerAddonChanges(w, r, scope, http.StatusOK, addon, changes, err)
 }
 
 // sameUsedBy reports whether two Used by settings, as stored, are the
@@ -944,8 +988,8 @@ func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
 		h.answerAddon(w, r, scope, http.StatusOK, addon, errors.Join(err, findErr))
 		return
 	}
-	addon, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
-	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+	addon, changes, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
+	h.answerAddonChanges(w, r, scope, http.StatusOK, addon, &changes, err)
 }
 
 // refreshAddonAll answers Refresh everything on an addon's page: its
@@ -962,7 +1006,7 @@ func (h *handler) refreshAddonAll(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	addon, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
+	addon, changes, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
 	if err == nil && h.AddonCaches != nil {
 		var stale library.StaleAddon
 		if stale, err = h.AddonCaches.MarkAddonStale(context.WithoutCancel(r.Context()), addon.ID); err == nil {
@@ -970,7 +1014,7 @@ func (h *handler) refreshAddonAll(w http.ResponseWriter, r *http.Request) {
 				"descriptions", stale.Descriptions, "lists", stale.VersionLists)
 		}
 	}
-	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+	h.answerAddonChanges(w, r, scope, http.StatusOK, addon, &changes, err)
 }
 
 func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {
