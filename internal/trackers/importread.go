@@ -683,7 +683,7 @@ type imdbCandidate struct {
 // nothing, and is asked again the next time.
 func (s *Service) mapPublicMetaDB(ctx context.Context, r *reader, ref library.TitleRef) string {
 	mediaType := "movie"
-	if ref.Episode {
+	if ref.Episode || ref.Series {
 		mediaType = "tv"
 	}
 	cacheKey := mediaType + ":" + strconv.Itoa(ref.TMDB)
