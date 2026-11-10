@@ -183,26 +183,85 @@ func (s *Service) watchlistChanged(ctx context.Context, user accounts.ID) {
 	}
 }
 
+// WatchlistChange is what a change of a user's watchlist made of its
+// titles: the movies and series it newly lists, and those it no longer
+// lists, neither an entry nor waiting for its entries.
+type WatchlistChange struct {
+	Added, Removed []accounts.ID
+}
+
+// listedTitles lists the movies and series user's watchlist holds an
+// entry of or waits for.
+func (s *Service) listedTitles(ctx context.Context, user accounts.ID) (map[accounts.ID]bool, error) {
+	held, err := s.watchlist.Held(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := s.watchlist.Pending(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	titles := make(map[accounts.ID]bool, len(held)+len(pending))
+	for _, h := range held {
+		if h.Series != (accounts.ID{}) {
+			titles[h.Series] = true
+		} else {
+			titles[h.ID] = true
+		}
+	}
+	for _, p := range pending {
+		titles[p.ID] = true
+	}
+	return titles, nil
+}
+
+// watchlistEdit makes edit to user's watchlist, and tells what it made of
+// its titles.
+func (s *Service) watchlistEdit(ctx context.Context, user accounts.ID, edit func() error) (WatchlistChange, error) {
+	defer s.watchlistChanged(ctx, user)
+	before, err := s.listedTitles(ctx, user)
+	if err != nil {
+		return WatchlistChange{}, err
+	}
+	if err := edit(); err != nil {
+		return WatchlistChange{}, err
+	}
+	after, err := s.listedTitles(ctx, user)
+	if err != nil {
+		// The edit is made: only what it made is unknown.
+		return WatchlistChange{}, nil
+	}
+	var c WatchlistChange
+	for id := range after {
+		if !before[id] {
+			c.Added = append(c.Added, id)
+		}
+	}
+	for id := range before {
+		if !after[id] {
+			c.Removed = append(c.Removed, id)
+		}
+	}
+	return c, nil
+}
+
 // AddToWatchlist puts groups on user's watchlist, on the list of the
 // titles they add themselves (see watchlist.Store.Add): the entries it
 // does not hold at position, the first being 0.
-func (s *Service) AddToWatchlist(ctx context.Context, user accounts.ID, groups []watchlist.Group, position int) error {
-	defer s.watchlistChanged(ctx, user)
-	return s.watchlist.Add(ctx, user, groups, position)
+func (s *Service) AddToWatchlist(ctx context.Context, user accounts.ID, groups []watchlist.Group, position int) (WatchlistChange, error) {
+	return s.watchlistEdit(ctx, user, func() error { return s.watchlist.Add(ctx, user, groups, position) })
 }
 
 // RemoveFromWatchlist takes items and the episodes of series off user's
 // watchlist (see watchlist.Store.Remove).
-func (s *Service) RemoveFromWatchlist(ctx context.Context, user accounts.ID, items, series []accounts.ID) error {
-	defer s.watchlistChanged(ctx, user)
-	return s.watchlist.Remove(ctx, user, items, series)
+func (s *Service) RemoveFromWatchlist(ctx context.Context, user accounts.ID, items, series []accounts.ID) (WatchlistChange, error) {
+	return s.watchlistEdit(ctx, user, func() error { return s.watchlist.Remove(ctx, user, items, series) })
 }
 
 // RemoveWatchlistEntries takes entries off user's watchlist, as
 // RemoveFromWatchlist takes their items off.
-func (s *Service) RemoveWatchlistEntries(ctx context.Context, user accounts.ID, entries []accounts.ID) error {
-	defer s.watchlistChanged(ctx, user)
-	return s.watchlist.RemoveEntries(ctx, user, entries)
+func (s *Service) RemoveWatchlistEntries(ctx context.Context, user accounts.ID, entries []accounts.ID) (WatchlistChange, error) {
+	return s.watchlistEdit(ctx, user, func() error { return s.watchlist.RemoveEntries(ctx, user, entries) })
 }
 
 // MoveInWatchlist places entry of user's watchlist just before the entry
@@ -214,9 +273,8 @@ func (s *Service) MoveInWatchlist(ctx context.Context, user, entry, before accou
 
 // ReplaceWatchlist makes groups all user's watchlist holds, in order (see
 // watchlist.Store.Replace).
-func (s *Service) ReplaceWatchlist(ctx context.Context, user accounts.ID, groups []watchlist.Group) error {
-	defer s.watchlistChanged(ctx, user)
-	return s.watchlist.Replace(ctx, user, groups)
+func (s *Service) ReplaceWatchlist(ctx context.Context, user accounts.ID, groups []watchlist.Group) (WatchlistChange, error) {
+	return s.watchlistEdit(ctx, user, func() error { return s.watchlist.Replace(ctx, user, groups) })
 }
 
 // DeleteWatchlist deletes user's watchlist (see watchlist.Store.Delete).

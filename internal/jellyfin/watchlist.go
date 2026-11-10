@@ -66,15 +66,17 @@ func (h *Handler) watchlistTitle(add bool) http.HandlerFunc {
 			badRequestProblem(w)
 			return
 		}
+		var change library.WatchlistChange
 		var err error
 		if add {
 			var groups []watchlist.Group
 			if groups, err = h.watchlistGroups(r.Context(), user, []library.Item{item}); err == nil {
-				err = h.Library.AddToWatchlist(r.Context(), user.ID, groups, 0)
+				change, err = h.Library.AddToWatchlist(r.Context(), user.ID, groups, 0)
 			}
 		} else {
-			err = h.removeFromWatchlist(r.Context(), user, item)
+			change, err = h.removeFromWatchlist(r.Context(), user, item)
 		}
+		h.watchlistEdited(user, user.ID, change)
 		if err != nil {
 			h.browseError(w, r, err)
 			return
@@ -86,14 +88,14 @@ func (h *Handler) watchlistTitle(add bool) http.HandlerFunc {
 
 // removeFromWatchlist takes item off user's watchlist: a movie or an
 // episode itself, a series all its episodes, a season its own.
-func (h *Handler) removeFromWatchlist(ctx context.Context, user accounts.User, item library.Item) error {
+func (h *Handler) removeFromWatchlist(ctx context.Context, user accounts.User, item library.Item) (library.WatchlistChange, error) {
 	switch item.Kind {
 	case library.KindSeries:
 		return h.Library.RemoveFromWatchlist(ctx, user.ID, nil, []accounts.ID{item.ID})
 	case library.KindSeason:
 		episodes, err := h.Library.Episodes(ctx, user, item.SeriesID, &item.ID)
 		if err != nil {
-			return err
+			return library.WatchlistChange{}, err
 		}
 		ids := make([]accounts.ID, len(episodes))
 		for i, e := range episodes {

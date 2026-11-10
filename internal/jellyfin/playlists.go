@@ -399,7 +399,9 @@ func (h *Handler) updatePlaylist(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	h.playlistChanged(w, r, h.Library.ReplaceWatchlist(r.Context(), p.Owner, groups))
+	change, err := h.Library.ReplaceWatchlist(r.Context(), p.Owner, groups)
+	h.watchlistEdited(user, p.Owner, change)
+	h.playlistChanged(w, r, err)
 }
 
 func (h *Handler) playlistItems(w http.ResponseWriter, r *http.Request) {
@@ -750,7 +752,9 @@ func (h *Handler) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 		if !positioned {
 			position = 0
 		}
-		h.playlistChanged(w, r, h.Library.AddToWatchlist(r.Context(), p.Owner, groups, position))
+		change, err := h.Library.AddToWatchlist(r.Context(), p.Owner, groups, position)
+		h.watchlistEdited(user, p.Owner, change)
+		h.playlistChanged(w, r, err)
 		return
 	}
 	titles, err := h.playlistTitles(r.Context(), user, queryIDs(r, "ids"))
@@ -785,7 +789,9 @@ func (h *Handler) removeFromPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 	entries := queryIDs(r, "entryIds")
 	if p.Watchlist {
-		h.playlistChanged(w, r, h.Library.RemoveWatchlistEntries(r.Context(), p.Owner, entries))
+		change, err := h.Library.RemoveWatchlistEntries(r.Context(), p.Owner, entries)
+		h.watchlistEdited(callerFrom(r.Context()).User, p.Owner, change)
+		h.playlistChanged(w, r, err)
 		return
 	}
 	h.playlistChanged(w, r, h.Playlists.Remove(r.Context(), p.ID, entries))

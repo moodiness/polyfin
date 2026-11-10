@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -170,7 +171,7 @@ func TestWatchlistEntriesAreWhatIsLeftToWatch(t *testing.T) {
 	check("a season watched whole", second, watchlist.Made{Series: show, Known: true})
 
 	// Added by hand, the played movie and the watched series come whole.
-	if err := e.service.AddToWatchlist(ctx, e.member.ID, []watchlist.Group{
+	if _, err := e.service.AddToWatchlist(ctx, e.member.ID, []watchlist.Group{
 		{Title: movieID("tt41"), Items: []accounts.ID{movieID("tt41")}},
 		{Title: show, Series: show, Items: []accounts.ID{showEpisode(1, 1), showEpisode(1, 2), showEpisode(2, 1)}},
 	}, 0); err != nil {
@@ -236,7 +237,7 @@ func TestEachViewerGetsTheirOwnPlaylistMosaic(t *testing.T) {
 	if err != nil || !exists {
 		t.Fatalf("the member's watchlist: %v %v", exists, err)
 	}
-	if err := e.service.AddToWatchlist(ctx, e.member.ID, []watchlist.Group{
+	if _, err := e.service.AddToWatchlist(ctx, e.member.ID, []watchlist.Group{
 		{Title: movieID("tt41"), Items: []accounts.ID{movieID("tt41")}},
 		{Title: seriesID("tt31"), Series: seriesID("tt31"), Items: []accounts.ID{showEpisode(1, 1)}},
 		{Title: movieID("tt42"), Items: []accounts.ID{movieID("tt42")}},
@@ -276,7 +277,7 @@ func TestEachViewerGetsTheirOwnPlaylistMosaic(t *testing.T) {
 	}
 
 	// A title taken off leaves the image at its next listing.
-	if err := e.service.RemoveFromWatchlist(ctx, e.member.ID, []accounts.ID{movieID("tt41")}, nil); err != nil {
+	if _, err := e.service.RemoveFromWatchlist(ctx, e.member.ID, []accounts.ID{movieID("tt41")}, nil); err != nil {
 		t.Fatal(err)
 	}
 	after := image(e.member, "Watchlist", first[1:])
@@ -295,4 +296,36 @@ func TestEachViewerGetsTheirOwnPlaylistMosaic(t *testing.T) {
 	if err := e.service.db.QueryRow(ctx, "SELECT count(*) FROM personal_images").Scan(&rows); err != nil || rows != 0 {
 		t.Errorf("%d images left with the playlist, %v", rows, err)
 	}
+}
+
+// A change of the watchlist tells the movies and series it newly lists and
+// those it no longer lists: a series leaves with its last entry.
+func TestAWatchlistChangeTellsTheTitlesItListsOrNoLonger(t *testing.T) {
+	t.Parallel()
+	e, _ := watchlistEnv(t)
+	ctx := t.Context()
+	show := seriesID("tt31")
+	step := func(name string, change WatchlistChange, err error, added, removed []accounts.ID) {
+		t.Helper()
+		slices.SortFunc(change.Added, func(a, b accounts.ID) int { return strings.Compare(a.String(), b.String()) })
+		slices.SortFunc(added, func(a, b accounts.ID) int { return strings.Compare(a.String(), b.String()) })
+		if err != nil || !slices.Equal(change.Added, added) || !slices.Equal(change.Removed, removed) {
+			t.Errorf("%s: %+v %v, want added %v, removed %v", name, change, err, added, removed)
+		}
+	}
+	change, err := e.service.AddToWatchlist(ctx, e.member.ID, []watchlist.Group{
+		{Title: movieID("tt41"), Items: []accounts.ID{movieID("tt41")}},
+		{Title: show, Series: show, Items: []accounts.ID{showEpisode(1, 1), showEpisode(1, 2)}},
+	}, 0)
+	step("a movie and a series added", change, err, []accounts.ID{movieID("tt41"), show}, nil)
+	change, err = e.service.AddToWatchlist(ctx, e.member.ID, []watchlist.Group{
+		{Title: show, Series: show, Items: []accounts.ID{showEpisode(2, 1)}},
+	}, 0)
+	step("an episode of a listed series added", change, err, nil, nil)
+	change, err = e.service.RemoveFromWatchlist(ctx, e.member.ID, []accounts.ID{showEpisode(1, 1)}, nil)
+	step("one episode of several taken off", change, err, nil, nil)
+	change, err = e.service.RemoveFromWatchlist(ctx, e.member.ID, []accounts.ID{movieID("tt41")}, nil)
+	step("the movie taken off", change, err, nil, []accounts.ID{movieID("tt41")})
+	change, err = e.service.RemoveFromWatchlist(ctx, e.member.ID, []accounts.ID{showEpisode(1, 2), showEpisode(2, 1)}, nil)
+	step("the last episodes taken off", change, err, nil, []accounts.ID{show})
 }

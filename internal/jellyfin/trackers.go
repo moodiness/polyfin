@@ -172,3 +172,42 @@ func (h *Handler) rated(user accounts.User, item library.Item, was, now *float64
 	}
 	h.Trackers.Rate(user.ID, trackers.Rating{Score: now, Title: h.ratedTitle(item)})
 }
+
+// watchlistEdited sends the movies and series that a change user made to
+// the watchlist of owner listed or no longer lists to the tracking
+// services owner syncs their watchlist with.
+func (h *Handler) watchlistEdited(user accounts.User, owner accounts.ID, change library.WatchlistChange) {
+	if h.Trackers == nil || len(change.Added) == 0 && len(change.Removed) == 0 {
+		return
+	}
+	h.Trackers.Watchlist(owner, trackers.WatchlistChange{Titles: func(ctx context.Context) (added, removed []trackers.Title) {
+		return h.listedTitles(ctx, user, change.Added), h.listedTitles(ctx, user, change.Removed)
+	}})
+}
+
+// listedTitles identifies to the tracking services the movies and series
+// of ids by their own identifiers, leaving out those that have none.
+func (h *Handler) listedTitles(ctx context.Context, user accounts.User, ids []accounts.ID) []trackers.Title {
+	if len(ids) == 0 {
+		return nil
+	}
+	items, err := h.Library.Items(ctx, user, ids)
+	if err != nil {
+		return nil
+	}
+	var titles []trackers.Title
+	for _, item := range items {
+		var title trackers.Title
+		ok := false
+		switch item.Kind {
+		case library.KindMovie:
+			title, ok = trackers.Movie(item.ID, item.ProviderIDs)
+		case library.KindSeries:
+			title, ok = trackers.Series(item.ID, item.ProviderIDs)
+		}
+		if ok {
+			titles = append(titles, title)
+		}
+	}
+	return titles
+}
