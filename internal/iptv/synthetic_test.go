@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,8 +17,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/addons"
 )
@@ -430,62 +434,183 @@ func TestServeSyntheticXtream(t *testing.T) {
 	<-t.Context().Done()
 }
 
+// statementCounter counts the statements a pool sends, COPY and those of
+// batches among them, and the rows the database returns to them.
+type statementCounter struct{ statements, rows atomic.Int64 }
+
+func (c *statementCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
+	c.statements.Add(1)
+	return ctx
+}
+
+func (c *statementCounter) TraceQueryEnd(_ context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	if data.CommandTag.Select() {
+		c.rows.Add(data.CommandTag.RowsAffected())
+	}
+}
+
+func (c *statementCounter) TraceCopyFromStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceCopyFromStartData) context.Context {
+	c.statements.Add(1)
+	return ctx
+}
+
+func (c *statementCounter) TraceCopyFromEnd(context.Context, *pgx.Conn, pgx.TraceCopyFromEndData) {}
+
+func (c *statementCounter) TraceBatchStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceBatchStartData) context.Context {
+	return ctx
+}
+
+func (c *statementCounter) TraceBatchQuery(context.Context, *pgx.Conn, pgx.TraceBatchQueryData) {
+	c.statements.Add(1)
+}
+
+func (c *statementCounter) TraceBatchEnd(context.Context, *pgx.Conn, pgx.TraceBatchEndData) {}
+
 // A line-up of about 54,000 entries in hundreds of groups is imported,
-// merged, refreshed, listed and searched within bounds: reconciling is
-// batched and listing pages and searches read the database once. The race
-// detector gets a smaller one (see lineupScale).
+// refreshed, merged, listed and searched as one a tenth its size is: with
+// no more statements, in at most thirty times the time, processed in at
+// most twenty times the processor time, and listed a page at a time with
+// at most twice the rows. Reconciling is batched, listing pages and
+// searches read the database a fixed number of times and the page alone,
+// and no step costs more than in proportion to the line-up. Two small
+// line-ups take each step with the large one, one just before it and one
+// just after, so that the machine's load weighs on the three alike, and
+// the large one is compared with the slower small one. Time alone would
+// not do on a loaded machine: each statement waits longer for the
+// database, which weighs most on the small line-ups, mostly statements,
+// so that work growing faster than the line-up could hide in the gap.
+// Processor time does not count waiting, but would count the other tests'
+// work, so this test runs alone. The race detector gets smaller line-ups
+// (see lineupScale).
+//
+//nolint:paralleltest // compares its process's processor time, which the other tests' work would add to
 func TestLargeLineupsStayFast(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("large line-up")
 	}
-	e := newEnv(t)
-	server := newSyntheticServer(newSynthetic(54_000/lineupScale, 420/lineupScale), nil)
-	server.Start()
-	t.Cleanup(server.Close)
-	account := Account{Kind: addons.KindXtream, Server: server.URL, Username: "user", Password: "secret"}
-	bound := func(what string, limit time.Duration, run func() error) {
+	// Ten times the entries take at most about ten times as long, a step's
+	// fixed costs being the same. On a loaded machine, with or without the
+	// race detector, that was measured at most 14 times the time, when a
+	// burst of load fell on the large line-up's turn alone, hence thirty,
+	// and 10.5 times the processor time, which waiting does not count,
+	// hence twenty. A cost growing with the square of the entries is a
+	// hundred times larger for the large line-up: past twenty times the
+	// processor time, one fails as soon as it takes about one and a half
+	// times what processing the line-up does.
+	const timeScaling, processorScaling = 30, 20
+	statements := &statementCounter{}
+	e := tracedEnv(t, statements)
+	type lineup struct {
+		name            string
+		entries, groups int
+		account         Account
+		addon           addons.Addon
+	}
+	small := &lineup{name: "Small", entries: 5_400 / lineupScale, groups: 42 / lineupScale}
+	large := &lineup{name: "Big", entries: 54_000 / lineupScale, groups: 420 / lineupScale}
+	lineups := []*lineup{small, large, {name: "Other small", entries: small.entries, groups: small.groups}}
+	for _, l := range lineups {
+		server := newSyntheticServer(newSynthetic(l.entries, l.groups), nil)
+		server.Start()
+		t.Cleanup(server.Close)
+		l.account = Account{Kind: addons.KindXtream, Server: server.URL, Username: "user", Password: "secret"}
+	}
+	// also is what a step compares besides statements and time: the
+	// processor time of a step processing the line-ups, and the rows the
+	// database returns to a step reading a page or a count, as many
+	// whatever the line-up's size.
+	type also struct{ processorTime, rows bool }
+	// scaled runs a step on each line-up in turn, rounds times, and
+	// compares the large one's most statements and rows and least times
+	// with the small ones'.
+	scaled := func(what string, rounds int, compare also, run func(l *lineup, round int) error) {
 		t.Helper()
-		start := time.Now()
-		if err := run(); err != nil {
-			t.Fatalf("%s: %v", what, err)
+		var sent, read [3]int64
+		var took, used [3]time.Duration
+		for round := range rounds {
+			for i, l := range lineups {
+				sentBefore, readBefore := statements.statements.Load(), statements.rows.Load()
+				start, usedBefore := time.Now(), processCPU()
+				if err := run(l, round); err != nil {
+					t.Fatalf("%s, %d entries: %v", what, l.entries, err)
+				}
+				tookNow, usedNow := time.Since(start), processCPU()-usedBefore
+				sent[i] = max(sent[i], statements.statements.Load()-sentBefore)
+				read[i] = max(read[i], statements.rows.Load()-readBefore)
+				if round == 0 {
+					took[i], used[i] = tookNow, usedNow
+				}
+				took[i], used[i] = min(took[i], tookNow), min(used[i], usedNow)
+			}
 		}
-		limit *= raceSlowdown
-		if took := time.Since(start); took > limit {
-			t.Errorf("%s took %v, more than %v", what, took.Round(time.Millisecond), limit)
-		} else {
-			t.Logf("%s: %v", what, took.Round(time.Millisecond))
+		smallSent, smallRead := max(sent[0], sent[2]), max(read[0], read[2])
+		smallTook, smallUsed := max(took[0], took[2]), max(used[0], used[2])
+		passed := true
+		check := func(failed bool, format string, args ...any) {
+			t.Helper()
+			if failed {
+				passed = false
+				t.Errorf("%s %s", what, fmt.Sprintf(format, args...))
+			}
+		}
+		check(sent[1] > smallSent, "sent %d statements for %d entries, more than the %d for %d", sent[1], large.entries, smallSent, small.entries)
+		check(took[1] > timeScaling*smallTook, "took %v for %d entries, more than %d times the %v for %d", took[1].Round(time.Millisecond),
+			large.entries, timeScaling, smallTook.Round(time.Millisecond), small.entries)
+		check(compare.processorTime && used[1] > processorScaling*smallUsed, "used %v of processor time for %d entries, more than %d times the %v for %d",
+			used[1].Round(time.Millisecond), large.entries, processorScaling, smallUsed.Round(time.Millisecond), small.entries)
+		check(compare.rows && read[1] > 2*smallRead, "read %d rows for %d entries, more than twice the %d for %d", read[1], large.entries,
+			smallRead, small.entries)
+		if passed {
+			details := ""
+			if compare.processorTime {
+				details = fmt.Sprintf(", and %.1f times the processor time", float64(used[1])/float64(max(smallUsed, 1)))
+			}
+			if compare.rows {
+				details = fmt.Sprintf(", reading %d rows against %d", read[1], smallRead)
+			}
+			t.Logf("%s: %v for %d entries, %.1f times the %v for %d%s", what, took[1].Round(time.Millisecond), large.entries,
+				float64(took[1])/float64(smallTook), smallTook.Round(time.Millisecond), small.entries, details)
 		}
 	}
-	var addon addons.Addon
-	bound("adding", 12*time.Second, func() (err error) {
-		addon, err = e.service.Add(t.Context(), addons.Shared(), NewSource{Name: "Big", Account: account}, false)
+	scaled("adding", 1, also{processorTime: true}, func(l *lineup, _ int) (err error) {
+		l.addon, err = e.service.Add(t.Context(), addons.Shared(), NewSource{Name: l.name, Account: l.account}, false)
 		return err
 	})
-	source, err := e.service.Source(t.Context(), addons.Shared(), addon.ID)
-	if err != nil || source.Lineup.Channels != 54_000/lineupScale || source.Lineup.Categories != 420/lineupScale {
-		t.Fatalf("line-up: %+v %v", source.Lineup, err)
+	for _, l := range lineups {
+		source, err := e.service.Source(t.Context(), addons.Shared(), l.addon.ID)
+		if err != nil || source.Lineup.Channels != l.entries || source.Lineup.Categories != l.groups {
+			t.Fatalf("line-up of %d entries: %+v %v", l.entries, source.Lineup, err)
+		}
 	}
 	// An edit survives the refreshes and option changes below.
-	_, channels, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Q: "Zebzeb 0", Limit: 1})
+	_, channels, err := e.service.ListChannels(t.Context(), addons.Shared(), large.addon.ID, ChannelFilter{Q: "Zebzeb 0", Limit: 1})
 	if err != nil || len(channels) != 1 {
 		t.Fatalf("search: %+v %v", channels, err)
 	}
-	if _, err := e.service.UpdateChannel(t.Context(), addons.Shared(), addon.ID, channels[0].ID, ChannelChanges{Name: &Nullable[string]{Value: new("Kept")}}); err != nil {
+	if _, err := e.service.UpdateChannel(t.Context(), addons.Shared(), large.addon.ID, channels[0].ID, ChannelChanges{Name: &Nullable[string]{Value: new("Kept")}}); err != nil {
 		t.Fatal(err)
 	}
-	bound("refreshing unchanged", 12*time.Second, func() error { return e.service.Refresh(t.Context(), addons.Shared(), addon.ID, false) })
+	scaled("refreshing unchanged", 1, also{processorTime: true}, func(l *lineup, _ int) error {
+		return e.service.Refresh(t.Context(), addons.Shared(), l.addon.ID, false)
+	})
 	merged := ChannelsMerged
-	bound("merging", 15*time.Second, func() error {
-		return e.service.Update(t.Context(), addons.Shared(), addon.ID, Changes{Options: &OptionsPatch{Channels: &merged}}, false)
+	scaled("merging", 1, also{processorTime: true}, func(l *lineup, _ int) error {
+		return e.service.Update(t.Context(), addons.Shared(), l.addon.ID, Changes{Options: &OptionsPatch{Channels: &merged}}, false)
 	})
 	byCountry := CategoriesCountry
-	bound("by country", 15*time.Second, func() error {
-		return e.service.Update(t.Context(), addons.Shared(), addon.ID, Changes{Options: &OptionsPatch{Categories: &byCountry}}, false)
+	scaled("by country", 1, also{processorTime: true}, func(l *lineup, _ int) error {
+		return e.service.Update(t.Context(), addons.Shared(), l.addon.ID, Changes{Options: &OptionsPatch{Categories: &byCountry}}, false)
 	})
-	if kept, err := e.service.Channel(t.Context(), addons.Shared(), addon.ID, channels[0].ID); err != nil || kept.Name != "Kept" || len(kept.Streams) != 3 {
+	if kept, err := e.service.Channel(t.Context(), addons.Shared(), large.addon.ID, channels[0].ID); err != nil || kept.Name != "Kept" || len(kept.Streams) != 3 {
 		t.Errorf("the edited channel after merging: %+v %v", kept, err)
 	}
+	scaled("listing the first page", 5, also{rows: true}, func(l *lineup, _ int) error {
+		_, page, err := e.service.ListChannels(t.Context(), addons.Shared(), l.addon.ID, ChannelFilter{Limit: 500 / lineupScale})
+		if err == nil && len(page) != 500/lineupScale {
+			err = fmt.Errorf("%d channels", len(page))
+		}
+		return err
+	})
 	// A page far down costs a few times what the first one does, not tens
 	// of times: the listing reads the page alone, and the database skips
 	// the channels before it. The two pages are listed in turn, five times,
@@ -495,7 +620,7 @@ func TestLargeLineupsStayFast(t *testing.T) {
 	listPage := func(offset int) time.Duration {
 		t.Helper()
 		start := time.Now()
-		total, page, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: offset, Limit: 500 / lineupScale})
+		total, page, err := e.service.ListChannels(t.Context(), addons.Shared(), large.addon.ID, ChannelFilter{Offset: offset, Limit: 500 / lineupScale})
 		took := time.Since(start)
 		if err == nil && (len(page) != 500/lineupScale || total < 20_500/lineupScale) {
 			err = fmt.Errorf("%d of %d", len(page), total)
@@ -510,41 +635,35 @@ func TestLargeLineupsStayFast(t *testing.T) {
 		first = min(first, listPage(0))
 		far = min(far, listPage(20_000/lineupScale))
 	}
-	if limit := time.Second * raceSlowdown; first > limit {
-		t.Errorf("listing the first page took %v, more than %v", first.Round(time.Millisecond), limit)
-	}
 	if far > 10*first {
 		t.Errorf("listing a page far down took %v, more than ten times the first page's %v", far.Round(time.Millisecond), first.Round(time.Millisecond))
 	} else {
 		t.Logf("listing the first page: %v, a page far down: %v", first.Round(time.Millisecond), far.Round(time.Millisecond))
 	}
-	bound("searching", 1*time.Second, func() error {
-		_, _, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Q: "orb", Limit: 100})
+	scaled("searching", 5, also{rows: true}, func(l *lineup, _ int) error {
+		_, _, err := e.service.ListChannels(t.Context(), addons.Shared(), l.addon.ID, ChannelFilter{Q: "orb", Limit: 100 / lineupScale})
 		return err
 	})
-	bound("bulk by keyword", 2*time.Second, func() error {
-		_, _, err := e.service.BulkChannels(t.Context(), addons.Shared(), addon.ID, Bulk{Q: "tac", Enabled: false})
+	// Each round disables the channels the keyword finds, or enables them
+	// again, so that each writes.
+	scaled("bulk by keyword", 5, also{rows: true}, func(l *lineup, round int) error {
+		_, _, err := e.service.BulkChannels(t.Context(), addons.Shared(), l.addon.ID, Bulk{Q: "tac", Enabled: round%2 == 1})
 		return err
 	})
-	bound("listing the catalog", 2*time.Second, func() error {
-		e.service.forget(addon.ID)
-		_, err := e.service.Channels(t.Context(), addon.ID)
+	scaled("listing the catalog", 5, also{}, func(l *lineup, _ int) error {
+		e.service.forget(l.addon.ID)
+		_, err := e.service.Channels(t.Context(), l.addon.ID)
 		return err
 	})
-	var wg sync.WaitGroup
-	bound("eight parallel pages", 2*time.Second, func() error {
+	scaled("eight parallel pages", 5, also{rows: true}, func(l *lineup, _ int) error {
+		var wg sync.WaitGroup
 		errs := make([]error, 8)
 		for i := range 8 {
 			wg.Go(func() {
-				_, _, errs[i] = e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: i * 1000 / lineupScale, Limit: 100})
+				_, _, errs[i] = e.service.ListChannels(t.Context(), addons.Shared(), l.addon.ID, ChannelFilter{Offset: i * l.entries / 54, Limit: 100})
 			})
 		}
 		wg.Wait()
-		for _, err := range errs {
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		return errors.Join(errs...)
 	})
 }

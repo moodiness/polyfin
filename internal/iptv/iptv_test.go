@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -29,7 +32,25 @@ type env struct {
 
 func newEnv(t *testing.T) env {
 	t.Helper()
-	pool := migrated.New(t)
+	return envOn(t, migrated.New(t))
+}
+
+// tracedEnv is an env whose statements tracer sees.
+func tracedEnv(t *testing.T, tracer pgx.QueryTracer) env {
+	t.Helper()
+	config := migrated.New(t).Config()
+	config.ConnConfig.Tracer = tracer
+	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	return envOn(t, pool)
+}
+
+// envOn is an env on pool.
+func envOn(t *testing.T, pool *pgxpool.Pool) env {
+	t.Helper()
 	users, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
