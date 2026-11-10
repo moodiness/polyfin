@@ -890,7 +890,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			Logger: logger,
 			// Silo's apps, while the settings allow them, through the
 			// Jellyfin API's answers.
-			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI,
+			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI, Genres: jellyfinAPI.CatalogGenres,
 				DB: pool, QuickConnect: quickConnect, BoxSets: movieCollections, Logger: logger, ContainerTracks: jellyfinAPI.ContainerTracks}),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,

@@ -279,9 +279,16 @@ func (h *Handler) describeCollection(w http.ResponseWriter, r *http.Request, use
 	if errors.Is(err, collections.ErrNotFound) {
 		return false
 	}
+	var shown []collections.Collection
+	if err == nil {
+		shown, err = h.shownCollections(r.Context(), user, []collections.Collection{c})
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return true
+	}
+	if len(shown) == 0 {
+		return false
 	}
 	dtos, err := h.collectionDtos(r, user, []collections.Collection{c}, requestedFields(r), true)
 	if err != nil {
@@ -323,7 +330,15 @@ func (h *Handler) collectionAncestors(w http.ResponseWriter, r *http.Request, us
 func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID, hasParent bool, start, limit int) bool {
 	if hasParent && parent != collectionsViewID {
 		c, err := h.Collections.Get(r.Context(), parent)
+		var shown []collections.Collection
 		if err == nil {
+			shown, err = h.shownCollections(r.Context(), user, []collections.Collection{c})
+		}
+		if err == nil {
+			if len(shown) == 0 {
+				notFoundProblem(w)
+				return true
+			}
 			if wholeListing(r) {
 				limit = library.WholeListing
 			}
@@ -358,6 +373,9 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 	all, err := h.Collections.All(r.Context())
 	if err == nil && within != (accounts.ID{}) {
 		all, err = h.listedUnder(r.Context(), all, within)
+	}
+	if err == nil {
+		all, err = h.shownCollections(r.Context(), user, all)
 	}
 	if err != nil {
 		h.internalError(w, r, err)
@@ -583,7 +601,8 @@ func premiere(item library.Item) time.Time {
 }
 
 // collectionTitles lists, for each collection, the titles in it user may
-// see, in the order they were added: the titles user hid are left out.
+// see, in the order they were added: the titles user hid are left out, and
+// those the request's rating filter does not keep.
 func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, lists ...collections.Collection) ([][]library.Item, error) {
 	var ids []accounts.ID
 	seen := map[accounts.ID]bool{}
@@ -598,6 +617,9 @@ func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, list
 	byID := map[accounts.ID]library.Item{}
 	if len(ids) > 0 {
 		items, err := h.Library.Items(ctx, user, ids)
+		if err == nil {
+			items, err = h.Library.RatingFiltered(ctx, user, items)
+		}
 		if err != nil {
 			return nil, err
 		}

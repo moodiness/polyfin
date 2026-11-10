@@ -236,3 +236,96 @@ func (s *Service) ratingFiltered(ctx context.Context, v view, items []Item) ([]I
 		return known && !kept[item.ID]
 	}), nil
 }
+
+// OfficialRatings lists the official ratings of items, each once, as the
+// rating filter judges them (see officialRating): the one an
+// administrator set first, else the one known for the server's rating
+// country. No rating is looked up: a title whose rating is not known yet
+// has none here. They are sorted by their score under the server's
+// rating country, then by name, those Polyfin cannot score last.
+func (s *Service) OfficialRatings(ctx context.Context, user accounts.User, items []Item) ([]string, error) {
+	result := []string{}
+	if len(items) == 0 {
+		return result, nil
+	}
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]accounts.ID, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	records, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	titles := make([]record, len(records))
+	for i, r := range records {
+		titles[i] = r
+		var holder accounts.ID
+		switch {
+		case r.Kind == KindSeason || r.Kind == KindEpisode:
+			holder = r.seriesItemID()
+		case r.folderVideo():
+			holder = r.folderItemID()
+		}
+		if holder != (accounts.ID{}) {
+			if title, err := s.load(ctx, holder); err == nil {
+				titles[i] = title
+			}
+		}
+	}
+	s.storedTraits(ctx, titles)
+	seen := map[string]bool{}
+	for i, r := range titles {
+		if _, ok := unratedKind(r.Kind); !ok {
+			continue
+		}
+		t, _ := s.knownTraits(ctx, v, r)
+		official := strings.TrimSpace(s.officialRating(records[i], t.rating))
+		if official != "" && !seen[official] {
+			seen[official] = true
+			result = append(result, official)
+		}
+	}
+	slices.SortFunc(result, func(a, b string) int {
+		sa, oka := localization.RatingScore(a, v.country)
+		sb, okb := localization.RatingScore(b, v.country)
+		switch {
+		case oka && okb:
+			if c := compareScores(sa, sb); c != 0 {
+				return c
+			}
+		case oka:
+			return -1
+		case okb:
+			return 1
+		}
+		return strings.Compare(a, b)
+	})
+	return result, nil
+}
+
+// WithMembersFilter returns ctx with its rating filter narrowed to what
+// a container's members are judged by when deciding whether the
+// container shows: the highest rating asked only, as Jellyfin hides a
+// collection or a playlist none of whose members is within it.
+func WithMembersFilter(ctx context.Context) context.Context {
+	f, ok := ctx.Value(ratingFilterKey{}).(RatingFilter)
+	if !ok {
+		return ctx
+	}
+	return context.WithValue(ctx, ratingFilterKey{}, RatingFilter{MaxOfficialRating: f.MaxOfficialRating})
+}
+
+// Narrows reports whether the listings user is answered under ctx leave
+// titles out by their rating or genres: the user's parental control or
+// blocked genres, or the rating filter of ctx (see WithRatingFilter).
+func (s *Service) Narrows(ctx context.Context, user accounts.User) (bool, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return false, err
+	}
+	return v.narrows(), nil
+}
