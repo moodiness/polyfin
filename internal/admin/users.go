@@ -602,10 +602,12 @@ type settingsJSON struct {
 	VersionLabelRules   *[]accounts.VersionLabelRule `json:"versionLabelRules"`
 	// NameHowVersionsPlay keeps its current value when a PUT leaves it out.
 	NameHowVersionsPlay *bool `json:"nameHowVersionsPlay"`
-	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
-	MaxConversions      *int  `json:"maxConversions"`
-	MaxConversionHeight *int  `json:"maxConversionHeight"`
-	ConvertedDownloads  *bool `json:"convertedDownloads"`
+	// VersionNames is "addon" or "short".
+	VersionNames        *string `json:"versionNames"`
+	SyncAddonSubtitles  *bool   `json:"syncAddonSubtitles"`
+	MaxConversions      *int    `json:"maxConversions"`
+	MaxConversionHeight *int    `json:"maxConversionHeight"`
+	ConvertedDownloads  *bool   `json:"convertedDownloads"`
 	// SubtitleOCR ("off", "played" or "scans"), SubtitleOCRTracks and
 	// SubtitleOCRDownload keep their current values when a PUT leaves them
 	// out.
@@ -692,6 +694,8 @@ type settingsJSON struct {
 	// AddVersionsToOpenPage keeps its current value when a PUT leaves it
 	// out.
 	AddVersionsToOpenPage *bool `json:"addVersionsToOpenPage"`
+	// VersionBadges keeps its current value when a PUT leaves it out.
+	VersionBadges *bool `json:"versionBadges"`
 	// TraktClientID, TraktClientSecret and SimklClientID keep their current
 	// values when a PUT leaves them out; empty removes them. The secret is
 	// never sent back: TraktClientSecretSet tells whether one is saved, and
@@ -967,6 +971,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		HiddenVersionCodecs:   &settings.HiddenVersionCodecs,
 		HiddenVersionWords:    &settings.HiddenVersionWords,
 		NameHowVersionsPlay:   &settings.NameHowVersionsPlay,
+		VersionNames:          &settings.VersionNames,
 		HiddenReleases:        &settings.HiddenReleases,
 		VersionEditionOrder:   &settings.VersionEditionOrder,
 		VersionMBPerMinute:    &settings.VersionMBPerMinute,
@@ -1035,6 +1040,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		LumaaGlaass:           &webThemeTextsJSON{Css: accounts.LumaaGlaassCss, Js: accounts.LumaaGlaassJs},
 		LoginDisclaimer:       &settings.LoginDisclaimer,
 		AddVersionsToOpenPage: &settings.AddVersionsToOpenPage,
+		VersionBadges:         &settings.VersionBadges,
 
 		TraktClientID:        &settings.TraktClientID,
 		TraktClientSecretSet: settings.TraktClientSecret != "",
@@ -1794,6 +1800,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		HiddenVersionCodecs:   valueOr(body.HiddenVersionCodecs, current.HiddenVersionCodecs),
 		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
 		NameHowVersionsPlay:   valueOr(body.NameHowVersionsPlay, current.NameHowVersionsPlay),
+		VersionNames:          valueOr(body.VersionNames, current.VersionNames),
 		HiddenReleases:        valueOr(body.HiddenReleases, current.HiddenReleases),
 		VersionEditionOrder:   valueOr(body.VersionEditionOrder, current.VersionEditionOrder),
 		VersionMBPerMinute:    valueOr(body.VersionMBPerMinute, current.VersionMBPerMinute),
@@ -1860,6 +1867,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CustomJs:              valueOr(body.CustomJs, current.CustomJs),
 		LoginDisclaimer:       valueOr(body.LoginDisclaimer, current.LoginDisclaimer),
 		AddVersionsToOpenPage: valueOr(body.AddVersionsToOpenPage, current.AddVersionsToOpenPage),
+		VersionBadges:         valueOr(body.VersionBadges, current.VersionBadges),
 
 		TraktClientID:     valueOr(body.TraktClientID, current.TraktClientID),
 		TraktClientSecret: valueOr(body.TraktClientSecret, current.TraktClientSecret),

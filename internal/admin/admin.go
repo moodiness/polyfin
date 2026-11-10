@@ -756,6 +756,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidMDBListRatingsKey, http.StatusBadRequest, "invalid_mdblist_ratings_key"},
 		{accounts.ErrInvalidTMDBKey, http.StatusBadRequest, "invalid_tmdb_key"},
 		{accounts.ErrInvalidCriticRatingShows, http.StatusBadRequest, "invalid_critic_rating_shows"},
+		{accounts.ErrInvalidVersionNames, http.StatusBadRequest, "invalid_version_names"},
 		{accounts.ErrInvalidPosterBadgeSize, http.StatusBadRequest, "invalid_poster_badge_size"},
 		{accounts.ErrInvalidPosterTemplate, http.StatusBadRequest, "invalid_poster_template"},
 		{accounts.ErrInvalidMeasureLoudness, http.StatusBadRequest, "invalid_measure_loudness"},

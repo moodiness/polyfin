@@ -930,11 +930,13 @@ func validSegmentSources(names []string) bool {
 }
 
 // ErrInvalidMDBListRatingsKey reports a Settings.MDBListRatingsKey that is
-// not a valid key (see ValidRatingsKey), and ErrInvalidCriticRatingShows a
-// CriticRatingShows not among CriticRatingChoices.
+// not a valid key (see ValidRatingsKey), ErrInvalidCriticRatingShows a
+// CriticRatingShows not among CriticRatingChoices, and
+// ErrInvalidVersionNames a VersionNames not among VersionNameChoices.
 var (
 	ErrInvalidMDBListRatingsKey = errors.New("invalid MDBList ratings key")
 	ErrInvalidCriticRatingShows = errors.New("invalid critic rating choice")
+	ErrInvalidVersionNames      = errors.New("invalid version names choice")
 )
 
 // MaxRatingsKeyBytes is the longest Settings.MDBListRatingsKey.
@@ -959,6 +961,11 @@ func ValidRatingsKey(key string) bool {
 // Settings.CriticRatingShows), the first by default: the critics' score
 // or the audience score.
 var CriticRatingChoices = []string{"critics", "audience"}
+
+// VersionNameChoices are the ways of writing version names (see
+// Settings.VersionNames), the first by default: as the addon writes them,
+// or short.
+var VersionNameChoices = []string{"addon", "short"}
 
 // PosterBadgeSizes are the size presets of the badges drawn over posters
 // (see Settings.PosterBadgeSize), the first by default.
@@ -1701,6 +1708,11 @@ type Settings struct {
 	// versions with how the app asking plays each, as the device profile of
 	// its last PlaybackInfo decides it.
 	NameHowVersionsPlay bool
+	// VersionNames is how the names of a movie's or an episode's versions
+	// are written, one of VersionNameChoices: as the addon writes them, the
+	// default, or short, as Polyfin writes them from what it knows of each
+	// (see library.VersionBadges), with its size and its addon.
+	VersionNames string
 	// SyncAddonSubtitles times the addons' subtitles to the version played,
 	// against when the version has speech (see playback.Service.FindSpeech).
 	SyncAddonSubtitles bool
@@ -1881,6 +1893,10 @@ type Settings struct {
 	// placeholder with the versions, and the later ones show when the page
 	// is opened again.
 	AddVersionsToOpenPage bool
+	// VersionBadges has the web player show the badges of the version
+	// picked under a title's Version menu, and of the version played in
+	// the playback controls (see library.VersionBadges). On by default.
+	VersionBadges bool
 	// TraktClientID and TraktClientSecret identify the app an
 	// administrator registered with Trakt, and SimklClientID the one
 	// registered with Simkl, through which users connect their accounts
@@ -2319,7 +2335,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
-	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
+	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, version_names, " +
 	"hidden_releases, version_edition_order, version_mb_per_minute, version_label_rules, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, subtitle_ocr_download, " +
 	"default_audio_language, default_subtitle_language, " +
@@ -2333,7 +2349,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"recording_commercials, " +
 	"live_tv_refresh_hours, local_scan_hours, watchlist_check_hours, watch_local_folders, " +
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
-	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
+	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, version_badges, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backups_kept, collection_library_apps, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, backup_passphrase, public_address, " +
@@ -2381,7 +2397,7 @@ func (settings *Settings) fields() []any {
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
 		&settings.HiddenVersionWords,
-		&settings.NameHowVersionsPlay,
+		&settings.NameHowVersionsPlay, &settings.VersionNames,
 		&settings.HiddenReleases, &settings.VersionEditionOrder, &settings.VersionMBPerMinute, &settings.VersionLabelRules,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
 		&settings.SubtitleOCRDownload,
@@ -2399,7 +2415,7 @@ func (settings *Settings) fields() []any {
 		&settings.LiveTvRefreshHours, &settings.LocalScanHours, &settings.WatchlistCheckHours,
 		&settings.WatchLocalFolders,
 		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
-		&settings.WebTheme, &settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
+		&settings.WebTheme, &settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage, &settings.VersionBadges,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
@@ -2678,6 +2694,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !slices.Contains(CriticRatingChoices, settings.CriticRatingShows) {
 		return Settings{}, ErrInvalidCriticRatingShows
+	}
+	if !slices.Contains(VersionNameChoices, settings.VersionNames) {
+		return Settings{}, ErrInvalidVersionNames
 	}
 	if !slices.Contains(PosterBadgeSizes, settings.PosterBadgeSize) {
 		return Settings{}, ErrInvalidPosterBadgeSize

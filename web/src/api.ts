@@ -543,6 +543,8 @@ export type Settings = {
   versionLabelRules: VersionLabelRule[]
   /** Ends version names with how the app asking plays each, as its last playback decides it. */
   nameHowVersionsPlay: boolean
+  /** How version names are written: as the addon writes them, or short names written by Polyfin. */
+  versionNames: 'addon' | 'short'
   /** Times the addons' subtitles to the version played, against when it has speech. */
   syncAddonSubtitles: boolean
   /** Playbacks whose video the server converts at once, 0 for no limit. */
@@ -700,6 +702,8 @@ export type Settings = {
   loginDisclaimer: string
   /** Whether the web player adds the versions that come to a title's page while it is open. */
   addVersionsToOpenPage: boolean
+  /** Whether the web player shows badges for the version picked and the version playing. */
+  versionBadges: boolean
   /** Whether the web player shows titles' ratings on their posters, as the pointer or focus comes. */
   posterRatings: boolean
   /** Whether movies' and series' posters carry their ratings and new episode or season, in every app. */

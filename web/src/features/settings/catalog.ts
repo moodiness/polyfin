@@ -178,6 +178,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'version-names',
+    label: (t) => s(t).versionNames,
+    help: (t) => s(t).versionNamesHelp,
+    keywords: ['short', 'versions', 'names'],
+    codes: ['invalid_version_names'],
+  },
+  {
+    section: 'playback',
     anchor: 'name-how-versions-play',
     label: (t) => s(t).nameHowVersionsPlay,
     help: (t) => s(t).nameHowVersionsPlayHelp,
@@ -1577,6 +1585,13 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).addVersionsToOpenPage,
     help: (t) => s(t).addVersionsToOpenPageHelp,
     keywords: ['versions', 'jellyfin-web'],
+  },
+  {
+    section: 'web-player',
+    anchor: 'version-badges',
+    label: (t) => s(t).versionBadges,
+    help: (t) => s(t).versionBadgesHelp,
+    keywords: ['badges', 'HDR', 'Dolby Vision', 'Atmos', 'jellyfin-web'],
   },
   {
     section: 'web-player',

@@ -266,6 +266,10 @@ const settings: typeof en = {
     preferDirectPlay: 'Preferisci le versioni che l’applicazione riproduce senza conversione',
     preferDirectPlayHelp:
       'Quando un’applicazione riproduce un titolo senza scegliere una versione, Polyfin sceglie la prima versione che l’applicazione riproduce così com’è o semplicemente reimpacchettata, anziché la prima che si riproduce comunque. Una volta che un’applicazione ha riprodotto qualcosa dall’avvio del server, anche i suoi menu delle versioni elencano prima queste versioni, così la riproduzione parte dalla versione che il menu mostra. Gli utenti con «Riproduci prima i file locali» mantengono prima i loro file locali. La primissima riproduzione di un titolo può essere un po’ più lenta, perché potrebbero essere analizzate più versioni; non cambia nulla una volta che sono note.',
+    versionNames: 'Nomi delle versioni',
+    versionNamesHelp:
+      'I nomi brevi sono scritti da Polyfin in base a ciò che sa di ogni versione, uguali in ogni app, come «4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Add-on»: risoluzione, HDR, codec video, audio, edizione, lingue audio, dimensione e add-on. Due versioni non hanno mai lo stesso nome.',
+    versionNameChoices: { addon: 'Come li scrive l’add-on', short: 'Brevi' },
     nameHowVersionsPlay: 'Indica nei nomi delle versioni come vengono riprodotte',
     nameHowVersionsPlayHelp:
       'I nomi delle versioni terminano con il modo in cui l’applicazione riproduce ciascuna: «(riproduzione diretta)», «(stream diretto)» quando viene copiata senza conversione, «(convertita: motivo)» con la richiesta dell’applicazione, HDR, il limite di qualità, i sottotitoli, il video o l’audio come motivo, oppure «(non riproducibile qui)». Polyfin lo stabilisce in base al profilo del dispositivo inviato dall’applicazione alla sua ultima riproduzione o, prima, nelle capacità della sua sessione, quindi i nomi non indicano nulla prima della prima riproduzione di un dispositivo, a meno che le sue capacità portassero un profilo, o dopo un riavvio, né per una versione non ancora analizzata o descritta da RemuxDB. I nomi sono nella lingua dei nomi generati. Per questo non viene letto nulla.',
@@ -1101,6 +1105,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Aggiungi le versioni alla pagina aperta di un titolo',
     addVersionsToOpenPageHelp:
       'Aggiunge le versioni trovate dagli add-on al menu delle versioni della pagina di un film o di un episodio mentre è aperta, mantenendo la versione scelta. Se disattivato, una pagina aperta prima che venisse trovata una versione elenca comunque le prime man mano che arrivano, e i suoi pulsanti di riproduzione attendono comunque una versione; le altre compaiono alla successiva apertura della pagina.',
+    versionBadges: 'Badge delle versioni',
+    versionBadgesHelp:
+      'Mostra una fila di badge per la versione scelta, sotto il menu Versione di un titolo e nei controlli di riproduzione: risoluzione, HDR, codec video, audio, edizione e lingue audio. Provengono dall’analisi della versione non appena Polyfin ne ha una, altrimenti dalle etichette dell’add-on.',
     posterRatings: 'Mostra i voti sulle locandine',
     posterRatingsHelp:
       'Mostra il voto a stelle di un film o di una serie sulla sua locandina nel lettore web quando vi arriva il puntatore o il focus, con i punteggi della critica e del pubblico finché è impostata una chiave API MDBList per i voti in Impostazioni › Contenuti. Per tutti gli utenti. Finché Badge sulle locandine è attivato in Impostazioni › Contenuti, al loro posto si vedono i badge.',
