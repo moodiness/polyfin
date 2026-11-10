@@ -208,7 +208,7 @@ func (t trackPreferences) chosen(streams []playback.MediaStream, audio, subtitle
 			switch {
 			case equalIndex(plain.audio(streams), audio):
 				choice.AudioLanguage, choice.AudioVariant = "", ""
-			case !undeterminedLanguage(stream.Language):
+			case !localization.Undetermined(stream.Language):
 				choice.AudioLanguage, choice.AudioVariant = stream.Language, t.chosenVariant(stream)
 			}
 		}
@@ -239,7 +239,7 @@ func (t trackPreferences) chosen(streams []playback.MediaStream, audio, subtitle
 		choice.Subtitle = preferences.SubtitleChoice{}
 	case index < 0:
 		choice.Subtitle = preferences.SubtitleChoice{Off: true}
-	case !undeterminedLanguage(stream.Language):
+	case !localization.Undetermined(stream.Language):
 		choice.Subtitle = preferences.SubtitleChoice{Language: stream.Language, Forced: stream.IsForced, HearingImpaired: stream.IsHearingImpaired}
 	}
 	return choice

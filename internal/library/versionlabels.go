@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/moodiness/polyfin/internal/localization"
 )
@@ -43,9 +44,13 @@ const (
 // Tier, Audio and Edition are its source tier, of Tiers, its best audio
 // format and its edition, of accounts.VersionEditions, empty or zero when
 // the labels name none (see ReadRelease).
+//
+// HDR is the kind of HDR video the labels name, the best of HDRKinds they
+// name: empty when they name none, as "HDR" alone does.
 type Labels struct {
 	Codec     string
 	Range     DynamicRange
+	HDR       string
 	Languages []string
 	Multi     bool
 	Regions   []string
@@ -71,6 +76,17 @@ var (
 // highRangeWords name HDR video in labels; "sdr" names SDR video.
 var highRangeWords = map[string]bool{"hdr": true, "hdr10": true, "hdr10plus": true, "hdr10p": true, "hlg": true,
 	"dv": true, "dovi": true, "dolbyvision": true}
+
+// HDRKinds are the kinds of HDR video, best first: Dolby Vision, HDR10+,
+// HDR10 and HLG. A version with Dolby Vision over an HDR10 base layer is
+// Dolby Vision.
+var HDRKinds = []string{"dv", "hdr10plus", "hdr10", "hlg"}
+
+// hdrWords are the words naming a kind of HDRKinds, in lower case: Dolby
+// Vision is also "Dolby Vision", in two words, and HDR10+ "HDR10+", whose
+// sign is no word's (see hdrKind).
+var hdrWords = map[string]string{"dv": "dv", "dovi": "dv", "dolbyvision": "dv", "hdr10plus": "hdr10plus", "hdr10p": "hdr10plus",
+	"hdr10": "hdr10", "hlg": "hlg"}
 
 // multiWords say a stream has several audio languages.
 var multiWords = map[string]bool{"multi": true, "dual": true, "multilang": true, "multiaudio": true}
@@ -179,6 +195,9 @@ func ReadLabels(title string, labels ...string) Labels {
 			switch {
 			case highRangeWords[lower] || lower == "dolby" && next == "vision":
 				read.Range = HighRange
+				if kind := hdrKind(label, lower, next); kind != "" && listRank(HDRKinds, kind) < listRank(HDRKinds, read.HDR) {
+					read.HDR = kind
+				}
 			case lower == "sdr":
 				standard = true
 			case multiWords[lower] && !subtitles[i]:
@@ -213,6 +232,47 @@ func ReadLabels(title string, labels ...string) Labels {
 // letter case.
 func labelWords(label string) []string {
 	return strings.FieldsFunc(label, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+}
+
+// hdrKind is the kind of HDRKinds a word of label names, in lower case,
+// next being the word after it: "dolby" before "vision" names Dolby
+// Vision, and "hdr10" followed by "+" in the label, or by the word
+// "plus", HDR10+. Empty for another word.
+func hdrKind(label, word, next string) string {
+	if word == "dolby" && next == "vision" {
+		return "dv"
+	}
+	kind := hdrWords[word]
+	if kind == "hdr10" && (next == "plus" || plusAfter(label, "hdr10")) {
+		return "hdr10plus"
+	}
+	return kind
+}
+
+// plusAfter reports whether label holds word, in lower case, as the start
+// of a word in any letter case, right followed by "+": "HDR10+", "DD+5.1".
+func plusAfter(label, word string) bool {
+	lower := strings.ToLower(label)
+	for from := 0; ; {
+		i := strings.Index(lower[from:], word+"+")
+		if i < 0 {
+			return false
+		}
+		i += from
+		before, _ := utf8.DecodeLastRuneInString(lower[:i])
+		if i == 0 || !unicode.IsLetter(before) && !unicode.IsDigit(before) {
+			return true
+		}
+		from = i + len(word)
+	}
+}
+
+// listRank is value's place in list, len(list) when it is not there.
+func listRank(list []string, value string) int {
+	if i := slices.Index(list, value); i >= 0 {
+		return i
+	}
+	return len(list)
 }
 
 // labelFlags lists the countries of the flags a label holds, by their

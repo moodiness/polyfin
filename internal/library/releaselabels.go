@@ -13,13 +13,21 @@ var Tiers = []string{"disc", "bluray", "web", "dvd", "tv"}
 
 // AudioFormat is what labels or an analysis tell of a version's best audio
 // track: lossless (Dolby TrueHD, DTS-HD Master Audio, FLAC, PCM), object
-// based (Dolby Atmos, DTS:X), and its channels, 0 when unknown. The zero
-// value tells nothing.
+// based (Dolby Atmos, DTS:X), and its channels, 0 when unknown; Format is
+// the best of AudioFormats it is, empty for another or when unknown. The
+// zero value tells nothing.
 type AudioFormat struct {
 	Lossless bool
 	Object   bool
 	Channels int
+	Format   string
 }
+
+// AudioFormats are the audio formats versions are told apart by, best
+// first: Dolby Atmos, DTS:X, Dolby TrueHD, DTS-HD Master Audio, DTS-HD
+// (High Resolution Audio) and Dolby Digital Plus. A Dolby TrueHD or Dolby
+// Digital Plus track carrying Atmos is Atmos.
+var AudioFormats = []string{"atmos", "dtsx", "truehd", "dtshdma", "dtshd", "ddp"}
 
 // Rank is the format's class for the audio criterion: 2 lossless and
 // object based, 1 one of them, 0 neither.
@@ -70,6 +78,23 @@ var (
 	objectRuns    = [][]string{{"dts", "x"}}
 )
 
+// formatWords are the words naming a format of AudioFormats, in lower
+// case; formatRuns, by words in a row ("DTS-HD MA", "E-AC-3", "Dolby
+// Digital Plus"). Dolby Digital Plus is also "DDP5.1" (see formatAt), and
+// "DD+", whose sign is no word's.
+var (
+	formatWords = map[string]string{"atmos": "atmos", "dtsx": "dtsx", "truehd": "truehd", "dtsma": "dtshdma", "dtshdma": "dtshdma",
+		"dtshd": "dtshd", "ddp": "ddp", "eac3": "ddp"}
+	formatRuns = []struct {
+		words  []string
+		format string
+	}{
+		{[]string{"dts", "x"}, "dtsx"}, {[]string{"true", "hd"}, "truehd"}, {[]string{"dts", "hd", "ma"}, "dtshdma"},
+		{[]string{"dtshd", "ma"}, "dtshdma"}, {[]string{"dts", "hd"}, "dtshd"}, {[]string{"e", "ac", "3"}, "ddp"},
+		{[]string{"dolby", "digital", "plus"}, "ddp"},
+	}
+)
+
 // editionWords are the words naming an edition of accounts.VersionEditions,
 // in lower case; a director's cut is named by two or three words
 // ("Director's Cut", "Directors.Cut").
@@ -77,8 +102,9 @@ var editionWords = map[string]string{"theatrical": "theatrical", "extended": "ex
 
 // ReadRelease reads what the labels of a stream tell of its release: its
 // source tier, of Tiers, the best named, empty when they name none; its
-// audio format, the best named; and its edition, of
-// accounts.VersionEditions, the first named, empty when they name none.
+// audio format, the best named, its Format the best of AudioFormats named;
+// and its edition, of accounts.VersionEditions, the first named, empty
+// when they name none.
 // titles are as ReleaseKinds reads them: the words of a line naming the
 // title are the title's, so that a movie named "Extended" is no extended
 // cut.
@@ -94,6 +120,9 @@ func ReadRelease(titles []string, labels ...string) (tier string, audio AudioFor
 		for line := range strings.Lines(label) {
 			words := lowerWords(line)
 			words = words[titleEnd(words, named):]
+			if len(words) > 0 && plusAfter(line, "dd") {
+				audio.Format = betterFormat(audio.Format, "ddp")
+			}
 			for i, word := range words {
 				next := ""
 				if i+1 < len(words) {
@@ -114,6 +143,7 @@ func ReadRelease(titles []string, labels ...string) (tier string, audio AudioFor
 				if objectWords[word] || runAt(words, i, objectRuns) {
 					audio.Object = true
 				}
+				audio.Format = betterFormat(audio.Format, formatAt(words, i))
 				if channels := labelChannels(word, next); channels > audio.Channels {
 					audio.Channels = channels
 				}
@@ -137,6 +167,30 @@ func tierRank(tier string) int {
 		}
 	}
 	return len(Tiers)
+}
+
+// formatAt is the format of AudioFormats the words starting at words[i]
+// name, the best when several do, empty for none.
+func formatAt(words []string, i int) string {
+	format := formatWords[words[i]]
+	if strings.HasPrefix(words[i], "ddp") && strings.Trim(words[i][3:], "0123456789") == "" {
+		format = "ddp"
+	}
+	for _, run := range formatRuns {
+		if runAt(words, i, [][]string{run.words}) {
+			format = betterFormat(format, run.format)
+		}
+	}
+	return format
+}
+
+// betterFormat is the better of two formats of AudioFormats, either
+// empty for none.
+func betterFormat(a, b string) string {
+	if listRank(AudioFormats, b) < listRank(AudioFormats, a) {
+		return b
+	}
+	return a
 }
 
 // runAt reports whether one of runs starts at words[i].

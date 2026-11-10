@@ -34,21 +34,30 @@ func TestReadReleaseTellsTheSourceTier(t *testing.T) {
 
 // Labels tell a release's best audio: lossless, object based and its
 // channels, as releases write them glued to the codec or apart; DTS-HD
-// without MA is lossy, and a year or a height is no channel layout.
+// without MA is lossy, and a year or a height is no channel layout. Its
+// format is the best brand named: Atmos over the TrueHD or Dolby Digital
+// Plus carrying it, DTS:X apart from Atmos, Dolby Digital Plus however
+// written.
 func TestReadReleaseTellsTheAudioFormat(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		labels []string
 		want   AudioFormat
 	}{
-		{[]string{"Movie.2008.2160p.BluRay.TrueHD.Atmos.7.1.mkv"}, AudioFormat{Lossless: true, Object: true, Channels: 8}},
-		{[]string{"Movie.2008.1080p.BluRay.DTS-HD.MA.5.1.x264"}, AudioFormat{Lossless: true, Channels: 6}},
-		{[]string{"Movie 2008 DTS-HD HRA 5.1"}, AudioFormat{Channels: 6}},
-		{[]string{"Movie.2008.WEB-DL.DDP5.1.Atmos.mkv"}, AudioFormat{Object: true, Channels: 6}},
-		{[]string{"Movie (2008) DTS:X 7.1"}, AudioFormat{Object: true, Channels: 8}},
+		{[]string{"Movie.2008.2160p.BluRay.TrueHD.Atmos.7.1.mkv"}, AudioFormat{Lossless: true, Object: true, Channels: 8, Format: "atmos"}},
+		{[]string{"Movie.2008.1080p.BluRay.DTS-HD.MA.5.1.x264"}, AudioFormat{Lossless: true, Channels: 6, Format: "dtshdma"}},
+		{[]string{"Movie 2008 DTS-HD HRA 5.1"}, AudioFormat{Channels: 6, Format: "dtshd"}},
+		{[]string{"Movie.2008.WEB-DL.DDP5.1.Atmos.mkv"}, AudioFormat{Object: true, Channels: 6, Format: "atmos"}},
+		{[]string{"Movie (2008) DTS:X 7.1"}, AudioFormat{Object: true, Channels: 8, Format: "dtsx"}},
+		{[]string{"Movie (2008) True HD 7.1"}, AudioFormat{Lossless: true, Channels: 8, Format: "truehd"}},
 		{[]string{"Movie.2008.1080p.WEB.AAC2.0"}, AudioFormat{Channels: 2}},
 		{[]string{"Movie.2008.FLAC.2.0", "5.1"}, AudioFormat{Lossless: true, Channels: 6}},
 		{[]string{"Movie.2008.1080p.x264.mkv", "Movie.2008.Part.2.10bit.H.264"}, AudioFormat{}},
+		{[]string{"Movie.2008.1080p.WEB-DL.DDP5.1.H.264"}, AudioFormat{Channels: 6, Format: "ddp"}},
+		{[]string{"Source\n🔊 DD+ 5.1"}, AudioFormat{Channels: 6, Format: "ddp"}},
+		{[]string{"Movie 2008 E-AC-3 Dolby Digital Plus"}, AudioFormat{Format: "ddp"}},
+		// "ADD+" is no Dolby Digital Plus.
+		{[]string{"Movie 2008 ADD+ 2.0"}, AudioFormat{Channels: 2}},
 	} {
 		if _, got, _ := ReadRelease([]string{"Movie"}, tc.labels...); got != tc.want {
 			t.Errorf("%q: %+v, want %+v", tc.labels, got, tc.want)

@@ -92,6 +92,17 @@ func SameLanguage(a, b string) bool {
 	return a != "" && a == b
 }
 
+// Undetermined reports whether a track's language code states no
+// language, as Jellyfin 12.2 counts them: none, undetermined, multiple
+// languages, or no linguistic content.
+func Undetermined(code string) bool {
+	switch LanguageCode(code) {
+	case "", "und", "undetermined", "unknown", "mul", "zxx":
+		return true
+	}
+	return false
+}
+
 // KnownLanguage reports whether code is one of an ISO 639 language's codes,
 // in any letter case.
 func KnownLanguage(code string) bool {

@@ -231,7 +231,7 @@ func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *
 	// those of no stated language.
 	onlyForced := func() *playback.MediaStream {
 		return bestSubtitle(subtitles, func(s playback.MediaStream) int {
-			matches, undetermined := t.matches(s), undeterminedLanguage(s.Language)
+			matches, undetermined := t.matches(s), localization.Undetermined(s.Language)
 			if s.IsExternal || !s.IsForced || !matches && !undetermined {
 				return -1
 			}
@@ -292,7 +292,7 @@ func (t trackPreferences) subtitleRank(s playback.MediaStream, audioLanguage str
 		s.IsDefault,
 		!s.IsForced && matches,
 		s.IsForced && matches,
-		s.IsForced && undeterminedLanguage(s.Language),
+		s.IsForced && localization.Undetermined(s.Language),
 		s.IsForced,
 		s.IsForced && localization.SameLanguage(s.Language, audioLanguage),
 	} {
@@ -335,15 +335,4 @@ func bestSubtitle(subtitles []playback.MediaStream, score func(playback.MediaStr
 		return best
 	}
 	return text
-}
-
-// undeterminedLanguage reports whether a track states no language, as
-// Jellyfin 12.2 counts them: none, undetermined, multiple languages, or no
-// linguistic content.
-func undeterminedLanguage(language string) bool {
-	switch localization.LanguageCode(language) {
-	case "", "und", "undetermined", "unknown", "mul", "zxx":
-		return true
-	}
-	return false
 }
