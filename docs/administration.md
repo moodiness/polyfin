@@ -114,7 +114,7 @@ Home reads the server's state, which the conversions under **Bandwidth** and **S
 
 Below 1024 pixels wide, Home is one column, in the same order, with **Recent activity** last.
 
-A member's **Home** greets them too, then shows what they play now, as a wide tile on its poster with where it is read from and their quality group, while they play. Under it come **Quick Connect**, where they type a device's code to approve it, **My sources**, with **Use the server's sources**, and **My account**, with the server's status under it. A member sees their own playbacks only, never another user's, and cannot stop them or send them a message from there.
+A member's **Home** greets them too, then shows what they play now, as a wide tile on its poster with where it is read from and their quality group, while they play. Its poster and title open the title's page in the web player, as on an administrator's Home (see [Now playing](#now-playing)). Under it come **Quick Connect**, where they type a device's code to approve it, **My sources**, with **Use the server's sources**, and **My account**, with the server's status under it. A member sees their own playbacks only, never another user's, and cannot stop them or send them a message from there.
 
 **Compared with Jellyfin**
 
@@ -135,6 +135,14 @@ The tile under the keyboard or the mouse opens wide and shows its buttons; the a
 - **Stop**, after you confirm it.
 
 Apps that take no remote control show no message or stop button, and the wide tile tells why.
+
+The poster and the title open the title's page in the web player, as the titles of [Recent activity](#activity-log) do: in a new tab, or in place when you came from the web player or a Jellyfin app. An episode opens its own page, and a channel its channel's page. They stay plain text:
+
+- for a recording;
+- for a title your own account does not reach, such as a member's own source or a library hidden from you, even though the user playing it reaches it;
+- while Polyfin serves no web player.
+
+The title underlines under the mouse. On the keyboard, **Tab** reaches the tile, then its title, then its buttons.
 
 ![Home with two playbacks in Now playing, one with Details open](images/home-now-playing.webp)
 
