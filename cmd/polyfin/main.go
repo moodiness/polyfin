@@ -781,8 +781,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// offers them.
 		Versions: jellyfinAPI,
 		Titles:   lib,
-		// Replacing an addon's address forgets its version lists.
-		VersionLists: lib,
+		// Replacing an addon's address forgets its version lists, and
+		// Refresh everything makes what it gave old.
+		AddonCaches: lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,

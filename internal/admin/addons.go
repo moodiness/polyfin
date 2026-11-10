@@ -111,21 +111,24 @@ func usedBy(w http.ResponseWriter, scope addons.Scope, body *usedByJSON) (addons
 	return result, true
 }
 
-// VersionLists forgets the version lists an addon gave for titles, in
-// memory and saved, and tells how many it forgot (see
-// library.Service.ForgetAddonVersionLists).
-type VersionLists interface {
+// AddonCaches forgets or makes old what an addon gave: its version lists
+// for titles, in memory and saved, telling how many it forgot (see
+// library.Service.ForgetAddonVersionLists), or its catalog pages,
+// descriptions, page sizes and version lists at once (see
+// library.Service.MarkAddonStale).
+type AddonCaches interface {
 	ForgetAddonVersionLists(ctx context.Context, addon accounts.ID) (int, error)
+	MarkAddonStale(ctx context.Context, addon accounts.ID) (library.StaleAddon, error)
 }
 
 // forgetVersionLists forgets the version lists of addon, whose address
 // was replaced: reconfigured, it may list other streams, which each title
 // asks it for again. A failure is logged, the address staying replaced.
 func (h *handler) forgetVersionLists(ctx context.Context, addon addons.Addon) {
-	if h.VersionLists == nil {
+	if h.AddonCaches == nil {
 		return
 	}
-	forgotten, err := h.VersionLists.ForgetAddonVersionLists(ctx, addon.ID)
+	forgotten, err := h.AddonCaches.ForgetAddonVersionLists(ctx, addon.ID)
 	if err != nil {
 		h.Logger.Warn("Forgetting the version lists of an addon whose address was replaced failed", "addon", addon.Manifest.Name, "error", err)
 		return
@@ -942,6 +945,31 @@ func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addon, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
+	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+}
+
+// refreshAddonAll answers Refresh everything on an addon's page: its
+// manifest is downloaded again, as Refresh does, then what Polyfin keeps
+// of its answers is made old or forgotten (see AddonCaches), to be asked
+// for again as it is next needed, not at once. An IPTV source or a local
+// folder is refused, as for Replace the address (ErrNotStremio).
+func (h *handler) refreshAddonAll(w http.ResponseWriter, r *http.Request) {
+	scope, ok := h.scope(w, r)
+	if !ok || h.personalAddonsRefused(w, r, scope) {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	addon, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
+	if err == nil && h.AddonCaches != nil {
+		var stale library.StaleAddon
+		if stale, err = h.AddonCaches.MarkAddonStale(context.WithoutCancel(r.Context()), addon.ID); err == nil {
+			h.Logger.Info("Made what an addon gave old, to be asked for again", "addon", addon.Manifest.Name, "pages", stale.Pages,
+				"descriptions", stale.Descriptions, "lists", stale.VersionLists)
+		}
+	}
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 
