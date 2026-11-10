@@ -239,6 +239,22 @@ func (c *Cache[K, V]) DeleteFunc(drop func(key K, value V) bool) {
 	}
 }
 
+// ChangeFunc replaces in place the values change reports, given their key
+// and value, with what it returns for them. The entries keep when they
+// were stored, so they expire as they would have, and their place among
+// the recently used. A changed value is not measured again: it counts for
+// the size of the one it replaces, so change is for changes that keep the
+// size, as a value's date. change must not use the cache.
+func (c *Cache[K, V]) ChangeFunc(change func(key K, value V) (V, bool)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, e := range c.entries {
+		if value, ok := change(key, e.value); ok {
+			e.value = value
+		}
+	}
+}
+
 // remove forgets e, with c.mu held.
 func (c *Cache[K, V]) remove(e *entry[K, V]) {
 	e.unlink(byUse)
