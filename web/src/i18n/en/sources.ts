@@ -80,6 +80,12 @@ const sources = {
     refreshLabel: (name: string) => `Refresh ${name}`,
     refreshed: (name: string) => `${name}: the manifest was downloaded again.`,
     refreshedList: (name: string) => `${name}: the list was downloaded again.`,
+    refreshAll: 'Refresh everything',
+    refreshAllTitle: (name: string) => `Refresh everything from ${name}?`,
+    refreshAllBody:
+      'Its manifest is downloaded again. Its catalog pages, descriptions and version lists are asked for again as they are next needed, not all at once, and its libraries keep their settings.',
+    refreshedAll: (name: string) =>
+      `${name}: the manifest was downloaded again, and the rest is asked for again as it is needed.`,
     replace: 'Replace the address',
     newManifestUrl: 'New manifest address',
     replaceHint:

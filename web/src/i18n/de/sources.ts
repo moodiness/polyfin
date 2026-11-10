@@ -82,6 +82,12 @@ const sources: typeof en = {
     refreshLabel: (name: string) => `${name} aktualisieren`,
     refreshed: (name: string) => `${name}: Das Manifest wurde erneut heruntergeladen.`,
     refreshedList: (name: string) => `${name}: Die Liste wurde erneut heruntergeladen.`,
+    refreshAll: 'Alles aktualisieren',
+    refreshAllTitle: (name: string) => `Alles von ${name} aktualisieren?`,
+    refreshAllBody:
+      'Sein Manifest wird erneut heruntergeladen. Seine Katalogseiten, Beschreibungen und Versionslisten werden erneut abgefragt, sobald sie gebraucht werden, nicht alle auf einmal, und seine Bibliotheken behalten ihre Einstellungen.',
+    refreshedAll: (name: string) =>
+      `${name}: Das Manifest wurde erneut heruntergeladen, der Rest wird erneut abgefragt, sobald er gebraucht wird.`,
     replace: 'Adresse ersetzen',
     newManifestUrl: 'Neue Manifest-Adresse',
     replaceHint:
