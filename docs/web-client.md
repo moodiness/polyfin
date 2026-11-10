@@ -215,7 +215,7 @@ The script adds Polyfin's entries to the ⋮ menus of cards and of a title's pag
 | "Show this title again" | In its place, on a title the user hid | The title comes back. |
 | "Add to Watchlist" | A movie or an episode the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist) does not hold; a series or a season none of whose episodes it holds | A movie or an episode goes at the top of the playlist, a series or a season as its aired episodes, and a message says so. A user who deleted the playlist gets it again. |
 | "Remove from Watchlist" | In its place, on a movie or an episode the playlist holds, or a series or a season it holds an episode of | A movie or an episode leaves the playlist, a series or a season all its entries. Its cards leave the playlist's page, and Now available and Still waiting, but no other row. A message says so. |
-| "Watch together" | The ⋮ menu of a movie's or an episode's page, for a user who may create SyncPlay groups, in a web player that offers SyncPlay | The title opens paused at its start in a SyncPlay group, a new one unless the device is already in one, and a message says how the others join. See [Watching together](playback.md#watching-together). |
+| "Watch together" | The ⋮ menu of a movie's or an episode's page, for a user who may create SyncPlay groups, in a web player that offers SyncPlay | The title opens paused at its start in a SyncPlay group, a new one unless the device is already in one, and a list of the people to invite opens. See [Watching together](playback.md#watching-together). |
 
 - **Next Up lists:** the home page's Next Up, the Next Up page its title opens, the Next Up of a TV library's tab, and the Next Up of a series' page.
   - A removed card leaves the lists at once.

@@ -79,7 +79,7 @@ Analysis also reads chapters, which apps show and let you skip through. Apps get
 
 ## Watching together
 
-Watch together (SyncPlay in Jellyfin), the web player first, plays titles in step across devices and users. Each person joins from their own device: nobody can add someone else to a group.
+Watch together (SyncPlay in Jellyfin), the web player first, plays titles in step across devices and users. Each person joins from their own device: nobody can add someone else to a group, but the web player can invite them.
 
 1. One person opens the SyncPlay menu, the people icon at the top of the web player, and chooses "Create a new group".
 2. The others open the same menu on their own device and join that group, named after the person who created it.
@@ -88,9 +88,22 @@ Watch together (SyncPlay in Jellyfin), the web player first, plays titles in ste
 **From a title's page:** "Watch together" in the ⋮ menu of a movie or an episode does the first step with that title.
 
 - It creates a group, or uses the one the device is already in, and opens the title paused at its start.
-- A message says how the others join. Once they are in, press Play: it starts for everyone at once.
+- It then lists the people you can invite. Tick some and choose "Invite", or choose "Skip": a message then says how the others join, as it does when nobody can be invited. Once they are in, press Play: it starts for everyone at once.
+- Choosing "Watch together" again while the group plays that title opens the list again.
 - It shows to users whose **Watch together** access is Create and join (see [Watch together](user-limits.md#watch-together)), in a web player that offers SyncPlay.
 - A message says why it can't start: SyncPlay turned off for the user, an access that only joins groups, a title with no source yet, or a group where someone can't play the title.
+
+**Invitations:**
+
+- The list shows the people who could join now: another user with the web player open, whose **Watch together** access is Create and join or Join only, inside their **Allowed hours**, who can play the title, and not in the group yet. Disabled and ended accounts, and accounts not shown on the sign-in screen, are left out. Nobody is told why someone is missing.
+- Who can play the title follows their parental control, blocked genres and addons, as joining does. A library hidden from someone's **Visible libraries** leaves them in the list: its titles stay reachable (see [Visible libraries](user-limits.md#visible-libraries)).
+- An invitation shows a prompt in the invitee's web player, on every device where it is open: who invites, and the title. Other Jellyfin apps get nothing.
+- "Join" joins the group, as joining from the SyncPlay menu does: the title opens paused, until the host presses Play. "Not now" declines.
+- Joining or declining on one device closes the prompt on the invitee's other devices.
+- An invitation lasts 5 minutes, or until the group ends. A person can be invited once a minute.
+- The group stays listed in everyone's SyncPlay menu, so the others can still join from there.
+
+API details: [Watch together invitations for apps](jellyfin-api.md#watch-together-invitations-for-apps).
 
 How groups behave:
 
@@ -107,6 +120,7 @@ How groups behave:
 
 - Like Jellyfin, Polyfin keeps the groups in memory.
 - Jellyfin has no "Watch together" entry: its web player starts a group from the SyncPlay menu only.
+- Jellyfin has no invitations: everyone finds the group in the SyncPlay menu.
 
 <div class="moved-sections">
 
