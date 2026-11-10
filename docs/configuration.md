@@ -14,7 +14,8 @@ The database and the secret key:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `POLYFIN_DATABASE_URL` | (required) | PostgreSQL URL, such as `postgresql://polyfin:password@postgres:5432/polyfin`. Its `pool_max_conns` bounds the pool, 10 connections by default (see [A light PostgreSQL](installation.md#a-light-postgresql)). |
+| `POLYFIN_DATABASE_URL` | (required, unless `POLYFIN_DATABASE` is `embedded`) | PostgreSQL URL, such as `postgresql://polyfin:password@postgres:5432/polyfin`. Its `pool_max_conns` bounds the pool, 10 connections by default (see [A light PostgreSQL](installation.md#a-light-postgresql)). |
+| `POLYFIN_DATABASE` | (unset) | `embedded`: Polyfin runs its own PostgreSQL 18 in the folder `postgresql` of `POLYFIN_DATA_DIR`, with the server programs it finds in `PATH`, starting it before it serves and stopping it after. The `aio` image sets it (see [One container](installation.md#one-container)). Setting `POLYFIN_DATABASE_URL` too is an error. |
 | `POLYFIN_SECRET_KEY` | (unset) | Key that encrypts the stored secrets: API keys, client secrets, tokens and passwords. See [Stored keys and tokens](#stored-keys-and-tokens). |
 
 - **The database connection:** besides its pool, Polyfin keeps one connection that listens for changes to addons and libraries. It then answers them from memory.
@@ -127,6 +128,8 @@ At the `info` level, Polyfin logs each Jellyfin endpoint an app calls that it do
 | `tools` | The FFmpeg for NVIDIA drivers older than 610, when NVENC needs it (see [NVIDIA driver](gpus-and-hdr.md#nvidia-driver)) | Yes |
 | `recordings` | Live TV recordings | Yes |
 | `backups` | Database backups | Yes |
+| `postgresql` | The database, when `POLYFIN_DATABASE` is `embedded` | Yes |
+| `log` | The database's log, `postgresql.log`, when `POLYFIN_DATABASE` is `embedded` | Yes |
 
 - **Parts of `cache`:** the settings can move each to another folder (see [Folders for conversion, files being read and the cache](#folders-for-conversion-files-being-read-and-the-cache)).
 - **Recordings and backups:** they go elsewhere when their settings name other folders.

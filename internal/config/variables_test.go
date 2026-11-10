@@ -46,6 +46,7 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		// Copied into the settings once, it is no longer read.
 		"POLYFIN_CACHE_SIZE":     {Value: "20GB", Set: true},
 		"POLYFIN_LISTEN":         {Value: ":8096", Known: true},
+		"POLYFIN_DATABASE":       {Known: true},
 		"POLYFIN_DATA_DIR":       {Value: cfg.DataDir, Known: true},
 		"POLYFIN_API_TOKEN":      {Set: true, Hidden: true},
 		"POLYFIN_ADMIN_PASSWORD": {Set: true, Hidden: true},

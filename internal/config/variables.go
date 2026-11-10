@@ -47,6 +47,7 @@ func Variables(environ []string, cfg Config) []Variable {
 	}
 	effective := map[string]string{
 		"POLYFIN_DATABASE_URL":        databaseLocation(cfg.DatabaseURL),
+		"POLYFIN_DATABASE":            embedded(cfg.Embedded),
 		"POLYFIN_LISTEN":              cfg.Listen,
 		"POLYFIN_DISCOVERY_PORT":      strconv.Itoa(cfg.DiscoveryPort),
 		"POLYFIN_DLNA_PORT":           strconv.Itoa(cfg.DLNAPort),
@@ -101,6 +102,14 @@ func Variables(environ []string, cfg Config) []Variable {
 		variables = append(variables, v)
 	}
 	return variables
+}
+
+// embedded is the value of POLYFIN_DATABASE that gives on.
+func embedded(on bool) string {
+	if on {
+		return EmbeddedDatabase
+	}
+	return ""
 }
 
 // secretName reports whether a variable's name tells its value is secret.
