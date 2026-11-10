@@ -7,6 +7,11 @@ NPM ?= npm
 VERSION ?= dev
 # The PostgreSQL image-health starts the image against, on the host.
 IMAGE_DATABASE_URL ?= postgresql://polyfin:polyfin@host.docker.internal:5432/polyfin
+# A folder holding the FFmpeg archives the Dockerfile downloads, as
+# scripts/ffmpeg-archives.sh fetch makes it: image-check takes them from
+# there, checked as a download is, rather than download them.
+FFMPEG_ARCHIVES ?=
+FFMPEG_CONTEXTS = $(if $(FFMPEG_ARCHIVES),--build-context ffmpeg-amd64-archive=$(FFMPEG_ARCHIVES)/amd64 --build-context ffmpeg-arm64-archive=$(FFMPEG_ARCHIVES)/arm64)
 
 .PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health
 
@@ -87,12 +92,12 @@ compose-check:
 # Local tag only: this target never pushes. It also checks that the
 # jellyfin-web source releases attach still matches its checksum.
 image-check:
-	docker buildx build --load --build-arg VERSION=$(VERSION) --tag polyfin-local:check .
+	docker buildx build --load --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --tag polyfin-local:check .
 	@printed="$$(docker run --rm --network none polyfin-local:check version)"; \
 	if [ "$$printed" != "$(VERSION)" ]; then \
 		echo "image reports version '$$printed', expected '$(VERSION)'"; exit 1; \
 	fi
-	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) --output type=cacheonly .
+	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --output type=cacheonly .
 	docker buildx build --target jellyfin-web-source --output type=cacheonly .
 
 # The image image-check built becomes healthy within its start period,
