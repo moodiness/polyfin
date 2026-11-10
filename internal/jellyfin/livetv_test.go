@@ -316,10 +316,13 @@ func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {
 
 // jellyfin-web's home fills none of its rows before the request of its
 // Live TV section, what airs now, answers (#1042). So what airs now never
-// waits for an addon: it answers at once from the pages Polyfin keeps,
-// with the programmes of the channels kept, while an addon whose live TV
-// catalog does not answer is asked in the background, once however many
-// requests come. The other requests the home waits for answer at once too.
+// waits for an addon: it answers from the pages Polyfin keeps, with the
+// programmes of the channels kept, while an addon whose live TV catalog
+// does not answer is asked in the background, once however many requests
+// come. The other requests the home waits for wait for no addon either.
+// The stuck addon holds every request until the end of the test, or until
+// Polyfin gives up on it: an answer that waited for it comes only once one
+// of them ended, whatever the time the server takes under load.
 func TestOnNowNeverWaitsForAnAddon(t *testing.T) {
 	t.Parallel()
 	addon := newTVAddon(t, true, "")
@@ -329,7 +332,7 @@ func TestOnNowNeverWaitsForAnAddon(t *testing.T) {
 
 	// A second addon whose channels and guide never answer, and a movie
 	// catalog that does not either.
-	var asked atomic.Int32
+	var asked, ended atomic.Int32
 	release := make(chan struct{})
 	answer := sync.OnceFunc(func() { close(release) })
 	stuck := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -345,6 +348,7 @@ func TestOnNowNeverWaitsForAnAddon(t *testing.T) {
 		if strings.HasPrefix(r.URL.Path, "/catalog/tv/") {
 			asked.Add(1)
 		}
+		defer ended.Add(1)
 		select {
 		case <-release:
 		case <-r.Context().Done():
@@ -368,10 +372,11 @@ func TestOnNowNeverWaitsForAnAddon(t *testing.T) {
 	}
 	for round := range 3 {
 		for _, path := range home {
-			start := time.Now()
 			status, body := s.call(http.MethodGet, path, app("tv", token), nil)
-			if took := time.Since(start); status != http.StatusOK || took > time.Second {
-				t.Fatalf("round %d, %s: %d after %v", round, path, status, took)
+			// Every request to the stuck addon was still pending when the
+			// answer came: it waited for none of them.
+			if n := ended.Load(); status != http.StatusOK || n != 0 {
+				t.Fatalf("round %d, %s: %d, after %d of the stuck addon's requests ended", round, path, status, n)
 			}
 			if strings.HasPrefix(path, "/LiveTv/") {
 				var programs QueryResult
