@@ -61,17 +61,29 @@ COPY --from=jellyfin-web-source-download --chmod=600 /jellyfin-web-12.4-source.t
 # time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
 # the last build of a month, kept for two years. The shared build keeps
 # ffmpeg and ffprobe from carrying a copy of every library each.
-FROM download AS ffmpeg-amd64
+#
+# Each platform's archive is downloaded by a stage of its own, which CI
+# replaces with the same file from its cache (scripts/ffmpeg-archives.sh,
+# docker buildx build --build-context ffmpeg-amd64-archive=<a folder
+# holding ffmpeg.tar.xz>), so that an outage of the download fails no run.
+# The stage after it checks the archive against its SHA-256 either way.
+FROM download AS ffmpeg-amd64-archive
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
-	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz \
-	&& echo "01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
+	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz
+
+FROM download AS ffmpeg-amd64
+COPY --from=ffmpeg-amd64-archive /ffmpeg.tar.xz /
+RUN echo "01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
 	&& sha256sum -c /ffmpeg.sha256 \
 	&& rm /ffmpeg.sha256
 
-FROM download AS ffmpeg-arm64
+FROM download AS ffmpeg-arm64-archive
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /ffmpeg.tar.xz \
-	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz \
-	&& echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
+	https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz
+
+FROM download AS ffmpeg-arm64
+COPY --from=ffmpeg-arm64-archive /ffmpeg.tar.xz /
+RUN echo "706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a  /ffmpeg.tar.xz" > /ffmpeg.sha256 \
 	&& sha256sum -c /ffmpeg.sha256 \
 	&& rm /ffmpeg.sha256
 
