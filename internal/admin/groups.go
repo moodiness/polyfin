@@ -27,11 +27,12 @@ func newGroupJSON(group accounts.Group) groupJSON {
 	}
 }
 
-// groupMemberJSON is a user in a group, and whether they follow it.
+// groupMemberJSON is a user in a group, and the sections in which they
+// keep their own values (accounts.GroupSections).
 type groupMemberJSON struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	FollowGroup bool   `json:"followGroup"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	OwnSections []string `json:"ownSections"`
 }
 
 func (h *handler) groups(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +163,7 @@ func (h *handler) writeGroupMembers(w http.ResponseWriter, r *http.Request, id a
 	}
 	result := make([]groupMemberJSON, 0, len(members))
 	for _, member := range members {
-		result = append(result, groupMemberJSON{ID: member.ID.String(), Name: member.Name, FollowGroup: member.FollowGroup})
+		result = append(result, groupMemberJSON{ID: member.ID.String(), Name: member.Name, OwnSections: member.OwnSections})
 	}
 	writeJSON(w, status, result)
 }

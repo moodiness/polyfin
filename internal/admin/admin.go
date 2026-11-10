@@ -739,6 +739,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidGroupCopy, http.StatusBadRequest, "invalid_copy_from"},
 		{accounts.ErrAdministratorGroup, http.StatusConflict, "admin_cannot_join_group"},
 		{accounts.ErrFollowsGroup, http.StatusConflict, "follows_group"},
+		{accounts.ErrInvalidOwnSections, http.StatusBadRequest, "invalid_own_sections"},
 		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
 		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
 		{accounts.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},

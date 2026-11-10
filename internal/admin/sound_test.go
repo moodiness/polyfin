@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -49,7 +50,7 @@ func TestUsersChooseTheirSound(t *testing.T) {
 		t.Fatalf("the group's: %d %v", status, group)
 	}
 	if status, body, _ := admin.call(http.MethodPatch, "/users/"+id, map[string]any{"groupId": group["id"]}); status != http.StatusOK ||
-		body["boostVolume"] != true || body["convertSound"] != false || body["followGroup"] != true {
+		body["boostVolume"] != true || body["convertSound"] != false || fmt.Sprint(body["ownSections"]) != "[]" {
 		t.Fatalf("joining the group: %d %v", status, body)
 	}
 	if status, body, _ := member.call(http.MethodGet, "/account/sound", nil); status != http.StatusOK ||

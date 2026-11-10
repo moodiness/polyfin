@@ -21,6 +21,9 @@ var (
 	// ErrFollowsGroup refuses a change to a setting the user's group holds
 	// while they follow it (see UserChanges.DetachFromGroup).
 	ErrFollowsGroup = errors.New("the user follows their group")
+	// ErrInvalidOwnSections reports a list of own sections (see
+	// User.OwnSections) naming something else than GroupSections.
+	ErrInvalidOwnSections = errors.New("invalid own sections")
 	// ErrInvalidGroupName reports a group name that is empty, longer than
 	// maxNameLength or unprintable; ErrGroupNameTaken, one another group
 	// has, compared without regard to case.
@@ -129,22 +132,40 @@ func set[T any](field, value *T) {
 	}
 }
 
-// equal reports whether l and o allow the same: the hidden libraries are
-// compared as a set, the rest as they are kept.
-func (l Limits) equal(o Limits) bool {
-	return equalPointers(l.Parental.MaxRating, o.Parental.MaxRating) &&
-		equalPointers(l.Parental.MaxSubRating, o.Parental.MaxSubRating) &&
-		slices.Equal(l.Parental.BlockUnrated, o.Parental.BlockUnrated) &&
-		l.VideoTranscoding == o.VideoTranscoding && l.AudioTranscoding == o.AudioTranscoding &&
-		l.ContentDownloading == o.ContentDownloading && l.PersonalAddons == o.PersonalAddons &&
-		l.MaxPlaybacks == o.MaxPlaybacks && l.MaxBitrate == o.MaxBitrate && l.LiveTv == o.LiveTv &&
-		l.SyncPlay == o.SyncPlay && l.RemoteControl == o.RemoteControl &&
-		SameLibraries(l.HiddenLibraries, o.HiddenLibraries) && slices.Equal(l.BlockedGenres, o.BlockedGenres) &&
-		slices.Equal(l.AccessSchedules, o.AccessSchedules) && l.CollectionManagement == o.CollectionManagement &&
-		l.SubtitleManagement == o.SubtitleManagement && l.LiveTvManagement == o.LiveTvManagement &&
-		l.QualityGroup == o.QualityGroup && l.CanShare == o.CanShare && l.TorrentStreams == o.TorrentStreams &&
-		l.RemoteAccess == o.RemoteAccess && l.LiveTvChannels.equal(o.LiveTvChannels) &&
-		l.LocalFirst == o.LocalFirst && l.BoostVolume == o.BoostVolume && l.ConvertSound == o.ConvertSound
+// differs names the GroupSections in which l and o allow something
+// different: the hidden libraries are compared as a set, the rest as they
+// are kept.
+func (l Limits) differs(o Limits) []string {
+	return slices.DeleteFunc(slices.Clone(GroupSections), func(section string) bool { return l.sameIn(o, section) })
+}
+
+// sameIn reports whether l and o allow the same in section.
+func (l Limits) sameIn(o Limits, section string) bool {
+	switch section {
+	case SectionAccess:
+		return l.VideoTranscoding == o.VideoTranscoding && l.AudioTranscoding == o.AudioTranscoding &&
+			l.ContentDownloading == o.ContentDownloading && l.PersonalAddons == o.PersonalAddons &&
+			l.CollectionManagement == o.CollectionManagement && l.SubtitleManagement == o.SubtitleManagement &&
+			l.CanShare == o.CanShare && l.TorrentStreams == o.TorrentStreams && l.RemoteAccess == o.RemoteAccess
+	case SectionPlayback:
+		return l.MaxPlaybacks == o.MaxPlaybacks && l.MaxBitrate == o.MaxBitrate && l.QualityGroup == o.QualityGroup &&
+			l.SyncPlay == o.SyncPlay && l.LiveTv == o.LiveTv && l.RemoteControl == o.RemoteControl &&
+			l.LiveTvManagement == o.LiveTvManagement && l.LocalFirst == o.LocalFirst &&
+			l.BoostVolume == o.BoostVolume && l.ConvertSound == o.ConvertSound
+	case SectionParental:
+		return equalPointers(l.Parental.MaxRating, o.Parental.MaxRating) &&
+			equalPointers(l.Parental.MaxSubRating, o.Parental.MaxSubRating) &&
+			slices.Equal(l.Parental.BlockUnrated, o.Parental.BlockUnrated)
+	case SectionLibraries:
+		return SameLibraries(l.HiddenLibraries, o.HiddenLibraries)
+	case SectionGenres:
+		return slices.Equal(l.BlockedGenres, o.BlockedGenres)
+	case SectionHours:
+		return slices.Equal(l.AccessSchedules, o.AccessSchedules)
+	case SectionChannels:
+		return l.LiveTvChannels.equal(o.LiveTvChannels)
+	}
+	return true
 }
 
 func equalPointers(a, b *int) bool {
@@ -158,13 +179,13 @@ func SameLibraries(a, b []ID) bool {
 		!slices.ContainsFunc(b, func(id ID) bool { return !slices.Contains(a, id) })
 }
 
-// Group holds the limits of several users at once, its members: those who
-// follow it have its values, at once after each change.
+// Group holds the limits of several users at once, its members: they have
+// its values, at once after each change, in the sections they follow.
 type Group struct {
 	ID        ID
 	Name      string
 	CreatedAt time.Time
-	// Members counts the users in the group, following it or not.
+	// Members counts the users in the group, whatever they follow.
 	Members int
 	Limits
 }
@@ -200,6 +221,58 @@ const (
 	SectionHours     = "hours"
 	SectionChannels  = "channels"
 )
+
+// GroupSections are the sections holding a group's settings, in the order
+// of a user's page: a member follows the group in each, or keeps it as
+// their own (User.OwnSections).
+var GroupSections = []string{SectionAccess, SectionPlayback, SectionParental, SectionLibraries,
+	SectionGenres, SectionHours, SectionChannels}
+
+// columnSections give the section of each of the groupColumns.
+var columnSections = map[string]string{
+	"max_parental_rating": SectionParental, "max_parental_sub_rating": SectionParental, "block_unrated_items": SectionParental,
+	"video_transcoding": SectionAccess, "audio_transcoding": SectionAccess, "content_downloading": SectionAccess,
+	"personal_addons": SectionAccess, "collection_management": SectionAccess, "subtitle_management": SectionAccess,
+	"can_share": SectionAccess, "torrent_streams": SectionAccess, "remote_access": SectionAccess,
+	"max_playbacks": SectionPlayback, "max_bitrate": SectionPlayback, "quality_group": SectionPlayback,
+	"sync_play": SectionPlayback, "live_tv": SectionPlayback, "remote_control": SectionPlayback,
+	"live_tv_management": SectionPlayback, "local_first": SectionPlayback, "boost_volume": SectionPlayback,
+	"convert_sound":    SectionPlayback,
+	"hidden_libraries": SectionLibraries, "blocked_genres": SectionGenres, "access_schedules": SectionHours,
+	"live_tv_channels": SectionChannels,
+}
+
+// groupCopy is the SET clause that gives a row of users its group's values
+// in the sections it follows, keeping its own in the others.
+var groupCopy = func() string {
+	columns := strings.Split(groupColumns, ", ")
+	values := make([]string, len(columns))
+	for i, column := range columns {
+		values[i] = "CASE WHEN '" + columnSections[column] + "' = ANY(users.own_sections) THEN users." + column +
+			" ELSE g." + column + " END"
+	}
+	return "(" + groupColumns + ") = (SELECT " + strings.Join(values, ", ") +
+		" FROM user_groups g WHERE g.id = users.group_id)"
+}()
+
+// FollowsGroup reports whether the user has their group's values in
+// section, one of GroupSections.
+func (u User) FollowsGroup(section string) bool {
+	return u.GroupID != nil && !slices.Contains(u.OwnSections, section)
+}
+
+// normalizeSections checks sections against GroupSections, and returns
+// them once each, in their order.
+func normalizeSections(sections []string) ([]string, error) {
+	for _, section := range sections {
+		if !slices.Contains(GroupSections, section) {
+			return nil, ErrInvalidOwnSections
+		}
+	}
+	return slices.DeleteFunc(slices.Clone(GroupSections), func(section string) bool {
+		return !slices.Contains(sections, section)
+	}), nil
+}
 
 // Sections names what changes sets, in the order of a group's page.
 func (changes GroupChanges) Sections() []string {
@@ -361,24 +434,32 @@ func (s *Store) UpdateGroup(ctx context.Context, id ID, changes GroupChanges) (G
 	return updated, err
 }
 
-// spreadGroup gives group's values to the members who follow it, in the
-// order of their identifiers, and takes the share links of those who may
-// no longer share.
+// spreadGroup gives group's values to its members in the sections they
+// follow, in the order of their identifiers, and takes the share links of
+// those who follow it in Access when it may not share.
 func spreadGroup(ctx context.Context, tx pgx.Tx, group Group) error {
-	rows, err := tx.Query(ctx, "SELECT id FROM users WHERE group_id = $1 AND follow_group ORDER BY id FOR UPDATE", group.ID)
+	rows, err := tx.Query(ctx, "SELECT id, own_sections FROM users WHERE group_id = $1 AND cardinality(own_sections) < $2 ORDER BY id FOR UPDATE",
+		group.ID, len(GroupSections))
 	if err != nil {
 		return err
 	}
-	followers, err := pgx.CollectRows(rows, pgx.RowTo[ID])
-	if err != nil || len(followers) == 0 {
+	var followers, access []ID
+	var id ID
+	var own []string
+	if _, err := pgx.ForEachRow(rows, []any{&id, &own}, func() error {
+		followers = append(followers, id)
+		if !slices.Contains(own, SectionAccess) {
+			access = append(access, id)
+		}
+		return nil
+	}); err != nil || len(followers) == 0 {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "UPDATE users SET ("+groupColumns+") = (SELECT "+groupColumns+
-		" FROM user_groups WHERE id = $1) WHERE id = ANY($2)", group.ID, followers); err != nil {
+	if _, err := tx.Exec(ctx, "UPDATE users SET "+groupCopy+" WHERE id = ANY($1)", followers); err != nil {
 		return err
 	}
-	if !group.CanShare {
-		return revokeShareLinks(ctx, tx, followers...)
+	if !group.CanShare && len(access) > 0 {
+		return revokeShareLinks(ctx, tx, access...)
 	}
 	return nil
 }
@@ -396,7 +477,7 @@ func (s *Store) DeleteGroup(ctx context.Context, id ID) (Group, error) {
 		if deleted, err = scanGroup(tx.QueryRow(ctx, groupSelect+" WHERE id = $1 FOR UPDATE", id)); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE users SET group_id = NULL, follow_group = true WHERE id IN (
+		if _, err := tx.Exec(ctx, `UPDATE users SET group_id = NULL, own_sections = '{}' WHERE id IN (
 			SELECT id FROM users WHERE group_id = $1 ORDER BY id FOR UPDATE)`, id); err != nil {
 			return err
 		}
@@ -419,7 +500,7 @@ func (s *Store) GroupMembers(ctx context.Context, id ID) ([]User, error) {
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (User, error) { return scanUser(row) })
 }
 
-// AddGroupMembers has users join a group and follow it, leaving the group
+// AddGroupMembers has users join a group and follow it everywhere, leaving the group
 // they were in, all of them or none: ErrNotFound reports a user or a group
 // that does not exist, ErrAdministratorGroup an administrator among them.
 // The users already in the group stay as they are. It returns those who
@@ -459,19 +540,20 @@ func (s *Store) AddGroupMembers(ctx context.Context, id ID, users []ID) ([]User,
 	return joined, nil
 }
 
-// membership is the group a change leaves a user in, nil for none; follow
-// tells whether they follow it, and takeValues whether the group's values
-// are to be written to them.
+// membership is the group a change leaves a user in, nil for none; own
+// lists the sections they keep as their own (User.OwnSections), and
+// takeValues tells whether the group's values are to be written to the
+// others.
 type membership struct {
 	group      *ID
-	follow     bool
+	own        []string
 	takeValues bool
 }
 
 // groupMembership decides the group of current after changes, prepared as
 // u, administrator telling whether they are one after them.
 func groupMembership(ctx context.Context, tx pgx.Tx, current User, administrator bool, changes UserChanges, u userUpdate) (membership, error) {
-	m := membership{group: current.GroupID, follow: current.FollowGroup}
+	m := membership{group: current.GroupID, own: current.OwnSections}
 	joined := false
 	if g := changes.Group; g != nil {
 		if *g == (ID{}) {
@@ -487,32 +569,43 @@ func groupMembership(ctx context.Context, tx pgx.Tx, current User, administrator
 	// Making a member an administrator takes them out of their group, with
 	// its values kept as their own.
 	if administrator || m.group == nil {
-		return membership{follow: true}, nil
+		return membership{own: []string{}}, nil
 	}
 	if joined {
-		m.follow = true
+		m.own = []string{}
 	}
-	if f := changes.FollowGroup; f != nil {
-		m.follow = *f
-	}
-	if !joined && !m.follow {
-		return m, nil
+	if o := changes.OwnSections; o != nil {
+		own, err := normalizeSections(*o)
+		if err != nil {
+			return m, err
+		}
+		m.own = own
 	}
 	var limits Limits
 	err := tx.QueryRow(ctx, "SELECT "+groupColumns+" FROM user_groups WHERE id = $1", *m.group).Scan(limits.fields()...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return m, ErrInvalidGroup
 	}
-	if err != nil || !m.follow {
+	if err != nil {
 		return m, err
 	}
-	m.takeValues = true
+	// The sections the user follows again take the group's values, what
+	// the change sets in them aside.
+	again := slices.ContainsFunc(current.OwnSections, func(section string) bool { return !slices.Contains(m.own, section) })
+	m.takeValues = joined || again
+	if joined {
+		return m, nil
+	}
 	// A change that keeps the group's values leaves the user following it.
-	if !joined && current.FollowGroup && !limits.with(changes, u).equal(limits) {
+	for _, section := range limits.with(changes, u).differs(limits) {
+		if slices.Contains(m.own, section) || slices.Contains(current.OwnSections, section) {
+			continue
+		}
 		if !changes.DetachFromGroup {
 			return m, ErrFollowsGroup
 		}
-		m.follow, m.takeValues = false, false
+		m.own = append(m.own, section)
 	}
-	return m, nil
+	m.own, err = normalizeSections(m.own)
+	return m, err
 }

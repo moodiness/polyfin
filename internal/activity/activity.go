@@ -394,6 +394,18 @@ var sectionNames = map[string]i18n.Text{
 	accounts.SectionChannels:  {"Live TV channels", "Chaînes de TV en direct", "Live-TV-Sender", "Canales de TV en directo", "Canali TV in diretta", "Canais de TV ao vivo"},
 }
 
+// sections names the sections of a group's page, separated by commas.
+func (s *Store) sections(sections []string) string {
+	names := make([]string, 0, len(sections))
+	for _, section := range sections {
+		if name, ok := sectionNames[section]; ok {
+			section = s.phrase(name)
+		}
+		names = append(names, section)
+	}
+	return strings.Join(names, ", ")
+}
+
 // GroupCreated records a new user group.
 func (s *Store) GroupCreated(ctx context.Context, group accounts.Group) {
 	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"Group %s was created", "Groupe %s créé", "Gruppe %s wurde erstellt", "Se ha creado el grupo %s", "Gruppo %s creato", "Grupo %s criado"}, group.Name), Type: "GroupCreated"})
@@ -402,14 +414,7 @@ func (s *Store) GroupCreated(ctx context.Context, group accounts.Group) {
 // GroupChanged records a change to a user group, naming the sections of
 // its page changed (accounts.GroupChanges.Sections).
 func (s *Store) GroupChanged(ctx context.Context, group accounts.Group, sections []string) {
-	names := make([]string, 0, len(sections))
-	for _, section := range sections {
-		if name, ok := sectionNames[section]; ok {
-			section = s.phrase(name)
-		}
-		names = append(names, section)
-	}
-	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"Group %s was changed: %s", "Groupe %s modifié\u202f: %s", "Gruppe %s wurde geändert: %s", "Se ha modificado el grupo %s: %s", "Gruppo %s modificato: %s", "Grupo %s alterado: %s"}, group.Name, strings.Join(names, ", ")),
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"Group %s was changed: %s", "Groupe %s modifié\u202f: %s", "Gruppe %s wurde geändert: %s", "Se ha modificado el grupo %s: %s", "Gruppo %s modificato: %s", "Grupo %s alterado: %s"}, group.Name, s.sections(sections)),
 		Type: "GroupChanged"})
 }
 
@@ -433,15 +438,24 @@ func (s *Store) GroupMemberRemoved(ctx context.Context, user accounts.User, grou
 }
 
 // GroupMemberDetached records that user no longer follows the group named
-// group: they keep their own settings. app names the Jellyfin app a change
-// detached them from, empty when an administrator turned following off.
-func (s *Store) GroupMemberDetached(ctx context.Context, user accounts.User, group, app string) {
-	name := s.phrase(i18n.Text{"%s no longer follows the group %s", "%s ne suit plus le groupe %s", "%s folgt der Gruppe %s nicht mehr", "%s ya no sigue el grupo %s", "%s non segue più il gruppo %s", "%s não segue mais o grupo %s"}, user.Name, group)
+// group in sections (accounts.GroupSections): they keep their own values
+// there. app names the Jellyfin app a change detached them from, empty
+// when an administrator made the sections their own.
+func (s *Store) GroupMemberDetached(ctx context.Context, user accounts.User, group string, sections []string, app string) {
+	name := s.phrase(i18n.Text{"%s no longer follows the group %s for %s", "%s ne suit plus le groupe %s pour %s", "%s folgt der Gruppe %s nicht mehr für %s", "%s ya no sigue el grupo %s en %s", "%s non segue più il gruppo %s per %s", "%s não segue mais o grupo %s em %s"},
+		user.Name, group, s.sections(sections))
 	if app != "" {
-		name = s.phrase(i18n.Text{"%s no longer follows the group %s: changed from %s", "%s ne suit plus le groupe %s\u202f: modifié depuis %s", "%s folgt der Gruppe %s nicht mehr: geändert in %s", "%s ya no sigue el grupo %s: cambiado desde %s", "%s non segue più il gruppo %s: modificato da %s", "%s não segue mais o grupo %s: alterado em %s"},
-			user.Name, group, app)
+		name = s.phrase(i18n.Text{"%s no longer follows the group %s for %s: changed from %s", "%s ne suit plus le groupe %s pour %s\u202f: modifié depuis %s", "%s folgt der Gruppe %s nicht mehr für %s: geändert in %s", "%s ya no sigue el grupo %s en %s: cambiado desde %s", "%s non segue più il gruppo %s per %s: modificato da %s", "%s não segue mais o grupo %s em %s: alterado em %s"},
+			user.Name, group, s.sections(sections), app)
 	}
 	s.record(ctx, Entry{Name: name, Type: "GroupMemberDetached", UserID: &user.ID})
+}
+
+// GroupMemberFollows records that user follows the group named group again
+// in sections (accounts.GroupSections), taking its values back.
+func (s *Store) GroupMemberFollows(ctx context.Context, user accounts.User, group string, sections []string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s follows the group %s again for %s", "%s suit de nouveau le groupe %s pour %s", "%s folgt der Gruppe %s wieder für %s", "%s vuelve a seguir el grupo %s en %s", "%s segue di nuovo il gruppo %s per %s", "%s voltou a seguir o grupo %s em %s"},
+		user.Name, group, s.sections(sections)), Type: "GroupMemberFollows", UserID: &user.ID})
 }
 
 // LimitsReset records that the administrator named by put the settings a

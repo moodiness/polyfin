@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -113,7 +114,7 @@ func TestRemoteAccessInTheAdminApp(t *testing.T) {
 		t.Fatalf("the group's: %d %v", status, group)
 	}
 	status, cat, _ := admin.call(http.MethodPost, "/users", map[string]any{"name": "cat", "password": "correct horse", "groupId": group["id"]})
-	if status != http.StatusCreated || cat["remoteAccess"] != false || cat["followGroup"] != true {
+	if status != http.StatusCreated || cat["remoteAccess"] != false || fmt.Sprint(cat["ownSections"]) != "[]" {
 		t.Errorf("a member of the group: %d %v", status, cat)
 	}
 }

@@ -117,7 +117,7 @@ func TestResetsFollowTheGroupRules(t *testing.T) {
 	group := kidsGroup(t, store)
 	ann := mustCreate(t, store, NewUser{Name: "ann", Password: "correct horse", Group: &group.ID})
 	cat := mustCreate(t, store, NewUser{Name: "cat", Password: "correct horse", Group: &group.ID})
-	cat, err := store.UpdateUser(ctx, cat.ID, UserChanges{FollowGroup: new(false), MaxBitrate: new(2_000_000)}, nil)
+	cat, err := store.UpdateUser(ctx, cat.ID, UserChanges{OwnSections: new(GroupSections), MaxBitrate: new(2_000_000)}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,12 +128,12 @@ func TestResetsFollowTheGroupRules(t *testing.T) {
 	if _, err := store.ResetLimits(ctx, ann.ID); !errors.Is(err, ErrFollowsGroup) {
 		t.Errorf("resetting a follower: %v", err)
 	}
-	if got := mustUser(t, store, ann.ID); !got.FollowGroup || !got.Limits().equal(group.Limits) {
+	if got := mustUser(t, store, ann.ID); len(got.OwnSections) != 0 || !got.Limits().equal(group.Limits) {
 		t.Errorf("ann after a refused reset: %+v", got)
 	}
 
 	reset, err := store.ResetLimits(ctx, cat.ID)
-	if err != nil || reset.GroupID == nil || *reset.GroupID != group.ID || reset.FollowGroup || !reset.Limits().equal(fresh.Limits()) {
+	if err != nil || reset.GroupID == nil || *reset.GroupID != group.ID || len(reset.OwnSections) == 0 || !reset.Limits().equal(fresh.Limits()) {
 		t.Errorf("cat after the reset: %+v %v", reset, err)
 	}
 	cat = reset
@@ -166,7 +166,7 @@ func TestResetsFollowTheGroupRules(t *testing.T) {
 	if err != nil || group.Name != "Kids" || group.Members != 2 || !group.Limits.equal(empty.Limits) {
 		t.Fatalf("the group after its reset: %+v %v", group, err)
 	}
-	if got := mustUser(t, store, ann.ID); !got.FollowGroup || !got.Limits().equal(fresh.Limits()) {
+	if got := mustUser(t, store, ann.ID); len(got.OwnSections) != 0 || !got.Limits().equal(fresh.Limits()) {
 		t.Errorf("ann after the group's reset: %+v", got.Limits())
 	}
 	if _, signed, err := store.DeviceByToken(ctx, token, "192.0.2.1"); err != nil || !signed.Limits().equal(fresh.Limits()) {

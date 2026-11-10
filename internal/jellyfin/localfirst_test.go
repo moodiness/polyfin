@@ -75,7 +75,7 @@ func TestLocalFilesFirstFromTheGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if own, err = p.store.UpdateUser(ctx, own.ID, accounts.UserChanges{FollowGroup: new(false)}, nil); err != nil {
+	if own, err = p.store.UpdateUser(ctx, own.ID, accounts.UserChanges{OwnSections: new(accounts.GroupSections)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	followerToken, ownToken := p.signIn("kim", "tv"), p.signIn("lee", "tv")

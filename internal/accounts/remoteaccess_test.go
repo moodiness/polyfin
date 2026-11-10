@@ -58,7 +58,7 @@ func TestRemoteAccessIsAGroupSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	member, err := store.CreateUser(ctx, NewUser{Name: "cat", Password: "correct horse", Group: &group.ID})
-	if err != nil || member.RemoteAccess || !member.FollowGroup {
+	if err != nil || member.RemoteAccess || len(member.OwnSections) != 0 {
 		t.Fatalf("a member: %+v %v", member, err)
 	}
 	if _, err := store.UpdateGroup(ctx, group.ID, GroupChanges{Limits: UserChanges{RemoteAccess: new(true)}}); err != nil {

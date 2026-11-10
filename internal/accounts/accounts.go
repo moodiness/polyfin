@@ -132,11 +132,12 @@ type User struct {
 	// while the server plays them (see Settings.TorrentsAllowed). Off for
 	// every user, administrators included, until given.
 	TorrentStreams bool
-	// GroupID is the group the user belongs to, nil for none (see Group);
-	// while FollowGroup is set, the settings the group holds are its
-	// values, otherwise the user's own. FollowGroup is set without a group.
+	// GroupID is the group the user belongs to, nil for none (see Group).
+	// OwnSections lists the GroupSections in which the user keeps their
+	// own values: in the others, the settings the group holds are its
+	// values. It is empty without a group.
 	GroupID     *ID
-	FollowGroup bool
+	OwnSections []string
 	// MetadataLanguage is the language the user's titles are described in,
 	// by the server's addons given that language (see addons.Addon.Language);
 	// empty for the server's descriptions. It also names what Polyfin
@@ -247,16 +248,19 @@ type UserChanges struct {
 	// TorrentStreams, see User.
 	TorrentStreams *bool
 	// Group sets the user's group, the zero ID for none. Joining a group
-	// follows it, unless FollowGroup says otherwise; leaving one keeps its
+	// follows it everywhere, unless OwnSections says otherwise; leaving one keeps its
 	// values as the user's own. An administrator cannot join one
 	// (ErrAdministratorGroup), and making a member one takes them out.
 	Group *ID
-	// FollowGroup has the user follow their group, taking its values back,
-	// or keep its values as their own and stop following it.
-	FollowGroup *bool
+	// OwnSections sets the sections in which a member keeps their own
+	// values (see User.OwnSections), all of them: those they follow again
+	// take the group's values back, those they no longer follow keep the
+	// group's current values as their own (ErrInvalidOwnSections for
+	// another name than GroupSections).
+	OwnSections *[]string
 	// DetachFromGroup decides what a change to a setting the user's group
-	// holds does while they follow it, when it sets another value than the
-	// group's: with it, the user stops following the group and keeps the
+	// holds does in a section they follow, when it sets another value than
+	// the group's: with it, the section becomes their own and keeps the
 	// change; without it, the change is refused (ErrFollowsGroup).
 	DetachFromGroup bool
 	// MetadataLanguage, see User: a language code (MetadataLanguageCode)
@@ -375,7 +379,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, ends_at, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, ends_at, can_share, group_id, own_sections, metadata_language, two_step, torrent_streams, " +
 	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume, " +
 	"boost_volume, convert_sound, interface_size"
 
@@ -389,7 +393,7 @@ func (user *User) fields() []any {
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.EndsAt, &user.CanShare,
-		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
+		&user.GroupID, &user.OwnSections, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
 		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
 		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize}
 }
@@ -851,7 +855,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28 AND ends_at IS NOT DISTINCT FROM $45,
 			can_share = coalesce($29, can_share),
 			group_id = $30,
-			follow_group = $31,
+			own_sections = $31,
 			metadata_language = coalesce($32, metadata_language),
 			torrent_streams = coalesce($33, torrent_streams),
 			provider_only = coalesce($34, provider_only),
@@ -873,7 +877,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
-		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
+		membership.group, membership.own, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
 		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess, u.channels, changes.LocalFirst,
 		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound, changes.InterfaceSize, endsAt))
 	if uniqueViolation(err) {
@@ -883,8 +887,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		return User{}, nil, err
 	}
 	if membership.takeValues {
-		if updated, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ("+groupColumns+") = (SELECT "+groupColumns+
-			" FROM user_groups WHERE id = $2) WHERE id = $1 RETURNING "+userColumns, id, membership.group)); err != nil {
+		if updated, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET "+groupCopy+" WHERE id = $1 RETURNING "+userColumns, id)); err != nil {
 			return User{}, nil, err
 		}
 	}

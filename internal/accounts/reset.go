@@ -15,7 +15,7 @@ import (
 // user, or of a group, back to a new user's: the values CreateUser gives.
 // The rest of the account stays as it is: the name and password,
 // administrator status, the sign-in screen, the disabled switch, the end
-// date, the group and whether the user follows it, and everything kept for
+// date, the group and what the user follows of it, and everything kept for
 // the user elsewhere.
 
 // administratorPermissions are the settings a group holds that CreateUser
@@ -26,12 +26,15 @@ import (
 var administratorPermissions = []string{"remote_control", "collection_management", "subtitle_management", "live_tv_management"}
 
 // newUserValues is the SET list that gives a row of users or user_groups a
-// new user's values for the groupColumns: each column's default, and
-// administrator, an SQL boolean, for administratorPermissions.
-func newUserValues(administrator string) string {
+// new user's values for the groupColumns of sections: each column's
+// default, and administrator, an SQL boolean, for administratorPermissions.
+func newUserValues(administrator string, sections []string) string {
 	columns := strings.Split(groupColumns, ", ")
 	set := make([]string, 0, len(columns))
 	for _, column := range columns {
+		if !slices.Contains(sections, columnSections[column]) {
+			continue
+		}
 		value := "DEFAULT"
 		if slices.Contains(administratorPermissions, column) {
 			value = administrator
@@ -60,9 +63,9 @@ func (s *Store) preview(ctx context.Context, change func(tx pgx.Tx) error) error
 
 // ResetLimits gives the user id a new user's values for the settings a
 // group holds, those CreateUser gives an account with their administrator
-// status, and returns the user as they are now. A member who follows their
-// group has the group's values, and is refused with ErrFollowsGroup; one
-// with their own settings stays in the group, not following it. As
+// status, and returns the user as they are now. A member resets only the
+// sections they keep as their own, and is refused with ErrFollowsGroup
+// when they follow the group everywhere; they follow the others still. As
 // UpdateUser, it applies from the user's next request, and a user who may
 // no longer share loses their share links.
 func (s *Store) ResetLimits(ctx context.Context, id ID) (User, error) {
@@ -104,10 +107,14 @@ func resetLimits(ctx context.Context, tx pgx.Tx, id ID) (User, error) {
 	if err != nil {
 		return User{}, err
 	}
-	if current.GroupID != nil && current.FollowGroup {
-		return User{}, ErrFollowsGroup
+	sections := GroupSections
+	if current.GroupID != nil {
+		if len(current.OwnSections) == 0 {
+			return User{}, ErrFollowsGroup
+		}
+		sections = current.OwnSections
 	}
-	return scanUser(tx.QueryRow(ctx, "UPDATE users SET "+newUserValues("is_administrator")+" WHERE id = $1 RETURNING "+userColumns, id))
+	return scanUser(tx.QueryRow(ctx, "UPDATE users SET "+newUserValues("is_administrator", sections)+" WHERE id = $1 RETURNING "+userColumns, id))
 }
 
 // ResetGroup gives the group id a new user's values for the settings it
@@ -144,7 +151,7 @@ func (s *Store) GroupLimitsAfterReset(ctx context.Context, id ID) (Limits, error
 }
 
 func resetGroup(ctx context.Context, tx pgx.Tx, id ID) (Group, error) {
-	tag, err := tx.Exec(ctx, "UPDATE user_groups SET "+newUserValues("DEFAULT")+" WHERE id = $1", id)
+	tag, err := tx.Exec(ctx, "UPDATE user_groups SET "+newUserValues("DEFAULT", GroupSections)+" WHERE id = $1", id)
 	if err != nil {
 		return Group{}, err
 	}
