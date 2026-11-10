@@ -646,6 +646,15 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 ### Version names for apps
 
 - Only `MediaSources[].Name` changes. `Id` and `ETag` stay, so the web player keeps a picked version selected.
+- With **Version names** on **Short**, `Name` is the short name Polyfin writes (see [Version names](versions.md#version-names)), for movies and episodes, the same in item details, listings and `PlaybackInfo`. On **As the addon writes them**, it is the addon's name. Either may end with how the app plays it.
+
+### Version badges for apps
+
+- `GET /Polyfin/Items/{itemId}/Badges?language=fr` answers `{"Show": <the Version badges setting>, "Versions": [{"Id", "ETag", "Name", "Badges"}]}`, with the authentication and access checks of item details; an unknown item answers `404 Not Found`. `Versions` lists the versions known now, as item details list them; `Id` is the identifier details give the version's media source, so the version the item was opened as has the opened identifier; `ETag` is the version's own identifier. Items other than movies and episodes answer `"Versions": []`.
+- `GET /Polyfin/Playback/Badges?language=fr` answers `{"Show", "ItemId", "Name", "Badges"}` for what the caller's own device plays: the version played, or the one the play went on with after another failed. When it plays nothing Polyfin knows, `ItemId` and `Name` are empty and `Badges` is `[]`.
+- `Name` in both is always the addon's own name, whatever **Version names** says.
+- `Badges` are `[{"Kind", "Text", "Label"}]` in the order of `Kind`: `resolution`, `range`, `codec`, `audio`, `channels`, `edition`, `language` (see [Badges](versions.md#badges)). `Text` is the short text shown ("4K", "DV", "FR"); `Label` the full words for screen readers and tooltips ("4K Ultra HD", "Dolby Vision", "Audio: French").
+- `language` is the language of the words; when missing or not one Polyfin speaks, it is the server language.
 
 ### Versions as media sources
 

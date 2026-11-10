@@ -25,6 +25,7 @@ Polyfin adds these to the web player's pages:
 - **Louder videos:** for a user with **Boost the volume in the web player**, videos play louder, and the player's settings menu offers **Boost the volume**. See [Louder videos in the web player](#louder-videos-in-the-web-player).
 - **Recent searches:** on the search page, while the field is empty, the user's recent searches show above the Suggestions. See [Recent searches](#recent-searches).
 - **Ratings on posters:** while **Show ratings on posters** is on, a movie's or a series' poster shows its ratings as the pointer or the focus comes to it. See [Ratings on posters](#ratings-on-posters).
+- **Version badges:** while **Version badges** is on, a title's page shows badges for the version picked under its version menu, and a video shows those of the version it plays. See [Version badges](#version-badges).
 
 **Compared with Jellyfin**
 
@@ -101,6 +102,40 @@ The ratings are asked for once per page:
 
 API details: [Ratings on posters](jellyfin-api.md#ratings-on-posters-for-apps).
 
+### Version badges
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Version badges** | **Settings › Web player** | On | Shows a row of badges for the version picked on a title's page, and for the version a video plays, in the web player, for every user. |
+
+Each badge is a short text in a thin border, in the page's font, such as "4K", "DV", "HEVC", "Atmos", "7.1", "IMAX" or "FR". They come in this order, those the version lacks left out:
+
+1. resolution;
+2. HDR;
+3. video codec;
+4. audio;
+5. channels;
+6. edition;
+7. audio languages.
+
+Polyfin writes them from the version's analysis once it has one, else from the addon's labels. A badge's tooltip, which screen readers read too, says it in full words, in the web player's language: "Dolby Vision", "7.1 surround", "Audio: French".
+
+On a movie's or an episode's page:
+
+- The row sits right under the "Version" menu, with **LumaaGlaass** as with jellyfin-web's own look. With one version, the menu is hidden, and the row joins the track menus instead: after them in jellyfin-web's own look, at the top of their panel with **LumaaGlaass**.
+- It shows the badges of the version picked, and changes as you pick another.
+- The "Version" menu's tooltip names the version picked in full, as its addon names it, which helps when the menu shows short names (see [Version names](versions.md#version-names)). The tooltip shows while the setting is off too.
+- A version that joins the menu while the page is open gets its badges about a second later.
+- Nothing changes while the menu has the focus, but for a pick: the rest waits for the focus to leave it.
+
+During a video, the row sits in the player's controls at the bottom, above the progress bar, and shows and hides with them. Its badges have a dark ground, so they stay readable over a bright picture. The web player tells the server of a play a moment after the video starts, so the badges may take a few seconds to come. They go when the video ends.
+
+The row wraps on a narrow screen and stays on one line where it fits. The TV layout shows larger badges. Nothing shows only on hover, since screen readers read each badge's full words, and there is no animation.
+
+**Compared with Jellyfin**
+
+- jellyfin-web shows no badges for a version. Its "Version" menu lists the versions' names only, and its player shows the title.
+
 ### Louder videos in the web player
 
 **Boost the volume in the web player** makes videos louder in the web player for a user. The boost, how it is measured and where it applies are on [Loudness](loudness.md#loudness-in-the-web-player).
@@ -149,6 +184,7 @@ On a movie's or an episode's page, the script:
 - **Says when nothing was found:** when every addon has answered without a version, "No source is available for this title." shows under the buttons. Its **Try again** button has Polyfin ask the addons again.
 - **Shortens long names:** a long version, audio or subtitle name ends with "…" before its menu's arrow, so that it does not run under it. Stream addons' detailed version names are often that long. The open menu shows whole names.
 - **Adds Share:** see [Share button](#share-button).
+- **Shows version badges:** see [Version badges](#version-badges).
 
 The script changes nothing during a video. It holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it.
 
