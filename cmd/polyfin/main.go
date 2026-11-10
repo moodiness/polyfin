@@ -108,7 +108,8 @@ Commands:
   help         Show this help
 
 Environment:
-  POLYFIN_DATABASE_URL  PostgreSQL URL (required)
+  POLYFIN_DATABASE_URL  PostgreSQL URL (required, unless POLYFIN_DATABASE is embedded)
+  POLYFIN_DATABASE      embedded: run PostgreSQL 18 in the folder postgresql of POLYFIN_DATA_DIR, with the server programs found in PATH, instead of POLYFIN_DATABASE_URL (default: none)
   POLYFIN_SECRET_KEY    key the stored keys and tokens are encrypted with: 32 bytes in base64, from openssl rand -base64 32 (default: none, stored unencrypted)
   POLYFIN_DATA_DIR      absolute path of the folder Polyfin keeps its files in: the cache, and the default recordings and backups folders (default: a polyfin folder in the system's temporary folder)
   POLYFIN_LISTEN        HTTP address (default :8096)
@@ -138,35 +139,15 @@ func main() {
 	switch command {
 	case "serve":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		var restore pendingRestore
-		err := serve(ctx, &restore)
-		// A restart from the admin app exits once Polyfin has stopped, as
-		// on a signal, with exitRestart: Docker's restart policies, on-failure
-		// included, systemd's Restart=on-failure and Polyfin Desktop start a
-		// process that failed again, where 0 would leave on-failure down.
-		if errors.Is(err, errRestart) {
-			stop()
-			fmt.Fprintln(os.Stderr, "polyfin: stopped to restart, as an administrator asked: exit code", exitRestart)
-			os.Exit(exitRestart)
-		}
-		// A stop requested while waiting for PostgreSQL is not a failure.
-		interrupted := ctx.Err() != nil && errors.Is(err, context.Canceled)
-		// Polyfin stopped to restore a backup: it starts again afterwards,
-		// unless asked to stop meanwhile.
-		restart := err == nil && restore.plan != nil && ctx.Err() == nil
-		if restart {
-			restoreBackup(ctx, restore)
-			restart = ctx.Err() == nil
-		}
+		code, again := runServe(ctx, os.Getenv)
 		stop()
-		if err != nil && !interrupted {
-			fmt.Fprintln(os.Stderr, "polyfin:", err)
-			os.Exit(1)
-		}
-		if restart {
+		if again {
 			err := startAgain()
 			fmt.Fprintln(os.Stderr, "polyfin: start again after the restore:", err)
-			os.Exit(1)
+			code = 1
+		}
+		if code != 0 {
+			os.Exit(code)
 		}
 	case "healthcheck":
 		if err := healthcheck(os.Getenv, healthcheckTimeout); err != nil {
@@ -183,19 +164,64 @@ func main() {
 	}
 }
 
+// runServe runs polyfin serve until it stops, with the database it runs
+// itself when POLYFIN_DATABASE is embedded, and returns the exit code,
+// and whether to start again after a restore. Its own database is stopped
+// before it returns: after the restore, and before a start again.
+func runServe(ctx context.Context, getenv func(string) string) (code int, again bool) {
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "polyfin:", err)
+		return 1, false
+	}
+	if cfg.Embedded {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+		db, err := startEmbedded(ctx, getenv("PATH"), cfg.DataDir, logger)
+		if err != nil {
+			if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+				return 0, false
+			}
+			fmt.Fprintln(os.Stderr, "polyfin:", err)
+			return 1, false
+		}
+		defer db.stop()
+		cfg.DatabaseURL = db.url()
+	}
+	var restore pendingRestore
+	err = serve(ctx, cfg, &restore)
+	// A restart from the admin app exits once Polyfin has stopped, as
+	// on a signal, with exitRestart: Docker's restart policies, on-failure
+	// included, systemd's Restart=on-failure and Polyfin Desktop start a
+	// process that failed again, where 0 would leave on-failure down.
+	if errors.Is(err, errRestart) {
+		fmt.Fprintln(os.Stderr, "polyfin: stopped to restart, as an administrator asked: exit code", exitRestart)
+		return exitRestart, false
+	}
+	// A stop requested while waiting for PostgreSQL is not a failure.
+	interrupted := ctx.Err() != nil && errors.Is(err, context.Canceled)
+	// Polyfin stopped to restore a backup: it starts again afterwards,
+	// unless asked to stop meanwhile.
+	restart := err == nil && restore.plan != nil && ctx.Err() == nil
+	if restart {
+		restoreBackup(ctx, restore)
+		restart = ctx.Err() == nil
+	}
+	if err != nil && !interrupted {
+		fmt.Fprintln(os.Stderr, "polyfin:", err)
+		return 1, false
+	}
+	return 0, restart
+}
+
 // serve runs Polyfin until ctx ends, until an administrator restores a
 // backup, or restarts Polyfin: restore then holds what Restore needs, once
 // every part of Polyfin has stopped, and errRestart tells a restart.
-func serve(ctx context.Context, restore *pendingRestore) error {
+func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) error {
 	started := time.Now()
 	// Everything Polyfin runs in the background ends with ctx, or when it
 	// stops to restore a backup.
 	ctx, stopAll := context.WithCancel(ctx)
 	defer stopAll()
-	cfg, err := config.Load(os.Getenv)
-	if err != nil {
-		return err
-	}
 	// The level is info, and follows the settings' detailed log once they
 	// are loaded. The recent lines are also kept, redacted, for
 	// administrators to read from Jellyfin apps.

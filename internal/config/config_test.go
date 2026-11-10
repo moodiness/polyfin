@@ -253,3 +253,26 @@ func TestDataFolder(t *testing.T) {
 		}
 	}
 }
+
+// POLYFIN_DATABASE=embedded stands in for the URL; with a URL too, or
+// with another value, the configuration is refused.
+func TestEmbeddedDatabaseReplacesTheURL(t *testing.T) {
+	t.Parallel()
+	cfg, err := Load(env(map[string]string{"POLYFIN_DATABASE": " embedded "}))
+	if err != nil || !cfg.Embedded || cfg.DatabaseURL != "" {
+		t.Fatalf("embedded: %+v, %v", cfg, err)
+	}
+	if cfg, err := Load(with(nil)); err != nil || cfg.Embedded {
+		t.Errorf("URL alone: embedded %v, %v", cfg.Embedded, err)
+	}
+	for name, values := range map[string]map[string]string{
+		"both":        {"POLYFIN_DATABASE": "embedded", "POLYFIN_DATABASE_URL": database},
+		"other value": {"POLYFIN_DATABASE": "postgresql"},
+		"neither":     {},
+	} {
+		_, err := Load(env(values))
+		if err == nil || !strings.Contains(err.Error(), "POLYFIN_DATABASE") {
+			t.Errorf("%s: %v, want an error about POLYFIN_DATABASE", name, err)
+		}
+	}
+}

@@ -53,7 +53,7 @@ Some tests need a program or a service, and run only when a variable names it. W
 | Tests that run FFmpeg | `POLYFIN_TEST_FFMPEG` names an `ffmpeg` executable with `ffprobe` beside it. |
 | Backup and restore tests | `POLYFIN_TEST_PG_DUMP` and `POLYFIN_TEST_PG_RESTORE` name PostgreSQL 18's `pg_dump` and `pg_restore`. |
 | OCR tests | `POLYFIN_TEST_TESSERACT` names a Tesseract executable. They use the data of `POLYFIN_TEST_TESSDATA` when set. |
-| Polyfin Desktop's tests that run PostgreSQL (`internal/desktop/cluster` and `internal/desktop/app`) | `POLYFIN_TEST_POSTGRES_BIN` names the folder of PostgreSQL 18's server programs. |
+| The tests that run PostgreSQL's server (`internal/cluster`, `internal/desktop/app`, and the embedded database's in `cmd/polyfin`) | `POLYFIN_TEST_POSTGRES_BIN` names the folder of PostgreSQL 18's server programs. |
 | The test of a torrent route's interface going down | `POLYFIN_TEST_TORRENT_INTERFACE` names a dummy interface with an address, with the right to set it down and up (`NET_ADMIN`). |
 | SMB share tests | `POLYFIN_TEST_SMB` names a share holding video files (see [SMB shares](#smb-shares)). |
 

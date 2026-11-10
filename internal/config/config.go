@@ -27,11 +27,20 @@ import (
 // DefaultListen is the port Jellyfin clients try first when no port is given.
 const DefaultListen = ":8096"
 
+// EmbeddedDatabase is the value of POLYFIN_DATABASE that makes the server
+// run its own PostgreSQL cluster, in the folder postgresql of the data
+// folder.
+const EmbeddedDatabase = "embedded"
+
 // Config holds the settings needed to start the server.
 type Config struct {
 	// DatabaseURL is a PostgreSQL connection string. It contains credentials:
 	// never log it.
 	DatabaseURL string
+	// Embedded tells that the server runs its own PostgreSQL cluster, in
+	// the data folder (POLYFIN_DATABASE set to embedded): DatabaseURL is
+	// then empty until the cluster starts.
+	Embedded bool
 	// Listen is the TCP address of the HTTP server, as host:port.
 	Listen string
 	// DiscoveryPort is the UDP port local network discovery listens on,
@@ -160,8 +169,15 @@ func Load(getenv func(string) string) (Config, error) {
 		cfg.Tesseract = "tesseract"
 	}
 	var errs []error
-	if cfg.DatabaseURL == "" {
-		errs = append(errs, errors.New("POLYFIN_DATABASE_URL is required"))
+	switch database := strings.TrimSpace(getenv("POLYFIN_DATABASE")); {
+	case database == EmbeddedDatabase && cfg.DatabaseURL != "":
+		errs = append(errs, errors.New("POLYFIN_DATABASE is embedded and POLYFIN_DATABASE_URL is set: set only one of them"))
+	case database == EmbeddedDatabase:
+		cfg.Embedded = true
+	case database != "":
+		errs = append(errs, fmt.Errorf("POLYFIN_DATABASE: %q is not embedded, the only value it takes", database))
+	case cfg.DatabaseURL == "":
+		errs = append(errs, errors.New("POLYFIN_DATABASE_URL is required, unless POLYFIN_DATABASE is embedded"))
 	}
 	if cfg.Listen == "" {
 		cfg.Listen = DefaultListen
