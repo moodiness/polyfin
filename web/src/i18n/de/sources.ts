@@ -94,6 +94,9 @@ const sources: typeof en = {
       'Verwende dies, nachdem du das Add-on auf seiner Konfigurationsseite neu eingerichtet hast. Seine Bibliotheken bleiben erhalten, und seine Versionslisten werden vergessen, damit jeder Titel es erneut fragt.',
     replaceSubmit: 'Ersetzen',
     replaced: 'Die Manifest-Adresse wurde ersetzt.',
+    librariesFollowed: (names: string) =>
+      `Bibliotheken, die der neuen Kennung ihres Katalogs gefolgt sind: ${names}.`,
+    librariesRemoved: (names: string) => `Mit ihrem Katalog entfernte Bibliotheken: ${names}.`,
     language: 'Sprache der Beschreibungen',
     languageHelp:
       'Lass beim einzigen Metadaten-Add-on des Servers „Keine“ eingestellt, egal welche Sprache seine Konfigurationsseite festlegt: Ein Add-on mit einer Sprache beschreibt Titel nur für die Benutzer, die diese Sprache gewählt haben, es sei denn, kein Add-on mit „Keine“ beschreibt sie. Damit Benutzer Titel in anderen Sprachen lesen können, füge dasselbe Metadaten-Add-on für jede Sprache ein weiteres Mal hinzu, jeweils auf seiner Konfigurationsseite in dieser Sprache eingerichtet, und gib die Sprache nur bei diesen zusätzlichen Kopien hier an: Benutzer, die diese Metadatensprache wählen, sehen dessen Namen, Beschreibungen und Bilder. Ein Add-on mit einer Sprache und ohne eigene Bibliothek beschreibt nur Titel.',

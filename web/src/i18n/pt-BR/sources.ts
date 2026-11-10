@@ -94,6 +94,9 @@ const sources: typeof en = {
       'Use isto depois de reconfigurar o complemento na página de configuração dele. As bibliotecas dele são mantidas, e as listas de versões dele são esquecidas, para que cada título o consulte de novo.',
     replaceSubmit: 'Substituir',
     replaced: 'O endereço do manifesto foi substituído.',
+    librariesFollowed: (names: string) =>
+      `Bibliotecas que seguiram o novo identificador do catálogo: ${names}.`,
+    librariesRemoved: (names: string) => `Bibliotecas removidas com o catálogo: ${names}.`,
     language: 'Idioma das descrições',
     languageHelp:
       'Deixe em Nenhum no único complemento de metadados do servidor, seja qual for o idioma definido na página de configuração dele: um complemento com idioma descreve os títulos apenas para os usuários que escolheram esse idioma, a menos que nenhum complemento deixado em Nenhum os descreva. Para que os usuários leiam os títulos em outros idiomas, adicione o mesmo complemento de metadados mais uma vez para cada idioma, configurado nesse idioma na página de configuração dele, e indique o idioma aqui somente nessas cópias extras: os usuários que escolherem esse idioma dos metadados verão os nomes, sinopses e imagens dele. Um complemento com idioma e sem biblioteca própria apenas descreve títulos.',

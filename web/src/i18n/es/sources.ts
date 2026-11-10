@@ -95,6 +95,9 @@ const sources: typeof en = {
       'Úselo después de volver a configurar la extensión en su página de configuración. Sus bibliotecas se conservan, y sus listas de versiones se olvidan para que cada título vuelva a consultarla.',
     replaceSubmit: 'Reemplazar',
     replaced: 'Se ha reemplazado la dirección del manifiesto.',
+    librariesFollowed: (names: string) =>
+      `Bibliotecas que siguieron el nuevo identificador de su catálogo: ${names}.`,
+    librariesRemoved: (names: string) => `Bibliotecas eliminadas con su catálogo: ${names}.`,
     language: 'Idioma de sus descripciones',
     languageHelp:
       'Déjelo en Ninguno en la única extensión de metadatos del servidor, sea cual sea el idioma que se haya fijado en su página de configuración: una extensión con un idioma solo describe los títulos para los usuarios que han elegido ese idioma, salvo que ninguna extensión dejada en Ninguno los describa. Para que los usuarios lean los títulos en otros idiomas, añada la misma extensión de metadatos una vez más por cada idioma, configurada en ese idioma en su página de configuración, e indique aquí el idioma solo en esas copias adicionales: los usuarios que elijan ese idioma de los metadatos verán sus nombres, sinopsis e imágenes. Una extensión con un idioma y sin biblioteca propia solo describe títulos.',
