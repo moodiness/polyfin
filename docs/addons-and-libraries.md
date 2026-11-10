@@ -214,6 +214,7 @@ They apply to catalogs of titles and of collections. Live TV catalogs and music 
 **Genre:**
 
 - Without a name of its own, apps name the library after its catalog and genre, such as "Popular · Comedy".
+- A catalog the manifest gives no name names the library after its id, or after its content type when it has no id either.
 - The choice shows only for a catalog that offers genres to choose from. It does not show for one that requires a single genre, as many collection catalogs do.
 - A genre the addon stops offering lists the whole catalog again, until another is chosen.
 
