@@ -618,13 +618,13 @@ const users: typeof en = {
     deleted: (name: string) => `O grupo ${name} foi excluído.`,
     membersTitle: 'Membros',
     membersHelp:
-      'Um membro que deixa de seguir o grupo mantém os valores dele como configurações próprias, marcadas como “Configurações próprias”.',
+      'Um membro mantém valores próprios nas seções que escolher, que a página dele pode alterar; nas outras, segue o grupo.',
     noMembers: 'Nenhum membro ainda.',
     noMembersHelp:
       'Adicione membros aqui ou escolha o grupo na seção Acesso da página de um usuário.',
     ownSettings: 'Configurações próprias',
     followsHelp: 'Segue o grupo',
-    ownSettingsHelp: 'Mantém as próprias configurações',
+    ownSections: (sections: string) => `Próprias: ${sections}`,
     addMembers: 'Adicionar membros',
     addMembersTitle: (name: string) => `Adicionar membros a ${name}`,
     addMembersHelp:
@@ -639,25 +639,31 @@ const users: typeof en = {
     group: 'Grupo',
     noGroup: 'Nenhum grupo',
     groupHelp:
-      'Um membro segue o grupo: os valores dele se aplicam, e esta página os mostra somente para leitura. Ao sair, eles ficam como configurações próprias do usuário.',
+      'Um membro segue o grupo: os valores dele se aplicam, e esta página os mostra somente para leitura, exceto nas seções mantidas como próprias. Ao sair, eles ficam como configurações próprias do usuário.',
     administratorNoGroup:
       'Administradores não podem entrar em um grupo, pois suas permissões são diferentes.',
     administratorLeaves: (name: string) =>
       `Tornar este usuário administrador o remove do grupo ${name}.`,
     newAccountGroupHelp: 'As contas criadas entram neste grupo e o seguem.',
     newUserGroupHelp: 'O usuário entra neste grupo e o segue.',
-    followGroup: 'Seguir o grupo',
-    followGroupHelp:
-      'Desativado, o usuário mantém os valores atuais do grupo como seus, e esta página pode alterá-los.',
+    values: 'Valores',
+    valuesHelp:
+      'Vindos do grupo, os valores mudam com ele. Próprios, são definidos nesta página, e as mudanças posteriores do grupo não os afetam.',
+    valuesFromGroup: (name: string) => `Do grupo ${name}`,
+    valuesOwn: 'Próprios deste usuário',
+    followEverywhere: 'Seguir o grupo em tudo',
     setByGroup: (name: string) => `Definido pelo grupo ${name}.`,
     openGroup: 'Abrir o grupo',
     joinTitle: 'Entrar no grupo?',
     joinConfirm: (user: string, group: string) =>
       `${user} entra em ${group} e passa a segui-lo: os valores do grupo substituem os seus em Acesso, Reprodução e acesso, Controle parental, Bibliotecas visíveis, Gêneros bloqueados e Horários permitidos.`,
     join: 'Entrar',
-    followAgainTitle: 'Seguir o grupo novamente?',
-    followAgainConfirm: (user: string, group: string) =>
-      `${user} volta a receber os valores de ${group}: as configurações próprias nas seções do grupo serão substituídas.`,
+    followSectionTitle: (section: string) => `Seguir o grupo em ${section}?`,
+    followSectionConfirm: (user: string, group: string, section: string) =>
+      `${user} volta a receber os valores de ${group} em ${section}: as configurações próprias ali serão substituídas.`,
+    followEverywhereTitle: 'Seguir o grupo em tudo?',
+    followEverywhereConfirm: (user: string, group: string) =>
+      `${user} volta a receber os valores de ${group} em todas as seções: todas as configurações próprias serão substituídas.`,
     followAgain: 'Seguir o grupo',
     groupBadge: (name: string) => `Grupo ${name}`,
     groupOwnBadge: (name: string) => `Grupo ${name}, configurações próprias`,
@@ -681,8 +687,8 @@ const users: typeof en = {
     groupTitle: (name: string) => `Redefinir as configurações do grupo ${name}?`,
     userHelp: (name: string) =>
       `As permissões de Acesso, Reprodução e acesso com o Grupo de qualidade, Controle parental, Bibliotecas visíveis, Gêneros bloqueados e Horários permitidos voltam às configurações de um novo usuário, as que “Criar um usuário” dá; os apps de ${name} já conectados as recebem na hora. O nome e a senha, Administrador, Mostrar na tela de login, Desativado, Encerra em, o grupo, os próprios addons, as conexões, as contas de acompanhamento e tudo o que foi assistido continuam.`,
-    ownSettingsHelp: (group: string) =>
-      `Continua no grupo ${group} com as próprias configurações, sem segui-lo.`,
+    ownSettingsHelp: (group: string, sections: string) =>
+      `Só as seções mantidas como próprias voltam às configurações de um novo usuário: ${sections}. Continua no grupo ${group} e o segue nas outras.`,
     groupHelp:
       'As permissões de Acesso, Reprodução e acesso com o Grupo de qualidade, Controle parental, Bibliotecas visíveis, Gêneros bloqueados e Horários permitidos voltam às configurações de um novo usuário. O nome e os membros do grupo continuam.',
     followers: (count: number) =>

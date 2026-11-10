@@ -611,12 +611,12 @@ const users = {
     deleted: (name: string) => `The group ${name} has been deleted.`,
     membersTitle: 'Members',
     membersHelp:
-      'A member who no longer follows the group keeps its values as their own settings, marked Own settings.',
+      'A member keeps their own values in the sections they choose, which their page can change; they follow the group in the others.',
     noMembers: 'No member yet.',
     noMembersHelp: 'Add members here, or choose the group in the Access section of a user’s page.',
     ownSettings: 'Own settings',
     followsHelp: 'Follows the group',
-    ownSettingsHelp: 'Keeps their own settings',
+    ownSections: (sections: string) => `Own: ${sections}`,
     addMembers: 'Add members',
     addMembersTitle: (name: string) => `Add members to ${name}`,
     addMembersHelp:
@@ -631,24 +631,30 @@ const users = {
     group: 'Group',
     noGroup: 'No group',
     groupHelp:
-      'A member follows the group: its values apply, and this page shows them read only. Leaving it keeps them as the user’s own.',
+      'A member follows the group: its values apply, and this page shows them read only, except in the sections kept as own. Leaving it keeps them as the user’s own.',
     administratorNoGroup: 'Administrators cannot join a group, as their permissions differ.',
     administratorLeaves: (name: string) =>
       `Making this user an administrator takes them out of the group ${name}.`,
     newAccountGroupHelp: 'The accounts created join this group and follow it.',
     newUserGroupHelp: 'The user joins this group and follows it.',
-    followGroup: 'Follow the group',
-    followGroupHelp:
-      'Turned off, the user keeps the group’s current values as their own, and this page can change them.',
+    values: 'Values',
+    valuesHelp:
+      'Taken from the group, the values change with it. Own, they are set on this page, and later changes to the group pass them by.',
+    valuesFromGroup: (name: string) => `From the group ${name}`,
+    valuesOwn: 'Own for this user',
+    followEverywhere: 'Follow the group everywhere',
     setByGroup: (name: string) => `Set by the group ${name}.`,
     openGroup: 'Open the group',
     joinTitle: 'Join the group?',
     joinConfirm: (user: string, group: string) =>
       `${user} joins ${group} and follows it: the group’s values replace theirs in Access, Playback and access, Parental control, Visible libraries, Blocked genres and Allowed hours.`,
     join: 'Join',
-    followAgainTitle: 'Follow the group again?',
-    followAgainConfirm: (user: string, group: string) =>
-      `${user} takes the values of ${group} back: their own settings in the group’s sections are replaced.`,
+    followSectionTitle: (section: string) => `Follow the group for ${section}?`,
+    followSectionConfirm: (user: string, group: string, section: string) =>
+      `${user} takes the values of ${group} back in ${section}: their own settings there are replaced.`,
+    followEverywhereTitle: 'Follow the group everywhere?',
+    followEverywhereConfirm: (user: string, group: string) =>
+      `${user} takes the values of ${group} back in every section: all their own settings are replaced.`,
     followAgain: 'Follow the group',
     groupBadge: (name: string) => `Group ${name}`,
     groupOwnBadge: (name: string) => `Group ${name}, own settings`,
@@ -672,8 +678,8 @@ const users = {
     groupTitle: (name: string) => `Reset the settings of the group ${name}?`,
     userHelp: (name: string) =>
       `The permissions under Access, Playback and access with the Quality group, Parental control, Visible libraries, Blocked genres and Allowed hours go back to a new user’s settings, those Create a user gives; ${name}’s apps already signed in have them at once. Their name and password, Administrator, Show on the sign-in screen, Disabled, Ends on, their group, their own addons, connections, tracking accounts and everything they watched stay.`,
-    ownSettingsHelp: (group: string) =>
-      `They stay in the group ${group} with their own settings, not following it.`,
+    ownSettingsHelp: (group: string, sections: string) =>
+      `Only the sections they keep as their own go back: ${sections}. They stay in the group ${group} and follow it in the others.`,
     groupHelp:
       'The permissions under Access, Playback and access with the Quality group, Parental control, Visible libraries, Blocked genres and Allowed hours go back to a new user’s settings. The group’s name and members stay.',
     followers: (count: number) =>

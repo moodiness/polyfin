@@ -84,7 +84,7 @@ const common: typeof en = {
       'Administradores não podem entrar em um grupo, pois suas permissões são diferentes. Recarregue a página para ver quem é administrador agora.',
     invalid_group: 'Este grupo não existe mais. Recarregue a página e escolha outro.',
     follows_group:
-      'Este usuário segue seu grupo: altere o grupo, ou desative “Seguir o grupo” primeiro.',
+      'Este usuário segue seu grupo nesta seção: altere o grupo, ou escolha “Próprios deste usuário” primeiro.',
     invalid_copy_from: 'Este usuário não existe mais. Escolha outro.',
     invalid_server_name: 'O nome do servidor deve ter de 1 a 64 caracteres.',
     invalid_language: 'Escolha um idioma da lista.',

@@ -616,13 +616,13 @@ const users: typeof en = {
     deleted: (name: string) => `Die Gruppe ${name} wurde gelöscht.`,
     membersTitle: 'Mitglieder',
     membersHelp:
-      'Ein Mitglied, das der Gruppe nicht mehr folgt, behält ihre Werte als eigene Einstellungen, gekennzeichnet mit „Eigene Einstellungen“.',
+      'Ein Mitglied behält in den Bereichen seiner Wahl eigene Werte, die seine Seite ändern kann; in den anderen folgt es der Gruppe.',
     noMembers: 'Noch kein Mitglied.',
     noMembersHelp:
       'Füge hier Mitglieder hinzu oder wähle die Gruppe im Bereich „Zugriff“ auf der Seite eines Benutzers.',
     ownSettings: 'Eigene Einstellungen',
     followsHelp: 'Folgt der Gruppe',
-    ownSettingsHelp: 'Behält eigene Einstellungen',
+    ownSections: (sections: string) => `Eigene: ${sections}`,
     addMembers: 'Mitglieder hinzufügen',
     addMembersTitle: (name: string) => `Mitglieder zu ${name} hinzufügen`,
     addMembersHelp:
@@ -638,25 +638,31 @@ const users: typeof en = {
     group: 'Gruppe',
     noGroup: 'Keine Gruppe',
     groupHelp:
-      'Ein Mitglied folgt der Gruppe: Ihre Werte gelten, und diese Seite zeigt sie schreibgeschützt an. Beim Verlassen bleiben sie als eigene Einstellungen des Benutzers erhalten.',
+      'Ein Mitglied folgt der Gruppe: Ihre Werte gelten, und diese Seite zeigt sie schreibgeschützt an, außer in den Bereichen mit eigenen Werten. Beim Verlassen bleiben sie als eigene Einstellungen des Benutzers erhalten.',
     administratorNoGroup:
       'Administratoren können keiner Gruppe beitreten, da sich ihre Berechtigungen unterscheiden.',
     administratorLeaves: (name: string) =>
       `Wird dieser Benutzer zum Administrator, verlässt er die Gruppe ${name}.`,
     newAccountGroupHelp: 'Die erstellten Konten treten dieser Gruppe bei und folgen ihr.',
     newUserGroupHelp: 'Der Benutzer tritt dieser Gruppe bei und folgt ihr.',
-    followGroup: 'Der Gruppe folgen',
-    followGroupHelp:
-      'Wenn ausgeschaltet, behält der Benutzer die aktuellen Werte der Gruppe als eigene, und diese Seite kann sie ändern.',
+    values: 'Werte',
+    valuesHelp:
+      'Von der Gruppe übernommen, ändern sich die Werte mit ihr. Eigene Werte werden auf dieser Seite festgelegt, und spätere Änderungen der Gruppe lassen sie unberührt.',
+    valuesFromGroup: (name: string) => `Von der Gruppe ${name}`,
+    valuesOwn: 'Eigene für diesen Benutzer',
+    followEverywhere: 'Der Gruppe überall folgen',
     setByGroup: (name: string) => `Von der Gruppe ${name} festgelegt.`,
     openGroup: 'Gruppe öffnen',
     joinTitle: 'Der Gruppe beitreten?',
     joinConfirm: (user: string, group: string) =>
       `${user} tritt ${group} bei und folgt der Gruppe: Ihre Werte ersetzen die eigenen in „Zugriff“, „Wiedergabe und Zugriff“, „Kindersicherung“, „Sichtbare Bibliotheken“, „Gesperrte Genres“ und „Erlaubte Zeiten“.`,
     join: 'Beitreten',
-    followAgainTitle: 'Der Gruppe wieder folgen?',
-    followAgainConfirm: (user: string, group: string) =>
-      `${user} übernimmt wieder die Werte von ${group}: Die eigenen Einstellungen in den Bereichen der Gruppe werden ersetzt.`,
+    followSectionTitle: (section: string) => `Der Gruppe in „${section}“ folgen?`,
+    followSectionConfirm: (user: string, group: string, section: string) =>
+      `${user} übernimmt in „${section}“ wieder die Werte von ${group}: Die eigenen Einstellungen dort werden ersetzt.`,
+    followEverywhereTitle: 'Der Gruppe überall folgen?',
+    followEverywhereConfirm: (user: string, group: string) =>
+      `${user} übernimmt in allen Bereichen wieder die Werte von ${group}: Alle eigenen Einstellungen werden ersetzt.`,
     followAgain: 'Der Gruppe folgen',
     groupBadge: (name: string) => `Gruppe ${name}`,
     groupOwnBadge: (name: string) => `Gruppe ${name}, eigene Einstellungen`,
@@ -680,8 +686,8 @@ const users: typeof en = {
     groupTitle: (name: string) => `Die Einstellungen der Gruppe ${name} zurücksetzen?`,
     userHelp: (name: string) =>
       `Die Berechtigungen unter Zugriff, Wiedergabe und Zugriff mit der Qualitätsgruppe, Kindersicherung, Sichtbare Bibliotheken, Gesperrte Genres und Erlaubte Zeiten erhalten wieder die Einstellungen eines neuen Benutzers, die „Benutzer erstellen“ vergibt; bereits angemeldete Apps von ${name} haben sie sofort. Name und Passwort, Administrator, Auf dem Anmeldebildschirm anzeigen, Deaktiviert, Endet am, die Gruppe, die eigenen Addons, Verbindungen, Tracking-Konten und alles Angesehene bleiben.`,
-    ownSettingsHelp: (group: string) =>
-      `Der Benutzer bleibt mit eigenen Einstellungen in der Gruppe ${group}, ohne ihr zu folgen.`,
+    ownSettingsHelp: (group: string, sections: string) =>
+      `Nur die Bereiche mit eigenen Werten werden zurückgesetzt: ${sections}. Der Benutzer bleibt in der Gruppe ${group} und folgt ihr in den anderen.`,
     groupHelp:
       'Die Berechtigungen unter Zugriff, Wiedergabe und Zugriff mit der Qualitätsgruppe, Kindersicherung, Sichtbare Bibliotheken, Gesperrte Genres und Erlaubte Zeiten erhalten wieder die Einstellungen eines neuen Benutzers. Name und Mitglieder der Gruppe bleiben.',
     followers: (count: number) =>

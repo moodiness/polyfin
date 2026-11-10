@@ -85,7 +85,7 @@ const common = {
       'Administrators cannot join a group, as their permissions differ. Reload the page to see who is one now.',
     invalid_group: 'This group no longer exists. Reload the page and choose another one.',
     follows_group:
-      'This user follows their group: change the group, or turn off Follow the group first.',
+      'This user follows their group in this section: change the group, or choose Own for this user first.',
     invalid_copy_from: 'This user no longer exists. Choose another one.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
     invalid_language: 'Choose a language from the list.',

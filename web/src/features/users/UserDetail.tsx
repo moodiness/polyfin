@@ -26,6 +26,7 @@ import {
   turnOffUserTwoStep,
   unblockUser,
   userImageUrl,
+  type GroupSection,
   type User,
   type UserWebTheme,
 } from '@/api'
@@ -73,11 +74,15 @@ import {
   FollowedNotice,
   followedGroup,
   LiveTvChannelsSection,
+  memberGroup,
   ParentalControlSection,
   PermissionRows,
   PlaybackAccessSection,
   ResetDefaultsDialog,
+  sectionTitle,
+  SectionValuesRow,
   VisibleLibrariesSection,
+  withOwnSection,
   type LimitsTarget,
 } from './UserForms'
 
@@ -152,10 +157,10 @@ function UserPage({ user }: { user: User }) {
   // Each save, discard or reset draws the sections again from the saved values.
   const [version, setVersion] = useState(0)
   const target: LimitsTarget = { kind: 'user', user }
-  // A member's own values change only here, while the values of a group they follow change with
-  // it: those sections are drawn again from each copy.
-  const followed = followedGroup(user)
-  const formsKey = followed === null ? `own:${version}` : `group:${JSON.stringify(user)}`
+  // A section is drawn again when its values are kept or follow the group again, or the group
+  // changes; one following the group also as the group's values reach it.
+  const formsKey = (section: GroupSection) =>
+    `${section}:${version}:${user.groupId}:${user.ownSections.includes(section)}`
 
   // The content arrives after the first render: a #section address scrolls once it is drawn.
   useEffect(() => {
@@ -213,7 +218,7 @@ function UserPage({ user }: { user: User }) {
           {user.id === self.id && <Badge>{t.users.you}</Badge>}
           {user.groupName !== null && (
             <Badge>
-              {user.followGroup
+              {user.ownSections.length === 0
                 ? t.groups.groupBadge(user.groupName)
                 : t.groups.groupOwnBadge(user.groupName)}
             </Badge>
@@ -231,8 +236,8 @@ function UserPage({ user }: { user: User }) {
       }
       actions={
         <>
-          {/* A member following their group has its values: the group's page resets them. */}
-          {followed === null && (
+          {/* A member following their group everywhere has its values: its page resets them. */}
+          {(user.groupId === null || user.ownSections.length > 0) && (
             <Button
               variant="secondary"
               icon={ArrowCounterClockwiseIcon}
@@ -267,16 +272,12 @@ function UserPage({ user }: { user: User }) {
               <MetadataLanguageSection user={user} />
               <WebThemeSection user={user} />
               <AudioRegionSection user={user} />
-              <PlaybackAccessSection key={`playback:${formsKey}`} id="playback" target={target} />
-              <ParentalControlSection key={`parental:${formsKey}`} id="parental" target={target} />
-              <VisibleLibrariesSection
-                key={`libraries:${formsKey}`}
-                id="libraries"
-                target={target}
-              />
-              <BlockedGenresSection key={`genres:${formsKey}`} id="genres" target={target} />
-              <AllowedHoursSection key={`hours:${formsKey}`} id="hours" target={target} />
-              <LiveTvChannelsSection key={`channels:${formsKey}`} id="channels" target={target} />
+              <PlaybackAccessSection key={formsKey('playback')} id="playback" target={target} />
+              <ParentalControlSection key={formsKey('parental')} id="parental" target={target} />
+              <VisibleLibrariesSection key={formsKey('libraries')} id="libraries" target={target} />
+              <BlockedGenresSection key={formsKey('genres')} id="genres" target={target} />
+              <AllowedHoursSection key={formsKey('hours')} id="hours" target={target} />
+              <LiveTvChannelsSection key={formsKey('channels')} id="channels" target={target} />
               <ShareLinksSection user={user} />
               <ImportTitlesSection user={user} />
               <PageSection id="devices" title={t.users.devicesTitle}>
@@ -436,14 +437,17 @@ function ProfileSection({ user, nameError }: { user: User; nameError: string | u
 
 /**
  * What applies at once: role, sign-in screen, disabled, the end date, the group, and the user's
- * rights, which a group the user follows sets.
+ * rights, which the group of a member sets while Access follows it.
  */
 function AccessSection({ user }: { user: User }) {
   const { t, language } = useI18n()
   const toast = useToast()
   const access = useUserPatch(user)
-  // Joining a group and following it again replace the user's values: both are asked first.
-  const [asked, setAsked] = useState<{ groupId: string; name: string } | 'follow' | null>(null)
+  // Joining a group and following it again, in Access or everywhere, replace the user's values:
+  // each is asked first.
+  const [asked, setAsked] = useState<
+    { groupId: string; name: string } | 'access' | 'everywhere' | null
+  >(null)
   // Losing the permission, or being disabled, revokes the user's share links. A change waits for
   // the one before it, so that no row is turned off under the keyboard meanwhile.
   const change = (patch: Parameters<typeof access.mutate>[0]) => {
@@ -457,7 +461,9 @@ function AccessSection({ user }: { user: User }) {
     })
   }
   const lastAdmin = access.error instanceof ApiError && access.error.code === 'last_administrator'
-  const followed = followedGroup(user)
+  const userGroup = memberGroup(user)
+  const accessOwn = user.ownSections.includes('access')
+  const followed = followedGroup(user, 'access')
 
   return (
     <PageSection
@@ -531,16 +537,26 @@ function AccessSection({ user }: { user: User }) {
           else setAsked({ groupId: group.id, name: group.name })
         }}
       />
-      {user.groupId !== null && (
-        <SettingRow
-          kind="switch"
-          label={t.groups.followGroup}
-          help={t.groups.followGroupHelp}
-          checked={user.followGroup}
-          onChange={(follow) => {
+      {user.ownSections.length > 0 && (
+        <OpenRow
+          label={t.groups.followEverywhere}
+          help={t.groups.ownSections(
+            user.ownSections.map((section) => sectionTitle(t, section)).join(', '),
+          )}
+          onClick={() => {
             access.reset()
-            if (follow) setAsked('follow')
-            else change({ followGroup: false })
+            setAsked('everywhere')
+          }}
+        />
+      )}
+      {userGroup !== null && (
+        <SectionValuesRow
+          group={userGroup}
+          own={accessOwn}
+          onChange={(own) => {
+            access.reset()
+            if (own) change({ ownSections: withOwnSection(user.ownSections, 'access', true) })
+            else setAsked('access')
           }}
         />
       )}
@@ -550,15 +566,23 @@ function AccessSection({ user }: { user: User }) {
         open={asked !== null}
         onClose={() => setAsked(null)}
         onConfirm={() =>
-          asked === 'follow'
-            ? change({ followGroup: true })
-            : asked !== null && change({ groupId: asked.groupId })
+          asked === 'access'
+            ? change({ ownSections: withOwnSection(user.ownSections, 'access', false) })
+            : asked === 'everywhere'
+              ? change({ ownSections: [] })
+              : asked !== null && change({ groupId: asked.groupId })
         }
-        title={asked === 'follow' ? t.groups.followAgainTitle : t.groups.joinTitle}
+        title={
+          asked === 'access'
+            ? t.groups.followSectionTitle(sectionTitle(t, 'access'))
+            : asked === 'everywhere'
+              ? t.groups.followEverywhereTitle
+              : t.groups.joinTitle
+        }
         confirmLabel={
           access.isPending
             ? t.common.saving
-            : asked === 'follow'
+            : asked === 'access' || asked === 'everywhere'
               ? t.groups.followAgain
               : t.groups.join
         }
@@ -566,9 +590,11 @@ function AccessSection({ user }: { user: User }) {
         busy={access.isPending}
         error={access.isError ? errorMessage(t, access.error) : undefined}
       >
-        {asked === 'follow'
-          ? t.groups.followAgainConfirm(user.name, user.groupName ?? '')
-          : asked !== null && t.groups.joinConfirm(user.name, asked.name)}
+        {asked === 'access'
+          ? t.groups.followSectionConfirm(user.name, userGroup?.name ?? '', t.users.accessTitle)
+          : asked === 'everywhere'
+            ? t.groups.followEverywhereConfirm(user.name, userGroup?.name ?? '')
+            : asked !== null && t.groups.joinConfirm(user.name, asked.name)}
       </ConfirmDialog>
     </PageSection>
   )

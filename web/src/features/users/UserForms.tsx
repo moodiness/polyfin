@@ -1,12 +1,14 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
-import { useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
+  fetchGroup,
   fetchGroupDefaults,
   fetchLineupChannelChoices,
   fetchUserContentChoices,
   fetchUserDefaults,
   fetchUsers,
+  groupSections,
   maxPlaybacksRange,
   qualityGroups,
   queryClient,
@@ -18,6 +20,8 @@ import {
   type ChannelRule,
   type Group,
   type GroupLimits,
+  type GroupPatch,
+  type GroupSection,
   type QualityGroup,
   type ScheduleDay,
   type SyncPlayAccess,
@@ -66,11 +70,40 @@ import {
  */
 export type LimitsTarget = { kind: 'user'; user: User } | { kind: 'group'; group: Group }
 
-/** The group whose values a user follows, shown read only on their page; null otherwise. */
-export function followedGroup(user: User): { id: string; name: string } | null {
-  return user.groupId !== null && user.followGroup
-    ? { id: user.groupId, name: user.groupName ?? '' }
-    : null
+/** The group of a member, whose values they take in the sections they follow; null for none. */
+export function memberGroup(user: User): { id: string; name: string } | null {
+  return user.groupId === null ? null : { id: user.groupId, name: user.groupName ?? '' }
+}
+
+/** The group whose values a member follows in a section, shown read only there; null otherwise. */
+export function followedGroup(
+  user: User,
+  section: GroupSection,
+): { id: string; name: string } | null {
+  return user.ownSections.includes(section) ? null : memberGroup(user)
+}
+
+/** The sections a member keeps as own, with one section kept or following the group again. */
+export function withOwnSection(
+  ownSections: readonly GroupSection[],
+  section: GroupSection,
+  own: boolean,
+): GroupSection[] {
+  return groupSections.filter((item) => (item === section ? own : ownSections.includes(item)))
+}
+
+/** The title of a section a group holds, as the pages name it. */
+export function sectionTitle(t: Messages, section: GroupSection): string {
+  const titles: Record<GroupSection, string> = {
+    access: t.users.accessTitle,
+    playback: t.users.playbackAccessTitle,
+    parental: t.users.parentalTitle,
+    libraries: t.users.visibleLibrariesTitle,
+    genres: t.users.blockedGenresTitle,
+    hours: t.users.allowedHoursTitle,
+    channels: t.users.liveTvChannelsTitle,
+  }
+  return titles[section]
 }
 
 /** "Set by the group Kids.", with a link to the group, above the values a member follows. */
@@ -89,34 +122,148 @@ export function FollowedNotice({ group }: { group: { id: string; name: string } 
   )
 }
 
-/** Whether the section shows a group's values, read only, on the page of a member following it. */
-function isReadOnly(target: LimitsTarget) {
-  return target.kind === 'user' && followedGroup(target.user) !== null
+/**
+ * Values, From the group Kids or Own for this user: whether a member follows their group in a
+ * section or keeps their own values there.
+ */
+export function SectionValuesRow({
+  group,
+  own,
+  saved,
+  onChange,
+}: {
+  group: { name: string }
+  own: boolean
+  /** The saved choice, for "was …"; undefined where the choice saves at once. */
+  saved?: boolean
+  onChange: (own: boolean) => void
+}) {
+  const { t } = useI18n()
+  const value = (own: boolean) => (own ? 'own' : 'group')
+  return (
+    <SettingRow<'group' | 'own'>
+      kind="choice"
+      label={t.groups.values}
+      help={t.groups.valuesHelp}
+      value={value(own)}
+      saved={saved === undefined ? undefined : value(saved)}
+      options={[
+        { value: 'group', label: t.groups.valuesFromGroup(group.name) },
+        { value: 'own', label: t.groups.valuesOwn },
+      ]}
+      onChange={(choice) => onChange(choice === 'own')}
+    />
+  )
+}
+
+/** The sections LimitsSection draws, each with the fields it holds. */
+const sectionFields = {
+  playback: [
+    'maxPlaybacks',
+    'maxBitrate',
+    'qualityGroup',
+    'syncPlay',
+    'liveTv',
+    'remoteControl',
+    'liveTvManagement',
+    'localFirst',
+    'boostVolume',
+    'convertSound',
+  ],
+  parental: ['parentalControl'],
+  libraries: ['hiddenLibraries'],
+  genres: ['blockedGenres'],
+  hours: ['accessSchedules'],
+  channels: ['liveTvChannels'],
+} satisfies Record<Exclude<GroupSection, 'access'>, (keyof GroupLimits)[]>
+
+/**
+ * What the rows of a section show: the values they start from, the saved ones that mark a changed
+ * row with "was …" (undefined to mark none, and count no change), and whether they are read only.
+ */
+type SectionView = { values: GroupLimits; saved: GroupLimits | undefined; readOnly: boolean }
+
+/**
+ * Tells the dock what a section's rows change: nothing while they show the group's values a
+ * member follows; while a member goes back to the group, the rows differing from their own
+ * values, without sending them, as the group's replace them.
+ */
+function useSectionDraft(
+  id: string,
+  view: SectionView,
+  changes: number,
+  patch: () => GroupPatch | null,
+) {
+  useDraftPart(id, view.saved === undefined ? 0 : changes, () => (view.readOnly ? {} : patch()))
 }
 
 /**
- * A section of limits on a user's or a group's page: its title, its rows, and on the page of a
- * member following their group, the notice saying the values are the group's. Its changes go to
- * the page's dock.
+ * A section of limits on a user's or a group's page: its title and its rows, whose changes go to
+ * the page's dock. On a member's page it starts with Values, From the group or Own for this user,
+ * itself a change in the dock: following the group, the rows show its values read only, under a
+ * notice saying so; going back to it shows the group's values against the member's own.
  */
 function LimitsSection({
   id,
+  section,
   title,
   description,
   target,
   children,
 }: {
   id: string
+  section: keyof typeof sectionFields
   title: string
   description?: ReactNode
   target: LimitsTarget
-  children: ReactNode
+  children: (view: SectionView) => ReactNode
 }) {
-  const followed = target.kind === 'user' ? followedGroup(target.user) : null
+  const { t } = useI18n()
+  const limits = limitsOf(target)
+  const member = target.kind === 'user' ? target.user : null
+  const group = member === null ? null : memberGroup(member)
+  const savedOwn = member === null || group === null || member.ownSections.includes(section)
+  const [own, setOwn] = useState(savedOwn)
+  const back = savedOwn && !own
+  const groupValues = useQuery({
+    queryKey: queryKeys.group(group?.id ?? ''),
+    queryFn: ({ signal }) => fetchGroup(group?.id ?? '', signal),
+    enabled: group !== null && back,
+  })
+  useDraftPart(`${id}-values`, own === savedOwn ? 0 : 1, () =>
+    member === null ? {} : { ownSections: withOwnSection(member.ownSections, section, own) },
+  )
+
+  const view: SectionView | null = own
+    ? { values: limits, saved: limits, readOnly: false }
+    : !back
+      ? { values: limits, saved: undefined, readOnly: true }
+      : groupValues.data === undefined
+        ? null
+        : { values: groupValues.data, saved: limits, readOnly: true }
+  // The rows start again from their values when the choice changes, and, read only, when the
+  // group's values reach the member.
+  const key = own
+    ? 'own'
+    : back
+      ? 'back'
+      : JSON.stringify(sectionFields[section].map((field) => limits[field]))
+
   return (
     <PageSection id={id} title={title} description={description}>
-      {followed !== null && <FollowedNotice group={followed} />}
-      {children}
+      {group !== null && (
+        <SectionValuesRow group={group} own={own} saved={savedOwn} onChange={setOwn} />
+      )}
+      {group !== null && !own && <FollowedNotice group={group} />}
+      {view !== null ? (
+        <Fragment key={key}>{children(view)}</Fragment>
+      ) : groupValues.isError ? (
+        <InlineError onRetry={() => void groupValues.refetch()} retrying={groupValues.isFetching}>
+          {errorMessage(t, groupValues.error)}
+        </InlineError>
+      ) : (
+        <Skeleton className="h-24 rounded-row" />
+      )}
     </PageSection>
   )
 }
@@ -190,13 +337,22 @@ function playbackOf(limits: GroupLimits) {
 }
 
 export function PlaybackAccessSection({ target, id }: { target: LimitsTarget; id: string }) {
+  const { t } = useI18n()
+  return (
+    <LimitsSection id={id} section="playback" target={target} title={t.users.playbackAccessTitle}>
+      {(view) => <PlaybackAccessRows id={id} view={view} />}
+    </LimitsSection>
+  )
+}
+
+function PlaybackAccessRows({ id, view }: { id: string; view: SectionView }) {
   const { t, language } = useI18n()
-  const readOnly = isReadOnly(target)
-  const saved = playbackOf(limitsOf(target))
-  const [form, setForm] = useState(saved)
-  useDraftPart(id, readOnly ? 0 : countChanged(form, saved), () => changedFields(form, saved))
-  // The saved values give each changed row its "was …"; a member following a group changes none.
-  const was = readOnly ? undefined : saved
+  const { readOnly } = view
+  const saved = playbackOf(view.saved ?? view.values)
+  const [form, setForm] = useState(() => playbackOf(view.values))
+  useSectionDraft(id, view, countChanged(form, saved), () => changedFields(form, saved))
+  // The saved values give each changed row its "was …"; rows following the group mark none.
+  const was = view.saved === undefined ? undefined : saved
 
   function update(change: Partial<typeof form>) {
     setForm((current) => ({ ...current, ...change }))
@@ -224,7 +380,7 @@ export function PlaybackAccessSection({ target, id }: { target: LimitsTarget; id
   ] as const
 
   return (
-    <LimitsSection id={id} target={target} title={t.users.playbackAccessTitle}>
+    <>
       <SettingRow
         kind="number"
         label={t.users.maxPlaybacks}
@@ -286,7 +442,7 @@ export function PlaybackAccessSection({ target, id }: { target: LimitsTarget; id
           onChange={(checked) => update({ [field]: checked })}
         />
       ))}
-    </LimitsSection>
+    </>
   )
 }
 
@@ -295,23 +451,38 @@ const unratedSeries = 'Series'
 
 export function ParentalControlSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
+  return (
+    <LimitsSection id={id} section="parental" target={target} title={t.users.parentalTitle}>
+      {(view) => <ParentalControlRows id={id} view={view} />}
+    </LimitsSection>
+  )
+}
+
+function ParentalControlRows({ id, view }: { id: string; view: SectionView }) {
+  const { t } = useI18n()
   const ratings = useParentalRatings()
-  const readOnly = isReadOnly(target)
-  const initial = limitsOf(target).parentalControl
+  const { readOnly } = view
+  const marked = view.saved !== undefined
+  const start = view.values.parentalControl
+  const initial = (view.saved ?? view.values).parentalControl
   const savedMovies = initial.blockUnrated.includes(unratedMovie)
   const savedShows = initial.blockUnrated.includes(unratedSeries)
   const [limit, setLimit] = useState<{ maxRating: number | null; maxSubRating: number | null }>({
-    maxRating: initial.maxRating,
-    maxSubRating: initial.maxSubRating,
+    maxRating: start.maxRating,
+    maxSubRating: start.maxSubRating,
   })
-  const [blockMovies, setBlockMovies] = useState(savedMovies)
-  const [blockShows, setBlockShows] = useState(savedShows)
+  const [blockMovies, setBlockMovies] = useState(start.blockUnrated.includes(unratedMovie))
+  const [blockShows, setBlockShows] = useState(start.blockUnrated.includes(unratedSeries))
 
   // A saved limit the rating country has no rating for stays a choice, named by its age.
   const groups =
     ratings.data === undefined
       ? []
-      : withLimit(groupRatings(ratings.data), initial, t.users.ratingAge)
+      : withLimit(
+          withLimit(groupRatings(ratings.data), initial, t.users.ratingAge),
+          start,
+          t.users.ratingAge,
+        )
   const selected = selectedGroup(groups, { ...limit, blockUnrated: [] })
   const savedSelected = selectedGroup(groups, initial)
 
@@ -319,7 +490,7 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
     Number(limit.maxRating !== initial.maxRating || limit.maxSubRating !== initial.maxSubRating) +
     Number(blockMovies !== savedMovies) +
     Number(blockShows !== savedShows)
-  useDraftPart(id, readOnly ? 0 : changes, () => {
+  useSectionDraft(id, view, changes, () => {
     // Keep values set by Jellyfin apps (live TV, books...) that this section does not show.
     const blockUnrated = initial.blockUnrated.filter(
       (item) => item !== unratedMovie && item !== unratedSeries,
@@ -330,7 +501,7 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
   })
 
   return (
-    <LimitsSection id={id} target={target} title={t.users.parentalTitle}>
+    <>
       {ratings.isError ? (
         <InlineError onRetry={() => void ratings.refetch()} retrying={ratings.isFetching}>
           {errorMessage(t, ratings.error)}
@@ -343,7 +514,7 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
           label={t.users.maxRating}
           help={t.users.maxRatingHelp}
           value={selected}
-          saved={readOnly ? undefined : savedSelected}
+          saved={marked ? savedSelected : undefined}
           options={[
             { value: -1, label: t.users.noLimit },
             ...groups.map((group, index) => ({ value: index, label: group.name })),
@@ -363,7 +534,7 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
         kind="switch"
         label={t.users.blockUnratedMovies}
         checked={blockMovies}
-        saved={readOnly ? undefined : savedMovies}
+        saved={marked ? savedMovies : undefined}
         disabled={readOnly}
         onChange={setBlockMovies}
       />
@@ -371,24 +542,39 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
         kind="switch"
         label={t.users.blockUnratedShows}
         checked={blockShows}
-        saved={readOnly ? undefined : savedShows}
+        saved={marked ? savedShows : undefined}
         disabled={readOnly}
         onChange={setBlockShows}
       />
-    </LimitsSection>
+    </>
   )
 }
 
 export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const readOnly = isReadOnly(target)
+  return (
+    <LimitsSection
+      id={id}
+      section="libraries"
+      target={target}
+      title={t.users.visibleLibrariesTitle}
+      description={t.users.visibleLibrariesHelp}
+    >
+      {(view) => <VisibleLibrariesRows id={id} view={view} />}
+    </LimitsSection>
+  )
+}
+
+function VisibleLibrariesRows({ id, view }: { id: string; view: SectionView }) {
+  const { t } = useI18n()
+  const { readOnly } = view
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
   })
-  const savedHidden = limitsOf(target).hiddenLibraries
-  const [hidden, setHidden] = useState(savedHidden)
-  useDraftPart(id, readOnly ? 0 : setDifference(hidden, savedHidden), () => {
+  const savedHidden = (view.saved ?? view.values).hiddenLibraries
+  const [hidden, setHidden] = useState(view.values.hiddenLibraries)
+  useSectionDraft(id, view, setDifference(hidden, savedHidden), () => {
     if (!choices.isSuccess) return null
     // Libraries removed from the server since are dropped.
     const libraries = choices.data.libraries
@@ -396,12 +582,7 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
   })
 
   return (
-    <LimitsSection
-      id={id}
-      target={target}
-      title={t.users.visibleLibrariesTitle}
-      description={t.users.visibleLibrariesHelp}
-    >
+    <>
       {choices.isPending ? (
         <Skeleton className="h-24 rounded-row" />
       ) : choices.isError ? (
@@ -430,7 +611,7 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
                   setHidden(on ? hidden.filter((id) => id !== library.id) : [...hidden, library.id])
                 }
                 aside={
-                  !readOnly && shown !== savedShown ? (
+                  view.saved !== undefined && shown !== savedShown ? (
                     <span className="inline-flex items-center gap-1.5 text-micro">
                       <span aria-hidden="true" className="size-1.5 rounded-full bg-link" />
                       {t.ui.was(savedShown ? t.users.libraryShown : t.users.libraryHidden)}
@@ -442,21 +623,36 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
           })}
         </div>
       )}
-    </LimitsSection>
+    </>
   )
 }
 
 export function BlockedGenresSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const readOnly = isReadOnly(target)
+  return (
+    <LimitsSection
+      id={id}
+      section="genres"
+      target={target}
+      title={t.users.blockedGenresTitle}
+      description={t.users.blockedGenresHelp}
+    >
+      {(view) => <BlockedGenresRows id={id} view={view} />}
+    </LimitsSection>
+  )
+}
+
+function BlockedGenresRows({ id, view }: { id: string; view: SectionView }) {
+  const { t } = useI18n()
+  const { readOnly } = view
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
   })
-  const savedGenres = limitsOf(target).blockedGenres
-  const [genres, setGenres] = useState(savedGenres)
+  const savedGenres = (view.saved ?? view.values).blockedGenres
+  const [genres, setGenres] = useState(view.values.blockedGenres)
   const [typed, setTyped] = useState('')
-  useDraftPart(id, readOnly ? 0 : setDifference(genres, savedGenres), () => ({
+  useSectionDraft(id, view, setDifference(genres, savedGenres), () => ({
     blockedGenres: genres,
   }))
 
@@ -469,59 +665,52 @@ export function BlockedGenresSection({ target, id }: { target: LimitsTarget; id:
   }
 
   return (
-    <LimitsSection
-      id={id}
-      target={target}
-      title={t.users.blockedGenresTitle}
-      description={t.users.blockedGenresHelp}
-    >
-      <fieldset disabled={readOnly} className={cx(tile, 'space-y-5')}>
-        {genres.length === 0 ? (
-          <p className="text-body text-ink-2">{t.users.noBlockedGenres}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2" aria-label={t.users.blockedGenresTitle}>
-            {genres.map((genre) => (
-              <Chip
-                key={genre}
-                label={genre}
-                removeLabel={t.users.removeGenre(genre)}
-                onClick={() => setGenres(genres.filter((g) => g !== genre))}
-              />
-            ))}
-          </ul>
-        )}
-        {!readOnly && (
-          <div className="flex flex-wrap items-start gap-3">
-            <Field
-              label={t.users.genre}
-              help={t.users.genreHint}
-              className="w-full sm:max-w-[28.5rem]"
-            >
-              <SuggestInput
-                size="sm"
-                value={typed}
-                onValue={setTyped}
-                suggestions={(choices.data?.genres ?? []).filter(
-                  (genre) => !genres.some((g) => g.toLowerCase() === genre.toLowerCase()),
-                )}
-                onPick={add}
-                maxLength={100}
-                onKeyDown={(event) => {
-                  // Enter adds the genre rather than saving the page.
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    add()
-                  }
-                }}
-              />
-            </Field>
-            <Button icon={PlusIcon} className="sm:mt-[1.875rem]" onClick={() => add()}>
-              {t.users.addGenre}
-            </Button>
-          </div>
-        )}
-      </fieldset>
-    </LimitsSection>
+    <fieldset disabled={readOnly} className={cx(tile, 'space-y-5')}>
+      {genres.length === 0 ? (
+        <p className="text-body text-ink-2">{t.users.noBlockedGenres}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-2" aria-label={t.users.blockedGenresTitle}>
+          {genres.map((genre) => (
+            <Chip
+              key={genre}
+              label={genre}
+              removeLabel={t.users.removeGenre(genre)}
+              onClick={() => setGenres(genres.filter((g) => g !== genre))}
+            />
+          ))}
+        </ul>
+      )}
+      {!readOnly && (
+        <div className="flex flex-wrap items-start gap-3">
+          <Field
+            label={t.users.genre}
+            help={t.users.genreHint}
+            className="w-full sm:max-w-[28.5rem]"
+          >
+            <SuggestInput
+              size="sm"
+              value={typed}
+              onValue={setTyped}
+              suggestions={(choices.data?.genres ?? []).filter(
+                (genre) => !genres.some((g) => g.toLowerCase() === genre.toLowerCase()),
+              )}
+              onPick={add}
+              maxLength={100}
+              onKeyDown={(event) => {
+                // Enter adds the genre rather than saving the page.
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  add()
+                }
+              }}
+            />
+          </Field>
+          <Button icon={PlusIcon} className="sm:mt-[1.875rem]" onClick={() => add()}>
+            {t.users.addGenre}
+          </Button>
+        </div>
+      )}
+    </fieldset>
   )
 }
 
@@ -531,8 +720,24 @@ const listedChannels = 50
 
 export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const readOnly = isReadOnly(target)
-  const initial = limitsOf(target).liveTvChannels
+  return (
+    <LimitsSection
+      id={id}
+      section="channels"
+      target={target}
+      title={t.users.liveTvChannelsTitle}
+      description={t.users.liveTvChannelsHelp}
+    >
+      {(view) => <LiveTvChannelsRows id={id} view={view} />}
+    </LimitsSection>
+  )
+}
+
+function LiveTvChannelsRows({ id, view }: { id: string; view: SectionView }) {
+  const { t } = useI18n()
+  const { readOnly } = view
+  const initial = view.values.liveTvChannels
+  const saved = (view.saved ?? view.values).liveTvChannels
   const [mode, setMode] = useState<ChannelRule['mode']>(initial.mode)
   const [groups, setGroups] = useState(initial.groups)
   const [channels, setChannels] = useState(initial.channels)
@@ -573,14 +778,14 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
   const tickedNames = new Map((ticked.data?.channels ?? []).map((c) => [c.key, c]))
 
   const changes =
-    Number(mode !== initial.mode) +
+    Number(mode !== saved.mode) +
     (mode === 'all'
       ? 0
-      : setDifference(groups, initial.groups) +
-        setDifference(channels, initial.channels) +
+      : setDifference(groups, saved.groups) +
+        setDifference(channels, saved.channels) +
         released.length +
-        Number(mode === 'except' && hideNew !== initial.hideNewGroups))
-  useDraftPart(id, readOnly ? 0 : changes, () => {
+        Number(mode === 'except' && hideNew !== saved.hideNewGroups))
+  useSectionDraft(id, view, changes, () => {
     if (mode !== 'all' && !choices.isSuccess) return null
     const kept =
       mode === 'except'
@@ -615,12 +820,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
   }
 
   return (
-    <LimitsSection
-      id={id}
-      target={target}
-      title={t.users.liveTvChannelsTitle}
-      description={t.users.liveTvChannelsHelp}
-    >
+    <>
       <SettingRow<ChannelRule['mode']>
         kind="choice"
         label={t.users.channelsMode}
@@ -632,7 +832,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
               : undefined
         }
         value={mode}
-        saved={readOnly ? undefined : initial.mode}
+        saved={view.saved === undefined ? undefined : saved.mode}
         options={[
           { value: 'all', label: t.users.channelsAll },
           { value: 'only', label: t.users.channelsOnly },
@@ -760,7 +960,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
             </div>
           </fieldset>
         ))}
-    </LimitsSection>
+    </>
   )
 }
 
@@ -786,11 +986,26 @@ function changedSchedules(a: readonly AccessSchedule[], b: readonly AccessSchedu
 
 export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const readOnly = isReadOnly(target)
-  const saved = limitsOf(target).accessSchedules
-  const [schedules, setSchedules] = useState<AccessSchedule[]>(saved)
+  return (
+    <LimitsSection
+      id={id}
+      section="hours"
+      target={target}
+      title={t.users.allowedHoursTitle}
+      description={t.users.allowedHoursHelp}
+    >
+      {(view) => <AllowedHoursRows id={id} view={view} />}
+    </LimitsSection>
+  )
+}
+
+function AllowedHoursRows({ id, view }: { id: string; view: SectionView }) {
+  const { t } = useI18n()
+  const { readOnly } = view
+  const saved = (view.saved ?? view.values).accessSchedules
+  const [schedules, setSchedules] = useState<AccessSchedule[]>(view.values.accessSchedules)
   const misordered = schedules.some((s) => s.startHour >= s.endHour)
-  useDraftPart(id, readOnly ? 0 : changedSchedules(schedules, saved), () =>
+  useSectionDraft(id, view, changedSchedules(schedules, saved), () =>
     misordered ? null : { accessSchedules: schedules },
   )
 
@@ -799,77 +1014,70 @@ export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: 
   }
 
   return (
-    <LimitsSection
-      id={id}
-      target={target}
-      title={t.users.allowedHoursTitle}
-      description={t.users.allowedHoursHelp}
-    >
-      <fieldset disabled={readOnly} className="contents">
-        {schedules.length === 0 ? (
-          <p className={cx(tile, 'text-body text-ink-2')}>{t.users.noAllowedHours}</p>
-        ) : (
-          <ul
-            className="grid grid-cols-[minmax(0,1fr)] gap-1.5"
-            aria-label={t.users.allowedHoursTitle}
-          >
-            {schedules.map((schedule, index) => (
-              // Rows have no identity of their own; they are edited in place.
-              <li key={index} className={cx(tile, 'flex flex-wrap items-end gap-3')}>
-                <Field label={t.users.day} className="min-w-[12.5rem] flex-1">
-                  <Select<ScheduleDay>
+    <fieldset disabled={readOnly} className="contents">
+      {schedules.length === 0 ? (
+        <p className={cx(tile, 'text-body text-ink-2')}>{t.users.noAllowedHours}</p>
+      ) : (
+        <ul
+          className="grid grid-cols-[minmax(0,1fr)] gap-1.5"
+          aria-label={t.users.allowedHoursTitle}
+        >
+          {schedules.map((schedule, index) => (
+            // Rows have no identity of their own; they are edited in place.
+            <li key={index} className={cx(tile, 'flex flex-wrap items-end gap-3')}>
+              <Field label={t.users.day} className="min-w-[12.5rem] flex-1">
+                <Select<ScheduleDay>
+                  size="sm"
+                  value={schedule.day}
+                  onValue={(day) => change(index, { day })}
+                  options={scheduleDays.map((day) => ({ value: day, label: t.users.days[day] }))}
+                />
+              </Field>
+              {(['startHour', 'endHour'] as const).map((field) => (
+                <Field
+                  key={field}
+                  label={field === 'startHour' ? t.users.from : t.users.to}
+                  className="w-[8rem]"
+                >
+                  <Select
                     size="sm"
-                    value={schedule.day}
-                    onValue={(day) => change(index, { day })}
-                    options={scheduleDays.map((day) => ({ value: day, label: t.users.days[day] }))}
+                    value={schedule[field]}
+                    invalid={misordered && schedule.startHour >= schedule.endHour}
+                    onValue={(hour) => change(index, { [field]: hour })}
+                    options={(halfHours.includes(schedule[field])
+                      ? halfHours
+                      : [...halfHours, schedule[field]].sort((a, b) => a - b)
+                    ).map((hour) => ({ value: hour, label: hourLabel(hour) }))}
                   />
                 </Field>
-                {(['startHour', 'endHour'] as const).map((field) => (
-                  <Field
-                    key={field}
-                    label={field === 'startHour' ? t.users.from : t.users.to}
-                    className="w-[8rem]"
-                  >
-                    <Select
-                      size="sm"
-                      value={schedule[field]}
-                      invalid={misordered && schedule.startHour >= schedule.endHour}
-                      onValue={(hour) => change(index, { [field]: hour })}
-                      options={(halfHours.includes(schedule[field])
-                        ? halfHours
-                        : [...halfHours, schedule[field]].sort((a, b) => a - b)
-                      ).map((hour) => ({ value: hour, label: hourLabel(hour) }))}
-                    />
-                  </Field>
-                ))}
-                {!readOnly && (
-                  <Button
-                    variant="ghost"
-                    icon={TrashIcon}
-                    onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
-                  >
-                    {t.users.removeHours}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {misordered && <Notice tone="danger">{t.users.hoursOrder}</Notice>}
-        {!readOnly && (
-          <div>
-            <Button
-              icon={PlusIcon}
-              onClick={() =>
-                setSchedules([...schedules, { day: 'Everyday', startHour: 8, endHour: 20 }])
-              }
-            >
-              {t.users.addHours}
-            </Button>
-          </div>
-        )}
-      </fieldset>
-    </LimitsSection>
+              ))}
+              {!readOnly && (
+                <Button
+                  variant="ghost"
+                  icon={TrashIcon}
+                  onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
+                >
+                  {t.users.removeHours}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {misordered && <Notice tone="danger">{t.users.hoursOrder}</Notice>}
+      {!readOnly && (
+        <div>
+          <Button
+            icon={PlusIcon}
+            onClick={() =>
+              setSchedules([...schedules, { day: 'Everyday', startHour: 8, endHour: 20 }])
+            }
+          >
+            {t.users.addHours}
+          </Button>
+        </div>
+      )}
+    </fieldset>
   )
 }
 
@@ -949,10 +1157,16 @@ function sameSet(a: readonly string[], b: readonly string[]) {
 }
 
 /**
- * What Reset to defaults changes, in the order of the page: each section whose values change, with
- * the settings that change in it for Access and Playback and access, whose settings are many.
+ * What Reset to defaults changes, in the order of the page: each of the sections it resets whose
+ * values change, with the settings that change in it for Access and Playback and access, whose
+ * settings are many.
  */
-function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) {
+function resetChanges(
+  t: Messages,
+  current: GroupLimits,
+  defaults: GroupLimits,
+  reset: readonly GroupSection[],
+) {
   const access = (
     [
       ['remoteAccess', t.users.remoteAccess],
@@ -980,19 +1194,19 @@ function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) 
     ] as const
   ).filter(([field]) => current[field] !== defaults[field])
   const parental = current.parentalControl
-  const sections: { title: string; settings: string[]; changed: boolean }[] = [
+  const sections: { section: GroupSection; settings: string[]; changed: boolean }[] = [
     {
-      title: t.users.accessTitle,
+      section: 'access',
       settings: access.map(([, label]) => label),
       changed: access.length > 0,
     },
     {
-      title: t.users.playbackAccessTitle,
+      section: 'playback',
       settings: playback.map(([, label]) => label),
       changed: playback.length > 0,
     },
     {
-      title: t.users.parentalTitle,
+      section: 'parental',
       settings: [],
       changed:
         parental.maxRating !== defaults.parentalControl.maxRating ||
@@ -1000,22 +1214,22 @@ function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) 
         !sameSet(parental.blockUnrated, defaults.parentalControl.blockUnrated),
     },
     {
-      title: t.users.visibleLibrariesTitle,
+      section: 'libraries',
       settings: [],
       changed: !sameSet(current.hiddenLibraries, defaults.hiddenLibraries),
     },
     {
-      title: t.users.blockedGenresTitle,
+      section: 'genres',
       settings: [],
       changed: !sameSet(current.blockedGenres, defaults.blockedGenres),
     },
     {
-      title: t.users.allowedHoursTitle,
+      section: 'hours',
       settings: [],
       changed: JSON.stringify(current.accessSchedules) !== JSON.stringify(defaults.accessSchedules),
     },
     {
-      title: t.users.liveTvChannelsTitle,
+      section: 'channels',
       settings: [],
       changed:
         current.liveTvChannels.mode !== defaults.liveTvChannels.mode ||
@@ -1023,7 +1237,7 @@ function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) 
         !sameSet(current.liveTvChannels.channels, defaults.liveTvChannels.channels),
     },
   ]
-  return sections.filter((section) => section.changed)
+  return sections.filter((section) => section.changed && reset.includes(section.section))
 }
 
 /**
@@ -1055,14 +1269,14 @@ export function ResetDefaultsDialog({
       target.kind === 'group' ? fetchGroupDefaults(id, signal) : fetchUserDefaults(id, signal),
     enabled: open,
   })
-  // The members who follow the group take its values at once.
+  // The members who follow the group in a section take its values there at once.
   const users = useQuery({
     queryKey: queryKeys.users,
     queryFn: ({ signal }) => fetchUsers(signal),
     enabled: open && target.kind === 'group',
   })
   const followers = (users.data ?? []).filter(
-    (user) => user.groupId === id && user.followGroup,
+    (user) => user.groupId === id && user.ownSections.length < groupSections.length,
   ).length
   const reset = useMutation({
     mutationFn: async () => {
@@ -1079,8 +1293,11 @@ export function ResetDefaultsDialog({
     },
     onError: target.kind === 'group' ? refreshGroupIfGone : refreshIfGone,
   })
+  // A member's reset reaches only the sections they keep as their own.
+  const resets =
+    target.kind === 'user' && target.user.groupId !== null ? target.user.ownSections : groupSections
   const changes =
-    defaults.data === undefined ? null : resetChanges(t, limitsOf(target), defaults.data)
+    defaults.data === undefined ? null : resetChanges(t, limitsOf(target), defaults.data, resets)
 
   return (
     <ConfirmDialog
@@ -1098,7 +1315,12 @@ export function ResetDefaultsDialog({
       <div className="space-y-3">
         <p>{target.kind === 'group' ? text.groupHelp : text.userHelp(name)}</p>
         {target.kind === 'user' && target.user.groupName !== null && (
-          <p>{text.ownSettingsHelp(target.user.groupName)}</p>
+          <p>
+            {text.ownSettingsHelp(
+              target.user.groupName,
+              target.user.ownSections.map((section) => sectionTitle(t, section)).join(', '),
+            )}
+          </p>
         )}
         {target.kind === 'group' && users.isSuccess && <p>{text.followers(followers)}</p>}
         {defaults.isError ? (
@@ -1112,8 +1334,8 @@ export function ResetDefaultsDialog({
             <p className="font-medium text-ink">{text.changesTitle}</p>
             <ul className="mt-1 list-disc space-y-0.5 ps-5">
               {changes.map((change) => (
-                <li key={change.title}>
-                  <span className="text-ink">{change.title}</span>
+                <li key={change.section}>
+                  <span className="text-ink">{sectionTitle(t, change.section)}</span>
                   {change.settings.length > 0 && `: ${change.settings.join(', ')}`}
                 </li>
               ))}
