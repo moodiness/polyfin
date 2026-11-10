@@ -471,7 +471,7 @@ jobs:
         # apt's archive from.
         id: tesseract
         run: |
-          sudo apt-get update
+          sudo apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any
           uris="$RUNNER_TEMP/tesseract.uris"
           sudo apt-get install --print-uris -qq --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra | tee "$uris"
           if [ -s "$uris" ]; then
@@ -517,7 +517,7 @@ jobs:
             if [ -f "$deb" ] && [ -z "${wanted[$(basename "$deb")]:-}" ]; then rm -f "$deb"; fi
           done
           apt_install() {
-            sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$debs/" \
+            sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Dir::Cache::Archives="$debs/" \
               -o APT::Keep-Downloaded-Packages=true "$@"
           }
           packages=(tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra)
@@ -752,8 +752,8 @@ jobs:
             echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.d/polyfin.conf
             echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
               | sudo tee /etc/apt/sources.list.d/pgdg.list
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends postgresql-18
+            sudo apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any
+            sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 postgresql-18
             ln -s /usr/lib/postgresql/18 "$temp/install/postgresql"
             exit 0
           fi

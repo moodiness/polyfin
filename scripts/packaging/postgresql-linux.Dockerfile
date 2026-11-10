@@ -17,10 +17,12 @@
 FROM ubuntu:22.04@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956 AS build
 ADD --checksum=sha256:555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f \
 	https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2 /src/postgresql.tar.bz2
-# The build's own tools, from Ubuntu 22.04's archive.
+# The build's own tools, from Ubuntu 22.04's archive. apt retries its
+# downloads, and its update fails on an index it could not fetch rather
+# than going on without it.
 # hadolint ignore=DL3008
-RUN apt-get update \
-	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+RUN apt-get update -o Acquire::Retries=5 -o APT::Update::Error-Mode=any \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
 		bzip2 gcc make libc6-dev pkg-config bison flex perl libicu-dev zlib1g-dev patchelf
 WORKDIR /src
 # A prefix with "pgsql" in it keeps bin, lib and share flat, as
