@@ -181,14 +181,21 @@ func (t *track) await(ctx context.Context, n int) (*os.File, error) {
 
 // waitProgress waits for a change, or reports ErrStalled once the running
 // job made no progress for the stall timeout, counted from since at the
-// earliest. The caller holds t.mu, held again when it returns.
+// earliest, and stops that job, as encoding.waitProgress does. The caller
+// holds t.mu, held again when it returns.
 func (t *track) waitProgress(ctx context.Context, since time.Time) error {
+	j := t.job
 	last := since
-	if j := t.job; j != nil && j.progressed.After(last) {
+	if j != nil && j.progressed.After(last) {
 		last = j.progressed
 	}
 	left := time.Until(last.Add(t.m.stall))
 	if left <= 0 {
+		if j != nil && !j.done {
+			t.m.logger.Warn("FFmpeg made no progress on a kept video's audio: stopped, to start again on the next request", "from", j.start,
+				"for", time.Since(j.progressed).Round(time.Second))
+			j.cancel()
+		}
 		return ErrStalled
 	}
 	timer := time.NewTimer(left)
