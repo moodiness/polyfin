@@ -45,8 +45,9 @@ const (
 	behind = 3
 	// stallTimeout is how long a request waits for a job that makes no
 	// progress, reading or writing, before it is answered that the server
-	// is busy (ErrStalled): a player asks again, or moves on, rather than
-	// showing a frozen picture for minutes.
+	// is busy (ErrStalled) and the job is stopped: a player asks again,
+	// which starts FFmpeg anew, or moves on, rather than showing a frozen
+	// picture for minutes.
 	stallTimeout = 20 * time.Second
 	// idleTimeout stops an encoding no player asked anything of for that
 	// long, such as a paused one; it starts again on the next request.
@@ -72,7 +73,8 @@ var (
 	// ErrStopped reports an encoding stopped while a player waited for it.
 	ErrStopped = errors.New("the encoding was stopped")
 	// ErrStalled reports a segment FFmpeg made no progress towards for
-	// stallTimeout: its source is slow to answer, or stopped answering.
+	// stallTimeout: its source is slow to answer, or stopped answering, or
+	// FFmpeg itself stopped for good.
 	ErrStalled = errors.New("the encoding made no progress")
 	errStale   = errors.New("the job was replaced")
 )
@@ -1492,14 +1494,23 @@ func (e *encoding) wait(ctx context.Context) error {
 
 // waitProgress waits for a change as wait does, or reports ErrStalled once
 // the running job made no progress for the stall timeout, counted from
-// since at the earliest: when the request began waiting.
+// since at the earliest: when the request began waiting. That job is
+// stopped, and the next request starts another: FFmpeg may never go on,
+// as FFmpeg 9.0.2 at times deadlocks when a subtitle file burned in ends
+// before the first frame of the video is decoded.
 func (e *encoding) waitProgress(ctx context.Context, since time.Time) error {
+	j := e.job
 	last := since
-	if j := e.job; j != nil && j.progressed.After(last) {
+	if j != nil && j.progressed.After(last) {
 		last = j.progressed
 	}
 	left := time.Until(last.Add(e.m.stall))
 	if left <= 0 {
+		if j != nil && !j.done {
+			e.m.logger.Warn("FFmpeg made no progress: stopped, to start again on the next request", "from", j.start,
+				"for", time.Since(j.progressed).Round(time.Second))
+			j.cancel()
+		}
 		return ErrStalled
 	}
 	timer := time.NewTimer(left)

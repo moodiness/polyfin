@@ -79,8 +79,10 @@ func twoSecondKeyframes(t *testing.T, ffmpeg string) (string, Plan) {
 
 // A segment whose FFmpeg makes no progress, its source answering nothing
 // more, is answered ErrStalled once the stall timeout passed, rather than
-// waited for until the player gives up; a slow source that keeps FFmpeg
-// going is waited for past it.
+// waited for until the player gives up, and that FFmpeg is stopped: the
+// request asking again starts another, rather than waiting on one that may
+// never go on. A slow source that keeps FFmpeg going is waited for past
+// it.
 func TestStalledSegmentsAreAnsweredWithinTheTimeout(t *testing.T) {
 	t.Parallel()
 	ffmpeg, _ := tools(t)
@@ -102,9 +104,20 @@ func TestStalledSegmentsAreAnsweredWithinTheTimeout(t *testing.T) {
 		return Remux{Input: stalled.URL + "/steady.mkv", Video: 0, Audio: -1, Format: FMP4, Plan: plan}, func() {}, nil
 	}
 	started := time.Now()
-	_, err = m.Segment(t.Context(), Key{Session: "stalled", Audio: -1, Format: FMP4}, open, 0)
+	stalledKey := Key{Session: "stalled", Audio: -1, Format: FMP4}
+	_, err = m.Segment(t.Context(), stalledKey, open, 0)
 	if waited := time.Since(started); !errors.Is(err, ErrStalled) || waited < m.stall || waited > m.stall+3*time.Second {
 		t.Errorf("a stalled source: %v after %v", err, waited)
+	}
+	_, err = m.Segment(t.Context(), stalledKey, open, 0)
+	m.mu.Lock()
+	e := m.encodings[stalledKey]
+	m.mu.Unlock()
+	e.mu.Lock()
+	runs := e.runs
+	e.mu.Unlock()
+	if !errors.Is(err, ErrStalled) || runs != 2 {
+		t.Errorf("asked again: %v, %d FFmpeg started, want 2", err, runs)
 	}
 
 	// Paced at twice the video's own rate: segment 3, which ends at 14 s,
