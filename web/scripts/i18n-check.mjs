@@ -3,8 +3,10 @@
 // - every other language has the keys English has and no other, its lists
 //   as long and its functions taking as many arguments;
 // - French messages, and the French words of the web player's script, set
-//   : ; ? ! and « » apart with a narrow no-break space, never a plain or a
-//   no-break one (see french-spacing.mjs, which writes them so).
+//   : ; ? ! and « » apart with a narrow no-break space written \u202f,
+//   never a plain or a no-break one, nor the narrow one as the character:
+//   it fails on any string french-spacing.mjs would change, which writes
+//   them so.
 //
 // It needs the compiler API of TypeScript 5, which TypeScript 7, the admin
 // app's, no longer has. Run it from web/ as
@@ -228,11 +230,14 @@ const different = await mismatches()
 const spaced = frenchSpacing(ts)
 for (const line of notRead) console.log(`unread: ${line}`)
 for (const line of different) console.log(`differs: ${line}`)
-for (const { at, key, text } of spaced)
-  console.log(`spacing: ${at} ${key}: ${JSON.stringify(text)}`)
+// The strings as written, the no-break characters named, so that the
+// finding tells them from a plain space and from \u202f.
+const spaces = (source) =>
+  source.replace(/[\u00a0\u202f]/g, (c) => `[U+${c.charCodeAt(0).toString(16).toUpperCase()}]`)
+for (const { at, key, source } of spaced) console.log(`spacing: ${at} ${key}: ${spaces(source)}`)
 if (notRead.length || different.length || spaced.length) {
   console.error(
-    `${notRead.length} English messages no code reads, ${different.length} differences between languages, ${spaced.length} French texts with a wide space before a sign or inside « » (run scripts/french-spacing.mjs)`,
+    `${notRead.length} English messages no code reads, ${different.length} differences between languages, ${spaced.length} French texts with a space before a sign or inside « » other than \\u202f (run scripts/french-spacing.mjs)`,
   )
   process.exit(1)
 }

@@ -55,8 +55,6 @@ const space = String.raw`(?: |\u00a0|\\u00[aA]0|\\x[aA]0|\u202f|\\u202F)`
 const sign = String.raw`(?:[:;?!](?![\p{L}\p{N}])|»)`
 const before = new RegExp(String.raw`(?<!\\)${space}(?=${sign})`, 'gu')
 const after = new RegExp(String.raw`«${space}`, 'gu')
-// A space the text holds where a narrow one belongs.
-const wide = new RegExp(String.raw`[ \u00a0](?=${sign})|«[ \u00a0]`, 'u')
 
 // narrow rewrites the source of a string, its quotes included, and counts
 // the spaces it changed.
@@ -144,8 +142,10 @@ const frenchFiles = () => [
   webClient,
 ]
 
-// frenchSpacing lists the French strings with a wide space where a narrow
-// one belongs, as { at, key, text }; with write, it rewrites them and
+// frenchSpacing lists the French strings the script would change, as
+// { at, key, source }, source being the string as written: those with a
+// plain or a no-break space where a narrow one belongs, or with a narrow
+// one written as the character or \u202F; with write, it rewrites them and
 // returns the number of spaces changed by file instead.
 export function frenchSpacing(ts, write = false) {
   const findings = []
@@ -161,11 +161,11 @@ export function frenchSpacing(ts, write = false) {
       if (n === 0) continue
       count += n
       if (write) text = text.slice(0, start) + result + text.slice(node.end)
-      else if (wide.test(node.text))
+      else
         findings.unshift({
           at: `${path.relative(web, file)}:${sf.getLineAndCharacterOfPosition(start).line + 1}`,
           key,
-          text: node.text,
+          source: text.slice(start, node.end),
         })
     }
     if (count > 0) {
