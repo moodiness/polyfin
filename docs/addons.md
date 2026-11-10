@@ -65,7 +65,7 @@ Every server source has a **Used by** setting: a Stremio or Eclipse addon, an IP
 | **Only these groups and users** | The users ticked, and the members of the groups ticked. |
 
 - Sources made before this setting existed are on **Everyone**, so nothing changes until an administrator limits one.
-- A group member who keeps **Own settings** still belongs to the group, and gets its sources.
+- A group member who keeps some sections as their own still belongs to the group, and gets its sources. To give one member a source their group does not get, list them by name beside the group (see [Giving one member more or less](users.md#giving-one-member-more-or-less)).
 - Administrators are users like others here. An administrator left out still manages the source under **Content › Sources**. The source's page warns that their own apps will not use it.
 
 ### From a group page
@@ -107,7 +107,7 @@ Background work uses every server source, such as reading catalogs ahead or warm
 - **New users:** a new user in no group gets none of the sources limited to others.
 - **Deleting:** deleting a group or a user removes them from every **Used by** list.
 - **Empty lists:** a source whose list empties is used by no one, never by everyone.
-- **Groups:** the setting belongs to the source, not to the group's sections. It is not part of **Reset to defaults**. A member who follows their group, or not, uses the same sources.
+- **Groups:** the setting belongs to the source, not to the group's sections. It is not part of **Reset to defaults**. A member uses the same sources whatever sections they keep as their own.
 - **Own addons:** a user who may add their own addons can still add the same addon under **My sources**, at a public address. To prevent it, turn **Can add their own addons** off for them or their group (see [Users' own addons](sign-in-and-security.md#users-own-addons)).
 - **Own sources:** a user's own sources have no **Used by**. They belong to their owner alone.
 - **Local addresses:** a limited source stays a server source, so it may keep a local network address.
