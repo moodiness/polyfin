@@ -6,13 +6,12 @@ Everything Polyfin keeps is in its PostgreSQL database: accounts and watch histo
 
 ## Turning backups on
 
-Turn on **Back up the database every day**, under **Settings › Backups**. Backups are off until then.
+Turn on **Back up the database**, under **Settings › Backups**. Backups are off until then.
 
 | Setting | Where | Default | What it does |
 | --- | --- | --- | --- |
-| **Back up the database every day** | **Settings › Backups** | Off | Backs the database up every day into the backups folder. |
+| **Back up the database** | **Settings › Backups** | Off | Backs the database up into the backups folder, when the **Back up the database** task's triggers say. |
 | **Backups folder** | **Settings › Backups** | Empty, for `backups` in the data folder: `/data/backups` in the Docker image's volume | The folder backups are written to. Polyfin creates the default one. |
-| **Back up every day at** | **Settings › Backups** | 4:00 | The hour of the daily backup, in the server's time zone. |
 | **Backups to keep** | **Settings › Backups** | 7 | How many of the newest backups the folder keeps, from 1 to 90. |
 | **Backup passphrase** | **Settings › Backups** | Empty, for none | Encrypts every backup (see [Encrypting the backups](#encrypting-the-backups)). |
 
@@ -34,7 +33,7 @@ The Docker image includes `pg_dump` and `pg_restore` from PostgreSQL 18. Without
 
 ## What Polyfin does
 
-Every day, at the hour of **Back up every day at**, the **Back up the database** task runs `pg_dump`.
+When its triggers say, every day at 4:00 by default, the **Back up the database** task runs `pg_dump`. Change them with **Triggers** on the task, in **System › Schedule**: every day or every week at a time, or at an interval of 6 hours or more, but not at startup (see [Triggers](administration.md#triggers)). While **Back up the database** is off, the task does nothing when its triggers come.
 
 - It writes a full copy of the database, in `pg_dump`'s custom format.
 - The file is named after its start time, such as `polyfin-20261005-040000.dump`.

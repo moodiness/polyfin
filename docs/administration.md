@@ -14,7 +14,7 @@ Other administration pages:
 
 Open the admin app at `/admin/`. From the [web player](web-client.md), it opens in these ways:
 
-- **Administrators:** the dashboard link opens it. jellyfin-web's dashboard pages open their counterpart: users, libraries, logs, scheduled tasks, API keys and playback settings.
+- **Administrators:** the dashboard link opens it. jellyfin-web's dashboard pages open their counterpart: users, libraries, logs, scheduled tasks, API keys and playback settings. A task's page opens that task's triggers.
 - **Members:** the **Polyfin** entry, which the web player shows them instead of **Dashboard**, opens it.
 
 A user signed in to the web player arrives signed in, as that user. The admin app stays signed in only as long as the web player does. Signing out of the web player, or signing in there as someone else, signs the admin app out too (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
@@ -244,7 +244,7 @@ See [The Statistics page](statistics.md#the-statistics-page).
 
 **System › Schedule** lists:
 
-- the **Tasks**, with their last run, result and next run. **Run now** and **Stop** run or stop each one by hand;
+- the **Tasks**, with their last run, result, next run and triggers. **Run now** and **Stop** run or stop each one by hand, and **Triggers** changes when it runs on its own (see [Triggers](#triggers));
 - **Database backups**, with **Back up now**, each destination's last upload, and **Restore** (see [Backups](backups.md));
 - the **Upcoming recordings** (see [Live TV](live-tv.md));
 - the **Live TV refreshes**: when the IPTV lists and guides are fetched again (see [IPTV](iptv.md)).
@@ -253,13 +253,13 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 
 ### Scheduled tasks
 
-| Task | When it runs on its own |
+| Task | When it runs on its own, by default |
 |---|---|
 | Sign out unused devices | Every hour, for the apps left unused for the days the settings choose |
 | Clean the activity log | Every day: deletes the entries older than 30 days |
 | Refresh Live TV guides | Polyfin looks every 5 minutes for the IPTV lists and guides due under **Settings › Live TV**. Started by hand, it fetches every list and guide. |
 | Read the libraries' first pages | For the libraries older than **Refresh catalogs after (minutes)** |
-| Read every collection | Every day at the hour set in **Settings › Catalogs**; never by default |
+| Read every collection | Never. Give it a daily trigger to read every collection of the server's collection libraries, then its smart lists, each day (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)) |
 | Refresh ratings | Only when started: it asks the addons again |
 | Forget the version lists | Only when started: every title asks its addons again for its versions (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)) |
 | Clean up removed sources | Every hour: deletes what removed sources and dropped catalogs left behind (see [Removing a source](addons.md#removing-a-source)) |
@@ -269,10 +269,10 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Delete old recordings | For the recordings older than the days the settings keep them |
 | Schedule series recordings | For the new programmes of each series recording |
 | Find commercials in recordings | While **Find commercials in recordings** is on, in **Settings › Recordings** |
-| Back up the database | Every day at the hour set in **Settings › Backups**, while backups are on |
+| Back up the database | Every day at 4:00, while backups are on (see [Backups](backups.md)) |
 | Build taste profiles | Every hour, for the users whose watch data, hidden titles or access changed, and once a day for every user |
 | Clean the playback history | For the playbacks older than the days to keep set in **Settings › Playback** |
-| Empty the cache of files being read | Every day at the hour set in **Settings › Playback**; never by default. Rarely needed, as the cache's size and days already bound it (see [Keeping the files read across restarts](reading-the-sources.md#keeping-the-files-read-across-restarts)) |
+| Empty the cache of files being read | Never. Rarely needed, as the cache's size and days already bound it (see [Keeping the files read across restarts](reading-the-sources.md#keeping-the-files-read-across-restarts)) |
 | Send the weekly summary | At the day and hour set in **Settings › Notifications** |
 | Send the month in review | On the 1st, at the hour of the weekly summary |
 | Send the year in review | On January 1st, at the hour of the weekly summary |
@@ -281,7 +281,44 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 
 A task that runs every few minutes or hours first runs a few minutes after its interval, at an offset of its own, so that such tasks do not all start in the same second. The tasks that run at start still do then.
 
-Jellyfin apps see every task of **System › Schedule**, and can start and stop them. They cannot change these schedules. Some follow the hours and days set in Polyfin's settings, as above.
+- **Last runs:** each task's last run and result are kept, and still show after a restart.
+- **Intervals:** an interval counts from the task's last start, kept across restarts. A task every 7 days still runs every 7 days on a server restarted each night.
+- **Already running:** a trigger that comes while its task runs is skipped, not queued.
+
+### Triggers
+
+**Triggers**, on a task of **System › Schedule**, opens the list of what starts it on its own. A task may have up to 8 triggers, of four types:
+
+- **Every day:** at a time of the server's time zone, to the minute (daily);
+- **Every week:** on a day of the week, at a time (weekly);
+- **At an interval:** every number of minutes, hours or days, 28 days at most (interval);
+- **At startup:** when Polyfin starts (startup).
+
+**Add a trigger** adds one, **Remove** removes one, and **Save** keeps the list. **Reset to defaults** gives the task its default triggers again.
+
+A task left with no trigger runs only when started by hand, and shows a warning. Record ended accounts and Record expired share links must keep at least one, as the activity log relies on them.
+
+Each task allows some types, and a shortest interval:
+
+| Task | Types | Shortest interval |
+|---|---|---|
+| Record ended accounts, Record expired share links | interval, startup | 10 minutes |
+| Read the libraries' first pages, Add the episodes of watchlist series, Build taste profiles, Clean up removed sources | all four | 15 minutes |
+| Look for versions of watchlist titles | daily, weekly, interval | 1 hour |
+| Clean the activity log, Clean the playback history, Delete old recordings, Find commercials in recordings | all four | 1 hour |
+| Read every collection | daily, weekly, interval | 12 hours |
+| Refresh ratings | daily, weekly, interval | 24 hours |
+| Empty the cache of files being read | all four | 6 hours |
+| Back up the database | daily, weekly, interval | 6 hours |
+
+Some tasks are locked: their dialog tells why, and their triggers cannot change.
+
+- **Their settings set when they run:** Refresh Live TV guides, Scan local folders and Sign out unused devices.
+- **Series recordings depend on it:** Schedule series recordings.
+- **Sent on their own:** the weekly summary, the month and the year in review, at the day and hour set in **Settings › Notifications**.
+- **By hand only:** Forget the version lists.
+
+Jellyfin apps see every task of **System › Schedule**, and can start and stop them. They can change the triggers too, as above, and give a trigger a time limit, which the admin app keeps but does not show.
 
 API details: [Scheduled tasks](jellyfin-api.md#scheduled-tasks-in-the-jellyfin-api).
 

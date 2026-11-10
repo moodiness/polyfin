@@ -97,7 +97,7 @@ The list's page shows a preview of its titles as they stand now, before you save
 ### Limits
 
 - A list sees only the titles its catalogs list within their maximum, and changes as they change.
-- A list whose catalogs are long is slow to fill the first time. **Read every collection each day** reads the server's smart lists too (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)).
+- A list whose catalogs are long is slow to fill the first time. The task "Read every collection", given a trigger, reads the server's smart lists too (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)).
 - Parental control, blocked genres and allowed hours apply as everywhere. A user under parental control or blocking genres sees the server's lists only, and cannot make or change lists of their own. Those made before are kept, and **My sources** lists them with **Delete** only, as it does while the user's own addons are turned off (see [Users' own addons](sign-in-and-security.md#users-own-addons)).
 - A list keeps its own sort: apps cannot sort it otherwise.
 - A library made of a list offers no genre to filter by.
