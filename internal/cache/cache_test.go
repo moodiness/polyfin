@@ -165,6 +165,32 @@ func TestDeleteFuncForgetsWhatItReports(t *testing.T) {
 	}
 }
 
+// ChangeFunc changes the values it reports in place: they expire when
+// they would have, and the others stay as they were.
+func TestChangeFuncChangesWhatItReportsInPlace(t *testing.T) {
+	t.Parallel()
+	k := newClock(time.Hour)
+	c := k.sized(100)
+	c.Put("a", "old")
+	k.now = k.now.Add(30 * time.Minute)
+	c.Put("b", "old")
+	c.ChangeFunc(func(key, value string) (string, bool) { return "new", key == "a" })
+	if a, _ := c.Get("a"); a != "new" {
+		t.Errorf("a: %q, want new", a)
+	}
+	if b, _ := c.Get("b"); b != "old" {
+		t.Errorf("b: %q, want old", b)
+	}
+	if c.Bytes() != 6 || c.Len() != 2 {
+		t.Errorf("%d bytes, %d entries", c.Bytes(), c.Len())
+	}
+	// a was stored first, and expires first.
+	k.now = k.now.Add(31 * time.Minute)
+	if got := keeps(c, "a", "b"); !slices.Equal(got, []string{"b"}) {
+		t.Errorf("kept past a's lifetime: %v", got)
+	}
+}
+
 func TestASizedCacheKeepsItsCapacity(t *testing.T) {
 	t.Parallel()
 	c := NewLasting[string, string](2, func() time.Duration { return time.Hour }, time.Now).Sized(100, func(value string) int { return len(value) })
