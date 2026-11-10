@@ -79,19 +79,34 @@ Analysis also reads chapters, which apps show and let you skip through. Apps get
 
 ## Watching together
 
-Watch together (SyncPlay in Jellyfin), the web player first, plays titles in step across devices and users.
+Watch together (SyncPlay in Jellyfin), the web player first, plays titles in step across devices and users. Each person joins from their own device: nobody can add someone else to a group.
+
+1. One person opens the SyncPlay menu, the people icon at the top of the web player, and chooses "Create a new group".
+2. The others open the same menu on their own device and join that group, named after the person who created it.
+3. Whoever then plays a title starts it for everyone. Pause, Play and seeking also act for the whole group.
+
+**From a title's page:** "Watch together" in the ⋮ menu of a movie or an episode does the first step with that title.
+
+- It creates a group, or uses the one the device is already in, and opens the title paused at its start.
+- A message says how the others join. Once they are in, press Play: it starts for everyone at once.
+- It shows to users whose **Watch together** access is Create and join (see [Watch together](user-limits.md#watch-together)), in a web player that offers SyncPlay.
+- A message says why it can't start: SyncPlay turned off for the user, an access that only joins groups, a title with no source yet, or a group where someone can't play the title.
+
+How groups behave:
 
 - Any member can set what plays (up to 5,000 entries), play, pause and seek.
 - Groups start and resume on Polyfin's clock, slightly ahead so every app is ready.
 - Groups wait up to 30 seconds for loading or buffering apps.
 - Every user may create and join groups, but only users who can see everything a group plays can see or join it. Nothing hidden from a member is queued.
 - A session leaves when its app disconnects or is signed out (by the app, a password change, or an administrator).
-- Empty groups end.
+- A group ends once everyone has left it, and when Polyfin restarts. A new watch together then starts with a new group.
 - Apps need Jellyfin's live connection (WebSocket) open.
+- Some Jellyfin apps don't support SyncPlay, so they can neither create nor join a group. The web player does, and so do the Jellyfin apps that show it, on computers and phones.
 
 **Compared with Jellyfin**
 
 - Like Jellyfin, Polyfin keeps the groups in memory.
+- Jellyfin has no "Watch together" entry: its web player starts a group from the SyncPlay menu only.
 
 <div class="moved-sections">
 
