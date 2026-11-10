@@ -193,7 +193,7 @@ Uninstalling the app leaves the data folder. Remove the folder to remove everyth
 
 To reach the database with your own tools:
 
-- **Address:** `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free. The port is in `postgresql/polyfin.port`.
+- **Address:** `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free. Another one is chosen when another program takes it, even as the database starts. The port is in `postgresql/polyfin.port`.
 - **User:** `polyfin`, with the password in `polyfin.password`.
 - **Settings:** light ones, appended to `postgresql/postgresql.conf`, with 20 connections at most (see [A light PostgreSQL](installation.md#a-light-postgresql)). A setting written below them, or with `ALTER SYSTEM`, wins.
 - **Version:** PostgreSQL 18. A `postgresql` folder another major version made does not start: the app says so. Move it with a backup and a restore (see [PostgreSQL versions](installation.md#postgresql-versions)).

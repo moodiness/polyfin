@@ -56,6 +56,8 @@ const (
 	// probeWait bounds the attempt to reach a cluster a crash left
 	// running.
 	probeWait = 5 * time.Second
+	// portTries bounds the ports a start tries (see startPostgres).
+	portTries = 3
 )
 
 // settings are appended to the postgresql.conf initdb writes: no Unix
@@ -220,29 +222,22 @@ func newPassword() (string, error) {
 }
 
 // Start starts the cluster, after stopping one a crash of the app left
-// running or clearing the lock file of one that crashed, rebuilds the
-// indexes of the databases whose collation version changed, and creates
-// the server's database when it has none. Prepare must have run.
+// running or clearing the lock file of one that crashed, on another port
+// when the one chosen is taken as it starts, rebuilds the indexes of the
+// databases whose collation version changed, and creates the server's
+// database when it has none. Prepare must have run.
 func (c *Cluster) Start(ctx context.Context) error {
 	if err := c.recover(ctx); err != nil {
 		return err
 	}
-	port, err := c.choosePort()
-	if err != nil {
-		return err
-	}
-	c.port = port
 	if err := os.MkdirAll(filepath.Dir(c.Log), 0o700); err != nil {
 		return err
 	}
 	if err := c.lighten(); err != nil {
 		return fmt.Errorf("set the database's light settings: %w", err)
 	}
-	c.logger().Info("Starting the database", "port", port)
-	err = c.run(ctx, "pg_ctl", "start", "-D", c.Dir, "-l", c.Log, "-w", "-t", seconds(startWait),
-		"-o", "-p "+strconv.Itoa(port))
-	if err != nil {
-		return fmt.Errorf("start the database (see %s): %w", c.Log, err)
+	if err := c.startPostgres(ctx); err != nil {
+		return err
 	}
 	if err := c.refreshCollations(ctx); err != nil {
 		return err
@@ -251,6 +246,32 @@ func (c *Cluster) Start(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// startPostgres starts PostgreSQL on the port choosePort gives. A port
+// found free may be taken before PostgreSQL listens on it, by another
+// program given it as a free port meanwhile: PostgreSQL then ends at once.
+// When it ended and its port is taken, another one is chosen, up to
+// portTries ports. A port set in Port is the only one tried.
+func (c *Cluster) startPostgres(ctx context.Context) error {
+	for try := 1; ; try++ {
+		port, err := c.choosePort()
+		if err != nil {
+			return err
+		}
+		c.port = port
+		c.logger().Info("Starting the database", "port", port)
+		err = c.run(ctx, "pg_ctl", "start", "-D", c.Dir, "-l", c.Log, "-w", "-t", seconds(startWait),
+			"-o", "-p "+strconv.Itoa(port))
+		if err == nil {
+			return nil
+		}
+		err = fmt.Errorf("start the database (see %s): %w", c.Log, err)
+		if c.Port != 0 || try == portTries || ctx.Err() != nil || c.PID() != 0 || free(port) {
+			return err
+		}
+		c.logger().Warn("The database's port was taken as it started: trying another one", "port", port, "error", err)
+	}
 }
 
 // lighten appends light to the postgresql.conf of a cluster made before
