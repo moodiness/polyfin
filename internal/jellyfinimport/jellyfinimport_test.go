@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"strconv"
 	"strings"
 	"sync"
@@ -494,6 +495,32 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 	} {
 		if got, err := ParseAddress(typed); err != nil || got != want {
 			t.Errorf("%q: %q %v, want %q", typed, got, err, want)
+		}
+	}
+}
+
+// A server's users are read even when another test closes its server right
+// as the connection of an answer without a body, Jellyfin's 400 to
+// /Users/Me for the server's key, goes back among the idle ones, before
+// the answer reaches the request (#958): httptest.Server.Close closes the
+// idle connections of http.DefaultTransport, and the service's transport
+// is its own. An administrator waits on that answer, which is tried once.
+func TestUsersAreReadWhileAnotherServerCloses(t *testing.T) {
+	t.Parallel()
+	s := New(Options{Version: "1.2.3", Logger: slog.New(slog.DiscardHandler)})
+	t.Cleanup(s.Close)
+	f := newFakeJellyfin(t)
+	// PutIdleConn runs in that window: a server closes there, and the
+	// request is given the time to see a closed connection.
+	ctx := httptrace.WithClientTrace(t.Context(), &httptrace.ClientTrace{PutIdleConn: func(err error) {
+		if err == nil {
+			httptest.NewServer(http.NotFoundHandler()).Close()
+			time.Sleep(2 * time.Millisecond)
+		}
+	}})
+	for range 10 {
+		if _, _, err := s.Users(ctx, to(f.url, Credentials{Key: goodKey})); err != nil {
+			t.Fatalf("users while another server closes: %v", err)
 		}
 	}
 }

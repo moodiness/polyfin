@@ -236,7 +236,11 @@ type Service struct {
 	plexServer  string
 }
 
-// New returns a service importing with options.
+// New returns a service importing with options. Its transport is its own,
+// a clone of the default one: whoever closes the idle connections of
+// http.DefaultTransport, as httptest.Server.Close does, cannot break a
+// request whose answer without a body has just put its connection back
+// among the idle ones (#958).
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	device := options.PlexClient
@@ -253,7 +257,7 @@ func New(options Options) *Service {
 		playlists:   options.Playlists,
 		version:     options.Version,
 		logger:      options.Logger,
-		client:      &http.Client{},
+		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
 		timing:      defaultTiming,
 		now:         time.Now,
 		device:      device,
