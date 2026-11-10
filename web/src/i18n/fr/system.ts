@@ -38,10 +38,8 @@ const system: typeof en = {
       tasksTitle: 'Tâches',
       lastRun: 'Dernière exécution',
       nextRun: 'Prochaine exécution',
-      notRunYet: 'Pas encore lancée depuis le démarrage du serveur',
+      notRunYet: 'Pas encore lancée',
       byHandOnly: 'Lancée à la main seulement',
-      every: (span: string) => `Intervalle\u202f: ${span}`,
-      daily: (time: string) => `Chaque jour à ${time}, heure du serveur`,
       took: (span: string) => `en ${span}`,
       results: {
         Completed: 'Terminée',
@@ -55,6 +53,52 @@ const system: typeof en = {
       stop: 'Arrêter',
       stopLabel: (name: string) => `Arrêter ${name}`,
       started: (name: string) => `${name} est lancée.`,
+      triggersButton: 'Déclencheurs',
+      triggersLabel: (name: string) => `Modifier les déclencheurs de ${name}`,
+      triggers: {
+        title: (name: string) => `Déclencheurs\u202f: ${name}`,
+        serverTime: 'Les heures sont celles du fuseau horaire du serveur.',
+        none: 'Aucun déclencheur\u202f: cette tâche ne se lance qu’à la main.',
+        keepOne: 'Cette tâche a besoin d’au moins un déclencheur.',
+        locked: {
+          settings: 'La planification de cette tâche est fixe\u202f: elle suit ses paramètres.',
+          recordings:
+            'La planification de cette tâche est fixe\u202f: les enregistrements de séries en dépendent.',
+          notifications:
+            'La planification de cette tâche est fixe\u202f: le résumé part de lui-même, comme le règle Paramètres › Notifications.',
+          byHand: 'La planification de cette tâche est fixe\u202f: elle ne se lance qu’à la main.',
+        },
+        daily: (time: string) => `Tous les jours à ${time}`,
+        weekly: (day: string, _index: number, time: string) => `Chaque ${day} à ${time}`,
+        interval: (count: number, unit: 'minute' | 'hour' | 'day') =>
+          unit === 'day'
+            ? count === 1
+              ? 'Tous les jours'
+              : `Tous les ${count} jours`
+            : count === 1
+              ? `Toutes les ${unit === 'hour' ? 'heures' : 'minutes'}`
+              : `Toutes les ${count} ${unit === 'hour' ? 'heures' : 'minutes'}`,
+        startup: 'Au démarrage',
+        stopsAfter: (span: string) => `Arrêtée au bout de ${span}`,
+        remove: 'Retirer',
+        removeLabel: (trigger: string) => `Retirer le déclencheur «\u202f${trigger}\u202f»`,
+        add: 'Ajouter un déclencheur',
+        type: 'Quand',
+        types: {
+          daily: 'Tous les jours',
+          weekly: 'Chaque semaine',
+          interval: 'À intervalle régulier',
+          startup: 'Au démarrage',
+        },
+        time: 'Heure',
+        day: 'Jour',
+        intervalLabel: 'Intervalle',
+        duplicate: 'Ce déclencheur est déjà dans la liste.',
+        full: (max: number) => `Une tâche a au plus ${max} déclencheurs.`,
+        reset: 'Rétablir les déclencheurs par défaut',
+        saved: (name: string) => `Déclencheurs enregistrés\u202f: ${name}`,
+        resetDone: (name: string) => `Déclencheurs par défaut rétablis\u202f: ${name}`,
+      },
       autoRefresh: 'Mise à jour toutes les 5 secondes.',
       recordingsTitle: 'Enregistrements à venir',
       recordingsOff:
@@ -295,7 +339,8 @@ const system: typeof en = {
             ? `La carte graphique NVIDIA ne convertit pas la vidéo\u202f: son pilote est antérieur à la version 610, et le FFmpeg pour ces pilotes n’a pas pu être téléchargé\u202f: ${error}. Polyfin réessaie à son prochain démarrage, ou quand les réglages de conversion sont enregistrés.`
             : `La carte graphique NVIDIA ne convertit pas la vidéo, même avec le FFmpeg pour les pilotes antérieurs à la version 610\u202f: ${error}`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
-        backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
+        backupStale:
+          'La dernière sauvegarde de la base de données est en retard\u202f: elle est plus ancienne que ne le permet sa planification.',
         backupDestinationFailed: (name: string) =>
           `${name}\u202f: le dernier envoi des sauvegardes de la base de données a échoué.`,
         backupDestinationStale: (name: string) =>

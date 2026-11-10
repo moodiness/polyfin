@@ -333,7 +333,6 @@ const common: typeof en = {
       'Le client ID et le client secret Trakt doivent faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-les de nouveau depuis votre application Trakt.',
     invalid_simkl_app:
       'Le client ID Simkl doit faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-le de nouveau depuis votre application Simkl.',
-    invalid_backup_hour: 'Choisissez l’heure des sauvegardes dans la liste.',
     invalid_backups_kept:
       'Le nombre de sauvegardes conservées doit être un nombre entier de 1 à 90.',
     invalid_torrent_route:
@@ -403,10 +402,10 @@ const common: typeof en = {
       'Cette sauvegarde chiffrée est endommagée\u202f: une partie a été modifiée ou manque. Rien n’a été restauré.',
     not_encrypted: 'Cette sauvegarde n’est pas chiffrée.',
     unlock_failed: 'La sauvegarde n’a pas pu être déchiffrée.',
-    invalid_collection_read_hour:
-      'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
-    invalid_source_cache_empty_hour:
-      'Choisissez dans la liste l’heure à laquelle vider le cache, ou Jamais.',
+    task_locked:
+      'La planification de cette tâche est fixe\u202f: ses déclencheurs ne peuvent pas être modifiés.',
+    invalid_triggers:
+      'Ces déclencheurs ne conviennent pas à cette tâche. Vérifiez leurs types, heures et intervalles, puis réessayez.',
     invalid_collection_library_apps:
       'Choisissez dans la liste les applis qui présentent les bibliothèques de collections par collection.',
     invalid_remuxdb_url:

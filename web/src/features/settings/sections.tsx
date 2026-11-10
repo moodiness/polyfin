@@ -843,7 +843,7 @@ function Content({ form, update, error, number, range, limits, saved, minMax }: 
 }
 
 function Catalogs({ form, update, error, number, range, saved, minMax }: SectionFormApi) {
-  const { language, t } = useI18n()
+  const { t } = useI18n()
   const s = t.settings
   const host = computer(useServerSystem())
   return (
@@ -899,23 +899,6 @@ function Catalogs({ form, update, error, number, range, saved, minMax }: Section
           update({ catalogRefreshMinutes: Math.trunc(value) }),
         )}
         saved={saved.catalogRefreshMinutes}
-      />
-      <SettingRow
-        kind="choice"
-        anchor="collection-read-hour"
-        label={s.collectionReadHour}
-        help={s.collectionReadHourHelp}
-        error={error('collection-read-hour')}
-        value={form.collectionReadHour}
-        options={[
-          { value: -1, label: s.collectionReadHourNever },
-          ...Array.from({ length: 24 }, (_, hour) => ({
-            value: hour,
-            label: formatHour(hour, language),
-          })),
-        ]}
-        onChange={(collectionReadHour) => update({ collectionReadHour })}
-        saved={saved.collectionReadHour}
       />
       <CollectionLibraryApps
         chosen={form.collectionLibraryApps}
@@ -1713,7 +1696,7 @@ function Recordings({ form, update, error, number, range, limits, saved, minMax 
 }
 
 function Backups({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
-  const { language, t } = useI18n()
+  const { t } = useI18n()
   const s = t.settings
   const host = computer(useServerSystem())
   return (
@@ -1741,20 +1724,6 @@ function Backups({ form, update, error, number, range, limits, saved, minMax }: 
           maxLength={limits('backupFolder').max}
           mono
           saved={saved.backupFolder}
-        />
-        <SettingRow
-          kind="choice"
-          anchor="backup-hour"
-          label={s.backupHour}
-          help={s.backupHourHelp(formatHour(Number(form.bounds.backupHour?.default), language))}
-          error={error('backup-hour')}
-          value={form.backupHour}
-          options={Array.from({ length: 24 }, (_, hour) => ({
-            value: hour,
-            label: formatHour(hour, language),
-          }))}
-          onChange={(backupHour) => update({ backupHour })}
-          saved={saved.backupHour}
         />
         <SettingRow
           kind="number"

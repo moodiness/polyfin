@@ -732,10 +732,6 @@ const settings = {
     catalogRefreshMinutes: 'Refresh catalogs after (minutes)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `How old a catalog page Polyfin read from an addon, the Live TV guide included, may get before Polyfin reads it again. Apps never wait for it: an older page still shows at once while Polyfin reads it again in the background, and it is kept a day more. A longer time sends fewer requests to the addons, but new titles show up later. From ${r.min} to ${r.max} (one day); ${r.default} by default.`,
-    collectionReadHour: 'Read every collection each day',
-    collectionReadHourNever: 'Never',
-    collectionReadHourHelp:
-      'Reads every collection of the server’s collection libraries at this hour, one after the other, then the catalogs of the server’s smart lists, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others.',
     collectionLibraryApps: 'Apps that show collection libraries by collection',
     collectionLibraryAppsHelp:
       'Collection libraries are told to apps as libraries of mixed content, so that jellyfin-web and Streamyfin give them a row on the home screen. The apps ticked are told they hold collections, as Jellyfin’s Collections view does: apps that list a library by its type then show its collections, and a collection’s titles once it is opened, rather than the titles of all its collections together. jellyfin-web and Streamyfin leave such libraries out of their home screen rows, so do not tick them. The list shows the apps that have signed in to this server.',
@@ -901,10 +897,6 @@ const settings = {
     sourceCacheCreditDays: 'Extra days for each play again',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `A title played again, 6 hours or more after its last play, keeps its parts this many days longer for each play after the first, 8 at most, and they make room after those of titles played once. From ${r.min} to ${r.max}; ${r.default} by default.`,
-    sourceCacheEmptyHour: 'Empty the cache each day',
-    sourceCacheEmptyHourNever: 'Never',
-    sourceCacheEmptyHourHelp:
-      'At this hour, removes the parts kept of the files played, but those of the files being read then. It is rarely needed: the disk space and the days above already bound the cache, and what is played again afterwards is downloaded again. System › Schedule empties it at once, whatever the hour.',
     preloadGroup: 'Next-episode preloading',
     preloadNextEpisodes: 'Preload the next episodes',
     preloadNextEpisodesHelp:
@@ -977,9 +969,9 @@ const settings = {
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `How often the IPTV channel lists and the XMLTV programme guides are downloaded again. A download that failed is tried again sooner: after 5 minutes, 15 minutes, then every hour. From ${r.min} to ${r.max}; ${r.default} by default.`,
     backupsFolder: (folder: string) => `Backups of the database are saved in ${folder}.`,
-    backups: 'Back up the database every day',
+    backups: 'Back up the database',
     backupsHelp:
-      'Writes a copy of the database to the folder below each day, at the hour chosen, and deletes the oldest past the number kept.',
+      'Writes a copy of the database to the folder below at the times System › Schedule sets for its task, and deletes the oldest past the number kept.',
     backupFolderLabel: 'Backups folder',
     backupFolderHelp: {
       container:
@@ -987,8 +979,6 @@ const settings = {
       computer:
         'A folder of the computer Polyfin runs on, the one shown when empty, in its data folder. Backups are safer on another disk than the database’s: enter a folder of one here. Polyfin must be able to write to it.',
     },
-    backupHour: 'Back up every day at',
-    backupHourHelp: (hour: string) => `In the server’s time zone. ${hour} by default.`,
     backupsKept: 'Backups to keep',
     backupsKeptHelp: (r: RangeText) =>
       `After each backup, Polyfin deletes its oldest backups past this number. Other files in the folder are never touched. From ${r.min} to ${r.max}; ${r.default} by default.`,

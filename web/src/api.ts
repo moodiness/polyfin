@@ -578,8 +578,6 @@ export type Settings = {
   sourceCacheDays: number
   /** Extra days a title played again keeps its parts, for each play after the first. */
   sourceCacheCreditDays: number
-  /** Hour of the server's time zone the cache of files being read is emptied at each day, but for the files being read, 0 to 23; -1 never. */
-  sourceCacheEmptyHour: number
   /** Whether the next episodes of the series users watch are read ahead while nothing plays. */
   preloadNextEpisodes: boolean
   /** Episodes preloaded per series. */
@@ -723,8 +721,6 @@ export type Settings = {
   myAnimeListClientSecretSet: boolean
   /** Sent only to change the secret: a new secret, or "" to remove it. */
   myAnimeListClientSecret?: string
-  /** Hour of the server's time zone the database is backed up at every day, 0 to 23. */
-  backupHour: number
   /** How many of the newest database backups are kept. */
   backupsKept: number
   /** Whether the database is backed up every day. */
@@ -737,8 +733,6 @@ export type Settings = {
   backupPassphraseSet: boolean
   /** Sent only to change the backup passphrase: a new one, or "" to stop encrypting. */
   backupPassphrase?: string
-  /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
-  collectionReadHour: number
   /** Apps, by the name they sign in with, told an addon's collection library holds collections (boxsets) rather than mixed content; none by default. */
   collectionLibraryApps: string[]
   /** Describes the versions not analyzed yet from RemuxDB, which the titles' IMDb ids are sent to. */
@@ -4808,9 +4802,38 @@ type TaskResult = {
   error: string
 }
 
+export type TriggerType = 'daily' | 'weekly' | 'interval' | 'startup'
+
 /**
- * A scheduled task; `interval` is in seconds, 0 for a task run by hand only or daily, and `daily`
- * the hour of the server's time zone a daily task runs at.
+ * When a task runs. `time` is in minutes from midnight in the server's time zone (daily, weekly),
+ * `day` 0 to 6 from Sunday (weekly), `interval` in minutes (interval), and `maxRuntime` the
+ * minutes after which a run is stopped, which only Jellyfin's API sets.
+ */
+export type TaskTrigger = {
+  type: TriggerType
+  time?: number
+  day?: number
+  interval?: number
+  maxRuntime?: number
+}
+
+/** Why a task's triggers cannot be changed; "" when they can. */
+export type TaskLock = '' | 'settings' | 'recordings' | 'notifications' | 'byHand'
+
+/** What a task's triggers may be: the types allowed, the interval's bounds in minutes, and more. */
+export type TaskLimits = {
+  locked: TaskLock
+  types: TriggerType[]
+  minInterval: number
+  maxInterval: number
+  maxTriggers: number
+  /** The task needs at least one trigger. */
+  keepOne: boolean
+}
+
+/**
+ * A scheduled task, with its triggers and the code's defaults; `custom` when an administrator
+ * changed its triggers.
  */
 export type Task = {
   id: string
@@ -4818,11 +4841,13 @@ export type Task = {
   name: string
   description: string
   category: string
-  interval: number
-  daily: number | null
   state: 'Idle' | 'Running' | 'Cancelling'
   last: TaskResult | null
   next: string | null
+  triggers: TaskTrigger[]
+  defaultTriggers: TaskTrigger[]
+  custom: boolean
+  limits: TaskLimits
 }
 
 export const fetchTasks = (language: Language, signal?: AbortSignal) =>
@@ -4831,6 +4856,14 @@ export const fetchTasks = (language: Language, signal?: AbortSignal) =>
 export const runTask = (id: string) => request<void>('POST', `/tasks/${seg(id)}/run`)
 
 export const stopTask = (id: string) => request<void>('POST', `/tasks/${seg(id)}/stop`)
+
+/** Replaces a task's triggers; answers the task as it is now. */
+export const saveTaskTriggers = (id: string, triggers: TaskTrigger[]) =>
+  request<Task>('PUT', `/tasks/${seg(id)}/triggers`, { triggers })
+
+/** Gives a task its default triggers back; answers the task as it is now. */
+export const resetTaskTriggers = (id: string) =>
+  request<Task>('DELETE', `/tasks/${seg(id)}/triggers`)
 
 /** A Live TV recording scheduled or under way; it runs from `from` to `until`, padding included. */
 export type Timer = {

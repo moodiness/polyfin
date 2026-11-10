@@ -319,7 +319,6 @@ const common: typeof en = {
       'O client ID e o secret do Trakt devem ter no máximo 256 caracteres, sem espaços nem caracteres especiais. Copie-os novamente do seu aplicativo Trakt.',
     invalid_simkl_app:
       'O client ID do Simkl deve ter no máximo 256 caracteres, sem espaços nem caracteres especiais. Copie-o novamente do seu aplicativo Simkl.',
-    invalid_backup_hour: 'Escolha o horário dos backups na lista.',
     invalid_backups_kept: 'O número de backups mantidos deve ser um número inteiro de 1 a 90.',
     invalid_torrent_route:
       'As streams de torrent precisam de uma única rota: um nome de interface de rede (somente Linux), um proxy SOCKS5 no formato host:porta ou uma configuração do WireGuard.',
@@ -387,10 +386,9 @@ const common: typeof en = {
       'Este backup criptografado está danificado: uma parte dele foi alterada ou está faltando. Nada foi restaurado.',
     not_encrypted: 'Este backup não está criptografado.',
     unlock_failed: 'Não foi possível descriptografar o backup.',
-    invalid_collection_read_hour:
-      'Escolha na lista o horário em que as coleções são lidas, ou Nunca.',
-    invalid_source_cache_empty_hour:
-      'Escolha na lista o horário em que o cache é esvaziado, ou Nunca.',
+    task_locked: 'O agendamento desta tarefa é fixo: seus gatilhos não podem ser alterados.',
+    invalid_triggers:
+      'Estes gatilhos não são válidos para esta tarefa. Confira seus tipos, horários e intervalos e tente de novo.',
     invalid_collection_library_apps:
       'Escolha na lista os aplicativos que exibem as bibliotecas de coleções por coleção.',
     invalid_remuxdb_url:

@@ -38,10 +38,8 @@ const system: typeof en = {
       tasksTitle: 'Operazioni',
       lastRun: 'Ultima esecuzione',
       nextRun: 'Prossima esecuzione',
-      notRunYet: 'Non eseguita dall’avvio del server',
+      notRunYet: 'Non ancora eseguita',
       byHandOnly: 'Solo esecuzione manuale',
-      every: (span: string) => `Intervallo: ${span}`,
-      daily: (time: string) => `Ogni giorno alle ${time}, ora del server`,
       took: (span: string) => `durata ${span}`,
       results: {
         Completed: 'Completata',
@@ -55,6 +53,51 @@ const system: typeof en = {
       stop: 'Interrompi',
       stopLabel: (name: string) => `Interrompi ${name}`,
       started: (name: string) => `${name} avviata.`,
+      triggersButton: 'Trigger',
+      triggersLabel: (name: string) => `Modifica i trigger di ${name}`,
+      triggers: {
+        title: (name: string) => `Trigger: ${name}`,
+        serverTime: 'Gli orari sono nel fuso orario del server.',
+        none: 'Nessun trigger: questa operazione si esegue solo a mano.',
+        keepOne: 'Questa operazione ha bisogno di almeno un trigger.',
+        locked: {
+          settings: 'La pianificazione di questa operazione è fissa: segue le sue impostazioni.',
+          recordings:
+            'La pianificazione di questa operazione è fissa: le registrazioni delle serie dipendono da essa.',
+          notifications:
+            'La pianificazione di questa operazione è fissa: il riepilogo viene inviato da sé, come stabilito in Impostazioni › Notifiche.',
+          byHand:
+            'La pianificazione di questa operazione è fissa: viene eseguita solo quando avviata a mano.',
+        },
+        daily: (time: string) => `Ogni giorno alle ${time}`,
+        weekly: (day: string, _index: number, time: string) => `Ogni ${day} alle ${time}`,
+        interval: (count: number, unit: 'minute' | 'hour' | 'day') =>
+          ({
+            minute: count === 1 ? 'Ogni minuto' : `Ogni ${count} minuti`,
+            hour: count === 1 ? 'Ogni ora' : `Ogni ${count} ore`,
+            day: count === 1 ? 'Ogni giorno' : `Ogni ${count} giorni`,
+          })[unit],
+        startup: 'All’avvio',
+        stopsAfter: (span: string) => `Fermata dopo ${span}`,
+        remove: 'Rimuovi',
+        removeLabel: (trigger: string) => `Rimuovi il trigger «${trigger}»`,
+        add: 'Aggiungi un trigger',
+        type: 'Quando',
+        types: {
+          daily: 'Ogni giorno',
+          weekly: 'Ogni settimana',
+          interval: 'A intervalli',
+          startup: 'All’avvio',
+        },
+        time: 'Ora',
+        day: 'Giorno',
+        intervalLabel: 'Intervallo',
+        duplicate: 'Questo trigger è già nell’elenco.',
+        full: (max: number) => `Un’operazione ha al massimo ${max} trigger.`,
+        reset: 'Ripristina i predefiniti',
+        saved: (name: string) => `Trigger salvati: ${name}`,
+        resetDone: (name: string) => `Trigger predefiniti ripristinati: ${name}`,
+      },
       autoRefresh: 'Aggiornamento ogni 5 secondi.',
       recordingsTitle: 'Prossime registrazioni',
       recordingsOff: 'La registrazione è disattivata. Attivala in Impostazioni › Registrazioni.',
@@ -299,7 +342,8 @@ const system: typeof en = {
             ? `La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione 610 e non è stato possibile scaricare l’FFmpeg per questi driver: ${error}. Polyfin riprova al prossimo avvio o quando vengono salvate le impostazioni di conversione.`
             : `La scheda grafica NVIDIA non converte i video, nemmeno con l’FFmpeg per i driver precedenti alla versione 610: ${error}`,
         backupFailed: 'L’ultimo backup del database non è riuscito.',
-        backupStale: 'L’ultimo backup del database risale a più di due giorni fa.',
+        backupStale:
+          'L’ultimo backup del database è in ritardo: è più vecchio di quanto consenta la sua pianificazione.',
         backupDestinationFailed: (name: string) =>
           `${name}: l’ultimo caricamento dei backup del database non è riuscito.`,
         backupDestinationStale: (name: string) =>

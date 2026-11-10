@@ -307,7 +307,6 @@ const common = {
       'The Trakt client ID and secret must be at most 256 characters, without spaces or special characters. Copy them again from your Trakt app.',
     invalid_simkl_app:
       'The Simkl client ID must be at most 256 characters, without spaces or special characters. Copy it again from your Simkl app.',
-    invalid_backup_hour: 'Choose the hour of the backups from the list.',
     invalid_backups_kept: 'The number of backups kept must be a whole number from 1 to 90.',
     invalid_torrent_route:
       'Torrent streams need one route alone: a network interface name (Linux only), a SOCKS5 proxy as host:port, or a WireGuard configuration.',
@@ -373,10 +372,9 @@ const common = {
       'This encrypted backup is damaged: part of it was changed or is missing. Nothing was restored.',
     not_encrypted: 'This backup is not encrypted.',
     unlock_failed: 'The backup could not be decrypted.',
-    invalid_collection_read_hour:
-      'Choose the hour collections are read at, or Never, from the list.',
-    invalid_source_cache_empty_hour:
-      'Choose the hour the cache is emptied at, or Never, from the list.',
+    task_locked: 'The schedule of this task is fixed: its triggers cannot be changed.',
+    invalid_triggers:
+      'These triggers are not valid for this task. Check their types, times and intervals, and try again.',
     invalid_collection_library_apps:
       'Choose the apps that show collection libraries by collection from the list.',
     invalid_remuxdb_url:

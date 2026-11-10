@@ -748,10 +748,6 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Aggiorna i cataloghi dopo (minuti)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `Quanto può invecchiare una pagina di catalogo letta da un add-on, guida della Diretta TV inclusa, prima che Polyfin la rilegga. Le applicazioni non aspettano mai: una pagina più vecchia viene comunque mostrata subito mentre Polyfin la rilegge in background, e viene conservata un giorno in più. Un tempo più lungo invia meno richieste agli add-on, ma i nuovi titoli compaiono più tardi. Da ${r.min} a ${r.max} (un giorno); ${r.default} per impostazione predefinita.`,
-    collectionReadHour: 'Leggi tutte le collezioni ogni giorno',
-    collectionReadHourNever: 'Mai',
-    collectionReadHourHelp:
-      'Legge a quest’ora tutte le collezioni delle librerie di collezioni del server, una dopo l’altra, poi i cataloghi delle liste intelligenti del server, così che si aprano subito. Richiede molte pagine agli add-on: lascialo disattivato per un add-on che condividi con altri.',
     collectionLibraryApps: 'Applicazioni che mostrano le librerie di collezioni per collezione',
     collectionLibraryAppsHelp:
       'Le librerie di collezioni vengono presentate alle applicazioni come librerie di contenuti misti, così che jellyfin-web e Streamyfin diano loro una riga nella schermata iniziale. Alle applicazioni selezionate viene comunicato che contengono collezioni, come fa la vista Collezioni di Jellyfin: le applicazioni che elencano una libreria in base al tipo mostrano allora le sue collezioni, e i titoli di una collezione una volta aperta, anziché i titoli di tutte le sue collezioni insieme. jellyfin-web e Streamyfin escludono tali librerie dalle righe della schermata iniziale, quindi non selezionarle. L’elenco mostra le applicazioni che hanno effettuato l’accesso a questo server.',
@@ -919,10 +915,6 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Giorni in più per ogni nuova riproduzione',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Un titolo riprodotto di nuovo, 6 ore o più dopo l’ultima riproduzione, conserva le sue parti questi giorni in più per ogni riproduzione dopo la prima, 8 al massimo, e lasciano spazio dopo quelle dei titoli riprodotti una sola volta. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
-    sourceCacheEmptyHour: 'Svuota la cache ogni giorno',
-    sourceCacheEmptyHourNever: 'Mai',
-    sourceCacheEmptyHourHelp:
-      'Elimina a quest’ora le parti conservate, tranne quelle dei file in lettura in quel momento. Serve di rado: lo spazio su disco e i giorni qui sopra limitano già la cache, e ciò che viene riprodotto di nuovo in seguito viene scaricato di nuovo. Sistema › Pianificazione la svuota subito, a qualsiasi ora.',
     preloadGroup: 'Precaricamento degli episodi successivi',
     preloadNextEpisodes: 'Precarica gli episodi successivi',
     preloadNextEpisodesHelp:
@@ -996,9 +988,9 @@ const settings: typeof en = {
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Ogni quanto vengono scaricati di nuovo gli elenchi canali IPTV e le guide dei programmi XMLTV. Un download non riuscito viene ritentato prima: dopo 5 minuti, 15 minuti, poi ogni ora. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     backupsFolder: (folder: string) => `I backup del database vengono salvati in ${folder}.`,
-    backups: 'Esegui il backup del database ogni giorno',
+    backups: 'Esegui il backup del database',
     backupsHelp:
-      'Scrive ogni giorno una copia del database nella cartella indicata sotto, all’ora scelta, ed elimina le più vecchie oltre il numero da conservare.',
+      'Scrive una copia del database nella cartella indicata sotto nei momenti che Sistema › Pianificazione stabilisce per la sua operazione, ed elimina le più vecchie oltre il numero da conservare.',
     backupFolderLabel: 'Cartella dei backup',
     backupFolderHelp: {
       container:
@@ -1006,9 +998,6 @@ const settings: typeof en = {
       computer:
         'Una cartella del computer su cui gira Polyfin, quella mostrata se il campo è vuoto, nella sua cartella dati. I backup sono più sicuri su un disco diverso da quello del database: inserisci qui una cartella di un disco simile. Polyfin deve poterci scrivere.',
     },
-    backupHour: 'Esegui il backup ogni giorno alle',
-    backupHourHelp: (hour: string) =>
-      `Nel fuso orario del server. ${hour} per impostazione predefinita.`,
     backupsKept: 'Backup da conservare',
     backupsKeptHelp: (r: RangeText) =>
       `Dopo ogni backup, Polyfin elimina i suoi backup più vecchi oltre questo numero. Gli altri file nella cartella non vengono mai toccati. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,

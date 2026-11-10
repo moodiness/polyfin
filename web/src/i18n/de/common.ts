@@ -340,7 +340,6 @@ const common: typeof en = {
       'Client-ID und Secret von Trakt dürfen höchstens 256 Zeichen lang sein, ohne Leerzeichen oder Sonderzeichen. Kopiere sie erneut aus deiner Trakt-App.',
     invalid_simkl_app:
       'Die Client-ID von Simkl darf höchstens 256 Zeichen lang sein, ohne Leerzeichen oder Sonderzeichen. Kopiere sie erneut aus deiner Simkl-App.',
-    invalid_backup_hour: 'Wähle die Uhrzeit der Backups aus der Liste.',
     invalid_backups_kept:
       'Die Anzahl der aufbewahrten Backups muss eine ganze Zahl von 1 bis 90 sein.',
     invalid_torrent_route:
@@ -410,10 +409,9 @@ const common: typeof en = {
       'Dieses verschlüsselte Backup ist beschädigt: Ein Teil davon wurde verändert oder fehlt. Es wurde nichts wiederhergestellt.',
     not_encrypted: 'Dieses Backup ist nicht verschlüsselt.',
     unlock_failed: 'Das Backup konnte nicht entschlüsselt werden.',
-    invalid_collection_read_hour:
-      'Wähle aus der Liste die Uhrzeit, zu der Sammlungen eingelesen werden, oder „Nie“.',
-    invalid_source_cache_empty_hour:
-      'Wähle aus der Liste die Uhrzeit, zu der der Cache geleert wird, oder „Nie“.',
+    task_locked: 'Der Zeitplan dieser Aufgabe ist fest: Ihre Auslöser lassen sich nicht ändern.',
+    invalid_triggers:
+      'Diese Auslöser passen nicht zu dieser Aufgabe. Prüfe ihre Arten, Uhrzeiten und Abstände und versuche es erneut.',
     invalid_collection_library_apps:
       'Wähle aus der Liste die Apps, die Sammlungsbibliotheken nach Sammlung anzeigen.',
     invalid_remuxdb_url:

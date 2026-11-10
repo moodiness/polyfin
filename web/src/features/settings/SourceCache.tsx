@@ -1,5 +1,5 @@
 import { sourceCachePresets, type Settings, type SourceCachePreset } from '@/api'
-import { formatBytes, formatHour } from '@/format'
+import { formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import { SettingRow } from '@/ui'
 import { SettingsGroup } from './parts'
@@ -101,23 +101,6 @@ export default function SourceCache({
           {...number('source-cache-credit', form.sourceCacheCreditDays, (value) =>
             custom({ sourceCacheCreditDays: Math.trunc(value) }),
           )}
-        />
-        <SettingRow
-          kind="choice"
-          anchor="source-cache-empty-hour"
-          label={s.sourceCacheEmptyHour}
-          help={s.sourceCacheEmptyHourHelp}
-          error={error('source-cache-empty-hour')}
-          value={form.sourceCacheEmptyHour}
-          options={[
-            { value: -1, label: s.sourceCacheEmptyHourNever },
-            ...Array.from({ length: 24 }, (_, hour) => ({
-              value: hour,
-              label: formatHour(hour, language),
-            })),
-          ]}
-          onChange={(sourceCacheEmptyHour) => update({ sourceCacheEmptyHour })}
-          saved={saved.sourceCacheEmptyHour}
         />
         <WorkFolderRow
           folder="readingFolder"

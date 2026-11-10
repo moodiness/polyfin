@@ -236,14 +236,6 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
-    anchor: 'source-cache-empty-hour',
-    label: (t) => s(t).sourceCacheEmptyHour,
-    help: (t) => s(t).sourceCacheEmptyHourHelp,
-    keywords: ['cache', 'empty', 'clear', 'schedule'],
-    codes: ['invalid_source_cache_empty_hour'],
-  },
-  {
-    section: 'playback',
     anchor: 'reading-folder',
     label: (t) => s(t).workFolders.readingFolder,
     help: (t) => `${s(t).workFolders.readingFolderHelp} ${anyServer(s(t).workFolders.where)}`,
@@ -863,13 +855,6 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'catalogs',
-    anchor: 'collection-read-hour',
-    label: (t) => s(t).collectionReadHour,
-    help: (t) => s(t).collectionReadHourHelp,
-    codes: ['invalid_collection_read_hour'],
-  },
-  {
-    section: 'catalogs',
     anchor: 'collection-library-apps',
     label: (t) => s(t).collectionLibraryApps,
     help: (t) => s(t).collectionLibraryAppsHelp,
@@ -1438,13 +1423,6 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => anyServer(s(t).backupFolderHelp),
     keywords: ['POLYFIN_BACKUP_DIR'],
     codes: ['invalid_backup_folder'],
-  },
-  {
-    section: 'backups',
-    anchor: 'backup-hour',
-    label: (t) => s(t).backupHour,
-    help: (t, r) => s(t).backupHourHelp(r('backupHour').default),
-    codes: ['invalid_backup_hour'],
   },
   {
     section: 'backups',

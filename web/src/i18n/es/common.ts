@@ -332,7 +332,6 @@ const common: typeof en = {
       'El ID de cliente y el secreto de Trakt deben tener como máximo 256 caracteres, sin espacios ni caracteres especiales. Cópielos de nuevo desde su aplicación de Trakt.',
     invalid_simkl_app:
       'El ID de cliente de Simkl debe tener como máximo 256 caracteres, sin espacios ni caracteres especiales. Cópielo de nuevo desde su aplicación de Simkl.',
-    invalid_backup_hour: 'Elija en la lista la hora de las copias de seguridad.',
     invalid_backups_kept:
       'El número de copias de seguridad conservadas debe ser un número entero de 1 a 90.',
     invalid_torrent_route:
@@ -402,10 +401,9 @@ const common: typeof en = {
       'Esta copia de seguridad cifrada está dañada: una parte se ha modificado o falta. No se ha restaurado nada.',
     not_encrypted: 'Esta copia de seguridad no está cifrada.',
     unlock_failed: 'No se pudo descifrar la copia de seguridad.',
-    invalid_collection_read_hour:
-      'Elija en la lista la hora a la que se leen las colecciones, o «Nunca».',
-    invalid_source_cache_empty_hour:
-      'Elija en la lista la hora a la que se vacía la caché, o «Nunca».',
+    task_locked: 'La programación de esta tarea es fija: sus disparadores no se pueden cambiar.',
+    invalid_triggers:
+      'Estos disparadores no son válidos para esta tarea. Revise sus tipos, horas e intervalos, e inténtelo de nuevo.',
     invalid_collection_library_apps:
       'Elija en la lista las aplicaciones que muestran las bibliotecas de colecciones por colección.',
     invalid_remuxdb_url:

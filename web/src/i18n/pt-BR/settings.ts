@@ -739,10 +739,6 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Atualizar catálogos após (minutos)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `Quanto tempo uma página de catálogo lida de um complemento, incluindo o guia da TV ao Vivo, pode ter antes que o Polyfin a leia novamente. Os aplicativos nunca esperam por isso: uma página mais antiga ainda aparece imediatamente enquanto o Polyfin a lê novamente em segundo plano, e ela é mantida por mais um dia. Um tempo maior envia menos solicitações aos complementos, mas novos títulos aparecem mais tarde. De ${r.min} a ${r.max} (um dia); ${r.default} por padrão.`,
-    collectionReadHour: 'Ler todas as coleções diariamente',
-    collectionReadHourNever: 'Nunca',
-    collectionReadHourHelp:
-      'Lê todas as coleções das bibliotecas de coleções do servidor neste horário, uma após a outra, e depois os catálogos das listas inteligentes do servidor, para que abram imediatamente. Isso solicita muitas páginas aos complementos: deixe desativado para um complemento que você compartilha com outras pessoas.',
     collectionLibraryApps: 'Aplicativos que mostram bibliotecas de coleções por coleção',
     collectionLibraryAppsHelp:
       'As bibliotecas de coleções são apresentadas aos aplicativos como bibliotecas de conteúdo misto, para que o jellyfin-web e o Streamyfin lhes deem uma linha na tela inicial. Os aplicativos marcados são informados de que elas contêm coleções, como faz a visualização Coleções do Jellyfin: os aplicativos que listam uma biblioteca pelo tipo mostram então suas coleções, e os títulos de uma coleção depois que ela é aberta, em vez dos títulos de todas as suas coleções juntos. O jellyfin-web e o Streamyfin deixam essas bibliotecas fora das linhas da tela inicial, então não os marque. A lista mostra os aplicativos que entraram neste servidor.',
@@ -907,10 +903,6 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Dias a mais por nova reprodução',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Um título reproduzido de novo, 6 horas ou mais após a última reprodução, mantém suas partes esse número de dias a mais para cada reprodução após a primeira, no máximo 8, e elas abrem espaço depois das dos títulos reproduzidos uma vez só. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
-    sourceCacheEmptyHour: 'Esvaziar o cache diariamente',
-    sourceCacheEmptyHourNever: 'Nunca',
-    sourceCacheEmptyHourHelp:
-      'Exclui neste horário as partes mantidas, exceto as dos arquivos sendo lidos no momento. Raramente é necessário: o espaço em disco e os dias acima já limitam o cache, e o que for reproduzido de novo depois é baixado de novo. Sistema › Agenda o esvazia na hora, qualquer que seja o horário.',
     preloadGroup: 'Pré-carregamento dos próximos episódios',
     preloadNextEpisodes: 'Pré-carregar os próximos episódios',
     preloadNextEpisodesHelp:
@@ -983,9 +975,9 @@ const settings: typeof en = {
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Com que frequência as listas de canais IPTV e os guias de programação XMLTV são baixados novamente. Um download que falhou é tentado novamente antes: após 5 minutos, 15 minutos e depois a cada hora. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     backupsFolder: (folder: string) => `Os backups do banco de dados são salvos em ${folder}.`,
-    backups: 'Fazer backup do banco de dados todos os dias',
+    backups: 'Fazer backup do banco de dados',
     backupsHelp:
-      'Grava uma cópia do banco de dados na pasta abaixo todos os dias, no horário escolhido, e exclui as mais antigas além do número mantido.',
+      'Grava uma cópia do banco de dados na pasta abaixo nos horários que Sistema › Agenda define para a tarefa, e exclui as mais antigas além do número mantido.',
     backupFolderLabel: 'Pasta de backups',
     backupFolderHelp: {
       container:
@@ -993,8 +985,6 @@ const settings: typeof en = {
       computer:
         'Uma pasta do computador em que o Polyfin roda (a mostrada quando vazio), na pasta de dados dele. Os backups ficam mais seguros em um disco diferente do banco de dados: digite aqui uma pasta de um desses discos. O Polyfin precisa poder gravar nela.',
     },
-    backupHour: 'Fazer backup todos os dias às',
-    backupHourHelp: (hour: string) => `No fuso horário do servidor. ${hour} por padrão.`,
     backupsKept: 'Backups a manter',
     backupsKeptHelp: (r: RangeText) =>
       `Após cada backup, o Polyfin exclui os backups mais antigos além deste número. Outros arquivos da pasta nunca são alterados. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
