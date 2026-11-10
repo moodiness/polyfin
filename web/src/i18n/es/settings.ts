@@ -745,10 +745,6 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Actualizar los catálogos después de (minutos)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `Antigüedad máxima que puede alcanzar una página de catálogo leída de una extensión, incluida la guía de Televisión en vivo, antes de que Polyfin vuelva a leerla. Las aplicaciones nunca esperan: una página más antigua se sigue mostrando al instante mientras Polyfin la vuelve a leer en segundo plano, y se conserva un día más. Un tiempo mayor envía menos solicitudes a las extensiones, pero los nuevos títulos aparecen más tarde. De ${r.min} a ${r.max} (un día); ${r.default} por defecto.`,
-    collectionReadHour: 'Leer todas las colecciones cada día',
-    collectionReadHourNever: 'Nunca',
-    collectionReadHourHelp:
-      'Lee a esta hora todas las colecciones de las bibliotecas de colecciones del servidor, una tras otra, y después los catálogos de las listas inteligentes del servidor, para que se abran al instante. Pide muchas páginas a las extensiones: déjelo desactivado si comparte la extensión con otras personas.',
     collectionLibraryApps: 'Aplicaciones que muestran las bibliotecas de colecciones por colección',
     collectionLibraryAppsHelp:
       'Las bibliotecas de colecciones se presentan a las aplicaciones como bibliotecas de contenido mixto, para que jellyfin-web y Streamyfin les den una fila en la pantalla de inicio. A las aplicaciones marcadas se les indica que contienen colecciones, como hace la vista Colecciones de Jellyfin: las aplicaciones que muestran una biblioteca según su tipo muestran entonces sus colecciones, y los títulos de una colección al abrirla, en lugar de los títulos de todas sus colecciones juntos. jellyfin-web y Streamyfin excluyen esas bibliotecas de las filas de su pantalla de inicio, así que no las marque. La lista muestra las aplicaciones que han iniciado sesión en este servidor.',
@@ -915,10 +911,6 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Días extra por cada nueva reproducción',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Un título reproducido de nuevo, 6 horas o más después de su última reproducción, conserva sus partes estos días más por cada reproducción tras la primera, 8 como máximo, y dejan sitio después de las de los títulos reproducidos una sola vez. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
-    sourceCacheEmptyHour: 'Vaciar la caché cada día',
-    sourceCacheEmptyHourNever: 'Nunca',
-    sourceCacheEmptyHourHelp:
-      'Borra a esta hora las partes conservadas, salvo las de los archivos que se estén leyendo. Rara vez hace falta: el espacio en disco y los días de arriba ya limitan la caché, y lo que se reproduzca de nuevo después se vuelve a descargar. Sistema › Programación la vacía al instante, sea cual sea la hora.',
     preloadGroup: 'Precarga de los siguientes episodios',
     preloadNextEpisodes: 'Precargar los siguientes episodios',
     preloadNextEpisodesHelp:
@@ -993,9 +985,9 @@ const settings: typeof en = {
       `Con qué frecuencia se vuelven a descargar las listas de canales IPTV y las guías de programación XMLTV. Una descarga que ha fallado se reintenta antes: a los 5 minutos, a los 15 minutos y después cada hora. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
     backupsFolder: (folder: string) =>
       `Las copias de seguridad de la base de datos se guardan en ${folder}.`,
-    backups: 'Hacer una copia de seguridad de la base de datos cada día',
+    backups: 'Hacer copias de seguridad de la base de datos',
     backupsHelp:
-      'Escribe cada día una copia de la base de datos en la carpeta indicada abajo, a la hora elegida, y borra las más antiguas que superen el número conservado.',
+      'Escribe una copia de la base de datos en la carpeta indicada abajo en los momentos que Sistema › Programación fija para su tarea, y borra las más antiguas que superen el número conservado.',
     backupFolderLabel: 'Carpeta de copias de seguridad',
     backupFolderHelp: {
       container:
@@ -1003,9 +995,6 @@ const settings: typeof en = {
       computer:
         'Una carpeta del ordenador en el que se ejecuta Polyfin, la que se muestra si está vacío, en su carpeta de datos. Las copias de seguridad están más seguras en un disco distinto del de la base de datos: introduzca aquí una carpeta de uno. Polyfin debe poder escribir en ella.',
     },
-    backupHour: 'Hacer la copia de seguridad cada día a las',
-    backupHourHelp: (hour: string) =>
-      `En la zona horaria del servidor. ${hour} de forma predeterminada.`,
     backupsKept: 'Copias de seguridad que conservar',
     backupsKeptHelp: (r: RangeText) =>
       `Tras cada copia de seguridad, Polyfin borra sus copias más antiguas que superen este número. Los demás archivos de la carpeta nunca se tocan. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,

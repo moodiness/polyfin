@@ -746,10 +746,6 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Rafraîchir les catalogues après (minutes)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `L’âge qu’une page de catalogue lue auprès d’un addon, guide de la TV en direct compris, peut atteindre avant que Polyfin la relise. Les applis ne l’attendent jamais\u202f: une page plus ancienne s’affiche quand même tout de suite pendant que Polyfin la relit en arrière-plan, et elle est gardée un jour de plus. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De ${r.min} à ${r.max} (un jour)\u202f; ${r.default} par défaut.`,
-    collectionReadHour: 'Lire toutes les collections chaque jour',
-    collectionReadHourNever: 'Jamais',
-    collectionReadHourHelp:
-      'Lit toutes les collections des bibliothèques de collections du serveur à cette heure, l’une après l’autre, puis les catalogues des listes intelligentes du serveur, pour qu’elles s’ouvrent tout de suite. Cela demande beaucoup de pages aux addons\u202f: laissez-le désactivé pour un addon que vous partagez avec d’autres.',
     collectionLibraryApps: 'Applis qui présentent les bibliothèques de collections par collection',
     collectionLibraryAppsHelp:
       'Les bibliothèques de collections sont présentées aux applis comme des bibliothèques de contenu mixte, pour que jellyfin-web et Streamyfin leur donnent une rangée sur l’accueil. Les applis cochées apprennent qu’elles contiennent des collections, comme la vue Collections de Jellyfin\u202f: les applis qui listent une bibliothèque selon son type affichent alors ses collections, puis les titres d’une collection une fois ouverte, plutôt que les titres de toutes ses collections mélangés. jellyfin-web et Streamyfin écartent ces bibliothèques des rangées de leur accueil\u202f: ne les cochez donc pas. La liste montre les applis qui se sont connectées à ce serveur.',
@@ -917,10 +913,6 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Jours de plus par nouvelle lecture',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Un titre relu, 6 heures ou plus après sa dernière lecture, garde ses parties ce nombre de jours de plus pour chaque lecture après la première, 8 au plus, et elles laissent la place après celles des titres lus une seule fois. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
-    sourceCacheEmptyHour: 'Vider le cache chaque jour',
-    sourceCacheEmptyHourNever: 'Jamais',
-    sourceCacheEmptyHourHelp:
-      'Supprime à cette heure les parties gardées, sauf celles des fichiers en cours de lecture. C’est rarement utile\u202f: l’espace disque et les jours ci-dessus bornent déjà le cache, et ce qui est relu ensuite est téléchargé à nouveau. Système › Planning le vide tout de suite, quelle que soit l’heure.',
     preloadGroup: 'Préchargement des épisodes suivants',
     preloadNextEpisodes: 'Précharger les épisodes suivants',
     preloadNextEpisodesHelp:
@@ -994,9 +986,9 @@ const settings: typeof en = {
       `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt\u202f: après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     backupsFolder: (folder: string) =>
       `Les sauvegardes de la base de données sont enregistrées dans ${folder}.`,
-    backups: 'Sauvegarder la base de données chaque jour',
+    backups: 'Sauvegarder la base de données',
     backupsHelp:
-      'Écrit chaque jour une copie de la base de données dans le dossier ci-dessous, à l’heure choisie, et supprime les plus anciennes au-delà du nombre conservé.',
+      'Écrit une copie de la base de données dans le dossier ci-dessous aux moments que Système › Planning fixe pour sa tâche, et supprime les plus anciennes au-delà du nombre conservé.',
     backupFolderLabel: 'Dossier des sauvegardes',
     backupFolderHelp: {
       container:
@@ -1004,8 +996,6 @@ const settings: typeof en = {
       computer:
         'Un dossier de l’ordinateur où tourne Polyfin, celui indiqué s’il est vide, dans son dossier de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base\u202f: indiquez ici un dossier d’un tel disque. Polyfin doit pouvoir y écrire.',
     },
-    backupHour: 'Sauvegarder chaque jour à',
-    backupHourHelp: (hour: string) => `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
     backupsKept: 'Sauvegardes à conserver',
     backupsKeptHelp: (r: RangeText) =>
       `Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,

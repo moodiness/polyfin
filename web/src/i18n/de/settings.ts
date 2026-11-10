@@ -739,10 +739,6 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Kataloge aktualisieren nach (Minuten)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `Wie alt eine von einem Add-on gelesene Katalogseite, einschließlich des Live-TV-Fernsehprogramms, werden darf, bevor Polyfin sie erneut liest. Apps warten nie darauf: Eine ältere Seite wird trotzdem sofort angezeigt, während Polyfin sie im Hintergrund neu liest, und sie wird noch einen Tag länger behalten. Eine längere Zeit sendet weniger Anfragen an die Add-ons, aber neue Titel erscheinen später. Von ${r.min} bis ${r.max} (ein Tag); standardmäßig ${r.default}.`,
-    collectionReadHour: 'Alle Sammlungen täglich lesen',
-    collectionReadHourNever: 'Nie',
-    collectionReadHourHelp:
-      'Liest zu dieser Uhrzeit nacheinander alle Sammlungen der Sammlungsbibliotheken des Servers, dann die Kataloge der Intelligenten Listen des Servers, damit sie sofort öffnen. Dabei werden viele Seiten von den Add-ons abgefragt: Lass es bei einem Add-on, das du mit anderen teilst, ausgeschaltet.',
     collectionLibraryApps: 'Apps, die Sammlungsbibliotheken nach Sammlung anzeigen',
     collectionLibraryAppsHelp:
       'Sammlungsbibliotheken werden Apps als Bibliotheken mit gemischten Inhalten gemeldet, damit jellyfin-web und Streamyfin ihnen eine Zeile auf dem Startbildschirm geben. Den angehakten Apps wird mitgeteilt, dass sie Sammlungen enthalten, wie es die Sammlungsansicht von Jellyfin tut: Apps, die eine Bibliothek nach ihrem Typ auflisten, zeigen dann ihre Sammlungen und nach dem Öffnen die Titel einer Sammlung, statt die Titel aller Sammlungen zusammen. jellyfin-web und Streamyfin lassen solche Bibliotheken in den Zeilen ihres Startbildschirms weg, hake sie also nicht an. Die Liste zeigt die Apps, die sich bei diesem Server angemeldet haben.',
@@ -909,10 +905,6 @@ const settings: typeof en = {
     sourceCacheCreditDays: 'Zusätzliche Tage je erneuter Wiedergabe',
     sourceCacheCreditDaysHelp: (r: RangeText) =>
       `Ein Titel, der 6 Stunden oder mehr nach seiner letzten Wiedergabe erneut abgespielt wird, behält seine Teile für jede Wiedergabe nach der ersten so viele Tage länger, höchstens 8-mal, und sie machen erst nach denen einmal abgespielter Titel Platz. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
-    sourceCacheEmptyHour: 'Cache täglich leeren',
-    sourceCacheEmptyHourNever: 'Nie',
-    sourceCacheEmptyHourHelp:
-      'Entfernt zu dieser Uhrzeit die behaltenen Teile, außer denen der gerade gelesenen Dateien. Das ist selten nötig: Speicherplatz und Tage oben begrenzen den Cache bereits, und was danach erneut abgespielt wird, wird erneut heruntergeladen. System › Zeitplan leert ihn sofort, unabhängig von der Uhrzeit.',
     preloadGroup: 'Vorladen der nächsten Folgen',
     preloadNextEpisodes: 'Nächste Folgen vorladen',
     preloadNextEpisodesHelp:
@@ -985,9 +977,9 @@ const settings: typeof en = {
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Wie oft die IPTV-Kanallisten und die XMLTV-Fernsehprogramme erneut heruntergeladen werden. Ein fehlgeschlagener Download wird früher wiederholt: nach 5 Minuten, nach 15 Minuten, dann stündlich. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     backupsFolder: (folder: string) => `Backups der Datenbank werden in ${folder} gespeichert.`,
-    backups: 'Datenbank täglich sichern',
+    backups: 'Datenbank sichern',
     backupsHelp:
-      'Schreibt jeden Tag zur gewählten Stunde eine Kopie der Datenbank in den unten angegebenen Ordner und löscht die ältesten, die über die behaltene Anzahl hinausgehen.',
+      'Schreibt eine Kopie der Datenbank in den unten angegebenen Ordner, zu den Zeiten, die System › Zeitplan für ihre Aufgabe festlegt, und löscht die ältesten, die über die behaltene Anzahl hinausgehen.',
     backupFolderLabel: 'Backup-Ordner',
     backupFolderHelp: {
       container:
@@ -995,8 +987,6 @@ const settings: typeof en = {
       computer:
         'Ein Ordner auf dem Computer, auf dem Polyfin läuft, wenn leer der angezeigte, in seinem Datenordner. Backups sind auf einem anderen Datenträger als dem der Datenbank sicherer: Gib hier einen Ordner auf einem solchen ein. Polyfin muss darin schreiben können.',
     },
-    backupHour: 'Täglich sichern um',
-    backupHourHelp: (hour: string) => `In der Zeitzone des Servers. Standardmäßig ${hour}.`,
     backupsKept: 'Zu behaltende Backups',
     backupsKeptHelp: (r: RangeText) =>
       `Nach jedem Backup löscht Polyfin seine ältesten Backups, die über diese Anzahl hinausgehen. Andere Dateien im Ordner werden nie angetastet. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,

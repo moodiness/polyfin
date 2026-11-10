@@ -38,10 +38,8 @@ const system: typeof en = {
       tasksTitle: 'Tarefas',
       lastRun: 'Última execução',
       nextRun: 'Próxima execução',
-      notRunYet: 'Não executada desde a inicialização do servidor',
+      notRunYet: 'Ainda não executada',
       byHandOnly: 'Executada somente manualmente',
-      every: (span: string) => `Intervalo: ${span}`,
-      daily: (time: string) => `Todos os dias às ${time}, horário do servidor`,
       took: (span: string) => `levou ${span}`,
       results: {
         Completed: 'Concluída',
@@ -55,6 +53,51 @@ const system: typeof en = {
       stop: 'Interromper',
       stopLabel: (name: string) => `Interromper ${name}`,
       started: (name: string) => `${name} iniciada.`,
+      triggersButton: 'Gatilhos',
+      triggersLabel: (name: string) => `Alterar os gatilhos de ${name}`,
+      triggers: {
+        title: (name: string) => `Gatilhos: ${name}`,
+        serverTime: 'Os horários seguem o fuso horário do servidor.',
+        none: 'Nenhum gatilho: esta tarefa só é executada manualmente.',
+        keepOne: 'Esta tarefa precisa de pelo menos um gatilho.',
+        locked: {
+          settings: 'O agendamento desta tarefa é fixo: ele segue as configurações dela.',
+          recordings: 'O agendamento desta tarefa é fixo: as gravações de séries dependem dele.',
+          notifications:
+            'O agendamento desta tarefa é fixo: o resumo é enviado sozinho, conforme Configurações › Notificações.',
+          byHand:
+            'O agendamento desta tarefa é fixo: ela só é executada quando iniciada manualmente.',
+        },
+        daily: (time: string) => `Todos os dias às ${time}`,
+        weekly: (day: string, index: number, time: string) =>
+          `${index === 0 || index === 6 ? 'Todo' : 'Toda'} ${day} às ${time}`,
+        interval: (count: number, unit: 'minute' | 'hour' | 'day') =>
+          ({
+            minute: count === 1 ? 'A cada minuto' : `A cada ${count} minutos`,
+            hour: count === 1 ? 'A cada hora' : `A cada ${count} horas`,
+            day: count === 1 ? 'Todos os dias' : `A cada ${count} dias`,
+          })[unit],
+        startup: 'Na inicialização',
+        stopsAfter: (span: string) => `Interrompida após ${span}`,
+        remove: 'Remover',
+        removeLabel: (trigger: string) => `Remover o gatilho “${trigger}”`,
+        add: 'Adicionar um gatilho',
+        type: 'Quando',
+        types: {
+          daily: 'Todos os dias',
+          weekly: 'Toda semana',
+          interval: 'Em intervalos',
+          startup: 'Na inicialização',
+        },
+        time: 'Horário',
+        day: 'Dia',
+        intervalLabel: 'Intervalo',
+        duplicate: 'Este gatilho já está na lista.',
+        full: (max: number) => `Uma tarefa tem no máximo ${max} gatilhos.`,
+        reset: 'Restaurar os padrões',
+        saved: (name: string) => `Gatilhos salvos: ${name}`,
+        resetDone: (name: string) => `Gatilhos padrão restaurados: ${name}`,
+      },
       autoRefresh: 'Atualiza a cada 5 segundos.',
       recordingsTitle: 'Próximas gravações',
       recordingsOff: 'A gravação está desativada. Ative-a em Configurações › Gravações.',
@@ -292,7 +335,8 @@ const system: typeof en = {
             ? `A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão 610, e não foi possível baixar o FFmpeg para esses drivers: ${error}. O Polyfin tenta de novo na próxima inicialização, ou quando as configurações de conversão são salvas.`
             : `A placa de vídeo NVIDIA não converte vídeo, nem com o FFmpeg para drivers anteriores à versão 610: ${error}`,
         backupFailed: 'O último backup do banco de dados falhou.',
-        backupStale: 'O último backup do banco de dados tem mais de dois dias.',
+        backupStale:
+          'O último backup do banco de dados está atrasado: é mais antigo do que a agenda permite.',
         backupDestinationFailed: (name: string) =>
           `${name}: o último envio dos backups do banco de dados falhou.`,
         backupDestinationStale: (name: string) =>

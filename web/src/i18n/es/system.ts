@@ -38,10 +38,8 @@ const system: typeof en = {
       tasksTitle: 'Tareas',
       lastRun: 'Última ejecución',
       nextRun: 'Próxima ejecución',
-      notRunYet: 'No se ha ejecutado desde que se inició el servidor',
+      notRunYet: 'Aún no se ha ejecutado',
       byHandOnly: 'Solo ejecución manual',
-      every: (span: string) => `Intervalo: ${span}`,
-      daily: (time: string) => `Todos los días a las ${time}, hora del servidor`,
       took: (span: string) => `duró ${span}`,
       results: {
         Completed: 'Completada',
@@ -55,6 +53,50 @@ const system: typeof en = {
       stop: 'Detener',
       stopLabel: (name: string) => `Detener ${name}`,
       started: (name: string) => `Se ha iniciado ${name}.`,
+      triggersButton: 'Disparadores',
+      triggersLabel: (name: string) => `Cambiar los disparadores de ${name}`,
+      triggers: {
+        title: (name: string) => `Disparadores: ${name}`,
+        serverTime: 'Las horas son las de la zona horaria del servidor.',
+        none: 'Ningún disparador: esta tarea solo se ejecuta a mano.',
+        keepOne: 'Esta tarea necesita al menos un disparador.',
+        locked: {
+          settings: 'La programación de esta tarea es fija: sigue sus ajustes.',
+          recordings:
+            'La programación de esta tarea es fija: las grabaciones de series dependen de ella.',
+          notifications:
+            'La programación de esta tarea es fija: el resumen se envía solo, como indica Ajustes › Notificaciones.',
+          byHand: 'La programación de esta tarea es fija: solo se ejecuta cuando se inicia a mano.',
+        },
+        daily: (time: string) => `Todos los días a las ${time}`,
+        weekly: (day: string, _index: number, time: string) => `Cada ${day} a las ${time}`,
+        interval: (count: number, unit: 'minute' | 'hour' | 'day') =>
+          ({
+            minute: count === 1 ? 'Cada minuto' : `Cada ${count} minutos`,
+            hour: count === 1 ? 'Cada hora' : `Cada ${count} horas`,
+            day: count === 1 ? 'Cada día' : `Cada ${count} días`,
+          })[unit],
+        startup: 'Al iniciar',
+        stopsAfter: (span: string) => `Se detiene tras ${span}`,
+        remove: 'Quitar',
+        removeLabel: (trigger: string) => `Quitar el disparador «${trigger}»`,
+        add: 'Añadir un disparador',
+        type: 'Cuándo',
+        types: {
+          daily: 'Todos los días',
+          weekly: 'Cada semana',
+          interval: 'A intervalos',
+          startup: 'Al iniciar',
+        },
+        time: 'Hora',
+        day: 'Día',
+        intervalLabel: 'Intervalo',
+        duplicate: 'Este disparador ya está en la lista.',
+        full: (max: number) => `Una tarea tiene como máximo ${max} disparadores.`,
+        reset: 'Restablecer los predeterminados',
+        saved: (name: string) => `Disparadores guardados: ${name}`,
+        resetDone: (name: string) => `Disparadores predeterminados restablecidos: ${name}`,
+      },
       autoRefresh: 'Se actualiza cada 5 segundos.',
       recordingsTitle: 'Próximas grabaciones',
       recordingsOff: 'La grabación está desactivada. Actívela en Ajustes › Grabaciones.',
@@ -296,7 +338,8 @@ const system: typeof en = {
             ? `La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión 610 y no se pudo descargar el FFmpeg para esos controladores: ${error}. Polyfin lo vuelve a intentar en su próximo inicio o cuando se guardan los ajustes de conversión.`
             : `La tarjeta gráfica NVIDIA no convierte el vídeo, tampoco con el FFmpeg para controladores anteriores a la versión 610: ${error}`,
         backupFailed: 'Ha fallado la última copia de seguridad de la base de datos.',
-        backupStale: 'La última copia de seguridad de la base de datos tiene más de dos días.',
+        backupStale:
+          'La última copia de seguridad de la base de datos está atrasada: es más antigua de lo que permite su programación.',
         backupDestinationFailed: (name: string) =>
           `${name}: ha fallado la última subida de las copias de seguridad de la base de datos.`,
         backupDestinationStale: (name: string) =>

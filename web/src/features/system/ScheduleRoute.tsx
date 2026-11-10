@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import {
   useMutation,
   useQuery,
@@ -7,7 +8,9 @@ import {
 } from '@tanstack/react-query'
 import {
   CalendarDotsIcon,
+  ClockIcon,
   ListChecksIcon,
+  LockSimpleIcon,
   PlayIcon,
   RecordIcon,
   StopIcon,
@@ -44,13 +47,14 @@ import {
   useToast,
   RelativeTime,
 } from '@/ui'
-import { dateTime, errorMessage, formatHour, formatSpan } from '@/format'
+import { dateTime, errorMessage, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import { TunersShort } from '@/features/livetv/TunersShort'
 import BackupStatus from './BackupStatus'
 import OwnerChip from './OwnerChip'
 import RestoreBackup from './RestoreBackup'
 import { Anchor } from './parts'
+import { TaskTriggers, triggerLabel } from './TaskTriggers'
 
 /** The task that backs the database up every day while backups are on in the settings. */
 const backupTaskKey = 'BackUpDatabase'
@@ -95,6 +99,20 @@ type Act = UseMutationResult<void, Error, TaskAction>
 function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
   const { t } = useI18n()
   const text = t.system.schedule
+  // Jellyfin's task page, tasks/edit?id=, comes as ?task=<id>: that task's triggers open once.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('task')
+  const loaded = tasks.data !== undefined
+  useEffect(() => {
+    if (asked === null || !loaded) return
+    setParams(
+      (current) => {
+        current.delete('task')
+        return current
+      },
+      { replace: true },
+    )
+  }, [asked, loaded, setParams])
   const categories = new Map<string, Task[]>()
   for (const task of tasks.data ?? []) {
     categories.set(task.category, [...(categories.get(task.category) ?? []), task])
@@ -120,7 +138,7 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
                 <h3 className="mb-2 text-group text-ink">{category}</h3>
                 <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                   {list.map((task) => (
-                    <TaskRow key={task.id} task={task} act={act} />
+                    <TaskRow key={task.id} task={task} act={act} asked={asked === task.id} />
                   ))}
                 </ul>
               </section>
@@ -134,11 +152,23 @@ function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
 
 /**
  * One task on one row: its name with its description as a one-line caption (More reads the
- * rest), how its last run went, when it runs next, and Run now. Below 1024 px the name and caption
- * take the row's width, and the last and next runs go under them, beside Run now.
+ * rest), how its last run went, when it runs next and on what triggers, Triggers, which opens
+ * them in a dialog, and Run now. Below 1024 px the name and caption take the row's width, and the
+ * last and next runs go under them, beside the buttons; on a phone the buttons go under them too.
+ * A row asked for by the address opens its triggers at once.
  */
-function TaskRow({ task, act }: { task: Task; act: Act }) {
+function TaskRow({ task, act, asked }: { task: Task; act: Act; asked: boolean }) {
+  const { t } = useI18n()
+  const text = t.system.schedule
   const id = useId()
+  const [editing, setEditing] = useState(asked)
+  // The dialog unmounts as it closes, so the focus comes back to Triggers here.
+  const closed = useRef(false)
+  useEffect(() => {
+    if (editing || !closed.current) return
+    closed.current = false
+    document.getElementById(`${id}-triggers`)?.focus()
+  }, [editing, id])
   const error = task.state === 'Idle' && task.last !== null ? task.last.error : ''
   return (
     <li className="grid min-h-15 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 rounded-row bg-s1 py-2 pr-2.5 pl-4 lg:grid-cols-[minmax(0,1fr)_16.5rem_10rem_auto] lg:gap-y-1">
@@ -150,14 +180,33 @@ function TaskRow({ task, act }: { task: Task; act: Act }) {
           </SettingHelp>
         )}
       </div>
-      <div className="col-start-1 row-start-2 flex min-w-0 flex-col gap-y-0.5 lg:contents">
+      <div className="col-span-full row-start-2 flex min-w-0 flex-col gap-y-0.5 sm:col-span-1 sm:col-start-1 lg:contents">
         <LastRun task={task} />
         <NextRun task={task} />
       </div>
-      <div className="col-start-2 row-start-2 flex justify-end self-end lg:col-start-4 lg:row-start-1 lg:self-center">
+      <div className="col-span-full flex flex-wrap justify-end gap-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:self-end lg:col-start-4 lg:row-start-1 lg:self-center">
+        <Button
+          id={`${id}-triggers`}
+          size="sm"
+          variant="ghost"
+          icon={task.limits.locked === '' ? ClockIcon : LockSimpleIcon}
+          aria-label={text.triggersLabel(task.name)}
+          onClick={() => setEditing(true)}
+        >
+          {text.triggersButton}
+        </Button>
         <TaskButton task={task} act={act} />
       </div>
       {error !== '' && <p className="col-span-full text-small break-words text-danger">{error}</p>}
+      {editing && (
+        <TaskTriggers
+          task={task}
+          onClose={() => {
+            closed.current = true
+            setEditing(false)
+          }}
+        />
+      )}
     </li>
   )
 }
@@ -191,23 +240,24 @@ function TaskButton({ task, act }: { task: Task; act: Act }) {
   )
 }
 
-/** When the task runs next, then how often; "Next run" is for screen readers. */
+/** When the task runs next, then its triggers; "Next run" is for screen readers. */
 function NextRun({ task }: { task: Task }) {
   const { language, t } = useI18n()
   const text = t.system.schedule
-  const cadence =
-    task.interval > 0
-      ? text.every(formatSpan(task.interval, language))
-      : task.daily !== null
-        ? text.daily(formatHour(task.daily, language))
-        : null
+  const triggers = task.triggers
+    .map((trigger) => triggerLabel(text.triggers, trigger, language))
+    .join(' · ')
   return (
     <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-small figures lg:block">
       <span className="sr-only">{text.nextRun}</span>
-      <span className="text-ink lg:block">
-        {task.next !== null ? <RelativeTime iso={task.next} /> : text.byHandOnly}
-      </span>
-      {cadence !== null && <span className="text-ink-3 lg:block lg:text-micro">{cadence}</span>}
+      {task.next !== null ? (
+        <span className="text-ink lg:block">
+          <RelativeTime iso={task.next} />
+        </span>
+      ) : (
+        triggers === '' && <span className="text-ink lg:block">{text.byHandOnly}</span>
+      )}
+      {triggers !== '' && <span className="text-ink-3 lg:block lg:text-micro">{triggers}</span>}
     </div>
   )
 }

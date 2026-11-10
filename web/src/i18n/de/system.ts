@@ -39,10 +39,8 @@ const system: typeof en = {
       tasksTitle: 'Aufgaben',
       lastRun: 'Letzte Ausführung',
       nextRun: 'Nächste Ausführung',
-      notRunYet: 'Seit dem Serverstart nicht ausgeführt',
+      notRunYet: 'Noch nicht ausgeführt',
       byHandOnly: 'Nur manuelle Ausführung',
-      every: (span: string) => `Intervall: ${span}`,
-      daily: (time: string) => `Täglich um ${time}, Serverzeit`,
       took: (span: string) => `dauerte ${span}`,
       results: {
         Completed: 'Abgeschlossen',
@@ -56,6 +54,50 @@ const system: typeof en = {
       stop: 'Stoppen',
       stopLabel: (name: string) => `${name} stoppen`,
       started: (name: string) => `${name} gestartet.`,
+      triggersButton: 'Auslöser',
+      triggersLabel: (name: string) => `Auslöser von ${name} ändern`,
+      triggers: {
+        title: (name: string) => `Auslöser: ${name}`,
+        serverTime: 'Uhrzeiten gelten in der Zeitzone des Servers.',
+        none: 'Kein Auslöser: Diese Aufgabe läuft nur manuell.',
+        keepOne: 'Diese Aufgabe braucht mindestens einen Auslöser.',
+        locked: {
+          settings: 'Der Zeitplan dieser Aufgabe ist fest: Er folgt ihren Einstellungen.',
+          recordings: 'Der Zeitplan dieser Aufgabe ist fest: Serienaufnahmen hängen von ihm ab.',
+          notifications:
+            'Der Zeitplan dieser Aufgabe ist fest: Die Zusammenfassung wird von selbst gesendet, wie unter Einstellungen › Benachrichtigungen festgelegt.',
+          byHand:
+            'Der Zeitplan dieser Aufgabe ist fest: Sie läuft nur, wenn sie manuell gestartet wird.',
+        },
+        daily: (time: string) => `Täglich um ${time}`,
+        weekly: (day: string, _index: number, time: string) => `Jeden ${day} um ${time}`,
+        interval: (count: number, unit: 'minute' | 'hour' | 'day') =>
+          ({
+            minute: count === 1 ? 'Jede Minute' : `Alle ${count} Minuten`,
+            hour: count === 1 ? 'Jede Stunde' : `Alle ${count} Stunden`,
+            day: count === 1 ? 'Jeden Tag' : `Alle ${count} Tage`,
+          })[unit],
+        startup: 'Beim Start',
+        stopsAfter: (span: string) => `Abbruch nach ${span}`,
+        remove: 'Entfernen',
+        removeLabel: (trigger: string) => `Auslöser „${trigger}“ entfernen`,
+        add: 'Auslöser hinzufügen',
+        type: 'Wann',
+        types: {
+          daily: 'Täglich',
+          weekly: 'Wöchentlich',
+          interval: 'In Abständen',
+          startup: 'Beim Start',
+        },
+        time: 'Uhrzeit',
+        day: 'Tag',
+        intervalLabel: 'Abstand',
+        duplicate: 'Dieser Auslöser steht schon in der Liste.',
+        full: (max: number) => `Eine Aufgabe hat höchstens ${max} Auslöser.`,
+        reset: 'Auf Standard zurücksetzen',
+        saved: (name: string) => `Auslöser gespeichert: ${name}`,
+        resetDone: (name: string) => `Standardauslöser wiederhergestellt: ${name}`,
+      },
       autoRefresh: 'Wird alle 5 Sekunden aktualisiert.',
       recordingsTitle: 'Anstehende Aufnahmen',
       recordingsOff: 'Aufnahmen sind deaktiviert. Aktiviere sie unter Einstellungen › Aufnahmen.',
@@ -299,7 +341,8 @@ const system: typeof en = {
             ? `Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version 610, und das FFmpeg für solche Treiber konnte nicht heruntergeladen werden: ${error}. Polyfin versucht es beim nächsten Start erneut oder wenn die Konvertierungseinstellungen gespeichert werden.`
             : `Die NVIDIA-Grafikkarte konvertiert keine Videos, auch nicht mit dem FFmpeg für Treiber älter als Version 610: ${error}`,
         backupFailed: 'Das letzte Datenbank-Backup ist fehlgeschlagen.',
-        backupStale: 'Das letzte Datenbank-Backup ist älter als zwei Tage.',
+        backupStale:
+          'Das letzte Datenbank-Backup ist überfällig: Es ist älter, als sein Zeitplan erlaubt.',
         backupDestinationFailed: (name: string) =>
           `${name}: Der letzte Upload der Datenbank-Backups ist fehlgeschlagen.`,
         backupDestinationStale: (name: string) =>
