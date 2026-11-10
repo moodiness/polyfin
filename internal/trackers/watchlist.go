@@ -14,8 +14,8 @@ import (
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
-// A user who turns it on has their watchlist on Trakt, or their Plan to
-// Watch list on Simkl, read whole with each import of the service, and
+// A user who turns it on has their watchlist on Trakt or PublicMetaDB, or
+// their Plan to Watch list on Simkl, read whole with each import of the service, and
 // put on their Polyfin watchlist (see package watchlist): its movies and
 // series, a season or an episode listed counting for its series. Titles
 // are found as the history's are; those not found count among the titles
@@ -63,6 +63,8 @@ func (r *reader) readWatchlist(ctx context.Context) (watchlistRead, error) {
 		return r.readTraktWatchlist(ctx)
 	case AniList, MyAnimeList:
 		return r.readAnimeWatchlist(ctx)
+	case PublicMetaDB:
+		return r.readPublicMetaDBWatchlist(ctx)
 	}
 	return r.readSimklWatchlist(ctx)
 }
@@ -103,6 +105,76 @@ func (r *reader) readTraktWatchlist(ctx context.Context) (watchlistRead, error) 
 		}
 		pages, _ := strconv.Atoi(answer.header.Get("X-Pagination-Page-Count"))
 		if len(items) == 0 || page >= pages {
+			break
+		}
+	}
+	list.whole = true
+	return list, nil
+}
+
+// readPublicMetaDBWatchlist reads PublicMetaDB's watchlist, its movies and
+// series, a page at a time. It is read whole only once found among the
+// user's lists and read to its last page; the list is never created here.
+func (r *reader) readPublicMetaDBWatchlist(ctx context.Context) (watchlistRead, error) {
+	var list watchlistRead
+	var id string
+	for page := 1; id == ""; page++ {
+		answer, err := r.get(ctx, "/api/external/lists", url.Values{"page": {strconv.Itoa(page)}, "perPage": {"500"}})
+		if err != nil {
+			return list, err
+		}
+		var lists struct {
+			Items []struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+			} `json:"items"`
+			TotalPages int `json:"totalPages"`
+		}
+		if json.Unmarshal(answer.body, &lists) != nil {
+			return list, ErrUnreachable
+		}
+		for _, l := range lists.Items {
+			if l.Type == "watchlist" && l.ID != "" {
+				id = l.ID
+				break
+			}
+		}
+		if len(lists.Items) == 0 || page >= lists.TotalPages {
+			break
+		}
+	}
+	if id == "" {
+		// No watchlist yet: nothing is taken off.
+		return list, nil
+	}
+	for page := 1; ; page++ {
+		answer, err := r.get(ctx, "/api/external/lists/"+url.PathEscape(id)+"/items",
+			url.Values{"page": {strconv.Itoa(page)}, "perPage": {"500"}})
+		if err != nil {
+			return list, err
+		}
+		var items struct {
+			Items []struct {
+				publicMetaDBListItem
+				CreatedAt string `json:"created_at"`
+			} `json:"items"`
+			TotalPages int `json:"totalPages"`
+		}
+		if json.Unmarshal(answer.body, &items) != nil {
+			return list, ErrUnreachable
+		}
+		for _, item := range items.Items {
+			ref := library.TitleRef{TMDB: int(item.TMDB)}
+			switch item.MediaType {
+			case "movie":
+			case "tv":
+				ref.Series = true
+			default:
+				continue
+			}
+			list.add(ref, date(item.CreatedAt))
+		}
+		if len(items.Items) == 0 || page >= items.TotalPages {
 			break
 		}
 	}

@@ -143,9 +143,11 @@ type Status struct {
 	LastImport    *ImportResult
 	NextImport    *time.Time
 	// Watchlist tells that Polyfin can import the service's watchlist
-	// (Trakt, Simkl, AniList, MyAnimeList), and ImportWatchlist that it
-	// does, with the imports of the history.
-	Watchlist, ImportWatchlist bool
+	// (Trakt, Simkl, AniList, MyAnimeList, PublicMetaDB), and
+	// ImportWatchlist that it does, with the imports of the history.
+	// WatchlistSent tells that the user's own changes of their watchlist
+	// are sent there too while it does (PublicMetaDB).
+	Watchlist, ImportWatchlist, WatchlistSent bool
 	// Ratings tells that the service can keep the user's ratings (AniList,
 	// MyAnimeList), and SyncRatings that they are sent there and imported.
 	Ratings, SyncRatings bool
@@ -197,7 +199,8 @@ func (s *Service) Stopped(ctx context.Context) ([]StoppedConnection, error) {
 
 func (s *Service) status(ctx context.Context, user accounts.ID, service string) (Status, error) {
 	status := Status{Service: service, ByCode: ByCode(service), BySignIn: BySignIn(service), ByPaste: ByPaste(service), Music: Music(service),
-		Available: Available(service, s.settings()), Watchlist: watchlists(service), Ratings: animeLists(service)}
+		Available: Available(service, s.settings()), Watchlist: watchlists(service),
+		WatchlistSent: syncsWatchlist(service), Ratings: animeLists(service)}
 	c, ok, err := s.connection(ctx, user, service)
 	if err != nil {
 		return status, err

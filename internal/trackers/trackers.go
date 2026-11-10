@@ -160,9 +160,10 @@ func imports(service string) bool {
 }
 
 // watchlists reports whether Polyfin reads the watchlist of service: Trakt's
-// watchlist, Simkl's, AniList's and MyAnimeList's Plan to Watch.
+// and PublicMetaDB's watchlist, Simkl's, AniList's and MyAnimeList's Plan
+// to Watch.
 func watchlists(service string) bool {
-	return service == Trakt || service == Simkl || animeLists(service)
+	return service == Trakt || service == Simkl || service == PublicMetaDB || animeLists(service)
 }
 
 // known reports whether service is one of Services.
@@ -387,6 +388,9 @@ type Service struct {
 	// publicMetaDBIMDb caches the IMDb identifiers PublicMetaDB maps TMDB
 	// identifiers to, as decided (see mapPublicMetaDB).
 	publicMetaDBIMDb map[string]imdbDecision
+	// publicMetaDBLists remembers the identifier of the PublicMetaDB
+	// watchlist of each key that sent to it (see publicMetaDBWatchlist).
+	publicMetaDBLists map[string]string
 	// anime maps anime between identifiers and numberings.
 	anime *anime.Service
 	// stopped is told as a connection stops (see Options.Stopped).
@@ -442,11 +446,12 @@ func New(options Options) *Service {
 
 		recommending: map[laneKey]bool{},
 
-		publicMetaDBIMDb: map[string]imdbDecision{},
-		anime:            options.Anime,
-		stopped:          options.Stopped,
-		watchlist:        cmp.Or(options.Watchlist, watchlist.New(options.DB)),
-		links:            options.Links,
+		publicMetaDBIMDb:  map[string]imdbDecision{},
+		publicMetaDBLists: map[string]string{},
+		anime:             options.Anime,
+		stopped:           options.Stopped,
+		watchlist:         cmp.Or(options.Watchlist, watchlist.New(options.DB)),
+		links:             options.Links,
 	}
 }
 

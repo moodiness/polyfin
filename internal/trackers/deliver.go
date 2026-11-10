@@ -149,6 +149,17 @@ func (s *Service) deliver(key laneKey, l *lane, t ticket) time.Duration {
 		s.forget(t.id)
 		return 0
 	}
+	if kind == kindListAdd || kind == kindListRemove {
+		// The user stopped syncing their watchlist meanwhile.
+		on, err := s.stillSynced(ctx, key)
+		if err != nil {
+			return s.timing.retryFirst
+		}
+		if !on {
+			s.forget(t.id)
+			return 0
+		}
+	}
 	if kind == kindHistoryAdd || kind == kindWatched {
 		// A title the service counted watched lately, from the same
 		// viewing, is not added again.

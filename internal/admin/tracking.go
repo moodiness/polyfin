@@ -40,9 +40,12 @@ type trackingServiceJSON struct {
 	LastImport    *trackingImportJSON `json:"lastImport"`
 	NextImport    *time.Time          `json:"nextImportAt"`
 	// Watchlist tells that the service has a watchlist Polyfin imports
-	// (Trakt, Simkl, AniList, MyAnimeList), ImportWatchlist that it does.
+	// (Trakt, Simkl, AniList, MyAnimeList, PublicMetaDB), ImportWatchlist
+	// that it does, and WatchlistSent that the user's own changes of
+	// their watchlist are sent there too (PublicMetaDB).
 	Watchlist       bool `json:"watchlist"`
 	ImportWatchlist bool `json:"importWatchlist"`
+	WatchlistSent   bool `json:"watchlistSent"`
 	// Ratings tells that the service keeps ratings (AniList,
 	// MyAnimeList), SyncRatings that the user's are synced with it.
 	Ratings     bool `json:"ratings"`
@@ -96,7 +99,7 @@ func newTrackingServiceJSON(status trackers.Status) trackingServiceJSON {
 			ExpiresAt: status.Code.ExpiresAt.UTC().Truncate(time.Second)}
 	}
 	result.ImportHistory, result.Importing, result.NextImport = status.ImportHistory, status.Importing, utcSeconds(status.NextImport)
-	result.Watchlist, result.ImportWatchlist = status.Watchlist, status.ImportWatchlist
+	result.Watchlist, result.ImportWatchlist, result.WatchlistSent = status.Watchlist, status.ImportWatchlist, status.WatchlistSent
 	result.Ratings, result.SyncRatings = status.Ratings, status.SyncRatings
 	if last := status.LastImport; last != nil {
 		result.LastImport = &trackingImportJSON{At: last.At.UTC().Truncate(time.Second), Played: last.Played, Resumed: last.Resumed,
