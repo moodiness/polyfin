@@ -264,6 +264,10 @@ const settings: typeof en = {
     preferDirectPlay: 'Versionen bevorzugen, die die App ohne Konvertierung abspielt',
     preferDirectPlayHelp:
       'Wenn eine App einen Titel ohne Wahl einer Version abspielt, wählt Polyfin die erste Version, die die App unverändert oder nur neu verpackt abspielt, statt der ersten, die überhaupt abspielbar ist. Sobald eine App seit dem Start des Servers etwas abgespielt hat, listen auch ihre Versionsmenüs diese Versionen zuerst, sodass die Wiedergabe mit der Version beginnt, die das Menü zeigt. Benutzer mit „Lokale Dateien zuerst abspielen“ behalten ihre lokalen Dateien vorn. Die allererste Wiedergabe eines Titels kann etwas langsamer sein, da mehr Versionen analysiert werden können; sobald sie bekannt sind, ändert sich nichts mehr.',
+    versionNames: 'Versionsnamen',
+    versionNamesHelp:
+      'Kurze Namen schreibt Polyfin aus dem, was es über jede Version weiß, gleich in jeder App, etwa „4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Add-on“: Auflösung, HDR, Videocodec, Audio, Edition, Audiosprachen, Größe und Add-on. Zwei Versionen haben nie denselben Namen.',
+    versionNameChoices: { addon: 'Wie das Add-on sie schreibt', short: 'Kurz' },
     nameHowVersionsPlay: 'In Versionsnamen angeben, wie sie abgespielt werden',
     nameHowVersionsPlayHelp:
       'Versionsnamen enden damit, wie die App die jeweilige Version abspielt: „(Direktes Abspielen)“, „(Direktes Streamen)“, wenn sie ohne Umwandlung kopiert wird, „(umgewandelt: Grund)“ mit dem Wunsch der App, HDR, dem Qualitätslimit, Untertiteln, Video oder Audio als Grund, oder „(hier nicht abspielbar)“. Polyfin entscheidet das anhand des Geräteprofils, das die App bei ihrer letzten Wiedergabe gesendet hat, oder davor in den Fähigkeiten ihrer Sitzung. Vor der ersten Wiedergabe eines Geräts, sofern seine Fähigkeiten kein Profil mitbrachten, oder nach einem Neustart sagen die Namen daher nichts, ebenso bei einer Version, die noch nicht analysiert oder von RemuxDB beschrieben wurde. Die Namen stehen in der Sprache der generierten Namen. Dafür wird nichts gelesen.',
@@ -1087,6 +1091,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Versionen zur geöffneten Seite eines Titels hinzufügen',
     addVersionsToOpenPageHelp:
       'Fügt die von den Add-ons gefundenen Versionen dem Versionsmenü der Seite eines Films oder einer Folge hinzu, während sie geöffnet ist, und behält die gewählte Version bei. Wenn aus, zeigt eine Seite, die geöffnet wurde, bevor eine Version gefunden wurde, die ersten trotzdem an, sobald sie eintreffen, und ihre Wiedergabeschaltflächen warten weiterhin auf eine Version; die übrigen erscheinen beim erneuten Öffnen der Seite.',
+    versionBadges: 'Versionsabzeichen',
+    versionBadgesHelp:
+      'Zeigt eine Reihe von Abzeichen für die gewählte Version, unter dem Versionsmenü eines Titels und in der Wiedergabesteuerung: Auflösung, HDR, Videocodec, Audio, Edition und Audiosprachen. Sie stammen aus der Analyse der Version, sobald Polyfin eine hat, sonst aus den Bezeichnungen des Add-ons.',
     posterRatings: 'Bewertungen auf Postern anzeigen',
     posterRatingsHelp:
       'Zeigt die Sternbewertung eines Films oder einer Serie im Web-Player auf dem Poster, sobald der Zeiger oder der Fokus darauf kommt, dazu die Kritiker- und Publikumswertung, solange unter Einstellungen › Inhalte ein MDBList-API-Schlüssel für Bewertungen gesetzt ist. Für alle Benutzer. Solange Abzeichen auf Postern unter Einstellungen › Inhalte an ist, erscheinen stattdessen die Abzeichen.',

@@ -329,6 +329,7 @@ const common: typeof en = {
     tmdb_unreachable:
       'TMDB war zur Prüfung des Schlüssels nicht erreichbar. Es wurde nichts gespeichert: Versuche es später erneut.',
     invalid_critic_rating_shows: 'Wähle aus der Liste, welchen Wert die Kritikerbewertung anzeigt.',
+    invalid_version_names: 'Wähle aus der Liste, wie Versionsnamen geschrieben werden.',
     invalid_poster_badge_size: 'Wähle die Größe der Abzeichen aus der Liste.',
     invalid_poster_template:
       'Die Vorlage für Poster-Adressen muss eine Webadresse sein, die mit http:// oder https:// beginnt und {imdb_id} oder {tmdb_id} nennt, ohne Leerzeichen, Benutzernamen oder Fragment.',

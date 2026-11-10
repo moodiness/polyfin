@@ -297,6 +297,7 @@ const common = {
     tmdb_unreachable:
       'TMDB could not be reached to check the key. Nothing was saved: try again later.',
     invalid_critic_rating_shows: 'Choose from the list which score the critic rating shows.',
+    invalid_version_names: 'Choose from the list how version names are written.',
     invalid_poster_badge_size: 'Choose the size of the badges from the list.',
     invalid_poster_template:
       'The poster address template must be a web address starting with http:// or https://, naming {imdb_id} or {tmdb_id}, without spaces, a user name or a fragment.',

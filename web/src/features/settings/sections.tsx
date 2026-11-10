@@ -313,6 +313,20 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
           saved={saved.preferDirectPlay}
         />
         <SettingRow
+          kind="choice"
+          anchor="version-names"
+          label={s.versionNames}
+          help={s.versionNamesHelp}
+          error={error('version-names')}
+          value={form.versionNames}
+          options={(['addon', 'short'] as const).map((value) => ({
+            value,
+            label: s.versionNameChoices[value],
+          }))}
+          onChange={(versionNames) => update({ versionNames })}
+          saved={saved.versionNames}
+        />
+        <SettingRow
           kind="switch"
           anchor="name-how-versions-play"
           label={s.nameHowVersionsPlay}
@@ -1865,6 +1879,15 @@ function WebPlayer({ form, update, error, limits, dirty, adopt, saved }: Section
           checked={form.addVersionsToOpenPage}
           onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
           saved={saved.addVersionsToOpenPage}
+        />
+        <SettingRow
+          kind="switch"
+          anchor="version-badges"
+          label={s.versionBadges}
+          help={s.versionBadgesHelp}
+          checked={form.versionBadges}
+          onChange={(versionBadges) => update({ versionBadges })}
+          saved={saved.versionBadges}
         />
         <SettingRow
           kind="switch"

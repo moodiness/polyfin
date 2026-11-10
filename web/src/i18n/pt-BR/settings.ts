@@ -263,6 +263,10 @@ const settings: typeof en = {
     preferDirectPlay: 'Preferir versões que o aplicativo reproduz sem conversão',
     preferDirectPlayHelp:
       'Quando um aplicativo reproduz um título sem escolher uma versão, o Polyfin escolhe a primeira versão que o aplicativo reproduz como é ou apenas reempacotada, em vez da primeira que simplesmente reproduz. Depois que um aplicativo reproduz algo desde o início do servidor, os menus de versões dele também listam essas versões primeiro, para que a reprodução comece pela versão que o menu mostra. Os usuários com “Reproduzir arquivos locais primeiro” mantêm os arquivos locais primeiro. A primeiríssima reprodução de um título pode ser um pouco mais lenta, pois mais versões podem ser analisadas; nada muda depois que elas são conhecidas.',
+    versionNames: 'Nomes das versões',
+    versionNamesHelp:
+      'Os nomes curtos são escritos pelo Polyfin a partir do que ele sabe de cada versão, iguais em todos os aplicativos, como “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Complemento”: resolução, HDR, codec de vídeo, áudio, edição, idiomas do áudio, tamanho e complemento. Duas versões nunca têm o mesmo nome.',
+    versionNameChoices: { addon: 'Como o complemento os escreve', short: 'Curtos' },
     nameHowVersionsPlay: 'Indicar no nome das versões como elas são reproduzidas',
     nameHowVersionsPlayHelp:
       'Os nomes das versões terminam com a forma como o aplicativo reproduz cada uma: “(reprodução direta)”, “(stream direta)” quando copiada sem conversão, “(convertida: motivo)” com o pedido do aplicativo, HDR, o limite de qualidade, as legendas, o vídeo ou o áudio como motivo, ou “(não reproduzível aqui)”. O Polyfin decide isso pelo perfil de dispositivo que o aplicativo enviou na última reprodução ou, antes disso, nas capacidades da sessão dele, então os nomes não dizem nada antes da primeira reprodução de um dispositivo, a menos que as capacidades tenham trazido um perfil, nem após uma reinicialização, e nada para uma versão ainda não analisada nem descrita pelo RemuxDB. Os nomes ficam no idioma dos nomes gerados. Nada é lido para isso.',
@@ -1089,6 +1093,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Adicionar versões à página aberta de um título',
     addVersionsToOpenPageHelp:
       'Adiciona as versões que os complementos encontram ao menu de versões da página de um filme ou episódio enquanto ela está aberta, mantendo a versão escolhida. Quando desativado, uma página aberta antes de qualquer versão ser encontrada ainda lista as primeiras à medida que chegam, e os botões de reprodução dela ainda aguardam uma versão; as demais aparecem quando a página é aberta novamente.',
+    versionBadges: 'Selos das versões',
+    versionBadgesHelp:
+      'Mostra uma fileira de selos para a versão escolhida, sob o menu Versão de um título e nos controles de reprodução: resolução, HDR, codec de vídeo, áudio, edição e idiomas do áudio. Eles vêm da análise da versão assim que o Polyfin tem uma, senão dos rótulos do complemento.',
     posterRatings: 'Mostrar avaliações nos pôsteres',
     posterRatingsHelp:
       'Mostra a avaliação em estrelas de um filme ou de uma série sobre o pôster no player web quando o ponteiro ou o foco chega nele, com as notas da crítica e do público enquanto houver uma chave da API do MDBList para avaliações em Configurações › Conteúdo. Para todos os usuários. Enquanto Selos nos pôsteres estiver ativado em Configurações › Conteúdo, os selos aparecem no lugar.',

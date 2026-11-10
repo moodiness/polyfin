@@ -108,6 +108,7 @@ func DefaultSettings() Settings {
 		HiddenVersionCodecs: []string{},
 		HiddenVersionWords:  []string{},
 		NameHowVersionsPlay: true,
+		VersionNames:        VersionNameChoices[0],
 		HiddenReleases:      []string{},
 		VersionEditionOrder: slices.Clone(VersionEditions),
 		VersionLabelRules:   []VersionLabelRule{},
@@ -163,6 +164,7 @@ func DefaultSettings() Settings {
 		CustomCss:             "",
 		CustomJs:              "",
 		AddVersionsToOpenPage: true,
+		VersionBadges:         true,
 
 		LastFMAPIKey: "",
 		LastFMSecret: "",
@@ -355,6 +357,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"hiddenVersionCodecs":  choice(d.HiddenVersionCodecs, anys(VersionCodecs)),
 		"hiddenVersionWords":   between(0, MaxHiddenVersionWords, d.HiddenVersionWords),
 		"nameHowVersionsPlay":  is(d.NameHowVersionsPlay),
+		"versionNames":         choice(d.VersionNames, anys(VersionNameChoices)),
 		"hiddenReleases":       choice(d.HiddenReleases, anys(ReleaseKinds)),
 		"versionEditionOrder":  choice(d.VersionEditionOrder, anys(VersionEditions)),
 		// Megabytes a minute; 0 puts the largest a minute first.
@@ -422,6 +425,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"customJs":                text(MaxCustomCodeBytes, d.CustomJs),
 		"loginDisclaimer":         text(MaxLoginDisclaimerBytes, d.LoginDisclaimer),
 		"addVersionsToOpenPage":   is(d.AddVersionsToOpenPage),
+		"versionBadges":           is(d.VersionBadges),
 		"traktClientId":           text(MaxTrackingAppBytes, d.TraktClientID),
 		"traktClientSecret":       text(MaxTrackingAppBytes, d.TraktClientSecret),
 		"simklClientId":           text(MaxTrackingAppBytes, d.SimklClientID),

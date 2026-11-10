@@ -265,6 +265,10 @@ const settings: typeof en = {
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
       'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. Dès qu’une application a lu quelque chose depuis le démarrage du serveur, ses menus de versions placent aussi ces versions en premier, pour que la lecture commence par la version que montre le menu. Les utilisateurs qui ont «\u202fLire d’abord les fichiers locaux\u202f» gardent leurs fichiers locaux en premier. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées\u202f; rien ne change une fois qu’elles sont connues.',
+    versionNames: 'Nom des versions',
+    versionNamesHelp:
+      'Les noms courts sont écrits par Polyfin d’après ce qu’il sait de chaque version, les mêmes dans toutes les applis, comme «\u202f4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 Go · Addon\u202f»\u202f: résolution, HDR, codec vidéo, audio, édition, langues audio, taille et addon. Deux versions n’ont jamais le même nom.',
+    versionNameChoices: { addon: 'Tels que l’addon les écrit', short: 'Courts' },
     nameHowVersionsPlay: 'Dire dans le nom des versions comment elles se lisent',
     nameHowVersionsPlayHelp:
       'Le nom des versions finit par la façon dont l’appli lit chacune\u202f: «\u202f(lecture directe)\u202f», «\u202f(flux direct)\u202f» quand elle est copiée sans conversion, «\u202f(converti\u202f: raison)\u202f» avec la demande de l’appli, HDR, la limite de qualité, les sous-titres, la vidéo ou l’audio pour raison, ou «\u202f(illisible ici)\u202f». Polyfin le décide pour le profil d’appareil envoyé par l’appli à sa dernière lecture, ou avant cela dans les capacités de sa session\u202f: les noms ne disent rien avant la première lecture d’un appareil, sauf si ses capacités portaient un profil, ni après un redémarrage, et rien pour une version pas encore analysée ni décrite par RemuxDB. Les noms sont dans la langue des noms générés. Rien n’est lu pour cela.',
@@ -1101,6 +1105,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Ajouter les versions à la page ouverte d’un titre',
     addVersionsToOpenPageHelp:
       'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version\u202f; les autres apparaissent à la prochaine ouverture de la page.',
+    versionBadges: 'Badges des versions',
+    versionBadgesHelp:
+      'Affiche une rangée de badges pour la version choisie, sous le menu Version d’un titre et dans les commandes de lecture\u202f: sa résolution, le HDR, le codec vidéo, l’audio, l’édition et les langues audio. Ils viennent de l’analyse de la version dès que Polyfin en a une, sinon des libellés de l’addon.',
     posterRatings: 'Afficher les notes sur les affiches',
     posterRatingsHelp:
       'Affiche la note en étoiles d’un film ou d’une série sur son affiche dans le lecteur web quand le pointeur ou le focus y arrive, avec les scores des critiques et du public tant qu’une clé d’API MDBList des notes est définie dans Paramètres › Contenu. Pour tous les utilisateurs. Tant que Badges sur les affiches est activé dans Paramètres › Contenu, les badges s’affichent à la place.',

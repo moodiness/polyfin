@@ -261,6 +261,10 @@ const settings = {
     preferDirectPlay: 'Prefer versions the app plays without conversion',
     preferDirectPlayHelp:
       'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. Once an app has played since the server started, its version menus also list those versions first, so that Play starts the version the menu shows. Users given “Play local files first” keep their local files first. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+    versionNames: 'Version names',
+    versionNamesHelp:
+      'Short names are written by Polyfin from what it knows of each version, the same in every app, such as “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon”: resolution, HDR, video codec, audio, edition, audio languages, size and addon. Two versions never share a name.',
+    versionNameChoices: { addon: 'As the addon writes them', short: 'Short' },
     nameHowVersionsPlay: 'Say in version names how they play',
     nameHowVersionsPlayHelp:
       'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with the app’s request, HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback, or before that in its session’s capabilities, so names say nothing before a device’s first play, unless its capabilities carried a profile, or after a restart, and nothing for a version not analyzed or described by RemuxDB yet. Names are in the language of generated names. Nothing is read for them.',
@@ -1073,6 +1077,9 @@ const settings = {
     addVersionsToOpenPage: 'Add versions to an open title’s page',
     addVersionsToOpenPageHelp:
       'Adds the versions the addons find to the version menu of a movie’s or an episode’s page while it is open, keeping the version picked. When off, a page opened before any version was found still lists the first ones as they come, and its play buttons still wait for a version; the others show when the page is opened again.',
+    versionBadges: 'Version badges',
+    versionBadgesHelp:
+      'Shows a row of badges for the version picked, under a title’s Version menu and in the playback controls: its resolution, HDR, video codec, audio, edition and audio languages. They come from the version’s analysis once Polyfin has one, else from the addon’s labels.',
     posterRatings: 'Show ratings on posters',
     posterRatingsHelp:
       'Shows a movie’s or a series’ star rating over its poster in the web player as the pointer or the focus comes to it, with its critics’ and audience scores while an MDBList API key for ratings is set under Settings › Content. For every user. While Badges on posters is on under Settings › Content, the badges show instead.',
