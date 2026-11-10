@@ -107,9 +107,10 @@ func TestTopPicksFollowTheUsersTaste(t *testing.T) {
 }
 
 // A movie's details tell a user above the confidence gate why it is for
-// them, before its own taglines, unless they turned taglines off; a new
-// user is told nothing. Saving the movie's metadata from the editor, which
-// sends the taglines it was shown, keeps the movie's own only.
+// them, after its own tagline, first when it has none, unless they turned
+// taglines off; a new user is told nothing. Saving the movie's metadata
+// from the editor, which sends the taglines it was shown, keeps the
+// movie's own only.
 func TestTaglineTellsWhyATitleIsForTheUser(t *testing.T) {
 	t.Parallel()
 	s, tastes, user, token, ids := tasteServer(t)
@@ -147,7 +148,7 @@ func TestTaglineTellsWhyATitleIsForTheUser(t *testing.T) {
 	if status, body := s.call(http.MethodPost, "/Items/"+ids["Thriller D"], app("tv", token), edit); status != http.StatusNoContent {
 		t.Fatalf("edit: %d %s", status, body)
 	}
-	if got := taglines(token, user.ID); !slices.Equal(got, []string{shown[0], "Its own"}) {
+	if got := taglines(token, user.ID); !slices.Equal(got, []string{"Its own", shown[0]}) {
 		t.Errorf("after the edit: %q", got)
 	}
 	if got := taglines(newcomerToken, newcomer.ID); !slices.Equal(got, []string{"Its own"}) {
