@@ -266,6 +266,7 @@ func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 		"#/dashboard/plugins/0123/settings":                                           "",
 		"#/Dashboard/Tasks":                                                           "system/schedule",
 		"#/dashboard/tasks/edit?id=3":                                                 "system/schedule",
+		"#/dashboard/tasks/edit?id=0123456789ABCDEF0123456789abcdef":                  "system/schedule?task=0123456789abcdef0123456789abcdef",
 		"#/dashboard/activity":                                                        "",
 		"#/dashboard?tab=1":                                                           "",
 		"#!/dashboard":                                                                "",
