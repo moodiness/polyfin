@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type AnchorHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -78,6 +79,7 @@ export function ArtTile({
   detail,
   footer,
   tools,
+  link,
   onLight,
   className,
 }: {
@@ -111,6 +113,12 @@ export function ArtTile({
   footer?: ReactNode
   /** Icon buttons at the top right (Details, message, stop), shown while the tile is lit. */
   tools?: ReactNode
+  /**
+   * Where the title and the poster lead, as a link's attributes (`href`, `target`…). The title is
+   * the link keyboards and screen readers reach, named by its words; the poster repeats it for the
+   * mouse only. Without it, both stay plain.
+   */
+  link?: AnchorHTMLAttributes<HTMLAnchorElement>
   /** Called when the tile lights up, for a page that takes its color (Home's room light). */
   onLight?: () => void
   className?: string
@@ -135,6 +143,27 @@ export function ArtTile({
     'aspect-[400/560] rounded-[0.75rem] shadow-[0_18px_36px_-12px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-20 max-md:rounded-[0.625rem]',
     wide ? 'w-[clamp(6.75rem,16vh,9.25rem)]' : 'w-[clamp(5rem,11.5vh,6.5rem)]',
   )
+  const posterFrame =
+    posterShown !== undefined ? (
+      <img
+        src={posterShown}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed((old) => new Set(old).add(posterShown))}
+        className={cx(frameClass, fit === 'cover' ? 'object-cover' : 'bg-bg object-contain p-[8%]')}
+      />
+    ) : frame ? (
+      <div
+        aria-hidden="true"
+        className={cx(
+          frameClass,
+          'grid place-items-center bg-s2 text-[2rem] font-bold text-ink-2 max-md:text-[1.75rem]',
+        )}
+      >
+        {fallback ?? <FilmStripIcon size="1em" />}
+      </div>
+    ) : null
 
   function light() {
     if (lit) return
@@ -196,30 +225,18 @@ export function ArtTile({
             className="absolute -inset-[60px] -z-2 size-[calc(100%+120px)] max-w-none scale-110 object-cover brightness-[0.62] saturate-[1.25] blur-[46px]"
           />
         )}
-        {posterShown !== undefined ? (
-          <img
-            src={posterShown}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            onError={() => setFailed((old) => new Set(old).add(posterShown))}
-            className={cx(
-              frameClass,
-              fit === 'cover' ? 'object-cover' : 'bg-bg object-contain p-[8%]',
-            )}
-          />
+        {link !== undefined && posterFrame !== null ? (
+          // The title's link is the one keyboards and screen readers reach; this one repeats it.
+          <a
+            {...link}
+            tabIndex={-1}
+            aria-hidden="true"
+            className="self-start transition-[filter] duration-300 ease-nuit hover:brightness-110"
+          >
+            {posterFrame}
+          </a>
         ) : (
-          frame && (
-            <div
-              aria-hidden="true"
-              className={cx(
-                frameClass,
-                'grid place-items-center bg-s2 text-[2rem] font-bold text-ink-2 max-md:text-[1.75rem]',
-              )}
-            >
-              {fallback ?? <FilmStripIcon size="1em" />}
-            </div>
-          )
+          posterFrame
         )}
         <div className="flex min-w-0 flex-col">
           {top !== undefined && (
@@ -239,7 +256,17 @@ export function ArtTile({
               wide ? 'text-[1.875rem]' : 'text-[1.5rem]',
             )}
           >
-            {title}
+            {link !== undefined ? (
+              <a
+                {...link}
+                // The focus chip reaches a little past the words, which stay in place.
+                className="focus-lit -mx-1.5 rounded-control box-decoration-clone px-1.5 underline decoration-transparent decoration-2 underline-offset-[0.14em] hover:decoration-current"
+              >
+                {title}
+              </a>
+            ) : (
+              title
+            )}
           </Title>
           {meta !== undefined && (
             <p className="mt-1 text-small text-ink-2 max-md:text-micro">{meta}</p>

@@ -127,6 +127,10 @@ type liveItemJSON struct {
 	// PosterID is the item whose Primary image is the poster: the series
 	// of an episode.
 	PosterID string `json:"posterId"`
+	// Linked is true when the item's page opens in the web player for the
+	// user reading: the web player is served and the user reaches the
+	// item, as for the titles of Recent activity (see linkTitles).
+	Linked bool `json:"linked"`
 }
 
 // streamJSON describes a video: its size, codecs and bitrate in bits per
@@ -204,6 +208,7 @@ func (h *handler) liveSessions(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, newLiveSessionJSON(s))
 	}
+	h.linkTitles(r.Context(), user, result)
 	writeJSON(w, http.StatusOK, result)
 }
 

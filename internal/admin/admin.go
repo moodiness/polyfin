@@ -272,6 +272,9 @@ type handler struct {
 	decryptedDownloads once[decryptedDownload]
 	// secrets keeps the report of the stored secrets (see secretsReport).
 	secrets secretsCache
+	// nowPlayingLinks keeps which titles of Now playing link to the web
+	// player (see linkTitles).
+	nowPlayingLinks nowPlayingLinks
 }
 
 // New returns the handler of every /admin/api/ route.
