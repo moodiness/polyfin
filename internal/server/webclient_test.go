@@ -1327,6 +1327,9 @@ async function run(scenario) {
     getJSON: (url) => {
       // Polyfin answers the user's views too, which hide nothing here.
       if (url === 'http://polyfin.test/Polyfin/UserViews') return Promise.resolve({ Items: [] })
+      // The version badges' ask (the twenty-first part) is another part's,
+      // tested on its own: it never answers here.
+      if (/\/Polyfin\/Items\/[0-9a-f]{32}\/Badges(\?|$)/.test(url)) return new Promise(() => {})
       log.push('ask ' + url)
       const answer = answers.shift()
       if (!answer) return Promise.reject(new Error('down'))
