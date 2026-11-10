@@ -318,6 +318,7 @@ Catalog pages work the same way:
 - Once a page is older than **Refresh catalogs after (minutes)**, it still shows at once. Polyfin reads it again from the addon in the background.
 - It is kept 24 hours more, and also kept when the addon fails.
 - A new title shows up one visit later.
+- **Refresh everything**, on an addon's page, makes all its pages old at once, so that each is read again as it is next shown (see [Refreshing an addon](addons.md#refreshing-an-addon)).
 
 Polyfin also keeps catalog pages and titles' descriptions in its database. So libraries, collections, home rows and title pages show at once after a restart too, with the images the descriptions give.
 

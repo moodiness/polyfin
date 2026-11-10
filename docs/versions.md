@@ -197,9 +197,10 @@ API details: [Version list progress for apps](jellyfin-api.md#version-list-progr
 
 ### Forgetting the version lists
 
-Two actions drop addons' lists for every title at once, saved ones included, as [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) does for one title:
+Three actions drop addons' lists for every title at once, saved ones included, as [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) does for one title:
 
 - **Replace the address**, in a source's more-actions menu, drops that addon's lists: once reconfigured, it may list other streams. Other addons' lists stay.
+- **Refresh everything**, in the same menu, drops that addon's lists too, with its manifest downloaded again and its pages and descriptions made old (see [Refreshing an addon](addons.md#refreshing-an-addon)). Other addons' lists stay.
 - The task "Forget the version lists", under **System › Schedule**, drops every addon's lists, subtitles included. It runs only when started by hand, and the log tells how many lists it forgot.
 
 Either way:

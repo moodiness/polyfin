@@ -207,6 +207,40 @@ Manifest addresses usually hold your addon settings or keys. Polyfin never shows
 
 Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
 
+## Refreshing an addon
+
+An addon's page, in **Content › Sources** or **My sources**, reads the addon again in two ways. Neither changes its libraries' names, images or settings, its home rows or the libraries users hid.
+
+**Refresh**, in the page's header, downloads the addon's manifest again:
+
+- Libraries whose catalog is still in it keep their place and settings. Those whose catalog is gone are deleted.
+- New catalogs wait under **Content › Libraries** to be turned on. Unlike an install, a refresh turns none on.
+- Catalog pages, descriptions and version lists stay as they are kept.
+
+**Refresh everything**, in the more-actions menu, asks first. It downloads the manifest as **Refresh** does, then has what Polyfin keeps of the addon asked for again as it is next needed, never all at once:
+
+- **Catalog pages:** they count as old. Each still shows at once and is read again in the background when shown. The hourly task "Read the libraries' first pages" reads every first page again within the hour (see [Catalog pages](addons-and-libraries.md#catalog-pages)).
+- **Descriptions:** they count as old. Each is read again in the background when its title is shown.
+- **Page sizes:** the page lengths Polyfin learned from the addon are forgotten, and learned again from its next pages.
+- **Version lists:** they are forgotten, as the task "Forget the version lists" does for every addon. Each title asks the addon again when opened or played. Pins and blocks stay.
+
+Deep pages and titles no one opens stay as they are kept until someone opens them.
+
+Other tools read parts of an addon again:
+
+| Tool | Where | What it does |
+|---|---|---|
+| **Refresh descriptions** | The menu of a server movie or series library, in **Content › Libraries** | Reads every kept title's description again now, one title every 2 seconds, with progress on the row (see [Library description refresh](addons-and-libraries.md#library-description-refresh)). |
+| **Replace the address** | The source's more-actions menu | Downloads the manifest from a new address, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
+| "Forget the version lists" | **System › Schedule** | Forgets every addon's version lists (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)). |
+| **Refresh catalogs after (minutes)** | **Settings › Catalogs** | Sets how old a catalog page may get before Polyfin reads it again (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)). |
+
+Removing the addon and adding it again is never needed to refresh it, and costs more:
+
+- It loses what [Removing a source](#removing-a-source) lists: libraries with their names, images and settings, home rows, hidden libraries and scheduled recordings.
+- Everything is read again cold: libraries and collections wait for the addon, and many users browsing at once send it many requests together.
+- The new addon turns on its default catalogs, as any install does.
+
 ## Removing a source
 
 **Remove** asks before it deletes the source. Once it has counted them, the question also lists what will be lost: home rows, libraries with their names, images and settings, the hidden libraries of users, and scheduled recordings.
