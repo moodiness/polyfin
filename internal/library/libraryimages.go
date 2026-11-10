@@ -1,7 +1,6 @@
 package library
 
 import (
-	"cmp"
 	"context"
 	"sync"
 	"time"
@@ -197,12 +196,12 @@ func (s *Service) automaticImages(ctx context.Context, libraries []library) []fo
 }
 
 // libraryRecord is what Polyfin remembers of a library: its catalog, and
-// its automatic image, if any. Its key keeps the catalog type its
-// identifier comes from (see LibraryID).
+// its automatic image, if any. Its key keeps the catalog type and
+// identifier its identifier comes from (see LibraryID).
 func libraryRecord(l library, image string) record {
 	addon := l.addon.addon.ID
-	keyType := cmp.Or(l.addon.addon.LibraryKeyTypes[l.catalog.ID], l.catalog.Type)
-	return record{ID: l.item.ID, Key: libraryKey(addon, keyType, l.catalog.ID), Kind: KindLibrary, Addon: &addon,
+	key := l.addon.addon.LibraryKey(l.catalog.Type, l.catalog.ID)
+	return record{ID: l.item.ID, Key: libraryKey(addon, key.Type, key.ID), Kind: KindLibrary, Addon: &addon,
 		CatalogType: l.catalog.Type, CatalogID: l.catalog.ID, Confined: l.addon.confined, Poster: image}
 }
 

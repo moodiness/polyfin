@@ -75,6 +75,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	addonStore.SetCleanup(lib.CleanRemoved)
+	addonStore.SetCarry(lib.CarryRenamed)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)
 	options := Options{

@@ -4,7 +4,6 @@ package addons
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -114,10 +113,11 @@ type Addon struct {
 	Settings    map[string]string
 	Enabled     bool
 	RefreshedAt time.Time
-	// LibraryKeyTypes are the catalog types the libraries of its catalogs
-	// take their identifiers from, by catalog identifier, for the catalogs
-	// whose type changed since (see Library.KeyType).
-	LibraryKeyTypes map[string]string
+	// LibraryKeys are the catalogs whose libraries keep the identifier
+	// they took from another catalog key: the type and identifier their
+	// catalog had when the library was made, before its type or its
+	// identifier changed (see Library.Key and LibraryKey).
+	LibraryKeys []KeptKey
 	// Language is the language of the descriptions of a server addon, as
 	// its manifest address configures it, empty for none: it describes
 	// titles for the users who chose that language only, not for others
@@ -205,11 +205,12 @@ type Library struct {
 	Name        *string
 	Enabled     bool
 	AddonActive bool
-	// KeyType is the catalog type the library takes its identifier from
-	// when its catalog's type changed since the library was made, as a
-	// local folder's does when it holds something else; empty for the
-	// catalog's own (see Addon.LibraryKeyTypes).
-	KeyType string
+	// Key is the catalog type and identifier the library takes its
+	// identifier from: those its catalog had when the library was made,
+	// kept when its type or its identifier changed since, as a local
+	// folder's type does when it holds something else (see
+	// Addon.LibraryKey). Zero is read as the catalog's own.
+	Key CatalogKey
 	// Filterable tells that the library takes a Genre and MaxItems: a
 	// catalog of titles or collections, not of live TV or music.
 	Filterable bool
@@ -472,8 +473,10 @@ type Store struct {
 	// database, so that a burst of requests reads one snapshot.
 	snapshot atomic.Pointer[snapshot]
 	loading  sync.Mutex
-	// cleanup runs with each removal (see SetCleanup).
+	// cleanup runs with each removal (see SetCleanup), carry with each
+	// manifest that renames catalogs (see SetCarry).
 	cleanup Cleanup
+	carry   CarryRenames
 }
 
 func New(db *pgxpool.Pool, client *stremio.Client) *Store {
@@ -490,7 +493,7 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
 	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
-		&addon.LibraryKeyTypes, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users}, extra...)...)
+		&addon.LibraryKeys, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -535,7 +538,7 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 
 // addonColumns are the columns scanAddon reads, of the addons table, named
 // addons in the query.
-const addonColumns = `id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types, language, used_by = 'listed',
+const addonColumns = `id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_keys, language, used_by = 'listed',
 	ARRAY(SELECT u.group_id FROM addon_users u WHERE u.addon_id = addons.id AND u.group_id IS NOT NULL ORDER BY u.group_id),
 	ARRAY(SELECT u.user_id FROM addon_users u WHERE u.addon_id = addons.id AND u.user_id IS NOT NULL ORDER BY u.user_id)`
 
@@ -905,7 +908,7 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 // Update changes an IPTV source's or a local folder's address and
 // manifest, keeping its libraries: a catalog whose type changes, its
 // identifier kept, keeps its library, and the library its identifier (see
-// Library.KeyType). setup stores, in the same transaction, what changes
+// Library.Key). setup stores, in the same transaction, what changes
 // with them. It answers ErrNotFound for an addon of another kind.
 func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, address string, manifest stremio.Manifest,
 	setup func(pgx.Tx) error) (Addon, error) {
@@ -917,9 +920,9 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 	var addon Addon
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var raw []byte
-		var keyTypes map[string]string
-		err := tx.QueryRow(ctx, "SELECT manifest, library_key_types FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind = $3 FOR UPDATE",
-			id, scope.Owner, kind).Scan(&raw, &keyTypes)
+		var keys []KeptKey
+		err := tx.QueryRow(ctx, "SELECT manifest, library_keys FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind = $3 FOR UPDATE",
+			id, scope.Owner, kind).Scan(&raw, &keys)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -930,11 +933,13 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 		if err := json.Unmarshal(raw, &old); err != nil {
 			return err
 		}
-		if keyTypes, err = retypeLibraries(ctx, tx, scope, id, old, manifest, keyTypes); err != nil {
+		moved, err := retypeLibraries(ctx, tx, scope, id, old, manifest)
+		if err != nil {
 			return err
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_key_types = $5, refreshed_at = now()
-			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, address, encoded, keyTypes))
+		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now()
+			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, address, encoded,
+			settleKeys(keys, manifest, moved)))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -949,41 +954,37 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 
 // retypeLibraries moves, in tx, the libraries of an addon's catalogs
 // whose type changes from manifest old to manifest, their identifiers
-// kept, to their new type, and returns the addon's LibraryKeyTypes, from
-// keyTypes, that keep the libraries' identifiers.
-func retypeLibraries(ctx context.Context, tx pgx.Tx, scope Scope, id accounts.ID, old, manifest stremio.Manifest,
-	keyTypes map[string]string) (map[string]string, error) {
-	if keyTypes == nil {
-		keyTypes = map[string]string{}
-	}
-	locked := false
+// kept, to their new type, and returns the catalogs moved, by their new
+// key, with the key each had (see settleKeys).
+func retypeLibraries(ctx context.Context, tx pgx.Tx, scope Scope, id accounts.ID, old, manifest stremio.Manifest) (map[CatalogKey]CatalogKey, error) {
+	moved := map[CatalogKey]CatalogKey{}
 	for _, before := range old.Catalogs {
 		if _, kept := manifest.Catalog(before.Type, before.ID); kept {
 			continue
 		}
-		i := slices.IndexFunc(manifest.Catalogs, func(c stremio.Catalog) bool { return c.ID == before.ID })
+		i := slices.IndexFunc(manifest.Catalogs, func(c stremio.Catalog) bool {
+			_, existed := old.Catalog(c.Type, c.ID)
+			return c.ID == before.ID && !existed
+		})
 		if i < 0 {
 			continue
 		}
-		if !locked {
+		after := CatalogKey{Type: manifest.Catalogs[i].Type, ID: before.ID}
+		if _, taken := moved[after]; taken {
+			continue
+		}
+		if len(moved) == 0 {
 			if err := lockScope(ctx, tx, scope); err != nil {
 				return nil, err
 			}
-			locked = true
 		}
-		after := manifest.Catalogs[i].Type
 		if _, err := tx.Exec(ctx, "UPDATE libraries SET catalog_type = $4 WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3",
-			id, before.Type, before.ID, after); err != nil {
+			id, before.Type, before.ID, after.Type); err != nil {
 			return nil, err
 		}
-		first := cmp.Or(keyTypes[before.ID], before.Type)
-		if first == after {
-			delete(keyTypes, before.ID)
-		} else {
-			keyTypes[before.ID] = first
-		}
+		moved[after] = CatalogKey{Type: before.Type, ID: before.ID}
 	}
-	return keyTypes, nil
+	return moved, nil
 }
 
 // SyncCatalogs replaces an IPTV source's manifest, in tx, as its options
@@ -1168,53 +1169,71 @@ func (s *Store) SetSettings(ctx context.Context, scope Scope, id accounts.ID, va
 }
 
 // Replace installs a new manifest URL for an addon, keeping the libraries
-// whose catalogs still exist. The address must serve the same kind of
-// addon: a Stremio addon stays one, and so does an Eclipse addon.
-func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL string, confined bool) (Addon, error) {
+// whose catalogs still exist or were renamed (see matchRenames), and tells
+// which libraries followed a new identifier and which were removed. The
+// address must serve the same kind of addon: a Stremio addon stays one,
+// and so does an Eclipse addon.
+func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL string, confined bool) (Addon, CatalogChanges, error) {
 	addon, err := s.addon(ctx, s.db, scope, id)
 	if err != nil {
-		return Addon{}, err
+		return Addon{}, CatalogChanges{}, err
 	} else if !addon.Stremio() && !addon.Eclipse() {
-		return Addon{}, ErrNotStremio
+		return Addon{}, CatalogChanges{}, ErrNotStremio
 	}
 	f, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
-		return Addon{}, err
+		return Addon{}, CatalogChanges{}, err
 	}
 	if f.kind != addon.Kind {
-		return Addon{}, ErrKindChanged
+		return Addon{}, CatalogChanges{}, ErrKindChanged
 	}
 	return s.store(ctx, scope, id, f)
 }
 
-// Refresh downloads an addon's manifest again.
-func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confined bool) (Addon, error) {
+// Refresh downloads an addon's manifest again, and tells which libraries
+// followed a new identifier and which were removed, as Replace does.
+func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confined bool) (Addon, CatalogChanges, error) {
 	addon, err := s.addon(ctx, s.db, scope, id)
 	if err != nil {
-		return Addon{}, err
+		return Addon{}, CatalogChanges{}, err
 	}
 	if !addon.Stremio() && !addon.Eclipse() {
-		return Addon{}, ErrNotStremio
+		return Addon{}, CatalogChanges{}, ErrNotStremio
 	}
 	f, err := s.fetch(ctx, addon.ManifestURL, confined)
 	if err != nil {
-		return Addon{}, err
+		return Addon{}, CatalogChanges{}, err
 	}
 	if f.kind != addon.Kind {
-		return Addon{}, ErrKindChanged
+		return Addon{}, CatalogChanges{}, ErrKindChanged
 	}
 	return s.store(ctx, scope, id, f)
 }
 
 // store saves a manifest downloaded again: a new address, or a refresh.
-func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetched) (Addon, error) {
+// The library of a catalog renamed follows its new identifier, keeping its
+// own, and what names the catalog follows it too (see SetCarry); the
+// library of a catalog gone is removed.
+func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetched) (Addon, CatalogChanges, error) {
 	defer s.changed()
 	manifestURL, encoded, manifest := f.url, f.encoded, f.manifest
 	var addon Addon
+	var changes CatalogChanges
+	var after func()
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		var err error
-		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, refreshed_at = now()
-			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, manifestURL, encoded))
+		old, err := scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
+			id, scope.Owner))
+		if err != nil {
+			return err
+		}
+		renames := matchRenames(old.Manifest, manifest)
+		moved := make(map[CatalogKey]CatalogKey, len(renames))
+		for _, r := range renames {
+			moved[CatalogKey{Type: r.CatalogType, ID: r.To}] = CatalogKey{Type: r.CatalogType, ID: r.From}
+		}
+		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now()
+			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, manifestURL, encoded,
+			settleKeys(old.LibraryKeys, manifest, moved)))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1222,29 +1241,22 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 		if err != nil {
 			return err
 		}
-		// Forget libraries whose catalog the addon no longer offers.
-		rows, err := tx.Query(ctx, "SELECT catalog_type, catalog_id FROM libraries WHERE addon_id = $1", id)
-		if err != nil {
+		if changes, err = followLibraries(ctx, tx, scope, old, manifest, renames); err != nil {
 			return err
 		}
-		var catalogType, catalogID string
-		var gone [][2]string
-		if _, err := pgx.ForEachRow(rows, []any{&catalogType, &catalogID}, func() error {
-			if _, ok := manifest.Catalog(catalogType, catalogID); !ok {
-				gone = append(gone, [2]string{catalogType, catalogID})
-			}
+		if len(renames) == 0 || s.carry == nil {
 			return nil
-		}); err != nil {
-			return err
 		}
-		for _, key := range gone {
-			if _, err := tx.Exec(ctx, "DELETE FROM libraries WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3", id, key[0], key[1]); err != nil {
-				return err
-			}
-		}
-		return nil
+		after, err = s.carry(ctx, tx, addon, renames)
+		return err
 	})
-	return addon, err
+	if err != nil {
+		return Addon{}, CatalogChanges{}, err
+	}
+	if after != nil {
+		after()
+	}
+	return addon, changes, nil
 }
 
 // Cleanup deletes, in the transaction that removes an addon, what the
@@ -1433,7 +1445,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			continue
 		}
 		chosen[row.key] = len(enabled)
-		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog, KeyType: addon.LibraryKeyTypes[catalog.ID],
+		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog, Key: addon.LibraryKey(catalog.Type, catalog.ID),
 			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image,
 			HideInMenus: row.hideInMenus, Skippable: Skippable(addon, catalog), ShowAsChoices: ShowAsChoices(addon, catalog)}
 		library.SkipLocal = row.skipLocal && library.Skippable
@@ -1466,7 +1478,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 				continue
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-				KeyType: addon.LibraryKeyTypes[catalog.ID], AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
+				Key: addon.LibraryKey(catalog.Type, catalog.ID), AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
 				Skippable: Skippable(addon, catalog), ShowAsChoices: ShowAsChoices(addon, catalog), Image: NewLibraryImage(catalog.Type)})
 		}
 	}
