@@ -957,7 +957,8 @@
   // The admin page for a route: "" (home) unless it is a dashboard page with a match. A user's
   // dashboard pages name the user with ?userId=, which opens that user. A tuner's page names it
   // with ?id=, the identifier of its source among the server's, which opens that source; without
-  // one, the page adds a tuner, which opens Add a source on its HDHomeRun tuner tab.
+  // one, the page adds a tuner, which opens Add a source on its HDHomeRun tuner tab. A task's
+  // page, tasks/edit?id=, opens that task's triggers on the schedule.
   function target(hash) {
     if (!/^#!?\/dashboard(?:[/?#]|$)/i.test(hash)) return ''
     var path = hash.replace(/^#!?\/dashboard\/?/i, '').split(/[?#]/)[0].toLowerCase()
@@ -967,6 +968,11 @@
     if (/^livetv\/tuner(\/|$)/.test(path)) {
       var tuner = /[?&]id=([0-9a-f]{32})(?:[&#]|$)/i.exec(hash)
       return tuner ? 'sources/shared/' + tuner[1].toLowerCase() : 'sources?add=hdhomerun'
+    }
+    // A task's page names it with ?id=, which opens its triggers on the schedule.
+    if (/^tasks\/edit(\/|$)/.test(path)) {
+      var task = /[?&]id=([0-9a-f]{32})(?:[&#]|$)/i.exec(hash)
+      if (task) return 'system/schedule?task=' + task[1].toLowerCase()
     }
     for (var i = 0; i < pages.length; i++) {
       var prefix = pages[i][0]
