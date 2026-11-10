@@ -77,7 +77,9 @@ func TestReadAheadRollsWithAPacedReader(t *testing.T) {
 	}
 	stop := e.Play(spec)
 	defer stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	// The context only bounds a hang: the whole test took up to 100 s
+	// under the race detector on a loaded machine.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	r, err := e.Open(ctx, spec)
 	if err != nil {
@@ -93,7 +95,7 @@ func TestReadAheadRollsWithAPacedReader(t *testing.T) {
 	buf := make([]byte, piece)
 	for i := range len(data) / piece {
 		// The first read starts the torrent's reads, and waits.
-		if i > 0 && !idleWith(r.t, i, 10*time.Second) {
+		if i > 0 && !idleWith(t, ctx, r.t, i) {
 			t.Fatalf("the read at %d MiB waited for its piece: nothing was in flight, and it was not asked", i)
 		}
 		// Within the window past the last read, the edge pieces of the
@@ -111,22 +113,25 @@ func TestReadAheadRollsWithAPacedReader(t *testing.T) {
 	}
 }
 
-// idleWith waits, up to wait, for the torrent to hold piece index with no
-// piece in flight; false if it does not.
-func idleWith(t *torrent, index int, wait time.Duration) bool {
-	deadline := time.NewTimer(wait)
-	defer deadline.Stop()
+// idleWith waits, as long as ctx allows, for the torrent to have no piece
+// in flight, and reports whether it then holds piece index. With nothing
+// in flight and the reader between its reads, nothing asks the peers for
+// more: a piece missing then is one the next read would wait for. Only
+// ctx bounds the wait, as the swarm's pace is the machine's: a loaded one
+// took up to 24 s for the first window and the file's edges.
+func idleWith(tb testing.TB, ctx context.Context, t *torrent, index int) bool {
+	tb.Helper()
 	for {
 		t.mu.Lock()
-		idle, changed := t.have[index] && len(t.inflight) == 0, t.changed
+		idle, has, changed := len(t.inflight) == 0, t.have[index], t.changed
 		t.mu.Unlock()
 		if idle {
-			return true
+			return has
 		}
 		select {
 		case <-changed:
-		case <-deadline.C:
-			return false
+		case <-ctx.Done():
+			tb.Fatalf("waiting for the swarm to fetch the pieces asked before the read at %d MiB: %v", index, ctx.Err())
 		}
 	}
 }
