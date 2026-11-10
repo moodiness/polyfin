@@ -188,7 +188,7 @@ Once confident:
 - **Top picks for you** lists the titles in the order of the profile. Those it ranks the same keep the order above.
 - Similar titles, **Because you watched** rows and [movie recommendations](jellyfin-compatibility.md#movie-recommendations) are ordered half by how close each title is, and half by the profile. The sum of the two ranks decides.
 - `/Items/Suggestions` puts the titles the profile ranks first first, and the others at random as before.
-- A movie's or series' page starts its taglines with why it is for the user: "87% for you · because you like Thriller".
+- A movie's or series' page adds to its taglines why it is for the user: "87% for you · because you like Thriller". It comes after the title's own tagline, from TMDB (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)) or the metadata editor, and first when the title has none.
 
 The tagline:
 

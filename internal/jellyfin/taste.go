@@ -131,14 +131,16 @@ func (h *Handler) tasteTaglineOf(ctx context.Context, user accounts.User, item l
 	return fmt.Sprintf(tasteTagline.In(language), match.Percent, match.Reason)
 }
 
-// addTasteTagline puts why item is for the user before the taglines of
-// its details, when they ask for them.
+// addTasteTagline puts why item is for the user among the taglines of its
+// details, when they ask for them: second, after the title's own (TMDB's
+// or an administrator's), first when it has none.
 func (h *Handler) addTasteTagline(ctx context.Context, user accounts.User, dto *BaseItemDto, item library.Item) {
 	if dto.Taglines == nil {
 		return
 	}
 	if tagline := h.tasteTaglineOf(ctx, user, item); tagline != "" {
-		dto.Taglines = new(append([]string{tagline}, *dto.Taglines...))
+		taglines := *dto.Taglines
+		dto.Taglines = new(slices.Insert(slices.Clone(taglines), min(1, len(taglines)), tagline))
 	}
 }
 
