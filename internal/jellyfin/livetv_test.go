@@ -641,9 +641,16 @@ func TestChannelPlaysThroughFFmpeg(t *testing.T) {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
 	dir := t.TempDir()
-	cmd := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=12",
-		"-f", "lavfi", "-i", "sine=duration=12", "-c:v", "libx264", "-g", "24", "-pix_fmt", "yuv420p", "-c:a", "aac",
-		"-f", "hls", "-hls_time", "2", "-hls_list_size", "0", filepath.Join(dir, "one.m3u8"))
+	// The channel streams a live playlist of six seconds, without an
+	// EXT-X-ENDLIST: FFmpeg reads it at once, then waits for a next
+	// segment. It cuts six segments of a second at most, fewer than the
+	// eleven that follow a segment before the live window deletes it, so
+	// the first segment the playlist lists stays until the app leaves. A
+	// finished playlist, read whole at once, could lose it to the window
+	// before the app asks for it.
+	cmd := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=6",
+		"-f", "lavfi", "-i", "sine=duration=6", "-c:v", "libx264", "-g", "24", "-pix_fmt", "yuv420p", "-c:a", "aac",
+		"-f", "hls", "-hls_time", "2", "-hls_list_size", "0", "-hls_flags", "omit_endlist", filepath.Join(dir, "one.m3u8"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, output)
 	}
