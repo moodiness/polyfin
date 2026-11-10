@@ -13,7 +13,7 @@ IMAGE_DATABASE_URL ?= postgresql://polyfin:polyfin@host.docker.internal:5432/pol
 FFMPEG_ARCHIVES ?=
 FFMPEG_CONTEXTS = $(if $(FFMPEG_ARCHIVES),--build-context ffmpeg-amd64-archive=$(FFMPEG_ARCHIVES)/amd64 --build-context ffmpeg-arm64-archive=$(FFMPEG_ARCHIVES)/arm64)
 
-.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health
+.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health image-health-aio
 
 web:
 	$(NPM) --prefix web ci --no-audit --no-fund
@@ -52,7 +52,7 @@ JELLYFIN := $(POLYFIN)/jellyfin
 RACE_1 := $(addprefix $(POLYFIN)/,playback backup admin library source thumbnails commercials \
 	notifications audiosegments trackers iptv jellyfinimport recordings lyrics)
 RACE_2 := $(addprefix $(POLYFIN)/,localfiles hls accounts database container torrent addons \
-	torrent/utp appimport desktop/cluster)
+	torrent/utp appimport cluster)
 RACE_REST = $$($(GO) list ./... | grep -vxF $(addprefix -e ,$(JELLYFIN) $(RACE_1) $(RACE_2)))
 
 # internal/jellyfin's halves, by the first letter after Test of each
@@ -88,6 +88,7 @@ compose-check:
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml config --quiet
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.build.yaml config --quiet
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.host.yaml config --quiet
+	docker compose --env-file /dev/null -f compose.aio.yaml config --quiet
 
 # Local tag only: this target never pushes. It also checks that the
 # jellyfin-web source releases attach still matches its checksum.
@@ -97,7 +98,9 @@ image-check:
 	if [ "$$printed" != "$(VERSION)" ]; then \
 		echo "image reports version '$$printed', expected '$(VERSION)'"; exit 1; \
 	fi
+	docker buildx build --load --target aio --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --tag polyfin-local:aio .
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --output type=cacheonly .
+	docker buildx build --platform linux/amd64,linux/arm64 --target aio --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --output type=cacheonly .
 	docker buildx build --target jellyfin-web-source --output type=cacheonly .
 
 # The image image-check built becomes healthy within its start period,
@@ -114,3 +117,8 @@ image-health:
 	if [ "$$status" != healthy ]; then docker logs polyfin-health; fi; \
 	docker rm -f polyfin-health >/dev/null; \
 	[ "$$status" = healthy ]
+
+# The aio image image-check built, with its own database: healthy, a clean
+# stop, and a recovery after a kill.
+image-health-aio:
+	sh scripts/image-health-aio.sh polyfin-local:aio

@@ -254,6 +254,8 @@ Jellyfin apps restore a backup of the folder the same way, through `/Backup/Rest
 
 A backup also restores into the PostgreSQL 18 container with its own `pg_restore`, while Polyfin is stopped.
 
+- **With one container:** the `aio` image's database stops with Polyfin, so this does not apply to it (see [One container](installation.md#one-container)). Restore from the admin app, or from the setup page of a new, empty database. Moving to it from a `postgres` container is a backup, then a restore from the setup page (see [Moving to one container](installation.md#moving-to-one-container)).
+
 - The examples use the Compose services `postgres` and `polyfin`, and the database and user `polyfin` of `compose.yaml`.
 - They read the backups from a `backups` folder of the server.
 - When the backups are in Polyfin's data volume, copy the one to restore out of it first: `mkdir -p backups && docker compose cp polyfin:/data/backups/polyfin-20261005-040000.dump backups/`.
