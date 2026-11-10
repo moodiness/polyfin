@@ -46,7 +46,8 @@ function useWebClient(): boolean {
 
 /**
  * The top row of every signed-in page, which scrolls away with it: the logo, the five area words
- * (a member's own pages instead), then Search with ⌘K, the web player and the account. The area
+ * (a member's own pages instead), then Search with ⌘K, the web player and the account. Search and
+ * the web player show their words from 1280 px, their icons alone below. The area
  * words are 17 px, 16 under 1400 px and 15 under 1100 px; below 1180 px, where German ones
  * no longer fit, they move into the full-screen menu, behind the menu button. The account's name
  * gives way first when the row is short of room. `data-top-bar` marks it for the lists of
@@ -118,13 +119,20 @@ export function TopBar({ user }: { user: SessionUser }) {
                 inPlace ? t.nav.backToWebPlayer : `${t.nav.webPlayer}: ${t.nav.webPlayerHint}`
               }
               title={inPlace ? t.nav.backToWebPlayer : t.nav.webPlayer}
-              className={cx(topControl, 'size-9.5 justify-center max-[1180px]:hidden')}
+              className={cx(
+                topControl,
+                'h-9.5 gap-2 px-3 text-control whitespace-nowrap',
+                'max-xl:w-9.5 max-xl:justify-center max-xl:px-0 max-[1180px]:size-10',
+                // In place, a phone has the back arrow before the logo already.
+                inPlace && 'max-[1180px]:hidden',
+              )}
             >
               {inPlace ? (
-                <ArrowLeftIcon size="1.25rem" aria-hidden="true" />
+                <ArrowLeftIcon size="1.25rem" aria-hidden="true" className="shrink-0" />
               ) : (
-                <MonitorPlayIcon size="1.25rem" aria-hidden="true" />
+                <MonitorPlayIcon size="1.25rem" aria-hidden="true" className="shrink-0" />
               )}
+              <span className="max-xl:hidden">{t.nav.webPlayer}</span>
             </a>
           )}
           <AccountMenu user={user} />
