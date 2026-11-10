@@ -621,13 +621,13 @@ const users: typeof en = {
     deleted: (name: string) => `Se ha borrado el grupo ${name}.`,
     membersTitle: 'Miembros',
     membersHelp:
-      'Un miembro que deja de seguir el grupo conserva sus valores como ajustes propios, marcados como «Ajustes propios».',
+      'Un miembro conserva valores propios en las secciones que elija, que su página puede cambiar; en las demás sigue el grupo.',
     noMembers: 'Aún no hay ningún miembro.',
     noMembersHelp:
       'Añada miembros aquí o elija el grupo en la sección Acceso de la página de un usuario.',
     ownSettings: 'Ajustes propios',
     followsHelp: 'Sigue el grupo',
-    ownSettingsHelp: 'Conserva sus propios ajustes',
+    ownSections: (sections: string) => `Propios: ${sections}`,
     addMembers: 'Añadir miembros',
     addMembersTitle: (name: string) => `Añadir miembros a ${name}`,
     addMembersHelp:
@@ -642,25 +642,31 @@ const users: typeof en = {
     group: 'Grupo',
     noGroup: 'Ningún grupo',
     groupHelp:
-      'Un miembro sigue el grupo: se aplican sus valores y esta página los muestra en modo de solo lectura. Al salir, el usuario los conserva como propios.',
+      'Un miembro sigue el grupo: se aplican sus valores y esta página los muestra en modo de solo lectura, salvo en las secciones que conserva como propias. Al salir, el usuario los conserva como propios.',
     administratorNoGroup:
       'Los administradores no pueden unirse a un grupo, ya que sus permisos son distintos.',
     administratorLeaves: (name: string) =>
       `Convertir a este usuario en administrador lo saca del grupo ${name}.`,
     newAccountGroupHelp: 'Las cuentas creadas se unen a este grupo y lo siguen.',
     newUserGroupHelp: 'El usuario se une a este grupo y lo sigue.',
-    followGroup: 'Seguir el grupo',
-    followGroupHelp:
-      'Si se desactiva, el usuario conserva los valores actuales del grupo como propios y se pueden cambiar en esta página.',
+    values: 'Valores',
+    valuesHelp:
+      'Tomados del grupo, los valores cambian con él. Propios, se fijan en esta página y los cambios posteriores del grupo no les afectan.',
+    valuesFromGroup: (name: string) => `Del grupo ${name}`,
+    valuesOwn: 'Propios de este usuario',
+    followEverywhere: 'Seguir el grupo en todo',
     setByGroup: (name: string) => `Definido por el grupo ${name}.`,
     openGroup: 'Abrir el grupo',
     joinTitle: '¿Unirse al grupo?',
     joinConfirm: (user: string, group: string) =>
       `${user} se une a ${group} y lo sigue: los valores del grupo sustituyen a los suyos en Acceso, Reproducción y acceso, Control parental, Bibliotecas visibles, Géneros bloqueados y Horarios permitidos.`,
     join: 'Unirse',
-    followAgainTitle: '¿Volver a seguir el grupo?',
-    followAgainConfirm: (user: string, group: string) =>
-      `${user} recupera los valores de ${group}: se sustituyen sus ajustes propios en las secciones del grupo.`,
+    followSectionTitle: (section: string) => `¿Seguir el grupo en ${section}?`,
+    followSectionConfirm: (user: string, group: string, section: string) =>
+      `${user} recupera los valores de ${group} en ${section}: se sustituyen allí sus ajustes propios.`,
+    followEverywhereTitle: '¿Seguir el grupo en todo?',
+    followEverywhereConfirm: (user: string, group: string) =>
+      `${user} recupera los valores de ${group} en todas las secciones: se sustituyen todos sus ajustes propios.`,
     followAgain: 'Seguir el grupo',
     groupBadge: (name: string) => `Grupo ${name}`,
     groupOwnBadge: (name: string) => `Grupo ${name}, ajustes propios`,
@@ -684,8 +690,8 @@ const users: typeof en = {
     groupTitle: (name: string) => `¿Restablecer los ajustes del grupo ${name}?`,
     userHelp: (name: string) =>
       `Los permisos de Acceso, Reproducción y acceso con el Grupo de calidad, Control parental, Bibliotecas visibles, Géneros bloqueados y Horario permitido vuelven a los ajustes de un usuario nuevo, los que da «Crear un usuario»; las aplicaciones de ${name} ya conectadas los tienen al instante. Su nombre y contraseña, Administrador, Mostrar en la pantalla de inicio de sesión, Desactivado, Finaliza el, su grupo, sus propios addons, conexiones, cuentas de seguimiento y todo lo que ha visto se mantienen.`,
-    ownSettingsHelp: (group: string) =>
-      `Sigue en el grupo ${group} con sus propios ajustes, sin seguirlo.`,
+    ownSettingsHelp: (group: string, sections: string) =>
+      `Solo vuelven a los ajustes de un usuario nuevo las secciones que conserva como propias: ${sections}. Sigue en el grupo ${group} y lo sigue en las demás.`,
     groupHelp:
       'Los permisos de Acceso, Reproducción y acceso con el Grupo de calidad, Control parental, Bibliotecas visibles, Géneros bloqueados y Horario permitido vuelven a los ajustes de un usuario nuevo. El nombre y los miembros del grupo se mantienen.',
     followers: (count: number) =>

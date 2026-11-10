@@ -138,10 +138,10 @@ export type User = {
   groupId: string | null
   groupName: string | null
   /**
-   * Whether the user follows their group: its values apply and their page shows them read only.
-   * False once detached (Own settings); true when the user has no group.
+   * The sections in which the user keeps their own values, in page order; they follow their group
+   * in the others, whose values apply and their page shows read only. Empty without a group.
    */
-  followGroup: boolean
+  ownSections: GroupSection[]
   /** The language the user's titles are described in; '' for the server's. */
   metadataLanguage: string
   /** The user's web player theme; '' for the server's. */
@@ -185,6 +185,19 @@ export type GroupLimits = Pick<
   | 'accessSchedules'
   | 'liveTvChannels'
 >
+
+/** The sections of a user's page a group holds, in page order. */
+export const groupSections = [
+  'access',
+  'playback',
+  'parental',
+  'libraries',
+  'genres',
+  'hours',
+  'channels',
+] as const
+
+export type GroupSection = (typeof groupSections)[number]
 
 /** A group as Users › Groups lists it. */
 export type GroupSummary = { id: string; name: string; memberCount: number }
@@ -999,8 +1012,11 @@ export type UserPatch = Partial<{
   endsOn: string | null
   /** Joins this group and takes its values; '' leaves the group, keeping them as own settings. */
   groupId: string
-  /** False detaches the member, keeping the group's values; true takes them back. */
-  followGroup: boolean
+  /**
+   * The sections in which the member keeps their own values, all of them. A section left out
+   * follows the group again, taking its values; one added keeps the group's current values.
+   */
+  ownSections: GroupSection[]
   /** One of the languages the server's addons were given, or '' for the server's. */
   metadataLanguage: string
   /** One of the user's audioRegions, or '' for none. */

@@ -631,13 +631,13 @@ const users: typeof en = {
     deleted: (name: string) => `Le groupe ${name} a été supprimé.`,
     membersTitle: 'Membres',
     membersHelp:
-      'Un membre qui ne suit plus le groupe garde ses valeurs comme ses propres réglages, marqués «\u202fRéglages propres\u202f».',
+      'Un membre garde ses propres valeurs dans les sections qu’il choisit, que sa page peut modifier\u202f; il suit le groupe dans les autres.',
     noMembers: 'Aucun membre pour le moment.',
     noMembersHelp:
       'Ajoutez des membres ici, ou choisissez le groupe dans la section Accès de la page d’un utilisateur.',
     ownSettings: 'Réglages propres',
     followsHelp: 'Suit le groupe',
-    ownSettingsHelp: 'Garde ses propres réglages',
+    ownSections: (sections: string) => `Propres\u202f: ${sections}`,
     addMembers: 'Ajouter des membres',
     addMembersTitle: (name: string) => `Ajouter des membres à ${name}`,
     addMembersHelp:
@@ -653,25 +653,31 @@ const users: typeof en = {
     group: 'Groupe',
     noGroup: 'Aucun groupe',
     groupHelp:
-      'Un membre suit le groupe\u202f: ses valeurs s’appliquent, et cette page les affiche en lecture seule. Le quitter les garde comme les réglages propres de l’utilisateur.',
+      'Un membre suit le groupe\u202f: ses valeurs s’appliquent, et cette page les affiche en lecture seule, sauf dans les sections gardées comme propres. Le quitter les garde comme les réglages propres de l’utilisateur.',
     administratorNoGroup:
       'Les administrateurs ne peuvent pas rejoindre un groupe, car leurs autorisations diffèrent.',
     administratorLeaves: (name: string) =>
       `Rendre cet utilisateur administrateur le retire du groupe ${name}.`,
     newAccountGroupHelp: 'Les comptes créés rejoignent ce groupe et le suivent.',
     newUserGroupHelp: 'L’utilisateur rejoint ce groupe et le suit.',
-    followGroup: 'Suivre le groupe',
-    followGroupHelp:
-      'Désactivé, l’utilisateur garde les valeurs actuelles du groupe comme les siennes, et cette page peut les modifier.',
+    values: 'Valeurs',
+    valuesHelp:
+      'Reprises du groupe, les valeurs changent avec lui. Propres, elles se règlent sur cette page, et les changements ultérieurs du groupe ne les touchent pas.',
+    valuesFromGroup: (name: string) => `Du groupe ${name}`,
+    valuesOwn: 'Propres à cet utilisateur',
+    followEverywhere: 'Suivre le groupe partout',
     setByGroup: (name: string) => `Réglé par le groupe ${name}.`,
     openGroup: 'Ouvrir le groupe',
     joinTitle: 'Rejoindre le groupe\u202f?',
     joinConfirm: (user: string, group: string) =>
       `${user} rejoint ${group} et le suit\u202f: les valeurs du groupe remplacent les siennes dans Accès, Lecture et accès, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés.`,
     join: 'Rejoindre',
-    followAgainTitle: 'Suivre de nouveau le groupe\u202f?',
-    followAgainConfirm: (user: string, group: string) =>
-      `${user} reprend les valeurs de ${group}\u202f: ses propres réglages dans les sections du groupe sont remplacés.`,
+    followSectionTitle: (section: string) => `Suivre le groupe pour ${section}\u202f?`,
+    followSectionConfirm: (user: string, group: string, section: string) =>
+      `${user} reprend les valeurs de ${group} dans ${section}\u202f: ses propres réglages y sont remplacés.`,
+    followEverywhereTitle: 'Suivre le groupe partout\u202f?',
+    followEverywhereConfirm: (user: string, group: string) =>
+      `${user} reprend les valeurs de ${group} dans toutes les sections\u202f: tous ses propres réglages sont remplacés.`,
     followAgain: 'Suivre le groupe',
     groupBadge: (name: string) => `Groupe ${name}`,
     groupOwnBadge: (name: string) => `Groupe ${name}, réglages propres`,
@@ -695,8 +701,8 @@ const users: typeof en = {
     groupTitle: (name: string) => `Rétablir les réglages par défaut du groupe ${name}\u202f?`,
     userHelp: (name: string) =>
       `Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur, ceux que donne «\u202fCréer un utilisateur\u202f»\u202f; les applications de ${name} déjà connectées les ont aussitôt. Son nom et son mot de passe, Administrateur, Afficher sur l’écran de connexion, Désactivé, Prend fin le, son groupe, ses propres addons, ses connexions, ses comptes de suivi et tout ce qu’il a regardé restent.`,
-    ownSettingsHelp: (group: string) =>
-      `Cet utilisateur reste dans le groupe ${group} avec ses propres réglages, sans le suivre.`,
+    ownSettingsHelp: (group: string, sections: string) =>
+      `Seules les sections gardées comme propres reprennent les réglages d’un nouvel utilisateur\u202f: ${sections}. Cet utilisateur reste dans le groupe ${group} et le suit dans les autres.`,
     groupHelp:
       'Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur. Le nom et les membres du groupe restent.',
     followers: (count: number) =>

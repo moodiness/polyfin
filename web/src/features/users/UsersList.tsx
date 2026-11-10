@@ -225,7 +225,7 @@ function UserRow({ user }: { user: User }) {
     ),
     user.groupName !== null && (
       <Badge key="group">
-        {user.followGroup
+        {user.ownSections.length === 0
           ? t.groups.groupBadge(user.groupName)
           : t.groups.groupOwnBadge(user.groupName)}
       </Badge>

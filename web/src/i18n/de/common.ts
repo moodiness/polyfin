@@ -88,7 +88,7 @@ const common: typeof en = {
       'Administratoren können keiner Gruppe beitreten, da ihre Berechtigungen abweichen. Lade die Seite neu, um zu sehen, wer jetzt Administrator ist.',
     invalid_group: 'Diese Gruppe existiert nicht mehr. Lade die Seite neu und wähle eine andere.',
     follows_group:
-      'Dieser Benutzer folgt seiner Gruppe: Ändere die Gruppe oder deaktiviere zuerst „Der Gruppe folgen“.',
+      'Dieser Benutzer folgt seiner Gruppe in diesem Bereich: Ändere die Gruppe oder wähle zuerst „Eigene für diesen Benutzer“.',
     invalid_copy_from: 'Dieser Benutzer existiert nicht mehr. Wähle einen anderen.',
     invalid_server_name: 'Der Servername muss 1 bis 64 Zeichen lang sein.',
     invalid_language: 'Wähle eine Sprache aus der Liste.',

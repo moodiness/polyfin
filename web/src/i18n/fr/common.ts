@@ -87,7 +87,7 @@ const common: typeof en = {
       'Les administrateurs ne peuvent pas rejoindre un groupe, car leurs autorisations diffèrent. Rechargez la page pour voir qui l’est à présent.',
     invalid_group: 'Ce groupe n’existe plus. Rechargez la page et choisissez-en un autre.',
     follows_group:
-      'Cet utilisateur suit son groupe\u202f: modifiez le groupe, ou désactivez d’abord «\u202fSuivre le groupe\u202f».',
+      'Cet utilisateur suit son groupe dans cette section\u202f: modifiez le groupe, ou choisissez d’abord «\u202fPropres à cet utilisateur\u202f».',
     invalid_copy_from: 'Cet utilisateur n’existe plus. Choisissez-en un autre.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
     invalid_language: 'Choisissez une langue dans la liste.',

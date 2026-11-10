@@ -9,7 +9,14 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react'
-import { ApiError, updateGroup, updateUser, type GroupPatch } from '@/api'
+import {
+  ApiError,
+  groupSections,
+  updateGroup,
+  updateUser,
+  type GroupPatch,
+  type UserPatch,
+} from '@/api'
 import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
@@ -17,11 +24,14 @@ import { SaveBar, useToast } from '@/ui'
 import { groupSaved, refreshGroupIfGone, refreshIfGone, userSaved } from './shared'
 import type { LimitsTarget } from './UserForms'
 
+/** A section's part of the patch: a group's limits, and on a member's page their own sections. */
+type DraftPatch = GroupPatch & Pick<UserPatch, 'ownSections'>
+
 /**
  * What a section of the page brings to the dock: how many of its settings differ from the saved
  * ones, and its part of the patch, or null while it holds an error to fix first.
  */
-type DraftPart = { changes: number; patch: () => GroupPatch | null }
+type DraftPart = { changes: number; patch: () => DraftPatch | null }
 
 type Report = (id: string, part: DraftPart | null) => void
 
@@ -31,7 +41,7 @@ const DraftContext = createContext<Report | null>(null)
  * Tells the page's dock what this section changes. Sections of a page that saves as a whole call
  * it on every render; outside a DraftForm it does nothing.
  */
-export function useDraftPart(id: string, changes: number, patch: () => GroupPatch | null) {
+export function useDraftPart(id: string, changes: number, patch: () => DraftPatch | null) {
   const report = use(DraftContext)
   const latest = useRef(patch)
   latest.current = patch
@@ -81,7 +91,7 @@ export function DraftForm({
   const toast = useToast()
   const self = useSessionUser()
   const [counts, setCounts] = useState<Record<string, number>>({})
-  const patches = useRef(new Map<string, () => GroupPatch | null>())
+  const patches = useRef(new Map<string, () => DraftPatch | null>())
   const [invalid, setInvalid] = useState(false)
 
   const report = useCallback<Report>((id, part) => {
@@ -99,7 +109,7 @@ export function DraftForm({
   const changes = Object.values(counts).reduce((sum, count) => sum + count, 0)
 
   const save = useMutation({
-    mutationFn: async (patch: GroupPatch) => {
+    mutationFn: async (patch: DraftPatch) => {
       if (target.kind === 'group') {
         groupSaved(await updateGroup(target.group.id, patch))
       } else {
@@ -130,7 +140,7 @@ export function DraftForm({
     // A form in a dialog opened from a section submits through the page in React's tree only.
     if (event.target !== event.currentTarget) return
     if (changes === 0 || save.isPending) return
-    let patch: GroupPatch = {}
+    let patch: DraftPatch = {}
     for (const [id, part] of patches.current) {
       if ((counts[id] ?? 0) === 0) continue
       const own = part()
@@ -138,7 +148,19 @@ export function DraftForm({
         setInvalid(true)
         return
       }
-      patch = { ...patch, ...own }
+      const { ownSections: chosen, ...values } = own
+      patch = { ...patch, ...values }
+      // Each section's Values sends the member's whole list with its own choice in it: the patch
+      // takes every section's choice.
+      if (chosen !== undefined && target.kind === 'user') {
+        const saved = target.user.ownSections
+        const before = patch.ownSections ?? saved
+        patch.ownSections = groupSections.filter((section) =>
+          chosen.includes(section) !== saved.includes(section)
+            ? chosen.includes(section)
+            : before.includes(section),
+        )
+      }
     }
     setInvalid(false)
     save.mutate(patch)

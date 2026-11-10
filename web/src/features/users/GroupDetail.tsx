@@ -61,6 +61,7 @@ import {
   PermissionRows,
   PlaybackAccessSection,
   ResetDefaultsDialog,
+  sectionTitle,
   VisibleLibrariesSection,
   type LimitsTarget,
 } from './UserForms'
@@ -428,8 +429,16 @@ function MembersSection({ group }: { group: Group }) {
               to={`/users/${member.id}`}
               leading={<Avatar name={member.name} image={userImageUrl(member)} size="md" />}
               title={member.name}
-              titleAside={!member.followGroup && <Badge tone="warn">{t.groups.ownSettings}</Badge>}
-              meta={member.followGroup ? t.groups.followsHelp : t.groups.ownSettingsHelp}
+              titleAside={
+                member.ownSections.length > 0 && <Badge tone="warn">{t.groups.ownSettings}</Badge>
+              }
+              meta={
+                member.ownSections.length === 0
+                  ? t.groups.followsHelp
+                  : t.groups.ownSections(
+                      member.ownSections.map((section) => sectionTitle(t, section)).join(', '),
+                    )
+              }
               trailing={<UserState user={member} />}
             />
           ))}

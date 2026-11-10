@@ -77,6 +77,7 @@ const filters = {
       'GroupMemberAdded',
       'GroupMemberRemoved',
       'GroupMemberDetached',
+      'GroupMemberFollows',
     ],
   },
   server: {
@@ -114,6 +115,7 @@ const typeIcons: Record<string, Icon> = {
   GroupMemberAdded: UsersThreeIcon,
   GroupMemberRemoved: UsersThreeIcon,
   GroupMemberDetached: UsersThreeIcon,
+  GroupMemberFollows: UsersThreeIcon,
   ShareLinkCreated: LinkIcon,
   ShareLinkRevoked: LinkBreakIcon,
   ShareLinkExpired: LinkBreakIcon,
