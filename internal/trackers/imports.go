@@ -107,10 +107,12 @@ func (s *Service) SetImport(ctx context.Context, user accounts.ID, service strin
 }
 
 // SetWatchlistImport turns the import of user's watchlist from service on
-// or off: Trakt's watchlist, Simkl's, AniList's and MyAnimeList's Plan to
-// Watch, imported with the imports of the history, whether those import
-// the history or not. Turned on, it imports at once. Turned off, the
-// titles the list alone held leave the watchlist. The other services have
+// or off: Trakt's and PublicMetaDB's watchlist, Simkl's, AniList's and
+// MyAnimeList's Plan to Watch, imported with the imports of the history,
+// whether those import the history or not. For PublicMetaDB, it also
+// sends the user's own changes of their watchlist from then on (see
+// listsync.go). Turned on, it imports at once. Turned off, the titles the
+// list alone held leave the watchlist. The other services have
 // no watchlist Polyfin imports: ErrUnknownService.
 func (s *Service) SetWatchlistImport(ctx context.Context, user accounts.ID, service string, on bool) (Status, error) {
 	if !watchlists(service) {

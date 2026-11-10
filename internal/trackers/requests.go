@@ -430,14 +430,14 @@ func (s *Service) sendTo(ctx context.Context, service, token string, settings ac
 
 // mediaType is how PublicMetaDB names the kind of a title.
 func (t Title) mediaType() string {
-	if t.Episode {
+	if t.Episode || t.Series {
 		return "tv"
 	}
 	return "movie"
 }
 
-// sendPublicMetaDB sends a resume point or a change to the watch history
-// to PublicMetaDB.
+// sendPublicMetaDB sends a resume point, a change to the watch history or
+// one to the watchlist to PublicMetaDB.
 func (s *Service) sendPublicMetaDB(ctx context.Context, key string, settings accounts.Settings, kind string, ev event) result {
 	title := ev.Titles[0]
 	switch kind {
@@ -488,6 +488,8 @@ func (s *Service) sendPublicMetaDB(ctx context.Context, key string, settings acc
 			res.outcome = delivered
 		}
 		return res
+	case kindListAdd, kindListRemove:
+		return s.sendPublicMetaDBList(ctx, key, settings, kind, ev)
 	}
 	return result{outcome: refused}
 }
