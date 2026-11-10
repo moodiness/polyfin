@@ -28,8 +28,9 @@ type trackerCall struct {
 }
 
 // trackerFakes stands in for MDBList (/mdblist) and PublicMetaDB
-// (/publicmetadb), accepting every key and change, and knowing the test
-// series by its TMDB identifier.
+// (/publicmetadb), accepting every key and change, knowing the test
+// series by its TMDB identifier, and holding a watchlist of the test
+// movie and series.
 type trackerFakes struct {
 	mu    sync.Mutex
 	calls []trackerCall
@@ -49,8 +50,13 @@ func newTrackerFakes(t *testing.T) *trackerFakes {
 			_, _ = io.WriteString(w, `{"username":"member"}`)
 			return
 		case "/publicmetadb/api/external/lists":
-			_, _ = io.WriteString(w, `{"items":[]}`)
+			_, _ = io.WriteString(w, `{"items":[{"id":"w1","type":"watchlist"}],"totalPages":1}`)
 			return
+		case "/publicmetadb/api/external/lists/w1/items":
+			if r.Method == http.MethodGet {
+				_, _ = io.WriteString(w, `{"items":[{"id":"li_10","tmdb_id":10,"media_type":"movie"},{"id":"li_30","tmdb_id":30,"media_type":"tv"}],"totalPages":1}`)
+				return
+			}
 		case "/publicmetadb/api/external/mappings/lookup":
 			_, _ = io.WriteString(w, `{"results":[{"tmdb_id":30,"media_type":"tv"}],"total":1}`)
 			return
