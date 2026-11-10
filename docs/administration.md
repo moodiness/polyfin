@@ -33,10 +33,11 @@ The pages of Content and System show as smaller words under the page's title. Th
 
 ![The admin app's top bar with the account panel open, numbered 1 to 3](images/top-bar-account-menu.webp)
 
-1: the areas. 2: **Search**, with the web player link beside it. 3: the account panel.
+1: the areas. 2: **Search**, with the **Web player** link beside it. 3: the account panel.
 
 - **Members** see shorter words: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them.
-- On a phone, the row keeps the logo, search, the account and a menu button. The menu fills the screen: the account, search, the areas with their pages, then the account's pages, the web player, the language and **Sign out**.
+- Below 1280 px, **Search** and **Web player** show their icons alone.
+- On a phone, the row keeps the logo, search, the web player, the account and a menu button. The menu fills the screen: the account, search, the web player, the areas with their pages, then the account's pages, the language and **Sign out**.
 
 ### The web player link
 
@@ -44,8 +45,8 @@ When the server serves a web player, the bar has a link to it (see [Back to the 
 
 | Admin app opened | The link reads | It opens the web player |
 |---|---|---|
-| From the web player, or inside the Jellyfin apps for Android and iOS | **Back to the web player**, a back arrow before the logo on a phone | In place |
-| Any other way | **Web player** | In a new tab |
+| From the web player, or inside the Jellyfin apps for Android and iOS | **Web player** with a back arrow, which is a back arrow before the logo on a phone, and **Back to the web player** in the phone menu | In place |
+| Any other way | **Web player** with a screen icon, the icon alone below 1280 px | In a new tab |
 
 In the Jellyfin apps, Android's **Back** button and the iOS app's **Home** tab lead back to the web player too.
 

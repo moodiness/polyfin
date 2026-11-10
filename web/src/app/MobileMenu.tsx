@@ -57,9 +57,9 @@ function isCurrentPage(page: { to: string }, pathname: string): boolean {
 
 /**
  * The phone menu: the menu button of the top row and the full-screen room it opens. The account
- * at the top, then search, then the five areas as section-title words, each with its pages as
- * smaller words, then My account, My sources, Quick Connect, the web player, the language and
- * signing out. A member's areas are their own pages, so their foot starts at the web player.
+ * at the top, then search and the web player, then the five areas as section-title words, each
+ * with its pages as smaller words, then My account, My sources, Quick Connect, the language and
+ * signing out. A member's areas are their own pages, so their foot starts at the language.
  * `inPlace`: the web player opens in place, as the way back to it.
  */
 export function MobileMenu({
@@ -160,6 +160,29 @@ export function MobileMenu({
               <span className="truncate">{t.palette.placeholder}</span>
               <span className="sr-only">{t.nav.search}</span>
             </button>
+            {webClient && (
+              <div className="mb-2.5 flex flex-col">
+                <a {...webPlayerLink(inPlace)} className={rowClass}>
+                  {inPlace ? (
+                    <>
+                      <RowIcon icon={ArrowLeftIcon} />
+                      {t.nav.backToWebPlayer}
+                    </>
+                  ) : (
+                    <>
+                      <RowIcon icon={MonitorPlayIcon} />
+                      {t.nav.webPlayer}
+                      <span className="sr-only">{t.nav.webPlayerHint}</span>
+                      <ArrowSquareOutIcon
+                        size="1.125rem"
+                        aria-hidden="true"
+                        className="ml-auto shrink-0 text-ink-3"
+                      />
+                    </>
+                  )}
+                </a>
+              </div>
+            )}
             <nav aria-label={t.nav.label}>
               {sections.map((section) => (
                 <Area
@@ -184,27 +207,6 @@ export function MobileMenu({
                     {page.label(t)}
                   </Link>
                 ))}
-              {webClient && (
-                <a {...webPlayerLink(inPlace)} className={rowClass}>
-                  {inPlace ? (
-                    <>
-                      <RowIcon icon={ArrowLeftIcon} />
-                      {t.nav.backToWebPlayer}
-                    </>
-                  ) : (
-                    <>
-                      <RowIcon icon={MonitorPlayIcon} />
-                      {t.nav.webPlayer}
-                      <span className="sr-only">{t.nav.webPlayerHint}</span>
-                      <ArrowSquareOutIcon
-                        size="1.125rem"
-                        aria-hidden="true"
-                        className="ml-auto shrink-0 text-ink-3"
-                      />
-                    </>
-                  )}
-                </a>
-              )}
               <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-1 text-lead">
                 <RowIcon icon={GlobeIcon} />
                 <span className="mr-auto">{t.nav.language}</span>

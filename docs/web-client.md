@@ -315,8 +315,8 @@ API details: [Admin app sign-in from the web player](jellyfin-api.md#admin-app-s
 
 Opened from the web player, the admin app leads back to it in the same tab, as Jellyfin's dashboard shares jellyfin-web's tab.
 
-- **Back to the web player** shows in the admin app's top bar, its phone menu and its sign-in page. It opens the web player in that tab, also after the admin app is reloaded.
-- In a tab opened otherwise, such as from a bookmark, the top bar's **Web player** opens the web player in a new tab.
+- **Back to the web player** shows in the admin app's phone menu and its sign-in page, and the top bar's **Web player** has a back arrow. It opens the web player in that tab, also after the admin app is reloaded.
+- In a tab opened otherwise, such as from a bookmark, the top bar's **Web player**, a screen icon below 1280 px, opens the web player in a new tab.
 - A Ctrl-click or a middle click on either still opens a new tab.
 
 The official Jellyfin apps for Android and iOS show the web player inside the app. There, **Dashboard** and the **Polyfin** entry open the admin app inside the app too, signed in (see [Signing in to the admin app](#signing-in-to-the-admin-app)).
