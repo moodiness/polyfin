@@ -160,6 +160,58 @@ RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarc
 FROM scratch AS postgresql-client
 COPY --from=pg-dump /pg-dump/usr/ /usr/
 
+# The server of PostgreSQL 18, which the aio image runs in its data
+# folder (POLYFIN_DATABASE=embedded): postgres, initdb and pg_ctl, their
+# modules but for JIT, which the cluster turns off, their data, and the
+# libraries they load that the image lacks, taken from the same official
+# image as pg_dump, the target platform's files, copied, nothing run.
+# initdb's postgresql.conf.sample is a link to the image's own, which is
+# copied in its place; the cluster's settings, appended to it, decide.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS postgresql-server-files
+ARG TARGETARCH
+COPY --from=postgres /usr/lib/postgresql/18/bin/postgres /usr/lib/postgresql/18/bin/initdb /usr/lib/postgresql/18/bin/pg_ctl \
+	/server/usr/lib/postgresql/18/bin/
+COPY --from=postgres /usr/lib/postgresql/18/lib/ /server/usr/lib/postgresql/18/lib/
+COPY --from=postgres /usr/share/postgresql/ /server/usr/share/postgresql/
+COPY --from=postgres /usr/lib/*-linux-gnu/libicuuc.so.76 /usr/lib/*-linux-gnu/libicui18n.so.76 /usr/lib/*-linux-gnu/libicudata.so.76 \
+	/usr/lib/*-linux-gnu/libnuma.so.1 /usr/lib/*-linux-gnu/liburing.so.2 /usr/lib/*-linux-gnu/libxslt.so.1 \
+	/usr/lib/*-linux-gnu/libxml2.so.2 /libraries/
+COPY --from=postgres /usr/share/doc/ /doc/
+RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarch64-linux-gnu ;; *) exit 1 ;; esac \
+	&& rm -rf /server/usr/lib/postgresql/18/lib/bitcode /server/usr/lib/postgresql/18/lib/llvmjit* \
+	&& sample=/server/usr/share/postgresql/18/postgresql.conf.sample \
+	&& cp --remove-destination "$(readlink -f "$sample")" "$sample" \
+	&& rm -f /server/usr/share/postgresql/postgresql.conf.sample \
+	&& mkdir -p "/server/usr/lib/$triplet" /server/usr/share/doc \
+	&& mv /libraries/* "/server/usr/lib/$triplet/" \
+	&& for package in postgresql-18 libicu76 libnuma1 liburing2 libxslt1.1 libxml2; do \
+		mkdir "/server/usr/share/doc/$package" && cp "/doc/$package/copyright" "/server/usr/share/doc/$package/"; \
+	done
+
+# PostgreSQL's server alone, with the libraries the stage above copies.
+FROM scratch AS postgresql-server
+COPY --from=postgresql-server-files /server/usr/ /usr/
+
+# tini, the aio image's first process: it passes Docker's signals on to
+# Polyfin and reaps the processes left to it, PostgreSQL's among them.
+# Debian's package of the target platform, downloaded and unpacked
+# natively.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS tini
+ARG TARGETARCH
+WORKDIR /debs
+# hadolint ignore=DL3008
+RUN if [ "$TARGETARCH" != "$(dpkg --print-architecture)" ]; then dpkg --add-architecture "$TARGETARCH"; fi \
+	&& apt-get update \
+	&& apt-get download "tini:$TARGETARCH" \
+	&& dpkg-deb -x /debs/tini_*.deb /tini \
+	&& test -x /tini/usr/bin/tini
+
+# The users of the image, with the one Polyfin runs as, which initdb looks
+# up: the same files on every platform, made natively.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS users
+RUN echo 'polyfin:x:65532:65532:Polyfin:/nonexistent:/usr/sbin/nologin' >> /etc/passwd \
+	&& echo 'polyfin:x:65532:' >> /etc/group
+
 # Tesseract 5.5, which reads picture subtitles into text, with the data of
 # English, French, German, Spanish, Italian, Portuguese and Dutch: Debian's
 # packages of the target platform, with those of the libraries they load
@@ -209,7 +261,7 @@ RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.li
 
 # A stage of this file, chosen by platform: no tag to give.
 # hadolint ignore=DL3006
-FROM runtime-${TARGETARCH}
+FROM runtime-${TARGETARCH} AS polyfin
 COPY --from=ffmpeg /bin/ffmpeg /bin/ffprobe /usr/local/bin/
 COPY --from=ffmpeg /lib/ /usr/local/lib/
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
@@ -256,3 +308,20 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=2m --start-in
 	CMD ["/polyfin", "healthcheck"]
 ENTRYPOINT ["/polyfin"]
 CMD ["serve"]
+
+# The aio image, tagged aio and <version>-aio: the image above with
+# PostgreSQL 18's server, which Polyfin starts in /data/postgresql as it
+# starts and stops after it, so that one container runs both. tini is the
+# first process; the postmaster is in a session of its own, which Docker's
+# signals do not reach: Polyfin stops it.
+FROM polyfin AS aio
+COPY --from=postgresql-server /usr/ /usr/
+COPY --from=tini /tini/usr/bin/tini /usr/bin/tini
+COPY --from=tini /tini/usr/share/doc/tini/copyright /usr/share/doc/tini/copyright
+COPY --from=users /etc/passwd /etc/group /etc/
+ENV POLYFIN_DATABASE=embedded PATH=/usr/lib/postgresql/18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENTRYPOINT ["/usr/bin/tini", "--", "/polyfin"]
+CMD ["serve"]
+
+# The image without a target: the one above the aio image.
+FROM polyfin

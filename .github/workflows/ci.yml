@@ -905,6 +905,8 @@ jobs:
         run: make image-check VERSION="$VERSION" FFMPEG_ARCHIVES="$RUNNER_TEMP/ffmpeg-archives"
       - name: See the image become healthy
         run: make image-health
+      - name: See the aio image become healthy, stop cleanly and recover after a kill
+        run: make image-health-aio
 
   publish:
     name: Publish multi-platform image to GHCR
@@ -918,6 +920,7 @@ jobs:
     outputs:
       image: ${{ steps.tags.outputs.image }}
       digest: ${{ steps.push.outputs.digest }}
+      aio-digest: ${{ steps.push-aio.outputs.digest }}
     steps:
       - *checkout
       - name: Set up Buildx
@@ -952,6 +955,14 @@ jobs:
               echo "${image}:latest"
             fi
             echo "TAGS"
+            # The aio image, with its own database: the same tags, with aio.
+            echo "aio-tags<<TAGS"
+            echo "${image}:${VERSION}-aio"
+            echo "${image}:sha-${GITHUB_SHA}-aio"
+            if [ "$PRERELEASE" = false ]; then
+              echo "${image}:aio"
+            fi
+            echo "TAGS"
           } >> "$GITHUB_OUTPUT"
       - name: Build and push linux/amd64 and linux/arm64
         id: push
@@ -969,6 +980,29 @@ jobs:
             ffmpeg-arm64-archive=${{ runner.temp }}/ffmpeg-archives/arm64
           labels: |
             org.opencontainers.image.title=Polyfin
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.tested.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+          provenance: mode=max
+          sbom: true
+      - name: Build and push the aio image, linux/amd64 and linux/arm64
+        # Its stages are the image's above, from the cache, and its own.
+        id: push-aio
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: aio
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.aio-tags }}
+          build-args: VERSION=${{ needs.tested.outputs.version }}
+          # The FFmpeg archives the steps above keep, as for the image.
+          build-contexts: |
+            ffmpeg-amd64-archive=${{ runner.temp }}/ffmpeg-archives/amd64
+            ffmpeg-arm64-archive=${{ runner.temp }}/ffmpeg-archives/arm64
+          labels: |
+            org.opencontainers.image.title=Polyfin (with its own database)
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.tested.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -1000,6 +1034,7 @@ jobs:
           PRERELEASE: ${{ needs.tested.outputs.prerelease }}
           IMAGE: ${{ needs.publish.outputs.image }}
           DIGEST: ${{ needs.publish.outputs.digest }}
+          AIO_DIGEST: ${{ needs.publish.outputs.aio-digest }}
         run: |
           flags=(--latest)
           if [ "$PRERELEASE" = true ]; then
@@ -1010,7 +1045,7 @@ jobs:
           fi
           gh release create "$TAG" --verify-tag --generate-notes \
             --title "Polyfin ${VERSION}" \
-            --notes "Image: \`${IMAGE}:${VERSION}\` (linux/amd64, linux/arm64), digest \`${DIGEST}\`. It includes jellyfin-web, unmodified, under the GPL-2.0: its complete source is attached." \
+            --notes "Image: \`${IMAGE}:${VERSION}\` (linux/amd64, linux/arm64), digest \`${DIGEST}\`; with its own database, \`${IMAGE}:${VERSION}-aio\`, digest \`${AIO_DIGEST}\`. It includes jellyfin-web, unmodified, under the GPL-2.0: its complete source is attached." \
             "${flags[@]}" "$RUNNER_TEMP"/jellyfin-web-source/*.tar.gz
 
   desktop:
@@ -1108,7 +1143,7 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Vet and build
         run: |
-          go vet ./internal/desktop/... ./cmd/polyfin-desktop
+          go vet ./internal/desktop/... ./internal/cluster ./cmd/polyfin-desktop
           if [ "$RUNNER_OS" = Windows ]; then exe=.exe; else exe=; fi
           CGO_ENABLED=0 go build -o "$DESKTOP_TEMP/install/polyfin$exe" ./cmd/polyfin
           case "$RUNNER_OS" in
@@ -1120,7 +1155,11 @@ jobs:
           # The tray needs no cgo on Linux.
           if [ "$RUNNER_OS" = Linux ]; then CGO_ENABLED=0 go build -o /dev/null ./cmd/polyfin-desktop; fi
       - name: Test
-        run: go test -count=1 ./internal/desktop/... ./cmd/polyfin-desktop
+        # The cluster's tests, and those of polyfin serve running its own
+        # database, take the PostgreSQL above too.
+        run: |
+          go test -count=1 ./internal/desktop/... ./internal/cluster ./cmd/polyfin-desktop
+          go test -count=1 -run 'Embedded|ServeRunsItsOwnDatabase' ./cmd/polyfin
       - name: Stop the test database before the smoke
         # It runs from the install folder, which the smoke checks is left
         # with no process.

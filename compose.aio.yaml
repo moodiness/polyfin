@@ -1,0 +1,42 @@
+name: polyfin
+
+# One container: Polyfin with its own PostgreSQL 18, in the volume's
+# folder postgresql (see "One container" in docs/installation.md).
+# Everything else is set in the admin app, under Settings.
+
+services:
+  polyfin:
+    image: ghcr.io/moodiness/polyfin:aio
+    environment:
+      # Encrypts the keys and tokens Polyfin stores, optional but advised:
+      # set it in .env, and keep it, or they have to be entered again.
+      POLYFIN_SECRET_KEY: ${POLYFIN_SECRET_KEY:-}
+    # The database, the cache, and by default the recordings and backups:
+    # back the database up to another folder than this volume.
+    volumes:
+      - polyfin_data:/data
+      # A folder of another disk for the backups, writable by user 65532.
+      # - /srv/backups/polyfin:/data/backups
+      # Folders of your own videos, read-only, then added under Sources as
+      # local folders (see docs/local-folders.md); user 65532 must read them.
+      # - /srv/media/movies:/media/movies:ro
+      # - /srv/media/shows:/media/shows:ro
+    # Reachable on the LAN: TVs and phones connect to it directly.
+    ports:
+      - "8096:8096"
+      # Local network discovery. Docker Desktop forwards the broadcasts
+      # Jellyfin apps send here; Docker Engine on Linux does not: give the
+      # service network_mode: host there, without ports (see
+      # docs/installation.md).
+      - "7359:7359/udp"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Time for Polyfin to stop, then its database to stop cleanly.
+    stop_grace_period: 1m
+    restart: unless-stopped
+
+volumes:
+  polyfin_data:

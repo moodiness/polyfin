@@ -9,7 +9,7 @@ This page is for anyone installing Polyfin as a server, with Docker Compose or o
 | | Docker | [Polyfin Desktop](desktop.md) |
 | --- | --- | --- |
 | Runs on | A NAS, or a computer that stays on | The computer you have: Windows, macOS or Linux |
-| Database | A PostgreSQL container beside Polyfin | Its own, in the package |
+| Database | A PostgreSQL container beside Polyfin, or its own in the `aio` image (see [One container](#one-container)) | Its own, in the package |
 | FFmpeg | In the image | Downloaded at its first start |
 | Started by | Docker | An icon in the tray, or the menu bar on macOS |
 | Runs | At any hour | While the computer is on and you are signed in |
@@ -25,6 +25,7 @@ Both run the same server, with the same admin app and apps. A backup moves from 
 
 - Docker with Compose v2.
 - The image, `ghcr.io/moodiness/polyfin`, is published for linux/amd64 and linux/arm64.
+- Its `aio` tags run PostgreSQL inside the same container, with no PostgreSQL container beside it (see [One container](#one-container)).
 - 32-bit systems get no image, and binaries you build yourself for them are best effort: CI builds the server for 32-bit ARM and tests its playback path as 386 binaries (see [Building for 32-bit targets](development.md#building-for-32-bit-targets)).
 
 ### Steps
@@ -335,9 +336,79 @@ To build the image from source instead of pulling it, run:
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
+## One container
+
+The `aio` image runs PostgreSQL 18 inside Polyfin's container, so that one container holds everything. It is the usual image plus PostgreSQL's server, about 22 MB more compressed.
+
+| Tag | Follows |
+| --- | --- |
+| `aio` | Stable releases, as `latest` does |
+| `<version>-aio`, such as `0.71.0-aio` | That release |
+
+- **The database:** Polyfin makes it at its first start in `/data/postgresql`, and logs it to `/data/log/postgresql.log`, as [Polyfin Desktop](desktop.md#folders) does. It listens on the container's `127.0.0.1` alone, with a random password kept in `/data/postgresql/polyfin.password`.
+- **The settings:** the light ones of `compose.yaml` (see [A light PostgreSQL](#a-light-postgresql)).
+- **The variable:** the image sets `POLYFIN_DATABASE=embedded`. Setting `POLYFIN_DATABASE_URL` too is an error: Polyfin does not start.
+- **The volume:** `/data` must be a named volume or a folder of the server. Without one, the database goes with the container.
+
+### Steps with one container
+
+1. Clone the repository and create your `.env` file, as in [Steps](#steps). `POSTGRES_PASSWORD` is not needed.
+2. Optionally but preferably, set `POLYFIN_SECRET_KEY` in `.env` to the output of `openssl rand -base64 32` (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+3. Start Polyfin with `compose.aio.yaml`:
+
+   ```sh
+   docker compose -f compose.aio.yaml up -d
+   ```
+
+4. Open `http://<server>:8096/admin/`.
+
+With `docker run`, give it the volume and the time to stop:
+
+```sh
+docker run -d --name polyfin --restart unless-stopped --stop-timeout 60 \
+  --read-only --cap-drop ALL --security-opt no-new-privileges \
+  -v polyfin_data:/data -p 8096:8096 ghcr.io/moodiness/polyfin:aio
+```
+
+On Docker Engine on Linux, for apps to find Polyfin on the local network, give the service `network_mode: host` in place of its `ports` (see [Let apps find Polyfin on the local network](#let-apps-find-polyfin-on-the-local-network)).
+
+### Starting and stopping
+
+- **At a start:** Polyfin starts its database first, recovering it if the container was killed, then serves.
+- **At a stop:** Polyfin stops serving, then stops its database cleanly. This takes a few seconds, more under load. `compose.aio.yaml` gives it a minute (`stop_grace_period: 1m`), and `--stop-timeout 60` does with `docker run`. Docker's default of 10 seconds may kill the database first: no data is lost, but it recovers at the next start.
+- **A restart from the admin app, or a restore:** the database stops with Polyfin and starts again with it.
+- **A database that stops by itself:** Polyfin notices within 10 seconds and starts it again.
+- **The first process:** `tini`, which passes Docker's signals on to Polyfin and reaps the processes left to it.
+
+### Backups with one container
+
+The database and the default backups folder share the `/data` volume. Mount a folder of another disk at `/data/backups`, writable by UID 65532, or send the backups to a destination (see [Destinations](backups.md#destinations)). See [Restoring a backup by hand](backups.md#restoring-a-backup-by-hand) for what changes there.
+
+### Moving to one container
+
+The data folder of the `postgres` container cannot be reused: its cluster needs system locales the image lacks. Move with a backup:
+
+1. Choose **Back up now** in the **Database backups** panel of **System › Schedule**, then copy the backup out of the container, such as `docker compose cp polyfin:/data/backups/polyfin-20261005-040000.dump .`.
+2. Stop everything: `docker compose down`. Keep the `polyfin_data` volume and `POLYFIN_SECRET_KEY` in `.env`.
+3. Start with `compose.aio.yaml`, as above. The new database is empty, and the log prints a setup code.
+4. On the setup page, choose **Restore a backup instead** and give it the backup (see [Restoring from the setup page](backups.md#restoring-from-the-setup-page)).
+5. Once it answers, remove the old database's volume: `docker volume rm polyfin_postgres_data`.
+
+The way back, to a `postgres` container or to [Polyfin Desktop](desktop.md#moving-to-docker-and-back), is the same: a backup, then a restore.
+
+### PostgreSQL versions
+
+The image runs PostgreSQL 18, which its project supports until November 2030.
+
+- **Minor versions:** a new image brings them, with nothing to do.
+- **Another major version:** a database another major version made does not start. Polyfin says so, and stops. Move it with a backup made by the old image, then a restore on the setup page of the new one, as in [Moving to one container](#moving-to-one-container).
+- **Polyfin Desktop:** it checks the same way.
+
 ## Unraid
 
 The template is [`templates/unraid/polyfin.xml`](../templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container.
+
+- **One container instead:** [`templates/unraid/polyfin-aio.xml`](../templates/unraid/polyfin-aio.xml) runs the `aio` image, with its own database (see [One container](#one-container)). Its Data folder path is required, writable by UID 65532: run `chown 65532:65532` on it first. Add it as below, with its own name, `my-Polyfin-AIO.xml`.
 
 To add the template:
 
