@@ -657,10 +657,14 @@ const account = {
             simkl: 'Plan to Watch list',
             anilist: 'Plan to Watch list',
             myanimelist: 'Plan to Watch list',
+            publicmetadb: 'Watchlist',
           },
           toggle: (name: string, list: string) => `Import my ${name} ${list}`,
           toggleHelp: (name: string, list: string) =>
             `Puts the movies and series of your ${name} ${list} in your Watchlist playlist in Jellyfin apps, with each import, a series as its aired episodes. Only what you have not watched yet is added. What you started stays. A title ${name} no longer lists leaves it, unless you started it or added it yourself. Nothing is sent back to ${name}.`,
+          syncToggle: (name: string, list: string) => `Sync my ${name} ${list}`,
+          syncHelp: (name: string, list: string) =>
+            `Puts the movies and series of your ${name} ${list} in your Watchlist playlist in Jellyfin apps, with each import, a series as its aired episodes. The movies and series you add to or take off your Watchlist playlist yourself are sent to it. A series leaves it only once none of its episodes is left. Moving entries, watching a title or deleting the playlist changes nothing there.`,
           counts: (added: number, unmapped: number) =>
             `${added} added to the Watchlist playlist, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
           added: (added: number) => `${added} added to the Watchlist playlist.`,

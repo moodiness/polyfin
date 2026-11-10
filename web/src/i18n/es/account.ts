@@ -670,10 +670,14 @@ const account: typeof en = {
             simkl: 'lista Plan to Watch',
             anilist: 'lista Plan to Watch',
             myanimelist: 'lista Plan to Watch',
+            publicmetadb: 'watchlist',
           },
           toggle: (name: string, list: string) => `Importar mi ${list} de ${name}`,
           toggleHelp: (name: string, list: string) =>
             `Coloca las películas y series de su ${list} de ${name} en la lista de reproducción «Para ver» de sus aplicaciones de Jellyfin, en cada importación, una serie como sus episodios emitidos. Solo se añade lo que aún no ha visto. Lo que empezó se queda. Un título que ${name} deja de incluir sale de ella, salvo si lo empezó o lo añadió usted. No se envía nada a ${name}.`,
+          syncToggle: (name: string, list: string) => `Sincronizar mi ${list} de ${name}`,
+          syncHelp: (name: string, list: string) =>
+            `Coloca las películas y series de su ${list} de ${name} en la lista de reproducción «Para ver» de sus aplicaciones de Jellyfin, en cada importación, una serie como sus episodios emitidos. Las películas y series que usted añade a «Para ver» o quita de ella se le envían. Una serie solo sale cuando ya no queda ninguno de sus episodios. Mover entradas, ver un título o eliminar la lista no cambia nada allí.`,
           counts: (added: number, unmapped: number) =>
             `${added === 1 ? '1 añadido' : `${added} añadidos`} a «Para ver», ${unmapped === 1 ? '1 título no encontrado' : `${unmapped} títulos no encontrados`} en Polyfin.`,
           added: (added: number) =>
