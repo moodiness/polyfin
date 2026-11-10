@@ -881,7 +881,7 @@ Silo's apps use their own API, under `/api/v2/`. These notes cover what Polyfin 
 
 ### Silo TV sign-in with a code
 
-- `GET /api/v2/auth/device/capability` answers the `state` `available` with `cancel` while Quick Connect is on, `disabled` otherwise. `remote_playback_handoff`, `jellyfin_quick_connect` and `opened_signal` are false.
+- `GET /api/v2/auth/device/capability` answers the `state` `available` with `cancel` while Quick Connect is on, `disabled` otherwise. `remote_playback_handoff`, `jellyfin_quick_connect`, `opened_signal` and `session_binding` are false.
 - `POST /api/v2/auth/device/start` answers 201 with a `user_code` written `4821-7730`, `verification_uri` ending in `/activate`, `verification_uri_complete` with `?code=48217730`, `expires_in` 600 and `interval` 5. A remote playback's start (`client_purpose` `remote_playback`, or `temporary`) is 501 `capability_unsupported`; while 1,000 Quick Connect requests are pending, a start is 429 `rate_limited`, which the TV retries; with Quick Connect off, every operation below is 404.
 - `POST /api/v2/auth/device/poll` answers `pending` with `expires_at`, then `approved` with `tokens` once, `consumed` after. `denied` and `canceled` end it too; a request that expired, or never was, is 404.
 - `POST /api/v2/auth/device/cancel` withdraws a request pending or approved but not collected, and answers its state.

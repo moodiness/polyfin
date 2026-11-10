@@ -149,6 +149,9 @@ func TestSiloTVSignsInWithACode(t *testing.T) {
 	if offered, cancel, err := silotest.CheckDeviceCapability(data); status != http.StatusOK || err != nil || !offered || !cancel {
 		t.Fatalf("capability: %d %v %s", status, err, data)
 	}
+	if !bytes.Contains(data, []byte(`"session_binding":false`)) {
+		t.Errorf("capability binds sessions: %s", data)
+	}
 	code, secret := a.startCode(t)
 	if state, _ := a.poll(t, secret); state != "pending" {
 		t.Errorf("before approval: %s", state)
@@ -334,6 +337,8 @@ func TestSiloTVCodesFollowTheSettings(t *testing.T) {
 			t.Errorf("%s: capability %d %v %s", tc.name, status, err, data)
 		case !tc.quickConnect && !bytes.Contains(data, []byte(`"state":"disabled"`)):
 			t.Errorf("%s: capability %s", tc.name, data)
+		case !bytes.Contains(data, []byte(`"session_binding":false`)):
+			t.Errorf("%s: capability binds sessions: %s", tc.name, data)
 		}
 		want := http.StatusCreated
 		if !tc.quickConnect || !tc.siloApp {

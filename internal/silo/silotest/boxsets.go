@@ -42,12 +42,11 @@ func checkBoxSet(c *checker, set object, where string) {
 	}
 }
 
-// CheckBrowseUngrouped checks a library's page asked as the apps at the
-// commits followed ask it of a library with box_sets_enabled, with
-// group=box_set (Apple CatalogQueryBuilder.build's groupsBoxSets and
-// Library.browsesBoxSets in Networking/Models.swift; Android
-// LibrariesViewModel.browseGroup in ui/screens/libraries/LibrariesScreen.kt),
-// against the same page asked without it. Silo no longer groups a
+// CheckBrowseUngrouped checks a library's page asked as apps older than
+// silo-apple 9723df00 and silo-android 6f3e3682 ask it of a library with
+// box_sets_enabled, with group=box_set (in the Apple query, in the
+// Android body), against the same page asked without it. Silo no longer
+// groups a
 // library's grid (silo-server a5325887, contract 527e4043, which drops
 // group=box_set and CatalogItem.box_set), and its apps since no longer
 // ask it (silo-apple 9723df00 CatalogQueryBuilder.swift, silo-android

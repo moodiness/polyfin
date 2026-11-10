@@ -63,14 +63,15 @@ var unsupportedDocuments = map[string]map[string]any{
 		"proxy_delivery": false, "ordered_status": false, "quality_presets": []any{}, "quality_options": []any{}, "transcode_enabled": false,
 		"transcode_user_allowed": false, "season_download": false, "series_monitoring": false, "monitoring_modes": []any{},
 		"bulk_quality": false, "monitor_quality": false, "preparation_progress": false, "direct_download_links": false,
-		"prepare_again": false, "revoked_removes_local": false},
+		"prepare_again": false, "revoked_removes_local": false, "batch_version": false},
 	"/api/v2/capabilities/metadata-ai": {"on_view": "off"},
 	"/api/v2/capabilities/ebooks": {"guarded_annotations": false, "reader_files": false, "guarded_config": false, "ordered_progress": false,
 		"kindle_conversion": false, "source_formats": []any{}, "served_format": "", "header": "", "header_failed_value": ""},
 	"/api/v2/diagnostics/capabilities": {"status": "", "server_instance_id": "", "accepted_schema_versions": []any{},
-		"max_bundle_bytes": 0, "max_manifest_bytes": 0, "retention_days": 0, "consent_notice_version": 0, "upload_chunk_bytes": 0},
+		"max_bundle_bytes": 0, "max_manifest_bytes": 0, "retention_days": 0, "consent_notice_version": 0, "upload_chunk_bytes": 0,
+		"accepted_crash_sources": []any{}},
 	"/api/v2/devices/push/apple/capabilities":         {"registration_available": false, "installation_reset_available": false},
-	"/api/v2/notifications/push/devices/capabilities": {"registration_available": false, "platforms": []any{}},
+	"/api/v2/notifications/push/devices/capabilities": {"registration_available": false, "platforms": []any{}, "binds_login_session": false},
 	"/api/v2/notifications/capabilities": {"in_app": map[string]any{"enabled": false},
 		"apple_push":   map[string]any{"available": false, "provider": "", "supported_modes": []any{}},
 		"android_push": map[string]any{"available": false, "provider": "", "supported_modes": []any{}},
@@ -85,7 +86,8 @@ var unsupportedDocuments = map[string]map[string]any{
 	"/api/v2/subtitles/sync/status":                  {"auto_sync": false, "external": false},
 	"/api/v2/requests/status": {"requests_enabled": false, "rating_restrictions_enforced": false, "follow_supported": false,
 		"season_requests_supported": false, "missing_seasons_requestable": false, "download_progress_supported": false,
-		"watchlist_titles_supported": false, "watchlist_requests": false, "discover_rows_supported": false},
+		"watchlist_titles_supported": false, "watchlist_requests": false, "discover_rows_supported": false,
+		"remove_failed_supported": false},
 	"/api/v2/auth/external-sign-in/capabilities": {"available": false, "identities": false, "admin_identities": false, "break_glass": false,
 		"connection_test": false, "live_provider_changes": false, "provider_recheck": false, "credentials_linking": false,
 		"network_sign_in": false, "network_link_keeps_password": false},
@@ -98,7 +100,7 @@ var unsupportedDocuments = map[string]map[string]any{
 		"grant_lifetime_seconds": 0},
 	"/api/v2/settings/contract/capabilities": {"api_version": 0, "manifest_revision": 0, "contract_etag": "", "definition_count": 0,
 		"scopes": []any{}, "client_families": []any{}, "supports_batched_effective": false, "supports_idempotent_writes": false,
-		"supports_atomic_shortcuts": false, "supports_device_rename": false},
+		"supports_atomic_shortcuts": false, "supports_device_rename": false, "supports_overlay_images": false},
 	"/api/v2/onboarding/capabilities": {"available": false, "revision_guarded": false},
 }
 
@@ -247,8 +249,10 @@ func (s *Server) dismiss(w http.ResponseWriter, r *http.Request, v viewer) {
 // first, both favorite and watched.
 func (s *Server) overlayConfig(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
-		Enabled             bool   `json:"enabled"`
-		QuickActionsEnabled bool   `json:"quick_actions_enabled"`
-		QuickActionsDefault string `json:"quick_actions_default"`
-	}{false, false, "both"})
+		Enabled               bool   `json:"enabled"`
+		QuickActionsEnabled   bool   `json:"quick_actions_enabled"`
+		QuickActionsDefault   string `json:"quick_actions_default"`
+		Images                []any  `json:"images"`
+		ImageUploadsAvailable bool   `json:"image_uploads_available"`
+	}{false, false, "both", []any{}, false})
 }

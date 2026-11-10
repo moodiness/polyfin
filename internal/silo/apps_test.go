@@ -559,15 +559,26 @@ func TestEpisodeCardsCarryTheirParentsArtwork(t *testing.T) {
 
 // The documents the apps read of features Polyfin does not offer hold the
 // keys the contract requires: no reset of an Apple push installation, no
-// Discover rows of requests, no box sets in a library or a search.
+// Discover rows of requests, no box sets in a library or a search, and
+// the members the contract added since, all off or empty.
 func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, browsing)
-	for path, key := range map[string]string{"/api/v2/devices/push/apple/capabilities": "installation_reset_available",
-		"/api/v2/requests/status": "discover_rows_supported", "/api/v2/catalog/search/capabilities": "box_sets"} {
+	for _, tc := range []struct{ path, key string }{{"/api/v2/devices/push/apple/capabilities", "installation_reset_available"},
+		{"/api/v2/requests/status", "discover_rows_supported"}, {"/api/v2/catalog/search/capabilities", "box_sets"},
+		{"/api/v2/capabilities/downloads", "batch_version"}, {"/api/v2/diagnostics/capabilities", "accepted_crash_sources"},
+		{"/api/v2/requests/status", "remove_failed_supported"},
+		{"/api/v2/notifications/push/devices/capabilities", "binds_login_session"},
+		{"/api/v2/settings/contract/capabilities", "supports_overlay_images"}, {"/api/v2/settings/overlay-config", "images"},
+		{"/api/v2/settings/overlay-config", "image_uploads_available"}} {
 		var doc map[string]any
-		if w := h.do(http.MethodGet, path, nil); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &doc) != nil || doc[key] != false {
-			t.Errorf("%s: %d %s", path, w.Code, w.Body)
+		w := h.do(http.MethodGet, tc.path, nil)
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &doc) != nil {
+			t.Errorf("%s: %d %s", tc.path, w.Code, w.Body)
+			continue
+		}
+		if list, isList := doc[tc.key].([]any); doc[tc.key] != false && (!isList || len(list) != 0) {
+			t.Errorf("%s: %s is %v", tc.path, tc.key, doc[tc.key])
 		}
 	}
 	w := h.do(http.MethodGet, "/api/v2/user/libraries", nil)
