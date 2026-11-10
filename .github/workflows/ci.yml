@@ -407,11 +407,45 @@ jobs:
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["mirror.gcr.io"]
-      - &install-ffmpeg
-        name: Install the image's FFmpeg for the remux tests
+      - &find-ffmpeg-archives
+        name: Find the FFmpeg archives the Dockerfile takes
+        # Each platform's, which its stage ffmpeg-<platform>-archive
+        # downloads from GitHub's releases: answering 504, the download
+        # failed whole runs. The steps below keep them in GitHub's cache,
+        # keyed by their URLs and the SHA-256 the Dockerfile checks them
+        # against, and the builds take them from there in place of that
+        # stage, the next stage checking them as before.
+        id: ffmpeg-archives
         run: |
-          # The Dockerfile's FFmpeg stage: the very build the image ships.
-          docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
+          scripts/ffmpeg-archives.sh | tee "$RUNNER_TEMP/ffmpeg-archives.txt"
+          echo "key=ffmpeg-linux-$(sha256sum < "$RUNNER_TEMP/ffmpeg-archives.txt" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - &restore-ffmpeg-archives
+        name: Restore the FFmpeg archives
+        id: ffmpeg-archives-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ffmpeg-archives
+          key: ${{ steps.ffmpeg-archives.outputs.key }}
+      - &fetch-ffmpeg-archives
+        name: Fetch the FFmpeg archives
+        if: steps.ffmpeg-archives-cache.outputs.cache-hit != 'true'
+        run: scripts/ffmpeg-archives.sh fetch "$RUNNER_TEMP/ffmpeg-archives"
+      - &keep-ffmpeg-archives
+        name: Keep the FFmpeg archives for the next runs
+        # From any run that missed them, a pull request's too, as the
+        # Tesseract packages.
+        if: steps.ffmpeg-archives-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ffmpeg-archives
+          key: ${{ steps.ffmpeg-archives.outputs.key }}
+      - &install-ffmpeg
+        name: Install the image's FFmpeg for the tests
+        run: |
+          # The Dockerfile's FFmpeg stage: the very build the image ships,
+          # from the archive the steps above keep.
+          docker buildx build --build-context ffmpeg-amd64-archive="$RUNNER_TEMP/ffmpeg-archives/amd64" \
+            --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
           echo "POLYFIN_TEST_FFMPEG=$RUNNER_TEMP/ffmpeg/bin/ffmpeg" >> "$GITHUB_ENV"
       - &install-postgresql-client
         name: Install the image's pg_dump and pg_restore for the backup and restore tests
@@ -572,6 +606,10 @@ jobs:
       - *find-go-caches
       - *restore-go-caches
       - *setup-buildx
+      - *find-ffmpeg-archives
+      - *restore-ffmpeg-archives
+      - *fetch-ffmpeg-archives
+      - *keep-ffmpeg-archives
       - *install-ffmpeg
       - *install-postgresql-client
       - name: Test internal/jellyfin
@@ -646,6 +684,9 @@ jobs:
             packages: ./internal/localfiles ./internal/hls ./internal/media
     env:
       POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
+      # BtbN's FFmpeg build of the Dockerfile's release for Windows.
+      FFMPEG_WINDOWS_URL: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0.zip
+      FFMPEG_WINDOWS_SHA256: 3da6c7b60bb9ccd73ec5b5e815ba804a0879eb362ba0e3beebce50174c022696
     defaults:
       run:
         shell: bash
@@ -735,15 +776,35 @@ jobs:
         with:
           path: ${{ runner.temp }}/install/postgresql
           key: *postgresql-key
+      - name: Restore the image's FFmpeg for Windows
+        # Kept in GitHub's cache under its URL and SHA-256, as the Linux
+        # jobs keep the Dockerfile's archives (find-ffmpeg-archives).
+        id: ffmpeg-windows-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ffmpeg-archives/win64
+          key: &ffmpeg-windows-key ffmpeg-windows-${{ env.FFMPEG_WINDOWS_URL }}-${{ env.FFMPEG_WINDOWS_SHA256 }}
+      - name: Fetch the image's FFmpeg for Windows
+        if: steps.ffmpeg-windows-cache.outputs.cache-hit != 'true'
+        run: |
+          archives="$(cygpath -u "$RUNNER_TEMP")/ffmpeg-archives/win64"
+          mkdir -p "$archives"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$archives/ffmpeg.zip" "$FFMPEG_WINDOWS_URL"
+          echo "$FFMPEG_WINDOWS_SHA256  $archives/ffmpeg.zip" | sha256sum -c -
+      - name: Keep the image's FFmpeg for Windows for the next runs
+        # From any run that missed it, a pull request's too.
+        if: steps.ffmpeg-windows-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ffmpeg-archives/win64
+          key: *ffmpeg-windows-key
       - name: Start PostgreSQL 18 and install the image's FFmpeg, for Windows
         run: |
-          # BtbN's FFmpeg build of the Dockerfile's release for Windows,
-          # checked against its checksum.
+          # The archive the steps above keep, checked against its checksum.
           temp="$(cygpath -u "$RUNNER_TEMP")"
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$temp/ffmpeg.zip" https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0.zip
-          echo "3da6c7b60bb9ccd73ec5b5e815ba804a0879eb362ba0e3beebce50174c022696  $temp/ffmpeg.zip" | sha256sum -c -
-          unzip -q "$temp/ffmpeg.zip" -d "$temp"
-          mv "$temp"/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0 "$temp/ffmpeg"
+          echo "$FFMPEG_WINDOWS_SHA256  $temp/ffmpeg-archives/win64/ffmpeg.zip" | sha256sum -c -
+          unzip -q "$temp/ffmpeg-archives/win64/ffmpeg.zip" -d "$temp"
+          mv "$temp/$(basename "$FFMPEG_WINDOWS_URL" .zip)" "$temp/ffmpeg"
           # pg_ctl drops the runner's administrator rights, which the
           # server refuses to run with.
           bin="$temp/install/postgresql/bin"
@@ -817,9 +878,9 @@ jobs:
           go build ./...
           go vet ./...
       - name: Test
-        # TestLargeLineupsStayFast times IPTV listings against bounds set for
-        # the Linux runner, which the check job holds; a macOS runner is
-        # slower at them without anything being wrong.
+        # TestLargeLineupsStayFast is the check job's (make bounds): a
+        # minute of large IPTV line-ups, which runs alone, for nothing a
+        # Linux runner does not check.
         run: go test -p 2 -skip '^TestLargeLineupsStayFast$' ./...
       - *save-go-caches
 
@@ -834,10 +895,14 @@ jobs:
     steps:
       - *checkout
       - *setup-buildx
+      - *find-ffmpeg-archives
+      - *restore-ffmpeg-archives
+      - *fetch-ffmpeg-archives
+      - *keep-ffmpeg-archives
       - name: Build native image, check its version, then build both platforms
         env:
           VERSION: ${{ needs.tested.outputs.version }}
-        run: make image-check VERSION="$VERSION"
+        run: make image-check VERSION="$VERSION" FFMPEG_ARCHIVES="$RUNNER_TEMP/ffmpeg-archives"
       - name: See the image become healthy
         run: make image-health
 
@@ -862,6 +927,10 @@ jobs:
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["mirror.gcr.io"]
+      - *find-ffmpeg-archives
+      - *restore-ffmpeg-archives
+      - *fetch-ffmpeg-archives
+      - *keep-ffmpeg-archives
       - name: Log in to GHCR
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -893,6 +962,11 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: VERSION=${{ needs.tested.outputs.version }}
+          # The FFmpeg archives from the cache, as in the image job: the
+          # same files, checked by the same stage.
+          build-contexts: |
+            ffmpeg-amd64-archive=${{ runner.temp }}/ffmpeg-archives/amd64
+            ffmpeg-arm64-archive=${{ runner.temp }}/ffmpeg-archives/arm64
           labels: |
             org.opencontainers.image.title=Polyfin
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -1204,11 +1278,16 @@ jobs:
       - name: Build Polyfin with it
         run: CGO_ENABLED=0 go build -tags production -trimpath -o bin/polyfin ./cmd/polyfin
       - *setup-buildx
+      - *find-ffmpeg-archives
+      - *restore-ffmpeg-archives
+      - *fetch-ffmpeg-archives
+      - *keep-ffmpeg-archives
       - name: Install the image's FFmpeg for the demo's video
         run: |
           # The Dockerfile's FFmpeg stage, as the tests take it; ffmpeg makes
           # the demo's video, and Polyfin reads it with ffprobe.
-          docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
+          docker buildx build --build-context ffmpeg-amd64-archive="$RUNNER_TEMP/ffmpeg-archives/amd64" \
+            --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
           echo "$RUNNER_TEMP/ffmpeg/bin" >> "$GITHUB_PATH"
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
