@@ -31,17 +31,20 @@ const runScript = (script, context) => {
 }
 `
 
-// Five parts of the script follow the whole page as jellyfin-web renders
+// Six parts of the script follow the whole page as jellyfin-web renders
 // it (see the start of the header of webclient.js): the menus' entry, the
 // home page's rows, the play buttons until the first answer, the
-// reminders and the recent searches. One observer of the body serves them
-// all, whatever the route, rather than one each; each part listens to the
-// page's changes only on the routes it follows, and the changes of a
-// frame, however many, are told once, as the frame is drawn. Each part's
-// own test shows it does its work when told, and fails without the event:
-// TestMembersGetAPolyfinEntry, TestTheHomePageGetsTheServersRows,
-// TestPlayButtonsWaitForASource, TestProgrammePagesGetReminders and
-// TestSearchPageListsTheUsersRecentSearches.
+// reminders, the recent searches and the version badges, these once a
+// title's badges were answered or while a video plays. One observer of
+// the body serves them all, whatever the route, rather than one each; each
+// part listens to the page's changes only on the routes it follows, and
+// the changes of a frame, however many, are told once, as the frame is
+// drawn. Each part's own test shows it does its work when told, and fails
+// without the event: TestMembersGetAPolyfinEntry,
+// TestTheHomePageGetsTheServersRows, TestPlayButtonsWaitForASource,
+// TestProgrammePagesGetReminders,
+// TestSearchPageListsTheUsersRecentSearches and
+// TestVersionBadgesShowForTheVersionPickedAndPlayed.
 //
 // Each step logs the route, the observers of the whole body, the parts
 // listening, and, after the page changed 40 times, how many times each
