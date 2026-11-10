@@ -1,4 +1,6 @@
-// Package cluster runs the PostgreSQL 18 cluster of Polyfin Desktop: made
+// Package cluster runs the PostgreSQL 18 cluster of Polyfin Desktop, and
+// of the image whose server runs its own database (POLYFIN_DATABASE set to
+// embedded): made
 // at first start in the data folder, with a random password kept in a file
 // only the user can read, listening on 127.0.0.1 alone, started before the
 // server and stopped after it. A cluster a crash of the app left running is
@@ -27,9 +29,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-
-	"github.com/moodiness/polyfin/internal/desktop"
 )
+
+// Major is the major version of PostgreSQL the cluster is made and run
+// with. A cluster another major version made needs moving by a backup
+// and a restore: PostgreSQL's server cannot open it.
+const Major = "18"
 
 const (
 	// User is the cluster's only role, its superuser, which the server
@@ -40,6 +45,7 @@ const (
 	// passwordFile and portFile are kept in the cluster's folder, which
 	// PostgreSQL makes readable by the user only.
 	passwordFile = "polyfin.password"
+	versionFile  = "PG_VERSION"
 	portFile     = "polyfin.port"
 	lockFile     = "postmaster.pid"
 
@@ -110,12 +116,15 @@ type Cluster struct {
 // made again: it is made beside Dir and renamed into place once complete.
 func (c *Cluster) Prepare(ctx context.Context) (bool, error) {
 	created := false
-	if _, err := os.Stat(filepath.Join(c.Dir, "PG_VERSION")); errors.Is(err, os.ErrNotExist) {
+	version, err := os.ReadFile(filepath.Join(c.Dir, versionFile))
+	if errors.Is(err, os.ErrNotExist) {
 		if err := c.initialize(ctx); err != nil {
 			return false, err
 		}
 		created = true
 	} else if err != nil {
+		return false, err
+	} else if err := checkMajor(c.Dir, version); err != nil {
 		return false, err
 	}
 	password, err := os.ReadFile(filepath.Join(c.Dir, passwordFile))
@@ -127,6 +136,16 @@ func (c *Cluster) Prepare(ctx context.Context) (bool, error) {
 		return created, fmt.Errorf("the database password file %s is empty", filepath.Join(c.Dir, passwordFile))
 	}
 	return created, nil
+}
+
+// checkMajor tells when version, the PG_VERSION of the cluster in dir, is
+// not Major.
+func checkMajor(dir string, version []byte) error {
+	if got := strings.TrimSpace(string(version)); got != Major {
+		return fmt.Errorf("the database cluster in %s was made by PostgreSQL %s, and this version of Polyfin runs PostgreSQL %s: "+
+			"make a backup with the Polyfin that made it, then restore it into a new, empty cluster", dir, got, Major)
+	}
+	return nil
 }
 
 // initialize runs initdb into a folder beside Dir, then renames it.
@@ -464,7 +483,7 @@ const waitDelay = 10 * time.Second
 // pg_ctl start leaves the postmaster running, which inherits pg_ctl's
 // output on Windows: it gets a file, never a pipe the app waits on.
 func (c *Cluster) run(ctx context.Context, program string, args ...string) error {
-	cmd := desktop.Command(ctx, filepath.Join(c.Bin, desktop.Executable(program)), args...)
+	cmd := command(ctx, filepath.Join(c.Bin, executable(program)), args...)
 	cmd.Env = environment(os.Environ())
 	cmd.WaitDelay = waitDelay
 	var out []byte

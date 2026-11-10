@@ -12,8 +12,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-
-	"github.com/moodiness/polyfin/internal/desktop"
 )
 
 // The tests that run PostgreSQL need its server programs, version 18:
@@ -368,7 +366,7 @@ func TestInitdbArgumentsAndURL(t *testing.T) {
 	if strings.Join(env, " ") != "PATH=/bin HOME=/home/a" {
 		t.Errorf("environment = %v", env)
 	}
-	if desktop.Executable("pg_ctl") == "" {
+	if executable("pg_ctl") == "" {
 		t.Fatal("no executable name")
 	}
 }
@@ -418,4 +416,31 @@ func chosenPortIsKept(t *testing.T) bool {
 		t.Fatalf("a taken port was kept: %d, %v", third, err)
 	}
 	return true
+}
+
+// A cluster another major version of PostgreSQL made is refused before
+// anything runs, with a message that says how to move it.
+func TestPrepareRefusesAnotherMajorVersion(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "postgresql")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, versionFile), []byte("17\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, passwordFile), []byte("abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cluster{Bin: filepath.Join(t.TempDir(), "none"), Dir: dir, Log: filepath.Join(dir, "log")}
+	_, err := c.Prepare(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "PostgreSQL 17") || !strings.Contains(err.Error(), "PostgreSQL "+Major) {
+		t.Fatalf("Prepare = %v, want a major version error", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, versionFile), []byte(Major+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Prepare(context.Background()); err != nil {
+		t.Fatalf("Prepare of a %s cluster: %v", Major, err)
+	}
 }

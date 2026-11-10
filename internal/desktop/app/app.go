@@ -27,8 +27,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/moodiness/polyfin/internal/cluster"
 	"github.com/moodiness/polyfin/internal/desktop"
-	"github.com/moodiness/polyfin/internal/desktop/cluster"
 	"github.com/moodiness/polyfin/internal/desktop/keystore"
 	"github.com/moodiness/polyfin/internal/desktop/loginitem"
 	"github.com/moodiness/polyfin/internal/desktop/tools"
