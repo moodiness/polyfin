@@ -16,11 +16,13 @@ import {
   refreshAddonAll,
   updateAddon,
   type Addon,
+  type ChangedLibrary,
+  type LibraryChanges,
   type Scope,
 } from '@/api'
 import { IptvSource } from '@/features/iptv/IptvSource'
 import { catalogTypeLabel, errorMessage, languageOptions, stremioLabel } from '@/format'
-import { useI18n } from '@/i18n'
+import { useI18n, type Messages } from '@/i18n'
 import {
   AlertTile,
   Avatar,
@@ -40,6 +42,7 @@ import {
   SettingRow,
   TextInput,
   useToast,
+  type ToastOptions,
 } from '@/ui'
 import { AddonSettings, MusicBadge } from './AddonSettings'
 import { IptvEditForm } from './IptvForms'
@@ -118,6 +121,13 @@ export function SourceDetail({
 
   const fallbackScope: Scope = scope ?? 'shared'
   const toggle = useSourceToggle(fallbackScope, addon.id)
+  // A manifest downloaded again tells which libraries followed a new catalog identifier and which
+  // were removed with their catalog.
+  function toastChanged(message: string, updated: Addon) {
+    const note = libraryChangesNote(text, language, updated.libraries)
+    if (note === '') toast(message)
+    else toast(`${message} ${note}`, changedToast)
+  }
   const refresh = useMutation({
     mutationFn: () => refreshAddon(fallbackScope, addon.id),
     onSuccess: (updated) => {
@@ -126,14 +136,12 @@ export function SourceDetail({
       const failed = updated.source?.error ?? ''
       if (failed !== '') {
         toast(t.iptv.errors[failed] ?? t.errors.generic, { tone: 'danger' })
-      } else {
+      } else if (folder !== null || iptv) {
         toast(
-          folder !== null
-            ? t.localFolders.scanStarted(updated.name)
-            : iptv
-              ? t.lineup.summary.refreshed
-              : text.refreshed(updated.name),
+          folder !== null ? t.localFolders.scanStarted(updated.name) : t.lineup.summary.refreshed,
         )
+      } else {
+        toastChanged(text.refreshed(updated.name), updated)
       }
     },
     onSettled: () => invalidateScope(fallbackScope),
@@ -144,7 +152,7 @@ export function SourceDetail({
     onSuccess: (updated) => {
       replaceCachedAddon(fallbackScope, updated)
       setConfirmingAll(false)
-      toast(text.refreshedAll(updated.name))
+      toastChanged(text.refreshedAll(updated.name), updated)
     },
     onSettled: () => invalidateScope(fallbackScope),
   })
@@ -509,7 +517,7 @@ export function SourceDetail({
                 addon={addon}
                 onDone={(replaced) => {
                   setEditing(false)
-                  if (replaced) toast(text.replaced)
+                  if (replaced !== null) toastChanged(text.replaced, replaced)
                 }}
               />
             )}
@@ -640,6 +648,30 @@ function AddonLanguage({ addon }: { addon: Addon }) {
   )
 }
 
+/** A toast that names libraries stays long enough to be read. */
+const changedToast: ToastOptions = { tone: 'info', duration: 12000 }
+
+/**
+ * What a manifest downloaded again did to the addon's libraries, to follow the toast that tells it:
+ * those that followed their catalog's new identifier, and those removed with their catalog; '' for
+ * neither.
+ */
+function libraryChangesNote(
+  text: Messages['sources'],
+  language: string,
+  changes: LibraryChanges | undefined,
+): string {
+  if (changes === undefined) return ''
+  const names = (list: ChangedLibrary[]) =>
+    new Intl.ListFormat(language, { type: 'conjunction' }).format(list.map((l) => l.name))
+  return [
+    changes.followed.length > 0 ? text.librariesFollowed(names(changes.followed)) : '',
+    changes.removed.length > 0 ? text.librariesRemoved(names(changes.removed)) : '',
+  ]
+    .filter((part) => part !== '')
+    .join(' ')
+}
+
 /** A new manifest address for a Stremio or music addon, keeping its libraries. */
 function ReplaceForm({
   scope,
@@ -648,7 +680,7 @@ function ReplaceForm({
 }: {
   scope: Scope
   addon: Addon
-  onDone: (replaced: boolean) => void
+  onDone: (replaced: Addon | null) => void
 }) {
   const { t } = useI18n()
   const text = t.sources
@@ -657,7 +689,7 @@ function ReplaceForm({
     mutationFn: (url: string) => updateAddon(scope, addon.id, { manifestUrl: url }),
     onSuccess: (updated) => {
       replaceCachedAddon(scope, updated)
-      onDone(true)
+      onDone(updated)
     },
     onSettled: () => invalidateScope(scope),
   })
@@ -694,7 +726,7 @@ function ReplaceForm({
         <Button type="submit" variant="primary" loading={replace.isPending}>
           {text.replaceSubmit}
         </Button>
-        <Button variant="ghost" onClick={() => onDone(false)}>
+        <Button variant="ghost" onClick={() => onDone(null)}>
           {t.common.cancel}
         </Button>
       </div>

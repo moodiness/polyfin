@@ -94,6 +94,10 @@ const sources: typeof en = {
       'À utiliser après avoir reconfiguré l’addon sur sa page de configuration. Ses bibliothèques sont conservées, et ses listes de versions sont oubliées, pour que chaque titre lui redemande.',
     replaceSubmit: 'Remplacer',
     replaced: 'L’adresse du manifeste a été remplacée.',
+    librariesFollowed: (names: string) =>
+      `Bibliothèques qui ont suivi le nouvel identifiant de leur catalogue\u202f: ${names}.`,
+    librariesRemoved: (names: string) =>
+      `Bibliothèques supprimées avec leur catalogue\u202f: ${names}.`,
     language: 'Langue de ses descriptions',
     languageHelp:
       'Laissez Aucune sur le seul addon de métadonnées du serveur, quelle que soit la langue réglée sur sa page de configuration\u202f: un addon avec une langue ne décrit les titres que pour les utilisateurs qui ont choisi cette langue, sauf si aucun addon laissé sur Aucune ne les décrit. Pour que les utilisateurs lisent les titres dans d’autres langues, ajoutez le même addon de métadonnées une fois de plus par langue, configuré dans cette langue sur sa page de configuration, et indiquez ici la langue sur ces copies supplémentaires seulement\u202f: les utilisateurs qui choisissent cette langue des métadonnées voient ses noms, ses résumés et ses images. Un addon avec une langue et sans bibliothèque à lui ne fait que décrire les titres.',

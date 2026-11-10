@@ -1055,6 +1055,11 @@ export type Addon = {
    * automatically, when none of its catalogs became a library because there were that many already.
    */
   libraryLimit?: number
+  /**
+   * In the answer to Refresh, Refresh everything or a new manifest address only: the libraries
+   * that followed their catalog's new identifier, and those removed with their catalog.
+   */
+  libraries?: LibraryChanges
   refreshedAt: string
   /**
    * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;
@@ -1072,6 +1077,24 @@ export type Addon = {
   language: string
   /** Who uses a server source; a user's own source is used by everyone, its owner alone seeing it. */
   usedBy: UsedBy
+}
+
+/**
+ * What a manifest downloaded again did to an addon's libraries: a catalog whose identifier changed,
+ * its type, name and options kept, keeps its library, which follows the new identifier; the library
+ * of a catalog gone is removed.
+ */
+export type LibraryChanges = {
+  followed: ChangedLibrary[]
+  removed: ChangedLibrary[]
+}
+
+/** A library of a catalog renamed (`newId`, its new identifier) or gone. */
+export type ChangedLibrary = {
+  name: string
+  catalogType: string
+  catalogId: string
+  newId?: string
 }
 
 /**

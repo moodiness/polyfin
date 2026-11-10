@@ -92,6 +92,9 @@ const sources = {
       'Use this after reconfiguring the addon on its configure page. Its libraries are kept, and its version lists are forgotten, so that each title asks it again.',
     replaceSubmit: 'Replace',
     replaced: 'The manifest address was replaced.',
+    librariesFollowed: (names: string) =>
+      `Libraries that followed their catalog’s new identifier: ${names}.`,
+    librariesRemoved: (names: string) => `Libraries removed with their catalog: ${names}.`,
     language: 'Language of its descriptions',
     languageHelp:
       'Leave it at None on the server’s only metadata addon, whatever language its configure page sets: an addon with a language describes titles for the users who chose that language only, unless no addon left at None describes them. To let users read titles in other languages, add the same metadata addon once more for each language, configured in that language on its configure page, and name the language here on each of these extra copies only: users who choose that metadata language see its names, overviews and images. An addon with a language and no library of its own only describes titles.',
