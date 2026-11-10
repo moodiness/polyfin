@@ -39,6 +39,32 @@ func TestLabelsTellCodecRangeAndLanguages(t *testing.T) {
 	}
 }
 
+// Labels tell the kind of HDR video they name, the best of those named:
+// Dolby Vision over the HDR10 base layer named with it, HDR10+ however
+// written; "HDR" alone names no kind, and SDR none.
+func TestLabelsTellTheKindOfHDR(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		labels []string
+		want   string
+	}{
+		{[]string{"Movie.2008.2160p.BluRay.DV.HDR10.HEVC.mkv"}, "dv"},
+		{[]string{"4K 🌈 Dolby Vision"}, "dv"},
+		{[]string{"Movie.2008.2160p.WEB-DL.DoVi.mkv"}, "dv"},
+		{[]string{"Movie 2008 2160p HDR10"}, "hdr10"},
+		{[]string{"Movie 2008 2160p HDR10+ HEVC"}, "hdr10plus"},
+		{[]string{"Movie.2008.2160p.HDR10Plus.mkv"}, "hdr10plus"},
+		{[]string{"Movie 2008 HDR10 Plus"}, "hdr10plus"},
+		{[]string{"Movie.2008.2160p.HLG.mkv"}, "hlg"},
+		{[]string{"Movie.2008.2160p.HDR.mkv"}, ""},
+		{[]string{"Movie.2008.1080p.SDR.mkv"}, ""},
+	} {
+		if got := ReadLabels("Movie", tc.labels...); got.HDR != tc.want || got.Range != HighRange && tc.want != "" {
+			t.Errorf("%q: %q (%v), want %q", tc.labels, got.HDR, got.Range, tc.want)
+		}
+	}
+}
+
 // Labels tag low-quality releases by whole words after the title's own,
 // in any letter case: a title named after a tag, a tag inside a word and
 // a .ts file are none; each kind's tags are.

@@ -260,13 +260,7 @@ type versionFacts struct {
 // its size given by the addon (videoSize), and the words of its labels
 // (see library.ReadLabels).
 func (h *Handler) versionFacts(ctx context.Context, version library.Version) versionFacts {
-	var known []media.Analysis
-	if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
-		known = append(known, analysis)
-	}
-	if described, ok := h.RemuxDB.Described(version); ok {
-		known = append(known, described)
-	}
+	known := h.knownAnalyses(ctx, version)
 	var facts versionFacts
 	ranged, spoken, heard := false, false, false
 	var runtime time.Duration
@@ -274,7 +268,7 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 		if runtime == 0 {
 			runtime = analysis.Duration
 		}
-		if audio, ok := analysisAudio(analysis); ok && !heard {
+		if audio, ok := library.AnalysisAudio(analysis); ok && !heard {
 			facts.audio, heard = audio, true
 		}
 		facts.height = cmp.Or(facts.height, videoHeight(analysis))
@@ -324,13 +318,26 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 	return facts
 }
 
+// knownAnalyses are what describes a version's file without reading it,
+// best first: its analysis, then RemuxDB's description; each when there.
+func (h *Handler) knownAnalyses(ctx context.Context, version library.Version) []media.Analysis {
+	var known []media.Analysis
+	if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
+		known = append(known, analysis)
+	}
+	if described, ok := h.RemuxDB.Described(version); ok {
+		known = append(known, described)
+	}
+	return known
+}
+
 // audioLanguages are the languages of an analysis's audio tracks, by ISO
 // 639-2/B code, those tagged with none left out, and their variants (see
 // versionFacts): each track's of localization.AudioVariants, read from its
 // tag and its title, else its language's code.
 func audioLanguages(analysis media.Analysis) (languages, variants []string) {
 	for _, stream := range analysis.Streams {
-		if stream.Type != "audio" || undeterminedLanguage(stream.Language) {
+		if stream.Type != "audio" || localization.Undetermined(stream.Language) {
 			continue
 		}
 		code := localization.LanguageCode(stream.Language)
@@ -342,31 +349,6 @@ func audioLanguages(analysis media.Analysis) (languages, variants []string) {
 		}
 	}
 	return languages, variants
-}
-
-// analysisAudio is the best audio format of an analysis's audio tracks
-// (see library.AudioFormat.Better), false when it has none: lossless for
-// Dolby TrueHD, FLAC, ALAC, PCM and DTS-HD Master Audio, object based for
-// Dolby Atmos and DTS:X, which ffprobe names in the track's profile.
-func analysisAudio(analysis media.Analysis) (library.AudioFormat, bool) {
-	var best library.AudioFormat
-	found := false
-	for _, stream := range analysis.Streams {
-		if stream.Type != "audio" {
-			continue
-		}
-		profile := strings.ToLower(stream.Profile)
-		format := library.AudioFormat{
-			Lossless: slices.Contains([]string{"truehd", "mlp", "flac", "alac"}, stream.Codec) || strings.HasPrefix(stream.Codec, "pcm_") ||
-				stream.Codec == "dts" && strings.Contains(profile, "dts-hd ma"),
-			Object:   strings.Contains(profile, "atmos") || strings.Contains(profile, "dts:x"),
-			Channels: stream.Channels,
-		}
-		if !found || format.Better(best) {
-			best, found = format, true
-		}
-	}
-	return best, found
 }
 
 // hidden reports whether a rule hides a version (see hiddenBy).
