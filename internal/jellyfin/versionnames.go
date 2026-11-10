@@ -2,13 +2,103 @@ package jellyfin
 
 import (
 	"context"
+	"math"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 )
+
+// With Settings › Playback › Version names on Short, Polyfin writes the
+// names of a movie's or an episode's versions itself, the same for every
+// app, from what it knows of each (see library.VersionBadges): its
+// badges, its size and its addon, such as "4K · DV · HEVC · Atmos 7.1 ·
+// IMAX · FR EN · 58 GB · Addon". The names follow the server language,
+// and change as a version is analyzed. Rules on version names still read
+// the addon's own (see versionRules).
+
+// versionNames are the short names of a title's versions listed
+// together, by version, when the setting has them short; nil otherwise,
+// and for an item other than a movie or an episode. Two versions listed
+// together never share a name: the later of those that would ends with
+// " · 2", " · 3" and so on, as the web player tells versions apart by
+// name.
+func (h *Handler) versionNames(ctx context.Context, item library.Item, versions []library.Version) map[accounts.ID]string {
+	settings := h.Accounts.Settings()
+	if settings.VersionNames != "short" || item.Kind != library.KindMovie && item.Kind != library.KindEpisode || len(versions) == 0 {
+		return nil
+	}
+	names := make(map[accounts.ID]string, len(versions))
+	taken := make(map[string]bool, len(versions))
+	for _, version := range versions {
+		known := h.knownAnalyses(ctx, version)
+		size := version.Size
+		if len(known) > 0 && known[0].Size > 0 {
+			size = known[0].Size
+		}
+		name := shortVersionName(library.VersionBadges(version, settings.Language, known...), size, version.Addon, settings.Language)
+		unique := name
+		for n := 2; taken[unique]; n++ {
+			unique = name + " · " + strconv.Itoa(n)
+		}
+		taken[unique] = true
+		names[version.ID] = unique
+	}
+	return names
+}
+
+// shortVersionName writes a version's short name from its badges, its size in
+// bytes, 0 when unknown, and its addon's name, in language: its badges
+// apart, but its audio format with its channels ("Atmos 7.1") and its
+// languages together ("FR EN"), then its size and its addon, those
+// unknown left out.
+func shortVersionName(badges []library.Badge, size int64, addon, language string) string {
+	var parts []string
+	previous := ""
+	for _, badge := range badges {
+		joined := badge.Kind == library.BadgeChannels && previous == library.BadgeAudio ||
+			badge.Kind == library.BadgeLanguage && previous == library.BadgeLanguage
+		if joined {
+			parts[len(parts)-1] += " " + badge.Text
+		} else {
+			parts = append(parts, badge.Text)
+		}
+		previous = badge.Kind
+	}
+	if size > 0 {
+		parts = append(parts, sizeName(size, language))
+	}
+	if addon = strings.TrimSpace(addon); addon != "" {
+		parts = append(parts, addon)
+	}
+	return strings.Join(parts, " · ")
+}
+
+// sizeName writes a size in bytes as language writes it, in decimal units:
+// whole gigabytes from 10 GB, gigabytes with one decimal from 1 GB,
+// megabytes below; a decimal comma but in English, and "Go" and "Mo" in
+// French.
+func sizeName(size int64, language string) string {
+	unit, value, decimals := "GB", float64(size)/1e9, 0
+	switch {
+	case value < 1:
+		unit, value = "MB", math.Max(1, float64(size)/1e6)
+	case value < 10:
+		decimals = 1
+	}
+	text := strconv.FormatFloat(value, 'f', decimals, 64)
+	if language != "en" {
+		text = strings.Replace(text, ".", ",", 1)
+	}
+	if language == "fr" {
+		unit = strings.Replace(unit, "B", "o", 1)
+	}
+	return text + " " + unit
+}
 
 // With Settings › Playback › Say in version names how they play, the
 // names of a movie's or an episode's versions end with how the app asking
@@ -115,7 +205,7 @@ func (h *Handler) playbackNamer(item library.Item, request playbackInfoRequest, 
 // listedDecision).
 func (h *Handler) playName(n *versionNamer, p playable, version library.Version, streams []playback.MediaStream, analysis media.Analysis) string {
 	decision, playable := h.listedDecision(p, version, streams, analysis, n.request, n.allowed)
-	return version.Name + " " + playback.PlayNote(decision, playable, n.language)
+	return p.name(version) + " " + playback.PlayNote(decision, playable, n.language)
 }
 
 // listedDecision decides how an app plays a version, for its request,

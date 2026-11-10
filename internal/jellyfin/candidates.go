@@ -381,7 +381,7 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 	versions, complete, err := h.Library.VersionsToPlay(ctx, user, item.ID)
 	// Before offered, which leaves the failed out of versions in place.
 	p.unstarted = h.unstartedTorrent(versions)
-	p.versions = h.offered(ctx, user, item, versions)
+	h.offer(ctx, user, &p, versions)
 	grace := time.NewTimer(subtitleGrace)
 	defer grace.Stop()
 	select {

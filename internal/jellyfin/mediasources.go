@@ -71,6 +71,17 @@ type playable struct {
 	// unstarted tells a torrent version left out for a while, as it could
 	// not start (see playback.Service.Unstarted).
 	unstarted bool
+	// names are the short names of versions, by version, with Version
+	// names on Short (see versionNames); nil otherwise.
+	names map[accounts.ID]string
+}
+
+// name is a version's name: its short name, else the addon's.
+func (p playable) name(version library.Version) string {
+	if name, ok := p.names[version.ID]; ok {
+		return name
+	}
+	return version.Name
 }
 
 // playable gathers a title's versions and subtitles, both asked of the
@@ -92,7 +103,7 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 		}
 	})
 	wg.Wait()
-	p.versions = h.offered(ctx, user, item, p.versions)
+	h.offer(ctx, user, &p, p.versions)
 	h.keepSubtitles(user, item.ID, p.subtitles)
 	return p, versionsErr
 }
@@ -114,7 +125,7 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 		h.watch(user, item.ID, opened)
 	}
 	h.RemuxDB.Describe(ctx, versions)
-	p.versions = h.offered(ctx, user, item, versions)
+	h.offer(ctx, user, &p, versions)
 	if err == nil {
 		h.watched.show(user.ID, item.ID, p.versions, h.pageKey(ctx, user))
 	}
@@ -138,7 +149,7 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 		return p
 	}
 	if versions, ok := h.Library.CachedVersions(ctx, user, item.ID); ok {
-		p.versions = h.offered(ctx, user, item, versions)
+		h.offer(ctx, user, &p, versions)
 	}
 	p.subtitles, _ = h.keptSubtitles(user, item.ID)
 	return p
@@ -157,6 +168,13 @@ func (h *Handler) offered(ctx context.Context, user accounts.User, item library.
 		versions = h.ordered(ctx, user, item, versions)
 	}
 	return h.pinnedFirst(ctx, versions)
+}
+
+// offer has p offer its title's versions, of versions, to user (see
+// offered), named as the setting has them (see versionNames).
+func (h *Handler) offer(ctx context.Context, user accounts.User, p *playable, versions []library.Version) {
+	p.versions = h.offered(ctx, user, p.item, versions)
+	p.names = h.versionNames(ctx, p.item, p.versions)
 }
 
 // pinnedFirst moves the version an administrator pinned for the title
@@ -333,7 +351,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		Id:                     id.String(),
 		Type:                   "Default",
 		Container:              containerOfName(version.Filename),
-		Name:                   version.Name,
+		Name:                   p.name(version),
 		IsRemote:               true,
 		ETag:                   version.ID.String(),
 		SupportsProbing:        true,

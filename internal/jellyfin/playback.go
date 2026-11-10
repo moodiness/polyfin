@@ -31,6 +31,7 @@ func (h *Handler) playbackRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Items/{itemId}/PlaybackInfo", h.playbackInfo)
 	signedIn(http.MethodPost, "/Items/{itemId}/PlaybackInfo", h.playbackInfo)
 	signedIn(http.MethodGet, "/Polyfin/Playback/Starting", h.playbackStarting)
+	signedIn(http.MethodGet, "/Polyfin/Playback/Badges", h.playingBadges)
 	// Players fetch media, subtitles and the fonts they use without
 	// credentials, as Jellyfin allows: see streamAccess. What the media
 	// routes send is counted (see metered).
@@ -506,7 +507,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		unstarted = unstarted || h.unstartedTorrent(versions)
-		p.versions = h.offered(r.Context(), user, item, versions)
+		h.offer(r.Context(), user, &p, versions)
 		c = plan(p.versions)
 		choice = h.choose(r, user, p, opened, request, c, prefer)
 		unstarted = unstarted || choice.unstarted
@@ -539,7 +540,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// from its decision, the others from what is known of them.
 	namer := h.playbackNamer(item, request, user)
 	if namer != nil {
-		chosenSource.Name = chosen.version.Name + " " + playback.PlayNote(chosen.decision, true, namer.language)
+		chosenSource.Name = p.name(chosen.version) + " " + playback.PlayNote(chosen.decision, true, namer.language)
 	}
 	if chosen.decision.HLS {
 		// The bytes of the segment the play begins with are read while the
