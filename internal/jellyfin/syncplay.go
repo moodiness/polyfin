@@ -100,7 +100,10 @@ type syncPlay struct {
 	// canPlay reports whether a user may play every one of items.
 	canPlay func(ctx context.Context, user accounts.ID, items []accounts.ID) bool
 	// write sends a message to its session.
-	write  func(syncMessage)
+	write func(syncMessage)
+	// ended, when set, is told of each group that ends, with the
+	// group's locks held.
+	ended  func(group accounts.ID)
 	logger *slog.Logger
 	// outboxMu guards outbox: the messages waiting for each session. A
 	// session is listed while a goroutine sends it its messages.
@@ -160,6 +163,13 @@ func (sp *syncPlay) groupOf(device accounts.ID) *syncGroup {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 	return sp.members[device]
+}
+
+// exists reports whether g has not ended.
+func (sp *syncPlay) exists(g *syncGroup) bool {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.groups[g.id] == g
 }
 
 // isActive reports whether one of a user's sessions is in a group, which
@@ -294,6 +304,9 @@ func (sp *syncPlay) leave(g *syncGroup, device accounts.ID) {
 		sp.mu.Lock()
 		delete(sp.groups, g.id)
 		sp.mu.Unlock()
+		if sp.ended != nil {
+			sp.ended(g.id)
+		}
 	}
 }
 
@@ -394,6 +407,7 @@ func (h *Handler) syncPlayRoutes(rt *router) {
 	inGroup("/SyncPlay/SetShuffleMode", h.syncPlayRequest(syncPlayShuffle))
 	// A session out of any group may ping: it is then told so.
 	signedIn(http.MethodPost, "/SyncPlay/Ping", syncPlayAnyAccess, h.syncPlayRequest(syncPlayPing))
+	h.syncPlayInviteRoutes(rt)
 }
 
 // utcTime gives the server's time, for apps to measure how far their
@@ -447,6 +461,8 @@ func (h *Handler) syncPlayNew(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.syncPlay.create(member, strings.TrimSpace(name), playing))
 }
 
+// syncPlayJoin adds the caller's session to a group. A session that joins
+// ends its user's invitations to the group (see syncplayinvites.go).
 func (h *Handler) syncPlayJoin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		GroupId syncPlayID
@@ -454,7 +470,11 @@ func (h *Handler) syncPlayJoin(w http.ResponseWriter, r *http.Request) {
 	if !requiredBody(w, r, "requestData", &body) {
 		return
 	}
-	h.syncPlay.join(context.WithoutCancel(r.Context()), syncPlayMember(r), accounts.ID(body.GroupId))
+	member, id := syncPlayMember(r), accounts.ID(body.GroupId)
+	h.syncPlay.join(context.WithoutCancel(r.Context()), member, id)
+	if g := h.syncPlay.groupOf(member.device); g != nil && g.id == id {
+		h.joinedGroup(member.user, id)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
