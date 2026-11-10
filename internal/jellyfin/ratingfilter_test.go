@@ -184,3 +184,77 @@ func TestItemsFilterByRatingUnderTheRatingCountry(t *testing.T) {
 		t.Errorf("under VM14: %v, counted %d", got, total)
 	}
 }
+
+// officialRatings answers the official ratings /Items/Filters lists for
+// query to the user signed in with token.
+func (e edited) officialRatings(t *testing.T, token, query string) []string {
+	t.Helper()
+	var filters struct{ OfficialRatings []string }
+	if status := e.get(t, "/Items/Filters?"+query, token, &filters); status != http.StatusOK {
+		t.Fatalf("filters %s: %d", query, status)
+	}
+	return filters.OfficialRatings
+}
+
+// /Items/Filters lists the official ratings of the titles the user sees,
+// as the rating filter judges them: the one an administrator set first,
+// sorted by score. Only ratings already known are listed: none is looked
+// up for it.
+func TestItemsFiltersListOfficialRatings(t *testing.T) {
+	t.Parallel()
+	e := newEdited(t)
+	top := "ParentId=" + e.ids["Top"]
+	if got := e.officialRatings(t, e.member, top); len(got) != 0 {
+		t.Errorf("before any rating is known: %v", got)
+	}
+	// The child's listing learns the ratings.
+	e.listed(t, e.child, "Top")
+	if got := e.officialRatings(t, e.member, top); !slices.Equal(got, []string{"PG", "R"}) {
+		t.Errorf("the member: %v", got)
+	}
+	if got := e.officialRatings(t, e.child, top); !slices.Equal(got, []string{"PG"}) {
+		t.Errorf("the child, limited to 13: %v", got)
+	}
+	if got := e.officialRatings(t, e.member, top+"&includeItemTypes=Series"); len(got) != 0 {
+		t.Errorf("series only: %v", got)
+	}
+	allowed := e.ids["Allowed"]
+	edit := editorBody(allowed, map[string]any{"Name": "Allowed", "OfficialRating": "PG-13"})
+	if status, body := e.call(http.MethodPost, "/Items/"+allowed, app("dashboard", e.admin), edit); status != http.StatusNoContent {
+		t.Fatalf("edit: %d %s", status, body)
+	}
+	if got := e.officialRatings(t, e.member, top); !slices.Equal(got, []string{"PG-13", "R"}) {
+		t.Errorf("after the edit: %v", got)
+	}
+	// What is listed is what officialRatings keeps.
+	if got, _ := e.filtered(t, e.member, "/Items?"+top+"&officialRatings=PG-13"); !slices.Equal(got, []string{"Allowed"}) {
+		t.Errorf("officially PG-13: %v", got)
+	}
+}
+
+// Under Italy, the ratings listed are Italy's, in their order.
+func TestItemsFiltersListOfficialRatingsUnderTheRatingCountry(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), italianRatings(t), false); err != nil {
+		t.Fatal(err)
+	}
+	settings := s.store.Settings()
+	settings.RatingCountry = "IT"
+	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	e := edited{testServer: s, admin: s.signIn("admin", "tv")}
+	var views QueryResult
+	s.get(t, "/UserViews", e.admin, &views)
+	if len(views.Items) == 0 {
+		t.Fatal("no views")
+	}
+	top := "ParentId=" + views.Items[0].Id
+	// A listing narrowed by rating learns the ratings.
+	e.filtered(t, e.admin, "/Items?"+top+"&maxOfficialRating=VM18")
+	if got := e.officialRatings(t, e.admin, top); !slices.Equal(got, []string{"VM14", "VM18"}) {
+		t.Errorf("under Italy: %v", got)
+	}
+}

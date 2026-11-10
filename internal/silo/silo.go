@@ -58,6 +58,10 @@ type Options struct {
 	// allow Silo's apps, as it did before.
 	Jellyfin http.Handler
 	DB       *pgxpool.Pool
+	// Genres returns the genres a library's catalog offers, as the
+	// Jellyfin API's /Items/Filters lists them, and none for a folder
+	// that is not a library (see catalogGenres).
+	Genres func(ctx context.Context, user accounts.User, libraryID accounts.ID) ([]string, error)
 	// QuickConnect holds the requests TVs sign in with a code through
 	// (see deviceLoginRoutes).
 	QuickConnect *quickconnect.Store

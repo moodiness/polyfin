@@ -427,6 +427,15 @@ func (h *Handler) playlistItems(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	shown, err := h.shownPlaylists(r.Context(), user, []playlists.Playlist{p})
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	if len(shown) == 0 {
+		playlistNotFound(w)
+		return
+	}
 	h.writePlaylistEntries(w, r, user, p, start, limit, false)
 }
 
@@ -495,7 +504,7 @@ func bounds(n, start, limit int) (from, to int) {
 }
 
 // playlistContents describes, by identifier, the titles of playlists that
-// user can reach.
+// user can reach, and the request's rating filter keeps.
 func (h *Handler) playlistContents(ctx context.Context, user accounts.User, lists ...playlists.Playlist) (map[accounts.ID]library.Item, error) {
 	var ids []accounts.ID
 	seen := map[accounts.ID]bool{}
@@ -512,6 +521,9 @@ func (h *Handler) playlistContents(ctx context.Context, user accounts.User, list
 		return titles, nil
 	}
 	items, err := h.Library.Items(ctx, user, ids)
+	if err == nil {
+		items, err = h.Library.RatingFiltered(ctx, user, items)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -683,6 +695,9 @@ func (h *Handler) searchPlaylists(r *http.Request, user accounts.User, term stri
 		return nil, nil
 	}
 	lists, err := h.Playlists.Visible(r.Context(), user.ID)
+	if err == nil {
+		lists, err = h.shownPlaylists(r.Context(), user, lists)
+	}
 	if err == nil {
 		err = h.namePlaylists(r.Context(), user, lists)
 	}
@@ -1027,8 +1042,16 @@ func (h *Handler) playlistListing(w http.ResponseWriter, r *http.Request, user a
 		if errors.Is(err, playlists.ErrNotFound) || err == nil && !p.Visible(user.ID) {
 			return false
 		}
+		var shown []playlists.Playlist
+		if err == nil {
+			shown, err = h.shownPlaylists(r.Context(), user, []playlists.Playlist{p})
+		}
 		if err != nil {
 			h.internalError(w, r, err)
+			return true
+		}
+		if len(shown) == 0 {
+			notFoundProblem(w)
 			return true
 		}
 		h.writePlaylistEntries(w, r, user, p, start, limit, true)
@@ -1043,6 +1066,9 @@ func (h *Handler) playlistListing(w http.ResponseWriter, r *http.Request, user a
 	var err error
 	if own {
 		lists, err = h.Playlists.Visible(r.Context(), user.ID)
+		if err == nil {
+			lists, err = h.shownPlaylists(r.Context(), user, lists)
+		}
 		if err == nil {
 			err = h.namePlaylists(r.Context(), user, lists)
 		}
@@ -1171,9 +1197,16 @@ func (h *Handler) describePlaylist(w http.ResponseWriter, r *http.Request, user 
 	if errors.Is(err, playlists.ErrNotFound) || err == nil && !p.Visible(user.ID) {
 		return false
 	}
+	var shown []playlists.Playlist
+	if err == nil {
+		shown, err = h.shownPlaylists(r.Context(), user, []playlists.Playlist{p})
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return true
+	}
+	if len(shown) == 0 {
+		return false
 	}
 	dtos, err := h.playlistDtos(r, user, []playlists.Playlist{p}, requestedFields(r), true)
 	if err != nil {

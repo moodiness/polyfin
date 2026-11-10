@@ -43,6 +43,8 @@ A title above the limit is hidden everywhere, as in Jellyfin:
 - people credited only in hidden titles are not listed;
 - opening, playing, downloading it or searching its subtitles is refused.
 
+A collection or playlist made by users is hidden from a user who may see none of its titles, whatever hides them: the limit, unrated titles blocked, blocked genres, or the highest rating an app asks. Listings leave it out of their count and pages, and its page answers as missing. One without titles still shows. Collections from addons and smart lists are not judged this way yet.
+
 Artwork stays reachable without signing in, as in Jellyfin.
 
 ### Ratings looked up for limited users

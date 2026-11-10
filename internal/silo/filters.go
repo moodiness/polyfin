@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 // Filters.
@@ -719,17 +721,22 @@ func distinct(titles []item, values func(item) []string) []string {
 
 // catalogGenres are the genres the catalogs of libraries offer, as the
 // Jellyfin API's /Items/Filters gives them, each once, in their order.
+// They are asked of the library directly: /Items/Filters also reads the
+// titles of the library for their ratings, which the genres do not need.
 func (s *Server) catalogGenres(r *http.Request, v viewer, views []item) ([]string, answer, error) {
 	seen := map[string]bool{}
 	genres := []string{}
 	a := answer{status: http.StatusOK}
 	for _, view := range views {
-		var filters struct{ Genres []string }
-		var err error
-		if a, err = s.call(r, v, http.MethodGet, "/Items/Filters?"+url.Values{"ParentId": {view.Id}}.Encode(), nil, &filters); err != nil || !a.ok() {
+		id, err := accounts.ParseID(view.Id)
+		if err != nil {
+			continue
+		}
+		offered, err := s.options.Genres(r.Context(), v.user, id)
+		if err != nil {
 			return nil, a, err
 		}
-		for _, genre := range filters.Genres {
+		for _, genre := range offered {
 			genre = strings.TrimSpace(genre)
 			if key := strings.ToLower(genre); genre != "" && !seen[key] {
 				seen[key] = true

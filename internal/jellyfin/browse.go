@@ -922,50 +922,102 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pageOf(items, start, limit, len(items)))
 }
 
-// libraryGenres returns the genres a library's catalog offers. Other
-// folders have none, Polyfin's own among them; a folder that does not
-// exist is refused, as Jellyfin does.
-func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]string, bool) {
+// libraryGenres returns the genres a library's catalog offers, with the
+// user and the folder asked, zero for none. Other folders have none,
+// Polyfin's own among them; a folder that does not exist is refused, as
+// Jellyfin does.
+func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]string, accounts.User, accounts.ID, bool) {
 	b := bindErrors{}
 	id, hasParent := b.guid(r, "parentId")
 	user, ok := h.viewer(w, r, b, unknownListingUser)
 	if !ok || !hasParent {
-		return nil, ok
+		return nil, user, accounts.ID{}, ok
 	}
 	genres, err := h.Library.Genres(r.Context(), user, id)
 	if errors.Is(err, library.ErrNotFound) {
 		if _, err := h.Library.Item(r.Context(), user, id); err == nil {
-			return nil, true
+			return nil, user, id, true
 		}
 		exists, err := h.ownItemExists(r.Context(), user, id)
 		if err != nil {
 			h.internalError(w, r, err)
-			return nil, false
+			return nil, user, id, false
 		}
 		if exists {
-			return nil, true
+			return nil, user, id, true
 		}
 		processingError(w, http.StatusBadRequest)
-		return nil, false
+		return nil, user, id, false
 	}
 	if err != nil {
 		h.internalError(w, r, err)
-		return nil, false
+		return nil, user, id, false
 	}
-	return genres, true
+	return genres, user, id, true
 }
 
+// CatalogGenres returns the genres a library's catalog offers, as
+// /Items/Filters lists them, and none for another folder: what Silo's
+// filter sheet offers, without reading the library's titles.
+func (h *Handler) CatalogGenres(ctx context.Context, user accounts.User, libraryID accounts.ID) ([]string, error) {
+	genres, err := h.Library.Genres(ctx, user, libraryID)
+	if errors.Is(err, library.ErrNotFound) {
+		return nil, nil
+	}
+	return genres, err
+}
+
+// filters lists the genres a library's catalog offers, and the official
+// ratings of the titles the user sees in the folder, among the first ones
+// listed (scanLimit), as the rating filter judges them (see
+// library.Service.OfficialRatings).
 func (h *Handler) filters(w http.ResponseWriter, r *http.Request) {
-	genres, ok := h.libraryGenres(w, r)
+	genres, user, parent, ok := h.libraryGenres(w, r)
 	if !ok {
+		return
+	}
+	ratings, err := h.officialRatings(r, user, parent)
+	if err != nil {
+		h.browseError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]any{
 		"Genres":          toAny(nonNil(genres)),
 		"Tags":            {},
-		"OfficialRatings": {},
+		"OfficialRatings": toAny(ratings),
 		"Years":           {},
 	})
+}
+
+// officialRatings lists the official ratings of the children of parent
+// the request's item types keep, among the first scanLimit, as the user
+// sees them. A folder that is not one of the library's has none.
+func (h *Handler) officialRatings(r *http.Request, user accounts.User, parent accounts.ID) ([]string, error) {
+	if parent == (accounts.ID{}) {
+		return []string{}, nil
+	}
+	keep := itemTypeFilter(r)
+	ctx := listingContext(r, keep)
+	var titles []library.Item
+	for offset := 0; offset < scanLimit; {
+		page, err := h.Library.Children(ctx, user, parent, offset, defaultPageSize, "")
+		if errors.Is(err, library.ErrNotFound) {
+			return []string{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range page.Items {
+			if keep(item) {
+				titles = append(titles, item)
+			}
+		}
+		offset += len(page.Items)
+		if !page.More || len(page.Items) == 0 {
+			break
+		}
+	}
+	return h.Library.OfficialRatings(r.Context(), user, titles)
 }
 
 func toAny(values []string) []any {
@@ -977,7 +1029,7 @@ func toAny(values []string) []any {
 }
 
 func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
-	genres, ok := h.libraryGenres(w, r)
+	genres, _, _, ok := h.libraryGenres(w, r)
 	if !ok {
 		return
 	}
@@ -990,7 +1042,7 @@ func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) genres(w http.ResponseWriter, r *http.Request) {
-	genres, ok := h.libraryGenres(w, r)
+	genres, _, _, ok := h.libraryGenres(w, r)
 	if !ok {
 		return
 	}

@@ -41,7 +41,7 @@ type siloApps struct {
 
 func servingSilo(t *testing.T, s testServer) siloApps {
 	t.Helper()
-	api := silo.New(silo.Options{ServerID: testServerID, Version: "test", Accounts: s.store, Jellyfin: s.handler, DB: s.pool,
+	api := silo.New(silo.Options{ServerID: testServerID, Version: "test", Accounts: s.store, Jellyfin: s.handler, Genres: s.handler.CatalogGenres, DB: s.pool,
 		QuickConnect: s.handler.QuickConnect, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), ContainerTracks: s.handler.ContainerTracks})
 	site := httptest.NewServer(api)
 	t.Cleanup(site.Close)
@@ -1182,7 +1182,20 @@ func TestSiloAppsListCollections(t *testing.T) {
 	}
 	check("with a hidden title", []string{"Movie"})
 	p.limit(t, p.user, func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"Drama"} })
-	check("with Drama blocked", nil)
+	// None of its titles within the user's reach, the collection is
+	// hidden from them, as Jellyfin hides it.
+	if status, _ := p.call(http.MethodGet, "/Items?ParentId="+picks, app("tv", p.token), nil); status != http.StatusNotFound {
+		t.Errorf("with Drama blocked: Jellyfin apps get %d", status)
+	}
+	if cards := tab(); len(cards) != 0 {
+		t.Errorf("with Drama blocked: the tab %+v", cards)
+	}
+	if section, shown := row(); section != "" {
+		t.Errorf("with Drama blocked: the home row shows %v", shown)
+	}
+	if status, _ := a.do(t, http.MethodGet, "/api/v2/library/"+library+"/collections/"+picks+"/items", token, profile, nil); status != http.StatusNotFound {
+		t.Errorf("with Drama blocked: the collection's page answers %d", status)
+	}
 
 	if status, data := a.do(t, http.MethodPost, "/api/v2/collections", token, profile, map[string]any{"name": "Mine"}); status != http.StatusNotImplemented ||
 		problemCode(data) != "capability_unsupported" {
