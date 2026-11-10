@@ -106,9 +106,10 @@ type Item struct {
 	Language string
 	// OriginalTitle is a title's name as its addon gives it, which the
 	// metadata editor may change apart from its name; SortName, when set,
-	// is what it sorts by instead of its name. Taglines, Tags, Studios and
-	// CustomRating come from an administrator's edits only (see
-	// Overrides): addons give none. CriticRating comes from MDBList (see
+	// is what it sorts by instead of its name. Taglines and Studios come
+	// from TMDB with a movie's or series' credits (see titlesFromTMDB),
+	// Tags and CustomRating from an administrator's edits only, which win
+	// (see Overrides): addons give none. CriticRating comes from MDBList (see
 	// ratings.go), and CommunityRating from it rather than the addon,
 	// before an administrator's edits.
 	OriginalTitle string

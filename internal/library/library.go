@@ -2297,7 +2297,7 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 		return nil, err
 	}
 	found := make([]*Item, len(ids))
-	// credited are the titles whose people are left to titlesPeople.
+	// credited are the titles whose people are left to titlesFromTMDB.
 	credited := make([]bool, len(ids))
 	var g errgroup.Group
 	g.SetLimit(8)
@@ -2338,7 +2338,7 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 			titles = append(titles, item)
 		}
 	}
-	s.titlesPeople(ctx, titles)
+	s.titlesFromTMDB(ctx, titles)
 	items := make([]Item, 0, len(ids))
 	for _, item := range found {
 		if item != nil {
@@ -2485,7 +2485,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 	case KindMovie, KindSeries, KindVideo, KindFolder:
 		item, uncredited, err := s.describedTitle(ctx, v, r)
 		if uncredited {
-			item.People = s.titlePeople(ctx, item.ID, item.Kind, item.ProviderIDs, item.People)
+			s.titlesFromTMDB(ctx, []*Item{&item})
 		}
 		return item, err
 	case KindSeason, KindEpisode:
@@ -2546,7 +2546,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 }
 
 // describedUncredited is described, but for the people of a movie or a
-// series, which it leaves to titlePeople or titlesPeople: it reports
+// series, which it leaves to titlesFromTMDB: it reports
 // whether it did.
 func (s *Service) describedUncredited(ctx context.Context, v view, r record) (Item, bool, error) {
 	switch r.Kind {
@@ -2559,7 +2559,7 @@ func (s *Service) describedUncredited(ctx context.Context, v view, r record) (It
 
 // describedTitle describes the title Polyfin recorded as r, a movie, a
 // series, a video or a folder, as described does, but for its people as
-// TMDB credits them, which it leaves to titlePeople: it reports whether
+// TMDB credits them, which it leaves to titlesFromTMDB: it reports whether
 // it did.
 func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, bool, error) {
 	id := r.ID

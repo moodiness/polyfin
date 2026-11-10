@@ -299,7 +299,7 @@ func TestPostersAndCreditsFollowAnEditedTMDBIdentifier(t *testing.T) {
 		Scan(&titles); err != nil || slices.Contains(titles, harbor.ID) {
 		t.Errorf("the former credits' titles: %v %v", titles, err)
 	}
-	if asked := e.tmdb.requests("/3/movie/1012/credits"); len(asked) != 1 {
+	if asked := e.tmdb.requests("/3/movie/1012?"); len(asked) != 1 {
 		t.Errorf("TMDB was asked %v", asked)
 	}
 	harbor = e.open(e.admin, "Harbor Lights")

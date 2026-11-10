@@ -88,7 +88,7 @@ func (f *fakeCreditsTMDB) movie(imdb string, id int, cast, crew []map[string]any
 	// TMDB lists the cast in no particular order: the billing is order.
 	shuffled := slices.Clone(cast)
 	slices.Reverse(shuffled)
-	f.answers["/movie/"+strconv.Itoa(id)+"/credits"] = map[string]any{"id": id, "cast": shuffled, "crew": crew}
+	f.answers["/movie/"+strconv.Itoa(id)] = map[string]any{"id": id, "credits": map[string]any{"cast": shuffled, "crew": crew}}
 }
 
 // billed is a cast of actors of TMDB identifiers ids, each named after
@@ -297,7 +297,7 @@ func TestTitlesTakeTheirPeopleFromTMDB(t *testing.T) {
 	if got := harbor.People[0].Role; got != "Character 0" {
 		t.Errorf("Ana Actor's role: %q", got)
 	}
-	if asked := e.tmdb.requests("/3/movie/1001/credits"); len(asked) != 1 || !strings.Contains(asked[0], "language=fr") {
+	if asked := e.tmdb.requests("/3/movie/1001?"); len(asked) != 1 || !strings.Contains(asked[0], "language=fr") {
 		t.Errorf("TMDB was asked %v", asked)
 	}
 	extra := itemID(personTMDBKey("8011"))
@@ -316,7 +316,7 @@ func TestTitlesTakeTheirPeopleFromTMDB(t *testing.T) {
 	// Opened again, the title asks TMDB nothing.
 	e.open(e.admin, "Harbor Lights")
 	e.settle()
-	if asked := e.tmdb.requests("/3/movie/1001/credits"); len(asked) != 1 {
+	if asked := e.tmdb.requests("/3/movie/1001?"); len(asked) != 1 {
 		t.Errorf("TMDB was asked again: %v", asked)
 	}
 }
@@ -343,7 +343,7 @@ func TestTheAddonsPeopleStayWithoutTMDB(t *testing.T) {
 	}
 	e.setting(func(s *accounts.Settings) { s.TMDBKey = "k3y" })
 	e.tmdb.mu.Lock()
-	e.tmdb.failing["/movie/1002/credits"] = true
+	e.tmdb.failing["/movie/1002"] = true
 	delete(e.tmdb.finds, "tt0882012")
 	e.tmdb.mu.Unlock()
 	if got := people(e.open(e.admin, "Quiet Pier")); !slices.Equal(got, addonPeople) {
@@ -359,7 +359,7 @@ func TestTheAddonsPeopleStayWithoutTMDB(t *testing.T) {
 	// Once TMDB answers, its credits are the title's, and taking the key
 	// off brings the addon's back.
 	e.tmdb.mu.Lock()
-	delete(e.tmdb.failing, "/movie/1002/credits")
+	delete(e.tmdb.failing, "/movie/1002")
 	e.tmdb.mu.Unlock()
 	if got := people(e.open(e.admin, "Quiet Pier")); !slices.Equal(got, []string{"Ana Actor", "Ben Actor"}) {
 		t.Errorf("once TMDB answered: %v", got)
@@ -570,7 +570,7 @@ func TestRefreshReadsATitlesCreditsAgain(t *testing.T) {
 	if got := e.titlesOf(e.admin, itemID(personTMDBKey("6002")), KindMovie); !slices.Equal(got, []string{"Quiet Pier"}) {
 		t.Errorf("Cleo Actor's movies: %v", got)
 	}
-	if asked := e.tmdb.requests("/3/movie/1002/credits"); len(asked) != 2 {
+	if asked := e.tmdb.requests("/3/movie/1002?"); len(asked) != 2 {
 		t.Errorf("Quiet Pier's credits were asked %d times", len(asked))
 	}
 }

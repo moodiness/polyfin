@@ -67,8 +67,20 @@ type credits struct {
 	Crew []crewMember `json:"crew"`
 }
 
-// TitleCredits returns the people of the movie or series (kind) TMDB
-// identifies as id, as Jellyfin 12.4's TMDB providers keep them: actors
+// TitleDetails is what TitleDetails reads of a movie or series: its
+// people (see TitleDetails), the names of the networks a series aired on
+// and of the companies that made the title, each once, and its tagline,
+// empty when TMDB has none in the language asked.
+type TitleDetails struct {
+	Credits   []TitleCredit
+	Networks  []string
+	Companies []string
+	Tagline   string
+}
+
+// TitleDetails returns the details of the movie or series (kind) TMDB
+// identifies as id, in one request: its networks, companies and tagline,
+// and its people, as Jellyfin 12.4's TMDB providers keep them: actors
 // in billing order, at most MaxCast, then the directors, writers and
 // producers, at most MaxCrew, in TMDB's order
 // (Plugins/Tmdb/Movies/TmdbMovieProvider.cs lines 276-360). A series'
@@ -76,41 +88,40 @@ type credits struct {
 // role an actor played a credit of its own, the one they played the
 // longest first; its crew is that of its credits, and its actors too when
 // TMDB has no aggregate ones (Plugins/Tmdb/TV/TmdbSeriesProvider.cs lines
-// 365-420, TmdbUtils.cs lines 292-329). Both are asked at once, through
-// the series' details. Roles are in language (an ISO 639-1 code, with a
-// region or not), TMDB's default when empty.
-func (c *Client) TitleCredits(ctx context.Context, kind Kind, id, language string) ([]TitleCredit, error) {
+// 365-420, TmdbUtils.cs lines 292-329). Credits are asked with the
+// details. Roles and the tagline are in language (an ISO 639-1 code, with
+// a region or not), TMDB's default when empty.
+func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language string) (TitleDetails, error) {
 	query := url.Values{}
 	if language != "" {
 		query.Set("language", language)
 	}
-	var cast []castMember
-	var crew []crewMember
-	if kind == TV {
-		query.Set("append_to_response", "aggregate_credits,credits")
-		var details struct {
-			Aggregate credits `json:"aggregate_credits"`
-			Credits   credits `json:"credits"`
-		}
-		if err := c.get(ctx, "/tv/"+url.PathEscape(id), query, &details); err != nil {
-			return nil, err
-		}
-		cast, crew = details.Aggregate.Cast, details.Credits.Crew
-		if len(cast) == 0 {
-			cast = details.Credits.Cast
-		}
-	} else {
-		var answer credits
-		if err := c.get(ctx, "/movie/"+url.PathEscape(id)+"/credits", query, &answer); err != nil {
-			return nil, err
-		}
-		cast, crew = answer.Cast, answer.Crew
+	var details struct {
+		Networks  []named `json:"networks"`
+		Companies []named `json:"production_companies"`
+		Tagline   string  `json:"tagline"`
+		Aggregate credits `json:"aggregate_credits"`
+		Credits   credits `json:"credits"`
 	}
-	return keptCredits(cast, crew), nil
+	path := "/movie/" + url.PathEscape(id)
+	query.Set("append_to_response", "credits")
+	if kind == TV {
+		path = "/tv/" + url.PathEscape(id)
+		query.Set("append_to_response", "aggregate_credits,credits")
+	}
+	if err := c.get(ctx, path, query, &details); err != nil {
+		return TitleDetails{}, err
+	}
+	cast, crew := details.Aggregate.Cast, details.Credits.Crew
+	if len(cast) == 0 {
+		cast = details.Credits.Cast
+	}
+	return TitleDetails{Credits: keptCredits(cast, crew), Networks: namesOf(details.Networks),
+		Companies: namesOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline)}, nil
 }
 
 // keptCredits keeps the people of TMDB's credits a title shows (see
-// TitleCredits).
+// TitleDetails).
 func keptCredits(cast []castMember, crew []crewMember) []TitleCredit {
 	cast = slices.DeleteFunc(slices.Clone(cast), func(m castMember) bool { return strings.TrimSpace(m.Name) == "" })
 	slices.SortStableFunc(cast, func(a, b castMember) int { return cmp.Compare(a.Order, b.Order) })
@@ -219,17 +230,14 @@ func (c Credit) Appearance() bool {
 	return false
 }
 
-// ForgetTitleCredits forgets the answer kept of the credits of the movie
-// or series (kind) TMDB identifies as id, so that TitleCredits asks TMDB
-// again, as a refresh of the title asks.
-func (c *Client) ForgetTitleCredits(kind Kind, id string) {
+// ForgetTitleDetails forgets the answers kept of the details of the
+// movie or series (kind) TMDB identifies as id, so that TitleDetails asks
+// TMDB again, as a refresh of the title asks.
+func (c *Client) ForgetTitleDetails(kind Kind, id string) {
 	if c == nil {
 		return
 	}
-	path := "/movie/" + url.PathEscape(id) + "/credits"
-	if kind == TV {
-		path = "/tv/" + url.PathEscape(id)
-	}
+	path := "/" + string(kind) + "/" + url.PathEscape(id)
 	c.answers.DeleteFunc(func(key string, _ answer) bool {
 		kept, _, _ := strings.Cut(key, "?")
 		return kept == path

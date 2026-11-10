@@ -397,6 +397,7 @@ A genre, studio or year page lists the titles of the catalogs that offer that na
 
 - Addons use the genre filter for genres, and some for years or studios.
 - Titles from catalogs that cannot be filtered by that name are not on the page.
+- A studio a title has from TMDB (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)) lists only what the catalogs offer under that name, often nothing.
 
 ## Similar titles
 
