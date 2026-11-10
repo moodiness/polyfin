@@ -20,6 +20,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   fetchBandwidth,
   fetchLiveSessions,
+  fetchStatus,
   messageLiveSession,
   queryClient,
   queryKeys,
@@ -37,6 +38,7 @@ import {
   relativeTime,
 } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
+import { webPlayerInPlace, webPlayerLink, webPlayerPath } from '@/jellyfinApps'
 import {
   ArtShelf,
   ArtTile,
@@ -308,6 +310,20 @@ function SessionTile({
   const [details, setDetails] = useState(false)
   const detailsId = useId()
   const formId = useId()
+  const status = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  })
+  // The title's page in the web player, as Recent activity links titles: the server tells whether
+  // the signed-in user reaches it while the web player is served.
+  const serverId = status.data?.serverId
+  const link =
+    item?.linked && serverId
+      ? {
+          ...webPlayerLink(webPlayerInPlace()),
+          href: `${webPlayerPath}#/details?${new URLSearchParams({ id: item.id, serverId })}`,
+        }
+      : undefined
 
   const stop = useMutation({
     mutationFn: () => stopLiveSession(session.id),
@@ -355,6 +371,7 @@ function SessionTile({
       fallback={isChannel ? <TelevisionSimpleIcon size="1em" /> : <FilmStripIcon size="1em" />}
       backdrop={art !== null ? posterUrl(art, 64) : undefined}
       onLight={onLight}
+      link={link}
       top={
         <>
           <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />

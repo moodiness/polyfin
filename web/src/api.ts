@@ -4724,6 +4724,11 @@ export type LiveSession = {
     /** Seconds, 0 when unknown. */
     runtime: number
     posterId: string
+    /**
+     * Whether the item's page opens in the web player: it is served and the signed-in user
+     * reaches the item, as Recent activity's titles.
+     */
+    linked: boolean
   } | null
   /** Seconds. */
   position: number
