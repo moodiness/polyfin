@@ -209,6 +209,18 @@ A person's page lists the titles of your libraries TMDB credits them in, from TM
 - A Polyfin person's page lists the titles whose credits it read, plus the titles of your libraries TMDB credits them in. That comes to the same as Jellyfin without reading every title. Jellyfin lists the items of its libraries crediting them ([Person.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/Person.cs#L67-L70)), which its scans read.
 - The titles beyond the libraries are Polyfin's own (see [Titles a person is known for](#titles-a-person-is-known-for)).
 
+### Studios and taglines from TMDB
+
+While the server has a [TMDB API key](#tmdb-key), a movie or series whose credits were read from TMDB (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)) also gets its studios and tagline from TMDB.
+
+- **Studios:** a movie's are the companies that made it. A series' are the networks it aired on, then the companies that made it, each name once. jellyfin-web lists them on the title's page, and Silo's apps on its cards.
+- **Tagline:** TMDB's, in the server's metadata language. A title TMDB has no tagline for in that language shows none. A tagline read in another language is hidden until the title is read again in the new one. On a title's page, it comes before the "for you" tagline (see [When the profile is confident](home-rows.md#when-the-profile-is-confident)).
+- **Cost:** none of its own. They come in the same request as the credits, kept and read again with them. Credits read before Polyfin kept studios are read again once, at a title's page or in the next pass.
+- **Edits win:** studios or a tagline set in the metadata editor replace TMDB's. Saving the editor without changing them keeps following TMDB. Emptying an edited list goes back to TMDB's.
+- **Fallback:** no studios and no tagline without a key, for a title whose credits are not read, or whose credits TMDB does not know.
+
+**Compared with Jellyfin:** Jellyfin gives a movie its production companies and TMDB's tagline. It gives a series its networks only, and no tagline ([TmdbMovieProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs), [TmdbSeriesProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs)).
+
 ### Titles a person is known for
 
 A person credited in few titles of your libraries would show few titles. While the server has a **TMDB API key**, the page of a person of a known TMDB identifier also lists the movies and series TMDB knows them best for. They come from the same list of their titles, after those of your libraries.

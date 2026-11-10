@@ -4,7 +4,8 @@
 // package's remote images), for the details of the people titles credit
 // (see the library package's people details), for the studios and
 // networks of titles, which smart lists may judge (see the library
-// package's studios.go), for the release dates of movies, which the
+// package's studios.go) and movies and series show with their tagline
+// (see the library package's titlecredits.go), for the release dates of movies, which the
 // wait for their digital release and smart lists judge (see the library
 // package's releases.go), for the episode groups series may show in
 // (see the library package's episodeorder.go), for the seasons and
@@ -296,9 +297,6 @@ func (c *Client) TitleImages(ctx context.Context, kind Kind, id string) (TitleIm
 // identifies as id aired on, then of the companies that made the movie or
 // series, each once.
 func (c *Client) Studios(ctx context.Context, kind Kind, id string) ([]string, error) {
-	type named struct {
-		Name string `json:"name"`
-	}
 	var details struct {
 		Networks  []named `json:"networks"`
 		Companies []named `json:"production_companies"`
@@ -306,13 +304,36 @@ func (c *Client) Studios(ctx context.Context, kind Kind, id string) ([]string, e
 	if err := c.get(ctx, "/"+string(kind)+"/"+url.PathEscape(id), nil, &details); err != nil {
 		return nil, err
 	}
+	return JoinStudios(namesOf(details.Networks), namesOf(details.Companies)), nil
+}
+
+// JoinStudios returns the studios of a title: the names of the networks
+// it aired on, then of the companies that made it, each once.
+func JoinStudios(networks, companies []string) []string {
 	var names []string
-	for _, n := range slices.Concat(details.Networks, details.Companies) {
+	for _, name := range slices.Concat(networks, companies) {
+		if name = strings.TrimSpace(name); name != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// named is a network or a company of TMDB's details of a title.
+type named struct {
+	Name string `json:"name"`
+}
+
+// namesOf returns the names of TMDB's networks or companies, trimmed,
+// each once, empty ones left out.
+func namesOf(list []named) []string {
+	names := []string{}
+	for _, n := range list {
 		if name := strings.TrimSpace(n.Name); name != "" && !slices.Contains(names, name) {
 			names = append(names, name)
 		}
 	}
-	return names, nil
+	return names
 }
 
 // CollectionRef is the TMDB collection a movie belongs to, as the movie's

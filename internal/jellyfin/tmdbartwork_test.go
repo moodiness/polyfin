@@ -388,10 +388,13 @@ func TestRefreshAsksTMDBForThePosterAgain(t *testing.T) {
 	if status, _ := e.image(t, bare, "Primary", bare.ImageTags["Primary"]); status != http.StatusOK {
 		t.Fatalf("Bare Harbor's poster after the refresh: %d", status)
 	}
-	// The refresh also reads the title's credits again (/3/movie/9301/credits).
-	details := slices.DeleteFunc(e.tmdb.requests("/3/movie/9301"), func(path string) bool { return path != "/3/movie/9301" })
+	// The refresh also reads the title's credits again, on the same path
+	// with append_to_response=credits: they are left out.
+	details := slices.DeleteFunc(e.tmdb.requestsWithQueries("/3/movie/9301"), func(asked string) bool {
+		return strings.Contains(asked, "append_to_response=credits")
+	})
 	if len(details) != 2 {
-		t.Errorf("TMDB was asked %v", e.tmdb.requests("/"))
+		t.Errorf("TMDB was asked %v", e.tmdb.requestsWithQueries("/3/movie/9301"))
 	}
 	if tag := e.list(t)["Bare Harbor"].ImageTags["Primary"]; tag != library.ImageTag(e.tmdb.URL+"/t/p/original/p9301-new.jpg") {
 		t.Errorf("after the refresh, the poster tag is %q", tag)

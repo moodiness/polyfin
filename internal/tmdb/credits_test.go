@@ -52,7 +52,8 @@ func names(credits []TitleCredit, kind string) []string {
 // character in the language asked, then its first 15 directors, writers
 // (of a script, screenplay or novel) and producers in TMDB's order, the
 // rest of the crew left out, each with their TMDB identifier and photo,
-// as Jellyfin 12.4 keeps them.
+// as Jellyfin 12.4 keeps them. They come with the movie's details, its
+// companies and tagline, in one request.
 func TestAMoviesCreditsAreItsBilledCastAndCrew(t *testing.T) {
 	t.Parallel()
 	var cast []map[string]any
@@ -72,11 +73,19 @@ func TestAMoviesCreditsAreItsBilledCastAndCrew(t *testing.T) {
 	for i := range 20 {
 		crew = append(crew, map[string]any{"id": 200 + i, "name": fmt.Sprintf("Producer %02d", i), "job": "Producer", "department": "Production"})
 	}
-	client, asked := creditsServer(t, map[string]any{"/3/movie/1001/credits": map[string]any{"cast": cast, "crew": crew}})
-	credits, err := client.TitleCredits(t.Context(), Movie, "1001", "fr-FR")
+	client, asked := creditsServer(t, map[string]any{"/3/movie/1001": map[string]any{"tagline": " Une phrase. ",
+		"production_companies": []any{map[string]any{"name": "North Pictures"}, map[string]any{"name": " "}, map[string]any{"name": "North Pictures"},
+			map[string]any{"name": "South Films"}},
+		"credits": map[string]any{"cast": cast, "crew": crew}}})
+	details, err := client.TitleDetails(t.Context(), Movie, "1001", "fr-FR")
 	if err != nil {
 		t.Fatal(err)
 	}
+	if details.Tagline != "Une phrase." || !slices.Equal(details.Companies, []string{"North Pictures", "South Films"}) ||
+		details.Networks == nil || len(details.Networks) != 0 {
+		t.Errorf("details %q %q %q", details.Tagline, details.Companies, details.Networks)
+	}
+	credits := details.Credits
 	actors := names(credits, Actor)
 	if len(actors) != MaxCast || actors[0] != "Actor 00/Rôle 0" || actors[14] != "Actor 14/Rôle 14" {
 		t.Errorf("actors %v", actors)
@@ -95,7 +104,7 @@ func TestAMoviesCreditsAreItsBilledCastAndCrew(t *testing.T) {
 	if !slices.Equal(crewKept, want) {
 		t.Errorf("crew %v, want %v", crewKept, want)
 	}
-	if got := asked(); len(got) != 1 || got[0] != "/3/movie/1001/credits?language=fr-FR" {
+	if got := asked(); len(got) != 1 || got[0] != "/3/movie/1001?append_to_response=credits&language=fr-FR" {
 		t.Errorf("TMDB was asked %v", got)
 	}
 }
@@ -117,17 +126,28 @@ func TestASeriesCreditsAreItsAggregateCast(t *testing.T) {
 			"roles": []any{map[string]any{"character": "Guest", "episode_count": 1}}})
 	}
 	client, asked := creditsServer(t, map[string]any{
-		"/3/tv/2031": map[string]any{"aggregate_credits": map[string]any{"cast": aggregate, "crew": []any{
-			map[string]any{"id": 77, "name": "Episode Director", "jobs": []any{map[string]any{"job": "Director"}}, "department": "Directing"}}},
+		"/3/tv/2031": map[string]any{"tagline": "Every tide turns.",
+			"networks":             []any{map[string]any{"name": "Coast TV"}, map[string]any{"name": "Coast Streams"}},
+			"production_companies": []any{map[string]any{"name": "Coast TV"}, map[string]any{"name": "Harbor Works"}},
+			"aggregate_credits": map[string]any{"cast": aggregate, "crew": []any{
+				map[string]any{"id": 77, "name": "Episode Director", "jobs": []any{map[string]any{"job": "Director"}}, "department": "Directing"}}},
 			"credits": map[string]any{"cast": []any{map[string]any{"id": 10, "name": "Lead", "character": "Lee", "order": 0}},
 				"crew": []any{map[string]any{"id": 50, "name": "Shaun Runner", "job": "Producer", "department": "Production"}}}},
 		"/3/tv/2032": map[string]any{"aggregate_credits": map[string]any{"cast": []any{}},
 			"credits": map[string]any{"cast": []any{map[string]any{"id": 10, "name": "Lead", "character": "Lee", "order": 0}}}},
 	})
-	credits, err := client.TitleCredits(t.Context(), TV, "2031", "en")
+	details, err := client.TitleDetails(t.Context(), TV, "2031", "en")
 	if err != nil {
 		t.Fatal(err)
 	}
+	if details.Tagline != "Every tide turns." || !slices.Equal(details.Networks, []string{"Coast TV", "Coast Streams"}) ||
+		!slices.Equal(details.Companies, []string{"Coast TV", "Harbor Works"}) {
+		t.Errorf("details %q %q %q", details.Tagline, details.Networks, details.Companies)
+	}
+	if got := JoinStudios(details.Networks, details.Companies); !slices.Equal(got, []string{"Coast TV", "Coast Streams", "Harbor Works"}) {
+		t.Errorf("studios %q", got)
+	}
+	credits := details.Credits
 	actors := names(credits, Actor)
 	if len(actors) != MaxCast+1 || !slices.Equal(actors[:3], []string{"Lead/Lee", "Lead/Young Lee", "Second Billed/Sam"}) ||
 		actors[len(actors)-1] != "Guest 12/Guest" {
@@ -139,8 +159,8 @@ func TestASeriesCreditsAreItsAggregateCast(t *testing.T) {
 	if got := asked(); len(got) != 1 || !strings.HasPrefix(got[0], "/3/tv/2031?") || !strings.Contains(got[0], "append_to_response=aggregate_credits%2Ccredits") {
 		t.Errorf("TMDB was asked %v", got)
 	}
-	credits, err = client.TitleCredits(t.Context(), TV, "2032", "en")
-	if err != nil || len(credits) != 1 || credits[0].Role != "Lee" {
+	details, err = client.TitleDetails(t.Context(), TV, "2032", "en")
+	if credits = details.Credits; err != nil || len(credits) != 1 || credits[0].Role != "Lee" {
 		t.Errorf("without aggregate credits: %+v %v", credits, err)
 	}
 }
