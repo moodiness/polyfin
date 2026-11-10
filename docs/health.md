@@ -33,9 +33,9 @@ Under **Checks**, a tile for each main part tells its state at a glance: **Addon
 
 **Backups** problems:
 
-- a failed backup, or a last backup older than two days, is a problem;
+- a failed backup, or a last backup too old, is a problem. Too old is twice the longest gap between two runs of the **Back up the database** task's triggers, and never less than two days: 48 hours for daily backups, 14 days for weekly ones;
 - a destination whose last upload failed is an error;
-- a destination whose newest backup is older than two days is a warning.
+- a destination whose newest backup is too old, as above, is a warning.
 
 **Download the goroutines** gives a text file of what every goroutine of the server is doing. It holds each one's stack and how long it has waited, as Go prints it when a program crashes.
 

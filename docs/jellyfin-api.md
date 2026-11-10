@@ -913,7 +913,21 @@ The web player's dashboard and other Jellyfin apps reach the server's administra
 
 ### Scheduled tasks in the Jellyfin API
 
-- Tasks are at `/ScheduledTasks`, every one listed, none hidden. Changing a schedule answers 400.
+- Tasks are at `/ScheduledTasks`, every one listed, none hidden, each with its `Triggers`. A task's last run is kept across restarts.
+- `POST /ScheduledTasks/{id}/Triggers` takes the task's whole list of triggers, as Jellyfin does, and answers 204. Types are `DailyTrigger`, `WeeklyTrigger` (`DayOfWeek` as a name, such as `Monday`, or 0 to 6 from Sunday), `IntervalTrigger` and `StartupTrigger`. `MaxRuntimeTicks` sets a time limit, from 1 minute to 7 days: only this endpoint takes one.
+- A wrong list answers 400 before anything is saved: more than 8 triggers, a type the task does not take, a time of day not in whole minutes, an interval under the task's shortest or over 28 days, or no trigger for `RecordEndedAccounts` or `RecordExpiredShareLinks` (see [Triggers](administration.md#triggers) for each task's limits).
+- A locked task answers 204 to its unchanged list, and 400 to any other.
+- A trigger that comes while its task runs is skipped. An interval counts from the task's last start, kept across restarts.
+
+### Scheduled tasks in the admin API
+
+- `GET /admin/api/tasks` lists the tasks with `id`, `key`, `name`, `description`, `category`, `state`, `last` and `next`, and:
+  - `triggers`: the current triggers, each `{"type": "daily" | "weekly" | "interval" | "startup"}` with `time` (minutes from midnight, daily and weekly), `day` (0 to 6 from Sunday, weekly), `interval` (minutes) and `maxRuntime` (minutes) as they apply;
+  - `defaultTriggers`: the task's defaults;
+  - `custom`: true once an administrator changed them;
+  - `limits`: `locked` (empty, or `settings`, `recordings`, `notifications` or `byHand`, why the triggers cannot change), `types`, `minInterval` and `maxInterval` (minutes, 40320 at most), `maxTriggers` (8) and `keepOne` (true when the task needs a trigger).
+- `PUT /admin/api/tasks/{id}/triggers` with `{"triggers": [...]}` replaces them, and answers the task. It answers 400 with `task_locked` or `invalid_triggers`, and 404 with `not_found`. A `maxRuntime` the admin app does not show is kept as sent.
+- `DELETE /admin/api/tasks/{id}/triggers` gives the task its defaults again, and answers the task.
 
 ### Backups for apps
 
@@ -1009,7 +1023,7 @@ Also:
 
 ### Source cache in the admin API
 
-- `GET /admin/api/health` gives the cache as `cache`: `used`, `limit`, `sources` (files open), `kept` (files with parts kept), `hits` and `misses` (bytes read since the start that were read before or kept from before the start, and bytes read for the first time since they were fetched), `days` and `torrents`. `GET /admin/api/settings` gives `sourceCachePreset`, `sourceCacheDays`, `sourceCacheCreditDays`, `sourceCacheEmptyHour` (the hour the cache is emptied each day, `-1` for never), each preset's values as `sourceCachePresetLimits`, and `readingFree`, the bytes free on the disk of the folder for files being read. A `PUT` that sets `cacheSizeGb`, `sourceCacheDays`, `sourceCacheCreditDays` or `preloadWholeFiles` to another value than its preset's, without a preset, makes it `custom`; `sourceCacheEmptyHour` leaves the preset as it is.
+- `GET /admin/api/health` gives the cache as `cache`: `used`, `limit`, `sources` (files open), `kept` (files with parts kept), `hits` and `misses` (bytes read since the start that were read before or kept from before the start, and bytes read for the first time since they were fetched), `days` and `torrents`. `GET /admin/api/settings` gives `sourceCachePreset`, `sourceCacheDays`, `sourceCacheCreditDays`, each preset's values as `sourceCachePresetLimits`, and `readingFree`, the bytes free on the disk of the folder for files being read. A `PUT` that sets `cacheSizeGb`, `sourceCacheDays`, `sourceCacheCreditDays` or `preloadWholeFiles` to another value than its preset's, without a preset, makes it `custom`. When the cache is emptied on its own is the schedule of the task `EmptySourceCache` (see [Scheduled tasks in the admin API](#scheduled-tasks-in-the-admin-api)).
 
 ### Local network discovery in the admin API
 

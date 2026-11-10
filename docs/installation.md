@@ -201,7 +201,7 @@ Updating the image needs Docker itself: pull the new image and recreate the cont
 
 ### Back up the database
 
-Everything Polyfin keeps is in its PostgreSQL database. To back it up every day, turn on **Back up the database every day** in **Settings › Backups**.
+Everything Polyfin keeps is in its PostgreSQL database. To back it up every day, turn on **Back up the database** in **Settings › Backups**.
 
 The backups go to Polyfin's data volume, on the same disk as the database. To keep them on another disk, mount a folder of the server at `/data/backups`, writable by UID 65532 (see [Turning backups on](backups.md#turning-backups-on)).
 
@@ -356,7 +356,7 @@ Every option other than those below is set in the admin app, in the sections of 
 
 1. Create a folder of the server, writable by UID 65532, such as `/mnt/user/appdata/polyfin/backups`.
 2. Set it as the template's **Backups folder** or **Recordings folder**.
-3. Turn on **Back up the database every day** in **Settings › Backups** (see [Turning backups on](backups.md#turning-backups-on)), or **Record Live TV** in **Settings › Recordings**.
+3. Turn on **Back up the database** in **Settings › Backups** (see [Turning backups on](backups.md#turning-backups-on)), or **Record Live TV** in **Settings › Recordings**.
 
 **Work folders on another disk:** for the segments being played, the files being read or the cache:
 

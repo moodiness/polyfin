@@ -192,7 +192,7 @@ These variables are now settings of the admin app, and are no longer read at eve
 | `POLYFIN_VAAPI_DEVICE` | **Graphics card for VAAPI**, in **Settings › Conversion (transcoding)** | Yes |
 | `POLYFIN_SEGMENTS` | The databases turned on, and their order, in **Settings › Content** (see [Skip segments](skip-segments.md)) | No |
 | `POLYFIN_RECORDINGS_DIR` | **Record Live TV**, turned on, and **Recordings folder**, in **Settings › Recordings** (see [Live TV](live-tv.md)) | Yes |
-| `POLYFIN_BACKUP_DIR` | **Back up the database every day**, turned on, and **Backups folder**, in **Settings › Backups** (see [Backups](backups.md)) | Yes |
+| `POLYFIN_BACKUP_DIR` | **Back up the database**, turned on, and **Backups folder**, in **Settings › Backups** (see [Backups](backups.md)) | Yes |
 | `POLYFIN_LOG_LEVEL` | **Detailed log (to diagnose a problem)**, in **Settings › Diagnostics**. `debug` turns it on; the other levels are not copied. | Yes |
 | `POLYFIN_CACHE_DIR` | None, and never read: `POLYFIN_DATA_DIR` replaced it, and its `cache` folder holds the cache | No |
 

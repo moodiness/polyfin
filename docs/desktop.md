@@ -180,7 +180,7 @@ The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configurati
 | `postgresql` | The database cluster, with the database password in `polyfin.password`, which only you can read |
 | `tools` | FFmpeg and ffprobe |
 | `log` | The logs: `desktop.log`, the app's; `polyfin.log`, the server's, which **System › Logs** shows too; `postgresql.log`, the database's. At a start, a log past 10 MB is renamed with `.1` |
-| `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another folder (see [Backups](backups.md)) |
+| `backups` | The database backups, while **Back up the database** is on, unless **Backups folder** names another folder (see [Backups](backups.md)) |
 | `recordings` | The Live TV recordings, unless **Recordings folder** names another folder (see [Live TV](live-tv.md)) |
 | `cache` | The work files: segments being played, guides and picture subtitles being read, parts of the files read, and relayed images. **Conversion folder**, **Folder for files being read** and **Cache folder** can name other folders (see [Data folder](configuration.md#data-folder) and [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
 | `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](themes-and-custom-code.md#keeping-a-copy-of-a-theme)) |
@@ -337,11 +337,11 @@ Do not move its data folder to the arm64 package as it is. Its database was made
 
 Move the database with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back). On the same computer, the secret key and the paths stay the same, and nothing needs importing or changing.
 
-1. In the admin app, turn on **Back up the database every day** in **Settings › Backups** if it is off. Then choose **Back up now** in the **Database backups** panel of **System › Schedule**.
+1. In the admin app, turn on **Back up the database** in **Settings › Backups** if it is off. Then choose **Back up now** in the **Database backups** panel of **System › Schedule**.
 2. Quit Polyfin from its menu, then uninstall it under Settings › Apps › Installed apps. The data folder stays.
 3. Rename the data folder, `%LOCALAPPDATA%\Polyfin`, such as to `Polyfin-x64`.
 4. Install the arm64 package. Polyfin makes a new data folder and database, and finds the secret key it kept in Windows Credential Manager for the data folder's path.
-5. Create an administrator with the setup code (see [First start](#first-start)). Turn on **Back up the database every day** in **Settings › Backups**, which a restore needs.
+5. Create an administrator with the setup code (see [First start](#first-start)). Turn on **Back up the database** in **Settings › Backups**, which a restore needs.
 6. Choose **Restore** in the **Database backups** panel of **System › Schedule**, and send the file from `Polyfin-x64\backups` (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)). The backup brings back its users, settings and libraries.
 
 Then finish the move:

@@ -49,7 +49,7 @@ Once the administrator exists, the admin app's **Home** shows **Get started**: h
 | **Add a metadata addon** | An enabled Stremio addon of the server gives metadata (its manifest lists the `meta` resource), the addons that the **System › Health** warning about metadata languages counts. | **Content › Sources** |
 | **Choose your libraries** | At least one of the server's libraries is enabled. | **Content › Libraries** |
 | **Create users or an invite link** | Another account than the first exists, or an invite link is active. | **Users** |
-| **Back up the database every day** | **Back up the database every day** is on, as the **Backups** part of **System › Health** tells. | **Settings › Backups** |
+| **Back up the database every day** | **Back up the database** is on, as the **Backups** part of **System › Health** tells. | **Settings › Backups** |
 | **Set POLYFIN_SECRET_KEY** | `POLYFIN_SECRET_KEY` is set, as the **Stored keys** part of **System › Health** tells (see [Configuration](configuration.md#stored-keys-and-tokens)). | **System › Health**, at **Stored keys** |
 | **Serve HTTPS or set a public address** | **Public address** is set, in **Settings › Notifications**, or **Serve HTTPS** is on and **System › Health** finds no problem with its port, its certificate files or Let's Encrypt. | **Settings › Security**, or the page of the HTTPS problem in **System › Health** |
 | **Let apps on your network find Polyfin** | **Answer local network discovery** is on, **Address on the local network** is set, and **System › Health** finds no problem with discovery's port or the address it announces. | **Settings › General**, or the page of the discovery problem in **System › Health** |

@@ -38,7 +38,7 @@ A collection whose catalog gives no poster shows one Polyfin draws (see [Generat
 | Primary | The posters of its first four titles, in its own order, under a gradient, with its name across them |
 | Thumb, a wide image for apps that show wide cards | Its first six titles |
 
-- It comes once Polyfin has read the collection's titles, as when an app opens it or **Read every collection** runs. Until then the collection shows none.
+- It comes once Polyfin has read the collection's titles, as when an app opens it or the task "Read every collection" runs. Until then the collection shows none.
 - Listing the collections asks the addon for nothing more.
 - A collection whose catalog gives a poster keeps it.
 
