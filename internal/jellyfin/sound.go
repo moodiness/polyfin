@@ -35,7 +35,7 @@ type SoundDto struct {
 }
 
 func soundOf(user accounts.User) SoundDto {
-	return SoundDto{BoostVolume: user.BoostVolume, ConvertSound: user.ConvertSound, FollowsGroup: user.GroupID != nil && user.FollowGroup}
+	return SoundDto{BoostVolume: user.BoostVolume, ConvertSound: user.ConvertSound, FollowsGroup: user.FollowsGroup(accounts.SectionPlayback)}
 }
 
 func (h *Handler) sound(w http.ResponseWriter, r *http.Request) {

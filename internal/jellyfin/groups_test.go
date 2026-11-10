@@ -23,7 +23,7 @@ func (s contentServer) kids(t *testing.T) (group accounts.Group, sibling account
 	if _, err := s.store.AddGroupMembers(t.Context(), group.ID, []accounts.ID{s.member.ID, sibling.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.store.UpdateUser(t.Context(), sibling.ID, accounts.UserChanges{FollowGroup: new(false)}, nil); err != nil {
+	if _, err := s.store.UpdateUser(t.Context(), sibling.ID, accounts.UserChanges{OwnSections: new(accounts.GroupSections)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	return group, sibling, s.signIn("sibling", "phone")
@@ -144,15 +144,15 @@ func TestPoliciesFromAppsDetachMembersOnlyWhenAGroupSettingChanges(t *testing.T)
 	if status, body := s.setPolicy(t, s.member, func(p map[string]any) { p["IsDisabled"] = true }); status != http.StatusNoContent {
 		t.Fatalf("disabling: %d %s", status, body)
 	}
-	if got := member(); !got.IsDisabled || !got.FollowGroup || len(got.HiddenLibraries) != 1 {
+	if got := member(); !got.IsDisabled || len(got.OwnSections) != 0 || len(got.HiddenLibraries) != 1 {
 		t.Errorf("disabled: %+v", got)
 	}
 	if status, body := s.setPolicy(t, s.member, func(p map[string]any) { p["IsDisabled"] = false }); status != http.StatusNoContent {
 		t.Fatalf("enabling: %d %s", status, body)
 	}
 
-	// A group setting changed detaches the member, and the whole policy is
-	// kept.
+	// A group setting changed detaches the member in its sections only, and
+	// the whole policy is kept.
 	status, body := s.setPolicy(t, s.member, func(p map[string]any) {
 		p["MaxParentalRating"], p["IsHidden"], p["EnableContentDownloading"] = nil, true, false
 	})
@@ -160,23 +160,26 @@ func TestPoliciesFromAppsDetachMembersOnlyWhenAGroupSettingChanges(t *testing.T)
 		t.Fatalf("changing the rating: %d %s", status, body)
 	}
 	got := member()
-	if got.FollowGroup || got.GroupID == nil || *got.GroupID != group.ID || got.Parental.MaxRating != nil || !got.IsHidden ||
-		got.ContentDownloading || len(got.AccessSchedules) != 1 {
-		t.Errorf("after the change: %+v", got)
+	if !slices.Equal(got.OwnSections, []string{accounts.SectionAccess, accounts.SectionParental}) || got.GroupID == nil ||
+		*got.GroupID != group.ID || got.Parental.MaxRating != nil || !got.IsHidden || got.ContentDownloading || len(got.AccessSchedules) != 1 {
+		t.Errorf("after the change: %v %+v", got.OwnSections, got)
 	}
 	page, err := s.activity.Entries(t.Context(), activity.Query{Types: []string{"GroupMemberDetached"}})
-	if err != nil || len(page.Entries) != 1 || page.Entries[0].Name != "member no longer follows the group Kids: changed from Test App" {
+	if err != nil || len(page.Entries) != 1 ||
+		page.Entries[0].Name != "member no longer follows the group Kids for Access, Parental control: changed from Test App" {
 		t.Errorf("activity: %+v %v", page.Entries, err)
 	}
-	// The group's next change passes the member by.
-	s.changeGroup(t, group, accounts.UserChanges{Parental: &accounts.ParentalControl{MaxRating: new(7)}})
-	if got := member(); got.Parental.MaxRating != nil {
-		t.Errorf("detached member's rating: %v", *got.Parental.MaxRating)
+	// The group's next change passes the member's own sections by, and
+	// reaches the others.
+	s.changeGroup(t, group, accounts.UserChanges{Parental: &accounts.ParentalControl{MaxRating: new(7)},
+		AccessSchedules: &[]accounts.AccessSchedule{{Day: "Weekday", StartHour: 9, EndHour: 20}}})
+	if got := member(); got.Parental.MaxRating != nil || len(got.AccessSchedules) != 1 || got.AccessSchedules[0].StartHour != 9 {
+		t.Errorf("partly detached member after a group change: %v %+v", got.Parental.MaxRating, got.AccessSchedules)
 	}
 
 	// Made an administrator from an app, a member leaves the group.
 	sibling, _ := s.store.User(t.Context(), s.member.ID)
-	if _, err := s.store.UpdateUser(t.Context(), sibling.ID, accounts.UserChanges{FollowGroup: new(true)}, nil); err != nil {
+	if _, err := s.store.UpdateUser(t.Context(), sibling.ID, accounts.UserChanges{OwnSections: new([]string{})}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if status, body := s.setPolicy(t, s.member, func(p map[string]any) { p["IsAdministrator"] = true }); status != http.StatusNoContent {

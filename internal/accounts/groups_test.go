@@ -92,13 +92,13 @@ func TestGroupChangesReachEveryFollowingMemberAtOnce(t *testing.T) {
 		members = append(members, mustCreate(t, store, NewUser{Name: name, Password: "correct horse", Group: &group.ID}))
 	}
 	for _, member := range members {
-		if member.GroupID == nil || *member.GroupID != group.ID || !member.FollowGroup || !member.Limits().equal(group.Limits) {
+		if member.GroupID == nil || *member.GroupID != group.ID || len(member.OwnSections) != 0 || !member.Limits().equal(group.Limits) {
 			t.Fatalf("%s joining: %+v", member.Name, member)
 		}
 	}
 	// Cat keeps her own settings.
-	cat, err := store.UpdateUser(ctx, members[2].ID, UserChanges{FollowGroup: new(false)}, nil)
-	if err != nil || cat.FollowGroup || !cat.Limits().equal(group.Limits) {
+	cat, err := store.UpdateUser(ctx, members[2].ID, UserChanges{OwnSections: new(GroupSections)}, nil)
+	if err != nil || len(cat.OwnSections) == 0 || !cat.Limits().equal(group.Limits) {
 		t.Fatalf("detaching: %+v %v", cat, err)
 	}
 	// Ann's app is signed in, and resolved once.
@@ -119,7 +119,7 @@ func TestGroupChangesReachEveryFollowingMemberAtOnce(t *testing.T) {
 		t.Fatalf("changing the group: %+v %v", changed, err)
 	}
 	for _, member := range members[:2] {
-		if got := mustUser(t, store, member.ID); !got.FollowGroup || !got.Limits().equal(changed.Limits) {
+		if got := mustUser(t, store, member.ID); len(got.OwnSections) != 0 || !got.Limits().equal(changed.Limits) {
 			t.Errorf("%s after the change: %+v, want %+v", member.Name, got.Limits(), changed.Limits)
 		}
 	}
@@ -145,12 +145,12 @@ func TestDetachedMembersKeepTheirValuesAndFollowingAgainRestoresTheGroups(t *tes
 		t.Errorf("changing a group setting while following: %v", err)
 	}
 	// The group's own value, or a setting no group holds, are fine.
-	if got, err := store.UpdateUser(ctx, sam.ID, UserChanges{MaxPlaybacks: new(2), IsHidden: new(true)}, nil); err != nil || !got.FollowGroup {
+	if got, err := store.UpdateUser(ctx, sam.ID, UserChanges{MaxPlaybacks: new(2), IsHidden: new(true)}, nil); err != nil || len(got.OwnSections) != 0 {
 		t.Errorf("same value: %+v %v", got, err)
 	}
 
-	sam, err := store.UpdateUser(ctx, sam.ID, UserChanges{FollowGroup: new(false), MaxPlaybacks: new(5), BlockedGenres: &[]string{}}, nil)
-	if err != nil || sam.FollowGroup || sam.MaxPlaybacks != 5 || len(sam.BlockedGenres) != 0 || sam.QualityGroup != 720 {
+	sam, err := store.UpdateUser(ctx, sam.ID, UserChanges{OwnSections: new(GroupSections), MaxPlaybacks: new(5), BlockedGenres: &[]string{}}, nil)
+	if err != nil || len(sam.OwnSections) == 0 || sam.MaxPlaybacks != 5 || len(sam.BlockedGenres) != 0 || sam.QualityGroup != 720 {
 		t.Fatalf("detaching with changes: %+v %v", sam, err)
 	}
 	if _, err := store.UpdateGroup(ctx, group.ID, GroupChanges{Limits: UserChanges{QualityGroup: new(1080)}}); err != nil {
@@ -160,14 +160,14 @@ func TestDetachedMembersKeepTheirValuesAndFollowingAgainRestoresTheGroups(t *tes
 		t.Errorf("detached after a group change: %+v", got.Limits())
 	}
 	// Following again takes the group's values back.
-	sam, err = store.UpdateUser(ctx, sam.ID, UserChanges{FollowGroup: new(true)}, nil)
+	sam, err = store.UpdateUser(ctx, sam.ID, UserChanges{OwnSections: new([]string{})}, nil)
 	group, _ = store.Group(ctx, group.ID)
-	if err != nil || !sam.FollowGroup || !sam.Limits().equal(group.Limits) || sam.QualityGroup != 1080 {
+	if err != nil || len(sam.OwnSections) != 0 || !sam.Limits().equal(group.Limits) || sam.QualityGroup != 1080 {
 		t.Errorf("following again: %+v %v", sam.Limits(), err)
 	}
 	// Leaving keeps the values as Sam's own.
 	sam, err = store.UpdateUser(ctx, sam.ID, UserChanges{Group: &ID{}}, nil)
-	if err != nil || sam.GroupID != nil || !sam.FollowGroup || !sam.Limits().equal(group.Limits) {
+	if err != nil || sam.GroupID != nil || len(sam.OwnSections) != 0 || !sam.Limits().equal(group.Limits) {
 		t.Errorf("leaving: %+v %v", sam, err)
 	}
 	if _, err := store.UpdateUser(ctx, sam.ID, UserChanges{Group: &ID{7}}, nil); !errors.Is(err, ErrInvalidGroup) {
@@ -191,14 +191,14 @@ func TestChangesFromAppsDetachOnlyWhenAGroupSettingDiffers(t *testing.T) {
 			SubtitleManagement: &l.SubtitleManagement, LiveTvManagement: &l.LiveTvManagement, DetachFromGroup: true}
 	}
 	got, err := store.UpdateUser(ctx, sam.ID, whole(sam), nil)
-	if err != nil || !got.IsDisabled || !got.FollowGroup {
+	if err != nil || !got.IsDisabled || len(got.OwnSections) != 0 {
 		t.Fatalf("disabling with the policy as read: %+v %v", got, err)
 	}
 	changes := whole(got)
 	changes.IsDisabled = new(false)
 	changes.ContentDownloading = new(true)
 	got, err = store.UpdateUser(ctx, sam.ID, changes, nil)
-	if err != nil || got.FollowGroup || got.GroupID == nil || !got.ContentDownloading || got.IsDisabled || got.MaxPlaybacks != 2 {
+	if err != nil || len(got.OwnSections) == 0 || got.GroupID == nil || !got.ContentDownloading || got.IsDisabled || got.MaxPlaybacks != 2 {
 		t.Errorf("a group setting changed: %+v %v", got, err)
 	}
 }
@@ -249,7 +249,7 @@ func TestDeletingAGroupLeavesItsMembersLimitsUnchanged(t *testing.T) {
 	group := kidsGroup(t, store)
 	ann := mustCreate(t, store, NewUser{Name: "ann", Password: "correct horse", Group: &group.ID})
 	ben := mustCreate(t, store, NewUser{Name: "ben", Password: "correct horse", Group: &group.ID})
-	ben, err := store.UpdateUser(ctx, ben.ID, UserChanges{FollowGroup: new(false), MaxPlaybacks: new(4)}, nil)
+	ben, err := store.UpdateUser(ctx, ben.ID, UserChanges{OwnSections: new(GroupSections), MaxPlaybacks: new(4)}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestDeletingAGroupLeavesItsMembersLimitsUnchanged(t *testing.T) {
 	}
 	for _, before := range []User{ann, ben} {
 		after := mustUser(t, store, before.ID)
-		if after.GroupID != nil || !after.FollowGroup || !after.Limits().equal(before.Limits()) {
+		if after.GroupID != nil || len(after.OwnSections) != 0 || !after.Limits().equal(before.Limits()) {
 			t.Errorf("%s after the deletion: %+v, want %+v", before.Name, after.Limits(), before.Limits())
 		}
 	}
@@ -299,7 +299,7 @@ func TestInvitesNamingAGroupPutTheirAccountsInIt(t *testing.T) {
 		t.Fatalf("accepting: %+v %v", invite, err)
 	}
 	// The model's other settings stay; the group's are the group's.
-	if guest.GroupID == nil || *guest.GroupID != group.ID || !guest.FollowGroup || !guest.Limits().equal(group.Limits) || guest.IsHidden {
+	if guest.GroupID == nil || *guest.GroupID != group.ID || len(guest.OwnSections) != 0 || !guest.Limits().equal(group.Limits) || guest.IsHidden {
 		t.Errorf("guest: %+v", guest)
 	}
 	if members, err := store.GroupMembers(ctx, group.ID); err != nil || len(members) != 1 || members[0].ID != guest.ID {
@@ -320,7 +320,12 @@ func TestTurningDownloadsOffKeepsMembersFollowing(t *testing.T) {
 	if err != nil || len(users) != 1 || len(groups) != 1 || groups[0].ContentDownloading {
 		t.Fatalf("turning off: %d users, %+v, %v", len(users), groups, err)
 	}
-	if got := mustUser(t, store, sam.ID); got.ContentDownloading || !got.FollowGroup {
+	if got := mustUser(t, store, sam.ID); got.ContentDownloading || len(got.OwnSections) != 0 {
 		t.Errorf("sam: %+v", got)
 	}
+}
+
+// equal reports whether l and o allow the same in every section.
+func (l Limits) equal(o Limits) bool {
+	return len(l.differs(o)) == 0
 }

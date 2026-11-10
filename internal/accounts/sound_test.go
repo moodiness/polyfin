@@ -35,7 +35,7 @@ func TestSoundOptionsAreGroupSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	member, err := store.CreateUser(ctx, NewUser{Name: "kim", Password: "correct horse", Group: &group.ID})
-	if err != nil || !member.ConvertSound || member.BoostVolume || !member.FollowGroup {
+	if err != nil || !member.ConvertSound || member.BoostVolume || len(member.OwnSections) != 0 {
 		t.Fatalf("a member: %+v %v", member, err)
 	}
 	// A following member's own change is refused; one keeping the group's

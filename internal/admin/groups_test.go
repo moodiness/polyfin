@@ -1,9 +1,12 @@
 package admin
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 // createdID creates through the admin API, and returns the identifier of
@@ -63,7 +66,7 @@ func TestGroupsHoldTheLimitsOfTheirMembers(t *testing.T) {
 
 	// Creating a user in the group.
 	status, cat, _ := admin.call(http.MethodPost, "/users", map[string]any{"name": "cat", "password": "correct horse", "groupId": group})
-	if status != http.StatusCreated || cat["groupId"] != group || cat["groupName"] != "Kids" || cat["followGroup"] != true ||
+	if status != http.StatusCreated || cat["groupId"] != group || cat["groupName"] != "Kids" || fmt.Sprint(cat["ownSections"]) != "[]" ||
 		cat["downloads"] != false || cat["maxPlaybacks"] != 2.0 {
 		t.Fatalf("creating cat in the group: %d %v", status, cat)
 	}
@@ -78,24 +81,24 @@ func TestGroupsHoldTheLimitsOfTheirMembers(t *testing.T) {
 		t.Errorf("adding an administrator: %d", status)
 	}
 	if status := admin.raw(http.MethodPost, "/groups/"+group+"/members", `{"userIds":["`+ann+`"]}`, &members); status != http.StatusOK ||
-		len(members) != 2 || members[0]["name"] != "ann" || members[0]["followGroup"] != true || members[1]["name"] != "cat" {
+		len(members) != 2 || members[0]["name"] != "ann" || fmt.Sprint(members[0]["ownSections"]) != "[]" || members[1]["name"] != "cat" {
 		t.Fatalf("adding ann: %d %v", status, members)
 	}
 	listed := map[string]map[string]any{}
 	for _, user := range api.users(t, admin) {
 		listed[user["name"].(string)] = user
 	}
-	if listed["ann"]["groupName"] != "Kids" || listed["ann"]["maxBitrate"] != 0.0 || listed["admin"]["groupId"] != nil || listed["admin"]["followGroup"] != true {
+	if listed["ann"]["groupName"] != "Kids" || listed["ann"]["maxBitrate"] != 0.0 || listed["admin"]["groupId"] != nil || fmt.Sprint(listed["admin"]["ownSections"]) != "[]" {
 		t.Errorf("users list: %v", listed)
 	}
 
 	// Ann follows the group: her own page cannot change its settings, until
-	// she stops following it.
+	// she keeps their sections as her own.
 	if status, body, _ := admin.call(http.MethodPatch, "/users/"+ann, map[string]any{"downloads": true}); status != http.StatusConflict || body["error"] != "follows_group" {
 		t.Errorf("changing a followed setting: %d %v", status, body)
 	}
-	status, body, _ := admin.call(http.MethodPatch, "/users/"+ann, map[string]any{"followGroup": false, "downloads": true})
-	if status != http.StatusOK || body["followGroup"] != false || body["downloads"] != true || body["groupId"] != group || body["maxPlaybacks"] != 2.0 {
+	status, body, _ := admin.call(http.MethodPatch, "/users/"+ann, map[string]any{"ownSections": []string{accounts.SectionPlayback, accounts.SectionAccess}, "downloads": true})
+	if status != http.StatusOK || fmt.Sprint(body["ownSections"]) != "[access playback]" || body["downloads"] != true || body["groupId"] != group || body["maxPlaybacks"] != 2.0 {
 		t.Fatalf("detaching ann: %d %v", status, body)
 	}
 	if status, _, _ := admin.call(http.MethodPatch, "/groups/"+group, map[string]any{"maxPlaybacks": 3}); status != http.StatusOK {
@@ -107,8 +110,8 @@ func TestGroupsHoldTheLimitsOfTheirMembers(t *testing.T) {
 	if user := api.user(t, admin, cat["id"].(string)); user["maxPlaybacks"] != 3.0 {
 		t.Errorf("cat missed a change: %v", user)
 	}
-	status, body, _ = admin.call(http.MethodPatch, "/users/"+ann, map[string]any{"followGroup": true})
-	if status != http.StatusOK || body["followGroup"] != true || body["downloads"] != false || body["maxPlaybacks"] != 3.0 {
+	status, body, _ = admin.call(http.MethodPatch, "/users/"+ann, map[string]any{"ownSections": []string{}})
+	if status != http.StatusOK || fmt.Sprint(body["ownSections"]) != "[]" || body["downloads"] != false || body["maxPlaybacks"] != 3.0 {
 		t.Errorf("following again: %d %v", status, body)
 	}
 
@@ -165,7 +168,7 @@ func TestGroupsHoldTheLimitsOfTheirMembers(t *testing.T) {
 	var page struct {
 		Items []activityEntryJSON `json:"items"`
 	}
-	admin.raw(http.MethodGet, "/activity?limit=100&type=GroupCreated,GroupChanged,GroupDeleted,GroupMemberAdded,GroupMemberRemoved,GroupMemberDetached", "", &page)
+	admin.raw(http.MethodGet, "/activity?limit=100&type=GroupCreated,GroupChanged,GroupDeleted,GroupMemberAdded,GroupMemberRemoved,GroupMemberDetached,GroupMemberFollows", "", &page)
 	var names []string
 	for _, entry := range slices.Backward(page.Items) {
 		names = append(names, entry.Name)
@@ -176,8 +179,9 @@ func TestGroupsHoldTheLimitsOfTheirMembers(t *testing.T) {
 		"Group Kids was changed: Access, Playback and access, Allowed hours",
 		"cat joined the group Kids",
 		"ann joined the group Kids",
-		"ann no longer follows the group Kids",
+		"ann no longer follows the group Kids for Access, Playback and access",
 		"Group Kids was changed: Playback and access",
+		"ann follows the group Kids again for Access, Playback and access",
 		"cat left the group Kids",
 		"ann left the group Kids",
 		"guest joined the group Kids",

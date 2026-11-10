@@ -45,6 +45,6 @@ func writeSound(w http.ResponseWriter, user accounts.User) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"boostVolume":  user.BoostVolume,
 		"convertSound": user.ConvertSound,
-		"followsGroup": user.GroupID != nil && user.FollowGroup,
+		"followsGroup": user.FollowsGroup(accounts.SectionPlayback),
 	})
 }

@@ -248,7 +248,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	libraries := &hidden
-	if user.GroupID != nil && user.FollowGroup {
+	if user.FollowsGroup(accounts.SectionLibraries) {
 		// The policy names only the server's libraries: one the group
 		// hides that is gone does not count as a change.
 		kept, err := h.hiddenLibraries(r.Context(), policyUpdate{}, nil)
@@ -293,7 +293,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		LiveTvManagement: &policy.EnableLiveTvManagement,
 		// Whether they may connect from outside the local network.
 		RemoteAccess: &policy.EnableRemoteAccess,
-		// A setting the user's group holds changed detaches them from it.
+		// A setting the user's group holds changed detaches them from it
+		// in its section only.
 		DetachFromGroup: true,
 	}, caller.Device.ID)
 	switch {
@@ -310,9 +311,11 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 			if group, err := h.Accounts.Group(r.Context(), *user.GroupID); err == nil {
 				h.Activity.GroupMemberRemoved(r.Context(), updated, group.Name)
 			}
-		case user.FollowGroup && !updated.FollowGroup:
+		case len(updated.OwnSections) > len(user.OwnSections):
+			// Only the sections the change set another value in detach.
 			if group, err := h.Accounts.Group(r.Context(), *user.GroupID); err == nil {
-				h.Activity.GroupMemberDetached(r.Context(), updated, group.Name, caller.Device.Client)
+				own := slices.DeleteFunc(slices.Clone(updated.OwnSections), func(section string) bool { return slices.Contains(user.OwnSections, section) })
+				h.Activity.GroupMemberDetached(r.Context(), updated, group.Name, own, caller.Device.Client)
 			}
 		}
 		w.WriteHeader(http.StatusNoContent)

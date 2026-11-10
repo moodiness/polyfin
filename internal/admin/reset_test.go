@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"testing"
@@ -98,7 +99,7 @@ func TestResetToDefaultsOnUsersAndGroups(t *testing.T) {
 	if status != http.StatusOK || kids["name"] != "Kids" || kids["memberCount"] != 1.0 || len(differentLimits(kids, fresh)) != 0 {
 		t.Errorf("resetting the group: %d %v", status, kids)
 	}
-	if user := api.user(t, admin, ann); user["followGroup"] != true || user["maxPlaybacks"] != 0.0 {
+	if user := api.user(t, admin, ann); fmt.Sprint(user["ownSections"]) != "[]" || user["maxPlaybacks"] != 0.0 {
 		t.Errorf("ann after the group's reset: %v", user)
 	}
 

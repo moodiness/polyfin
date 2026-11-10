@@ -69,10 +69,12 @@ type userJSON struct {
 	EndsAt *time.Time `json:"endsAt"`
 	Ended  bool       `json:"ended"`
 	// GroupID and GroupName are the user's group, null for none;
-	// FollowGroup tells whether they follow it, set without a group.
-	GroupID     *string `json:"groupId"`
-	GroupName   *string `json:"groupName"`
-	FollowGroup bool    `json:"followGroup"`
+	// OwnSections lists the sections in which they keep their own values
+	// (accounts.GroupSections), following the group in the others; empty
+	// without a group.
+	GroupID     *string  `json:"groupId"`
+	GroupName   *string  `json:"groupName"`
+	OwnSections []string `json:"ownSections"`
 	// TwoStep tells whether the user signs in with a code from an
 	// authenticator app after their password.
 	TwoStep bool `json:"twoStep"`
@@ -345,7 +347,7 @@ func newUserJSON(user accounts.User) userJSON {
 		EndsOn:       endsOn(user),
 		EndsAt:       user.EndsAt,
 		Ended:        user.Ended(time.Now()),
-		FollowGroup:  user.FollowGroup || user.GroupID == nil,
+		OwnSections:  user.OwnSections,
 		TwoStep:      user.TwoStep,
 		ProviderOnly: user.ProviderOnly,
 	}
@@ -1316,7 +1318,8 @@ func (h *handler) groupName(r *http.Request, id *accounts.ID) string {
 }
 
 // recordMembership records the changes to a user's group from before to
-// after: leaving a group, joining one, or no longer following it.
+// after: leaving a group, joining one, or following it in fewer or more
+// sections.
 func (h *handler) recordMembership(r *http.Request, before, after accounts.User) {
 	same := func(a, b *accounts.ID) bool { return (a == nil) == (b == nil) && (a == nil || *a == *b) }
 	if !same(before.GroupID, after.GroupID) {
@@ -1328,9 +1331,20 @@ func (h *handler) recordMembership(r *http.Request, before, after accounts.User)
 		}
 		return
 	}
-	if after.GroupID != nil && before.FollowGroup && !after.FollowGroup {
-		h.Activity.GroupMemberDetached(r.Context(), after, h.groupName(r, after.GroupID), "")
+	if after.GroupID == nil {
+		return
 	}
+	if own := newSections(before.OwnSections, after.OwnSections); len(own) > 0 {
+		h.Activity.GroupMemberDetached(r.Context(), after, h.groupName(r, after.GroupID), own, "")
+	}
+	if followed := newSections(after.OwnSections, before.OwnSections); len(followed) > 0 {
+		h.Activity.GroupMemberFollows(r.Context(), after, h.groupName(r, after.GroupID), followed)
+	}
+}
+
+// newSections lists the sections in after that are not in before.
+func newSections(before, after []string) []string {
+	return slices.DeleteFunc(slices.Clone(after), func(section string) bool { return slices.Contains(before, section) })
 }
 
 func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
@@ -1386,15 +1400,16 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		IsHidden        *bool   `json:"isHidden"`
 		IsDisabled      *bool   `json:"isDisabled"`
 		// The settings a group holds, see userJSON; refused while the user
-		// follows their group, unless followGroup turns that off.
+		// follows their group, unless ownSections makes their section own.
 		limitChanges
 		// EndsOn, see userJSON: a date, or null for never; either clears
 		// the exact end (endsAt), which no other change touches.
 		EndsOn json.RawMessage `json:"endsOn"`
 		// GroupID is the group the user joins and follows, empty for none;
-		// FollowGroup has them follow it, or keep its values as their own.
-		GroupID     *string `json:"groupId"`
-		FollowGroup *bool   `json:"followGroup"`
+		// OwnSections lists the sections in which they keep their own
+		// values, all of them: a section left out follows the group again.
+		GroupID     *string   `json:"groupId"`
+		OwnSections *[]string `json:"ownSections"`
 		// MetadataLanguage, see userJSON.
 		MetadataLanguage *string `json:"metadataLanguage"`
 		// AudioRegion, see userJSON.
@@ -1441,7 +1456,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	changes.IsAdministrator = body.IsAdministrator
 	changes.IsHidden = body.IsHidden
 	changes.IsDisabled = body.IsDisabled
-	changes.FollowGroup = body.FollowGroup
+	changes.OwnSections = body.OwnSections
 	changes.ProviderOnly = body.ProviderOnly
 	if changes.Group, ok = groupParam(w, body.GroupID); !ok {
 		return

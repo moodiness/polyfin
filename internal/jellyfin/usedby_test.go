@@ -118,7 +118,7 @@ func usedByOn(t *testing.T) usedBySetup {
 		}
 	}
 	// A member keeping their own settings still belongs to the group.
-	s.limit(t, s.bob, func(c *accounts.UserChanges) { c.FollowGroup = new(false) })
+	s.limit(t, s.bob, func(c *accounts.UserChanges) { c.OwnSections = new(accounts.GroupSections) })
 	s.useBy(t, s.familyAddon, addons.UsedBy{Listed: true, Groups: []accounts.ID{s.familyGroup.ID}, Users: []accounts.ID{s.boss.ID}})
 	s.useBy(t, s.friendsAddon, addons.UsedBy{Listed: true, Groups: []accounts.ID{s.friendsGroup.ID}, Users: []accounts.ID{s.boss.ID}})
 	s.boss, s.alice, s.bob = s.reload(t, s.boss), s.reload(t, s.alice), s.reload(t, s.bob)
