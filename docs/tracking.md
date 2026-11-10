@@ -6,6 +6,7 @@ This page is for every user who connects a tracking account, and for the adminis
 |---|---|
 | Trakt, Simkl, MDBList, PublicMetaDB | The movies and episodes the user watches and marks played |
 | AniList, MyAnimeList | The anime the user watches, on the user's anime lists |
+| PublicMetaDB, with its watchlist switch on | Also the titles the user adds to or removes from their Watchlist playlist |
 | Last.fm, ListenBrainz | The songs the user plays |
 
 It covers what is sent, how users connect and import, and what an administrator sets up.
@@ -69,7 +70,7 @@ When Trakt refuses your sign-in, or the code ends without connecting, **My accou
 
 ## Imports and the Watchlist
 
-A connected Trakt, Simkl, MDBList or PublicMetaDB account can also bring your watch history into Polyfin. Trakt's watchlist and Simkl's Plan to Watch can fill your Watchlist playlist, and Trakt can recommend titles in a home row. See [Tracking imports and the Watchlist](tracking-imports.md).
+A connected Trakt, Simkl, MDBList or PublicMetaDB account can also bring your watch history into Polyfin. Trakt's watchlist, Simkl's Plan to Watch and PublicMetaDB's Watchlist can fill your Watchlist playlist, PublicMetaDB's also receiving the titles you add and remove yourself, and Trakt can recommend titles in a home row. See [Tracking imports and the Watchlist](tracking-imports.md).
 
 ## Anime
 
