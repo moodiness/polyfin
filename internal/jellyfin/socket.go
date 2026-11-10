@@ -115,6 +115,22 @@ func (s *sockets) latest(device accounts.ID) *websocket.Conn {
 	return open[len(open)-1]
 }
 
+// webUsers lists the users who keep a jellyfin-web socket open.
+func (s *sockets) webUsers() []accounts.ID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var users []accounts.ID
+	for user, open := range s.open {
+		for _, web := range open {
+			if web {
+				users = append(users, user)
+				break
+			}
+		}
+	}
+	return users
+}
+
 // close closes the sockets of a device, whose serving then ends.
 func (s *sockets) close(device accounts.ID) {
 	s.mu.Lock()

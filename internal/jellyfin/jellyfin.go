@@ -188,8 +188,10 @@ type Handler struct {
 	trackChoices *trackChoices
 	// sockets are the WebSockets apps keep open.
 	sockets *sockets
-	// syncPlay holds the groups apps watch together in.
+	// syncPlay holds the groups apps watch together in, invites the
+	// invitations to them (see syncplayinvites.go).
 	syncPlay *syncPlay
+	invites  *syncPlayInvites
 	// preparations bounds the preparations of playback made ahead of it.
 	preparations *preparations
 	// listings lists the versions of home rows' titles ahead of a play.
@@ -266,6 +268,7 @@ func New(options Options) *Handler {
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		trackChoices:   newTrackChoices(),
 		sockets:        newSockets(),
+		invites:        newSyncPlayInvites(),
 		preparations:   newPreparations(options.Logger),
 		watched:        newWatchedPages(),
 		now:            time.Now,
@@ -290,6 +293,7 @@ func New(options Options) *Handler {
 	h.draws = cache.NewLasting[drawKey, draw](1000, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
 		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
+	h.syncPlay.ended = h.groupEnded
 	h.listings = newListings(h.listVersions)
 	if options.Library != nil {
 		options.Library.OnVersionsChanged(h.versionsChanged)
