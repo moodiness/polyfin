@@ -266,13 +266,42 @@
 //     eleventh), or the list of the user's watchlist playlist on its page
 //     (#/details?id= it, its Id the PlaylistId /Polyfin/UserItems/Watchlist
 //     gives, empty while the user has none); the title's cards elsewhere
-//     stay.
+//     stay;
+//   "Watch together", on a movie's or an episode's page, for a user whose
+//     SyncPlay access is Create and join (Policy.SyncPlayAccess
+//     CreateAndJoinGroups, as ApiClient.getCurrentUser gives it), while
+//     jellyfin-web shows its SyncPlay button: the default layout's
+//     (aria-controls app-sync-play-menu) or the legacy layouts'
+//     (.headerSyncButton), which it shows only with its SyncPlay plugin
+//     and an access other than None. It starts the title in a SyncPlay
+//     group with Jellyfin's own routes: in the group the page's session
+//     is in, as the socket's SyncPlayGroupUpdate messages tell (GroupJoined,
+//     until GroupLeft, NotInGroup or GroupDoesNotExist) and
+//     GET /SyncPlay/{id} confirms, else in a new one (POST /SyncPlay/New,
+//     named as jellyfin-web names its own). A new group starts with a
+//     Stop, which jellyfin-web applies once its clock is set to the
+//     server's, about a second later, pinging the group then
+//     (ApiClient.sendSyncPlayPing): the script waits for that ping, 10
+//     seconds at most, so that the Stop finds nothing playing. It sets the
+//     title as the group's queue, from its start (POST
+//     /SyncPlay/SetNewQueue), then pauses the group (POST /SyncPlay/Pause)
+//     while it waits for its members to load the title: jellyfin-web
+//     pauses a title it starts for a group and tells it ready, and the
+//     group, paused meanwhile, stays paused once all are, until someone
+//     presses Play. Polyfin starts a queue only when every member may play
+//     it, the group then waiting (State Waiting), which GET /SyncPlay/{id}
+//     checks before the pause. A toast then tells how the others join. A
+//     title without a known version, as /Polyfin/Items/{id}/Versions
+//     tells, a queue the group refused, and SyncPlay refused (403, the
+//     user's access asked again telling None or Join only) each get a
+//     toast instead.
 // As the button is pressed or the card right-clicked, before jellyfin-web
 // opens its menu, the script asks for the item (ApiClient.getItem), the
-// hidden titles, the titles of the watchlist and, for a card with a resume
-// point, Continue Watching; the first action sheet that opens within 10
-// seconds, no other click coming between, gets the entries once the
-// answers come. An entry closes the menu as Back does, then acts.
+// hidden titles, the titles of the watchlist, for a card with a resume
+// point, Continue Watching, and on a title's page, the user; the first
+// action sheet that opens within 10 seconds, no other click coming
+// between, gets the entries once the answers come. An entry closes the
+// menu as Back does, then acts.
 // jellyfin-web 12.4 keeps the answers of its rows for a minute, in memory
 // and in the browser's IndexedDB, and draws a row from such an answer,
 // asking nothing, when the change's UserDataChanged message refreshes it
@@ -1262,12 +1291,14 @@
   // That event only fires for the socket of jellyfin-apiclient itself,
   // which jellyfin-web opens no more since 12.0: its socket is its SDK's,
   // whose messages ApiClient.subscribe gives by type, any type
-  // (ServerConnections.js). So UserDataChanged and PolyfinVersions are
-  // heard there when jellyfin-web has it, through the message event
-  // otherwise.
+  // (ServerConnections.js). So UserDataChanged, PolyfinVersions and
+  // SyncPlayGroupUpdate are heard there when jellyfin-web has it, through
+  // the message event otherwise.
   // It also hears the answers of the played marks the page sends, as
   // markPlayed and markUnplayed give them: what the user did with the item
-  // afterwards. They come at once, before the socket's message.
+  // afterwards. They come at once, before the socket's message. And it
+  // hears jellyfin-web ping its SyncPlay group (sendSyncPlayPing), as it
+  // does once its clock is set to the server's (see the tenth).
   function listen() {
     var api = window.ApiClient
     if (!api || api === heard) return
@@ -1282,13 +1313,20 @@
         hear(message)
       } catch (error) {}
     }
+    function heardSyncPlay(message) {
+      try {
+        heardGroup(message)
+      } catch (error) {}
+    }
     if (typeof api.subscribe === 'function') {
       api.subscribe(['UserDataChanged'], heardData)
       api.subscribe(['PolyfinVersions'], heardVersions)
+      api.subscribe(['SyncPlayGroupUpdate'], heardSyncPlay)
     } else {
       var callbacks = (api._callbacks = api._callbacks || {})
       ;(callbacks.message = callbacks.message || []).push(function (event, message) {
         if (message && message.MessageType === 'UserDataChanged') heardData(message)
+        else if (message && message.MessageType === 'SyncPlayGroupUpdate') heardSyncPlay(message)
         else heardVersions(message)
       })
     }
@@ -1307,6 +1345,15 @@
         return answer
       }
     })
+    var ping = api.sendSyncPlayPing
+    if (typeof ping === 'function') {
+      api.sendSyncPlayPing = function () {
+        try {
+          pinged()
+        } catch (error) {}
+        return ping.apply(this, arguments)
+      }
+    }
   }
   // hear takes a pushed progress of the title followed as an answer. One
   // that tells the tracks of its versions changed (Tracks) has the track
@@ -1351,6 +1398,14 @@
       removeWatchlist: 'Remove from Watchlist',
       addedWatchlist: 'This title is on your Watchlist.',
       removedWatchlist: 'This title is off your Watchlist.',
+      watchTogether: 'Watch together',
+      groupName: '{name}’s group',
+      togetherStarted: 'Your SyncPlay group is ready, paused. The others join it on their own device, from the SyncPlay button (the people icon at the top). Press Play once they are in.',
+      togetherOff: 'SyncPlay is off for your account.',
+      togetherJoinOnly: 'Your account can join SyncPlay groups, but not start one.',
+      togetherSearching: 'Sources for this title are still being looked for. Try again in a moment.',
+      togetherRefused: 'Not everyone in your SyncPlay group can play this title.',
+      togetherFailed: 'Watch together could not start. Try again.',
     },
     fr: {
       searching: 'Recherche des sources…',
@@ -1367,6 +1422,14 @@
       removeWatchlist: 'Retirer de «\u202fÀ regarder\u202f»',
       addedWatchlist: 'Ce titre est dans «\u202fÀ regarder\u202f».',
       removedWatchlist: 'Ce titre n’est plus dans «\u202fÀ regarder\u202f».',
+      watchTogether: 'Regarder ensemble',
+      groupName: 'Groupe de {name}',
+      togetherStarted: 'Votre groupe SyncPlay est prêt, en pause. Les autres le rejoignent sur leur propre appareil, depuis le bouton SyncPlay (l’icône de personnes en haut). Appuyez sur Lire une fois qu’ils sont là.',
+      togetherOff: 'SyncPlay est désactivé pour votre compte.',
+      togetherJoinOnly: 'Votre compte peut rejoindre des groupes SyncPlay, mais pas en créer.',
+      togetherSearching: 'Les sources de ce titre sont encore recherchées. Réessayez dans un instant.',
+      togetherRefused: 'Certains membres de votre groupe SyncPlay ne peuvent pas lire ce titre.',
+      togetherFailed: 'Impossible de lancer «\u202fRegarder ensemble\u202f». Réessayez.',
     },
     de: {
       searching: 'Quellen werden gesucht…',
@@ -1383,6 +1446,14 @@
       removeWatchlist: 'Von der Merkliste entfernen',
       addedWatchlist: 'Dieser Titel ist auf deiner Merkliste.',
       removedWatchlist: 'Dieser Titel ist nicht mehr auf deiner Merkliste.',
+      watchTogether: 'Gemeinsam ansehen',
+      groupName: 'Gruppe von {name}',
+      togetherStarted: 'Deine SyncPlay-Gruppe ist bereit und pausiert. Die anderen treten ihr auf ihrem eigenen Gerät bei, über die Schaltfläche Synchronwiedergabe (das Personen-Symbol oben). Drücke auf Abspielen, sobald alle da sind.',
+      togetherOff: 'SyncPlay ist für dein Konto ausgeschaltet.',
+      togetherJoinOnly: 'Dein Konto kann SyncPlay-Gruppen beitreten, aber keine starten.',
+      togetherSearching: 'Für diesen Titel werden noch Quellen gesucht. Versuche es gleich noch einmal.',
+      togetherRefused: 'Nicht alle in deiner SyncPlay-Gruppe können diesen Titel abspielen.',
+      togetherFailed: '„Gemeinsam ansehen“ konnte nicht starten. Versuche es erneut.',
     },
     es: {
       searching: 'Buscando fuentes…',
@@ -1399,6 +1470,14 @@
       removeWatchlist: 'Quitar de «Para ver»',
       addedWatchlist: 'Este título está en «Para ver».',
       removedWatchlist: 'Este título ya no está en «Para ver».',
+      watchTogether: 'Ver juntos',
+      groupName: 'Grupo de {name}',
+      togetherStarted: 'Su grupo de SyncPlay está listo, en pausa. Los demás se unen desde su propio dispositivo, con el botón Reproducción sincronizada (el icono de personas de arriba). Pulse Reproducir cuando estén todos.',
+      togetherOff: 'SyncPlay está desactivado para su cuenta.',
+      togetherJoinOnly: 'Su cuenta puede unirse a grupos de SyncPlay, pero no crearlos.',
+      togetherSearching: 'Todavía se están buscando fuentes para este título. Vuelva a intentarlo en un momento.',
+      togetherRefused: 'No todos en su grupo de SyncPlay pueden reproducir este título.',
+      togetherFailed: '«Ver juntos» no pudo empezar. Vuelva a intentarlo.',
     },
     it: {
       searching: 'Ricerca delle origini…',
@@ -1415,6 +1494,14 @@
       removeWatchlist: 'Rimuovi da «Da guardare»',
       addedWatchlist: 'Questo titolo è in «Da guardare».',
       removedWatchlist: 'Questo titolo non è più in «Da guardare».',
+      watchTogether: 'Guarda insieme',
+      groupName: 'Gruppo di {name}',
+      togetherStarted: 'Il tuo gruppo SyncPlay è pronto, in pausa. Gli altri si uniscono dal proprio dispositivo, con il pulsante Sincronizza Riproduzione (l’icona delle persone in alto). Premi Riproduci quando ci sono tutti.',
+      togetherOff: 'SyncPlay è disattivato per il tuo account.',
+      togetherJoinOnly: 'Il tuo account può unirsi ai gruppi SyncPlay, ma non crearne.',
+      togetherSearching: 'Le origini di questo titolo sono ancora in ricerca. Riprova tra un momento.',
+      togetherRefused: 'Non tutti nel tuo gruppo SyncPlay possono riprodurre questo titolo.',
+      togetherFailed: '«Guarda insieme» non è riuscito ad avviarsi. Riprova.',
     },
     pt: {
       searching: 'Procurando fontes…',
@@ -1431,6 +1518,14 @@
       removeWatchlist: 'Remover de “Para assistir”',
       addedWatchlist: 'Este título está em “Para assistir”.',
       removedWatchlist: 'Este título saiu de “Para assistir”.',
+      watchTogether: 'Assistir juntos',
+      groupName: 'Grupo de {name}',
+      togetherStarted: 'Seu grupo do SyncPlay está pronto, em pausa. Os outros entram pelo próprio dispositivo, no botão Reprodução sincronizada (o ícone de pessoas no topo). Toque em Reproduzir quando todos estiverem lá.',
+      togetherOff: 'O SyncPlay está desativado para a sua conta.',
+      togetherJoinOnly: 'Sua conta pode entrar em grupos do SyncPlay, mas não criá-los.',
+      togetherSearching: 'Ainda estamos procurando fontes para este título. Tente novamente em instantes.',
+      togetherRefused: 'Nem todos no seu grupo do SyncPlay podem reproduzir este título.',
+      togetherFailed: '“Assistir juntos” não conseguiu começar. Tente novamente.',
     },
   }
   function say(key) {
@@ -1949,6 +2044,11 @@
     try {
       followShare()
     } catch (error) {}
+    // The socket's SyncPlay messages tell the group the session is in from
+    // the first route on (see the tenth).
+    try {
+      listen()
+    } catch (error) {}
   }
   // The user signed in whose views were asked for, the style hiding the
   // views they hide from the menus, and until when the script looks for a
@@ -2459,8 +2559,8 @@
   // askFacts asks for what the entries of the item's menu depend on: its
   // type and series, whether the user hid it or its series, whether it is
   // on the user's watchlist and which entries stand for it there, whether
-  // its card stands in a Continue Watching row, and in which Next Up it
-  // does.
+  // its card stands in a Continue Watching row, in which Next Up it does,
+  // and, on a title's page, whether the user may watch it together.
   function askFacts(api, id, card) {
     var user = api.getCurrentUserId()
     var row = card && card.getAttribute('data-positionticks') ? card.closest('.itemsContainer') : null
@@ -2468,11 +2568,20 @@
     var resume = row
       ? api.getJSON(api.getUrl('UserItems/Resume', { userId: user, Limit: 100, MediaTypes: 'Video', EnableImages: false }))
       : null
+    // The user signed in, which jellyfin-web keeps, for their SyncPlay
+    // access; none leaves Watch together out.
+    var viewer =
+      !card && typeof api.getCurrentUser === 'function'
+        ? api.getCurrentUser().then(null, function () {
+            return null
+          })
+        : null
     var asked = [
       api.getItem(user, id),
       api.getJSON(api.getUrl('Polyfin/UserItems/Hidden')),
       resume,
       api.getJSON(api.getUrl('Polyfin/UserItems/Watchlist')),
+      viewer,
     ]
     return Promise.all(asked).then(function (answers) {
       var item = answers[0] || {}
@@ -2530,8 +2639,23 @@
             return resumable[plainId(other.getAttribute('data-id'))]
           }),
         nextUp: item.Type === 'Episode' && series ? nextUp : '',
+        // A movie or an episode, for a user who may start a SyncPlay group
+        // where jellyfin-web offers SyncPlay (see the header).
+        together:
+          /^(Movie|Episode)$/.test(item.Type) && !!answers[4] && mayStartGroups(answers[4]) && syncPlayOffered()
+            ? answers[4]
+            : null,
       }
     })
+  }
+  function mayStartGroups(user) {
+    return !!user.Policy && user.Policy.SyncPlayAccess === 'CreateAndJoinGroups'
+  }
+  // syncPlayOffered tells whether jellyfin-web shows its SyncPlay button,
+  // from which the others join: in the default layout's top bar, or the
+  // legacy layouts' header.
+  function syncPlayOffered() {
+    return !!document.querySelector('button[aria-controls="app-sync-play-menu"], .headerSyncButton:not(.hide)')
   }
   // extendMenu adds the entries to the item menu a dialog container holds,
   // when it opens for the item aimed at, once Polyfin answered.
@@ -2646,13 +2770,22 @@
             })
           )
         }
-        // The menu was placed for its own entries: it moves up, and left, as
-        // far as the added ones need.
-        var box = sheet.getBoundingClientRect()
-        if (sheet.style.top && box.bottom > window.innerHeight) {
-          sheet.style.top = Math.max(0, window.innerHeight - box.height) + 'px'
+        if (facts.together) {
+          scroller.appendChild(
+            menuItem(container, model, 'groups', say('watchTogether'), function () {
+              watchTogether(entry.id, facts.together)
+            })
+          )
         }
-        // Measured without the transform of its opening animation.
+        // The menu was placed for its own entries: it moves up, and left, as
+        // far as the added ones need, measured without the transform of its
+        // opening animation, which scales it down at first.
+        var box = sheet.getBoundingClientRect()
+        var top = parseFloat(sheet.style.top)
+        var tall = sheet.offsetHeight || box.height
+        if (sheet.style.top && top + tall > window.innerHeight) {
+          sheet.style.top = Math.max(0, window.innerHeight - tall) + 'px'
+        }
         var width = document.documentElement.clientWidth || window.innerWidth
         var left = parseFloat(sheet.style.left)
         var wide = sheet.offsetWidth || box.width
@@ -2701,6 +2834,116 @@
     var request = { type: method, url: api.getUrl('Polyfin/UserItems/' + id + '/' + path) }
     if (path === 'Resume') request.dataType = 'json'
     api.ajax(request).then(quietly(done), function () {})
+  }
+  // The SyncPlay group the page's session is in, as the socket's
+  // SyncPlayGroupUpdate messages tell it, with the user signed in then.
+  // Polyfin takes a session out of its group as its socket closes, as a
+  // page loaded again or another user signing in does.
+  var syncGroup = null
+  function heardGroup(message) {
+    var update = message && message.Data
+    if (!update) return
+    if (update.Type === 'GroupJoined' && update.GroupId) {
+      var api = window.ApiClient
+      syncGroup = { user: api ? api.getCurrentUserId() : '', id: String(update.GroupId) }
+    } else if (/^(GroupLeft|NotInGroup|GroupDoesNotExist)$/.test(update.Type)) {
+      syncGroup = null
+    }
+  }
+  // Those waiting for jellyfin-web's next ping of its SyncPlay group.
+  var pingWaiters = []
+  function pinged() {
+    var waiters = pingWaiters
+    pingWaiters = []
+    waiters.forEach(function (resolve) {
+      resolve()
+    })
+  }
+  // nextPing resolves at jellyfin-web's next ping, or within milliseconds
+  // at the latest.
+  function nextPing(within) {
+    return new Promise(function (resolve) {
+      pingWaiters.push(resolve)
+      setTimeout(resolve, within)
+    })
+  }
+  // watchTogether starts the title id in a SyncPlay group of host, the
+  // user signed in, paused at its start (see the header), and says how the
+  // others join, or why it could not.
+  function watchTogether(id, host) {
+    var api = window.ApiClient
+    var user = api.getCurrentUserId()
+    var group = syncGroup && syncGroup.user === user ? syncGroup.id : ''
+    function send(method, path, body) {
+      var request = { type: method, url: api.getUrl(path) }
+      if (body) {
+        request.data = JSON.stringify(body)
+        request.contentType = 'application/json'
+      }
+      if (method === 'GET' || path === 'SyncPlay/New') request.dataType = 'json'
+      return api.ajax(request)
+    }
+    function refusal(key) {
+      return { refused: key }
+    }
+    api
+      .getJSON(api.getUrl('Polyfin/Items/' + id + '/Versions'))
+      .then(function (progress) {
+        // A title without a known version would not play: jellyfin-web
+        // holds its play buttons meanwhile (see the third).
+        if (progress && progress.Count >= 1 && progress.Known === 0) {
+          throw refusal(progress.Pending > 0 ? 'togetherSearching' : 'none')
+        }
+        // The group the session is in, unless it ended meanwhile.
+        if (!group) return null
+        return send('GET', 'SyncPlay/' + group).then(null, function () {
+          return null
+        })
+      })
+      .then(function (current) {
+        if (current) return current
+        // A new group starts stopped: it tells jellyfin-web to stop, which
+        // jellyfin-web does once its clock is set to the server's, about
+        // a second later, and would stop the title started meanwhile. It
+        // pings the group then, the stop done.
+        var ready = nextPing(10000)
+        return send('POST', 'SyncPlay/New', { GroupName: say('groupName').replace('{name}', host.Name || '') }).then(function (joined) {
+          return ready.then(function () {
+            return joined
+          })
+        })
+      })
+      .then(function (joined) {
+        group = joined.GroupId
+        return send('POST', 'SyncPlay/SetNewQueue', { PlayingQueue: [id], PlayingItemPosition: 0, StartPositionTicks: 0 })
+      })
+      .then(function () {
+        return send('GET', 'SyncPlay/' + group)
+      })
+      .then(function (current) {
+        // A queue some member may not play leaves the group as it was.
+        if (!current || current.State !== 'Waiting') throw refusal('togetherRefused')
+        return send('POST', 'SyncPlay/Pause')
+      })
+      .then(function () {
+        toast(say('togetherStarted'), 10000)
+      })
+      .catch(function (error) {
+        if (error && error.refused) return toast(say(error.refused))
+        if (!error || error.status !== 403 || typeof api.getUser !== 'function') return toast(say('togetherFailed'))
+        // SyncPlay refused: the user's access changed since jellyfin-web
+        // asked for it.
+        return api.getUser(user).then(
+          function (fresh) {
+            var access = fresh && fresh.Policy ? fresh.Policy.SyncPlayAccess : ''
+            toast(say(access === 'None' ? 'togetherOff' : access === 'JoinGroups' ? 'togetherJoinOnly' : 'togetherFailed'))
+          },
+          function () {
+            toast(say('togetherFailed'))
+          }
+        )
+      })
+      .catch(function () {})
   }
   // What the entries took off (see the header), kept in the browser's
   // session storage under dropsKey for dropsKept: jellyfin-web keeps its
@@ -2978,8 +3221,9 @@
       if (section && !row.querySelector('.card, .listItem')) section.classList.add('hide')
     })
   }
-  // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
-  function toast(text) {
+  // toast says text as jellyfin-web's toasts do, for 3.3 seconds, or for
+  // lasts milliseconds when given, for a longer text.
+  function toast(text, lasts) {
     var holder = document.querySelector('.toastContainer')
     if (!holder) {
       holder = element('div', 'toastContainer', '')
@@ -2995,7 +3239,7 @@
       setTimeout(function () {
         note.remove()
       }, 300)
-    }, 3300)
+    }, lasts || 3300)
   }
   // The title whose Share is asked about (see the header), the address its
   // button opens once Polyfin says it may be shared, the next ask while
