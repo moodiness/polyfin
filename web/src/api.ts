@@ -4192,6 +4192,10 @@ export const updateAddon = (scope: Scope, id: string, patch: AddonPatch) =>
 export const refreshAddon = (scope: Scope, id: string) =>
   request<Addon>('POST', `${scopePath(scope)}/addons/${seg(id)}/refresh`)
 
+/** Refresh everything: the manifest again, and the addon's pages, descriptions and version lists made old. */
+export const refreshAddonAll = (scope: Scope, id: string) =>
+  request<Addon>('POST', `${scopePath(scope)}/addons/${seg(id)}/refresh-all`)
+
 export const addIptvSource = (scope: Scope, source: NewIptvSource) =>
   request<Addon>('POST', `${scopePath(scope)}/iptv`, source)
 

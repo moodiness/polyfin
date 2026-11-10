@@ -82,6 +82,12 @@ const sources: typeof en = {
     refreshLabel: (name: string) => `Atualizar ${name}`,
     refreshed: (name: string) => `${name}: o manifesto foi baixado novamente.`,
     refreshedList: (name: string) => `${name}: a lista foi baixada novamente.`,
+    refreshAll: 'Atualizar tudo',
+    refreshAllTitle: (name: string) => `Atualizar tudo de ${name}?`,
+    refreshAllBody:
+      'O manifesto dele é baixado novamente. As páginas de catálogo, descrições e listas de versões dele são pedidas de novo à medida que forem necessárias, não todas de uma vez, e as bibliotecas dele mantêm as configurações.',
+    refreshedAll: (name: string) =>
+      `${name}: o manifesto foi baixado novamente, e o resto será pedido de novo à medida que for necessário.`,
     replace: 'Substituir o endereço',
     newManifestUrl: 'Novo endereço do manifesto',
     replaceHint:

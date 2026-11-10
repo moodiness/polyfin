@@ -82,6 +82,12 @@ const sources: typeof en = {
     refreshLabel: (name: string) => `Actualiser ${name}`,
     refreshed: (name: string) => `${name}\u202f: le manifeste a été téléchargé à nouveau.`,
     refreshedList: (name: string) => `${name}\u202f: la liste a été téléchargée à nouveau.`,
+    refreshAll: 'Tout actualiser',
+    refreshAllTitle: (name: string) => `Tout actualiser pour ${name}\u202f?`,
+    refreshAllBody:
+      'Son manifeste est téléchargé à nouveau. Ses pages de catalogue, ses descriptions et ses listes de versions sont redemandées au fur et à mesure des besoins, pas toutes d’un coup, et ses bibliothèques gardent leurs réglages.',
+    refreshedAll: (name: string) =>
+      `${name}\u202f: le manifeste a été téléchargé à nouveau, et le reste sera redemandé au fur et à mesure des besoins.`,
     replace: 'Remplacer l’adresse',
     newManifestUrl: 'Nouvelle adresse du manifeste',
     replaceHint:

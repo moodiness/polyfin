@@ -13,6 +13,7 @@ import {
   queryClient,
   queryKeys,
   refreshAddon,
+  refreshAddonAll,
   updateAddon,
   type Addon,
   type Scope,
@@ -113,6 +114,7 @@ export function SourceDetail({
   const system = useServerSystem()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [confirmingAll, setConfirmingAll] = useState(false)
 
   const fallbackScope: Scope = scope ?? 'shared'
   const toggle = useSourceToggle(fallbackScope, addon.id)
@@ -133,6 +135,16 @@ export function SourceDetail({
               : text.refreshed(updated.name),
         )
       }
+    },
+    onSettled: () => invalidateScope(fallbackScope),
+  })
+  // Refresh everything: the manifest again, and the rest asked for again as it is next needed.
+  const refreshAll = useMutation({
+    mutationFn: () => refreshAddonAll(fallbackScope, addon.id),
+    onSuccess: (updated) => {
+      replaceCachedAddon(fallbackScope, updated)
+      setConfirmingAll(false)
+      toast(text.refreshedAll(updated.name))
     },
     onSettled: () => invalidateScope(fallbackScope),
   })
@@ -208,10 +220,17 @@ export function SourceDetail({
       <Menu
         label={text.moreActions(addon.name)}
         align="end"
+        // On a phone the actions start the row: the menu, aligned on its end, opens from its right edge.
+        className="max-md:ml-auto"
         trigger={(props) => (
           <IconButton {...props} label={text.moreActions(addon.name)} icon={DotsThreeIcon} />
         )}
       >
+        {!iptv && folder === null && (
+          <MenuItem icon={ArrowsClockwiseIcon} onSelect={() => setConfirmingAll(true)}>
+            {text.refreshAll}
+          </MenuItem>
+        )}
         <MenuItem
           icon={iptv || folder !== null ? PencilSimpleIcon : LinkSimpleIcon}
           onSelect={() => setEditing(true)}
@@ -524,6 +543,24 @@ export function SourceDetail({
               </div>
             )}
           </div>
+        </ConfirmDialog>
+      )}
+
+      {scope !== null && (
+        <ConfirmDialog
+          open={confirmingAll}
+          onClose={() => {
+            setConfirmingAll(false)
+            refreshAll.reset()
+          }}
+          onConfirm={() => refreshAll.mutate()}
+          title={text.refreshAllTitle(addon.name)}
+          confirmLabel={text.refreshAll}
+          tone="primary"
+          busy={refreshAll.isPending}
+          error={refreshAll.isError ? errorMessage(t, refreshAll.error) : undefined}
+        >
+          <p>{text.refreshAllBody}</p>
         </ConfirmDialog>
       )}
     </article>
