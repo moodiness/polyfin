@@ -485,11 +485,22 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 
 ### Version names
 
-**Say in version names how they play** ends each movie or episode version's name with how the app plays it, as synced subtitles end with "(synced)" (see [Subtitles](subtitles.md)). The rest of the name is unchanged.
+**Version names** sets how each movie or episode version is named: **As the addon writes them** keeps the addon's name; **Short** has Polyfin write it. **Say in version names how they play** then ends the name with how the app plays it, as synced subtitles end with "(synced)" (see [Subtitles](subtitles.md)). The rest of the name is as **Version names** writes it.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Say in version names how they play** | **Settings › Playback** | On | Adds how each version plays. Off, names are the addons' own. |
+| **Version names** | **Settings › Playback** | **As the addon writes them** | **Short** names each version from its [badges](#badges), size and addon. |
+| **Say in version names how they play** | **Settings › Playback** | On | Adds how each version plays. Off, names are as **Version names** writes them. |
+
+**Short** names give the version's badges in their order (resolution, HDR kind, video codec, audio format with its channels, edition, audio languages as codes, never flags), then its size and its addon, those unknown left out:
+
+`4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon`
+
+- Sizes are in decimal units: whole gigabytes from 10 GB (`58 GB`), one decimal from 1 GB (`4.7 GB`), megabytes below (`700 MB`). They follow **Language of generated names**, as do Stereo and Mono ("Stéréo" in French) (see [Getting started](getting-started.md#language-of-generated-names)): `Go` and `Mo` in French, and a decimal comma in every language but English.
+- The analysis, else the [RemuxDB](#tracks-from-remuxdb) description, wins over the addon's labels, so a name changes once its version is analyzed.
+- Two versions listed together never share a name: the later one ends with ` · 2`, then ` · 3` and so on.
+- Only movies and episodes get short names. They are the same in item details, listings and `PlaybackInfo`, for every app.
+- [Version rules](#version-order) still read the addon's own text.
 
 | Ending | When |
 |---|---|
@@ -522,3 +533,21 @@ Polyfin reads no keyframe index for addon MPEG-TS files, MPEG program streams (`
 - A file whose index proves missing or unreadable once played does not play over HLS as named: names do not read the index.
 
 API details: [Version names for apps](jellyfin-api.md#version-names-for-apps).
+
+#### Badges
+
+Badges tell what a version holds in a few words. Polyfin builds them from the version's analysis, else its [RemuxDB](#tracks-from-remuxdb) description, else the addon's labels (see [Label rules](#label-rules)); the edition comes from the labels only. Kinds come in this order, each left out when nothing tells it:
+
+| Kind | Texts | Full words |
+|---|---|---|
+| Resolution | 8K, 4K, 1440p, 1080p, 720p, SD | "4K Ultra HD", "1080p Full HD", "Standard definition"; a wide video counts by its width, so a wide 4K movie is 4K |
+| HDR kind | DV, HDR10+, HDR10, HLG, HDR | "Dolby Vision"; HDR when its kind is unknown; none for SDR |
+| Video codec | HEVC, H.264, AV1, VP9, VC-1, MPEG-2… | "HEVC video" |
+| Audio format | Atmos, DTS:X, TrueHD, DTS-HD MA, DTS-HD, DD+ | "Dolby Atmos", "DTS-HD Master Audio", "Dolby Digital Plus" |
+| Channels | 7.1, 5.1…; Stereo and Mono in words | "7.1 surround sound", "Stereo"; in French « Stéréo », « Mono » |
+| Edition | IMAX, Extended, Director’s Cut, Theatrical | "Extended edition", "Theatrical cut" |
+| Audio languages | Codes such as FR, EN | "Audio: French"; at most the first 4 languages. MULTI shows only when the labels say several languages without naming one |
+
+- Labels are read in their usual spellings: DV, Dolby Vision or DoVi; HDR10+ or HDR10Plus; DD+, DDP or E-AC-3. DTS-HD MA is told from plain DTS-HD; Atmos and DTS:X are kept apart from the TrueHD or DTS-HD track carrying them.
+- Full words follow the language asked, such as "Version longue" for Extended in French.
+- The web player shows them as a row under **Version badges** (see [Version badges](web-client.md#version-badges)). Apps read them through [Version badges for apps](jellyfin-api.md#version-badges-for-apps).
