@@ -2,8 +2,5 @@
 
 package iptv
 
-// raceSlowdown scales time bounds while the race detector slows code down.
-const raceSlowdown = 1
-
-// lineupScale divides the size of TestLargeLineupsStayFast's line-up.
+// lineupScale divides the size of TestLargeLineupsStayFast's line-ups.
 const lineupScale = 1
