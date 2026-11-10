@@ -402,7 +402,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
 	registerTasks(registry, store, activityLog, lib, channels, logger)
-	registry.Register(emptySourceCacheTask(sources, store.Settings, logger))
+	registry.Register(emptySourceCacheTask(sources, logger))
 	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		return err
@@ -899,6 +899,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	}
 	// Jellyfin's handler, created above, closes the sockets of the devices
 	// the device sweep signs out. The guides due are fetched at start too.
+	if err := registry.Load(ctx, tasks.NewStore(pool)); err != nil {
+		return fmt.Errorf("read the tasks' triggers and last runs: %w", err)
+	}
 	registry.Start(ctx)
 	// Recordings in progress when ctx ends are finished, as partial, when
 	// Polyfin starts again.
@@ -972,8 +975,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Disconnetti i dispositivi inutilizzati", Description: "Disconnette le applicazioni Jellyfin rimaste inutilizzate per il numero di giorni scelto nelle impostazioni."},
 			"pt-BR": {Name: "Desconectar dispositivos sem uso", Description: "Desconecta os aplicativos Jellyfin que ficaram sem uso pelo número de dias escolhido nas configurações."},
 		},
-		Interval: accounts.DeviceSweepInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(accounts.DeviceSweepInterval)},
+		Limits:   tasks.Limits{Locked: tasks.LockedSettings},
 		Run:      func(ctx context.Context) error { return store.SweepInactiveDevices(ctx, logger) },
 	})
 	registry.Register(tasks.Task{
@@ -987,8 +990,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Pulisci il registro attività", Description: "Elimina le voci del registro attività più vecchie di 30 giorni."},
 			"pt-BR": {Name: "Limpar o registro de atividades", Description: "Exclui as entradas do registro de atividades com mais de 30 dias."},
 		},
-		Interval: activity.SweepInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(activity.SweepInterval)},
+		Limits:   tasks.Limits{MinInterval: time.Hour},
 		Run: func(ctx context.Context) error {
 			deleted, err := activityLog.Sweep(ctx)
 			if deleted > 0 {
@@ -1008,8 +1011,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Aggiorna le guide della Diretta TV", Description: "Scarica gli elenchi canali IPTV, poi le guide XMLTV dei cataloghi di Diretta TV non scaricate da quante ore scelte in Impostazioni › Diretta TV; avviata a mano, scarica subito tutti gli elenchi e tutte le guide."},
 			"pt-BR": {Name: "Atualizar os guias de TV ao Vivo", Description: "Baixa as listas de canais IPTV e depois os guias XMLTV dos catálogos de TV ao Vivo que não foram baixados nas horas definidas em Configurações › TV ao Vivo; iniciada manualmente, baixa agora todas as listas e guias."},
 		},
-		Interval: library.GuideCheck,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(library.GuideCheck)},
+		Limits:   tasks.Limits{Locked: tasks.LockedSettings},
 		Run: func(ctx context.Context) error {
 			// The guides are matched with the channels of the lists.
 			if err := channels.RefreshDue(ctx, tasks.ByHand(ctx)); err != nil {
@@ -1031,25 +1034,25 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Leggi la prima pagina delle librerie", Description: "Rilegge dagli add-on la prima pagina di ogni libreria più vecchia di «Aggiorna i cataloghi dopo (minuti)», così le schermate iniziali non la aspettano mai, poi scarica le loro locandine e le ridimensiona per le schede delle app, e dimentica le pagine di catalogo e le descrizioni che nessuno legge da tempo."},
 			"pt-BR": {Name: "Ler a primeira página das bibliotecas", Description: "Lê de novo nos complementos a primeira página de cada biblioteca mais antiga que “Atualizar catálogos após (minutos)”, para que as telas iniciais nunca esperem por ela, depois baixa os pôsteres delas e os redimensiona para os cartões dos aplicativos, e esquece as páginas de catálogo e as descrições que ninguém lê há muito tempo."},
 		},
-		Interval: library.WarmInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(library.WarmInterval)},
+		Limits:   tasks.Limits{MinInterval: 15 * time.Minute},
 		Run:      lib.Warm,
 	})
-	// Reading every collection asks the addons for many pages: it runs at
-	// the hour an administrator sets, never by default.
+	// Reading every collection asks the addons for many pages: it runs on
+	// the triggers an administrator gives it, none by default.
 	registry.Register(tasks.Task{
 		Key:      "ReadCollections",
 		Category: tasks.CategoryLibrary,
 		Text: map[string]tasks.Text{
-			"en":    {Name: "Read every collection", Description: "Reads every collection of the server's collection libraries whole, two at a time, then the catalogs of the server's smart lists, so that each opens at once with all its titles: every day at the hour set under Settings › Catalogs, never by default."},
-			"fr":    {Name: "Lire toutes les collections", Description: "Lit en entier toutes les collections des médiathèques de collections du serveur, deux à la fois, puis les catalogues des listes intelligentes du serveur, pour que chacune s’ouvre tout de suite avec tous ses titres\u202f: chaque jour à l’heure choisie dans Paramètres › Catalogues, jamais par défaut."},
-			"de":    {Name: "Alle Sammlungen lesen", Description: "Liest alle Sammlungen der Sammlungsbibliotheken des Servers vollständig, jeweils zwei gleichzeitig, dann die Kataloge der intelligenten Listen des Servers, damit sich jede sofort mit allen Titeln öffnet: jeden Tag zu der unter Einstellungen › Kataloge festgelegten Stunde, standardmäßig nie."},
-			"es":    {Name: "Leer todas las colecciones", Description: "Lee enteras, de dos en dos, todas las colecciones de las bibliotecas de colecciones del servidor y luego los catálogos de las listas inteligentes del servidor, para que cada una se abra al instante con todos sus títulos: cada día a la hora elegida en Ajustes › Catálogos, nunca por defecto."},
-			"it":    {Name: "Leggi tutte le collezioni", Description: "Legge per intero, due alla volta, tutte le collezioni delle librerie di collezioni del server, poi i cataloghi delle liste intelligenti del server, così ognuna si apre subito con tutti i suoi titoli: ogni giorno all’ora scelta in Impostazioni › Cataloghi, mai in modo predefinito."},
-			"pt-BR": {Name: "Ler todas as coleções", Description: "Lê por inteiro, duas de cada vez, todas as coleções das bibliotecas de coleções do servidor e depois os catálogos das listas inteligentes do servidor, para que cada uma abra na hora com todos os seus títulos: todos os dias na hora definida em Configurações › Catálogos, nunca por padrão."},
+			"en":    {Name: "Read every collection", Description: "Reads every collection of the server's collection libraries whole, two at a time, then the catalogs of the server's smart lists, so that each opens at once with all its titles. It has no trigger by default."},
+			"fr":    {Name: "Lire toutes les collections", Description: "Lit en entier toutes les collections des médiathèques de collections du serveur, deux à la fois, puis les catalogues des listes intelligentes du serveur, pour que chacune s’ouvre tout de suite avec tous ses titres. Elle n’a aucun déclencheur par défaut."},
+			"de":    {Name: "Alle Sammlungen lesen", Description: "Liest alle Sammlungen der Sammlungsbibliotheken des Servers vollständig, jeweils zwei gleichzeitig, dann die Kataloge der intelligenten Listen des Servers, damit sich jede sofort mit allen Titeln öffnet. Standardmäßig hat sie keinen Auslöser."},
+			"es":    {Name: "Leer todas las colecciones", Description: "Lee enteras, de dos en dos, todas las colecciones de las bibliotecas de colecciones del servidor y luego los catálogos de las listas inteligentes del servidor, para que cada una se abra al instante con todos sus títulos. No tiene ningún activador por defecto."},
+			"it":    {Name: "Leggi tutte le collezioni", Description: "Legge per intero, due alla volta, tutte le collezioni delle librerie di collezioni del server, poi i cataloghi delle liste intelligenti del server, così ognuna si apre subito con tutti i suoi titoli. Per impostazione predefinita non ha alcun attivatore."},
+			"pt-BR": {Name: "Ler todas as coleções", Description: "Lê por inteiro, duas de cada vez, todas as coleções das bibliotecas de coleções do servidor e depois os catálogos das listas inteligentes do servidor, para que cada uma abra na hora com todos os seus títulos. Por padrão, não tem nenhum gatilho."},
 		},
-		Daily: func() int { return store.Settings().CollectionReadHour },
-		Run:   lib.ReadCollections,
+		Limits: tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: 12 * time.Hour},
+		Run:    lib.ReadCollections,
 	})
 	// Asking for ratings costs requests to addons: this runs only when an
 	// administrator starts it.
@@ -1064,6 +1067,7 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Aggiorna le classificazioni", Description: "Richiede agli add-on del server le classificazioni e i generi dei titoli richiesti molto tempo fa, che usano il controllo parentale e i generi bloccati."},
 			"pt-BR": {Name: "Atualizar as classificações", Description: "Pede de novo aos complementos do servidor as classificações etárias e os gêneros dos títulos pedidos há muito tempo, que o controle parental e os gêneros bloqueados usam."},
 		},
+		Limits: tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: 24 * time.Hour},
 		Run: func(ctx context.Context) error {
 			asked, err := lib.RefreshRatings(ctx)
 			logger.Info("Ratings refreshed", "titles", asked)
@@ -1084,8 +1088,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Annota gli account scaduti", Description: "Scrive nel registro attività, una volta ciascuno, gli account la cui fine, data o ora esatta, è arrivata."},
 			"pt-BR": {Name: "Registrar as contas encerradas", Description: "Registra no registro de atividades, uma vez cada, as contas cujo encerramento, data ou hora exata, chegou."},
 		},
-		Interval: accounts.EndCheckInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(accounts.EndCheckInterval)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.IntervalTrigger, tasks.StartupTrigger}, MinInterval: 10 * time.Minute, KeepOne: true},
 		Run: func(ctx context.Context) error {
 			ended, err := store.EndedAccounts(ctx)
 			for _, user := range ended {
@@ -1107,8 +1111,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			"it":    {Name: "Annota i link di condivisione scaduti", Description: "Scrive nel registro attività, una volta ciascuno, i link di condivisione scaduti ed elimina quelli terminati da più di 30 giorni."},
 			"pt-BR": {Name: "Registrar os links de compartilhamento expirados", Description: "Registra no registro de atividades, uma vez cada, os links de compartilhamento que expiraram, e exclui os que terminaram há mais de 30 dias."},
 		},
-		Interval: accounts.ShareLinkCheckInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(accounts.ShareLinkCheckInterval)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.IntervalTrigger, tasks.StartupTrigger}, MinInterval: 10 * time.Minute, KeepOne: true},
 		Run: func(ctx context.Context) error {
 			expired, err := store.ExpiredShareLinks(ctx)
 			for _, link := range expired {
@@ -1134,8 +1138,8 @@ func registerLocalFoldersTask(registry *tasks.Registry, folders *localfiles.Serv
 			"it":    {Name: "Scansiona le cartelle locali", Description: "Cerca nelle cartelle locali i file aggiunti, modificati o rimossi dall’ultima scansione e associa i nuovi ai titoli: ogni cartella all’avvio, poi ogni numero di ore scelto in Impostazioni › Cataloghi; avviata a mano, scansiona subito tutte le cartelle."},
 			"pt-BR": {Name: "Rastrear as pastas locais", Description: "Procura nas pastas locais os arquivos adicionados, alterados ou removidos desde o último rastreamento e associa os novos a títulos: cada pasta na inicialização, depois a cada número de horas definido em Configurações › Catálogos; iniciada manualmente, rastreia agora todas as pastas."},
 		},
-		Interval: localfiles.ScanCheck,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(localfiles.ScanCheck)},
+		Limits:   tasks.Limits{Locked: tasks.LockedSettings},
 		Run:      func(ctx context.Context) error { return folders.ScanDue(ctx, tasks.ByHand(ctx)) },
 	})
 }
@@ -1157,8 +1161,8 @@ func registerCleanupTask(registry *tasks.Registry, lib *library.Service, folders
 			"it":    {Name: "Pulisci le fonti rimosse", Description: "Elimina ciò che hanno lasciato le fonti rimosse e i cataloghi tolti dai loro add-on: le loro librerie, collezioni e canali, le loro registrazioni programmate e il loro posto nelle liste intelligenti, nelle librerie nascoste e nei limiti della Diretta TV; i titoli che elencavano passano al prossimo catalogo che li elenca."},
 			"pt-BR": {Name: "Limpar as fontes removidas", Description: "Exclui o que as fontes removidas e os catálogos retirados pelos complementos deixaram: suas bibliotecas, coleções e canais, suas gravações agendadas e seu lugar nas listas inteligentes, nas bibliotecas ocultas e nos limites de TV ao Vivo; os títulos que listavam passam para o próximo catálogo que os liste."},
 		},
-		Interval: library.LeftoversInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(library.LeftoversInterval)},
+		Limits:   tasks.Limits{MinInterval: 15 * time.Minute},
 		Run: func(ctx context.Context) error {
 			cleaned, err := lib.CleanUpRemoved(ctx)
 			if err != nil {
@@ -1192,8 +1196,8 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 			"it":    {Name: "Elimina le vecchie registrazioni", Description: "Elimina le registrazioni della Diretta TV più vecchie del numero di giorni scelto nelle impostazioni."},
 			"pt-BR": {Name: "Excluir gravações antigas", Description: "Exclui as gravações de TV ao Vivo mais antigas que o número de dias definido nas configurações."},
 		},
-		Interval: recordings.SweepInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(recordings.SweepInterval)},
+		Limits:   tasks.Limits{MinInterval: time.Hour},
 		Run:      recorder.SweepRecordings,
 	})
 	registry.Register(tasks.Task{
@@ -1207,8 +1211,8 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 			"it":    {Name: "Pianifica le registrazioni delle serie TV", Description: "Cerca nella guida i nuovi programmi di ogni registrazione di serie TV e li pianifica."},
 			"pt-BR": {Name: "Agendar gravações de séries", Description: "Procura no guia os novos programas de cada gravação de série e os agenda."},
 		},
-		Interval: recordings.SeriesRefreshInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(recordings.SeriesRefreshInterval)},
+		Limits:   tasks.Limits{Locked: tasks.LockedRecordings},
 		Run:      recorder.RefreshSeriesTimers,
 	})
 	registry.Register(tasks.Task{
@@ -1222,27 +1226,31 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 			"it":    {Name: "Trova la pubblicità nelle registrazioni", Description: "Legge, una alla volta, le registrazioni terminate non ancora lette per trovarne le interruzioni pubblicitarie, finché «Trova la pubblicità nelle registrazioni» è attivo in Impostazioni › Registrazioni. Altrimenti ogni registrazione viene letta appena termina."},
 			"pt-BR": {Name: "Encontrar comerciais nas gravações", Description: "Lê, uma de cada vez, as gravações terminadas ainda não lidas para encontrar seus intervalos comerciais, enquanto “Encontrar comerciais nas gravações” estiver ativado em Configurações › Gravações. Caso contrário, cada gravação é lida assim que termina."},
 		},
-		Interval: commercials.RunInterval,
+		Triggers: []tasks.Trigger{tasks.Every(commercials.RunInterval)},
+		Limits:   tasks.Limits{MinInterval: time.Hour},
 		Run:      breaks.Run,
 	})
 }
 
-// registerBackupTask registers the daily database backup: it runs every
-// day while backups are on, and by hand only, failing, while they are off.
+// registerBackupTask registers the database backup: it runs every day at
+// backup.DefaultTime by default while backups are on, and by hand only,
+// failing, while they are off.
 func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
 	registry.Register(tasks.Task{
-		Key:      "BackUpDatabase",
+		Key:      backup.TaskKey,
 		Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{
-			"en":    {Name: "Back up the database", Description: "Copies the database into the backup folder every day at the hour set under Settings › Backups, while backups are on, sends the copies to the backup destinations, and deletes the oldest copies past the number each place keeps."},
-			"fr":    {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans le dossier des sauvegardes chaque jour à l’heure choisie dans Paramètres › Sauvegardes, quand elles sont activées, envoie les copies aux destinations des sauvegardes, et supprime les plus anciennes copies au-delà du nombre que chaque endroit conserve."},
-			"de":    {Name: "Datenbank sichern", Description: "Kopiert die Datenbank jeden Tag zu der unter Einstellungen › Backups festgelegten Stunde in den Backup-Ordner, solange Backups aktiviert sind, sendet die Kopien an die Backup-Ziele und löscht die ältesten Kopien über die Anzahl hinaus, die jeder Ort behält."},
-			"es":    {Name: "Hacer una copia de seguridad de la base de datos", Description: "Copia la base de datos en la carpeta de las copias de seguridad cada día a la hora elegida en Ajustes › Copias de seguridad, mientras estén activadas, envía las copias a los destinos de las copias de seguridad y borra las copias más antiguas que superen el número que conserva cada lugar."},
-			"it":    {Name: "Esegui il backup del database", Description: "Copia il database nella cartella dei backup ogni giorno all’ora scelta in Impostazioni › Backup, finché i backup sono attivi, invia le copie alle destinazioni dei backup ed elimina le copie più vecchie oltre il numero che ogni posizione conserva."},
-			"pt-BR": {Name: "Fazer backup do banco de dados", Description: "Copia o banco de dados para a pasta de backups todos os dias na hora definida em Configurações › Backups, enquanto os backups estiverem ativados, envia as cópias para os destinos de backup e exclui as cópias mais antigas além do número que cada local mantém."},
+			"en":    {Name: "Back up the database", Description: "Copies the database into the backup folder, while backups are on, sends the copies to the backup destinations, and deletes the oldest copies past the number each place keeps."},
+			"fr":    {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans le dossier des sauvegardes, quand elles sont activées, envoie les copies aux destinations des sauvegardes, et supprime les plus anciennes copies au-delà du nombre que chaque endroit conserve."},
+			"de":    {Name: "Datenbank sichern", Description: "Kopiert die Datenbank in den Backup-Ordner, solange Backups aktiviert sind, sendet die Kopien an die Backup-Ziele und löscht die ältesten Kopien über die Anzahl hinaus, die jeder Ort behält."},
+			"es":    {Name: "Hacer una copia de seguridad de la base de datos", Description: "Copia la base de datos en la carpeta de las copias de seguridad, mientras estén activadas, envía las copias a los destinos de las copias de seguridad y borra las copias más antiguas que superen el número que conserva cada lugar."},
+			"it":    {Name: "Esegui il backup del database", Description: "Copia il database nella cartella dei backup, finché i backup sono attivi, invia le copie alle destinazioni dei backup ed elimina le copie più vecchie oltre il numero che ogni posizione conserva."},
+			"pt-BR": {Name: "Fazer backup do banco de dados", Description: "Copia o banco de dados para a pasta de backups, enquanto os backups estiverem ativados, envia as cópias para os destinos de backup e exclui as cópias mais antigas além do número que cada local mantém."},
 		},
-		Daily: backups.Hour,
-		Run:   backups.Run,
+		Triggers: []tasks.Trigger{tasks.Daily(backup.DefaultTime)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: 6 * time.Hour},
+		Enabled:  backups.Available,
+		Run:      backups.Run,
 	})
 }
 
@@ -1260,8 +1268,8 @@ func registerTasteTask(registry *tasks.Registry, tastes *taste.Service) {
 			"it":    {Name: "Crea i profili dei gusti", Description: "Ricrea il profilo dei gusti di ogni utente dai film e dalle serie che ha finito, rivisto, interrotto presto, apprezzato, non apprezzato, messo tra i preferiti e nascosto, per Scelti per te e l’ordine dei titoli simili, dei suggerimenti e dei film consigliati: ogni ora."},
 			"pt-BR": {Name: "Criar os perfis de gosto", Description: "Cria de novo o perfil de gosto de cada usuário a partir dos filmes e séries que ele terminou, reviu, largou cedo, curtiu, não curtiu, marcou como favoritos e ocultou, para Escolhas para você e a ordem dos títulos semelhantes, das sugestões e das recomendações de filmes: a cada hora."},
 		},
-		Interval: taste.BuildInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(taste.BuildInterval)},
+		Limits:   tasks.Limits{MinInterval: 15 * time.Minute},
 		Run:      tastes.BuildAll,
 	})
 }
@@ -1280,8 +1288,8 @@ func registerPlaybackHistoryTask(registry *tasks.Registry, history *plays.Histor
 			"it":    {Name: "Pulisci la cronologia di riproduzione", Description: "Elimina le riproduzioni più vecchie dei giorni da conservare scelti in Impostazioni › Riproduzione."},
 			"pt-BR": {Name: "Limpar o histórico de reprodução", Description: "Exclui as reproduções mais antigas que os dias a manter definidos em Configurações › Reprodução."},
 		},
-		Interval: plays.SweepInterval,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(plays.SweepInterval)},
+		Limits:   tasks.Limits{MinInterval: time.Hour},
 		Run: func(ctx context.Context) error {
 			deleted, err := history.Sweep(ctx)
 			if deleted > 0 {
@@ -1311,7 +1319,8 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"it":    {Name: "Invia il riepilogo settimanale", Description: "Invia subito il riepilogo degli ultimi 7 giorni a ogni destinazione delle notifiche che l’ha scelto. Ogni settimana viene inviato da solo nel giorno e all’ora scelti in Impostazioni › Notifiche."},
 			"pt-BR": {Name: "Enviar o resumo semanal", Description: "Envia agora o resumo dos últimos 7 dias para cada destino de notificação que o escolheu. Toda semana, ele é enviado sozinho no dia e na hora definidos em Configurações › Notificações."},
 		},
-		Run: send(notifications.WeeklySummary),
+		Limits: tasks.Limits{Locked: tasks.LockedNotifications},
+		Run:    send(notifications.WeeklySummary),
 	})
 	registry.Register(tasks.Task{
 		Key:      "SendMonthlySummary",
@@ -1324,7 +1333,8 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"it":    {Name: "Invia il mese in sintesi", Description: "Invia subito la sintesi dell’ultimo mese a ogni destinazione delle notifiche che l’ha scelta. Ogni mese viene inviata da sola il giorno 1, all’ora del riepilogo settimanale."},
 			"pt-BR": {Name: "Enviar a retrospectiva do mês", Description: "Envia agora a retrospectiva do último mês para cada destino de notificação que a escolheu. Todo mês, ela é enviada sozinha no dia 1º, na hora do resumo semanal."},
 		},
-		Run: send(notifications.MonthlySummary),
+		Limits: tasks.Limits{Locked: tasks.LockedNotifications},
+		Run:    send(notifications.MonthlySummary),
 	})
 	registry.Register(tasks.Task{
 		Key:      "SendYearlySummary",
@@ -1337,7 +1347,8 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"it":    {Name: "Invia l’anno in sintesi", Description: "Invia subito la sintesi dell’ultimo anno a ogni destinazione delle notifiche che l’ha scelta. Ogni anno viene inviata da sola il 1º gennaio, all’ora del riepilogo settimanale."},
 			"pt-BR": {Name: "Enviar a retrospectiva do ano", Description: "Envia agora a retrospectiva do último ano para cada destino de notificação que a escolheu. Todo ano, ela é enviada sozinha em 1º de janeiro, na hora do resumo semanal."},
 		},
-		Run: send(notifications.YearlySummary),
+		Limits: tasks.Limits{Locked: tasks.LockedNotifications},
+		Run:    send(notifications.YearlySummary),
 	})
 }
 
@@ -1356,6 +1367,7 @@ func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Tas
 			"it":    {Name: "Dimentica gli elenchi delle versioni", Description: "Dimentica le versioni e i sottotitoli che gli add-on hanno elencato per ogni titolo, compresi quelli conservati da un riavvio all’altro, così ogni titolo interpella di nuovo i suoi add-on. Le versioni fissate e i file bloccati restano. In seguito, la prima riproduzione di ogni titolo attende di nuovo gli add-on, e gli add-on ricevono più richieste per un po’."},
 			"pt-BR": {Name: "Esquecer as listas de versões", Description: "Esquece as versões e as legendas que os complementos listaram para cada título, inclusive as mantidas entre reinicializações, para que cada título consulte de novo seus complementos. As versões fixadas e os arquivos bloqueados permanecem. Depois, a primeira reprodução de cada título espera de novo pelos complementos, e os complementos recebem mais solicitações por um tempo."},
 		},
+		Limits: tasks.Limits{Locked: tasks.LockedByHand},
 		Run: func(ctx context.Context) error {
 			forgotten, err := lib.ForgetVersionLists(ctx)
 			logger.Info("Version lists forgotten", "lists", forgotten)
@@ -1366,21 +1378,21 @@ func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Tas
 
 // emptySourceCacheTask empties the cache of files being read, but for the
 // files being read, and logs the bytes it freed: the tasks tell no more
-// of a run than how it ended. It runs every day at the hour settings
-// give, never by default, and whenever an administrator starts it.
-func emptySourceCacheTask(sources *source.Cache, settings func() accounts.Settings, logger *slog.Logger) tasks.Task {
+// of a run than how it ended. It has no trigger by default, and runs
+// whenever an administrator starts it.
+func emptySourceCacheTask(sources *source.Cache, logger *slog.Logger) tasks.Task {
 	return tasks.Task{
 		Key:      "EmptySourceCache",
 		Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{
-			"en":    {Name: "Empty the cache of files being read", Description: "Removes the parts of files kept in the cache of files being read, but those of the files being read now and those read in the last 30 seconds; the torrents playing keep their pieces. The disk space and the days set under Settings › Playback already bound the cache, so emptying it is rarely needed, and what is played again afterwards is downloaded again. Runs every day at the hour set there, never by default."},
-			"fr":    {Name: "Vider le cache des fichiers lus", Description: "Supprime les parties de fichiers gardées dans le cache des fichiers en cours de lecture, sauf celles des fichiers lus en ce moment et celles lues dans les 30 dernières secondes\u202f; les torrents en cours de lecture gardent leurs morceaux. L’espace disque et les jours choisis dans Paramètres › Lecture bornent déjà le cache\u202f: le vider est rarement utile, et ce qui est relu ensuite est téléchargé à nouveau. S’exécute chaque jour à l’heure choisie là, jamais par défaut."},
-			"de":    {Name: "Cache der gelesenen Dateien leeren", Description: "Entfernt die im Cache der gelesenen Dateien behaltenen Teile, außer denen der gerade gelesenen Dateien und denen, die in den letzten 30 Sekunden gelesen wurden; laufende Torrents behalten ihre Stücke. Speicherplatz und Tage unter Einstellungen › Wiedergabe begrenzen den Cache bereits, daher ist das Leeren selten nötig, und was danach erneut abgespielt wird, wird erneut heruntergeladen. Läuft jeden Tag zu der dort festgelegten Stunde, standardmäßig nie."},
-			"es":    {Name: "Vaciar la caché de archivos en lectura", Description: "Borra las partes de archivos conservadas en la caché de archivos en lectura, salvo las de los archivos que se están leyendo y las leídas en los últimos 30 segundos; los torrents en reproducción conservan sus piezas. El espacio en disco y los días elegidos en Ajustes › Reproducción ya limitan la caché, así que vaciarla rara vez hace falta, y lo que se reproduce de nuevo después se vuelve a descargar. Se ejecuta cada día a la hora elegida allí, nunca por defecto."},
-			"it":    {Name: "Svuota la cache dei file in lettura", Description: "Elimina le parti di file conservate nella cache dei file in lettura, tranne quelle dei file letti in questo momento e quelle lette negli ultimi 30 secondi; i torrent in riproduzione conservano i loro pezzi. Lo spazio su disco e i giorni scelti in Impostazioni › Riproduzione limitano già la cache, quindi svuotarla serve di rado, e ciò che viene riprodotto di nuovo in seguito viene scaricato di nuovo. Viene eseguita ogni giorno all’ora scelta lì, mai in modo predefinito."},
-			"pt-BR": {Name: "Esvaziar o cache de arquivos em leitura", Description: "Exclui as partes de arquivos mantidas no cache de arquivos em leitura, exceto as dos arquivos sendo lidos agora e as lidas nos últimos 30 segundos; os torrents em reprodução mantêm suas partes. O espaço em disco e os dias definidos em Configurações › Reprodução já limitam o cache, então esvaziá-lo raramente é necessário, e o que for reproduzido de novo depois é baixado de novo. É executada todos os dias na hora definida ali, nunca por padrão."},
+			"en":    {Name: "Empty the cache of files being read", Description: "Removes the parts of files kept in the cache of files being read, but those of the files being read now and those read in the last 30 seconds; the torrents playing keep their pieces. The disk space and the days set under Settings › Playback already bound the cache, so emptying it is rarely needed, and what is played again afterwards is downloaded again. It has no trigger by default."},
+			"fr":    {Name: "Vider le cache des fichiers lus", Description: "Supprime les parties de fichiers gardées dans le cache des fichiers en cours de lecture, sauf celles des fichiers lus en ce moment et celles lues dans les 30 dernières secondes\u202f; les torrents en cours de lecture gardent leurs morceaux. L’espace disque et les jours choisis dans Paramètres › Lecture bornent déjà le cache\u202f: le vider est rarement utile, et ce qui est relu ensuite est téléchargé à nouveau. Elle n’a aucun déclencheur par défaut."},
+			"de":    {Name: "Cache der gelesenen Dateien leeren", Description: "Entfernt die im Cache der gelesenen Dateien behaltenen Teile, außer denen der gerade gelesenen Dateien und denen, die in den letzten 30 Sekunden gelesen wurden; laufende Torrents behalten ihre Stücke. Speicherplatz und Tage unter Einstellungen › Wiedergabe begrenzen den Cache bereits, daher ist das Leeren selten nötig, und was danach erneut abgespielt wird, wird erneut heruntergeladen. Standardmäßig hat sie keinen Auslöser."},
+			"es":    {Name: "Vaciar la caché de archivos en lectura", Description: "Borra las partes de archivos conservadas en la caché de archivos en lectura, salvo las de los archivos que se están leyendo y las leídas en los últimos 30 segundos; los torrents en reproducción conservan sus piezas. El espacio en disco y los días elegidos en Ajustes › Reproducción ya limitan la caché, así que vaciarla rara vez hace falta, y lo que se reproduce de nuevo después se vuelve a descargar. No tiene ningún activador por defecto."},
+			"it":    {Name: "Svuota la cache dei file in lettura", Description: "Elimina le parti di file conservate nella cache dei file in lettura, tranne quelle dei file letti in questo momento e quelle lette negli ultimi 30 secondi; i torrent in riproduzione conservano i loro pezzi. Lo spazio su disco e i giorni scelti in Impostazioni › Riproduzione limitano già la cache, quindi svuotarla serve di rado, e ciò che viene riprodotto di nuovo in seguito viene scaricato di nuovo. Per impostazione predefinita non ha alcun attivatore."},
+			"pt-BR": {Name: "Esvaziar o cache de arquivos em leitura", Description: "Exclui as partes de arquivos mantidas no cache de arquivos em leitura, exceto as dos arquivos sendo lidos agora e as lidas nos últimos 30 segundos; os torrents em reprodução mantêm suas partes. O espaço em disco e os dias definidos em Configurações › Reprodução já limitam o cache, então esvaziá-lo raramente é necessário, e o que for reproduzido de novo depois é baixado de novo. Por padrão, não tem nenhum gatilho."},
 		},
-		Daily: func() int { return settings().SourceCacheEmptyHour },
+		Limits: tasks.Limits{MinInterval: 6 * time.Hour},
 		Run: func(context.Context) error {
 			logger.Info("The cache of files being read was emptied", "freed_bytes", sources.Empty())
 			return nil
@@ -1407,8 +1419,8 @@ func registerWatchlistTasks(registry *tasks.Registry, store *accounts.Store, lis
 			"it":    {Name: "Aggiungi gli episodi delle serie da guardare", Description: "Aggiunge alla playlist «Da guardare» di ogni utente gli episodi trasmessi delle serie portate dalle sue liste, appena i loro episodi sono noti e uno è stato trasmesso, come ogni playlist prende una serie."},
 			"pt-BR": {Name: "Adicionar os episódios das séries para assistir", Description: "Adiciona à playlist “Para assistir” de cada usuário os episódios exibidos das séries trazidas por suas listas, assim que seus episódios são conhecidos e um deles foi exibido, como qualquer playlist recebe uma série."},
 		},
-		Interval: time.Hour,
-		AtStart:  true,
+		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(time.Hour)},
+		Limits:   tasks.Limits{MinInterval: 15 * time.Minute},
 		Run:      lists.ExpandAll,
 	})
 	checker := watchlist.NewChecker(watchlist.CheckerOptions{
@@ -1436,7 +1448,8 @@ func registerWatchlistTasks(registry *tasks.Registry, store *accounts.Store, lis
 			"it":    {Name: "Cerca versioni dei titoli da guardare", Description: "Chiede agli add-on di flussi versioni dei titoli non iniziati della lista «Da guardare» di ogni utente, 20 titoli per utente alla volta, ciascuno di nuovo dopo le ore scelte in Impostazioni › Cataloghi, per le righe iniziali Ora disponibili e Ancora in attesa, e avvisa ogni utente una volta di un titolo per cui sono state trovate versioni."},
 			"pt-BR": {Name: "Procurar versões dos títulos para assistir", Description: "Pede aos complementos de streams versões dos títulos não iniciados da lista “Para assistir” de cada usuário, 20 títulos por usuário de cada vez, cada um de novo após as horas definidas em Configurações › Catálogos, para as linhas iniciais Já disponível e Ainda aguardando, e avisa cada usuário uma vez de um título para o qual foram encontradas versões."},
 		},
-		Interval: watchlist.CheckInterval,
+		Triggers: []tasks.Trigger{tasks.Every(watchlist.CheckInterval)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: time.Hour},
 		Run:      checker.Check,
 	})
 }

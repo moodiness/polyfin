@@ -339,7 +339,7 @@ func TestTasksAreListedRunAndStopped(t *testing.T) {
 	registry.Register(tasks.Task{Key: "Wait", Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{"en": {Name: "Wait"}, "fr": {Name: "Attendre"}},
 		Run:  func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }})
-	registry.Register(tasks.Task{Key: "Hourly", Category: tasks.CategoryLibrary, Interval: time.Hour,
+	registry.Register(tasks.Task{Key: "Hourly", Category: tasks.CategoryLibrary, Triggers: []tasks.Trigger{tasks.Every(time.Hour)},
 		Text: map[string]tasks.Text{"en": {Name: "Hourly"}},
 		Run:  func(context.Context) error { return errors.New("addon down") }})
 	registry.Start(t.Context())
@@ -362,7 +362,7 @@ func TestTasksAreListedRunAndStopped(t *testing.T) {
 	if wait := listed["Wait"]; wait.Name != "Attendre" || wait.Category != "Maintenance" || wait.State != "Idle" || wait.Next != nil || wait.Last != nil {
 		t.Errorf("wait: %+v", wait)
 	}
-	if hourly := listed["Hourly"]; hourly.Interval != 3600 || hourly.Next == nil || hourly.Category != "Médiathèque" {
+	if hourly := listed["Hourly"]; len(hourly.Triggers) != 1 || hourly.Triggers[0] != tasks.Every(time.Hour) || hourly.Next == nil || hourly.Category != "Médiathèque" {
 		t.Errorf("hourly: %+v", hourly)
 	}
 
@@ -376,6 +376,56 @@ func TestTasksAreListedRunAndStopped(t *testing.T) {
 	}
 	waitUntil(t, func() bool { last := list()["Wait"].Last; return last != nil && last.Status == "Cancelled" })
 	if status := admin.raw(http.MethodPost, "/tasks/"+tasks.ID("Missing")+"/run", "", nil); status != http.StatusNotFound {
+		t.Errorf("unknown task: %d", status)
+	}
+}
+
+// An administrator replaces a task's triggers within its limits and
+// resets them; a locked task keeps its own, and refused triggers change
+// nothing.
+func TestTaskTriggersAreChangedAndReset(t *testing.T) {
+	t.Parallel()
+	registry := tasks.New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	registry.Register(tasks.Task{Key: "Read", Category: tasks.CategoryLibrary,
+		Limits: tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.IntervalTrigger}, MinInterval: 12 * time.Hour},
+		Text:   map[string]tasks.Text{"en": {Name: "Read"}}, Run: func(context.Context) error { return nil }})
+	registry.Register(tasks.Task{Key: "Poll", Category: tasks.CategoryLibrary, Triggers: []tasks.Trigger{tasks.Every(5 * time.Minute)},
+		Limits: tasks.Limits{Locked: tasks.LockedSettings},
+		Text:   map[string]tasks.Text{"en": {Name: "Poll"}}, Run: func(context.Context) error { return nil }})
+	registry.Start(t.Context())
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.Tasks = registry })
+	admin := api.signedIn("root", true)
+	read := "/tasks/" + tasks.ID("Read") + "/triggers"
+
+	var task taskJSON
+	if status := admin.raw(http.MethodPut, read, `{"triggers":[{"type":"daily","time":195}]}`, &task); status != http.StatusOK ||
+		!task.Custom || len(task.Triggers) != 1 || task.Triggers[0] != tasks.Daily(3*time.Hour+15*time.Minute) || task.Next == nil ||
+		task.Limits.MinInterval != 720 || task.Limits.MaxTriggers != tasks.MaxTriggers || len(task.Limits.Types) != 2 || len(task.DefaultTriggers) != 0 {
+		t.Fatalf("set: %d %+v", status, task)
+	}
+	for _, refused := range []string{`{"triggers":[{"type":"interval","interval":60}]}`, `{"triggers":[{"type":"startup"}]}`,
+		`{"triggers":[{"type":"weekly","time":0,"day":1}]}`, `{}`} {
+		var answer map[string]string
+		if status := admin.raw(http.MethodPut, read, refused, &answer); status != http.StatusBadRequest || answer["error"] != "invalid_triggers" {
+			t.Errorf("%s: %d %v", refused, status, answer)
+		}
+	}
+	if info, _ := registry.Task(tasks.ID("Read"), "en"); len(info.Triggers) != 1 || info.Triggers[0].Type != tasks.DailyTrigger {
+		t.Errorf("refused triggers changed them: %+v", info.Triggers)
+	}
+	if status := admin.raw(http.MethodDelete, read, "", &task); status != http.StatusOK || task.Custom || len(task.Triggers) != 0 || task.Next != nil {
+		t.Errorf("reset: %d %+v", status, task)
+	}
+	var answer map[string]string
+	if status := admin.raw(http.MethodPut, "/tasks/"+tasks.ID("Poll")+"/triggers", `{"triggers":[]}`, &answer); status != http.StatusBadRequest ||
+		answer["error"] != "task_locked" {
+		t.Errorf("locked: %d %v", status, answer)
+	}
+	if status := admin.raw(http.MethodPut, "/tasks/"+tasks.ID("Poll")+"/triggers", `{"triggers":[{"type":"interval","interval":5}]}`, &task); status != http.StatusOK ||
+		task.Limits.Locked != tasks.LockedSettings || len(task.Limits.Types) != 0 {
+		t.Errorf("a locked task's own triggers: %d %+v", status, task)
+	}
+	if status := admin.raw(http.MethodDelete, "/tasks/"+tasks.ID("Missing")+"/triggers", "", nil); status != http.StatusNotFound {
 		t.Errorf("unknown task: %d", status)
 	}
 }

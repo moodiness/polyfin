@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,18 +42,11 @@ func TestEmptyTheSourceCacheTask(t *testing.T) {
 		t.Fatalf("%d bytes kept, want 100", used)
 	}
 
-	var hour atomic.Int64
-	hour.Store(int64(accounts.DefaultSettings().SourceCacheEmptyHour))
-	settings := func() accounts.Settings {
-		s := accounts.DefaultSettings()
-		s.SourceCacheEmptyHour = int(hour.Load())
-		return s
-	}
 	var logged lockedBuffer
 	logger := slog.New(slog.NewTextHandler(&logged, nil))
-	task := emptySourceCacheTask(cache, settings, logger)
-	if task.Category != tasks.CategoryMaintenance || task.Interval != 0 || task.AtStart || task.Daily == nil {
-		t.Errorf("not a Maintenance task of a daily hour: %+v", task)
+	task := emptySourceCacheTask(cache, logger)
+	if task.Category != tasks.CategoryMaintenance || len(task.Triggers) != 0 || task.Limits.Locked != "" || task.Limits.MinInterval != 6*time.Hour {
+		t.Errorf("not a Maintenance task without triggers by default: %+v", task)
 	}
 	for _, language := range []string{"en", "fr", "de", "es", "it", "pt-BR"} {
 		if text := task.Text[language]; text.Name == "" || text.Description == "" {
@@ -68,14 +60,15 @@ func TestEmptyTheSourceCacheTask(t *testing.T) {
 	registry.Register(task)
 	registry.Start(t.Context())
 	id := tasks.ID(task.Key)
-	if info, _ := registry.Task(id, "en"); info.Daily != nil || info.Next != nil || info.Interval != 0 || info.AtStart {
+	if info, _ := registry.Task(id, "en"); info.Next != nil || len(info.Triggers) != 0 {
 		t.Errorf("a trigger by default: %+v", info)
 	}
-	hour.Store(4)
-	if info, _ := registry.Task(id, "en"); info.Daily == nil || *info.Daily != 4 {
+	if err := registry.SetTriggers(t.Context(), id, []tasks.Trigger{tasks.Daily(4 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := registry.Task(id, "en"); info.Next == nil || info.Next.Hour() != 4 {
 		t.Errorf("no trigger at 4: %+v", info)
 	}
-	hour.Store(-1)
 
 	if err := registry.Run(id); err != nil {
 		t.Fatal(err)

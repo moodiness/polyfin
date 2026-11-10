@@ -172,9 +172,7 @@ func DefaultSettings() Settings {
 		MyAnimeListClientID:     "",
 		MyAnimeListClientSecret: "",
 
-		BackupHour:            DefaultBackupHour,
 		BackupsKept:           DefaultBackupsKept,
-		CollectionReadHour:    DefaultCollectionReadHour,
 		CollectionLibraryApps: []string{},
 
 		RemuxDB:    false,
@@ -245,7 +243,6 @@ func DefaultSettings() Settings {
 		SourceCachePreset:     SourceCacheSmall,
 		SourceCacheDays:       DefaultSourceCacheDays,
 		SourceCacheCreditDays: DefaultSourceCacheCreditDays,
-		SourceCacheEmptyHour:  DefaultSourceCacheEmptyHour,
 		PreloadNextEpisodes:   false,
 		PreloadEpisodes:       DefaultPreloadEpisodes,
 		PreloadMbps:           DefaultPreloadMbps,
@@ -435,9 +432,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"myAnimeListClientId":     text(MaxTrackingAppBytes, d.MyAnimeListClientID),
 		"myAnimeListClientSecret": text(MaxTrackingAppBytes, d.MyAnimeListClientSecret),
 
-		"backupHour":            between(0, 23, d.BackupHour),
 		"backupsKept":           between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),
-		"collectionReadHour":    between(-1, 23, d.CollectionReadHour),
 		"collectionLibraryApps": between(0, MaxCollectionLibraryApps, d.CollectionLibraryApps),
 
 		"remuxDb":    is(d.RemuxDB),
@@ -508,7 +503,6 @@ func SettingsBounds() map[string]SettingBounds {
 		"sourceCachePreset":     choice(d.SourceCachePreset, anys(SourceCachePresets)),
 		"sourceCacheDays":       between(0, MaxSourceCacheDays, d.SourceCacheDays),
 		"sourceCacheCreditDays": between(0, MaxSourceCacheCreditDays, d.SourceCacheCreditDays),
-		"sourceCacheEmptyHour":  between(-1, 23, d.SourceCacheEmptyHour),
 		"preloadNextEpisodes":   is(d.PreloadNextEpisodes),
 		"preloadEpisodes":       between(MinPreloadEpisodes, MaxPreloadEpisodes, d.PreloadEpisodes),
 		"preloadMbps":           between(MinPreloadMbps, MaxPreloadMbps, d.PreloadMbps),

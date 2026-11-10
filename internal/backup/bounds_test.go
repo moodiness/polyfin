@@ -191,7 +191,7 @@ func TestAStalledDestinationFailsAlone(t *testing.T) {
 	}
 	for _, id := range []Destination{stalledDAV, stalledSFTP} {
 		d, err := h.service.Destination(t.Context(), id.ID)
-		if err != nil || d.Error == "" || d.Problem(time.Date(2026, 10, 1, 5, 0, 0, 0, time.Local)) != ProblemFailed {
+		if err != nil || d.Error == "" || d.Problem(time.Date(2026, 10, 1, 5, 0, 0, 0, time.Local), MinStaleAfter) != ProblemFailed {
 			t.Errorf("%s: %+v %v", id.Name(), d, err)
 		}
 	}

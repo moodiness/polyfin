@@ -133,7 +133,7 @@ func TestBackupsAreSentToEachDestination(t *testing.T) {
 	newestAt := at.AddDate(0, 0, 2)
 	for _, d := range destinations {
 		if d.RanAt == nil || !d.RanAt.Equal(newestAt) || d.Error != "" || d.NewestFile != newest[1] || d.NewestAt == nil ||
-			!d.NewestAt.Equal(newestAt) || d.Problem(newestAt.Add(time.Hour)) != "" || !d.SecretSet || d.Unreadable {
+			!d.NewestAt.Equal(newestAt) || d.Problem(newestAt.Add(time.Hour), MinStaleAfter) != "" || !d.SecretSet || d.Unreadable {
 			t.Errorf("%s: %+v", d.Name(), d)
 		}
 	}
@@ -177,7 +177,7 @@ func TestAFailedUploadIsTriedAgainAtTheNextBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(failed.Error, "503") || failed.NewestFile != "polyfin-20261001-040000.dump" ||
-		failed.Problem(at.AddDate(0, 0, 1)) != ProblemFailed {
+		failed.Problem(at.AddDate(0, 0, 1), MinStaleAfter) != ProblemFailed {
 		t.Errorf("after a failure: %+v", failed)
 	}
 	if status, _ := h.service.Status(t.Context()); status.Error != "" || status.File != "polyfin-20261002-040000.dump" {
@@ -191,13 +191,13 @@ func TestAFailedUploadIsTriedAgainAtTheNextBackup(t *testing.T) {
 		t.Errorf("after the next backup: %q", got)
 	}
 	recovered, _ := h.service.Destination(t.Context(), d.ID)
-	if recovered.Error != "" || recovered.Problem(at.AddDate(0, 0, 2)) != "" {
+	if recovered.Error != "" || recovered.Problem(at.AddDate(0, 0, 2), MinStaleAfter) != "" {
 		t.Errorf("after the next backup: %+v", recovered)
 	}
-	if problem := recovered.Problem(at.AddDate(0, 0, 2).Add(StaleAfter + time.Minute)); problem != ProblemStale {
+	if problem := recovered.Problem(at.AddDate(0, 0, 2).Add(MinStaleAfter+time.Minute), MinStaleAfter); problem != ProblemStale {
 		t.Errorf("two days later: %q", problem)
 	}
-	if problem := (Destination{}).Problem(at); problem != "" {
+	if problem := (Destination{}).Problem(at, MinStaleAfter); problem != "" {
 		t.Errorf("before the first upload: %q", problem)
 	}
 }

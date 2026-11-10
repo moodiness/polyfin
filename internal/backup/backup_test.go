@@ -63,7 +63,7 @@ func newHarness(t *testing.T, db DB) *harness {
 		PgDump:      script,
 		DB:          db,
 		Settings: func() accounts.Settings {
-			return accounts.Settings{BackupHour: 4, BackupsKept: h.kept, BackupPassphrase: h.passphrase}
+			return accounts.Settings{BackupsKept: h.kept, BackupPassphrase: h.passphrase}
 		},
 		Logger: slog.New(slog.NewTextHandler(h.logs, nil)),
 	})
@@ -157,8 +157,8 @@ func TestAFailedDumpLeavesNoBackup(t *testing.T) {
 		status.File != "polyfin-20261004-040000.dump" || status.Size != int64(len("PGDMP partial complete")) {
 		t.Fatalf("after a success: %+v %v", status, err)
 	}
-	if status.Problem(made.Add(StaleAfter)) || !status.Problem(made.Add(StaleAfter+time.Minute)) {
-		t.Error("a backup is stale only after StaleAfter")
+	if status.Problem(made.Add(MinStaleAfter), MinStaleAfter) || !status.Problem(made.Add(MinStaleAfter+time.Minute), MinStaleAfter) {
+		t.Error("a backup is stale only after MinStaleAfter")
 	}
 
 	h.failDumps(t, true)
@@ -173,7 +173,7 @@ func TestAFailedDumpLeavesNoBackup(t *testing.T) {
 	}
 	status, err = h.service.Status(t.Context())
 	if err != nil || !status.RanAt.Equal(failed) || !strings.Contains(status.Error, "connection to server failed") ||
-		!status.MadeAt.Equal(made) || status.File != "polyfin-20261004-040000.dump" || !status.Problem(failed) {
+		!status.MadeAt.Equal(made) || status.File != "polyfin-20261004-040000.dump" || !status.Problem(failed, MinStaleAfter) {
 		t.Errorf("after a failure: %+v %v", status, err)
 	}
 	if strings.Contains(h.logs.String(), password) {
@@ -200,7 +200,7 @@ func TestAFailedDumpLeavesNoBackup(t *testing.T) {
 func TestStatusBeforeTheFirstRun(t *testing.T) {
 	t.Parallel()
 	var none Status
-	if none.Problem(time.Now()) {
+	if none.Problem(time.Now(), MinStaleAfter) {
 		t.Error("no run is a problem")
 	}
 	off := New(Config{})
@@ -320,15 +320,14 @@ func TestSplitPassword(t *testing.T) {
 }
 
 // Backups follow the folder the settings give: off, they are not
-// available, the daily task has no hour, and a run by hand fails; another
-// folder is written to at once.
+// available and a run by hand fails; another folder is written to at once.
 func TestBackupsFollowTheSettingsFolder(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, nil)
 	on := h.dir
 	h.dir = ""
-	if h.service.Available() || h.service.Dir() != "" || h.service.Hour() != -1 {
-		t.Errorf("off: available %v, folder %q, hour %d", h.service.Available(), h.service.Dir(), h.service.Hour())
+	if h.service.Available() || h.service.Dir() != "" {
+		t.Errorf("off: available %v, folder %q", h.service.Available(), h.service.Dir())
 	}
 	if err := h.service.Run(t.Context()); !errors.Is(err, ErrOff) {
 		t.Errorf("run by hand while off: %v", err)
@@ -338,13 +337,25 @@ func TestBackupsFollowTheSettingsFolder(t *testing.T) {
 	}
 	other := t.TempDir()
 	h.dir = other
-	if !h.service.Available() || h.service.Dir() != other || h.service.Hour() != 4 {
-		t.Errorf("on: available %v, folder %q, hour %d", h.service.Available(), h.service.Dir(), h.service.Hour())
+	if !h.service.Available() || h.service.Dir() != other {
+		t.Errorf("on: available %v, folder %q", h.service.Available(), h.service.Dir())
 	}
 	if err := h.service.Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if files := h.files(t); len(files) != 1 || !backupName.MatchString(files[0]) {
 		t.Errorf("files in the other folder: %v", files)
+	}
+}
+
+// A backup is stale after two runs of its schedule missed, never under 48
+// hours.
+func TestStaleAfterFollowsTheSchedule(t *testing.T) {
+	t.Parallel()
+	for gap, want := range map[time.Duration]time.Duration{0: 48 * time.Hour, 6 * time.Hour: 48 * time.Hour,
+		24 * time.Hour: 48 * time.Hour, 7 * 24 * time.Hour: 14 * 24 * time.Hour} {
+		if got := StaleAfter(gap); got != want {
+			t.Errorf("gap %v: %v, want %v", gap, got, want)
+		}
 	}
 }

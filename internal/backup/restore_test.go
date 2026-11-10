@@ -42,7 +42,7 @@ func newRestoring(t *testing.T) *restoring {
 	// The restore empties the database it is given: the test's own copy.
 	r.service = New(Config{Folder: func() string { return r.dir }, DatabaseURL: testdb.CopyURL(t, pool), PgDump: pgDump,
 		PgRestore: pgRestore, DB: pool, Secrets: newBox(t, testKey),
-		Settings: func() accounts.Settings { return accounts.Settings{BackupHour: 4, BackupsKept: 7} },
+		Settings: func() accounts.Settings { return accounts.Settings{BackupsKept: 7} },
 		Logger:   slog.New(slog.NewTextHandler(r.logs, nil))})
 	return r
 }
@@ -175,7 +175,7 @@ func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
 	// database's own record, which predates the backup restored.
 	status, err := r.service.Status(ctx)
 	if err != nil || status.File != beforeRestore || status.Error != "" || status.Size != info.Size() || status.MadeAt == nil ||
-		!status.MadeAt.Equal(at.Add(time.Hour)) || status.Problem(at.Add(2*time.Hour)) {
+		!status.MadeAt.Equal(at.Add(time.Hour)) || status.Problem(at.Add(2*time.Hour), MinStaleAfter) {
 		t.Errorf("status after the restore: %+v %v", status, err)
 	}
 	if deleted, err := prune(r.dir, 1); err != nil || len(deleted) != 0 {

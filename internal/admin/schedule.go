@@ -19,15 +19,27 @@ type taskJSON struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Category    string `json:"category"`
-	// Interval is in seconds, 0 for a task run by hand only or daily.
-	Interval int64 `json:"interval"`
-	// Daily is the hour of the server's time zone a daily task runs at,
-	// null for other tasks.
-	Daily *int `json:"daily"`
+	// Triggers are the task's triggers, DefaultTriggers those it has
+	// by default, and Custom tells that an administrator changed them.
+	Triggers        []tasks.Trigger `json:"triggers"`
+	DefaultTriggers []tasks.Trigger `json:"defaultTriggers"`
+	Custom          bool            `json:"custom"`
+	Limits          taskLimitsJSON  `json:"limits"`
 	// State is Idle, Running or Cancelling.
 	State string          `json:"state"`
 	Last  *taskResultJSON `json:"last"`
 	Next  *time.Time      `json:"next"`
+}
+
+// taskLimitsJSON bounds the triggers a task takes: Locked is why they
+// cannot change, empty when they can; intervals are in minutes.
+type taskLimitsJSON struct {
+	Locked      string              `json:"locked"`
+	Types       []tasks.TriggerType `json:"types"`
+	MinInterval int64               `json:"minInterval"`
+	MaxInterval int64               `json:"maxInterval"`
+	MaxTriggers int                 `json:"maxTriggers"`
+	KeepOne     bool                `json:"keepOne"`
 }
 
 type taskResultJSON struct {
@@ -43,24 +55,79 @@ type taskResultJSON struct {
 func (h *handler) scheduledTasks(w http.ResponseWriter, r *http.Request) {
 	result := []taskJSON{}
 	if h.Tasks != nil {
-		language := r.URL.Query().Get("language")
-		if language == "" {
-			language = h.Accounts.Settings().Language
-		}
-		for _, info := range h.Tasks.Tasks(language) {
+		for _, info := range h.Tasks.Tasks(h.taskLanguage(r)) {
 			result = append(result, newTaskJSON(info))
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *handler) taskLanguage(r *http.Request) string {
+	if language := r.URL.Query().Get("language"); language != "" {
+		return language
+	}
+	return h.Accounts.Settings().Language
+}
+
 func newTaskJSON(info tasks.Info) taskJSON {
 	result := taskJSON{ID: info.ID, Key: info.Key, Name: info.Name, Description: info.Description, Category: info.Category,
-		Interval: int64(info.Interval.Seconds()), Daily: info.Daily, State: string(info.State), Next: info.Next}
+		Triggers: info.Triggers, DefaultTriggers: info.Defaults, Custom: info.Custom, State: string(info.State), Next: info.Next,
+		Limits: taskLimitsJSON{Locked: info.Limits.Locked, Types: info.Limits.AllowedTypes(), MinInterval: int64(max(info.Limits.MinInterval, time.Minute) / time.Minute),
+			MaxInterval: int64(tasks.MaxInterval / time.Minute), MaxTriggers: tasks.MaxTriggers, KeepOne: info.Limits.KeepOne}}
+	if info.Limits.Locked != "" {
+		result.Limits.Types = []tasks.TriggerType{}
+	}
 	if info.Last != nil {
 		result.Last = &taskResultJSON{Start: info.Last.Start, End: info.Last.End, Status: string(info.Last.Status), Error: info.Last.Error}
 	}
 	return result
+}
+
+// setTaskTriggers replaces a task's triggers with those of the body,
+// {"triggers": [...]}, and answers the task.
+func (h *handler) setTaskTriggers(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Triggers *[]tasks.Trigger `json:"triggers"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.Triggers == nil {
+		writeError(w, http.StatusBadRequest, "invalid_triggers")
+		return
+	}
+	h.changeTriggers(w, r, func(id string) error { return h.Tasks.SetTriggers(r.Context(), id, *body.Triggers) })
+}
+
+// resetTaskTriggers gives a task its default triggers again, and answers
+// the task.
+func (h *handler) resetTaskTriggers(w http.ResponseWriter, r *http.Request) {
+	h.changeTriggers(w, r, func(id string) error { return h.Tasks.ResetTriggers(r.Context(), id) })
+}
+
+func (h *handler) changeTriggers(w http.ResponseWriter, r *http.Request, change func(id string) error) {
+	if h.Tasks == nil {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	id := r.PathValue("id")
+	switch err := change(id); {
+	case errors.Is(err, tasks.ErrUnknown):
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	case errors.Is(err, tasks.ErrLocked):
+		writeError(w, http.StatusBadRequest, "task_locked")
+		return
+	case errors.Is(err, tasks.ErrInvalidTriggers):
+		writeError(w, http.StatusBadRequest, "invalid_triggers")
+		return
+	case err != nil:
+		h.internalError(w, r, err)
+		return
+	}
+	info, _ := h.Tasks.Task(id, h.taskLanguage(r))
+	h.Logger.Info("An administrator changed a task's triggers", "task", info.Key, "path", r.URL.Path, "by", sessionFrom(r.Context()).User.Name)
+	writeJSON(w, http.StatusOK, newTaskJSON(info))
 }
 
 // runTask starts a task now, unless it runs.

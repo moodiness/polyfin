@@ -7,17 +7,17 @@
 //		Key:      "RefreshGuide",
 //		Category: tasks.CategoryLiveTV,
 //		Text:     map[string]tasks.Text{"en": {Name: "Refresh the guide", Description: "…"}, "fr": {…}},
-//		Interval: 12 * time.Hour,
+//		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(12 * time.Hour)},
 //		Run:      guide.Refresh,
 //	})
 //
 // Key identifies the task for good: its Jellyfin identifier derives from
-// it. Interval runs it periodically, Daily every day at an hour, AtStart
-// once when the registry starts; a task with none runs only when an
-// administrator starts it. Run gets a context that ends when the task is
-// cancelled or the server stops; its error is reported as the task's
-// failure. A task never runs twice at once: a run due while one goes on is
-// skipped.
+// it. Triggers are the task's default schedule, which administrators may
+// change within its Limits (see SetTriggers); a task without triggers
+// runs only when an administrator starts it. Run gets a context that ends
+// when the task is cancelled, its time limit passes or the server stops;
+// its error is reported as the task's failure. A task never runs twice at
+// once: a run due while one goes on is skipped.
 package tasks
 
 import (
@@ -64,16 +64,13 @@ type Task struct {
 	// Text gives the name and description by server language; "en" is
 	// required and used for languages missing.
 	Text map[string]Text
-	// Interval runs the task that often; 0 never runs it on a timer.
-	Interval time.Duration
-	// Daily, when set, runs the task every day at the hour of the server's
-	// time zone it returns, 0 to 23, or never for a negative hour: the task
-	// then runs by hand only. It is asked again every minute, so that a new
-	// hour applies without a restart. A task has an Interval or Daily, not
-	// both.
-	Daily func() int
-	// AtStart runs the task once when the registry starts.
-	AtStart bool
+	// Triggers are the task's default triggers, which administrators may
+	// replace within Limits.
+	Triggers []Trigger
+	Limits   Limits
+	// Enabled, when set, tells whether the triggers run the task: a task
+	// disabled runs by hand only, as Jellyfin's disabled tasks.
+	Enabled func() bool
 	Run     func(ctx context.Context) error
 }
 
@@ -99,7 +96,8 @@ const (
 type Result struct {
 	Start, End time.Time
 	Status     Status
-	// Error is the failure of a failed run.
+	// Error is the failure of a failed run, or why a run was cancelled
+	// when its time limit passed.
 	Error string
 }
 
@@ -110,18 +108,33 @@ type Info struct {
 	Name        string
 	Description string
 	Category    string
-	Interval    time.Duration
-	// Daily is the hour a daily task runs at, nil for other tasks and for
-	// a daily task without one.
-	Daily   *int
-	AtStart bool
-	State   State
-	// Last is the last run that ended since the server started; nil when
-	// none did.
+	// Triggers are the task's triggers, Defaults those of its code, and
+	// Custom tells that an administrator changed them.
+	Triggers []Trigger
+	Defaults []Trigger
+	Custom   bool
+	Limits   Limits
+	State    State
+	// Last is the last run that ended, kept across restarts once the
+	// registry is loaded; nil when none did.
 	Last *Result
 	// Next is when the schedule runs the task next; nil for a task without
-	// interval or daily hour, or before the registry starts.
+	// timed triggers or disabled, or before the registry starts.
 	Next *time.Time
+}
+
+// Store keeps the triggers administrators gave and the last runs across
+// restarts.
+type Store interface {
+	// LoadTriggers gives the triggers saved, by task key.
+	LoadTriggers(ctx context.Context) (map[string][]Trigger, error)
+	// SaveTriggers replaces the triggers of a task; DeleteTriggers returns
+	// it to its defaults.
+	SaveTriggers(ctx context.Context, key string, triggers []Trigger) error
+	DeleteTriggers(ctx context.Context, key string) error
+	// LoadRuns gives the last run of each task, by key.
+	LoadRuns(ctx context.Context) (map[string]Result, error)
+	SaveRun(ctx context.Context, key string, result Result) error
 }
 
 // Registry runs the registered tasks.
@@ -131,10 +144,15 @@ type Registry struct {
 	tasks  []*entry
 	// ctx is the registry's context once started; nil before.
 	ctx context.Context
-	// now is the clock daily tasks are scheduled by, and dailyCheck how
-	// often their hour is asked again.
-	now        func() time.Time
-	dailyCheck time.Duration
+	// store keeps triggers and runs once loaded, and triggers and runs
+	// what it gave, by key, for the tasks registered after.
+	store    Store
+	triggers map[string][]Trigger
+	runs     map[string]Result
+	// now is the clock triggers are scheduled by, and check how often a
+	// schedule looks at it at least.
+	now   func() time.Time
+	check time.Duration
 }
 
 type entry struct {
@@ -143,14 +161,23 @@ type entry struct {
 	cancel context.CancelFunc
 	state  State
 	last   *Result
-	// next is when the ticker or the daily schedule fires next, zero
-	// without one.
-	next time.Time
+	// triggers are those in force, custom when an administrator gave
+	// them.
+	triggers []Trigger
+	custom   bool
+	// stop ends the schedule's goroutine; scheduled is when the schedule
+	// began, fired when a trigger last fired, and next when one fires
+	// next, by trigger, zero without one.
+	stop      context.CancelFunc
+	scheduled time.Time
+	fired     time.Time
+	next      time.Time
+	trigger   Trigger
 }
 
 // New returns an empty registry.
 func New(logger *slog.Logger) *Registry {
-	return &Registry{logger: logger, now: time.Now, dailyCheck: time.Minute}
+	return &Registry{logger: logger, now: time.Now, check: time.Minute}
 }
 
 // ID is the Jellyfin identifier of the task key names: 32 hexadecimal
@@ -161,73 +188,168 @@ func ID(key string) string {
 }
 
 // Register adds a task; one registered after Start is scheduled at once.
-// It panics on a task without Key, English text or Run, with both an
-// Interval and Daily, or with a Key already registered: registrations are
-// made by code at startup.
+// It panics on a task without Key, English text or Run, with default
+// triggers outside its limits, or with a Key already registered:
+// registrations are made by code at startup.
 func (r *Registry) Register(task Task) {
 	if task.Key == "" || task.Text["en"].Name == "" || task.Run == nil {
 		panic("tasks: a task needs a key, an English name and a run")
 	}
-	if task.Interval > 0 && task.Daily != nil {
-		panic("tasks: " + task.Key + " has both an interval and a daily hour")
+	if task.Limits.Locked == "" {
+		if err := task.Limits.Check(task.Triggers); err != nil {
+			panic("tasks: " + task.Key + ": " + err.Error())
+		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if slices.ContainsFunc(r.tasks, func(e *entry) bool { return e.Key == task.Key }) {
 		panic("tasks: " + task.Key + " is registered twice")
 	}
-	e := &entry{Task: task, id: ID(task.Key), state: Idle}
+	e := &entry{Task: task, id: ID(task.Key), state: Idle, triggers: task.Triggers}
+	r.apply(e)
 	r.tasks = append(r.tasks, e)
 	if r.ctx != nil {
-		r.schedule(e)
+		r.schedule(e, true)
 	}
 }
 
-// Start runs the tasks due at start and schedules the periodic ones until
+// Load reads the triggers and last runs store keeps, and keeps those of
+// the runs to come there; it is called before Start. Saved triggers a
+// task's limits refuse, as after its limits changed, are left for its
+// defaults, with a warning.
+func (r *Registry) Load(ctx context.Context, store Store) error {
+	triggers, err := store.LoadTriggers(ctx)
+	if err != nil {
+		return err
+	}
+	runs, err := store.LoadRuns(ctx)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.store, r.triggers, r.runs = store, triggers, runs
+	for _, e := range r.tasks {
+		r.apply(e)
+	}
+	return nil
+}
+
+// apply gives e the triggers and last run loaded; r.mu is held.
+func (r *Registry) apply(e *entry) {
+	if saved, ok := r.triggers[e.Key]; ok && e.Limits.Locked == "" {
+		if err := e.Limits.Check(saved); err != nil {
+			r.logger.Warn("A task's saved triggers are refused: it runs on its defaults", "task", e.Key, "error", err)
+		} else {
+			e.triggers, e.custom = saved, true
+		}
+	}
+	if last, ok := r.runs[e.Key]; ok && e.last == nil {
+		e.last = &last
+	}
+}
+
+// Start runs the tasks of a startup trigger and schedules the others until
 // ctx ends.
 func (r *Registry) Start(ctx context.Context) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ctx = ctx
 	for _, e := range r.tasks {
-		r.schedule(e)
+		r.schedule(e, true)
 	}
 }
 
-// schedule runs e at start and on its interval or daily hour; r.mu is
-// held. An interval task's first timed run comes its stagger after its
-// interval (see stagger), so that tasks of one interval do not all run in
-// the same second.
-func (r *Registry) schedule(e *entry) {
-	if e.AtStart {
-		r.start(e, false)
+// schedule follows e's triggers from now, in place of the schedule it
+// had, and runs it now when atStart and it has a startup trigger; r.mu is
+// held.
+func (r *Registry) schedule(e *entry, atStart bool) {
+	if e.stop != nil {
+		e.stop()
 	}
-	if e.Daily != nil {
-		e.next = scheduledDaily(r.now(), e.Daily())
-		go r.daily(e, e.next)
-		return
-	}
-	if e.Interval <= 0 {
-		return
-	}
-	first := e.Interval + stagger(e.Key, e.Interval)
-	e.next = time.Now().Add(first)
-	go func() {
-		timer := time.NewTimer(first)
-		defer timer.Stop()
-		for {
-			select {
-			case <-r.ctx.Done():
-				return
-			case at := <-timer.C:
-				r.mu.Lock()
-				e.next = at.Add(e.Interval)
-				r.start(e, false)
-				r.mu.Unlock()
-				timer.Reset(time.Until(at.Add(e.Interval)))
-			}
+	ctx, stop := context.WithCancel(r.ctx)
+	e.stop = stop
+	e.scheduled, e.fired = r.now(), time.Time{}
+	if atStart {
+		if i := slices.IndexFunc(e.triggers, func(t Trigger) bool { return t.Type == StartupTrigger }); i >= 0 {
+			r.start(e, false, e.triggers[i].MaxRuntime)
 		}
-	}()
+	}
+	e.next, e.trigger = r.nextRun(e, e.scheduled)
+	if !e.next.IsZero() {
+		go r.follow(ctx, e)
+	}
+}
+
+// follow runs e when its triggers fire, until ctx ends. It wakes at the
+// next run, or sooner to look at the clock again.
+func (r *Registry) follow(ctx context.Context, e *entry) {
+	for {
+		r.mu.Lock()
+		wait := min(e.next.Sub(r.now()), r.check)
+		r.mu.Unlock()
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		r.mu.Lock()
+		if ctx.Err() != nil {
+			r.mu.Unlock()
+			return
+		}
+		now := r.now()
+		if !now.Before(e.next) {
+			e.fired = now
+			r.start(e, false, e.trigger.MaxRuntime)
+		}
+		e.next, e.trigger = r.nextRun(e, now)
+		r.mu.Unlock()
+	}
+}
+
+// nextRun is when e's triggers run it next after after, and the trigger
+// that does; zero without timed triggers; r.mu is held.
+//
+// An interval counts from the start of the last run, kept across
+// restarts, or from when a trigger last fired when later, as when the run
+// was skipped. Without either, the first run comes the interval and its
+// stagger (see stagger) after the schedule began, so that tasks of one
+// interval do not all run in the same second; a run overdue at start
+// comes its stagger after it.
+func (r *Registry) nextRun(e *entry, after time.Time) (time.Time, Trigger) {
+	var next time.Time
+	var trigger Trigger
+	for _, t := range e.triggers {
+		var at time.Time
+		switch t.Type {
+		case DailyTrigger:
+			at = NextAt(after, t.TimeOfDay)
+		case WeeklyTrigger:
+			at = NextWeekly(after, t.Day, t.TimeOfDay)
+		case IntervalTrigger:
+			from := e.fired
+			if e.last != nil && e.last.Start.After(from) {
+				from = e.last.Start
+			}
+			if from.IsZero() {
+				at = e.scheduled.Add(t.Interval + stagger(e.Key, t.Interval))
+			} else {
+				at = from.Add(t.Interval)
+				if floor := e.scheduled.Add(stagger(e.Key, t.Interval)); at.Before(floor) {
+					at = floor
+				}
+			}
+		default:
+			continue
+		}
+		if next.IsZero() || at.Before(next) {
+			next, trigger = at, t
+		}
+	}
+	return next, trigger
 }
 
 // maxStagger bounds how long after its interval an interval task first
@@ -246,68 +368,30 @@ func stagger(key string, interval time.Duration) time.Duration {
 	return time.Duration(binary.BigEndian.Uint64(sum[:8]) % uint64(bound))
 }
 
-// daily runs e every day at the hour e.Daily gives, next the first time,
-// until the registry's context ends. It wakes at the next run, or sooner
-// to ask the hour again: an hour changed to one already past today runs
-// tomorrow. A negative hour runs it never, until an hour is given.
-func (r *Registry) daily(e *entry, next time.Time) {
-	for {
-		wait := r.dailyCheck
-		if !next.IsZero() {
-			wait = min(next.Sub(r.now()), r.dailyCheck)
-		}
-		timer := time.NewTimer(wait)
-		select {
-		case <-r.ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-		}
-		checked := r.now()
-		r.mu.Lock()
-		if !next.IsZero() && !checked.Before(next) {
-			r.start(e, false)
-		}
-		next = scheduledDaily(checked, e.Daily())
-		e.next = next
-		r.mu.Unlock()
-	}
-}
+// errTimeLimit cancels a run whose trigger's time limit passed.
+var errTimeLimit = errors.New("the time limit passed")
 
-// scheduledDaily is when a daily task of hour runs next after after (see
-// NextDaily), zero for a negative hour: none.
-func scheduledDaily(after time.Time, hour int) time.Time {
-	if hour < 0 {
-		return time.Time{}
-	}
-	return NextDaily(after, hour)
-}
-
-// NextDaily is the first time after after that is hour o'clock in after's
-// time zone. A day whose hour is skipped by a change to daylight saving
-// time runs at the time the zone gives it instead.
-func NextDaily(after time.Time, hour int) time.Time {
-	year, month, day := after.Date()
-	next := time.Date(year, month, day, hour, 0, 0, 0, after.Location())
-	if !next.After(after) {
-		next = time.Date(year, month, day+1, hour, 0, 0, 0, after.Location())
-	}
-	return next
-}
-
-// start runs e unless it is running, byHand when an administrator asked;
-// r.mu is held.
-func (r *Registry) start(e *entry, byHand bool) {
-	if e.state != Idle || r.ctx == nil || r.ctx.Err() != nil {
+// start runs e unless it is running, byHand when an administrator asked,
+// and cancels it after limit when not 0; a task disabled runs by hand
+// only. r.mu is held.
+func (r *Registry) start(e *entry, byHand bool, limit time.Duration) {
+	if e.state != Idle || r.ctx == nil || r.ctx.Err() != nil || !byHand && e.Enabled != nil && !e.Enabled() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.WithValue(r.ctx, byHandKey{}, byHand))
+	if limit > 0 {
+		cancelRun := cancel
+		limited, cancelLimit := context.WithTimeoutCause(ctx, limit, errTimeLimit)
+		ctx, cancel = limited, func() { cancelLimit(); cancelRun() }
+	}
 	e.state, e.cancel = Running, cancel
-	started := time.Now()
+	started := r.now()
 	go func() {
 		err := e.Run(ctx)
-		result := &Result{Start: started, End: time.Now(), Status: Completed}
+		result := Result{Start: started, End: r.now(), Status: Completed}
 		switch {
+		case errors.Is(context.Cause(ctx), errTimeLimit):
+			result.Status, result.Error = Cancelled, errTimeLimit.Error()
 		case ctx.Err() != nil:
 			result.Status = Cancelled
 		case err != nil:
@@ -316,8 +400,16 @@ func (r *Registry) start(e *entry, byHand bool) {
 		}
 		cancel()
 		r.mu.Lock()
-		e.state, e.cancel, e.last = Idle, nil, result
+		e.state, e.cancel, e.last = Idle, nil, &result
+		store := r.store
 		r.mu.Unlock()
+		if store != nil {
+			saveCtx, done := context.WithTimeout(context.WithoutCancel(r.ctx), 10*time.Second)
+			defer done()
+			if err := store.SaveRun(saveCtx, e.Key, result); err != nil {
+				r.logger.Warn("A task's last run could not be saved", "task", e.Key, "error", err)
+			}
+		}
 	}()
 }
 
@@ -336,7 +428,7 @@ func (r *Registry) Tasks(language string) []Info {
 	r.mu.Lock()
 	infos := make([]Info, 0, len(r.tasks))
 	for _, e := range r.tasks {
-		infos = append(infos, e.info(language, r.now()))
+		infos = append(infos, e.info(language))
 	}
 	r.mu.Unlock()
 	slices.SortFunc(infos, func(a, b Info) int { return strings.Compare(a.Name, b.Name) })
@@ -348,7 +440,7 @@ func (r *Registry) Task(id, language string) (Info, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if e := r.find(id); e != nil {
-		return e.info(language, r.now()), true
+		return e.info(language), true
 	}
 	return Info{}, false
 }
@@ -364,7 +456,7 @@ func (r *Registry) Run(id string) error {
 	if e == nil {
 		return ErrUnknown
 	}
-	r.start(e, true)
+	r.start(e, true, 0)
 	return nil
 }
 
@@ -383,6 +475,66 @@ func (r *Registry) Cancel(id string) error {
 	return nil
 }
 
+// SetTriggers replaces the triggers of the task id identifies, saved for
+// the next starts, and schedules it by them from now. Triggers outside
+// the task's limits are refused with ErrInvalidTriggers before anything is
+// saved; a locked task's with ErrLocked, but for the triggers it has,
+// which change nothing.
+func (r *Registry) SetTriggers(ctx context.Context, id string, triggers []Trigger) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e := r.find(id)
+	if e == nil {
+		return ErrUnknown
+	}
+	if e.Limits.Locked != "" {
+		if slices.Equal(triggers, e.triggers) {
+			return nil
+		}
+		return ErrLocked
+	}
+	if err := e.Limits.Check(triggers); err != nil {
+		return err
+	}
+	triggers = slices.Clone(triggers)
+	if triggers == nil {
+		triggers = []Trigger{}
+	}
+	if r.store != nil {
+		if err := r.store.SaveTriggers(ctx, e.Key, triggers); err != nil {
+			return err
+		}
+	}
+	e.triggers, e.custom = triggers, true
+	if r.ctx != nil {
+		r.schedule(e, false)
+	}
+	return nil
+}
+
+// ResetTriggers gives the task id identifies its default triggers again.
+func (r *Registry) ResetTriggers(ctx context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e := r.find(id)
+	if e == nil {
+		return ErrUnknown
+	}
+	if !e.custom {
+		return nil
+	}
+	if r.store != nil {
+		if err := r.store.DeleteTriggers(ctx, e.Key); err != nil {
+			return err
+		}
+	}
+	e.triggers, e.custom = e.Task.Triggers, false
+	if r.ctx != nil {
+		r.schedule(e, false)
+	}
+	return nil
+}
+
 func (r *Registry) find(id string) *entry {
 	for _, e := range r.tasks {
 		if strings.EqualFold(e.id, id) {
@@ -392,9 +544,8 @@ func (r *Registry) find(id string) *entry {
 	return nil
 }
 
-// info describes e at now. A daily task's next run is that of its hour at
-// now, which a new hour changes at once.
-func (e *entry) info(language string, now time.Time) Info {
+// info describes e.
+func (e *entry) info(language string) Info {
 	text, ok := e.Text[language]
 	if !ok {
 		text = e.Text["en"]
@@ -404,20 +555,18 @@ func (e *entry) info(language string, now time.Time) Info {
 		category = named.In(language)
 	}
 	info := Info{ID: e.id, Key: e.Key, Name: text.Name, Description: text.Description, Category: category,
-		Interval: e.Interval, AtStart: e.AtStart, State: e.state}
+		Triggers: slices.Clone(e.triggers), Defaults: slices.Clone(e.Task.Triggers), Custom: e.custom, Limits: e.Limits, State: e.state}
+	if info.Triggers == nil {
+		info.Triggers = []Trigger{}
+	}
+	if info.Defaults == nil {
+		info.Defaults = []Trigger{}
+	}
 	if e.last != nil {
 		last := *e.last
 		info.Last = &last
 	}
-	switch {
-	case e.Daily != nil:
-		if hour := e.Daily(); hour >= 0 {
-			info.Daily = &hour
-			if !e.next.IsZero() {
-				info.Next = new(NextDaily(now, hour))
-			}
-		}
-	case !e.next.IsZero():
+	if !e.next.IsZero() && (e.Enabled == nil || e.Enabled()) {
 		info.Next = new(e.next)
 	}
 	return info

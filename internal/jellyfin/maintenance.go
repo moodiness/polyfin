@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -131,25 +132,116 @@ type TaskResult struct {
 	ErrorMessage string `json:",omitempty"`
 }
 
-// TaskTriggerInfo is what runs a task: at startup, every IntervalTicks, or
-// every day at TimeOfDayTicks.
+// TaskTriggerInfo is what runs a task, as Jellyfin's TaskTriggerInfo:
+// at startup, every IntervalTicks, every day at TimeOfDayTicks, or every
+// week on DayOfWeek at TimeOfDayTicks; MaxRuntimeTicks, when set, stops
+// the runs it starts after that long.
 type TaskTriggerInfo struct {
-	Type           string
-	IntervalTicks  int64 `json:",omitempty"`
-	TimeOfDayTicks int64 `json:",omitempty"`
+	Type            string
+	TimeOfDayTicks  *int64     `json:",omitempty"`
+	IntervalTicks   *int64     `json:",omitempty"`
+	DayOfWeek       *DayOfWeek `json:",omitempty"`
+	MaxRuntimeTicks *int64     `json:",omitempty"`
+}
+
+// DayOfWeek is a day as .NET's DayOfWeek: written by name, read by name
+// or number, 0 for Sunday.
+type DayOfWeek time.Weekday
+
+// MarshalJSON writes the day's name.
+func (d DayOfWeek) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Weekday(d).String())
+}
+
+// UnmarshalJSON reads a name, in any case, or a number from 0 to 6; others
+// are left out of range, for the triggers' check to refuse.
+func (d *DayOfWeek) UnmarshalJSON(data []byte) error {
+	var name string
+	if json.Unmarshal(data, &name) == nil {
+		*d = -1
+		for day := time.Sunday; day <= time.Saturday; day++ {
+			if strings.EqualFold(name, day.String()) {
+				*d = DayOfWeek(day)
+			}
+		}
+		return nil
+	}
+	var number int
+	if err := json.Unmarshal(data, &number); err != nil {
+		return err
+	}
+	*d = DayOfWeek(number)
+	if number < 0 || number > 6 {
+		*d = -1
+	}
+	return nil
+}
+
+// jellyfinTriggerTypes are Jellyfin's trigger types, by Polyfin's.
+var jellyfinTriggerTypes = map[tasks.TriggerType]string{
+	tasks.DailyTrigger:    "DailyTrigger",
+	tasks.WeeklyTrigger:   "WeeklyTrigger",
+	tasks.IntervalTrigger: "IntervalTrigger",
+	tasks.StartupTrigger:  "StartupTrigger",
+}
+
+func newTaskTriggerInfo(t tasks.Trigger) TaskTriggerInfo {
+	info := TaskTriggerInfo{Type: jellyfinTriggerTypes[t.Type]}
+	switch t.Type {
+	case tasks.WeeklyTrigger:
+		info.DayOfWeek = new(DayOfWeek(t.Day))
+		fallthrough
+	case tasks.DailyTrigger:
+		info.TimeOfDayTicks = new(ticks(t.TimeOfDay))
+	case tasks.IntervalTrigger:
+		info.IntervalTicks = new(ticks(t.Interval))
+	}
+	if t.MaxRuntime > 0 {
+		info.MaxRuntimeTicks = new(ticks(t.MaxRuntime))
+	}
+	return info
+}
+
+// trigger is the trigger info describes; false for an unknown type. A
+// field its type needs and that is missing is left out of range, for the
+// triggers' check to refuse.
+func (info TaskTriggerInfo) trigger() (tasks.Trigger, bool) {
+	var t tasks.Trigger
+	for kind, name := range jellyfinTriggerTypes {
+		if strings.EqualFold(info.Type, name) {
+			t.Type = kind
+		}
+	}
+	if t.Type == "" {
+		return t, false
+	}
+	duration := func(ticks *int64, missing time.Duration) time.Duration {
+		if ticks == nil {
+			return missing
+		}
+		return time.Duration(*ticks) * 100
+	}
+	switch t.Type {
+	case tasks.WeeklyTrigger:
+		t.Day = -1
+		if info.DayOfWeek != nil {
+			t.Day = time.Weekday(*info.DayOfWeek)
+		}
+		fallthrough
+	case tasks.DailyTrigger:
+		t.TimeOfDay = duration(info.TimeOfDayTicks, -1)
+	case tasks.IntervalTrigger:
+		t.Interval = duration(info.IntervalTicks, 0)
+	}
+	t.MaxRuntime = duration(info.MaxRuntimeTicks, 0)
+	return t, true
 }
 
 func newTaskInfo(info tasks.Info) TaskInfo {
 	task := TaskInfo{Name: info.Name, State: info.State, Id: info.ID, Triggers: []TaskTriggerInfo{},
 		Description: info.Description, Category: info.Category, Key: info.Key}
-	if info.AtStart {
-		task.Triggers = append(task.Triggers, TaskTriggerInfo{Type: "StartupTrigger"})
-	}
-	if info.Interval > 0 {
-		task.Triggers = append(task.Triggers, TaskTriggerInfo{Type: "IntervalTrigger", IntervalTicks: int64(info.Interval / 100)})
-	}
-	if info.Daily != nil {
-		task.Triggers = append(task.Triggers, TaskTriggerInfo{Type: "DailyTrigger", TimeOfDayTicks: int64(time.Duration(*info.Daily) * time.Hour / 100)})
+	for _, t := range info.Triggers {
+		task.Triggers = append(task.Triggers, newTaskTriggerInfo(t))
 	}
 	if last := info.Last; last != nil {
 		task.LastExecutionResult = &TaskResult{StartTimeUtc: Time(last.Start), EndTimeUtc: Time(last.End), Status: last.Status,
@@ -211,12 +303,47 @@ func (h *Handler) stopTask(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// updateTaskTriggers refuses new triggers: Polyfin's tasks run on fixed
-// schedules, which Jellyfin lets administrators change.
+// updateTaskTriggers replaces a task's triggers with the list of the
+// body, as Jellyfin does, but checks them first: a list outside the
+// task's limits is refused with 400 and saves nothing. A task whose
+// triggers are locked takes the list it has, as Jellyfin's dashboard posts
+// it back unchanged, and refuses any other.
 func (h *Handler) updateTaskTriggers(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.task(w, r); ok {
-		validationProblem(w, map[string][]string{"triggerInfos": {"Polyfin's tasks run on fixed schedules: their triggers cannot be changed."}})
+	info, ok := h.task(w, r)
+	if !ok {
+		return
 	}
+	var infos []*TaskTriggerInfo
+	if err := decode(r, &infos); err != nil {
+		badRequestProblem(w)
+		return
+	}
+	triggers := []tasks.Trigger{}
+	for i, t := range infos {
+		// Jellyfin drops the null entries.
+		if t == nil {
+			continue
+		}
+		trigger, known := t.trigger()
+		if !known {
+			validationProblem(w, map[string][]string{"triggerInfos": {fmt.Sprintf("Trigger %d has an unknown type: %q.", i, t.Type)}})
+			return
+		}
+		triggers = append(triggers, trigger)
+	}
+	switch err := h.Tasks.SetTriggers(r.Context(), info.ID, triggers); {
+	case errors.Is(err, tasks.ErrLocked):
+		validationProblem(w, map[string][]string{"triggerInfos": {"This task's triggers cannot be changed."}})
+		return
+	case errors.Is(err, tasks.ErrInvalidTriggers):
+		validationProblem(w, map[string][]string{"triggerInfos": {err.Error()}})
+		return
+	case err != nil:
+		h.internalError(w, r, err)
+		return
+	}
+	h.Logger.Info("A task's triggers were changed", "task", info.Key, "by", actor(callerFrom(r.Context())))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // logName is the name of the one log file Polyfin serves: the recent lines

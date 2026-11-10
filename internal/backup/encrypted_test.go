@@ -159,7 +159,7 @@ func encryptedRestoring(t *testing.T) *restoring {
 	t.Helper()
 	r := newRestoring(t)
 	r.service.cfg.Settings = func() accounts.Settings {
-		return accounts.Settings{BackupHour: 4, BackupsKept: 7, BackupPassphrase: testPassphrase}
+		return accounts.Settings{BackupsKept: 7, BackupPassphrase: testPassphrase}
 	}
 	return r
 }
