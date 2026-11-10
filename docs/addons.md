@@ -203,17 +203,19 @@ Anime databases make each season, or part of a season, an entry of its own. Its 
 
 ## Manifest addresses
 
-Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu. It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
+Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu. The libraries follow the new manifest as they do at a refresh (see [Refreshing an addon](#refreshing-an-addon)). It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
 
 Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
 
 ## Refreshing an addon
 
-An addon's page, in **Content › Sources** or **My sources**, reads the addon again in two ways. Neither changes its libraries' names, images or settings, its home rows or the libraries users hid.
+An addon's page, in **Content › Sources** or **My sources**, reads the addon again in two ways. Neither changes the names, images or settings of the libraries it keeps, their home rows or the libraries users hid. A library whose catalog is gone is removed, and a library whose catalog took a new identifier follows it (see [A catalog with a new identifier](#a-catalog-with-a-new-identifier)).
 
 **Refresh**, in the page's header, downloads the addon's manifest again:
 
-- Libraries whose catalog is still in it keep their place and settings. Those whose catalog is gone are deleted.
+- Libraries whose catalog is still in it keep their place and settings, and so do those whose catalog took a new identifier.
+- Libraries whose catalog is gone are deleted at once, with their place and settings and, for Live TV, their guides and channel choices. Within the hour, the task "Clean up removed sources" deletes the rest, as for a removed source: users' hidden libraries, smart list entries, catalog home rows on it and the titles' record of it (see [Removing a source](#removing-a-source)).
+- The message after the refresh names the libraries that followed a new identifier and those removed. **Refresh everything** and **Replace the address** tell the same.
 - New catalogs wait under **Content › Libraries** to be turned on. Unlike an install, a refresh turns none on.
 - Catalog pages, descriptions and version lists stay as they are kept.
 
@@ -231,7 +233,7 @@ Other tools read parts of an addon again:
 | Tool | Where | What it does |
 |---|---|---|
 | **Refresh descriptions** | The menu of a server movie or series library, in **Content › Libraries** | Reads every kept title's description again now, one title every 2 seconds, with progress on the row (see [Library description refresh](addons-and-libraries.md#library-description-refresh)). |
-| **Replace the address** | The source's more-actions menu | Downloads the manifest from a new address, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
+| **Replace the address** | The source's more-actions menu | Downloads the manifest from a new address, with libraries kept, followed and removed as at a refresh, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
 | "Forget the version lists" | **System › Schedule** | Forgets every addon's version lists (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)). |
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | Sets how old a catalog page may get before Polyfin reads it again (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)). |
 
@@ -240,6 +242,24 @@ Removing the addon and adding it again is never needed to refresh it, and costs 
 - It loses what [Removing a source](#removing-a-source) lists: libraries with their names, images and settings, home rows, hidden libraries and scheduled recordings.
 - Everything is read again cold: libraries and collections wait for the addon, and many users browsing at once send it many requests together.
 - The new addon turns on its default catalogs, as any install does.
+
+### A catalog with a new identifier
+
+An addon may give a catalog a new identifier: a new version renames it, or a new configuration puts its settings in it. When the manifest downloaded again lists a catalog gone and a new one that are the same, the library of the one gone follows the new one. They are the same when they have:
+
+- the same type;
+- the same name, spaces at either end and case left aside;
+- the same extra properties (genre, year, skip and the like) by name, each required or not alike. The choices of a genre list may differ.
+
+The pair must also be the only one: when two catalogs gone, or two new catalogs, of that type share the name, none follows. A catalog whose name changed too, or whose type or extra properties changed, counts as removed, and the new one waits under **Content › Libraries** to be turned on.
+
+A library that follows keeps everything:
+
+- **Its identifier in Jellyfin apps:** what names it there stays, such as users' hidden libraries, apps' view settings, its uploaded image and its edits. Users who hid it still do not see it.
+- **Its settings:** place, name in apps, genre, maximum, hide in menus and the others.
+- **What names its catalog:** its home rows, its place in smart lists, Live TV channel limits on its channel groups, its guides with their channel choices and programmes, the titles it listed first, and the catalog pages and new arrivals Polyfin keeps of it.
+
+A catalog may follow new identifiers more than once: its library keeps the identifier it had first. If the addon later brings back a catalog under an identifier a library followed away from, that catalog makes a library of its own, with an identifier of its own: the library that followed keeps its own.
 
 ## Removing a source
 
