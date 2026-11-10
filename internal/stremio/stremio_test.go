@@ -1,6 +1,7 @@
 package stremio
 
 import (
+	"encoding/json"
 	"errors"
 	"maps"
 	"net/http"
@@ -46,6 +47,22 @@ func TestParseManifest(t *testing.T) {
 		if _, err := ParseManifest([]byte(invalid)); !errors.Is(err, ErrInvalidManifest) {
 			t.Errorf("%s: got %v", invalid, err)
 		}
+	}
+}
+
+func TestBlankCatalogNamesFallBackToTheirID(t *testing.T) {
+	t.Parallel()
+	var catalogs []Catalog
+	if err := json.Unmarshal([]byte(`[{"type": "movie", "id": "top", "name": "  Top  "},
+		{"type": "movie", "id": "spaces", "name": "   "}, {"type": "series", "id": "none"}, {"type": "series"}]`), &catalogs); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, catalog := range catalogs {
+		got = append(got, catalog.Name)
+	}
+	if want := []string{"Top", "spaces", "none", ""}; !slices.Equal(got, want) {
+		t.Errorf("names: %q, want %q", got, want)
 	}
 }
 

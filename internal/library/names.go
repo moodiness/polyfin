@@ -166,6 +166,10 @@ func LibraryNames(libraries []addons.Library, language string) []string {
 			// Polyfin's own catalog, named in the server's language.
 			base = w.myMusic
 		}
+		if base == "" {
+			// A catalog with neither a name nor an id: its content type.
+			base = w.contentType(l.Catalog.Type)
+		}
 		if l.Name != nil {
 			base = strings.TrimSpace(*l.Name)
 		} else if genre := strings.TrimSpace(l.Genre); genre != "" {

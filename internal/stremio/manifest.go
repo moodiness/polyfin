@@ -86,7 +86,8 @@ func (c *Catalog) UnmarshalJSON(data []byte) error {
 			c.Extra = append(c.Extra, Extra{Name: name, IsRequired: slices.Contains(raw.ExtraRequired, name)})
 		}
 	}
-	if c.Name == "" {
+	// A catalog without a name, or named only spaces, is named after its id.
+	if c.Name = strings.TrimSpace(c.Name); c.Name == "" {
 		c.Name = c.ID
 	}
 	return nil
