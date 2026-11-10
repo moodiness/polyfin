@@ -68,6 +68,7 @@ func (s *Server) deviceCapability(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersions      []int  `json:"protocol_versions"`
 		Cancel                bool   `json:"cancel"`
 		OpenedSignal          bool   `json:"opened_signal"`
+		SessionBinding        bool   `json:"session_binding"`
 	}{State: state, Revision: revision + "-" + state, ProtocolVersions: []int{}, Cancel: state == "available"})
 }
 

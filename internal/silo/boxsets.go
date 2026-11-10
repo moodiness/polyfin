@@ -28,7 +28,8 @@ import (
 // They show on a movie's page, in a search, and open on their movies
 // (getCatalogBoxSet), with their artwork relayed by Polyfin; a library's
 // grid lists each movie, as Silo's does since it stopped grouping them
-// (group=box_set, which the apps at the commits followed still send, is
+// (group=box_set, which apps older than silo-apple 9723df00 and
+// silo-android 6f3e3682 still send, is
 // answered as without it). Without the key, the apps are told none.
 //
 // A library's box sets are made of its first maxScanned movies, as the

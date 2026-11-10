@@ -40,6 +40,9 @@ func instantOf(text any) bool {
 // protocol versions; both offer device sign-in only in the state available
 // (offersDeviceSignIn, deviceLoginAvailable), and withdraw codes when it
 // says cancel too (supportsCancel; Android DeviceCapabilityV2.domain).
+// They bind a request to the TV only when session_binding is true (Apple
+// APIv2DeviceCapability.sessionBinding, Android
+// DeviceCapabilityV2.sessionBinding), a boolean when sent.
 func CheckDeviceCapability(data []byte) (offered, cancel bool, err error) {
 	doc, err := decode(data)
 	if err != nil {
@@ -47,7 +50,7 @@ func CheckDeviceCapability(data []byte) (offered, cancel bool, err error) {
 	}
 	c := &checker{}
 	c.has(doc, "capability", map[string]string{"state": "s", "revision": "s", "remote_playback_handoff": "b", "protocol_versions": "a"})
-	for _, key := range []string{"cancel", "opened_signal", "jellyfin_quick_connect"} {
+	for _, key := range []string{"cancel", "opened_signal", "jellyfin_quick_connect", "session_binding"} {
 		if value, ok := doc[key]; ok {
 			if _, isBool := value.(bool); !isBool {
 				c.fail("capability.%s is not a boolean: %v", key, value)
@@ -175,7 +178,8 @@ func CheckDevicePoll(data []byte) (state, token string, err error) {
 // approving it (GET /api/v2/auth/device), and returns its state. Apple
 // APIv2DeviceLookup requires every field but the times; TVApprovalModel
 // offers no approval of a request whose purpose is not device_login, or
-// which is temporary.
+// which is temporary. Its binding, when sent, is a string (Apple
+// APIv2DeviceLookup.binding).
 func CheckDeviceLookup(data []byte) (string, error) {
 	doc, err := decode(data)
 	if err != nil {
@@ -191,6 +195,11 @@ func CheckDeviceLookup(data []byte) (string, error) {
 	for _, key := range []string{"expires_at", "requested_at"} {
 		if value, ok := doc[key]; ok && !instantOf(value) {
 			c.fail("%s %v", key, value)
+		}
+	}
+	if value, ok := doc["binding"]; ok {
+		if _, isString := value.(string); !isString {
+			c.fail("lookup.binding is not a string: %v", value)
 		}
 	}
 	if doc["client_purpose"] != "device_login" || doc["temporary"] != false {

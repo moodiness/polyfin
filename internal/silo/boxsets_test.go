@@ -352,8 +352,9 @@ func TestAMoviesFirstPageShowsItsBoxSet(t *testing.T) {
 	}
 }
 
-// An app at the commits followed asks a library with box sets for its
-// grid grouped by box set, as Silo's apps did before Silo stopped grouping
+// An app older than silo-apple 9723df00 and silo-android 6f3e3682 asks a
+// library with box sets for its grid grouped by box set, as Silo's apps
+// did before Silo stopped grouping
 // them: the Apple apps in the query, the Android apps in the body. Polyfin
 // answers as without the group, the movies one by one, page after page,
 // once their collections are known too.

@@ -2,13 +2,13 @@
   "contract": {
     "repository": "Silo-Server/silo-server",
     "path": "contracts/api/v2/openapi.json",
-    "commit": "08d1f4d0d192a407b68278d74451787db62f34b3",
-    "sha256": "8dc174b4635f15183c1787199d66665a535431460ba1a5b170165570977aa53b"
+    "commit": "8487cd7b1f645d104e5d4d180a4d788a4cb6851a",
+    "sha256": "bfbd7f6be48781eb5967ae3687962eb8a6c639816b0a7095c6a9e53885c09d8b"
   },
   "apps": [
     {
       "repository": "Silo-Server/silo-apple",
-      "commit": "eb65415997d60a4067f9db24829cd135251f588a",
+      "commit": "97ecec1d0363ab17df0a237caea73bbaf1fce9ce",
       "files": [
         "iosApp/iosApp/Networking/APIv2/APIv2AuthModels.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2CatalogModels.swift",
@@ -55,7 +55,7 @@
     },
     {
       "repository": "Silo-Server/silo-android",
-      "commit": "7e4580db185b1ae85af489f7017dfa9008f4f391",
+      "commit": "075e37d6a75bff84cd5c5f07e918cd41d6c06601",
       "files": [
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/DeviceLoginRouteParser.kt",
