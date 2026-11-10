@@ -3266,7 +3266,9 @@
     })
   }
   // toast says text as jellyfin-web's toasts do, for 3.3 seconds, or for
-  // lasts milliseconds when given, for a longer text.
+  // lasts milliseconds when given, for a longer text. Clicks pass through
+  // it: a long one lies over the video's Play button, which the group's
+  // host is told to press.
   function toast(text, lasts) {
     var holder = document.querySelector('.toastContainer')
     if (!holder) {
@@ -3274,6 +3276,7 @@
       document.body.appendChild(holder)
     }
     var note = element('div', 'toast', text)
+    if (note.style) note.style.pointerEvents = 'none'
     holder.appendChild(note)
     setTimeout(function () {
       note.classList.add('toastVisible')

@@ -18,7 +18,8 @@ import (
 // the one the socket said the session is in, if it still exists), waits
 // for jellyfin-web to ping a new group (10 seconds at most), sets the
 // title as its queue from the start, checks the group took it and pauses
-// it, and tells how the others join. A title without a version, a queue
+// it, and tells how the others join, in a toast that lets clicks through
+// to the video's Play button under it. A title without a version, a queue
 // the group refused and SyncPlay refused each get their own toast. It runs
 // in Node.js, in a context that stands for the browser and jellyfin-web.
 func TestTitleMenusOfferWatchTogether(t *testing.T) {
@@ -178,7 +179,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
       getBoundingClientRect: () => (short ? { bottom: 730, height: 230, right: 300, width: 218 } : { bottom: 100, height: 90, right: 300, width: 218 }) }
     const container = { isConnected: true, classList: classes(['dialogContainer']), querySelector: (s) => (s === '.actionSheet' || s === '.dialog' ? sheet : null) }
     const toasts = []
-    const element = () => ({ classList: classes([]), setAttribute: () => {}, addEventListener: () => {},
+    const element = () => ({ classList: classes([]), style: {}, setAttribute: () => {}, addEventListener: () => {},
       appendChild: (child) => { if (child.className === 'toast') toasts.push(child) }, remove: () => {} })
     // jellyfin-web's SyncPlay button: the default layout's, or the legacy
     // layouts' header button, which it hides rather than leaves out.
@@ -242,7 +243,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     // A toast lasts as long as the timer after its first, of 50 ms, says.
     const delays = timers.map((timer) => timer.delay)
     const lasts = delays[delays.lastIndexOf(50) + 1]
-    const said = toasts.map((t) => 'toast ' + t.textContent + (lasts === 10000 ? ' (10s)' : ''))
+    const said = toasts.map((t) => 'toast ' + t.textContent + (lasts === 10000 ? ' (10s)' : '') + (t.style.pointerEvents === 'none' ? '' : ' (blocks clicks)'))
     const pressed = did.concat(said).join(', ')
     results[name] = words.join(' | ') + (pressed ? ' => ' + pressed : '')
   }
