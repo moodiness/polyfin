@@ -36,6 +36,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Users/{userId}/Items/{itemId}", h.item)
 	signedIn(http.MethodGet, "/Items/{itemId}/Ancestors", h.ancestors)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Versions", h.versionProgress)
+	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Badges", h.itemBadges)
 	signedIn(http.MethodGet, "/Polyfin/UserViews", h.menuViews)
 	signedIn(http.MethodGet, "/Polyfin/HomeRows", h.customRowsAnswer)
 	signedIn(http.MethodPost, "/Polyfin/Items/{itemId}/Versions/Search", h.searchVersions)

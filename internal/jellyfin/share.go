@@ -626,7 +626,7 @@ func (h *Handler) planGuest(r *http.Request, user accounts.User, item library.It
 		if err != nil {
 			return guestPlan{}, shareRefusedUnavailable
 		}
-		p.versions = h.offered(ctx, user, item, versions)
+		h.offer(ctx, user, &p, versions)
 		choice = h.choose(r, user, p, item.ID, request, candidatesOf(p.versions), settings.PreferDirectPlay)
 	}
 	chosen := choice.decided
