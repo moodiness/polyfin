@@ -18,7 +18,8 @@ import (
 // written to, empty when backups are off, which leaves the rest empty.
 type backupJSON struct {
 	Folder string `json:"folder"`
-	// Next is when the next backup is made, at the settings' hour.
+	// Next is when the backup task's triggers make the next backup, null
+	// without a timed trigger.
 	Next *time.Time `json:"next"`
 	// RanAt is when the last run started, null before the first; Error is
 	// why it failed, empty after a success.
@@ -81,12 +82,26 @@ type destinationJSON struct {
 	Unreadable    bool       `json:"unreadable"`
 }
 
-func newDestinationJSON(d backup.Destination, now time.Time) destinationJSON {
+// backupSchedule is when the backup task runs next, nil without a timed
+// trigger, and the age past which a backup is stale by its triggers.
+func (h *handler) backupSchedule() (*time.Time, time.Duration) {
+	if h.Tasks == nil {
+		return nil, backup.MinStaleAfter
+	}
+	info, ok := h.Tasks.Task(tasks.ID(backup.TaskKey), "en")
+	if !ok {
+		return nil, backup.MinStaleAfter
+	}
+	return info.Next, backup.StaleAfter(tasks.LongestGap(info.Triggers))
+}
+
+func (h *handler) newDestinationJSON(d backup.Destination, now time.Time) destinationJSON {
 	result := destinationJSON{ID: d.ID.String(), Kind: d.Kind, Name: d.Name(), Address: d.Address, Port: d.Port, Bucket: d.Bucket,
 		Folder: d.Folder, Region: d.Region, Username: d.Username, SecretSet: d.SecretSet, PrivateKeySet: d.PrivateKeySet,
 		HostKey: d.HostKeyFingerprint(), Kept: d.Kept, CreatedAt: d.CreatedAt.UTC().Truncate(time.Second), RanAt: utcSeconds(d.RanAt),
 		Error: d.Error, NewestFile: d.NewestFile, NewestAt: d.NewestAt, Unreadable: d.Unreadable}
-	if problem := d.Problem(now); problem != "" {
+	_, staleAfter := h.backupSchedule()
+	if problem := d.Problem(now, staleAfter); problem != "" {
 		result.Problem = &problem
 	}
 	return result
@@ -110,11 +125,12 @@ func (h *handler) backupStatus(ctx context.Context) (*backupJSON, error) {
 		return nil, err
 	}
 	now := h.now()
-	result := &backupJSON{Folder: h.Backups.Dir(), Next: new(tasks.NextDaily(now, h.Backups.Hour())), RanAt: status.RanAt,
-		Error: status.Error, MadeAt: status.MadeAt, File: status.File, Size: status.Size, Problem: status.Problem(now),
+	next, staleAfter := h.backupSchedule()
+	result := &backupJSON{Folder: h.Backups.Dir(), Next: next, RanAt: status.RanAt,
+		Error: status.Error, MadeAt: status.MadeAt, File: status.File, Size: status.Size, Problem: status.Problem(now, staleAfter),
 		Destinations: []destinationJSON{}}
 	for _, d := range destinations {
-		result.Destinations = append(result.Destinations, newDestinationJSON(d, now))
+		result.Destinations = append(result.Destinations, h.newDestinationJSON(d, now))
 	}
 	if errors.Is(h.Backups.CanRestore(), backup.ErrNoPgRestore) {
 		result.Restore = "pg_restore_missing"
@@ -221,7 +237,7 @@ func (h *handler) backupDestinations(w http.ResponseWriter, r *http.Request) {
 	now := h.now()
 	result := destinationsJSON{Destinations: []destinationJSON{}, Kinds: backup.Kinds}
 	for _, d := range destinations {
-		result.Destinations = append(result.Destinations, newDestinationJSON(d, now))
+		result.Destinations = append(result.Destinations, h.newDestinationJSON(d, now))
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -239,7 +255,7 @@ func (h *handler) createBackupDestination(w http.ResponseWriter, r *http.Request
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, newDestinationJSON(d, h.now()))
+	writeJSON(w, http.StatusCreated, h.newDestinationJSON(d, h.now()))
 }
 
 // updateBackupDestination changes a destination.
@@ -259,7 +275,7 @@ func (h *handler) updateBackupDestination(w http.ResponseWriter, r *http.Request
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newDestinationJSON(d, h.now()))
+	writeJSON(w, http.StatusOK, h.newDestinationJSON(d, h.now()))
 }
 
 // deleteBackupDestination removes a destination; the backups sent there
@@ -300,7 +316,7 @@ func (h *handler) testBackupDestination(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
-	result := destinationTestJSON{OK: err == nil, Destination: newDestinationJSON(d, h.now())}
+	result := destinationTestJSON{OK: err == nil, Destination: h.newDestinationJSON(d, h.now())}
 	if err != nil {
 		result.Error = err.Error()
 	}
@@ -351,7 +367,7 @@ func (h *handler) backupFiles(w http.ResponseWriter, r *http.Request) {
 	now := h.now()
 	result := backupFilesJSON{Folder: newBackupFilesJSON(listing.Folder), Destinations: []destinationFilesJSON{}}
 	for _, d := range listing.Destinations {
-		files := destinationFilesJSON{Destination: newDestinationJSON(d.Destination, now), Files: newBackupFilesJSON(d.Files)}
+		files := destinationFilesJSON{Destination: h.newDestinationJSON(d.Destination, now), Files: newBackupFilesJSON(d.Files)}
 		if d.Error != nil {
 			files.Error = d.Error.Error()
 		}

@@ -5,23 +5,14 @@ import (
 	"testing"
 )
 
-// The database is backed up at 4 by default, at an hour from 0 to 23,
-// and 7 backups are kept by default, from 1 to 90; the database refuses
-// what the store would.
+// 7 backups are kept by default, from 1 to 90; the database refuses what
+// the store would.
 func TestBackupSettingsStayInRange(t *testing.T) {
 	t.Parallel()
 	store := newStore(t)
 	ctx := t.Context()
-	if got := store.Settings(); got.BackupHour != DefaultBackupHour || DefaultBackupHour != 4 ||
-		got.BackupsKept != DefaultBackupsKept || DefaultBackupsKept != 7 {
-		t.Errorf("defaults: %d %d", got.BackupHour, got.BackupsKept)
-	}
-	for _, hour := range []int{-1, 24} {
-		changed := store.Settings()
-		changed.BackupHour = hour
-		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidBackupHour) {
-			t.Errorf("hour %d: %v", hour, err)
-		}
+	if got := store.Settings(); got.BackupsKept != DefaultBackupsKept || DefaultBackupsKept != 7 {
+		t.Errorf("default: %d", got.BackupsKept)
 	}
 	for _, kept := range []int{0, -1, MaxBackupsKept + 1} {
 		changed := store.Settings()
@@ -30,9 +21,9 @@ func TestBackupSettingsStayInRange(t *testing.T) {
 			t.Errorf("%d kept: %v", kept, err)
 		}
 	}
-	for _, values := range [][2]int{{0, MinBackupsKept}, {23, MaxBackupsKept}} {
+	for _, kept := range []int{MinBackupsKept, MaxBackupsKept} {
 		changed := store.Settings()
-		changed.BackupHour, changed.BackupsKept = values[0], values[1]
+		changed.BackupsKept = kept
 		if _, err := store.UpdateSettings(ctx, changed); err != nil {
 			t.Fatal(err)
 		}
@@ -40,48 +31,11 @@ func TestBackupSettingsStayInRange(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := reopened.Settings(); got.BackupHour != values[0] || got.BackupsKept != values[1] {
-			t.Errorf("after reopening: %d %d, want %v", got.BackupHour, got.BackupsKept, values)
+		if got := reopened.Settings().BackupsKept; got != kept {
+			t.Errorf("after reopening: %d, want %d", got, kept)
 		}
 	}
-	for _, column := range []string{"backup_hour = 24", "backups_kept = 0", "backups_kept = 91"} {
-		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
-			t.Errorf("the database took %s", column)
-		}
-	}
-}
-
-// Collections are never all read by default, and otherwise at an hour
-// from 0 to 23; the database refuses what the store would.
-func TestCollectionReadHourStaysInRange(t *testing.T) {
-	t.Parallel()
-	store := newStore(t)
-	ctx := t.Context()
-	if got := store.Settings().CollectionReadHour; got != DefaultCollectionReadHour || DefaultCollectionReadHour != -1 {
-		t.Errorf("default: %d", got)
-	}
-	for _, hour := range []int{-2, 24} {
-		changed := store.Settings()
-		changed.CollectionReadHour = hour
-		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidCollectionReadHour) {
-			t.Errorf("hour %d: %v", hour, err)
-		}
-	}
-	for _, hour := range []int{0, 23, -1} {
-		changed := store.Settings()
-		changed.CollectionReadHour = hour
-		if _, err := store.UpdateSettings(ctx, changed); err != nil {
-			t.Fatal(err)
-		}
-		reopened, err := Open(ctx, store.db)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := reopened.Settings().CollectionReadHour; got != hour {
-			t.Errorf("after reopening: %d, want %d", got, hour)
-		}
-	}
-	for _, column := range []string{"collection_read_hour = -2", "collection_read_hour = 24"} {
+	for _, column := range []string{"backups_kept = 0", "backups_kept = 91"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}

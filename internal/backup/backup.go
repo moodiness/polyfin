@@ -34,9 +34,24 @@ import (
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
-// StaleAfter is the age past which the last backup made is a problem while
-// backups are on: two daily runs missed.
-const StaleAfter = 48 * time.Hour
+// MinStaleAfter is the youngest age at which the last backup made is a
+// problem while backups are on: two daily runs missed.
+const MinStaleAfter = 48 * time.Hour
+
+// StaleAfter is the age past which the last backup made is a problem
+// while backups are on, for a schedule whose longest gap between two runs
+// is gap (see tasks.LongestGap): two runs missed, never under
+// MinStaleAfter.
+func StaleAfter(gap time.Duration) time.Duration {
+	return max(MinStaleAfter, 2*gap)
+}
+
+// TaskKey is the key of the backup task.
+const TaskKey = "BackUpDatabase"
+
+// DefaultTime is when the backup task runs every day by default, from
+// midnight in the server's time zone.
+const DefaultTime = 4 * time.Hour
 
 // nameLayout is the time in a backup's name, polyfin-YYYYMMDD-HHMMSS.dump,
 // or polyfin-YYYYMMDD-HHMMSS.dump.enc for an encrypted one.
@@ -81,7 +96,7 @@ type Config struct {
 	// Secrets seals the destinations' passwords and keys; nil stores them
 	// as they are.
 	Secrets *secrets.Box
-	// Settings gives BackupHour, BackupsKept and BackupPassphrase, read
+	// Settings gives BackupsKept and BackupPassphrase, read
 	// when they are used: a passphrase encrypts the backups.
 	Settings func() accounts.Settings
 	// PassphraseUnreadable reports whether the settings hold a passphrase
@@ -147,16 +162,6 @@ func (s *Service) PgDump() string {
 	return s.cfg.PgDump
 }
 
-// Hour is the hour of the server's time zone the database is backed up at
-// every day, the settings' BackupHour; -1 while backups are off, which
-// leaves the daily task to be run by hand.
-func (s *Service) Hour() int {
-	if !s.Available() {
-		return -1
-	}
-	return s.cfg.Settings().BackupHour
-}
-
 // Status is how backups went.
 type Status struct {
 	// RanAt is when the last run started, nil before the first; Error is
@@ -172,12 +177,12 @@ type Status struct {
 
 // Problem reports whether an administrator should look at backups, at
 // now: the last run failed, or the last backup made is older than
-// StaleAfter. Before the first run there is none.
-func (st Status) Problem(now time.Time) bool {
+// staleAfter (see StaleAfter). Before the first run there is none.
+func (st Status) Problem(now time.Time, staleAfter time.Duration) bool {
 	if st.RanAt == nil {
 		return false
 	}
-	return st.Error != "" || st.MadeAt == nil || now.Sub(*st.MadeAt) > StaleAfter
+	return st.Error != "" || st.MadeAt == nil || now.Sub(*st.MadeAt) > staleAfter
 }
 
 // Status reads how the last backup went.

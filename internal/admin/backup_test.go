@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"maps"
@@ -10,76 +11,40 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/backup"
+	"github.com/moodiness/polyfin/internal/tasks"
 )
 
-// The backup hour defaults to 4, from 0 to 23, and the backups kept to 7,
-// from 1 to 90; a PUT leaving them out keeps them.
+// The backups kept default to 7, from 1 to 90; a PUT leaving them out
+// keeps them.
 func TestSettingsBackups(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
-	if body["backupHour"] != 4.0 || body["backupsKept"] != 7.0 || body["backupFolder"] != "" {
-		t.Errorf("defaults: %v %v %q", body["backupHour"], body["backupsKept"], body["backupFolder"])
+	if body["backupsKept"] != 7.0 || body["backupFolder"] != "" {
+		t.Errorf("defaults: %v %q", body["backupsKept"], body["backupFolder"])
 	}
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
-	for _, values := range [][2]int{{0, accounts.MinBackupsKept}, {23, accounts.MaxBackupsKept}} {
+	for _, kept := range []int{accounts.MinBackupsKept, accounts.MaxBackupsKept} {
 		settings := maps.Clone(base)
-		settings["backupHour"], settings["backupsKept"] = values[0], values[1]
+		settings["backupsKept"] = kept
 		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
-			body["backupHour"] != float64(values[0]) || body["backupsKept"] != float64(values[1]) {
-			t.Fatalf("saving %v: %d %v", values, status, body)
+			body["backupsKept"] != float64(kept) {
+			t.Fatalf("saving %d: %d %v", kept, status, body)
 		}
 	}
-	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK ||
-		body["backupHour"] != 23.0 || body["backupsKept"] != 90.0 {
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || body["backupsKept"] != 90.0 {
 		t.Errorf("left out: %d %v", status, body)
 	}
-	for field, refused := range map[string][]int{"backupHour": {-1, 24}, "backupsKept": {0, accounts.MaxBackupsKept + 1}} {
-		code := map[string]string{"backupHour": "invalid_backup_hour", "backupsKept": "invalid_backups_kept"}[field]
-		for _, value := range refused {
-			settings := maps.Clone(base)
-			settings[field] = value
-			if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusBadRequest || body["error"] != code {
-				t.Errorf("%s %d: %d %v", field, value, status, body)
-			}
-		}
-	}
-	if store := api.store.Settings(); store.BackupHour != 23 || store.BackupsKept != 90 {
-		t.Errorf("saved: %d %d", store.BackupHour, store.BackupsKept)
-	}
-}
-
-// The collection read hour defaults to -1, never, and otherwise goes from
-// 0 to 23; a PUT leaving it out keeps it.
-func TestSettingsCollectionReadHour(t *testing.T) {
-	t.Parallel()
-	api := newTestAPI(t, 10)
-	administrator := api.signedIn("administrator", true)
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["collectionReadHour"] != -1.0 {
-		t.Errorf("default: %v", body["collectionReadHour"])
-	}
-	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
-	for _, hour := range []int{0, 23} {
+	for _, kept := range []int{0, accounts.MaxBackupsKept + 1} {
 		settings := maps.Clone(base)
-		settings["collectionReadHour"] = hour
-		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
-			body["collectionReadHour"] != float64(hour) {
-			t.Fatalf("saving %d: %d %v", hour, status, body)
-		}
-	}
-	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || body["collectionReadHour"] != 23.0 {
-		t.Errorf("left out: %d %v", status, body)
-	}
-	for _, hour := range []int{-2, 24} {
-		settings := maps.Clone(base)
-		settings["collectionReadHour"] = hour
+		settings["backupsKept"] = kept
 		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusBadRequest ||
-			body["error"] != "invalid_collection_read_hour" {
-			t.Errorf("hour %d: %d %v", hour, status, body)
+			body["error"] != "invalid_backups_kept" {
+			t.Errorf("%d kept: %d %v", kept, status, body)
 		}
 	}
-	if got := api.store.Settings().CollectionReadHour; got != 23 {
+	if got := api.store.Settings().BackupsKept; got != 90 {
 		t.Errorf("saved: %d", got)
 	}
 }
@@ -99,8 +64,13 @@ func TestBackupStatus(t *testing.T) {
 
 	dir := t.TempDir()
 	var deps testDeps
+	registry := tasks.New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	registry.Register(tasks.Task{Key: backup.TaskKey, Triggers: []tasks.Trigger{tasks.Daily(backup.DefaultTime)},
+		Text: map[string]tasks.Text{"en": {Name: "Back up"}}, Run: func(context.Context) error { return nil }})
+	registry.Start(t.Context())
 	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
 		deps = d
+		o.Tasks = registry
 		settings := o.Accounts.Settings
 		dataDir := o.DataDir
 		o.Backups = backup.New(backup.Config{Folder: func() string { return settings().BackupDir(dataDir) }, DB: d.pool, Settings: settings,
@@ -156,6 +126,16 @@ func TestBackupStatus(t *testing.T) {
 		_, health, _ := administrator.call(http.MethodGet, "/health", nil)
 		if backupHealth, _ := health["backup"].(map[string]any); backupHealth == nil || backupHealth["problem"] != test.problem {
 			t.Errorf("%s health: %v", test.name, health["backup"])
+		}
+	}
+	// A weekly backup is stale after two weeks only.
+	if err := registry.SetTriggers(t.Context(), tasks.ID(backup.TaskKey), []tasks.Trigger{tasks.Weekly(time.Sunday, backup.DefaultTime)}); err != nil {
+		t.Fatal(err)
+	}
+	for age, problem := range map[time.Duration]bool{49 * time.Hour: false, 13 * 24 * time.Hour: false, 15 * 24 * time.Hour: true} {
+		record(now.Add(-age), "", now.Add(-age))
+		if _, body, _ := administrator.call(http.MethodGet, "/backup", nil); body["problem"] != problem {
+			t.Errorf("weekly, %v old: %v", age, body)
 		}
 	}
 }

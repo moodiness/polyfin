@@ -120,20 +120,21 @@ func (d Destination) Name() string {
 const (
 	// ProblemFailed: its last upload failed.
 	ProblemFailed = "failed"
-	// ProblemStale: its newest backup is older than StaleAfter.
+	// ProblemStale: its newest backup is older than the age Problem is
+	// given.
 	ProblemStale = "stale"
 )
 
 // Problem is what an administrator should look at, at now: its last
-// upload failed, or its newest backup is older than StaleAfter; empty
-// before the first upload, and when all is well.
-func (d Destination) Problem(now time.Time) string {
+// upload failed, or its newest backup is older than staleAfter (see
+// StaleAfter); empty before the first upload, and when all is well.
+func (d Destination) Problem(now time.Time, staleAfter time.Duration) string {
 	switch {
 	case d.RanAt == nil:
 		return ""
 	case d.Error != "":
 		return ProblemFailed
-	case d.NewestAt == nil || now.Sub(*d.NewestAt) > StaleAfter:
+	case d.NewestAt == nil || now.Sub(*d.NewestAt) > staleAfter:
 		return ProblemStale
 	}
 	return ""

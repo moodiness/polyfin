@@ -711,11 +711,9 @@ type settingsJSON struct {
 	MyAnimeListClientID        *string `json:"myAnimeListClientId"`
 	MyAnimeListClientSecret    *string `json:"myAnimeListClientSecret,omitempty"`
 	MyAnimeListClientSecretSet bool    `json:"myAnimeListClientSecretSet"`
-	// BackupHour, BackupsKept, CollectionReadHour and CollectionLibraryApps
-	// keep their current values when a PUT leaves them out.
-	BackupHour            *int      `json:"backupHour"`
+	// BackupsKept and CollectionLibraryApps keep their current values when
+	// a PUT leaves them out.
 	BackupsKept           *int      `json:"backupsKept"`
-	CollectionReadHour    *int      `json:"collectionReadHour"`
 	CollectionLibraryApps *[]string `json:"collectionLibraryApps"`
 	// RemuxDB and RemuxDBURL keep their current values when a PUT leaves
 	// them out.
@@ -833,13 +831,11 @@ type settingsJSON struct {
 	// cacheSizeGb, sourceCacheDays, sourceCacheCreditDays and
 	// preloadWholeFiles as SourceCachePresetLimits tell; a PUT setting one
 	// of them to another value without a preset makes it custom.
-	// sourceCacheEmptyHour is the hour the cache is emptied each day, -1
-	// never. ReadingFree is the space free on the disk of the folder for
-	// files being read, null when unknown; a PUT ignores it and the limits.
+	// ReadingFree is the space free on the disk of the folder for files
+	// being read, null when unknown; a PUT ignores it and the limits.
 	SourceCachePreset       *string                          `json:"sourceCachePreset"`
 	SourceCacheDays         *int                             `json:"sourceCacheDays"`
 	SourceCacheCreditDays   *int                             `json:"sourceCacheCreditDays"`
-	SourceCacheEmptyHour    *int                             `json:"sourceCacheEmptyHour"`
 	PreloadNextEpisodes     *bool                            `json:"preloadNextEpisodes"`
 	PreloadEpisodes         *int                             `json:"preloadEpisodes"`
 	PreloadMbps             *int                             `json:"preloadMbps"`
@@ -1049,9 +1045,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		MyAnimeListClientID:        &settings.MyAnimeListClientID,
 		MyAnimeListClientSecretSet: settings.MyAnimeListClientSecret != "",
 
-		BackupHour:            &settings.BackupHour,
 		BackupsKept:           &settings.BackupsKept,
-		CollectionReadHour:    &settings.CollectionReadHour,
 		CollectionLibraryApps: &settings.CollectionLibraryApps,
 
 		RemuxDB:    &settings.RemuxDB,
@@ -1113,7 +1107,6 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SourceCachePreset:       &settings.SourceCachePreset,
 		SourceCacheDays:         &settings.SourceCacheDays,
 		SourceCacheCreditDays:   &settings.SourceCacheCreditDays,
-		SourceCacheEmptyHour:    &settings.SourceCacheEmptyHour,
 		PreloadNextEpisodes:     &settings.PreloadNextEpisodes,
 		PreloadEpisodes:         &settings.PreloadEpisodes,
 		PreloadMbps:             &settings.PreloadMbps,
@@ -1864,9 +1857,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MyAnimeListClientID:     valueOr(body.MyAnimeListClientID, current.MyAnimeListClientID),
 		MyAnimeListClientSecret: valueOr(body.MyAnimeListClientSecret, current.MyAnimeListClientSecret),
 
-		BackupHour:            valueOr(body.BackupHour, current.BackupHour),
 		BackupsKept:           valueOr(body.BackupsKept, current.BackupsKept),
-		CollectionReadHour:    valueOr(body.CollectionReadHour, current.CollectionReadHour),
 		CollectionLibraryApps: valueOr(body.CollectionLibraryApps, current.CollectionLibraryApps),
 
 		RemuxDB:    valueOr(body.RemuxDB, current.RemuxDB),
@@ -1927,7 +1918,6 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SourceCachePreset:     valueOr(body.SourceCachePreset, current.SourceCachePreset),
 		SourceCacheDays:       valueOr(body.SourceCacheDays, current.SourceCacheDays),
 		SourceCacheCreditDays: valueOr(body.SourceCacheCreditDays, current.SourceCacheCreditDays),
-		SourceCacheEmptyHour:  valueOr(body.SourceCacheEmptyHour, current.SourceCacheEmptyHour),
 		PreloadNextEpisodes:   valueOr(body.PreloadNextEpisodes, current.PreloadNextEpisodes),
 		PreloadEpisodes:       valueOr(body.PreloadEpisodes, current.PreloadEpisodes),
 		PreloadMbps:           valueOr(body.PreloadMbps, current.PreloadMbps),

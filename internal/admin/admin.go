@@ -483,6 +483,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/tasks", h.administrator(h.scheduledTasks))
 	mux.Handle("POST /admin/api/tasks/{id}/run", h.administrator(h.runTask))
 	mux.Handle("POST /admin/api/tasks/{id}/stop", h.administrator(h.stopTask))
+	mux.Handle("PUT /admin/api/tasks/{id}/triggers", h.administrator(h.setTaskTriggers))
+	mux.Handle("DELETE /admin/api/tasks/{id}/triggers", h.administrator(h.resetTaskTriggers))
 	mux.Handle("GET /admin/api/timers", h.administrator(h.timers))
 	if h.VirtualChannels != nil {
 		mux.Handle("GET /admin/api/live-tv/channels", h.administrator(h.virtualChannels))
@@ -823,7 +825,6 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidLastFMApp, http.StatusBadRequest, "invalid_lastfm_app"},
 		{accounts.ErrInvalidAniListApp, http.StatusBadRequest, "invalid_anilist_app"},
 		{accounts.ErrInvalidMyAnimeListApp, http.StatusBadRequest, "invalid_myanimelist_app"},
-		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidPublicAddress, http.StatusBadRequest, "invalid_public_address"},
 		{accounts.ErrInvalidLocalAddress, http.StatusBadRequest, "invalid_local_address"},
@@ -836,7 +837,6 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidWeeklySummaryDay, http.StatusBadRequest, "invalid_weekly_summary_day"},
 		{accounts.ErrInvalidWeeklySummaryHour, http.StatusBadRequest, "invalid_weekly_summary_hour"},
 		{accounts.ErrInvalidImportEveryMinutes, http.StatusBadRequest, "invalid_import_every_minutes"},
-		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
 		{accounts.ErrInvalidCollectionLibraryApps, http.StatusBadRequest, "invalid_collection_library_apps"},
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
 		{accounts.ErrInvalidUpdateToolURL, http.StatusBadRequest, "invalid_update_tool_url"},
@@ -844,7 +844,6 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidProvider, http.StatusBadRequest, "invalid_provider"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidSourceCache, http.StatusBadRequest, "invalid_source_cache"},
-		{accounts.ErrInvalidSourceCacheEmptyHour, http.StatusBadRequest, "invalid_source_cache_empty_hour"},
 		{accounts.ErrInvalidPreload, http.StatusBadRequest, "invalid_preload"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},

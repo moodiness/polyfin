@@ -105,7 +105,7 @@ func TestForgetTheVersionListsTask(t *testing.T) {
 	}
 
 	task := forgetVersionListsTask(lib, logger)
-	if task.Category != tasks.CategoryLibrary || task.Interval != 0 || task.Daily != nil || task.AtStart {
+	if task.Category != tasks.CategoryLibrary || len(task.Triggers) != 0 || task.Limits.Locked != tasks.LockedByHand {
 		t.Errorf("not a Library task run by hand only: %+v", task)
 	}
 	for _, language := range []string{"en", "fr", "de", "es", "it", "pt-BR"} {

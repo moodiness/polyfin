@@ -1040,26 +1040,16 @@ var (
 // app, in bytes.
 const MaxTrackingAppBytes = 256
 
-// ErrInvalidBackupHour reports a BackupHour outside [0, 23],
-// ErrInvalidBackupsKept a BackupsKept outside [MinBackupsKept,
-// MaxBackupsKept], and ErrInvalidCollectionReadHour a CollectionReadHour
-// outside [-1, 23].
-var (
-	ErrInvalidBackupHour         = errors.New("invalid backup hour")
-	ErrInvalidBackupsKept        = errors.New("invalid number of backups kept")
-	ErrInvalidCollectionReadHour = errors.New("invalid collection read hour")
-)
+// ErrInvalidBackupsKept reports a BackupsKept outside [MinBackupsKept,
+// MaxBackupsKept].
+var ErrInvalidBackupsKept = errors.New("invalid number of backups kept")
 
-// The bounds and defaults of Settings.BackupHour, BackupsKept and
-// CollectionReadHour: by default, the database is backed up at 4 in the
-// morning, the last week of backups is kept, and collections are never
-// all read.
+// The bounds and default of Settings.BackupsKept: by default, the last
+// week of backups is kept.
 const (
-	DefaultBackupHour         = 4
-	MinBackupsKept            = 1
-	MaxBackupsKept            = 90
-	DefaultBackupsKept        = 7
-	DefaultCollectionReadHour = -1
+	MinBackupsKept     = 1
+	MaxBackupsKept     = 90
+	DefaultBackupsKept = 7
 )
 
 // ErrInvalidCollectionLibraryApps reports a Settings.CollectionLibraryApps
@@ -1268,13 +1258,11 @@ const (
 
 // ErrInvalidSourceCache reports a SourceCachePreset not among
 // SourceCachePresets, or a SourceCacheDays or SourceCacheCreditDays out of
-// their bounds; ErrInvalidSourceCacheEmptyHour a SourceCacheEmptyHour
-// outside [-1, 23]; ErrInvalidPreload a PreloadEpisodes, PreloadMbps or
+// their bounds; ErrInvalidPreload a PreloadEpisodes, PreloadMbps or
 // PreloadReserveGB out of theirs.
 var (
-	ErrInvalidSourceCache          = errors.New("invalid source cache retention")
-	ErrInvalidSourceCacheEmptyHour = errors.New("invalid source cache empty hour")
-	ErrInvalidPreload              = errors.New("invalid next-episode preloading")
+	ErrInvalidSourceCache = errors.New("invalid source cache retention")
+	ErrInvalidPreload     = errors.New("invalid next-episode preloading")
 )
 
 // The presets of the source cache (see Settings.SourceCachePreset): Off
@@ -1310,15 +1298,13 @@ var SourceCachePresetLimits = map[string]SourceCacheLimits{
 }
 
 // The bounds and defaults of SourceCacheDays and SourceCacheCreditDays,
-// the default of SourceCacheEmptyHour, never, and the bounds and defaults
-// of the next-episode preloading's PreloadEpisodes, PreloadMbps and
-// PreloadReserveGB.
+// and the bounds and defaults of the next-episode preloading's
+// PreloadEpisodes, PreloadMbps and PreloadReserveGB.
 const (
 	MaxSourceCacheDays           = 365
 	DefaultSourceCacheDays       = 3
 	MaxSourceCacheCreditDays     = 30
 	DefaultSourceCacheCreditDays = 1
-	DefaultSourceCacheEmptyHour  = -1
 	MinPreloadEpisodes           = 1
 	MaxPreloadEpisodes           = 3
 	DefaultPreloadEpisodes       = 1
@@ -1923,15 +1909,9 @@ type Settings struct {
 	AniListClientSecret     string
 	MyAnimeListClientID     string
 	MyAnimeListClientSecret string
-	// BackupHour is the hour of the server's time zone, 0 to 23, the
-	// database is backed up at every day, and BackupsKept how many of the
-	// newest backups are kept, while Backups is on.
-	BackupHour  int
+	// BackupsKept is how many of the newest backups are kept, while
+	// Backups is on.
 	BackupsKept int
-	// CollectionReadHour is the hour of the server's time zone, 0 to 23,
-	// at which every collection of the server's collection libraries is
-	// read each day; -1 never.
-	CollectionReadHour int
 	// CollectionLibraryApps are the apps, by the name they send in the
 	// Client field of their authorization, told an addon's collection
 	// library holds collections, as Jellyfin's Collections view does;
@@ -1959,11 +1939,6 @@ type Settings struct {
 	// SourceCacheCreditDays is how many days longer it keeps those of a
 	// title for each time it was played again.
 	SourceCacheDays, SourceCacheCreditDays int
-	// SourceCacheEmptyHour is the hour of the server's time zone, 0 to 23,
-	// at which the source cache is emptied each day, but for the files
-	// being read; -1 never. Administrators may empty it by hand whatever
-	// the hour.
-	SourceCacheEmptyHour int
 	// PreloadNextEpisodes has the source cache read ahead the next
 	// PreloadEpisodes episodes of the series the users watch lately, while
 	// nothing plays, at PreloadMbps megabits a second at most, as long as
@@ -2360,7 +2335,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
 	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
-	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
+	"backups_kept, collection_library_apps, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, backup_passphrase, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
@@ -2373,7 +2348,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"poster_ratings, poster_badges, poster_badge_size, poster_template, " +
 	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
 	"provider_admin_claim, provider_admin_value, " +
-	"source_cache_preset, source_cache_days, source_cache_credit_days, source_cache_empty_hour, " +
+	"source_cache_preset, source_cache_days, source_cache_credit_days, " +
 	"preload_next_episodes, preload_episodes, preload_mbps, preload_reserve_gb, preload_whole_files"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
@@ -2428,7 +2403,7 @@ func (settings *Settings) fields() []any {
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
-		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.CollectionLibraryApps, &settings.RemuxDB, &settings.RemuxDBURL,
+		&settings.BackupsKept, &settings.CollectionLibraryApps, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
 		&settings.BackupPassphrase,
 		&settings.PublicAddress,
@@ -2445,7 +2420,7 @@ func (settings *Settings) fields() []any {
 		&settings.PosterRatings, &settings.PosterBadges, &settings.PosterBadgeSize, &settings.PosterTemplate,
 		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
 		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue,
-		&settings.SourceCachePreset, &settings.SourceCacheDays, &settings.SourceCacheCreditDays, &settings.SourceCacheEmptyHour,
+		&settings.SourceCachePreset, &settings.SourceCacheDays, &settings.SourceCacheCreditDays,
 		&settings.PreloadNextEpisodes, &settings.PreloadEpisodes, &settings.PreloadMbps, &settings.PreloadReserveGB, &settings.PreloadWholeFiles}
 }
 
@@ -2897,14 +2872,8 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !validTrackingApp(settings.MyAnimeListClientID) || !validTrackingApp(settings.MyAnimeListClientSecret) {
 		return Settings{}, ErrInvalidMyAnimeListApp
 	}
-	if settings.BackupHour < 0 || settings.BackupHour > 23 {
-		return Settings{}, ErrInvalidBackupHour
-	}
 	if settings.BackupsKept < MinBackupsKept || settings.BackupsKept > MaxBackupsKept {
 		return Settings{}, ErrInvalidBackupsKept
-	}
-	if settings.CollectionReadHour < -1 || settings.CollectionReadHour > 23 {
-		return Settings{}, ErrInvalidCollectionReadHour
 	}
 	apps, err := canonicalCollectionLibraryApps(settings.CollectionLibraryApps)
 	if err != nil {
@@ -2913,9 +2882,6 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	settings.CollectionLibraryApps = apps
 	if err := settings.applySourceCachePreset(); err != nil {
 		return Settings{}, err
-	}
-	if settings.SourceCacheEmptyHour < -1 || settings.SourceCacheEmptyHour > 23 {
-		return Settings{}, ErrInvalidSourceCacheEmptyHour
 	}
 	if settings.CacheSizeGB < MinCacheSizeGB || settings.CacheSizeGB > MaxCacheSizeGB {
 		return Settings{}, ErrInvalidCacheSize

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -437,8 +438,12 @@ func TestScheduledTasksRunStopAndKeepTheirTriggers(t *testing.T) {
 	s, admin, _ := administrated(t)
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
-	s.tasks.Register(tasks.Task{Key: "Wait", Category: tasks.CategoryMaintenance, Interval: time.Hour,
-		Text: map[string]tasks.Text{"en": {Name: "Wait"}}, Run: func(ctx context.Context) error { <-ctx.Done(); return nil }})
+	s.tasks.Register(tasks.Task{Key: "Wait", Category: tasks.CategoryMaintenance, Triggers: []tasks.Trigger{tasks.Every(time.Hour)},
+		Limits: tasks.Limits{MinInterval: 15 * time.Minute},
+		Text:   map[string]tasks.Text{"en": {Name: "Wait"}}, Run: func(ctx context.Context) error { <-ctx.Done(); return nil }})
+	s.tasks.Register(tasks.Task{Key: "Poll", Category: tasks.CategoryMaintenance, Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(5 * time.Minute)},
+		Limits: tasks.Limits{Locked: tasks.LockedSettings},
+		Text:   map[string]tasks.Text{"en": {Name: "Poll"}}, Run: func(context.Context) error { return nil }})
 	s.tasks.Start(ctx)
 	id := tasks.ID("Wait")
 	task := func() TaskInfo {
@@ -447,7 +452,7 @@ func TestScheduledTasksRunStopAndKeepTheirTriggers(t *testing.T) {
 		_ = json.Unmarshal(body, &info)
 		return info
 	}
-	if info := task(); info.State != tasks.Idle || len(info.Triggers) != 1 || info.Triggers[0].IntervalTicks != int64(time.Hour/100) {
+	if info := task(); info.State != tasks.Idle || len(info.Triggers) != 1 || info.Triggers[0].IntervalTicks == nil || *info.Triggers[0].IntervalTicks != int64(time.Hour/100) {
 		t.Errorf("before: %+v", info)
 	}
 	s.call(http.MethodPost, "/ScheduledTasks/Running/"+id, admin, nil)
@@ -461,8 +466,43 @@ func TestScheduledTasksRunStopAndKeepTheirTriggers(t *testing.T) {
 	if info := task(); info.State != tasks.Idle || info.LastExecutionResult == nil || info.LastExecutionResult.Status != tasks.Cancelled {
 		t.Errorf("stopped: %+v", info)
 	}
-	if status, _ := s.call(http.MethodPost, "/ScheduledTasks/"+id+"/Triggers", admin, []TaskTriggerInfo{}); status != http.StatusBadRequest {
-		t.Errorf("triggers changed: %d", status)
+	weekly := []any{map[string]any{"Type": "WeeklyTrigger", "DayOfWeek": "Friday", "TimeOfDayTicks": int64(3 * time.Hour / 100),
+		"MaxRuntimeTicks": int64(time.Hour / 100)}, nil, map[string]any{"Type": "StartupTrigger"}}
+	if status, body := s.call(http.MethodPost, "/ScheduledTasks/"+id+"/Triggers", admin, weekly); status != http.StatusNoContent {
+		t.Fatalf("new triggers: %d %s", status, body)
+	}
+	saved := task().Triggers
+	if len(saved) != 2 || saved[0].Type != "WeeklyTrigger" || saved[0].DayOfWeek == nil || *saved[0].DayOfWeek != DayOfWeek(time.Friday) ||
+		*saved[0].MaxRuntimeTicks != int64(time.Hour/100) || saved[1].Type != "StartupTrigger" {
+		t.Errorf("saved: %+v", saved)
+	}
+	for _, refused := range []any{
+		[]any{map[string]any{"Type": "MonthlyTrigger"}},
+		[]any{map[string]any{"Type": "IntervalTrigger", "IntervalTicks": int64(5 * time.Minute / 100)}},
+		[]any{map[string]any{"Type": "DailyTrigger"}},
+		[]any{map[string]any{"Type": "WeeklyTrigger", "DayOfWeek": 7, "TimeOfDayTicks": 0}},
+		[]any{map[string]any{"Type": "DailyTrigger", "TimeOfDayTicks": int64(24 * time.Hour / 100)}},
+		[]any{map[string]any{"Type": "DailyTrigger", "TimeOfDayTicks": 0, "MaxRuntimeTicks": int64(8 * 24 * time.Hour / 100)}},
+	} {
+		if status, _ := s.call(http.MethodPost, "/ScheduledTasks/"+id+"/Triggers", admin, refused); status != http.StatusBadRequest {
+			t.Errorf("%v: %d", refused, status)
+		}
+	}
+	if after := task().Triggers; !slices.EqualFunc(after, saved, func(a, b TaskTriggerInfo) bool { return a.Type == b.Type }) {
+		t.Errorf("refused triggers were saved: %+v", after)
+	}
+	poll := "/ScheduledTasks/" + tasks.ID("Poll")
+	var locked TaskInfo
+	_, body := s.call(http.MethodGet, poll, admin, nil)
+	_ = json.Unmarshal(body, &locked)
+	if status, body := s.call(http.MethodPost, poll+"/Triggers", admin, locked.Triggers); status != http.StatusNoContent {
+		t.Errorf("a locked task's own triggers: %d %s", status, body)
+	}
+	if status, _ := s.call(http.MethodPost, poll+"/Triggers", admin, []TaskTriggerInfo{}); status != http.StatusBadRequest {
+		t.Errorf("a locked task's triggers changed: %d", status)
+	}
+	if status, _ := s.call(http.MethodPost, "/ScheduledTasks/nothing/Triggers", admin, []TaskTriggerInfo{}); status != http.StatusNotFound {
+		t.Errorf("triggers of an unknown task: %d", status)
 	}
 	if status, _ := s.call(http.MethodGet, "/ScheduledTasks/nothing", admin, nil); status != http.StatusNotFound {
 		t.Errorf("unknown task: %d", status)
