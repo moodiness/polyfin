@@ -1017,6 +1017,7 @@ The admin app reads and saves the settings at `/admin/api/settings`, and the hea
 
 - a picture subtitle language as `subtitle_ocr_language`, with `name`, `file`, `download` true when it can be downloaded, and `error`;
 - a return to the previous version of Polyfin Desktop as `desktop_rolled_back`, with `name`, the version that did not start, `previous` and `error`;
+- a collation version of the database that changed as `collation_version`, with `name`, the database, `previous`, the version PostgreSQL recorded, `version`, the one the system provides now, and `kind`, the locale provider (`libc`, `icu` or `builtin`);
 - an unwritable folder as `folder_unwritable`, with `folder` (`conversion`, `reading` or `cache`), `path` and `error`;
 - torrent streams that cannot play as `torrent_route`, with `failure` and `name`, and `grace`, the seconds the torrents playing go on for, while they ride the outage out;
 - a torrent that stopped while it played as `torrent_stopped`, with `at`, `failure` (`proxy_unreachable`, `proxy_refused`, `interface_missing`, `interface_down`, `interface_no_address`, `wireguard_endpoint`, `wireguard_down`, `wireguard_handshake`, or `route` for another failure) and `name`, the interface, proxy or WireGuard server;
