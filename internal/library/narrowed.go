@@ -82,6 +82,26 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 	return page(s.overridden(items), start, total), s.save(ctx, records)
 }
 
+// GenreOption returns the first genre option of the catalogs of titles the
+// user reaches that matches, as Narrowed reads them; ok is false for none.
+func (s *Service) GenreOption(ctx context.Context, user accounts.User, matches func(option string) bool) (option string, ok bool, err error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return "", false, err
+	}
+	catalogs, err := s.titleCatalogs(ctx, v)
+	if err != nil {
+		return "", false, err
+	}
+	for _, c := range catalogs {
+		options := c.options()
+		if i := slices.IndexFunc(options, matches); i >= 0 {
+			return options[i], true, nil
+		}
+	}
+	return "", false, nil
+}
+
 // titleCatalog is a catalog of titles a user reaches, with its addon, and
 // the genre the library listing it is narrowed to, if any.
 type titleCatalog struct {
