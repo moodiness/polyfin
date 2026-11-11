@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -13,15 +14,19 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// A user who syncs their PublicMetaDB watchlist has it imported (see
-// watchlist.go), and the titles they put on their Polyfin watchlist or
-// take off it themselves sent to it: a movie as itself, an episode,
-// season or series as its series, which PublicMetaDB lists alone. A
-// series leaves only once none of its entries is left and it waits for
-// none. Moving entries, watching a title or deleting the playlist sends
-// nothing, nor do the imports, and turning the sync on sends nothing of
-// what the watchlist holds. Titles PublicMetaDB cannot name by TMDB, such
-// as an anime known only to an anime catalog, are not sent.
+// A user who syncs their watchlist with Trakt, Simkl, MDBList or
+// PublicMetaDB has it imported (see watchlist.go), and the titles they put
+// on their Polyfin watchlist or take off it themselves sent to it: a movie
+// as itself, an episode, season or series as its series, which those
+// lists hold. A series leaves only once none of its entries is left and it
+// waits for none. A removal goes to each service synced, the titles it
+// does not hold counting as taken off. Moving entries, watching a title or
+// deleting the playlist sends nothing, nor do the imports, so a title one
+// service's list brings is not sent to the others, and turning the sync on
+// sends nothing of what the watchlist holds. Titles the services cannot
+// name by IMDb, TMDB or TVDB, such as an anime known only to an anime
+// catalog, are not sent. Trakt, Simkl and MDBList take all the titles of
+// a change in one request (see listsend.go), PublicMetaDB one at a time.
 
 // The kinds of change sent to a watchlist.
 const (
@@ -59,26 +64,35 @@ func (s *Service) sendWatchlist(ctx context.Context, user accounts.ID, c Watchli
 		return
 	}
 	added, removed := c.Titles(ctx)
+	// One known only to an anime catalog has no identifier they take.
+	added, removed = slices.DeleteFunc(added, unidentified), slices.DeleteFunc(removed, unidentified)
 	for _, service := range services {
 		for i, titles := range [][]Title{added, removed} {
 			kind := kindListAdd
 			if i == 1 {
 				kind = kindListRemove
 			}
+			if len(titles) == 0 {
+				continue
+			}
+			if service != PublicMetaDB {
+				s.queue(ctx, user, service, change{kind: kind, durable: true, event: event{Titles: titles}})
+				continue
+			}
 			for _, t := range titles {
-				// One known only to an anime catalog has no TMDB identifier.
-				if t.Identified() {
-					s.queue(ctx, user, service, change{kind: kind, durable: true, event: event{Titles: []Title{t}}})
-				}
+				s.queue(ctx, user, service, change{kind: kind, durable: true, event: event{Titles: []Title{t}}})
 			}
 		}
 	}
 }
 
+// unidentified reports whether t has no identifier but an anime catalog's.
+func unidentified(t Title) bool { return !t.Identified() }
+
 // syncsWatchlist reports whether Polyfin sends the watchlist changes of
 // user to service.
 func syncsWatchlist(service string) bool {
-	return service == PublicMetaDB
+	return service == Trakt || service == Simkl || service == MDBList || service == PublicMetaDB
 }
 
 // watchlistSynced lists the services user syncs their watchlist with.
