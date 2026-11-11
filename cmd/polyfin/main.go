@@ -822,6 +822,7 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 			NVIDIADriver:     segments.NVIDIADriver,
 			Thumbnails:       images,
 			DatabaseSize:     func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
+			Collation:        func(ctx context.Context) (database.Collation, error) { return database.ReadCollation(ctx, pool) },
 			Started:          started,
 			SecretKey:        box.Enabled(),
 			Secrets:          func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
