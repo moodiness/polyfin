@@ -307,7 +307,7 @@ Polyfin draws these images (see [Library images](#library-images) and [Collectio
 
 **Who sees it:**
 
-- Users under parental control or blocking genres get no generated image, since it may show a title hidden from them.
+- Users under parental control or blocking genres get no generated image, since it may show a title hidden from them. Neither does a listing an app narrows by rating, such as with `maxOfficialRating`.
 - Neither do users who hid one of the titles it shows.
 - An image uploaded with **Edit images** replaces the generated one of its type. Deleting it brings the generated one back.
 
