@@ -203,6 +203,50 @@ It then says what to check: "This often means the account at that service needs 
 - It goes as soon as the host answers a file of its own size, and the versions refused meanwhile are tried again at once.
 - **Content › Versions** shows it too, on the versions from that host.
 
+### Collation version changed
+
+PostgreSQL records, for each database, the version of the collation library that sorts its text. When the system under PostgreSQL brings another version, as a new PostgreSQL image can, text may sort differently, and indexes built under the old version may be out of order. Lookups through them can then miss rows, which hides them, or let a second copy of a row in. This is a warning naming the database and both versions, with the commands that repair it, **Copy the commands** and **How to repair**.
+
+- It shows only when both versions are known and differ. A database with no version recorded, or a system that gives none, as for the C locale, raises none.
+- Polyfin Desktop and the `aio` image rebuild the indexes of their own database and record the new version at start, so it does not show there.
+
+To repair it:
+
+1. Back up the database (see [Backups](backups.md)), then stop Polyfin, so that nothing writes meanwhile.
+2. Connect to Polyfin's database as its owner, such as with `docker compose exec postgres psql -U polyfin -d polyfin`, and run, in this order, with your database's name:
+
+   ```sql
+   REINDEX DATABASE "polyfin";
+   ALTER DATABASE "polyfin" REFRESH COLLATION VERSION;
+   ```
+
+   The first rebuilds every index in the new order; only then does the second record the new version.
+3. Start Polyfin. The warning goes.
+
+#### A duplicated key during REINDEX
+
+An index out of order may have let in two rows with the same key. `REINDEX` then stops with an error such as `could not create unique index "catalog_reach_pkey"` and `Key (…)=(…) is duplicated`. The indexes rebuilt before it stay rebuilt. With Polyfin still stopped:
+
+1. List the copies, reading the table without its indexes, with the table, columns and values the error names:
+
+   ```sql
+   SET enable_indexscan = off;
+   SET enable_indexonlyscan = off;
+   SET enable_bitmapscan = off;
+   SELECT ctid, * FROM catalog_reach WHERE (addon_id, catalog_type, catalog_id, genre) = ('…', '…', '…', '…');
+   ```
+
+2. Keep one copy and delete the others by their `ctid`. The copy kept holds the key, so the deletion must not cascade to the rows that refer to it. Setting `session_replication_role` needs a superuser, such as the `POSTGRES_USER` of the `postgres` image:
+
+   ```sql
+   BEGIN;
+   SET LOCAL session_replication_role = replica;
+   DELETE FROM catalog_reach WHERE ctid = '(12,3)';
+   COMMIT;
+   ```
+
+3. Run `REINDEX DATABASE` again, until it ends without an error, then `ALTER DATABASE … REFRESH COLLATION VERSION`.
+
 API details: [Health problems](jellyfin-api.md#health-problems-in-the-admin-api).
 
 ## Artwork and people

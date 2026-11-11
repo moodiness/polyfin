@@ -401,6 +401,7 @@ The way back, to a `postgres` container or to [Polyfin Desktop](desktop.md#movin
 The image runs PostgreSQL 18, which its project supports until November 2030.
 
 - **Minor versions:** a new image brings them, with nothing to do.
+- **Collation:** a new image can bring another version of the system's collation library, which changes how text sorts. The `aio` image then rebuilds its database's indexes and records the new version at start, as Polyfin Desktop does. A `postgres` container beside Polyfin does not: Health warns, with the commands to run (see [Collation version changed](health.md#collation-version-changed)).
 - **Another major version:** a database another major version made does not start. Polyfin says so, and stops. Move it with a backup made by the old image, then a restore on the setup page of the new one, as in [Moving to one container](#moving-to-one-container).
 - **Polyfin Desktop:** it checks the same way.
 
