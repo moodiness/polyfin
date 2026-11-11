@@ -156,3 +156,39 @@ func TestAUsersOwnSmartListIsNotSeenByOthers(t *testing.T) {
 		}
 	}
 }
+
+// The titles read for a smart list serve every user who reads its
+// catalogs the same way: a listing narrowed by its titles' ratings reads
+// them its own way, so that it neither narrows another user's listing nor
+// takes one that is not narrowed.
+func TestASmartListNarrowedByRatingKeepsItsOwnRead(t *testing.T) {
+	t.Parallel()
+	s, _, _ := grouping(t)
+	s.user("first", nil)
+	s.user("second", nil)
+	first, second := s.signIn("first", "tv"), s.signIn("second", "tv")
+	all := []string{"Adults", "Kids", "Teens"}
+	sorted := func(token, path string) []string {
+		t.Helper()
+		names := s.listingNames(t, token, path)
+		slices.Sort(names)
+		return names
+	}
+	narrowedFirst := s.makeSmartList(t, nil, "Narrowed first", smartlists.ShownAsLibrary, []string{"movie/top"}, smartlists.SortCatalog)
+	if got := sorted(first, "/Items?ParentId="+narrowedFirst+"&officialRatings=PG-13"); !slices.Equal(got, []string{"Teens"}) {
+		t.Errorf("narrowed: %v", got)
+	}
+	if got := sorted(second, "/Items?ParentId="+narrowedFirst); !slices.Equal(got, all) {
+		t.Errorf("another user's listing after a narrowed one: %v", got)
+	}
+	if got := sorted(first, "/Items?ParentId="+narrowedFirst); !slices.Equal(got, all) {
+		t.Errorf("the same user's listing after a narrowed one: %v", got)
+	}
+	wholeFirst := s.makeSmartList(t, nil, "Whole first", smartlists.ShownAsLibrary, []string{"movie/top"}, smartlists.SortCatalog)
+	if got := sorted(second, "/Items?ParentId="+wholeFirst); !slices.Equal(got, all) {
+		t.Errorf("whole: %v", got)
+	}
+	if got := sorted(first, "/Items?ParentId="+wholeFirst+"&officialRatings=PG-13"); !slices.Equal(got, []string{"Teens"}) {
+		t.Errorf("a narrowed listing after another user's whole one: %v", got)
+	}
+}

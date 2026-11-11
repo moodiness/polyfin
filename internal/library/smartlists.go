@@ -182,21 +182,42 @@ type smartKey struct {
 }
 
 // smartReader tells apart the ways sources are read: by which addon, at
-// which address and how far, narrowed to which genre. A user whose
-// parental control or blocked genres hide titles reads them apart, as the
-// titles they are shown differ (see visibleMetas). The titles a user hid
-// tell no reader apart: they are read for every user, and left out at
-// each listing (see smartMatches).
+// which address and how far, narrowed to which genre. A listing that
+// leaves titles out by their rating or genres reads them apart (see
+// visibleMetas): a user whose parental control or blocked genres hide
+// titles, as the titles they are shown differ, and a listing narrowed by
+// its titles' ratings, by its rating filter. The titles a user hid tell no
+// reader apart: they are read for every user, and left out at each
+// listing (see smartMatches).
 func smartReader(v view, sources []source) string {
 	var b strings.Builder
 	if v.restricted() {
 		b.WriteString("user " + v.user.String() + "\n")
+	}
+	if v.query.active {
+		b.WriteString("rating " + v.query.signature() + "\n")
 	}
 	for _, src := range sources {
 		fmt.Fprintf(&b, "%s %s %t %q %q %q %d\n", src.addon.addon.ID, configOf(src.addon.addon), src.addon.confined,
 			src.catalog.Type, src.catalog.ID, src.genre, v.limit(src))
 	}
 	return b.String()
+}
+
+// signature tells apart the rating filters that keep different titles,
+// for smartReader.
+func (q ratingQuery) signature() string {
+	score := func(s *localization.Score) string {
+		if s == nil {
+			return "-"
+		}
+		return fmt.Sprintf("%d.%d", s.Score, subScore(*s))
+	}
+	has := "-"
+	if q.hasOfficial != nil {
+		has = fmt.Sprint(*q.hasOfficial)
+	}
+	return fmt.Sprintf("%s %s %t %s %q", score(q.min), score(q.max), q.unratedOnly, has, q.officials)
 }
 
 // smartTitleSize estimates what a title read for a list takes in memory
