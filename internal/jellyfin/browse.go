@@ -772,6 +772,10 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, library.ErrNotFound) && h.describeCustomRow(w, r, user, id) {
 		return
 	}
+	// A genre or studio a title links to (see names.go).
+	if errors.Is(err, library.ErrNotFound) && h.describeNamed(w, r, user, id) {
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
@@ -1035,7 +1039,7 @@ func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"Genres":            genreItems(genres),
+		"Genres":            h.namedPairs(genreNamed, genres),
 		"Tags":              []string{},
 		"AudioLanguages":    []NameValuePair{},
 		"SubtitleLanguages": []NameValuePair{},
@@ -1048,19 +1052,19 @@ func (h *Handler) genres(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]BaseItemDto, 0, len(genres))
-	for _, genre := range genres {
+	for _, genre := range h.namedPairs(genreNamed, genres) {
 		items = append(items, BaseItemDto{
-			Name:              genre,
+			Name:              genre.Name,
 			ServerId:          h.ServerID,
-			Id:                nameID("genre", genre),
-			Type:              "Genre",
+			Id:                genre.Id,
+			Type:              genreNamed.itemType,
 			IsFolder:          false,
 			ImageTags:         map[string]string{},
 			BackdropImageTags: []string{},
 			ImageBlurHashes:   map[string]map[string]string{},
 			LocationType:      "FileSystem",
 			MediaType:         "Unknown",
-			UserData:          UserItemData{Key: genre, ItemId: nameID("genre", genre)},
+			UserData:          UserItemData{Key: genre.Name, ItemId: genre.Id},
 		})
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items), StartIndex: 0})

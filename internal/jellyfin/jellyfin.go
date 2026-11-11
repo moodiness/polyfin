@@ -168,6 +168,9 @@ type Handler struct {
 	Options
 	routes http.Handler
 	images imageCache
+	// names remembers the genres and studios identifiers were given to
+	// (see names.go).
+	names namedItems
 	// fonts write the names of generated images, from FontsDir (see
 	// fontsFor).
 	fonts    fontsFor
