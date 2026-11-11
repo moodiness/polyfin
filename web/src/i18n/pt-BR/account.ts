@@ -664,6 +664,7 @@ const account: typeof en = {
         watchlist: {
           lists: {
             trakt: 'watchlist',
+            mdblist: 'watchlist',
             simkl: 'lista Plan to Watch',
             anilist: 'lista Plan to Watch',
             myanimelist: 'lista Plan to Watch',
@@ -674,7 +675,11 @@ const account: typeof en = {
             `Coloca os filmes e séries da sua ${list} do ${name} na playlist “Para assistir” dos seus aplicativos Jellyfin, a cada importação, uma série como os episódios já exibidos. Só entra o que você ainda não assistiu. O que você começou fica. Um título que o ${name} deixa de listar sai dela, a menos que você tenha começado a assisti-lo ou o adicionado você mesmo. Nada é enviado de volta ao ${name}.`,
           syncToggle: (name: string, list: string) => `Sincronizar minha ${list} do ${name}`,
           syncHelp: (name: string, list: string) =>
-            `Coloca os filmes e séries da sua ${list} do ${name} na playlist “Para assistir” dos seus aplicativos Jellyfin, a cada importação, uma série como os episódios já exibidos. Os filmes e séries que você mesmo adiciona a “Para assistir” ou tira dela são enviados a ela. Uma série só sai quando não resta nenhum dos seus episódios. Mover itens, assistir a um título ou excluir a playlist não muda nada lá.`,
+            `Coloca os filmes e séries da sua ${list} do ${name} na playlist “Para assistir” dos seus aplicativos Jellyfin, a cada importação, uma série como os episódios já exibidos. Depois que você ativar esta opção, os filmes e séries que você mesmo adiciona a “Para assistir” ou tira dela são enviados a ela. Uma série só sai quando não resta nenhum dos seus episódios. Mover itens, assistir a um título ou excluir a playlist não muda nada lá.`,
+          simklNote:
+            'Um título que o Simkl lista como assistindo, concluído, em pausa ou abandonado fica como está.',
+          full: (name: string) =>
+            `O ${name} recusou o último título enviado: sua watchlist do ${name} está cheia. Libere espaço lá; este aviso some quando uma alteração for enviada.`,
           counts: (added: number, unmapped: number) =>
             `${added} adicionado${added === 1 ? '' : 's'} a “Para assistir”, ${unmapped === 1 ? '1 título não encontrado' : `${unmapped} títulos não encontrados`} no Polyfin.`,
           added: (added: number) =>
