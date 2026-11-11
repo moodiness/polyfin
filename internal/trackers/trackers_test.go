@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/pace"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -249,7 +250,8 @@ func newService(pool *pgxpool.Pool, store *accounts.Store, f *fakes, log io.Writ
 		UserData: userdata.New(pool), Watchlist: watchlisttest.Store(pool)})
 	s.now = func() time.Time { return clockStart }
 	s.timing.gaps = map[string]time.Duration{}
-	s.timing.sharedGaps = map[string]time.Duration{}
+	s.paces = map[string]*pace.Pace{LastFM: pace.New(0), AniList: pace.New(0)}
+	s.publicMetaDBPace = pace.New(0)
 	s.timing.retryFirst, s.timing.retryMax = 10*time.Millisecond, 40*time.Millisecond
 	s.timing.pollUnit = 5 * time.Millisecond
 	s.timing.importGaps = map[string]time.Duration{}

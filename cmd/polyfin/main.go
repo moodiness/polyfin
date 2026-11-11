@@ -56,6 +56,7 @@ import (
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/ocr"
+	"github.com/moodiness/polyfin/internal/pace"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/plays"
@@ -572,7 +573,11 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	case cfg.WebDir != config.DefaultWebDir:
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
+	// PublicMetaDB's limit counts every request of the server's address:
+	// the segment lookups and the tracking services keep one pace for it.
+	publicMetaDBPace := pace.New(trackers.PublicMetaDBGap)
 	skipSegments := mediasegments.New(pool, mediasegments.Sources(accounts.SegmentSources), version, logger, store.Settings)
+	skipSegments.UsePublicMetaDBPace(publicMetaDBPace)
 	// Local episodes played without an intro or credits have them looked
 	// for in their season's audio, a season at a time, read through the
 	// loopback interface.
@@ -601,7 +606,7 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	// the users' data. A connection a service stops is told to the
 	// notifications, made below, as recordings are.
 	tracking := trackers.New(trackers.Options{DB: pool, Watchlist: lists, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
-		Titles: lib, UserData: userData, Anime: animeMapping, Links: importTitles,
+		Titles: lib, UserData: userData, Anime: animeMapping, Links: importTitles, PublicMetaDBPace: publicMetaDBPace,
 		Stopped: func(user accounts.ID, service string) {
 			notifier.ConnectionStopped(user, notifications.ConnectionTracking, service)
 		}})

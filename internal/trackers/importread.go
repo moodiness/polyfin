@@ -68,8 +68,8 @@ func (r *reader) fetch(ctx context.Context, method, path string, query url.Value
 		if !sleep(ctx, time.Until(r.last.Add(s.timing.importGaps[r.key.service]))) {
 			return reply{}, ctx.Err()
 		}
-		if !s.waitPace(ctx, r.key.service) {
-			return reply{}, ctx.Err()
+		if err := s.waitPace(ctx, r.key.service); err != nil {
+			return reply{}, err
 		}
 		answer, err := s.api(ctx, r.key.service, r.token, r.settings, method, path, cloneQuery(query), payload)
 		r.last = time.Now()
@@ -138,20 +138,14 @@ func (r *reader) refused(ctx context.Context) error {
 }
 
 // waitPace waits for the turn of a request to service, when its limit
-// counts every request of the server (see timing.sharedGaps), and reports
-// false if ctx ended first.
-func (s *Service) waitPace(ctx context.Context, service string) bool {
+// counts every request of the server (see PublicMetaDBGap): an error if
+// ctx ends first, or its deadline comes before the turn.
+func (s *Service) waitPace(ctx context.Context, service string) error {
 	p := s.paces[service]
 	if p == nil {
-		return ctx.Err() == nil
+		return ctx.Err()
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !sleep(ctx, time.Until(latest(p.last.Add(s.timing.sharedGaps[service]), p.notBefore))) {
-		return false
-	}
-	p.last = time.Now()
-	return true
+	return p.Wait(ctx)
 }
 
 // holdPace holds every request to service for wait, when its limit counts
@@ -161,9 +155,7 @@ func (s *Service) holdPace(service string, wait time.Duration) {
 	if p == nil {
 		return
 	}
-	p.mu.Lock()
-	p.notBefore = time.Now().Add(wait)
-	p.mu.Unlock()
+	p.Hold(wait)
 }
 
 // authorize refreshes a code service's token before it expires, before

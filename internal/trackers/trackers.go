@@ -36,6 +36,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/importlinks"
+	"github.com/moodiness/polyfin/internal/pace"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -257,18 +258,27 @@ type Options struct {
 	// AuthURLs replaces the base URLs of the services' OAuth pages and
 	// endpoints, as URLs does their APIs'.
 	AuthURLs map[string]string
+	// PublicMetaDBPace spaces every request to PublicMetaDB, shared with
+	// the other parts of the server that ask it; nil makes one of the
+	// service's own, PublicMetaDBGap apart.
+	PublicMetaDBPace *pace.Pace
 }
+
+// The least time between two requests of the server to a service whose
+// limit counts the server's address rather than each user: PublicMetaDB
+// takes 300 requests every 10 seconds, Last.fm about 5 a second, AniList
+// 90 a minute.
+const (
+	PublicMetaDBGap = 40 * time.Millisecond
+	lastFMGap       = 250 * time.Millisecond
+	aniListGap      = time.Second
+)
 
 // timing is how long the service waits for what. Tests shorten it.
 type timing struct {
 	// gaps are the least time between two requests for one user to a
 	// service: Trakt and Simkl take one write a second.
 	gaps map[string]time.Duration
-	// sharedGaps space every request to a service whose limit counts the
-	// server's address rather than each user: PublicMetaDB takes 300
-	// requests every 10 seconds, Last.fm about 5 a second, AniList 90 a
-	// minute.
-	sharedGaps map[string]time.Duration
 	// retryFirst is the first wait after a failed send, doubling up to
 	// retryMax; giveUp is how old a change gets before it is dropped.
 	retryFirst, retryMax, giveUp time.Duration
@@ -312,7 +322,6 @@ type timing struct {
 
 var defaultTiming = timing{
 	gaps:             map[string]time.Duration{Trakt: time.Second, Simkl: time.Second, MDBList: 250 * time.Millisecond, ListenBrainz: 250 * time.Millisecond, MyAnimeList: time.Second},
-	sharedGaps:       map[string]time.Duration{PublicMetaDB: 40 * time.Millisecond, LastFM: 250 * time.Millisecond, AniList: time.Second},
 	retryFirst:       30 * time.Second,
 	retryMax:         30 * time.Minute,
 	giveUp:           48 * time.Hour,
@@ -375,8 +384,8 @@ type Service struct {
 	// lanes are what waits to be sent, by user and service.
 	lanes map[laneKey]*lane
 	seq   int64
-	// paces space every request to the services of sharedGaps.
-	paces map[string]*pace
+	// paces space every turn to Last.fm and AniList (see PublicMetaDBGap).
+	paces map[string]*pace.Pace
 
 	titles   Titles
 	userData *userdata.Store
@@ -391,6 +400,9 @@ type Service struct {
 	// publicMetaDBLists remembers the identifier of the PublicMetaDB
 	// watchlist of each key that sent to it (see publicMetaDBWatchlist).
 	publicMetaDBLists map[string]string
+	// publicMetaDBPace spaces every request to PublicMetaDB, each taking
+	// its own turn (see api).
+	publicMetaDBPace *pace.Pace
 	// anime maps anime between identifiers and numberings.
 	anime *anime.Service
 	// stopped is told as a connection stops (see Options.Stopped).
@@ -403,7 +415,9 @@ type Service struct {
 }
 
 // New returns a service keeping connections and queued changes in the
-// database of options. Run sends what an earlier run left.
+// database of options. Run sends what an earlier run left. Its transport
+// is its own, a clone of the default one: whoever closes the idle
+// connections of http.DefaultTransport cannot break its requests (#958).
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	urls := make(map[string]string, len(publicURLs))
@@ -428,7 +442,7 @@ func New(options Options) *Service {
 		logger:      options.Logger,
 		authURLs:    auth,
 		urls:        urls,
-		client:      &http.Client{},
+		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
 		now:         time.Now,
 		timing:      defaultTiming,
 		ctx:         ctx,
@@ -438,7 +452,7 @@ func New(options Options) *Service {
 		intakes:     map[accounts.ID]*intake{},
 		sessions:    map[sessionKey]*session{},
 		listens:     map[sessionKey]*listen{},
-		paces:       map[string]*pace{PublicMetaDB: {}, LastFM: {}, AniList: {}},
+		paces:       map[string]*pace.Pace{LastFM: pace.New(lastFMGap), AniList: pace.New(aniListGap)},
 		lanes:       map[laneKey]*lane{},
 		titles:      options.Titles,
 		userData:    options.UserData,
@@ -448,6 +462,7 @@ func New(options Options) *Service {
 
 		publicMetaDBIMDb:  map[string]imdbDecision{},
 		publicMetaDBLists: map[string]string{},
+		publicMetaDBPace:  cmp.Or(options.PublicMetaDBPace, pace.New(PublicMetaDBGap)),
 		anime:             options.Anime,
 		stopped:           options.Stopped,
 		watchlist:         cmp.Or(options.Watchlist, watchlist.New(options.DB)),

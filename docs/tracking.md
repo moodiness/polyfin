@@ -328,7 +328,7 @@ Nothing waits for the services: reports and marks are sent in the background, at
 | MDBList, ListenBrainz | Four a second per user |
 | Last.fm | Four requests a second per server address, shared by all users |
 | AniList | One request a second per server address, shared by all users |
-| PublicMetaDB | Its limit per server address, shared by all users |
+| PublicMetaDB | Its limit per server address, shared by all users and by [skip segment](skip-segments.md#publicmetadb-key) lookups |
 
 - When a service answers that it gets too many requests, Polyfin waits as long as it asks.
 - AniList and MyAnimeList get the progress and scores of entries. Each change is sent after reading the entry, so that progress is never lowered.
