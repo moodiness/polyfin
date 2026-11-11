@@ -661,6 +661,7 @@ const account: typeof en = {
         watchlist: {
           lists: {
             trakt: 'watchlist',
+            mdblist: 'watchlist',
             simkl: 'lista Plan to Watch',
             anilist: 'lista Plan to Watch',
             myanimelist: 'lista Plan to Watch',
@@ -671,7 +672,11 @@ const account: typeof en = {
             `Inserisce i film e le serie TV della tua ${list} di ${name} nella playlist «Da guardare» delle tue applicazioni Jellyfin, a ogni importazione, una serie come i suoi episodi trasmessi. Viene aggiunto solo ciò che non hai ancora visto. Ciò che hai iniziato resta. Un titolo che ${name} non elenca più ne esce, a meno che tu non l’abbia iniziato o aggiunto. Nulla viene inviato a ${name}.`,
           syncToggle: (name: string, list: string) => `Sincronizza la mia ${list} di ${name}`,
           syncHelp: (name: string, list: string) =>
-            `Inserisce i film e le serie TV della tua ${list} di ${name} nella playlist «Da guardare» delle tue applicazioni Jellyfin, a ogni importazione, una serie come i suoi episodi trasmessi. I film e le serie che aggiungi a «Da guardare» o ne togli tu le vengono inviati. Una serie ne esce solo quando non resta nessuno dei suoi episodi. Spostare voci, guardare un titolo o eliminare la playlist non cambia nulla lì.`,
+            `Inserisce i film e le serie TV della tua ${list} di ${name} nella playlist «Da guardare» delle tue applicazioni Jellyfin, a ogni importazione, una serie come i suoi episodi trasmessi. Da quando attivi questa opzione, i film e le serie che aggiungi a «Da guardare» o ne togli tu le vengono inviati. Una serie ne esce solo quando non resta nessuno dei suoi episodi. Spostare voci, guardare un titolo o eliminare la playlist non cambia nulla lì.`,
+          simklNote:
+            'Un titolo che Simkl elenca come in corso, completato, in pausa o abbandonato resta com’è.',
+          full: (name: string) =>
+            `${name} ha rifiutato l’ultimo titolo inviato: la tua watchlist di ${name} è piena. Fai spazio lì; questo avviso sparisce quando una modifica va a buon fine.`,
           counts: (added: number, unmapped: number) =>
             `${added === 1 ? '1 aggiunto' : `${added} aggiunti`} a «Da guardare», ${unmapped === 1 ? '1 titolo non trovato' : `${unmapped} titoli non trovati`} in Polyfin.`,
           added: (added: number) =>

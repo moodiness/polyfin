@@ -664,6 +664,7 @@ const account: typeof en = {
         watchlist: {
           lists: {
             trakt: 'Watchlist',
+            mdblist: 'Watchlist',
             simkl: 'Plan-to-Watch-Liste',
             anilist: 'Plan-to-Watch-Liste',
             myanimelist: 'Plan-to-Watch-Liste',
@@ -674,7 +675,11 @@ const account: typeof en = {
             `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Wiedergabeliste „Merkliste“ deiner Jellyfin-Apps, eine Serie als ihre ausgestrahlten Folgen. Nur was du noch nicht gesehen hast, wird hinzugefügt. Was du begonnen hast, bleibt. Ein Titel, den ${name} nicht mehr aufführt, verschwindet daraus, außer du hast ihn begonnen oder selbst hinzugefügt. Nichts wird an ${name} zurückgesendet.`,
           syncToggle: (name: string, list: string) => `Meine ${name}-${list} synchronisieren`,
           syncHelp: (name: string, list: string) =>
-            `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Wiedergabeliste „Merkliste“ deiner Jellyfin-Apps, eine Serie als ihre ausgestrahlten Folgen. Filme und Serien, die du selbst zur Merkliste hinzufügst oder daraus entfernst, werden an sie gesendet. Eine Serie verschwindet dort erst, wenn keine ihrer Folgen mehr übrig ist. Einträge verschieben, einen Titel ansehen oder die Wiedergabeliste löschen ändert dort nichts.`,
+            `Übernimmt bei jedem Import die Filme und Serien deiner ${name}-${list} in die Wiedergabeliste „Merkliste“ deiner Jellyfin-Apps, eine Serie als ihre ausgestrahlten Folgen. Ab dem Einschalten werden Filme und Serien, die du selbst zur Merkliste hinzufügst oder daraus entfernst, an sie gesendet. Eine Serie verschwindet dort erst, wenn keine ihrer Folgen mehr übrig ist. Einträge verschieben, einen Titel ansehen oder die Wiedergabeliste löschen ändert dort nichts.`,
+          simklNote:
+            'Ein Titel, den Simkl als laufend, abgeschlossen, pausiert oder abgebrochen führt, bleibt, wie er ist.',
+          full: (name: string) =>
+            `${name} hat den zuletzt gesendeten Titel abgelehnt: Deine ${name}-Watchlist ist voll. Schaffe dort Platz; dieser Hinweis verschwindet, sobald eine Änderung durchgeht.`,
           counts: (added: number, unmapped: number) =>
             `${added} zur Merkliste hinzugefügt, ${unmapped === 1 ? '1 Titel' : `${unmapped} Titel`} nicht in Polyfin gefunden.`,
           added: (added: number) => `${added} zur Merkliste hinzugefügt.`,

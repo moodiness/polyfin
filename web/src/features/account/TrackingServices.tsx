@@ -723,10 +723,15 @@ function HistoryImport({
               name,
               list,
             )}
-            help={(service.watchlistSent ? text.watchlist.syncHelp : text.watchlist.toggleHelp)(
-              name,
-              list,
-            )}
+            help={
+              (service.watchlistSent ? text.watchlist.syncHelp : text.watchlist.toggleHelp)(
+                name,
+                list,
+              ) +
+              (service.service === 'simkl' && service.watchlistSent
+                ? ` ${text.watchlist.simklNote}`
+                : '')
+            }
             checked={service.importWatchlist}
             disabled={busy}
             onChange={(on) => {
@@ -804,6 +809,9 @@ function HistoryImport({
       {importing && <TitlesNotFound scope="own" source={service.service} stamp={last?.at ?? ''} />}
       {importing && !service.importing && last?.problem && (
         <Notice tone="warn">{text.problem[last.problem](name)}</Notice>
+      )}
+      {service.importWatchlist && service.watchlistFull && (
+        <Notice tone="warn">{text.watchlist.full(name)}</Notice>
       )}
       {failed && (
         <Notice tone="danger" live>

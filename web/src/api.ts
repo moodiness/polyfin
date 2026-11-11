@@ -2710,14 +2710,16 @@ export type TrackingService = {
   /** When the next import runs; null while none is planned. */
   nextImportAt: string | null
   /**
-   * The service has a watchlist Polyfin can import: Trakt's and PublicMetaDB's watchlist,
-   * Simkl's, AniList's and MyAnimeList's Plan to Watch.
+   * The service has a watchlist Polyfin can import: Trakt's, MDBList's and PublicMetaDB's
+   * watchlist, Simkl's, AniList's and MyAnimeList's Plan to Watch.
    */
   watchlist: boolean
   /** Whether that watchlist is imported, with the history's imports, into the Watchlist playlist. */
   importWatchlist: boolean
   /** The user's own changes of their Watchlist are sent to that watchlist while it is imported. */
   watchlistSent: boolean
+  /** The service refused the last title sent as its watchlist is full; cleared once a change goes through. */
+  watchlistFull: boolean
   /** The service keeps ratings (AniList, MyAnimeList). */
   ratings: boolean
   /** Whether the user's ratings are sent there, and its scores imported. */

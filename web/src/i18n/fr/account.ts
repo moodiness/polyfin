@@ -670,6 +670,7 @@ const account: typeof en = {
         watchlist: {
           lists: {
             trakt: 'watchlist',
+            mdblist: 'watchlist',
             simkl: 'liste Plan to Watch',
             anilist: 'liste Plan to Watch',
             myanimelist: 'liste Plan to Watch',
@@ -680,7 +681,11 @@ const account: typeof en = {
             `Place les films et séries de votre ${list} ${name} dans la liste de lecture «\u202fÀ regarder\u202f» de vos applis Jellyfin, à chaque importation, une série sous forme de ses épisodes diffusés. Seul ce que vous n’avez pas encore vu y est ajouté. Ce que vous avez commencé y reste. Un titre que ${name} ne liste plus en sort, sauf si vous l’avez commencé ou ajouté vous-même. Rien n’est renvoyé à ${name}.`,
           syncToggle: (name: string, list: string) => `Synchroniser ma ${list} ${name}`,
           syncHelp: (name: string, list: string) =>
-            `Place les films et séries de votre ${list} ${name} dans la liste de lecture «\u202fÀ regarder\u202f» de vos applis Jellyfin, à chaque importation, une série sous forme de ses épisodes diffusés. Les films et séries que vous y ajoutez ou en retirez vous-même lui sont envoyés. Une série n’en sort qu’une fois qu’il n’en reste aucun épisode. Déplacer des entrées, regarder un titre ou supprimer la liste n’y change rien.`,
+            `Place les films et séries de votre ${list} ${name} dans la liste de lecture «\u202fÀ regarder\u202f» de vos applis Jellyfin, à chaque importation, une série sous forme de ses épisodes diffusés. Une fois cette option activée, les films et séries que vous y ajoutez ou en retirez vous-même lui sont envoyés. Une série n’en sort qu’une fois qu’il n’en reste aucun épisode. Déplacer des entrées, regarder un titre ou supprimer la liste n’y change rien.`,
+          simklNote:
+            'Un titre que Simkl liste comme en cours, terminé, en pause ou abandonné reste tel quel.',
+          full: (name: string) =>
+            `${name} a refusé le dernier titre envoyé\u202f: votre watchlist ${name} est pleine. Faites-y de la place\u202f; cet avertissement disparaît dès qu’un changement passe.`,
           counts: (added: number, unmapped: number) =>
             `${added <= 1 ? `${added} ajouté` : `${added} ajoutés`} à «\u202fÀ regarder\u202f», ${unmapped <= 1 ? `${unmapped} titre introuvable` : `${unmapped} titres introuvables`} dans Polyfin.`,
           added: (added: number) =>
