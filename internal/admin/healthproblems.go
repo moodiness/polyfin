@@ -132,6 +132,12 @@ const (
 	// did not start, Previous the one put back, and Error why. It lasts
 	// while an older version than Name runs.
 	problemDesktopRolledBack = "desktop_rolled_back"
+	// The collation version of the server's database changed since
+	// PostgreSQL recorded it (see database.Collation): Name is the
+	// database, Previous the version recorded, Version the one the system
+	// provides now and Kind the locale provider ("libc", "icu",
+	// "builtin").
+	problemCollationVersion = "collation_version"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -163,7 +169,8 @@ const (
 // route stopped while it played; Missing and Files for a theme copy missing
 // files; Folder, Path and Error for a folder of the settings that cannot
 // be written into; Name, Previous and Error for Polyfin Desktop's return
-// to its previous version. To is the admin app's page that describes
+// to its previous version; Name, Previous, Version and Kind for the
+// database's collation version. To is the admin app's page that describes
 // it, with its anchor. Transient ones are not told as health problems:
 // they come and go with the load, or, for stopped connections, the
 // connection_stopped event told them already.
@@ -199,6 +206,7 @@ type healthProblemJSON struct {
 	Missing  int    `json:"missing,omitempty"`
 	Files    int    `json:"files,omitempty"`
 	Previous string `json:"previous,omitempty"`
+	Version  string `json:"version,omitempty"`
 	// Download offers to download the data of a language Tesseract lacks.
 	Download bool `json:"download,omitempty"`
 }
@@ -264,6 +272,14 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 	cancel()
 	if !reachable {
 		return []healthProblemJSON{{Key: "database", Code: problemDatabase, Tone: notifications.SeverityError, To: "/system/health#database"}}, nil
+	}
+	// A query that fails, as on a PostgreSQL whose provider cannot load
+	// the database's locale, tells nothing: no false alarm.
+	if h.Health.Collation != nil {
+		if c, err := h.Health.Collation(ctx); err == nil && c.Changed() {
+			add(healthProblemJSON{Key: problemCollationVersion, Code: problemCollationVersion, Tone: notifications.SeverityWarning,
+				To: "/system/health", Name: c.Database, Previous: c.Recorded, Version: c.Actual, Kind: c.Provider})
+		}
 	}
 
 	for _, folder := range h.measuredFolders() {
@@ -1130,6 +1146,27 @@ func (p healthProblemJSON) text(language string) string {
 			"Polyfin Desktop è tornato alla versione %s, perché la versione %s non si è avviata: %s. Quella versione non viene più proposta; la prossima sì.",
 			"O Polyfin Desktop voltou para a versão %s, pois a versão %s não iniciou: %s. Essa versão não é mais oferecida; a próxima será."},
 			p.Previous, p.Name, p.Error)
+	case problemCollationVersion:
+		reindex, refresh := collationCommands(p.Name)
+		return say(i18n.Text{"The collation version of the database %[1]s changed: PostgreSQL recorded %[2]s, and the system’s collation library now provides %[3]s. " +
+			"Its text indexes may be out of order, which can hide rows or duplicate them. " +
+			"To repair them, stop Polyfin, then, connected as the database’s owner, run %[4]s and then %[5]s",
+			"La version de collation de la base de données %[1]s a changé\u202f: PostgreSQL a enregistré %[2]s, et la bibliothèque de collation du système fournit maintenant %[3]s. " +
+				"Ses index de texte peuvent ne plus être dans l’ordre, ce qui peut masquer des lignes ou les dupliquer. " +
+				"Pour les réparer, arrêtez Polyfin, puis, connecté en tant que propriétaire de la base, exécutez %[4]s puis %[5]s",
+			"Die Collation-Version der Datenbank %[1]s hat sich geändert: PostgreSQL hat %[2]s vermerkt, und die Collation-Bibliothek des Systems liefert jetzt %[3]s. " +
+				"Ihre Textindizes sind womöglich nicht mehr richtig sortiert, wodurch Zeilen verborgen oder doppelt vorhanden sein können. " +
+				"Zur Reparatur stoppe Polyfin und führe dann, als Eigentümer mit der Datenbank verbunden, Folgendes aus: %[4]s, danach %[5]s",
+			"La versión de intercalación (collation) de la base de datos %[1]s cambió: PostgreSQL registró %[2]s, y la biblioteca de intercalación del sistema ahora proporciona %[3]s. " +
+				"Sus índices de texto pueden estar desordenados, lo que puede ocultar filas o duplicarlas. " +
+				"Para repararlos, detenga Polyfin y luego, conectado como propietario de la base de datos, ejecute %[4]s y después %[5]s",
+			"La versione di collation del database %[1]s è cambiata: PostgreSQL ha registrato %[2]s, e la libreria di collation del sistema ora fornisce %[3]s. " +
+				"I suoi indici di testo potrebbero non essere più in ordine, il che può nascondere righe o duplicarle. " +
+				"Per ripararli, arresta Polyfin, poi, connesso come proprietario del database, esegui %[4]s e poi %[5]s",
+			"A versão de collation do banco de dados %[1]s mudou: o PostgreSQL registrou %[2]s, e a biblioteca de collation do sistema agora fornece %[3]s. " +
+				"Os índices de texto dele podem estar fora de ordem, o que pode esconder linhas ou duplicá-las. " +
+				"Para repará-los, pare o Polyfin e depois, conectado como dono do banco de dados, execute %[4]s e depois %[5]s"},
+			p.Name, p.Previous, p.Version, reindex, refresh)
 	case problemThemeCopyMissing:
 		return say(i18n.Text{"The copy of the web player theme misses %d of its %d files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.",
 			"La copie du thème du lecteur web n’a plus %d de ses %d fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système\u202f: les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.",
@@ -1161,6 +1198,15 @@ func (p healthProblemJSON) text(language string) string {
 			"A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão 610, e não foi possível baixar o FFmpeg para esses drivers: %s. O Polyfin tenta de novo na próxima inicialização, ou quando as configurações de conversão são salvas."}, p.Error)
 	}
 	return leftoverProblemText(p, language)
+}
+
+// collationCommands are the commands that rebuild the indexes of the
+// database named name and then record its new collation version, the name
+// quoted as an identifier. Run in this order: the version recorded first
+// would hide indexes still out of order.
+func collationCommands(name string) (reindex, refresh string) {
+	quoted := `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	return "REINDEX DATABASE " + quoted + ";", "ALTER DATABASE " + quoted + " REFRESH COLLATION VERSION;"
 }
 
 // ocrLanguageName names a language by its Tesseract code, in English:

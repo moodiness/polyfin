@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/config"
+	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/dlna"
@@ -62,6 +63,10 @@ type HealthSources struct {
 	Thumbnails *thumbnails.Service
 	// DatabaseSize measures the database.
 	DatabaseSize func(context.Context) (int64, error)
+	// Collation reads how the database's collation version stands
+	// (database.ReadCollation): Health warns while it changed. Nil tells
+	// nothing.
+	Collation func(context.Context) (database.Collation, error)
 	// Started is when the server started.
 	Started time.Time
 	// SecretKey tells whether POLYFIN_SECRET_KEY is set, and Secrets reads
