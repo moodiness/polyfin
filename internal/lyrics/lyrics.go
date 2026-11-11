@@ -140,13 +140,16 @@ type answer struct {
 
 // New returns a service asking LRCLIB at base, and keeping its answers in
 // db, while settings turn lyrics on. version is Polyfin's, which the
-// User-Agent sent to LRCLIB names with Polyfin's repository.
+// User-Agent sent to LRCLIB names with Polyfin's repository. Its
+// transport is its own, a clone of the default one: whoever closes the
+// idle connections of http.DefaultTransport cannot break its requests
+// (#958).
 func New(db *pgxpool.Pool, base, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{
 		db:        db,
 		base:      strings.TrimSuffix(base, "/"),
 		settings:  settings,
-		client:    &http.Client{},
+		client:    &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
 		userAgent: "Polyfin/" + version + " (" + repository + ")",
 		logger:    logger,
 		now:       time.Now,

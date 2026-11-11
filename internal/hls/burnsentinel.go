@@ -199,6 +199,12 @@ func writeCopy(ctx context.Context, original, out string, write func(io.Writer, 
 	return nil
 }
 
+// sourceClient reads the subtitle files given as an http URL. Its
+// transport is its own, a clone of the default one: whoever closes the
+// idle connections of http.DefaultTransport cannot break its requests
+// (#958).
+var sourceClient = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}
+
 // readSource calls use with the file at name, a path or an http URL.
 func readSource(ctx context.Context, name string, use func(io.Reader) error) error {
 	if !strings.HasPrefix(name, "http://") && !strings.HasPrefix(name, "https://") {
@@ -213,7 +219,7 @@ func readSource(ctx context.Context, name string, use func(io.Reader) error) err
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sourceClient.Do(req)
 	if err != nil {
 		return err
 	}
