@@ -12,7 +12,9 @@
 &#xD;
 EARLY DEVELOPMENT: Polyfin is not ready for everyday use yet.&#xD;
 &#xD;
-REQUIRED: A PostgreSQL 18 container must already be running, for example the official postgres:18 image with a dedicated database and user named polyfin. Enter its address in PostgreSQL URL as postgresql://USER:PASSWORD@HOST:5432/DATABASE, where HOST is the PostgreSQL container name on a shared custom Docker network or the Unraid server IP. Use a URL-safe password such as the output of openssl rand -hex 24. Polyfin waits for the database and creates its tables automatically.&#xD;
+DATABASE, one of two:&#xD;
+- A PostgreSQL 18 container, already running, for example the official postgres:18 image with a dedicated database and user named polyfin. Enter its address in PostgreSQL URL as postgresql://USER:PASSWORD@HOST:5432/DATABASE, where HOST is the PostgreSQL container name on a shared custom Docker network or the server's IP. Use a URL-safe password such as the output of openssl rand -hex 24. Polyfin waits for the database and creates its tables automatically.&#xD;
+- Its own database, in one container: set Database to embedded, leave PostgreSQL URL empty, and set Data folder to a folder of the server, writable by UID 65532 (chown 65532:65532 it in the terminal) before the first start. Polyfin runs PostgreSQL 18 in its folder postgresql; without a Data folder, the database would be lost with the container.&#xD;
 &#xD;
 FIRST RUN: open the container log and copy the one-time setup code, then open the WebUI and create the administrator with it. Afterwards the WebUI opens the web client, whose Dashboard opens Polyfin's admin page. Every option is set there, under Settings.&#xD;
 &#xD;
@@ -20,22 +22,26 @@ GPU (optional): Polyfin converts video on the first GPU that works and logs whic
 &#xD;
 RECORDINGS AND BACKUPS (optional): set Recordings folder or Backups folder to a folder of the server, such as /mnt/user/appdata/polyfin/backups, writable by UID 65532 (chown 65532:65532 it in the terminal), then turn Live TV recording or daily backups on in the admin page, under Settings, Recordings or Backups.&#xD;
 &#xD;
+STOPPING: with its own database, Polyfin stops it after itself. Extra Parameters give it a minute to do so; a container killed sooner recovers its database at the next start.&#xD;
+&#xD;
 CACHE: the parts of the files being read are kept in Docker's storage and emptied when Polyfin starts: keep their size, under Settings, Playback, below the free space of your Docker vDisk or directory.&#xD;
 &#xD;
 Polyfin hosts no content and ships with no addons or catalogues: you choose and configure your own sources. Do not forward its HTTP port to the internet.</Overview>
   <Category>MediaServer:Video</Category>
   <WebUI>http://[IP]:[PORT:8096]/web/</WebUI>
   <Icon>https://raw.githubusercontent.com/moodiness/polyfin/main/web/public/polyfin.png</Icon>
-  <ExtraParams>--restart unless-stopped --security-opt=no-new-privileges --cap-drop=ALL --read-only</ExtraParams>
+  <ExtraParams>--restart unless-stopped --stop-timeout=60 --security-opt=no-new-privileges --cap-drop=ALL --read-only</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DonateText/>
   <DonateLink/>
-  <Requires>PostgreSQL 18</Requires>
+  <Requires>PostgreSQL 18, unless Database is set to embedded</Requires>
 
   <Config Name="HTTP port" Target="8096" Default="8096" Mode="tcp" Description="Port for Jellyfin apps, the web client and the admin page. 8096 is the port Jellyfin apps try by default." Type="Port" Display="always" Required="true" Mask="false">8096</Config>
   <Config Name="Discovery port" Target="7359" Default="7359" Mode="udp" Description="UDP port Jellyfin apps broadcast to when they look for servers on the local network. On the default bridge network, broadcasts do not reach the container: choose br0, which gives it its own address on your network, or Host, for apps to find Polyfin by themselves." Type="Port" Display="advanced" Required="false" Mask="false">7359</Config>
-  <Config Name="PostgreSQL URL" Target="POLYFIN_DATABASE_URL" Default="" Mode="" Description="Connection URL of your PostgreSQL 18 database, for example postgresql://polyfin:YOUR_PASSWORD@postgres:5432/polyfin. Keep the password URL-safe." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="PostgreSQL URL" Target="POLYFIN_DATABASE_URL" Default="" Mode="" Description="Connection URL of your PostgreSQL 18 database, for example postgresql://polyfin:YOUR_PASSWORD@postgres:5432/polyfin. Keep the password URL-safe. Leave it empty when Database is embedded." Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Database" Target="POLYFIN_DATABASE" Default="" Mode="" Description="Optional. embedded: Polyfin runs its own PostgreSQL 18 in the folder postgresql of the Data folder, so that no PostgreSQL container is needed. Leave PostgreSQL URL empty then, and set Data folder. Empty: Polyfin connects to PostgreSQL URL." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Data folder" Target="/data" Default="" Mode="rw" Description="Folder on the server for the cache, and by default the recordings and backups, writable by UID 65532 (chown 65532:65532 it in the terminal). Needed when Database is embedded: the database lives here, in the folder postgresql. Empty: the container keeps them in Docker's storage." Type="Path" Display="always" Required="false" Mask="false"/>
   <Config Name="Secret key" Target="POLYFIN_SECRET_KEY" Default="" Mode="" Description="Optional, advised: encrypts the API keys, client secret and tracking tokens Polyfin stores in the database. 32 random bytes in base64: run openssl rand -base64 32 in Unraid's terminal and paste the result. Keep a copy with your backups: with another key or none, the keys and connections have to be entered again." Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="NVIDIA GPUs" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="NVIDIA GPUs Polyfin may use, with --runtime=nvidia in Extra Parameters: all, or a GPU's UUID from the Nvidia Driver plugin." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
   <Config Name="NVIDIA capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,video,utility,graphics" Mode="" Description="NVIDIA driver libraries the container gets. Video decoding and encoding need video; tone mapping HDR on the GPU needs graphics." Type="Variable" Display="advanced" Required="false" Mask="false">compute,video,utility,graphics</Config>

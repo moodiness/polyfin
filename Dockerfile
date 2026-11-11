@@ -162,8 +162,8 @@ RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarc
 FROM scratch AS postgresql-client
 COPY --from=pg-dump /pg-dump/usr/ /usr/
 
-# The server of PostgreSQL 18, which the aio image runs in its data
-# folder (POLYFIN_DATABASE=embedded): postgres, initdb and pg_ctl, their
+# The server of PostgreSQL 18, which the image runs in its data folder
+# with POLYFIN_DATABASE=embedded: postgres, initdb and pg_ctl, their
 # modules but for JIT, which the cluster turns off, their data, and the
 # libraries they load that the image lacks, taken from the same official
 # image as pg_dump, the target platform's files, copied, nothing run.
@@ -194,7 +194,7 @@ RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarc
 FROM scratch AS postgresql-server
 COPY --from=postgresql-server-files /server/usr/ /usr/
 
-# tini, the aio image's first process: it passes Docker's signals on to
+# tini, the image's first process: it passes Docker's signals on to
 # Polyfin and reaps the processes left to it, PostgreSQL's among them.
 # Debian's package of the target platform, downloaded and unpacked
 # natively.
@@ -263,13 +263,21 @@ RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.li
 
 # A stage of this file, chosen by platform: no tag to give.
 # hadolint ignore=DL3006
-FROM runtime-${TARGETARCH} AS polyfin
+FROM runtime-${TARGETARCH}
 COPY --from=ffmpeg /bin/ffmpeg /bin/ffprobe /usr/local/bin/
 COPY --from=ffmpeg /lib/ /usr/local/lib/
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=fonts /usr/share/fonts/truetype/dejavu/ /usr/share/fonts/truetype/dejavu/
 COPY --from=pg-dump /pg-dump/ /
 COPY --from=tesseract /tesseract/ /
+# PostgreSQL 18's server, which Polyfin starts in /data/postgresql as it
+# starts and stops after it with POLYFIN_DATABASE=embedded, so that one
+# container runs both; tini; and the user Polyfin runs as, which initdb
+# looks up.
+COPY --from=postgresql-server /usr/ /usr/
+COPY --from=tini /tini/usr/bin/tini /usr/bin/tini
+COPY --from=tini /tini/usr/share/doc/tini/copyright /usr/share/doc/tini/copyright
+COPY --from=users /etc/passwd /etc/group /etc/
 # jellyfin-web, a separate GPL-2.0 program, unmodified, in the folder
 # POLYFIN_WEB_DIR names by default; its license, and a notice saying where
 # its source is, in the usual documentation folder.
@@ -295,10 +303,12 @@ VOLUME /data
 # containers that ask for it; other runtimes ignore these. Mesa would keep
 # a shader cache in a home directory the read-only image does not have.
 # Tesseract reads its own data, and the .traineddata files of other
-# languages from the folder tessdata of the volume.
+# languages from the folder tessdata of the volume. Polyfin finds
+# PostgreSQL's server programs in PATH.
 ENV POLYFIN_LISTEN=:8096 POLYFIN_DATA_DIR=/data NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics \
 	MESA_SHADER_CACHE_DISABLE=true \
-	POLYFIN_TESSERACT=/usr/bin/tesseract TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata POLYFIN_TESSDATA_DIR=/data/tessdata
+	POLYFIN_TESSERACT=/usr/bin/tesseract TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata POLYFIN_TESSDATA_DIR=/data/tessdata \
+	PATH=/usr/lib/postgresql/18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EXPOSE 8096
 USER 65532:65532
 # Whether Polyfin answers /healthz, which it does while its process serves,
@@ -308,22 +318,9 @@ USER 65532:65532
 # ignores --start-interval and checks every 30 seconds from the start.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=2m --start-interval=2s \
 	CMD ["/polyfin", "healthcheck"]
-ENTRYPOINT ["/polyfin"]
+# tini is the first process; the postmaster is in a session of its own,
+# which Docker's signals do not reach: Polyfin stops it. tini registers as
+# a subreaper (-s), so that it still reaps orphans, without a warning,
+# when Docker's own init runs first (init: true, docker run --init).
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/polyfin"]
 CMD ["serve"]
-
-# The aio image, tagged aio and <version>-aio: the image above with
-# PostgreSQL 18's server, which Polyfin starts in /data/postgresql as it
-# starts and stops after it, so that one container runs both. tini is the
-# first process; the postmaster is in a session of its own, which Docker's
-# signals do not reach: Polyfin stops it.
-FROM polyfin AS aio
-COPY --from=postgresql-server /usr/ /usr/
-COPY --from=tini /tini/usr/bin/tini /usr/bin/tini
-COPY --from=tini /tini/usr/share/doc/tini/copyright /usr/share/doc/tini/copyright
-COPY --from=users /etc/passwd /etc/group /etc/
-ENV POLYFIN_DATABASE=embedded PATH=/usr/lib/postgresql/18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENTRYPOINT ["/usr/bin/tini", "--", "/polyfin"]
-CMD ["serve"]
-
-# The image without a target: the one above the aio image.
-FROM polyfin

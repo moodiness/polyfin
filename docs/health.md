@@ -208,7 +208,7 @@ It then says what to check: "This often means the account at that service needs 
 PostgreSQL records, for each database, the version of the collation library that sorts its text. When the system under PostgreSQL brings another version, as a new PostgreSQL image can, text may sort differently, and indexes built under the old version may be out of order. Lookups through them can then miss rows, which hides them, or let a second copy of a row in. This is a warning naming the database and both versions, with the commands that repair it, **Copy the commands** and **How to repair**.
 
 - It shows only when both versions are known and differ. A database with no version recorded, or a system that gives none, as for the C locale, raises none.
-- Polyfin Desktop and the `aio` image rebuild the indexes of their own database and record the new version at start, so it does not show there.
+- Polyfin Desktop and the image with `POLYFIN_DATABASE=embedded` rebuild the indexes of their own database and record the new version at start, so it does not show there.
 
 To repair it:
 
