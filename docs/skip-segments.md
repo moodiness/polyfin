@@ -259,6 +259,7 @@ PublicMetaDB is asked only with an API key. Create one on the PublicMetaDB websi
 - Saving, changing or removing the key applies at once, without a restart.
 - Titles asked about before a key was saved are asked again once one is.
 - Should PublicMetaDB refuse the key later, Polyfin logs it once and asks no more until another key is saved.
+- PublicMetaDB's limit counts every request from the server's address. Segment lookups keep the pace the [tracking services](tracking.md#delivery-and-retries) keep for it, and when PublicMetaDB asks either to wait, both do. A lookup that would wait more than a few seconds is skipped, and tried again an hour later.
 
 ### How PublicMetaDB matches titles
 

@@ -28,6 +28,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/pace"
 )
 
 // The databases, by the names POLYFIN_SEGMENTS gives them.
@@ -229,14 +230,48 @@ type Service struct {
 	// limited holds, by database, when one that answered 429 with a
 	// Retry-After may be asked again.
 	limited map[string]time.Time
+	// publicMetaDBPace spaces the requests to PublicMetaDB, nil none (see
+	// UsePublicMetaDBPace).
+	publicMetaDBPace *pace.Pace
 }
 
 // New returns a service asking those of sources the settings turn on, in
 // the order of preference they save, and keeping their answers in db.
-// PublicMetaDB is asked only while settings hold a key for it.
+// PublicMetaDB is asked only while settings hold a key for it. Its
+// transport is its own, a clone of the default one: whoever closes the
+// idle connections of http.DefaultTransport cannot break its requests
+// (#958).
 func New(db *pgxpool.Pool, sources []Source, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
-	return &Service{db: db, sources: sources, settings: settings, client: &http.Client{}, userAgent: "Polyfin/" + version, logger: logger,
-		now: time.Now, refused: map[string]string{}, limited: map[string]time.Time{}}
+	return &Service{db: db, sources: sources, settings: settings, client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		userAgent: "Polyfin/" + version, logger: logger, now: time.Now, refused: map[string]string{}, limited: map[string]time.Time{}}
+}
+
+// UsePublicMetaDBPace has each request to PublicMetaDB wait for its turn
+// on p, which the other parts of the server asking PublicMetaDB share:
+// its limit counts every request of the server's address. A rate limit it
+// answers holds p too. Call it before the service is used.
+func (s *Service) UsePublicMetaDBPace(p *pace.Pace) {
+	s.publicMetaDBPace = p
+}
+
+// getPublicMetaDB asks PublicMetaDB as get does, once its pace, if any,
+// gives the request its turn: an error if ctx ends first, or its deadline
+// comes before the turn. A rate limit it answers holds the pace until its
+// Retry-After.
+func (s *Service) getPublicMetaDB(ctx context.Context, target, key string, body any) (found bool, err error) {
+	p := s.publicMetaDBPace
+	if p == nil {
+		return s.get(ctx, target, key, body)
+	}
+	if err := p.Wait(ctx); err != nil {
+		return false, err
+	}
+	found, err = s.get(ctx, target, key, body)
+	var limited *rateLimited
+	if errors.As(err, &limited) {
+		p.Hold(limited.until.Sub(s.now()))
+	}
+	return found, err
 }
 
 // Asks reports whether the settings turn a segment database on; a nil
@@ -698,7 +733,7 @@ func (s *Service) askPublicMetaDB(ctx context.Context, base string, title Title,
 	var body struct {
 		Items []skipRecord `json:"items"`
 	}
-	if found, err := s.get(ctx, base+"/api/external/skips?"+query.Encode(), key, &body); err != nil || !found {
+	if found, err := s.getPublicMetaDB(ctx, base+"/api/external/skips?"+query.Encode(), key, &body); err != nil || !found {
 		return nil, err
 	}
 	return pickSkips(body.Items), nil
@@ -852,7 +887,7 @@ func (s *Service) CheckKey(ctx context.Context, database, key string) error {
 	case PublicMetaDB:
 		// The skip timestamps of a known movie, which take a key.
 		var body json.RawMessage
-		_, err = s.get(ctx, base+"/api/external/skips?media_type=movie&perPage=1&tmdb_id=550", key, &body)
+		_, err = s.getPublicMetaDB(ctx, base+"/api/external/skips?media_type=movie&perPage=1&tmdb_id=550", key, &body)
 	case TheIntroDB:
 		err = s.checkTheIntroDBKey(ctx, base, key)
 	default:

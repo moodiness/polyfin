@@ -145,7 +145,18 @@ func (s *Service) api(ctx context.Context, service, token string, settings accou
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
-	return s.call(ctx, method, target, header, body)
+	if service == PublicMetaDB {
+		// PublicMetaDB's limit counts every request of the server's
+		// address: each takes its turn, and a 429 holds them all.
+		if err := s.publicMetaDBPace.Wait(ctx); err != nil {
+			return reply{}, err
+		}
+	}
+	r, err := s.call(ctx, method, target, header, body)
+	if service == PublicMetaDB && err == nil && r.status == http.StatusTooManyRequests {
+		s.publicMetaDBPace.Hold(max(retryAfter(r.header), time.Second))
+	}
+	return r, err
 }
 
 // form sends a form to an OAuth endpoint of Simkl, which takes them so.
@@ -554,6 +565,10 @@ func lookedUpTMDB(body []byte, mediaType string) []int {
 // checkKey asks service whether key is valid, and returns the account name
 // it gives, empty when it gives none.
 func (s *Service) checkKey(ctx context.Context, service, key string) (string, error) {
+	// A user waits: no longer than for the answer, even for PublicMetaDB's
+	// turn.
+	ctx, cancel := context.WithTimeout(ctx, s.timing.request)
+	defer cancel()
 	var (
 		r   reply
 		err error
