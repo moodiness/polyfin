@@ -5993,9 +5993,9 @@ export const queryKeys = {
   /** Prefix of everything kept of a scope's titles not found: invalidated after a link. */
   importTitles: (scope: ImportTitlesScope) =>
     ['import-titles', importTitlesScopeKey(scope)] as const,
-  /** The counts by source; `stamp` follows the import status shown beside them. */
-  importTitleCounts: (scope: ImportTitlesScope, stamp: string) =>
-    ['import-titles', importTitlesScopeKey(scope), 'sources', stamp] as const,
+  /** The counts by source, one query per scope shared by every import panel beside them. */
+  importTitleCounts: (scope: ImportTitlesScope) =>
+    ['import-titles', importTitlesScopeKey(scope), 'sources'] as const,
   importTitleList: (scope: ImportTitlesScope, source: string) =>
     ['import-titles', importTitlesScopeKey(scope), 'source', source] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
