@@ -98,27 +98,35 @@ Polyfin reads one page a second from Trakt, two from Simkl and MDBList, and Publ
 
 ## The watchlist
 
-Trakt, Simkl and PublicMetaDB also keep the titles you mean to watch. A connected Trakt, Simkl or PublicMetaDB has a second switch under **My account › Tracking**, off by default:
+Trakt, Simkl, MDBList and PublicMetaDB also keep the titles you mean to watch. A connected Trakt, Simkl, MDBList or PublicMetaDB has a second switch under **My account › Tracking**, off by default:
 
 | Service | Its list | Switch |
 |---|---|---|
-| Trakt | Watchlist | **Import my Trakt watchlist** |
-| Simkl | Plan to Watch | **Import my Simkl Plan to Watch list** |
+| Trakt | Watchlist | **Sync my Trakt watchlist** |
+| Simkl | Plan to Watch | **Sync my Simkl Plan to Watch list** |
+| MDBList | Watchlist | **Sync my MDBList watchlist** |
 | PublicMetaDB | Watchlist | **Sync my PublicMetaDB Watchlist** |
 
-- Turned on, the list is read whole with each import of the service, whether the history switch is on or not.
+- Turned on, the list is read whole with each import of the service, whether the history switch is on or not. MDBList's is read only when MDBList reports a change since the last read.
 - Its movies and series go to your Watchlist playlist. A season or an episode on the list counts for its series.
 - Titles are found as the history's are. Those not found count among the titles not found.
 - The status line tells how many titles the import added to the Watchlist playlist.
 - Simkl's anime are found through the [anime mapping](tracking.md#anime). Until the mapping is read, they wait for a later import.
 
-PublicMetaDB's switch also sends your own changes of the Watchlist playlist to PublicMetaDB's watchlist:
+The switch also sends your own changes of the Watchlist playlist to that service's list:
 
-- A movie you add or remove is sent as itself; an episode, a season or a series as its series.
-- A series leaves PublicMetaDB's watchlist only once none of its episodes is left in the playlist.
+- A movie you add or remove is sent as itself; an episode, a season or a series as its series. Each change is one request per service.
+- A series leaves the service's list only once none of its episodes is left in the playlist.
+- A removal goes to every service you sync with. A title the list does not hold counts as done.
 - Moving entries, watching a title, or deleting the playlist sends nothing, and neither do the changes imports make.
-- A title PublicMetaDB cannot know by its TMDB id, such as an anime known only to an anime catalog, is skipped.
-- Turning the switch on sends nothing of what the playlist already holds.
+- Turning the switch on sends nothing of what the playlist already holds: only your changes from then on.
+- A title with no IMDb, TMDB or TVDB id, or that the service does not know, is skipped. So is an anime known only to an anime catalog.
+- A title added on one service's site is not sent to the other services.
+- A title removed on a service's site does not take off what you added in Polyfin yourself.
+- Simkl: a title Simkl lists as watching, completed, on hold or dropped is left as it is, never moved to Plan to Watch nor removed. Only a title on Plan to Watch you never watched is removed.
+- Trakt: when your Trakt watchlist is full (free accounts have a limit), the title is not sent, and the connection shows a warning until a later change goes through.
+
+If you had **Import my Trakt watchlist** or **Import my Simkl Plan to Watch list** on, it stays on and now also sends your own changes.
 
 ### The Watchlist playlist
 
@@ -135,7 +143,7 @@ Every user has a Watchlist from the start: a playlist of their own, listed with 
 
 It is filled by every list feeding it:
 
-- Trakt's watchlist, Simkl's Plan to Watch and PublicMetaDB's Watchlist;
+- Trakt's watchlist, Simkl's Plan to Watch, MDBList's watchlist and PublicMetaDB's Watchlist;
 - AniList's and MyAnimeList's Plan to Watch (see [Importing the lists](tracking.md#importing-the-lists));
 - the library of a Stremio or Nuvio account (see [Importing from an app](moving-to-polyfin.md#what-comes-over-from-an-app));
 - the watchlist of a Letterboxd export (see [Letterboxd](moving-to-polyfin.md#letterboxd));
@@ -166,7 +174,7 @@ What you add, or move, is yours: no import takes it off.
 
 **Sharing:** share it, or open it to all, as any playlist (see [Playlists](watch-state.md#playlists)). Its rows, checks, messages and imports stay yours, and what a user it is shared with to edit adds counts as yours. While it keeps its default name, others see it with your name, such as "Watchlist (Alice)", in their own language, so that several users' Watchlists never look the same.
 
-Only PublicMetaDB is told of changes, with its switch on: its watchlist receives what you add and remove yourself (see [The watchlist](#the-watchlist)). The other lists only flow into Polyfin.
+Trakt, Simkl, MDBList and PublicMetaDB are told of changes, with their watchlist switch on: their list receives what you add and remove yourself (see [The watchlist](#the-watchlist)). The other lists only flow into Polyfin.
 
 API details: [Watchlist for apps](jellyfin-api.md#watchlist-for-apps).
 
