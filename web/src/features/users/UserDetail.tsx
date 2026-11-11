@@ -918,7 +918,7 @@ function ImportTitlesSection({ user }: { user: User }) {
   const [source, setSource] = useState<string | null>(null)
   const scope = { userId: user.id }
   const counts = useQuery({
-    queryKey: queryKeys.importTitleCounts(scope, ''),
+    queryKey: queryKeys.importTitleCounts(scope),
     queryFn: ({ signal }) => fetchImportTitleCounts(scope, signal),
   })
 

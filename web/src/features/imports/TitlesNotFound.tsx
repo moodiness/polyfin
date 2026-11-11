@@ -1,6 +1,6 @@
 import { LinkBreakIcon, LinkIcon } from '@phosphor-icons/react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ApiError,
   fetchImportTitleCounts,
@@ -70,9 +70,9 @@ function linkedName(link: ImportTitleLink): string {
 
 /**
  * The button that opens the titles one source's imports did not find, for one account: named by
- * how many are not linked, else by how many are linked, and drawn only when there are some.
- * `stamp` follows the status of the import shown beside it, so that the counts are read again as
- * it changes.
+ * how many are not linked, else by how many are linked, and drawn only when there are some. Every
+ * button of a scope reads the same counts, once; `stamp` follows the status of the import shown
+ * beside it, and as it changes the counts are read again.
  */
 export function TitlesNotFound({
   scope,
@@ -87,10 +87,17 @@ export function TitlesNotFound({
   const text = t.importTitles
   const [open, setOpen] = useState(false)
   const counts = useQuery({
-    queryKey: queryKeys.importTitleCounts(scope, stamp),
+    queryKey: queryKeys.importTitleCounts(scope),
     queryFn: ({ signal }) => fetchImportTitleCounts(scope, signal),
     placeholderData: keepPreviousData,
   })
+  // The stamp of the first render is that of the counts just read; only a later one asks again.
+  const shownStamp = useRef(stamp)
+  useEffect(() => {
+    if (shownStamp.current === stamp) return
+    shownStamp.current = stamp
+    void queryClient.invalidateQueries({ queryKey: queryKeys.importTitleCounts(scope) })
+  }, [scope, stamp])
   const count = counts.data?.find((item) => item.source === source)
   if (count === undefined || count.notFound + count.linked === 0) return null
   return (
