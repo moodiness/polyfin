@@ -43,7 +43,15 @@ A title above the limit is hidden everywhere, as in Jellyfin:
 - people credited only in hidden titles are not listed;
 - opening, playing, downloading it or searching its subtitles is refused.
 
-A collection or playlist made by users is hidden from a user who may see none of its titles, whatever hides them: the limit, unrated titles blocked, blocked genres, or the highest rating an app asks. Listings leave it out of their count and pages, and its page answers as missing. One without titles still shows. Collections from addons and smart lists are not judged this way yet.
+A collection or playlist made by users is hidden from a user who may see none of its titles, whatever hides them: the limit, unrated titles blocked, blocked genres, or the highest rating an app asks. Listings leave it out of their count and pages, and its page answers as missing. One without titles still shows.
+
+Collections from addons and smart lists shown as collections are hidden the same way. Their titles cannot all be read for each listing, so:
+
+- A collection from an addon shows when the first page of one of its catalogs holds a title the user may see, as its home row shows it. The catalogs of the collections inside it count too. Its own rating, when its addon gives one, must be within the limit as well. One that groups no catalog still shows.
+- While its titles' ratings are looked up, it is left out of the listing, which tells apps that more may follow, as for titles (see [Ratings looked up for limited users](#ratings-looked-up-for-limited-users)).
+- A smart list shown as a collection shows when the list keeps a title for the user.
+- A smart list shown as a library always shows, as a library does. The **Collections** view shows once a collection exists, whether or not the user may see any.
+- Only listings that leave titles out judge collections. Each collection costs one page of each of its catalogs, mostly kept already.
 
 Artwork stays reachable without signing in, as in Jellyfin.
 
