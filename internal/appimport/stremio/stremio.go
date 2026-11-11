@@ -139,7 +139,9 @@ type pendingLink struct {
 	busy  bool
 }
 
-// New returns a reader with options.
+// New returns a reader with options. Its transport is its own, a clone of
+// the default one: whoever closes the idle connections of
+// http.DefaultTransport cannot break its requests (#958).
 func New(options Options) *Reader {
 	api, link := DefaultAPI, DefaultLink
 	if options.API != "" {
@@ -148,7 +150,8 @@ func New(options Options) *Reader {
 	if options.Link != "" {
 		link = strings.TrimRight(options.Link, "/")
 	}
-	return &Reader{anime: options.Anime, metas: options.Metas, version: options.Version, api: api, link: link, client: &http.Client{},
+	return &Reader{anime: options.Anime, metas: options.Metas, version: options.Version, api: api, link: link,
+		client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
 		timing: defaultTiming, now: time.Now, links: map[accounts.ID]*pendingLink{}}
 }
 

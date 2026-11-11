@@ -393,6 +393,13 @@ func (s *Service) renderer(message []byte, from netip.Addr) (string, bool) {
 	return location, true
 }
 
+// descriptionClient reads devices' descriptions, without following a
+// redirect elsewhere. Its transport is its own, a clone of the default
+// one: whoever closes the idle connections of http.DefaultTransport cannot
+// break its requests (#958).
+var descriptionClient = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: 5 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
 // describe reads the names a device's description gives, at location on
 // its own address.
 func describe(location string, from netip.Addr) (Sighting, error) {
@@ -404,8 +411,7 @@ func describe(location string, from netip.Addr) (Sighting, error) {
 	if err != nil || host.Unmap() != from || request.URL.Scheme != "http" {
 		return Sighting{}, errors.New("a description elsewhere than its device")
 	}
-	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(request)
+	response, err := descriptionClient.Do(request)
 	if err != nil {
 		return Sighting{}, err
 	}

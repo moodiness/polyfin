@@ -294,7 +294,10 @@ func New(options Options) http.Handler {
 	// of start-up as within a minute of the last one, which the process
 	// that restarted could not tell the new one.
 	h.actions.last = map[string]time.Time{"restart": h.Health.Started}
-	h.provider = oidc.New(&http.Client{Timeout: providerTimeout}, h.now)
+	// The identity provider's client has a transport of its own, a clone
+	// of the default one: whoever closes the idle connections of
+	// http.DefaultTransport cannot break a sign-in (#958).
+	h.provider = oidc.New(&http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: providerTimeout}, h.now)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)

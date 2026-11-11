@@ -103,12 +103,14 @@ type lookup struct {
 // New returns a service asking RemuxDB as settings tell. serverID is the
 // server's identifier: RemuxDB is given a name derived from it, which
 // tells this server's requests apart without being the identifier apps
-// see.
+// see. Its transport is its own, a clone of the default one: whoever
+// closes the idle connections of http.DefaultTransport cannot break its
+// requests (#958).
 func New(serverID, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	sum := sha256.Sum256([]byte("polyfin remuxdb client " + serverID))
 	return &Service{
 		settings:     settings,
-		client:       &http.Client{},
+		client:       &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
 		userAgent:    "Polyfin/" + version,
 		clientID:     hex.EncodeToString(sum[:16]),
 		logger:       logger,

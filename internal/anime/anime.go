@@ -109,7 +109,10 @@ type listState struct {
 }
 
 // New returns a service that reads the copies of the lists kept in
-// options.Dir, then keeps them fresh, in the background until Close.
+// options.Dir, then keeps them fresh, in the background until Close. Its
+// transport is its own, a clone of the default one: whoever closes the
+// idle connections of http.DefaultTransport cannot break its requests
+// (#958).
 func New(options Options) *Service {
 	s := newService(options, defaultTiming)
 	s.start()
@@ -118,8 +121,8 @@ func New(options Options) *Service {
 
 func newService(options Options, t timing) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{dir: options.Dir, userAgent: "Polyfin/" + options.Version, logger: options.Logger, client: &http.Client{},
-		now: time.Now, timing: t, ctx: ctx, cancel: cancel}
+	s := &Service{dir: options.Dir, userAgent: "Polyfin/" + options.Version, logger: options.Logger, now: time.Now, timing: t, ctx: ctx,
+		cancel: cancel, client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}}
 	if s.logger == nil {
 		s.logger = slog.New(slog.DiscardHandler)
 	}

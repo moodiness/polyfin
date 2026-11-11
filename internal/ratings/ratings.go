@@ -229,13 +229,15 @@ type limits struct {
 
 // New returns a service asking MDBList at base, and keeping its answers in
 // db, while settings hold a key. version is Polyfin's, which the
-// User-Agent names.
+// User-Agent names. Its transport is its own, a clone of the default one:
+// whoever closes the idle connections of http.DefaultTransport cannot
+// break its requests (#958).
 func New(db *pgxpool.Pool, base, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{
 		db:        db,
 		base:      strings.TrimSuffix(base, "/"),
 		settings:  settings,
-		client:    &http.Client{},
+		client:    &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
 		userAgent: "Polyfin/" + version,
 		logger:    logger,
 		now:       time.Now,
