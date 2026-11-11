@@ -106,9 +106,9 @@ func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 		index := block / s.cache.chunkBlocks
 		read, err := s.readChunk(index, part, position-index*s.cache.chunkBlocks*blockSize)
 		if errors.Is(err, fs.ErrNotExist) && !refetched {
-			// The chunk was evicted between the wait and the read: fetch it
-			// again, once.
-			s.forget(index)
+			// The chunk was evicted between the wait and the read, or its
+			// file removed from outside: fetch it again, once.
+			s.cache.lose(s, index)
 			refetched = true
 			continue
 		}
