@@ -255,6 +255,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.themeCopyMissing(problem.missing, problem.files)
     case 'desktop_rolled_back':
       return text.desktopRolledBack(problem.name, problem.previous, problem.error)
+    case 'collation_version':
+      return text.collationVersion(problem.name, problem.previous, problem.version)
     case 'folder_unwritable':
       return text.folderUnwritable(health.folderTitle[problem.folder], problem.path)
     case 'connection_stopped':
@@ -278,4 +280,13 @@ export function ocrLanguageName(language: string, problem: { name: string; file:
   } catch {
     return problem.name
   }
+}
+
+/**
+ * The commands that rebuild the indexes of the database `name`, then record its new collation
+ * version, in this order, the name quoted as an identifier, as the server writes them.
+ */
+export function collationCommands(name: string): string[] {
+  const quoted = `"${name.replaceAll('"', '""')}"`
+  return [`REINDEX DATABASE ${quoted};`, `ALTER DATABASE ${quoted} REFRESH COLLATION VERSION;`]
 }

@@ -310,6 +310,14 @@ const system = {
           `${name}: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. Keep Language of its descriptions at None on this addon, or on one more metadata addon.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop went back to version ${previous}, as version ${version} did not start: ${error}. That version is no longer offered; the next one will be.`,
+        collationVersion: (name: string, recorded: string, actual: string) =>
+          `The collation version of the database ${name} changed: PostgreSQL recorded ${recorded}, and the system’s collation library now provides ${actual}. Its text indexes may be out of order, which can hide rows or duplicate them.`,
+        collationRepair:
+          'To repair them, stop Polyfin, then, connected as the database’s owner, run these commands one after the other:',
+        collationCopy: 'Copy the commands',
+        collationCopied: 'The commands are copied.',
+        collationCopyFailed: 'The commands could not be copied: select them and copy them by hand.',
+        collationDocs: 'How to repair',
         themeCopyMissing: (missing: number, files: number) =>
           `The copy of the web player theme misses ${missing} of its ${files} files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.`,
         folderUnwritable: (name: string, path: string) =>

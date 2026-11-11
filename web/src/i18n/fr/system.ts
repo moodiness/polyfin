@@ -328,6 +328,15 @@ const system: typeof en = {
           `${name}\u202f: chaque addon de métadonnées du serveur a une langue\u202f: ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop est revenu à la version ${previous}, car la version ${version} n’a pas démarré\u202f: ${error}. Cette version n’est plus proposée\u202f; la suivante le sera.`,
+        collationVersion: (name: string, recorded: string, actual: string) =>
+          `La version de collation de la base de données ${name} a changé\u202f: PostgreSQL a enregistré ${recorded}, et la bibliothèque de collation du système fournit maintenant ${actual}. Ses index de texte peuvent ne plus être dans l’ordre, ce qui peut masquer des lignes ou les dupliquer.`,
+        collationRepair:
+          'Pour les réparer, arrêtez Polyfin, puis, connecté en tant que propriétaire de la base, exécutez ces commandes l’une après l’autre\u202f:',
+        collationCopy: 'Copier les commandes',
+        collationCopied: 'Les commandes sont copiées.',
+        collationCopyFailed:
+          'Les commandes n’ont pas pu être copiées\u202f: sélectionnez-les et copiez-les à la main.',
+        collationDocs: 'Comment réparer',
         themeCopyMissing: (missing: number, files: number) =>
           `La copie du thème du lecteur web n’a plus ${missing} de ses ${files} fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système\u202f: les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.`,
         folderUnwritable: (name: string, path: string) =>

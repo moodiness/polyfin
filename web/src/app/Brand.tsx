@@ -53,3 +53,6 @@ export function LanguageSwitch({ className }: { className?: string }) {
 }
 
 export const repositoryUrl = 'https://github.com/moodiness/polyfin'
+
+/** The documentation's site: a page's address is this, `/`, then its file's name without `.md`. */
+export const docsUrl = 'https://moodiness.github.io/polyfin/docs'
