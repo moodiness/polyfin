@@ -22,7 +22,7 @@ import (
 func TestSegmentLookupsKeepThePublicMetaDBPace(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	const gap = 100 * time.Millisecond
+	const gap = 200 * time.Millisecond
 	shared := pace.New(gap)
 	h.publicMetaDBPace = shared
 	segments := mediasegments.New(h.db, []mediasegments.Source{{Name: mediasegments.PublicMetaDB, URL: h.f.url + "/publicmetadb"}}, "test",
@@ -33,11 +33,16 @@ func TestSegmentLookupsKeepThePublicMetaDBPace(t *testing.T) {
 	// up, all at once. The last play is of a movie known by IMDb only,
 	// whose TMDB identifier is looked up first.
 	h.f.reply("GET", "/publicmetadb/api/external/mappings/lookup", http.StatusOK, `{"results":[{"tmdb_id":30,"media_type":"movie"}],"total":1}`)
-	imdbOnly := Title{Item: itemID(5), IMDb: "tt0100"}
-	for i, played := range []Title{movie, movie, imdbOnly} {
+	var users []accounts.ID
+	for i := range 3 {
 		user := h.user(t, "user"+strconv.Itoa(i))
 		h.connected(t, user, PublicMetaDB, "pm-user"+strconv.Itoa(i))
-		h.Mark(user, Mark{Played: true, Titles: titles(played)})
+		users = append(users, user)
+	}
+	started := time.Now()
+	imdbOnly := Title{Item: itemID(5), IMDb: "tt0100"}
+	for i, played := range []Title{movie, movie, imdbOnly} {
+		h.Mark(users[i], Mark{Played: true, Titles: titles(played)})
 	}
 	var lookups sync.WaitGroup
 	for i := range 4 {
@@ -51,7 +56,7 @@ func TestSegmentLookupsKeepThePublicMetaDBPace(t *testing.T) {
 	if skips, mappings := len(h.f.sent("publicmetadb", "/api/external/skips")), len(h.f.sent("publicmetadb", "/api/external/mappings/lookup")); skips != 4 || mappings != 1 {
 		t.Fatalf("PublicMetaDB was asked for %d segments and %d TMDB identifiers, want 4 and 1", skips, mappings)
 	}
-	spaced(t, h.f, gap)
+	paced(t, h.f, started, gap)
 
 	// A rate limit told to a segment lookup holds the next play sent.
 	h.f.on("GET", "/publicmetadb/api/external/skips", func(request) answer {
@@ -68,10 +73,13 @@ func TestSegmentLookupsKeepThePublicMetaDBPace(t *testing.T) {
 	}
 }
 
-// spaced fails t unless the requests to PublicMetaDB came at least half of
-// gap apart: each is sent in its turn, gap after the one before, and
-// arrives a little later.
-func spaced(t *testing.T, f *fakes, gap time.Duration) {
+// paced fails t unless the requests to PublicMetaDB came no faster than
+// one pace of gap allows: the k-th to arrive, counting from 0, at least k
+// gaps after started, which is before any asked for its turn. Each request
+// is sent in its turn, a gap after the one before, and arrives only later:
+// a request delayed in transit, as on a loaded machine, can come close to
+// the next one, but never before its own turn.
+func paced(t *testing.T, f *fakes, started time.Time, gap time.Duration) {
 	t.Helper()
 	f.mu.Lock()
 	var times []time.Time
@@ -82,9 +90,9 @@ func spaced(t *testing.T, f *fakes, gap time.Duration) {
 	}
 	f.mu.Unlock()
 	slices.SortFunc(times, time.Time.Compare)
-	for i := 1; i < len(times); i++ {
-		if apart := times[i].Sub(times[i-1]); apart < gap/2 {
-			t.Errorf("requests %d and %d to PublicMetaDB came %v apart, want about %v", i-1, i, apart, gap)
+	for k, at := range times {
+		if after, least := at.Sub(started), time.Duration(k)*gap; after < least {
+			t.Errorf("request %d to PublicMetaDB came %v after the start, want at least %v", k, after, least)
 		}
 	}
 }
