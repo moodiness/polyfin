@@ -26,6 +26,18 @@ const migrationLock int64 = 0x706f6c7966696e // "polyfin"
 
 var migrationName = regexp.MustCompile(`^([0-9]{4})_([a-z0-9_]+)\.sql$`)
 
+// superseded lists, by version, the checksums of migrations as earlier
+// releases shipped them, before they were edited: a database that applied
+// one is accepted, and Migrate records it as this build ships it. An edit
+// listed here must leave the schema the earlier one did, wherever the
+// earlier one succeeded.
+var superseded = map[int][]string{
+	// 0239_catalog_renames as Polyfin 0.72.0 shipped it, which failed on
+	// databases holding rows its keys do not match: the current one
+	// deletes them first, and deletes nothing where it succeeded.
+	239: {"31eea78c9bad0c4fa99bd34e4b3b4a8a2119deb606af69b1bfff92fb8912054b"},
+}
+
 type migration struct {
 	version  int
 	name     string
@@ -36,9 +48,10 @@ type migration struct {
 // Migrate brings the schema to the version this build ships.
 //
 // Each migration runs in its own transaction. Polyfin refuses to start when a
-// migration it already applied was edited, or when the database was migrated
-// by a newer Polyfin: both would leave the schema in a state the code does
-// not expect.
+// migration it already applied was edited, unless superseded lists the
+// checksum it was applied with, or when the database was migrated by a
+// newer Polyfin: both would leave the schema in a state the code does not
+// expect.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	migrations, err := shippedMigrations()
 	if err != nil {
@@ -141,6 +154,14 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, migrations []migration) er
 	if err := checkApplied(applied, migrations); err != nil {
 		return err
 	}
+	// What checkApplied accepted but differs is a superseded checksum.
+	for _, m := range migrations {
+		if checksum, done := applied[m.version]; done && checksum != m.checksum {
+			if _, err := conn.Exec(ctx, "UPDATE schema_migrations SET checksum = $2 WHERE version = $1", m.version, m.checksum); err != nil {
+				return fmt.Errorf("record migration %04d_%s as this build ships it: %w", m.version, m.name, err)
+			}
+		}
+	}
 
 	for _, m := range migrations {
 		if _, done := applied[m.version]; done {
@@ -181,8 +202,9 @@ func (e *schemaError) Unwrap() error { return e.kind }
 
 // CheckApplied checks the migrations a database applied, their checksums by
 // version as schema_migrations holds them, against those this build
-// ships, as Migrate does before migrating: it fails with ErrNewerSchema or
-// ErrChangedMigration, saying what differs.
+// ships, as Migrate does before migrating, superseded checksums accepted:
+// it fails with ErrNewerSchema or ErrChangedMigration, saying what
+// differs.
 func CheckApplied(applied map[int]string) error {
 	migrations, err := shippedMigrations()
 	if err != nil {
@@ -206,7 +228,7 @@ func checkApplied(applied map[int]string, migrations []migration) error {
 			return &schemaError{ErrNewerSchema,
 				fmt.Sprintf("the database schema is at version %d but this Polyfin build only knows %d: upgrade Polyfin", version, known)}
 		}
-		if m := migrations[version-1]; m.checksum != applied[version] {
+		if m := migrations[version-1]; m.checksum != applied[version] && !slices.Contains(superseded[version], applied[version]) {
 			return &schemaError{ErrChangedMigration, fmt.Sprintf("migration %04d_%s was changed after it was applied to the database", m.version, m.name)}
 		}
 	}

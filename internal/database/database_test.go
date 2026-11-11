@@ -7,12 +7,14 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/moodiness/polyfin/internal/testdb"
 )
 
@@ -89,6 +91,62 @@ func TestSchemaErrorsNameTheSameVersionEachTime(t *testing.T) {
 		if err := checkApplied(changed, shipped); !errors.Is(err, ErrChangedMigration) || !strings.Contains(err.Error(), "0001_a") {
 			t.Fatalf("two changed migrations: %v", err)
 		}
+	}
+}
+
+// A database that applied 0239_catalog_renames as Polyfin 0.72.0 shipped
+// it is accepted, and recorded as this build ships it; any other checksum
+// is still refused.
+func TestMigrateRecordsASupersededChecksumAsShipped(t *testing.T) {
+	t.Parallel()
+	pool := testdb.Empty(t)
+	ctx := t.Context()
+	if err := Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	shipped, err := shippedMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := func() map[int]string {
+		t.Helper()
+		rows, _ := pool.Query(ctx, "SELECT version, checksum FROM schema_migrations")
+		checksums := map[int]string{}
+		var version int
+		var checksum string
+		if _, err := pgx.ForEachRow(rows, []any{&version, &checksum}, func() error {
+			checksums[version] = checksum
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return checksums
+	}
+	const released = "31eea78c9bad0c4fa99bd34e4b3b4a8a2119deb606af69b1bfff92fb8912054b"
+	if !slices.Contains(superseded[239], released) || shipped[238].checksum == released {
+		t.Fatalf("0239 as 0.72.0 shipped it is not superseded: %q", superseded[239])
+	}
+	if _, err := pool.Exec(ctx, "UPDATE schema_migrations SET checksum = $1 WHERE version = 239", released); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckApplied(applied()); err != nil {
+		t.Fatalf("CheckApplied with 0.72.0's 0239: %v", err)
+	}
+	if err := Migrate(ctx, pool); err != nil {
+		t.Fatalf("Migrate with 0.72.0's 0239: %v", err)
+	}
+	if checksum := applied()[239]; checksum != shipped[238].checksum {
+		t.Errorf("0239 recorded as %s, want %s", checksum, shipped[238].checksum)
+	}
+
+	if _, err := pool.Exec(ctx, "UPDATE schema_migrations SET checksum = 'edited' WHERE version = 239"); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckApplied(applied()); !errors.Is(err, ErrChangedMigration) {
+		t.Errorf("CheckApplied with an edited 0239: %v", err)
+	}
+	if err := Migrate(ctx, pool); !errors.Is(err, ErrChangedMigration) || !strings.Contains(err.Error(), "0239_catalog_renames") {
+		t.Errorf("Migrate with an edited 0239: %v", err)
 	}
 }
 

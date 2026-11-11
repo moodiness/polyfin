@@ -197,8 +197,10 @@ func TestARestoreOfAnOlderBackupIsMigrated(t *testing.T) {
 	r := newRestoring(t)
 	ctx := t.Context()
 	// The schema before the destinations: the newest migration undone.
+	// 0239 is recorded as Polyfin 0.72.0 shipped it, since superseded.
 	if _, err := r.pool.Exec(ctx, `DROP TABLE backup_destinations, backup_restore;
-		DELETE FROM schema_migrations WHERE name = 'backup_destinations'`); err != nil {
+		DELETE FROM schema_migrations WHERE name = 'backup_destinations';
+		UPDATE schema_migrations SET checksum = '31eea78c9bad0c4fa99bd34e4b3b4a8a2119deb606af69b1bfff92fb8912054b' WHERE version = 239`); err != nil {
 		t.Fatal(err)
 	}
 	old := r.backUp(t, time.Date(2026, 10, 1, 4, 0, 0, 0, time.Local))
@@ -234,6 +236,9 @@ func TestARestoreOfAnOlderBackupIsMigrated(t *testing.T) {
 	}
 	if n := r.count(t, "SELECT count(*) FROM schema_migrations WHERE name = 'backup_destinations'"); n != 1 {
 		t.Error("the restored database was not migrated")
+	}
+	if n := r.count(t, "SELECT count(*) FROM schema_migrations WHERE checksum = '31eea78c9bad0c4fa99bd34e4b3b4a8a2119deb606af69b1bfff92fb8912054b'"); n != 0 {
+		t.Error("0239 kept the checksum Polyfin 0.72.0 shipped it with")
 	}
 	for _, entry := range fileNames(t, r.dir) {
 		if restoreTemporary.MatchString(entry) {
