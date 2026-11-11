@@ -382,9 +382,11 @@ func (v view) withoutWait() view {
 // visibleMetas keeps the entries of a catalog page the user's parental
 // control and blocked genres let them see, without the titles they hid
 // and the movies waiting for their digital release (see releases.go).
-// Entries that are not titles, collections among them, are kept. held
-// reports titles left out only because their rating or genres, or their
-// release, are not known yet (see visible).
+// Entries that are not titles are kept, but the collections of a catalog
+// of collections none of whose titles the user may see (see
+// containers.go). held reports entries left out only because their rating
+// or genres, those of their titles for a collection, or their release,
+// are not known yet (see visible).
 func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []stremio.Meta) ([]stremio.Meta, bool) {
 	metas = v.unhiddenMetas(src, metas)
 	metas, waiting := s.releasedMetas(ctx, v, src, metas)
@@ -392,6 +394,7 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 		return metas, waiting
 	}
 	var titles []record
+	var others []int
 	judged := make(map[accounts.ID]int, len(metas))
 	for i, meta := range metas {
 		// The listing saves its records with their folder afterwards.
@@ -399,6 +402,8 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 			r.Parent = nil
 			titles = append(titles, r)
 			judged[r.ID] = i
+		} else {
+			others = append(others, i)
 		}
 	}
 	allowed := make([]bool, len(metas))
@@ -411,6 +416,9 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 	visible, held := s.visible(ctx, v, titles)
 	for _, r := range visible {
 		allowed[judged[r.ID]] = true
+	}
+	if src.catalog.Type == "collection" && s.shownCollections(ctx, v, src, metas, others, allowed) {
+		held = true
 	}
 	kept := metas[:0:0]
 	for i, meta := range metas {
