@@ -330,6 +330,15 @@ const system: typeof en = {
           `${name}: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop ist zu Version ${previous} zurückgekehrt, da Version ${version} nicht gestartet ist: ${error}. Diese Version wird nicht mehr angeboten, die nächste schon.`,
+        collationVersion: (name: string, recorded: string, actual: string) =>
+          `Die Collation-Version der Datenbank ${name} hat sich geändert: PostgreSQL hat ${recorded} vermerkt, und die Collation-Bibliothek des Systems liefert jetzt ${actual}. Ihre Textindizes sind womöglich nicht mehr richtig sortiert, wodurch Zeilen verborgen oder doppelt vorhanden sein können.`,
+        collationRepair:
+          'Zur Reparatur stoppe Polyfin und führe dann, als Eigentümer mit der Datenbank verbunden, diese Befehle nacheinander aus:',
+        collationCopy: 'Befehle kopieren',
+        collationCopied: 'Die Befehle sind kopiert.',
+        collationCopyFailed:
+          'Die Befehle konnten nicht kopiert werden: Markiere sie und kopiere sie von Hand.',
+        collationDocs: 'So reparierst du sie',
         themeCopyMissing: (missing: number, files: number) =>
           `Der Kopie des Web-Player-Themes fehlen ${missing} ihrer ${files} Dateien im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System: Browser laden sie bis dahin von ihren ursprünglichen Adressen, was Internet braucht. Aktualisiere die Kopie unter Einstellungen › Web-Player oder wähle ein anderes Theme.`,
         folderUnwritable: (name: string, path: string) =>

@@ -324,6 +324,14 @@ const system: typeof en = {
           `${name}: todos os complementos de metadados do servidor têm um idioma, então eles descrevem os títulos no idioma deles para todos os usuários, seja qual for o idioma dos metadados de cada um. Mantenha Idioma das descrições como Nenhum neste complemento, ou em mais um complemento de metadados.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `O Polyfin Desktop voltou para a versão ${previous}, pois a versão ${version} não iniciou: ${error}. Essa versão não é mais oferecida; a próxima será.`,
+        collationVersion: (name: string, recorded: string, actual: string) =>
+          `A versão de collation do banco de dados ${name} mudou: o PostgreSQL registrou ${recorded}, e a biblioteca de collation do sistema agora fornece ${actual}. Os índices de texto dele podem estar fora de ordem, o que pode esconder linhas ou duplicá-las.`,
+        collationRepair:
+          'Para repará-los, pare o Polyfin e depois, conectado como dono do banco de dados, execute estes comandos um após o outro:',
+        collationCopy: 'Copiar os comandos',
+        collationCopied: 'Os comandos foram copiados.',
+        collationCopyFailed: 'Não foi possível copiar os comandos: selecione-os e copie-os à mão.',
+        collationDocs: 'Como reparar',
         themeCopyMissing: (missing: number, files: number) =>
           `Faltam à cópia do tema do player web ${missing} dos seus ${files} arquivos na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema: enquanto isso, os navegadores os carregam dos endereços originais, o que exige internet. Atualize a cópia em Configurações › Player web, ou escolha outro tema.`,
         folderUnwritable: (name: string, path: string) =>

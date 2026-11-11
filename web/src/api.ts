@@ -5410,6 +5410,17 @@ export type HealthProblem = {
   /** Polyfin Desktop went back to `previous`, as `name` did not start, for `error`. */
   | { code: 'desktop_rolled_back'; name: string; previous: string; error: string }
   /**
+   * The collation version of the database `name` changed: PostgreSQL recorded `previous`, the
+   * system's collation library now provides `version`; `kind` is the database's locale provider.
+   */
+  | {
+      code: 'collation_version'
+      name: string
+      previous: string
+      version: string
+      kind: 'libc' | 'icu' | 'builtin'
+    }
+  /**
    * A folder the settings chose could not be written into at start: `path` is the folder, `error`
    * why; the cache in the data folder keeps its files until the next start.
    */

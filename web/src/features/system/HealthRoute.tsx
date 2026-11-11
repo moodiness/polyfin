@@ -7,6 +7,8 @@ import {
   ArrowSquareOutIcon,
   CalendarDotsIcon,
   CaretRightIcon,
+  CheckIcon,
+  CopyIcon,
   CpuIcon,
   DatabaseIcon,
   DownloadSimpleIcon,
@@ -25,6 +27,7 @@ import {
   type HealthProblem,
   type Sources,
 } from '@/api'
+import { docsUrl } from '@/app/Brand'
 import { PageLayout } from '@/app/PageLayout'
 import { settingsPath } from '@/app/navigation'
 import {
@@ -49,6 +52,7 @@ import {
 import { hdrPathText } from '@/features/settings/hdrPath'
 import { destinationStatus } from './BackupStatus'
 import {
+  collationCommands,
   ocrLanguageName,
   problemText,
   useHealth,
@@ -230,6 +234,13 @@ function Problems({ health }: { health: Health }) {
           >
             {problems.map((problem) => {
               const [title, rest] = splitSentence(language, problemText(t, language, problem))
+              if (problem.code === 'collation_version') {
+                return (
+                  <li key={problem.key} className="grid">
+                    <CollationTile name={problem.name} title={title} said={rest} />
+                  </li>
+                )
+              }
               const missing = downloadable(problem, language)
               const downloading = download.isPending && download.variables === missing?.code
               const link = problemLink(t, problem.to)
@@ -299,6 +310,66 @@ function Problems({ health }: { health: Health }) {
         </>
       )}
     </Block>
+  )
+}
+
+/**
+ * The collation version of the database changed: what it means, then the commands that repair it,
+ * which Copy the commands copies, and the way to the documentation's section.
+ */
+function CollationTile({ name, title, said }: { name: string; title: string; said: string }) {
+  const { t } = useI18n()
+  const text = t.system.health.problems
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const commands = collationCommands(name).join('\n')
+
+  async function copyCommands() {
+    try {
+      // The clipboard is missing outside secure contexts, such as plain http on a local network.
+      await navigator.clipboard.writeText(commands)
+      setCopy('copied')
+    } catch {
+      setCopy('failed')
+    }
+  }
+
+  return (
+    <AlertTile
+      tone="warn"
+      title={title}
+      actions={
+        <>
+          <Button
+            icon={copy === 'copied' ? CheckIcon : CopyIcon}
+            onClick={() => void copyCommands()}
+          >
+            {text.collationCopy}
+          </Button>
+          <ExternalButtonLink
+            href={`${docsUrl}/health#collation-version-changed`}
+            target="_blank"
+            rel="noopener noreferrer"
+            iconEnd={ArrowSquareOutIcon}
+          >
+            {text.collationDocs}
+          </ExternalButtonLink>
+        </>
+      }
+    >
+      <p>{said}</p>
+      <p className="mt-2">{text.collationRepair}</p>
+      <pre className="mt-2 rounded-field bg-s2 px-3.5 py-2.5 font-mono text-control break-words whitespace-pre-wrap text-ink select-all">
+        {commands}
+      </pre>
+      <div aria-live="polite">
+        {copy === 'copied' && <span className="sr-only">{text.collationCopied}</span>}
+        {copy === 'failed' && (
+          <Notice tone="danger" className="mt-2">
+            {text.collationCopyFailed}
+          </Notice>
+        )}
+      </div>
+    </AlertTile>
   )
 }
 
