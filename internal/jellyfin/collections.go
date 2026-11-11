@@ -244,7 +244,8 @@ func (h *Handler) collectionsViewItem() library.Item {
 
 // addCollectionsView adds the Collections view to views once a collection
 // exists, as Jellyfin shows it once there is one: one made by users, or a
-// smart list the user sees as a collection.
+// smart list the user sees as a collection, whether or not it holds a
+// title they may see, which would cost a read of each list.
 func (h *Handler) addCollectionsView(r *http.Request, user accounts.User, views []BaseItemDto) ([]BaseItemDto, error) {
 	exists, err := h.Collections.Any(r.Context())
 	if err != nil {
@@ -387,11 +388,11 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 	}
 	fields := requestedFields(r)
 	filter, filtered := stateFilterOf(r)
-	// The Collections view lists the smart lists the user sees as
+	// The Collections view lists the smart lists the user is shown as
 	// collections beside those made by users, by name.
 	var smart []library.Item
 	if within == (accounts.ID{}) && hasParent {
-		if smart, err = h.Library.SmartCollections(r.Context(), user); err != nil {
+		if smart, err = h.Library.ShownSmartCollections(r.Context(), user); err != nil {
 			h.internalError(w, r, err)
 			return true
 		}
@@ -446,7 +447,7 @@ func (h *Handler) listedUnder(ctx context.Context, all []collections.Collection,
 // writeCollectionsAcrossServer answers a listing of collections across the
 // server as Jellyfin answers one, with every BoxSet the user sees: the
 // collections made by users, those the user's collection libraries list,
-// each once, and the smart lists the user sees as collections, by name.
+// each once, and the smart lists the user is shown as collections, by name.
 // Strand builds its shelves from such a listing. jellyfin-web makes one
 // only for its Add to collection dialog, where a title can go to
 // collections made by users alone: collectionListing answers it with
@@ -457,7 +458,7 @@ func (h *Handler) writeCollectionsAcrossServer(w http.ResponseWriter, r *http.Re
 		h.browseError(w, r, err)
 		return
 	}
-	smart, err := h.Library.SmartCollections(r.Context(), user)
+	smart, err := h.Library.ShownSmartCollections(r.Context(), user)
 	if err != nil {
 		h.internalError(w, r, err)
 		return

@@ -562,6 +562,11 @@ func (h *Handler) collectionRowTitles(ctx context.Context, user accounts.User, i
 		return library.Page{}, err
 	}
 	collection, err := h.Library.Item(ctx, user, id)
+	if errors.Is(err, library.ErrHidden) {
+		// One none of whose titles the user may see lists none, as one
+		// made by users does: it makes no row.
+		return library.Page{}, nil
+	}
 	if err != nil {
 		return library.Page{}, err
 	}

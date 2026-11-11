@@ -19,8 +19,9 @@ import (
 // control, unrated titles blocked, blocked genres, or the highest rating
 // a listing asks (maxOfficialRating). One without titles still shows. A
 // hidden one is left out of listings before they page and count, and its
-// own pages answer as missing. The collections of addons and smart lists
-// are not judged so.
+// own pages answer as missing. The library hides the collections of
+// addons and the smart lists shown as collections the same way (see the
+// library package's containers.go).
 
 // shownContainers reports, for each container holding the titles of
 // members, whether user is shown it under ctx: when it holds none, or one

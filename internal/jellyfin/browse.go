@@ -541,6 +541,12 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		page, err = h.Library.Children(ctx, user, parent, max(start, 0), limit, genre)
 	}
 	read := time.Since(asked)
+	// A collection the user may see none of the titles of is missing to
+	// them (see library.ErrHidden), as one made by users is.
+	if errors.Is(err, library.ErrHidden) {
+		notFoundProblem(w)
+		return
+	}
 	if errors.Is(err, library.ErrNotFound) && h.customRowListing(w, r, user, parent, start, limit) {
 		return
 	}
