@@ -143,11 +143,13 @@ type Status struct {
 	LastImport    *ImportResult
 	NextImport    *time.Time
 	// Watchlist tells that Polyfin can import the service's watchlist
-	// (Trakt, Simkl, AniList, MyAnimeList, PublicMetaDB), and
+	// (Trakt, Simkl, MDBList, AniList, MyAnimeList, PublicMetaDB), and
 	// ImportWatchlist that it does, with the imports of the history.
 	// WatchlistSent tells that the user's own changes of their watchlist
-	// are sent there too while it does (PublicMetaDB).
-	Watchlist, ImportWatchlist, WatchlistSent bool
+	// are sent there too while it does (see syncsWatchlist), and
+	// WatchlistFull that the service refused the last title sent there as
+	// the list is full (Trakt), until a change goes through.
+	Watchlist, ImportWatchlist, WatchlistSent, WatchlistFull bool
 	// Ratings tells that the service can keep the user's ratings (AniList,
 	// MyAnimeList), and SyncRatings that they are sent there and imported.
 	Ratings, SyncRatings bool

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/pace"
 )
 
 // maxReply bounds the bytes read from a service.
@@ -152,11 +153,33 @@ func (s *Service) api(ctx context.Context, service, token string, settings accou
 			return reply{}, err
 		}
 	}
+	if p := s.writePace(service, token, method); p != nil {
+		if err := p.Wait(ctx); err != nil {
+			return reply{}, err
+		}
+	}
 	r, err := s.call(ctx, method, target, header, body)
 	if service == PublicMetaDB && err == nil && r.status == http.StatusTooManyRequests {
 		s.publicMetaDBPace.Hold(max(retryAfter(r.header), time.Second))
 	}
 	return r, err
+}
+
+// writePace is the pace of the writes of token to service, nil when they
+// need none: Trakt and Simkl take one write a second from each user.
+func (s *Service) writePace(service, token, method string) *pace.Pace {
+	if method == http.MethodGet || service != Trakt && service != Simkl {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := service + " " + token
+	p := s.writePaces[key]
+	if p == nil {
+		p = pace.New(s.timing.gaps[service])
+		s.writePaces[key] = p
+	}
+	return p
 }
 
 // form sends a form to an OAuth endpoint of Simkl, which takes them so.
@@ -182,12 +205,14 @@ const (
 )
 
 // result is what came of a send, how long to wait before sending again,
-// and the titles the service now counts watched.
+// and the titles the service now counts watched. full tells a change to
+// a watchlist refused as the list is full.
 type result struct {
 	outcome outcome
 	after   time.Duration
 	status  int
 	watched []accounts.ID
+	full    bool
 }
 
 // classify reads the status of a reply to a change.
@@ -373,6 +398,9 @@ func (s *Service) sendTo(ctx context.Context, service, token string, settings ac
 		return s.sendAniList(ctx, token, kind, ev)
 	case MyAnimeList:
 		return s.sendMyAnimeList(ctx, token, kind, ev)
+	}
+	if kind == kindListAdd || kind == kindListRemove {
+		return s.sendList(ctx, service, token, settings, kind, ev)
 	}
 	var (
 		path    string

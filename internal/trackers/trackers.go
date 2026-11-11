@@ -160,11 +160,11 @@ func imports(service string) bool {
 	return known(service) && !Music(service)
 }
 
-// watchlists reports whether Polyfin reads the watchlist of service: Trakt's
-// and PublicMetaDB's watchlist, Simkl's, AniList's and MyAnimeList's Plan
-// to Watch.
+// watchlists reports whether Polyfin reads the watchlist of service: Trakt's,
+// MDBList's and PublicMetaDB's watchlist, Simkl's, AniList's and
+// MyAnimeList's Plan to Watch.
 func watchlists(service string) bool {
-	return service == Trakt || service == Simkl || service == PublicMetaDB || animeLists(service)
+	return service == Trakt || service == Simkl || service == MDBList || service == PublicMetaDB || animeLists(service)
 }
 
 // known reports whether service is one of Services.
@@ -403,6 +403,10 @@ type Service struct {
 	// publicMetaDBPace spaces every request to PublicMetaDB, each taking
 	// its own turn (see api).
 	publicMetaDBPace *pace.Pace
+	// writePaces space the writes of each token to Trakt and Simkl, which
+	// take one a second from each user, however many a change makes (see
+	// api).
+	writePaces map[string]*pace.Pace
 	// anime maps anime between identifiers and numberings.
 	anime *anime.Service
 	// stopped is told as a connection stops (see Options.Stopped).
@@ -463,6 +467,7 @@ func New(options Options) *Service {
 		publicMetaDBIMDb:  map[string]imdbDecision{},
 		publicMetaDBLists: map[string]string{},
 		publicMetaDBPace:  cmp.Or(options.PublicMetaDBPace, pace.New(PublicMetaDBGap)),
+		writePaces:        map[string]*pace.Pace{},
 		anime:             options.Anime,
 		stopped:           options.Stopped,
 		watchlist:         cmp.Or(options.Watchlist, watchlist.New(options.DB)),

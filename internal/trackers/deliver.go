@@ -181,12 +181,19 @@ func (s *Service) deliver(key laneKey, l *lane, t ticket) time.Duration {
 	case delivered:
 		s.forget(t.id)
 		s.delivered(ctx, key, kind, ev, res.watched)
+		if kind == kindListAdd || kind == kindListRemove {
+			// A change went through: the list is no longer told full.
+			s.setWatchlistFull(ctx, key, false)
+		}
 		return 0
 	case reconnect:
 		s.refusedToken(ctx, key)
 		return 0
 	case refused:
 		s.forget(t.id)
+		if res.full {
+			s.setWatchlistFull(ctx, key, true)
+		}
 		if t.id != 0 {
 			s.logger.Info("A tracking service refused a change, which was dropped",
 				"user_id", key.user.String(), "service", key.service, "change", kind, "status", res.status)

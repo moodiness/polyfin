@@ -70,9 +70,11 @@ func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status)
 	var last *time.Time
 	var result ImportResult
 	var problem *string
-	err := s.db.QueryRow(ctx, `SELECT enabled, watchlist, ratings, last_import_at, played, resumed, watchlisted, unmapped, rated, ratings_skipped, problem
+	err := s.db.QueryRow(ctx, `SELECT enabled, watchlist, ratings, last_import_at, played, resumed, watchlisted, unmapped, rated, ratings_skipped, problem,
+			watchlist AND watchlist_full
 		FROM tracking_imports WHERE user_id = $1 AND service = $2`, key.user, key.service).Scan(&status.ImportHistory, &status.ImportWatchlist,
-		&status.SyncRatings, &last, &result.Played, &result.Resumed, &result.Watchlist, &result.Unmapped, &result.Rated, &result.RatingsSkipped, &problem)
+		&status.SyncRatings, &last, &result.Played, &result.Resumed, &result.Watchlist, &result.Unmapped, &result.Rated, &result.RatingsSkipped, &problem,
+		&status.WatchlistFull)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -107,13 +109,14 @@ func (s *Service) SetImport(ctx context.Context, user accounts.ID, service strin
 }
 
 // SetWatchlistImport turns the import of user's watchlist from service on
-// or off: Trakt's and PublicMetaDB's watchlist, Simkl's, AniList's and
-// MyAnimeList's Plan to Watch, imported with the imports of the history,
-// whether those import the history or not. For PublicMetaDB, it also
-// sends the user's own changes of their watchlist from then on (see
-// listsync.go). Turned on, it imports at once. Turned off, the titles the
-// list alone held leave the watchlist. The other services have
-// no watchlist Polyfin imports: ErrUnknownService.
+// or off: Trakt's, MDBList's and PublicMetaDB's watchlist, Simkl's,
+// AniList's and MyAnimeList's Plan to Watch, imported with the imports of
+// the history, whether those import the history or not. For the services
+// that keep it (see syncsWatchlist), it also sends the user's own changes
+// of their watchlist from then on (see listsync.go). Turned on, it imports
+// at once, the list read whole. Turned off, the titles the list alone held
+// leave the watchlist. The other services have no watchlist Polyfin
+// imports: ErrUnknownService.
 func (s *Service) SetWatchlistImport(ctx context.Context, user accounts.ID, service string, on bool) (Status, error) {
 	if !watchlists(service) {
 		return Status{}, ErrUnknownService
@@ -154,6 +157,12 @@ func (s *Service) setImport(ctx context.Context, user accounts.ID, service, colu
 		was = map[string]bool{"enabled": history, "watchlist": list, "ratings": ratings}
 		_, err = tx.Exec(ctx, `INSERT INTO tracking_imports (user_id, service, `+column+`) VALUES ($1, $2, $3)
 			ON CONFLICT (user_id, service) DO UPDATE SET `+column+` = excluded.`+column, user, service, on)
+		if err == nil && column == "watchlist" && on != list {
+			// Turned on, the list is read whole again; off, what the
+			// service refused is forgotten.
+			_, err = tx.Exec(ctx, "UPDATE tracking_imports SET watchlist_cursor = '', watchlist_full = false WHERE user_id = $1 AND service = $2",
+				user, service)
+		}
 		return err
 	})
 	if err != nil {
@@ -331,12 +340,12 @@ type watchHistory struct {
 // turned on: reads them from the service, finds their titles, and adds
 // what Polyfin lacks to the user's data and watchlist.
 func (s *Service) runImport(ctx context.Context, key laneKey) {
-	var cursor string
+	var cursor, listCursor string
 	var cursorFor *time.Time
 	var history, list, ratings bool
-	err := s.db.QueryRow(ctx, `SELECT cursor, cursor_for, enabled, watchlist, ratings FROM tracking_imports
+	err := s.db.QueryRow(ctx, `SELECT cursor, watchlist_cursor, cursor_for, enabled, watchlist, ratings FROM tracking_imports
 		WHERE user_id = $1 AND service = $2 AND (enabled OR watchlist OR ratings)`,
-		key.user, key.service).Scan(&cursor, &cursorFor, &history, &list, &ratings)
+		key.user, key.service).Scan(&cursor, &listCursor, &cursorFor, &history, &list, &ratings)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("A watch history import could not start", "service", key.service, "error", err)
@@ -348,9 +357,15 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		return
 	}
 	// A cursor tells where the history of the account it was read from
-	// stood: a new connection reads it whole.
+	// stood, and when its watchlist last changed: a new connection reads
+	// them whole.
 	if cursorFor == nil || !cursorFor.Equal(conn.connectedAt) {
-		cursor = ""
+		cursor, listCursor = "", ""
+	}
+	if history && cursor == "" {
+		// The titles not found are kept anew from a history read whole:
+		// the watchlist's too.
+		listCursor = ""
 	}
 	r := &reader{s: s, key: key, token: conn.token, settings: s.settings()}
 	var read watchHistory
@@ -361,7 +376,7 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		read, next, readErr = r.read(ctx, cursor)
 	}
 	if readErr == nil && list && watchlists(key.service) {
-		listed, readErr = r.readWatchlist(ctx)
+		listed, readErr = r.readWatchlist(ctx, listCursor)
 	}
 	ratings = ratings && animeLists(key.service)
 	if readErr == nil && ratings && s.anime.Ready() {
@@ -372,8 +387,9 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		return
 	}
 	result := ImportResult{Problem: importProblem(readErr)}
+	nextList := listed.cursor
 	if readErr != nil {
-		next = cursor
+		next, nextList = cursor, listCursor
 		s.logger.Info("A watch history could not be read whole: what was read is imported", "user_id", key.user.String(),
 			"service", key.service, "problem", result.Problem)
 	}
@@ -417,9 +433,9 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		problem = &result.Problem
 	}
 	if _, err := s.db.Exec(ctx, `UPDATE tracking_imports SET last_import_at = $3, played = $4, resumed = $5, unmapped = $6, problem = $7,
-			cursor = $8, cursor_for = $9, watchlisted = $10, rated = $11, ratings_skipped = $12
+			cursor = $8, cursor_for = $9, watchlisted = $10, rated = $11, ratings_skipped = $12, watchlist_cursor = $13
 		WHERE user_id = $1 AND service = $2`, key.user, key.service, result.At, result.Played, result.Resumed, result.Unmapped, problem,
-		next, conn.connectedAt, result.Watchlist, result.Rated, result.RatingsSkipped); err != nil && ctx.Err() == nil {
+		next, conn.connectedAt, result.Watchlist, result.Rated, result.RatingsSkipped, nextList); err != nil && ctx.Err() == nil {
 		s.logger.Warn("A watch history import could not be recorded", "service", key.service, "error", err)
 	}
 	s.logger.Debug("Imported a watch history", "user_id", key.user.String(), "service", key.service, "played", result.Played,

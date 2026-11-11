@@ -48,15 +48,15 @@ func TestTraktWatchlistFillsTheWatchlist(t *testing.T) {
 	h := newHarness(t)
 	user := h.user(t, "dave")
 	h.connected(t, user, Trakt, "trakt-dave")
-	h.connected(t, user, MDBList, "mdblist-dave")
-	if status := h.status(t, user, Trakt); !status.Watchlist || status.ImportWatchlist {
+	h.connected(t, user, ListenBrainz, "listenbrainz-dave")
+	if status := h.status(t, user, Trakt); !status.Watchlist || !status.WatchlistSent || status.ImportWatchlist {
 		t.Errorf("Trakt connected: %+v", status)
 	}
-	if status := h.status(t, user, MDBList); status.Watchlist {
-		t.Errorf("MDBList connected: %+v", status)
+	if status := h.status(t, user, ListenBrainz); status.Watchlist || status.WatchlistSent {
+		t.Errorf("ListenBrainz connected: %+v", status)
 	}
-	if _, err := h.SetWatchlistImport(t.Context(), user, MDBList, true); !errors.Is(err, ErrUnknownService) {
-		t.Errorf("MDBList's watchlist: %v", err)
+	if _, err := h.SetWatchlistImport(t.Context(), user, ListenBrainz, true); !errors.Is(err, ErrUnknownService) {
+		t.Errorf("ListenBrainz's watchlist: %v", err)
 	}
 	pages := [][]string{
 		{`{"listed_at":"2026-09-01T10:00:00.000Z","type":"movie","movie":{"title":"First","ids":{"imdb":"tt0000001"}}}`,
