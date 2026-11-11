@@ -124,6 +124,11 @@ type Remux struct {
 	FastTag string
 	Format  Format
 	Plan    Plan
+	// Duration is how long the version lasts, as its analysis states, for
+	// a stream without a Plan, zero when not known: a subtitle file burned
+	// in gets a picture past it (see writeBurnCopy). A Plan's own duration
+	// serves otherwise.
+	Duration time.Duration
 	// Subtitles are the FFmpeg indexes of the text subtitle streams
 	// extracted into Extracted while remuxing, from the bytes FFmpeg reads
 	// anyway.
@@ -1324,6 +1329,9 @@ type encoding struct {
 	switching bool
 	switches  int
 	converts  bool
+	// burns are the copies of the subtitle files the jobs burn in, by
+	// file, under e.mu (see burnInput).
+	burns map[string]*burnCopy
 }
 
 func (e *encoding) open(ctx context.Context, open Opener) {
@@ -1820,7 +1828,8 @@ func (e *encoding) progress(j *job) {
 // run runs FFmpeg for a job and files what it writes into segments, and
 // the cues of the subtitles it extracts.
 func (e *encoding) run(ctx context.Context, j *job) {
-	cmd := exec.CommandContext(ctx, e.m.ffmpegPath(), j.input.args(j.start, j.lookback)...)
+	input := e.burnInput(ctx, j.input)
+	cmd := exec.CommandContext(ctx, e.m.ffmpegPath(), input.args(j.start, j.lookback)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

@@ -53,7 +53,7 @@ func (s *Service) progressiveOpener(remux Remux) hls.Opener {
 			return hls.Remux{}, nil, err
 		}
 		video, _ := videoOf(analysis)
-		r := hls.Remux{Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
+		r := hls.Remux{Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format, Duration: analysis.Duration}
 		if s.ReadsInput(remux.Version) {
 			in, err := s.input(ctx, remux.Version)
 			if err != nil {
