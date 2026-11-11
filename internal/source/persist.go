@@ -47,6 +47,11 @@ const (
 	// saveDelay is how long after a change the state of a source is
 	// saved: a crash loses at most what was read meanwhile.
 	saveDelay = 30 * time.Second
+	// saveTries bounds the saves of a source failing in a row that have
+	// it saved again saveDelay later: past them, it is saved again once a
+	// block is written or its last reader releases it (see Source.store
+	// and Source.Release), and as the cache closes (see keep).
+	saveTries = 3
 	// sweepEvery spaces the sweeps of the chunks kept past the policy's
 	// Keep.
 	sweepEvery = time.Hour
@@ -406,7 +411,12 @@ func (c *Cache) saveLater(s *Source) {
 
 // save saves the source's state, once the chunks written since the last
 // save reached the disk. A chunk evicted meanwhile has the save made
-// again later, as the state read would claim it (see unclaim).
+// again later, as the state read would claim it (see unclaim). A source
+// holding no chunk saves nothing: one read past the block cache alone, as
+// the subtitle blocks of an index are (see Fetch), learned its size
+// without a folder made. One whose folder was removed from outside holds
+// none from then on (see lostFolder). A failed save is told once, and made
+// again later saveTries times in a row at most.
 func (c *Cache) save(s *Source) {
 	s.mu.Lock()
 	s.saveTimer = nil
@@ -419,36 +429,62 @@ func (c *Cache) save(s *Source) {
 	state, unsynced, ok := c.snapshot(s)
 	evictions := s.evictions.Load()
 	c.mu.Unlock()
-	if !ok {
+	if !ok || len(state.Chunks) == 0 {
 		return
 	}
+	again, failures, err := s.commit(state, unsynced, evictions)
+	if err == nil && !again {
+		return
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		c.mu.Lock()
+		// What is written from now on is saved as any change.
+		if c.sources[s.id] == s && c.lostFolder(s) {
+			err = nil
+		}
+		c.mu.Unlock()
+	}
+	switch {
+	case err == nil:
+	case failures == 1:
+		c.logger.Warn("A cached source's state could not be saved", "error", err)
+	default:
+		c.logger.Debug("A cached source's state could not be saved again", "failures", failures, "error", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, index := range unsynced {
+		s.unsynced[index] = true
+	}
+	if err == nil || failures < saveTries {
+		c.saveLater(s)
+	}
+}
+
+// commit writes the source's state once the chunks written since the
+// last save reached the disk, and tells whether to save again, a chunk
+// evicted meanwhile (see save), and how many saves failed in a row, this
+// one included. A source halted meanwhile writes nothing.
+func (s *Source) commit(state *keptState, unsynced []int64, evictions int64) (again bool, failures int, err error) {
 	s.writing.RLock()
 	defer s.writing.RUnlock()
 	if s.ctx.Err() != nil {
-		return
+		return false, 0, nil
 	}
-	err := syncChunks(s, unsynced)
-	again := false
+	err = syncChunks(s, unsynced)
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 	if err == nil {
-		s.saveMu.Lock()
-		if again = s.evictions.Load() != evictions; !again {
-			if err = writeState(s.dir, state); err == nil {
-				s.saved = state
-			}
+		if s.evictions.Load() != evictions {
+			return true, s.saveFailures, nil
 		}
-		s.saveMu.Unlock()
+		if err = writeState(s.dir, state); err == nil {
+			s.saved, s.saveFailures = state, 0
+			return false, 0, nil
+		}
 	}
-	if err != nil || again {
-		if err != nil {
-			c.logger.Warn("A cached source's state could not be saved", "error", err)
-		}
-		s.mu.Lock()
-		for _, index := range unsynced {
-			s.unsynced[index] = true
-		}
-		c.saveLater(s)
-		s.mu.Unlock()
-	}
+	s.saveFailures++
+	return false, s.saveFailures, err
 }
 
 // snapshot is the state to save of the source, and the chunks written

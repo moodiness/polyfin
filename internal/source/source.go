@@ -663,6 +663,63 @@ func (c *Cache) evict(key chunkKey, use *chunkUse) {
 	}
 }
 
+// lose has the cache stop counting the chunk index of source s, whose file
+// a reader or a write found gone though the source held blocks of it:
+// evicted meanwhile, or removed from outside, alone or with the source's
+// folder (see lostFolder). Its blocks are fetched again, and the state no
+// longer claims it (see unclaim). A file made again meanwhile holds what
+// was written since, and stays.
+func (c *Cache) lose(s *Source, index int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.sources[s.id] != s {
+		return
+	}
+	if _, err := os.Stat(s.chunkPath(index)); !errors.Is(err, fs.ErrNotExist) || c.lostFolder(s) {
+		return
+	}
+	key := chunkKey{s.id, index}
+	if use := c.chunks[key]; use != nil {
+		delete(c.chunks, key)
+		c.used -= use.size
+		c.unclaim(s, index)
+	}
+	s.forget(index)
+}
+
+// lostFolder reports whether the folder of source s is gone, removed from
+// outside, as by someone freeing disk space, and then has the cache stop
+// counting the chunks it held, which went with it, as the state did: their
+// blocks are fetched again, into a folder made again (see Source.write).
+// The removal is told once. The cache's lock is held, and s is the source
+// of its identifier.
+func (c *Cache) lostFolder(s *Source) bool {
+	if _, err := os.Stat(s.dir); !errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+	var lost int64
+	for key, use := range c.chunks {
+		if key.source == s.id {
+			delete(c.chunks, key)
+			c.used -= use.size
+			lost += use.size
+		}
+	}
+	// A save under way claims none of them, and a block being written is
+	// written again (see save and Source.store).
+	s.evictions.Add(1)
+	s.saveMu.Lock()
+	s.saved, s.saveFailures = nil, 0
+	s.saveMu.Unlock()
+	s.mu.Lock()
+	s.present, s.pending, s.unread = nil, nil, nil
+	s.mu.Unlock()
+	if lost > 0 {
+		c.logger.Warn("A cached source's folder was removed: its blocks are fetched again", "source", s.id, "bytes", lost)
+	}
+	return true
+}
+
 // Source is a remote file read through the cache.
 type Source struct {
 	cache  *Cache
@@ -683,11 +740,13 @@ type Source struct {
 	// kept as the cache closes, which then waits for it.
 	writing sync.RWMutex
 	// saveMu orders the writes of the source's state file, saved is what
-	// it holds, nil while it holds nothing, and evictions counts the
-	// chunks evicted (see persist.go).
-	saveMu    sync.Mutex
-	saved     *keptState
-	evictions atomic.Int64
+	// it holds, nil while it holds nothing, saveFailures counts the saves
+	// that failed in a row, and evictions the chunks evicted, or found
+	// gone (see persist.go and lose).
+	saveMu       sync.Mutex
+	saved        *keptState
+	saveFailures int
+	evictions    atomic.Int64
 
 	mu sync.Mutex
 	// origin is where the addon said the file is, and pinned where the
@@ -975,8 +1034,8 @@ func (s *Source) chunkPath(index int64) string {
 	return filepath.Join(s.dir, strconv.FormatInt(index, 10))
 }
 
-// forget marks the blocks of an evicted chunk as no longer cached, those
-// kept from a previous run included.
+// forget marks the blocks of an evicted or lost chunk as no longer cached,
+// those kept from a previous run included.
 func (s *Source) forget(index int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -985,6 +1044,26 @@ func (s *Source) forget(index int64) {
 		clearBit(s.pending, block)
 		delete(s.unread, block)
 	}
+}
+
+// holds reports whether the source holds blocks of chunk index, those
+// kept from a previous run included, and holdsAny whether it holds any.
+func (s *Source) holds(index int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for block := index * s.cache.chunkBlocks; block < (index+1)*s.cache.chunkBlocks; block++ {
+		if hasBit(s.present, block) || hasBit(s.pending, block) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Source) holdsAny() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	held := func(word uint64) bool { return word != 0 }
+	return slices.ContainsFunc(s.present, held) || slices.ContainsFunc(s.pending, held)
 }
 
 // Size returns the size of the source, reaching it if needed. A source that
@@ -1160,22 +1239,38 @@ func (s *Source) sizeUnknown() bool {
 // counts the block (see stored) under its lock, taken before the readers
 // are woken: whatever a reader of the block does next, as closing the
 // cache, which keeps the chunks it counts (see keep), finds it counted.
+// A chunk of the source evicted or found gone while the block is written
+// may be the block's, the file written into gone with it: the block is
+// written again, into the file made again, as it is once into a chunk
+// whose file was found gone (see write).
 func (s *Source) store(block int64, data []byte, last bool) error {
 	index := block / s.cache.chunkBlocks
-	s.writing.RLock()
-	if s.ctx.Err() != nil {
+	for lost := false; ; {
+		evictions := s.evictions.Load()
+		s.writing.RLock()
+		if s.ctx.Err() != nil {
+			s.writing.RUnlock()
+			return errDiscarded
+		}
+		if hold := s.cache.storing; hold != nil {
+			hold()
+		}
+		err := s.write(index, block, data)
 		s.writing.RUnlock()
-		return errDiscarded
+		if errors.Is(err, errChunkGone) && !lost {
+			s.cache.lose(s, index)
+			lost = true
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		s.cache.mu.Lock()
+		if s.evictions.Load() == evictions {
+			break
+		}
+		s.cache.mu.Unlock()
 	}
-	if hold := s.cache.storing; hold != nil {
-		hold()
-	}
-	err := s.write(index, block, data)
-	s.writing.RUnlock()
-	if err != nil {
-		return err
-	}
-	s.cache.mu.Lock()
 	defer s.cache.mu.Unlock()
 	s.mu.Lock()
 	added := 0
@@ -1216,12 +1311,32 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 	return nil
 }
 
-// write writes a block into its chunk's file.
+// errChunkGone reports a block to write into a chunk whose file is gone,
+// or into a folder gone, though the source holds blocks there (see
+// Source.write).
+var errChunkGone = errors.New("a cached chunk's file is gone")
+
+// write writes a block into its chunk's file, made, with the source's
+// folder, when the source holds no block of the chunk, nor of the folder
+// when it is gone. A file or a folder the source holds blocks in is never
+// made again: gone, evicted meanwhile or removed from outside, the blocks
+// went with it, and made again it would read as holding them, so
+// errChunkGone has the cache stop counting them first (see Cache.lose).
 func (s *Source) write(index, block int64, data []byte) error {
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return err
+	flag := os.O_RDWR
+	if !s.holds(index) {
+		flag |= os.O_CREATE
 	}
-	file, err := os.OpenFile(s.chunkPath(index), os.O_RDWR|os.O_CREATE, 0o600)
+	path := s.chunkPath(index)
+	file, err := os.OpenFile(path, flag, 0o600)
+	if errors.Is(err, fs.ErrNotExist) {
+		if flag&os.O_CREATE == 0 || s.holdsAny() {
+			return errChunkGone
+		}
+		if err = os.MkdirAll(s.dir, 0o700); err == nil {
+			file, err = os.OpenFile(path, flag, 0o600)
+		}
+	}
 	if err != nil {
 		return err
 	}
