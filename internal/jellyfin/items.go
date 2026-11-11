@@ -541,7 +541,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.EnableMediaSourceDisplay = new(true)
 		dto.PlayAccess = "Full"
 		dto.RemoteTrailers = new(trailers(item.Trailers))
-		dto.GenreItems = new(genreItems(item.Genres))
+		dto.GenreItems = new(h.namedPairs(genresOf(item.Kind), item.Genres))
 		dto.LocalTrailerCount = new(0)
 		dto.SpecialFeatureCount = new(0)
 		dto.DisplayPreferencesId = item.ID.String()
@@ -701,14 +701,6 @@ func trailers(list []library.Trailer) []MediaUrl {
 	result := make([]MediaUrl, 0, len(list))
 	for _, trailer := range list {
 		result = append(result, MediaUrl{Url: trailer.URL, Name: trailer.Name})
-	}
-	return result
-}
-
-func genreItems(genres []string) []NameGuidPair {
-	result := make([]NameGuidPair, 0, len(genres))
-	for _, genre := range genres {
-		result = append(result, NameGuidPair{Name: genre, Id: nameID("genre", genre)})
 	}
 	return result
 }

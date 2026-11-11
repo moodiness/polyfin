@@ -231,12 +231,16 @@ func (h *Handler) musicListing(w http.ResponseWriter, r *http.Request, user acco
 	return true
 }
 
-// writeMusic answers a page of music, kept by the request's type, name and
-// state filters, and sorted as it asks, else by sorting.
+// writeMusic answers a page of music, kept by the request's type, name,
+// genre and state filters, and sorted as it asks, else by sorting. A genre
+// of music's page lists its albums by genreIds.
 func (h *Handler) writeMusic(w http.ResponseWriter, r *http.Request, user accounts.User, items []library.Item, start, limit int, sorting []string) {
 	keep := itemTypeFilter(r)
 	inRange := letterRange(r)
 	items = slices.DeleteFunc(items, func(item library.Item) bool { return !keep(item) || !inRange(sortName(item)) })
+	if genres, _ := nameFilterOf(r); len(genres.names) > 0 || len(genres.genreIDs) > 0 {
+		items = slices.DeleteFunc(items, func(item library.Item) bool { return !slices.ContainsFunc(item.Genres, genres.matches) })
+	}
 	state, err := h.userState(r.Context(), user, items)
 	if err != nil {
 		h.internalError(w, r, err)

@@ -80,8 +80,8 @@ type namedItemDto struct {
 }
 
 // namedPage is the page being answered: the item's Jellyfin type, its name
-// and identifier, how it sorts, and which genre options are its. refused
-// is set for a year before 1, which does not exist.
+// and identifier, how it sorts, and which genre options are its, nil for
+// none. refused is set for a year before 1, which does not exist.
 type namedPage struct {
 	itemType, name, id, sortName string
 	matches                      func(option string) bool
@@ -89,26 +89,23 @@ type namedPage struct {
 }
 
 func (h *Handler) genrePage(w http.ResponseWriter, r *http.Request) {
-	h.namedPageByName(w, r, "Genre", "genreName", "genre")
+	h.namedPageByName(w, r, genreNamed, "genreName")
 }
 
 func (h *Handler) studioPage(w http.ResponseWriter, r *http.Request) {
-	h.namedPageByName(w, r, "Studio", "name", "studio")
+	h.namedPageByName(w, r, studioNamed, "name")
 }
 
 // namedPageByName answers the page of a genre or studio, whose name is the
 // route's parameter param and whose identifier is that of its kind, as in
 // the titles' GenreItems and in /Genres.
-func (h *Handler) namedPageByName(w http.ResponseWriter, r *http.Request, itemType, param, kind string) {
+func (h *Handler) namedPageByName(w http.ResponseWriter, r *http.Request, kind namedKind, param string) {
 	b := bindErrors{}
 	name := r.PathValue(param)
 	if strings.TrimSpace(name) == "" {
 		b.add(param, fmt.Sprintf("The %s field is required.", param))
 	}
-	h.writeNamedPage(w, r, b, namedPage{
-		itemType: itemType, name: name, id: nameID(kind, name), sortName: strings.ToLower(name),
-		matches: func(option string) bool { return strings.EqualFold(strings.TrimSpace(option), strings.TrimSpace(name)) },
-	})
+	h.writeNamedPage(w, r, b, kind.page(name))
 }
 
 func (h *Handler) yearPage(w http.ResponseWriter, r *http.Request) {
@@ -144,11 +141,17 @@ func (h *Handler) writeNamedPage(w http.ResponseWriter, r *http.Request, b bindE
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	dto := h.namedItem(page)
-	user, ok := h.targetUser(w, r, id, set, func(w http.ResponseWriter) { writeJSON(w, http.StatusOK, dto) })
+	user, ok := h.targetUser(w, r, id, set, func(w http.ResponseWriter) { writeJSON(w, http.StatusOK, h.namedItem(page)) })
 	if !ok {
 		return
 	}
+	h.writeNamedItem(w, r, user, page)
+}
+
+// writeNamedItem answers a page's item for user, with the counts of its
+// titles.
+func (h *Handler) writeNamedItem(w http.ResponseWriter, r *http.Request, user accounts.User, page namedPage) {
+	dto := h.namedItem(page)
 	// Apps only show the sections of a page whose count is not zero. A
 	// catalog's size is unknown until it is read through, so the counts are
 	// those of a first page of titles, plus one when more follow: enough to
@@ -158,6 +161,9 @@ func (h *Handler) writeNamedPage(w http.ResponseWriter, r *http.Request, b bindE
 		kind  library.Kind
 		total *int
 	}{{library.KindMovie, &dto.MovieCount}, {library.KindSeries, &dto.SeriesCount}} {
+		if page.matches == nil {
+			break
+		}
 		titles, err := h.Library.Narrowed(r.Context(), user, page.matches, []library.Kind{count.kind}, 0, defaultPageSize)
 		if err != nil {
 			h.browseError(w, r, err)
@@ -246,16 +252,17 @@ func (f nameFilter) requested() bool {
 	return len(f.names) > 0 || len(f.years) > 0 || len(f.genreIDs) > 0 || len(f.studioIDs) > 0
 }
 
-// matches reports whether a catalog's genre option is one the listing asks
-// for. A catalog accepts a single option, so a listing that asks for
-// several, of one kind or not, gets the titles of the first one a catalog
-// offers.
+// matches reports whether a catalog's genre option, or a genre of music,
+// is one the listing asks for. A catalog accepts a single option, so a
+// listing that asks for several, of one kind or not, gets the titles of the
+// first one a catalog offers.
 func (f nameFilter) matches(option string) bool {
 	option = strings.TrimSpace(option)
 	return slices.ContainsFunc(f.names, func(name string) bool { return strings.EqualFold(name, option) }) ||
 		slices.Contains(f.years, option) ||
-		len(f.genreIDs) > 0 && slices.Contains(f.genreIDs, nameID("genre", option)) ||
-		len(f.studioIDs) > 0 && slices.Contains(f.studioIDs, nameID("studio", option))
+		len(f.genreIDs) > 0 && (slices.Contains(f.genreIDs, nameID(genreNamed.kind, option)) ||
+			slices.Contains(f.genreIDs, nameID(musicGenreNamed.kind, option))) ||
+		len(f.studioIDs) > 0 && slices.Contains(f.studioIDs, nameID(studioNamed.kind, option))
 }
 
 // narrowedListing lists, across the user's libraries, the titles of a genre,

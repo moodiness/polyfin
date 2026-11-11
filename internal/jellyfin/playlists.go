@@ -1381,7 +1381,7 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 			dto.PlayAccess = "Full"
 			dto.RemoteTrailers = &[]MediaUrl{}
 			dto.People = &[]BaseItemPerson{}
-			dto.GenreItems = new(genreItems(genres))
+			dto.GenreItems = new(h.namedPairs(genreNamed, genres))
 			dto.LocalTrailerCount = new(0)
 			dto.SpecialFeatureCount = new(0)
 			dto.DisplayPreferencesId = p.ID.String()
