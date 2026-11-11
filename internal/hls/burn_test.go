@@ -74,7 +74,8 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 
 // A PGS file and a VobSub pair beside the video, read as a second input,
 // are burned in as an image track is; a run started while a subtitle is
-// shown shows it.
+// shown shows it. Of a pair of two tracks, each given a sentinel (see
+// vobSubSentinel), the first is burned in.
 func TestImageSubtitleFilesAreBurnedIn(t *testing.T) {
 	t.Parallel()
 	ffmpeg, ffprobe := tools(t)
@@ -83,7 +84,9 @@ func TestImageSubtitleFilesAreBurnedIn(t *testing.T) {
 	rectangle := testsubtitles.Rectangle{CanvasWidth: 320, CanvasHeight: 180, X: 60, Y: 120, Width: 200, Height: 40,
 		Shown: [][2]time.Duration{{2 * time.Second, 5 * time.Second}, {15 * time.Second, 19 * time.Second}}}
 	idx, sub := rectangle.VobSub()
-	for name, data := range map[string][]byte{"rectangle.sup": rectangle.PGS(), "rectangle.idx": []byte(idx), "rectangle.sub": sub} {
+	twoIdx, twoSub := twoTrackVobSub()
+	for name, data := range map[string][]byte{"rectangle.sup": rectangle.PGS(), "rectangle.idx": []byte(idx), "rectangle.sub": sub,
+		"two.idx": []byte(twoIdx), "two.sub": twoSub} {
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -98,7 +101,7 @@ func TestImageSubtitleFilesAreBurnedIn(t *testing.T) {
 	if first == plan.Len() || plan.Start(first) > 15500*time.Millisecond {
 		t.Fatal("no segment starts between 15 and 15.5 s")
 	}
-	for _, file := range []string{"rectangle.sup", "rectangle.idx"} {
+	for _, file := range []string{"rectangle.sup", "rectangle.idx", "two.idx"} {
 		t.Run(file, func(t *testing.T) {
 			t.Parallel()
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))

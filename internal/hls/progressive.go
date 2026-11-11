@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -94,6 +96,17 @@ func (m *Manager) Progressive(ctx context.Context, key Key, open Opener, start t
 			case <-ctx.Done():
 			}
 		}()
+	}
+	if remux.Encode != nil && remux.Encode.BurnFile != "" {
+		// The stream is one run: its copy of the subtitle file burned in
+		// is its own (see writeBurnCopy), removed once it ends.
+		if dir, err := os.MkdirTemp(m.dir, "burn-"); err != nil {
+			m.logger.Info("A subtitle file is burned in as it is, without a sentinel: FFmpeg 9.0 may stop for good at its end", "file", remux.Encode.BurnFile, "error", err)
+		} else {
+			defer os.RemoveAll(dir)
+			file, _ := m.sentinelCopy(ctx, &remux, filepath.Join(dir, "burn"))
+			remux = *burning(&remux, file)
+		}
 	}
 	cmd := exec.CommandContext(ctx, m.ffmpegPath(), remux.progressiveArgs(start)...)
 	cmd.WaitDelay = 5 * time.Second
