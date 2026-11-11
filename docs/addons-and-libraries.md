@@ -399,6 +399,12 @@ A genre, studio or year page lists the titles of the catalogs that offer that na
 - Titles from catalogs that cannot be filtered by that name are not on the page.
 - A studio a title has from TMDB (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)) lists only what the catalogs offer under that name, often nothing.
 
+A genre a title's page links to opens its page in jellyfin-web, which asks for the genre as an item first:
+
+- Polyfin finds the genre by the names it gave to the titles and genre lists it answered lately, then by the genre options of your catalogs.
+- After a restart, a genre page opened again finds its name in your catalogs. A genre no catalog offers opens again once a page that names it is opened.
+- A genre an artist, album or song links to is a genre of music, as in Jellyfin. Its page lists the music of that genre: the albums and songs of local music folders, whose genres come from their tags. Music addons give genres only on an artist's page.
+
 ## Similar titles
 
 A movie's or series' similar titles come from the first page of the catalogs of your addons that offer one of its genres in their genre filter.
