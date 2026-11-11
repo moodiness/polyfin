@@ -1,14 +1,15 @@
 #!/bin/sh
-# The aio image image-check built, polyfin-local:aio, run as compose.aio.yaml
-# runs it: read-only, without capabilities, with a named volume and no
-# PostgreSQL of its own. It becomes healthy; docker stop stops Polyfin, then
-# its database cleanly, which then starts without recovery; after docker
-# kill, the database recovers and Polyfin becomes healthy again.
+# The image image-check built, polyfin-local:check, run as
+# compose.embedded.yaml runs it: with POLYFIN_DATABASE=embedded, read-only,
+# without capabilities, with a named volume and no PostgreSQL beside it. It
+# becomes healthy; docker stop stops Polyfin, then its database cleanly,
+# which then starts without recovery; after docker kill, the database
+# recovers and Polyfin becomes healthy again.
 set -eu
 
-name=polyfin-aio-health
-volume=polyfin-aio-health
-image=${1:-polyfin-local:aio}
+name=polyfin-embedded-health
+volume=polyfin-embedded-health
+image=${1:-polyfin-local:check}
 
 cleanup() {
 	docker rm -f "$name" >/dev/null 2>&1 || true
@@ -18,7 +19,7 @@ trap cleanup EXIT
 cleanup
 
 fail() {
-	echo "image-health-aio: $*"
+	echo "image-health-embedded: $*"
 	docker logs "$name" 2>&1 | tail -n 60 || true
 	docker exec "$name" cat /data/log/postgresql.log 2>/dev/null | tail -n 30 || true
 	exit 1
@@ -34,7 +35,7 @@ healthy() {
 		tries=$((tries + 1))
 		status="$(docker inspect --format '{{if .State.Running}}{{.State.Health.Status}}{{else}}exited{{end}}' "$name")"
 	done
-	echo "image-health-aio: $status after $((tries * 2)) seconds ($1)"
+	echo "image-health-embedded: $status after $((tries * 2)) seconds ($1)"
 	[ "$status" = healthy ] || fail "not healthy ($1)"
 }
 
@@ -44,8 +45,8 @@ postgresql_log() {
 }
 
 docker volume create "$volume" >/dev/null
-docker run -d --name "$name" --read-only --cap-drop ALL --security-opt no-new-privileges \
-	--stop-timeout 60 -v "$volume:/data" "$image" >/dev/null
+docker run -d --name "$name" -e POLYFIN_DATABASE=embedded \
+	--read-only --cap-drop ALL --security-opt no-new-privileges --stop-timeout 60 -v "$volume:/data" "$image" >/dev/null
 healthy "first start"
 
 docker stop "$name" >/dev/null
@@ -65,4 +66,4 @@ docker start "$name" >/dev/null
 healthy "start after docker kill"
 recovered="$(postgresql_log | grep -c "redo starts\|database system was interrupted" || true)"
 [ "$recovered" -gt 0 ] || fail "the start after docker kill did not recover the database"
-echo "image-health-aio: healthy, stopped cleanly, recovered after a kill"
+echo "image-health-embedded: healthy, stopped cleanly, recovered after a kill"

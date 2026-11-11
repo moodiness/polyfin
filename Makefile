@@ -13,7 +13,7 @@ IMAGE_DATABASE_URL ?= postgresql://polyfin:polyfin@host.docker.internal:5432/pol
 FFMPEG_ARCHIVES ?=
 FFMPEG_CONTEXTS = $(if $(FFMPEG_ARCHIVES),--build-context ffmpeg-amd64-archive=$(FFMPEG_ARCHIVES)/amd64 --build-context ffmpeg-arm64-archive=$(FFMPEG_ARCHIVES)/arm64)
 
-.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health image-health-aio
+.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health image-health-embedded
 
 web:
 	$(NPM) --prefix web ci --no-audit --no-fund
@@ -88,7 +88,7 @@ compose-check:
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml config --quiet
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.build.yaml config --quiet
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.host.yaml config --quiet
-	docker compose --env-file /dev/null -f compose.aio.yaml config --quiet
+	docker compose --env-file /dev/null -f compose.embedded.yaml config --quiet
 
 # Local tag only: this target never pushes. It also checks that the
 # jellyfin-web source releases attach still matches its checksum.
@@ -98,9 +98,7 @@ image-check:
 	if [ "$$printed" != "$(VERSION)" ]; then \
 		echo "image reports version '$$printed', expected '$(VERSION)'"; exit 1; \
 	fi
-	docker buildx build --load --target aio --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --tag polyfin-local:aio .
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --output type=cacheonly .
-	docker buildx build --platform linux/amd64,linux/arm64 --target aio --build-arg VERSION=$(VERSION) $(FFMPEG_CONTEXTS) --output type=cacheonly .
 	docker buildx build --target jellyfin-web-source --output type=cacheonly .
 
 # The image image-check built becomes healthy within its start period,
@@ -118,7 +116,7 @@ image-health:
 	docker rm -f polyfin-health >/dev/null; \
 	[ "$$status" = healthy ]
 
-# The aio image image-check built, with its own database: healthy, a clean
-# stop, and a recovery after a kill.
-image-health-aio:
-	sh scripts/image-health-aio.sh polyfin-local:aio
+# The same image with its own database, POLYFIN_DATABASE=embedded: healthy,
+# a clean stop, and a recovery after a kill.
+image-health-embedded:
+	sh scripts/image-health-embedded.sh polyfin-local:check

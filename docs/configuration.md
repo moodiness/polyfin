@@ -15,7 +15,7 @@ The database and the secret key:
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `POLYFIN_DATABASE_URL` | (required, unless `POLYFIN_DATABASE` is `embedded`) | PostgreSQL URL, such as `postgresql://polyfin:password@postgres:5432/polyfin`. Its `pool_max_conns` bounds the pool, 10 connections by default (see [A light PostgreSQL](installation.md#a-light-postgresql)). |
-| `POLYFIN_DATABASE` | (unset) | `embedded`: Polyfin runs its own PostgreSQL 18 in the folder `postgresql` of `POLYFIN_DATA_DIR`, with the server programs it finds in `PATH`, starting it before it serves and stopping it after. The `aio` image sets it (see [One container](installation.md#one-container)). Setting `POLYFIN_DATABASE_URL` too is an error. |
+| `POLYFIN_DATABASE` | (unset) | `embedded`: Polyfin runs its own PostgreSQL 18 in the folder `postgresql` of `POLYFIN_DATA_DIR`, with the server programs it finds in `PATH`, starting it before it serves and stopping it after. The image has these programs; set the variable on its container to run them (see [One container](installation.md#one-container)). Setting `POLYFIN_DATABASE_URL` too is an error. |
 | `POLYFIN_SECRET_KEY` | (unset) | Key that encrypts the stored secrets: API keys, client secrets, tokens and passwords. See [Stored keys and tokens](#stored-keys-and-tokens). |
 
 - **The database connection:** besides its pool, Polyfin keeps one connection that listens for changes to addons and libraries. It then answers them from memory.

@@ -328,7 +328,7 @@ The database is a PostgreSQL 18 database like the Docker image's. A backup made 
    - **to the desktop:** write Docker's `POLYFIN_SECRET_KEY` in a file and quit Polyfin Desktop. Run `polyfin-desktop -import-secret-key <file>`, which puts the key in the key store in place of the desktop's own, then start the app again. On macOS the program is `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`.
 3. On the destination, choose **Restore** in the **Database backups** panel of **System › Schedule**. Before restoring, the admin app counts the keys and tokens that the destination's key cannot read, and asks before going ahead.
 
-The `aio` image, which runs its own database in one container (see [One container](installation.md#one-container)), moves the same way. Its setup page restores the backup at its first start (see [Restoring from the setup page](backups.md#restoring-from-the-setup-page)). Copying the `postgresql` folder is not a way to move: a backup is.
+The image with `POLYFIN_DATABASE=embedded`, which runs its own database in one container (see [One container](installation.md#one-container)), moves the same way. Its setup page restores the backup at its first start (see [Restoring from the setup page](backups.md#restoring-from-the-setup-page)). Copying the `postgresql` folder is not a way to move: a backup is.
 
 Paths do not move with the backup. Local folders, the recordings folder and the backups folder still name folders of the source. Change them on the destination in **Content › Sources**, **Settings › Recordings** and **Settings › Backups**.
 
