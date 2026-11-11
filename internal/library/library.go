@@ -526,6 +526,9 @@ type view struct {
 	hidden HiddenTitles
 	// query is the request's rating filter (see ratingfilter.go).
 	query ratingQuery
+	// members is set for a view judging the titles of a container, among
+	// which collections are not judged in turn (see containers.go).
+	members bool
 	// withheld are the server's enabled addons the user does not use (see
 	// addons.UsedBy), in order: the view holds nothing of theirs, and the
 	// titles only they know are out of the user's reach (see withholds).
@@ -1299,6 +1302,9 @@ func (s *Service) childrenIn(ctx context.Context, v view, user accounts.User, pa
 		return s.libraryChildren(ctx, v, l, start, count, genre, first)
 	}
 	if l, ok := v.smartList(parent); ok {
+		if err := s.shownSmartList(ctx, v, l); err != nil {
+			return Page{}, err
+		}
 		return s.smartChildren(ctx, v, l, start, count)
 	}
 	if parent == ReplayViewID {
@@ -1719,6 +1725,9 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	}
 	meta, err := s.meta(ctx, addon, "collection", r.Meta.ID)
 	if err != nil {
+		return Page{}, err
+	}
+	if err := s.shownCollection(ctx, v, addon, r); err != nil {
 		return Page{}, err
 	}
 	// A collection lists at most the items of the library it belongs to.
@@ -2427,6 +2436,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		return item, nil
 	}
 	if l, ok := v.smartList(id); ok {
+		if err := s.shownSmartList(ctx, v, l); err != nil {
+			return Item{}, err
+		}
 		items := []Item{l.item}
 		if l.item.Kind == KindLibrary {
 			s.withSmartLibraryImage(ctx, v, l, &items[0])
@@ -2475,8 +2487,12 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		if r.Meta == nil || r.Addon == nil {
 			return Item{}, ErrNotFound
 		}
-		if _, ok := v.addon(*r.Addon); !ok {
+		addon, ok := v.addon(*r.Addon)
+		if !ok {
 			return Item{}, ErrNotFound
+		}
+		if err := s.shownCollection(ctx, v, addon, r); err != nil {
+			return Item{}, err
 		}
 		item := Item{ID: id, Kind: KindCollection, ParentID: deref(r.Parent)}
 		s.fromMeta(&item, *r.Meta, v.country)

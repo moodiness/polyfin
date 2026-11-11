@@ -53,8 +53,9 @@ import (
 // The image is the same for everyone who sees the item. A user under
 // parental control or blocking genres is not shown it, as for a library's
 // automatic image, since a title it shows may be hidden from them; nor is
-// a user who hid one of the titles it shows. An image uploaded for the
-// item wins over it (see overridden, Artwork).
+// a listing narrowed by its titles' ratings (see ratingfilter.go), nor a
+// user who hid one of the titles it shows. An image uploaded for the item
+// wins over it (see overridden, Artwork).
 
 const (
 	// generatedReach is how many of an item's first titles are compared
@@ -352,9 +353,10 @@ func (s *Service) rechoose(ctx context.Context, entry generatedEntry, name strin
 	return generatedEntry{choice: choice, found: found, checked: now, unknown: !found && !known, kept: kept}, true
 }
 
-// generatesFor reports whether collections get generated images in v.
+// generatesFor reports whether collections get generated images in v: not
+// in a view that leaves titles out by their rating or genres.
 func (s *Service) generatesFor(v view) bool {
-	return s.settings().GenerateImages && !v.restricted()
+	return s.settings().GenerateImages && !v.narrows()
 }
 
 // shows reports whether the user of v is shown an image of choice: not
