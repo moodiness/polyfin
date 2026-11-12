@@ -1,14 +1,18 @@
 package jellyfin
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -48,6 +52,86 @@ func TestGenreLinksOpenTheirPage(t *testing.T) {
 		t.Errorf("a genre of the catalogs: %+v", genre)
 	}
 	// A name no title or catalog gave is no item.
+	if status, body := s.call(http.MethodGet, "/Users/"+user+"/Items/"+nameID("genre", "Western"), app("web", token), nil); status != http.StatusNotFound {
+		t.Errorf("an unknown genre: %d %s", status, body)
+	}
+}
+
+// shelfAddon serves a movie and a series catalog without genre filter, of
+// titles whose genres differ in letter case, most spelled "Mystery".
+func shelfAddon(t *testing.T) string {
+	t.Helper()
+	title := func(id, metaType, name string, genres ...string) stremio.Meta {
+		return stremio.Meta{ID: id, Type: metaType, Name: name, Genres: genres, ReleaseInfo: "2020", Released: "2020-04-10T00:00:00.000Z",
+			Extras: &stremio.Extras{Certification: "PG"}}
+	}
+	listed := map[string][]stremio.Meta{
+		"shelf": {title("tt3001", "movie", "Ash Road", "Mystery"), title("tt3002", "movie", "Cold Night", "mystery", "Crime"),
+			title("tt3003", "movie", "Dawn Light", "Comedy")},
+		"shows": {title("tt4001", "series", "Harbor Tales", "Mystery")},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.EscapedPath(), ".json")
+		switch {
+		case path == "/manifest":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "shelf", Name: "Shelf", Version: "1", Types: []string{"movie", "series"},
+				Resources: []stremio.Resource{{Name: "catalog"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "shelf", Name: "Shelf"}, {Type: "series", ID: "shows", Name: "Shows"}}})
+		case strings.HasPrefix(path, "/catalog/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": listed[strings.Split(strings.TrimPrefix(path, "/catalog/"), "/")[1]]})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// forget forgets the names given identifiers and those read of the
+// genres and studios kept, as a restart does.
+func (n *namedItems) forget() {
+	n.mu.Lock()
+	n.byID, n.ring, n.next = nil, nil, 0
+	n.mu.Unlock()
+	for _, kept := range []*keptNames{&n.genres, &n.studios} {
+		kept.mu.Lock()
+		kept.byID, kept.read = nil, time.Time{}
+		kept.mu.Unlock()
+	}
+}
+
+// A genre no catalog filters by lists the titles kept of it, whatever the
+// letter case of their genres, and opens by the identifier a title links
+// to, also after a restart.
+func TestKeptGenresOpenTheirPageAfterARestart(t *testing.T) {
+	t.Parallel()
+	s, token, user, views := pagesServerWith(t, shelfAddon(t), "")
+	var shows QueryResult
+	s.get(t, "/Items?parentId="+views["Shows"], token, &shows)
+	var movies QueryResult
+	s.get(t, "/Items?parentId="+views["Shelf"], token, &movies)
+	var movie BaseItemDto
+	s.get(t, "/Users/"+user+"/Items/"+movies.Items[0].Id, token, &movie)
+	if movie.Name != "Ash Road" || movie.GenreItems == nil || len(*movie.GenreItems) != 1 || (*movie.GenreItems)[0].Name != "Mystery" {
+		t.Fatalf("genres of %s: %+v", movie.Name, movie.GenreItems)
+	}
+	linked := (*movie.GenreItems)[0].Id
+	opens := func(when string) {
+		t.Helper()
+		genre := namedPageOf(t, s, token, "/Users/"+user+"/Items/"+linked)
+		if genre.Type != "Genre" || genre.Name != "Mystery" || genre.Id != linked || genre.MovieCount != 2 || genre.SeriesCount != 1 {
+			t.Errorf("%s, the genre's page: %+v", when, genre)
+		}
+		for _, filter := range []string{"genreIds=" + linked, "genres=MYSTERY"} {
+			if names, total := listed(t, s, token, titlesOf+filter); !slices.Equal(names, []string{"Ash Road", "Cold Night", "Harbor Tales"}) || total != 3 {
+				t.Errorf("%s, the titles of %s: %v of %d", when, filter, names, total)
+			}
+		}
+	}
+	opens("linked")
+	s.handler.names.forget()
+	opens("after a restart")
+	// A genre no title has is still no item.
 	if status, body := s.call(http.MethodGet, "/Users/"+user+"/Items/"+nameID("genre", "Western"), app("web", token), nil); status != http.StatusNotFound {
 		t.Errorf("an unknown genre: %d %s", status, body)
 	}
