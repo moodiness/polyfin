@@ -762,6 +762,11 @@ type Source struct {
 	renew       Renewer
 	size        int64
 	contentType string
+	// cut is where the file's bytes end, short of the size its host
+	// tells, once its answers proved it (see cutShort); 0 while none
+	// did. Reads end there, and nothing past it is fetched; size stays
+	// the one told, which later answers are checked against.
+	cut int64
 	// status is the status of the first answer read as the source's
 	// content (200 or 206), 0 before; learned is closed once it is set.
 	status  int
@@ -1066,8 +1071,9 @@ func (s *Source) holdsAny() bool {
 	return slices.ContainsFunc(s.present, held) || slices.ContainsFunc(s.pending, held)
 }
 
-// Size returns the size of the source, reaching it if needed. A source that
-// does not announce it is read to its end.
+// Size returns the size of the source, reaching it if needed: where its
+// host's answers stop, when they stop short of the size it tells (see
+// cutShort). A source that does not announce it is read to its end.
 func (s *Source) Size(ctx context.Context) (int64, error) {
 	r := s.reader(false)
 	defer r.Close()
@@ -1085,6 +1091,23 @@ func (s *Source) knownSize() (int64, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.size, s.size >= 0
+}
+
+// extent is how far the source's bytes go, when known: its size, or
+// where its host's answers stop short of it (see cutShort). Readers read
+// up to there.
+func (s *Source) extent() (int64, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.extentLocked(), s.size >= 0
+}
+
+// extentLocked is extent, the source's lock held: -1 when unknown.
+func (s *Source) extentLocked() int64 {
+	if s.cut > 0 && s.cut < s.size {
+		return s.cut
+	}
+	return s.size
 }
 
 // ReadAt reads len(p) bytes at off, waiting for the blocks not cached yet
@@ -1206,9 +1229,11 @@ func (s *Source) has(block int64) bool {
 	return word < int64(len(s.present)) && s.present[word]&(1<<(block%64)) != 0
 }
 
-// pastEnd reports whether block starts beyond the end of the source.
+// pastEnd reports whether block starts beyond the end of the source, or
+// beyond where its host's answers stop.
 func (s *Source) pastEnd(block int64) bool {
-	return s.size >= 0 && block*blockSize >= s.size
+	end := s.extentLocked()
+	return end >= 0 && block*blockSize >= end
 }
 
 // missing reports whether block is to be fetched: in the file, not cached.
@@ -1221,8 +1246,8 @@ func (s *Source) missing(block int64) bool {
 func (s *Source) blockLength(block int64) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.size >= 0 {
-		return int(min(blockSize, s.size-block*blockSize))
+	if end := s.extentLocked(); end >= 0 {
+		return int(min(blockSize, end-block*blockSize))
 	}
 	return blockSize
 }
@@ -1362,6 +1387,35 @@ func (s *Source) end(size int64) {
 	s.size = size
 	s.wakePastEnd()
 	s.signal()
+}
+
+// cutShort records that the source's file ends where its host's answers
+// stop, short of the size it tells, after data, the bytes of block before
+// there: the same answer came at each try, the last ones asked from there
+// (see work). Readers waiting past it get io.EOF, and data is stored as
+// the last bytes of the file. The end is kept in memory with the source,
+// which keeps the size told: an answer of another size is another file
+// (see learn), and a restart, or the source discarded or evicted, forgets
+// it. It outlasts the cooldown: a play stops where its version ends
+// anyway (see hls.Manager.End), and asking the host again would hold
+// each read of the end for the tries.
+func (s *Source) cutShort(block int64, data []byte) error {
+	at := block*blockSize + int64(len(data))
+	s.mu.Lock()
+	if s.cut == 0 || at < s.cut {
+		s.cut = at
+		s.cache.logger.Info("A source's host sends less than it tells: the file is read up to where it stops", "source", s.id,
+			"at", at, "size", s.size)
+	}
+	data = data[:max(0, min(int64(len(data)), s.cut-block*blockSize))]
+	stored := s.has(block)
+	s.wakePastEnd()
+	s.signal()
+	s.mu.Unlock()
+	if len(data) == 0 || stored {
+		return nil
+	}
+	return s.store(block, data, false)
 }
 
 // wakePastEnd answers the readers waiting for blocks past the end.

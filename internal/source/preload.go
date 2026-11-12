@@ -98,7 +98,7 @@ func (s *Source) missingBytes(span Span) int64 {
 	var missing int64
 	for block := span.Off / blockSize; block*blockSize < span.End; block++ {
 		if s.missing(block) {
-			missing += min(blockSize, s.size-block*blockSize)
+			missing += min(blockSize, s.extentLocked()-block*blockSize)
 		}
 	}
 	return missing
