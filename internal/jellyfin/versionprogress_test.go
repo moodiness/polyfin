@@ -303,11 +303,13 @@ func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
 // scriptedAddon lists, for every movie, as many streams named after it as
 // the next count sent on replies, holding each request until it comes, as
 // an addon that gathers other addons' streams answers with more of them
-// once they came into its cache.
+// once they came into its cache. askedAt are the times it was asked.
 type scriptedAddon struct {
 	url     string
 	asked   atomic.Int32
 	replies chan int
+	mu      sync.Mutex
+	askedAt []time.Time
 }
 
 func newScriptedAddon(t *testing.T, name string) *scriptedAddon {
@@ -322,6 +324,9 @@ func newScriptedAddon(t *testing.T, name string) *scriptedAddon {
 			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: strings.ToLower(name), Name: name, Version: "1",
 				Types: []string{"movie"}, IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "stream"}}})
 		case strings.HasPrefix(path, "/stream/movie/"):
+			a.mu.Lock()
+			a.askedAt = append(a.askedAt, time.Now())
+			a.mu.Unlock()
 			a.asked.Add(1)
 			var n int
 			select {
@@ -357,6 +362,13 @@ func newScriptedAddon(t *testing.T, name string) *scriptedAddon {
 	return a
 }
 
+// askedTime is when the addon was asked the n-th time, from 1.
+func (a *scriptedAddon) askedTime(n int) time.Time {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.askedAt[n-1]
+}
+
 // An addon that answers first with part of a title's streams is asked
 // again: the title stays pending meanwhile, its open page then lists the
 // streams that came later, and PlaybackInfo never waits for it.
@@ -370,17 +382,23 @@ func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
 	t.Cleanup(func() { h.settle(t) })
 
 	h.sources(t)
+	answered := time.Now()
 	gathering.replies <- 1
 	eventually(t, "the first answer", func() bool {
 		sources := h.sources(t)
 		return len(sources) == 1 && strings.HasPrefix(sources[0].Name, "Gathering ")
 	})
-	// The follow-up is scheduled: the title is still pending.
-	if got, asked := h.progress(t), gathering.asked.Load(); got != (VersionProgress{Pending: 1, Count: 1, Known: 1}) || asked != 1 {
-		t.Errorf("follow-up scheduled: %+v, addon asked %d times", got, asked)
+	// The follow-up is scheduled: the title is still pending. It runs a
+	// second after the answer, which the requests above may outlast on a
+	// busy machine: its delay is checked against the time it asked.
+	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 1, Known: 1}) {
+		t.Errorf("follow-up scheduled: %+v", got)
 	}
 	// It runs, held: PlaybackInfo answers at once with the version known.
 	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 2 })
+	if waited := gathering.askedTime(2).Sub(answered); waited < time.Second {
+		t.Errorf("the follow-up asked %v after the first answer, before its delay", waited)
+	}
 	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 1, Known: 1}) {
 		t.Errorf("follow-up running: %+v", got)
 	}
