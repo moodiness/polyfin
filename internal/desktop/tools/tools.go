@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/ulikunitz/xz"
 )
 
@@ -221,19 +222,20 @@ func (t Tools) Ensure(ctx context.Context, progress Progress) (Paths, error) {
 		return Paths{}, err
 	}
 	defer os.RemoveAll(building)
+	programs := []string{filepath.Join(building, filepath.FromSlash(t.Manifest.FFmpeg)),
+		filepath.Join(building, filepath.FromSlash(t.Manifest.FFprobe))}
 	for i, f := range t.Manifest.Files {
 		archive := filepath.Join(downloads, fmt.Sprintf("%d.%s", i, f.Format))
 		if err := t.downloadRetrying(ctx, f, archive, report); err != nil {
 			return Paths{}, err
 		}
 		done += f.Size
-		if err := unpack(archive, f, building); err != nil {
+		if err := unpack(archive, f, building, programs); err != nil {
 			return Paths{}, fmt.Errorf("unpack %s: %w", f.URL, err)
 		}
 	}
-	for _, p := range []string{t.Manifest.FFmpeg, t.Manifest.FFprobe} {
-		executable := filepath.Join(building, filepath.FromSlash(p))
-		if err := os.Chmod(executable, 0o755); err != nil {
+	for i, p := range []string{t.Manifest.FFmpeg, t.Manifest.FFprobe} {
+		if err := os.Chmod(programs[i], 0o755); err != nil {
 			return Paths{}, fmt.Errorf("the downloads lack %s: %w", p, err)
 		}
 	}
@@ -384,14 +386,15 @@ func target(f File, member, dir string) (string, bool, error) {
 	return out, true, nil
 }
 
-func unpack(archive string, f File, dir string) error {
+// unpack unpacks f's archive into dir, where programs are the files run.
+func unpack(archive string, f File, dir string, programs []string) error {
 	if f.Format == "zip" {
-		return unzip(archive, f, dir)
+		return unzip(archive, f, dir, programs)
 	}
-	return untar(archive, f, dir)
+	return untar(archive, f, dir, programs)
 }
 
-func unzip(archive string, f File, dir string) error {
+func unzip(archive string, f File, dir string, programs []string) error {
 	reader, err := zip.OpenReader(archive)
 	if err != nil {
 		return err
@@ -412,7 +415,7 @@ func unzip(archive string, f File, dir string) error {
 		if err != nil {
 			return err
 		}
-		err = write(out, in, member.Mode().Perm())
+		err = write(out, in, member.Mode().Perm(), slices.Contains(programs, out))
 		in.Close()
 		if err != nil {
 			return err
@@ -421,7 +424,7 @@ func unzip(archive string, f File, dir string) error {
 	return nil
 }
 
-func untar(archive string, f File, dir string) error {
+func untar(archive string, f File, dir string, programs []string) error {
 	file, err := os.Open(archive)
 	if err != nil {
 		return err
@@ -449,7 +452,7 @@ func untar(archive string, f File, dir string) error {
 		}
 		switch header.Typeflag {
 		case tar.TypeReg:
-			if err := write(out, reader, header.FileInfo().Mode().Perm()); err != nil {
+			if err := write(out, reader, header.FileInfo().Mode().Perm(), slices.Contains(programs, out)); err != nil {
 				return err
 			}
 		case tar.TypeSymlink:
@@ -468,12 +471,19 @@ func untar(archive string, f File, dir string) error {
 	}
 }
 
-func write(out string, in io.Reader, mode os.FileMode) error {
+// write writes what in reads to out, with mode. A program, run as soon as
+// it is there, is written as process.WriteExecutable writes it: the
+// server may download one while it converts video, starting programs all
+// the time.
+func write(out string, in io.Reader, mode os.FileMode, program bool) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
 	if mode == 0 {
 		mode = 0o644
+	}
+	if program {
+		return process.WriteExecutable(out, in, mode|0o600)
 	}
 	file, err := os.OpenFile(out, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode|0o600)
 	if err != nil {
