@@ -452,7 +452,11 @@ func TestHostsThatStopAnsweringFailWithinSeconds(t *testing.T) {
 	t.Cleanup(server.Close)
 	cache := newCache(t, 1<<30)
 	cache.stallTimeout, cache.recoveryTimeout = time.Second, 200*time.Millisecond
-	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	// The connections are counted as the source opens them: the server may
+	// see the new one late, or never, once the source gave up on it, as a
+	// loaded machine can take the 200 ms to dial it or to run its handler.
+	opener := &countingOpener{}
+	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file", Opener: opener}, nil)
 	defer s.Release()
 	r := s.NewReader()
 	defer r.Close()
@@ -464,9 +468,19 @@ func TestHostsThatStopAnsweringFailWithinSeconds(t *testing.T) {
 	if !errors.Is(err, ErrUnavailable) || time.Since(started) > 5*time.Second {
 		t.Fatalf("%v after %v", err, time.Since(started))
 	}
-	if requests.Load() != 2 {
-		t.Errorf("%d requests", requests.Load())
+	if opened := opener.opened.Load(); opened != 2 {
+		t.Errorf("%d connections opened, want 2", opened)
 	}
+}
+
+// countingOpener opens requests as the tests' client does, counting them.
+type countingOpener struct {
+	opened atomic.Int32
+}
+
+func (o *countingOpener) Open(ctx context.Context, method, target string, header http.Header, confined bool) (*http.Response, error) {
+	o.opened.Add(1)
+	return client{}.Open(ctx, method, target, header, confined)
 }
 
 // switching serves a file, then, once switched, another of another size,
