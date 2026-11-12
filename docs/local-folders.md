@@ -96,6 +96,7 @@ A scan reads only what changed:
 - Subtitle files and images added, changed or removed are offered as they are now from the next scan on.
 - Files left unmatched are matched again at each scan.
 - On a share, NFO and subtitle files and images are listed with the folders. Only the new or changed NFO files are read.
+- A video of a movies or shows folder is read with ffprobe once, when it is new or changed, for how long it plays. A movie or an episode whose description gives no length, and TMDB none either, shows that one with its "Ends at" time (see [Lengths and "Ends at"](collections-people-and-ratings.md#lengths-and-ends-at)). A disc's title has the length its disc gives. A video ffprobe cannot read has none, until it changes. After an update, the first scan reads every video found before, once.
 
 A few titles are looked up at once, so a large first scan takes a while. The folder's figures follow it.
 
@@ -233,7 +234,7 @@ API details: [Local files in the Jellyfin API](jellyfin-api.md#local-files-in-th
 
 A folder's versions take its place among the sources. Moving it up under **Content › Sources** puts its files before the addons' streams, while no criterion orders versions.
 
-With criteria, such as **Preferred audio language**, a local file often ranks low. A scan does not analyze the files, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description.
+With criteria, such as **Preferred audio language**, a local file often ranks low. A scan reads how long a file plays, not its tracks, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description.
 
 To list local files first for everyone, or for some users with **Play local files first**, see [Local files first for some users](versions.md#local-files-first-for-some-users) and [Version order](versions.md#version-order). **Add a criterion** adds a criterion last: move it up with its arrow.
 
