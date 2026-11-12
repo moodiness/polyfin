@@ -58,6 +58,7 @@ Some tests need a program or a service, and run only when a variable names it. W
 | SMB share tests | `POLYFIN_TEST_SMB` names a share holding video files (see [SMB shares](#smb-shares)). |
 
 - **Databases:** most database tests work in a database of their own, copied from a template database. The template is migrated once and kept for later runs, named `polyfin_template_` followed by a key of the migrations. The migrations' own tests start from an empty database of their own, copied from `polyfin_template_empty`. A few other tests work in a schema of their own.
+- **A fast test server:** start the disposable server with `-c fsync=off`, or turn it off on a running one with `ALTER SYSTEM SET fsync = off; SELECT pg_reload_conf();`. Each test database's drop waits for a checkpoint, which otherwise writes every other test database to disk first: with it on, a local run of `internal/jellyfin` spends most of its time waiting. CI's server keeps its data in memory, so it does not wait either.
 - **Polyfin Desktop's ports:** `POLYFIN_TEST_POSTGRES_PORT` gives PostgreSQL a port, else the tests take a free one. Both packages read it, so a fixed port needs them tested apart.
 - **The desktop app's port:** `POLYFIN_TEST_DESKTOP_PORT` gives the app's tests their listening port, else they take a free one.
 - **On CI:** the workflows provide:
