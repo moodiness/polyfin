@@ -611,12 +611,24 @@ func newOlderDriverJSON(encoder *hls.Manager) *olderDriverJSON {
 	return &olderDriverJSON{State: status.State, Error: status.Error}
 }
 
+// thumbnailHealthJSON is how the thumbnails stand: whether the settings
+// turn them on, the queue, the paused hosts, and the files of local
+// folders by their last result.
 type thumbnailHealthJSON struct {
-	Enabled     bool             `json:"enabled"`
-	Waiting     int              `json:"waiting"`
-	QueueLength int              `json:"queueLength"`
-	Working     bool             `json:"working"`
-	PausedHosts []pausedHostJSON `json:"pausedHosts"`
+	Enabled     bool                     `json:"enabled"`
+	Waiting     int                      `json:"waiting"`
+	QueueLength int                      `json:"queueLength"`
+	Working     bool                     `json:"working"`
+	PausedHosts []pausedHostJSON         `json:"pausedHosts"`
+	Local       localThumbnailHealthJSON `json:"local"`
+}
+
+// localThumbnailHealthJSON counts the files of local folders whose images
+// were made, cannot be made, or failed, by their last result.
+type localThumbnailHealthJSON struct {
+	Made   int `json:"made"`
+	Cannot int `json:"cannot"`
+	Failed int `json:"failed"`
 }
 
 type pausedHostJSON struct {
@@ -760,6 +772,11 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			QueueLength: status.QueueLength, Working: status.Working, PausedHosts: []pausedHostJSON{}}
 		for _, paused := range status.Paused {
 			th.PausedHosts = append(th.PausedHosts, pausedHostJSON{Host: paused.Host, Until: paused.Until})
+		}
+		var err error
+		if th.Local.Made, th.Local.Cannot, th.Local.Failed, err = h.Health.Thumbnails.LocalCounts(r.Context()); err != nil {
+			h.internalError(w, r, err)
+			return
 		}
 		result.Thumbnails = th
 	}

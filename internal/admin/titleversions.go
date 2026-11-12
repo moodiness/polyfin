@@ -12,13 +12,14 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/thumbnails"
 )
 
 // The Versions page (Content › Versions) explains, for a movie or an
 // episode, every stream each addon listed and what became of it, as a user
 // is offered them: the administrator signed in, or another user the page
 // names. It pins a version for every user, blocks files, analyzes a version
-// now and asks the addons again.
+// now, makes a local file's thumbnails again and asks the addons again.
 
 // Versions explains titles' versions and acts on them (see
 // jellyfin.Handler.ExplainVersions).
@@ -30,6 +31,7 @@ type Versions interface {
 	UnblockVersion(ctx context.Context, id accounts.ID) error
 	VersionBlocks(ctx context.Context) []library.VersionBlock
 	AnalyzeVersion(ctx context.Context, user accounts.User, item, id accounts.ID) (string, error)
+	MakeThumbnailsAgain(ctx context.Context, user accounts.User, item, id accounts.ID) (thumbnails.Result, error)
 	AskVersionsAgain(ctx context.Context, by, user accounts.User, item accounts.ID) (time.Duration, error)
 }
 
@@ -175,6 +177,8 @@ type versionSourceExplainedJSON struct {
 // versionStreamJSON is a stream an addon listed and what became of it;
 // version is empty for a stream with nothing to play. HostErrorFile is the
 // error file its host answers instead of the videos now, nil when none.
+// Thumbnails tells where the images of a local folder's file stand, nil
+// for another version.
 type versionStreamJSON struct {
 	Name          string             `json:"name"`
 	Filename      string             `json:"filename"`
@@ -192,6 +196,7 @@ type versionStreamJSON struct {
 	Facts         versionFactsJSON   `json:"facts"`
 	Analyzed      bool               `json:"analyzed"`
 	HostErrorFile *hostErrorFileJSON `json:"hostErrorFile"`
+	Thumbnails    *thumbnailsJSON    `json:"thumbnails"`
 }
 
 // hostErrorFileJSON is a host answering an error file instead of the
@@ -199,6 +204,21 @@ type versionStreamJSON struct {
 type hostErrorFileJSON struct {
 	Host  string    `json:"host"`
 	Since time.Time `json:"since"`
+}
+
+// thumbnailsJSON is where the images of a local folder's file stand (see
+// thumbnails.Result): state none, waiting, working, made, cannot or failed;
+// the reason it cannot, or "error" for a failure; the thumbnails made; and
+// when the result came, null for none.
+type thumbnailsJSON struct {
+	State  string     `json:"state"`
+	Reason string     `json:"reason"`
+	Count  int        `json:"count"`
+	At     *time.Time `json:"at"`
+}
+
+func newThumbnailsJSON(result thumbnails.Result) *thumbnailsJSON {
+	return &thumbnailsJSON{State: result.State, Reason: result.Reason, Count: result.Count, At: result.At}
 }
 
 // versionLabelsJSON is what the stream's labels tell: its height, video
@@ -372,6 +392,9 @@ func (h *handler) titleVersions(w http.ResponseWriter, r *http.Request) {
 			}
 			if e := stream.ErrorFile; e != nil {
 				listed.HostErrorFile = &hostErrorFileJSON{Host: e.Host, Since: e.Since}
+			}
+			if stream.Thumbnails != nil {
+				listed.Thumbnails = newThumbnailsJSON(*stream.Thumbnails)
 			}
 			streams = append(streams, listed)
 		}
@@ -580,4 +603,35 @@ func (h *handler) analyzeVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"failure": failure})
+}
+
+// makeThumbnailsAgain makes the thumbnails and chapter images of a local
+// folder's file of the title again, replacing those it has, and answers
+// where they stand then. Another version is refused as not_local, and so
+// is any while the settings turn the images off, as thumbnails_off.
+func (h *handler) makeThumbnailsAgain(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.versionsUser(w, r)
+	if !ok {
+		return
+	}
+	item, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	version, ok := pathID(w, r, "versionId")
+	if !ok {
+		return
+	}
+	result, err := h.Versions.MakeThumbnailsAgain(r.Context(), user, item, version)
+	switch {
+	case titleError(w, err):
+	case errors.Is(err, thumbnails.ErrNotLocal):
+		writeError(w, http.StatusBadRequest, "not_local")
+	case errors.Is(err, thumbnails.ErrTurnedOff):
+		writeError(w, http.StatusConflict, "thumbnails_off")
+	case err != nil:
+		h.internalError(w, r, err)
+	default:
+		writeJSON(w, http.StatusAccepted, newThumbnailsJSON(result))
+	}
 }
