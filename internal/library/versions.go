@@ -1173,10 +1173,19 @@ func (s *Service) KnownSubtitles(ctx context.Context, user accounts.User, id acc
 // shared runs fetch once for every caller asking for key at the same time,
 // in s.flight. fetch runs detached from the callers, bounded by the
 // timeouts of what it asks (the client's, for addons): a caller that stops
-// waiting, when its ctx ends, does not cut it short for the others.
+// waiting, when its ctx ends, does not cut it short for the others; the
+// server stopping does (see detached). A caller that gave up already
+// starts no fetch.
 func shared[T any](ctx context.Context, s *Service, key string, fetch func(context.Context) (T, error)) (T, error) {
-	detached := context.WithoutCancel(ctx)
-	answer := s.flight.DoChan(key, func() (any, error) { return fetch(detached) })
+	if err := ctx.Err(); err != nil {
+		var zero T
+		return zero, err
+	}
+	answer := s.flight.DoChan(key, func() (any, error) {
+		detached, done := s.detached(ctx)
+		defer done()
+		return fetch(detached)
+	})
 	if s.joined != nil {
 		s.joined(key)
 	}
@@ -1410,7 +1419,6 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 		}
 		wg.Wait()
 	} else {
-		detached := context.WithoutCancel(ctx)
 		for i, entry := range serving {
 			l, fresh, ok := listOf(s, s.subtitleLists, streamKey{entry.addon.ID, t.metaType, t.id})
 			lists[i] = l.items
@@ -1419,7 +1427,9 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 				complete = false
 				if mode == askLater {
 					go func() {
-						if _, err := s.subtitleList(detached, entry, t); err != nil {
+						detached, done := s.detached(ctx)
+						defer done()
+						if _, err := s.subtitleList(detached, entry, t); err != nil && detached.Err() == nil {
 							s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
 						}
 					}()

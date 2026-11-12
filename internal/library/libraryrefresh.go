@@ -147,7 +147,13 @@ func (s *Service) RefreshLibrary(ctx context.Context, id accounts.ID) (LibraryRe
 	r.queue = append(r.queue, id)
 	if !r.running {
 		r.running = true
-		go s.runRefreshes(context.WithoutCancel(ctx))
+		// The request ending does not stop the refreshes, the server
+		// stopping does (see detached).
+		detached, done := s.detached(ctx)
+		go func() {
+			defer done()
+			s.runRefreshes(detached)
+		}()
 	}
 	return *state, nil
 }

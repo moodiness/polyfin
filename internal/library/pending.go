@@ -188,11 +188,14 @@ func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, 
 	}
 	// Put again, so that it is kept as long as its latest addons are asked.
 	s.asked.Put(key, a)
-	detached := context.WithoutCancel(ctx)
 	for _, entry := range a.add(unknown) {
 		go func() {
 			defer s.versionsChanged(t.item)
 			defer a.done(entry.addon.ID)
+			// The request ending does not stop the addon being asked, the
+			// server stopping does (see detached).
+			detached, done := s.detached(ctx)
+			defer done()
 			// A failure, or an answer of notices alone, is logged where the
 			// addon is asked, once (see askStreamsOf).
 			_, _ = s.streams(detached, entry.installed, entry.contentType, entry.id)

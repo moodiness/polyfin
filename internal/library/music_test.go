@@ -28,7 +28,7 @@ func musicService(t *testing.T) (*Service, *atomic.Pointer[time.Time]) {
 	start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	clock.Store(&start)
 	s := &Service{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), now: func() time.Time { return *clock.Load() },
-		settings: func() accounts.Settings { return accounts.Settings{CatalogRefreshMinutes: 60} }}
+		settings: func() accounts.Settings { return accounts.Settings{CatalogRefreshMinutes: 60} }, lifetime: context.Background()}
 	s.musicCache = newMusicCaches(s)
 	return s, &clock
 }

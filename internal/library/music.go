@@ -468,7 +468,11 @@ func newAddonSlots[K comparable](size int) *addonSlots[K] {
 }
 
 // acquire waits for a place for a request to addon, which release frees.
+// A request whose ctx ended gets none, so that it asks nothing.
 func (a *addonSlots[K]) acquire(ctx context.Context, addon K) (release func(), err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	release = func() { a.release(addon) }
 	yields := yielding(ctx)
 	a.mu.Lock()
@@ -491,6 +495,11 @@ func (a *addonSlots[K]) acquire(ctx context.Context, addon K) (release func(), e
 	a.mu.Unlock()
 	select {
 	case <-turn:
+		// ctx may have ended as the place came.
+		if err := ctx.Err(); err != nil {
+			a.release(addon)
+			return nil, err
+		}
 		return release, nil
 	case <-ctx.Done():
 	}
@@ -547,13 +556,14 @@ func remember[V any](ctx context.Context, s *Service, c musicCache[V], key music
 	}
 	if kept, ok := c.answers.Get(key); ok {
 		if s.now().Sub(kept.at) > c.life() {
-			detached := context.WithoutCancel(ctx)
 			s.flight.DoChan(flightKey, func() (any, error) {
 				// A refresh that ended between the read above and this one
 				// already asked the addon.
 				if newer, ok := c.answers.Get(key); ok && newer.at.After(kept.at) {
 					return newer.value, nil
 				}
+				detached, done := s.detached(ctx)
+				defer done()
 				value, err := ask(detached)
 				if err != nil {
 					s.logger.Debug("A music page could not be read again", "resource", key.resource, "error", err)
