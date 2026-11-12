@@ -119,6 +119,20 @@ func namedPageOf(t *testing.T, s testServer, token, path string) namedItemDto {
 	return page
 }
 
+// settledPageOf opens the page at path as jellyfin-web does, lists its
+// titles with listing, which waits for its catalogs, and opens it again.
+// Its counts answer at once with the catalog pages read already: before
+// the listing, they only tell that there may be titles; after, they are
+// those of its titles.
+func settledPageOf(t *testing.T, s testServer, token, path, listing string) namedItemDto {
+	t.Helper()
+	if first := namedPageOf(t, s, token, path); first.MovieCount+first.SeriesCount == 0 {
+		t.Errorf("%s, before its catalogs are read: no titles", path)
+	}
+	listed(t, s, token, titlesOf+listing)
+	return namedPageOf(t, s, token, path)
+}
+
 // listed returns the sorted names a listing returns, and its total.
 func listed(t *testing.T, s testServer, token, path string) ([]string, int) {
 	t.Helper()
@@ -152,7 +166,7 @@ func TestGenreStudioAndYearPages(t *testing.T) {
 	if len(genres.Items) == 0 || genres.Items[0].Name != "Action" || genres.Items[0].Id != carried {
 		t.Fatalf("genres of the library: %+v", genres.Items)
 	}
-	genre := namedPageOf(t, s, token, "/Genres/Action?userId="+user)
+	genre := settledPageOf(t, s, token, "/Genres/Action?userId="+user, "genres=Action")
 	if genre.Type != "Genre" || genre.Name != "Action" || genre.Id != carried || genre.UserData == nil ||
 		genre.UserData.ItemId != carried || genre.MovieCount != 2 || genre.SeriesCount != 1 {
 		t.Errorf("genre page: %+v", genre)
@@ -161,7 +175,7 @@ func TestGenreStudioAndYearPages(t *testing.T) {
 		t.Errorf("a genre named in another letter case: %s, want %s", other.Id, carried)
 	}
 
-	studio := namedPageOf(t, s, token, "/Studios/North%20Studio?userId="+user)
+	studio := settledPageOf(t, s, token, "/Studios/North%20Studio?userId="+user, "studios=North%20Studio")
 	if studio.Type != "Studio" || studio.Name != "North Studio" || studio.MovieCount != 1 || studio.SeriesCount != 1 {
 		t.Errorf("studio page: %+v", studio)
 	}
@@ -169,7 +183,7 @@ func TestGenreStudioAndYearPages(t *testing.T) {
 		t.Errorf("titles by the studio page's identifier: %v", names)
 	}
 
-	year := namedPageOf(t, s, token, "/Years/2021?userId="+user)
+	year := settledPageOf(t, s, token, "/Years/2021?userId="+user, "years=2021")
 	if year.Type != "Year" || year.Name != "2021" || year.SortName != "0000002021" || year.MovieCount != 2 || year.SeriesCount != 0 {
 		t.Errorf("year page: %+v", year)
 	}
@@ -284,7 +298,7 @@ func TestPagesListCatalogsBehindCollections(t *testing.T) {
 	s, token, user, _ := pagesServerWith(t, collectionsAddon(t), "collection")
 	// The collection fixed to Drama still offers its catalog's Action
 	// titles; the nested collection's series count too.
-	if page := namedPageOf(t, s, token, "/Genres/Action?userId="+user); page.MovieCount != 2 || page.SeriesCount != 1 {
+	if page := settledPageOf(t, s, token, "/Genres/Action?userId="+user, "genres=Action"); page.MovieCount != 2 || page.SeriesCount != 1 {
 		t.Errorf("genre page: %d movies, %d series", page.MovieCount, page.SeriesCount)
 	}
 	for query, want := range map[string][]string{
