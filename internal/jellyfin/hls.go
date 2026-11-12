@@ -772,6 +772,10 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
 		return true
+	case errors.Is(err, hls.ErrFailed):
+		// FFmpeg failed, which its encoding logged.
+		processingError(w, http.StatusInternalServerError)
+		return true
 	default:
 		logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusInternalServerError)
