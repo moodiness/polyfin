@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -27,7 +28,7 @@ func scriptedProbe(t *testing.T, body string) fakeProbe {
 	t.Helper()
 	f := newFakeProbe(t, true)
 	script := "#!/bin/sh\necho run >> \"$0.runs\"\nn=$(wc -l < \"$0.runs\")\n" + body
-	if err := os.WriteFile(f.path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(f.path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return f

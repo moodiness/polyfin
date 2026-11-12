@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
@@ -54,7 +55,7 @@ func newHarness(t *testing.T, db DB) *harness {
 	t.Helper()
 	h := &harness{dir: t.TempDir(), record: t.TempDir(), logs: &bytes.Buffer{}, kept: 3}
 	script := filepath.Join(t.TempDir(), "pg_dump")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\nrecord='"+h.record+"'\n"+fakePgDump), 0o700); err != nil {
+	if err := process.WriteExecutable(script, strings.NewReader("#!/bin/sh\nrecord='"+h.record+"'\n"+fakePgDump), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	h.service = New(Config{

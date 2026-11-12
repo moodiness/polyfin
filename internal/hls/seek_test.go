@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // unindexedSource writes a 30-second file of 24 frames a second FFmpeg
@@ -149,7 +151,7 @@ func TestSeeksStartWithTheLookbackLearned(t *testing.T) {
 	}
 	dir := t.TempDir()
 	runs, wrapper := filepath.Join(dir, "runs"), filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\necho \"$*\" >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(wrapper, strings.NewReader("#!/bin/sh\necho \"$*\" >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	m, err := NewManager(wrapper, t.TempDir(), slog.New(slog.DiscardHandler))

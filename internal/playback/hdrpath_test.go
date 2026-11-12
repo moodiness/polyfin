@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // The paths the timings at startup choose for HDR (see hls.HDRPath).
@@ -97,7 +98,7 @@ func TestFFmpegFollowsWhereHDRIsToneMapped(t *testing.T) {
 	}
 	dir := t.TempDir()
 	runs, script := filepath.Join(dir, "runs"), filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\ncase \"$*\" in\n*-encoders*|*-filters*) exit 0 ;;\nesac\necho \"$*\" >> '"+runs+
+	if err := process.WriteExecutable(script, strings.NewReader("#!/bin/sh\ncase \"$*\" in\n*-encoders*|*-filters*) exit 0 ;;\nesac\necho \"$*\" >> '"+runs+
 		"'\necho 'no GPU here' >&2\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}

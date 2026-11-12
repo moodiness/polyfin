@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // What FFmpeg 9 writes when NVENC fails at startup, -loglevel error: with
@@ -41,7 +43,7 @@ func failingFFmpeg(t *testing.T, system, nvenc string, log io.Writer) *Manager {
 	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\ncase \"$*\" in\n*_nvenc*)\n\tcat >&2 <<'EOF'\n"+nvenc+"\nEOF\n\texit 1 ;;\nesac\n"+
+	if err := process.WriteExecutable(script, strings.NewReader("#!/bin/sh\ncase \"$*\" in\n*_nvenc*)\n\tcat >&2 <<'EOF'\n"+nvenc+"\nEOF\n\texit 1 ;;\nesac\n"+
 		"echo 'No device available for the encoder' >&2\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestVAAPIIsNotOfferedOnArm64WithoutLibva(t *testing.T) {
 	} {
 		dir := t.TempDir()
 		script, tried := filepath.Join(dir, "ffmpeg"), filepath.Join(dir, "tried")
-		if err := os.WriteFile(script, []byte("#!/bin/sh\ncase \"$*\" in\n*_vaapi*)\n\techo vaapi >> "+tried+"\n\tcat >&2 <<'EOF'\n"+noX11+
+		if err := process.WriteExecutable(script, strings.NewReader("#!/bin/sh\ncase \"$*\" in\n*_vaapi*)\n\techo vaapi >> "+tried+"\n\tcat >&2 <<'EOF'\n"+noX11+
 			"\nEOF\n\texit 134 ;;\nesac\necho 'No device available for the encoder' >&2\nexit 1\n"), 0o700); err != nil {
 			t.Fatal(err)
 		}

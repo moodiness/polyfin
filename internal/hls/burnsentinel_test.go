@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/testsubtitles"
 )
 
@@ -303,7 +304,7 @@ func TestBurnCopyPerEncoding(t *testing.T) {
 	// is there, and fails.
 	runs, ffmpeg := filepath.Join(dir, "runs"), filepath.Join(dir, "ffmpeg")
 	script := "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in *.sup) [ -f \"$a\" ] && echo \"$a\" >> '" + runs + "';; esac; done\nexit 1\n"
-	if err := os.WriteFile(ffmpeg, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(ffmpeg, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	folder := t.TempDir()

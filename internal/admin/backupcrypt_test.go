@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/backup"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // fakeDump is what the fake pg_dump of fakeBackupTools writes.
@@ -51,7 +52,7 @@ esac
 `,
 	}
 	for path, script := range scripts {
-		if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}

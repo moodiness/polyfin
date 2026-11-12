@@ -12,6 +12,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // A show matched to a series whose metadata addon lists only some of its
@@ -82,7 +83,7 @@ func heldFFmpeg(t *testing.T, failing bool) (path string, runs func() int, relea
 		end = "exit 1\n"
 	}
 	script := "#!/bin/sh\necho run >> \"$0.runs\"\nwhile [ ! -e \"$0.released\" ]; do sleep 0.01; done\n" + end
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	runs = func() int {

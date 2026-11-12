@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // fakeFrameProbe is an ffprobe script answering a first frame with the
@@ -27,7 +28,7 @@ func fakeFrameProbe(t *testing.T, fails bool) (path string, runs func() int) {
 		script += `echo '{"frames": [{"stream_index": 0, "side_data_list": [{"side_data_type": "Mastering display metadata"}]}]}'` + "\n"
 	}
 	path = filepath.Join(dir, "ffprobe")
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path, func() int {
@@ -99,7 +100,7 @@ func TestTheMasteringDisplayOfAnInput(t *testing.T) {
 	script := "#!/bin/sh\necho \"$@\" > " + args + "\n" +
 		`echo '{"frames": [{"stream_index": 0, "side_data_list": [{"side_data_type": "Mastering display metadata"}]}]}'` + "\n"
 	ffprobe := filepath.Join(dir, "ffprobe")
-	if err := os.WriteFile(ffprobe, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(ffprobe, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s := newService(t, &fakeSource{}, ffprobe, nil)
