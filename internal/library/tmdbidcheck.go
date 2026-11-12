@@ -39,21 +39,23 @@ import (
 // it judged, so that another identifier an addon gives later is checked
 // on its own; one TMDB gave as a replacement is known right. Verdicts are
 // applied, with or without a key, where descriptions enter Polyfin, from
-// addons and from the database (see checkMetas), and where catalogs make
-// titles (see titleItem): every reader of a title's identifiers sees the
-// corrected one. An administrator's identifier wins over them (see
-// Overrides.identifiers), and a title whose TMDB identifier was set is
-// never checked. Identifiers addons give as _tmdbId are taken as they are.
+// addons and from the database (see checkMetas and correctMeta), and where
+// catalogs make titles (see titleItem): every reader of a title's
+// identifiers sees the corrected one. An administrator's identifier wins
+// over them (see Overrides.identifiers), and a title whose TMDB identifier
+// was set is never checked. Identifiers addons give as _tmdbId are taken
+// as they are.
 //
 // A check is queued when a description of an identifier not checked
-// enters, after a request's lookups; a title's page asks for its own ahead
-// of the passes, and waits for it with its credits (see
-// AwaitTitleCredits). A pass, once a day while a key is saved, queues
-// those of the titles stored, and corrects those a verdict found wrong.
-// Once a verdict finds one wrong, the titles showing it are corrected:
-// their stored previews are rewritten, their kept descriptions forgotten,
-// and what was learnt by the former identifier dropped (see
-// titleTMDBChanged).
+// enters, after a request's lookups; a title's complete description is
+// kept first, so that a verdict finding the identifier wrong forgets it
+// (see keepMeta). A title's page asks for its own ahead of the passes,
+// and waits for it with its credits (see AwaitTitleCredits). A pass, once
+// a day while a key is saved, queues those of the titles stored, and
+// corrects those a verdict found wrong. Once a verdict finds one wrong,
+// the titles showing it are corrected: their stored previews are
+// rewritten, their kept descriptions forgotten, and what was learnt by the
+// former identifier dropped (see titleTMDBChanged).
 //
 // What it costs: one request to TMDB a title of an IMDb identifier, two
 // when find has no title of its kind, one a title without; a request's
@@ -236,11 +238,10 @@ func (s *Service) checkMetas(metas []stremio.Meta, metaType string, queue bool) 
 	s.lookups.Add(lookups, false)
 }
 
-// checkMeta is checkMetas of one description.
-func (s *Service) checkMeta(meta *stremio.Meta, metaType string, queue bool) {
-	if lookup, ok := s.checkedMeta(meta, metaType, queue); ok {
-		s.lookups.Add([]tmdb.Lookup{lookup}, false)
-	}
+// correctMeta corrects the TMDB identifier meta read from moviedb_id when
+// a check found it wrong, metaType being its type when it gives none.
+func (s *Service) correctMeta(meta *stremio.Meta, metaType string) {
+	s.checkedMeta(meta, metaType, false)
 }
 
 // checkedMeta corrects the TMDB identifier meta read from moviedb_id when

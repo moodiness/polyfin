@@ -1698,7 +1698,7 @@ func (s *Service) titleItem(entry installed, catalog stremio.Catalog, meta strem
 		kind = KindFolder
 	}
 	item := Item{ID: itemID(key), Kind: kind, ParentID: parent, Available: true}
-	s.checkMeta(&meta, metaType, false)
+	s.correctMeta(&meta, metaType)
 	s.fromMeta(&item, meta, country)
 	preview := meta
 	addon := entry.addon.ID
@@ -2047,7 +2047,9 @@ func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id s
 			return s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
 		})
 		withoutGenerated(&meta)
-		s.checkMeta(&meta, metaType, true)
+		// The check of an identifier not checked yet is queued once the
+		// description is kept (see keepMeta).
+		s.correctMeta(&meta, metaType)
 		return meta, failedAt(addon, "", err)
 	case addon.addon.Local():
 		if s.local == nil {
