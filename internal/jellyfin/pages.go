@@ -160,8 +160,10 @@ func (h *Handler) writeNamedItem(w http.ResponseWriter, r *http.Request, user ac
 	// Apps only show the sections of a page whose count is not zero. A
 	// catalog's size is unknown until it is read through, so the counts are
 	// those of a first page of titles, plus one when more follow: enough to
-	// tell whether there are any, and the listing that follows reads the
-	// same catalog pages again from cache.
+	// tell whether there are any. They answer at once with the catalog
+	// pages read already, and start reading the others, which the listing
+	// that follows waits for (see library.Service.Narrowed).
+	atOnce := r.WithContext(library.AtOnce(r.Context()))
 	for _, count := range []struct {
 		kind  library.Kind
 		total *int
@@ -169,7 +171,7 @@ func (h *Handler) writeNamedItem(w http.ResponseWriter, r *http.Request, user ac
 		if page.matches == nil {
 			break
 		}
-		titles, err := h.pageTitles(r, user, page, []library.Kind{count.kind}, 0, defaultPageSize)
+		titles, err := h.pageTitles(atOnce, user, page, []library.Kind{count.kind}, 0, defaultPageSize)
 		if err != nil {
 			h.browseError(w, r, err)
 			return

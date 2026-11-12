@@ -34,6 +34,9 @@ func TestGenreLinksOpenTheirPage(t *testing.T) {
 		t.Fatalf("genres of %s: %+v", movie.Name, movie.GenreItems)
 	}
 	linked := (*movie.GenreItems)[0].Id
+	// As jellyfin-web opens it: the page, which starts reading its
+	// catalogs, then its titles.
+	settledPageOf(t, s, token, "/Users/"+user+"/Items/"+linked, "genreIds="+linked)
 	for _, path := range []string{"/Users/" + user + "/Items/" + linked, "/Items/" + linked + "?userId=" + user} {
 		genre := namedPageOf(t, s, token, path)
 		if genre.Type != "Genre" || genre.Name != "Action" || genre.Id != linked || genre.MovieCount != 2 || genre.SeriesCount != 1 ||
@@ -48,7 +51,8 @@ func TestGenreLinksOpenTheirPage(t *testing.T) {
 	// A genre no page gave yet, as after a restart, is found among the
 	// catalogs' genre options.
 	drama := nameID("genre", "Drama")
-	if genre := namedPageOf(t, s, token, "/Users/"+user+"/Items/"+drama); genre.Type != "Genre" || genre.Name != "Drama" || genre.MovieCount != 1 {
+	if genre := settledPageOf(t, s, token, "/Users/"+user+"/Items/"+drama, "genres=Drama"); genre.Type != "Genre" || genre.Name != "Drama" ||
+		genre.MovieCount != 1 {
 		t.Errorf("a genre of the catalogs: %+v", genre)
 	}
 	// A name no title or catalog gave is no item.
