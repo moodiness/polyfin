@@ -215,13 +215,54 @@ A person's page lists the titles of your libraries TMDB credits them in, from TM
 
 While the server has a [TMDB API key](#tmdb-key), a movie or series whose credits were read from TMDB (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)) also gets its studios and tagline from TMDB.
 
-- **Studios:** a movie's are the companies that made it. A series' are the networks it aired on, then the companies that made it, each name once. jellyfin-web lists them on the title's page, and Silo's apps on its cards.
+- **Studios:** a movie's are the companies that made it. A series' are the networks it aired on, then the companies that made it, each name once. jellyfin-web lists them on the title's page, each a link to the studio's page (see [Studio pages](#studio-pages)), and Silo's apps on its cards.
 - **Tagline:** TMDB's, in the server's metadata language. A title TMDB has no tagline for in that language shows none. A tagline read in another language is hidden until the title is read again in the new one. On a title's page, it comes before the "for you" tagline (see [When the profile is confident](home-rows.md#when-the-profile-is-confident)).
-- **Cost:** none of its own. They come in the same request as the credits, kept and read again with them. Credits read before Polyfin kept studios are read again once, at a title's page or in the next pass.
+- **Cost:** none of its own. They come in the same request as the credits, kept and read again with them, with each network's and company's TMDB identifier and logo. Credits read before Polyfin kept studios, or their identifiers, are read again once, at a title's page or in the next pass.
 - **Edits win:** studios or a tagline set in the metadata editor replace TMDB's. Saving the editor without changing them keeps following TMDB. Emptying an edited list goes back to TMDB's.
 - **Fallback:** no studios and no tagline without a key, for a title whose credits are not read, or whose credits TMDB does not know.
 
-**Compared with Jellyfin:** Jellyfin gives a movie its production companies and TMDB's tagline. It gives a series its networks only, and no tagline ([TmdbMovieProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs), [TmdbSeriesProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs)).
+A studio is a name, whatever its letter case: a network and a company of one name are one studio.
+
+#### Studio logos
+
+A studio shows its TMDB logo, drawn by Polyfin on a light grey plate. TMDB's logos are mostly dark on a transparent background, which a dark app would not show.
+
+- **Which logo:** its network's, else its company's. Among several, the lowest TMDB identifier that has a logo.
+- **Shapes:** a wide image (Thumb, 960 by 540 pixels) for jellyfin-web's Studios tab of a library and for favorites, and a square one (Primary, 600 by 600) for search results. The logo fits within the plate, an eighth of each side left free around it.
+- **Smaller margin:** where a logo shows small, an app may ask for a plate with a sixteenth of each side left free, so the logo takes more of it (see [Studios for apps](jellyfin-api.md#studios-for-apps)). That plate is kept apart from the other, so neither is served for the other.
+- **Cost:** the logo comes with the title's details, with no request of its own. Polyfin downloads TMDB's 500-pixel PNG the first time an app asks for the image, and keeps the plate in the image cache, as the images it draws for collections (see [Images of collections](#images-of-collections)). Smaller asks get it resized, as any artwork.
+- **Changes:** a new logo on TMDB shows once a title of that studio is read again, under a new image tag, so apps fetch it again.
+- A studio TMDB has no logo for shows its name only.
+
+#### Studio pages
+
+A studio's link opens its page, which lists, in this order and each title once:
+
+1. **Catalogs:** the titles of the catalogs that offer its name in their genre filter, as a genre's page (see [Genre, studio and year pages](addons-and-libraries.md#genre-studio-and-year-pages)).
+2. **Your titles:** the titles you reach whose details from TMDB name the studio, by name, at most 1,000.
+3. **From TMDB:** the 40 most popular movies and the 40 most popular series of the studio on TMDB, from TMDB's discover. Movies are those of its companies; series those of its networks, else of its companies. Titles for adults, not out yet, or of no date are left out.
+
+The titles from TMDB open as the titles a person is known for do (see [Titles a person is known for](#titles-a-person-is-known-for)): through your metadata addons, by TMDB identifier, else by IMDb identifier. A title none of your addons describes is left out.
+
+Rules:
+
+- Parental control, blocked genres, the titles you hid and movies waiting for their digital release apply, as on every listing.
+- The page's counts of movies and series come from the same listing: its first page, plus one when more follow.
+- Without a key, the page lists the catalogs' titles and your titles only.
+
+Requests:
+
+- Discover costs two requests of each kind, kept in memory for 24 hours.
+- An IMDb identifier that box sets or TMDB's credits did not learn costs one request a title, in the queue of TMDB's lookups, kept as for a person's titles.
+- The page waits up to 3 seconds for them. Titles that come later show the next time.
+
+jellyfin-web's Studios tab of a library lists the studios of its first 2,000 titles whose details are kept, sorted by name, each with its counts of movies and series. Asked without a library, Polyfin lists those of every library of movies or series you reach. Search finds them by name, and they can be favorites.
+
+**Compared with Jellyfin**
+
+- Jellyfin gives a movie its production companies and TMDB's tagline. It gives a series its networks only, and no tagline ([TmdbMovieProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs), [TmdbSeriesProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs)).
+- Jellyfin's studio images are wide only, ready-made pictures from its own artwork repository, matched by name ([StudiosImageProvider.cs, lines 54 to 56](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/StudiosImageProvider.cs#L54-L56), [Plugin.cs, line 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/Plugin.cs#L22)). Polyfin draws TMDB's logos, wide and square.
+- Jellyfin's studio page and Studios tab list the items of its libraries ([StudiosController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/StudiosController.cs)). Polyfin also lists the studio's catalog titles and TMDB's most popular titles of it that your addons describe.
 
 ### Titles a person is known for
 
@@ -381,6 +422,7 @@ The key is kept with the server's other secrets (see [Configuration](configurati
 | People's photos and biographies | Looked up on TMDB (see [Photos and biographies from TMDB](#photos-and-biographies-from-tmdb)) | Only what the addons give |
 | A title's cast and crew | TMDB's credits, in billing order, with photos (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)) | What the addon gives |
 | Person pages | Every library title they are credited in, and the titles TMDB knows them best for (see [Titles a person is known for](#titles-a-person-is-known-for)) | Only titles people searches find and titles Polyfin knows them in |
+| Studios | TMDB's studios and logos on titles, and studio pages with TMDB's most popular titles of each (see [Studios and taglines from TMDB](#studios-and-taglines-from-tmdb)) | Only studios an administrator set; studio pages list catalog titles and titles whose details were kept |
 | Posters | TMDB's, for movies and series whose addon gives none or a dead one (see [Posters from TMDB](artwork-and-editing.md#posters-from-tmdb)) | None for such titles |
 | **Edit images** | TMDB's images too (see [Edit images](artwork-and-editing.md#edit-images)) | Only the addons' images |
 | Unmatched local files | Matched through TMDB's search when every metadata addon's fails (see [Through TMDB, when every addon fails](unmatched-files.md#through-tmdb-when-every-addon-fails)) | Stay unmatched |

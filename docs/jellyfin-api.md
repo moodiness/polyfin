@@ -475,6 +475,14 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 
 - With **Similar titles** off, every Similar route answers an empty list. An unknown title is still not found.
 
+### Studios for apps
+
+- A title's `Studios` give each studio's `Id`, the identifier of its name, whatever its case. `/Items/{id}`, `/Users/{userId}/Items/{id}` and `/Studios/{name}` answer it as a `Studio` item, with its `MovieCount` and `SeriesCount`, and `ImageTags` `Thumb` and `Primary` when it has a logo. Its `UserData` gives `IsFavorite`, which `POST /UserFavoriteItems/{id}` and `DELETE` set.
+- `/Items` with `studioIds`, or `studios` (names separated by `|`), and no `parentId`, lists the studio's titles: the catalogs', then those whose TMDB details name it, then TMDB's most popular (see [Studio pages](collections-people-and-ratings.md#studio-pages)). `TotalRecordCount` counts them all, or, while the catalogs have more, those read plus one. The counts of a studio's item are those of a first page.
+- `/Studios` lists the studios of the first 2,000 titles of each movie or series library the user reaches, of `parentId` only when given, sorted by name, each with `MovieCount`, `SeriesCount`, `ImageTags` and `UserData`. It takes `searchTerm` (the name contains it, whatever the case), `nameStartsWith`, `nameLessThan`, `nameStartsWithOrGreater`, `isFavorite`, `startIndex` and `limit`, all of them without a limit. A `parentId` that is no such library lists none.
+- `/Items/{id}/Images/Thumb` answers the studio's logo on a 960 by 540 PNG, and `/Images/Primary` on a 600 by 600 one, resized for smaller asks as other artwork. With `margin=narrow`, a Polyfin parameter, the plate leaves a sixteenth of each side free around the logo rather than an eighth, for a logo shown small; it is kept apart from the other. A studio of no logo answers `404`. As every item image, they need no credentials.
+- Jellyfin's `/Studios` lists the studios of its library items, and their images are wide only ([StudiosController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/StudiosController.cs), [StudiosImageProvider.cs, lines 54 to 56](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/StudiosImageProvider.cs#L54-L56)). Polyfin's ignores `includeItemTypes` and `excludeItemTypes`.
+
 ### Artwork requests for apps
 
 - An image its artwork server does not have (`404` or `410`) answers `404`, and an artwork server that fails otherwise (no answer, a `5xx`) makes it answer `502`. An artwork server that answered `429`, or `503`, with a `Retry-After` has its images answer `503` at once, with a `Retry-After` of the time left.
