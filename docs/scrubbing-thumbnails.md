@@ -32,13 +32,24 @@ Polyfin makes thumbnails during a play from what it reads, and the rest after wa
 **After the play:**
 
 - For a version once played, and the next episode when [playback is prepared in advance](reading-the-sources.md#preparing-playback-in-advance).
-- Polyfin waits until playback stops and nobody plays from the same host.
+- Polyfin waits until playback stops and nobody plays from the same host. A play of a version Polyfin does not know holds back no host.
 - It adds what the source cache still holds, then reads only missing keyframes, located through the index (Matroska Cues or MP4 sample tables), one request each, never the whole file.
 - One version at a time, with a short queue.
 
-DVDs, recordings, Replay and torrents get no images.
+DVDs, recordings, Replay and torrents get no images. The log tells why, with the title, once a day for each version.
+
+### Files of local folders
+
+A file of a local folder or a network share is read from the server's storage, not from a provider:
+
+- It gets a thumbnail at every **One thumbnail every (seconds, at least)**: a 2-hour movie, 720 at 10 seconds.
+- It takes none of the request limits below.
+- It waits only while the same file plays, not for the plays of other local files.
+- A file without an index, such as AVI or MPEG-TS, gets no images. The log tells it once a day, with the title.
 
 ### Request limits
+
+These limits apply to addons' links.
 
 | Limit | Value |
 |---|---|
