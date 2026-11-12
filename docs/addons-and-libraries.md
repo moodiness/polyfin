@@ -405,6 +405,12 @@ A genre, studio or year page lists the titles of the catalogs that offer that na
   - **Limits:** [parental control](user-limits.md#parental-control), [blocked genres](user-limits.md#blocked-genres), hidden titles and [movies waiting for their digital release](smart-lists-and-search.md#movies-waiting-for-their-digital-release) apply, as on every list.
 - A studio's page goes on after them: the titles you reach whose TMDB details name the studio, then TMDB's most popular titles of it that your addons describe (see [Studio pages](collections-people-and-ratings.md#studio-pages)).
 
+A page answers within about 1.5 seconds, even when its catalogs are slow to answer. A common genre can be offered by a hundred catalogs, and Polyfin asks an addon's server for 8 catalog pages at once:
+
+- **Counts:** the page's counts of movies and series answer at once, from the catalog pages Polyfin has already read, and Polyfin starts reading the others.
+- **Titles:** the list waits 1.5 seconds at most. It then lists the titles of the catalogs that answered, then a genre's or a studio's own titles, as above, with the same limits, and tells apps that more may follow.
+- **The next time:** Polyfin reads on, each catalog page once, so the page lists every catalog the next time it opens, in an order that may differ. Lists you wait for are asked of the addon's server first.
+
 A genre or studio a title's page links to opens its page in jellyfin-web, which asks for it as an item first:
 
 - Polyfin finds it by the names it gave to the titles and genre or studio lists it answered lately, then a genre by the genre options of your catalogs and the genres of the titles it keeps, and a studio by the studios TMDB's details named.
