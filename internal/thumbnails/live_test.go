@@ -116,10 +116,12 @@ func TestThumbnailsDuringThePlay(t *testing.T) {
 
 	// The play starts: its version waits for its images, and is played.
 	ts.WatchPlaybacks(func() []Playing { return []Playing{{Device: viewer, URL: version.URL}} })
-	ts.Queue(version, viewer)
-	if playing := ts.playingVersions(); len(playing) != 1 || playing[0].ID != version.ID {
+	ts.Queue(version, "Test (2026)", viewer)
+	playing := ts.playingJobs()
+	if len(playing) != 1 || playing[0].version.ID != version.ID {
 		t.Fatalf("versions playing: %+v", playing)
 	}
+	j := playing[0]
 	src := cache.Open(version.ID, source.Location{URL: version.URL}, nil)
 	defer src.Release()
 	keyframes, err := container.KeyframeOffsets(ctx, src, int64(len(data)))
@@ -130,14 +132,14 @@ func TestThumbnailsDuringThePlay(t *testing.T) {
 
 	// No thumbnail while a conversion runs on the processor.
 	ts.converting.Store(true)
-	ts.extendPlaying(ctx, version)
+	ts.extendPlaying(ctx, j)
 	if _, found, err := ts.trickplaySet(ctx, version.ID, 240); found || err != nil {
 		t.Fatalf("thumbnails made during a conversion: %v", err)
 	}
 	ts.converting.Store(false)
 
 	requests := origin.requests.Load()
-	ts.extendPlaying(ctx, version)
+	ts.extendPlaying(ctx, j)
 	info := covered(t, ts, version, 5*time.Minute)
 	if after := origin.requests.Load(); after != requests {
 		t.Errorf("the thumbnails made %d requests to the host", after-requests)
@@ -149,7 +151,7 @@ func TestThumbnailsDuringThePlay(t *testing.T) {
 	// Five minutes more: the first tile is completed, the second started.
 	play(t, src, keyframes, 10*time.Minute)
 	requests = origin.requests.Load()
-	ts.extendPlaying(ctx, version)
+	ts.extendPlaying(ctx, j)
 	info = covered(t, ts, version, 10*time.Minute)
 	if after := origin.requests.Load(); after != requests {
 		t.Errorf("the thumbnails made %d requests to the host", after-requests)

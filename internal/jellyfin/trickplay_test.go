@@ -409,3 +409,31 @@ func TestTrickplayFollowsTheQualityGroup(t *testing.T) {
 		t.Errorf("the 4K version's tiles named: %d", status)
 	}
 }
+
+// A play of a title's first version, which apps report under the title's
+// own identifier with no play session, names the version played to the
+// thumbnails, and so its host alone: it no longer holds back the images of
+// every other host's versions.
+func TestThumbnailPlaybacksNameTheVersionOfATitlePlayedAsItIs(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	// Both versions play: the first, offered under the title's identifier.
+	p.analyzed(t, p.versions[0], "h264-aac-mp4")
+	source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), nil))
+	if source.Id != p.movie {
+		t.Fatalf("PlaybackInfo: %+v", source)
+	}
+	if status, body := p.call(http.MethodPost, "/Sessions/Playing", app("tv", p.token), map[string]any{"ItemId": p.movie, "MediaSourceId": p.movie,
+		"PositionTicks": 0, "PlayMethod": "DirectPlay"}); status != http.StatusNoContent {
+		t.Fatalf("start: %d %s", status, body)
+	}
+	var url string
+	for _, version := range p.versions {
+		if version.ID.String() == source.ETag {
+			url = version.URL
+		}
+	}
+	if playing := p.handler.thumbnailPlaybacks(); len(playing) != 1 || url == "" || playing[0].URL != url {
+		t.Errorf("playbacks %+v, want the URL of version %s", playing, source.ETag)
+	}
+}

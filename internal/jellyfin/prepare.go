@@ -287,7 +287,7 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item
 		// Its images too, in the background, as its play would ask,
 		// once the playback of this episode stopped.
 		if h.Thumbnails != nil {
-			h.Thumbnails.Queue(versions[0], device)
+			h.Thumbnails.Queue(versions[0], logTitle(next), device)
 		}
 		_, analyzed := h.Playback.Analyzed(ctx, versions[0].ID)
 		return analyzed
