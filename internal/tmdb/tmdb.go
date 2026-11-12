@@ -774,13 +774,15 @@ func (c *Client) SeriesSeasons(ctx context.Context, id int) ([]SeasonSummary, er
 }
 
 // SeasonEpisode is an episode of a series as TMDB numbers it as aired:
-// its season (0 for the specials) and number, its name, and the day it
-// aired ("2006-01-02", empty when TMDB gives none).
+// its season (0 for the specials) and number, its name, the day it aired
+// ("2006-01-02", empty when TMDB gives none) and its runtime in minutes,
+// 0 when TMDB gives none.
 type SeasonEpisode struct {
 	Season  int    `json:"season_number"`
 	Episode int    `json:"episode_number"`
 	Name    string `json:"name"`
 	AirDate string `json:"air_date"`
+	Runtime int    `json:"runtime"`
 }
 
 const (

@@ -70,13 +70,15 @@ type credits struct {
 // TitleDetails is what TitleDetails reads of a movie or series: its
 // people (see TitleDetails), the networks a series aired on and the
 // companies that made the title, each once, with their TMDB identifier
-// and logo (see Studio), and its tagline, empty when TMDB has none in the
-// language asked.
+// and logo (see Studio), its tagline, empty when TMDB has none in the
+// language asked, and a movie's runtime in minutes, 0 when TMDB gives
+// none or for a series.
 type TitleDetails struct {
 	Credits   []TitleCredit
 	Networks  []Studio
 	Companies []Studio
 	Tagline   string
+	Runtime   int
 }
 
 // TitleDetails returns the details of the movie or series (kind) TMDB
@@ -101,6 +103,7 @@ func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language strin
 		Networks  []Studio `json:"networks"`
 		Companies []Studio `json:"production_companies"`
 		Tagline   string   `json:"tagline"`
+		Runtime   int      `json:"runtime"`
 		Aggregate credits  `json:"aggregate_credits"`
 		Credits   credits  `json:"credits"`
 	}
@@ -118,7 +121,7 @@ func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language strin
 		cast = details.Credits.Cast
 	}
 	return TitleDetails{Credits: keptCredits(cast, crew), Networks: studiosOf(details.Networks),
-		Companies: studiosOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline)}, nil
+		Companies: studiosOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline), Runtime: max(details.Runtime, 0)}, nil
 }
 
 // keptCredits keeps the people of TMDB's credits a title shows (see
