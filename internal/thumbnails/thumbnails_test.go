@@ -624,25 +624,19 @@ func (l *logLines) all() []string {
 }
 
 // A version played that gets no images logs why, with its title, once:
-// a torrent's file is never queued; while the settings turn the images
-// off, one line stands for every version.
+// a disc is not one file; while the settings turn the images off, one
+// line stands for every version.
 func TestSkippedVersionsAreLoggedOnce(t *testing.T) {
 	t.Parallel()
 	ts := newTestService(t, "")
 	logged := &logLines{}
 	ts.Logger = slog.New(slog.NewTextHandler(logged, nil))
-	torrent := library.Version{ID: accounts.ID{21}, Item: accounts.ID{22}, URL: "magnet:?xt=urn:btih:0", Torrent: &library.Torrent{}}
-	ts.Queue(torrent, "Night Train (2021)", accounts.ID{7})
-	ts.Queue(torrent, "Night Train (2021)", accounts.ID{7})
-	ts.Service.mu.Lock()
-	waiting := len(ts.jobs)
-	ts.Service.mu.Unlock()
-	if waiting != 0 {
-		t.Errorf("%d versions queued", waiting)
-	}
+	disc := library.Version{ID: accounts.ID{21}, Item: accounts.ID{22}, URL: "http://127.0.0.1:9/input/disc", LocalFolder: true}
+	ts.Skip(disc, "Night Train (2021)", SkippedDisc)
+	ts.Skip(disc, "Night Train (2021)", SkippedDisc)
 	lines := logged.all()
-	if len(lines) != 1 || !strings.Contains(lines[0], `title="Night Train (2021)"`) || !strings.Contains(lines[0], SkippedTorrent) {
-		t.Errorf("a torrent's file logged %q", lines)
+	if len(lines) != 1 || !strings.Contains(lines[0], `title="Night Train (2021)"`) || !strings.Contains(lines[0], SkippedDisc) {
+		t.Errorf("a disc logged %q", lines)
 	}
 	ts.change(func(s *accounts.Settings) { s.Trickplay, s.ChapterImages = false, false })
 	ts.Queue(testVersion, "One", accounts.ID{7})

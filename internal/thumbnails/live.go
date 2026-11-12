@@ -79,6 +79,7 @@ func (s *Service) playingJobs() []job {
 // settings turn them off, a conversion runs on the processor, its images
 // are made after a play now, or it recently could not be extended. A file
 // that cannot give images is logged once its play is over (see generate).
+// A torrent's file keeps its result at each pass, as it gets no other.
 func (s *Service) extendPlaying(ctx context.Context, j job) {
 	version := j.version
 	if !s.Settings().Trickplay || s.converting() {
@@ -104,6 +105,14 @@ func (s *Service) extendPlaying(ctx context.Context, j job) {
 		return
 	}
 	added, err := s.extend(ctx, version, analysis, true)
+	if version.Torrent != nil {
+		switch {
+		case added > 0:
+			s.recordMade(ctx, version)
+		case lasting(err):
+			s.recordFailure(ctx, version, err)
+		}
+	}
 	switch {
 	case err == nil || errors.Is(err, source.ErrNotCached) || ctx.Err() != nil:
 		if added > 0 {
