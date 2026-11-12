@@ -26,6 +26,14 @@ type slowCatalogs struct {
 
 	mu            sync.Mutex
 	asked, served map[string]int
+	// arrived is when each catalog page asked arrived, by path, in order.
+	arrived []arrival
+}
+
+// arrival is a catalog page asked of an addon, and when it arrived.
+type arrival struct {
+	path string
+	at   time.Time
 }
 
 func (a *slowCatalogs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +41,7 @@ func (a *slowCatalogs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(path, "/catalog/") {
 		a.mu.Lock()
 		a.asked[path]++
+		a.arrived = append(a.arrived, arrival{path, time.Now()})
 		a.mu.Unlock()
 		if a.slow(path) {
 			select {
@@ -66,6 +75,20 @@ func (a *slowCatalogs) answered(part string) (pages, most int) {
 		}
 	}
 	return pages, most
+}
+
+// askedSince returns the catalog pages whose path contains part that
+// arrived after since.
+func (a *slowCatalogs) askedSince(part string, since time.Time) []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var paths []string
+	for _, arrival := range a.arrived {
+		if strings.Contains(arrival.path, part) && arrival.at.After(since) {
+			paths = append(paths, arrival.path)
+		}
+	}
+	return paths
 }
 
 // installServing serves handler, an addon, and installs it in scope.
@@ -359,7 +382,7 @@ func TestAHostsPlacesGoToWaitingRequestsFirst(t *testing.T) {
 }
 
 // A page's catalogs are read on to the end once the request that started
-// the read stops waiting, and no further once the server stops.
+// the read stops waiting, and no read starts once the server stops.
 func TestAPagesReadGoesOnUntilTheServerStops(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
@@ -371,14 +394,20 @@ func TestAPagesReadGoesOnUntilTheServerStops(t *testing.T) {
 		titles = append(titles, stremio.Meta{ID: fmt.Sprintf("tt%03d", i), Type: "movie", Name: fmt.Sprintf("Title %d", i),
 			Genres: stremio.Names{"Drama", "Crime"}})
 	}
+	// A catalog of each genre, so that the second read does not know the
+	// pages' size from the first: it asks its first two pages one after
+	// the other, then the last two at once.
+	catalog := func(id, genre string) stremio.Catalog {
+		return stremio.Catalog{Type: "movie", ID: id, Name: id, Extra: []stremio.Extra{{Name: "genre", Options: []string{genre}}, {Name: "skip"}}}
+	}
 	paged := &fakeAddon{
 		manifest: stremio.Manifest{ID: "paged", Name: "Paged", Version: "1", Types: []string{"movie"}, Resources: []stremio.Resource{{Name: "catalog"}},
-			Catalogs: []stremio.Catalog{{Type: "movie", ID: "paged", Name: "Paged",
-				Extra: []stremio.Extra{{Name: "genre", Options: []string{"Drama", "Crime"}}, {Name: "skip"}}}}},
-		catalogs: map[string][]stremio.Meta{"movie/paged": titles},
+			Catalogs: []stremio.Catalog{catalog("dramas", "Drama"), catalog("crimes", "Crime")}},
+		catalogs: map[string][]stremio.Meta{"movie/dramas": titles, "movie/crimes": titles},
 		pageSize: 5,
 	}
-	busy := &slowCatalogs{addon: paged, delay: 200 * time.Millisecond, asked: map[string]int{}, served: map[string]int{},
+	const delay = 200 * time.Millisecond
+	busy := &slowCatalogs{addon: paged, delay: delay, asked: map[string]int{}, served: map[string]int{},
 		slow: func(string) bool { return true }}
 	e.installServing(addons.Shared(), busy)
 	open := func(genre string) {
@@ -395,7 +424,7 @@ func TestAPagesReadGoesOnUntilTheServerStops(t *testing.T) {
 		return pages
 	}
 
-	// The request is gone; its four pages are read one after the other.
+	// The request is gone; its four pages are read all the same.
 	open("Drama")
 	for deadline := time.Now().Add(10 * time.Second); served("Drama") < 4; time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
@@ -403,21 +432,21 @@ func TestAPagesReadGoesOnUntilTheServerStops(t *testing.T) {
 		}
 	}
 
-	// The server stops after the first page of another read.
+	// The server stops once the first page of another read answered: the
+	// page then asked, if any, is cancelled, and the last two are never
+	// asked. Pages asked before the stop may still be on their way to the
+	// addon for a moment; a page the read would ask next comes a whole
+	// answer later.
 	open("Crime")
-	for deadline := time.Now().Add(10 * time.Second); served("Crime") < 1; time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(10 * time.Second); served("Crime") < 1; time.Sleep(time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("the read did not start")
 		}
 	}
 	stop()
-	time.Sleep(time.Second)
-	if pages := served("Crime"); pages >= 4 {
-		t.Errorf("%d pages read after the server stopped", pages)
-	}
-	asked, _ := busy.answered("")
-	time.Sleep(500 * time.Millisecond)
-	if again, _ := busy.answered(""); again != asked {
-		t.Errorf("pages still read after the server stopped: %d, then %d", asked, again)
+	stopped := time.Now()
+	time.Sleep(3 * delay)
+	if late := busy.askedSince("genre=Crime", stopped.Add(delay/2)); len(late) > 0 {
+		t.Errorf("pages asked after the server stopped: %v", late)
 	}
 }
