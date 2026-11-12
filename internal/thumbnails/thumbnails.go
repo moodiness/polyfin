@@ -3,9 +3,11 @@
 // files, from their keyframes alone: during a play, those whose bytes the
 // playback brought into the source cache; after it, the others, read
 // through the container's index, a few dozen spans of a file rather than
-// the whole of it, gently, once nobody plays from its host. A torrent's
-// file gets only what its plays brought into the cache. FFmpeg decodes
-// them; the database keeps the images and the result of each version.
+// the whole of it, gently, once nobody plays from its host. A local
+// folder's file whose container has no index is read whole, FFmpeg
+// decoding its keyframes alone. A torrent's file gets only what its plays
+// brought into the cache. FFmpeg decodes them; the database keeps the
+// images and the result of each version.
 package thumbnails
 
 import (
@@ -566,6 +568,10 @@ func (s *Service) generate(ctx context.Context, j job) {
 	defer cancel()
 	started := time.Now()
 	read, err := s.make(generation, version, analysis, want)
+	if local(version) && errors.Is(err, container.ErrNoIndex) {
+		// A local folder's file without an index is read whole.
+		read, err = s.makeFromFile(generation, version, analysis, want)
+	}
 	switch {
 	case err == nil:
 		s.Logger.Info("Made the images of a version", "title", j.title, "addon", version.Addon, "thumbnails", want.trickplay,
@@ -723,9 +729,10 @@ type reads struct {
 // make reads keyframes within the version's budget, spread over its
 // runtime, decodes them and keeps the images, each thumbnail and chapter
 // showing the keyframe read nearest its time. Nothing is kept when a
-// request fails. A local folder's file is read without budget nor pace,
-// one keyframe for each thumbnail at the interval asked, waiting while
-// that file plays.
+// request fails. A source serving several ranges with one request has
+// every keyframe a request reads count, not the request alone. A local
+// folder's file is read without budget nor pace, one keyframe for each
+// thumbnail at the interval asked, waiting while that file plays.
 func (s *Service) make(ctx context.Context, version library.Version, analysis media.Analysis, want wanted) (reads, error) {
 	stream, ok := videoStream(analysis)
 	if !ok {
@@ -753,34 +760,43 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	if err != nil {
 		return reads{requests: p.requests}, err
 	}
-	// Every request left could read a keyframe: one for each thumbnail,
-	// their interval stretched so that each has its own, and one at each
-	// chapter's start while requests are left for them; otherwise chapter
-	// images show the thumbnails' keyframes. The thumbnails a play made
-	// are kept, and those after them read; when the requests left stretch
-	// the interval, the kept ones nearest each thumbnail's time show.
+	// The keyframes are read in passes. The first reads one for each
+	// request left: one for each thumbnail, their interval stretched so
+	// that each has its own, and one at each chapter's start while
+	// requests are left for them; otherwise chapter images show the
+	// thumbnails' keyframes. A request may read several keyframes, from a
+	// source serving several ranges with one: each pass after that reads
+	// the keyframes of thumbnails closer together, as many as the requests
+	// left would read at the rate of the pass before, until the interval
+	// asked. The thumbnails take the interval of the last pass read whole.
+	// The thumbnails a play made are kept, and those after them read; when
+	// the requests left stretch the interval, the kept ones nearest each
+	// thumbnail's time show.
 	var chapters []time.Duration
 	for _, chapter := range want.chapters {
 		chapters = append(chapters, chapter.Start)
 	}
-	targets := chapters
-	interval := want.interval
 	kept := time.Duration(want.partial.ThumbnailCount) * want.interval
-	if want.trickplay {
-		reads := p.left
+	// plan is the interval of the thumbnails when n keyframes may be read,
+	// and the times of the keyframes to read for them.
+	plan := func(n int) (time.Duration, []time.Duration) {
+		if !want.trickplay {
+			return want.interval, chapters
+		}
+		reads := n
 		if kept > 0 && len(chapters) > 0 {
 			// The chapters within the thumbnails kept need reads of their
 			// own.
-			reads = max(p.left/2, p.left-len(chapters))
+			reads = max(n/2, n-len(chapters))
 		}
-		interval = stepFor(analysis.Duration-kept, want.interval, reads)
+		interval := stepFor(analysis.Duration-kept, want.interval, reads)
 		all := thumbnailTimes(analysis.Duration, interval)
-		targets = all[sort.Search(len(all), func(i int) bool { return all[i] >= kept }):]
-		if len(targets)+len(chapters) <= p.left {
+		targets := all[sort.Search(len(all), func(i int) bool { return all[i] >= kept }):]
+		if len(targets)+len(chapters) <= n {
 			targets = append(targets, chapters...)
 		}
+		return interval, targets
 	}
-	order := chooseKeyframes(video.Keyframes, targets)
 	hw, hdr := s.decoder(stream)
 	var filters []string
 	if want.trickplay {
@@ -793,7 +809,9 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	// with its time: the images shown are chosen by time, whatever the
 	// order the keyframes were read in.
 	var frames []decodedFrame
-	err = video.ReadFrames(ctx, p, order, func(index int, frame []byte) error {
+	done := map[int]bool{}
+	decodeFrame := func(index int, frame []byte) error {
+		done[index] = true
 		images, err := s.decode(ctx, hw, video, frame, filters, false)
 		switch {
 		case err == nil:
@@ -808,11 +826,40 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 		}
 		s.Logger.Debug("A keyframe could not be decoded", "addon", version.Addon, "at", video.Keyframes[index], "error", err)
 		return nil
-	})
-	read := reads{requests: p.requests, keyframes: len(frames)}
-	if err != nil && (!errors.Is(err, errBudget) || len(frames) == 0) {
-		return read, err
 	}
+	keyframes := video.Frames(p)
+	var interval time.Duration
+	for n := p.left; ; {
+		step, targets := plan(n)
+		if interval > 0 && step >= interval {
+			break
+		}
+		var order []int
+		for _, k := range chooseKeyframes(video.Keyframes, targets) {
+			if !done[k] {
+				order = append(order, k)
+			}
+		}
+		requests, before := p.requests, len(done)
+		if err := keyframes.Read(ctx, order, decodeFrame); err != nil {
+			if !errors.Is(err, errBudget) || len(frames) == 0 {
+				return reads{requests: p.requests, keyframes: len(frames)}, err
+			}
+			// The requests ran out: the thumbnails keep the interval of the
+			// pass before, or the first's, showing the keyframes read.
+			if interval == 0 {
+				interval = step
+			}
+			break
+		}
+		interval = step
+		if !want.trickplay || step <= want.interval || p.left <= 0 || p.requests == requests {
+			break
+		}
+		perRequest := float64(len(done)-before) / float64(p.requests-requests)
+		n = len(done) + int(float64(p.left)*perRequest)
+	}
+	read := reads{requests: p.requests, keyframes: len(frames)}
 	times := make([]time.Duration, len(frames))
 	for i, f := range frames {
 		times[i] = f.at

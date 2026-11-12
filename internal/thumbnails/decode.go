@@ -42,27 +42,7 @@ func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video 
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, hw.DecodeInputs()...)
 	args = append(args, "-f", "matroska", "-i", "pipe:0")
-	if len(filters) == 1 {
-		args = append(args, "-map", "0:v:0", "-vf", filters[0], "-frames:v", "1", "-f", "yuv4mpegpipe", "pipe:1")
-	} else {
-		graph := "[0:v:0]split=" + strconv.Itoa(len(filters))
-		for i := range filters {
-			graph += "[in" + strconv.Itoa(i) + "]"
-		}
-		for i, filter := range filters {
-			graph += ";[in" + strconv.Itoa(i) + "]" + filter + "[out" + strconv.Itoa(i) + "]"
-		}
-		args = append(args, "-filter_complex", graph)
-		for i := range filters {
-			// The first output goes to the standard output, the others to
-			// pipe:3 on (see process.Outputs).
-			fd := 1
-			if i > 0 {
-				fd = 2 + i
-			}
-			args = append(args, "-map", "[out"+strconv.Itoa(i)+"]", "-frames:v", "1", "-f", "yuv4mpegpipe", "pipe:"+strconv.Itoa(fd))
-		}
-	}
+	args = append(args, outputArgs("0:v:0", "", filters, "-frames:v", "1")...)
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 	cmd.Stdin = bytes.NewReader(append(streamHead(video), cluster(0, frame)...))
 	stderr := &bytes.Buffer{}
@@ -112,6 +92,44 @@ func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video 
 		}
 	}
 	return images, nil
+}
+
+// outputArgs has FFmpeg write the video stream named stream, through pre
+// when not empty, then through each of filters, as YUV4MPEG frames: the
+// first to its standard output, the others to pipe:3 on (see
+// process.Outputs). options are those of each output.
+func outputArgs(stream, pre string, filters []string, options ...string) []string {
+	if len(filters) == 1 {
+		filter := filters[0]
+		if pre != "" {
+			filter = pre + "," + filter
+		}
+		return slices.Concat([]string{"-map", stream, "-vf", filter}, options, []string{"-f", "yuv4mpegpipe", "pipe:1"})
+	}
+	graph := "[" + stream + "]"
+	if pre != "" {
+		graph += pre + ","
+	}
+	graph += "split=" + strconv.Itoa(len(filters))
+	for i := range filters {
+		graph += "[in" + strconv.Itoa(i) + "]"
+	}
+	for i, filter := range filters {
+		graph += ";[in" + strconv.Itoa(i) + "]" + filter + "[out" + strconv.Itoa(i) + "]"
+	}
+	args := []string{"-filter_complex", graph}
+	for i := range filters {
+		// The first output goes to the standard output, the others to
+		// pipe:3 on.
+		fd := 1
+		if i > 0 {
+			fd = 2 + i
+		}
+		args = append(args, "-map", "[out"+strconv.Itoa(i)+"]")
+		args = append(args, options...)
+		args = append(args, "-f", "yuv4mpegpipe", "pipe:"+strconv.Itoa(fd))
+	}
+	return args
 }
 
 // errFirstImage stops readY4M once it read the first image.
