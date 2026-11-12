@@ -539,6 +539,9 @@ const system: typeof en = {
       idle: 'Inaktiv',
       pausedHosts: 'Pausierte Quellen',
       noPausedHosts: 'Keine Quelle ist pausiert.',
+      localMade: 'Lokale Dateien mit Vorschaubildern',
+      localCannot: 'Lokale Dateien, die keine haben können',
+      localFailed: 'Lokale Dateien mit Fehler',
       until: (time: string) => `bis ${time}`,
       ratingsTitle: 'Bewertungen von MDBList',
       ratingsHelp:

@@ -61,6 +61,9 @@ const common: typeof en = {
       'Los administradores deben usar el inicio de sesión en dos pasos en este servidor: no se puede desactivar.',
     two_step_own: 'Desactive su propio inicio de sesión en dos pasos desde «Mi cuenta».',
     not_found: 'Este elemento ya no existe. Se ha actualizado la lista.',
+    not_local: 'Solo la versión de una carpeta local puede volver a crear sus miniaturas.',
+    thumbnails_off:
+      'Las miniaturas y las imágenes de capítulos están desactivadas: active una en Ajustes › Miniaturas (trickplay).',
     not_set:
       'No hay nada guardado: se eliminó o no se puede descifrar con POLYFIN_SECRET_KEY. Recargue la página.',
     not_revealable: 'Esta conexión no contiene ninguna clave que mostrar.',

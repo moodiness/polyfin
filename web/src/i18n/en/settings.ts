@@ -861,7 +861,7 @@ const settings = {
       'Images made from the titles themselves, after they are watched. To make them, Polyfin reads small parts of the file from the source, at a gentle pace, once nobody is playing from that source: at most 60 requests per title, one every 3 seconds, and 120 an hour per source, never the whole file. A source that asks Polyfin to slow down gets no request for images for 2 hours. Off by default.',
     trickplay: 'Thumbnails when moving through a title',
     trickplayHelp:
-      'Apps show a small image of the moment the user moves to in the playback bar. Polyfin makes them once a title has been watched, and for the next episode when playback is prepared in advance. Long movies get coarser thumbnails: a few minutes apart rather than a few seconds.',
+      'Apps show a small image of the moment the user moves to in the playback bar. Polyfin makes them once a title has been watched, and for the next episode when playback is prepared in advance. Local folders’ files get theirs from the Make thumbnails task, each night by default, and torrents from what their plays read. Long movies get coarser thumbnails: a few minutes apart rather than a few seconds.',
     trickplayInterval: 'One thumbnail every (seconds, at least)',
     trickplayIntervalHelp: (r: RangeText) =>
       `How often the playback bar changes image. Polyfin reads at most 60 images per title, so a title longer than about 10 minutes gets one image per step, its steps spread evenly over its runtime: about 1 minute apart for a 1-hour episode, 2 minutes for a 2-hour movie. From ${r.min} to ${r.max}; ${r.default} by default, like Jellyfin.`,

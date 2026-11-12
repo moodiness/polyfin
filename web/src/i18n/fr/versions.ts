@@ -131,6 +131,21 @@ const versions: typeof en = {
     analyze: 'Analyser maintenant',
     analyzeDone: 'Version analysée.',
     analysisFailed: (why: string) => `Elle n’a pas pu être analysée\u202f: ${why}`,
+    thumbnails: 'Vignettes',
+    thumbnailStates: {
+      none: 'Aucune pour l’instant',
+      waiting: 'En attente',
+      working: 'En cours de création',
+      made: (count: number) => `${count} ${count > 1 ? 'créées' : 'créée'}`,
+      failed: 'Échec, nouvel essai à la prochaine lecture',
+    },
+    thumbnailsCannot: {
+      no_index: 'Impossible à créer\u202f: le fichier n’a pas d’index',
+      unreadable: 'Impossible à créer\u202f: le fichier ne peut pas être lu',
+      no_video: 'Impossible à créer\u202f: aucune vidéo',
+    },
+    makeAgain: 'Refaire',
+    makeAgainDone: 'Ses vignettes vont être refaites.',
     decisions: 'Dernières lectures',
     decisionsHelp:
       'Ce qu’ont essayé les dernières lectures de ce titre, pour tout utilisateur. Gardées jusqu’au redémarrage.',

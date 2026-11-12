@@ -59,6 +59,9 @@ const common: typeof en = {
       'Su questo server gli amministratori devono usare l’accesso in due passaggi: non può essere disattivato.',
     two_step_own: 'Disattiva il tuo accesso in due passaggi da Il mio account.',
     not_found: 'Questo elemento non esiste più. L’elenco è stato aggiornato.',
+    not_local: 'Solo la versione di una cartella locale può avere le miniature create di nuovo.',
+    thumbnails_off:
+      'Le miniature e le immagini dei capitoli sono disattivate: attivane una in Impostazioni › Miniature (trickplay).',
     not_set:
       'Nessun valore salvato: è stato rimosso, oppure non può essere decifrato con POLYFIN_SECRET_KEY. Ricarica la pagina.',
     not_revealable: 'Questa connessione non contiene alcuna chiave da mostrare.',

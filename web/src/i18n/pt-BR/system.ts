@@ -530,6 +530,9 @@ const system: typeof en = {
       idle: 'Ocioso',
       pausedHosts: 'Fontes pausadas',
       noPausedHosts: 'Nenhuma fonte está pausada.',
+      localMade: 'Arquivos locais com miniaturas',
+      localCannot: 'Arquivos locais que não podem tê-las',
+      localFailed: 'Arquivos locais com falha',
       until: (time: string) => `até ${time}`,
       ratingsTitle: 'Avaliações do MDBList',
       ratingsHelp:

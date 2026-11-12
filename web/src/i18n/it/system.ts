@@ -539,6 +539,9 @@ const system: typeof en = {
       idle: 'Inattivo',
       pausedHosts: 'Origini in pausa',
       noPausedHosts: 'Nessuna origine in pausa.',
+      localMade: 'File locali con miniature',
+      localCannot: 'File locali che non possono averle',
+      localFailed: 'File locali non riusciti',
       until: (time: string) => `fino alle ${time}`,
       ratingsTitle: 'Voti da MDBList',
       ratingsHelp:

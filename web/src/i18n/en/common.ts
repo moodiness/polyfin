@@ -61,6 +61,9 @@ const common = {
       'Administrators must use two-step sign-in on this server: it cannot be turned off.',
     two_step_own: 'Turn your own two-step sign-in off from My account.',
     not_found: 'This item no longer exists. The list has been refreshed.',
+    not_local: 'Only a local folder’s version has its thumbnails made again.',
+    thumbnails_off:
+      'Thumbnails and chapter images are off: turn one on under Settings › Thumbnails (trickplay) first.',
     not_set:
       'Nothing is saved: it was removed, or it cannot be decrypted with POLYFIN_SECRET_KEY. Reload the page.',
     not_revealable: 'This connection holds no key to show.',

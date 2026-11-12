@@ -891,7 +891,24 @@ function Thumbnails({ health }: { health: Health }) {
   const text = t.system.health
   const thumbnails = health.thumbnails
   if (thumbnails === null) return <Unknown />
-  if (!thumbnails.enabled) return <Help>{text.thumbnailsOff}</Help>
+  const number = new Intl.NumberFormat(language)
+  // Kept from the last time each file's images were made, so shown while the setting is off too.
+  const local = (
+    <Facts
+      items={[
+        { label: text.localMade, value: number.format(thumbnails.local.made) },
+        { label: text.localCannot, value: number.format(thumbnails.local.cannot) },
+        { label: text.localFailed, value: number.format(thumbnails.local.failed) },
+      ]}
+    />
+  )
+  if (!thumbnails.enabled)
+    return (
+      <div className="space-y-6">
+        <Help>{text.thumbnailsOff}</Help>
+        {local}
+      </div>
+    )
   const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
   return (
     <div className="space-y-6">
@@ -905,6 +922,7 @@ function Thumbnails({ health }: { health: Health }) {
         value={thumbnails.waiting}
         max={thumbnails.queueLength}
       />
+      {local}
       <div className="space-y-1.5">
         <SubTitle>{text.pausedHosts}</SubTitle>
         {thumbnails.pausedHosts.length === 0 ? (

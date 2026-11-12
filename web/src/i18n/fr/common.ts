@@ -61,6 +61,9 @@ const common: typeof en = {
       'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur\u202f: elle ne peut pas être désactivée.',
     two_step_own: 'Désactivez votre propre connexion en deux étapes depuis Mon compte.',
     not_found: 'Cet élément n’existe plus. La liste a été actualisée.',
+    not_local: 'Seule la version d’un dossier local peut avoir ses vignettes refaites.',
+    thumbnails_off:
+      'Les vignettes et images de chapitres sont désactivées\u202f: activez-en une dans Paramètres › Vignettes (trickplay).',
     not_set:
       'Aucune valeur enregistrée\u202f: elle a été supprimée, ou ne peut pas être déchiffrée avec POLYFIN_SECRET_KEY. Rechargez la page.',
     not_revealable: 'Cette connexion n’a pas de clé à afficher.',

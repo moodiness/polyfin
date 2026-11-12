@@ -61,6 +61,10 @@ const common: typeof en = {
       'Administratoren müssen auf diesem Server die zweistufige Anmeldung verwenden: Sie kann nicht deaktiviert werden.',
     two_step_own: 'Deaktiviere deine eigene zweistufige Anmeldung unter „Mein Konto“.',
     not_found: 'Dieses Element existiert nicht mehr. Die Liste wurde aktualisiert.',
+    not_local:
+      'Nur bei einer Version aus einem lokalen Ordner können die Vorschaubilder neu erstellt werden.',
+    thumbnails_off:
+      'Vorschaubilder und Kapitelbilder sind aus: Schalte zuerst eines davon unter Einstellungen › Vorschaubilder (Trickplay) ein.',
     not_set:
       'Nichts gespeichert: Der Wert wurde entfernt oder kann mit POLYFIN_SECRET_KEY nicht entschlüsselt werden. Lade die Seite neu.',
     not_revealable: 'Diese Verbindung enthält keinen Schlüssel, der angezeigt werden kann.',
