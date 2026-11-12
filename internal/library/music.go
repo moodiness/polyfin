@@ -420,7 +420,7 @@ func newMusicCaches(s *Service) musicCaches {
 		artists:   newMusicCache(2000, 8<<20, cache.JSONSize[eclipse.Artist], fixed(metaTTL), staleMusic, clock),
 		playlists: newMusicCache(1000, 16<<20, cache.JSONSize[eclipse.Playlist], fixed(metaTTL), staleMusic, clock),
 		searches:  newMusicCache(500, 4<<20, cache.JSONSize[eclipse.Results], fixed(searchTTL), 0, clock),
-		fetches:   &addonSlots[accounts.ID]{size: addonFetches, slots: map[accounts.ID]chan struct{}{}},
+		fetches:   newAddonSlots[accounts.ID](addonFetches),
 	}
 }
 
@@ -447,27 +447,81 @@ func newMusicCache[V any](capacity, maxBytes int, size func(V) int, life func() 
 }
 
 // addonSlots bounds the requests under way to each addon, or each host,
-// to size at once.
+// to size at once. A request waiting for a place gets it before every
+// request of a read no one waits for (see withYielding) that waits too,
+// and those of each kind in turn.
 type addonSlots[K comparable] struct {
 	size  int
 	mu    sync.Mutex
-	slots map[K]chan struct{}
+	slots map[K]*slotQueue
+}
+
+// slotQueue is the places of one addon or host: those taken, and the
+// requests waiting for one, those someone waits for first.
+type slotQueue struct {
+	taken          int
+	first, yielded []chan struct{}
+}
+
+func newAddonSlots[K comparable](size int) *addonSlots[K] {
+	return &addonSlots[K]{size: size, slots: map[K]*slotQueue{}}
 }
 
 // acquire waits for a place for a request to addon, which release frees.
 func (a *addonSlots[K]) acquire(ctx context.Context, addon K) (release func(), err error) {
+	release = func() { a.release(addon) }
+	yields := yielding(ctx)
 	a.mu.Lock()
-	slots, ok := a.slots[addon]
+	q, ok := a.slots[addon]
 	if !ok {
-		slots = make(chan struct{}, a.size)
-		a.slots[addon] = slots
+		q = &slotQueue{}
+		a.slots[addon] = q
+	}
+	if q.taken < a.size {
+		q.taken++
+		a.mu.Unlock()
+		return release, nil
+	}
+	turn := make(chan struct{})
+	if yields {
+		q.yielded = append(q.yielded, turn)
+	} else {
+		q.first = append(q.first, turn)
 	}
 	a.mu.Unlock()
 	select {
-	case slots <- struct{}{}:
-		return func() { <-slots }, nil
+	case <-turn:
+		return release, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+	}
+	a.mu.Lock()
+	waiting := len(q.first) + len(q.yielded)
+	q.first = slices.DeleteFunc(q.first, func(c chan struct{}) bool { return c == turn })
+	q.yielded = slices.DeleteFunc(q.yielded, func(c chan struct{}) bool { return c == turn })
+	handed := len(q.first)+len(q.yielded) == waiting
+	a.mu.Unlock()
+	// The place was handed over as ctx ended: it goes to the next.
+	if handed {
+		a.release(addon)
+	}
+	return nil, ctx.Err()
+}
+
+// release frees a place of addon: it goes to the request waiting first,
+// one someone waits for before one no one does.
+func (a *addonSlots[K]) release(addon K) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	q := a.slots[addon]
+	switch {
+	case len(q.first) > 0:
+		close(q.first[0])
+		q.first = q.first[1:]
+	case len(q.yielded) > 0:
+		close(q.yielded[0])
+		q.yielded = q.yielded[1:]
+	default:
+		q.taken--
 	}
 }
 

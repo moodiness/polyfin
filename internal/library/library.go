@@ -160,6 +160,12 @@ type Service struct {
 	// keptWait how long one does when what was kept fills it (see Whole).
 	wholeWait time.Duration
 	keptWait  time.Duration
+	// narrowedWait bounds how long a genre's, studio's or year's page
+	// waits for its catalogs (see Narrowed).
+	narrowedWait time.Duration
+	// lifetime ends with the server: the reads no request waits for any
+	// more end with it (see EndWith).
+	lifetime context.Context
 	// creditsWait bounds how long a title's page waits for its credits
 	// (see AwaitTitleCredits).
 	creditsWait time.Duration
@@ -392,6 +398,8 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		ratingWait:     ratingWait,
 		wholeWait:      wholeListingWait,
 		keptWait:       keptListingWait,
+		narrowedWait:   narrowedWait,
+		lifetime:       context.Background(),
 		creditsWait:    titleCreditsWait,
 		searchGrace:    searchGrace,
 		searchBound:    searchBound,
@@ -409,7 +417,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
 		Sized(16<<20, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)
-	s.catalogSlots = &addonSlots[string]{size: catalogHostFetches, slots: map[string]chan struct{}{}}
+	s.catalogSlots = newAddonSlots[string](catalogHostFetches)
 	s.failedRefreshes = cache.NewLasting[pageKey, time.Time](4000, func() time.Duration { return failedRefreshWait }, clock)
 	s.pace = newPacing(clock)
 	s.prefetches = make(chan struct{}, prefetchLimit)

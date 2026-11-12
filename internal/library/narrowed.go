@@ -3,6 +3,8 @@ package library
 import (
 	"context"
 	"slices"
+	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -17,7 +19,32 @@ const (
 	// maxNesting bounds how deep collections within collections are
 	// followed.
 	maxNesting = 3
+	// narrowedWait is how long a page of narrowed titles waits for its
+	// catalogs before it answers with those read by then (see Narrowed).
+	narrowedWait = 1500 * time.Millisecond
 )
+
+// atOnceKey marks the context of a read of narrowed titles that answers at
+// once with what is ready (see AtOnce).
+type atOnceKey struct{}
+
+// AtOnce marks ctx's reads of narrowed titles, such as the counts of a
+// genre's page, as answering at once with what is read already, rather
+// than waiting for the catalogs (see Narrowed). They still start the
+// reads, for what follows.
+func AtOnce(ctx context.Context) context.Context {
+	return context.WithValue(ctx, atOnceKey{}, true)
+}
+
+func atOnce(ctx context.Context) bool {
+	marked, _ := ctx.Value(atOnceKey{}).(bool)
+	return marked
+}
+
+// SetNarrowedWait replaces, before the service is used, how long a page
+// of narrowed titles waits for its catalogs (see Narrowed). Tests shorten
+// it; the server keeps narrowedWait.
+func (s *Service) SetNarrowedWait(wait time.Duration) { s.narrowedWait = wait }
 
 // Narrowed lists the titles of the given kinds that the user's catalogs
 // list for a genre option: each catalog of titles the user reaches (see
@@ -31,14 +58,31 @@ const (
 // genre's, a year's or a studio's titles are listed without reading whole
 // catalogs. A catalog that offers no matching option adds nothing, even if
 // some of its titles would match.
+//
+// A common genre may be offered by a hundred catalogs, of an addon asked
+// for a few pages at once (see catalogHostFetches): the listing waits for
+// them until narrowedWait after it started at most, then answers with the
+// titles of the catalog pages read by then, and tells that more may
+// follow. A read marked to answer at once (see AtOnce) does not wait. The
+// catalogs are read on, to the end of the listing, for the next one (see
+// mergedWithin).
 func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func(option string) bool, kinds []Kind, start, count int) (Page, error) {
+	page, _, err := s.narrowed(ctx, user, matches, kinds, start, count)
+	return page, err
+}
+
+// narrowed is Narrowed, and tells whether catalogs were still read when it
+// answered.
+func (s *Service) narrowed(ctx context.Context, user accounts.User, matches func(option string) bool, kinds []Kind, start, count int) (
+	_ Page, pending bool, _ error) {
+	deadline := time.Now().Add(s.narrowedWait)
 	v, err := s.view(ctx, user)
 	if err != nil {
-		return Page{}, err
+		return Page{}, false, err
 	}
 	catalogs, err := s.titleCatalogs(ctx, v)
 	if err != nil {
-		return Page{}, err
+		return Page{}, false, err
 	}
 	var sources []source
 	read := map[catalogKey]bool{}
@@ -60,11 +104,11 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 		}
 	}
 	if len(sources) == 0 {
-		return Page{}, nil
+		return Page{}, false, nil
 	}
-	titles, total, err := s.merged(ctx, v, sources, start, count)
+	titles, total, pending, err := s.mergedWithin(ctx, v, sources, start, count, deadline)
 	if err != nil {
-		return Page{}, err
+		return Page{}, false, err
 	}
 	var items []Item
 	var records []record
@@ -79,7 +123,128 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 		items, records = append(items, item), append(records, r)
 	}
 	s.translate(ctx, v, items)
-	return page(s.overridden(items), start, total), s.save(ctx, records)
+	return page(s.overridden(items), start, total), pending, s.save(ctx, records)
+}
+
+// merging is the outcome of a read of narrowed titles (see merged).
+type merging struct {
+	titles []listed
+	total  int
+	err    error
+}
+
+// mergedWithin merges sources as merged does, waiting until deadline at
+// most. The read runs on its own, to the end, and a request that stops
+// waiting does not cancel it: the server stopping does (see EndWith). Its
+// catalog pages yield to those a request waits for (see withYielding),
+// and a page another read asks for already is shared rather than asked
+// again (see readPage), so that reads started together, by a page's counts
+// and its listing, ask each page once. When it did not end in time, the
+// titles are those of the pages kept in memory then (see mergedReady), and
+// pending is set unless those pages held the whole listing. A read marked
+// AtOnce takes those pages without waiting, and starts the read only when
+// they do not hold the listing.
+func (s *Service) mergedWithin(ctx context.Context, v view, sources []source, start, count int, deadline time.Time) (
+	titles []listed, total int, pending bool, err error) {
+	if atOnce(ctx) {
+		titles, total, complete := s.mergedReady(ctx, v, sources, start, count)
+		if !complete {
+			s.readOn(ctx, v, sources, start, count)
+		}
+		return titles, total, !complete, nil
+	}
+	results := s.readOn(ctx, v, sources, start, count)
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case result := <-results:
+		return result.titles, result.total, false, result.err
+	case <-ctx.Done():
+		return nil, 0, false, ctx.Err()
+	case <-timer.C:
+	}
+	titles, total, complete := s.mergedReady(ctx, v, sources, start, count)
+	return titles, total, !complete, nil
+}
+
+// readOn merges sources as merged does, on its own (see mergedWithin), and
+// sends what it read once it ends.
+func (s *Service) readOn(ctx context.Context, v view, sources []source, start, count int) <-chan merging {
+	results := make(chan merging, 1)
+	reading, done := s.detached(withYielding(ctx))
+	// What the read leaves out for want of ratings is its own: it does
+	// not cut the request's other listings short.
+	v.held = new(atomic.Bool)
+	go func() {
+		defer done()
+		titles, total, err := s.merged(reading, v, sources, start, count)
+		results <- merging{titles, total, err}
+	}()
+	return results
+}
+
+// mergedReady merges sources as merged does, from the catalog pages kept in
+// memory alone, each catalog read once, as far as start+count, so that it
+// answers at once (see readyOnly). The user's limits apply as on any
+// listing, but without waiting for the ratings and release dates not
+// known yet: those titles are left out. complete reports that what was
+// read holds every title merged would have read, and the user's limits
+// left nothing out for want of what is not known yet: the titles and the
+// total are then merged's. Otherwise they are those of every page read,
+// plus one for the total, as more may follow.
+func (s *Service) mergedReady(ctx context.Context, v view, sources []source, start, count int) (_ []listed, total int, complete bool) {
+	v = v.withoutWait()
+	// What this read leaves out does not stop the read going on.
+	v.held = new(atomic.Bool)
+	ready := withReadyOnly(ctx)
+	need := start + count
+	lists := make([][]stremio.Meta, len(sources))
+	mores := make([]bool, len(sources))
+	limit := 0
+	var group errgroup.Group
+	group.SetLimit(catalogFetches)
+	for i, src := range sources {
+		limit = max(limit, v.limit(src))
+		group.Go(func() error {
+			metas, total, _ := s.window(ready, v, src, 0, need)
+			lists[i], mores[i] = metas, total > len(metas)
+			return nil
+		})
+	}
+	_ = group.Wait()
+	// merged's rounds, on what was read: an even share of each catalog,
+	// then more of each while the listing is short; a single catalog is
+	// read as far as the listing goes. A catalog that has more than was
+	// read, as memory lacked its next page or the read stopped at
+	// start+count, cannot give a larger share.
+	per := need/len(sources) + 1
+	if len(sources) == 1 {
+		per = need
+	}
+	complete = !v.held.Load()
+	for complete {
+		shares := make([][]stremio.Meta, len(lists))
+		anyMore := false
+		for i, list := range lists {
+			shares[i] = list[:min(per, len(list))]
+			anyMore = anyMore || len(list) > per || mores[i]
+			complete = complete && (per <= len(list) || !mores[i])
+		}
+		if !complete {
+			break
+		}
+		result := interleave(sources, shares)
+		if len(result) >= need || !anyMore || per >= limit {
+			total = len(result)
+			if anyMore {
+				total++
+			}
+			return result[min(start, len(result)):min(need, len(result))], total, true
+		}
+		per += need - len(result)
+	}
+	result := interleave(sources, lists)
+	return result[min(start, len(result)):min(need, len(result))], len(result) + 1, false
 }
 
 // GenreOption returns the first genre option of the catalogs of titles the

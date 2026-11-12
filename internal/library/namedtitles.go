@@ -14,7 +14,8 @@ import (
 // The titles of a genre's or studio's page: those of the user's catalogs
 // for an option of its name (see Narrowed), then, once the catalogs are
 // read through, those its stages add (see GenreTitles and StudioTitles),
-// each title listed once.
+// each title listed once. While the catalogs are still read, a page their
+// titles read by then do not fill goes on with the stages' titles too.
 
 // keptMost bounds the titles a genre's or studio's page lists from those
 // Polyfin keeps.
@@ -25,23 +26,32 @@ const keptMost = 1000
 // matches, as Narrowed lists them, then those extras returns that listed,
 // the catalogs' titles, do not hold. Total counts them all once the
 // catalogs are read through; while they have more, it counts those read,
-// plus one.
+// plus one. While the catalogs are still read (see mergedWithin), a page
+// their titles do not fill goes on with the extras, which leave out the
+// titles whose ratings or release dates are not known yet rather than
+// wait for them, and Total counts the titles listed, plus one.
 func (s *Service) namedTitles(ctx context.Context, user accounts.User, matches func(option string) bool, kinds []Kind, start, count int,
 	extras func(v view, listed []Item) []Item) (Page, error) {
 	start = max(start, 0)
 	need := start + count
-	catalogs, err := s.Narrowed(ctx, user, matches, kinds, 0, need)
+	catalogs, pending, err := s.narrowed(ctx, user, matches, kinds, 0, need)
 	if err != nil {
 		return Page{}, err
 	}
-	if catalogs.More {
+	if catalogs.More && (!pending || len(catalogs.Items) >= need) {
 		return Page{Items: window(catalogs.Items, start, need), Total: catalogs.Total, More: true}, nil
 	}
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return Page{}, err
 	}
+	if pending {
+		v = v.withoutWait()
+	}
 	all := slices.Concat(catalogs.Items, extras(v, catalogs.Items))
+	if pending {
+		return Page{Items: window(all, start, need), Total: len(all) + 1, More: true}, nil
+	}
 	return Page{Items: window(all, start, need), Total: len(all)}, nil
 }
 
