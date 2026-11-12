@@ -804,12 +804,17 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.Lyrics.Lyrics(r.Context(), track, detailsWait)
 	}
 	// A movie's or series' page waits a moment for its credits from TMDB,
-	// which then make its people.
+	// which then make its people and a movie's length when its addon
+	// gives none.
 	if h.Library.AwaitTitleCredits(r.Context(), item) {
 		if again, err := h.Library.Item(r.Context(), user, item.ID); err == nil {
 			item = again
 		}
 	}
+	// A series' or season's page waits a moment for the lengths TMDB
+	// gives its episodes whose addon gives none, which the episodes listed
+	// next show.
+	h.Library.AwaitEpisodeLengths(r.Context(), user, item)
 	state, err := h.userState(r.Context(), user, []library.Item{item})
 	if err != nil {
 		h.internalError(w, r, err)
