@@ -248,8 +248,9 @@ type Service struct {
 	// artwork remembers the artwork downloads that failed, which Refresh
 	// forgets (see refreshArtwork).
 	artwork ArtworkFailures
-	// lookups queues the lookups of titles' credits and artwork on TMDB
-	// (see titlecredits.go and tmdbartwork.go); nil makes none.
+	// lookups queues the lookups of titles' credits and artwork on TMDB,
+	// and of episodes' lengths (see titlecredits.go, tmdbartwork.go and
+	// lengths.go); nil makes none.
 	lookups *tmdb.Queue
 	// titleArtwork keeps the posters and backdrops TMDB gives titles
 	// lacking their addon's (see tmdbartwork.go).
@@ -257,6 +258,9 @@ type Service struct {
 	// titleCredits remembers the credits of titles TMDB gives, as kept
 	// (see titlecredits.go).
 	titleCredits titleCreditsMemory
+	// episodeLengths remembers the lengths of episodes TMDB gives, as
+	// kept (see lengths.go).
+	episodeLengths episodeLengthsMemory
 	// moviedbChecks are the verdicts on the TMDB identifiers addons give
 	// as moviedb_id (see tmdbidcheck.go).
 	moviedbChecks moviedbChecks
@@ -345,6 +349,12 @@ type Local interface {
 	// fileepisodes.go).
 	Episodes(ctx context.Context, folders []accounts.ID, stremioID string, catalog *stremio.Meta) ([]stremio.Video, error)
 	NoteUnlisted(ctx context.Context, stremioID string, unlisted, listed [][2]int) error
+	// TitleDurations tells how long the movies of the Stremio identifiers
+	// ids play, as the scans of folders probed their files, and
+	// EpisodeDurations the episodes of a show, by season and number (see
+	// lengths.go): those of no file left out.
+	TitleDurations(ctx context.Context, ids []string) (map[string]time.Duration, error)
+	EpisodeDurations(ctx context.Context, id string) (map[[2]int]time.Duration, error)
 	// HeldTitles reports which of the Stremio identifiers ids the
 	// catalogs of folders list as titles (see skiplocal.go).
 	HeldTitles(ctx context.Context, folders []accounts.ID, ids []string) (map[string]bool, error)
@@ -2359,6 +2369,7 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 		}
 	}
 	s.titlesFromTMDB(ctx, titles)
+	s.localLengths(ctx, titles)
 	items := make([]Item, 0, len(ids))
 	for _, item := range found {
 		if item != nil {
@@ -2513,6 +2524,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		item, uncredited, err := s.describedTitle(ctx, v, r)
 		if uncredited {
 			s.titlesFromTMDB(ctx, []*Item{&item})
+			s.localLengths(ctx, []*Item{&item})
 		}
 		return item, err
 	case KindSeason, KindEpisode:
@@ -2538,6 +2550,9 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		default:
 			for _, episode := range episodes(series, meta, seasonPosters(meta), nil, v.words, s.now()) {
 				if episode.ID == id {
+					found := []Item{episode}
+					s.episodeLengthsOf(ctx, meta.ID, found)
+					episode = found[0]
 					if layout := s.layoutOf(ctx, series.ID, full, v.words); layout != nil {
 						layout.place(&episode)
 					}
@@ -2931,12 +2946,15 @@ func (s *Service) orderedEpisodes(ctx context.Context, v view, seriesID accounts
 		layout = s.layoutOf(ctx, series.ID, meta, v.words)
 	}
 	if layout == nil {
-		return listEpisodes(series, shown, meta, seasonID, v.words, s.now())
+		result, records, err := listEpisodes(series, shown, meta, seasonID, v.words, s.now())
+		s.episodeLengthsOf(ctx, meta.ID, result)
+		return result, records, err
 	}
 	result, records, err := listEpisodes(series, shown, meta, nil, v.words, s.now())
 	if err != nil {
 		return nil, nil, err
 	}
+	s.episodeLengthsOf(ctx, meta.ID, result)
 	result, found := layout.arrange(result, seasonID)
 	if !found {
 		return nil, nil, ErrSeasonNotFound
@@ -2955,6 +2973,7 @@ func (s *Service) episodes(ctx context.Context, v view, seriesID accounts.ID, se
 	if err != nil {
 		return nil, err
 	}
+	s.episodeLengthsOf(ctx, meta.ID, result)
 	return s.overridden(result), s.save(ctx, records)
 }
 

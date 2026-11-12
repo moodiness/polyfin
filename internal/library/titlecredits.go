@@ -35,7 +35,8 @@ import (
 // The same answer gives the title's networks, companies and tagline,
 // kept with the credits, which make its studios and tagline (see
 // titlesFromTMDB), and the networks' and companies' TMDB identifiers and
-// logos (see studiopages.go).
+// logos (see studiopages.go), and a movie's runtime, its length when its
+// description gives none (see lengths.go).
 // The addon's people stay without a key, for a title of no TMDB or IMDb
 // identifier, one TMDB does not know or credits no one in, and until its
 // credits were read.
@@ -144,9 +145,9 @@ func (k creditsKey) lookup(title accounts.ID) string {
 
 // keptCredits is what is kept of a title's credits and details: found is
 // false for a title TMDB does not know; details is false while its
-// networks, companies, their TMDB identifiers and tagline were not read,
-// as of the credits kept before they were; titles are the items whose
-// people were saved from them.
+// networks, companies, their TMDB identifiers, tagline and runtime were
+// not read, as of the credits kept before they were; titles are the items
+// whose people were saved from them.
 type keptCredits struct {
 	found      bool
 	language   string
@@ -157,6 +158,7 @@ type keptCredits struct {
 	networkIDs []int
 	companyIDs []int
 	tagline    string
+	runtime    int
 	titles     []accounts.ID
 	asked      time.Time
 }
@@ -306,7 +308,7 @@ func (s *Service) readTitleCredits(ctx context.Context, keys []creditsKey) (map[
 		kinds[i], providers[i], ids[i] = string(key.kind), key.provider, key.id
 	}
 	rows, err := s.db.Query(ctx, `SELECT kind, provider, id, tmdb_id IS NOT NULL, language, credits, networks, companies, network_ids,
-			company_ids, tagline, titles, asked_at
+			company_ids, tagline, runtime, titles, asked_at
 		FROM title_credits JOIN unnest($1::text[], $2::text[], $3::text[]) AS asked (kind, provider, id) USING (kind, provider, id)`,
 		kinds, providers, ids)
 	if err != nil {
@@ -319,12 +321,14 @@ func (s *Service) readTitleCredits(ctx context.Context, keys []creditsKey) (map[
 		var kind string
 		var credits []byte
 		var tagline *string
+		var runtime *int
 		if err := rows.Scan(&kind, &key.provider, &key.id, &k.found, &k.language, &credits, &k.networks, &k.companies, &k.networkIDs,
-			&k.companyIDs, &tagline, &k.titles, &k.asked); err != nil {
+			&k.companyIDs, &tagline, &runtime, &k.titles, &k.asked); err != nil {
 			return nil, err
 		}
-		if k.details = tagline != nil && k.networks != nil && k.companies != nil && k.networkIDs != nil && k.companyIDs != nil; k.details {
-			k.tagline = *tagline
+		if k.details = tagline != nil && runtime != nil && k.networks != nil && k.companies != nil && k.networkIDs != nil &&
+			k.companyIDs != nil; k.details {
+			k.tagline, k.runtime = *tagline, *runtime
 		}
 		key.kind = tmdb.Kind(kind)
 		if err := json.Unmarshal(credits, &k.credits); err != nil {
@@ -382,6 +386,10 @@ func (s *Service) titlesFromTMDB(ctx context.Context, titles []*Item) {
 				}
 				if k.tagline != "" && k.language == language {
 					title.Taglines = []string{k.tagline}
+				}
+				// A movie's description gives its length first.
+				if title.Kind == KindMovie && title.Runtime == 0 {
+					title.Runtime = time.Duration(k.runtime) * time.Minute
 				}
 			}
 		}
@@ -654,12 +662,12 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, language strin
 	// knows.
 	var networks, companies []string
 	var networkIDs, companyIDs []int
-	tagline := &details.Tagline
+	tagline, runtime := &details.Tagline, &details.Runtime
 	if found {
 		networks, companies = tmdb.StudioNames(details.Networks), tmdb.StudioNames(details.Companies)
 		networkIDs, companyIDs = studioIDs(details.Networks), studioIDs(details.Companies)
 	} else {
-		tagline = nil
+		tagline, runtime = nil, nil
 	}
 	encoded, err := json.Marshal(credits)
 	if err != nil {
@@ -671,21 +679,21 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, language strin
 	}
 	var titles []accounts.ID
 	if err := s.db.QueryRow(ctx, `INSERT INTO title_credits (kind, provider, id, tmdb_id, language, credits, networks, companies,
-			network_ids, company_ids, tagline, asked_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			network_ids, company_ids, tagline, runtime, asked_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (kind, provider, id) DO UPDATE SET tmdb_id = excluded.tmdb_id, language = excluded.language,
 			credits = excluded.credits, networks = excluded.networks, companies = excluded.companies,
 			network_ids = excluded.network_ids, company_ids = excluded.company_ids, tagline = excluded.tagline,
-			asked_at = excluded.asked_at,
+			runtime = excluded.runtime, asked_at = excluded.asked_at,
 			titles = CASE WHEN title_credits.tmdb_id IS NOT DISTINCT FROM excluded.tmdb_id THEN title_credits.titles ELSE '{}' END
 		RETURNING titles`,
 		string(key.kind), key.provider, key.id, tmdbID, language, encoded, networks, companies, networkIDs, companyIDs, tagline,
-		now).Scan(&titles); err != nil {
+		runtime, now).Scan(&titles); err != nil {
 		s.forgetCredits(key)
 		return keptCredits{}, err
 	}
 	kept := keptCredits{found: found, language: language, credits: credits, details: found, networks: networks, companies: companies,
-		networkIDs: networkIDs, companyIDs: companyIDs, tagline: details.Tagline, titles: titles, asked: now}
+		networkIDs: networkIDs, companyIDs: companyIDs, tagline: details.Tagline, runtime: details.Runtime, titles: titles, asked: now}
 	// Remembered as a read gives it: the database keeps microseconds, and
 	// tells a title TMDB knows by its TMDB identifier.
 	remembered := kept
