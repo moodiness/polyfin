@@ -111,7 +111,7 @@ API details: [Web player theme loading](jellyfin-api.md#web-player-theme-loading
 
 ## LumaaGlaass
 
-The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `89b25b5` of its repository (November 8, 2026, after its version 1.1.0), with three patches of Polyfin's. The theme is updated with Polyfin's releases.
+The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `89b25b5` of its repository (November 8, 2026, after its version 1.1.0), with five patches of Polyfin's. The theme is updated with Polyfin's releases.
 
 - **Served by Polyfin:** the web player serves the theme's files itself, under `/web/polyfin/themes/lumaaglaass/`. No browser loads them from elsewhere, and the theme works on a server cut off from the internet.
 - **Cached:** their address carries a version that changes with them. A browser keeps each file for a year, and gets the new ones with the Polyfin release that brings them.
@@ -140,6 +140,24 @@ The theme's home carousel is the large rotating artwork above the home rows. It 
   - It draws anew each time a page is loaded 2 minutes or more after the last draw (see [Titles at random](jellyfin-api.md#titles-at-random)).
   - Refreshing the picks without loading the page again is the theme's to do.
 
+### Studio logos
+
+On a title's page, the Studios line shows each studio's logo in place of its name. Polyfin draws each logo from the one TMDB has for the studio (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)).
+
+- **The logo:** a light plate with the studio's logo, 64 pixels tall, 48 on a phone, with rounded corners. The plate leaves a sixteenth of each side free around the logo, half the margin of the Studios tab's cards, so a wordmark stays readable. It is sharp on high-density screens: the page asks for it at the screen's own resolution.
+- **The same link:** a logo opens the studio's page, as its name did. It takes keyboard focus in the same order, with the theme's focus ring around the plate. Screen readers read the studio's name, and the pointer and keyboard focus show it as a tooltip, above the logo so that it leaves the next line readable.
+- **Without a logo:** a studio Polyfin has no logo for keeps its name, and so does a logo that fails to load. In a line with logos, names follow each other with commas, and logos need none.
+- **Other themes:** jellyfin-web's own look, a **Custom** theme, and the theme loaded from its repository (see [Follow the theme repository](#follow-the-theme-repository)) show the names, as jellyfin-web does. So do Jellyfin's official apps.
+
+### List headings
+
+The page of a studio, a genre or a music genre starts with a heading that names it. jellyfin-web opens that page from a title's page, from a library's Genres or Studios tab and from search, and shows only the titles, with no name.
+
+- **A studio:** its logo, on the same light plate as on a title's page, 80 pixels tall, 64 on a phone. Screen readers read the studio's name. A studio Polyfin has no logo for, or whose logo fails to load, shows its name.
+- **A genre or a music genre:** its name.
+- **Where:** above the row of the page's controls (the count, Play All, Shuffle, Sort and Filter), which keeps its place under it. Opened from a library, the page names the genre or studio in place of the library.
+- **Other themes:** jellyfin-web's own look, a **Custom** theme and the theme loaded from its repository show no heading, as jellyfin-web does.
+
 ### Polyfin's patches
 
 The patches are in [`third_party/lumaaglaass`](../third_party/lumaaglaass), with the theme's license:
@@ -147,6 +165,8 @@ The patches are in [`third_party/lumaaglaass`](../third_party/lumaaglaass), with
 - The LumaaGlaass page's "Recommended" profile takes the options of the script's loader, as the defaults of a user who never saved do. The theme's own profile ignores them, so it would turn the carousel on.
 - The theme's script, pasted rather than loaded, takes its extensions from Polyfin. Otherwise it would take them from the main branch of the theme's repository.
 - The theme's script goes over the page once per frame, rather than after each of jellyfin-web's changes to it, which made the web player slower to start and to change pages.
+- The theme's script loads one more extension, Polyfin's, which shows the studios' logos on a title's page (see [Studio logos](#studio-logos)). Its tooltips may ask to show above their control.
+- The theme's script loads another extension of Polyfin's, which gives the pages of studios and genres their heading (see [List headings](#list-headings)).
 
 `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again. Each update is thus a change to review.
 
@@ -193,6 +213,8 @@ In **Custom JavaScript**, the bundled theme's loader with the address of the the
 - **Offline:** a browser that cannot reach the CDN shows the web player's own look.
 - **Delays:** the CDN takes up to 12 hours to serve a change to the theme. A browser keeps the files it loaded for up to 7 days.
 - **The carousel:** without Polyfin's patches, users who never saved also start with `homeCarousel: false`, but the "Recommended" profile of the LumaaGlaass page turns the carousel on.
+- **Studio logos:** without Polyfin's patches, a title's page shows the studios' names, not their logos.
+- **List headings:** without Polyfin's patches, the page of a studio or a genre has no heading.
 - **Coming back:** to come back to the bundled copy, choose **LumaaGlaass**. The **Custom** texts stay for later.
 
 ## Use another theme
