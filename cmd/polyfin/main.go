@@ -513,6 +513,11 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 		Settings:    store.Settings,
 		Open:        func(v library.Version) thumbnails.Source { return player.OpenSource(v).Once() },
 		Analyzed:    player.Analyzed,
+		// The task Make thumbnails and Make again analyze a local folder's
+		// file not played yet, in the background of the plays.
+		Analyze: func(ctx context.Context, v library.Version) (media.Analysis, error) {
+			return player.Analyze(playback.Background(ctx), v)
+		},
 		// During a play, thumbnails are made of what it read, unless a
 		// conversion runs on the processor.
 		Cached: func(v library.Version) (thumbnails.Cached, bool) {
@@ -523,6 +528,7 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 		Logger:     logger,
 	})
 	defer images.Close()
+	registerThumbnailsTask(registry, images, lib, player)
 	// Recording and backups follow the settings, which turn them on and
 	// choose their folders. Recordings that end are told to the
 	// notifications, made below, before any recording starts, and have
@@ -1178,6 +1184,36 @@ func registerLocalFoldersTask(registry *tasks.Registry, folders *localfiles.Serv
 		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(localfiles.ScanCheck)},
 		Limits:   tasks.Limits{Locked: tasks.LockedSettings},
 		Run:      func(ctx context.Context) error { return folders.ScanDue(ctx, tasks.ByHand(ctx)) },
+	})
+}
+
+// registerThumbnailsTask registers the making of the images the files of
+// local folders lack, daily at 3:00, as Jellyfin's task, and by hand. A
+// disc, which is not one file, gets none.
+func registerThumbnailsTask(registry *tasks.Registry, images *thumbnails.Service, lib *library.Service, player *playback.Service) {
+	registry.Register(tasks.Task{
+		Key:      "MakeThumbnails",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Make thumbnails", Description: "Makes the scrubbing thumbnails and chapter images the files of local folders lack, one file at a time, while they are on under Settings › Thumbnails (trickplay); a file that cannot have them is passed over. Other versions get theirs when they are played."},
+			"fr":    {Name: "Créer les vignettes", Description: "Crée les vignettes de défilement et les images de chapitres qui manquent aux fichiers des dossiers locaux, un fichier à la fois, quand elles sont activées dans Paramètres › Vignettes (trickplay)\u202f; un fichier qui ne peut pas en avoir est ignoré. Les autres versions ont les leurs quand elles sont lues."},
+			"de":    {Name: "Vorschaubilder erstellen", Description: "Erstellt die Vorschaubilder und Kapitelbilder, die den Dateien der lokalen Ordner fehlen, eine Datei nach der anderen, solange sie unter Einstellungen › Vorschaubilder (Trickplay) aktiviert sind; eine Datei, die keine haben kann, wird übersprungen. Andere Versionen erhalten ihre, wenn sie abgespielt werden."},
+			"es":    {Name: "Crear las miniaturas", Description: "Crea las miniaturas de avance y las imágenes de capítulos que les faltan a los archivos de las carpetas locales, un archivo a la vez, mientras estén activadas en Ajustes › Miniaturas (trickplay); un archivo que no puede tenerlas se omite. Las demás versiones reciben las suyas al reproducirse."},
+			"it":    {Name: "Crea le miniature", Description: "Crea le miniature di scorrimento e le immagini dei capitoli che mancano ai file delle cartelle locali, un file alla volta, finché sono attivate in Impostazioni › Miniature (trickplay); un file che non può averle viene saltato. Le altre versioni ricevono le loro quando vengono riprodotte."},
+			"pt-BR": {Name: "Criar as miniaturas", Description: "Cria as miniaturas de navegação e as imagens de capítulos que faltam aos arquivos das pastas locais, um arquivo por vez, enquanto estiverem ativadas em Configurações › Miniaturas (trickplay); um arquivo que não pode tê-las é ignorado. As demais versões recebem as suas quando são reproduzidas."},
+		},
+		Triggers: []tasks.Trigger{tasks.Daily(3 * time.Hour)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: time.Hour},
+		Run: func(ctx context.Context) error {
+			return images.MakeLocal(ctx, func(ctx context.Context, each func(library.Version, string) error) error {
+				return lib.LocalVersions(ctx, accounts.ID{}, func(item library.Item, version library.Version) error {
+					if player.ReadsInput(version) {
+						return nil
+					}
+					return each(version, thumbnails.Title(item))
+				})
+			})
+		},
 	})
 }
 
