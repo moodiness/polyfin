@@ -516,9 +516,12 @@ var metadataRefreshModes = []string{"None", "ValidationOnly", "Default", "FullRe
 // it queues the paced refresh of its titles' descriptions, as Content ›
 // Libraries does, when a mode asks for metadata (see
 // library.Service.RefreshItem), and answers at once, as Jellyfin answers
-// once it queued the refresh. The replace options, which choose what
-// Jellyfin keeps of what it read before, change nothing: addons are always
-// asked for everything, and a description replaces the one kept.
+// once it queued the refresh. The replace options for metadata and
+// images, which choose what Jellyfin keeps of what it read before, change
+// nothing: addons are always asked for everything, and a description
+// replaces the one kept. regenerateTrickplay, with a FullRefresh mode as
+// in Jellyfin, makes again the images of the local folders' files of the
+// title, or under it (see regenerateThumbnails).
 func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	if !user.IsAdministrator {
@@ -531,16 +534,18 @@ func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 	// providers for metadata, Default or FullRefresh, as jellyfin-web's
 	// Refresh metadata does: its images come with the descriptions. None,
 	// Jellyfin's default, and ValidationOnly ask none.
-	descriptions := false
+	descriptions, full := false, false
 	for _, name := range []string{"metadataRefreshMode", "imageRefreshMode"} {
 		if raw, _ := queryParam(r, name); strings.TrimSpace(raw) != "" {
 			mode := b.enum(name, raw, metadataRefreshModes)
 			descriptions = descriptions || mode == "Default" || mode == "FullRefresh"
+			full = full || mode == "FullRefresh"
 		}
 	}
-	for _, name := range []string{"replaceAllMetadata", "replaceAllImages", "regenerateTrickplay"} {
+	for _, name := range []string{"replaceAllMetadata", "replaceAllImages"} {
 		b.bool(r, name)
 	}
+	regenerate, _ := b.bool(r, "regenerateTrickplay")
 	if len(b) > 0 {
 		validationProblem(w, b)
 		return
@@ -554,6 +559,9 @@ func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 			h.subtitleCache.Delete(file.ID)
 		}
 		h.subtitleFiles.Delete(id)
+	}
+	if full && regenerate {
+		h.regenerateThumbnails(r.Context(), id)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

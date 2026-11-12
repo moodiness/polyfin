@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -116,7 +115,7 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, device ac
 		h.Thumbnails.Skip(library.Version{}, "", thumbnails.SkippedTurnedOff)
 		return
 	}
-	title := logTitle(item)
+	title := thumbnails.Title(item)
 	// Recordings are Polyfin's own files, which may be deleted at any time;
 	// a replay's file would take one of its provider's connections for the
 	// length of the programme: neither gets thumbnails or chapter images,
@@ -135,18 +134,6 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, device ac
 	default:
 		h.Thumbnails.Queue(version, title, device)
 	}
-}
-
-// logTitle names a title in the log: an episode by its series, season
-// and number, another title by its name and year.
-func logTitle(item library.Item) string {
-	switch {
-	case item.Kind == library.KindEpisode:
-		return fmt.Sprintf("%s S%02dE%02d", item.SeriesName, item.ParentIndexNumber, item.IndexNumber)
-	case item.ProductionYear > 0:
-		return fmt.Sprintf("%s (%d)", item.Name, item.ProductionYear)
-	}
-	return item.Name
 }
 
 // startedVersion is the version of item a playback started with, named

@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/source"
+	"github.com/moodiness/polyfin/internal/thumbnails"
 )
 
 // The admin app's Versions page explains a movie's or an episode's
@@ -82,24 +83,27 @@ type SourceExplanation struct {
 // Height are what its addon's labels tell, Facts what the rules know of it
 // (see versionFacts), Analyzed whether it was analyzed. ErrorFile is the
 // error file its host answers instead of the videos now, nil when none.
+// Thumbnails tells where the images of a local folder's file stand, nil
+// for another version (see thumbnailable).
 type StreamExplanation struct {
-	Name      string
-	Filename  string
-	Size      int64
-	Torrent   bool
-	Version   accounts.ID
-	Step      string
-	Rule      string
-	Detail    string
-	Place     int
-	Pinned    bool
-	Unstarted bool
-	Block     *library.VersionBlock
-	Height    int
-	Labels    library.Labels
-	Facts     ExplainedFacts
-	Analyzed  bool
-	ErrorFile *source.ErrorFile
+	Name       string
+	Filename   string
+	Size       int64
+	Torrent    bool
+	Version    accounts.ID
+	Step       string
+	Rule       string
+	Detail     string
+	Place      int
+	Pinned     bool
+	Unstarted  bool
+	Block      *library.VersionBlock
+	Height     int
+	Labels     library.Labels
+	Facts      ExplainedFacts
+	Analyzed   bool
+	ErrorFile  *source.ErrorFile
+	Thumbnails *thumbnails.Result
 }
 
 // ExplainedFacts are what the version rules know of a version: its
@@ -237,16 +241,92 @@ func (h *Handler) ExplainVersions(ctx context.Context, user accounts.User, id ac
 		return explained
 	}
 	explanation.Sources = make([]SourceExplanation, len(listed.Sources))
+	var local []accounts.ID
 	for i, source := range listed.Sources {
 		streams := make([]StreamExplanation, len(source.Streams))
 		for j, stream := range source.Streams {
 			streams[j] = explain(stream)
+			if stream.Step == library.StepVersion && h.thumbnailable(stream.Version) {
+				local = append(local, stream.Version.ID)
+			}
 		}
 		explanation.Sources[i] = SourceExplanation{Addon: source.Addon, Name: source.Name, Embedded: source.Embedded, State: source.State,
 			Streams: streams}
 	}
+	if len(local) == 0 {
+		return explanation, nil
+	}
+	results, err := h.Thumbnails.Results(ctx, local)
+	if err != nil {
+		return VersionsExplanation{}, err
+	}
+	for i, source := range listed.Sources {
+		for j, stream := range source.Streams {
+			if result, ok := results[stream.Version.ID]; ok && stream.Step == library.StepVersion {
+				explanation.Sources[i].Streams[j].Thumbnails = &result
+			}
+		}
+	}
 	return explanation, nil
 }
+
+// thumbnailable reports whether a version's images may be made before a
+// play, by the task Make thumbnails and by Make again: a local folder's
+// file, but a disc, which is not one file.
+func (h *Handler) thumbnailable(version library.Version) bool {
+	return h.Thumbnails != nil && version.LocalFolder && !h.Playback.ReadsInput(version)
+}
+
+// MakeThumbnailsAgain makes the images of a local folder's file a user is
+// offered again, replacing those it has (see thumbnails.Service.MakeAgain),
+// and tells where they stand then. Another version is
+// thumbnails.ErrNotLocal; while the settings turn the images off,
+// thumbnails.ErrTurnedOff.
+func (h *Handler) MakeThumbnailsAgain(ctx context.Context, user accounts.User, item, id accounts.ID) (thumbnails.Result, error) {
+	version, err := h.adminVersion(ctx, user, item, id)
+	if err != nil {
+		return thumbnails.Result{}, err
+	}
+	if !h.thumbnailable(version) {
+		return thumbnails.Result{}, thumbnails.ErrNotLocal
+	}
+	title := ""
+	if titled, err := h.Library.Item(ctx, user, item); err == nil {
+		title = thumbnails.Title(titled)
+	}
+	if err := h.Thumbnails.MakeAgain(ctx, version, title); err != nil {
+		return thumbnails.Result{}, err
+	}
+	results, err := h.Thumbnails.Results(ctx, []accounts.ID{version.ID})
+	return results[version.ID], err
+}
+
+// regenerateThumbnails makes again, in the background, the images of the
+// local folders' files of a title, or of those under a series, a season
+// or a library (see library.Service.LocalVersions), as jellyfin-web's
+// Refresh metadata asks with Replace existing trickplay images.
+func (h *Handler) regenerateThumbnails(ctx context.Context, id accounts.ID) {
+	if h.Thumbnails == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(library.Background(context.WithoutCancel(ctx)), regenerateTime)
+		defer cancel()
+		err := h.Library.LocalVersions(ctx, id, func(item library.Item, version library.Version) error {
+			if !h.thumbnailable(version) {
+				return nil
+			}
+			return h.Thumbnails.MakeAgain(ctx, version, thumbnails.Title(item))
+		})
+		if err != nil && !errors.Is(err, thumbnails.ErrTurnedOff) && ctx.Err() == nil {
+			h.Logger.Warn("The images of local files could not be made again", "error", err)
+		}
+	}()
+}
+
+// regenerateTime bounds how long a refresh lists the local files whose
+// images it makes again.
+const regenerateTime = 10 * time.Minute
 
 // adminVersion finds a version of a movie or an episode a user is offered,
 // for an administrator's action on it; ErrNotFound otherwise, and for the
