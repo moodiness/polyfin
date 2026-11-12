@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -15,16 +16,22 @@ import (
 // A title gives its genres and studios with the identifier of their name
 // (see nameID), and jellyfin-web opens one by asking for that identifier
 // as an item (/Users/{userId}/Items/{id}) before it lists its titles: a
-// link of a title's page, or a card of /Genres. An identifier is a hash
-// of the name, which cannot be read back, so Polyfin remembers the names it
-// gave an identifier to, the namesKept most recent, in memory. A genre is
-// also found among the genre options of the catalogs the user reaches,
-// which GenreIds matches too (see nameFilter), so that a genre's page
-// opened again after a restart still opens. An identifier known neither
-// way is no item.
+// link of a title's page, or a card of /Genres or /Studios. An identifier
+// is a hash of the name, which cannot be read back, so Polyfin remembers
+// the names it gave an identifier to, the namesKept most recent, in
+// memory. A genre is also found among the genre options of the catalogs
+// the user reaches, which GenreIds matches too (see nameFilter), and a
+// studio among those TMDB's details named (see
+// library.Service.StudioNames), so that a page opened again after a
+// restart still opens. An identifier known neither way is no item.
 
-// namesKept bounds the names remembered by their identifier.
-const namesKept = 10_000
+const (
+	// namesKept bounds the names remembered by their identifier.
+	namesKept = 10_000
+	// studioNamesFresh is how long the studios TMDB's details named are
+	// used before they are read again, when an identifier is none of them.
+	studioNamesFresh = time.Minute
+)
 
 // namedKind is a kind of item that stands for a name: its Jellyfin type,
 // and the kind its identifier is made of (see nameID).
@@ -41,10 +48,11 @@ var (
 )
 
 // page is the page of the item of kind named name. A genre's or studio's
-// titles are those of the catalog options of its name; a genre of music
-// lists no titles.
+// titles are those of the catalog options of its name, and a studio's
+// more (see library.Service.StudioTitles); a genre of music lists no
+// titles.
 func (k namedKind) page(name string) namedPage {
-	page := namedPage{itemType: k.itemType, name: name, id: nameID(k.kind, name), sortName: strings.ToLower(name)}
+	page := namedPage{itemType: k.itemType, name: name, id: nameID(k.kind, name), sortName: strings.ToLower(name), studio: k == studioNamed}
 	if k != musicGenreNamed {
 		page.matches = func(option string) bool { return strings.EqualFold(strings.TrimSpace(option), strings.TrimSpace(name)) }
 	}
@@ -76,6 +84,11 @@ type namedItems struct {
 	// oldest once it is full.
 	ring []string
 	next int
+	// studios are the names of the studios TMDB's details named, by
+	// identifier, as read at studiosRead.
+	studiosMu   sync.Mutex
+	studios     map[string]string
+	studiosRead time.Time
 }
 
 // id returns the identifier of the item of kind named name, and
@@ -142,14 +155,55 @@ func (h *Handler) describeNamed(w http.ResponseWriter, r *http.Request, user acc
 }
 
 // namedByID returns the item an identifier stands for: a name remembered,
-// else a genre option of the user's catalogs.
+// else a genre option of the user's catalogs, else a studio TMDB's
+// details named.
 func (h *Handler) namedByID(ctx context.Context, user accounts.User, id string) (namedItem, bool, error) {
 	if item, ok := h.names.named(id); ok {
 		return item, true, nil
 	}
 	option, ok, err := h.Library.GenreOption(ctx, user, func(option string) bool { return nameID(genreNamed.kind, option) == id })
-	if err != nil || !ok {
+	if err != nil {
 		return namedItem{}, false, err
 	}
-	return namedItem{genreNamed, option}, true, nil
+	if ok {
+		return namedItem{genreNamed, option}, true, nil
+	}
+	if name, ok := h.keptStudio(ctx, id); ok {
+		return namedItem{studioNamed, name}, true, nil
+	}
+	return namedItem{}, false, nil
+}
+
+// studioByID returns the name of the studio an identifier stands for: a
+// name remembered, else one TMDB's details named.
+func (h *Handler) studioByID(ctx context.Context, id string) (string, bool) {
+	if item, ok := h.names.named(id); ok {
+		return item.name, item.kind == studioNamed
+	}
+	return h.keptStudio(ctx, id)
+}
+
+// keptStudio returns the name of a studio TMDB's details named whose
+// identifier is id, which it remembers. The names are read again when id
+// is none of them, once a studioNamesFresh at most.
+func (h *Handler) keptStudio(ctx context.Context, id string) (string, bool) {
+	n := &h.names
+	n.studiosMu.Lock()
+	defer n.studiosMu.Unlock()
+	name, ok := n.studios[id]
+	if !ok && time.Since(n.studiosRead) >= studioNamesFresh {
+		names, err := h.Library.StudioNames(ctx)
+		if err != nil {
+			return "", false
+		}
+		n.studios, n.studiosRead = make(map[string]string, len(names)), time.Now()
+		for _, kept := range names {
+			n.studios[nameID(studioNamed.kind, kept)] = kept
+		}
+		name, ok = n.studios[id]
+	}
+	if ok {
+		h.names.id(studioNamed, name)
+	}
+	return name, ok
 }

@@ -26,7 +26,8 @@ import (
 // posterlessTMDB is a fake TMDB: its API finds the movies of the IMDb
 // identifiers it is given, gives their details, poster and backdrop, with
 // their images in the languages asked for when they are appended, and its
-// image server serves them. It records the API's requests.
+// image server serves them, and the logos it is given by path. It records
+// the API's requests.
 type posterlessTMDB struct {
 	*httptest.Server
 	mu sync.Mutex
@@ -35,6 +36,7 @@ type posterlessTMDB struct {
 	asked, queries []string
 	details        map[string]map[string]any
 	images         map[string]map[string][]map[string]any
+	logos          map[string][]byte
 }
 
 func newPosterlessTMDB(t *testing.T, picture []byte) *posterlessTMDB {
@@ -51,7 +53,7 @@ func newPosterlessTMDB(t *testing.T, picture []byte) *posterlessTMDB {
 		}
 		return map[string]any{"file_path": path, "iso_639_1": lang, "vote_average": rating, "vote_count": 3}
 	}
-	f := &posterlessTMDB{details: map[string]map[string]any{
+	f := &posterlessTMDB{logos: map[string][]byte{}, details: map[string]map[string]any{
 		"/3/movie/9301": {"id": 9301, "poster_path": "/p9301.jpg", "backdrop_path": "/b9301.jpg"},
 		"/3/movie/9302": {"id": 9302, "poster_path": "/p9302.jpg", "backdrop_path": nil},
 	}, images: map[string]map[string][]map[string]any{
@@ -73,6 +75,11 @@ func newPosterlessTMDB(t *testing.T, picture []byte) *posterlessTMDB {
 		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if logo, ok := f.logos[r.URL.Path]; ok {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(logo)
+			return
+		}
 		query := r.URL.Query()
 		query.Del("api_key")
 		f.asked = append(f.asked, r.URL.Path)

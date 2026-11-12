@@ -99,8 +99,12 @@ const generatedFetches = 3
 // image's shape takes, downloaded from public addresses only when confined
 // or g.Confined. A poster its server does not have, or that is no
 // picture, is left out for good; one that cannot be downloaded now is left
-// out of this request's image only.
+// out of this request's image only. A studio's logo is drawn on its plate
+// (see studioLogoArtwork).
 func (h *Handler) generatedArtwork(ctx context.Context, target string, g library.GeneratedImage, confined bool) (artwork, error) {
+	if g.Logo != "" {
+		return h.studioLogoArtwork(ctx, target, g)
+	}
 	confined = confined || g.Confined
 	drawn, err := h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
 		posters := make([]image.Image, min(len(g.Posters), mosaic.Tiles(g.Wide)))

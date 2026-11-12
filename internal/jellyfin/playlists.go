@@ -1369,7 +1369,7 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 		if detail || fields.has("CanDelete") {
 			dto.CanDelete = new(p.Owner == user.ID || user.IsAdministrator)
 		}
-		describeEdited(&dto, item, fields, detail)
+		h.describeEdited(&dto, item, fields, detail)
 		if detail || fields.has("ParentId") {
 			dto.ParentId = playlistsViewID.String()
 		}

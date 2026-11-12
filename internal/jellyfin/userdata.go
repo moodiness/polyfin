@@ -227,9 +227,9 @@ func stored(item library.Item) userdata.Item {
 }
 
 // userDataItem binds the item a user data endpoint acts on and the user it
-// acts for. A version stands for its title; a playlist the user sees is
-// described as an item too (see playlistItem). ok is false once w was
-// answered.
+// acts for. A version stands for its title; a playlist the user sees, and
+// a studio, are described as items too (see playlistItem and studioItem).
+// ok is false once w was answered.
 func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErrors) (accounts.User, library.Item, bool) {
 	id := b.pathID(r, "itemId")
 	user, ok := h.viewer(w, r, b, notFoundProblem)
@@ -242,6 +242,9 @@ func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErr
 	}
 	if errors.Is(err, library.ErrNotFound) {
 		item, err = h.playlistItem(r.Context(), user, id)
+	}
+	if errors.Is(err, library.ErrNotFound) {
+		item, err = h.studioItem(r.Context(), id)
 	}
 	if err != nil {
 		h.browseError(w, r, err)
