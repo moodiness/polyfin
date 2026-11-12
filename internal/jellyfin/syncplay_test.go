@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
@@ -127,15 +129,20 @@ func (a syncPlayApp) ended(t *testing.T) {
 }
 
 // drain reads the app's messages until the test ends, for an app whose
-// messages a test does not look at.
+// messages a test does not look at. Like an app, it answers the server's
+// reminders with a keep-alive: a socket left silent for a minute is
+// dropped, and its session leaves its group, while a test on a busy
+// machine may take longer.
 func (a syncPlayApp) drain(t *testing.T) {
-	done := make(chan struct{})
-	t.Cleanup(func() { close(done) })
+	ctx := t.Context()
 	go func() {
 		for {
 			select {
-			case <-a.socket.messages:
-			case <-done:
+			case message := <-a.socket.messages:
+				if message.MessageType == "ForceKeepAlive" {
+					_ = a.socket.conn.Write(ctx, websocket.MessageText, []byte(`{"MessageType":"KeepAlive"}`))
+				}
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -940,12 +947,18 @@ func TestSyncPlayKeepsToWhatMembersMaySee(t *testing.T) {
 func TestSyncPlayGroupStartsWithWhatItsCreatorPlays(t *testing.T) {
 	t.Parallel()
 	tr := newTracking(t)
+	// The position of a session that plays moves on with the server's
+	// clock, which here moves only when the test says, however long the
+	// requests take.
+	advance := idleClock(tr.testServer)
 	tr.testServer.user("alice", nil)
 	alice := tr.syncPlayApp(t, "alice", "alice-tv")
 	if status, answer := alice.send(t, tr.testServer, http.MethodPost, "/Sessions/Playing",
 		map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 300_000_000, "IsPaused": false}); status != http.StatusNoContent {
 		t.Fatalf("playback report: %d %s", status, answer)
 	}
+	// The session played on for 2 s since its report.
+	advance(2 * time.Second)
 	status, answer := alice.send(t, tr.testServer, http.MethodPost, "/SyncPlay/New", map[string]any{})
 	var info GroupInfoDto
 	if status != http.StatusOK || json.Unmarshal(answer, &info) != nil || info.State != "Waiting" || info.GroupName != "" {
@@ -954,7 +967,7 @@ func TestSyncPlayGroupStartsWithWhatItsCreatorPlays(t *testing.T) {
 	messages := alice.expect(t, "GroupJoined", "PlayQueue")
 	queue := playQueueOf(t, messages[1])
 	if len(queue.Playlist) != 1 || queue.Playlist[0].ItemId != tr.episodes[1] || queue.PlayingItemIndex != 0 ||
-		queue.StartPositionTicks < 300_000_000 || queue.StartPositionTicks > 310_000_000 {
+		queue.StartPositionTicks != 320_000_000 {
 		t.Fatalf("queue of the new group: %+v", queue)
 	}
 	alice.post(t, tr.testServer, "Ready", map[string]any{"When": time.Now().UTC().Format(time.RFC3339Nano),
