@@ -20,7 +20,9 @@ import (
 // narrowed through their genre extra; addons offer genres there, and some
 // also years, studios or networks. The titles of a page are therefore those
 // the user's libraries list for an option of that name (see
-// library.Service.Narrowed).
+// library.Service.Narrowed); a studio's page then lists the titles whose
+// TMDB details name it, and TMDB's most popular ones of it (see
+// library.Service.StudioTitles).
 
 // namedItemDto describes a genre, studio or year as Jellyfin does on its
 // page, in Jellyfin's key order; also a person, with the details TMDB gave
@@ -81,11 +83,13 @@ type namedItemDto struct {
 
 // namedPage is the page being answered: the item's Jellyfin type, its name
 // and identifier, how it sorts, and which genre options are its, nil for
-// none. refused is set for a year before 1, which does not exist.
+// none. studio is set for a studio's page, which lists more than its
+// genre options' titles. refused is set for a year before 1, which does
+// not exist.
 type namedPage struct {
 	itemType, name, id, sortName string
 	matches                      func(option string) bool
-	refused                      bool
+	studio, refused              bool
 }
 
 func (h *Handler) genrePage(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +153,7 @@ func (h *Handler) writeNamedPage(w http.ResponseWriter, r *http.Request, b bindE
 }
 
 // writeNamedItem answers a page's item for user, with the counts of its
-// titles.
+// titles, and a studio's images and favorite mark.
 func (h *Handler) writeNamedItem(w http.ResponseWriter, r *http.Request, user accounts.User, page namedPage) {
 	dto := h.namedItem(page)
 	// Apps only show the sections of a page whose count is not zero. A
@@ -164,7 +168,7 @@ func (h *Handler) writeNamedItem(w http.ResponseWriter, r *http.Request, user ac
 		if page.matches == nil {
 			break
 		}
-		titles, err := h.Library.Narrowed(r.Context(), user, page.matches, []library.Kind{count.kind}, 0, defaultPageSize)
+		titles, err := h.pageTitles(r, user, page, []library.Kind{count.kind}, 0, defaultPageSize)
 		if err != nil {
 			h.browseError(w, r, err)
 			return
@@ -173,7 +177,27 @@ func (h *Handler) writeNamedItem(w http.ResponseWriter, r *http.Request, user ac
 	}
 	dto.PlayAccess = "Full"
 	dto.UserData = &UserItemData{Key: page.name, ItemId: page.id}
+	if page.studio {
+		dto.ImageTags = h.studioImageTags(r.Context(), page.name)
+		if id, err := accounts.ParseID(page.id); err == nil {
+			data, err := h.UserData.Get(r.Context(), user.ID, []accounts.ID{id})
+			if err != nil {
+				h.internalError(w, r, err)
+				return
+			}
+			dto.UserData.IsFavorite = data[id].Favorite
+		}
+	}
 	writeJSON(w, http.StatusOK, dto)
+}
+
+// pageTitles lists the titles of the given kinds of a page, [start,
+// start+count).
+func (h *Handler) pageTitles(r *http.Request, user accounts.User, page namedPage, kinds []library.Kind, start, count int) (library.Page, error) {
+	if page.studio {
+		return h.Library.StudioTitles(r.Context(), user, []string{page.name}, page.matches, kinds, start, count)
+	}
+	return h.Library.Narrowed(r.Context(), user, page.matches, kinds, start, count)
 }
 
 // namedItem describes a page's item, without user data. Such an item has
@@ -211,8 +235,9 @@ func (h *Handler) namedItem(page namedPage) namedItemDto {
 // nameFilter is what a listing asks its titles to be narrowed to: genres
 // (genres, pipe-separated, or genreIds), studios (studios, pipe-separated,
 // or studioIds) and years. A genre option matches when it is any of them.
+// studios are the names the studios parameter gives.
 type nameFilter struct {
-	names, years, genreIDs, studioIDs []string
+	names, studios, years, genreIDs, studioIDs []string
 }
 
 // nameFilterOf reads the filter of a listing; ok is false when a year is
@@ -222,6 +247,9 @@ func nameFilterOf(r *http.Request) (f nameFilter, ok bool) {
 		for name := range strings.SplitSeq(query(r, param), "|") {
 			if name = strings.TrimSpace(name); name != "" {
 				f.names = append(f.names, name)
+				if param == "studios" {
+					f.studios = append(f.studios, name)
+				}
 			}
 		}
 	}
@@ -266,10 +294,24 @@ func (f nameFilter) matches(option string) bool {
 }
 
 // narrowedListing lists, across the user's libraries, the titles of a genre,
-// studio or year.
+// studio or year; a listing asking for studios lists theirs as their page
+// does (see library.Service.StudioTitles).
 func (h *Handler) narrowedListing(w http.ResponseWriter, r *http.Request, user accounts.User, f nameFilter, start, limit int) {
 	keep := itemTypeFilter(r)
-	page, err := h.Library.Narrowed(r.Context(), user, f.matches, searchKinds(keep), max(start, 0), limit)
+	kinds := searchKinds(keep)
+	var page library.Page
+	var err error
+	if len(f.studios) > 0 || len(f.studioIDs) > 0 {
+		studios := slices.Clone(f.studios)
+		for _, id := range f.studioIDs {
+			if name, ok := h.studioByID(r.Context(), id); ok {
+				studios = append(studios, name)
+			}
+		}
+		page, err = h.Library.StudioTitles(r.Context(), user, studios, f.matches, kinds, max(start, 0), limit)
+	} else {
+		page, err = h.Library.Narrowed(r.Context(), user, f.matches, kinds, max(start, 0), limit)
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return

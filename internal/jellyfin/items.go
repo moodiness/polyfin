@@ -521,7 +521,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		// Until its versions are known; see setDownload.
 		dto.CanDownload = new(false)
 	}
-	describeEdited(&dto, item, fields, detail)
+	h.describeEdited(&dto, item, fields, detail)
 	if detail || fields.has("People") {
 		dto.People = new(h.people(item.People))
 	}
@@ -583,8 +583,9 @@ func nonNil(values []string) []string {
 // describeEdited adds to a DTO what only administrators' edits give an
 // item (see library.Overrides), or MDBList for its critic rating: its sort
 // name, original title, taglines, tags, studios and critic and custom
-// ratings, as Jellyfin describes them.
-func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail bool) {
+// ratings, as Jellyfin describes them. A studio's identifier opens its
+// page (see names.go).
+func (h *Handler) describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail bool) {
 	if detail || fields.has("SortName") {
 		dto.SortName = sortName(item)
 		if detail {
@@ -607,11 +608,7 @@ func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail
 		dto.Tags = new(nonNil(item.Tags))
 	}
 	if detail || fields.has("Studios") {
-		studios := make([]NameGuidPair, 0, len(item.Studios))
-		for _, studio := range item.Studios {
-			studios = append(studios, NameGuidPair{Name: studio, Id: nameID("studio", studio)})
-		}
-		dto.Studios = &studios
+		dto.Studios = new(h.namedPairs(studioNamed, item.Studios))
 	}
 }
 

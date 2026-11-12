@@ -38,8 +38,9 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	signedIn(http.MethodGet, "/System/Endpoint", h.endpointInfo)
 	signedIn(http.MethodGet, "/Playback/BitrateTest", h.bitrateTest)
 
-	// Polyfin has no studio list or artists.
-	signedIn(http.MethodGet, "/Studios", h.emptyQueryResult)
+	// Polyfin has no artists; its studios are those of titles (see
+	// studios.go).
+	signedIn(http.MethodGet, "/Studios", h.studios)
 	// Jellyfin answers similar titles under each of these routes.
 	for _, similar := range []string{"/Items/{itemId}/Similar", "/Movies/{itemId}/Similar", "/Shows/{itemId}/Similar", "/Trailers/{itemId}/Similar"} {
 		signedIn(http.MethodGet, similar, h.similarItems)
