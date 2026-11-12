@@ -473,7 +473,11 @@ func (s *Service) episodeGroup(ctx context.Context, meta stremio.Meta, groupType
 	}
 	done := make(chan found, 1)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		// The request ending does not stop the lookup, the server stopping
+		// does (see detached).
+		detached, release := s.detached(ctx)
+		defer release()
+		ctx, cancel := context.WithTimeout(detached, time.Minute)
 		defer cancel()
 		var f found
 		show, groups, err := s.seriesGroups(ctx, meta)

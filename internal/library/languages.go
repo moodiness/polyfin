@@ -208,17 +208,21 @@ type untranslated struct {
 // readTranslations reads the descriptions of titles in the background,
 // one at a time, unless translationReaders reads are under way already:
 // the next listing asks again. Its requests are paced (see Background).
+// The listing ending does not stop them, the server stopping does (see
+// detached).
 func (s *Service) readTranslations(ctx context.Context, titles []untranslated) {
 	select {
 	case s.translations <- struct{}{}:
 	default:
 		return
 	}
-	detached := Background(context.WithoutCancel(ctx))
 	go func() {
 		defer func() { <-s.translations }()
+		detached, done := s.detached(ctx)
+		defer done()
+		reading := Background(detached)
 		for _, t := range titles {
-			if _, err := s.keptMeta(detached, t.entry, t.metaType, t.id); err != nil {
+			if _, err := s.keptMeta(reading, t.entry, t.metaType, t.id); err != nil && reading.Err() == nil {
 				s.logger.Debug("An addon could not describe a title in its language", "addon", t.entry.addon.Manifest.Name, "error", err)
 			}
 		}

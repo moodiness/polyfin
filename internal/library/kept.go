@@ -91,9 +91,14 @@ func (s *Service) shared(ctx context.Context, key string, fetch func(context.Con
 
 // detached returns a context with ctx's values that ctx ending does not
 // cancel, but the server stopping does (see EndWith), and the function
-// that frees it once the work it runs ends.
+// that frees it once the work it runs ends. Once the server stopped, it
+// is returned ended: work started then asks nothing.
 func (s *Service) detached(ctx context.Context) (context.Context, context.CancelFunc) {
 	detached, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	if s.lifetime.Err() != nil {
+		cancel()
+		return detached, cancel
+	}
 	stop := context.AfterFunc(s.lifetime, cancel)
 	return detached, func() {
 		stop()
@@ -109,15 +114,17 @@ func (s *Service) EndWith(ctx context.Context) { s.lifetime = ctx }
 // background runs fetch for key on its own, unless it runs already, and
 // does not wait for it. due, checked once it runs, tells whether it is
 // still to be done: a refresh that ended between the caller's read and
-// this one already did it. Its requests to addons are paced (see
+// this one already did it. ctx ending does not stop it, the server
+// stopping does (see detached). Its requests to addons are paced (see
 // Background).
 func (s *Service) background(ctx context.Context, key string, due func() bool, fetch func(context.Context) error) {
-	detached := Background(context.WithoutCancel(ctx))
 	s.flight.DoChan(key, func() (any, error) {
+		detached, done := s.detached(ctx)
+		defer done()
 		if !due() {
 			return nil, nil
 		}
-		return nil, fetch(detached)
+		return nil, fetch(Background(detached))
 	})
 }
 
@@ -306,9 +313,9 @@ func (s *Service) keptOrFetchedPage(ctx context.Context, src source, key pageKey
 // is the very fetch readPage shares (see pageFlight): a read that asks the
 // addon meanwhile waits for it rather than asking again, and a fetch under
 // way is not started twice. It runs on a context of its own, which the
-// read ending does not cancel. A page whose fetch failed is not asked for
-// again for failedRefreshWait, nor any page while its addon's host asked
-// to wait.
+// read ending does not cancel, but the server stopping does (see
+// detached). A page whose fetch failed is not asked for again for
+// failedRefreshWait, nor any page while its addon's host asked to wait.
 func (s *Service) fetchPageLater(ctx context.Context, src source, key pageKey) {
 	if _, failed := s.failedRefreshes.Get(key); failed {
 		return
@@ -316,8 +323,9 @@ func (s *Service) fetchPageLater(ctx context.Context, src source, key pageKey) {
 	if _, waiting := s.catalogWaitLeft(stremio.HostOf(src.addon.addon.ManifestURL)); waiting {
 		return
 	}
-	detached := context.WithoutCancel(ctx)
 	s.flight.DoChan(pageFlight(key), func() (any, error) {
+		detached, done := s.detached(ctx)
+		defer done()
 		metas, err := s.keptOrFetchedPage(detached, src, key)
 		if err != nil {
 			s.failedRefreshes.Put(key, s.now())

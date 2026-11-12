@@ -306,7 +306,6 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 	if f == nil {
 		return items, nil
 	}
-	detached := context.WithoutCancel(ctx)
 	flightKey := "follow-up " + kind.name + " " + key.addon.String() + " " + key.contentType + " " + key.id
 	go func() {
 		defer func() {
@@ -314,6 +313,10 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 			f.answered()
 			notify()
 		}()
+		// The request ending does not stop the schedule, the server
+		// stopping does (see detached).
+		detached, done := s.detached(ctx)
+		defer done()
 		for _, delay := range delays {
 			asking := laterBackground(detached)
 			timer := time.NewTimer(delay)
@@ -322,6 +325,9 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 			case <-f.hurry:
 				timer.Stop()
 				asking = foreground(detached)
+			case <-detached.Done():
+				timer.Stop()
+				return
 			}
 			if _, fresh, _ := listOf(s, lists, key); !fresh || !s.followingUp(followed, f) {
 				return

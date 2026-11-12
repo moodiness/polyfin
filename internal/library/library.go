@@ -1573,10 +1573,13 @@ func (s *Service) prefetch(ctx context.Context, v view, addon installed, read fu
 	default:
 		return
 	}
-	ctx = context.WithoutCancel(ctx)
 	go func() {
 		defer func() { <-s.prefetches }()
-		read(ctx)
+		// The listing ending does not stop the read, the server stopping
+		// does (see detached).
+		detached, done := s.detached(ctx)
+		defer done()
+		read(detached)
 	}()
 }
 

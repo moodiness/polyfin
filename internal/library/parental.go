@@ -362,7 +362,7 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 	}
 	// Traits kept long ago are asked again for the next listings; this one
 	// uses them.
-	s.lookUpTraits(context.WithoutCancel(ctx), v.withoutWait(), titles, stale)
+	s.lookUpTraits(ctx, v.withoutWait(), titles, stale)
 	kept = records[:0:0]
 	for i, r := range records {
 		if allowed[i] {
@@ -499,7 +499,11 @@ func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, ind
 		go func() {
 			r := result{at: at}
 			defer func() { done <- r }()
-			lookup, cancel := context.WithTimeout(context.WithoutCancel(ctx), ratingLookupTime)
+			// The request ending does not stop the lookup, the server
+			// stopping does (see detached).
+			detached, release := s.detached(ctx)
+			defer release()
+			lookup, cancel := context.WithTimeout(detached, ratingLookupTime)
 			defer cancel()
 			select {
 			case s.ratingLookups <- struct{}{}:
