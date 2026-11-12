@@ -84,14 +84,15 @@ func TestMakeLocalMakesTheLocalFilesOneAtATime(t *testing.T) {
 }
 
 // The result of making a version's images is kept: made, with its
-// thumbnails; cannot, for a file without an index; failed, for a read
-// that failed. The queue tells the versions waiting.
+// thumbnails; cannot, for an addon's file without an index, or a file
+// without video; failed, for a read that failed. The queue tells the
+// versions waiting.
 func TestResultsAreKept(t *testing.T) {
 	t.Parallel()
 	ts, made := localFile(t)
 	ts.generate(t.Context(), job{version: made, title: "Made", host: hostOf(made.URL)})
 
-	cannot := made
+	cannot := testVersion
 	cannot.ID = accounts.ID{15}
 	ts.source = &countingSource{data: []byte("not a video file at all")}
 	ts.generate(t.Context(), job{version: cannot, title: "Cannot", host: hostOf(cannot.URL)})
@@ -131,7 +132,7 @@ func TestResultsAreKept(t *testing.T) {
 			t.Errorf("version %v: %+v, want %s %q %d", c.version, result, c.state, c.reason, c.count)
 		}
 	}
-	if m, c, f, err := ts.LocalCounts(t.Context()); err != nil || m != 1 || c != 2 || f != 1 {
+	if m, c, f, err := ts.LocalCounts(t.Context()); err != nil || m != 1 || c != 1 || f != 1 {
 		t.Errorf("local counts %d %d %d, %v", m, c, f, err)
 	}
 
@@ -151,14 +152,21 @@ func TestResultsAreKept(t *testing.T) {
 func TestMakeAgainReplacesTheImages(t *testing.T) {
 	t.Parallel()
 	ts, file := localFile(t)
-	ts.source = &countingSource{data: []byte("not a video file at all")}
+	// A file of sound alone, not analyzed yet: ffprobe finds no video.
+	ts.mu.Lock()
+	analysis := ts.analysis
+	ts.analysis = media.Analysis{}
+	ts.mu.Unlock()
+	ts.Analyze = func(context.Context, library.Version) (media.Analysis, error) {
+		return media.Analysis{}, fmt.Errorf("%w: no video track", media.ErrNotMedia)
+	}
 	ts.generate(t.Context(), job{version: file, title: "Home video", host: hostOf(file.URL)})
 	if result := resultOf(t, ts, file.ID); result.State != StateCannot {
-		t.Fatalf("a file without an index: %+v", result)
+		t.Fatalf("a file without video: %+v", result)
 	}
-	// The file was replaced by one that gives images.
+	// The file was replaced by a video.
 	ts.mu.Lock()
-	ts.source = &countingSource{data: fixture(t, "forced.mkv")}
+	ts.analysis = analysis
 	ts.mu.Unlock()
 	if err := ts.MakeAgain(t.Context(), file, "Home video"); err != nil {
 		t.Fatal(err)
