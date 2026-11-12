@@ -398,13 +398,17 @@ API details: [Library description refresh](jellyfin-api.md#library-description-r
 A genre, studio or year page lists the titles of the catalogs that offer that name in their genre filter. Those are the catalogs you reach, as libraries or through collections.
 
 - Addons use the genre filter for genres, and some for years or studios.
-- Titles from catalogs that cannot be filtered by that name are not on the page.
+- A catalog that cannot be filtered by that name adds none of its titles itself.
+- A genre's page goes on after them: the movies and series of that genre that Polyfin keeps and you reach, at most 1,000, the most recently seen, by name. Polyfin keeps every title a list or a page showed to anyone, so a genre no catalog filters by still lists titles.
+  - **A title's genres:** those its catalog listed it with, those of its full description by one of the server's addons, and those an administrator set, which win over the addons'.
+  - **Names:** letter case does not count, spelling does. "Drama" and "Drame" are two genres, as are "Sci-Fi" and "Science Fiction". With a PostgreSQL older than 17, or a database not in UTF-8, case counts for letters beyond A to Z: "COMÉDIE" then finds no "Comédie".
+  - **Limits:** [parental control](user-limits.md#parental-control), [blocked genres](user-limits.md#blocked-genres), hidden titles and [movies waiting for their digital release](smart-lists-and-search.md#movies-waiting-for-their-digital-release) apply, as on every list.
 - A studio's page goes on after them: the titles you reach whose TMDB details name the studio, then TMDB's most popular titles of it that your addons describe (see [Studio pages](collections-people-and-ratings.md#studio-pages)).
 
 A genre or studio a title's page links to opens its page in jellyfin-web, which asks for it as an item first:
 
-- Polyfin finds it by the names it gave to the titles and genre or studio lists it answered lately, then a genre by the genre options of your catalogs, and a studio by the studios TMDB's details named.
-- After a restart, a genre page opened again finds its name in your catalogs. A genre no catalog offers opens again once a page that names it is opened. A studio page opens again as long as its studio is one TMDB named.
+- Polyfin finds it by the names it gave to the titles and genre or studio lists it answered lately, then a genre by the genre options of your catalogs and the genres of the titles it keeps, and a studio by the studios TMDB's details named.
+- After a restart, a genre page opened again finds its name in your catalogs, else among the genres of the titles Polyfin keeps. A studio page opens again as long as its studio is one TMDB named.
 - A genre an artist, album or song links to is a genre of music, as in Jellyfin. Its page lists the music of that genre: the albums and songs of local music folders, whose genres come from their tags. Music addons give genres only on an artist's page.
 
 ## Similar titles
