@@ -76,21 +76,29 @@ const (
 
 // GeneratedImage is an image Polyfin draws: a poster or a wide image of
 // Name from Posters, in order, downloaded from public addresses only when
-// Confined; or, with Emblem set, the wide emblem of one of Polyfin's views
-// (see EmblemImage).
+// Confined; with Emblem set, the wide emblem of one of Polyfin's views
+// (see EmblemImage); or, with Logo set, the logo of a studio at that
+// address on a plate, wide or square, with a narrower margin when
+// NarrowMargin (see StudioArtwork).
 type GeneratedImage struct {
-	Wide     bool
-	Name     string
-	Posters  []string
-	Confined bool
-	Emblem   string
+	Wide         bool
+	Name         string
+	Posters      []string
+	Confined     bool
+	Emblem       string
+	Logo         string
+	NarrowMargin bool
 }
 
 // URL stands for the image in Images: its ImageTag changes with the name,
-// the posters and the shape, or the emblem.
+// the posters and the shape, the emblem, or the logo, the shape and the
+// margin.
 func (g GeneratedImage) URL() string {
 	if g.Emblem != "" {
 		return generatedScheme + "emblem?" + url.Values{"v": {generatedVersion}, "emblem": {g.Emblem}}.Encode()
+	}
+	if g.Logo != "" {
+		return studioURL(g)
 	}
 	shape := "poster"
 	if g.Wide {

@@ -135,7 +135,7 @@ func (s *Service) knownFor(ctx context.Context, v view, credits []personCredit, 
 				}
 			}
 			var found []record
-			for _, r := range s.knownForTitles(ctx, v, window, deadline) {
+			for _, r := range s.tmdbTitleRecords(ctx, v, window, deadline) {
 				switch {
 				case r == nil || v.hidden[r.ID] || slices.ContainsFunc(picked, func(p record) bool { return p.ID == r.ID }):
 				case slices.ContainsFunc(listed, func(l record) bool { return l.ID == r.ID }):
@@ -209,10 +209,12 @@ func (s *Service) listedTMDB(ctx context.Context, v view, listed []record) map[t
 	return shown
 }
 
-// knownForTitles returns the record of the item of each credit (see
-// above), nil for a title none of the user's addons describes, or whose
-// IMDb identifier, the one it needs, is not known by deadline.
-func (s *Service) knownForTitles(ctx context.Context, v view, credits []personCredit, deadline time.Time) []*record {
+// tmdbTitleRecords returns the record of the item of each title of TMDB
+// (see above), as a person's credits or TMDB's discover of a studio (see
+// studiopages.go) name them: nil for a title none of the user's addons
+// describes, or whose IMDb identifier, the one it needs, is not known by
+// deadline.
+func (s *Service) tmdbTitleRecords(ctx context.Context, v view, credits []personCredit, deadline time.Time) []*record {
 	result := make([]*record, len(credits))
 	if len(credits) == 0 {
 		return result
@@ -233,9 +235,9 @@ func (s *Service) knownForTitles(ctx context.Context, v view, credits []personCr
 		case reached[i] != nil:
 			result[i] = reached[i]
 		case describable(v, kind, tmdbID):
-			result[i] = new(s.knownForTitle(kind, tmdbID, c, refs[i]))
+			result[i] = new(s.tmdbTitleRecord(kind, tmdbID, c, refs[i]))
 		case refs[i].IMDb != "" && describable(v, kind, refs[i].IMDb):
-			result[i] = new(s.knownForTitle(kind, refs[i].IMDb, c, refs[i]))
+			result[i] = new(s.tmdbTitleRecord(kind, refs[i].IMDb, c, refs[i]))
 		case !hasKey(imdb, c.title()) && describable(v, kind, "tt"):
 			asked = append(asked, i)
 		}
@@ -262,7 +264,7 @@ func (s *Service) knownForTitles(ctx context.Context, v view, credits []personCr
 		if id := imdb[c.title()]; id != "" && describable(v, kind, id) {
 			ref := refs[i]
 			ref.IMDb = id
-			result[i] = new(s.knownForTitle(kind, id, c, ref))
+			result[i] = new(s.tmdbTitleRecord(kind, id, c, ref))
 		}
 	}
 	return result
@@ -313,11 +315,10 @@ func (s *Service) reachedTitles(ctx context.Context, v view, refs []TitleRef) []
 	return result
 }
 
-// knownForTitle is the record of the title a person is known for that
-// none was kept of: the movie or series (kind) of the Stremio identifier
-// id, named, dated and with a poster as TMDB credits it (c) until its
-// addons describe it.
-func (s *Service) knownForTitle(kind Kind, id string, c personCredit, ref TitleRef) record {
+// tmdbTitleRecord is the record of a title of TMDB that none was kept of:
+// the movie or series (kind) of the Stremio identifier id, named, dated
+// and with a poster as TMDB lists it (c) until its addons describe it.
+func (s *Service) tmdbTitleRecord(kind Kind, id string, c personCredit, ref TitleRef) record {
 	r := unlistedTitle(kind, id, ref)
 	r.Meta.Released = c.Date
 	if len(c.Date) >= 4 {

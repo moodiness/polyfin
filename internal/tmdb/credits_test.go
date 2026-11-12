@@ -53,7 +53,8 @@ func names(credits []TitleCredit, kind string) []string {
 // (of a script, screenplay or novel) and producers in TMDB's order, the
 // rest of the crew left out, each with their TMDB identifier and photo,
 // as Jellyfin 12.4 keeps them. They come with the movie's details, its
-// companies and tagline, in one request.
+// companies, each with its identifier and logo, and tagline, in one
+// request.
 func TestAMoviesCreditsAreItsBilledCastAndCrew(t *testing.T) {
 	t.Parallel()
 	var cast []map[string]any
@@ -74,16 +75,17 @@ func TestAMoviesCreditsAreItsBilledCastAndCrew(t *testing.T) {
 		crew = append(crew, map[string]any{"id": 200 + i, "name": fmt.Sprintf("Producer %02d", i), "job": "Producer", "department": "Production"})
 	}
 	client, asked := creditsServer(t, map[string]any{"/3/movie/1001": map[string]any{"tagline": " Une phrase. ",
-		"production_companies": []any{map[string]any{"name": "North Pictures"}, map[string]any{"name": " "}, map[string]any{"name": "North Pictures"},
-			map[string]any{"name": "South Films"}},
+		"production_companies": []any{map[string]any{"id": 11, "name": "North Pictures", "logo_path": "/north.png"},
+			map[string]any{"id": 13, "name": " "}, map[string]any{"id": 11, "name": "North Pictures", "logo_path": "/north.png"},
+			map[string]any{"id": 12, "name": "South Films", "logo_path": nil}},
 		"credits": map[string]any{"cast": cast, "crew": crew}}})
 	details, err := client.TitleDetails(t.Context(), Movie, "1001", "fr-FR")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if details.Tagline != "Une phrase." || !slices.Equal(details.Companies, []string{"North Pictures", "South Films"}) ||
+	if details.Tagline != "Une phrase." || !slices.Equal(details.Companies, []Studio{{11, "North Pictures", "/north.png"}, {12, "South Films", ""}}) ||
 		details.Networks == nil || len(details.Networks) != 0 {
-		t.Errorf("details %q %q %q", details.Tagline, details.Companies, details.Networks)
+		t.Errorf("details %q %+v %+v", details.Tagline, details.Companies, details.Networks)
 	}
 	credits := details.Credits
 	actors := names(credits, Actor)
@@ -127,8 +129,10 @@ func TestASeriesCreditsAreItsAggregateCast(t *testing.T) {
 	}
 	client, asked := creditsServer(t, map[string]any{
 		"/3/tv/2031": map[string]any{"tagline": "Every tide turns.",
-			"networks":             []any{map[string]any{"name": "Coast TV"}, map[string]any{"name": "Coast Streams"}},
-			"production_companies": []any{map[string]any{"name": "Coast TV"}, map[string]any{"name": "Harbor Works"}},
+			"networks": []any{map[string]any{"id": 21, "name": "Coast TV", "logo_path": "/coast.png"},
+				map[string]any{"id": 22, "name": "Coast Streams"}},
+			"production_companies": []any{map[string]any{"id": 31, "name": "Coast TV", "logo_path": "/coast-co.png"},
+				map[string]any{"id": 32, "name": "Harbor Works"}},
 			"aggregate_credits": map[string]any{"cast": aggregate, "crew": []any{
 				map[string]any{"id": 77, "name": "Episode Director", "jobs": []any{map[string]any{"job": "Director"}}, "department": "Directing"}}},
 			"credits": map[string]any{"cast": []any{map[string]any{"id": 10, "name": "Lead", "character": "Lee", "order": 0}},
@@ -140,11 +144,13 @@ func TestASeriesCreditsAreItsAggregateCast(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if details.Tagline != "Every tide turns." || !slices.Equal(details.Networks, []string{"Coast TV", "Coast Streams"}) ||
-		!slices.Equal(details.Companies, []string{"Coast TV", "Harbor Works"}) {
-		t.Errorf("details %q %q %q", details.Tagline, details.Networks, details.Companies)
+	if details.Tagline != "Every tide turns." ||
+		!slices.Equal(details.Networks, []Studio{{21, "Coast TV", "/coast.png"}, {22, "Coast Streams", ""}}) ||
+		!slices.Equal(details.Companies, []Studio{{31, "Coast TV", "/coast-co.png"}, {32, "Harbor Works", ""}}) {
+		t.Errorf("details %q %+v %+v", details.Tagline, details.Networks, details.Companies)
 	}
-	if got := JoinStudios(details.Networks, details.Companies); !slices.Equal(got, []string{"Coast TV", "Coast Streams", "Harbor Works"}) {
+	if got := JoinStudios(StudioNames(details.Networks), StudioNames(details.Companies)); !slices.Equal(got,
+		[]string{"Coast TV", "Coast Streams", "Harbor Works"}) {
 		t.Errorf("studios %q", got)
 	}
 	credits := details.Credits

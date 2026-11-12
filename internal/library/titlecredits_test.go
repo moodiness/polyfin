@@ -58,7 +58,11 @@ func newFakeCreditsTMDB(t *testing.T) *fakeCreditsTMDB {
 			}
 			_ = json.NewEncoder(w).Encode(found)
 		default:
-			answer, ok := f.answers[path]
+			// A page of a list may have an answer of its own.
+			answer, ok := f.answers[path+"?page="+query.Get("page")]
+			if !ok {
+				answer, ok = f.answers[path]
+			}
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
 				return
