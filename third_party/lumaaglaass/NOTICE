@@ -8,6 +8,8 @@ its repository, at internal/webtheme/lumaaglaass, with Polyfin's patches
 - 0001-bundled-assets.patch
 - 0002-loader-defaults.patch
 - 0003-pass-per-frame.patch
+- 0004-studio-logos.patch
+- 0005-list-headings.patch
 
 The web client serves them at /web/polyfin/themes/lumaaglaass/, where the
 custom CSS and script Polyfin serves for the LumaaGlaass theme load them:

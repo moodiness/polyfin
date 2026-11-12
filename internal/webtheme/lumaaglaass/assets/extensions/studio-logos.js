@@ -1,0 +1,347 @@
+/* LumaaGlaass - Studio logos extension (Polyfin). */
+;
+(() => {
+    'use strict';
+
+    // =====================================================================
+    // Configuration
+    // =====================================================================
+    // Options - None: the main script loads it. On a title's page, the Studios line shows each
+    // studio's logo in place of its name: Polyfin draws it on a light plate at Items/<studio id>/
+    // Images/Thumb (16:9), of a narrow margin when asked (margin=narrow), and answers 404 for a
+    // studio without one, whose name then stays.
+    // Docs: Polyfin's themes-and-custom-code.md#studio-logos.
+
+    // =====================================================================
+    // Instance
+    // =====================================================================
+    const KEY = '__lumaaGlaassStudioLogos';
+    window[KEY]?.stop();
+    let stopped = false;
+
+    // =====================================================================
+    // Shared helpers
+    // =====================================================================
+    // Listeners - Added through listen() so stop() removes them all.
+    const listeners = [];
+    const listen = (target, event, fn, options) => {
+        target.addEventListener(event, fn, options);
+        listeners.push(() => target.removeEventListener(event, fn, options));
+    };
+    const element = (tag, cls, text) => {
+        const node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text) node.textContent = text;
+        return node;
+    };
+    // Theme - Only the stylesheet defines --lg-motion: without it, Jellyfin's own line stays.
+    const enabled = () => getComputedStyle(document.documentElement).getPropertyValue('--lg-motion').trim() !== '';
+    const currentClient = () => {
+        try {
+            return window.ApiClient || window.ConnectionManager?.currentApiClient?.();
+        } catch { return null; }
+    };
+    // Writes - Only real changes: the main theme's page observer and tooltip claim react to each write.
+    const setAttribute = (node, name, value) => {
+        if (node && node.getAttribute(name) !== value) node.setAttribute(name, value);
+    };
+    const toggleAttribute = (node, name, on) => {
+        if (node.hasAttribute(name) !== on) node.toggleAttribute(name, on);
+    };
+    const setProperty = (node, name, value) => {
+        if (node.style.getPropertyValue(name) !== value) node.style.setProperty(name, value);
+    };
+    // Titles - The main theme moves title to data-lg-tooltip for its styled hint: a title is read from
+    // either, and written (removed for null) only when it changes.
+    const titleOf = node => node.hasAttribute('title') ? node.getAttribute('title') : node.getAttribute('data-lg-tooltip');
+    const setTitle = (node, value) => {
+        if (titleOf(node) === value) return;
+        if (value === null) {
+            node.removeAttribute('title');
+            node.removeAttribute('data-lg-tooltip');
+        } else {
+            node.setAttribute('title', value);
+        }
+    };
+
+    // =====================================================================
+    // Styles
+    // =====================================================================
+    // Line - data-lg-studio-logos marks a Studios line showing a logo, on its .detailsGroupItem; the
+    // script sets --lg-studio-text (the line's font size) and --lg-studio-logo-height (see measure)
+    // there. Jellyfin's ", " separators are text of each item, hidden by a zero font size: a name
+    // keeps the line's size, and a name after a name gets its comma back (data-lg-studio-comma).
+    // Each item is a row of logo height, so names sit centered beside logos and the label in front.
+    const style = element('style', '', `
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] > .label {
+            align-self: start;
+            line-height: var(--lg-studio-logo-height);
+        }
+
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] > :not(.label) {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            row-gap: 6px;
+            min-width: 0;
+            margin-inline-start: -12px;
+        }
+
+        /* Items - Each starts 12px after the last, the line pulled back by as much so that wrapped
+           rows start where the first does; a name after a name follows its comma. */
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] > :not(.label) > * {
+            display: inline-flex;
+            align-items: center;
+            min-width: 0;
+            max-width: calc(100% - 12px);
+            min-height: var(--lg-studio-logo-height);
+            margin-inline-start: 12px;
+            font-size: 0;
+        }
+
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] > :not(.label) > [data-lg-studio-comma] {
+            margin-inline-start: 0;
+        }
+
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] > :not(.label) > * > a:not([data-lg-studio-logo]),
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] [data-lg-studio-comma]::before {
+            font-size: var(--lg-studio-text);
+        }
+
+        html body #itemDetailPage .detailsGroupItem[data-lg-studio-logos] [data-lg-studio-comma]::before {
+            content: ',';
+            margin-inline-end: .3em;
+        }
+
+        /* Logo - Polyfin's light plate, rounded on the dark page; the link keeps Jellyfin's focus and
+           draws the theme's ring around the plate. A logo shows once loaded, so a failed one never
+           shows a broken image. */
+        html body #itemDetailPage a[data-lg-studio-logo] {
+            display: inline-flex;
+            max-width: 100%;
+            border-radius: var(--lg-radius-small,8px);
+            line-height: 0;
+            text-decoration: none;
+        }
+
+        html body #itemDetailPage a[data-lg-studio-logo]:is(:focus-visible,.show-focus:focus) {
+            outline-offset: 3px;
+        }
+
+        html body #itemDetailPage .lg-studio-logo {
+            display: block;
+            height: var(--lg-studio-logo-height);
+            width: auto;
+            max-width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: contain;
+            border-radius: inherit;
+            transition: box-shadow var(--lg-duration,.2s) var(--lg-ease,ease);
+        }
+
+        html body #itemDetailPage a[data-lg-studio-logo]:hover > .lg-studio-logo {
+            box-shadow: 0 0 0 2px var(--lg-edge-open,rgba(255,255,255,.24));
+        }
+
+        html body #itemDetailPage a:not([data-lg-studio-logo]) > .lg-studio-logo {
+            display: none;
+        }
+    `);
+
+    // =====================================================================
+    // Logos
+    // =====================================================================
+    // Links - jellyfin-web links each studio of a title as #/list?studioId=<id>; the line's label is
+    // translated, so the links are what tells it.
+    const LINKS = '#itemDetailPage .detailsGroupItem a[href*="studioId="]';
+    const studioIdOf = link => {
+        try {
+            const hash = new URL(link.getAttribute('href'), location.href).hash;
+            return new URLSearchParams(hash.split('?')[1] || '').get('studioId') || '';
+        } catch { return ''; }
+    };
+    const nameOf = link => link.textContent.trim();
+    // State - Each link with its logo image (null once it failed), and each line's measures.
+    const links = new Map();
+    const groups = new Map();
+    // Measures - The logo is 64px tall, 48px on the stylesheet's compact layout (699px wide at most),
+    // where the line is narrow. It asks Polyfin for that height in device pixels, for a sharp plate,
+    // of a narrow margin, so the logo fills it. Names keep the line's font size.
+    const compact = matchMedia('(max-width:699px)');
+    function measure(group, line) {
+        const text = parseFloat(getComputedStyle(line).fontSize) || 16;
+        const height = compact.matches ? 48 : 64;
+        const old = groups.get(group);
+        if (old?.text === text && old.height === height) return old;
+        const measures = { text, height };
+        groups.set(group, measures);
+        return measures;
+    }
+    const logoUrl = (api, id, height) => api.getUrl('Items/' + encodeURIComponent(id) + '/Images/Thumb',
+        { maxHeight: Math.round(height * (window.devicePixelRatio || 1)), margin: 'narrow' });
+    function decorate(link, id, api) {
+        const group = link.closest('.detailsGroupItem');
+        const line = link.parentElement?.parentElement;
+        if (!group || !line || !group.contains(line)) return;
+        const { height } = measure(group, line);
+        const image = element('img', 'lg-studio-logo');
+        const state = { id, group, image, shown: false, url: logoUrl(api, id, height) };
+        image.alt = nameOf(link);
+        image.decoding = 'async';
+        image.draggable = false;
+        image.addEventListener('load', () => {
+            if (stopped || links.get(link) !== state) return;
+            state.shown = true;
+            syncLink(link, state);
+            syncGroup(group);
+        });
+        // Failed - A studio without a logo (404) keeps its name.
+        image.addEventListener('error', () => {
+            if (stopped || links.get(link) !== state) return;
+            image.remove();
+            state.image = null;
+            state.shown = false;
+            syncLink(link, state);
+            syncGroup(group);
+        });
+        links.set(link, state);
+        image.src = state.url;
+        link.append(image);
+    }
+    // Label - With its logo, the link is named by the studio (alt, aria-label, tooltip), its tooltip
+    // above it, clear of the next line (data-lg-tooltip-above, read by the main script); with its
+    // name, by the name itself, as Jellyfin draws it.
+    function syncLink(link, state) {
+        const name = nameOf(link);
+        toggleAttribute(link, 'data-lg-studio-logo', state.shown);
+        if (state.image && state.image.alt !== name) state.image.alt = name;
+        if (state.shown) {
+            setAttribute(link, 'aria-label', name);
+            setTitle(link, name);
+            toggleAttribute(link, 'data-lg-tooltip-above', true);
+        } else {
+            unlabel(link, state);
+        }
+        state.name = name;
+    }
+    function unlabel(link, state) {
+        toggleAttribute(link, 'data-lg-tooltip-above', false);
+        if (state.name === undefined) return;
+        if (link.getAttribute('aria-label') === state.name) link.removeAttribute('aria-label');
+        if (titleOf(link) === state.name) setTitle(link, null);
+    }
+    function release(link) {
+        const state = links.get(link);
+        links.delete(link);
+        state.image?.remove();
+        link.removeAttribute('data-lg-studio-logo');
+        unlabel(link, state);
+        syncGroup(state.group);
+    }
+    // Line - Marked while one of its logos shows; a name after a name keeps a comma.
+    function syncGroup(group) {
+        const states = [...links.values()].filter(state => state.group === group);
+        const logos = states.some(state => state.shown);
+        const line = group.querySelector('a[href*="studioId="]')?.parentElement?.parentElement;
+        toggleAttribute(group, 'data-lg-studio-logos', logos);
+        if (logos) {
+            const measures = groups.get(group);
+            setProperty(group, '--lg-studio-text', measures.text + 'px');
+            setProperty(group, '--lg-studio-logo-height', measures.height + 'px');
+        } else {
+            group.style.removeProperty('--lg-studio-text');
+            group.style.removeProperty('--lg-studio-logo-height');
+            if (group.getAttribute('style') === '') group.removeAttribute('style');
+            if (!states.length) groups.delete(group);
+        }
+        if (!line) return;
+        const logo = item => {
+            const link = item?.querySelector('a[href*="studioId="]');
+            return Boolean(link && links.get(link)?.shown);
+        };
+        [...line.children].forEach((item, index) => {
+            toggleAttribute(item, 'data-lg-studio-comma', logos && index > 0 && !logo(item) && !logo(line.children[index - 1]));
+        });
+    }
+    // Sync - New links get their image; links gone, or moved to another studio, are released. A
+    // page shown keeps its links; hidden pages (.hide) are left as they are until shown.
+    function sync() {
+        if (stopped) return;
+        const on = enabled();
+        for (const [link, state] of links) {
+            if (!on || !link.isConnected || studioIdOf(link) !== state.id) release(link);
+            else if (nameOf(link) !== state.name) syncLink(link, state);
+        }
+        if (!on) return;
+        const api = currentClient();
+        if (!api) return;
+        for (const link of document.querySelectorAll(LINKS)) {
+            if (links.has(link) || link.closest('.hide,[hidden]')) continue;
+            const id = studioIdOf(link);
+            if (id) decorate(link, id, api);
+        }
+    }
+    // Resize - A layout change (TV, another width) can change the line: its logos follow.
+    function remeasure() {
+        const api = currentClient();
+        if (!api) return;
+        for (const [link, state] of links) {
+            const line = link.parentElement?.parentElement;
+            if (!line || !state.image) continue;
+            const { height } = measure(state.group, line);
+            const url = logoUrl(api, state.id, height);
+            if (url !== state.url) {
+                state.url = url;
+                state.image.src = url;
+            }
+        }
+        new Set([...links.values()].map(state => state.group)).forEach(syncGroup);
+    }
+
+    // =====================================================================
+    // Scheduler
+    // =====================================================================
+    // Frames - Changes to the page and resizes are synchronized once per frame, a page shown at
+    // once; the clock covers the rest (the client signing in, the theme's stylesheet loading).
+    let scheduled = 0, timer = 0, resized = false;
+    const schedule = () => {
+        if (stopped || scheduled) return;
+        scheduled = requestAnimationFrame(() => {
+            scheduled = 0;
+            if (resized) remeasure();
+            resized = false;
+            sync();
+        });
+    };
+    const observer = new MutationObserver(schedule);
+    function start() {
+        document.head.append(style);
+        observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+        listen(document, 'viewshow', sync, true);
+        listen(window, 'hashchange', schedule);
+        listen(window, 'popstate', schedule);
+        listen(window, 'resize', () => {
+            resized = true;
+            schedule();
+        });
+        timer = setInterval(sync, 1000);
+        sync();
+    }
+
+    // =====================================================================
+    // Lifecycle
+    // =====================================================================
+    window[KEY] = {
+        stop() {
+            stopped = true;
+            clearInterval(timer);
+            observer.disconnect();
+            cancelAnimationFrame(scheduled);
+            listeners.forEach(fn => fn());
+            [...links.keys()].forEach(release);
+            style.remove();
+            delete window[KEY];
+        }
+    };
+    start();
+})();
