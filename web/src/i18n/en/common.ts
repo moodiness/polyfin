@@ -605,6 +605,7 @@ const common = {
     album: 'Albums',
     artist: 'Artists',
     playlist: 'Playlists',
+    collection: 'Collections',
   },
   stremioResources: {
     catalog: 'Catalogs',

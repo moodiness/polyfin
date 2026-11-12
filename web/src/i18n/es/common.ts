@@ -647,6 +647,7 @@ const common: typeof en = {
     artist: 'Artistas',
     playlist: 'Listas de reproducción',
     other: 'Otros vídeos',
+    collection: 'Colecciones',
   },
   stremioResources: {
     catalog: 'Catálogos',

@@ -12,9 +12,9 @@ import {
 import { Link } from 'react-router'
 import { cx, rem } from './cx'
 
-type MenuContextValue = { close: (returnFocus?: boolean) => void }
+type MenuContextValue = { close: (returnFocus?: boolean) => void; fit: boolean }
 
-const MenuContext = createContext<MenuContextValue>({ close: () => {} })
+const MenuContext = createContext<MenuContextValue>({ close: () => {}, fit: false })
 
 /** The props a Menu gives its trigger button: spread them on a `<button>`. */
 export type MenuTriggerProps = {
@@ -49,6 +49,7 @@ export function Menu({
   trigger,
   align = 'start',
   width = 256,
+  fit = false,
   children,
   className,
 }: {
@@ -58,14 +59,23 @@ export function Menu({
   trigger: (props: MenuTriggerProps) => ReactNode
   /** Which edge of the button the menu lines up with. */
   align?: 'start' | 'end'
-  /** Width in px. */
+  /** Width in px; with `fit`, the least width. */
   width?: number
+  /**
+   * Grows past `width` to fit its longest item, up to the room between its button and the edge
+   * of the screen, where an item wraps onto more lines rather than being cut: a row's actions,
+   * whose labels run long in some languages.
+   */
+  fit?: boolean
   /** MenuItem, MenuSeparator, MenuHeader and MenuGroup. */
   children: ReactNode
   className?: string
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
+  // With `fit`, the room between the button's aligned edge and the far edge of the screen, in px,
+  // measured as the menu opens: the menu wraps its items within it rather than going off screen.
+  const [room, setRoom] = useState<number | null>(null)
   const button = useRef<HTMLButtonElement | null>(null)
   const list = useRef<HTMLDivElement>(null)
   const root = useRef<HTMLDivElement>(null)
@@ -79,6 +89,14 @@ export function Menu({
       const all = items()
       all[which === 'first' ? 0 : all.length - 1]?.focus()
     })
+  }
+
+  function show() {
+    const box = button.current?.getBoundingClientRect()
+    if (fit && box !== undefined) {
+      setRoom(align === 'end' ? box.right : document.documentElement.clientWidth - box.left)
+    }
+    setOpen(true)
   }
 
   function close(returnFocus = true) {
@@ -120,7 +138,7 @@ export function Menu({
   }
 
   return (
-    <MenuContext value={{ close }}>
+    <MenuContext value={{ close, fit }}>
       <div ref={root} className={cx('relative', className)}>
         {trigger({
           ref: (element) => {
@@ -132,13 +150,17 @@ export function Menu({
           'aria-expanded': open,
           'aria-controls': `${id}-menu`,
           onClick: () => {
-            setOpen(!open)
-            if (!open) focusItem('first')
+            if (open) {
+              setOpen(false)
+            } else {
+              show()
+              focusItem('first')
+            }
           },
           onKeyDown: (event) => {
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
               event.preventDefault()
-              setOpen(true)
+              show()
               focusItem(event.key === 'ArrowDown' ? 'first' : 'last')
             }
           },
@@ -150,11 +172,23 @@ export function Menu({
           aria-label={label}
           hidden={!open}
           onKeyDown={onListKeyDown}
-          style={{ width: rem(width) }}
+          style={
+            fit
+              ? {
+                  minWidth: rem(width),
+                  // 0.75rem from the screen's edge, as the menu's own bound keeps.
+                  maxWidth:
+                    room === null
+                      ? undefined
+                      : `min(calc(100vw - 1.5rem), calc(${room}px - 0.75rem))`,
+                }
+              : { width: rem(width) }
+          }
           className={cx(
             // Above the SaveBar (z-20), under the TopBar (z-30).
             'absolute top-[calc(100%+0.375rem)] z-25 max-w-[calc(100vw-1.5rem)] rounded-panel p-1.5 raised animate-pop',
             align === 'end' ? 'right-0' : 'left-0',
+            fit && 'w-max',
           )}
         >
           {children}
@@ -198,7 +232,7 @@ export function MenuItem({
   end?: ReactNode
   children: ReactNode
 }) {
-  const { close } = use(MenuContext)
+  const { close, fit } = use(MenuContext)
   const content = (
     <>
       {Glyph && (
@@ -208,7 +242,9 @@ export function MenuItem({
           className={cx('shrink-0', danger ? 'text-danger' : 'text-ink-2')}
         />
       )}
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <span className={cx('min-w-0 flex-1', fit ? 'py-1.5 hyphenate' : 'truncate')}>
+        {children}
+      </span>
       {end !== undefined && <span className="shrink-0 text-small text-ink-3">{end}</span>}
     </>
   )
