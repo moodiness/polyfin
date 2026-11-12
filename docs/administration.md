@@ -266,6 +266,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Record ended accounts | Every hour |
 | Record expired share links | Every 10 minutes while share links are on, also deleting the links that ended more than 30 days ago |
 | Scan local folders | Each folder at startup, then every number of hours set in **Settings › Catalogs** |
+| Make thumbnails | Every day at 3:00, while thumbnails or chapter images are on: the images the files of local folders lack, one at a time (see [Files of local folders](scrubbing-thumbnails.md#files-of-local-folders)) |
 | Delete old recordings | For the recordings older than the days the settings keep them |
 | Schedule series recordings | For the new programmes of each series recording |
 | Find commercials in recordings | While **Find commercials in recordings** is on, in **Settings › Recordings** |
@@ -304,7 +305,7 @@ Each task allows some types, and a shortest interval:
 |---|---|---|
 | Record ended accounts, Record expired share links | interval, startup | 10 minutes |
 | Read the libraries' first pages, Add the episodes of watchlist series, Build taste profiles, Clean up removed sources | all four | 15 minutes |
-| Look for versions of watchlist titles | daily, weekly, interval | 1 hour |
+| Look for versions of watchlist titles, Make thumbnails | daily, weekly, interval | 1 hour |
 | Clean the activity log, Clean the playback history, Delete old recordings, Find commercials in recordings | all four | 1 hour |
 | Read every collection | daily, weekly, interval | 12 hours |
 | Refresh ratings | daily, weekly, interval | 24 hours |

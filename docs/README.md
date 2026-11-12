@@ -61,7 +61,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Versions](versions.md) | Which addon streams become versions, title pages, tracks from RemuxDB, live videos, and choosing, ordering and naming versions |
 | [Audio and subtitle tracks](audio-and-subtitle-tracks.md) | Default audio and subtitle languages, regional audio, and remembered track choices |
 | [Reading the sources](reading-the-sources.md) | Preparing playback in advance, the source cache, keeping files across restarts, preloading, failing sources, and carrying a play on |
-| [Scrubbing thumbnails](scrubbing-thumbnails.md) | Trickplay thumbnails and chapter images: settings, when they are made, request limits, look, and failing sources |
+| [Scrubbing thumbnails](scrubbing-thumbnails.md) | Trickplay thumbnails and chapter images: settings, when they are made, local files and their task, torrents, request limits, look, and failing sources |
 | [Transcoding](transcoding.md) | When Polyfin converts, adaptive quality, conversions at once, converted downloads, HLS segments and every Conversion setting |
 | [Quality of converted video](conversion-quality.md) | How large converted video is, the bitrate its video and audio get, and what an app's profile and the settings allow |
 | [GPUs and HDR](gpus-and-hdr.md) | Converting on NVIDIA, AMD, Intel and Apple GPUs, Docker GPU setup, and HDR tone mapping |

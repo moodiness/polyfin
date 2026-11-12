@@ -330,7 +330,7 @@ After a deadline:
 Only a playback starts a torrent, and a subtitle file inside it that a user picks before it was fetched (see [Subtitle files inside the torrent](#subtitle-files-inside-the-torrent)).
 
 - Preparing playback in advance, thumbnails and downloads never start one.
-- A torrent version cannot be downloaded, and has no thumbnails.
+- A torrent version cannot be downloaded. Its thumbnails come from what its plays read alone, never from the swarm, and grow with each play (see [Torrents' files](scrubbing-thumbnails.md#torrents-files)).
 - The playback ends after 30 seconds without a read, as when a player pauses, or between its requests.
 - Then the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
 

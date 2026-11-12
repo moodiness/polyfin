@@ -24,7 +24,7 @@ Under **Checks**, a tile for each main part tells its state at a glance: **Addon
 | **Torrents** | While they are on: the route, the torrents playing against **Torrents at once (0 = no limit)** when it is set, their peers and those reached over uTP, what was shared, and the route's outages the plays went on through in the last 15 minutes, as "Outage at 21:04: the proxy did not answer for 16 s; the play went on" (see [Torrents](torrents.md)) |
 | **Disk space** | The cache, recordings and backups folders, and the conversion folder and the folder for files being read when they are other folders than the cache's (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
 | **Backups** | The last run and its result, the last backup made with its file and size, the next one, each destination's last upload, and the last restore (see [Backups](backups.md)) |
-| **Thumbnails (trickplay)** | The queue and paused sources |
+| **Thumbnails (trickplay)** | The queue and paused sources, and the files of local folders by the last result of their images: **Local files with thumbnails**, **Local files that cannot have them** and **Local files that failed** (see [Files of local folders](scrubbing-thumbnails.md#files-of-local-folders)) |
 | **Artwork** | The artwork downloads that failed in the last hour, by kind and by server, and the servers waited for (see [Artwork and people](#artwork-and-people)) |
 | **People** | Whether a TMDB API key is saved, and how people's lookups on TMDB stand (see [Artwork and people](#artwork-and-people)) |
 | **Polyfin** | Memory, goroutines, uptime and version, and **Download the goroutines** (below) |
