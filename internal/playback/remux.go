@@ -699,7 +699,8 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if !x.Covers(0, analysis.Duration) {
 			streams = textSubtitles(analysis)
 		}
-		r := hls.Remux{Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan, Subtitles: streams, Extracted: x}
+		r := hls.Remux{Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan, Subtitles: streams, Extracted: x,
+			Size: s.endSize(ctx, remux.Version)}
 		if plan.IsSearched() {
 			s.useLookback(ctx, &r, remux.Version)
 		}
