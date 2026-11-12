@@ -375,6 +375,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	settings := store.Settings()
 	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
+	// The reads no request waits for any more, such as a genre page's
+	// catalogs, end as Polyfin stops.
+	lib.EndWith(ctx)
 	// A removal deletes, in its transaction, what the addon brought to the
 	// library and settings beyond its own tables; a manifest that renames
 	// catalogs has what names them follow, in its own.

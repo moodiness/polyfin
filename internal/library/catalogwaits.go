@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"sync"
@@ -36,6 +37,22 @@ const (
 	// refreshed again: the page kept is served meanwhile.
 	failedRefreshWait = time.Minute
 )
+
+// yieldingKey marks the context of a read no request may wait behind: its
+// catalog pages take a place among their host's after every page a request
+// waits for (see addonSlots), such as a genre's page's catalogs read on
+// after the page answered (see Narrowed). A page it asks for is shared as
+// any other: a request that needs it waits for it.
+type yieldingKey struct{}
+
+func withYielding(ctx context.Context) context.Context {
+	return context.WithValue(ctx, yieldingKey{}, true)
+}
+
+func yielding(ctx context.Context) bool {
+	yields, _ := ctx.Value(yieldingKey{}).(bool)
+	return yields
+}
 
 // catalogWaits are the waits hosts asked for, by host.
 type catalogWaits struct {

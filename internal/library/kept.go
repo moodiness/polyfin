@@ -68,11 +68,19 @@ func fetchedSize[T any](f fetched[T]) int { return cache.JSONSize(f.value) }
 func (s *Service) keptCatalogLife() time.Duration { return s.catalogLife() + staleCatalogs }
 
 // shared runs fetch once for all the callers of key at once, on a context
-// that the callers giving up does not cancel: each caller waits on its own
-// ctx. Addon requests bound themselves (see stremio.Client).
+// that the callers giving up does not cancel, but the server stopping does
+// (see detached): each caller waits on its own ctx. A caller that gave up
+// already starts no fetch. Addon requests bound themselves (see
+// stremio.Client).
 func (s *Service) shared(ctx context.Context, key string, fetch func(context.Context) (any, error)) (any, error) {
-	detached := context.WithoutCancel(ctx)
-	results := s.flight.DoChan(key, func() (any, error) { return fetch(detached) })
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	results := s.flight.DoChan(key, func() (any, error) {
+		detached, done := s.detached(ctx)
+		defer done()
+		return fetch(detached)
+	})
 	select {
 	case result := <-results:
 		return result.Val, result.Err
@@ -80,6 +88,23 @@ func (s *Service) shared(ctx context.Context, key string, fetch func(context.Con
 		return nil, ctx.Err()
 	}
 }
+
+// detached returns a context with ctx's values that ctx ending does not
+// cancel, but the server stopping does (see EndWith), and the function
+// that frees it once the work it runs ends.
+func (s *Service) detached(ctx context.Context) (context.Context, context.CancelFunc) {
+	detached, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	stop := context.AfterFunc(s.lifetime, cancel)
+	return detached, func() {
+		stop()
+		cancel()
+	}
+}
+
+// EndWith ties the reads that go on once their request no longer waits
+// for them, such as a genre's page's catalogs (see Narrowed), to ctx, the
+// server's: they end with it. It is set before the service is used.
+func (s *Service) EndWith(ctx context.Context) { s.lifetime = ctx }
 
 // background runs fetch for key on its own, unless it runs already, and
 // does not wait for it. due, checked once it runs, tells whether it is
@@ -151,6 +176,20 @@ func keptOrLater(ctx context.Context) bool {
 	return later
 }
 
+// readyOnlyKey marks a context whose reads take only the pages kept in
+// memory, asking neither the database nor any addon: a page that must
+// answer at once with what is read already (see mergedReady).
+type readyOnlyKey struct{}
+
+func withReadyOnly(ctx context.Context) context.Context {
+	return context.WithValue(ctx, readyOnlyKey{}, true)
+}
+
+func readyOnly(ctx context.Context) bool {
+	only, _ := ctx.Value(readyOnlyKey{}).(bool)
+	return only
+}
+
 // refreshingKey marks the context of a read that asks the addon at once
 // for the pages past their refresh age, and waits for them, instead of
 // taking them and asking again in the background (see ReadCollections).
@@ -175,8 +214,9 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // readPage returns the catalog page starting at skip: the one kept in
 // memory, else the one kept in the database, either asked for again in the
 // background once past its refresh age, else the addon's answer. A read
-// that asks no addon (see keptOnly) gets errNotKept instead of the
-// addon's answer, and has the page fetched in the background when it
+// that takes only memory (see readyOnly) gets errNotKept for any other
+// page; one that asks no addon (see keptOnly) gets errNotKept instead of
+// the addon's answer, and has the page fetched in the background when it
 // marks so (see keptOrLater); a read that refreshes (see withRefreshing)
 // waits for the addon's answer to a page past its refresh age, and takes
 // the kept one if the addon fails. A search's page is kept apart, for
@@ -216,6 +256,9 @@ func (s *Service) readPage(ctx context.Context, src source, skip int) ([]stremio
 	}
 	if _, ok := src.extras(skip); !ok {
 		return nil, nil
+	}
+	if readyOnly(ctx) {
+		return nil, errNotKept
 	}
 	if keptOnly(ctx) {
 		kept, ok := s.loadPage(ctx, src, key)
