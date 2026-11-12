@@ -362,24 +362,26 @@ A search reads the first page of the search catalogs, as Stremio apps do. Those 
 
 ### Library description refresh
 
-**Refresh descriptions** reads again, in the background, the descriptions of a library's titles, as **Refresh metadata** does for one title. It is in the menu at the end of the row of a server movie or series library, under **Content › Libraries**.
+**Refresh descriptions** reads again, in the background, the descriptions of a library's titles, as **Refresh metadata** does for one title. It is in the menu at the end of the row of a server movie, series or collection library, under **Content › Libraries**.
 
 - A title's overview, people, genres, rating and artwork then follow its metadata addon's new answer.
 - An addon that fails leaves the description as it was.
-- Libraries of collections, Live TV, music and IPTV sources do not offer it, nor do users' own libraries.
+- It refreshes descriptions only. Failed artwork downloads, ratings and version lists stay as they are: **Refresh metadata** on a title asks for them again, and **Refresh everything** on an addon's page forgets its version lists (see [Refreshing an addon](addons.md#refreshing-an-addon)).
+- Libraries of Live TV, music and IPTV sources do not offer it, nor do users' own libraries.
 
-Jellyfin apps start the same refresh. jellyfin-web's **Refresh metadata** on a server movie or series library queues it, from the menu of its card in the "My Media" home row. It joins the same queue, and the library's row under **Content › Libraries** shows it. The request answers at once, as Jellyfin's does once queued. Asked again while the library is refreshing or waiting, it starts no other.
+Jellyfin apps start the same refresh. jellyfin-web's **Refresh metadata** on a server movie, series or collection library queues it, from the menu of its card in the "My Media" home row. It joins the same queue, and the library's row under **Content › Libraries** shows it. The request answers at once, as Jellyfin's does once queued. Asked again while the library is refreshing or waiting, it starts no other.
 
 - **Modes:** "Scan for new and updated files" and a full refresh start it, as jellyfin-web sends them. A request that asks no metadata provider starts nothing. Images come with the descriptions, so an image mode starts it too.
 - **Options ignored:** "Replace all metadata", "Replace existing images" and trickplay regeneration. A description read again always replaces the one kept, the images follow it, and the image cache stays as it is (see [Clearing the image cache](health.md#clearing-the-image-cache)). Every mode does the same refresh.
-- **Libraries that do not offer it:** a collection, music or IPTV library, a smart list, or a user's own library answers as before, with nothing refreshed, as Jellyfin answers for any item it queues. A library the user cannot see answers as not found, as Jellyfin answers for an item it does not find.
+- **Libraries that do not offer it:** a music or IPTV library, a smart list, or a user's own library answers as before, with nothing refreshed, as Jellyfin answers for any item it queues. A library the user cannot see answers as not found, as Jellyfin answers for an item it does not find.
 
 How it runs:
 
 - **Which titles:** those of the catalog pages Polyfin keeps, up to the library's maximum, in the catalog's order. Those are the pages apps opened, and the first pages read every hour. For a local folder, every title it lists. Polyfin does not read the rest of a remote catalog to find more titles: that alone could cost thousands of requests.
+- **In a collection library:** first its collections, then the titles of the catalogs they group, one of each catalog in turn, as the library lists them, up to its maximum. It takes only what Polyfin keeps, and asks the addon nothing to find them. It covers the collections and titles whose description Polyfin keeps: those apps opened, or listed with their details. A collection no one opened, and its catalogs, are left out, and so is a title never described, which has nothing to read again.
 - **Its pace:** one title every 2 seconds, 30 a minute at most, whatever the addons. A title asks one request of the addon that describes it, or of the next one when it fails. A library of 600 titles kept takes about 20 minutes. Public metadata addons limit how often one server may ask them, and some block a server that asks too fast. At this pace, a refresh stays well below what apps browsing ask for.
 - **Rate limits:** an addon that answers "too many requests" (HTTP 429) is waited for as long as it asks (`Retry-After`). When it does not say, the wait is 30 seconds, then doubled, 15 minutes at most. The title is asked again 3 times at most, then counts as not described, and its description stays. Its failures show in **System › Health** as any request's.
-- **One at a time:** libraries asked to refresh while one is refreshing wait their turn, so the pace bounds them all. The refresh asks only for descriptions, never for catalog pages. "Read the libraries' first pages", every hour, and the apps' requests go on beside it, its one request at a time added to theirs.
+- **One at a time:** libraries asked to refresh while one is refreshing wait their turn, so the pace bounds them all. A title or collection read again since its library was asked to refresh, such as by a library before it in the queue that lists it too, is not asked again: it counts as described. The refresh asks only for descriptions, never for catalog pages. "Read the libraries' first pages", every hour, and the apps' requests go on beside it, its one request at a time added to theirs.
 - **Progress:** the library's row shows **Waiting to refresh its descriptions**. Then it shows the titles described against those to describe, with a bar. Then it shows the result: the titles described, and those no addon described.
 - **Stopping:** **Stop refreshing**, in the same menu, stops it, or takes it out of the queue. The titles described stay so. A restart stops it too.
 

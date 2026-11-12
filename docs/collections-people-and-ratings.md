@@ -14,6 +14,8 @@ A collection may also group other collections, such as a genre's movies and seri
 - **Order:** when the app reads them all at once, as jellyfin-web's collection page does, they come by release date once Polyfin has read them all, as Jellyfin orders a collection. Until then, and in pages, they come one of each catalog in turn.
 - **A collection of catalogs only** keeps their order, such as their titles' popularity.
 
+**Refresh descriptions**, in the menu of a collection library's row under **Content › Libraries**, reads again the descriptions of its collections, then of their titles (see [Library description refresh](addons-and-libraries.md#library-description-refresh)).
+
 #### Home rows of collection libraries
 
 On the home page of Jellyfin apps, each collection library has a row of its collections, "Recently Added in" the library's name. A movie or series library has a row of its titles the same way.

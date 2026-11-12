@@ -232,7 +232,7 @@ Other tools read parts of an addon again:
 
 | Tool | Where | What it does |
 |---|---|---|
-| **Refresh descriptions** | The menu of a server movie or series library, in **Content › Libraries** | Reads every kept title's description again now, one title every 2 seconds, with progress on the row (see [Library description refresh](addons-and-libraries.md#library-description-refresh)). |
+| **Refresh descriptions** | The menu of a server movie, series or collection library, in **Content › Libraries** | Reads every kept title's description again now, one title every 2 seconds, with progress on the row. A collection library's collections come first (see [Library description refresh](addons-and-libraries.md#library-description-refresh)). |
 | **Replace the address** | The source's more-actions menu | Downloads the manifest from a new address, with libraries kept, followed and removed as at a refresh, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
 | "Forget the version lists" | **System › Schedule** | Forgets every addon's version lists (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)). |
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | Sets how old a catalog page may get before Polyfin reads it again (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)). |
