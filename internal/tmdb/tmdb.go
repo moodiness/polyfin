@@ -5,7 +5,9 @@
 // (see the library package's people details), for the studios and
 // networks of titles, which smart lists may judge (see the library
 // package's studios.go) and movies and series show with their tagline
-// (see the library package's titlecredits.go), for the release dates of movies, which the
+// (see the library package's titlecredits.go), with the studios' logos,
+// for the titles of a studio (see the library package's studiopages.go),
+// for the release dates of movies, which the
 // wait for their digital release and smart lists judge (see the library
 // package's releases.go), for the episode groups series may show in
 // (see the library package's episodeorder.go), for the seasons and
@@ -298,13 +300,13 @@ func (c *Client) TitleImages(ctx context.Context, kind Kind, id string) (TitleIm
 // series, each once.
 func (c *Client) Studios(ctx context.Context, kind Kind, id string) ([]string, error) {
 	var details struct {
-		Networks  []named `json:"networks"`
-		Companies []named `json:"production_companies"`
+		Networks  []Studio `json:"networks"`
+		Companies []Studio `json:"production_companies"`
 	}
 	if err := c.get(ctx, "/"+string(kind)+"/"+url.PathEscape(id), nil, &details); err != nil {
 		return nil, err
 	}
-	return JoinStudios(namesOf(details.Networks), namesOf(details.Companies)), nil
+	return JoinStudios(StudioNames(details.Networks), StudioNames(details.Companies)), nil
 }
 
 // JoinStudios returns the studios of a title: the names of the networks
@@ -319,17 +321,38 @@ func JoinStudios(networks, companies []string) []string {
 	return names
 }
 
-// named is a network or a company of TMDB's details of a title.
-type named struct {
-	Name string `json:"name"`
+// Studio is a network or a company of TMDB's details of a title: its
+// TMDB identifier, its name, and the path of its logo on the image server,
+// empty when TMDB has none. TMDB serves every logo as a PNG at each of
+// its widths, whatever the file it was given.
+type Studio struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	LogoPath string `json:"logo_path"`
 }
 
-// namesOf returns the names of TMDB's networks or companies, trimmed,
-// each once, empty ones left out.
-func namesOf(list []named) []string {
+// studiosOf returns TMDB's networks or companies, their names and logo
+// paths trimmed, each once (by identifier, by name for one of none),
+// those of no name left out; never nil.
+func studiosOf(list []Studio) []Studio {
+	studios := []Studio{}
+	for _, s := range list {
+		s.Name, s.LogoPath = strings.TrimSpace(s.Name), strings.TrimSpace(s.LogoPath)
+		if s.Name != "" && !slices.ContainsFunc(studios, func(kept Studio) bool {
+			return kept.ID == s.ID && (s.ID > 0 || kept.Name == s.Name)
+		}) {
+			studios = append(studios, s)
+		}
+	}
+	return studios
+}
+
+// StudioNames returns the names of networks or companies, trimmed, each
+// once, empty ones left out; never nil.
+func StudioNames(list []Studio) []string {
 	names := []string{}
-	for _, n := range list {
-		if name := strings.TrimSpace(n.Name); name != "" && !slices.Contains(names, name) {
+	for _, s := range list {
+		if name := strings.TrimSpace(s.Name); name != "" && !slices.Contains(names, name) {
 			names = append(names, name)
 		}
 	}

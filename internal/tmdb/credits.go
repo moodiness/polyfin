@@ -68,13 +68,14 @@ type credits struct {
 }
 
 // TitleDetails is what TitleDetails reads of a movie or series: its
-// people (see TitleDetails), the names of the networks a series aired on
-// and of the companies that made the title, each once, and its tagline,
-// empty when TMDB has none in the language asked.
+// people (see TitleDetails), the networks a series aired on and the
+// companies that made the title, each once, with their TMDB identifier
+// and logo (see Studio), and its tagline, empty when TMDB has none in the
+// language asked.
 type TitleDetails struct {
 	Credits   []TitleCredit
-	Networks  []string
-	Companies []string
+	Networks  []Studio
+	Companies []Studio
 	Tagline   string
 }
 
@@ -97,11 +98,11 @@ func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language strin
 		query.Set("language", language)
 	}
 	var details struct {
-		Networks  []named `json:"networks"`
-		Companies []named `json:"production_companies"`
-		Tagline   string  `json:"tagline"`
-		Aggregate credits `json:"aggregate_credits"`
-		Credits   credits `json:"credits"`
+		Networks  []Studio `json:"networks"`
+		Companies []Studio `json:"production_companies"`
+		Tagline   string   `json:"tagline"`
+		Aggregate credits  `json:"aggregate_credits"`
+		Credits   credits  `json:"credits"`
 	}
 	path := "/movie/" + url.PathEscape(id)
 	query.Set("append_to_response", "credits")
@@ -116,8 +117,8 @@ func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language strin
 	if len(cast) == 0 {
 		cast = details.Credits.Cast
 	}
-	return TitleDetails{Credits: keptCredits(cast, crew), Networks: namesOf(details.Networks),
-		Companies: namesOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline)}, nil
+	return TitleDetails{Credits: keptCredits(cast, crew), Networks: studiosOf(details.Networks),
+		Companies: studiosOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline)}, nil
 }
 
 // keptCredits keeps the people of TMDB's credits a title shows (see
