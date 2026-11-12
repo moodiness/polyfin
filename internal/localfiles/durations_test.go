@@ -33,7 +33,8 @@ func about(d time.Duration, seconds int) bool {
 
 // A scan probes the videos of movies and shows folders for how long they
 // play, matched or plain: once, kept while the file is the same, probed
-// again once it changes. A video that cannot be probed is not tried again.
+// again once it changes. A video that cannot be probed is not tried again;
+// one scanned while ffprobe cannot be run is probed at a later scan.
 func TestScansProbeLengths(t *testing.T) {
 	t.Parallel()
 	ffmpeg, ffprobe := musicTools(t)
@@ -94,8 +95,9 @@ func TestScansProbeLengths(t *testing.T) {
 	check("first scan", 3)
 
 	// No video is probed again while it is the same: the scans would store
-	// 0 for each, no ffprobe being there.
-	e.service.UseTools(filepath.Join(t.TempDir(), "ffprobe"), ffmpeg)
+	// 0 for each, ffprobe failing on every video (FFmpeg takes none of its
+	// options).
+	e.service.UseTools(ffmpeg, ffmpeg)
 	for _, id := range []accounts.ID{moviesID, showsID} {
 		if err := e.service.Scan(t.Context(), id); err != nil {
 			t.Fatal(err)
@@ -103,9 +105,18 @@ func TestScansProbeLengths(t *testing.T) {
 	}
 	check("unchanged", 3)
 
-	// A video that changed is probed again.
-	e.service.UseTools(ffprobe, ffmpeg)
+	// A video that changed while ffprobe cannot be run is left without a
+	// length, rather than with none for good: the next scan that can run
+	// it probes it.
+	e.service.UseTools(filepath.Join(t.TempDir(), "ffprobe"), ffmpeg)
 	movie(t, ffmpeg, filepath.Join(movies, "Some Movie (2019)/Some Movie (2019).mkv"), 5)
+	if err := e.service.Scan(t.Context(), moviesID); err != nil {
+		t.Fatal(err)
+	}
+	if titles, err := e.service.TitleDurations(t.Context(), []string{someMovie}); err != nil || len(titles) != 0 {
+		t.Fatalf("changed without ffprobe: %v %v", titles, err)
+	}
+	e.service.UseTools(ffprobe, ffmpeg)
 	if err := e.service.Scan(t.Context(), moviesID); err != nil {
 		t.Fatal(err)
 	}

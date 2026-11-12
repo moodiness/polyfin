@@ -96,7 +96,7 @@ A scan reads only what changed:
 - Subtitle files and images added, changed or removed are offered as they are now from the next scan on.
 - Files left unmatched are matched again at each scan.
 - On a share, NFO and subtitle files and images are listed with the folders. Only the new or changed NFO files are read.
-- A video of a movies or shows folder is read with ffprobe once, when it is new or changed, for how long it plays. A movie or an episode whose description gives no length, and TMDB none either, shows that one with its "Ends at" time (see [Lengths and "Ends at"](collections-people-and-ratings.md#lengths-and-ends-at)). A disc's title has the length its disc gives. A video ffprobe cannot read has none, until it changes. After an update, the first scan reads every video found before, once.
+- A video of a movies or shows folder is read with ffprobe once, when it is new or changed, for how long it plays. A movie or an episode whose description gives no length, and TMDB none either, shows that one with its "Ends at" time (see [Lengths and "Ends at"](collections-people-and-ratings.md#lengths-and-ends-at)). A disc's title has the length its disc gives. A video ffprobe cannot read has none, until it changes. While ffprobe cannot be run, as when it is missing, videos are read at a later scan. After an update, the first scan reads every video found before, once.
 
 A few titles are looked up at once, so a large first scan takes a while. The folder's figures follow it.
 

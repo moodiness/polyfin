@@ -2,6 +2,8 @@ package localfiles
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -62,6 +64,15 @@ func (s *Service) storeDurations(ctx context.Context, id accounts.ID, list listi
 			if err != nil {
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()
+				}
+				// ffprobe that cannot be started, missing or not
+				// executable, says nothing of the video: it is probed
+				// again at the next scan, once ffprobe can be run.
+				var notFound *exec.Error
+				var notStarted *fs.PathError
+				if errors.As(err, &notFound) || errors.As(err, &notStarted) {
+					s.logger.Debug("ffprobe cannot be run: a video's length is read at the next scan", "path", rel, "error", err)
+					return nil
 				}
 				s.logger.Debug("A video cannot be probed", "path", rel, "error", err)
 			}
