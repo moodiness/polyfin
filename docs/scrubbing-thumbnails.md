@@ -12,7 +12,7 @@ For administrators: how Polyfin makes the scrubbing thumbnails and chapter image
 |---|---|---|---|
 | **Thumbnails when moving through a title** | **Settings › Thumbnails (trickplay)** | Off | Trickplay thumbnails. |
 | **Chapter images** | **Settings › Thumbnails (trickplay)** | Off | Chapter images. |
-| **One thumbnail every (seconds, at least)** | **Settings › Thumbnails (trickplay)** | 10 seconds (5 to 60) | Shortest time between thumbnails. A version longer than the requests allow at that pace gets longer steps ([How the images look](#how-the-images-look)). |
+| **One thumbnail every (seconds, at least)** | **Settings › Thumbnails (trickplay)** | 10 seconds (5 to 60) | Shortest time between thumbnails. A version longer than its requests can read at that pace gets longer steps ([How the images look](#how-the-images-look)). |
 | **Thumbnail width** | **Settings › Thumbnails (trickplay)** | 320 (or 240, 480) | Thumbnail width in pixels. |
 | **Space for images (GB)** | **Settings › Thumbnails (trickplay)** | 2 GB (1 to 50) | Past this, the least recently used versions lose images, remade on their next play. |
 
@@ -33,7 +33,7 @@ Polyfin makes thumbnails during a play from what it reads, and the rest after wa
 
 - For a version once played, and the next episode when [playback is prepared in advance](reading-the-sources.md#preparing-playback-in-advance).
 - Polyfin waits until playback stops and nobody plays from the same host. A play of a version Polyfin does not know holds back no host.
-- It adds what the source cache still holds, then reads only missing keyframes, located through the index (Matroska Cues or MP4 sample tables), one request each, never the whole file.
+- It adds what the source cache still holds, then reads only missing keyframes, located through the index (Matroska Cues or MP4 sample tables), never the whole file: one a request, or several when the host serves several ranges in one answer.
 - One version at a time, with a short queue.
 
 DVDs, recordings and Replay get no images. A torrent's file gets thumbnails from what its plays read alone ([Torrents' files](#torrents-files)). The log tells why a version gets none, with the title, once a day for each version.
@@ -45,20 +45,21 @@ A file of a local folder or a network share is read from the server's storage, n
 - It gets a thumbnail at every **One thumbnail every (seconds, at least)**: a 2-hour movie, 720 at 10 seconds.
 - It takes none of the request limits below.
 - It waits only while the same file plays, not for the plays of other local files.
-- A file without an index, such as AVI or MPEG-TS, gets no images. The log tells it once a day, with the title.
+- A file whose container has no index Polyfin reads, such as AVI, MPEG-TS, M2TS or MPG, is read whole by FFmpeg, which decodes its keyframes alone, as Jellyfin does when it extracts key frames only. It gets a thumbnail at every interval too, each showing the keyframe at its time.
+- That read goes through the whole file once, from the disk or the share, FFmpeg decoding on the processor at lowest priority. If the same file starts playing, it stops, and starts again once the play is over.
 
 The task Make thumbnails, in **System › Schedule**, makes the images of local files without waiting for a play:
 
 - It runs every day at 3:00 by default, as Jellyfin's, and when started by hand.
 - It makes the thumbnails and chapter images each local file lacks, one file at a time. A file not played yet is analyzed first.
 - While **Thumbnails when moving through a title** and **Chapter images** are both off, it does nothing.
-- It passes over discs, and the files whose last result says they cannot have images. Those that failed are tried again.
+- It passes over discs, and the files whose last result says they cannot have images. Those that failed are tried again. A file found without an index by an earlier version has its result dropped at the upgrade, so the task makes its images.
 - Addons' links and torrents still get theirs from their plays.
 
 **Thumbnails**, on **Content › Versions**, tells where each local file stands:
 
 - "15 made", "Waiting" or "Being made";
-- "Cannot be made: the file has no index", "Cannot be made: the file cannot be read" or "Cannot be made: no video";
+- "Cannot be made: the file cannot be read" or "Cannot be made: no video";
 - "Failed, tried again at the next play";
 - "None yet", before its first result.
 
@@ -84,14 +85,16 @@ These limits apply to addons' links.
 | Limit | Value |
 |---|---|
 | Requests per version, index included | 60 at most |
+| Keyframes per request | 1; up to 16, about 16 MB, from a host that serves several ranges in one answer |
 | Pace | 1 request every 3 seconds |
 | Per host, across versions | 120 an hour; past that, requests wait |
 | Thumbnails from the source cache | No request |
 
 ### How the images look
 
-- Each thumbnail gets its own keyframe. When thumbnails would outnumber requests left after the index, they spread evenly over the runtime, a whole number of seconds apart.
-- With about 58 requests left, that is every 47 seconds for a 45-minute episode, and every 2 minutes 5 seconds for a 2-hour movie.
+- Each thumbnail gets its own keyframe. When thumbnails would outnumber the keyframes the requests left can read, they spread evenly over the runtime, a whole number of seconds apart.
+- From a host that answers one range a request, with about 58 requests left, that is every 47 seconds for a 45-minute episode, and every 2 minutes 5 seconds for a 2-hour movie.
+- From a host that serves several ranges in one answer, Polyfin first reads one keyframe for each request left. With the requests still left, it then reads keyframes for thumbnails closer together, as many as the requests before read each, down to **One thumbnail every (seconds, at least)**. A 2-hour movie can thus get a thumbnail every 10 seconds, 720, within its 60 requests. If the requests run out first, the thumbnails keep the last step whose keyframes were all read.
 - Each shows the keyframe nearest its time, a few seconds off at most unless keyframes are further apart.
 - During a play, thumbnails follow **One thumbnail every (seconds, at least)**. After it, Polyfin keeps them and reads only later ones; if the interval grows, kept ones move to its nearest time.
 - A chapter image shows the keyframe nearest the chapter's start: its own read if requests allow one per thumbnail and chapter, else the nearest thumbnail read.
@@ -107,7 +110,7 @@ These limits apply to addons' links.
 | Two odd answers in a row | Fails the version; the log shows the answer, never the address | 30 minutes |
 | Link the source says expired | Renews it, once per version, then asks again | None |
 | Host asks to slow down (`429`) or is overloaded (`502`, `503`, `504`) | Stops the version, discarding that read; thumbnails from the play stay. Other hosts go on | Version: a day. Host: no image request for 2 hours |
-| File cannot give images (no index, an unsupported codec) | Leaves the version alone | A day |
+| File cannot give images (an addon's file without an index, an unsupported codec) | Leaves the version alone | A day |
 | Any other failure | Leaves the version alone | 30 minutes |
 
 **Compared with Jellyfin**
