@@ -202,6 +202,7 @@ When the server refuses to play a title, jellyfin-web 12.4 shows the reason, the
 - **Collection libraries:** on the home page, the title of a collection library's "Recently Added in" row opens the library on its default screen, as its links in the header do. That screen is the one chosen in the web player's **Settings › Home**, rather than Suggestions (see [Collections from addons](collections-people-and-ratings.md#collections-from-addons)).
 - **Hidden libraries:** once a user is signed in, the libraries hidden under **Content › Libraries** or **My sources** leave the top bar, its **More** menu and the side menu. They keep their row on the home page (see [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). After a user's first load in a browser, a reload doesn't show them even briefly: the script keeps the last answer in the browser's storage and applies it before jellyfin-web draws its menus.
 - **Home rows:** the script adds the rows chosen under **Settings › Web player › Home rows**. See [Home rows](home-rows.md).
+- **Place kept on Back:** in the modern and mobile layouts, Back to the home page or to search results returns to the same place, each row's sideways position included, once the rows are drawn; the logo and **Home** go to the top.
 
 #### Card menus
 
