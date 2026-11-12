@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"maps"
@@ -693,9 +694,18 @@ func TestStreamsNeedAGrant(t *testing.T) {
 			t.Errorf("%s: %d %q %s", name, response.StatusCode, body, response.Header.Get("Content-Type"))
 		}
 	}
+	// A forged play session is the real one with its MAC's last byte
+	// changed. The token's last two characters encode that byte alone:
+	// writing "AA" over them forges nothing when it is already 0, one
+	// session in 256.
+	forged, err := base64.RawURLEncoding.DecodeString(info.PlaySessionId)
+	if err != nil {
+		t.Fatalf("play session %s: %v", info.PlaySessionId, err)
+	}
+	forged[len(forged)-1] ^= 0xff
 	for name, target := range map[string]string{
 		"no credentials":      stream,
-		"forged play session": stream + "&playSessionId=" + info.PlaySessionId[:len(info.PlaySessionId)-2] + "AA",
+		"forged play session": stream + "&playSessionId=" + base64.RawURLEncoding.EncodeToString(forged),
 	} {
 		if response, _ := fetch(target); response.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s: %d", name, response.StatusCode)
