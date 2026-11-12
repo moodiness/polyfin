@@ -20,17 +20,20 @@ import (
 // is a hash of the name, which cannot be read back, so Polyfin remembers
 // the names it gave an identifier to, the namesKept most recent, in
 // memory. A genre is also found among the genre options of the catalogs
-// the user reaches, which GenreIds matches too (see nameFilter), and a
-// studio among those TMDB's details named (see
-// library.Service.StudioNames), so that a page opened again after a
-// restart still opens. An identifier known neither way is no item.
+// the user reaches, which GenreIds matches too (see nameFilter), then
+// among the genres of the titles Polyfin keeps (see
+// library.Service.GenreNames), and a studio among those TMDB's details
+// named (see library.Service.StudioNames), so that a page opened again
+// after a restart still opens. An identifier known none of these ways is
+// no item.
 
 const (
 	// namesKept bounds the names remembered by their identifier.
 	namesKept = 10_000
-	// studioNamesFresh is how long the studios TMDB's details named are
-	// used before they are read again, when an identifier is none of them.
-	studioNamesFresh = time.Minute
+	// keptNamesFresh is how long the genres of the titles kept and the
+	// studios TMDB's details named are used before they are read again,
+	// when an identifier is none of them.
+	keptNamesFresh = time.Minute
 )
 
 // namedKind is a kind of item that stands for a name: its Jellyfin type,
@@ -48,11 +51,12 @@ var (
 )
 
 // page is the page of the item of kind named name. A genre's or studio's
-// titles are those of the catalog options of its name, and a studio's
-// more (see library.Service.StudioTitles); a genre of music lists no
-// titles.
+// titles are those of the catalog options of its name, then more (see
+// library.Service.GenreTitles and StudioTitles); a genre of music lists
+// no titles.
 func (k namedKind) page(name string) namedPage {
-	page := namedPage{itemType: k.itemType, name: name, id: nameID(k.kind, name), sortName: strings.ToLower(name), studio: k == studioNamed}
+	page := namedPage{itemType: k.itemType, name: name, id: nameID(k.kind, name), sortName: strings.ToLower(name), genre: k == genreNamed,
+		studio: k == studioNamed}
 	if k != musicGenreNamed {
 		page.matches = func(option string) bool { return strings.EqualFold(strings.TrimSpace(option), strings.TrimSpace(name)) }
 	}
@@ -84,11 +88,9 @@ type namedItems struct {
 	// oldest once it is full.
 	ring []string
 	next int
-	// studios are the names of the studios TMDB's details named, by
-	// identifier, as read at studiosRead.
-	studiosMu   sync.Mutex
-	studios     map[string]string
-	studiosRead time.Time
+	// genres and studios are the names of the genres of the titles Polyfin
+	// keeps and of the studios TMDB's details named (see keptName).
+	genres, studios keptNames
 }
 
 // id returns the identifier of the item of kind named name, and
@@ -155,8 +157,8 @@ func (h *Handler) describeNamed(w http.ResponseWriter, r *http.Request, user acc
 }
 
 // namedByID returns the item an identifier stands for: a name remembered,
-// else a genre option of the user's catalogs, else a studio TMDB's
-// details named.
+// else a genre option of the user's catalogs, else a genre of the titles
+// Polyfin keeps, else a studio TMDB's details named.
 func (h *Handler) namedByID(ctx context.Context, user accounts.User, id string) (namedItem, bool, error) {
 	if item, ok := h.names.named(id); ok {
 		return item, true, nil
@@ -168,10 +170,22 @@ func (h *Handler) namedByID(ctx context.Context, user accounts.User, id string) 
 	if ok {
 		return namedItem{genreNamed, option}, true, nil
 	}
-	if name, ok := h.keptStudio(ctx, id); ok {
+	if name, ok := h.keptName(ctx, &h.names.genres, genreNamed, id, h.Library.GenreNames); ok {
+		return namedItem{genreNamed, name}, true, nil
+	}
+	if name, ok := h.keptName(ctx, &h.names.studios, studioNamed, id, h.Library.StudioNames); ok {
 		return namedItem{studioNamed, name}, true, nil
 	}
 	return namedItem{}, false, nil
+}
+
+// genreByID returns the name of the genre an identifier stands for: a
+// name remembered, else a genre of the titles Polyfin keeps.
+func (h *Handler) genreByID(ctx context.Context, id string) (string, bool) {
+	if item, ok := h.names.named(id); ok {
+		return item.name, item.kind == genreNamed
+	}
+	return h.keptName(ctx, &h.names.genres, genreNamed, id, h.Library.GenreNames)
 }
 
 // studioByID returns the name of the studio an identifier stands for: a
@@ -180,30 +194,40 @@ func (h *Handler) studioByID(ctx context.Context, id string) (string, bool) {
 	if item, ok := h.names.named(id); ok {
 		return item.name, item.kind == studioNamed
 	}
-	return h.keptStudio(ctx, id)
+	return h.keptName(ctx, &h.names.studios, studioNamed, id, h.Library.StudioNames)
 }
 
-// keptStudio returns the name of a studio TMDB's details named whose
-// identifier is id, which it remembers. The names are read again when id
-// is none of them, once a studioNamesFresh at most.
-func (h *Handler) keptStudio(ctx context.Context, id string) (string, bool) {
-	n := &h.names
-	n.studiosMu.Lock()
-	defer n.studiosMu.Unlock()
-	name, ok := n.studios[id]
-	if !ok && time.Since(n.studiosRead) >= studioNamesFresh {
-		names, err := h.Library.StudioNames(ctx)
+// keptNames are names of a kind Polyfin keeps, by identifier, as read at
+// read; the zero value has none yet.
+type keptNames struct {
+	mu   sync.Mutex
+	byID map[string]string
+	read time.Time
+}
+
+// keptName returns the name of kind whose identifier is id among the names
+// load returns, the first of each identifier, which it remembers. The
+// names are read again into kept when id is none of them, once a
+// keptNamesFresh at most.
+func (h *Handler) keptName(ctx context.Context, kept *keptNames, kind namedKind, id string, load func(context.Context) ([]string, error)) (string, bool) {
+	kept.mu.Lock()
+	defer kept.mu.Unlock()
+	name, ok := kept.byID[id]
+	if !ok && time.Since(kept.read) >= keptNamesFresh {
+		names, err := load(ctx)
 		if err != nil {
 			return "", false
 		}
-		n.studios, n.studiosRead = make(map[string]string, len(names)), time.Now()
-		for _, kept := range names {
-			n.studios[nameID(studioNamed.kind, kept)] = kept
+		kept.byID, kept.read = make(map[string]string, len(names)), time.Now()
+		for _, named := range names {
+			if key := nameID(kind.kind, named); kept.byID[key] == "" {
+				kept.byID[key] = named
+			}
 		}
-		name, ok = n.studios[id]
+		name, ok = kept.byID[id]
 	}
 	if ok {
-		h.names.id(studioNamed, name)
+		h.names.id(kind, name)
 	}
 	return name, ok
 }
