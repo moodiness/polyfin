@@ -477,8 +477,21 @@ func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool) ([]Range
 // does not give, one or rarely two. When f is also a RangeFetcher, several
 // keyframes are read with each request.
 func (v *Video) ReadFrames(ctx context.Context, f Fetcher, indexes []int, fn func(index int, frame []byte) error) error {
-	r := &frameReader{v: v, f: f, guess: firstFrameGuess}
+	return v.Frames(f).Read(ctx, indexes, fn)
+}
+
+// Frames reads the keyframes of v through f, as ReadFrames does, one Read
+// after another: what a Read learns of the keyframes' sizes, and whether f
+// serves several ranges with one request, the next Read keeps.
+func (v *Video) Frames(f Fetcher) *FrameReader {
+	r := &FrameReader{v: v, f: f, guess: firstFrameGuess}
 	_, r.ranges = f.(RangeFetcher)
+	return r
+}
+
+// Read reads the keyframes numbered by indexes, as ReadFrames does.
+func (r *FrameReader) Read(ctx context.Context, indexes []int, fn func(index int, frame []byte) error) error {
+	v := r.v
 	for len(indexes) > 0 {
 		batch := []Range{}
 		var bytes int64
@@ -515,9 +528,9 @@ func (v *Video) ReadFrames(ctx context.Context, f Fetcher, indexes []int, fn fun
 	return nil
 }
 
-// frameReader reads keyframes, learning as it goes how long Cluster
+// FrameReader reads keyframes, learning as it goes how long Cluster
 // headers are and how large keyframes are.
-type frameReader struct {
+type FrameReader struct {
 	v *Video
 	f Fetcher
 	// ranges is set while f serves several ranges with one request.
@@ -533,7 +546,7 @@ type frameReader struct {
 // for a Matroska block, a guess of its size, from the start of its
 // Cluster until the length of a Cluster header is known, or when its
 // index does not say where in the Cluster the block is.
-func (r *frameReader) first(place frameAt) Range {
+func (r *FrameReader) first(place frameAt) Range {
 	if !r.v.matroska {
 		return Range{Off: place.off, N: int(place.n)}
 	}
@@ -556,7 +569,7 @@ func (r *frameReader) first(place frameAt) Range {
 // several at once, else with one each. A source found not to now has the
 // first range alone read, so that a reader running out of requests has the
 // keyframes read so far.
-func (r *frameReader) fetchBatch(ctx context.Context, ranges []Range) ([][]byte, error) {
+func (r *FrameReader) fetchBatch(ctx context.Context, ranges []Range) ([][]byte, error) {
 	if rf, ok := r.f.(RangeFetcher); ok && r.ranges && len(ranges) > 1 {
 		data, err := rf.FetchRanges(ctx, ranges)
 		switch {
@@ -582,7 +595,7 @@ func (r *frameReader) fetchBatch(ctx context.Context, ranges []Range) ([][]byte,
 }
 
 // fetch reads exactly the n bytes at off.
-func (r *frameReader) fetch(ctx context.Context, off, n int64) ([]byte, error) {
+func (r *FrameReader) fetch(ctx context.Context, off, n int64) ([]byte, error) {
 	data, err := r.f.Fetch(ctx, off, int(n))
 	if err != nil {
 		return nil, err
@@ -595,7 +608,7 @@ func (r *frameReader) fetch(ctx context.Context, off, n int64) ([]byte, error) {
 
 // frame returns the keyframe at place from data, read at start, reading
 // what data lacks.
-func (r *frameReader) frame(ctx context.Context, place frameAt, data []byte, start int64) ([]byte, error) {
+func (r *FrameReader) frame(ctx context.Context, place frameAt, data []byte, start int64) ([]byte, error) {
 	if !r.v.matroska {
 		if int64(len(data)) < place.n {
 			return nil, fmt.Errorf("fetching %d bytes at %d: %w", place.n, place.off, io.ErrUnexpectedEOF)
@@ -645,7 +658,7 @@ func (r *frameReader) frame(ctx context.Context, place frameAt, data []byte, sta
 // firstBlock returns the frame of the first block of the track in the
 // Cluster whose data starts at from, which must be a keyframe. Only the
 // elements whose headers data, read at start, holds are walked.
-func (r *frameReader) firstBlock(ctx context.Context, from int64, data []byte, start int64) ([]byte, error) {
+func (r *FrameReader) firstBlock(ctx context.Context, from int64, data []byte, start int64) ([]byte, error) {
 	for at := from; at+min(maxHeader, r.v.size-at) <= start+int64(len(data)); {
 		frame, err := r.block(ctx, at, data, start)
 		if !errors.Is(err, errMisplaced) {
@@ -662,7 +675,7 @@ func (r *frameReader) firstBlock(ctx context.Context, from int64, data []byte, s
 
 // elementAt reads the element header at at, from *data read at *start
 // when it holds it, else from a new read, which replaces them.
-func (r *frameReader) elementAt(ctx context.Context, at int64, data *[]byte, start *int64) (header, error) {
+func (r *FrameReader) elementAt(ctx context.Context, at int64, data *[]byte, start *int64) (header, error) {
 	if at >= r.v.size {
 		return header{}, fmt.Errorf("element past the end of the file: %w", io.ErrUnexpectedEOF)
 	}
@@ -684,7 +697,7 @@ func (r *frameReader) elementAt(ctx context.Context, at int64, data *[]byte, sta
 // BlockGroup, at at: a keyframe of the track. Its bytes are taken from
 // data, read at start, as far as it holds them. errMisplaced when no
 // keyframe of the track is there.
-func (r *frameReader) block(ctx context.Context, at int64, data []byte, start int64) ([]byte, error) {
+func (r *FrameReader) block(ctx context.Context, at int64, data []byte, start int64) ([]byte, error) {
 	h, err := r.elementAt(ctx, at, &data, &start)
 	switch {
 	case err != nil && !errors.Is(err, errInvalid):
