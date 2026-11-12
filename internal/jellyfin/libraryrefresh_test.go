@@ -18,8 +18,8 @@ import (
 // Refresh metadata on a library, as jellyfin-web sends it, queues the
 // paced refresh of its titles' descriptions that Content › Libraries
 // starts, and answers at once; asked again while it runs, it starts no
-// other. Without a mode that asks for metadata, and on a library whose
-// descriptions are not refreshed, it answers the same and starts nothing.
+// other. A collection library's refresh starts the same way. Without a
+// mode that asks for metadata, it answers the same and starts nothing.
 // Members may not refresh.
 func TestJellyfinRefreshOfALibraryQueuesItsDescriptions(t *testing.T) {
 	t.Parallel()
@@ -97,13 +97,15 @@ func TestJellyfinRefreshOfALibraryQueuesItsDescriptions(t *testing.T) {
 	if _, ok := s.library.LibraryRefreshes()[top]; ok {
 		t.Fatal("a refresh without metadata started the library's")
 	}
-	// A collection library's descriptions are not refreshed.
+	// A collection library's descriptions are refreshed too: it lists no
+	// collection, so its refresh ends at once.
 	if status := refresh(admin, views["Sets"], asWeb); status != http.StatusNoContent {
 		t.Errorf("a collection library: %d", status)
 	}
-	if _, ok := s.library.LibraryRefreshes()[sets]; ok {
-		t.Error("a collection library's refresh started")
-	}
+	eventually(t, "the collection library's refresh", func() bool {
+		state, ok := s.library.LibraryRefreshes()[sets]
+		return ok && state.State == library.RefreshDone && state.Titles == 0
+	})
 
 	if status := refresh(admin, views["Top"], asWeb); status != http.StatusNoContent {
 		t.Fatalf("refreshing the library: %d", status)
