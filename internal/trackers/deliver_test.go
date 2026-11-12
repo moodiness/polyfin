@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -351,9 +352,19 @@ func TestChangesAreRetriedAfterAnOutage(t *testing.T) {
 	h := newHarness(t)
 	user := h.user(t, "gina")
 	h.connected(t, user, MDBList, "mdblist-gina")
+	// The fourth answer waits until the test saw MDBList shown unreachable,
+	// from the third failure: once answered, the fifth send succeeds, and
+	// a loaded machine could get there before the test looks.
+	seen := make(chan struct{})
+	var release sync.Once
+	defer release.Do(func() { close(seen) })
 	var calls atomic.Int32
 	h.f.on("POST", "/mdblist/sync/watched", func(request) answer {
-		if calls.Add(1) <= 4 {
+		n := calls.Add(1)
+		if n == 4 {
+			<-seen
+		}
+		if n <= 4 {
 			return answer{status: http.StatusServiceUnavailable, body: `{}`}
 		}
 		return answer{status: http.StatusOK, body: `{"updated":{"movies":1}}`}
@@ -364,6 +375,7 @@ func TestChangesAreRetriedAfterAnOutage(t *testing.T) {
 	h.Mark(user, Mark{Played: true, Titles: titles(movie)})
 	h.f.wait(t, 3, "mdblist", "/sync/watched")
 	eventually(t, "MDBList shown unreachable", func() bool { return h.status(t, user, MDBList).Problem == ProblemUnreachable })
+	release.Do(func() { close(seen) })
 	h.f.wait(t, 5, "mdblist", "/sync/watched")
 	eventually(t, "MDBList reachable again", func() bool { return h.status(t, user, MDBList).Problem == "" })
 	h.idle(t)
