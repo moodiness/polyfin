@@ -58,13 +58,16 @@ func TestAPortTakenAsTheClusterStartsGivesWayToAnother(t *testing.T) {
 	pgCtl := filepath.Join(bin, "pg_ctl")
 	// pg_ctl start records its port. The first start ends, as PostgreSQL
 	// does on a port taken, once the test took that port; the next one
-	// starts.
+	// starts. A start tells whether it is a later one before it records
+	// its port, since the test takes the port as soon as it sees it.
 	script := `#!/bin/sh
+later=
+if [ -e "$0.ports" ]; then later=1; fi
 for arg; do
 	if [ "$prev" = -o ]; then echo "${arg#-p }" >> "$0.ports"; fi
 	prev=$arg
 done
-if [ -e "$0.taken" ]; then exit 0; fi
+if [ -n "$later" ]; then exit 0; fi
 while [ ! -e "$0.taken" ]; do sleep 0.01; done
 echo "pg_ctl: could not start server" >&2
 exit 1
