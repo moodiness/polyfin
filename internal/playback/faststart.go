@@ -59,12 +59,36 @@ func (s *Service) FastStarts(ctx context.Context, version library.Version, conve
 // plan, from the version's keyframes, whatever the settings say since; a
 // play of a file whose keyframes are read from the whole file keeps the
 // plan it started with (see playPlan). Fast segments are for remote
-// versions only, which are not read so.
+// versions only, which are not read so. A version found to end before
+// its plan does, as a file cut short, ends there (see hls.Manager.End):
+// a play asked for later lists its segments up to there.
 func (s *Service) RemuxPlan(ctx context.Context, remux Remux) (hls.Plan, error) {
-	if !remux.FastStart {
-		return s.playPlan(ctx, remux)
+	var plan hls.Plan
+	var err error
+	if remux.FastStart {
+		plan, err = s.fastPlan(ctx, remux.Version, remux.ConvertVideo == nil, remux.Start)
+	} else {
+		plan, err = s.playPlan(ctx, remux)
 	}
-	return s.fastPlan(ctx, remux.Version, remux.ConvertVideo == nil, remux.Start)
+	if err != nil {
+		return plan, err
+	}
+	if end, ok := s.segments.End(remux.Version.ID.String(), s.endSize(ctx, remux.Version)); ok {
+		plan = plan.Until(end)
+	}
+	return plan, nil
+}
+
+// endSize is the size a version's early end is kept with (see
+// hls.Remux.Size): its library entry's, which each scan of a local folder
+// renews as the file changes, else the one its analysis found. The plans
+// of its plays read it as its encodings do, before any of its bytes.
+func (s *Service) endSize(ctx context.Context, version library.Version) int64 {
+	if version.Size > 0 {
+		return version.Size
+	}
+	analysis, _ := s.Analyzed(ctx, version.ID)
+	return analysis.Size
 }
 
 // fastPlan is the plan of a play of version from start, copied or not,
