@@ -76,6 +76,9 @@ func newAudioSeason(t *testing.T, ffmpeg string, count int, write func(dir strin
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, logger, o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
+		// The scan probes the episodes' lengths with the FFmpeg the test
+		// is given, as Polyfin does with its own, not with one on PATH.
+		folders.UseTools(ffprobe, ffmpeg)
 		o.Library.UseLocal(folders)
 		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 		o.Segments = mediasegments.New(pool, []mediasegments.Source{{Name: mediasegments.TheIntroDB, URL: databases.url}}, "test", logger,
