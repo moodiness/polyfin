@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -105,25 +106,47 @@ func (h *Handler) trickplayVersion(ctx context.Context, user accounts.User, item
 
 // queueImages asks, in the background, for the thumbnails and chapter
 // images of the version a playback on device started with, when the
-// settings turn them on: they are made once it stopped.
+// settings turn them on: they are made once it stopped. A version that
+// gets none has its reason logged (see thumbnails.Service.Skip).
 func (h *Handler) queueImages(ctx context.Context, user accounts.User, device accounts.ID, item library.Item, mediaSource string) {
-	// Recordings are Polyfin's own files, which may be deleted at any time;
-	// a replay's file would take one of its provider's connections for
-	// the length of the programme: neither gets thumbnails or chapter
-	// images.
-	if h.Thumbnails == nil || item.Kind == library.KindRecording || item.Kind == library.KindReplay {
+	if h.Thumbnails == nil {
 		return
 	}
 	if settings := h.Accounts.Settings(); !settings.Trickplay && !settings.ChapterImages {
+		h.Thumbnails.Skip(library.Version{}, "", thumbnails.SkippedTurnedOff)
+		return
+	}
+	title := logTitle(item)
+	// Recordings are Polyfin's own files, which may be deleted at any time;
+	// a replay's file would take one of its provider's connections for the
+	// length of the programme: neither gets thumbnails or chapter images,
+	// nor is its version looked up, the title standing for it in the log.
+	if item.Kind == library.KindRecording || item.Kind == library.KindReplay {
+		h.Thumbnails.Skip(library.Version{ID: item.ID}, title, thumbnails.SkippedRecording)
 		return
 	}
 	version, ok := h.startedVersion(ctx, user, item, mediaSource)
+	switch {
+	case !ok:
 	// Images are made of keyframes read by ranges through a file's index:
 	// a version that is not one file, a DVD, gets none.
-	if !ok || h.Playback.ReadsInput(version) {
-		return
+	case h.Playback.ReadsInput(version):
+		h.Thumbnails.Skip(version, title, thumbnails.SkippedDisc)
+	default:
+		h.Thumbnails.Queue(version, title, device)
 	}
-	h.Thumbnails.Queue(version, device)
+}
+
+// logTitle names a title in the log: an episode by its series, season
+// and number, another title by its name and year.
+func logTitle(item library.Item) string {
+	switch {
+	case item.Kind == library.KindEpisode:
+		return fmt.Sprintf("%s S%02dE%02d", item.SeriesName, item.ParentIndexNumber, item.IndexNumber)
+	case item.ProductionYear > 0:
+		return fmt.Sprintf("%s (%d)", item.Name, item.ProductionYear)
+	}
+	return item.Name
 }
 
 // startedVersion is the version of item a playback started with, named
@@ -147,7 +170,10 @@ func (h *Handler) startedVersion(ctx context.Context, user accounts.User, item l
 const playingStale = 5 * time.Minute
 
 // thumbnailPlaybacks lists the playbacks under way for the thumbnails,
-// which wait for them, with the URL of their version when it is known.
+// which wait for them, with the URL of their version when it is known: the
+// version played (see playedVersion), which a title's own identifier,
+// reported as the media source of its first version, does not name, or
+// the one the play went on from once that one failed.
 func (h *Handler) thumbnailPlaybacks() []thumbnails.Playing {
 	var playing []thumbnails.Playing
 	for device, now := range h.sessions.All() {
@@ -155,7 +181,9 @@ func (h *Handler) thumbnailPlaybacks() []thumbnails.Playing {
 			continue
 		}
 		p := thumbnails.Playing{Device: device}
-		if id, ok := parseGUID(now.MediaSourceID); ok {
+		if switched, ok := h.Playback.SwitchedTo(now.PlaySessionID); ok && now.PlaySessionID != "" {
+			p.URL = switched.URL
+		} else if id, ok := h.playedVersion(device, now); ok {
 			if version, known := h.Library.KnownVersion(id); known {
 				p.URL = version.URL
 			}

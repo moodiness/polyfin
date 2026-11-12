@@ -148,14 +148,16 @@ func sleep(ctx context.Context, d time.Duration) error {
 
 // paced reads a version's source for one generation: each request waits
 // while a playback reads the same host, then for the host's turn, and
-// those past the generation's budget fail with errBudget.
+// those past the generation's budget fail with errBudget. An unpaced one,
+// of a local folder's file, takes no turn of the host.
 type paced struct {
 	src  Source
 	host string
 	gate *gate
 	// busy reports whether a playback reads host.
-	busy func(host string) bool
-	left int
+	busy    func(host string) bool
+	left    int
+	unpaced bool
 	// requests counts the requests made, and renewed is set once the
 	// link was renewed: once a generation.
 	requests int
@@ -171,8 +173,10 @@ func (p *paced) take(ctx context.Context) error {
 			return err
 		}
 	}
-	if err := p.gate.wait(ctx, p.host); err != nil {
-		return err
+	if !p.unpaced {
+		if err := p.gate.wait(ctx, p.host); err != nil {
+			return err
+		}
 	}
 	p.left--
 	p.requests++

@@ -48,37 +48,39 @@ func (s *Service) live(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
-		for _, version := range s.playingVersions() {
+		for _, j := range s.playingJobs() {
 			if ctx.Err() != nil {
 				return
 			}
-			s.extendPlaying(ctx, version)
+			s.extendPlaying(ctx, j)
 		}
 	}
 }
 
-// playingVersions are the versions waiting for their images whose
-// playback goes on.
-func (s *Service) playingVersions() []library.Version {
+// playingJobs are the versions waiting for their images whose playback
+// goes on.
+func (s *Service) playingJobs() []job {
 	playing := s.playbacks()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var versions []library.Version
+	var jobs []job
 	for _, j := range s.jobs {
 		for _, p := range playing {
 			if p.Device == j.after {
-				versions = append(versions, j.version)
+				jobs = append(jobs, j)
 				break
 			}
 		}
 	}
-	return versions
+	return jobs
 }
 
 // extendPlaying extends the thumbnails of a version playing, unless the
 // settings turn them off, a conversion runs on the processor, its images
-// are made after a play now, or it recently could not be extended.
-func (s *Service) extendPlaying(ctx context.Context, version library.Version) {
+// are made after a play now, or it recently could not be extended. A file
+// that cannot give images is logged once its play is over (see generate).
+func (s *Service) extendPlaying(ctx context.Context, j job) {
+	version := j.version
 	if !s.Settings().Trickplay || s.converting() {
 		return
 	}
@@ -105,11 +107,14 @@ func (s *Service) extendPlaying(ctx context.Context, version library.Version) {
 	switch {
 	case err == nil || errors.Is(err, source.ErrNotCached) || ctx.Err() != nil:
 		if added > 0 {
-			s.Logger.Debug("Made thumbnails of a version from what its play read", "addon", version.Addon, "thumbnails", added)
+			s.Logger.Debug("Made thumbnails of a version from what its play read", "title", j.title, "addon", version.Addon, "thumbnails", added)
 		}
 	case errors.Is(err, errGone):
+	case lasting(err):
+		s.Logger.Debug("The thumbnails of a version cannot be made during its play", "title", j.title, "addon", version.Addon, "error", err)
+		s.unextended.Put(version.ID, err)
 	default:
-		s.Logger.Info("The thumbnails of a version cannot be made during its play", "addon", version.Addon, "error", err)
+		s.Logger.Info("The thumbnails of a version cannot be made during its play", "title", j.title, "addon", version.Addon, "error", err)
 		s.unextended.Put(version.ID, err)
 	}
 }

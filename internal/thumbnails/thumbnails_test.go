@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -460,7 +461,7 @@ func TestSlowDownPausesTheHost(t *testing.T) {
 	}
 	// Nothing more for that host, even another version.
 	before := len(ts.source.count())
-	ts.Queue(other, accounts.ID{})
+	ts.Queue(other, "Other", accounts.ID{})
 	ts.generate(ctx, job{version: other, host: "host.example"})
 	if n := len(ts.source.count()); n != before {
 		t.Errorf("%d requests to a paused host", n-before)
@@ -478,7 +479,8 @@ func TestSlowDownPausesTheHost(t *testing.T) {
 }
 
 // Images wait for the playback that asked for them to stop, and for
-// every playback from the same host to end.
+// every playback from the same host to end; a playback of a version not
+// known holds back no host.
 func TestGenerateWaitsForPlaybacks(t *testing.T) {
 	t.Parallel()
 	ts := newTestService(t, testFFmpeg(t))
@@ -509,24 +511,143 @@ func TestGenerateWaitsForPlaybacks(t *testing.T) {
 	}
 	// The viewer still plays, from another host.
 	set(Playing{Device: viewer, URL: "https://other.example/a.mkv"})
-	ts.Queue(testVersion, viewer)
+	ts.Queue(testVersion, "Test", viewer)
 	idle("while its playback goes on")
-	// It stopped, but someone else plays from the same host, or a version
-	// whose host is unknown.
+	// It stopped, but someone else plays from the same host.
 	set(Playing{Device: other, URL: "https://HOST.example/b.mkv"})
 	idle("while the host serves a playback")
-	set(Playing{Device: other})
-	idle("while a playback of an unknown host goes on")
-	// Only another host's playback is left.
-	set(Playing{Device: other, URL: "https://other.example/b.mkv"})
-	deadline := time.Now().Add(20 * time.Second)
+	// Only playbacks of a version not known, and of another host, are
+	// left.
+	set(Playing{Device: other}, Playing{Device: accounts.ID{9}, URL: "https://other.example/b.mkv"})
+	if !madeWithin(t, ts, testVersion, 20*time.Second) {
+		t.Error("no thumbnails were made once the host was free")
+	}
+}
+
+// madeWithin reports whether thumbnails of version are kept within d.
+func madeWithin(t *testing.T, ts *testService, version library.Version, d time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
-		if manifest, _ := ts.Manifest(t.Context(), testVersion.Item); len(manifest) == 1 {
-			return
+		if manifest, _ := ts.Manifest(t.Context(), version.Item); len(manifest[version.ID]) == 1 {
+			return true
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Error("no thumbnails were made once the host was free")
+	return false
+}
+
+// localFile is a file of a local folder, lasting two hours, made of
+// forced.mkv, with a thumbnail every 10 s asked and no chapter image.
+func localFile(t *testing.T) (*testService, library.Version) {
+	t.Helper()
+	ts := newTestService(t, testFFmpeg(t))
+	ts.change(func(s *accounts.Settings) { s.TrickplayInterval, s.ChapterImages = 10, false })
+	ts.mu.Lock()
+	ts.source = &countingSource{data: fixture(t, "forced.mkv")}
+	analysis := forcedAnalysis
+	analysis.Duration = 2 * time.Hour
+	ts.analysis = analysis
+	ts.mu.Unlock()
+	return ts, library.Version{ID: accounts.ID{11}, Item: accounts.ID{12}, URL: "http://127.0.0.1:9/file/a.mkv", Addon: "Home", LocalFolder: true}
+}
+
+// A local folder's file, read from the server's own storage, gets a
+// thumbnail every interval asked, whatever the budget, the pace and the
+// hourly cap of providers: a 2-hour file one every 10 s, 720, not 62
+// spread over its runtime.
+func TestLocalFilesTakeEveryThumbnail(t *testing.T) {
+	t.Parallel()
+	ts, file := localFile(t)
+	ts.generate(t.Context(), job{version: file, title: "Home video", host: hostOf(file.URL)})
+	manifest, err := ts.Manifest(t.Context(), file.Item)
+	if info := manifest[file.ID][240]; err != nil || info.Interval != 10000 || info.ThumbnailCount != 720 {
+		t.Errorf("thumbnails %+v, %v: one every 10 s, 720, expected", info, err)
+	}
+}
+
+// A local folder's file waits only while the same file plays, not for the
+// playbacks of the other local files, which come from the same address.
+func TestLocalFilesWaitOnlyForTheirOwnPlays(t *testing.T) {
+	t.Parallel()
+	ts, file := localFile(t)
+	var mu sync.Mutex
+	var playing []Playing
+	set := func(p ...Playing) {
+		mu.Lock()
+		playing = p
+		mu.Unlock()
+		ts.Wake()
+	}
+	ts.WatchPlaybacks(func() []Playing {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(playing)
+	})
+	viewer, other := accounts.ID{7}, accounts.ID{8}
+	set(Playing{Device: viewer, URL: file.URL})
+	ts.Queue(file, "Home video", viewer)
+	// The viewer stopped, someone else plays the same file.
+	set(Playing{Device: other, URL: file.URL})
+	time.Sleep(100 * time.Millisecond)
+	if n := len(ts.source.count()); n != 0 {
+		t.Fatalf("%d requests while the file plays", n)
+	}
+	// Another local file plays.
+	set(Playing{Device: other, URL: "http://127.0.0.1:9/file/b.mkv"})
+	if !madeWithin(t, ts, file, time.Minute) {
+		t.Error("no thumbnails were made while another local file plays")
+	}
+}
+
+// logLines keeps what a logger writes, a line at a time.
+type logLines struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (l *logLines) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = append(l.lines, string(p))
+	return len(p), nil
+}
+
+func (l *logLines) all() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.lines)
+}
+
+// A version played that gets no images logs why, with its title, once:
+// a torrent's file is never queued; while the settings turn the images
+// off, one line stands for every version.
+func TestSkippedVersionsAreLoggedOnce(t *testing.T) {
+	t.Parallel()
+	ts := newTestService(t, "")
+	logged := &logLines{}
+	ts.Logger = slog.New(slog.NewTextHandler(logged, nil))
+	torrent := library.Version{ID: accounts.ID{21}, Item: accounts.ID{22}, URL: "magnet:?xt=urn:btih:0", Torrent: &library.Torrent{}}
+	ts.Queue(torrent, "Night Train (2021)", accounts.ID{7})
+	ts.Queue(torrent, "Night Train (2021)", accounts.ID{7})
+	ts.Service.mu.Lock()
+	waiting := len(ts.jobs)
+	ts.Service.mu.Unlock()
+	if waiting != 0 {
+		t.Errorf("%d versions queued", waiting)
+	}
+	lines := logged.all()
+	if len(lines) != 1 || !strings.Contains(lines[0], `title="Night Train (2021)"`) || !strings.Contains(lines[0], SkippedTorrent) {
+		t.Errorf("a torrent's file logged %q", lines)
+	}
+	ts.change(func(s *accounts.Settings) { s.Trickplay, s.ChapterImages = false, false })
+	ts.Queue(testVersion, "One", accounts.ID{7})
+	other := testVersion
+	other.ID = accounts.ID{23}
+	ts.Queue(other, "Two", accounts.ID{7})
+	if lines := logged.all()[1:]; len(lines) != 1 || !strings.Contains(lines[0], SkippedTurnedOff) {
+		t.Errorf("turned off, logged %q", lines)
+	}
 }
 
 // A version queued as its playback starts, while the queue reads the
@@ -555,7 +676,7 @@ func TestQueuedDuringACheckWaitsForItsPlayback(t *testing.T) {
 	})
 	// A version waits for the watcher's playback, so that the queue is
 	// checked.
-	ts.Queue(library.Version{ID: accounts.ID{5}, Item: accounts.ID{6}, URL: "https://other.example/w.mkv"}, watcher)
+	ts.Queue(library.Version{ID: accounts.ID{5}, Item: accounts.ID{6}, URL: "https://other.example/w.mkv"}, "Waiting", watcher)
 	hold.Store(true)
 	release := <-reads
 	// The viewer's playback starts, and queues its version, as the queue
@@ -563,7 +684,7 @@ func TestQueuedDuringACheckWaitsForItsPlayback(t *testing.T) {
 	mu.Lock()
 	playing = append(playing, Playing{Device: viewer, URL: "https://other.example/a.mkv"})
 	mu.Unlock()
-	ts.Queue(testVersion, viewer)
+	ts.Queue(testVersion, "Test", viewer)
 	hold.Store(true)
 	close(release)
 	// The next read of the playbacks comes once that check is over.

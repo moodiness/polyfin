@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -36,6 +37,7 @@ const (
 	queueLength = 8
 	// budget bounds the requests the images of a version take, its index
 	// included: a long version's thumbnails show keyframes further apart.
+	// A local folder's file takes none of these limits (see local).
 	budget = 60
 	// requestInterval spaces the requests to a host, at most perHour of
 	// which go to it in an hour, over every version.
@@ -63,11 +65,20 @@ const (
 )
 
 // Playing is a playback under way: the device playing, and the URL of the
-// version it plays, empty when it is not known.
+// version it plays, empty when it is not known. A playback of a version
+// not known holds back no host.
 type Playing struct {
 	Device accounts.ID
 	URL    string
 }
+
+// Reasons a version played gets no images, which Skip logs.
+const (
+	SkippedTurnedOff = "the settings turn thumbnails and chapter images off"
+	SkippedTorrent   = "a torrent's file, whose swarm only a playback joins"
+	SkippedDisc      = "a disc, not one file"
+	SkippedRecording = "a recording or a Replay programme"
+)
 
 // Options are what the service needs.
 type Options struct {
@@ -100,11 +111,33 @@ type Options struct {
 }
 
 // job is a version waiting for its images, after the playback of device
-// stopped.
+// stopped, and the title it is of, as the log names it.
 type job struct {
 	version library.Version
+	title   string
 	host    string
 	after   accounts.ID
+}
+
+// local reports whether a version is a file of a local folder, a network
+// share's included: read from the server's own storage rather than from a
+// provider, its images take no budget, no pace and no hourly cap, and wait
+// only for the playbacks of that same file.
+func local(version library.Version) bool {
+	return version.LocalFolder
+}
+
+// heldBy reports whether a playback holds the version back: the one that
+// asked for it, one from its host, or for a local folder's file, one of
+// that file.
+func (j job) heldBy(p Playing) bool {
+	if p.Device == j.after {
+		return true
+	}
+	if local(j.version) {
+		return p.URL == j.version.URL
+	}
+	return busyHost(p, j.host)
 }
 
 // Service makes and keeps the images of versions.
@@ -133,6 +166,10 @@ type Service struct {
 	// unextended holds the versions whose thumbnails a play cannot
 	// extend, for failureTTL.
 	unextended *cache.Cache[accounts.ID, error]
+	// skipped holds the reason each version played got no images, logged
+	// once a refusalTTL; the zero identifier stands for every version
+	// while the settings turn the images off.
+	skipped *cache.Cache[accounts.ID, string]
 
 	// budget is that above, which tests lower.
 	budget int
@@ -160,6 +197,7 @@ func New(options Options) *Service {
 		refused:    cache.New[accounts.ID, error](2000, refusalTTL),
 		touched:    cache.New[accounts.ID, struct{}](5000, touchEvery),
 		unextended: cache.New[accounts.ID, error](2000, failureTTL),
+		skipped:    cache.New[accounts.ID, string](2000, refusalTTL),
 		budget:     budget,
 	}
 	var wg sync.WaitGroup
@@ -182,15 +220,20 @@ func (s *Service) Close() {
 }
 
 // Queue asks for the images of a version, in the background: the
-// thumbnails and chapter images the settings turn on and it lacks. They
-// are made once the playback of device has stopped, and while nobody
-// plays from the version's host. A version recently failed, already
-// waiting, or of a paused host, is not queued; neither is one when the
-// queue is full. A torrent's file is never: only a playback joins its
-// swarm.
-func (s *Service) Queue(version library.Version, device accounts.ID) {
+// thumbnails and chapter images the settings turn on and it lacks. title
+// names it in the log. They are made once the playback of device has
+// stopped, and while nobody plays from the version's host, or for a local
+// folder's file, that file. A version recently failed, already waiting, or
+// of a paused host, is not queued; neither is one when the queue is full.
+// A torrent's file is never: only a playback joins its swarm.
+func (s *Service) Queue(version library.Version, title string, device accounts.ID) {
 	settings := s.Settings()
-	if !settings.Trickplay && !settings.ChapterImages || version.Torrent != nil {
+	switch {
+	case !settings.Trickplay && !settings.ChapterImages:
+		s.Skip(version, title, SkippedTurnedOff)
+		return
+	case version.Torrent != nil:
+		s.Skip(version, title, SkippedTorrent)
 		return
 	}
 	if _, failed := s.failed.Get(version.ID); failed {
@@ -200,7 +243,7 @@ func (s *Service) Queue(version library.Version, device accounts.ID) {
 		return
 	}
 	host := hostOf(version.URL)
-	if s.gate.paused(host) {
+	if !local(version) && s.gate.paused(host) {
 		return
 	}
 	s.mu.Lock()
@@ -209,11 +252,30 @@ func (s *Service) Queue(version library.Version, device accounts.ID) {
 		return
 	}
 	if len(s.jobs) == queueLength {
-		s.Logger.Debug("The images of a version were not queued: too many are waiting", "addon", version.Addon)
+		s.Logger.Debug("The images of a version were not queued: too many are waiting", "title", title, "addon", version.Addon)
 		return
 	}
-	s.jobs = append(s.jobs, job{version: version, host: host, after: device})
+	s.jobs = append(s.jobs, job{version: version, title: title, host: host, after: device})
 	s.Wake()
+}
+
+// Skip logs that a version played gets no images, and why: one of the
+// Skipped reasons. Each version's reason is logged once a day; while the
+// settings turn the images off, once a day for every version.
+func (s *Service) Skip(version library.Version, title, reason string) {
+	key := version.ID
+	if reason == SkippedTurnedOff {
+		key = accounts.ID{}
+	}
+	if logged, ok := s.skipped.Get(key); ok && logged == reason {
+		return
+	}
+	s.skipped.Put(key, reason)
+	if key == (accounts.ID{}) {
+		s.Logger.Info("The versions played get no images", "reason", reason)
+		return
+	}
+	s.Logger.Info("A version played gets no images", "title", title, "addon", version.Addon, "reason", reason)
 }
 
 // WatchPlaybacks has images wait for the playbacks playing lists: the
@@ -263,12 +325,12 @@ func (s *Service) run(ctx context.Context) {
 }
 
 // next takes the first waiting version that may start, and marks it as
-// worked on: the playback that asked for it stopped, nobody plays from its
-// host, its host is neither paused nor out of requests for the hour, and
-// no play extends its thumbnails now. Only the versions waiting before the
-// playbacks are read are weighed: one queued as its playback starts would
-// otherwise be let through by playbacks read before that playback began.
-// Queue wakes the next check, which weighs it.
+// worked on: no playback holds it back (see job.heldBy), its host is
+// neither paused nor out of requests for the hour unless it is a local
+// folder's file, and no play extends its thumbnails now. Only the versions
+// waiting before the playbacks are read are weighed: one queued as its
+// playback starts would otherwise be let through by playbacks read before
+// that playback began. Queue wakes the next check, which weighs it.
 func (s *Service) next() (job, bool) {
 	s.mu.Lock()
 	waiting := len(s.jobs)
@@ -281,10 +343,8 @@ func (s *Service) next() (job, bool) {
 	defer s.mu.Unlock()
 	// Queue appends: versions queued meanwhile follow those counted.
 	for i, j := range s.jobs[:min(waiting, len(s.jobs))] {
-		blocked := j.version.ID == s.extending || slices.ContainsFunc(playing, func(p Playing) bool {
-			return p.Device == j.after || busyHost(p, j.host)
-		})
-		if !blocked && s.gate.ready(j.host) {
+		blocked := j.version.ID == s.extending || slices.ContainsFunc(playing, j.heldBy)
+		if !blocked && (local(j.version) || s.gate.ready(j.host)) {
 			s.jobs = slices.Delete(s.jobs, i, i+1)
 			s.working, s.generating = true, j.version.ID
 			return j, true
@@ -300,15 +360,20 @@ func (s *Service) finished() {
 	s.working, s.generating = false, accounts.ID{}
 }
 
-// busyHost reports whether a playback reads host: one of an unknown
-// version may.
+// busyHost reports whether a playback reads host: one of a version not
+// known reads none.
 func busyHost(p Playing, host string) bool {
-	return p.URL == "" || hostOf(p.URL) == host
+	return p.URL != "" && hostOf(p.URL) == host
 }
 
 // busy reports whether a playback reads host.
 func (s *Service) busy(host string) bool {
 	return slices.ContainsFunc(s.playbacks(), func(p Playing) bool { return busyHost(p, host) })
+}
+
+// playsFile reports whether a playback reads the file at url.
+func (s *Service) playsFile(url string) bool {
+	return slices.ContainsFunc(s.playbacks(), func(p Playing) bool { return p.URL == url })
 }
 
 // wanted is what a version lacks of what the settings turn on. partial
@@ -332,7 +397,7 @@ func (s *Service) generate(ctx context.Context, j job) {
 	// What the source cache still holds of a play takes no request.
 	if s.Cached != nil {
 		if _, err := s.extend(ctx, version, analysis, false); err != nil && ctx.Err() == nil {
-			s.Logger.Debug("The thumbnails of a version could not be made from what its play read", "addon", version.Addon, "error", err)
+			s.Logger.Debug("The thumbnails of a version could not be made from what its play read", "title", j.title, "addon", version.Addon, "error", err)
 		}
 	}
 	want, err := s.wanted(ctx, version.ID, analysis)
@@ -350,21 +415,21 @@ func (s *Service) generate(ctx context.Context, j job) {
 	read, err := s.make(ctx, version, analysis, want)
 	switch {
 	case err == nil:
-		s.Logger.Info("Made the images of a version", "addon", version.Addon, "thumbnails", want.trickplay,
+		s.Logger.Info("Made the images of a version", "title", j.title, "addon", version.Addon, "thumbnails", want.trickplay,
 			"chapters", len(want.chapters), "keyframes", read.keyframes, "requests", read.requests,
 			"duration", time.Since(started).Round(time.Second))
 	case ctx.Err() != nil && errors.Is(err, context.Canceled):
 	case errors.Is(err, source.ErrSlowDown):
-		s.Logger.Warn("A source asked to slow down: images of its host are paused", "addon", version.Addon,
+		s.Logger.Warn("A source asked to slow down: images of its host are paused", "title", j.title, "addon", version.Addon,
 			"requests", read.requests, "pause", slowDownPause, "answer", source.Answer(err))
 		s.gate.pause(j.host, slowDownPause)
 		s.refused.Put(version.ID, err)
 		s.dropHost(j.host)
 	case lasting(err):
-		s.Logger.Info("The images of a version cannot be made", append([]any{"addon", version.Addon, "requests", read.requests}, failure(err)...)...)
+		s.Logger.Info("The images of a version cannot be made", append([]any{"title", j.title, "addon", version.Addon, "requests", read.requests}, failure(err)...)...)
 		s.refused.Put(version.ID, err)
 	default:
-		s.Logger.Info("The images of a version could not be made", append([]any{"addon", version.Addon, "requests", read.requests}, failure(err)...)...)
+		s.Logger.Info("The images of a version could not be made", append([]any{"title", j.title, "addon", version.Addon, "requests", read.requests}, failure(err)...)...)
 		s.failed.Put(version.ID, err)
 	}
 }
@@ -436,7 +501,9 @@ type reads struct {
 // make reads keyframes within the version's budget, spread over its
 // runtime, decodes them and keeps the images, each thumbnail and chapter
 // showing the keyframe read nearest its time. Nothing is kept when a
-// request fails.
+// request fails. A local folder's file is read without budget nor pace,
+// one keyframe for each thumbnail at the interval asked, waiting while
+// that file plays.
 func (s *Service) make(ctx context.Context, version library.Version, analysis media.Analysis, want wanted) (reads, error) {
 	stream, ok := videoStream(analysis)
 	if !ok {
@@ -445,6 +512,10 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	src := s.Open(version)
 	defer src.Release()
 	p := &paced{src: src, host: hostOf(version.URL), gate: s.gate, busy: s.busy, left: s.budget}
+	if local(version) {
+		p.unpaced, p.left = true, math.MaxInt
+		p.busy = func(string) bool { return s.playsFile(version.URL) }
+	}
 	size := analysis.Size
 	if size <= 0 {
 		// The first request tells the size.
