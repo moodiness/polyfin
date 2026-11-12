@@ -15,21 +15,26 @@ import (
 
 // Refreshing a library's descriptions.
 //
-// An administrator may have the descriptions of one of the server's movie
-// or series libraries read again: those of the titles of its catalog
-// pages Polyfin keeps, the pages apps opened and the first pages the
-// hourly warming reads (see Warm), up to the library's maximum; for a
-// local folder, of every title it lists. Titles are described again one
-// after the other, LibraryRefreshPace apart, so that a library of
-// thousands of titles does not flood the metadata addons: Polyfin never
-// reads a whole remote catalog to find more. An addon that answers "too
-// many requests" is waited for as long as it asks, refreshRateWait
-// doubled at each try when it does not say, at most maxRefreshWait, and
-// asked again, refreshTries times at most. Libraries asked to be
-// refreshed meanwhile wait their turn: one refresh runs at a time on the
-// server, so the pace bounds them all. Each title is described as
-// Refresh describes it (see describeAgain): an addon that fails leaves its
-// description as it was.
+// An administrator may have the descriptions of one of the server's movie,
+// series or collection libraries read again. For a movie or series
+// library, those of the titles of its catalog pages Polyfin keeps, the
+// pages apps opened and the first pages the hourly warming reads (see
+// Warm), up to the library's maximum; for a local folder, of every title
+// it lists. For a collection library, those of its collections, then of
+// the titles of the catalogs they group, from the pages Polyfin keeps (see
+// refreshedCollections). Titles are described again one after the other,
+// LibraryRefreshPace apart, so that a library of thousands of titles does
+// not flood the metadata addons: Polyfin never reads a whole remote
+// catalog to find more. An addon that answers "too many requests" is
+// waited for as long as it asks, refreshRateWait doubled at each try when
+// it does not say, at most maxRefreshWait, and asked again, refreshTries
+// times at most. Libraries asked to be refreshed meanwhile wait their
+// turn: one refresh runs at a time on the server, so the pace bounds them
+// all. A title read again since its library's refresh was asked, by the
+// refresh of a library before it that lists it too, is not asked again.
+// Each title is described as Refresh describes it (see describeAgain), a
+// collection by its addon: an addon that fails leaves its description as
+// it was.
 
 // LibraryRefreshPace is the time between two titles a library refresh
 // describes again: 30 a minute.
@@ -42,7 +47,7 @@ const (
 )
 
 // ErrNotRefreshable is returned for a library whose descriptions are not
-// refreshed: a collection, live TV, music or IPTV source's library.
+// refreshed: a live TV, music or IPTV source's library.
 var ErrNotRefreshable = errors.New("this library's descriptions are not refreshed")
 
 // The states of a library refresh.
@@ -56,15 +61,18 @@ const (
 
 // LibraryRefresh is how the refresh of a library's descriptions stands:
 // queued, running, or ended done, stopped, or failed when its titles
-// could not be read. Titles counts the titles to describe again, Done
-// those described, Failed those no addon described. Started and Ended
-// are zero until it starts and ends.
+// could not be read. Titles counts the titles to describe again, a
+// collection library's collections included, Done those described, or
+// read again since it was asked, Failed those no addon described.
+// Started and Ended are zero until it starts and ends.
 type LibraryRefresh struct {
 	Library        accounts.ID
 	State          string
 	Titles         int
 	Done, Failed   int
 	Started, Ended time.Time
+	// asked is when it was asked for.
+	asked time.Time
 }
 
 // libraryRefreshes holds the refreshes asked for since the server
@@ -96,9 +104,16 @@ func waitFor(ctx context.Context, d time.Duration) error {
 
 // Refreshable reports whether the descriptions of a library of addon's
 // catalog are refreshed: those of a movie or series catalog of a Stremio
-// addon or a local folder.
+// addon or a local folder, and of a collection catalog of a Stremio
+// addon.
 func Refreshable(addon addons.Addon, catalog stremio.Catalog) bool {
-	return (catalog.Type == "movie" || catalog.Type == "series") && !addon.IPTV() && !addon.HasMusic()
+	switch catalog.Type {
+	case "movie", "series":
+		return !addon.IPTV() && !addon.HasMusic()
+	case "collection":
+		return addon.Stremio() && !addon.HasMusic()
+	}
+	return false
 }
 
 // RefreshLibrary has the descriptions of one of the server's libraries,
@@ -127,7 +142,7 @@ func (s *Service) RefreshLibrary(ctx context.Context, id accounts.ID) (LibraryRe
 	if state, ok := r.states[id]; ok && (state.State == RefreshQueued || state.State == RefreshRunning) {
 		return *state, nil
 	}
-	state := &LibraryRefresh{Library: id, State: RefreshQueued}
+	state := &LibraryRefresh{Library: id, State: RefreshQueued, asked: s.now()}
 	r.states[id] = state
 	r.queue = append(r.queue, id)
 	if !r.running {
@@ -223,24 +238,32 @@ func (s *Service) refreshLibrary(ctx context.Context, id accounts.ID, state *Lib
 	if !ok {
 		return ErrNotFound
 	}
-	titles, err := s.refreshedTitles(ctx, l)
+	titles, err := s.refreshedTitles(ctx, v, l)
 	if err != nil {
 		return err
 	}
 	r := &s.refreshes
 	r.mu.Lock()
 	state.Titles = len(titles)
-	pace, wait := r.pace, r.wait
+	pace, wait, since := r.pace, r.wait, state.asked
 	r.mu.Unlock()
-	for i, title := range titles {
-		if i > 0 {
+	paced := false
+	for _, title := range titles {
+		if at, ok := s.describedAt(ctx, v, l, title); ok && at.After(since) {
+			r.mu.Lock()
+			state.Done++
+			r.mu.Unlock()
+			continue
+		}
+		if paced {
 			if err := wait(ctx, pace); err != nil {
 				return nil
 			}
 		}
+		paced = true
 		described := false
 		for try := 0; ; try++ {
-			ok, keptBy, err := s.describeAgain(ctx, v, title)
+			ok, keptBy, err := s.redescribeRefreshed(ctx, v, l, title)
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -275,13 +298,59 @@ func (s *Service) refreshLibrary(ctx context.Context, id accounts.ID, state *Lib
 	return nil
 }
 
+// redescribeRefreshed asks for the description of a title of library l
+// again, as describeAgain does, and for a collection's, of its addon, as
+// the library lists it (see groupedSources).
+func (s *Service) redescribeRefreshed(ctx context.Context, v view, l library, r record) (described bool, keptBy string, err error) {
+	if r.Kind != KindCollection {
+		return s.describeAgain(ctx, v, r)
+	}
+	key := metaKey{l.addon.addon.ID, r.Meta.Type, r.Meta.ID}
+	if _, err = s.fetchKeptMeta(ctx, l.addon, key); err == nil {
+		return true, "", nil
+	}
+	if _, ok := s.keptDescription(ctx, l.addon, key, inDatabase); ok {
+		keptBy = l.addon.addon.Manifest.Name
+	}
+	return false, keptBy, err
+}
+
+// describedAt tells when the description a refresh of library l reads
+// again was given, as Polyfin keeps it, asking no addon: a collection's
+// by its addon, a title's by the first of its describers that keeps one
+// (see describedMeta). ok is false when none is kept.
+func (s *Service) describedAt(ctx context.Context, v view, l library, r record) (at time.Time, ok bool) {
+	candidates := []installed{l.addon}
+	if r.Kind != KindCollection {
+		candidates = describers(v, r, false)
+	}
+	for _, candidate := range candidates {
+		if own(candidate.addon) {
+			continue
+		}
+		key := metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}
+		kept, ok := s.metas.Get(key)
+		if !ok {
+			kept, ok = s.loadMeta(ctx, candidate, key)
+		}
+		if ok {
+			return kept.at, true
+		}
+	}
+	return time.Time{}, false
+}
+
 // refreshedTitles lists the titles of a library a refresh describes again,
 // in their order: those of its catalog pages Polyfin keeps, or of every
-// page of a local folder's catalog, at most its maximum.
-func (s *Service) refreshedTitles(ctx context.Context, l library) ([]record, error) {
+// page of a local folder's catalog, at most its maximum; for a collection
+// library, what refreshedCollections lists.
+func (s *Service) refreshedTitles(ctx context.Context, v view, l library) ([]record, error) {
 	most := addons.MaxLibraryItems
 	if l.maxItems > 0 {
 		most = l.maxItems
+	}
+	if l.catalog.Type == "collection" {
+		return s.refreshedCollections(ctx, v, l, most)
 	}
 	var pages [][]stremio.Meta
 	if l.addon.addon.Local() {
@@ -301,27 +370,8 @@ func (s *Service) refreshedTitles(ctx context.Context, l library) ([]record, err
 			listed += len(metas)
 		}
 	} else {
-		src := l.catalogSource()
-		rows, err := s.db.Query(ctx, `SELECT metas FROM catalog_pages
-			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 AND config = $5 AND fetched_at > $6
-			ORDER BY skip`, l.addon.addon.ID, l.catalog.Type, l.catalog.ID, src.genre, configOf(l.addon.addon),
-			s.now().Add(-s.keptCatalogLife()))
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var data []byte
-			var metas []stremio.Meta
-			if err := rows.Scan(&data); err != nil {
-				return nil, err
-			}
-			if err := json.Unmarshal(data, &metas); err != nil {
-				return nil, err
-			}
-			pages = append(pages, metas)
-		}
-		if err := rows.Err(); err != nil {
+		var err error
+		if pages, err = s.keptPages(ctx, l.catalogSource()); err != nil {
 			return nil, err
 		}
 	}
@@ -343,4 +393,124 @@ func (s *Service) refreshedTitles(ctx context.Context, l library) ([]record, err
 		}
 	}
 	return titles, nil
+}
+
+// refreshedCollections lists what the refresh of collection library l
+// describes again, from what Polyfin keeps alone, asking no addon: the
+// collections of the catalog pages it keeps, up to most, then those
+// within them, followed as groupedSources follows them; then the titles
+// of the catalogs they group, one of each catalog in turn, as the library
+// lists them, among its first most. Only those whose description is kept
+// are: a collection without one groups catalogs unknown, and a title never
+// described has nothing to read again.
+func (s *Service) refreshedCollections(ctx context.Context, v view, l library, most int) ([]record, error) {
+	pages, err := s.keptPages(ctx, l.catalogSource())
+	if err != nil {
+		return nil, err
+	}
+	type listed struct {
+		meta   stremio.Meta
+		parent accounts.ID
+	}
+	var level []listed
+	for _, metas := range pages {
+		for _, meta := range metas {
+			if len(level) < most {
+				level = append(level, listed{meta, l.item.ID})
+			}
+		}
+	}
+	var refreshed []record
+	var sources []source
+	described := map[string]bool{}
+	grouped := map[catalogKey]bool{}
+	for depth := 0; len(level) > 0 && depth < maxNesting; depth++ {
+		var within []listed
+		for _, entry := range level {
+			if entry.meta.ID == "" || described[entry.meta.ID] {
+				continue
+			}
+			described[entry.meta.ID] = true
+			meta, ok := s.keptDescription(ctx, l.addon, metaKey{l.addon.addon.ID, "collection", entry.meta.ID}, inDatabase)
+			if !ok {
+				continue
+			}
+			preview := entry.meta
+			preview.Type = "collection"
+			_, r := s.collectionItem(l.addon.addon.ID, preview, entry.parent, l.addon.confined, "")
+			refreshed = append(refreshed, r)
+			if meta.Collection == nil {
+				continue
+			}
+			for _, ref := range meta.Collection.Sources {
+				key := catalogKey{l.addon.addon.ID, ref.Type, ref.CatalogID, ref.Genre}
+				if catalog, ok := l.addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok && !grouped[key] {
+					grouped[key] = true
+					sources = append(sources, source{addon: l.addon, catalog: catalog, genre: ref.Genre, max: l.maxItems})
+				}
+			}
+			for _, sub := range meta.Collection.Items {
+				within = append(within, listed{sub, r.ID})
+			}
+		}
+		level = within
+	}
+	lists := make([][]stremio.Meta, len(sources))
+	for i, src := range sources {
+		pages, err := s.keptPages(ctx, src)
+		if err != nil {
+			return nil, err
+		}
+		lists[i] = slices.Concat(pages...)
+	}
+	seen := map[accounts.ID]bool{}
+	titles := 0
+	for i := 0; titles < most; i++ {
+		more := false
+		for j, src := range sources {
+			if i >= len(lists[j]) || titles == most {
+				continue
+			}
+			more = true
+			_, r, err := s.titleItem(src.addon, src.catalog, lists[j][i], l.item.ID, "")
+			if err != nil || seen[r.ID] {
+				continue
+			}
+			seen[r.ID] = true
+			titles++
+			if _, ok := s.describedAt(ctx, v, l, r); ok {
+				refreshed = append(refreshed, r)
+			}
+		}
+		if !more {
+			break
+		}
+	}
+	return refreshed, nil
+}
+
+// keptPages reads the pages of src's catalog Polyfin keeps in the
+// database, stale ones included, in their order.
+func (s *Service) keptPages(ctx context.Context, src source) ([][]stremio.Meta, error) {
+	rows, err := s.db.Query(ctx, `SELECT metas FROM catalog_pages
+		WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 AND config = $5 AND fetched_at > $6
+		ORDER BY skip`, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, configOf(src.addon.addon),
+		s.now().Add(-s.keptCatalogLife()))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var pages [][]stremio.Meta
+	for rows.Next() {
+		var data []byte
+		var metas []stremio.Meta
+		if err := rows.Scan(&data); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &metas); err != nil {
+			return nil, err
+		}
+		pages = append(pages, metas)
+	}
+	return pages, rows.Err()
 }

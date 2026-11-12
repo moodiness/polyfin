@@ -1804,7 +1804,8 @@ export type Library = {
   showAsChoices: LibraryShowAs[]
   /**
    * Whether an enabled library of the server's has its descriptions read again on request: a movie
-   * or series library of a Stremio addon or a local folder. False in the users' own scopes.
+   * or series library of a Stremio addon or a local folder, or a collection library of a Stremio
+   * addon. False in the users' own scopes.
    */
   refreshable: boolean
   /** How the last refresh of its descriptions since the server started stands; null for none. */

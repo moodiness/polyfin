@@ -217,3 +217,110 @@ func TestLibraryRefreshesWaitOutRateLimitsAndStop(t *testing.T) {
 		t.Errorf("asked %v", asked)
 	}
 }
+
+// A collection library's refresh describes again its collections first,
+// by their addon, then the titles of the catalogs they group, one of each
+// catalog in turn, from what Polyfin keeps alone: neither a collection nor
+// a title never described, nor a collection no one opened. A collection
+// library asked to refresh while another refreshes leaves out what that
+// one read again since: a collection or title both list is asked once.
+func TestCollectionLibraryRefreshesDescribeTheirKeptCollectionsAndTitles(t *testing.T) {
+	t.Parallel()
+	movie := func(id string) stremio.Meta {
+		return stremio.Meta{ID: id, Type: "movie", Name: "Movie " + id, Description: "Before."}
+	}
+	first := []stremio.Meta{movie("tt1"), movie("tt2"), movie("tt3")}
+	second := []stremio.Meta{movie("tt2"), movie("tt4"), movie("tt5")}
+	set := func(id string, catalog string) stremio.Meta {
+		return stremio.Meta{ID: id, Type: "collection", Name: "Set " + id,
+			Collection: &stremio.Collection{Sources: []stremio.CollectionSource{{Type: "movie", CatalogID: catalog}}}}
+	}
+	metas := map[string]stremio.Meta{}
+	for _, m := range slices.Concat(first, second, []stremio.Meta{movie("tt6")}) {
+		metas["movie/"+m.ID] = m
+	}
+	for _, m := range []stremio.Meta{set("setone", "first"), set("settwo", "second"), set("setthree", "third")} {
+		metas["collection/"+m.ID] = m
+	}
+	addon := &fakeAddon{
+		manifest: stremio.Manifest{ID: "sets", Name: "Sets", Version: "1", Types: []string{"movie", "collection"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+			Catalogs: []stremio.Catalog{
+				{Type: "collection", ID: "sets", Name: "Sets"},
+				{Type: "collection", ID: "picks", Name: "Picks"},
+				{Type: "movie", ID: "first", Name: "First"},
+				{Type: "movie", ID: "second", Name: "Second"},
+				{Type: "movie", ID: "third", Name: "Third"},
+			}},
+		catalogs: map[string][]stremio.Meta{
+			"collection/sets": {
+				{ID: "setone", Type: "collection", Name: "Set setone"},
+				{ID: "settwo", Type: "collection", Name: "Set settwo"},
+				{ID: "setthree", Type: "collection", Name: "Set setthree"},
+			},
+			"collection/picks": {{ID: "settwo", Type: "collection", Name: "Set settwo"}},
+			"movie/first":      first,
+			"movie/second":     second,
+			"movie/third":      {movie("tt6")},
+		},
+		metas: metas,
+	}
+	p := newPacer(true)
+	e := newEnv(t)
+	e.service.refreshes.wait = p.wait
+	e.install(addons.Shared(), addon)
+	e.chooseLibraries(libraryOf("collection", "sets", "", 0), libraryOf("collection", "picks", "", 0))
+	sets, picks := e.library(e.admin, "Sets").ID, e.library(e.admin, "Picks").ID
+	// Apps listed both libraries, opened the first two collections of Sets,
+	// never the third, and three titles.
+	e.children(e.member, "Picks", 0, 10)
+	for _, collection := range e.children(e.member, "Sets", 0, 10).Items[:2] {
+		if _, err := e.service.Children(t.Context(), e.member, collection.ID, 0, 10, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{"tt1", "tt2", "tt5"} {
+		if item, err := e.service.Item(t.Context(), e.member, itemID(titleKey(KindMovie, id))); err != nil || item.Overview != "Before." {
+			t.Fatalf("%s before: %q %v", id, item.Overview, err)
+		}
+	}
+	addon.mu.Lock()
+	for key, m := range addon.metas {
+		m.Description = "After."
+		addon.metas[key] = m
+	}
+	from := len(addon.requests)
+	addon.mu.Unlock()
+
+	if _, err := e.service.RefreshLibrary(t.Context(), sets); err != nil {
+		t.Fatal(err)
+	}
+	// Sets described its first collection, and waits before the next:
+	// Picks is asked for then.
+	<-p.waiting
+	if _, err := e.service.RefreshLibrary(t.Context(), picks); err != nil {
+		t.Fatal(err)
+	}
+	close(p.release)
+	state := refreshEnded(t, e, sets)
+	if state.State != RefreshDone || state.Titles != 5 || state.Done != 5 || state.Failed != 0 {
+		t.Errorf("the refresh of Sets: %+v", state)
+	}
+	state = refreshEnded(t, e, picks)
+	if state.State != RefreshDone || state.Titles != 3 || state.Done != 3 || state.Failed != 0 {
+		t.Errorf("the refresh of Picks: %+v", state)
+	}
+	addon.mu.Lock()
+	asked := slices.Clone(addon.requests[from:])
+	addon.mu.Unlock()
+	want := []string{"meta/collection/setone", "meta/collection/settwo", "meta/movie/tt1", "meta/movie/tt2", "meta/movie/tt5"}
+	if !slices.Equal(asked, want) {
+		t.Errorf("asked %v, want %v", asked, want)
+	}
+	if waits := p.recorded(); len(waits) != 4 {
+		t.Errorf("waits between titles: %v", waits)
+	}
+	if item, err := e.service.Item(t.Context(), e.member, itemID(titleKey(KindMovie, "tt5"))); err != nil || item.Overview != "After." {
+		t.Errorf("tt5 after: %q %v", item.Overview, err)
+	}
+}
