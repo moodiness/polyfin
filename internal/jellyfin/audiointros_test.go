@@ -250,10 +250,11 @@ func creditsEpisode(t *testing.T, ffmpeg, path, credits string, scene time.Durat
 // Local episodes ending with the same 60-second credits are given them,
 // to the second, from their audio once one of them is played: the scene
 // after them in some is left out, and the credits running to the end of
-// the others end at the end, for jellyfin-web's Up Next card, as the
-// listed runtime falls short of the files. The credits of the third
-// episode's chapters win; the fourth's from the databases, past its end,
-// leave the gap to the audio; the sixth, ending otherwise, gets none.
+// the others end a second before it, for jellyfin-web's skip button, as
+// the listed runtime, the length the folder's scan probed, does not fall
+// short of the files. The credits of the third episode's chapters win;
+// the fourth's from the databases, past its end, leave the gap to the
+// audio; the sixth, ending otherwise, gets none.
 func TestLocalEpisodesShareTheirCredits(t *testing.T) {
 	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
@@ -303,14 +304,14 @@ func TestLocalEpisodesShareTheirCredits(t *testing.T) {
 	for _, number := range []int{1, 2, 4, 5} {
 		start, end := 240*time.Second-scenes[number], 300*time.Second-scenes[number]
 		if scenes[number] == 0 {
-			end = ends[number]
+			end = ends[number] - creditsLead
 		}
 		if got := a.segments(t, number, "Outro"); !near(got, start, end) {
 			t.Errorf("episode %d: %v, want credits from %v to %v", number, got, start, end)
 		}
 	}
-	if got := a.segments(t, 3, "Outro"); !slices.Equal(got, []span{{"Outro", 250_000 * 10_000, int64(ends[3] / 100)}}) {
-		t.Errorf("episode 3: %v, want its chapters' credits, to its end at %v", got, ends[3])
+	if got := a.segments(t, 3, "Outro"); !slices.Equal(got, []span{{"Outro", 250_000 * 10_000, int64((ends[3] - creditsLead) / 100)}}) {
+		t.Errorf("episode 3: %v, want its chapters' credits, to a second before its end at %v", got, ends[3])
 	}
 	if got := a.segments(t, 6, "Outro"); len(got) != 0 {
 		t.Errorf("episode 6: %v, want none", got)

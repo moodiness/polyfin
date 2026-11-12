@@ -155,6 +155,13 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 			return err
 		}
 	}
+	// And the lengths TMDB gives a series' episodes, read again as its
+	// page opens (see lengths.go).
+	if r.Kind == KindSeries || r.Kind == KindSeason {
+		if err := s.forgetEpisodeLengths(ctx, title.Meta.ID); err != nil {
+			return err
+		}
+	}
 	// The description is asked for again now, as apps show the title's
 	// page again after a refresh; it gives the rating again too.
 	// An addon that fails leaves the title as it was: that is no failure
