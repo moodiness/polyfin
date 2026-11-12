@@ -513,6 +513,9 @@ const system = {
       idle: 'Idle',
       pausedHosts: 'Paused sources',
       noPausedHosts: 'No source is paused.',
+      localMade: 'Local files with thumbnails',
+      localCannot: 'Local files that cannot have them',
+      localFailed: 'Local files that failed',
       until: (time: string) => `until ${time}`,
       ratingsTitle: 'Ratings from MDBList',
       ratingsHelp:

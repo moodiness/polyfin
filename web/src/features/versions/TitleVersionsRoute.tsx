@@ -1,4 +1,9 @@
-import { ArrowsClockwiseIcon, ProhibitIcon, PushPinIcon } from '@phosphor-icons/react'
+import {
+  ArrowsClockwiseIcon,
+  ImagesSquareIcon,
+  ProhibitIcon,
+  PushPinIcon,
+} from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router'
@@ -10,6 +15,7 @@ import {
   fetchTitleVersions,
   fetchVersionTitle,
   maxBlockReason,
+  makeThumbnailsAgain,
   pinVersion,
   queryClient,
   queryKeys,
@@ -20,6 +26,7 @@ import {
   type VersionBlock,
   type TitleVersionSource,
   type VersionStream,
+  type VersionThumbnails,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { errorMessage, formatBytes, formatEpisode } from '@/format'
@@ -52,6 +59,17 @@ import { userQuery, UserPicker, useVersionsUser } from './parts'
  * and says so. A new answer, the tab or the window shown again, or Check again start over.
  */
 const pendingPolls = [2_000, 4_000, 8_000, 16_000, 30_000]
+
+/** The wait before reading the versions again while a version's thumbnails wait or are made. */
+const thumbnailsPoll = 5_000
+
+/** Whether a version of the title waits for its thumbnails or has them made now. */
+const makingThumbnails = (explained: TitleVersions | undefined) =>
+  explained?.sources.some((source) =>
+    source.streams.some(
+      (stream) => stream.thumbnails?.state === 'waiting' || stream.thumbnails?.state === 'working',
+    ),
+  ) ?? false
 
 /** The answers read one after the other the same as the last, counted once per read. */
 type SameAnswers = { data: unknown; at: number; count: number }
@@ -90,7 +108,9 @@ export default function TitleVersionsRoute() {
       (query.state.data?.pending ?? 0) > 0
         ? (pendingPolls[sameAnswers(seen.current, query.state.data, query.state.dataUpdatedAt)] ??
           false)
-        : false,
+        : makingThumbnails(query.state.data)
+          ? thumbnailsPoll
+          : false,
   })
   const stopped =
     (versions.data?.pending ?? 0) > 0 &&
@@ -475,6 +495,30 @@ function SourceStreams({
     },
     onError: failed,
   })
+  const makeAgain = useMutation({
+    mutationFn: (version: string) => makeThumbnailsAgain(id, version),
+    onSuccess: (thumbnails, version) => {
+      // Waiting at once, as the server answers, before the versions are read again.
+      queryClient.setQueryData<TitleVersions>(queryKeys.titleVersions(id, user), (explained) =>
+        explained === undefined
+          ? explained
+          : {
+              ...explained,
+              sources: explained.sources.map((each) => ({
+                ...each,
+                streams: each.streams.map((stream) =>
+                  stream.version === version && stream.thumbnails !== null
+                    ? { ...stream, thumbnails }
+                    : stream,
+                ),
+              })),
+            },
+      )
+      toast(text.makeAgainDone, { tone: 'ok' })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.titleVersions(id, user) })
+    },
+    onError: failed,
+  })
   const state: Record<TitleVersionSource['state'], StatusTone> = {
     known: 'ok',
     stale: 'warn',
@@ -543,6 +587,9 @@ function SourceStreams({
                     )}
                     {explanation !== '' && <span className="text-ink-2">{explanation}</span>}
                     {stream.unstarted && <span className="text-ink-2">{text.unstarted}</span>}
+                    {isVersion && stream.thumbnails !== null && (
+                      <ThumbnailsState thumbnails={stream.thumbnails} />
+                    )}
                     <HostErrorFile stream={stream} />
                   </span>
                 }
@@ -583,6 +630,16 @@ function SourceStreams({
                         {text.analyze}
                       </Button>
                     )}
+                    {stream.thumbnails !== null && (
+                      <Button
+                        size="sm"
+                        icon={ImagesSquareIcon}
+                        loading={makeAgain.isPending && makeAgain.variables === stream.version}
+                        onClick={() => makeAgain.mutate(stream.version)}
+                      >
+                        {text.makeAgain}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -615,6 +672,36 @@ function SourceStreams({
         />
       )}
     </section>
+  )
+}
+
+const thumbnailTones: Record<VersionThumbnails['state'], StatusTone> = {
+  none: 'muted',
+  waiting: 'muted',
+  working: 'live',
+  made: 'ok',
+  cannot: 'warn',
+  failed: 'danger',
+}
+
+/** How a local folder's version stands for its scrubbing thumbnails, with when it last did. */
+function ThumbnailsState({ thumbnails }: { thumbnails: VersionThumbnails }) {
+  const { t } = useI18n()
+  const text = t.versions
+  const { state, reason, count, at } = thumbnails
+  const word =
+    state === 'made'
+      ? text.thumbnailStates.made(count)
+      : state === 'cannot'
+        ? (text.thumbnailsCannot[reason as keyof typeof text.thumbnailsCannot] ??
+          text.thumbnailsCannot.unreadable)
+        : text.thumbnailStates[state]
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="text-ink-2">{text.thumbnails}</span>
+      <StatusPill tone={thumbnailTones[state]}>{word}</StatusPill>
+      {at !== null && state !== 'waiting' && state !== 'working' && <RelativeTime iso={at} />}
+    </span>
   )
 }
 

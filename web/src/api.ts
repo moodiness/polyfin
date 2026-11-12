@@ -3249,6 +3249,20 @@ export type VersionStream = {
     labelRules: string[]
   }
   analyzed: boolean
+  /** Its scrubbing thumbnails, for a local folder's version only; null for any other. */
+  thumbnails: VersionThumbnails | null
+}
+
+/**
+ * How a local folder's version stands for its scrubbing thumbnails: `waiting` and `working` come
+ * from the queue, `none` is no result yet; `reason` tells why it `cannot` have them, and `count`
+ * how many were `made`, at `at`.
+ */
+export type VersionThumbnails = {
+  state: 'none' | 'waiting' | 'working' | 'made' | 'cannot' | 'failed'
+  reason: '' | 'no_index' | 'unreadable' | 'no_video' | 'error'
+  count: number
+  at: string | null
 }
 
 /** A version's best audio format; channels is 0 when unknown. */
@@ -3369,6 +3383,14 @@ export const analyzeVersion = (id: string, version: string, user: string) =>
     'POST',
     `/titles/${seg(id)}/versions/${seg(version)}/analyze${asUser(user)}`,
   )
+
+/**
+ * Makes a local folder's version's thumbnails and chapter images again, dropping those it has;
+ * answers its thumbnails, waiting in the queue. 400 not_local for any other version, 409
+ * thumbnails_off while both settings are off.
+ */
+export const makeThumbnailsAgain = (id: string, version: string) =>
+  request<VersionThumbnails>('POST', `/titles/${seg(id)}/versions/${seg(version)}/thumbnails`)
 
 /** Longest block reason, in characters, as the server allows. */
 export const maxBlockReason = 200
@@ -5161,6 +5183,8 @@ export type Health = {
     queueLength: number
     working: boolean
     pausedHosts: { host: string; until: string }[]
+    /** The local folders' files with thumbnails, those that cannot have them and those that failed. */
+    local: { made: number; cannot: number; failed: number }
   } | null
   addons: AddonHealth[]
   /** How the enabled network shares are watched for changes; `watchFolders` tells whether they are. */

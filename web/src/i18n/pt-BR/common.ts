@@ -58,6 +58,9 @@ const common: typeof en = {
       'Os administradores devem usar o login em duas etapas neste servidor: ele não pode ser desativado.',
     two_step_own: 'Desative seu próprio login em duas etapas em Minha conta.',
     not_found: 'Este item não existe mais. A lista foi atualizada.',
+    not_local: 'Só a versão de uma pasta local pode ter as miniaturas criadas de novo.',
+    thumbnails_off:
+      'As miniaturas e as imagens de capítulos estão desativadas: ative uma em Configurações › Miniaturas (trickplay).',
     not_set:
       'Nada está salvo: foi removido, ou não pode ser descriptografado com POLYFIN_SECRET_KEY. Recarregue a página.',
     not_revealable: 'Esta conexão não tem nenhuma chave para mostrar.',

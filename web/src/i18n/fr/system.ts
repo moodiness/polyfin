@@ -531,6 +531,9 @@ const system: typeof en = {
       idle: 'Au repos',
       pausedHosts: 'Sources en pause',
       noPausedHosts: 'Aucune source en pause.',
+      localMade: 'Fichiers locaux avec vignettes',
+      localCannot: 'Fichiers locaux qui ne peuvent pas en avoir',
+      localFailed: 'Fichiers locaux en échec',
       until: (time: string) => `jusqu’à ${time}`,
       ratingsTitle: 'Notes depuis MDBList',
       ratingsHelp:

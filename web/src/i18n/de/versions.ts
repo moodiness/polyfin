@@ -126,6 +126,21 @@ const versions: typeof en = {
     analyze: 'Jetzt analysieren',
     analyzeDone: 'Version analysiert.',
     analysisFailed: (why: string) => `Sie konnte nicht analysiert werden: ${why}`,
+    thumbnails: 'Vorschaubilder',
+    thumbnailStates: {
+      none: 'Noch keine',
+      waiting: 'Wartet',
+      working: 'Wird erstellt',
+      made: (count: number) => `${count} erstellt`,
+      failed: 'Fehlgeschlagen, neuer Versuch bei der nächsten Wiedergabe',
+    },
+    thumbnailsCannot: {
+      no_index: 'Nicht möglich: Die Datei hat keinen Index',
+      unreadable: 'Nicht möglich: Die Datei kann nicht gelesen werden',
+      no_video: 'Nicht möglich: kein Video',
+    },
+    makeAgain: 'Neu erstellen',
+    makeAgainDone: 'Die Vorschaubilder werden neu erstellt.',
     decisions: 'Letzte Wiedergaben',
     decisionsHelp:
       'Was die letzten Wiedergaben dieses Titels versucht haben, für jeden Benutzer. Bis zum Neustart behalten.',

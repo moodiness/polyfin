@@ -128,6 +128,21 @@ const versions: typeof en = {
     analyze: 'Analisar agora',
     analyzeDone: 'Versão analisada.',
     analysisFailed: (why: string) => `Não foi possível analisá-la: ${why}`,
+    thumbnails: 'Miniaturas',
+    thumbnailStates: {
+      none: 'Nenhuma ainda',
+      waiting: 'Aguardando',
+      working: 'Sendo criadas',
+      made: (count: number) => `${count} ${count === 1 ? 'criada' : 'criadas'}`,
+      failed: 'Falhou, nova tentativa na próxima reprodução',
+    },
+    thumbnailsCannot: {
+      no_index: 'Não podem ser criadas: o arquivo não tem índice',
+      unreadable: 'Não podem ser criadas: o arquivo não pode ser lido',
+      no_video: 'Não podem ser criadas: sem vídeo',
+    },
+    makeAgain: 'Criar de novo',
+    makeAgainDone: 'Suas miniaturas serão criadas de novo.',
     decisions: 'Últimas reproduções',
     decisionsHelp:
       'O que as últimas reproduções deste título tentaram, para qualquer usuário. Mantidas até reiniciar.',
