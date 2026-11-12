@@ -85,45 +85,9 @@ func TestAMovieWhoseFileEndsEarlyPlaysUpToThereThenEnds(t *testing.T) {
 		return n
 	}
 
-	// open asks PlaybackInfo with more, then the master and media
-	// playlists, and returns the segments' addresses, how long each is,
-	// and whether the playlist ends.
-	open := func(more map[string]any) (uris []string, seconds []float64, ends bool) {
+	open := func(more map[string]any) ([]string, []float64, bool) {
 		t.Helper()
-		answer := s.ask(t, token, movie, recordedProfile(t, "jellyfin-web-chrome"), more)
-		if len(answer.MediaSources) != 1 || answer.MediaSources[0].TranscodingUrl == "" {
-			t.Fatalf("PlaybackInfo: %+v", answer)
-		}
-		base, query, _ := strings.Cut(s.url+answer.MediaSources[0].TranscodingUrl, "master.m3u8?")
-		_, _, master := fetchText(t, base+"master.m3u8?"+query)
-		var media string
-		for line := range strings.Lines(master) {
-			if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
-				media = line
-				break
-			}
-		}
-		_, _, playlist := fetchText(t, base+media)
-		for line := range strings.Lines(playlist) {
-			line = strings.TrimSpace(line)
-			if duration, ok := strings.CutPrefix(line, "#EXTINF:"); ok {
-				value, err := strconv.ParseFloat(strings.Split(duration, ",")[0], 64)
-				if err != nil {
-					t.Fatalf("%q: %v", line, err)
-				}
-				seconds = append(seconds, value)
-			}
-			if init, ok := strings.CutPrefix(line, `#EXT-X-MAP:URI="`); ok {
-				if status, _, _ := fetchText(t, base+strings.TrimSuffix(init, `"`)); status != http.StatusOK {
-					t.Fatalf("the initialization segment: %d", status)
-				}
-			}
-		}
-		relative, _ := segmentsOf(playlist)
-		for _, uri := range relative {
-			uris = append(uris, base+uri)
-		}
-		return uris, seconds, strings.Contains(playlist, "#EXT-X-ENDLIST")
+		return openPlay(t, s, token, movie, more)
 	}
 
 	// The first play copies the video, and goes as far as the file does.
@@ -179,4 +143,46 @@ func TestAMovieWhoseFileEndsEarlyPlaysUpToThereThenEnds(t *testing.T) {
 	if got := runs(); got != before {
 		t.Errorf("FFmpeg ran %d times for a converted segment past the end", got-before)
 	}
+}
+
+// openPlay asks PlaybackInfo for movie with more, as jellyfin-web in
+// Chrome does, then the master and media playlists and the initialization
+// segment, and returns the segments' addresses, how long each is, and
+// whether the playlist ends.
+func openPlay(t *testing.T, s testServer, token, movie string, more map[string]any) (uris []string, seconds []float64, ends bool) {
+	t.Helper()
+	answer := s.ask(t, token, movie, recordedProfile(t, "jellyfin-web-chrome"), more)
+	if len(answer.MediaSources) != 1 || answer.MediaSources[0].TranscodingUrl == "" {
+		t.Fatalf("PlaybackInfo: %+v", answer)
+	}
+	base, query, _ := strings.Cut(s.url+answer.MediaSources[0].TranscodingUrl, "master.m3u8?")
+	_, _, master := fetchText(t, base+"master.m3u8?"+query)
+	var media string
+	for line := range strings.Lines(master) {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			media = line
+			break
+		}
+	}
+	_, _, playlist := fetchText(t, base+media)
+	for line := range strings.Lines(playlist) {
+		line = strings.TrimSpace(line)
+		if duration, ok := strings.CutPrefix(line, "#EXTINF:"); ok {
+			value, err := strconv.ParseFloat(strings.Split(duration, ",")[0], 64)
+			if err != nil {
+				t.Fatalf("%q: %v", line, err)
+			}
+			seconds = append(seconds, value)
+		}
+		if init, ok := strings.CutPrefix(line, `#EXT-X-MAP:URI="`); ok {
+			if status, _, _ := fetchText(t, base+strings.TrimSuffix(init, `"`)); status != http.StatusOK {
+				t.Fatalf("the initialization segment: %d", status)
+			}
+		}
+	}
+	relative, _ := segmentsOf(playlist)
+	for _, uri := range relative {
+		uris = append(uris, base+uri)
+	}
+	return uris, seconds, strings.Contains(playlist, "#EXT-X-ENDLIST")
 }
