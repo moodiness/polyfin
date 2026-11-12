@@ -2181,8 +2181,11 @@
             const maxX = Math.min(document.documentElement.clientWidth || innerWidth, box?.right ?? Infinity) - gap;
             const maxY = Math.min(document.documentElement.clientHeight || innerHeight, box?.bottom ?? Infinity) - gap;
             const left = Math.max(minX, Math.min(rect.left + (rect.width - width) / 2, maxX - width));
-            const below = rect.bottom + gap;
-            const top = below + height <= maxY ? below : Math.max(minY, rect.top - height - gap);
+            // Placement - Below, else above; a control that asks for it (data-lg-tooltip-above) gets its
+            // hint above while it fits there, clear of the line below.
+            const below = rect.bottom + gap, above = rect.top - height - gap;
+            const top = active.hasAttribute('data-lg-tooltip-above') && above >= minY ? above :
+                below + height <= maxY ? below : Math.max(minY, above);
             popup.style.left = `${Math.round(left - origin.left)}px`;
             popup.style.top = `${Math.round(top - origin.top)}px`;
             popup.style.visibility = '';
@@ -2476,6 +2479,12 @@
             window.__lumaaGlaassPreferences?.stop();
             // Preferences - The next instance loads the settings page again only when its script is gone.
             document.querySelector('#lg-preferences-script[data-lg-managed]')?.remove();
+            // Studio logos - The same: Polyfin's extension, loaded again by the next instance.
+            window.__lumaaGlaassStudioLogos?.stop();
+            document.querySelector('#lg-studio-logos-script[data-lg-managed]')?.remove();
+            // List headings - The same: Polyfin's extension, loaded again by the next instance.
+            window.__lumaaGlaassListHeadings?.stop();
+            document.querySelector('#lg-list-headings-script[data-lg-managed]')?.remove();
             clearDetails();
             clearSheetTrigger();
             tooltipController.stop();
@@ -2495,6 +2504,32 @@
         script.onerror = () => {
             script.remove();
             console.error('LumaaGlaass could not load the preferences extension.');
+        };
+        document.head.append(script);
+    }
+    // Studio logos - Polyfin's extension: a title's Studios line shows each studio's logo, which
+    // Polyfin draws, in place of its name.
+    if (!document.getElementById('lg-studio-logos-script')) {
+        const script = document.createElement('script');
+        script.id = 'lg-studio-logos-script';
+        script.src = assetUrl('extensions/studio-logos.js');
+        script.setAttribute('data-lg-managed', '');
+        script.onerror = () => {
+            script.remove();
+            console.error('LumaaGlaass could not load the studio logos extension.');
+        };
+        document.head.append(script);
+    }
+    // List headings - Polyfin's extension: a studio's, a genre's or a music genre's page starts with a
+    // heading naming it, a studio's logo when it has one.
+    if (!document.getElementById('lg-list-headings-script')) {
+        const script = document.createElement('script');
+        script.id = 'lg-list-headings-script';
+        script.src = assetUrl('extensions/list-headings.js');
+        script.setAttribute('data-lg-managed', '');
+        script.onerror = () => {
+            script.remove();
+            console.error('LumaaGlaass could not load the list headings extension.');
         };
         document.head.append(script);
     }

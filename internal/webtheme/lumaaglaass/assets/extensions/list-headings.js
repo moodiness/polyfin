@@ -1,0 +1,218 @@
+/* LumaaGlaass - List headings extension (Polyfin). */
+;
+(() => {
+    'use strict';
+
+    // =====================================================================
+    // Configuration
+    // =====================================================================
+    // Options - None: the main script loads it. The page jellyfin-web opens for a studio, a genre or a
+    // music genre (#/list?studioId=, genreId=, musicGenreId=) starts with a heading naming it, in its
+    // row of controls: a studio's logo, which Polyfin draws at Items/<studio id>/Images/Thumb (16:9)
+    // with the name as its text alternative, else its name.
+    // Docs: Polyfin's themes-and-custom-code.md#list-headings.
+
+    // =====================================================================
+    // Instance
+    // =====================================================================
+    const KEY = '__lumaaGlaassListHeadings';
+    window[KEY]?.stop();
+    let stopped = false;
+
+    // =====================================================================
+    // Shared helpers
+    // =====================================================================
+    // Listeners - Added through listen() so stop() removes them all.
+    const listeners = [];
+    const listen = (target, event, fn, options) => {
+        target.addEventListener(event, fn, options);
+        listeners.push(() => target.removeEventListener(event, fn, options));
+    };
+    const element = (tag, cls, text) => {
+        const node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text) node.textContent = text;
+        return node;
+    };
+    // Theme - Only the stylesheet defines --lg-motion: without it, Jellyfin's own page stays.
+    const enabled = () => getComputedStyle(document.documentElement).getPropertyValue('--lg-motion').trim() !== '';
+    const currentClient = () => {
+        try {
+            return window.ApiClient || window.ConnectionManager?.currentApiClient?.();
+        } catch { return null; }
+    };
+
+    // =====================================================================
+    // Styles
+    // =====================================================================
+    // Heading - The first of the row of controls (count, Play All, Shuffle, Sort, Filter), a row of its
+    // own, at the size of the theme's page titles; the row wraps under it as before. In a library's
+    // card (the main script's, with parentId), it names the page in place of the library's title.
+    const style = element('style', '', `
+        html body .itemsViewSettingsContainer > .lg-list-heading {
+            flex: 0 0 100%;
+            min-width: 0;
+            margin: 0 0 12px;
+            font-family: inherit;
+            font-size: var(--lg-page-card-title-size,2em);
+            font-weight: var(--lg-page-card-title-weight,700);
+            line-height: 1.12;
+            text-align: center;
+            overflow-wrap: anywhere;
+        }
+
+        html body .lg-library-card > .lg-list-heading {
+            text-align: start;
+        }
+
+        html body .lg-library-card:has(> .lg-list-heading) > .lg-library-title {
+            display: none;
+        }
+
+        /* Logo - Polyfin's light plate, rounded on the dark page, 80px tall, 64px on the compact
+           layout; its line holds that height while it loads, so nothing moves. */
+        html body .lg-list-heading-logo {
+            display: inline-block;
+            height: 80px;
+            width: auto;
+            max-width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: contain;
+            vertical-align: top;
+            border-radius: var(--lg-radius-small,8px);
+        }
+
+        @media (max-width: 699px) {
+            html body .lg-list-heading-logo {
+                height: 64px;
+            }
+        }
+    `);
+    // Plate - Asked at its larger height in device pixels, sharp on both layouts.
+    const LOGO_HEIGHT = 80;
+
+    // =====================================================================
+    // Headings
+    // =====================================================================
+    // Route - The item a list page is for: a studio, a genre or a music genre.
+    const PARAMS = ['studioId', 'genreId', 'musicGenreId'];
+    function routeId() {
+        const [path, query = ''] = location.hash.split('?');
+        if (path !== '#/list') return '';
+        const params = new URLSearchParams(query);
+        for (const name of PARAMS) {
+            const id = params.get(name);
+            if (id) return id;
+        }
+        return '';
+    }
+    // Page - The row of controls of the list page shown; Jellyfin keeps hidden pages (.hide).
+    const shownRow = () => [...document.querySelectorAll('.libraryPage:not(.hide) .itemsViewSettingsContainer')]
+        .find(row => !row.closest('.hide,[hidden]'));
+    // Items - The item jellyfin-web asks for to open the page (Users/<user>/Items/<id>), asked once
+    // per id and session; a failure is asked again after 30 s.
+    const items = new Map();
+    function itemOf(api, id) {
+        const key = (api.serverId?.() || '') + '|' + api.getCurrentUserId() + '|' + id;
+        let entry = items.get(key);
+        if (entry && (entry.item || entry.loading || Date.now() < entry.retry)) return entry.item;
+        entry = { item: null, loading: true, retry: 0 };
+        items.set(key, entry);
+        void api.getItem(api.getCurrentUserId(), id).then(item => {
+            entry.item = item || null;
+        }, () => {}).finally(() => {
+            entry.loading = false;
+            if (!entry.item) entry.retry = Date.now() + 30000;
+            if (!stopped) sync();
+        });
+        return null;
+    }
+    const logoUrl = (api, item) => api.getUrl('Items/' + encodeURIComponent(item.Id) + '/Images/Thumb', {
+        tag: item.ImageTags.Thumb,
+        maxHeight: Math.round(LOGO_HEIGHT * (window.devicePixelRatio || 1)),
+        margin: 'narrow'
+    });
+    // Heading - A studio of a logo shows it, named by its alt; without one, or once it fails to load,
+    // the heading is the name, as for a genre.
+    function build(api, item) {
+        const heading = element('h1', 'lg-list-heading');
+        heading.setAttribute('data-lg-list-heading', item.Id);
+        if (item.Type === 'Studio' && item.ImageTags?.Thumb) {
+            const image = element('img', 'lg-list-heading-logo');
+            image.alt = item.Name;
+            image.decoding = 'async';
+            image.draggable = false;
+            image.addEventListener('error', () => {
+                image.remove();
+                heading.textContent = item.Name;
+            }, { once: true });
+            image.src = logoUrl(api, item);
+            heading.append(image);
+        } else {
+            heading.textContent = item.Name;
+        }
+        return heading;
+    }
+    const clear = (keep = null) => document.querySelectorAll('.lg-list-heading').forEach(node => {
+        if (node !== keep) node.remove();
+    });
+    // Sync - The page shown gets the heading of its item, first in its row; another page's goes.
+    function sync() {
+        if (stopped) return;
+        const id = enabled() ? routeId() : '';
+        const api = id ? currentClient() : null;
+        const row = api ? shownRow() : null;
+        if (!row) {
+            if (!id) clear();
+            return;
+        }
+        let heading = row.querySelector(':scope > .lg-list-heading');
+        if (heading?.getAttribute('data-lg-list-heading') !== id) {
+            heading?.remove();
+            heading = null;
+            const item = itemOf(api, id);
+            if (!item) return;
+            heading = build(api, item);
+        }
+        if (row.firstElementChild !== heading) row.prepend(heading);
+        clear(heading);
+    }
+
+    // =====================================================================
+    // Scheduler
+    // =====================================================================
+    // Events - A page shown, a route change; the clock covers the rest (the client signing in, the
+    // theme's stylesheet loading).
+    let scheduled = 0, timer = 0;
+    const schedule = () => {
+        if (stopped || scheduled) return;
+        scheduled = requestAnimationFrame(() => {
+            scheduled = 0;
+            sync();
+        });
+    };
+    function start() {
+        document.head.append(style);
+        listen(document, 'viewshow', sync, true);
+        listen(window, 'hashchange', schedule);
+        listen(window, 'popstate', schedule);
+        timer = setInterval(sync, 1000);
+        sync();
+    }
+
+    // =====================================================================
+    // Lifecycle
+    // =====================================================================
+    window[KEY] = {
+        stop() {
+            stopped = true;
+            clearInterval(timer);
+            cancelAnimationFrame(scheduled);
+            listeners.forEach(fn => fn());
+            clear();
+            style.remove();
+            delete window[KEY];
+        }
+    };
+    start();
+})();
