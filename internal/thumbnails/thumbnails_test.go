@@ -537,16 +537,19 @@ func madeWithin(t *testing.T, ts *testService, version library.Version, d time.D
 	return false
 }
 
-// localFile is a file of a local folder, lasting two hours, made of
-// forced.mkv, with a thumbnail every 10 s asked and no chapter image.
+// localFile is a file of a local folder, lasting two and a half minutes,
+// made of forced.mkv, with a thumbnail every 10 s asked and no chapter
+// image, and a budget of 5 requests for providers' files: the size and
+// the index would leave 3.
 func localFile(t *testing.T) (*testService, library.Version) {
 	t.Helper()
 	ts := newTestService(t, testFFmpeg(t))
 	ts.change(func(s *accounts.Settings) { s.TrickplayInterval, s.ChapterImages = 10, false })
 	ts.mu.Lock()
+	ts.budget = 5
 	ts.source = &countingSource{data: fixture(t, "forced.mkv")}
 	analysis := forcedAnalysis
-	analysis.Duration = 2 * time.Hour
+	analysis.Duration = 150 * time.Second
 	ts.analysis = analysis
 	ts.mu.Unlock()
 	return ts, library.Version{ID: accounts.ID{11}, Item: accounts.ID{12}, URL: "http://127.0.0.1:9/file/a.mkv", Addon: "Home", LocalFolder: true}
@@ -554,15 +557,16 @@ func localFile(t *testing.T) (*testService, library.Version) {
 
 // A local folder's file, read from the server's own storage, gets a
 // thumbnail every interval asked, whatever the budget, the pace and the
-// hourly cap of providers: a 2-hour file one every 10 s, 720, not 62
-// spread over its runtime.
+// hourly cap of providers: 15 for two and a half minutes, one every
+// 10 s, not 3 spread over its runtime as a budget of 5 requests would
+// give.
 func TestLocalFilesTakeEveryThumbnail(t *testing.T) {
 	t.Parallel()
 	ts, file := localFile(t)
 	ts.generate(t.Context(), job{version: file, title: "Home video", host: hostOf(file.URL)})
 	manifest, err := ts.Manifest(t.Context(), file.Item)
-	if info := manifest[file.ID][240]; err != nil || info.Interval != 10000 || info.ThumbnailCount != 720 {
-		t.Errorf("thumbnails %+v, %v: one every 10 s, 720, expected", info, err)
+	if info := manifest[file.ID][240]; err != nil || info.Interval != 10000 || info.ThumbnailCount != 15 {
+		t.Errorf("thumbnails %+v, %v: one every 10 s, 15, expected", info, err)
 	}
 }
 
