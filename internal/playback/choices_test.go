@@ -3,9 +3,9 @@ package playback
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +14,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // An analysis that outlasts the settings' timeout is given up, of a file
@@ -22,7 +23,7 @@ func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
 	t.Parallel()
 	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	// The channel answers with a live playlist: its start is checked

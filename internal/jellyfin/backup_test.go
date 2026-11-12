@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/backup"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/testdb"
 )
@@ -87,7 +88,7 @@ func TestBackupsAreThoseOfTheFolder(t *testing.T) {
 		}
 	}
 	script := filepath.Join(t.TempDir(), "pg_dump")
-	if err := os.WriteFile(script, []byte(fakePgDump), 0o700); err != nil {
+	if err := process.WriteExecutable(script, strings.NewReader(fakePgDump), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s, admin, member, service := backupServer(t, dir, func(c *backup.Config, _ *pgxpool.Pool) { c.PgDump = script })
@@ -160,7 +161,7 @@ func TestAppsCannotRestoreAnEncryptedBackup(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	script := filepath.Join(t.TempDir(), "pg_dump")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf 'PGDMP'\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(script, strings.NewReader("#!/bin/sh\nprintf 'PGDMP'\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s, admin, _, service := backupServer(t, dir, func(c *backup.Config, _ *pgxpool.Pool) {

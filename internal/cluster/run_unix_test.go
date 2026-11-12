@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // A pg_ctl that leaves a process behind holding its output, as the
@@ -21,7 +23,7 @@ func TestRunDoesNotWaitForWhatAProgramLeaves(t *testing.T) {
 	t.Parallel()
 	bin := t.TempDir()
 	script := "#!/bin/sh\necho \"pg_ctl $1\"\nsleep 60 &\n"
-	if err := os.WriteFile(filepath.Join(bin, "pg_ctl"), []byte(script), 0o755); err != nil {
+	if err := process.WriteExecutable(filepath.Join(bin, "pg_ctl"), strings.NewReader(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
@@ -67,7 +69,7 @@ while [ ! -e "$0.taken" ]; do sleep 0.01; done
 echo "pg_ctl: could not start server" >&2
 exit 1
 `
-	if err := os.WriteFile(pgCtl, []byte(script), 0o755); err != nil {
+	if err := process.WriteExecutable(pgCtl, strings.NewReader(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
@@ -114,7 +116,7 @@ func TestTheSetPortIsTheOnlyOneTried(t *testing.T) {
 	bin := t.TempDir()
 	pgCtl := filepath.Join(bin, "pg_ctl")
 	script := "#!/bin/sh\necho start >> \"$0.starts\"\necho 'pg_ctl: could not start server' >&2\nexit 1\n"
-	if err := os.WriteFile(pgCtl, []byte(script), 0o755); err != nil {
+	if err := process.WriteExecutable(pgCtl, strings.NewReader(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

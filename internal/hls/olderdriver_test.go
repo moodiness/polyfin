@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // What FFmpeg 9 writes when the NVIDIA driver is older than 570: its API
@@ -51,7 +52,7 @@ type fakeOlderFFmpeg struct {
 func newFakeOlderFFmpeg(t *testing.T, ready bool) *fakeOlderFFmpeg {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "ffmpeg")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return &fakeOlderFFmpeg{path: path, ready: ready, release: make(chan struct{})}
@@ -207,7 +208,7 @@ func TestNVENCFailingWithTheFFmpegForOlderDriversIsTold(t *testing.T) {
 	m := failingFFmpeg(t, "linux", driverTooOld, &log)
 	defer m.Close()
 	older := newFakeOlderFFmpeg(t, true)
-	if err := os.WriteFile(older.path, []byte("#!/bin/sh\necho 'OpenEncodeSessionEx failed: no encode device' >&2\nexit 1\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(older.path, strings.NewReader("#!/bin/sh\necho 'OpenEncodeSessionEx failed: no encode device' >&2\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	m.UseOlderDriverFFmpeg(older)

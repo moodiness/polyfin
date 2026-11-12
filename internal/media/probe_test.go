@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 func TestParseReadsWhatTheRecordedClipsLack(t *testing.T) {
@@ -136,7 +138,7 @@ func TestLiveAnalysesNeverReconnect(t *testing.T) {
 	args := filepath.Join(dir, "args")
 	path := filepath.Join(dir, "ffprobe")
 	script := "#!/bin/sh\necho \"$*\" > " + args + "\necho '{\"streams\": [{\"index\": 0, \"codec_type\": \"video\", \"codec_name\": \"h264\"}], \"format\": {}}'\n"
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	prober := Prober{Path: path, Timeout: 5 * time.Second}

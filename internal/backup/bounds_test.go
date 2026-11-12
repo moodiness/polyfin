@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/process"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/webdav"
 )
@@ -460,7 +461,7 @@ case "$1" in
 esac
 `
 	path := filepath.Join(t.TempDir(), "pg_restore")
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path

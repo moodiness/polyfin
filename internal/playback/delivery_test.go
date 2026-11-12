@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/source"
 )
 
@@ -49,7 +51,7 @@ func TestAnalysesStopWhenTheirSourceFails(t *testing.T) {
 	t.Parallel()
 	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	host := &changingSource{file: make([]byte, 16<<20), other: make([]byte, 20<<20)}
@@ -97,7 +99,7 @@ func TestMatroskaIndexesAreReadDuringTheAnalysis(t *testing.T) {
 	path := filepath.Join(dir, "ffprobe")
 	// ffprobe takes its time; it reads nothing here.
 	script := "#!/bin/sh\nsleep 1\ncat " + filepath.Join(dir, "output.json") + "\n"
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	for _, version := range []library.Version{
@@ -375,7 +377,7 @@ func TestVersionsAreNeverHiddenForARateLimit(t *testing.T) {
 	t.Parallel()
 	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s := newService(t, busyHost{}, path, nil)

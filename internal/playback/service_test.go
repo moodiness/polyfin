@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
@@ -257,7 +258,7 @@ func fakeProbe(t *testing.T, output string, fail bool) (string, func() int) {
 		script += "cat " + result + "\n"
 	}
 	path := filepath.Join(dir, "ffprobe")
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path, func() int {
@@ -311,7 +312,7 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 		t.Fatal(err)
 	}
 	held := strings.Replace(string(script), "cat ", "while [ ! -f "+released+" ]; do sleep 0.05; done\ncat ", 1)
-	if err := os.WriteFile(path, []byte(held), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(held), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)

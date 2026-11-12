@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // Live encodings read their source until the app leaves: a user starting
@@ -92,7 +94,7 @@ printf 'segment' > "$dir/$start.ts"
 } > "$playlist"
 `
 	path := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path, func() []string {
@@ -187,7 +189,7 @@ $n.ts"
 done
 `
 	ffmpeg = filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(ffmpeg, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(ffmpeg, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return ffmpeg, release

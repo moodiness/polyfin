@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // tsChunk is 16 MPEG-TS packets.
@@ -878,7 +879,7 @@ func heldProbe(t *testing.T) (path, started, released string) {
 	script := "#!/bin/sh\ntouch " + started + "\nwhile [ ! -e " + released + " ]; do sleep 0.05; done\n" +
 		"echo 'Invalid data found when processing input' >&2\nexit 1\n"
 	path = filepath.Join(dir, "ffprobe")
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+	if err := process.WriteExecutable(path, strings.NewReader(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path, started, released

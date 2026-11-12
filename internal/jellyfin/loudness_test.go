@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/loudness"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -27,7 +28,7 @@ func countedFFmpeg(t *testing.T, ffmpeg string) (string, func() int) {
 	dir := t.TempDir()
 	runs := filepath.Join(dir, "runs")
 	script := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\necho run >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
+	if err := process.WriteExecutable(script, strings.NewReader("#!/bin/sh\necho run >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return script, func() int {

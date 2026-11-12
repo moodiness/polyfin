@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // An H.264 MPEG-TS file of a local folder or a network share plays in
@@ -148,7 +149,7 @@ func TestLocalMPEGTSFilesPlayConvertedUntilTheirKeyframesAreRead(t *testing.T) {
 	ffprobe := filepath.Join(dir, "ffprobe")
 	script := "#!/bin/sh\ncase \"$*\" in *packet=pts_time*) while [ ! -e '" + release + "' ] && [ -d '" + dir + "' ]; do sleep 0.05; done;; esac\nexec '" +
 		filepath.Join(filepath.Dir(ffmpeg), "ffprobe") + "' \"$@\"\n"
-	if err := os.WriteFile(ffprobe, []byte(script), 0o755); err != nil {
+	if err := process.WriteExecutable(ffprobe, strings.NewReader(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	file := filepath.Join(dir, "movie.ts")
