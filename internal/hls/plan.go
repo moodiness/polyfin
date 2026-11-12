@@ -190,6 +190,23 @@ func (p Plan) Fast(n int) bool {
 	return n >= p.fastFrom && n < p.fastTo
 }
 
+// Until returns the plan of a version that ends at end, before p does
+// (see Manager.End): the segments starting before end, the last one
+// lasting up to it, and the fast segments among them (see FastFrom). It
+// returns p when end is not before p's end, or not past its start.
+func (p Plan) Until(end time.Duration) Plan {
+	if end >= p.duration || end <= 0 || len(p.starts) == 0 {
+		return p
+	}
+	n, _ := slices.BinarySearch(p.starts, end)
+	p.starts, p.duration = slices.Clip(p.starts[:n]), end
+	p.fastTo = min(p.fastTo, n)
+	if p.fastFrom >= p.fastTo {
+		p.fastFrom, p.fastTo = 0, 0
+	}
+	return p
+}
+
 // switches reports whether segment n is made otherwise than the one
 // before it: the first fast segment, or the first after them. A playlist
 // marks it with a discontinuity.

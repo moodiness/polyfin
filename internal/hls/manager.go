@@ -76,7 +76,10 @@ var (
 	// stallTimeout: its source is slow to answer, or stopped answering, or
 	// FFmpeg itself stopped for good.
 	ErrStalled = errors.New("the encoding made no progress")
-	errStale   = errors.New("the job was replaced")
+	// ErrFailed reports a run of FFmpeg that failed, which the manager
+	// logged already.
+	ErrFailed = errors.New("the encoding failed")
+	errStale  = errors.New("the job was replaced")
 )
 
 // Remux is what an encoding reads and produces.
@@ -129,6 +132,12 @@ type Remux struct {
 	// in gets a picture past it (see writeBurnCopy). A Plan's own duration
 	// serves otherwise.
 	Duration time.Duration
+	// Size is the size of the version's file, zero when not known: where
+	// the version is found to end before its Plan does is kept with it,
+	// and forgotten once the version comes with another size (see
+	// Manager.End). An encoding of no known size keeps none, as one going
+	// on from another version's input does not.
+	Size int64
 	// Subtitles are the FFmpeg indexes of the text subtitle streams
 	// extracted into Extracted while remuxing, from the bytes FFmpeg reads
 	// anyway.
@@ -874,6 +883,11 @@ type Manager struct {
 	// tests change.
 	keepVideo atomic.Pointer[func() bool]
 	keepFor   atomic.Int64
+	// ends are where versions were found to end before their plans do,
+	// by Key.Version, under endsMu, which is taken last, with nothing
+	// taken under it (see End).
+	endsMu sync.Mutex
+	ends   map[string]*versionEnd
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -1156,7 +1170,7 @@ func (m *Manager) Segment(ctx context.Context, key Key, open Opener, n int) (*os
 	if err != nil {
 		return nil, err
 	}
-	if n >= e.remux.Plan.Len() {
+	if e.beyond(n) {
 		return nil, ErrNotFound
 	}
 	return e.await(ctx, n)
@@ -1179,13 +1193,118 @@ func (m *Manager) Subtitles(ctx context.Context, key Key, open Opener, n int) er
 	} else if err := e.waitOpen(ctx); err != nil {
 		return err
 	}
-	if n < 0 || n >= e.remux.Plan.Len() {
+	if n < 0 || e.beyond(n) {
 		return ErrNotFound
 	}
 	if len(e.remux.Subtitles) == 0 {
 		return nil
 	}
 	return e.awaitCovered(ctx, n)
+}
+
+// beyond reports whether segment n is past the encoding's version: past
+// its plan, or past where the version was found to end (see End), which
+// no FFmpeg is started for.
+func (e *encoding) beyond(n int) bool {
+	plan := e.remux.Plan
+	if n >= plan.Len() {
+		return true
+	}
+	end, ok := e.m.End(e.key.Version, e.remux.Size)
+	return ok && plan.Start(n) >= end
+}
+
+// versionEnd is where a version of a size ends before its plan does, as
+// its encodings found: cut is the start of the segment FFmpeg's output
+// was cut short in last, seen how many times in a row it was there; end,
+// once ended is set, the start of the first segment the version does not
+// have.
+type versionEnd struct {
+	size  int64
+	cut   time.Duration
+	seen  int
+	end   time.Duration
+	ended bool
+}
+
+// End returns where version, of size bytes, was found to end before its
+// plan does: the start of the first segment it does not have. Its
+// encodings answer that no such segment exists from there on, without
+// FFmpeg, and the plans its plays get later may stop there (see
+// Plan.Until). What was found is kept until the server stops, and
+// forgotten once the version comes with another size, as when its file
+// was replaced. A size not known, zero, tells nothing.
+func (m *Manager) End(version string, size int64) (time.Duration, bool) {
+	if size <= 0 {
+		return 0, false
+	}
+	m.endsMu.Lock()
+	defer m.endsMu.Unlock()
+	if v := m.versionEnd(version, size, false); v != nil && v.ended {
+		return v.end, true
+	}
+	return 0, false
+}
+
+// versionEnd returns what is known of where version, of size bytes, ends,
+// made when create is set, else nil when nothing is. What was known of
+// another size is forgotten. The caller holds m.endsMu.
+func (m *Manager) versionEnd(version string, size int64, create bool) *versionEnd {
+	v := m.ends[version]
+	if v != nil && v.size != size {
+		delete(m.ends, version)
+		v = nil
+	}
+	if v == nil && create {
+		if m.ends == nil {
+			m.ends = map[string]*versionEnd{}
+		}
+		v = &versionEnd{size: size}
+		m.ends[version] = v
+	}
+	return v
+}
+
+// cutShort records that FFmpeg's output of version, of size bytes, its
+// source sound, was cut short in the segment starting at at, and reports
+// whether that is where the version ends: the output before was cut short
+// there too.
+func (m *Manager) cutShort(version string, size int64, at time.Duration) bool {
+	m.endsMu.Lock()
+	defer m.endsMu.Unlock()
+	v := m.versionEnd(version, size, true)
+	if v.seen == 0 || v.cut != at {
+		v.cut, v.seen = at, 0
+	}
+	v.seen++
+	return v.seen > 1
+}
+
+// passed records that an encoding of version, of size bytes, made the
+// segment starting at at: an output cut short before it met a crash, not
+// the version's end.
+func (m *Manager) passed(version string, size int64, at time.Duration) {
+	m.endsMu.Lock()
+	defer m.endsMu.Unlock()
+	if v := m.versionEnd(version, size, false); v != nil && v.seen > 0 && at > v.cut {
+		v.seen = 0
+	}
+}
+
+// endAt records that version, of size bytes, ends at end, and reports
+// whether that was not known yet. An end at the start tells nothing.
+func (m *Manager) endAt(version string, size int64, end time.Duration) bool {
+	if end <= 0 {
+		return false
+	}
+	m.endsMu.Lock()
+	defer m.endsMu.Unlock()
+	v := m.versionEnd(version, size, true)
+	if v.ended && v.end == end {
+		return false
+	}
+	v.end, v.ended = end, true
+	return true
 }
 
 // playing returns the encoding of key's playback asked for last, nil when
@@ -1332,6 +1451,35 @@ type encoding struct {
 	// burns are the copies of the subtitle files the jobs burn in, by
 	// file, under e.mu (see burnInput).
 	burns map[string]*burnCopy
+	// failing counts the runs of FFmpeg that failed in a row from one
+	// segment (see failed).
+	failing failing
+}
+
+// giveUp is how many runs of FFmpeg from the same segment may fail in a
+// row before an encoding gives up on that segment: a run that fails
+// there once may have met a passing fault, one that fails every time
+// meets the same one.
+const giveUp = 3
+
+// failing is what an encoding knows of the runs of FFmpeg that failed in
+// a row from segment start: how many, when the first and the last did,
+// and the last one's error. The count starts again once a segment at or
+// past start is made.
+type failing struct {
+	start, runs int
+	first, last time.Time
+	err         error
+}
+
+// gaveUp returns the failure an encoding gave up on segment start with
+// (see giveUp), nil while it did not: a request for that segment gets it
+// without FFmpeg, until the encoding ends. The caller holds e.mu.
+func (e *encoding) gaveUp(start int) error {
+	if f := e.failing; f.runs >= giveUp && f.start == start {
+		return fmt.Errorf("%w: %w", ErrNotFound, f.err)
+	}
+	return nil
 }
 
 func (e *encoding) open(ctx context.Context, open Opener) {
@@ -1663,13 +1811,20 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 			// Another input is being found: the job that failed is no
 			// answer, and none starts until it is there.
 		case j != nil && j.done && j.err != nil && !errors.Is(j.err, errStale) && j.start == start:
-			// Reported once: the next request tries again.
+			// Reported once: the next request tries again, until the
+			// encoding gave up on the segment.
 			e.job = nil
+			if err := e.gaveUp(start); err != nil {
+				return nil, err
+			}
 			return nil, j.err
 		case j != nil && j.done && j.err == nil && n >= j.start && n >= j.next:
 			// FFmpeg reached the end of the version before this segment.
 			return nil, ErrNotFound
 		case j == nil || j.done || (n >= 0 && (n < j.next || n > j.next+reach)) || (n < 0 && !e.makesInit(j, n)):
+			if err := e.gaveUp(start); err != nil {
+				return nil, err
+			}
 			e.start(start)
 		}
 		if err := e.waitProgress(ctx, since); err != nil {
@@ -1701,8 +1856,14 @@ func (e *encoding) awaitCovered(ctx context.Context, n int) error {
 		case e.switching:
 		case j != nil && j.done && j.err != nil && !errors.Is(j.err, errStale) && j.start == n:
 			e.job = nil
+			if err := e.gaveUp(n); err != nil {
+				return err
+			}
 			return j.err
 		case j == nil || j.done || n < j.start || n > j.next+reach:
+			if err := e.gaveUp(n); err != nil {
+				return err
+			}
 			e.start(n)
 		}
 		// A player may fetch subtitles ahead of the video: FFmpeg goes on
@@ -1878,20 +2039,37 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		err = splitMP4(output, take)
 	}
 	// A job replaced or stopped from outside is stale; one whose output
-	// could not be filed failed, and stops FFmpeg itself.
+	// could not be filed failed, and stops FFmpeg itself. An output cut
+	// short was ended by FFmpeg, as when it died: FFmpeg is waited for, so
+	// as to tell why, but not for long.
 	replaced := errors.Is(err, errStale) || ctx.Err() != nil
-	if err != nil && !replaced {
+	cut := errors.Is(err, errCut) && !replaced
+	var stopping *time.Timer
+	switch {
+	case cut:
+		stopping = time.AfterFunc(cutWait, j.cancel)
+	case err != nil && !replaced:
 		j.cancel()
 	}
 	// FFmpeg is waited for once its output is drained or abandoned.
 	_, _ = io.Copy(io.Discard, output)
 	waitErr := cmd.Wait()
+	if cut && stopping.Stop() && ctx.Err() != nil {
+		// Replaced or stopped meanwhile.
+		replaced = true
+	}
 	// The cues FFmpeg wrote before it ended are added before the job
 	// finishes and covers them.
 	extracting.Wait()
 	switch {
 	case replaced:
 		err = errStale
+	case cut:
+		status := "exit status 0"
+		if waitErr != nil {
+			status = waitErr.Error()
+		}
+		err = fmt.Errorf("%w; FFmpeg: %s: %s", err, status, bytes.TrimSpace(stderr.bytes()))
 	case err == nil && waitErr != nil:
 		err = fmt.Errorf("FFmpeg failed: %w: %s", waitErr, bytes.TrimSpace(stderr.bytes()))
 	case err == nil && j.inputFailed():
@@ -1902,14 +2080,15 @@ func (e *encoding) run(ctx context.Context, j *job) {
 	switch {
 	case errors.Is(err, errStale):
 		e.m.logger.Debug("A remux was stopped", "from", j.start, "duration", time.Since(started))
-	case err != nil:
-		e.m.logger.Warn("A remux failed", "from", j.start, "error", err)
-		metrics.EncodingFailed(j.input.Encode.method())
-	default:
+	case err == nil:
 		e.m.logger.Debug("A remux reached the end", "from", j.start, "duration", time.Since(started))
 	}
 	e.finish(j, err)
 }
+
+// cutWait bounds the wait for an FFmpeg whose output was cut short to end
+// (see run): it ended its output, which it does as it exits.
+const cutWait = 2 * time.Second
 
 // take files a piece of FFmpeg's output.
 func (e *encoding) take(ctx context.Context, j *job, p piece) error {
@@ -2010,6 +2189,9 @@ func (e *encoding) close(j *job) error {
 	}
 	e.ready[j.next] = true
 	metrics.SegmentMade(j.input.Encode.method())
+	if e.keepsEnd() {
+		e.m.passed(e.key.Version, e.remux.Size, e.remux.Plan.Start(j.next))
+	}
 	// The cues starting before the segment just made are counted as
 	// extracted once they had time to come, leaving that segment's length
 	// as a margin too.
@@ -2023,6 +2205,11 @@ func (e *encoding) close(j *job) error {
 		})
 	}
 	j.next++
+	// A segment made at or past the one runs failed from shows the fault
+	// passed (see failing).
+	if f := e.failing; f.runs > 0 && j.next > f.start {
+		e.failing = failing{}
+	}
 	e.signal()
 	return nil
 }
@@ -2066,15 +2253,35 @@ func (e *encoding) searchFurther(j *job, at time.Duration) bool {
 // One that reached it without starting its first segment, FFmpeg finding
 // no keyframe it could start it on past the time asked in a searched
 // version, starts again further back.
+//
+// An output that ends early, its source sound, is where the version ends
+// (see ended): one FFmpeg ended cleanly before the job's last segment, as
+// FFmpeg does at the end of a file cut short, once the job made a segment,
+// as one that made none tells not where; and one cut short (see errCut)
+// at the same segment as the one before it, as one cut short once may
+// have met a crash. The whole fragments of that segment, starting on its
+// keyframe, are its last segment. Another failure is counted (see
+// failed).
 func (e *encoding) finish(j *job, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if err == nil && e.job == j && !e.stopped && !j.inputFailed() {
-		plan := e.remux.Plan
+	sound := e.job == j && !e.stopped && !j.inputFailed()
+	plan := e.remux.Plan
+	switch {
+	case err == nil && sound:
 		if j.next == j.start && j.file == nil && e.searchFurther(j, plan.End(plan.Len()-1)) {
 			err = errStale
 		} else if err = e.close(j); err == nil {
 			e.cover(plan.Start(j.start), plan.End(plan.Len()-1))
+			if j.next < j.end && j.next > j.start {
+				e.ended(j)
+			}
+		}
+	case errors.Is(err, errCut) && sound && e.keepsEnd() && (j.next > 0 || j.file != nil) &&
+		e.m.cutShort(e.key.Version, e.remux.Size, plan.Start(j.next)):
+		if err = e.close(j); err == nil {
+			e.cover(plan.Start(j.start), plan.End(plan.Len()-1))
+			e.ended(j)
 		}
 	}
 	if j.file != nil {
@@ -2082,10 +2289,66 @@ func (e *encoding) finish(j *job, err error) {
 		_ = os.Remove(j.file.Name())
 		j.file = nil
 	}
+	if err != nil && !errors.Is(err, errStale) {
+		err = e.failed(j, err, sound)
+	}
 	j.done, j.err = true, err
 	if e.job == j {
 		e.signal()
 	}
+}
+
+// keepsEnd reports whether where the encoding's version ends is kept
+// (see Manager.End): not for an encoding that went on from another input
+// (see carryOn), nor for one of no version or of no known size (see
+// Remux.Size). The caller holds e.mu.
+func (e *encoding) keepsEnd() bool {
+	return e.switches == 0 && e.key.Version != "" && e.remux.Size > 0
+}
+
+// ended records that the encoding's version ends before segment j.next,
+// where job j's output ended, and tells it once. The caller holds e.mu.
+func (e *encoding) ended(j *job) {
+	if !e.keepsEnd() {
+		return
+	}
+	plan := e.remux.Plan
+	if j.next < plan.Len() && e.m.endAt(e.key.Version, e.remux.Size, plan.Start(j.next)) {
+		e.m.logger.Info("A version ends early: it plays up to a segment before its last", "segment", j.next, "of", plan.Len(),
+			"at", plan.Start(j.next))
+	}
+}
+
+// failed logs job j's failure, err, and returns it marked as logged
+// (ErrFailed). A failure of FFmpeg's own, sound being set as the job's
+// source did not fail, counts toward giving up on the job's first segment
+// (see giveUp): the first one there is a warning, the next ones are told
+// at debug level, and giving up is a warning again. The caller holds
+// e.mu.
+func (e *encoding) failed(j *job, err error, sound bool) error {
+	metrics.EncodingFailed(j.input.Encode.method())
+	marked := fmt.Errorf("%w: %w", ErrFailed, err)
+	if !sound || errors.Is(err, errInputFailed) {
+		e.m.logger.Warn("A remux failed", "from", j.start, "error", err)
+		return marked
+	}
+	now := time.Now()
+	f := &e.failing
+	if f.runs == 0 || f.start != j.start {
+		*f = failing{start: j.start, first: now}
+	}
+	f.runs++
+	f.last, f.err = now, err
+	if f.runs == 1 {
+		e.m.logger.Warn("A remux failed", "from", j.start, "error", err)
+	} else {
+		e.m.logger.Debug("A remux failed", "from", j.start, "attempt", f.runs, "error", err)
+	}
+	if f.runs == giveUp {
+		e.m.logger.Warn("An encoding gave up on a segment: FFmpeg failed there each time", "segment", j.start, "attempts", f.runs,
+			"first", f.first, "last", f.last, "error", err)
+	}
+	return marked
 }
 
 func writeFile(path string, data []byte) error {
