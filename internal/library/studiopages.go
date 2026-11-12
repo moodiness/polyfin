@@ -5,7 +5,6 @@ import (
 	"context"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +31,7 @@ import (
 //   - the titles the user's catalogs list for an option of its name, as a
 //     genre's page does (see Narrowed);
 //   - then the titles whose kept details name it that the user reaches,
-//     studioKeptMost at most, by name;
+//     keptMost at most, by name;
 //   - then, while the settings hold the server's TMDB key, the most popular
 //     movies and series of its networks and companies on TMDB's discover,
 //     studioDiscoverMost of each at most, from studioDiscoverPages pages
@@ -63,9 +62,6 @@ const (
 	// each kind it lists from them at most.
 	studioDiscoverPages = 2
 	studioDiscoverMost  = studioDiscoverPages * tmdb.DiscoverPage
-	// studioKeptMost bounds the titles a studio's page lists from the
-	// details kept.
-	studioKeptMost = 1000
 	// studioWait bounds how long a studio's page waits for TMDB's discover
 	// and the IMDb identifiers of its titles.
 	studioWait = knownForWait
@@ -380,32 +376,13 @@ func (s *Service) studioLogos(ctx context.Context, names []string) (map[string]s
 // StudioTitles lists the titles of the given kinds of the studios named
 // names (see above), [start, start+count): those of the user's catalogs
 // for a genre option matches matches, as Narrowed lists them, then the
-// titles whose kept details name them, then those of TMDB's discover.
-// Total counts them all once the catalogs are read through; while they
-// have more, it counts those read, plus one.
+// titles whose kept details name them, then those of TMDB's discover (see
+// namedTitles).
 func (s *Service) StudioTitles(ctx context.Context, user accounts.User, names []string, matches func(option string) bool, kinds []Kind,
 	start, count int) (Page, error) {
-	start = max(start, 0)
-	need := start + count
-	catalogs, err := s.Narrowed(ctx, user, matches, kinds, 0, need)
-	if err != nil {
-		return Page{}, err
-	}
-	if catalogs.More {
-		return Page{Items: window(catalogs.Items, start, need), Total: catalogs.Total, More: true}, nil
-	}
-	v, err := s.view(ctx, user)
-	if err != nil {
-		return Page{}, err
-	}
-	all := slices.Concat(catalogs.Items, s.studioExtras(ctx, v, names, kinds, catalogs.Items))
-	return Page{Items: window(all, start, need), Total: len(all)}, nil
-}
-
-// window returns items [start, end), within items.
-func window(items []Item, start, end int) []Item {
-	start, end = min(start, len(items)), min(end, len(items))
-	return items[start:end]
+	return s.namedTitles(ctx, user, matches, kinds, start, count, func(v view, listed []Item) []Item {
+		return s.studioExtras(ctx, v, names, kinds, listed)
+	})
 }
 
 // studioExtras returns the titles of the given kinds of the studios named
@@ -420,49 +397,17 @@ func (s *Service) studioExtras(ctx context.Context, v view, names []string, kind
 	if err != nil {
 		s.logger.Debug("A studio's networks and companies could not be read", "error", err)
 	}
-	// The titles listed, by identifier and by the keys of their IMDb and
-	// TMDB identifiers (see listedKeys).
-	seen := map[accounts.ID]bool{}
-	keys := map[string]bool{}
-	shown := map[tmdbTitle]bool{}
-	note := func(item Item) {
-		seen[item.ID] = true
-		for _, key := range listedKeys(item) {
-			keys[key] = true
-		}
-		kind := tmdb.Movie
-		if item.Kind == KindSeries {
-			kind = tmdb.TV
-		}
-		if id, err := strconv.Atoi(item.ProviderIDs["Tmdb"]); err == nil && id > 0 {
-			shown[tmdbTitle{kind, id}] = true
-		}
-	}
-	listedAlready := func(item Item) bool {
-		return seen[item.ID] || slices.ContainsFunc(listedKeys(item), func(key string) bool { return keys[key] })
-	}
-	for _, item := range listed {
-		note(item)
-	}
-	var extras []Item
+	shown := newShownTitles(listed)
 	kept := s.studioKept(ctx, v, names, refs, kinds)
 	// The kept titles' TMDB identifiers, so that discover does not repeat
 	// them.
 	for t := range s.listedTMDB(ctx, v, kept) {
-		shown[t] = true
+		shown.tmdb[t] = true
 	}
-	keptItems := s.titleItems(ctx, v, kept, kinds)
-	slices.SortFunc(keptItems, func(a, b Item) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
-	for _, item := range keptItems {
-		if !listedAlready(item) {
-			note(item)
-			extras = append(extras, item)
-		}
-	}
-	discovered := s.studioDiscovered(ctx, v, refs, kinds, shown)
+	extras := shown.byName(s.titleItems(ctx, v, kept, kinds))
+	discovered := s.studioDiscovered(ctx, v, refs, kinds, shown.tmdb)
 	for _, item := range s.titleItems(ctx, v, discovered, kinds) {
-		if !listedAlready(item) {
-			note(item)
+		if shown.add(item) {
 			extras = append(extras, item)
 		}
 	}
@@ -472,18 +417,12 @@ func (s *Service) studioExtras(ctx context.Context, v view, names []string, kind
 
 // studioKept returns the records of the titles of the given kinds whose
 // kept details name the studio of refs, or whose studios an administrator
-// set to one of names, that the user reaches and may see, studioKeptMost
-// at most.
+// set to one of names, as keptTitles keeps them. An administrator's
+// studios win over TMDB's.
 func (s *Service) studioKept(ctx context.Context, v view, names []string, refs studioRefs, kinds []Kind) []record {
 	var ids []accounts.ID
-	set := s.overridesNow()
-	named := func(studios []string) bool {
-		return slices.ContainsFunc(studios, func(studio string) bool {
-			return slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(strings.TrimSpace(studio), strings.TrimSpace(name)) })
-		})
-	}
-	for id, o := range set.fields {
-		if o.Studios != nil && named(o.Studios) {
+	for id, o := range s.overridesNow().fields {
+		if o.Studios != nil && namedAny(o.Studios, names) {
 			ids = append(ids, id)
 		}
 	}
@@ -491,7 +430,7 @@ func (s *Service) studioKept(ctx context.Context, v view, names []string, refs s
 		rows, err := s.db.Query(ctx, `SELECT titles FROM title_credits
 			WHERE tmdb_id IS NOT NULL AND tagline IS NOT NULL AND network_ids IS NOT NULL AND company_ids IS NOT NULL
 				AND (kind = 'tv' AND network_ids && $1::int[] OR company_ids && $2::int[])
-			ORDER BY asked_at DESC LIMIT $3`, refs.networks, refs.companies, studioKeptMost)
+			ORDER BY asked_at DESC LIMIT $3`, refs.networks, refs.companies, keptMost)
 		if err == nil {
 			var titles []accounts.ID
 			_, err = pgx.ForEachRow(rows, []any{&titles}, func() error {
@@ -503,24 +442,7 @@ func (s *Service) studioKept(ctx context.Context, v view, names []string, refs s
 			s.logger.Debug("The titles of a studio could not be read", "error", err)
 		}
 	}
-	slices.SortFunc(ids, func(a, b accounts.ID) int { return strings.Compare(a.String(), b.String()) })
-	ids = slices.Compact(ids)
-	records, err := s.loadAll(ctx, ids)
-	if err != nil {
-		return nil
-	}
-	records = slices.DeleteFunc(records, func(r record) bool {
-		if r.Meta == nil || r.Kind != KindMovie && r.Kind != KindSeries || !slices.Contains(kinds, r.Kind) || v.hidden[r.ID] || !v.reaches(r) {
-			return true
-		}
-		// An administrator's studios win over TMDB's.
-		o, edited := set.fields[r.ID]
-		return edited && o.Studios != nil && !named(o.Studios)
-	})
-	records = records[:min(len(records), studioKeptMost)]
-	records, _ = s.visible(ctx, v, records)
-	records, _ = s.released(ctx, v, records)
-	return records
+	return s.keptTitles(ctx, v, ids, kinds, func(o Overrides) bool { return o.Studios != nil && !namedAny(o.Studios, names) })
 }
 
 // studioDiscovered returns the records of the titles of the given kinds
