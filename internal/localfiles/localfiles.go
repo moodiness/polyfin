@@ -26,9 +26,12 @@
 // the server's disk or on a share (see sharedisc.go). An
 // administrator links the files left unmatched to an IMDb identifier by
 // hand. The subtitle files beside a video are offered with its stream (see
-// sidecars). A music folder answers as an Eclipse addon instead (see
-// music.go), and a home videos folder lists its videos as titles of their
-// own, which no metadata addon is asked about (see homevideos.go).
+// sidecars), and a video new or changed is probed with ffprobe for how
+// long it plays, which the library tells of titles neither their
+// descriptions nor TMDB give a length of (see durations.go). A music
+// folder answers as an Eclipse addon instead (see music.go), and a home
+// videos folder lists its videos as titles of their own, which no metadata
+// addon is asked about (see homevideos.go).
 //
 // A share's files are read from the share at each request, with byte
 // ranges; its connections are kept between requests. Those of S3 buckets,
@@ -224,9 +227,10 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 // playback.Service.LocalInputs); it is called before the service is used.
 func (s *Service) UseFiles(files, inputs string) { s.files, s.inputs = files, inputs }
 
-// UseTools sets the ffprobe and FFmpeg executables music folders' tracks
-// and home videos are read with, ffprobe and ffmpeg from PATH until then;
-// it is called before the service is used.
+// UseTools sets the ffprobe and FFmpeg executables music folders' tracks,
+// home videos and the lengths of movies and shows folders' videos are read
+// with, ffprobe and ffmpeg from PATH until then; it is called before the
+// service is used.
 func (s *Service) UseTools(ffprobe, ffmpeg string) { s.ffprobe, s.ffmpeg = ffprobe, ffmpeg }
 
 // UseToneMapping tells that FFmpeg has the filters bringing HDR to SDR,

@@ -413,7 +413,8 @@ type stored struct {
 // could not be read; a unit with files already matched keeps their title,
 // unless the identifier its NFO file gives changed. The subtitle files
 // beside the videos and the titles' artwork are stored as they are now
-// (see storeSubtitles and storeArtwork).
+// (see storeSubtitles and storeArtwork), and the videos new or changed
+// probed for how long they play (see storeDurations).
 func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
@@ -627,6 +628,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		return err
 	}
 	if err := s.storeArtwork(ctx, id, folder.Kind, root, list); err != nil {
+		return err
+	}
+	if err := s.storeDurations(ctx, id, list, files); err != nil {
 		return err
 	}
 	if err := s.finish(ctx, id, at, list); err != nil {
@@ -943,6 +947,9 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 			heightValue = &height
 		}
 		plain := plainID(id, e.unit)
+		// A file whose size and modification time are those stored keeps
+		// its probed duration: it is the same video. A changed one is
+		// probed again (see storeDurations).
 		batch.Queue(`INSERT INTO local_files (addon_id, path, size, modified, unit, title, year, season, episode, last_episode, height,
 				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length, search_addon, search_failure, added_at,
 				plain_id, absolute, numbering, file_season, file_episode, file_last_episode, unmapped)
@@ -951,7 +958,8 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $5, title = $6, year = $7, season = $8, episode = $9,
 				last_episode = $10, height = $11, stremio_id = $12, imdb_id = $13, tmdb_id = $14, name = $15, poster = $16, title_year = $17,
 				matched_by = $18, reason = $19, nfo_id = $20, length = $21, search_addon = $22, search_failure = $23, plain_id = $25,
-				absolute = $26, numbering = $27, file_season = $28, file_episode = $29, file_last_episode = $30, unmapped = $31`,
+				absolute = $26, numbering = $27, file_season = $28, file_episode = $29, file_last_episode = $30, unmapped = $31,
+				duration = CASE WHEN local_files.size = $3 AND local_files.modified = $4 THEN local_files.duration END`,
 			id, e.path, e.file.size, e.file.modified, e.unit, e.title.title, year, season, episode, last, heightValue,
 			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length, f.searchAddon, f.searchFailure, added, plain,
 			absolute, numbering, fileSeason, fileEpisode, fileLast, unmapped)
