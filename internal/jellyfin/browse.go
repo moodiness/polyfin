@@ -329,7 +329,9 @@ func (h *Handler) libraryViews(r *http.Request, user accounts.User) ([]BaseItemD
 // else with an empty 403, as it does for every endpoint it restricts by
 // policy. Libraries are addon catalogs: they have no paths, and nothing
 // scans them, so they are always idle. A music library tells whether its
-// songs' loudness is measured (see loudness.Measures).
+// songs' loudness is measured (see loudness.Measures); a local folder's
+// library, whether its files get scrubbing thumbnails (Settings.Trickplay),
+// as the task Make thumbnails makes them.
 func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	if !user.IsAdministrator {
@@ -359,6 +361,9 @@ func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
 		}
 		if view.CollectionType == "music" {
 			folder.LibraryOptions.EnableLUFSScan = loudness.Measures(settings, !libraries[i].LocalFolder)
+		}
+		if libraries[i].LocalFolder && view.CollectionType != "music" && view.CollectionType != "books" {
+			folder.LibraryOptions.EnableTrickplayImageExtraction = settings.Trickplay
 		}
 		// Jellyfin names the library itself as the holder of its image,
 		// and nothing when it has none.
