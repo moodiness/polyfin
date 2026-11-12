@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 // What addons answered for browsing.
@@ -545,20 +546,16 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 	if err != nil {
 		return fetched[stremio.Meta]{}, err
 	}
-	kept := fetched[stremio.Meta]{meta, s.now()}
-	s.metas.Put(key, kept)
+	kept := s.keepMeta(ctx, addon, key, fetched[stremio.Meta]{meta, s.now()}, true)
 	s.generated.kept.Add(1)
-	if err := s.storeMeta(ctx, addon, key, kept); err != nil {
-		s.logger.Debug("A description could not be kept", "addon", addon.addon.Manifest.Name, "error", err)
-	}
 	// The title's people are those of the description its page shows
 	// them from (see givesCredits): a translator's, or another addon's
 	// read meanwhile, are not.
 	// TMDB's credits of the title, while it shows them, stay (see
 	// titlecredits.go).
 	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && s.givesCredits(ctx, addon, kind, key.metaType, key.id) &&
-		!s.creditedByTMDB(ctx, itemID(titleKey(kind, key.id)), kind, s.providerIDs(itemID(titleKey(kind, key.id)), meta)) {
-		if err := s.saveCredits(ctx, itemID(titleKey(kind, key.id)), people(meta), addon.confined); err != nil {
+		!s.creditedByTMDB(ctx, itemID(titleKey(kind, key.id)), kind, s.providerIDs(itemID(titleKey(kind, key.id)), kept.value)) {
+		if err := s.saveCredits(ctx, itemID(titleKey(kind, key.id)), people(kept.value), addon.confined); err != nil {
 			s.logger.Debug("The people of a title could not be recorded", "addon", addon.addon.Manifest.Name, "error", err)
 		}
 	}
@@ -626,9 +623,39 @@ func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (f
 	if err := json.Unmarshal(data, &kept.value); err != nil || !kept.value.Describes(key.metaType, key.id) {
 		return kept, false
 	}
-	s.checkMeta(&kept.value, key.metaType, true)
-	s.metas.Put(key, kept)
-	return kept, true
+	s.correctMeta(&kept.value, key.metaType)
+	return s.keepMeta(ctx, addon, key, kept, false), true
+}
+
+// keepMeta keeps a description of key, which the verdicts known corrected
+// (see correctMeta), in memory, and in the database too when store is set,
+// then queues the check of the TMDB identifier it read from moviedb_id,
+// unless it was checked. Queued once the description is kept, the check
+// finds it to forget when its verdict finds the identifier wrong (see
+// correctMoviedb): queued before, it could forget the title's descriptions
+// before this one was kept, which would then show the wrong identifier
+// until asked for again. A verdict found meanwhile, by a check queued
+// elsewhere, corrects the description kept instead. It returns the
+// description kept.
+func (s *Service) keepMeta(ctx context.Context, addon installed, key metaKey, kept fetched[stremio.Meta], store bool) fetched[stremio.Meta] {
+	keep := func() {
+		s.metas.Put(key, kept)
+		if !store {
+			return
+		}
+		if err := s.storeMeta(ctx, addon, key, kept); err != nil {
+			s.logger.Debug("A description could not be kept", "addon", addon.addon.Manifest.Name, "error", err)
+		}
+	}
+	keep()
+	checked := kept.value
+	if lookup, ok := s.checkedMeta(&checked, key.metaType, true); ok {
+		s.lookups.Add([]tmdb.Lookup{lookup}, false)
+	} else if checked.TmdbID != kept.value.TmdbID {
+		kept.value = checked
+		keep()
+	}
+	return kept
 }
 
 // reach is how far describedMeta and enrich look for an addon's

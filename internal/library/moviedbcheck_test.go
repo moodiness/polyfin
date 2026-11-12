@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/tmdb"
 )
@@ -191,6 +192,19 @@ func (e moviedbEnv) shows(stremioID, name, want string) {
 	if got := e.listed()[name].ProviderIDs["Tmdb"]; got != want {
 		e.t.Errorf("%s listed shows TMDB %q, want %q", name, got, want)
 	}
+}
+
+// holdMetaWrite has the database hold the writes of the addon's
+// description of a series, as a slow database would: a transaction of its
+// own writes one, which they wait for until the hold is released.
+func (e moviedbEnv) holdMetaWrite(stremioID string) *testdb.Hold {
+	e.t.Helper()
+	installed, err := e.addons.All(e.t.Context())
+	if err != nil || len(installed) != 1 {
+		e.t.Fatalf("installed addons: %v, %v", installed, err)
+	}
+	return testdb.HoldRows(e.t, e.service.db, `INSERT INTO metas (addon_id, meta_type, meta_id, config, meta, fetched_at)
+		VALUES ($1, 'series', $2, '', '{}', now())`, installed[0].ID, stremioID)
 }
 
 // A moviedb_id that names another title on TMDB, as IT's names another
@@ -377,6 +391,72 @@ func TestAnotherMoviedbIdentifierIsCheckedAnew(t *testing.T) {
 	}
 	if described != 2 {
 		t.Errorf("the addon described IT %d times, want twice (with 1000, then 19614)", described)
+	}
+}
+
+// A verdict finding a moviedb_id wrong reaches a description the database
+// was slow to keep. Found once the description is kept, as its check is
+// queued only then, the verdict forgets it, and the next page is described
+// again; found while it waited, by a check queued elsewhere, as a page
+// waiting for its credits queues one, the verdict corrects it as it is
+// kept. A check queued as the description came, before it was kept, could
+// forget the title's descriptions while this one waited, which was then
+// kept with the wrong identifier.
+func TestAVerdictReachesADescriptionKeptSlowly(t *testing.T) {
+	t.Parallel()
+	it := itemID(titleKey(KindSeries, "tt0099864"))
+	for _, test := range []struct {
+		name      string
+		meanwhile bool   // whether a page checks 1000 while the description waits
+		shown     string // the TMDB identifier the page opened then shows
+		described int    // how many times the addon describes IT
+	}{
+		{"checked once kept", false, "1000", 2},
+		{"checked meanwhile", true, "19614", 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			e := newMoviedbEnv(t, "k3y", itMoviedb)
+			e.tmdb.finds["tt0099864"] = itFoundOnTMDB
+			e.listed()
+			e.settle()
+			e.describe(describedSeries("tt0099864", "IT", "1990", 1000))
+
+			hold := e.holdMetaWrite("tt0099864")
+			var page Item
+			opened := make(chan error, 1)
+			go func() {
+				var err error
+				page, err = e.service.Item(t.Context(), e.admin, it)
+				opened <- err
+			}()
+			// IT's description waits for the database, unless the page
+			// answered without keeping one.
+			hold.AwaitWaiting(func(waiting int) bool { return waiting > 0 || len(opened) > 0 })
+			if test.meanwhile {
+				e.service.AwaitTitleCredits(t.Context(), Item{ID: it, Kind: KindSeries, TMDBFromMoviedb: true,
+					ProviderIDs: map[string]string{"Imdb": "tt0099864", "Tmdb": "1000"}})
+			}
+			// What was queued until now ends while the description waits.
+			e.settle()
+			hold.Release()
+			if err := <-opened; err != nil {
+				t.Fatal(err)
+			}
+			if got := page.ProviderIDs["Tmdb"]; got != test.shown {
+				t.Errorf("IT's page shows TMDB %q, want %s", got, test.shown)
+			}
+			e.settle()
+			if got := e.verdict(1000, "tt0099864", 0); got != "wrong, replaced by 19614" {
+				t.Errorf("moviedb_id 1000: %s, want wrong, replaced by 19614", got)
+			}
+
+			e.describe(describedSeries("tt0099864", "IT", "1990", 19614))
+			e.shows("tt0099864", "IT", "19614")
+			if got := requestsTo(e.addon, "meta/series/tt0099864"); got != test.described {
+				t.Errorf("the addon described IT %d times, want %d", got, test.described)
+			}
+		})
 	}
 }
 
