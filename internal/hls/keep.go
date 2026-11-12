@@ -146,7 +146,7 @@ func (m *Manager) keptFile(ctx context.Context, key Key, open Opener, n int) (*o
 		if err != nil {
 			return nil, err
 		}
-		if n < 0 && e.remux.Format != FMP4 || n >= e.remux.Plan.Len() {
+		if n < 0 && e.remux.Format != FMP4 || n >= 0 && e.beyond(n) {
 			return nil, ErrNotFound
 		}
 		m.mu.Lock()

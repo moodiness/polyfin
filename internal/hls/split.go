@@ -25,6 +25,11 @@ type piece struct {
 // between two keyframes, a few seconds even at remux bitrates.
 const maxBox = 1 << 30
 
+// errCut reports FFmpeg's output ending in the middle of a box or of a
+// transport packet: FFmpeg stopped writing mid-way, as when it dies.
+// What came before is whole.
+var errCut = errors.New("the output was cut short")
+
 // splitMP4 reads a fragmented MP4 stream as FFmpeg writes it with
 // frag_keyframe: ftyp and moov, which make the initialization segment, then
 // a moof and an mdat for each video keyframe.
@@ -81,7 +86,7 @@ func readBox(in *bufio.Reader) ([]byte, string, error) {
 	head := make([]byte, 8, 16)
 	if _, err := io.ReadFull(in, head); err != nil {
 		if errors.Is(err, io.ErrUnexpectedEOF) {
-			return nil, "", errors.New("the output ends inside a box header")
+			return nil, "", fmt.Errorf("%w: it ends inside a box header", errCut)
 		}
 		return nil, "", err
 	}
@@ -89,7 +94,7 @@ func readBox(in *bufio.Reader) ([]byte, string, error) {
 	if size == 1 {
 		head = head[:16]
 		if _, err := io.ReadFull(in, head[8:]); err != nil {
-			return nil, "", fmt.Errorf("read a box size: %w", err)
+			return nil, "", fmt.Errorf("read a box size: %w", cut(err))
 		}
 		size = binary.BigEndian.Uint64(head[8:])
 	}
@@ -99,9 +104,20 @@ func readBox(in *bufio.Reader) ([]byte, string, error) {
 	box := make([]byte, size)
 	copy(box, head)
 	if _, err := io.ReadFull(in, box[len(head):]); err != nil {
-		return nil, "", fmt.Errorf("read a %q box: %w", head[4:8], err)
+		return nil, "", fmt.Errorf("read a %q box: %w", head[4:8], cut(err))
 	}
 	return box, string(head[4:8]), nil
+}
+
+// cut marks an error of a read that reached the end of FFmpeg's output
+// mid-way as errCut. Its io.EOF, when nothing of what was read came,
+// becomes io.ErrUnexpectedEOF: the callers take io.EOF for the output's
+// end, between two boxes or packets.
+func cut(err error) error {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return fmt.Errorf("%w: %w", errCut, io.ErrUnexpectedEOF)
+	}
+	return err
 }
 
 // children calls visit with the type and the content of each box in data.
@@ -327,7 +343,7 @@ func splitTS(r io.Reader, emit func(piece) error) error {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return fmt.Errorf("read a transport packet: %w", err)
+			return fmt.Errorf("read a transport packet: %w", cut(err))
 		}
 		if packet[0] != 0x47 {
 			return errors.New("the output lost transport stream sync")
