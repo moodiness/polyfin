@@ -651,6 +651,7 @@ const common: typeof en = {
     album: 'Albums',
     artist: 'Artistes',
     playlist: 'Playlists',
+    collection: 'Collections',
   },
   stremioResources: {
     catalog: 'Catalogues',

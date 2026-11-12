@@ -674,6 +674,7 @@ function LibraryForm({
                         <Menu
                           label={t.libraries.moreActions(name)}
                           align="end"
+                          fit
                           trigger={(props) => (
                             <IconButton
                               {...props}
