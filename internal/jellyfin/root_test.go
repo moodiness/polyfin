@@ -207,6 +207,7 @@ func TestEmptySearchSuggestsTheTopOfEachLibrary(t *testing.T) {
 	}
 	token := s.signIn("member", "tv")
 	ids := s.viewIDs(t, token)
+	var titles []string
 	for _, library := range []string{"Popular movies", "Popular series"} {
 		var page QueryResult
 		if status := s.get(t, "/Items?ParentId="+ids[library], token, &page); status != http.StatusOK || len(page.Items) != 30 {
@@ -214,7 +215,19 @@ func TestEmptySearchSuggestsTheTopOfEachLibrary(t *testing.T) {
 		}
 		for _, item := range page.Items {
 			ids[item.Name] = item.Id
+			titles = append(titles, item.Id)
 		}
+	}
+	// A listing for a user under parental control, or who blocks genres,
+	// waits a few seconds for the descriptions that tell its titles'
+	// ratings and genres, then leaves out those still unknown (see
+	// ratingWait in internal/library): a busy machine misses that wait, and
+	// the child's and the calm user's suggestions then reach further down
+	// the catalogs. The member first opens every title, whose ratings and
+	// genres are then known as after any user's visit.
+	var opened QueryResult
+	if status := s.get(t, "/Items?Ids="+strings.Join(titles, ","), token, &opened); status != http.StatusOK || len(opened.Items) != len(titles) {
+		t.Fatalf("opening the %d titles: %d, %d opened", len(titles), status, len(opened.Items))
 	}
 	rank := func(name string) int {
 		n, _ := strconv.Atoi(name[len(name)-2:])
