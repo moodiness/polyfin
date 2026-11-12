@@ -527,11 +527,12 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 
 - `POST /Items/{id}/Refresh` answers `204` at once, as Jellyfin's does once it queued the refresh ([ItemRefreshController.cs, lines 58 to 92](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Jellyfin.Api/Controllers/ItemRefreshController.cs#L58-L92); [ProviderManager.cs, lines 1136 to 1162](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Providers/Manager/ProviderManager.cs#L1136-L1162)), and `404` for an item the user cannot reach.
 - On a library, `metadataRefreshMode` or `imageRefreshMode` set to `Default` or `FullRefresh` starts the refresh; the replace options are ignored.
+- `regenerateTrickplay=true` with `FullRefresh` as either mode, the full refresh Jellyfin needs for it ([TrickplayProvider.cs, lines 101 to 104](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayProvider.cs#L101-L104)), makes again, in the background, the scrubbing thumbnails and chapter images of the local folders' files of the item, or of every title under a series, a season or a local folder's library (see [Files of local folders](scrubbing-thumbnails.md#files-of-local-folders)). Other versions keep theirs.
 
 ### Library refresh from Jellyfin apps
 
 - **Modes:** the refresh starts when the metadata or image refresh mode is "Scan for new and updated files" (`Default`) or a full refresh (`FullRefresh`), what jellyfin-web sends. Without a mode, `None` in Jellyfin, or with `ValidationOnly`, which ask no metadata provider, it starts nothing. Images come with the descriptions, so an image mode starts it too.
-- **Ignored:** "Replace all metadata" (`replaceAllMetadata`), "Replace existing images" (`replaceAllImages`) and `regenerateTrickplay`.
+- **Ignored:** "Replace all metadata" (`replaceAllMetadata`) and "Replace existing images" (`replaceAllImages`). `regenerateTrickplay` acts on the local folders' files only, as above.
 - **Libraries that do not offer it:** a collection, music or IPTV library, a smart list, or a user's own library answers as before, `204` with nothing refreshed, as Jellyfin answers for any item it queues. A library the user cannot see answers `404`, as Jellyfin answers for an item it does not find.
 - jellyfin-web's three modes send `MetadataRefreshMode=Default`, `FullRefresh`, and `FullRefresh` with `ReplaceAllMetadata`.
 
@@ -702,6 +703,7 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 - During a first play, a version's set lists the thumbnails made so far: its `ThumbnailCount` covers the start of the version, and grows. Tiles past it are not found.
 - `Trickplay` is keyed as the item's `MediaSources` name the versions (the first under the title's own identifier), and limited to the versions the user is offered under their quality group.
 - Tiles are served at `/Videos/{itemId}/Trickplay/{width}/tiles.m3u8` and `{index}.jpg`, which follow parental control, blocked genres and allowed hours.
+- `/Library/VirtualFolders` gives a local folder's library of videos `EnableTrickplayImageExtraction` while **Thumbnails when moving through a title** is on, as its files get thumbnails before any play; every other library has it false.
 - Chapters carry an `ImageTag`, served by `/Items/{itemId}/Images/Chapter/{index}` without credentials, like all images.
 
 ## Streams and conversion

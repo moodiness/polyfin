@@ -96,6 +96,7 @@ Actions:
   - The page lists the title's blocks, including unlisted files; every-title blocks are under the search.
   - Pins and blocks are stored in the database without links, the file as a hash of its identity.
 - **Analyze now** analyzes a version, forgetting its recent failure, and says why analysis failed. Torrents are analyzed only by plays.
+- **Thumbnails** tells, for a local folder's file, where its scrubbing thumbnails stand, and **Make again** replaces them, without waiting for a play (see [Files of local folders](scrubbing-thumbnails.md#files-of-local-folders)).
 - **Ask addons again** re-asks the user's addons, as `POST /Polyfin/Items/{id}/Versions/Search` does, at most once every 20 seconds; the page follows addons still asked.
 
 While addons are still asked, the page reads the versions again after 2, 4, 8, 16, then 30 seconds as long as nothing changes, then stops and says so, with **Check again**. A change, the tab or the window shown again, or an action starts over. An addon that failed shows **Failed lately**: for 3 minutes, the page and title pages do not ask it again (see [Title pages](#title-pages)).

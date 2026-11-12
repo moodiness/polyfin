@@ -20,7 +20,7 @@ Turning a setting off hides its images until it is turned back on.
 
 ### When images are made
 
-Polyfin makes thumbnails during a play from what it reads, and the rest after watching, gently.
+Polyfin makes thumbnails during a play from what it reads, and the rest after watching, gently. The files of local folders also get theirs from a task, before any play ([Files of local folders](#files-of-local-folders)).
 
 **During the play:**
 
@@ -36,7 +36,7 @@ Polyfin makes thumbnails during a play from what it reads, and the rest after wa
 - It adds what the source cache still holds, then reads only missing keyframes, located through the index (Matroska Cues or MP4 sample tables), one request each, never the whole file.
 - One version at a time, with a short queue.
 
-DVDs, recordings, Replay and torrents get no images. The log tells why, with the title, once a day for each version.
+DVDs, recordings and Replay get no images. A torrent's file gets thumbnails from what its plays read alone ([Torrents' files](#torrents-files)). The log tells why a version gets none, with the title, once a day for each version.
 
 ### Files of local folders
 
@@ -46,6 +46,36 @@ A file of a local folder or a network share is read from the server's storage, n
 - It takes none of the request limits below.
 - It waits only while the same file plays, not for the plays of other local files.
 - A file without an index, such as AVI or MPEG-TS, gets no images. The log tells it once a day, with the title.
+
+The task Make thumbnails, in **System › Schedule**, makes the images of local files without waiting for a play:
+
+- It runs every day at 3:00 by default, as Jellyfin's, and when started by hand.
+- It makes the thumbnails and chapter images each local file lacks, one file at a time. A file not played yet is analyzed first.
+- While **Thumbnails when moving through a title** and **Chapter images** are both off, it does nothing.
+- It passes over discs, and the files whose last result says they cannot have images. Those that failed are tried again.
+- Addons' links and torrents still get theirs from their plays.
+
+**Thumbnails**, on **Content › Versions**, tells where each local file stands:
+
+- "15 made", "Waiting" or "Being made";
+- "Cannot be made: the file has no index", "Cannot be made: the file cannot be read" or "Cannot be made: no video";
+- "Failed, tried again at the next play";
+- "None yet", before its first result.
+
+**Make again** drops the file's thumbnails and chapter images, forgets that it failed or could not have them, and makes them again at once, without waiting for a play. It is refused while both settings are off, and offered for local files only.
+
+jellyfin-web's "Refresh metadata" does the same with "Replace existing trickplay images" checked and a full refresh ("Search for missing metadata" or "Replace all metadata"), as Jellyfin asks: for the local files of a title, or of every title of a series, a season or a local folder's library.
+
+The **Thumbnails (trickplay)** card of **System › Health** counts the local files by their last result (see [Health](health.md)).
+
+### Torrents' files
+
+A torrent's file is read only by its plays, from its swarm (see [Torrents](torrents.md)). Its thumbnails come from what those plays read:
+
+- During a play, every 30 seconds, from the keyframes the play brought into the source cache, from the start of the file as far as they follow one another.
+- After the play, once, from what the cache still holds.
+- Nothing more: no request to the swarm, no read ahead, and no chapter images.
+- The set is kept for the file, the same version for the same torrent and file, and each later play extends it. A seek leaves a gap, where the set stops until a play covers it.
 
 ### Request limits
 
@@ -82,7 +112,7 @@ These limits apply to addons' links.
 
 **Compared with Jellyfin**
 
-- Jellyfin makes trickplay images in a scheduled task, every day at 3 a.m. ([TrickplayImagesTask.cs, lines 60 to 68](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayImagesTask.cs#L60-L68)), or during a library scan when the library asks ([TrickplayProvider.cs, line 101](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayProvider.cs#L101)), from the whole file. Polyfin makes them of the versions played, the first minutes of a first play during that play.
+- Jellyfin makes trickplay images in a scheduled task, every day at 3 a.m. ([TrickplayImagesTask.cs, lines 60 to 68](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayImagesTask.cs#L60-L68)), or during a library scan when the library asks ([TrickplayProvider.cs, line 101](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayProvider.cs#L101)), from the whole file. Polyfin makes them of the versions played, the first minutes of a first play during that play, and of the files of local folders in its own task, at 3:00 too.
 - Thumbnail timing is approximate, from keyframes read.
 - Chapters carry no `ImagePath`.
 - Turning either setting off hides what was made, which shows again when turned back on.

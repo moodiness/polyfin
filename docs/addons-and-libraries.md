@@ -372,7 +372,8 @@ A search reads the first page of the search catalogs, as Stremio apps do. Those 
 Jellyfin apps start the same refresh. jellyfin-web's **Refresh metadata** on a server movie, series or collection library queues it, from the menu of its card in the "My Media" home row. It joins the same queue, and the library's row under **Content › Libraries** shows it. The request answers at once, as Jellyfin's does once queued. Asked again while the library is refreshing or waiting, it starts no other.
 
 - **Modes:** "Scan for new and updated files" and a full refresh start it, as jellyfin-web sends them. A request that asks no metadata provider starts nothing. Images come with the descriptions, so an image mode starts it too.
-- **Options ignored:** "Replace all metadata", "Replace existing images" and trickplay regeneration. A description read again always replaces the one kept, the images follow it, and the image cache stays as it is (see [Clearing the image cache](health.md#clearing-the-image-cache)). Every mode does the same refresh.
+- **Options ignored:** "Replace all metadata" and "Replace existing images". A description read again always replaces the one kept, the images follow it, and the image cache stays as it is (see [Clearing the image cache](health.md#clearing-the-image-cache)). Every mode does the same refresh.
+- **Trickplay:** "Replace existing trickplay images" with a full refresh makes the thumbnails and chapter images of a local folder's library's files again (see [Files of local folders](scrubbing-thumbnails.md#files-of-local-folders)). Other libraries keep theirs.
 - **Libraries that do not offer it:** a music or IPTV library, a smart list, or a user's own library answers as before, with nothing refreshed, as Jellyfin answers for any item it queues. A library the user cannot see answers as not found, as Jellyfin answers for an item it does not find.
 
 How it runs:
