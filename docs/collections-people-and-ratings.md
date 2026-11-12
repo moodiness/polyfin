@@ -264,6 +264,24 @@ jellyfin-web's Studios tab of a library lists the studios of its first 2,000 tit
 - Jellyfin's studio images are wide only, ready-made pictures from its own artwork repository, matched by name ([StudiosImageProvider.cs, lines 54 to 56](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/StudiosImageProvider.cs#L54-L56), [Plugin.cs, line 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/Plugin.cs#L22)). Polyfin draws TMDB's logos, wide and square.
 - Jellyfin's studio page and Studios tab list the items of its libraries ([StudiosController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/StudiosController.cs)). Polyfin also lists the studio's catalog titles and TMDB's most popular titles of it that your addons describe.
 
+### Lengths and "Ends at"
+
+jellyfin-web shows a movie's length and the time it would end if played now, such as "1h 52m · Ends at 10:45 PM", on the movie's page. It shows each episode's beside its thumbnail on a season's page. A movie or episode without a length shows neither. A movie's or episode's length is, from the first that gives one:
+
+1. **Its description:** the runtime its metadata addon gives, the movie's or each episode's own.
+2. **From TMDB:** while the server has a [TMDB API key](#tmdb-key).
+   - **A movie:** TMDB's runtime comes with its credits (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)), with no request of its own. It shows from the next time the movie's page opens, or after the next pass. Credits read before Polyfin kept runtimes are read again once.
+   - **An episode:** when a series' or season's page opens and some of its aired episodes have no length, Polyfin asks TMDB for the series' seasons once, in the queue of TMDB's lookups, and waits up to a second. The lengths are kept 30 days. The episodes are paired with TMDB's as tracking services number them (see [Episode numbering](episode-numbering.md)): an episode paired with none, such as a special TMDB numbers otherwise, gets no length. A refresh of the series asks again when its page opens next. No pass reads them: a series never opened asks nothing.
+3. **Its file:** for a title of a local folder, how long it plays, as the folder's scan read it (see [Scanning](local-folders.md#scanning)).
+
+Rules:
+
+- **A version's own length:** a version that was played or analyzed tells how long its file plays, which players use as they play it. It never becomes the title's: another cut, or a sample, would change it, for everyone.
+- **The same for everyone:** a title's length does not depend on who opens it.
+- **Series:** a series' page shows no length nor "Ends at": jellyfin-web leaves them out for series.
+- **Thumbnails:** jellyfin-web draws no length on thumbnails, nor does LumaaGlaass.
+- **Cost:** a movie, none. A series whose aired episodes all have a length, none. Another, at most once every 30 days: one request for up to 20 seasons and 400 episodes, plus the series' details, and TMDB's find for a series known by its IMDb identifier only.
+
 ### Titles a person is known for
 
 A person credited in few titles of your libraries would show few titles. While the server has a **TMDB API key**, the page of a person of a known TMDB identifier also lists the movies and series TMDB knows them best for. They come from the same list of their titles, after those of your libraries.
@@ -423,6 +441,7 @@ The key is kept with the server's other secrets (see [Configuration](configurati
 | A title's cast and crew | TMDB's credits, in billing order, with photos (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)) | What the addon gives |
 | Person pages | Every library title they are credited in, and the titles TMDB knows them best for (see [Titles a person is known for](#titles-a-person-is-known-for)) | Only titles people searches find and titles Polyfin knows them in |
 | Studios | TMDB's studios and logos on titles, and studio pages with TMDB's most popular titles of each (see [Studios and taglines from TMDB](#studios-and-taglines-from-tmdb)) | Only studios an administrator set; studio pages list catalog titles and titles whose details were kept |
+| Lengths | TMDB's, for movies and episodes whose description gives none (see [Lengths and "Ends at"](#lengths-and-ends-at)) | The description's, else a local file's |
 | Posters | TMDB's, for movies and series whose addon gives none or a dead one (see [Posters from TMDB](artwork-and-editing.md#posters-from-tmdb)) | None for such titles |
 | **Edit images** | TMDB's images too (see [Edit images](artwork-and-editing.md#edit-images)) | Only the addons' images |
 | Unmatched local files | Matched through TMDB's search when every metadata addon's fails (see [Through TMDB, when every addon fails](unmatched-files.md#through-tmdb-when-every-addon-fails)) | Stay unmatched |
