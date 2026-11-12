@@ -86,10 +86,16 @@ type conn struct {
 	via *pin
 	// The fetch's own: the slot held of the host, the body read, the
 	// failures since the last block, and whether the last read stalled.
+	// skip is how many bytes of its first block the body starts past, as
+	// asked after an answer cut short; cutAt is where the last answers
+	// cut short stopped, the same each time, and cuts how many did.
 	slot     *slot
 	body     io.ReadCloser
 	failures int
 	stalled  bool
+	skip     int
+	cutAt    int64
+	cuts     int
 	// nudge has the connection, waiting for a slot, look again whether it
 	// reads for a playback.
 	nudge chan struct{}
@@ -177,6 +183,9 @@ func (s *Source) work(c *conn) {
 	defer func() { s.cache.release(c.slot) }()
 	defer c.closeBody()
 	buffer := make([]byte, blockSize)
+	// partial is the block whose first have bytes buffer holds, from an
+	// answer cut short: the next connection asks for the rest only.
+	partial, have := int64(-1), 0
 	for {
 		target, ok, reconnect, done := s.assign(c)
 		if done {
@@ -198,7 +207,11 @@ func (s *Source) work(c *conn) {
 			if !s.hold(c) {
 				return
 			}
-			err := s.connect(c, target)
+			skip := 0
+			if target == partial {
+				skip = have
+			}
+			err := s.connect(c, target, skip)
 			switch {
 			case s.dropped(c):
 				return
@@ -219,13 +232,24 @@ func (s *Source) work(c *conn) {
 				return
 			case !s.needed(target):
 				// The reader gave up while the connection opened: it reads
-				// what is needed next from there, or lingers.
+				// what is needed next from there, or lingers. A body that
+				// starts inside the block reads nothing else.
+				if c.skip > 0 {
+					c.closeBody()
+					s.disconnected(c)
+				}
 				continue
 			}
+			partial, have = target, c.skip
 		}
 		block := s.nextOf(c)
+		if block != partial {
+			have = 0
+		}
 		length := s.blockLength(block)
-		n, err := s.readBlock(c, buffer[:length])
+		n, err := s.readBlock(c, buffer[have:length])
+		n += have
+		have = 0
 		if s.dropped(c) {
 			return
 		}
@@ -235,6 +259,7 @@ func (s *Source) work(c *conn) {
 			}
 			continue
 		}
+		var wait time.Duration
 		switch {
 		case n == length:
 			if err := s.store(block, buffer[:n], false); err != nil {
@@ -255,10 +280,34 @@ func (s *Source) work(c *conn) {
 			// The connection broke or stalled: reconnect, within limits. A
 			// stall right after one fails at once: the host stopped
 			// answering. A pinned address breaking again sends the next
-			// connection to the origin.
+			// connection to the origin. An answer ending before the bytes
+			// it told is asked again from where it stopped, after a growing
+			// wait, as a host's passing fault clears: the same answer at
+			// each try, from there sending nothing, tells where the file
+			// ends.
 			stalledAgain := errors.Is(err, ErrStalled) && c.stalled
 			c.stalled = c.stalled || errors.Is(err, ErrStalled)
+			short := errors.Is(err, io.ErrUnexpectedEOF) && !s.sizeUnknown()
+			switch at := block*blockSize + int64(n); {
+			case !short:
+				c.cuts = 0
+			case at == c.cutAt:
+				c.cuts++
+			default:
+				c.cutAt, c.cuts = at, 1
+			}
+			if short {
+				partial, have = block, n
+			}
 			if c.failures++; c.failures >= attempts || stalledAgain {
+				if c.cuts >= attempts && c.cutAt > 0 {
+					if err := s.cutShort(block, buffer[:n]); err != nil {
+						s.fail(c, err)
+						return
+					}
+					c.failures, c.cuts, partial, have = 0, 0, -1, 0
+					break
+				}
 				err := fmt.Errorf("%w: %w", ErrUnavailable, err)
 				if s.extraFailed(c, err, false) {
 					return
@@ -269,9 +318,15 @@ func (s *Source) work(c *conn) {
 			if c.failures >= 2 {
 				s.unpinFrom(c.via)
 			}
+			if short {
+				wait = backoff(c.failures, "")
+			}
 		}
 		c.closeBody()
 		s.disconnected(c)
+		if wait > 0 {
+			_ = pause(c.slot.ctx, wait)
+		}
 	}
 }
 
@@ -670,7 +725,7 @@ func (s *Source) alone(c *conn) bool {
 // fast the source's connections read: once several read together no faster
 // than one alone did, the host is given one connection per file.
 func (s *Source) advance(c *conn, n int) {
-	c.failures, c.stalled = 0, false
+	c.failures, c.stalled, c.cuts = 0, false, 0
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c.next++
@@ -838,7 +893,8 @@ func (s *Source) unpinFrom(via *pin) {
 }
 
 // connect opens a connection yielding block for c, which holds a slot of
-// its host. An expired link goes back to the origin, then is renewed,
+// its host, from skip bytes into it: past those an answer cut short sent
+// (see c.skip). An expired link goes back to the origin, then is renewed,
 // once. An answer of another size than the file is asked again once, at
 // the origin, after a renewal when the file was known: a link answering
 // another file does not fix itself. A source asking to wait is waited for,
@@ -846,8 +902,8 @@ func (s *Source) unpinFrom(via *pin) {
 // fewer connections. A connection more is not retried: its failure is the
 // host's refusal. A source that served ranges answering one with the whole
 // file is asked again: it ignores ranges only once it keeps doing so.
-func (s *Source) connect(c *conn, block int64) error {
-	offset := block * blockSize
+func (s *Source) connect(c *conn, block int64, skip int) error {
+	offset := block*blockSize + int64(skip)
 	renewed, retried := false, false
 	s.mu.Lock()
 	timeout := cmp.Or(s.origin.HeaderTimeout, s.cache.headerTimeout)
@@ -900,6 +956,7 @@ func (s *Source) connect(c *conn, block int64) error {
 				s.mu.Unlock()
 				s.answered(t, response)
 				s.cache.rehome(c.slot, answerHost(t, response))
+				c.skip = skip
 				s.connected(c, response.Body, cancel, block, t.pinned)
 				return nil
 			}
@@ -933,6 +990,7 @@ func (s *Source) connect(c *conn, block int64) error {
 				}
 				s.answered(t, response)
 				s.cache.rehome(c.slot, answerHost(t, response))
+				c.skip = 0
 				s.connected(c, response.Body, cancel, 0, t.pinned)
 				return nil
 			}
