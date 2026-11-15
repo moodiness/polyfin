@@ -525,7 +525,7 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 - Names use **Language of generated names** (see [Getting started](getting-started.md#language-of-generated-names)): in French, "(lecture directe)", "(flux direct)", "(converti : HDR)", "(illisible ici)".
 - Endings are at most 30 characters; apps cutting names to one line may hide them.
 
-Polyfin reads no keyframe index for addon MPEG-TS files, MPEG program streams (`.mpg`, `.mpeg`, `.vob`) or AVI files, so over HLS their video is converted.
+Polyfin reads no keyframe index for addon MPEG-TS files, MPEG program streams (`.mpg`, `.mpeg`, `.vob`), AVI files or HLS playlists (see [Streams that are HLS playlists](playback.md#streams-that-are-hls-playlists)), so over HLS their video is converted.
 
 - Local MPEG-TS files lack one until keyframes are read from the whole file, when details open or at the first HLS play (see [HLS segments](transcoding.md#hls-segments)).
 - In the web player such files say "(converted)", or "(converted: video)" when the browser rejects the video; never "(direct stream)". Users barred from video conversion see "(cannot play here)".

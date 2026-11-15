@@ -29,6 +29,17 @@ The mode decides server bandwidth.
 
 API details: [Direct play and media source paths for apps](jellyfin-api.md#direct-play-and-media-source-paths-for-apps).
 
+### Streams that are HLS playlists
+
+An addon's stream may be an HLS playlist rather than one file. A finished playlist, which ends with `#EXT-X-ENDLIST`, plays as a file of its length. A video an addon lists among other titles whose playlist has no end plays live (see [Live videos](versions.md#live-videos)).
+
+- **Every file through Polyfin:** ffprobe, FFmpeg and relayed apps get the playlist with each address it names replaced by Polyfin's: variant and rendition playlists, segments, keys (`EXT-X-KEY`) and initialization sections (`EXT-X-MAP`). Polyfin fetches each with the headers the addon declares (`proxyHeaders`), within the source's address rules. Relative addresses are read from the playlist's own.
+- **Byte ranges:** a segment or a section named with `EXT-X-BYTERANGE` is fetched as that range.
+- **Still finished:** the playlist keeps its tags, `#EXT-X-ENDLIST` included, so it keeps its duration and seeking.
+- **Played as it is:** an app that plays HLS, such as jellyfin-web, gets the playlist. It is sent to the source when it can reach it itself, and relayed as above otherwise.
+- **Over HLS:** Polyfin reads no keyframe index from a playlist. It is cut every few seconds, and its video is converted, as for addon MPEG-TS files (see [Version names](versions.md#version-names)).
+- **Not kept:** the files a playlist names are fetched at each request, outside the source cache. A seek fetches its segment again.
+
 ## Versions and analysis
 
 A title's details list each addon stream as a version (see [Title pages](versions.md#title-pages)). On first play, Polyfin analyzes a version with ffprobe in a few seconds and keeps the result. Like a Jellyfin server, it then tells the app whether it can play the version as it is.

@@ -31,7 +31,7 @@ This costs a few more source requests, even for titles never played.
 
 ## The source cache
 
-FFmpeg, ffprobe and relayed apps read files through the source cache, which keeps fetched blocks on disk for seeks.
+FFmpeg, ffprobe and relayed apps read files through the source cache, which keeps fetched blocks on disk for seeks. The files an HLS playlist names are the exception: they are fetched at each request (see [Streams that are HLS playlists](playback.md#streams-that-are-hls-playlists)).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
