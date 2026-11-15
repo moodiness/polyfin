@@ -580,6 +580,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.updateAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh", h.signedIn(h.refreshAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh-all", h.signedIn(h.refreshAddonAll))
+	mux.Handle("GET /admin/api/scopes/{scope}/addons/{id}/configure", h.signedIn(h.configureAddon))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.removeAddon))
 	mux.Handle("GET /admin/api/scopes/{scope}/addons/{id}/removal", h.signedIn(h.addonRemoval))
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))
