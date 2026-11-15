@@ -1,6 +1,6 @@
 # Addons
 
-This page is for administrators, and for users who add their own addons. Polyfin gets its content from Stremio addons and Eclipse music addons. It covers adding addons, who uses each source, which streams play, how addons are asked, removing a source, what to do when one fails, how Polyfin keeps to addons' request limits, and the order and languages of sources.
+This page is for administrators, and for users who add their own addons. Polyfin gets its content from Stremio addons and Eclipse music addons. It covers adding addons, who uses each source, which streams play, how addons are asked, giving an addon a name of its own, removing a source, what to do when one fails, how Polyfin keeps to addons' request limits, and the order and languages of sources.
 
 Each addon has a role:
 
@@ -207,7 +207,29 @@ Anime databases make each season, or part of a season, an entry of its own. Its 
 
 Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu. The libraries follow the new manifest as they do at a refresh (see [Refreshing an addon](#refreshing-an-addon)). It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
 
-Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
+Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, an addon's **Name**, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
+
+## Giving an addon a name of its own
+
+A Stremio or Eclipse addon is named by its manifest. You can give it a name of its own instead, such as "Family streams" for two copies of one addon configured differently:
+
+- **Server addons:** administrators name them, on the addon's page in **Content › Sources**.
+- **Personal addons:** each user names their own, on the addon's page in **My sources**, even while their own addons are turned off for them. An administrator who opens a user's own addon sees it read-only and cannot rename it.
+
+Type the name in the **Name** row at the top of the addon's page, then save with the unsaved dock. The row shows the manifest's name while it is empty and, once the addon has a name of its own, what its manifest calls it.
+
+- **Length:** 1 to 64 printable characters. Spaces at either end are dropped.
+- **Back to the manifest's name:** empty the row, or type the manifest's name, and save. The addon then follows its manifest again, including a new name a later version gives it.
+- **Refresh:** **Refresh**, **Refresh everything** and **Replace the address** keep the name you chose.
+- **Same names:** two addons may share a name.
+
+The name shows wherever Polyfin names the addon: the admin app, Health and its notifications, the activity log, library names and short version names in Jellyfin apps, provider names, Silo and metrics. Searching the list of sources finds an addon by either name.
+
+The server log names the addon `Chosen (Manifest)`, the name you chose then its manifest's, so a log line can still be matched to the addon's manifest. An addon without a name of its own shows its manifest's name alone.
+
+The activity log records each change, such as "alex renamed the addon Stream Two to Family streams".
+
+IPTV sources, tuners and local folders have no **Name** row: they are named in their own settings, in the form their more-actions menu opens.
 
 ## Refreshing an addon
 
