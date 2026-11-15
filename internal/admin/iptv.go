@@ -87,7 +87,7 @@ func (h *handler) addSource(w http.ResponseWriter, r *http.Request) {
 	}
 	addon, err := h.IPTV.Add(ctx, scope, iptv.NewSource{Name: name, Account: account, Guide: guide, Options: body.Options, UsedBy: limited}, confined(r))
 	if err == nil {
-		h.Activity.AddonInstalled(ctx, sessionFrom(ctx).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+		h.Activity.AddonInstalled(ctx, sessionFrom(ctx).User, addon.Name(), addon.Manifest.Version, scope.Owner == nil)
 		if addon.UsedBy.Listed {
 			h.usedByChanged(ctx, addon)
 		}

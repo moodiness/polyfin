@@ -587,6 +587,13 @@ func (s *Store) AddonRemoved(ctx context.Context, by accounts.User, name string,
 	s.record(ctx, Entry{Name: s.phrase(text, by.Name, name), Type: "AddonUninstalled", UserID: s.owner(by, shared)})
 }
 
+// AddonRenamed records that by gave the addon named from the name to, a
+// server addon or their own.
+func (s *Store) AddonRenamed(ctx context.Context, by accounts.User, from, to string, shared bool) {
+	text := i18n.Text{"%s renamed the addon %s to %s", "%s a renommé l’addon %s en %s", "%s hat das Add-on %s in %s umbenannt", "%s ha cambiado el nombre de la extensión %s a %s", "%s ha rinominato l’add-on %s in %s", "%s renomeou o complemento %s para %s"}
+	s.record(ctx, Entry{Name: s.phrase(text, by.Name, from, to), Type: "AddonRenamed", UserID: s.owner(by, shared)})
+}
+
 // AddonUsedBy records that by changed who uses the server addon name (see
 // addons.UsedBy): everyone, or only the groups and users users names,
 // none for no one.

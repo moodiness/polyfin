@@ -339,7 +339,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					}
 					if failure != "" {
 						p := warning("addon:"+addon.ID.String(), problemAddon, "addons")
-						p.Name, p.Owner, p.Failure, p.Until = addon.Manifest.Name, scope.Owner, failure, until
+						p.Name, p.Owner, p.Failure, p.Until = addon.Name(), scope.Owner, failure, until
 						if until != nil && scope.Owner == nil {
 							p.To = "/sources/shared/" + addon.ID.String()
 						}
@@ -348,7 +348,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 				}
 				if h.Health.SearchesLeaveOut != nil && h.Health.SearchesLeaveOut(addon.ID) {
 					p := warning("search_late:"+addon.ID.String(), problemSearchLate, "addons")
-					p.Name, p.Owner, p.Transient = addon.Manifest.Name, scope.Owner, true
+					p.Name, p.Owner, p.Transient = addon.Name(), scope.Owner, true
 					add(p)
 				}
 				continue
@@ -363,21 +363,21 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 				}
 				if folder.Error != "" {
 					sources = append(sources, healthProblemJSON{Key: "folder:" + addon.ID.String(), Code: problemFolder,
-						Tone: notifications.SeverityError, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
+						Tone: notifications.SeverityError, To: "/sources/shared/" + addon.ID.String(), Name: addon.Name(),
 						Failure: folder.Error, Share: folder.Share})
 				} else if folder.Unwatched != "" {
 					sources = append(sources, healthProblemJSON{Key: "folder_unwatched:" + addon.ID.String(), Code: problemFolderUnwatched,
-						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
+						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Name(),
 						Failure: folder.Unwatched, Share: folder.Share})
 				}
 				if folder.SearchFailed > 0 {
 					sources = append(sources, healthProblemJSON{Key: "folder_search:" + addon.ID.String(), Code: problemFolderSearch,
-						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
+						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Name(),
 						Addon: folder.SearchAddon, Failure: folder.SearchFailure})
 				}
 				if folder.NoSearch > 0 {
 					sources = append(sources, healthProblemJSON{Key: "folder_no_search:" + addon.ID.String(), Code: problemFolderNoSearch,
-						Tone: notifications.SeverityWarning, To: "/sources", Name: addon.Manifest.Name})
+						Tone: notifications.SeverityWarning, To: "/sources", Name: addon.Name()})
 				}
 				continue
 			}
@@ -395,10 +395,10 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					failure = source.Tuner.Failure
 				}
 				sources = append(sources, healthProblemJSON{Key: "tuner:" + addon.ID.String(), Code: problemTuner,
-					Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name, Failure: failure})
+					Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Name(), Failure: failure})
 			case source.Error != "":
 				p := warning("iptv:"+addon.ID.String(), problemIPTV, "iptv")
-				p.Name, p.Owner = addon.Manifest.Name, scope.Owner
+				p.Name, p.Owner = addon.Name(), scope.Owner
 				sources = append(sources, p)
 			}
 		}
@@ -669,7 +669,7 @@ func metadataLanguagesProblem(list []addons.Addon) (healthProblemJSON, bool) {
 		return healthProblemJSON{}, false
 	}
 	return healthProblemJSON{Key: "metadata_languages", Code: problemMetadataLanguages, Tone: notifications.SeverityWarning,
-		To: "/sources/shared/" + first.ID.String(), Name: first.Manifest.Name}, true
+		To: "/sources/shared/" + first.ID.String(), Name: first.Name()}, true
 }
 
 // stoppedConnections lists the app connections and tracking services that

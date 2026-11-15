@@ -250,7 +250,7 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithoutCancel(r.Context())
 	addon, err := h.Folders.Add(ctx, folder)
 	if err == nil {
-		h.Activity.AddonInstalled(ctx, sessionFrom(ctx).User, addon.Manifest.Name, addon.Manifest.Version, true)
+		h.Activity.AddonInstalled(ctx, sessionFrom(ctx).User, addon.Name(), addon.Manifest.Version, true)
 		if addon.UsedBy.Listed {
 			h.usedByChanged(ctx, addon)
 		}

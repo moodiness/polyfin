@@ -1615,7 +1615,7 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 	body.VersionSourceOrder = new(sourceIDs(placedSources(settings.VersionSourceOrder, sources)))
 	body.VersionSources = make([]versionSourceJSON, len(sources))
 	for i, source := range sources {
-		body.VersionSources[i] = versionSourceJSON{ID: source.ID.String(), Name: source.Manifest.Name}
+		body.VersionSources[i] = versionSourceJSON{ID: source.ID.String(), Name: source.Name()}
 	}
 	body.Bounds = settingsBounds
 	body.RecordingsFolderDefault = accounts.DefaultRecordingsFolder(h.DataDir)

@@ -20,9 +20,14 @@ import (
 	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
+// addonJSON describes an addon. Name is the name it is shown under:
+// ChosenName, the one it was given, null for its manifest's, else
+// ManifestName.
 type addonJSON struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
+	ChosenName   *string   `json:"chosenName"`
+	ManifestName string    `json:"manifestName"`
 	Version      string    `json:"version"`
 	Description  string    `json:"description"`
 	Logo         *string   `json:"logo"`
@@ -161,10 +166,10 @@ func (h *handler) forgetVersionLists(ctx context.Context, addon addons.Addon) {
 	}
 	forgotten, err := h.AddonCaches.ForgetAddonVersionLists(ctx, addon.ID)
 	if err != nil {
-		h.Logger.Warn("Forgetting the version lists of an addon whose address was replaced failed", "addon", addon.Manifest.Name, "error", err)
+		h.Logger.Warn("Forgetting the version lists of an addon whose address was replaced failed", "addon", addon.LogName(), "error", err)
 		return
 	}
-	h.Logger.Info("Forgot the version lists of an addon whose address was replaced", "addon", addon.Manifest.Name, "lists", forgotten)
+	h.Logger.Info("Forgot the version lists of an addon whose address was replaced", "addon", addon.LogName(), "lists", forgotten)
 }
 
 // usedByChanged writes to the activity log that the caller set who uses
@@ -190,7 +195,7 @@ func (h *handler) usedByChanged(ctx context.Context, addon addons.Addon) {
 		slices.Sort(groups)
 		slices.Sort(users)
 	}
-	h.Activity.AddonUsedBy(ctx, sessionFrom(ctx).User, addon.Manifest.Name, !addon.UsedBy.Listed, slices.Concat(groups, users))
+	h.Activity.AddonUsedBy(ctx, sessionFrom(ctx).User, addon.Name(), !addon.UsedBy.Listed, slices.Concat(groups, users))
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -274,6 +279,10 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 	if addon.Manifest.Logo != "" {
 		logo = &addon.Manifest.Logo
 	}
+	var chosen *string
+	if addon.ChosenName != "" {
+		chosen = &addon.ChosenName
+	}
 	types, resources := addon.Manifest.Types, addon.Manifest.ResourceNames()
 	if addon.Eclipse() {
 		types, resources = addon.Music.Types, addon.Music.Resources
@@ -291,7 +300,9 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 	}
 	return addonJSON{
 		ID:           addon.ID.String(),
-		Name:         addon.Manifest.Name,
+		Name:         addon.Name(),
+		ChosenName:   chosen,
+		ManifestName: addon.Manifest.Name,
 		Version:      addon.Manifest.Version,
 		Description:  addon.Manifest.Description,
 		Logo:         logo,
@@ -698,6 +709,8 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidUsedBy, http.StatusBadRequest, "invalid_used_by"},
 		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrUsedByEveryone, http.StatusConflict, "used_by_everyone"},
+		{addons.ErrInvalidName, http.StatusBadRequest, "invalid_addon_name"},
+		{addons.ErrNotRenamable, http.StatusBadRequest, "addon_not_renamable"},
 		{addons.ErrKindChanged, http.StatusUnprocessableEntity, "addon_kind_changed"},
 		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
 		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
@@ -829,7 +842,7 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+	h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Name(), addon.Manifest.Version, scope.Owner == nil)
 	if addon.UsedBy.Listed {
 		h.usedByChanged(r.Context(), addon)
 	}
@@ -877,11 +890,12 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 		ManifestURL *string     `json:"manifestUrl"`
 		Language    *string     `json:"language"`
 		UsedBy      *usedByJSON `json:"usedBy"`
+		Name        *string     `json:"name"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil && body.UsedBy == nil {
+	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil && body.UsedBy == nil && body.Name == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -901,7 +915,18 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 	var addon addons.Addon
 	var changes *addons.CatalogChanges
 	var err error
-	if body.ManifestURL != nil {
+	// A name comes first, so that a refused one changes nothing else. A
+	// user names their own addons even while they may not use them.
+	if body.Name != nil {
+		var before addons.Addon
+		if before, err = h.Addons.Find(r.Context(), id); err == nil {
+			addon, err = h.Addons.SetName(r.Context(), scope, id, *body.Name)
+		}
+		if err == nil && before.Name() != addon.Name() {
+			h.Activity.AddonRenamed(r.Context(), sessionFrom(r.Context()).User, before.Name(), addon.Name(), scope.Owner == nil)
+		}
+	}
+	if err == nil && body.ManifestURL != nil {
 		var replaced addons.CatalogChanges
 		if addon, replaced, err = h.Addons.Replace(r.Context(), scope, id, *body.ManifestURL, confined(r)); err == nil {
 			changes = &replaced
@@ -1010,7 +1035,7 @@ func (h *handler) refreshAddonAll(w http.ResponseWriter, r *http.Request) {
 	if err == nil && h.AddonCaches != nil {
 		var stale library.StaleAddon
 		if stale, err = h.AddonCaches.MarkAddonStale(context.WithoutCancel(r.Context()), addon.ID); err == nil {
-			h.Logger.Info("Made what an addon gave old, to be asked for again", "addon", addon.Manifest.Name, "pages", stale.Pages,
+			h.Logger.Info("Made what an addon gave old, to be asked for again", "addon", addon.LogName(), "pages", stale.Pages,
 				"descriptions", stale.Descriptions, "lists", stale.VersionLists)
 		}
 	}
@@ -1034,7 +1059,7 @@ func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.Activity.AddonRemoved(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, scope.Owner == nil)
+	h.Activity.AddonRemoved(r.Context(), sessionFrom(r.Context()).User, addon.Name(), scope.Owner == nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

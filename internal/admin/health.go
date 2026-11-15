@@ -801,7 +801,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				if folder.Share != "" {
-					result.Shares = append(result.Shares, shareHealthJSON{ID: addon.ID.String(), Name: addon.Manifest.Name, Share: folder.Share,
+					result.Shares = append(result.Shares, shareHealthJSON{ID: addon.ID.String(), Name: addon.Name(), Share: folder.Share,
 						Watch: folder.ShareWatch, Polled: folder.Polled, Unwatched: folder.Unwatched, PollMinutes: folder.PollMinutes})
 				}
 				continue
@@ -835,7 +835,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) addonHealth(addon addons.Addon, owner *ownerJSON) addonHealthJSON {
-	result := addonHealthJSON{ID: addon.ID.String(), Owner: owner, Name: addon.Manifest.Name, Enabled: addon.Enabled,
+	result := addonHealthJSON{ID: addon.ID.String(), Owner: owner, Name: addon.Name(), Enabled: addon.Enabled,
 		RefreshedAt: addon.RefreshedAt}
 	if h.Health.Addons == nil {
 		return result
