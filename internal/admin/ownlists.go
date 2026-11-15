@@ -14,14 +14,15 @@ import (
 // Watching is what My account shows of the user's lists and changes in
 // them, as the Jellyfin API's Polyfin routes do: Continue Watching, whose
 // titles can be taken off it, Next Up, whose series can be taken off it and
-// put back, and the titles hidden from every list, which can be shown
-// again.
+// put back, with the series dropped on a tracking service it leaves out,
+// and the titles hidden from every list, which can be shown again.
 type Watching interface {
 	ResumeItems(ctx context.Context, user accounts.User) ([]jellyfin.ResumeItem, error)
 	RemoveResume(ctx context.Context, user accounts.User, id accounts.ID) error
 	NextUpItems(ctx context.Context, user accounts.User) ([]library.Item, error)
 	NextUpRemovals(ctx context.Context, user accounts.User) ([]jellyfin.NextUpRemoval, error)
 	RemoveFromNextUp(ctx context.Context, user accounts.User, id accounts.ID) error
+	NextUpDropped(ctx context.Context, user accounts.User) ([]jellyfin.DroppedSeries, error)
 	PutBackOnNextUp(ctx context.Context, user accounts.User, id accounts.ID) error
 	HiddenTitles(ctx context.Context, user accounts.User) ([]jellyfin.HiddenTitle, error)
 	ShowTitle(ctx context.Context, user accounts.User, id accounts.ID) error
@@ -44,12 +45,22 @@ type hiddenJSON struct {
 }
 
 // nextUpJSON is the user's Next Up: its episodes, the series they took off
-// it and that are still off it, and whether taking an episode off Continue
-// Watching also takes its series off Next Up.
+// it and that are still off it, those they dropped on a tracking service,
+// and whether taking an episode off Continue Watching also takes its
+// series off Next Up.
 type nextUpJSON struct {
 	Items      []*liveItemJSON `json:"items"`
 	Removed    []removedJSON   `json:"removed"`
+	Dropped    []droppedJSON   `json:"dropped"`
 	WithResume bool            `json:"withResume"`
+}
+
+// droppedJSON is a series dropped on tracking services, the services in
+// the Tracking page's order, and the latest of their drop dates.
+type droppedJSON struct {
+	Item      *liveItemJSON `json:"item"`
+	Services  []string      `json:"services"`
+	DroppedAt time.Time     `json:"droppedAt"`
 }
 
 // removedJSON is a series taken off Next Up, and when it was.
@@ -135,7 +146,7 @@ func (h *handler) showOwnHidden(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) ownNextUp(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
-	result := nextUpJSON{Items: []*liveItemJSON{}, Removed: []removedJSON{}, WithResume: user.NextUpWithResume}
+	result := nextUpJSON{Items: []*liveItemJSON{}, Removed: []removedJSON{}, Dropped: []droppedJSON{}, WithResume: user.NextUpWithResume}
 	if h.Watching == nil {
 		writeJSON(w, http.StatusOK, result)
 		return
@@ -155,6 +166,14 @@ func (h *handler) ownNextUp(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, removal := range removals {
 		result.Removed = append(result.Removed, removedJSON{Item: newLiveItemJSON(removal.Item), RemovedAt: removal.At})
+	}
+	dropped, err := h.Watching.NextUpDropped(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	for _, d := range dropped {
+		result.Dropped = append(result.Dropped, droppedJSON{Item: newLiveItemJSON(d.Item), Services: d.Services, DroppedAt: d.At})
 	}
 	writeJSON(w, http.StatusOK, result)
 }

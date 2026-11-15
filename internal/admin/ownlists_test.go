@@ -22,6 +22,7 @@ type fakeWatching struct {
 	resume  map[string][]jellyfin.ResumeItem
 	nextUp  map[string][]library.Item
 	removed map[string][]jellyfin.NextUpRemoval
+	dropped map[string][]jellyfin.DroppedSeries
 	hidden  map[string][]jellyfin.HiddenTitle
 	changes []string
 }
@@ -36,6 +37,12 @@ func (f *fakeWatching) NextUpRemovals(_ context.Context, user accounts.User) ([]
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.removed[user.Name], nil
+}
+
+func (f *fakeWatching) NextUpDropped(_ context.Context, user accounts.User) ([]jellyfin.DroppedSeries, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.dropped[user.Name], nil
 }
 
 func (f *fakeWatching) RemoveFromNextUp(_ context.Context, user accounts.User, id accounts.ID) error {
@@ -172,13 +179,16 @@ func TestMyAccountListsAndChangesTheUsersOwnTitles(t *testing.T) {
 
 func TestMyAccountListsAndChangesTheUsersNextUp(t *testing.T) {
 	t.Parallel()
-	episode, series, other := accounts.ID{4}, accounts.ID{5}, accounts.ID{6}
+	episode, series, other, abandoned := accounts.ID{4}, accounts.ID{5}, accounts.ID{6}, accounts.ID{7}
 	removedAt := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
+	droppedAt := removedAt.Add(-time.Hour)
 	watching := &fakeWatching{
 		nextUp: map[string][]library.Item{"member": {
 			{ID: episode, Kind: library.KindEpisode, Name: "Second", SeriesID: series, SeriesName: "Show", ParentIndexNumber: 1, IndexNumber: 2},
 		}},
 		removed: map[string][]jellyfin.NextUpRemoval{"member": {{Item: library.Item{ID: other, Kind: library.KindSeries, Name: "Other"}, At: removedAt}}},
+		dropped: map[string][]jellyfin.DroppedSeries{"member": {{Item: library.Item{ID: abandoned, Kind: library.KindSeries, Name: "Abandoned"},
+			Services: []string{"trakt", "simkl"}, At: droppedAt}}},
 	}
 	api := newTestAPI(t, 10, func(options *Options, _ testDeps) { options.Watching = watching })
 	nextUp := func(b browser) (int, nextUpJSON) {
@@ -207,10 +217,15 @@ func TestMyAccountListsAndChangesTheUsersNextUp(t *testing.T) {
 		len(got.Removed) != 1 || got.Removed[0].Item.ID != other.String() || !got.Removed[0].RemovedAt.Equal(removedAt) || got.WithResume {
 		t.Fatalf("next up: %d %+v", status, got)
 	}
+	// The series dropped on a tracking service come along, read-only.
+	if len(got.Dropped) != 1 || got.Dropped[0].Item.ID != abandoned.String() || !slices.Equal(got.Dropped[0].Services, []string{"trakt", "simkl"}) ||
+		!got.Dropped[0].DroppedAt.Equal(droppedAt) {
+		t.Errorf("dropped: %+v", got.Dropped)
+	}
 
 	// Each acts for the user signed in only.
 	stranger := api.signedIn("stranger", false)
-	if status, got := nextUp(stranger); status != http.StatusOK || len(got.Items) != 0 || len(got.Removed) != 0 {
+	if status, got := nextUp(stranger); status != http.StatusOK || len(got.Items) != 0 || len(got.Removed) != 0 || got.Dropped == nil || len(got.Dropped) != 0 {
 		t.Errorf("another user's next up: %d %+v", status, got)
 	}
 	if status, _, _ := stranger.call(http.MethodDelete, "/account/next-up/"+episode.String(), nil); status != http.StatusNotFound {
