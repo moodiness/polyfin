@@ -1,0 +1,491 @@
+{
+  "capturedAt": "2026-11-15T22:42:57.519Z",
+  "words": {
+    "common": "show",
+    "rare": "kepnor"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "budget": {
+        "warmP95": 1000
+      },
+      "waves": [
+        [
+          {
+            "index": 0,
+            "method": "POST",
+            "path": "/Sessions/Capabilities/Full",
+            "body": "{\"PlayableMediaTypes\":[\"Audio\",\"Video\"],\"SupportedCommands\":[\"MoveUp\",\"MoveDown\",\"MoveLeft\",\"MoveRight\",\"PageUp\",\"PageDown\",\"PreviousLetter\",\"NextLetter\",\"ToggleOsd\",\"ToggleContextMenu\",\"Select\",\"Back\",\"SendKey\",\"SendString\",\"GoHome\",\"GoToSettings\",\"VolumeUp\",\"VolumeDown\",\"Mute\",\"Unmute\",\"ToggleMute\",\"SetVolume\",\"SetAudioStreamIndex\",\"SetSubtitleStreamIndex\",\"DisplayContent\",\"GoToSearch\",\"DisplayMessage\",\"SetRepeatMode\",\"SetShuffleQueue\",\"ChannelUp\",\"ChannelDown\",\"PlayMediaSource\",\"PlayTrailers\"],\"SupportsPersistentIdentifier\":false,\"SupportsMediaControl\":true}",
+            "at": 0,
+            "took": 3
+          },
+          {
+            "index": 1,
+            "method": "GET",
+            "path": "/DisplayPreferences/usersettings?userId={user}&client=emby",
+            "at": 2,
+            "took": 6
+          }
+        ],
+        [
+          {
+            "index": 2,
+            "method": "GET",
+            "path": "/Users/{user}",
+            "at": 6,
+            "took": 12
+          },
+          {
+            "index": 3,
+            "method": "GET",
+            "path": "/Users/{user}",
+            "at": 7,
+            "took": 11
+          },
+          {
+            "index": 4,
+            "method": "GET",
+            "path": "/System/Info",
+            "at": 11,
+            "took": 4
+          }
+        ],
+        [
+          {
+            "index": 5,
+            "method": "GET",
+            "path": "/Polyfin/WebTheme",
+            "at": 23,
+            "took": 124
+          },
+          {
+            "index": 6,
+            "method": "GET",
+            "path": "/Polyfin/UserViews",
+            "at": 23,
+            "took": 137
+          },
+          {
+            "index": 7,
+            "method": "GET",
+            "path": "/Polyfin/Sound",
+            "at": 23,
+            "took": 136
+          },
+          {
+            "index": 8,
+            "method": "GET",
+            "path": "/Polyfin/Playback/Starting",
+            "at": 104,
+            "took": 55
+          },
+          {
+            "index": 9,
+            "method": "GET",
+            "path": "/QuickConnect/Enabled",
+            "at": 105,
+            "took": 43
+          },
+          {
+            "index": 10,
+            "method": "GET",
+            "path": "/Branding/Configuration",
+            "at": 105,
+            "took": 50
+          },
+          {
+            "index": 11,
+            "method": "GET",
+            "path": "/System/Info",
+            "at": 105,
+            "took": 50
+          },
+          {
+            "index": 12,
+            "method": "GET",
+            "path": "/UserViews?userId={user}",
+            "at": 105,
+            "took": 51
+          },
+          {
+            "index": 13,
+            "method": "GET",
+            "path": "/SyncPlay/List",
+            "at": 106,
+            "took": 50
+          },
+          {
+            "index": 14,
+            "method": "GET",
+            "path": "/DisplayPreferences/lumaaglaass?userId={user}&client=lumaaglaass",
+            "at": 144,
+            "took": 23
+          }
+        ],
+        [
+          {
+            "index": 15,
+            "method": "GET",
+            "path": "/LiveTv/Programs/Recommended?userId={user}&limit=1&isAiring=true&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Thumb&enableImageTypes=Backdrop&fields=ChannelInfo&fields=PrimaryImageAspectRatio&enableTotalRecordCount=false",
+            "at": 239,
+            "took": 216
+          },
+          {
+            "index": 16,
+            "method": "GET",
+            "path": "/Polyfin/HomeRows?Fields=PrimaryImageAspectRatio",
+            "at": 272,
+            "took": 14
+          },
+          {
+            "index": 17,
+            "method": "GET",
+            "path": "/DisplayPreferences/usersettings?userId={user}&client=emby",
+            "at": 276,
+            "took": 10
+          }
+        ],
+        [
+          {
+            "index": 18,
+            "method": "GET",
+            "path": "/Users/{user}/Views",
+            "at": 310,
+            "took": 9
+          }
+        ],
+        [
+          {
+            "index": 19,
+            "method": "GET",
+            "path": "/Users/{user}/Items?IncludeItemTypes=Movie%2CSeries&Recursive=true&EnableImages=true&ImageTypes=Backdrop%2CPrimary&Fields=Overview%2CGenres%2CCommunityRating%2COfficialRating%2CProductionYear%2CProviderIds%2CBackdropImageTags%2CParentBackdropImageTags%2CParentBackdropItemId&ParentId={18:Items.0.Id}&Limit=1",
+            "at": 319,
+            "took": 10
+          },
+          {
+            "index": 20,
+            "method": "GET",
+            "path": "/Users/{user}/Items?IncludeItemTypes=Movie%2CSeries&Recursive=true&EnableImages=true&ImageTypes=Backdrop%2CPrimary&Fields=Overview%2CGenres%2CCommunityRating%2COfficialRating%2CProductionYear%2CProviderIds%2CBackdropImageTags%2CParentBackdropImageTags%2CParentBackdropItemId&ParentId={18:Items.1.Id}&Limit=1",
+            "at": 320,
+            "took": 15
+          },
+          {
+            "index": 21,
+            "method": "GET",
+            "path": "/Users/{user}/Items?IncludeItemTypes=Movie%2CSeries&Recursive=true&EnableImages=true&ImageTypes=Backdrop%2CPrimary&Fields=Overview%2CGenres%2CCommunityRating%2COfficialRating%2CProductionYear%2CProviderIds%2CBackdropImageTags%2CParentBackdropImageTags%2CParentBackdropItemId&ParentId={18:Items.2.Id}&Limit=1",
+            "at": 320,
+            "took": 6
+          },
+          {
+            "index": 22,
+            "method": "GET",
+            "path": "/Users/{user}/Items?IncludeItemTypes=Movie%2CSeries&Recursive=true&EnableImages=true&ImageTypes=Backdrop%2CPrimary&Fields=Overview%2CGenres%2CCommunityRating%2COfficialRating%2CProductionYear%2CProviderIds%2CBackdropImageTags%2CParentBackdropImageTags%2CParentBackdropItemId&ParentId={18:Items.3.Id}&Limit=1",
+            "at": 320,
+            "took": 1
+          }
+        ],
+        [
+          {
+            "index": 23,
+            "method": "GET",
+            "path": "/Users/{user}/Items?ParentId={18:Items.3.Id}&IncludeItemTypes=BoxSet&EnableImages=false&EnableUserData=false&SortBy=Random&Limit=100",
+            "at": 322,
+            "took": 2
+          }
+        ],
+        [
+          {
+            "index": 24,
+            "method": "GET",
+            "path": "/Users/{user}/Items?ParentId={18:Items.2.Id}&IncludeItemTypes=BoxSet&EnableImages=false&EnableUserData=false&SortBy=Random&Limit=100",
+            "at": 326,
+            "took": 313
+          },
+          {
+            "index": 25,
+            "method": "GET",
+            "path": "/Users/{user}/Items?IncludeItemTypes=Movie%2CSeries&Recursive=true&EnableImages=true&ImageTypes=Backdrop%2CPrimary&Fields=Overview%2CGenres%2CCommunityRating%2COfficialRating%2CProductionYear%2CProviderIds%2CBackdropImageTags%2CParentBackdropImageTags%2CParentBackdropItemId&ParentId={18:Items.0.Id}&SortBy=Random&StartIndex=1968&Limit=10",
+            "at": 329,
+            "took": 49
+          },
+          {
+            "index": 26,
+            "method": "GET",
+            "path": "/Users/{user}/Items?IncludeItemTypes=Movie%2CSeries&Recursive=true&EnableImages=true&ImageTypes=Backdrop%2CPrimary&Fields=Overview%2CGenres%2CCommunityRating%2COfficialRating%2CProductionYear%2CProviderIds%2CBackdropImageTags%2CParentBackdropImageTags%2CParentBackdropItemId&ParentId={18:Items.1.Id}&SortBy=Random&StartIndex=1822&Limit=10",
+            "at": 335,
+            "took": 55
+          }
+        ],
+        [
+          {
+            "index": 27,
+            "method": "GET",
+            "path": "/UserItems/Resume?userId={user}&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Video&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false",
+            "at": 462,
+            "took": 71
+          },
+          {
+            "index": 28,
+            "method": "GET",
+            "path": "/UserItems/Resume?userId={user}&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Audio&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false",
+            "at": 463,
+            "took": 4
+          },
+          {
+            "index": 29,
+            "method": "GET",
+            "path": "/UserItems/Resume?userId={user}&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Book&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false",
+            "at": 464,
+            "took": 6
+          },
+          {
+            "index": 30,
+            "method": "GET",
+            "path": "/LiveTv/Programs/Recommended?userId={user}&limit=24&isAiring=true&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Thumb&enableImageTypes=Backdrop&fields=ChannelInfo&fields=PrimaryImageAspectRatio&enableTotalRecordCount=false",
+            "at": 464,
+            "took": 108
+          },
+          {
+            "index": 31,
+            "method": "GET",
+            "path": "/Shows/NextUp?userId={user}&limit=24&fields=PrimaryImageAspectRatio&fields=DateCreated&fields=Path&fields=MediaSourceCount&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&nextUpDateCutoff=2025-11-15&enableTotalRecordCount=false&enableResumable=false&enableRewatching=false",
+            "at": 464,
+            "took": 541
+          },
+          {
+            "index": 32,
+            "method": "GET",
+            "path": "/Items/Latest?userId={user}&parentId={18:Items.0.Id}&fields=PrimaryImageAspectRatio&fields=Path&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&limit=16",
+            "at": 464,
+            "took": 151
+          },
+          {
+            "index": 33,
+            "method": "GET",
+            "path": "/Items/Latest?userId={user}&parentId={18:Items.1.Id}&fields=PrimaryImageAspectRatio&fields=Path&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&limit=16",
+            "at": 465,
+            "took": 48
+          }
+        ],
+        [
+          {
+            "index": 34,
+            "method": "GET",
+            "path": "/Polyfin/Items/Ratings?Ids={27:Items.2.Id}%2C{27:Items.1.Id}%2C{27:Items.6.Id}%2C{27:Items.7.Id}%2C{27:Items.8.Id}%2C{27:Items.9.Id}%2C{33:0.Id}%2C{33:1.Id}%2C{33:2.Id}%2C{33:3.Id}%2C{33:4.Id}%2C{33:5.Id}%2C{33:6.Id}%2C{33:7.Id}%2C{33:8.Id}%2C{33:9.Id}%2C{33:10.Id}%2C{33:11.Id}%2C{33:12.Id}%2C{33:13.Id}%2C{33:14.Id}%2C{33:15.Id}",
+            "at": 553,
+            "took": 6
+          }
+        ]
+      ]
+    },
+    {
+      "name": "Guide",
+      "budget": {
+        "warmP95": 250
+      },
+      "waves": [
+        [
+          {
+            "index": 0,
+            "method": "GET",
+            "path": "/LiveTv/GuideInfo",
+            "at": 0,
+            "took": 4
+          },
+          {
+            "index": 1,
+            "method": "GET",
+            "path": "/Polyfin/Playback/Starting",
+            "at": 0,
+            "took": 3
+          }
+        ],
+        [
+          {
+            "index": 2,
+            "method": "GET",
+            "path": "/LiveTv/Channels?StartIndex=0&EnableFavoriteSorting=true&UserId={user}&Limit=500&AddCurrentProgram=false&EnableUserData=false&EnableImageTypes=Primary",
+            "at": 7,
+            "took": 39
+          }
+        ],
+        [
+          {
+            "index": 3,
+            "method": "POST",
+            "path": "/LiveTv/Programs",
+            "body": "{\"UserId\":\"{user}\",\"MaxStartDate\":\"{time:83836655}\",\"MinEndDate\":\"{time:-2561345}\",\"channelIds\":\"{2:Items.0.Id},{2:Items.1.Id},{2:Items.2.Id},{2:Items.3.Id},{2:Items.4.Id},{2:Items.5.Id},{2:Items.6.Id},{2:Items.7.Id},{2:Items.8.Id},{2:Items.9.Id},{2:Items.10.Id},{2:Items.11.Id},{2:Items.12.Id},{2:Items.13.Id},{2:Items.14.Id},{2:Items.15.Id},{2:Items.16.Id},{2:Items.17.Id},{2:Items.18.Id},{2:Items.19.Id},{2:Items.20.Id},{2:Items.21.Id},{2:Items.22.Id},{2:Items.23.Id},{2:Items.24.Id},{2:Items.25.Id},{2:Items.26.Id},{2:Items.27.Id},{2:Items.28.Id},{2:Items.29.Id},{2:Items.30.Id},{2:Items.31.Id},{2:Items.32.Id},{2:Items.33.Id},{2:Items.34.Id},{2:Items.35.Id},{2:Items.36.Id},{2:Items.37.Id},{2:Items.38.Id},{2:Items.39.Id},{2:Items.40.Id},{2:Items.41.Id},{2:Items.42.Id},{2:Items.43.Id},{2:Items.44.Id},{2:Items.45.Id},{2:Items.46.Id},{2:Items.47.Id},{2:Items.48.Id},{2:Items.49.Id},{2:Items.50.Id},{2:Items.51.Id},{2:Items.52.Id},{2:Items.53.Id},{2:Items.54.Id},{2:Items.55.Id},{2:Items.56.Id},{2:Items.57.Id},{2:Items.58.Id},{2:Items.59.Id},{2:Items.60.Id},{2:Items.61.Id},{2:Items.62.Id},{2:Items.63.Id},{2:Items.64.Id},{2:Items.65.Id},{2:Items.66.Id},{2:Items.67.Id},{2:Items.68.Id},{2:Items.69.Id},{2:Items.70.Id},{2:Items.71.Id},{2:Items.72.Id},{2:Items.73.Id},{2:Items.74.Id},{2:Items.75.Id},{2:Items.76.Id},{2:Items.77.Id},{2:Items.78.Id},{2:Items.79.Id},{2:Items.80.Id},{2:Items.81.Id},{2:Items.82.Id},{2:Items.83.Id},{2:Items.84.Id},{2:Items.85.Id},{2:Items.86.Id},{2:Items.87.Id},{2:Items.88.Id},{2:Items.89.Id},{2:Items.90.Id},{2:Items.91.Id},{2:Items.92.Id},{2:Items.93.Id},{2:Items.94.Id},{2:Items.95.Id},{2:Items.96.Id},{2:Items.97.Id},{2:Items.98.Id},{2:Items.99.Id},{2:Items.100.Id},{2:Items.101.Id},{2:Items.102.Id},{2:Items.103.Id},{2:Items.104.Id},{2:Items.105.Id},{2:Items.106.Id},{2:Items.107.Id},{2:Items.108.Id},{2:Items.109.Id},{2:Items.110.Id},{2:Items.111.Id},{2:Items.112.Id},{2:Items.113.Id},{2:Items.114.Id},{2:Items.115.Id},{2:Items.116.Id},{2:Items.117.Id},{2:Items.118.Id},{2:Items.119.Id},{2:Items.120.Id},{2:Items.121.Id},{2:Items.122.Id},{2:Items.123.Id},{2:Items.124.Id},{2:Items.125.Id},{2:Items.126.Id},{2:Items.127.Id},{2:Items.128.Id},{2:Items.129.Id},{2:Items.130.Id},{2:Items.131.Id},{2:Items.132.Id},{2:Items.133.Id},{2:Items.134.Id},{2:Items.135.Id},{2:Items.136.Id},{2:Items.137.Id},{2:Items.138.Id},{2:Items.139.Id},{2:Items.140.Id},{2:Items.141.Id},{2:Items.142.Id},{2:Items.143.Id},{2:Items.144.Id},{2:Items.145.Id},{2:Items.146.Id},{2:Items.147.Id},{2:Items.148.Id},{2:Items.149.Id},{2:Items.150.Id},{2:Items.151.Id},{2:Items.152.Id},{2:Items.153.Id},{2:Items.154.Id},{2:Items.155.Id},{2:Items.156.Id},{2:Items.157.Id},{2:Items.158.Id},{2:Items.159.Id},{2:Items.160.Id},{2:Items.161.Id},{2:Items.162.Id},{2:Items.163.Id},{2:Items.164.Id},{2:Items.165.Id},{2:Items.166.Id},{2:Items.167.Id},{2:Items.168.Id},{2:Items.169.Id},{2:Items.170.Id},{2:Items.171.Id},{2:Items.172.Id},{2:Items.173.Id},{2:Items.174.Id},{2:Items.175.Id},{2:Items.176.Id},{2:Items.177.Id},{2:Items.178.Id},{2:Items.179.Id},{2:Items.180.Id},{2:Items.181.Id},{2:Items.182.Id},{2:Items.183.Id},{2:Items.184.Id},{2:Items.185.Id},{2:Items.186.Id},{2:Items.187.Id},{2:Items.188.Id},{2:Items.189.Id},{2:Items.190.Id},{2:Items.191.Id},{2:Items.192.Id},{2:Items.193.Id},{2:Items.194.Id},{2:Items.195.Id},{2:Items.196.Id},{2:Items.197.Id},{2:Items.198.Id},{2:Items.199.Id},{2:Items.200.Id},{2:Items.201.Id},{2:Items.202.Id},{2:Items.203.Id},{2:Items.204.Id},{2:Items.205.Id},{2:Items.206.Id},{2:Items.207.Id},{2:Items.208.Id},{2:Items.209.Id},{2:Items.210.Id},{2:Items.211.Id},{2:Items.212.Id},{2:Items.213.Id},{2:Items.214.Id},{2:Items.215.Id},{2:Items.216.Id},{2:Items.217.Id},{2:Items.218.Id},{2:Items.219.Id},{2:Items.220.Id},{2:Items.221.Id},{2:Items.222.Id},{2:Items.223.Id},{2:Items.224.Id},{2:Items.225.Id},{2:Items.226.Id},{2:Items.227.Id},{2:Items.228.Id},{2:Items.229.Id},{2:Items.230.Id},{2:Items.231.Id},{2:Items.232.Id},{2:Items.233.Id},{2:Items.234.Id},{2:Items.235.Id},{2:Items.236.Id},{2:Items.237.Id},{2:Items.238.Id},{2:Items.239.Id},{2:Items.240.Id},{2:Items.241.Id},{2:Items.242.Id},{2:Items.243.Id},{2:Items.244.Id},{2:Items.245.Id},{2:Items.246.Id},{2:Items.247.Id},{2:Items.248.Id},{2:Items.249.Id},{2:Items.250.Id},{2:Items.251.Id},{2:Items.252.Id},{2:Items.253.Id},{2:Items.254.Id},{2:Items.255.Id},{2:Items.256.Id},{2:Items.257.Id},{2:Items.258.Id},{2:Items.259.Id},{2:Items.260.Id},{2:Items.261.Id},{2:Items.262.Id},{2:Items.263.Id},{2:Items.264.Id},{2:Items.265.Id},{2:Items.266.Id},{2:Items.267.Id},{2:Items.268.Id},{2:Items.269.Id},{2:Items.270.Id},{2:Items.271.Id},{2:Items.272.Id},{2:Items.273.Id},{2:Items.274.Id},{2:Items.275.Id},{2:Items.276.Id},{2:Items.277.Id},{2:Items.278.Id},{2:Items.279.Id},{2:Items.280.Id},{2:Items.281.Id},{2:Items.282.Id},{2:Items.283.Id},{2:Items.284.Id},{2:Items.285.Id},{2:Items.286.Id},{2:Items.287.Id},{2:Items.288.Id},{2:Items.289.Id},{2:Items.290.Id},{2:Items.291.Id},{2:Items.292.Id},{2:Items.293.Id},{2:Items.294.Id},{2:Items.295.Id},{2:Items.296.Id},{2:Items.297.Id},{2:Items.298.Id},{2:Items.299.Id},{2:Items.300.Id},{2:Items.301.Id},{2:Items.302.Id},{2:Items.303.Id},{2:Items.304.Id},{2:Items.305.Id},{2:Items.306.Id},{2:Items.307.Id},{2:Items.308.Id},{2:Items.309.Id},{2:Items.310.Id},{2:Items.311.Id},{2:Items.312.Id},{2:Items.313.Id},{2:Items.314.Id},{2:Items.315.Id},{2:Items.316.Id},{2:Items.317.Id},{2:Items.318.Id},{2:Items.319.Id},{2:Items.320.Id},{2:Items.321.Id},{2:Items.322.Id},{2:Items.323.Id},{2:Items.324.Id},{2:Items.325.Id},{2:Items.326.Id},{2:Items.327.Id},{2:Items.328.Id},{2:Items.329.Id},{2:Items.330.Id},{2:Items.331.Id},{2:Items.332.Id},{2:Items.333.Id},{2:Items.334.Id},{2:Items.335.Id},{2:Items.336.Id},{2:Items.337.Id},{2:Items.338.Id},{2:Items.339.Id},{2:Items.340.Id},{2:Items.341.Id},{2:Items.342.Id},{2:Items.343.Id},{2:Items.344.Id},{2:Items.345.Id},{2:Items.346.Id},{2:Items.347.Id},{2:Items.348.Id},{2:Items.349.Id},{2:Items.350.Id},{2:Items.351.Id},{2:Items.352.Id},{2:Items.353.Id},{2:Items.354.Id},{2:Items.355.Id},{2:Items.356.Id},{2:Items.357.Id},{2:Items.358.Id},{2:Items.359.Id},{2:Items.360.Id},{2:Items.361.Id},{2:Items.362.Id},{2:Items.363.Id},{2:Items.364.Id},{2:Items.365.Id},{2:Items.366.Id},{2:Items.367.Id},{2:Items.368.Id},{2:Items.369.Id},{2:Items.370.Id},{2:Items.371.Id},{2:Items.372.Id},{2:Items.373.Id},{2:Items.374.Id},{2:Items.375.Id},{2:Items.376.Id},{2:Items.377.Id},{2:Items.378.Id},{2:Items.379.Id},{2:Items.380.Id},{2:Items.381.Id},{2:Items.382.Id},{2:Items.383.Id},{2:Items.384.Id},{2:Items.385.Id},{2:Items.386.Id},{2:Items.387.Id},{2:Items.388.Id},{2:Items.389.Id},{2:Items.390.Id},{2:Items.391.Id},{2:Items.392.Id},{2:Items.393.Id},{2:Items.394.Id},{2:Items.395.Id},{2:Items.396.Id},{2:Items.397.Id},{2:Items.398.Id},{2:Items.399.Id},{2:Items.400.Id},{2:Items.401.Id},{2:Items.402.Id},{2:Items.403.Id},{2:Items.404.Id},{2:Items.405.Id},{2:Items.406.Id},{2:Items.407.Id},{2:Items.408.Id},{2:Items.409.Id},{2:Items.410.Id},{2:Items.411.Id},{2:Items.412.Id},{2:Items.413.Id},{2:Items.414.Id},{2:Items.415.Id},{2:Items.416.Id},{2:Items.417.Id},{2:Items.418.Id},{2:Items.419.Id},{2:Items.420.Id},{2:Items.421.Id},{2:Items.422.Id},{2:Items.423.Id},{2:Items.424.Id},{2:Items.425.Id},{2:Items.426.Id},{2:Items.427.Id},{2:Items.428.Id},{2:Items.429.Id},{2:Items.430.Id},{2:Items.431.Id},{2:Items.432.Id},{2:Items.433.Id},{2:Items.434.Id},{2:Items.435.Id},{2:Items.436.Id},{2:Items.437.Id},{2:Items.438.Id},{2:Items.439.Id},{2:Items.440.Id},{2:Items.441.Id},{2:Items.442.Id},{2:Items.443.Id},{2:Items.444.Id},{2:Items.445.Id},{2:Items.446.Id},{2:Items.447.Id},{2:Items.448.Id},{2:Items.449.Id},{2:Items.450.Id},{2:Items.451.Id},{2:Items.452.Id},{2:Items.453.Id},{2:Items.454.Id},{2:Items.455.Id},{2:Items.456.Id},{2:Items.457.Id},{2:Items.458.Id},{2:Items.459.Id},{2:Items.460.Id},{2:Items.461.Id},{2:Items.462.Id},{2:Items.463.Id},{2:Items.464.Id},{2:Items.465.Id},{2:Items.466.Id},{2:Items.467.Id},{2:Items.468.Id},{2:Items.469.Id},{2:Items.470.Id},{2:Items.471.Id},{2:Items.472.Id},{2:Items.473.Id},{2:Items.474.Id},{2:Items.475.Id},{2:Items.476.Id},{2:Items.477.Id},{2:Items.478.Id},{2:Items.479.Id},{2:Items.480.Id},{2:Items.481.Id},{2:Items.482.Id},{2:Items.483.Id},{2:Items.484.Id},{2:Items.485.Id},{2:Items.486.Id},{2:Items.487.Id},{2:Items.488.Id},{2:Items.489.Id},{2:Items.490.Id},{2:Items.491.Id},{2:Items.492.Id},{2:Items.493.Id},{2:Items.494.Id},{2:Items.495.Id},{2:Items.496.Id},{2:Items.497.Id},{2:Items.498.Id},{2:Items.499.Id}\",\"ImageTypeLimit\":1,\"EnableImages\":false,\"SortBy\":\"StartDate\",\"EnableTotalRecordCount\":false,\"EnableUserData\":false}",
+            "at": 47,
+            "took": 160
+          }
+        ]
+      ]
+    },
+    {
+      "name": "Guide, scrolled",
+      "budget": {
+        "warmP95": 250
+      },
+      "waves": [
+        [
+          {
+            "index": 0,
+            "method": "GET",
+            "path": "/LiveTv/GuideInfo",
+            "at": 0,
+            "took": 79
+          },
+          {
+            "index": 1,
+            "method": "GET",
+            "path": "/Polyfin/Playback/Starting",
+            "at": 0,
+            "took": 79
+          }
+        ],
+        [
+          {
+            "index": 2,
+            "method": "GET",
+            "path": "/LiveTv/Channels?StartIndex=500&EnableFavoriteSorting=true&UserId={user}&Limit=500&AddCurrentProgram=false&EnableUserData=false&EnableImageTypes=Primary",
+            "at": 81,
+            "took": 50
+          }
+        ],
+        [
+          {
+            "index": 3,
+            "method": "POST",
+            "path": "/LiveTv/Programs",
+            "body": "{\"UserId\":\"{user}\",\"MaxStartDate\":\"{time:83833873}\",\"MinEndDate\":\"{time:-2564127}\",\"channelIds\":\"{2:Items.0.Id},{2:Items.1.Id},{2:Items.2.Id},{2:Items.3.Id},{2:Items.4.Id},{2:Items.5.Id},{2:Items.6.Id},{2:Items.7.Id},{2:Items.8.Id},{2:Items.9.Id},{2:Items.10.Id},{2:Items.11.Id},{2:Items.12.Id},{2:Items.13.Id},{2:Items.14.Id},{2:Items.15.Id},{2:Items.16.Id},{2:Items.17.Id},{2:Items.18.Id},{2:Items.19.Id},{2:Items.20.Id},{2:Items.21.Id},{2:Items.22.Id},{2:Items.23.Id},{2:Items.24.Id},{2:Items.25.Id},{2:Items.26.Id},{2:Items.27.Id},{2:Items.28.Id},{2:Items.29.Id},{2:Items.30.Id},{2:Items.31.Id},{2:Items.32.Id},{2:Items.33.Id},{2:Items.34.Id},{2:Items.35.Id},{2:Items.36.Id},{2:Items.37.Id},{2:Items.38.Id},{2:Items.39.Id},{2:Items.40.Id},{2:Items.41.Id},{2:Items.42.Id},{2:Items.43.Id},{2:Items.44.Id},{2:Items.45.Id},{2:Items.46.Id},{2:Items.47.Id},{2:Items.48.Id},{2:Items.49.Id},{2:Items.50.Id},{2:Items.51.Id},{2:Items.52.Id},{2:Items.53.Id},{2:Items.54.Id},{2:Items.55.Id},{2:Items.56.Id},{2:Items.57.Id},{2:Items.58.Id},{2:Items.59.Id},{2:Items.60.Id},{2:Items.61.Id},{2:Items.62.Id},{2:Items.63.Id},{2:Items.64.Id},{2:Items.65.Id},{2:Items.66.Id},{2:Items.67.Id},{2:Items.68.Id},{2:Items.69.Id},{2:Items.70.Id},{2:Items.71.Id},{2:Items.72.Id},{2:Items.73.Id},{2:Items.74.Id},{2:Items.75.Id},{2:Items.76.Id},{2:Items.77.Id},{2:Items.78.Id},{2:Items.79.Id},{2:Items.80.Id},{2:Items.81.Id},{2:Items.82.Id},{2:Items.83.Id},{2:Items.84.Id},{2:Items.85.Id},{2:Items.86.Id},{2:Items.87.Id},{2:Items.88.Id},{2:Items.89.Id},{2:Items.90.Id},{2:Items.91.Id},{2:Items.92.Id},{2:Items.93.Id},{2:Items.94.Id},{2:Items.95.Id},{2:Items.96.Id},{2:Items.97.Id},{2:Items.98.Id},{2:Items.99.Id},{2:Items.100.Id},{2:Items.101.Id},{2:Items.102.Id},{2:Items.103.Id},{2:Items.104.Id},{2:Items.105.Id},{2:Items.106.Id},{2:Items.107.Id},{2:Items.108.Id},{2:Items.109.Id},{2:Items.110.Id},{2:Items.111.Id},{2:Items.112.Id},{2:Items.113.Id},{2:Items.114.Id},{2:Items.115.Id},{2:Items.116.Id},{2:Items.117.Id},{2:Items.118.Id},{2:Items.119.Id},{2:Items.120.Id},{2:Items.121.Id},{2:Items.122.Id},{2:Items.123.Id},{2:Items.124.Id},{2:Items.125.Id},{2:Items.126.Id},{2:Items.127.Id},{2:Items.128.Id},{2:Items.129.Id},{2:Items.130.Id},{2:Items.131.Id},{2:Items.132.Id},{2:Items.133.Id},{2:Items.134.Id},{2:Items.135.Id},{2:Items.136.Id},{2:Items.137.Id},{2:Items.138.Id},{2:Items.139.Id},{2:Items.140.Id},{2:Items.141.Id},{2:Items.142.Id},{2:Items.143.Id},{2:Items.144.Id},{2:Items.145.Id},{2:Items.146.Id},{2:Items.147.Id},{2:Items.148.Id},{2:Items.149.Id},{2:Items.150.Id},{2:Items.151.Id},{2:Items.152.Id},{2:Items.153.Id},{2:Items.154.Id},{2:Items.155.Id},{2:Items.156.Id},{2:Items.157.Id},{2:Items.158.Id},{2:Items.159.Id},{2:Items.160.Id},{2:Items.161.Id},{2:Items.162.Id},{2:Items.163.Id},{2:Items.164.Id},{2:Items.165.Id},{2:Items.166.Id},{2:Items.167.Id},{2:Items.168.Id},{2:Items.169.Id},{2:Items.170.Id},{2:Items.171.Id},{2:Items.172.Id},{2:Items.173.Id},{2:Items.174.Id},{2:Items.175.Id},{2:Items.176.Id},{2:Items.177.Id},{2:Items.178.Id},{2:Items.179.Id},{2:Items.180.Id},{2:Items.181.Id},{2:Items.182.Id},{2:Items.183.Id},{2:Items.184.Id},{2:Items.185.Id},{2:Items.186.Id},{2:Items.187.Id},{2:Items.188.Id},{2:Items.189.Id},{2:Items.190.Id},{2:Items.191.Id},{2:Items.192.Id},{2:Items.193.Id},{2:Items.194.Id},{2:Items.195.Id},{2:Items.196.Id},{2:Items.197.Id},{2:Items.198.Id},{2:Items.199.Id},{2:Items.200.Id},{2:Items.201.Id},{2:Items.202.Id},{2:Items.203.Id},{2:Items.204.Id},{2:Items.205.Id},{2:Items.206.Id},{2:Items.207.Id},{2:Items.208.Id},{2:Items.209.Id},{2:Items.210.Id},{2:Items.211.Id},{2:Items.212.Id},{2:Items.213.Id},{2:Items.214.Id},{2:Items.215.Id},{2:Items.216.Id},{2:Items.217.Id},{2:Items.218.Id},{2:Items.219.Id},{2:Items.220.Id},{2:Items.221.Id},{2:Items.222.Id},{2:Items.223.Id},{2:Items.224.Id},{2:Items.225.Id},{2:Items.226.Id},{2:Items.227.Id},{2:Items.228.Id},{2:Items.229.Id},{2:Items.230.Id},{2:Items.231.Id},{2:Items.232.Id},{2:Items.233.Id},{2:Items.234.Id},{2:Items.235.Id},{2:Items.236.Id},{2:Items.237.Id},{2:Items.238.Id},{2:Items.239.Id},{2:Items.240.Id},{2:Items.241.Id},{2:Items.242.Id},{2:Items.243.Id},{2:Items.244.Id},{2:Items.245.Id},{2:Items.246.Id},{2:Items.247.Id},{2:Items.248.Id},{2:Items.249.Id},{2:Items.250.Id},{2:Items.251.Id},{2:Items.252.Id},{2:Items.253.Id},{2:Items.254.Id},{2:Items.255.Id},{2:Items.256.Id},{2:Items.257.Id},{2:Items.258.Id},{2:Items.259.Id},{2:Items.260.Id},{2:Items.261.Id},{2:Items.262.Id},{2:Items.263.Id},{2:Items.264.Id},{2:Items.265.Id},{2:Items.266.Id},{2:Items.267.Id},{2:Items.268.Id},{2:Items.269.Id},{2:Items.270.Id},{2:Items.271.Id},{2:Items.272.Id},{2:Items.273.Id},{2:Items.274.Id},{2:Items.275.Id},{2:Items.276.Id},{2:Items.277.Id},{2:Items.278.Id},{2:Items.279.Id},{2:Items.280.Id},{2:Items.281.Id},{2:Items.282.Id},{2:Items.283.Id},{2:Items.284.Id},{2:Items.285.Id},{2:Items.286.Id},{2:Items.287.Id},{2:Items.288.Id},{2:Items.289.Id},{2:Items.290.Id},{2:Items.291.Id},{2:Items.292.Id},{2:Items.293.Id},{2:Items.294.Id},{2:Items.295.Id},{2:Items.296.Id},{2:Items.297.Id},{2:Items.298.Id},{2:Items.299.Id},{2:Items.300.Id},{2:Items.301.Id},{2:Items.302.Id},{2:Items.303.Id},{2:Items.304.Id},{2:Items.305.Id},{2:Items.306.Id},{2:Items.307.Id},{2:Items.308.Id},{2:Items.309.Id},{2:Items.310.Id},{2:Items.311.Id},{2:Items.312.Id},{2:Items.313.Id},{2:Items.314.Id},{2:Items.315.Id},{2:Items.316.Id},{2:Items.317.Id},{2:Items.318.Id},{2:Items.319.Id},{2:Items.320.Id},{2:Items.321.Id},{2:Items.322.Id},{2:Items.323.Id},{2:Items.324.Id},{2:Items.325.Id},{2:Items.326.Id},{2:Items.327.Id},{2:Items.328.Id},{2:Items.329.Id},{2:Items.330.Id},{2:Items.331.Id},{2:Items.332.Id},{2:Items.333.Id},{2:Items.334.Id},{2:Items.335.Id},{2:Items.336.Id},{2:Items.337.Id},{2:Items.338.Id},{2:Items.339.Id},{2:Items.340.Id},{2:Items.341.Id},{2:Items.342.Id},{2:Items.343.Id},{2:Items.344.Id},{2:Items.345.Id},{2:Items.346.Id},{2:Items.347.Id},{2:Items.348.Id},{2:Items.349.Id},{2:Items.350.Id},{2:Items.351.Id},{2:Items.352.Id},{2:Items.353.Id},{2:Items.354.Id},{2:Items.355.Id},{2:Items.356.Id},{2:Items.357.Id},{2:Items.358.Id},{2:Items.359.Id},{2:Items.360.Id},{2:Items.361.Id},{2:Items.362.Id},{2:Items.363.Id},{2:Items.364.Id},{2:Items.365.Id},{2:Items.366.Id},{2:Items.367.Id},{2:Items.368.Id},{2:Items.369.Id},{2:Items.370.Id},{2:Items.371.Id},{2:Items.372.Id},{2:Items.373.Id},{2:Items.374.Id},{2:Items.375.Id},{2:Items.376.Id},{2:Items.377.Id},{2:Items.378.Id},{2:Items.379.Id},{2:Items.380.Id},{2:Items.381.Id},{2:Items.382.Id},{2:Items.383.Id},{2:Items.384.Id},{2:Items.385.Id},{2:Items.386.Id},{2:Items.387.Id},{2:Items.388.Id},{2:Items.389.Id},{2:Items.390.Id},{2:Items.391.Id},{2:Items.392.Id},{2:Items.393.Id},{2:Items.394.Id},{2:Items.395.Id},{2:Items.396.Id},{2:Items.397.Id},{2:Items.398.Id},{2:Items.399.Id},{2:Items.400.Id},{2:Items.401.Id},{2:Items.402.Id},{2:Items.403.Id},{2:Items.404.Id},{2:Items.405.Id},{2:Items.406.Id},{2:Items.407.Id},{2:Items.408.Id},{2:Items.409.Id},{2:Items.410.Id},{2:Items.411.Id},{2:Items.412.Id},{2:Items.413.Id},{2:Items.414.Id},{2:Items.415.Id},{2:Items.416.Id},{2:Items.417.Id},{2:Items.418.Id},{2:Items.419.Id},{2:Items.420.Id},{2:Items.421.Id},{2:Items.422.Id},{2:Items.423.Id},{2:Items.424.Id},{2:Items.425.Id},{2:Items.426.Id},{2:Items.427.Id},{2:Items.428.Id},{2:Items.429.Id},{2:Items.430.Id},{2:Items.431.Id},{2:Items.432.Id},{2:Items.433.Id},{2:Items.434.Id},{2:Items.435.Id},{2:Items.436.Id},{2:Items.437.Id},{2:Items.438.Id},{2:Items.439.Id},{2:Items.440.Id},{2:Items.441.Id},{2:Items.442.Id},{2:Items.443.Id},{2:Items.444.Id},{2:Items.445.Id},{2:Items.446.Id},{2:Items.447.Id},{2:Items.448.Id},{2:Items.449.Id},{2:Items.450.Id},{2:Items.451.Id},{2:Items.452.Id},{2:Items.453.Id},{2:Items.454.Id},{2:Items.455.Id},{2:Items.456.Id},{2:Items.457.Id},{2:Items.458.Id},{2:Items.459.Id},{2:Items.460.Id},{2:Items.461.Id},{2:Items.462.Id},{2:Items.463.Id},{2:Items.464.Id},{2:Items.465.Id},{2:Items.466.Id},{2:Items.467.Id},{2:Items.468.Id},{2:Items.469.Id},{2:Items.470.Id},{2:Items.471.Id},{2:Items.472.Id},{2:Items.473.Id},{2:Items.474.Id},{2:Items.475.Id},{2:Items.476.Id},{2:Items.477.Id},{2:Items.478.Id},{2:Items.479.Id},{2:Items.480.Id},{2:Items.481.Id},{2:Items.482.Id},{2:Items.483.Id},{2:Items.484.Id},{2:Items.485.Id},{2:Items.486.Id},{2:Items.487.Id},{2:Items.488.Id},{2:Items.489.Id},{2:Items.490.Id},{2:Items.491.Id},{2:Items.492.Id},{2:Items.493.Id},{2:Items.494.Id},{2:Items.495.Id},{2:Items.496.Id},{2:Items.497.Id},{2:Items.498.Id},{2:Items.499.Id}\",\"ImageTypeLimit\":1,\"EnableImages\":false,\"SortBy\":\"StartDate\",\"EnableTotalRecordCount\":false,\"EnableUserData\":false}",
+            "at": 133,
+            "took": 150
+          }
+        ]
+      ]
+    },
+    {
+      "name": "Search, common word",
+      "budget": {
+        "warmP95": 350
+      },
+      "waves": [
+        [
+          {
+            "index": 0,
+            "method": "GET",
+            "path": "/Polyfin/Playback/Starting",
+            "at": 0,
+            "took": 4
+          },
+          {
+            "index": 1,
+            "method": "GET",
+            "path": "/Artists?limit=100&searchTerm=show&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&imageTypeLimit=1&userId={user}&enableTotalRecordCount=false",
+            "at": 0,
+            "took": 7
+          },
+          {
+            "index": 2,
+            "method": "GET",
+            "path": "/Persons?limit=100&searchTerm=show&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&imageTypeLimit=1&excludePersonTypes=Artist&excludePersonTypes=AlbumArtist&userId={user}",
+            "at": 0,
+            "took": 13
+          },
+          {
+            "index": 3,
+            "method": "GET",
+            "path": "/Studios?limit=100&searchTerm=show&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&imageTypeLimit=1&userId={user}&enableTotalRecordCount=false",
+            "at": 1,
+            "took": 383
+          },
+          {
+            "index": 4,
+            "method": "GET",
+            "path": "/Items?userId={user}&limit=100&recursive=true&searchTerm=show&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&excludeItemTypes=Movie&excludeItemTypes=Episode&excludeItemTypes=TvChannel&mediaTypes=Video&imageTypeLimit=1&enableTotalRecordCount=false",
+            "at": 1,
+            "took": 15
+          },
+          {
+            "index": 5,
+            "method": "GET",
+            "path": "/Items?userId={user}&limit=100&recursive=true&searchTerm=show&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&includeItemTypes=LiveTvProgram&imageTypeLimit=1&enableTotalRecordCount=false",
+            "at": 1,
+            "took": 463
+          }
+        ],
+        [
+          {
+            "index": 6,
+            "method": "GET",
+            "path": "/Items?userId={user}&isMissing=false&limit=800&recursive=true&searchTerm=show&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode&includeItemTypes=Playlist&includeItemTypes=MusicAlbum&includeItemTypes=Audio&includeItemTypes=TvChannel&includeItemTypes=PhotoAlbum&includeItemTypes=Photo&includeItemTypes=AudioBook&includeItemTypes=Book&includeItemTypes=BoxSet&imageTypeLimit=1&enableTotalRecordCount=false",
+            "at": 465,
+            "took": 42
+          }
+        ]
+      ]
+    },
+    {
+      "name": "Search, rare word",
+      "budget": {
+        "warmP95": 650
+      },
+      "waves": [
+        [
+          {
+            "index": 0,
+            "method": "GET",
+            "path": "/Polyfin/Playback/Starting",
+            "at": 0,
+            "took": 5
+          },
+          {
+            "index": 1,
+            "method": "GET",
+            "path": "/Artists?limit=100&searchTerm=kepnor&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&imageTypeLimit=1&userId={user}&enableTotalRecordCount=false",
+            "at": 1,
+            "took": 9
+          },
+          {
+            "index": 2,
+            "method": "GET",
+            "path": "/Persons?limit=100&searchTerm=kepnor&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&imageTypeLimit=1&excludePersonTypes=Artist&excludePersonTypes=AlbumArtist&userId={user}",
+            "at": 2,
+            "took": 17
+          },
+          {
+            "index": 3,
+            "method": "GET",
+            "path": "/Studios?limit=100&searchTerm=kepnor&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&imageTypeLimit=1&userId={user}&enableTotalRecordCount=false",
+            "at": 2,
+            "took": 231
+          },
+          {
+            "index": 4,
+            "method": "GET",
+            "path": "/Items?userId={user}&limit=100&recursive=true&searchTerm=kepnor&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&excludeItemTypes=Movie&excludeItemTypes=Episode&excludeItemTypes=TvChannel&mediaTypes=Video&imageTypeLimit=1&enableTotalRecordCount=false",
+            "at": 2,
+            "took": 16
+          },
+          {
+            "index": 5,
+            "method": "GET",
+            "path": "/Items?userId={user}&limit=100&recursive=true&searchTerm=kepnor&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&includeItemTypes=LiveTvProgram&imageTypeLimit=1&enableTotalRecordCount=false",
+            "at": 2,
+            "took": 457
+          }
+        ],
+        [
+          {
+            "index": 6,
+            "method": "GET",
+            "path": "/Items?userId={user}&isMissing=false&limit=800&recursive=true&searchTerm=kepnor&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode&includeItemTypes=Playlist&includeItemTypes=MusicAlbum&includeItemTypes=Audio&includeItemTypes=TvChannel&includeItemTypes=PhotoAlbum&includeItemTypes=Photo&includeItemTypes=AudioBook&includeItemTypes=Book&includeItemTypes=BoxSet&imageTypeLimit=1&enableTotalRecordCount=false",
+            "at": 460,
+            "took": 30
+          }
+        ]
+      ]
+    }
+  ]
+}

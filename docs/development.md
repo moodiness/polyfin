@@ -181,8 +181,13 @@ POLYFIN_SYNTHETIC_XTREAM=1 go test -run TestServeSyntheticXtream -v -timeout 0 .
 
 | Variable | What it sets | Default |
 |---|---|---|
-| `POLYFIN_SYNTHETIC_XTREAM` | The number of channels, 54,000 for `1`, with a third as many movies and a twentieth as many series. | Unset: the test is skipped. |
+| `POLYFIN_SYNTHETIC_XTREAM` | The number of channels, 54,000 for `1`, with a third as many movies and a twentieth as many series. `library` gives the large library of the bench below. | Unset: the test is skipped. |
+| `POLYFIN_SYNTHETIC_XTREAM_SEED` | With `library`, the seed its series lengths and guide are drawn from. | `1` |
 | `POLYFIN_SYNTHETIC_XTREAM_ADDR` | The address the provider listens on. | `127.0.0.1:0` |
+
+### The large-library bench
+
+Before each minor release, `docs/scripts/bench/bench.mjs` replays what the web player asks for its home page, its live TV guide and its search, against a library of 8,111 movies, 8,267 series with 1.15 million episodes and 2,360 channels with four days of guide. It fails when a screen is slower than its budget. CI does not run it. `docs/scripts/bench/README.md` tells how to run it.
 
 ## Jellyfin fixtures
 
