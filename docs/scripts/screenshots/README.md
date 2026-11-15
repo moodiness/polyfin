@@ -70,12 +70,12 @@ The plain demo is what the shots show. The rich demo, which the sweep runs and `
 - **Accounts:** Morgan is the administrator. Sam, Robin and Alex are members.
   - _Rich:_ six more members, ten users as on a real server, each member in one of two groups, of five and four members.
 - **Devices,** _rich:_ 45 Jellyfin apps are signed in, 23 of them Riley's, with names and apps as long as a real server's.
-- **Addon:** `demo.mjs` serves "Demo Catalog", a Stremio addon of the website's fictional titles, with the posters of `docs/public/posters/`. The browser draws Wild Atlas's poster, which the website lacks.
+- **Addon:** `demo.mjs` serves "Demo Catalog", a Stremio addon of the website's fictional titles, with the posters of `docs/public/posters/`. The browser draws Wild Atlas's poster, which the website lacks. Its manifest says it is configurable, so its page has **Configure**, and `demo.mjs` serves a plain configure page.
 - **More sources,** _rich:_ Demo Catalog's logo, and nine more Stremio addons, enough for the list to scroll:
   - **Logos:** most have one served over https, with transparent parts: round, a wide wordmark, a dark one, a white one, a square one and an SVG. The admin app only shows `https` logos, so the tool serves them over TLS, with a certificate of its own that its Chrome is told to accept; Night Owl Picks has one over http, which the admin app does not try, and Festival Reels none.
   - **Shapes:** Archive Shelf has 161 catalogs, a description of 318 characters and an address of 207, as the largest seen. One name is too long for a row, and Kinoklassikersammlungsarchiv has no space.
   - **Failures:** Harbor Classics' server fails once it is added, a Health problem. Night Owl Picks also has a Live TV catalog.
-  - **Own source:** Morgan has Festival Reels as their own. A member's own source may not be on the local network, as the demo's are.
+  - **Own source:** Morgan has Festival Reels as their own, configurable as Demo Catalog is. A member's own source may not be on the local network, as the demo's are.
 - **Libraries,** _rich:_ six, hidden in Jellyfin apps' menus but those of Live TV, which cannot be.
 - **IPTV:** "Demo TV" is an M3U list of five channels with logos and a programme guide: Summit, Deep Blue, Arena, Cinema One and Harbor.
 - **Folders,** _rich:_ "Home videos" has two files, and the folder of "Movies on the old disk" is gone since, a Health problem.

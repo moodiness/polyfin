@@ -15,7 +15,7 @@ A server addon is shared with every user. To add one:
 
 1. Open **Content › Sources**, then **Add a source**.
 2. Under **Kind of source**, keep **Stremio addon**, the first choice.
-3. Paste its **Manifest address**, copied from the addon's configure page.
+3. Paste its **Manifest address**, copied from the addon's configure page. Later, **Configure** on the addon's page opens that page again (see [Configuring an addon](#configuring-an-addon)).
 4. In **Content › Libraries**, choose which of its catalogs become libraries in Jellyfin apps.
 
 Polyfin turns some catalogs on for you:
@@ -205,9 +205,25 @@ Anime databases make each season, or part of a season, an entry of its own. Its 
 
 ## Manifest addresses
 
-Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu. The libraries follow the new manifest as they do at a refresh (see [Refreshing an addon](#refreshing-an-addon)). It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
+Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu, or the new install link of **Once configured** (see [Configuring an addon](#configuring-an-addon)). The libraries follow the new manifest as they do at a refresh (see [Refreshing an addon](#refreshing-an-addon)). It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
 
 Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, an addon's **Name**, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
+
+### Configuring an addon
+
+An addon whose manifest says it is configurable has a **Configure** button, next to **Refresh** on its page. Polyfin follows Stremio's rule:
+
+- **Which addons:** Stremio and Eclipse addons whose manifest sets `behaviorHints.configurable`, at an address ending in `manifest.json`. IPTV sources, tuners and local folders never have the button.
+- **Which page:** the manifest address with `manifest.json` replaced by `configure`, its query kept, in a new tab.
+- **Who sees it:** whoever may replace the address. Administrators see it on server addons, in **Content › Sources**, and each user on their own addons, in **My sources**. A user never configures a server addon, and an administrator who opens a user's own addon sees no button.
+- **Privacy:** the full address stays on the server until you use the button. The server then sends your browser on to the configure page, without telling it where you came from. No page of the admin app and no log holds the address.
+- **No button yet:** addons added before Polyfin kept the mark have it read in the background after the upgrade, one at a time, so the button may take a few minutes to show. An addon whose server asked to wait (see [Addon request limits](#addon-request-limits)), or whose read failed, is read again at the next start. Once the reads end, the log says `Read the configure hint of the addons stored without it`, with how many were read, how many have a configure page, how many were skipped and how many failed. Only the mark is read: the addon's catalogs, version and **Last refresh** stay as they are. **Refresh** reads it at once.
+
+The addon's page then shows **Once configured**, for when you come back from the configure page:
+
+- **A new install link:** most configure pages give one. Paste it under **New install link**, then select **Replace**. It works as **Replace the address** does: the libraries are kept, and the addon's version lists are forgotten.
+- **The address didn't change:** some addons keep your settings on their side and change only their manifest. This runs **Refresh everything** at once, without asking again (see [Refreshing an addon](#refreshing-an-addon)).
+- **Close:** changes nothing.
 
 ## Giving an addon a name of its own
 
@@ -243,7 +259,7 @@ An addon's page, in **Content › Sources** or **My sources**, reads the addon a
 - New catalogs wait under **Content › Libraries** to be turned on. Unlike an install, a refresh turns none on.
 - Catalog pages, descriptions and version lists stay as they are kept.
 
-**Refresh everything**, in the more-actions menu, asks first. It downloads the manifest as **Refresh** does, then has what Polyfin keeps of the addon asked for again as it is next needed, never all at once:
+**Refresh everything**, in the more-actions menu, asks first. **The address didn't change**, under **Once configured**, runs it without asking (see [Configuring an addon](#configuring-an-addon)). It downloads the manifest as **Refresh** does, then has what Polyfin keeps of the addon asked for again as it is next needed, never all at once:
 
 - **Catalog pages:** they count as old. Each still shows at once and is read again in the background when shown. The hourly task "Read the libraries' first pages" reads every first page again within the hour (see [Catalog pages](addons-and-libraries.md#catalog-pages)).
 - **Descriptions:** they count as old. Each is read again in the background when its title is shown.
@@ -257,7 +273,7 @@ Other tools read parts of an addon again:
 | Tool | Where | What it does |
 |---|---|---|
 | **Refresh descriptions** | The menu of a server movie, series or collection library, in **Content › Libraries** | Reads every kept title's description again now, one title every 2 seconds, with progress on the row. A collection library's collections come first (see [Library description refresh](addons-and-libraries.md#library-description-refresh)). |
-| **Replace the address** | The source's more-actions menu | Downloads the manifest from a new address, with libraries kept, followed and removed as at a refresh, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
+| **Replace the address** | The source's more-actions menu, or **Once configured** after **Configure** | Downloads the manifest from a new address, with libraries kept, followed and removed as at a refresh, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
 | "Forget the version lists" | **System › Schedule** | Forgets every addon's version lists (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)). |
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | Sets how old a catalog page may get before Polyfin reads it again (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)). |
 

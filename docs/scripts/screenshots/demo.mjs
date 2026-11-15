@@ -201,7 +201,8 @@ export const sources = [
     catalogs: 1,
     tv: true,
   },
-  { slug: 'festival-reels', name: 'Festival Reels', logo: null, catalogs: 0 },
+  // A user's own source with a configure page, which Configure opens.
+  { slug: 'festival-reels', name: 'Festival Reels', logo: null, catalogs: 0, configurable: true },
   {
     slug: 'family-sundays',
     name: 'Family Sundays',
@@ -348,6 +349,8 @@ export async function startDemo({ posterDir, images, video, certificate, rich })
       { type: 'movie', id: 'featured', name: 'Featured movies' },
       { type: 'series', id: 'featured', name: 'Featured series' },
     ],
+    // Its configure page is /configure, which Configure on its page opens.
+    behaviorHints: { configurable: true },
     ...(rich ? { logo: `${secureBase}/logos/sources/demo-catalog.png` } : {}),
   })
 
@@ -398,6 +401,7 @@ export async function startDemo({ posterDir, images, video, certificate, rich })
       ...(source.tv ? [{ type: 'tv', id: 'channels', name: `${source.name} channels` }] : []),
     ],
     ...(source.logo === null ? {} : { logo: sourceLogo(source) }),
+    ...(source.configurable ? { behaviorHints: { configurable: true } } : {}),
   })
 
   const now = Date.now()
@@ -447,6 +451,14 @@ export async function startDemo({ posterDir, images, video, certificate, rich })
     const path = decodeURIComponent(new URL(request.url, 'http://x').pathname)
     try {
       if (path === '/manifest.json') return json(response, manifest())
+      // A configurable addon's configure page, at its manifest address ending in configure.
+      if (/^(?:\/addons\/[a-z-]+(?:\/[A-Za-z0-9_-]+)?)?\/configure$/.test(path)) {
+        return send(
+          response,
+          'text/html; charset=utf-8',
+          Buffer.from('<!doctype html><title>Configure</title><h1>Configure the demo addon</h1>'),
+        )
+      }
       // The other sources: their manifest, then empty catalogs. A failing one answers 503.
       let match = path.match(
         /^\/addons\/([a-z-]+)(?:\/[A-Za-z0-9_-]+)?\/(manifest\.json|catalog\/.+)$/,
