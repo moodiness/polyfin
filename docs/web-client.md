@@ -185,6 +185,7 @@ On a movie's or an episode's page, the script:
 - **Shortens long names:** a long version, audio or subtitle name ends with "…" before its menu's arrow, so that it does not run under it. Stream addons' detailed version names are often that long. The open menu shows whole names.
 - **Adds Share:** see [Share button](#share-button).
 - **Shows version badges:** see [Version badges](#version-badges).
+- **Lets trailers play:** YouTube's player, which needs a Referer to play a trailer, gets the server's origin as one, such as `https://media.example.org`, never a page's path. Every other request of the web player still sends no Referer.
 
 The script changes nothing during a video. It holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it.
 
