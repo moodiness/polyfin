@@ -3,7 +3,6 @@ package jellyfin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -477,7 +476,7 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var update userDataUpdate
-	if err := json.Unmarshal(body, &update); err != nil {
+	if err := unmarshalBody(body, &update); err != nil {
 		validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}, "userDataDto": {"The userDataDto field is required."}})
 		return
 	}

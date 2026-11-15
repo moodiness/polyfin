@@ -492,7 +492,7 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 	var q programQuery
 	if r.Method == http.MethodPost {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-		if err != nil || json.Unmarshal(body, &q) != nil {
+		if err != nil || unmarshalBody(body, &q) != nil {
 			validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}})
 			return programQuery{}, false
 		}

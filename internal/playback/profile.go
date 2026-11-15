@@ -3,7 +3,10 @@ package playback
 import "encoding/json"
 
 // DeviceProfile is what a Jellyfin app says it can play, sent with its
-// PlaybackInfo requests. Field names follow Jellyfin's API.
+// PlaybackInfo requests. Field names follow Jellyfin's API, whose request
+// bodies are read leniently: a string field also takes a number, and a
+// number field a string holding one, as apps differ (see the jellyfin
+// package's bodyOptions).
 type DeviceProfile struct {
 	Name                string
 	MaxStreamingBitrate *int64 `json:",omitempty"`
@@ -36,8 +39,10 @@ type TranscodingProfile struct {
 	VideoCodec string
 	AudioCodec string
 	// Protocol is "http" for a progressive stream or "hls".
-	Protocol         string
-	Context          string
+	Protocol string
+	Context  string
+	// MaxAudioChannels is a string, as in Jellyfin: jellyfin-web sends
+	// "2", an app that sends numbers 2.
 	MaxAudioChannels string `json:",omitempty"`
 	// MinSegments is a number, which jellyfin-web sends as a string.
 	MinSegments         json.Number        `json:",omitempty"`

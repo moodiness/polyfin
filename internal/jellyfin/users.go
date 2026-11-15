@@ -1,7 +1,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"net/http"
 	"strconv"
@@ -16,8 +16,9 @@ import (
 // maxBody bounds JSON request bodies.
 const maxBody = 1 << 20
 
+// decode reads a JSON request body as Jellyfin does (see bodyOptions).
 func decode(r *http.Request, into any) error {
-	return json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxBody)).Decode(into)
+	return jsonv2.UnmarshalRead(http.MaxBytesReader(nil, r.Body, maxBody), into, bodyOptions)
 }
 
 // publicUsers lists the users shown on the sign-in screen of Jellyfin apps.

@@ -2,7 +2,6 @@ package jellyfin
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -80,7 +79,7 @@ func (h *Handler) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body uploadSubtitleDto
-	if err := json.Unmarshal(raw, &body); err != nil {
+	if err := unmarshalBody(raw, &body); err != nil {
 		b.add("$", "The JSON value could not be converted.")
 		b.add("body", "The body field is required.")
 	} else {

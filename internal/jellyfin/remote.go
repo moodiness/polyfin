@@ -3,7 +3,6 @@ package jellyfin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -313,7 +312,7 @@ func requiredBody(w http.ResponseWriter, r *http.Request, parameter string, into
 		validationProblem(w, map[string][]string{"": {"A non-empty request body is required."}, parameter: required})
 		return false
 	}
-	if json.Unmarshal(body, into) != nil {
+	if unmarshalBody(body, into) != nil {
 		validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}, parameter: required})
 		return false
 	}

@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -80,7 +79,7 @@ func (h *Handler) setSound(w http.ResponseWriter, r *http.Request) {
 		BoostVolume *bool
 	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-	if err != nil || json.Unmarshal(raw, &body) != nil || body.BoostVolume == nil {
+	if err != nil || unmarshalBody(raw, &body) != nil || body.BoostVolume == nil {
 		badRequestProblem(w)
 		return
 	}

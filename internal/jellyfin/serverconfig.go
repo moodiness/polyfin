@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"runtime"
@@ -215,7 +214,7 @@ func (h *Handler) updateServerConfiguration(w http.ResponseWriter, r *http.Reque
 		QuickConnectAvailable     *bool
 		EnableLegacyAuthorization *bool
 	}
-	if raw != nil && json.Unmarshal(raw, &body) != nil {
+	if raw != nil && unmarshalBody(raw, &body) != nil {
 		errs.add("$", "The JSON value could not be converted.")
 		errs.add("configuration", "The configuration field is required.")
 	}

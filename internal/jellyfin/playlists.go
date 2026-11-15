@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -152,7 +151,7 @@ func readJSONBody(w http.ResponseWriter, r *http.Request, into any, required str
 		unsupportedMediaTypeProblem(w)
 		return false, false
 	}
-	if err := json.Unmarshal(body, into); err != nil {
+	if err := unmarshalBody(body, into); err != nil {
 		problem := map[string][]string{"$": {"The JSON value could not be converted."}}
 		if required != "" {
 			problem[required] = []string{"The " + required + " field is required."}

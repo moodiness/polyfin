@@ -198,7 +198,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		errs.add("", "A non-empty request body is required.")
 		errs.add("newPolicy", "The newPolicy field is required.")
-	} else if json.Unmarshal(raw, &policy) != nil {
+	} else if unmarshalBody(raw, &policy) != nil {
 		errs.add("$", "The JSON value could not be converted.")
 		errs.add("newPolicy", "The newPolicy field is required.")
 	} else if i := slices.IndexFunc(policy.BlockUnratedItems, unknownUnratedKind); i >= 0 {

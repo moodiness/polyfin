@@ -3,7 +3,6 @@ package jellyfin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -273,7 +272,9 @@ func hasSources(kind library.Kind) bool {
 	return false
 }
 
-// looseInt reads a number that apps send as a JSON number or string.
+// looseInt is a number an app may leave out, or send null or empty: set
+// tells whether it sent one. Like any number of a request body (see
+// bodyOptions), it comes as a JSON number or a string holding one.
 type looseInt struct {
 	value int64
 	set   bool
@@ -608,8 +609,9 @@ type noCompatibleStream struct {
 }
 
 // readPlaybackInfoBody reads a posted PlaybackInfoDto over the query's
-// values. An empty body is allowed; a body without a JSON content type is
-// not.
+// values, as Jellyfin reads it (see bodyOptions). An empty body is
+// allowed; a body without a JSON content type is not. A body it cannot
+// read is logged, without its content, as the app shows no reason.
 func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b bindErrors, request *playbackInfoRequest) bool {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
@@ -628,7 +630,9 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 		return false
 	}
 	var posted playbackInfoRequest
-	if err := json.Unmarshal(body, &posted); err != nil {
+	if err := unmarshalBody(body, &posted); err != nil {
+		c := callerFrom(r.Context())
+		h.Logger.Warn("A PlaybackInfo request could not be read", "app", c.Device.Client, "device", c.Device.DeviceName, "error", err)
 		b.add("$", "The JSON value could not be converted.")
 		validationProblem(w, b)
 		return false
@@ -1730,7 +1734,7 @@ func (h *Handler) reportPlayback(parameter string, event playbackEvent) http.Han
 			return
 		}
 		var report playbackReport
-		if err := json.Unmarshal(body, &report); err != nil {
+		if err := unmarshalBody(body, &report); err != nil {
 			validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}, parameter: {"The " + parameter + " field is required."}})
 			return
 		}

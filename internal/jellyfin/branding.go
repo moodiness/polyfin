@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -131,7 +130,7 @@ func (h *Handler) updateBranding(w http.ResponseWriter, r *http.Request) {
 		CustomCss           *string
 		SplashscreenEnabled *bool
 	}
-	if raw != nil && json.Unmarshal(raw, &body) != nil {
+	if raw != nil && unmarshalBody(raw, &body) != nil {
 		errs.add("$", "The JSON value could not be converted.")
 		errs.add("configuration", "The configuration field is required.")
 	}

@@ -2,7 +2,6 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -176,7 +175,7 @@ func (h *Handler) setReminder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-	if err != nil || json.Unmarshal(raw, &body) != nil {
+	if err != nil || unmarshalBody(raw, &body) != nil {
 		badRequestProblem(w)
 		return
 	}
