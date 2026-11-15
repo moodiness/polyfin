@@ -102,6 +102,11 @@ const sources: typeof en = {
       'Lascia Nessuna sull’unico add-on di metadati del server, qualunque sia la lingua impostata nella sua pagina di configurazione: un add-on con una lingua descrive i titoli solo per gli utenti che hanno scelto quella lingua, a meno che nessun add-on lasciato su Nessuna li descriva. Per permettere agli utenti di leggere i titoli in altre lingue, aggiungi di nuovo lo stesso add-on di metadati una volta per ogni lingua, configurato in quella lingua nella sua pagina di configurazione, e indica qui la lingua solo su queste copie aggiuntive: gli utenti che scelgono quella lingua dei metadati ne vedono i nomi, le trame e le immagini. Un add-on con una lingua e senza una propria libreria si limita a descrivere i titoli.',
     languageNone: 'Nessuna',
     languageSaved: (name: string) => `${name}: lingua delle descrizioni salvata.`,
+    name: 'Nome',
+    nameHelp:
+      'Il nome mostrato ovunque Polyfin nomini questo addon. Lascialo vuoto per restituirgli il nome del suo manifest.',
+    manifestCalls: (name: string) => `Il suo manifest lo chiama «${name}».`,
+    nameSaved: (name: string) => `${name}: nome salvato.`,
     edit: 'Modifica l’account',
     saved: 'Origine salvata.',
     remove: 'Rimuovi',

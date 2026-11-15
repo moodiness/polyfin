@@ -185,6 +185,9 @@ const common: typeof en = {
     invalid_library:
       'Una libreria fa riferimento a un catalogo che non esiste più o non può essere sfogliato. Rimuovi le librerie segnalate come non più disponibili, poi salva di nuovo.',
     invalid_library_name: 'Il nome di una libreria deve contenere da 1 a 64 caratteri.',
+    invalid_addon_name: 'Il nome di un addon deve contenere da 1 a 64 caratteri stampabili.',
+    addon_not_renamable:
+      'Solo gli addon Stremio ed Eclipse prendono un nome proprio. Le origini IPTV, i tuner e le cartelle locali si nominano nelle loro impostazioni.',
     invalid_library_genre:
       'Il genere di una libreria non è offerto dal suo catalogo. Scegline un altro dall’elenco, poi salva di nuovo.',
     invalid_library_max_items:

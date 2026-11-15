@@ -102,6 +102,11 @@ const sources: typeof en = {
       'Deixe em Nenhum no único complemento de metadados do servidor, seja qual for o idioma definido na página de configuração dele: um complemento com idioma descreve os títulos apenas para os usuários que escolheram esse idioma, a menos que nenhum complemento deixado em Nenhum os descreva. Para que os usuários leiam os títulos em outros idiomas, adicione o mesmo complemento de metadados mais uma vez para cada idioma, configurado nesse idioma na página de configuração dele, e indique o idioma aqui somente nessas cópias extras: os usuários que escolherem esse idioma dos metadados verão os nomes, sinopses e imagens dele. Um complemento com idioma e sem biblioteca própria apenas descreve títulos.',
     languageNone: 'Nenhum',
     languageSaved: (name: string) => `${name}: o idioma das descrições foi salvo.`,
+    name: 'Nome',
+    nameHelp:
+      'O nome exibido onde quer que o Polyfin nomeie este complemento. Deixe vazio para devolver o nome do manifesto dele.',
+    manifestCalls: (name: string) => `O manifesto dele o chama de “${name}”.`,
+    nameSaved: (name: string) => `${name}: o nome foi salvo.`,
     edit: 'Editar a conta',
     saved: 'Fonte salva.',
     remove: 'Remover',

@@ -44,6 +44,7 @@ import {
   useToast,
   type ToastOptions,
 } from '@/ui'
+import { AddonNameForm, AddonNameRow, isRenamable, useAddonName } from './AddonName'
 import { AddonSettings, MusicBadge } from './AddonSettings'
 import { IptvEditForm } from './IptvForms'
 import {
@@ -81,9 +82,10 @@ export function OwnerLabel({ entry, selfId }: { entry: Entry; selfId: string }) 
 
 /**
  * One source's page, beside the list of sources: its head (mark, name, kind, state, Refresh and
- * the other actions), then, for an IPTV source, its six parts; for an addon or a folder, who uses
- * it and where it stands in the order, the language of its descriptions, its settings, its files
- * and its details. Another user's source (`entry.scope === null`) is shown without actions.
+ * the other actions), then, for an IPTV source, its six parts; for an addon or a folder, an addon's
+ * Name, who uses it and where it stands in the order, the language of its descriptions, its
+ * settings, its files and its details. Another user's source (`entry.scope === null`) is shown
+ * without actions.
  */
 export function SourceDetail({
   entry,
@@ -121,6 +123,11 @@ export function SourceDetail({
 
   const fallbackScope: Scope = scope ?? 'shared'
   const toggle = useSourceToggle(fallbackScope, addon.id)
+  // A Stremio or Eclipse addon's Name row, for whoever may change the addon. An Eclipse addon's
+  // settings save it with them, through one unsaved dock.
+  const name = useAddonName(fallbackScope, addon)
+  const renamable = scope !== null && isRenamable(addon)
+  const nameWithSettings = renamable && addon.music !== null && addon.music.settings.length > 0
   // A manifest downloaded again tells which libraries followed a new catalog identifier and which
   // were removed with their catalog.
   function toastChanged(message: string, updated: Addon) {
@@ -345,6 +352,14 @@ export function SourceDetail({
               className="mt-8"
             />
           )}
+          {renamable &&
+            (nameWithSettings ? (
+              <div className="mt-7 grid grid-cols-[minmax(0,1fr)] gap-1.5 max-md:mt-6">
+                <AddonNameRow addon={addon} draft={name} />
+              </div>
+            ) : (
+              <AddonNameForm addon={addon} draft={name} className="mt-7 max-md:mt-6" />
+            ))}
           {forWhom}
           {scope === 'shared' && (addon.kind === 'stremio' || addon.language !== '') && (
             <Group title={text.descriptions}>
@@ -352,7 +367,13 @@ export function SourceDetail({
             </Group>
           )}
           {scope !== null && addon.music !== null && (
-            <AddonSettings key={addon.id} scope={scope} addon={addon} music={addon.music} />
+            <AddonSettings
+              key={addon.id}
+              scope={scope}
+              addon={addon}
+              music={addon.music}
+              name={nameWithSettings ? name : undefined}
+            />
           )}
           {folder !== null && <LocalFolderFigures folder={folder} />}
           {scope !== null && folder !== null && folder.kind !== 'homevideos' && (

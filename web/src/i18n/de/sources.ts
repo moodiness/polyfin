@@ -102,6 +102,11 @@ const sources: typeof en = {
       'Lass beim einzigen Metadaten-Add-on des Servers „Keine“ eingestellt, egal welche Sprache seine Konfigurationsseite festlegt: Ein Add-on mit einer Sprache beschreibt Titel nur für die Benutzer, die diese Sprache gewählt haben, es sei denn, kein Add-on mit „Keine“ beschreibt sie. Damit Benutzer Titel in anderen Sprachen lesen können, füge dasselbe Metadaten-Add-on für jede Sprache ein weiteres Mal hinzu, jeweils auf seiner Konfigurationsseite in dieser Sprache eingerichtet, und gib die Sprache nur bei diesen zusätzlichen Kopien hier an: Benutzer, die diese Metadatensprache wählen, sehen dessen Namen, Beschreibungen und Bilder. Ein Add-on mit einer Sprache und ohne eigene Bibliothek beschreibt nur Titel.',
     languageNone: 'Keine',
     languageSaved: (name: string) => `${name}: Die Sprache der Beschreibungen wurde gespeichert.`,
+    name: 'Name',
+    nameHelp:
+      'Der Name, den Polyfin überall für dieses Addon zeigt. Leer lassen, um ihm den Namen aus seinem Manifest zurückzugeben.',
+    manifestCalls: (name: string) => `Sein Manifest nennt es „${name}“.`,
+    nameSaved: (name: string) => `${name}: Der Name wurde gespeichert.`,
     edit: 'Konto bearbeiten',
     saved: 'Quelle gespeichert.',
     remove: 'Entfernen',

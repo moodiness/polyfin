@@ -103,6 +103,11 @@ const sources: typeof en = {
       'Déjelo en Ninguno en la única extensión de metadatos del servidor, sea cual sea el idioma que se haya fijado en su página de configuración: una extensión con un idioma solo describe los títulos para los usuarios que han elegido ese idioma, salvo que ninguna extensión dejada en Ninguno los describa. Para que los usuarios lean los títulos en otros idiomas, añada la misma extensión de metadatos una vez más por cada idioma, configurada en ese idioma en su página de configuración, e indique aquí el idioma solo en esas copias adicionales: los usuarios que elijan ese idioma de los metadatos verán sus nombres, sinopsis e imágenes. Una extensión con un idioma y sin biblioteca propia solo describe títulos.',
     languageNone: 'Ninguno',
     languageSaved: (name: string) => `${name}: se ha guardado el idioma de sus descripciones.`,
+    name: 'Nombre',
+    nameHelp:
+      'El nombre que se muestra dondequiera que Polyfin nombre este addon. Déjalo vacío para devolverle el nombre de su manifiesto.',
+    manifestCalls: (name: string) => `Su manifiesto lo llama «${name}».`,
+    nameSaved: (name: string) => `${name}: se ha guardado su nombre.`,
     edit: 'Editar la cuenta',
     saved: 'Fuente guardada.',
     remove: 'Eliminar',

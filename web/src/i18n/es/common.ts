@@ -190,6 +190,9 @@ const common: typeof en = {
     invalid_library:
       'Una biblioteca hace referencia a un catálogo que ya no existe o no se puede explorar. Elimine las bibliotecas marcadas como no disponibles y vuelva a guardar.',
     invalid_library_name: 'Los nombres de biblioteca deben tener entre 1 y 64 caracteres.',
+    invalid_addon_name: 'Los nombres de addon deben tener entre 1 y 64 caracteres imprimibles.',
+    addon_not_renamable:
+      'Solo los addons de Stremio y Eclipse llevan un nombre propio. Las fuentes IPTV, los sintonizadores y las carpetas locales se nombran en sus propios ajustes.',
     invalid_library_genre:
       'El catálogo de una biblioteca no ofrece su género. Elija otro de la lista y vuelva a guardar.',
     invalid_library_max_items:

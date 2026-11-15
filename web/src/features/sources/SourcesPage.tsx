@@ -299,6 +299,7 @@ export function SourcesPage({
       (needle === '' ||
         [
           entry.addon.name,
+          entry.addon.manifestName,
           describe(t, entry.addon),
           entry.owner?.name ?? '',
           text.tag[entry.addon.kind],

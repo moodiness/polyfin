@@ -100,6 +100,11 @@ const sources = {
       'Leave it at None on the server’s only metadata addon, whatever language its configure page sets: an addon with a language describes titles for the users who chose that language only, unless no addon left at None describes them. To let users read titles in other languages, add the same metadata addon once more for each language, configured in that language on its configure page, and name the language here on each of these extra copies only: users who choose that metadata language see its names, overviews and images. An addon with a language and no library of its own only describes titles.',
     languageNone: 'None',
     languageSaved: (name: string) => `${name}: the language of its descriptions was saved.`,
+    name: 'Name',
+    nameHelp:
+      'The name shown wherever Polyfin names this addon. Leave it empty to give back its manifest’s name.',
+    manifestCalls: (name: string) => `Its manifest calls it “${name}”.`,
+    nameSaved: (name: string) => `${name}: its name was saved.`,
     edit: 'Edit the account',
     saved: 'Source saved.',
     remove: 'Remove',

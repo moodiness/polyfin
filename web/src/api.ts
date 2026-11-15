@@ -1042,7 +1042,15 @@ export type Scope = 'shared' | 'me'
 
 export type Addon = {
   id: string
+  /** The name shown: the one given to it, else its manifest's. */
   name: string
+  /**
+   * The name an administrator, or its owner, gave a Stremio or Eclipse addon; null while it follows
+   * its manifest's.
+   */
+  chosenName: string | null
+  /** The name its manifest gives it. */
+  manifestName: string
   version: string
   description: string
   logo: string | null
@@ -1744,6 +1752,8 @@ export type AddonPatch = Partial<{
   manifestUrl: string
   language: string
   usedBy: UsedBy
+  /** A Stremio or Eclipse addon's own name, 1 to 64 characters; '' gives back its manifest's. */
+  name: string
 }>
 
 export type Library = {

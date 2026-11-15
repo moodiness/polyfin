@@ -13,6 +13,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 import { Badge, Button, SaveBar, SettingRow, useToast } from '@/ui'
+import type { AddonNameDraft } from './AddonName'
 import { Group } from './parts'
 
 /** The badge of an Eclipse addon: what its tracks are. */
@@ -84,14 +85,19 @@ export type AddonSettingsProps = {
   /** The addon's `music`: its declared settings and the values chosen. */
   music: AddonMusic
   className?: string
+  /**
+   * The addon's Name row, shown at the top of its page: one unsaved dock saves it with the
+   * settings.
+   */
+  name?: AddonNameDraft
 }
 
 /**
  * The settings an Eclipse addon declares, as setting rows saved as a whole through the unsaved
- * dock. Saving updates the scope's cached addons and confirms with a toast; errors are shown under
- * their row, and the server's in the dock.
+ * dock, with the addon's Name row when given. Saving updates the scope's cached addons and confirms
+ * with a toast; errors are shown under their row, and the server's in the dock.
  */
-export function AddonSettings({ scope, addon, music, className }: AddonSettingsProps) {
+export function AddonSettings({ scope, addon, music, className, name }: AddonSettingsProps) {
   const { language, t } = useI18n()
   const toast = useToast()
   const saved = Object.fromEntries(music.settings.map((s) => [s.key, currentValue(music, s)]))
@@ -130,6 +136,8 @@ export function AddonSettings({ scope, addon, music, className }: AddonSettingsP
     event.preventDefault()
     setTouched(true)
     if (!valid) return
+    if (name?.changed) name.save()
+    if (changes === 0) return
     // Numbers are sent trimmed; the server writes them back in its own form.
     save.mutate(
       Object.fromEntries(
@@ -140,6 +148,7 @@ export function AddonSettings({ scope, addon, music, className }: AddonSettingsP
       ),
     )
   }
+  const nameChanges = name?.changed ? 1 : 0
 
   return (
     <Group title={t.music.settingsTitle} className={className}>
@@ -173,13 +182,14 @@ export function AddonSettings({ scope, addon, music, className }: AddonSettingsP
             </Button>
           </div>
           <SaveBar
-            dirty={changes > 0}
-            changes={changes}
-            saving={save.isPending}
+            dirty={changes + nameChanges > 0}
+            changes={changes + nameChanges}
+            saving={save.isPending || (name?.saving ?? false)}
             onDiscard={() => {
               save.reset()
               setTouched(false)
               setValues(saved)
+              name?.discard()
             }}
             error={save.isError ? errorMessage(t, save.error) : undefined}
           />

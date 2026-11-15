@@ -104,6 +104,11 @@ const sources: typeof en = {
     languageNone: 'Aucune',
     languageSaved: (name: string) =>
       `${name}\u202f: la langue de ses descriptions a été enregistrée.`,
+    name: 'Nom',
+    nameHelp:
+      'Le nom affiché partout où Polyfin nomme cet addon. Laissez-le vide pour lui rendre le nom de son manifeste.',
+    manifestCalls: (name: string) => `Son manifeste le nomme «\u202f${name}\u202f».`,
+    nameSaved: (name: string) => `${name}\u202f: son nom a été enregistré.`,
     edit: 'Modifier le compte',
     saved: 'Source enregistrée.',
     remove: 'Supprimer',

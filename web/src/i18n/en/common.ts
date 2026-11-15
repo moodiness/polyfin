@@ -179,6 +179,9 @@ const common = {
     invalid_library:
       'A library refers to a catalog that no longer exists or cannot be browsed. Remove the libraries marked as no longer available, then save again.',
     invalid_library_name: 'Library names must be 1 to 64 characters long.',
+    invalid_addon_name: 'Addon names must be 1 to 64 printable characters long.',
+    addon_not_renamable:
+      'Only Stremio and Eclipse addons take a name of their own. IPTV sources, tuners and local folders are named in their own settings.',
     invalid_library_genre:
       'A library’s genre is not offered by its catalog. Choose another one from the list, then save again.',
     invalid_library_max_items:
