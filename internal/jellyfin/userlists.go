@@ -95,7 +95,8 @@ var resumeKinds = []library.Kind{library.KindMovie, library.KindVideo, library.K
 
 // resumeItems describes the items of entries Continue Watching lists, of
 // kinds, in order: the titles the user hid, with the episodes of the
-// series they hid, are left out.
+// series they hid or dropped on a tracking service (see
+// userdata.Store.Dropped), are left out.
 func (h *Handler) resumeItems(ctx context.Context, user accounts.User, entries []userdata.Entry, kinds []library.Kind) ([]library.Item, error) {
 	items, err := h.Library.ItemsOf(ctx, user, entryIDs(entries), kinds)
 	if err != nil {
@@ -105,8 +106,13 @@ func (h *Handler) resumeItems(ctx context.Context, user accounts.User, entries [
 	if err != nil {
 		return nil, err
 	}
+	dropped, err := h.UserData.DroppedSeries(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
 	return slices.DeleteFunc(hidden.Without(items), func(item library.Item) bool {
-		return !versioned(item.Kind) && item.Kind != library.KindReplay
+		return !versioned(item.Kind) && item.Kind != library.KindReplay ||
+			item.Kind == library.KindEpisode && dropped[item.SeriesID]
 	}), nil
 }
 
@@ -339,8 +345,12 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 		if err != nil {
 			return nil, err
 		}
+		dropped, err := h.UserData.DroppedSeries(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
 		candidates = slices.DeleteFunc(candidates, func(c watching) bool {
-			return hidden[c.series] || cutoff != nil && c.latest.Before(*cutoff)
+			return hidden[c.series] || dropped[c.series] || cutoff != nil && c.latest.Before(*cutoff)
 		})
 		if parent == nil {
 			// As in Jellyfin 12.4, Next Up without a parent only looks in
@@ -464,12 +474,19 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	dropped, err := h.UserData.DroppedSeries(r.Context(), user.ID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	var candidates []accounts.ID
-	// The hidden series count as seen, so that none is a candidate.
+	// The hidden series, and those dropped on a tracking service, count
+	// as seen, so that none is a candidate.
 	seen := maps.Clone(hidden)
 	if seen == nil {
 		seen = map[accounts.ID]bool{}
 	}
+	maps.Copy(seen, dropped)
 	for _, e := range watched {
 		if e.Played && !seen[e.Series] && len(candidates) < watchedSeriesLimit {
 			seen[e.Series] = true
