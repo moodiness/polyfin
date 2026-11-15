@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +76,11 @@ type synthetic struct {
 	series       []syntheticSeries
 	vodGroups    []string
 	seriesGroups []string
+	// guideDays is how many days the guide covers from yesterday, its
+	// programmes of lengths seed draws; 0 for two-hour programmes from
+	// six hours ago to a day ahead.
+	guideDays int
+	seed      uint64
 }
 
 // syntheticMovie is a movie of the provider: its name with the provider's
@@ -89,14 +96,24 @@ type syntheticMovie struct {
 }
 
 // syntheticSeries is a series of the provider, with seasons of episodes
-// each; modified tells its details changed.
+// each, but the last of last when set; modified tells its details
+// changed.
 type syntheticSeries struct {
 	ID       int
 	Name     string
 	Group    int
 	Seasons  int
 	Episodes int
+	Last     int
 	Modified int64
+}
+
+// episodesIn is how many episodes a season of the series has.
+func (show syntheticSeries) episodesIn(season int) int {
+	if season == show.Seasons && show.Last > 0 {
+		return show.Last
+	}
+	return show.Episodes
 }
 
 var syntheticGenres = []string{"Action", "Drama", "Comedy", "Kids", "Documentary", "Thriller", "Animation", "Science Fiction"}
@@ -137,6 +154,15 @@ func (s *synthetic) withVOD(movies, series int) *synthetic {
 // newSynthetic makes about streams entries in groups groups.
 func newSynthetic(streams, groups int) *synthetic {
 	s := &synthetic{}
+	s.addChannels(streams, groups, func(base int) ([]string, bool) {
+		return syntheticVariants[base%len(syntheticVariants)], base%5 != 4
+	})
+	return s
+}
+
+// addChannels adds streams entries in groups groups: base channels in
+// the variants shape tells, with a guide identifier when it says so.
+func (s *synthetic) addChannels(streams, groups int, shape func(base int) (variants []string, guided bool)) {
 	for g := range groups {
 		country := ""
 		if g < groups*9/10 {
@@ -153,15 +179,16 @@ func newSynthetic(streams, groups int) *synthetic {
 		group := s.groups[min(len(s.streams)/perGroup, groups-1)]
 		word := syntheticSyllables[base%len(syntheticSyllables)] + syntheticSyllables[base/len(syntheticSyllables)%len(syntheticSyllables)]
 		name := strings.ToUpper(word[:1]) + word[1:] + fmt.Sprintf(" %d", base)
+		variants, guided := shape(base)
 		guideID := ""
-		if base%5 != 4 {
+		if guided {
 			guideID = fmt.Sprintf("%s%d.%s", word, base, strings.ToLower(group.Country))
 			if group.Country == "" {
 				guideID = fmt.Sprintf("%s%d.zz", word, base)
 			}
 		}
 		s.channels = append(s.channels, syntheticChannel{name: name, guideID: guideID})
-		for _, quality := range syntheticVariants[base%len(syntheticVariants)] {
+		for _, quality := range variants {
 			if len(s.streams) >= streams {
 				break
 			}
@@ -177,7 +204,77 @@ func newSynthetic(streams, groups int) *synthetic {
 				Logo: fmt.Sprintf("https://logos.example/%d.png", base)})
 		}
 	}
+}
+
+// The large library the bench of docs/scripts/bench measures, in the
+// shape a user reported: 2,360 channels with a guide of four days on
+// most, 8,111 movies, and 8,267 series with 1,151,201 episodes.
+const (
+	libraryStreams   = 2_360
+	libraryGroups    = 60
+	libraryMovies    = 8_111
+	librarySeries    = 8_267
+	libraryEpisodes  = 1_151_201
+	libraryGuideDays = 4
+)
+
+// newSyntheticLibrary makes the bench's large library, the same for the
+// same seed. Seven channels in ten come in one quality, two in two and
+// one in three; the guide covers 85 % of them. Series lengths follow a
+// log-normal law, as providers' do: most series have a few seasons, a
+// few dozen daily ones run past a thousand episodes in seasons of about
+// 230.
+func newSyntheticLibrary(seed uint64) *synthetic {
+	random := rand.New(rand.NewPCG(seed, 0))
+	s := &synthetic{guideDays: libraryGuideDays, seed: seed}
+	s.addChannels(libraryStreams, libraryGroups, func(int) ([]string, bool) {
+		variants := []string{""}
+		switch n := random.IntN(10); {
+		case n == 0:
+			variants = []string{"FHD", "HD", "SD"}
+		case n < 3:
+			variants = []string{"HD", "SD"}
+		}
+		return variants, random.IntN(100) < 85
+	})
+	s.withVOD(libraryMovies, librarySeries)
+	lengths := make([]float64, len(s.series))
+	sum := 0.0
+	for i := range lengths {
+		lengths[i] = math.Exp(0.9 * random.NormFloat64())
+		sum += lengths[i]
+	}
+	counts := make([]int, len(lengths))
+	left, longest := libraryEpisodes, 0
+	for i, length := range lengths {
+		counts[i] = max(1, int(math.Round(length*libraryEpisodes/sum)))
+		left -= counts[i]
+		if counts[i] > counts[longest] {
+			longest = i
+		}
+	}
+	counts[longest] += left
+	perSeason := []int{6, 8, 10, 12, 13, 22, 24}
+	for i, count := range counts {
+		season := perSeason[random.IntN(len(perSeason))]
+		if count >= 300 {
+			season = 200 + random.IntN(61)
+		}
+		season = max(season, (count+29)/30)
+		show := &s.series[i]
+		show.Seasons, show.Episodes = (count+season-1)/season, season
+		show.Last = count - (show.Seasons-1)*season
+	}
 	return s
+}
+
+// episodes counts the provider's episodes.
+func (s *synthetic) episodes() int {
+	n := 0
+	for _, show := range s.series {
+		n += (show.Seasons-1)*show.Episodes + show.episodesIn(show.Seasons)
+	}
+	return n
 }
 
 // syntheticServer serves a synthetic provider for user "user", password
@@ -319,9 +416,9 @@ func (s *syntheticServer) playerAPI(w http.ResponseWriter, action string, query 
 			var seasons []map[string]any
 			for season := 1; season <= show.Seasons; season++ {
 				seasons = append(seasons, map[string]any{"season_number": season, "cover": fmt.Sprintf("https://posters.example/s%d-%d.jpg", show.ID, season)})
-				for episode := 1; episode <= show.Episodes; episode++ {
+				for episode := 1; episode <= show.episodesIn(season); episode++ {
 					episodes[fmt.Sprint(season)] = append(episodes[fmt.Sprint(season)], map[string]any{
-						"id": fmt.Sprint(show.ID*100 + season*10 + episode), "episode_num": episode, "season": season, "container_extension": "mkv",
+						"id": fmt.Sprint(show.ID*1_000_000 + season*1_000 + episode), "episode_num": episode, "season": season, "container_extension": "mkv",
 						"title": fmt.Sprintf("%s - S%02dE%02d - Part %d FHD", show.Name, season, episode, episode),
 						"info":  map[string]any{"plot": fmt.Sprintf("Episode %d.", episode), "duration_secs": 2700, "releasedate": "2021-03-04"}})
 				}
@@ -336,8 +433,8 @@ func (s *syntheticServer) playerAPI(w http.ResponseWriter, action string, query 
 	}
 }
 
-// guide writes the XMLTV guide: the channels with a guide identifier, each
-// with two-hour programmes from six hours ago to a day ahead.
+// guide writes the XMLTV guide: the channels with a guide identifier, and
+// their programmes (see programmes).
 func (s *syntheticServer) guide(w http.ResponseWriter) {
 	buffered := bufio.NewWriterSize(w, 1<<16)
 	defer buffered.Flush()
@@ -347,19 +444,50 @@ func (s *syntheticServer) guide(w http.ResponseWriter) {
 			fmt.Fprintf(buffered, "<channel id=\"%s\"><display-name>%s</display-name></channel>\n", c.guideID, c.name)
 		}
 	}
-	start := time.Now().UTC().Truncate(time.Hour).Add(-6 * time.Hour)
-	for _, c := range s.data.channels {
+	s.data.programmes(time.Now(), func(c syntheticChannel, part int, from, to time.Time, title string) {
+		fmt.Fprintf(buffered, "<programme channel=\"%s\" start=\"%s\" stop=\"%s\"><title>%s</title><desc>Part %d of the day on %s.</desc></programme>\n",
+			c.guideID, from.Format("20060102150405 -0700"), to.Format("20060102150405 -0700"), title, part, c.name)
+	})
+	_, _ = buffered.WriteString("</tv>\n")
+}
+
+// syntheticLengths are the lengths of a long guide's programmes, in
+// minutes, as often as a channel's day has them.
+var syntheticLengths = []int{15, 30, 30, 45, 60, 60, 60, 90, 120}
+
+// programmes gives each programme of the guide at now: by default
+// fifteen of two hours from six hours ago; with guideDays, those from
+// yesterday's midnight (UTC) for that many days, of lengths drawn from
+// the seed and the channel, the same on any day. A long guide names one
+// programme in four as a show, as the series' names are made, so that a
+// search finds programmes as it finds series.
+func (s *synthetic) programmes(now time.Time, yield func(c syntheticChannel, part int, from, to time.Time, title string)) {
+	for index, c := range s.channels {
 		if c.guideID == "" {
 			continue
 		}
-		for slot := range 15 {
-			from := start.Add(time.Duration(slot) * 2 * time.Hour)
-			fmt.Fprintf(buffered, "<programme channel=\"%s\" start=\"%s\" stop=\"%s\"><title>%s</title><desc>Part %d of the day on %s.</desc></programme>\n",
-				c.guideID, from.Format("20060102150405 -0700"), from.Add(2*time.Hour).Format("20060102150405 -0700"),
-				syntheticThemes[slot%len(syntheticThemes)], slot+1, c.name)
+		if s.guideDays == 0 {
+			start := now.UTC().Truncate(time.Hour).Add(-6 * time.Hour)
+			for slot := range 15 {
+				from := start.Add(time.Duration(slot) * 2 * time.Hour)
+				yield(c, slot+1, from, from.Add(2*time.Hour), syntheticThemes[slot%len(syntheticThemes)])
+			}
+			continue
+		}
+		random := rand.New(rand.NewPCG(s.seed, uint64(index)+1))
+		from := now.UTC().Truncate(24 * time.Hour).Add(-24 * time.Hour)
+		end := from.Add(time.Duration(s.guideDays) * 24 * time.Hour)
+		for part := 1; from.Before(end); part++ {
+			to := from.Add(time.Duration(syntheticLengths[random.IntN(len(syntheticLengths))]) * time.Minute)
+			title := fmt.Sprintf("%s %d", syntheticThemes[random.IntN(len(syntheticThemes))], 1+random.IntN(400))
+			if random.IntN(4) == 0 {
+				word := syntheticSyllables[random.IntN(len(syntheticSyllables))] + syntheticSyllables[random.IntN(len(syntheticSyllables))]
+				title = strings.ToUpper(word[:1]) + word[1:] + " Show"
+			}
+			yield(c, part, from, to, title)
+			from = to
 		}
 	}
-	_, _ = buffered.WriteString("</tv>\n")
 }
 
 // syntheticVideos makes ten seconds of video with the ffmpeg of
@@ -397,8 +525,10 @@ func syntheticVideos(ctx context.Context) map[string][]byte {
 // interrupted, for trying Polyfin by hand with a large line-up, movies and
 // series. It only runs with POLYFIN_SYNTHETIC_XTREAM set: to a number of
 // channels (default 54000; a third as many movies and a twentieth as many
-// series come with them), or to "1" for the default. POLYFIN_SYNTHETIC_XTREAM_ADDR sets the
-// address it listens on (default 127.0.0.1:0).
+// series come with them), to "1" for the default, or to "library" for the
+// large library of the bench (see newSyntheticLibrary), with the seed of
+// POLYFIN_SYNTHETIC_XTREAM_SEED (default 1). POLYFIN_SYNTHETIC_XTREAM_ADDR
+// sets the address it listens on (default 127.0.0.1:0).
 //
 //	POLYFIN_SYNTHETIC_XTREAM=1 go test -run TestServeSyntheticXtream -v -timeout 0 ./internal/iptv
 func TestServeSyntheticXtream(t *testing.T) {
@@ -407,14 +537,27 @@ func TestServeSyntheticXtream(t *testing.T) {
 	if setting == "" {
 		t.Skip("set POLYFIN_SYNTHETIC_XTREAM to serve a synthetic Xtream provider")
 	}
-	channels := 54_000
-	if n := 0; setting != "1" {
-		if _, err := fmt.Sscan(setting, &n); err != nil || n < 1 {
-			t.Fatalf("POLYFIN_SYNTHETIC_XTREAM: %q is not a number of channels", setting)
+	var data *synthetic
+	switch setting {
+	case "library":
+		seed := uint64(1)
+		if value := os.Getenv("POLYFIN_SYNTHETIC_XTREAM_SEED"); value != "" {
+			if _, err := fmt.Sscan(value, &seed); err != nil {
+				t.Fatalf("POLYFIN_SYNTHETIC_XTREAM_SEED: %q is not a number", value)
+			}
 		}
-		channels = n
+		data = newSyntheticLibrary(seed)
+	default:
+		channels := 54_000
+		if n := 0; setting != "1" {
+			if _, err := fmt.Sscan(setting, &n); err != nil || n < 1 {
+				t.Fatalf("POLYFIN_SYNTHETIC_XTREAM: %q is not a number of channels, 1 or library", setting)
+			}
+			channels = n
+		}
+		data = newSynthetic(channels, max(channels/130, 1)).withVOD(channels/3, channels/20)
 	}
-	server := newSyntheticServer(newSynthetic(channels, max(channels/130, 1)).withVOD(channels/3, channels/20), syntheticVideos(t.Context()))
+	server := newSyntheticServer(data, syntheticVideos(t.Context()))
 	if address := os.Getenv("POLYFIN_SYNTHETIC_XTREAM_ADDR"); address != "" {
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
@@ -425,9 +568,17 @@ func TestServeSyntheticXtream(t *testing.T) {
 	}
 	server.Start()
 	defer server.Close()
-	fmt.Printf("Synthetic Xtream provider: %d channels in %d groups, %d movies in %d categories, %d series in %d categories, video %v\n",
-		len(server.data.streams), len(server.data.groups), len(server.data.movies), len(server.data.vodGroups), len(server.data.series),
-		len(server.data.seriesGroups), server.videos != nil)
+	guided, programmes := 0, 0
+	for _, c := range data.channels {
+		if c.guideID != "" {
+			guided++
+		}
+	}
+	data.programmes(time.Now(), func(syntheticChannel, int, time.Time, time.Time, string) { programmes++ })
+	fmt.Printf("Synthetic Xtream provider: %d channels (%d base channels, %d with a guide) in %d groups, %d programmes, "+
+		"%d movies in %d categories, %d series in %d categories, %d episodes, video %v\n",
+		len(data.streams), len(data.channels), guided, len(data.groups), programmes, len(data.movies), len(data.vodGroups),
+		len(data.series), len(data.seriesGroups), data.episodes(), server.videos != nil)
 	fmt.Printf("  server   %s\n  username user\n  password secret\n  guide    %s/xmltv.php?username=user&password=secret\n",
 		server.URL, server.URL)
 	fmt.Println("Interrupt (Ctrl-C) to stop.")
