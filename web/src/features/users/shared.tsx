@@ -234,7 +234,9 @@ export function useRestrictions(user: User): string[] {
   const words: string[] = []
   if (user.isHidden) words.push(t.users.hidden)
   if (rating !== null) words.push(rating)
-  if (!user.transcoding) words.push(t.users.noTranscoding)
+  if (!user.videoTranscoding && !user.audioTranscoding) words.push(t.users.noTranscoding)
+  else if (!user.videoTranscoding) words.push(t.users.noVideoTranscoding)
+  else if (!user.audioTranscoding) words.push(t.users.noAudioTranscoding)
   if (!user.downloads) words.push(t.users.noDownloads)
   if (!user.personalAddons) words.push(t.users.noPersonalAddons)
   if (user.qualityGroup !== 0) words.push(qualityGroupName(user.qualityGroup))

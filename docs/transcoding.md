@@ -171,7 +171,7 @@ jellyfin-web's player offers **Quality** in its settings menu during a play, to 
 
 The menu shows for a version played as it is (a movie, an episode, a recording or a channel), as for one Polyfin repackages or converts. It shows only when a lower quality would play it converted:
 
-- the server converts video (**Conversion (transcoding)**), and the user may have it converted (**Can use conversion (transcoding)**), while the server is not at its **Video conversions at once**;
+- the server converts video (**Conversion (transcoding)**), and the user may have it converted (**Can convert video (transcoding)**), while the server is not at its **Video conversions at once**;
 - FFmpeg can convert its video to a codec the app takes;
 - a file is known to be cut into HLS segments (see [HLS segments](#hls-segments)):
   - it is an MPEG-TS file, an MPEG program stream or an AVI file;
@@ -241,15 +241,19 @@ The server has one switch, **Conversion (transcoding)**, in **Settings › Conve
 - A title with no version that plays that way on an app does not start on that app. An example is a recording converted to HEVC, on an app that does not play HEVC (see [Smaller recordings](recordings.md#smaller-recordings)).
 - Picture subtitles the app cannot show are left out, except their text copies (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 
-Each user also has two permissions, in the **Access** section of their page under **Users**, both on by default:
+Each user also has three permissions, in the **Access** section of their page under **Users**, all on by default:
 
 | Permission | Needed for |
 |---|---|
-| **Can use conversion (transcoding)** | Conversion, together with the server's switch |
+| **Can convert video (transcoding)** | Converting the video, together with the server's switch |
+| **Can convert audio (transcoding)** | Converting the audio, together with the server's switch |
 | **Can download** | Downloads, on its own |
 
+- The two transcoding permissions are saved apart: a user may, for example, have their audio converted while their video never is. With the server's **Conversion (transcoding)** off, neither applies, for everyone.
+- They match `EnableVideoPlaybackTranscoding` and `EnableAudioPlaybackTranscoding` in a user's Jellyfin policy, which Jellyfin's official apps read and write.
+
 - **Turn off downloads for everyone**, on the **Users** page, takes downloads away from every user and every user group at once. It also applies in the apps already signed in.
-- A user group can hold both permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
+- A user group can hold these permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
 
 **Compared with Jellyfin**
 
@@ -289,7 +293,7 @@ With it on, an app that asks for a smaller copy gets one, as Streamyfin's downlo
 - **Audio:** copied when the app takes its codec and, when the video is converted, when it fits the audio's share of the quality picked (see [Audio bitrate](conversion-quality.md#audio-bitrate)). Else it is converted to one the app takes.
 - **Subtitles:** a picture subtitle the app chose is burned into the video. Text subtitles stay files the app saves beside it (see [Subtitles](subtitles.md)).
 - **Made on the fly:** FFmpeg makes the copy as the app downloads it, at the app's pace, and Polyfin keeps nothing on disk. The file's size is known only at its end, so an interrupted download starts again from the beginning.
-- **Permissions:** the user needs **Can download**. When the video or the audio is converted, they also need **Can use conversion (transcoding)**, with the server's **Conversion (transcoding)** switch on, as for a playback. Without them, the app downloads the file as it is, if the user may download.
+- **Permissions:** the user needs **Can download**. When the video is converted, they also need **Can convert video (transcoding)**, and **Can convert audio (transcoding)** when the audio is, with the server's **Conversion (transcoding)** switch on, as for a playback. Without them, the app downloads the file as it is, if the user may download.
 - **Cost:** while it runs, a converted download counts toward **Video conversions at once** when it converts the video (see [Video conversions at once](#video-conversions-at-once)).
   - It counts on its own, even next to the user's playback of the same title.
   - It also counts as one of the user's **Playbacks at once** on its device.

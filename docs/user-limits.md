@@ -192,7 +192,7 @@ Apps report playback every 10 seconds, paused too. After five minutes without a 
 
 Polyfin uses the lower of the app's limit and this one. A version above it is:
 
-- converted down, when the user may use conversion (see [Transcoding](transcoding.md));
+- converted down, when the user may have video converted (see [Transcoding](transcoding.md));
 - else skipped for the next version under it;
 - else nothing plays (`NoCompatibleStream`).
 
@@ -306,7 +306,7 @@ The group applies after the version order settings hide versions and before they
 - The played version is converted down to the group, or to **Maximum quality of converted video** if lower. Like every conversion, it is at most 1080p on the processor (4K on a GPU). See [Transcoding](transcoding.md).
 - A fitting version plays as is, or repackaged, as before.
 - A taller version is never sent at full size.
-- A user who may not have video converted (**Can use conversion** off, or the server's **Conversion** switch off) is refused taller versions, like other conversions (`NoCompatibleStream`).
+- A user who may not have video converted (**Can convert video (transcoding)** off, or the server's **Conversion (transcoding)** switch off) is refused taller versions, like other conversions (`NoCompatibleStream`).
 
 ### Live TV, recordings and downloads
 

@@ -48,9 +48,12 @@ const users: typeof en = {
     endDate: 'Date de fin',
     saveEnd: 'Enregistrer la date',
     endNever: 'Jamais',
-    canTranscode: 'Peut utiliser la conversion (transcodage)',
-    canTranscodeHelp:
-      'Le serveur peut convertir l’image et le son quand l’application de cet utilisateur ne sait pas lire un fichier tel quel. Sinon, l’image et le son ne sont jamais modifiés.',
+    videoTranscoding: 'Peut convertir la vidéo (transcodage)',
+    videoTranscodingHelp:
+      'Le serveur peut convertir l’image quand l’application de cet utilisateur ne sait pas la lire telle quelle. Sinon, l’image est lue telle quelle ou simplement présentée autrement, jamais convertie.',
+    audioTranscoding: 'Peut convertir le son (transcodage)',
+    audioTranscodingHelp:
+      'Le serveur peut convertir le son quand l’application de cet utilisateur ne sait pas le lire tel quel, l’image copiée quand c’est possible. Sinon, le son est lu tel quel, jamais converti.',
     canDownload: 'Peut télécharger',
     canDownloadHelp:
       'Permet à cet utilisateur d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion.',
@@ -58,6 +61,8 @@ const users: typeof en = {
     canPlayTorrentsHelp:
       'Propose à cet utilisateur les torrents que listent les addons, quand Paramètres › Torrents les lit. Désactivé pour tous, administrateurs compris, jusqu’à ce qu’on le donne.',
     noTranscoding: 'Sans conversion',
+    noVideoTranscoding: 'Sans conversion de l’image',
+    noAudioTranscoding: 'Sans conversion du son',
     noDownloads: 'Sans téléchargement',
     turnOffDownloads: 'Désactiver les téléchargements pour tous',
     turnOffDownloadsConfirm:

@@ -76,7 +76,7 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 ### User groups for apps
 
 - `GET /admin/api/groups` lists the groups, sorted by name: `id`, `name` and `memberCount`.
-- `POST /admin/api/groups` creates one from `name` and `copyFrom`, a user's `id`, or null or left out for a new user's settings; it answers 201 with the group. `GET /admin/api/groups/{id}` answers the group: `id`, `name`, `memberCount`, and the fields of a user's JSON the group holds: `transcoding`, `downloads`, `personalAddons`, `collectionManagement`, `subtitleManagement`, `canShare`, `maxPlaybacks`, `maxBitrate`, `qualityGroup`, `localFirst`, `syncPlay`, `liveTv`, `remoteControl`, `liveTvManagement`, `parentalControl`, `hiddenLibraries`, `blockedGenres` and `accessSchedules`.
+- `POST /admin/api/groups` creates one from `name` and `copyFrom`, a user's `id`, or null or left out for a new user's settings; it answers 201 with the group. `GET /admin/api/groups/{id}` answers the group: `id`, `name`, `memberCount`, and the fields of a user's JSON the group holds: `videoTranscoding`, `audioTranscoding`, `downloads`, `personalAddons`, `collectionManagement`, `subtitleManagement`, `canShare`, `maxPlaybacks`, `maxBitrate`, `qualityGroup`, `localFirst`, `syncPlay`, `liveTv`, `remoteControl`, `liveTvManagement`, `parentalControl`, `hiddenLibraries`, `blockedGenres` and `accessSchedules`.
 - `PATCH /admin/api/groups/{id}` takes `name` and any of those fields, as `PATCH /admin/api/users/{id}` takes them, with the same errors, and answers the group. `DELETE /admin/api/groups/{id}` deletes it (204).
 - `GET /admin/api/groups/{id}/members` lists the members, sorted by name: `id`, `name` and `ownSections`. `POST /admin/api/groups/{id}/members` with `userIds` adds those users, all of them or none, and answers the members.
 - A user's JSON has `groupId` and `groupName`, null for none, and `ownSections`: the sections in which the member keeps their own values, of `access`, `playback`, `parental`, `libraries`, `genres`, `hours` and `channels`, empty without a group. `PATCH /admin/api/users/{id}` takes `groupId`, a group's `id` or `""` for none, and `ownSections`, the whole list: a section left out follows the group again and takes its values, a section added keeps the group's current values. A field the group holds, sent with another value than the group's in a section the member follows, is 409 `follows_group`, unless the same change adds the section to `ownSections`; another section name is 400 `invalid_own_sections`. `POST /admin/api/users` and `POST /admin/api/invites` take `groupId`.
@@ -119,7 +119,7 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 
 - With conversion off, PlaybackInfo picks the next version that plays without conversion.
 - Without the user's **Can download** permission, `/Items/{id}/Download` answers 403.
-- Administrators' Jellyfin apps set the same permissions through the user policy (`EnableVideoPlaybackTranscoding`, `EnableAudioPlaybackTranscoding`, `EnableContentDownloading`), where video and audio conversion can be allowed separately.
+- Administrators' Jellyfin apps set the same permissions through the user policy (`EnableVideoPlaybackTranscoding`, `EnableAudioPlaybackTranscoding`, `EnableContentDownloading`). The admin API's user and group JSON carry the first two apart, as `videoTranscoding` and `audioTranscoding`, which `PATCH` takes one at a time.
 - The policy shows the user's own permissions, whatever the server's switches.
 
 ### Profile pictures for apps

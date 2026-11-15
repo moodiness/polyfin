@@ -424,7 +424,7 @@ const settings = {
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Converted downloads',
     convertedDownloadsHelp:
-      'Apps that ask for it, such as Streamyfin, save a title at the quality the user picks: Polyfin sends a smaller copy, made as the app downloads it and never kept on the server. Without it, they save the file as it is. Each download counts toward "Video conversions at once" while it converts, and as one of the user’s "Playbacks at once". The user needs "Can download", and "Can use conversion (transcoding)" when the video or the audio is converted. An interrupted download starts again. Off by default.',
+      'Apps that ask for it, such as Streamyfin, save a title at the quality the user picks: Polyfin sends a smaller copy, made as the app downloads it and never kept on the server. Without it, they save the file as it is. Each download counts toward "Video conversions at once" while it converts, and as one of the user’s "Playbacks at once". The user needs "Can download", and "Can convert video (transcoding)" or "Can convert audio (transcoding)" when the video or the audio is converted. An interrupted download starts again. Off by default.',
     conversion: {
       description:
         'When an app cannot play a file as it is, Polyfin converts it with FFmpeg. These settings choose how, for movies, series and Live TV alike. The defaults suit most servers.',

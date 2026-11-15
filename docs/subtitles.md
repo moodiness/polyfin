@@ -340,7 +340,7 @@ How apps see the copy:
 - It carries the original's language, and its forced and hearing-impaired flags.
 - Its title is the original's title or language followed by "(OCR)", such as `English (OCR) - SUBRIP - External`.
 - It reaches apps as other text subtitles do, in the format the app asks for (WebVTT, SubRip, ASS or JSON) or in the HLS playlist.
-- It needs no video conversion. It plays with **Conversion (transcoding)** off, and for users without **Can use conversion (transcoding)**.
+- It needs no video conversion. It plays with **Conversion (transcoding)** off, and for users without **Can convert video (transcoding)**.
 - The picture track stays: it is listed and served as before.
 - The picture track is burned in when an app names it, other than as the default track.
 - The app may ask for no track, or name the default track it was given for the version, as jellyfin-web always does. The default choice then treats the copy like its original.

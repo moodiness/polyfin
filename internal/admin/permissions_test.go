@@ -16,7 +16,7 @@ func TestAdministratorsSetConversionAndDownloadPermissions(t *testing.T) {
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
 	_, created, _ := administrator.call(http.MethodPost, "/users", map[string]any{"name": "child", "password": "correct horse"})
-	if created["transcoding"] != true || created["downloads"] != true {
+	if created["videoTranscoding"] != true || created["audioTranscoding"] != true || created["downloads"] != true {
 		t.Fatalf("new user's permissions: %v", created)
 	}
 	path := "/users/" + created["id"].(string)
@@ -30,33 +30,72 @@ func TestAdministratorsSetConversionAndDownloadPermissions(t *testing.T) {
 		return user
 	}
 
-	status, updated, _ := administrator.call(http.MethodPatch, path, map[string]any{"transcoding": false})
-	if status != http.StatusOK || updated["transcoding"] != false || updated["downloads"] != true {
-		t.Fatalf("turning conversion off: %d %v", status, updated)
+	// Each kind of conversion is saved on its own.
+	status, updated, _ := administrator.call(http.MethodPatch, path, map[string]any{"videoTranscoding": false})
+	if status != http.StatusOK || updated["videoTranscoding"] != false || updated["audioTranscoding"] != true || updated["downloads"] != true {
+		t.Fatalf("turning video conversion off: %d %v", status, updated)
 	}
-	if user := stored(); user.VideoTranscoding || user.AudioTranscoding || !user.ContentDownloading {
-		t.Errorf("stored after turning conversion off: %+v", user)
+	if user := stored(); user.VideoTranscoding || !user.AudioTranscoding || !user.ContentDownloading {
+		t.Errorf("stored after turning video conversion off: %+v", user)
 	}
+	// Another change keeps the split.
 	status, updated, _ = administrator.call(http.MethodPatch, path, map[string]any{"downloads": false, "isHidden": true})
-	if status != http.StatusOK || updated["transcoding"] != false || updated["downloads"] != false {
+	if status != http.StatusOK || updated["videoTranscoding"] != false || updated["audioTranscoding"] != true || updated["downloads"] != false {
 		t.Fatalf("turning downloads off: %d %v", status, updated)
 	}
-	status, updated, _ = administrator.call(http.MethodPatch, path, map[string]any{"transcoding": true})
-	if user := stored(); status != http.StatusOK || updated["transcoding"] != true || !user.VideoTranscoding || !user.AudioTranscoding || user.ContentDownloading {
-		t.Errorf("turning conversion on: %d %v, stored %+v", status, updated, user)
+	if user := stored(); user.VideoTranscoding || !user.AudioTranscoding {
+		t.Errorf("stored after another change: %+v", user)
 	}
-	// One kind taken away, as from a Jellyfin app's policy, is conversion
-	// not allowed.
-	video := false
-	if _, err := api.store.UpdateUser(t.Context(), id, accounts.UserChanges{VideoTranscoding: &video}, nil); err != nil {
+	status, updated, _ = administrator.call(http.MethodPatch, path, map[string]any{"videoTranscoding": true, "audioTranscoding": false})
+	if user := stored(); status != http.StatusOK || updated["videoTranscoding"] != true || updated["audioTranscoding"] != false ||
+		!user.VideoTranscoding || user.AudioTranscoding || user.ContentDownloading {
+		t.Errorf("turning video on and audio off: %d %v, stored %+v", status, updated, user)
+	}
+	// A split set elsewhere, as from a Jellyfin app's policy, shows as it is.
+	if _, err := api.store.UpdateUser(t.Context(), id, accounts.UserChanges{VideoTranscoding: new(false), AudioTranscoding: new(true)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if status, user, _ := administrator.call(http.MethodPatch, path, map[string]any{}); status != http.StatusOK || user["transcoding"] != false {
-		t.Errorf("video conversion taken away: %d %v", status, user)
+	if status, user, _ := administrator.call(http.MethodPatch, path, map[string]any{}); status != http.StatusOK ||
+		user["videoTranscoding"] != false || user["audioTranscoding"] != true {
+		t.Errorf("a split set elsewhere: %d %v", status, user)
 	}
 	if status, _, _ := member.call(http.MethodPatch, path, map[string]any{"downloads": true}); status != http.StatusForbidden {
 		t.Errorf("member changing permissions: %d", status)
 	}
+}
+
+// A group's video and audio conversion are saved apart, kept through
+// another change, and its followers take both.
+func TestGroupsSetVideoAndAudioConversionApart(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	admin := api.signedIn("admin", true)
+	group := createdID(t, admin, "/groups", map[string]any{"name": "Kids"})
+	path := "/groups/" + group
+	status, kids, _ := admin.call(http.MethodPatch, path, map[string]any{"videoTranscoding": false})
+	if status != http.StatusOK || kids["videoTranscoding"] != false || kids["audioTranscoding"] != true {
+		t.Fatalf("turning the group's video conversion off: %d %v", status, kids)
+	}
+	status, kids, _ = admin.call(http.MethodPatch, path, map[string]any{"downloads": false})
+	if status != http.StatusOK || kids["videoTranscoding"] != false || kids["audioTranscoding"] != true || kids["downloads"] != false {
+		t.Fatalf("another change to the group: %d %v", status, kids)
+	}
+	ann := createdID(t, admin, "/users", map[string]any{"name": "ann", "password": "correct horse", "groupId": group})
+	annID, _ := accounts.ParseID(ann)
+	follower := func(video, audio bool) {
+		t.Helper()
+		user := api.user(t, admin, ann)
+		stored, err := api.store.User(t.Context(), annID)
+		if err != nil || user["videoTranscoding"] != video || user["audioTranscoding"] != audio ||
+			stored.VideoTranscoding != video || stored.AudioTranscoding != audio {
+			t.Errorf("the follower: %v, stored %+v %v; want video %v, audio %v", user, stored, err, video, audio)
+		}
+	}
+	follower(false, true)
+	if status, kids, _ = admin.call(http.MethodPatch, path, map[string]any{"videoTranscoding": true, "audioTranscoding": false}); status != http.StatusOK {
+		t.Fatalf("swapping the group's conversion: %d %v", status, kids)
+	}
+	follower(true, false)
 }
 
 func TestSettingsSwitchConversion(t *testing.T) {

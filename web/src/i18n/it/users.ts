@@ -48,9 +48,12 @@ const users: typeof en = {
     endDate: 'Data di fine',
     saveEnd: 'Salva data',
     endNever: 'Mai',
-    canTranscode: 'Può usare la conversione (transcodifica)',
-    canTranscodeHelp:
-      'Consente al server di ricodificare video e audio quando l’applicazione di questo utente non riesce a riprodurre un file così com’è. Senza questa opzione, i file vengono riprodotti così come sono o semplicemente reimpacchettati.',
+    videoTranscoding: 'Può convertire il video (transcodifica)',
+    videoTranscodingHelp:
+      'Consente al server di ricodificare il video quando l’applicazione di questo utente non riesce a riprodurlo così com’è. Senza questa opzione, il video viene riprodotto così com’è o semplicemente reimpacchettato, mai ricodificato.',
+    audioTranscoding: 'Può convertire l’audio (transcodifica)',
+    audioTranscodingHelp:
+      'Consente al server di ricodificare l’audio quando l’applicazione di questo utente non riesce a riprodurlo così com’è, con il video copiato quando possibile. Senza questa opzione, l’audio viene riprodotto così com’è, mai ricodificato.',
     canDownload: 'Può scaricare',
     canDownloadHelp:
       'Consente a questo utente di salvare titoli nelle applicazioni Jellyfin per guardarli offline.',
@@ -58,6 +61,8 @@ const users: typeof en = {
     canPlayTorrentsHelp:
       'Offre a questo utente l’elenco dei torrent degli add-on, mentre Impostazioni › Torrent li riproduce. Disattivato per tutti, amministratori inclusi, finché non viene concesso.',
     noTranscoding: 'Nessuna conversione',
+    noVideoTranscoding: 'Nessuna conversione video',
+    noAudioTranscoding: 'Nessuna conversione audio',
     noDownloads: 'Nessun download',
     turnOffDownloads: 'Disattiva i download per tutti',
     turnOffDownloadsConfirm:

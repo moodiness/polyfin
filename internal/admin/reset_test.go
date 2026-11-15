@@ -19,7 +19,7 @@ import (
 
 // limitFields are the fields of a user's JSON a group holds, which Reset
 // to defaults puts back.
-var limitFields = []string{"parentalControl", "transcoding", "downloads", "personalAddons", "maxPlaybacks", "maxBitrate", "liveTv",
+var limitFields = []string{"parentalControl", "videoTranscoding", "audioTranscoding", "downloads", "personalAddons", "maxPlaybacks", "maxBitrate", "liveTv",
 	"syncPlay", "remoteControl", "hiddenLibraries", "blockedGenres", "accessSchedules", "collectionManagement", "liveTvManagement",
 	"subtitleManagement", "canShare", "torrentStreams", "qualityGroup"}
 

@@ -1085,7 +1085,8 @@ function AllowedHoursRows({ id, view }: { id: string; view: SectionView }) {
 export type Permissions = Pick<
   GroupLimits,
   | 'remoteAccess'
-  | 'transcoding'
+  | 'videoTranscoding'
+  | 'audioTranscoding'
   | 'downloads'
   | 'personalAddons'
   | 'collectionManagement'
@@ -1113,7 +1114,8 @@ export function PermissionRows({
     useHealthProblems().data?.some((problem) => problem.code === 'unknown_proxy') ?? false
   const rows = [
     ['remoteAccess', t.users.remoteAccess, t.users.remoteAccessHelp],
-    ['transcoding', t.users.canTranscode, t.users.canTranscodeHelp],
+    ['videoTranscoding', t.users.videoTranscoding, t.users.videoTranscodingHelp],
+    ['audioTranscoding', t.users.audioTranscoding, t.users.audioTranscodingHelp],
     ['downloads', t.users.canDownload, t.users.canDownloadHelp],
     ['torrentStreams', t.users.canPlayTorrents, t.users.canPlayTorrentsHelp],
     ['personalAddons', t.users.canAddAddons, t.users.canAddAddonsHelp],
@@ -1170,7 +1172,8 @@ function resetChanges(
   const access = (
     [
       ['remoteAccess', t.users.remoteAccess],
-      ['transcoding', t.users.canTranscode],
+      ['videoTranscoding', t.users.videoTranscoding],
+      ['audioTranscoding', t.users.audioTranscoding],
       ['downloads', t.users.canDownload],
       ['torrentStreams', t.users.canPlayTorrents],
       ['personalAddons', t.users.canAddAddons],

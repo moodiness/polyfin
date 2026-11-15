@@ -35,6 +35,7 @@ func TestGuestsJoinThroughInvitesWithoutChoosingTheirSettings(t *testing.T) {
 	}
 	if limited, err = api.store.UpdateUser(t.Context(), limited.ID, accounts.UserChanges{
 		Parental: &accounts.ParentalControl{MaxRating: new(10)}, LiveTv: new(false), ContentDownloading: new(false), QualityGroup: new(720),
+		VideoTranscoding: new(false), AudioTranscoding: new(true),
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +63,7 @@ func TestGuestsJoinThroughInvitesWithoutChoosingTheirSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if joined.IsAdministrator || joined.Parental.MaxRating == nil || *joined.Parental.MaxRating != 10 || joined.LiveTv ||
-		joined.ContentDownloading || joined.QualityGroup != 720 {
+		joined.ContentDownloading || joined.QualityGroup != 720 || joined.VideoTranscoding || !joined.AudioTranscoding {
 		t.Errorf("the guest chose their settings: %+v", joined)
 	}
 

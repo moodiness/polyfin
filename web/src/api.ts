@@ -60,8 +60,10 @@ export type User = {
    */
   lastActivityApp: string
   parentalControl: ParentalControl
-  /** Whether the user may have video and audio converted (transcoded). */
-  transcoding: boolean
+  /** Whether the user may have their video converted (transcoded). */
+  videoTranscoding: boolean
+  /** Whether the user may have their audio converted (transcoded). */
+  audioTranscoding: boolean
   /** Whether the user may download titles. */
   downloads: boolean
   /** Whether the user may add and use their own addons. */
@@ -161,7 +163,8 @@ export type User = {
 /** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
 export type GroupLimits = Pick<
   User,
-  | 'transcoding'
+  | 'videoTranscoding'
+  | 'audioTranscoding'
   | 'downloads'
   | 'personalAddons'
   | 'collectionManagement'
@@ -990,7 +993,8 @@ export type UserPatch = Partial<{
   isHidden: boolean
   isDisabled: boolean
   parentalControl: ParentalControl
-  transcoding: boolean
+  videoTranscoding: boolean
+  audioTranscoding: boolean
   downloads: boolean
   personalAddons: boolean
   maxPlaybacks: number

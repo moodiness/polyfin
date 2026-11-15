@@ -87,10 +87,12 @@ type userJSON struct {
 // group's show them.
 type limitsJSON struct {
 	ParentalControl parentalControlJSON `json:"parentalControl"`
-	// Transcoding is set when the user may have both video and audio
-	// converted; Downloads, when they may download.
-	Transcoding bool `json:"transcoding"`
-	Downloads   bool `json:"downloads"`
+	// VideoTranscoding and AudioTranscoding are set when the user may have
+	// their video, and their audio, converted; Downloads, when they may
+	// download.
+	VideoTranscoding bool `json:"videoTranscoding"`
+	AudioTranscoding bool `json:"audioTranscoding"`
+	Downloads        bool `json:"downloads"`
 	// PersonalAddons is set when the user may add and use their own addons.
 	PersonalAddons bool `json:"personalAddons"`
 	// MaxPlaybacks is how many of the user's other devices may be playing
@@ -151,7 +153,8 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 			MaxSubRating: limits.Parental.MaxSubRating,
 			BlockUnrated: append([]string{}, limits.Parental.BlockUnrated...),
 		},
-		Transcoding:          limits.VideoTranscoding && limits.AudioTranscoding,
+		VideoTranscoding:     limits.VideoTranscoding,
+		AudioTranscoding:     limits.AudioTranscoding,
 		Downloads:            limits.ContentDownloading,
 		PersonalAddons:       limits.PersonalAddons,
 		MaxPlaybacks:         limits.MaxPlaybacks,
@@ -179,9 +182,9 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 // limitChanges are the settings a group holds as a change to a user or a
 // group sets them; see limitsJSON.
 type limitChanges struct {
-	ParentalControl *parentalControlJSON `json:"parentalControl"`
-	// Transcoding sets both video and audio conversion.
-	Transcoding          *bool                    `json:"transcoding"`
+	ParentalControl      *parentalControlJSON     `json:"parentalControl"`
+	VideoTranscoding     *bool                    `json:"videoTranscoding"`
+	AudioTranscoding     *bool                    `json:"audioTranscoding"`
 	Downloads            *bool                    `json:"downloads"`
 	PersonalAddons       *bool                    `json:"personalAddons"`
 	MaxPlaybacks         *int                     `json:"maxPlaybacks"`
@@ -209,8 +212,8 @@ type limitChanges struct {
 // returns false.
 func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool) {
 	changes := accounts.UserChanges{
-		VideoTranscoding:     l.Transcoding,
-		AudioTranscoding:     l.Transcoding,
+		VideoTranscoding:     l.VideoTranscoding,
+		AudioTranscoding:     l.AudioTranscoding,
 		ContentDownloading:   l.Downloads,
 		PersonalAddons:       l.PersonalAddons,
 		MaxPlaybacks:         l.MaxPlaybacks,

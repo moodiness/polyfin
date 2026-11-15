@@ -427,7 +427,7 @@ const settings: typeof en = {
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Downloads convertidos',
     convertedDownloadsHelp:
-      'Aplicativos que solicitam isso, como o Streamyfin, salvam um título na qualidade escolhida pelo usuário: o Polyfin envia uma cópia menor, feita enquanto o aplicativo faz o download e nunca mantida no servidor. Sem isso, eles salvam o arquivo como está. Cada download conta para “Conversões de vídeo simultâneas” enquanto é convertido e como uma das “Reproduções simultâneas” do usuário. O usuário precisa de “Pode fazer download” e de “Pode usar conversão (transcodificação)” quando o vídeo ou o áudio é convertido. Um download interrompido recomeça do início. Desativado por padrão.',
+      'Aplicativos que solicitam isso, como o Streamyfin, salvam um título na qualidade escolhida pelo usuário: o Polyfin envia uma cópia menor, feita enquanto o aplicativo faz o download e nunca mantida no servidor. Sem isso, eles salvam o arquivo como está. Cada download conta para “Conversões de vídeo simultâneas” enquanto é convertido e como uma das “Reproduções simultâneas” do usuário. O usuário precisa de “Pode fazer download” e de “Pode converter vídeo (transcodificação)” ou “Pode converter áudio (transcodificação)” quando o vídeo ou o áudio é convertido. Um download interrompido recomeça do início. Desativado por padrão.',
     conversion: {
       description:
         'Quando um aplicativo não consegue reproduzir um arquivo como ele está, o Polyfin o converte com o FFmpeg. Estas configurações definem como, para filmes, séries e TV ao Vivo. Os padrões atendem à maioria dos servidores.',

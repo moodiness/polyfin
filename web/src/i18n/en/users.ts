@@ -44,15 +44,20 @@ const users = {
     endDate: 'End date',
     saveEnd: 'Save date',
     endNever: 'Never',
-    canTranscode: 'Can use conversion (transcoding)',
-    canTranscodeHelp:
-      'Lets the server re-encode video and audio when this user’s app cannot play a file as it is. Without it, files play as they are or simply repackaged.',
+    videoTranscoding: 'Can convert video (transcoding)',
+    videoTranscodingHelp:
+      'Lets the server re-encode the video when this user’s app cannot play it as it is. Without it, the video plays as it is or simply repackaged, never re-encoded.',
+    audioTranscoding: 'Can convert audio (transcoding)',
+    audioTranscodingHelp:
+      'Lets the server re-encode the audio when this user’s app cannot play it as it is, the video copied when it can be. Without it, the audio plays as it is, never re-encoded.',
     canDownload: 'Can download',
     canDownloadHelp: 'Lets this user save titles in Jellyfin apps to watch offline.',
     canPlayTorrents: 'Can play torrent streams',
     canPlayTorrentsHelp:
       'Offers this user the torrents addons list, while Settings › Torrents plays them. Off for everyone, administrators included, until given.',
     noTranscoding: 'No conversion',
+    noVideoTranscoding: 'No video conversion',
+    noAudioTranscoding: 'No audio conversion',
     noDownloads: 'No downloads',
     turnOffDownloads: 'Turn off downloads for everyone',
     turnOffDownloadsConfirm:

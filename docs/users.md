@@ -69,7 +69,7 @@ A group gives several accounts, such as a family's children, the same limits. A 
 
 A group's page holds the limit sections of a user's page:
 
-- **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
+- **Access**: **Can convert video (transcoding)**, **Can convert audio (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
 - **Playback and access**, with the **Quality group** and the two options of [Louder sound](loudness.md#louder-sound);
 - **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**.
 
@@ -234,7 +234,7 @@ Parental control, blocked genres, visible libraries, allowed hours, remote acces
 
 DLNA TVs and players cannot sign in. Each shows the libraries of the user an administrator chose for it under **Settings › DLNA**, or of **No one** until then (see [DLNA](dlna.md#devices-and-users)). **Show new devices the libraries of** sets the user for newly seen devices, **No one** by default.
 
-A device browses and plays as its user, under their visible libraries, blocked genres, parental control, hidden titles, allowed hours, **Playbacks at once**, **Maximum quality**, quality group and **Can use conversion**.
+A device browses and plays as its user, under their visible libraries, blocked genres, parental control, hidden titles, allowed hours, **Playbacks at once**, **Maximum quality**, quality group, **Can convert video (transcoding)** and **Can convert audio (transcoding)**.
 
 - Its playbacks show under the user in **Now playing** on **Home** and count in their statistics.
 - Deleting the user leaves the device showing **No one**'s libraries.

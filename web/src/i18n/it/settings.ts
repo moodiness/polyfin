@@ -431,7 +431,7 @@ const settings: typeof en = {
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Download convertiti',
     convertedDownloadsHelp:
-      'Le applicazioni che lo richiedono, come Streamyfin, salvano un titolo nella qualità scelta dall’utente: Polyfin invia una copia più leggera, creata mentre l’applicazione la scarica e mai conservata sul server. Altrimenti, salvano il file così com’è. Ogni download conta in «Conversioni video contemporanee» mentre viene convertito, e come una delle «Riproduzioni contemporanee» dell’utente. L’utente deve avere «Può scaricare» e, quando il video o l’audio vengono convertiti, «Può usare la conversione (transcodifica)». Un download interrotto ricomincia da capo. Disattivato per impostazione predefinita.',
+      'Le applicazioni che lo richiedono, come Streamyfin, salvano un titolo nella qualità scelta dall’utente: Polyfin invia una copia più leggera, creata mentre l’applicazione la scarica e mai conservata sul server. Altrimenti, salvano il file così com’è. Ogni download conta in «Conversioni video contemporanee» mentre viene convertito, e come una delle «Riproduzioni contemporanee» dell’utente. L’utente deve avere «Può scaricare» e, quando il video o l’audio vengono convertiti, «Può convertire il video (transcodifica)» o «Può convertire l’audio (transcodifica)». Un download interrotto ricomincia da capo. Disattivato per impostazione predefinita.',
     conversion: {
       description:
         'Quando un’applicazione non riesce a riprodurre un file così com’è, Polyfin lo converte con FFmpeg. Queste impostazioni stabiliscono come, per film, serie TV e Diretta TV. I valori predefiniti vanno bene per la maggior parte dei server.',
