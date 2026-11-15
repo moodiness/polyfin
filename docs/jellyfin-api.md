@@ -641,6 +641,17 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 - Elsewhere, the item's own identifier as a media source (the `mediaSourceId` of `/Videos/{id}/stream`, subtitle and attachment URLs, playback reports) stands for the first version the item's details and `PlaybackInfo` list, after leaving out the versions that failed lately and those the [version order](versions.md#version-order) rules or the user's quality group leave out, and past the torrents that did not start lately, which a play picking no version passes over. A version that fails thus passes the identifier to the next one, wherever its addon is in the addons' order, and the next one's own identifier keeps naming it. With **Prefer versions the app plays without conversion**, it is the first of the order made for the device the request's token belongs to; a media URL with no token stands for the server's order.
 - `StartTimeTicks` in the query or the body tells where an HLS play starts, so that Polyfin reads ahead from there.
 
+### Device profile values for apps
+
+- Polyfin reads the JSON bodies apps send as Jellyfin 12.4 reads them: property names in any letter case, a string field also from a number or a boolean, taken as its JSON text, and a number field also from a string that holds a number, or that is empty for a field that may be null. A boolean must be `true` or `false`, in Jellyfin too.
+- A device profile may therefore carry `MaxAudioChannels`, `MinSegments` or a condition's `Value` as `"2"`, as jellyfin-web sends them, or as `2`, as an app that sends numbers does, to `PlaybackInfo` and to `POST /Sessions/Capabilities/Full` alike.
+- A `PlaybackInfo` body Polyfin cannot read answers 400 `The JSON value could not be converted.`, as from Jellyfin. The server logs it once as a warning, with the app, the device and the reason, never the body.
+
+**Compared with Jellyfin**
+
+- Jellyfin's API reads bodies with [`JsonDefaults.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.Extensions/Json/JsonDefaults.cs#L29-L48) (`AllowReadingFromString`) and [`JsonStringConverter.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.Extensions/Json/Converters/JsonStringConverter.cs), applied in [`ApiServiceCollectionExtensions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Extensions/ApiServiceCollectionExtensions.cs#L137-L156).
+- Jellyfin also reads an enumeration, such as a profile's `Type` or a condition's `Property`, from its number; Polyfin reads those fields as names only.
+
 ### Watch together invitations for apps
 
 - `GET /Polyfin/SyncPlay/Invitees`, from a session in a SyncPlay group, answers `{"GroupId", "Items": [{"Id", "Name"}]}`: the session's group and the users it may invite, by name. They are the other users who have the web player open (a live connection signed in as jellyfin-web), are neither disabled, ended nor hidden from the sign-in screen, may join groups, are inside their allowed hours, may play every title of the group's queue, and are not in the group. The others are left out without a reason. A session out of any group gets 403.
