@@ -34,6 +34,9 @@ type reader struct {
 	// listed is the list of AniList or MyAnimeList, once listRead.
 	listed   []listItem
 	listRead bool
+	// droppedCursor is where the activities for the shows dropped stood
+	// at their last read (see droppedRead).
+	droppedCursor string
 }
 
 // sleep waits for d, and reports false if ctx ended first.
@@ -336,8 +339,8 @@ func (h *watchHistory) addPlayback(body []byte) error {
 }
 
 // readTrakt reads Trakt's history a page at a time, unless its last
-// activities tell nothing was watched since the last import, and its
-// resume points.
+// activities tell nothing was watched since the last import, its resume
+// points, and its dropped shows (see readTraktDropped).
 func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, string, error) {
 	var h watchHistory
 	answer, err := r.get(ctx, "/sync/last_activities", nil)
@@ -347,6 +350,9 @@ func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, st
 	var activities struct {
 		Movies, Episodes struct {
 			WatchedAt string `json:"watched_at"`
+		}
+		Shows struct {
+			DroppedAt string `json:"dropped_at"`
 		}
 	}
 	if json.Unmarshal(answer.body, &activities) != nil {
@@ -401,6 +407,9 @@ func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, st
 	if h.addPlayback(answer.body) != nil {
 		return h, cursor, ErrUnreachable
 	}
+	if h.dropped, err = r.readTraktDropped(ctx, activities.Shows.DroppedAt); r.droppedErr(ctx, err) != nil {
+		return h, cursor, err
+	}
 	return h, next, nil
 }
 
@@ -426,18 +435,27 @@ type simklItems struct {
 
 // readSimkl reads Simkl's watched movies and the watched episodes of its
 // shows and anime, one list status at a time and only what changed since
-// the last import unless its activities tell nothing did, and its resume
-// points. Anime, numbered as AniDB numbers them, is found through the
-// anime mapping: until the mapping is read, it is left for the next
-// import, which the cursor's second part tells.
+// the last import unless its activities tell nothing did, its resume
+// points, and its dropped shows and anime (see readSimklDropped). Anime,
+// numbered as AniDB numbers them, is found through the anime mapping:
+// until the mapping is read, it is left for the next import, which the
+// cursor's second part tells.
 func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, string, error) {
 	var h watchHistory
 	answer, err := r.get(ctx, "/sync/activities", nil)
 	if err != nil {
 		return h, cursor, err
 	}
+	// The activities of the shows and of the anime move when one of them
+	// changes list or leaves the user's: the dropped ones are read again.
 	var activities struct {
-		All string `json:"all"`
+		All     string `json:"all"`
+		TVShows struct {
+			All string `json:"all"`
+		} `json:"tv_shows"`
+		Anime struct {
+			All string `json:"all"`
+		} `json:"anime"`
 	}
 	if json.Unmarshal(answer.body, &activities) != nil {
 		return h, cursor, ErrUnreachable
@@ -511,12 +529,16 @@ func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, st
 	if all != "" {
 		next = all + "|" + animeAt
 	}
+	if h.dropped, err = r.readSimklDropped(ctx, activities.TVShows.All, activities.Anime.All); r.droppedErr(ctx, err) != nil {
+		return h, cursor, err
+	}
 	return h, next, nil
 }
 
 // readMDBList reads MDBList's watched movies and episodes, a page at a
 // time and only those updated since the last import, unless its last
-// activities tell nothing was watched since, and its resume points.
+// activities tell nothing was watched since, its resume points, and its
+// dropped shows (see readMDBListDropped).
 func (r *reader) readMDBList(ctx context.Context, cursor string) (watchHistory, string, error) {
 	var h watchHistory
 	answer, err := r.get(ctx, "/sync/last_activities", nil)
@@ -526,6 +548,7 @@ func (r *reader) readMDBList(ctx context.Context, cursor string) (watchHistory, 
 	var activities struct {
 		WatchedAt        string `json:"watched_at"`
 		EpisodeWatchedAt string `json:"episode_watched_at"`
+		DroppedAt        string `json:"dropped_at"`
 	}
 	if json.Unmarshal(answer.body, &activities) != nil {
 		return h, cursor, ErrUnreachable
@@ -567,13 +590,15 @@ func (r *reader) readMDBList(ctx context.Context, cursor string) (watchHistory, 
 			if json.Unmarshal(answer.body, &page) != nil {
 				return h, cursor, ErrUnreachable
 			}
+			// MDBList takes a title off the history by clearing its date,
+			// and keeps its record: one without a date is not watched.
 			for _, movie := range page.Movies {
-				if ref := movie.Movie.ref(false, 0, 0); usable(ref) {
+				if ref := movie.Movie.ref(false, 0, 0); movie.LastWatchedAt != "" && usable(ref) {
 					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(movie.LastWatchedAt)})
 				}
 			}
 			for _, episode := range page.Episodes {
-				if ref := episode.Episode.Show.ref(true, episode.Episode.Season, episode.Episode.Number); usable(ref) {
+				if ref := episode.Episode.Show.ref(true, episode.Episode.Season, episode.Episode.Number); episode.LastWatchedAt != "" && usable(ref) {
 					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.LastWatchedAt)})
 				}
 			}
@@ -588,6 +613,9 @@ func (r *reader) readMDBList(ctx context.Context, cursor string) (watchHistory, 
 	}
 	if h.addPlayback(answer.body) != nil {
 		return h, cursor, ErrUnreachable
+	}
+	if h.dropped, err = r.readMDBListDropped(ctx, activities.DroppedAt); r.droppedErr(ctx, err) != nil {
+		return h, cursor, err
 	}
 	return h, next, nil
 }

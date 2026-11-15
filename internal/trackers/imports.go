@@ -163,6 +163,11 @@ func (s *Service) setImport(ctx context.Context, user accounts.ID, service, colu
 			_, err = tx.Exec(ctx, "UPDATE tracking_imports SET watchlist_cursor = '', watchlist_full = false WHERE user_id = $1 AND service = $2",
 				user, service)
 		}
+		if err == nil && column == "enabled" && !on {
+			// The shows dropped there no longer count, as the watchlist's
+			// titles go with its switch.
+			err = forgetDropped(ctx, tx, key)
+		}
 		return err
 	})
 	if err != nil {
@@ -260,11 +265,17 @@ func (s *Service) stopImport(key laneKey) {
 }
 
 // forgetImport stops the imports of key, as its service is disconnected:
-// the next connection starts with them off, and the titles its watchlist
-// alone held leave the user's watchlist.
+// the next connection starts with them off, the titles its watchlist
+// alone held leave the user's watchlist, and the shows dropped there no
+// longer count.
 func (s *Service) forgetImport(ctx context.Context, key laneKey) error {
 	s.stopImport(key)
+	// The import's row goes first: an import saving the shows dropped
+	// holds it until saved, and then saves nothing (see saveDropped).
 	if _, err := s.db.Exec(ctx, "DELETE FROM tracking_imports WHERE user_id = $1 AND service = $2", key.user, key.service); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(ctx, "DELETE FROM tracker_dropped WHERE user_id = $1 AND service = $2", key.user, key.service); err != nil {
 		return err
 	}
 	return s.watchlist.Drop(ctx, key.user, watchlist.Tracking(key.service))
@@ -329,23 +340,24 @@ type unmappedTitle struct {
 	label importlinks.Label
 }
 
-// history is what an import read of a service: what it watched and its
-// resume points.
+// history is what an import read of a service: what it watched, its
+// resume points, and its shows dropped, nil when not read.
 type watchHistory struct {
 	watched []watchedEntry
 	resumes []resumeEntry
+	dropped *droppedRead
 }
 
 // runImport imports the watch history of key, and its watchlist, as
 // turned on: reads them from the service, finds their titles, and adds
 // what Polyfin lacks to the user's data and watchlist.
 func (s *Service) runImport(ctx context.Context, key laneKey) {
-	var cursor, listCursor string
+	var cursor, listCursor, droppedCursor string
 	var cursorFor *time.Time
 	var history, list, ratings bool
-	err := s.db.QueryRow(ctx, `SELECT cursor, watchlist_cursor, cursor_for, enabled, watchlist, ratings FROM tracking_imports
+	err := s.db.QueryRow(ctx, `SELECT cursor, watchlist_cursor, dropped_cursor, cursor_for, enabled, watchlist, ratings FROM tracking_imports
 		WHERE user_id = $1 AND service = $2 AND (enabled OR watchlist OR ratings)`,
-		key.user, key.service).Scan(&cursor, &listCursor, &cursorFor, &history, &list, &ratings)
+		key.user, key.service).Scan(&cursor, &listCursor, &droppedCursor, &cursorFor, &history, &list, &ratings)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("A watch history import could not start", "service", key.service, "error", err)
@@ -357,17 +369,17 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		return
 	}
 	// A cursor tells where the history of the account it was read from
-	// stood, and when its watchlist last changed: a new connection reads
-	// them whole.
+	// stood, and when its watchlist and shows dropped last changed: a new
+	// connection reads them whole.
 	if cursorFor == nil || !cursorFor.Equal(conn.connectedAt) {
-		cursor, listCursor = "", ""
+		cursor, listCursor, droppedCursor = "", "", ""
 	}
 	if history && cursor == "" {
 		// The titles not found are kept anew from a history read whole:
 		// the watchlist's too.
 		listCursor = ""
 	}
-	r := &reader{s: s, key: key, token: conn.token, settings: s.settings()}
+	r := &reader{s: s, key: key, token: conn.token, settings: s.settings(), droppedCursor: droppedCursor}
 	var read watchHistory
 	var listed watchlistRead
 	next := cursor
@@ -409,6 +421,13 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 	}
 	if err == nil && ratings && readErr == nil {
 		err = s.mergeRatings(ctx, r, &result)
+	}
+	if err == nil && readErr == nil && read.dropped != nil {
+		// The shows dropped are kept apart: a failure leaves those kept,
+		// to be read again at the next import.
+		if err := s.saveDropped(ctx, r, *read.dropped, linked); err != nil && ctx.Err() == nil {
+			s.logger.Warn("The shows dropped on a tracking service could not be kept", "service", key.service, "error", err)
+		}
 	}
 	if err != nil {
 		if ctx.Err() == nil {

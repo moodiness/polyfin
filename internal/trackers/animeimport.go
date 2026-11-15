@@ -19,9 +19,10 @@ import (
 // as turned on. Watching, On hold and Dropped entries count their episodes
 // 1 to their progress played; Completed and rewatched ones all of them,
 // Completed ones dated with their completion date when the list gives one.
-// Plan to Watch goes to the watchlist. Episodes are numbered as the entry
-// numbers them and placed through the anime mapping, as Simkl's anime are:
-// until the mapping is read, nothing of the list is imported.
+// Plan to Watch goes to the watchlist. Dropped entries also drop the
+// series they are part of (see droppedRead). Episodes are numbered as the
+// entry numbers them and placed through the anime mapping, as Simkl's
+// anime are: until the mapping is read, nothing of the list is imported.
 
 // listItem is an entry of a user's AniList or MyAnimeList list.
 type listItem struct {
@@ -197,7 +198,7 @@ func (r *reader) animeOf(item listItem) animeJSON {
 }
 
 // readAnimeHistory reads the episodes and movies the list of the
-// connection counts watched.
+// connection counts watched, and its Dropped series.
 func (r *reader) readAnimeHistory(ctx context.Context) (watchHistory, string, error) {
 	var h watchHistory
 	if !r.s.anime.Ready() {
@@ -235,6 +236,7 @@ func (r *reader) readAnimeHistory(ctx context.Context) (watchHistory, string, er
 			h.watched = append(h.watched, watchedEntry{ref: ref, at: at, unmapped: unmapped})
 		}
 	}
+	h.dropped = r.animeDropped(items)
 	return h, "", nil
 }
 
