@@ -291,3 +291,19 @@ func TestReorderNeedsEveryAddonOnce(t *testing.T) {
 		t.Error("order not applied")
 	}
 }
+
+// An addon is shown under the name it was given, else its manifest's;
+// logs add the manifest's name to one it was given, to tell the addon.
+func TestAddonNames(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ chosen, name, log string }{
+		{"", "Demo", "Demo"},
+		{"Mine", "Mine", "Mine (Demo)"},
+		{"Demo", "Demo", "Demo"},
+	} {
+		addon := Addon{ChosenName: c.chosen, Manifest: stremio.Manifest{Name: "Demo"}}
+		if addon.Name() != c.name || addon.LogName() != c.log {
+			t.Errorf("given %q: %q and %q in logs, want %q and %q", c.chosen, addon.Name(), addon.LogName(), c.name, c.log)
+		}
+	}
+}

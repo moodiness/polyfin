@@ -4,6 +4,7 @@ package addons
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -67,7 +68,16 @@ var (
 	// ErrUsedByEveryone reports a group given to, or taken from, a server
 	// addon used by everyone, whose Used by lists no one (see SetGroupUse).
 	ErrUsedByEveryone = errors.New("the addon is used by everyone")
+	// ErrInvalidName reports an addon's name longer than MaxNameLength or
+	// not printable.
+	ErrInvalidName = errors.New("addon names are 1 to 64 printable characters")
+	// ErrNotRenamable reports a name given to one of Polyfin's own
+	// sources, which their own settings name (see SetName).
+	ErrNotRenamable = errors.New("only Stremio and Eclipse addons take a name of their own")
 )
+
+// MaxNameLength bounds, in characters, the name an addon is given.
+const MaxNameLength = 64
 
 // Scope owns addons: the server (no owner) or one user.
 type Scope struct {
@@ -113,6 +123,10 @@ type Addon struct {
 	Settings    map[string]string
 	Enabled     bool
 	RefreshedAt time.Time
+	// ChosenName is the name a Stremio or Eclipse addon was given in
+	// Polyfin, empty for its manifest's (see Name and SetName). A refresh
+	// of its manifest keeps it.
+	ChosenName string
 	// LibraryKeys are the catalogs whose libraries keep the identifier
 	// they took from another catalog key: the type and identifier their
 	// catalog had when the library was made, before its type or its
@@ -165,6 +179,20 @@ func (u UsedBy) Uses(user accounts.User) bool {
 		return true
 	}
 	return slices.Contains(u.Users, user.ID) || user.GroupID != nil && slices.Contains(u.Groups, *user.GroupID)
+}
+
+// Name is the name Polyfin shows the addon under: the one it was given,
+// else its manifest's.
+func (a Addon) Name() string { return cmp.Or(a.ChosenName, a.Manifest.Name) }
+
+// LogName names the addon in logs: its name, then its manifest's in
+// parentheses when it was given another, so that a log still tells which
+// addon it is.
+func (a Addon) LogName() string {
+	if a.ChosenName == "" || a.ChosenName == a.Manifest.Name {
+		return a.Manifest.Name
+	}
+	return a.ChosenName + " (" + a.Manifest.Name + ")"
 }
 
 // Stremio reports whether the addon is a Stremio addon, whose resources
@@ -493,7 +521,7 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
 	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
-		&addon.LibraryKeys, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users}, extra...)...)
+		&addon.ChosenName, &addon.LibraryKeys, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -538,7 +566,7 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 
 // addonColumns are the columns scanAddon reads, of the addons table, named
 // addons in the query.
-const addonColumns = `id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_keys, language, used_by = 'listed',
+const addonColumns = `id, kind, manifest_url, manifest, settings, enabled, refreshed_at, coalesce(name, ''), library_keys, language, used_by = 'listed',
 	ARRAY(SELECT u.group_id FROM addon_users u WHERE u.addon_id = addons.id AND u.group_id IS NOT NULL ORDER BY u.group_id),
 	ARRAY(SELECT u.user_id FROM addon_users u WHERE u.addon_id = addons.id AND u.user_id IS NOT NULL ORDER BY u.user_id)`
 
@@ -620,7 +648,7 @@ func (s *Store) Names(ctx context.Context) (map[string]string, error) {
 	}
 	names := make(map[string]string, len(snap.addons))
 	for _, addon := range snap.addons {
-		names[stremio.BaseURL(addon.ManifestURL)] = addon.Manifest.Name
+		names[stremio.BaseURL(addon.ManifestURL)] = addon.Name()
 	}
 	return names, nil
 }
@@ -1121,6 +1149,28 @@ func (s *Store) SetLanguage(ctx context.Context, scope Scope, id accounts.ID, la
 	return addon, err
 }
 
+// SetName gives a Stremio or Eclipse addon a name of its own, trimmed, of
+// 1 to MaxNameLength printable characters; an empty name, or its
+// manifest's, gives it back its manifest's name, which it then follows.
+// Two addons may share a name. Polyfin's own sources are named by their
+// own settings: ErrNotRenamable refuses them.
+func (s *Store) SetName(ctx context.Context, scope Scope, id accounts.ID, name string) (Addon, error) {
+	name = strings.TrimSpace(name)
+	if !validName(name) {
+		return Addon{}, ErrInvalidName
+	}
+	defer s.changed()
+	addon, err := scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET name = nullif(nullif($3, ''), manifest->>'name')
+		WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind IN ($4, $5) RETURNING `+addonColumns,
+		id, scope.Owner, name, KindStremio, KindEclipse))
+	if errors.Is(err, ErrNotFound) {
+		if _, findErr := s.addon(ctx, s.db, scope, id); findErr == nil {
+			return Addon{}, ErrNotRenamable
+		}
+	}
+	return addon, err
+}
+
 // Languages lists, sorted and each once, the languages the server's
 // addons were given (see Addon.Language): those users may choose to see
 // their titles in.
@@ -1445,7 +1495,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			continue
 		}
 		chosen[row.key] = len(enabled)
-		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog, Key: addon.LibraryKey(catalog.Type, catalog.ID),
+		library := Library{AddonID: addon.ID, AddonName: addon.Name(), Catalog: catalog, Key: addon.LibraryKey(catalog.Type, catalog.ID),
 			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image,
 			HideInMenus: row.hideInMenus, Skippable: Skippable(addon, catalog), ShowAsChoices: ShowAsChoices(addon, catalog)}
 		library.SkipLocal = row.skipLocal && library.Skippable
@@ -1477,7 +1527,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			if _, ok := chosen[LibraryKey{AddonID: addon.ID, CatalogType: catalog.Type, CatalogID: catalog.ID}]; ok {
 				continue
 			}
-			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
+			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Name(), Catalog: catalog,
 				Key: addon.LibraryKey(catalog.Type, catalog.ID), AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
 				Skippable: Skippable(addon, catalog), ShowAsChoices: ShowAsChoices(addon, catalog), Image: NewLibraryImage(catalog.Type)})
 		}
@@ -1852,7 +1902,7 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 	if enabledOnly {
 		filter += " AND a.enabled"
 	}
-	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, a.owner_id,
+	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''), a.owner_id,
 		coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id
 		FROM libraries l JOIN addons a ON a.id = l.addon_id LEFT JOIN users u ON u.id = a.owner_id
 		WHERE l.catalog_type = 'tv' AND a.kind <> '`+KindEclipse+`'`+filter, args...)
@@ -1864,7 +1914,7 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 	var manifest []byte
 	var administrator bool
 	if _, err := pgx.ForEachRow(rows, []any{&c.Addon.ID, &c.Addon.Kind, &c.Addon.ManifestURL, &manifest, &c.Addon.Enabled,
-		&c.Addon.RefreshedAt, &c.Scope.Owner, &administrator, &c.Key.CatalogType, &c.Key.CatalogID}, func() error {
+		&c.Addon.RefreshedAt, &c.Addon.ChosenName, &c.Scope.Owner, &administrator, &c.Key.CatalogType, &c.Key.CatalogID}, func() error {
 		c.Addon.Manifest = stremio.Manifest{}
 		if err := json.Unmarshal(manifest, &c.Addon.Manifest); err != nil {
 			return err

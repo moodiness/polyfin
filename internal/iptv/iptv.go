@@ -544,7 +544,7 @@ func (s *Service) Refresh(ctx context.Context, scope addons.Scope, id accounts.I
 // of every scope. A list that is a file of the server is read again as
 // soon as it changed, or became unreadable (see serverfile.Changed).
 func (s *Service) RefreshDue(ctx context.Context, all bool) error {
-	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at,
+	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''),
 		a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.checked_at, i.next_try_at, i.error
 		FROM iptv_sources i JOIN addons a ON a.id = i.addon_id LEFT JOIN users u ON u.id = a.owner_id WHERE a.enabled`)
 	if err != nil {
@@ -563,7 +563,7 @@ func (s *Service) RefreshDue(ctx context.Context, all bool) error {
 	var retry *time.Time
 	var checked *time.Time
 	if _, err := pgx.ForEachRow(rows, []any{&d.addon.ID, &d.addon.Kind, &d.addon.ManifestURL, &manifestJSON, &d.addon.Enabled,
-		&d.addon.RefreshedAt, &d.confined, &checked, &retry, &d.failure}, func() error {
+		&d.addon.RefreshedAt, &d.addon.ChosenName, &d.confined, &checked, &retry, &d.failure}, func() error {
 		d.now = all || Due(checked, retry, s.interval(), s.now())
 		// The time is copied: the next row is scanned where it is.
 		d.checked = nil
@@ -622,7 +622,7 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 				return nil, err
 			}
 			next := at.Add(Backoff(failures+1, s.interval(), after))
-			s.logger.Warn("An IPTV channel list could not be fetched", "source", addon.Manifest.Name, "reason", code, "retry", next.Sub(at).Round(time.Second))
+			s.logger.Warn("An IPTV channel list could not be fetched", "source", addon.LogName(), "reason", code, "retry", next.Sub(at).Round(time.Second))
 			_, err := s.db.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, error = $3, failures = failures + 1, next_try_at = $4 WHERE addon_id = $1",
 				addon.ID, at, code, next)
 			return nil, err
