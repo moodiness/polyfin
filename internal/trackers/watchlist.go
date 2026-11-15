@@ -209,7 +209,13 @@ func (m mdblistListed) ref() library.TitleRef {
 
 // readMDBListWatchlist reads MDBList's watchlist, its movies and shows,
 // the latest added first, a page at a time, unless its last activities
-// tell it did not change since cursor. MDBList gives no date for them.
+// tell it did not change since cursor. MDBList gives no date for them, so
+// their order is the answer's: with sort=added, order=asc is the newest
+// first ("`asc` (default) returns ... newest first for dates (...
+// `added`)", https://api.mdblist.com/docs/, GET /watchlist/items, order).
+// A read that announces more, by pagination.has_more or the X-Has-More
+// header, but gives no new cursor to reach it, or an empty page, is cut
+// short: it is not whole, and ends unreachable.
 func (r *reader) readMDBListWatchlist(ctx context.Context, cursor string) (watchlistRead, error) {
 	list := watchlistRead{cursor: cursor}
 	answer, err := r.get(ctx, "/sync/last_activities", nil)
@@ -226,7 +232,7 @@ func (r *reader) readMDBListWatchlist(ctx context.Context, cursor string) (watch
 		// Unchanged: nothing is read, nor taken off.
 		return list, nil
 	}
-	query := url.Values{"limit": {"1000"}, "sort": {"added"}, "order": {"desc"}}
+	query := url.Values{"limit": {"1000"}, "sort": {"added"}, "order": {"asc"}}
 	for {
 		answer, err := r.get(ctx, "/watchlist/items", query)
 		if err != nil {
@@ -238,6 +244,7 @@ func (r *reader) readMDBListWatchlist(ctx context.Context, cursor string) (watch
 			NextCursor string          `json:"next_cursor"`
 			Pagination struct {
 				NextCursor string `json:"next_cursor"`
+				HasMore    bool   `json:"has_more"`
 			} `json:"pagination"`
 		}
 		if json.Unmarshal(answer.body, &page) != nil {
@@ -253,6 +260,9 @@ func (r *reader) readMDBListWatchlist(ctx context.Context, cursor string) (watch
 		}
 		next := cmpOr(page.Pagination.NextCursor, page.NextCursor)
 		if next == "" || next == query.Get("cursor") || len(page.Movies)+len(page.Shows) == 0 {
+			if page.Pagination.HasMore || strings.EqualFold(answer.header.Get("X-Has-More"), "true") {
+				return list, ErrUnreachable
+			}
 			break
 		}
 		query.Set("cursor", next)

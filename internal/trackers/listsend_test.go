@@ -3,9 +3,11 @@ package trackers
 import (
 	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -34,7 +36,7 @@ func TestMDBListWatchlistIsReadOnceChanged(t *testing.T) {
 	h.f.on("GET", "/mdblist/watchlist/items", func(r request) answer {
 		mu.Lock()
 		defer mu.Unlock()
-		if r.query.Get("sort") != "added" || r.query.Get("order") != "desc" {
+		if r.query.Get("sort") != "added" || r.query.Get("order") != "asc" {
 			t.Errorf("read as %v", r.query)
 		}
 		return answer{status: http.StatusOK, body: pages[r.query.Get("cursor")]}
@@ -82,6 +84,128 @@ func TestMDBListWatchlistIsReadOnceChanged(t *testing.T) {
 	}
 	h.idle(t)
 	h.noWrites(t)
+}
+
+// mdblistMovie is a movie of an MDBList watchlist answer, with its TMDB id
+// and the IMDb id imdbOf gives.
+func mdblistMovie(tmdb int) string {
+	return `{"id":` + strconv.Itoa(tmdb) + `,"imdb_id":"` + imdbOf(tmdb) + `","ids":{"imdb":"` + imdbOf(tmdb) +
+		`","tmdb":` + strconv.Itoa(tmdb) + `},"mediatype":"movie"}`
+}
+
+func imdbOf(tmdb int) string {
+	return "tt0" + strconv.Itoa(tmdb)
+}
+
+// A read of MDBList's watchlist that announces more but gives no way to
+// reach it is cut short: it is not whole, nothing is taken off, and the
+// cursor is kept, so the next import reads it again.
+func TestMDBListWatchlistCutShortIsNotWhole(t *testing.T) {
+	t.Parallel()
+	cuts := []struct {
+		name   string
+		pages  map[string]string
+		header http.Header
+	}{
+		{"has_more without a cursor", map[string]string{
+			"": `{"movies":[` + mdblistMovie(602) + `],"shows":[],"pagination":{"has_more":true}}`,
+		}, nil},
+		{"X-Has-More without a cursor", map[string]string{
+			"": `{"movies":[` + mdblistMovie(602) + `],"shows":[]}`,
+		}, http.Header{"X-Has-More": {"true"}}},
+		{"a repeated cursor", map[string]string{
+			"":   `{"movies":[` + mdblistMovie(602) + `],"shows":[],"pagination":{"next_cursor":"c2","has_more":true}}`,
+			"c2": `{"movies":[` + mdblistMovie(603) + `],"shows":[],"pagination":{"next_cursor":"c2","has_more":true}}`,
+		}, nil},
+		{"an empty page with more", map[string]string{
+			"":   `{"movies":[` + mdblistMovie(602) + `],"shows":[],"pagination":{"next_cursor":"c2"}}`,
+			"c2": `{"movies":[],"shows":[]}`,
+		}, http.Header{"X-Has-More": {"true"}}},
+	}
+	for _, cut := range cuts {
+		t.Run(cut.name, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			user := h.user(t, "ivy")
+			h.connected(t, user, MDBList, "mdblist-ivy")
+			var mu sync.Mutex
+			changed := "2026-10-01T10:00:00Z"
+			pages := map[string]string{"": `{"movies":[` + mdblistMovie(601) + `,` + mdblistMovie(602) + `],"shows":[]}`}
+			var header http.Header
+			h.f.on("GET", "/mdblist/sync/last_activities", func(request) answer {
+				mu.Lock()
+				defer mu.Unlock()
+				return answer{status: http.StatusOK, body: `{"watchlisted_at":"` + changed + `"}`}
+			})
+			h.f.on("GET", "/mdblist/watchlist/items", func(r request) answer {
+				mu.Lock()
+				defer mu.Unlock()
+				return answer{status: http.StatusOK, body: pages[r.query.Get("cursor")], header: header}
+			})
+			h.turnOnWatchlist(t, user, MDBList)
+			first := h.idOf(t, library.TitleRef{IMDb: imdbOf(601)})
+			if got := h.watchlistOf(t, user); !slices.Contains(got, first) {
+				t.Fatalf("imported: %v", got)
+			}
+
+			// Changed, and cut short: the movie past the cut stays.
+			mu.Lock()
+			changed, pages, header = "2026-10-02T10:00:00Z", cut.pages, cut.header
+			mu.Unlock()
+			if result := h.importNow(t, user, MDBList); result.Problem == "" {
+				t.Errorf("cut short without a problem: %+v", result)
+			}
+			if got := h.watchlistOf(t, user); !slices.Contains(got, first) {
+				t.Errorf("cut short, the movie left: %v", got)
+			}
+
+			// Unchanged since, it is read again: the cursor was kept.
+			before := len(h.f.sent("mdblist", "/watchlist/items"))
+			h.importNow(t, user, MDBList)
+			if n := len(h.f.sent("mdblist", "/watchlist/items")); n == before {
+				t.Error("cut short, the cursor moved: not read again")
+			}
+			if got := h.watchlistOf(t, user); !slices.Contains(got, first) {
+				t.Errorf("read again, the movie left: %v", got)
+			}
+			h.idle(t)
+		})
+	}
+}
+
+// A top-level next_cursor is followed too, and the titles keep the
+// answer's order, the newest first, on the Watchlist playlist.
+func TestMDBListWatchlistTopCursorAndOrder(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	user := h.user(t, "jay")
+	h.connected(t, user, MDBList, "mdblist-jay")
+	pages := map[string]string{
+		"":   `{"movies":[` + mdblistMovie(703) + `,` + mdblistMovie(702) + `],"shows":[],"next_cursor":"c2"}`,
+		"c2": `{"movies":[` + mdblistMovie(701) + `],"shows":[]}`,
+	}
+	h.f.on("GET", "/mdblist/sync/last_activities", func(request) answer {
+		return answer{status: http.StatusOK, body: `{"watchlisted_at":"2026-10-01T10:00:00Z"}`}
+	})
+	h.f.on("GET", "/mdblist/watchlist/items", func(r request) answer {
+		if r.query.Get("sort") != "added" || r.query.Get("order") != "asc" {
+			t.Errorf("read as %v", r.query)
+		}
+		return answer{status: http.StatusOK, body: pages[r.query.Get("cursor")]}
+	})
+	h.turnOnWatchlist(t, user, MDBList)
+	want := []accounts.ID{
+		h.idOf(t, library.TitleRef{IMDb: imdbOf(703)}),
+		h.idOf(t, library.TitleRef{IMDb: imdbOf(702)}),
+		h.idOf(t, library.TitleRef{IMDb: imdbOf(701)}),
+	}
+	if got := h.watchlistOf(t, user); !slices.Equal(got, want) {
+		t.Errorf("watchlist %v, want the newest first %v", got, want)
+	}
+	if n := len(h.f.sent("mdblist", "/watchlist/items")); n != 2 {
+		t.Errorf("%d pages read, want 2", n)
+	}
+	h.idle(t)
 }
 
 // posted lists the changes service received at path: its requests but
