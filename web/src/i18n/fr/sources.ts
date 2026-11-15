@@ -689,7 +689,7 @@ const sources: typeof en = {
     listTitle: 'Vos sources',
   },
   usedBy: {
-    title: 'Utilisé par',
+    title: 'Utilisée par',
     help: 'Qui reçoit cette source dans ses applications Jellyfin\u202f: ses bibliothèques, ses titres, versions, sous-titres et chaînes. Tout le monde inclut les utilisateurs créés plus tard\u202f; avec Seulement ces groupes et ces utilisateurs, un nouvel utilisateur n’en reçoit rien tant que son groupe ou lui-même n’est pas coché.',
     everyone: 'Tout le monde',
     listed: 'Seulement ces groupes et ces utilisateurs',
@@ -706,8 +706,8 @@ const sources: typeof en = {
     save: 'Enregistrer',
     cancel: 'Annuler',
     saved: (name: string) => `${name}\u202f: la liste de qui l’utilise a été enregistrée.`,
-    chip: (names: string) => `Utilisé par ${names}`,
-    chipNone: 'Utilisé par personne',
+    chip: (names: string) => `Utilisée par ${names}`,
+    chipNone: 'Utilisée par personne',
   },
   music: {
     content: { music: 'Musique', audiobook: 'Livres audio', podcast: 'Podcasts' },

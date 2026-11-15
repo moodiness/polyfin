@@ -691,7 +691,7 @@ const users: typeof en = {
     noneShown: 'Aucun utilisateur ici.',
     sourcesTitle: 'Sources',
     sourcesHelp:
-      'Les sources du serveur que reçoit chaque membre, qu’il suive le groupe ou garde ses propres réglages. Chaque changement est enregistré tout de suite, dans «\u202fUtilisé par\u202f» sur la page de la source. Les sources propres des membres ne sont pas listées.',
+      'Les sources du serveur que reçoit chaque membre, qu’il suive le groupe ou garde ses propres réglages. Chaque changement est enregistré tout de suite, dans «\u202fUtilisée par\u202f» sur la page de la source. Les sources propres des membres ne sont pas listées.',
     noSources: 'Aucune source du serveur pour l’instant.',
     noSourcesHelp:
       'Ajoutez un addon, une source IPTV ou un dossier\u202f: il pourra ensuite être donné au groupe ici.',
