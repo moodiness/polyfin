@@ -185,6 +185,9 @@ type Service struct {
 	// pace paces the background requests for streams and descriptions
 	// to each addon's server (see pacing.go).
 	pace *pacing
+	// hintSpacing is the time between two reads of configure hints (see
+	// ReadConfigureHints).
+	hintSpacing time.Duration
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
@@ -421,6 +424,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize),
 		smartFetches:   make(chan struct{}, smartFetches),
 		smartWait:      smartWait,
+		hintSpacing:    hintSpacing,
 		personLookups:  personLookups{slots: make(chan struct{}, personLookupsAtOnce)},
 	}
 	clock := func() time.Time { return s.now() }

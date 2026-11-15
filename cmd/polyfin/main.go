@@ -961,6 +961,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	go playbacks.Run(ctx)
 	// Playbacks whose apps stopped reporting are stopped.
 	go jellyfinAPI.Run(ctx)
+	// The addons stored before Polyfin kept their configure hint have it
+	// read, one at a time, so that Configure shows on their page.
+	go lib.ReadConfigureHints(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	secure.Start(ctx, httpServer.Handler)
