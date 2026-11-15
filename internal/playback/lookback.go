@@ -65,7 +65,7 @@ func (s *Service) seekFileOf(ctx context.Context, version library.Version) (seek
 func (s *Service) useLookback(ctx context.Context, r *hls.Remux, version library.Version) {
 	f, err := s.seekFileOf(ctx, version)
 	if err != nil {
-		s.logger.Debug("A version's file is not known: seeks in it start without a lookback", "addon", version.Addon, "error", err)
+		s.logger.Debug("A version's file is not known: seeks in it start without a lookback", "addon", version.AddonLog, "error", err)
 		return
 	}
 	r.Lookback = s.savedLookback(ctx, f)

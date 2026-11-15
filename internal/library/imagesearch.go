@@ -126,12 +126,12 @@ func (s *Service) addonImages(ctx context.Context, v view, title record) ([]Addo
 		g.Go(func() error {
 			kept, err := s.keptMeta(ctx, candidate, title.Meta.Type, title.Meta.ID)
 			if err != nil {
-				s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+				s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.LogName(), "error", err)
 				return nil
 			}
 			meta := kept.value
 			found[i] = described{ids: s.providerIDs(title.ID, meta), ok: true, images: AddonImages{
-				Addon: candidate.addon.Manifest.Name,
+				Addon: candidate.addon.Name(),
 				Images: Images{Primary: remoteImage(meta.Poster), Backdrop: remoteImage(meta.Background),
 					Logo: remoteImage(meta.Logo), Thumb: remoteImage(meta.LandscapePoster)},
 				Confined: candidate.confined || title.Confined && title.Addon != nil && candidate.addon.ID == *title.Addon,

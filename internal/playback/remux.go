@@ -327,7 +327,7 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 			return nil, err
 		}
 		s.saveKeyframes(ctx, version.ID, times)
-		s.logger.Debug("Read a keyframe index", "addon", version.Addon, "keyframes", len(times), "duration", time.Since(started))
+		s.logger.Debug("Read a keyframe index", "addon", version.AddonLog, "keyframes", len(times), "duration", time.Since(started))
 		return times, nil
 	})
 	if err != nil {

@@ -274,7 +274,7 @@ func (s *Service) Queue(version library.Version, title string, device accounts.I
 		return
 	}
 	if len(s.jobs) >= queueLength {
-		s.Logger.Debug("The images of a version were not queued: too many are waiting", "title", title, "addon", version.Addon)
+		s.Logger.Debug("The images of a version were not queued: too many are waiting", "title", title, "addon", version.AddonLog)
 		return
 	}
 	s.jobs = append(s.jobs, newJob(version, title, device))
@@ -411,7 +411,7 @@ func (s *Service) Skip(version library.Version, title, reason string) {
 		s.Logger.Info("The versions played get no images", "reason", reason)
 		return
 	}
-	s.Logger.Info("A version played gets no images", "title", title, "addon", version.Addon, "reason", reason)
+	s.Logger.Info("A version played gets no images", "title", title, "addon", version.AddonLog, "reason", reason)
 }
 
 // WatchPlaybacks has images wait for the playbacks playing lists: the
@@ -543,7 +543,7 @@ func (s *Service) generate(ctx context.Context, j job) {
 			return
 		}
 		if err != nil && ctx.Err() == nil {
-			s.Logger.Debug("The thumbnails of a version could not be made from what its play read", "title", j.title, "addon", version.Addon, "error", err)
+			s.Logger.Debug("The thumbnails of a version could not be made from what its play read", "title", j.title, "addon", version.AddonLog, "error", err)
 		}
 	}
 	if version.Torrent != nil {
@@ -574,7 +574,7 @@ func (s *Service) generate(ctx context.Context, j job) {
 	}
 	switch {
 	case err == nil:
-		s.Logger.Info("Made the images of a version", "title", j.title, "addon", version.Addon, "thumbnails", want.trickplay,
+		s.Logger.Info("Made the images of a version", "title", j.title, "addon", version.AddonLog, "thumbnails", want.trickplay,
 			"chapters", len(want.chapters), "keyframes", read.keyframes, "requests", read.requests,
 			"duration", time.Since(started).Round(time.Second))
 		s.recordMade(ctx, version)
@@ -582,16 +582,16 @@ func (s *Service) generate(ctx context.Context, j job) {
 	case ctx.Err() != nil && errors.Is(err, context.Canceled):
 		return
 	case errors.Is(err, source.ErrSlowDown):
-		s.Logger.Warn("A source asked to slow down: images of its host are paused", "title", j.title, "addon", version.Addon,
+		s.Logger.Warn("A source asked to slow down: images of its host are paused", "title", j.title, "addon", version.AddonLog,
 			"requests", read.requests, "pause", slowDownPause, "answer", source.Answer(err))
 		s.gate.pause(j.host, slowDownPause)
 		s.refused.Put(version.ID, err)
 		s.dropHost(j.host)
 	case lasting(err):
-		s.Logger.Info("The images of a version cannot be made", append([]any{"title", j.title, "addon", version.Addon, "requests", read.requests}, failure(err)...)...)
+		s.Logger.Info("The images of a version cannot be made", append([]any{"title", j.title, "addon", version.AddonLog, "requests", read.requests}, failure(err)...)...)
 		s.refused.Put(version.ID, err)
 	default:
-		s.Logger.Info("The images of a version could not be made", append([]any{"title", j.title, "addon", version.Addon, "requests", read.requests}, failure(err)...)...)
+		s.Logger.Info("The images of a version could not be made", append([]any{"title", j.title, "addon", version.AddonLog, "requests", read.requests}, failure(err)...)...)
 		s.failed.Put(version.ID, err)
 	}
 	s.recordFailure(ctx, version, err)
@@ -616,10 +616,10 @@ func (s *Service) analysis(ctx context.Context, j job) (media.Analysis, bool) {
 		return media.Analysis{}, false
 	}
 	if state, _ := outcome(err); state == StateCannot {
-		s.Logger.Info("The images of a version cannot be made", "title", j.title, "addon", j.version.Addon, "error", err)
+		s.Logger.Info("The images of a version cannot be made", "title", j.title, "addon", j.version.AddonLog, "error", err)
 		s.refused.Put(j.version.ID, err)
 	} else {
-		s.Logger.Info("The images of a version could not be made", "title", j.title, "addon", j.version.Addon, "error", err)
+		s.Logger.Info("The images of a version could not be made", "title", j.title, "addon", j.version.AddonLog, "error", err)
 		s.failed.Put(j.version.ID, err)
 	}
 	s.recordFailure(ctx, j.version, err)
@@ -634,7 +634,7 @@ func (s *Service) extended(ctx context.Context, j job, added int, err error) {
 	switch {
 	case err == nil || errors.Is(err, source.ErrNotCached) || errors.Is(err, errConverting):
 		if added > 0 {
-			s.Logger.Info("Made thumbnails of a torrent's file from what its plays read", "title", j.title, "addon", version.Addon, "thumbnails", added)
+			s.Logger.Info("Made thumbnails of a torrent's file from what its plays read", "title", j.title, "addon", version.AddonLog, "thumbnails", added)
 		}
 		settings := s.Settings()
 		if !settings.Trickplay {
@@ -647,10 +647,10 @@ func (s *Service) extended(ctx context.Context, j job, added int, err error) {
 	case ctx.Err() != nil || errors.Is(err, errGone):
 		return
 	case lasting(err):
-		s.Logger.Info("The images of a version cannot be made", "title", j.title, "addon", version.Addon, "error", err)
+		s.Logger.Info("The images of a version cannot be made", "title", j.title, "addon", version.AddonLog, "error", err)
 		s.refused.Put(version.ID, err)
 	default:
-		s.Logger.Info("The images of a version could not be made", "title", j.title, "addon", version.Addon, "error", err)
+		s.Logger.Info("The images of a version could not be made", "title", j.title, "addon", version.AddonLog, "error", err)
 		s.failed.Put(version.ID, err)
 	}
 	s.recordFailure(ctx, version, err)
@@ -824,7 +824,7 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 			// others are not read for nothing.
 			return fmt.Errorf("%w: %w", container.ErrUnreadable, err)
 		}
-		s.Logger.Debug("A keyframe could not be decoded", "addon", version.Addon, "at", video.Keyframes[index], "error", err)
+		s.Logger.Debug("A keyframe could not be decoded", "addon", version.AddonLog, "at", video.Keyframes[index], "error", err)
 		return nil
 	}
 	keyframes := video.Frames(p)

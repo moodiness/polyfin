@@ -342,7 +342,7 @@ func (r *run) install(ctx context.Context) {
 			}
 			problem = addonProblem(err)
 			if err == nil {
-				r.s.activity.AddonInstalled(ctx, r.user, installed.Manifest.Name, installed.Manifest.Version, false)
+				r.s.activity.AddonInstalled(ctx, r.user, installed.Name(), installed.Manifest.Version, false)
 			} else if problem == AddonInternal {
 				// Not the error, which may hold the address.
 				r.s.logger.Warn("An app's addon could not be installed", "app", r.status.App, "user_id", r.user.ID.String())

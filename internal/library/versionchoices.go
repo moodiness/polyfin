@@ -372,7 +372,7 @@ func (s *Service) ExplainVersions(ctx context.Context, user accounts.User, id ac
 	var explained VersionsExplained
 	var embedded *SourceExplained
 	if len(t.embedded) > 0 {
-		embedded = &SourceExplained{Addon: t.embeddedBy.addon.ID, Name: t.embeddedBy.addon.Manifest.Name, Embedded: true, State: ListKnown}
+		embedded = &SourceExplained{Addon: t.embeddedBy.addon.ID, Name: t.embeddedBy.addon.Name(), Embedded: true, State: ListKnown}
 	}
 	explained.Sources = make([]SourceExplained, len(serving))
 	for i, source := range serving {
@@ -386,7 +386,7 @@ func (s *Service) ExplainVersions(ctx context.Context, user accounts.User, id ac
 		case !own(source.addon) && s.failed(source.key()):
 			state = ListFailed
 		}
-		explained.Sources[i] = SourceExplained{Addon: source.addon.ID, Name: source.addon.Manifest.Name, State: state}
+		explained.Sources[i] = SourceExplained{Addon: source.addon.ID, Name: source.addon.Name(), State: state}
 	}
 	choices := s.versionChoices(ctx)
 	note := func(source int, stream stremio.Stream, version Version, step string) {

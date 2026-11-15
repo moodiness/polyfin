@@ -194,9 +194,9 @@ type Location struct {
 	// Confined restricts requests to public addresses.
 	Confined bool
 	// Size is the file's size its addon announced, 0 when unknown, and
-	// Announcer that addon: an answer of another size is another file,
-	// refused at once, once the addon's sizes proved right (see
-	// Cache.sizeTrusted).
+	// Announcer names that addon, by its ID: an answer of another size is
+	// another file, refused at once, once the addon's sizes proved right
+	// (see Cache.sizeTrusted).
 	Size      int64
 	Announcer string
 	// Analyzed is the size the file's analysis found, 0 when unknown: an

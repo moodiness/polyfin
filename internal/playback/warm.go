@@ -118,11 +118,11 @@ func (s *Service) warm(version library.Version, start time.Duration, replace, ur
 		}
 		s.warmMu.Unlock()
 		if err != nil {
-			s.logger.Debug("A version's first bytes could not be read ahead", "addon", version.Addon, "error", err)
+			s.logger.Debug("A version's first bytes could not be read ahead", "addon", version.AddonLog, "error", err)
 			return
 		}
 		s.warmed.Put(version.ID, start)
-		s.logger.Debug("Read a version's first bytes ahead", "addon", version.Addon, "from", start, "duration", time.Since(started))
+		s.logger.Debug("Read a version's first bytes ahead", "addon", version.AddonLog, "from", start, "duration", time.Since(started))
 	}()
 }
 
@@ -270,7 +270,7 @@ func (s *Service) watchSource(version library.Version, src *source.Source, done 
 			s.logger.Info("A version's source failed while it played", "answer", source.Answer(err), "error", err)
 			return
 		}
-		s.logger.Info("A version's source failed while it played", "addon", version.Addon, "answer", source.Answer(err))
+		s.logger.Info("A version's source failed while it played", "addon", version.AddonLog, "answer", source.Answer(err))
 	case <-done:
 	}
 }

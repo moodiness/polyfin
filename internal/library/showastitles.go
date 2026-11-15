@@ -117,7 +117,7 @@ func (s *Service) DecideShowAs(ctx context.Context, scope addons.Scope) error {
 		entry := installed{addon: list[i], confined: confined, shared: scope.Owner == nil}
 		first, err := s.page(ctx, source{addon: entry, catalog: l.Catalog, genre: l.Genre}, 0)
 		if err != nil {
-			s.logger.Debug("A library's first page could not be read", "addon", list[i].Manifest.Name, "catalog", l.Catalog.ID, "error", err)
+			s.logger.Debug("A library's first page could not be read", "addon", list[i].LogName(), "catalog", l.Catalog.ID, "error", err)
 			continue
 		}
 		errs = append(errs, s.decideShowAs(ctx, l, first))

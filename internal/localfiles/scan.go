@@ -375,7 +375,7 @@ func (s *Service) searchesDone(ctx context.Context, folder Folder, done *searche
 		return err
 	}
 	retry := s.now().Add(max(searchRetry(folder.SearchRetries), done.wait))
-	s.logger.Warn("The metadata addons could not search the titles of a local folder's files", "folder", folder.Addon.Manifest.Name,
+	s.logger.Warn("The metadata addons could not search the titles of a local folder's files", "folder", folder.Addon.LogName(),
 		"files", files, "addon", done.first.Addon, "failure", done.first.Failure, "error", done.first.Err, "retry", retry)
 	_, err := s.db.Exec(ctx, "UPDATE local_folders SET search_retry_at = $2, search_retries = search_retries + 1 WHERE addon_id = $1",
 		folder.Addon.ID, retry)
@@ -433,12 +433,12 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 			return err
 		}
 	} else if failure = readable(root); failure != "" {
-		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.Manifest.Name, "path", root, "reason", failure)
+		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.LogName(), "path", root, "reason", failure)
 	} else if list, err = walk(ctx, root, folder.Kind); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.Manifest.Name, "path", root, "error", err)
+		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.LogName(), "path", root, "error", err)
 		failure = errUnreadable
 	}
 	if failure != "" {

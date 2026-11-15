@@ -424,7 +424,7 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 		release()
 		if started {
 			s.logger.Info("An addon asked to wait: no catalog page is asked of its server until the wait ends", "addon",
-				src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "skip", key.skip, "genre", key.genre, "wait", wait)
+				src.addon.addon.LogName(), "catalog", src.catalog.ID, "skip", key.skip, "genre", key.genre, "wait", wait)
 		}
 		return nil, err
 	}
@@ -607,7 +607,7 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && s.givesCredits(ctx, addon, kind, key.metaType, key.id) &&
 		!s.creditedByTMDB(ctx, itemID(titleKey(kind, key.id)), kind, s.providerIDs(itemID(titleKey(kind, key.id)), kept.value)) {
 		if err := s.saveCredits(ctx, itemID(titleKey(kind, key.id)), people(kept.value), addon.confined); err != nil {
-			s.logger.Debug("The people of a title could not be recorded", "addon", addon.addon.Manifest.Name, "error", err)
+			s.logger.Debug("The people of a title could not be recorded", "addon", addon.addon.LogName(), "error", err)
 		}
 	}
 	return kept, nil
@@ -649,7 +649,7 @@ func (s *Service) refreshMeta(ctx context.Context, addon installed, key metaKey,
 	s.background(ctx, fmt.Sprintf("refresh meta %v", key), due, func(ctx context.Context) error {
 		_, err := s.fetchKeptMeta(ctx, addon, key)
 		if err != nil {
-			s.logger.Debug("A description could not be refreshed", "addon", addon.addon.Manifest.Name, "error", err)
+			s.logger.Debug("A description could not be refreshed", "addon", addon.addon.LogName(), "error", err)
 		}
 		return err
 	})
@@ -695,7 +695,7 @@ func (s *Service) keepMeta(ctx context.Context, addon installed, key metaKey, ke
 			return
 		}
 		if err := s.storeMeta(ctx, addon, key, kept); err != nil {
-			s.logger.Debug("A description could not be kept", "addon", addon.addon.Manifest.Name, "error", err)
+			s.logger.Debug("A description could not be kept", "addon", addon.addon.LogName(), "error", err)
 		}
 	}
 	keep()
@@ -919,7 +919,7 @@ func (s *Service) Warm(ctx context.Context) error {
 				first, err := s.page(ctx, src, 0)
 				switch {
 				case err != nil && ctx.Err() == nil:
-					s.logger.Debug("A library's first page could not be read", "addon", addon.Manifest.Name, "catalog", l.Catalog.ID, "error", err)
+					s.logger.Debug("A library's first page could not be read", "addon", addon.LogName(), "catalog", l.Catalog.ID, "error", err)
 				case err == nil:
 					if err := s.decideShowAs(ctx, l, first); err != nil {
 						s.logger.Warn("How a library shows its titles could not be decided", "catalog", l.Catalog.ID, "error", err)

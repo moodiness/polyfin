@@ -114,7 +114,7 @@ func (s *Service) findImage(ctx context.Context, src source) foundImage {
 	defer cancel()
 	found, err := s.automaticImageOf(ctx, src)
 	if err != nil {
-		s.logger.Debug("A library's image could not be found", "addon", src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "error", err)
+		s.logger.Debug("A library's image could not be found", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
 		kept, _ := s.libraryImages.Get(key)
 		found = kept.value
 	}

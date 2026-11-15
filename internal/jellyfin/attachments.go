@@ -160,7 +160,7 @@ func (h *Handler) attachment(w http.ResponseWriter, r *http.Request) {
 	data, err := h.Playback.Attachment(r.Context(), version, analysis, index)
 	if err != nil {
 		if r.Context().Err() == nil && !errors.Is(err, playback.ErrNoAttachment) {
-			h.Logger.Warn("An attached file could not be read", "addon", version.Addon, "error", err)
+			h.Logger.Warn("An attached file could not be read", "addon", version.AddonLog, "error", err)
 		}
 		cannotExtract()
 		return

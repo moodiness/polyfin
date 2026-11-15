@@ -273,7 +273,7 @@ func (h *Handler) origin(ctx context.Context, s *LiveSession, id accounts.ID) Or
 	origin := Origin{Kind: OriginAddon, Name: version.Addon}
 	addon, err := h.Library.VersionAddon(ctx, version)
 	if err == nil {
-		origin.Name = cmp.Or(addon.Manifest.Name, origin.Name)
+		origin.Name = cmp.Or(addon.Name(), origin.Name)
 	}
 	switch {
 	case version.Torrent != nil:

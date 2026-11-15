@@ -752,7 +752,7 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		// tuner or the provider's connections are all in use: a normal
 		// event, which lasts while they are. Even once the encoding gave up
 		// after its restarts, a 503 tells the app to ask again later.
-		logger.Info("A live stream was refused by its source", "addon", remux.Version.Addon, "error", err)
+		logger.Info("A live stream was refused by its source", "addon", remux.Version.AddonLog, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
 	case errors.Is(err, hls.ErrNotFound), errors.Is(err, hls.ErrStopped), errors.Is(err, playback.ErrNotRemuxable):
 		processingError(w, http.StatusNotFound)
@@ -762,14 +762,14 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		// nearest, a tuner's stream limit, fails with a 500. A 503 says the
 		// same to apps, which take both as a server error, and that the
 		// refusal lasts only while the server is busy.
-		logger.Info("An encoding was refused: the server runs as many as it may", "addon", remux.Version.Addon)
+		logger.Info("An encoding was refused: the server runs as many as it may", "addon", remux.Version.AddonLog)
 		processingError(w, http.StatusServiceUnavailable)
 	case errors.Is(err, hls.ErrStalled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, source.ErrUnavailable):
 		// The source is slow, stopped answering, or failed: the app hears
 		// it within seconds, rather than after minutes, and may ask again,
 		// which waits for the same encoding, or reopens one once the
 		// source failed.
-		logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.Addon, "error", err)
+		logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.AddonLog, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
 		return true
 	case errors.Is(err, hls.ErrFailed):
@@ -777,7 +777,7 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		processingError(w, http.StatusInternalServerError)
 		return true
 	default:
-		logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)
+		logger.Warn("A remux could not be served", "addon", remux.Version.AddonLog, "error", err)
 		processingError(w, http.StatusInternalServerError)
 		return true
 	}

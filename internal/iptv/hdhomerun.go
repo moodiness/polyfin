@@ -309,7 +309,7 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 		finish()
 		return nil, err
 	}
-	s.logger.Info("A tuner scans for channels", "source", addon.Manifest.Name)
+	s.logger.Info("A tuner scans for channels", "source", addon.LogName())
 	go func() {
 		defer finish()
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), scanMost)
@@ -323,7 +323,7 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 			}
 			var status statusJSON
 			if err := tunerGet(ctx, s.client, base+"/lineup_status.json", false, &status); err != nil {
-				s.logger.Warn("A tuner's scan could not be followed", "source", addon.Manifest.Name, "error", err)
+				s.logger.Warn("A tuner's scan could not be followed", "source", addon.LogName(), "error", err)
 				break
 			}
 			if status.ScanInProgress == 0 {
@@ -334,7 +334,7 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 			s.scans.mu.Unlock()
 		}
 		if err := s.refresh(ctx, addon, false); err != nil {
-			s.logger.Warn("A tuner's line-up could not be read after its scan", "source", addon.Manifest.Name, "error", err)
+			s.logger.Warn("A tuner's line-up could not be read after its scan", "source", addon.LogName(), "error", err)
 		}
 	}()
 	return run.done, nil

@@ -178,7 +178,7 @@ func (h *Handler) convertedDownload(w http.ResponseWriter, r *http.Request, exte
 		h.remuxError(w, r, remux, err)
 	case errors.Is(err, hls.ErrStopped):
 	default:
-		h.Logger.Warn("A converted download was cut short", "addon", remux.Version.Addon, "error", err)
+		h.Logger.Warn("A converted download was cut short", "addon", remux.Version.AddonLog, "error", err)
 	}
 }
 

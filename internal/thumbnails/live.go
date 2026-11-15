@@ -116,14 +116,14 @@ func (s *Service) extendPlaying(ctx context.Context, j job) {
 	switch {
 	case err == nil || errors.Is(err, source.ErrNotCached) || ctx.Err() != nil:
 		if added > 0 {
-			s.Logger.Debug("Made thumbnails of a version from what its play read", "title", j.title, "addon", version.Addon, "thumbnails", added)
+			s.Logger.Debug("Made thumbnails of a version from what its play read", "title", j.title, "addon", version.AddonLog, "thumbnails", added)
 		}
 	case errors.Is(err, errGone):
 	case lasting(err):
-		s.Logger.Debug("The thumbnails of a version cannot be made during its play", "title", j.title, "addon", version.Addon, "error", err)
+		s.Logger.Debug("The thumbnails of a version cannot be made during its play", "title", j.title, "addon", version.AddonLog, "error", err)
 		s.unextended.Put(version.ID, err)
 	default:
-		s.Logger.Info("The thumbnails of a version cannot be made during its play", "title", j.title, "addon", version.Addon, "error", err)
+		s.Logger.Info("The thumbnails of a version cannot be made during its play", "title", j.title, "addon", version.AddonLog, "error", err)
 		s.unextended.Put(version.ID, err)
 	}
 }

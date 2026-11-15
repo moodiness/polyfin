@@ -996,7 +996,7 @@ func (s *Service) SmartCatalogs(ctx context.Context, user accounts.User, shared 
 		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {
 			if smartCatalog(catalog) {
-				result = append(result, SmartCatalog{AddonID: entry.addon.ID, AddonName: entry.addon.Manifest.Name, Shared: entry.shared,
+				result = append(result, SmartCatalog{AddonID: entry.addon.ID, AddonName: entry.addon.Name(), Shared: entry.shared,
 					Catalog: catalog, Genres: slices.Clone(addons.GenreChoices(catalog))})
 			}
 		}

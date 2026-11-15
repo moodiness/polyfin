@@ -120,7 +120,7 @@ func (s *Service) RemoteLookup(ctx context.Context, kind Kind, id string) (resul
 		if err != nil {
 			continue
 		}
-		return RemoteResult{Item: item, Provider: candidate.addon.Manifest.Name}, true, nil
+		return RemoteResult{Item: item, Provider: candidate.addon.Name()}, true, nil
 	}
 	return RemoteResult{}, false, nil
 }

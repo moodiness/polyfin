@@ -93,7 +93,7 @@ func (s *Service) attachedFiles(ctx context.Context, version library.Version, an
 		}
 		files, err := m.Attachments(ctx)
 		if err != nil {
-			s.logger.Info("The attached files of a version could not be read", "addon", version.Addon, "error", err)
+			s.logger.Info("The attached files of a version could not be read", "addon", version.AddonLog, "error", err)
 			return nil, err
 		}
 		s.attached.Put(version.ID, files)

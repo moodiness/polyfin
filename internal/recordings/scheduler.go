@@ -449,7 +449,7 @@ func (s *Service) recordPart(ctx context.Context, t Timer, recording accounts.ID
 		if ctx.Err() != nil || size(path) > 0 || errors.Is(err, hls.ErrBusy) {
 			return err
 		}
-		s.logger.Info("A channel's stream could not be recorded", "addon", version.Addon, "error", err)
+		s.logger.Info("A channel's stream could not be recorded", "addon", version.AddonLog, "error", err)
 	}
 	return err
 }

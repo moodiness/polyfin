@@ -117,12 +117,12 @@ func (s *Service) scannedKeyframes(ctx context.Context, version library.Version)
 		times, err := s.prober.Keyframes(ctx, version.URL)
 		if err != nil {
 			s.unscanned.Put(version.ID, err)
-			s.logger.Info("The keyframes of an MPEG-TS file could not be read: it plays converted", "addon", version.Addon, "error", err,
+			s.logger.Info("The keyframes of an MPEG-TS file could not be read: it plays converted", "addon", version.AddonLog, "error", err,
 				"duration", time.Since(started).Round(time.Millisecond))
 			return nil, err
 		}
 		s.saveKeyframes(ctx, version.ID, times)
-		s.logger.Info("Read the keyframes of an MPEG-TS file", "addon", version.Addon, "keyframes", len(times),
+		s.logger.Info("Read the keyframes of an MPEG-TS file", "addon", version.AddonLog, "keyframes", len(times),
 			"duration", time.Since(started).Round(time.Millisecond))
 		return times, nil
 	})

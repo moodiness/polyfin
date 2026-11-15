@@ -54,8 +54,9 @@ var ErrNotFound = errors.New("item not found")
 var ErrSeasonNotFound = errors.New("season not found")
 
 // AddonError reports a failure of the addon, IPTV source or local folder a
-// library asked: its name, the catalog asked, empty for another resource,
-// and the error, whose text it keeps. Browsing logs who failed with it.
+// library asked: its name as logs give it (see addons.Addon.LogName), the
+// catalog asked, empty for another resource, and the error, whose text it
+// keeps. Browsing logs who failed with it.
 type AddonError struct {
 	Addon   string
 	Catalog string
@@ -76,7 +77,7 @@ func failedAt(entry installed, catalog string, err error) error {
 	if _, named := errors.AsType[*AddonError](err); named {
 		return err
 	}
-	return &AddonError{Addon: entry.addon.Manifest.Name, Catalog: catalog, Err: err}
+	return &AddonError{Addon: entry.addon.LogName(), Catalog: catalog, Err: err}
 }
 
 // Service browses the libraries of users.
@@ -2107,7 +2108,7 @@ func (s *Service) describeBy(ctx context.Context, v view, r record, shared bool)
 			return s.completed(ctx, v, r, candidate, kept, shared), candidate, true
 		}
 		if !notOwn(candidate, err) {
-			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.LogName(), "error", err)
 		}
 	}
 	return stremio.Meta{}, installed{}, false
@@ -3168,7 +3169,7 @@ func (s *Service) searched(ctx context.Context, v view, sources []source, need i
 			metas, _, err := s.window(ctx, v, src, 0, need)
 			// An app that stops waiting cancels ctx: nothing failed.
 			if err != nil && ctx.Err() == nil {
-				s.logger.Warn("A search catalog could not be read", "addon", src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "error", err)
+				s.logger.Warn("A search catalog could not be read", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
 			}
 			mu.Lock()
 			lists[i], answered[i] = metas, true

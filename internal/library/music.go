@@ -659,7 +659,7 @@ func (s *Service) musicCatalog(ctx context.Context, v view, entry installed, cat
 			if skip == 0 {
 				return nil, err
 			}
-			s.logger.Warn("A music catalog could not be read further", "addon", entry.addon.Manifest.Name, "error", err)
+			s.logger.Warn("A music catalog could not be read further", "addon", entry.addon.LogName(), "error", err)
 			break
 		}
 		items = append(items, page.items...)
@@ -933,7 +933,7 @@ func (s *Service) expand(ctx context.Context, v view, entry installed, folders [
 				}
 			}
 			if err != nil && ctx.Err() == nil {
-				s.logger.Debug("A music page could not be read", "addon", entry.addon.Manifest.Name, "error", err)
+				s.logger.Debug("A music page could not be read", "addon", entry.addon.LogName(), "error", err)
 			}
 			return nil
 		})
@@ -1020,7 +1020,7 @@ func (s *Service) Music(ctx context.Context, user accounts.User, q MusicQuery) (
 					list, err = s.artistRecords(ctx, v, entry, r, kind != KindAlbum)
 				}
 				if err != nil {
-					s.logger.Debug("A music page could not be read", "addon", entry.addon.Manifest.Name, "error", err)
+					s.logger.Debug("A music page could not be read", "addon", entry.addon.LogName(), "error", err)
 					continue
 				}
 				add(entry, list)
@@ -1033,7 +1033,7 @@ func (s *Service) Music(ctx context.Context, user accounts.User, q MusicQuery) (
 			}
 			list, err := s.musicLibrary(ctx, v, l, q.Kinds, true, q.Shallow)
 			if err != nil {
-				s.logger.Debug("A music library could not be listed", "addon", l.addon.addon.Manifest.Name, "error", err)
+				s.logger.Debug("A music library could not be listed", "addon", l.addon.addon.LogName(), "error", err)
 				continue
 			}
 			add(l.addon, list)
@@ -1507,7 +1507,7 @@ func (s *Service) SearchMusic(ctx context.Context, user accounts.User, term stri
 			results, err := s.musicSearch(ctx, entry, term)
 			if err != nil {
 				if ctx.Err() == nil {
-					s.logger.Warn("A music addon could not search", "addon", entry.addon.Manifest.Name, "error", err)
+					s.logger.Warn("A music addon could not search", "addon", entry.addon.LogName(), "error", err)
 				}
 				return
 			}
@@ -1706,7 +1706,7 @@ func trackVersionID(item accounts.ID) accounts.ID {
 // track at the same time share one request to the stream resource.
 func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, renew bool) (Version, error) {
 	e := r.Music
-	version := Version{ID: trackVersionID(r.ID), Item: r.ID, Name: e.Title, Addon: entry.addon.Manifest.Name,
+	version := Version{ID: trackVersionID(r.ID), Item: r.ID, Name: e.Title, Addon: entry.addon.Name(), AddonLog: entry.addon.LogName(),
 		Origin: Origin{Addon: entry.addon.ID, Type: originEclipse, ID: e.ID}, Confined: entry.confined,
 		Runtime: time.Duration(e.Duration * float64(time.Second))}
 	if !renew && e.StreamURL != "" {
@@ -1722,7 +1722,7 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 			return Version{}, ErrNotFound
 		}
 		if err != nil {
-			return Version{}, &StreamError{Addon: version.Addon, Err: err}
+			return Version{}, &StreamError{Addon: version.AddonLog, Err: err}
 		}
 		version.URL, version.Expires = stream.URL, stream.Expires
 		version.Name = cmpOr(stream.Quality, e.Title)
@@ -1738,7 +1738,8 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 // StreamError reports a track whose addon gave no stream: it could not be
 // reached, or its answer was no stream.
 type StreamError struct {
-	// Addon is the name of the track's addon.
+	// Addon names the track's addon as logs name it (see
+	// addons.Addon.LogName).
 	Addon string
 	Err   error
 }

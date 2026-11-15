@@ -105,7 +105,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 	// are never converted. Without one, the title is refused as downloads
 	// are without the permission.
 	if !user.FitsGroup(h.versionHeight(r.Context(), version)) {
-		h.Logger.Info("A download taller than the user's quality group was refused", "addon", version.Addon)
+		h.Logger.Info("A download taller than the user's quality group was refused", "addon", version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -120,7 +120,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		delivery.Attachment = name
 	}
 	if err := h.Playback.Serve(w, r, version, delivery); err != nil && r.Context().Err() == nil {
-		h.Logger.Warn("A download could not be served", "addon", version.Addon, "error", err)
+		h.Logger.Warn("A download could not be served", "addon", version.AddonLog, "error", err)
 	}
 }
 

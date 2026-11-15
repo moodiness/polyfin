@@ -196,13 +196,13 @@ func (c *carry) choose(ctx context.Context, from library.Version, n int) (versio
 			}
 			sw, err := c.alike(ctx, candidate)
 			if err != nil {
-				c.s.logger.Debug("A version cannot carry a play on", "addon", candidate.Addon, "error", err)
+				c.s.logger.Debug("A version cannot carry a play on", "addon", candidate.AddonLog, "error", err)
 				continue
 			}
 			sw.segment = n
 			c.s.switches.by.Put(key, sw)
 			c.s.switches.latest.Put(c.remux.Session, sw.to)
-			c.s.logger.Info("A play went on from another version: its source failed", "from", from.Addon, "to", sw.to.Addon,
+			c.s.logger.Info("A play went on from another version: its source failed", "from", from.AddonLog, "to", sw.to.AddonLog,
 				"segment", n, "shift", sw.shift)
 			return sw, nil
 		}

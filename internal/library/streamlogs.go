@@ -74,7 +74,7 @@ func (s *Service) streamsFailed(ctx context.Context, entry installed, key stream
 	if userWaited {
 		level = slog.LevelWarn
 	}
-	s.logger.Log(ctx, level, "An addon could not list streams", "addon", entry.addon.Manifest.Name, "type", key.contentType,
+	s.logger.Log(ctx, level, "An addon could not list streams", "addon", entry.addon.LogName(), "type", key.contentType,
 		"id", key.id, "error", err)
 }
 
@@ -95,7 +95,7 @@ func (s *Service) noticesLogged(ctx context.Context, entry installed, key stream
 	if !s.logger.Enabled(ctx, level) {
 		return
 	}
-	attrs := []any{"addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id, "notice", text}
+	attrs := []any{"addon", entry.addon.LogName(), "type", key.contentType, "id", key.id, "notice", text}
 	s.logger.Log(ctx, level, message, append(attrs, noticeShapes(notices)...)...)
 }
 

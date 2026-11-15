@@ -243,7 +243,7 @@ func (s *Service) SetFollowUps(delays ...time.Duration) { s.followUpDelays = del
 // saved, and told to whoever follows the title's versions (see
 // streamsChanged).
 func (s *Service) followStreams(ctx context.Context, entry installed, key streamKey, asked uint64, streams []stremio.Stream) ([]stremio.Stream, error) {
-	return followUpList(ctx, s, s.streamLists, streamKind, key, entry.addon.Manifest.Name, asked, streams,
+	return followUpList(ctx, s, s.streamLists, streamKind, key, entry.addon.LogName(), asked, streams,
 		func(ctx context.Context) ([]stremio.Stream, error) {
 			return s.fetchStreams(ctx, entry, key.contentType, key.id)
 		}, func() { s.streamsChanged(key) })
@@ -253,7 +253,7 @@ func (s *Service) followStreams(ctx context.Context, entry installed, key stream
 // under key, in answer to request asked (see ask), follows them up (see
 // followUpList), and returns those listed.
 func (s *Service) followSubtitles(ctx context.Context, entry installed, key streamKey, asked uint64, subtitles []stremio.Subtitle) ([]stremio.Subtitle, error) {
-	return followUpList(ctx, s, s.subtitleLists, subtitleKind, key, entry.addon.Manifest.Name, asked, subtitles,
+	return followUpList(ctx, s, s.subtitleLists, subtitleKind, key, entry.addon.LogName(), asked, subtitles,
 		func(ctx context.Context) ([]stremio.Subtitle, error) {
 			return s.fetchSubtitles(ctx, entry, key.contentType, key.id)
 		}, nil)

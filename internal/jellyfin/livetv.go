@@ -756,7 +756,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 	versions = h.inGroup(r.Context(), user, slices.DeleteFunc(versions, func(v library.Version) bool {
 		failure := h.Playback.Failure(v.ID)
 		if failure != nil {
-			h.Logger.Info("A channel's stream is left out: it failed lately", "addon", v.Addon, "error", failure)
+			h.Logger.Info("A channel's stream is left out: it failed lately", "addon", v.AddonLog, "error", failure)
 		}
 		return failure != nil
 	}))
@@ -778,7 +778,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		// next one is tried at once.
 		analysis, err := h.Playback.AnalyzeLive(playback.ForUser(r.Context(), user.ID), version)
 		if err != nil {
-			h.Logger.Info("A channel's stream could not be analyzed", "addon", version.Addon, "channel", channel.Name, "failure", playback.LiveFailure(err), "error", err)
+			h.Logger.Info("A channel's stream could not be analyzed", "addon", version.AddonLog, "channel", channel.Name, "failure", playback.LiveFailure(err), "error", err)
 			continue
 		}
 		manifest := playback.Manifest(analysis)
@@ -788,9 +788,9 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		source, ok := h.liveSource(r, channel, version, id, analysis, request, session, relay, permits)
 		if !ok {
 			if permits != allowed {
-				h.Logger.Info("A channel's stream would need its video converted while the server converts as many as it may", "addon", version.Addon)
+				h.Logger.Info("A channel's stream would need its video converted while the server converts as many as it may", "addon", version.AddonLog)
 			} else {
-				h.Logger.Info("A channel's stream would need a conversion the user may not have, or is above their bitrate limit or quality group", "addon", version.Addon)
+				h.Logger.Info("A channel's stream would need a conversion the user may not have, or is above their bitrate limit or quality group", "addon", version.AddonLog)
 			}
 			continue
 		}
@@ -987,7 +987,7 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 	// PlaybackInfo never offers a stream taller than the user's quality
 	// group as it is: this guards URLs kept, or made up.
 	if !user.FitsGroup(videoHeight(analysis)) {
-		h.Logger.Info("A channel's stream taller than the user's quality group was refused", "addon", version.Addon)
+		h.Logger.Info("A channel's stream taller than the user's quality group was refused", "addon", version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -1001,7 +1001,7 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 		err = h.Playback.Serve(w, r, version, playback.Delivery{})
 	}
 	if err != nil && r.Context().Err() == nil {
-		h.Logger.Warn("A channel's stream could not be served", "addon", version.Addon, "error", err)
+		h.Logger.Warn("A channel's stream could not be served", "addon", version.AddonLog, "error", err)
 	}
 }
 
@@ -1045,7 +1045,7 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Playback.ServeLive(w, r, version, string(target), h.liveLink(r, item.ID, token)); err != nil && r.Context().Err() == nil {
-		h.Logger.Debug("A file of a relayed playlist could not be relayed", "addon", version.Addon, "error", err)
+		h.Logger.Debug("A file of a relayed playlist could not be relayed", "addon", version.AddonLog, "error", err)
 	}
 }
 

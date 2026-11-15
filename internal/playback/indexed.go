@@ -217,7 +217,7 @@ func (s *Service) locate(ctx context.Context, version library.Version, analysis 
 		// The host or the network failed: asked again a while later; a
 		// torrent that did not send in time, at the next play (see
 		// passing).
-		s.logger.Info("The subtitles of a version could not be located", "addon", version.Addon, "error", err)
+		s.logger.Info("The subtitles of a version could not be located", "addon", version.AddonLog, "error", err)
 		if !passing(version, err) {
 			s.unlocated.Put(version.ID, err)
 		}
@@ -250,7 +250,7 @@ func (s *Service) readLocations(ctx context.Context, version library.Version, an
 	case errors.Is(err, container.ErrNoIndex):
 		return []int{}, nil
 	case errors.Is(err, container.ErrUnreadable):
-		s.logger.Info("The index of a version cannot be read", "addon", version.Addon, "error", err)
+		s.logger.Info("The index of a version cannot be read", "addon", version.AddonLog, "error", err)
 		return []int{}, nil
 	case err != nil:
 		return nil, err
@@ -285,7 +285,7 @@ func (s *Service) readLocations(ctx context.Context, version library.Version, an
 			// them; once a remux has extracted them whole, they are.
 			s.logger.Info("Subtitle tracks inside a version are not offered as files: its host serves one range per request, "+
 				"and reading them whole would take it too many requests; they are once a remux has read the whole version",
-				"addon", version.Addon, "tracks", len(costly))
+				"addon", version.AddonLog, "tracks", len(costly))
 		}
 	}
 	slices.Sort(located)
@@ -351,7 +351,7 @@ func (s *Service) readSized(ctx context.Context, version library.Version, analys
 	if !known || told == size {
 		return err
 	}
-	s.logger.Info("The analysis of a version had a wrong size, corrected from its host", "addon", version.Addon,
+	s.logger.Info("The analysis of a version had a wrong size, corrected from its host", "addon", version.AddonLog,
 		"analyzed", size, "size", told)
 	s.correctSize(ctx, version.ID, analysis, told)
 	return read(told)
@@ -455,7 +455,7 @@ func (s *Service) readTrack(ctx context.Context, version library.Version, analys
 	started := time.Now()
 	track, err := s.readBlocks(ctx, version, analysis, stream)
 	if err != nil {
-		s.logger.Info("A subtitle track could not be read through its index", "addon", version.Addon, "error", err)
+		s.logger.Info("A subtitle track could not be read through its index", "addon", version.AddonLog, "error", err)
 		if !passing(version, err) {
 			s.untracked.Put(key, err)
 		}
@@ -470,7 +470,7 @@ func (s *Service) readTrack(ctx context.Context, version library.Version, analys
 		s.logger.Warn("Saving a subtitle track failed", "error", err)
 	}
 	s.tracks.Put(key, track)
-	s.logger.Debug("Read a subtitle track through its index", "addon", version.Addon, "format", track.Format,
+	s.logger.Debug("Read a subtitle track through its index", "addon", version.AddonLog, "format", track.Format,
 		"bytes", len(track.Data), "duration", time.Since(started))
 	return track, nil
 }

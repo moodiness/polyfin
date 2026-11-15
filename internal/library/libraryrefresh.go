@@ -316,7 +316,7 @@ func (s *Service) redescribeRefreshed(ctx context.Context, v view, l library, r 
 		return true, "", nil
 	}
 	if _, ok := s.keptDescription(ctx, l.addon, key, inDatabase); ok {
-		keptBy = l.addon.addon.Manifest.Name
+		keptBy = l.addon.addon.LogName()
 	}
 	return false, keptBy, err
 }

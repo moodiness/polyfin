@@ -342,10 +342,10 @@ func (s *Service) redescribe(ctx context.Context, v view, r record) (answered in
 			failure = err
 		}
 		if _, ok := s.keptDescription(ctx, candidate, key, inDatabase); ok {
-			return installed{}, false, candidate.addon.Manifest.Name, failure
+			return installed{}, false, candidate.addon.LogName(), failure
 		}
 		if !notOwn(candidate, err) {
-			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.LogName(), "error", err)
 		}
 	}
 	if ctx.Err() == nil {

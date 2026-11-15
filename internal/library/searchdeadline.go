@@ -126,6 +126,6 @@ func (s *Service) lateSearch(src source) {
 	now := s.now()
 	if s.lateSearches.remember(searchCatalogOf(src.key(0)), now, now.Add(lateSearchLife)) {
 		s.logger.Warn("A search catalog did not answer in time: the searches leave it out for a while",
-			"addon", src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "for", lateSearchLife)
+			"addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "for", lateSearchLife)
 	}
 }

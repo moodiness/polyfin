@@ -319,7 +319,18 @@ func (s *Service) storedLocation(version library.Version) (source.Location, bool
 // sizes prove right, or as soon as the file was analyzed.
 func locationOf(version library.Version, analyzed int64) source.Location {
 	return source.Location{URL: version.URL, Headers: version.RequestHeaders(), Confined: version.Confined, Size: version.Size,
-		Announcer: version.Addon, Analyzed: analyzed}
+		Announcer: announcerOf(version), Analyzed: analyzed}
+}
+
+// announcerOf names, for the source cache's record of whose sizes prove
+// right, the addon that listed version by its ID: a rename keeps its
+// record, and two installs of one addon keep one each. Empty for a
+// version no addon listed, whose size is never trusted.
+func announcerOf(version library.Version) string {
+	if version.Origin.Addon == (accounts.ID{}) {
+		return ""
+	}
+	return version.Origin.Addon.String()
 }
 
 // Torrents has the source cache read the versions that are torrents'
@@ -367,7 +378,7 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 		err = errNoTorrents
 	}
 	engine := s.torrents
-	location := source.Location{URL: version.URL, Size: version.Size, Announcer: version.Addon, Transient: true,
+	location := source.Location{URL: version.URL, Size: version.Size, Announcer: announcerOf(version), Transient: true,
 		HeaderTimeout: torrentHeaders, StallTimeout: s.pieceWait(),
 		Opener: source.FileOpener(func(ctx context.Context, _ string) (source.RandomFile, int64, error) {
 			if err != nil {
@@ -702,7 +713,7 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 	analysis, err := s.analyze(ctx, version, media.Prober.Probe)
 	if err == nil {
 		if err := s.listTorrentSubtitles(ctx, version); err != nil {
-			s.logger.Info("The files of a torrent could not be listed", "addon", version.Addon, "error", err)
+			s.logger.Info("The files of a torrent could not be listed", "addon", version.AddonLog, "error", err)
 		}
 	}
 	return analysis, err
@@ -849,14 +860,14 @@ func (s *Service) keepAnalysis(ctx context.Context, version library.Version, ana
 		s.logger.Warn("Saving a media analysis failed", "error", err)
 	}
 	s.analyses.Put(version.ID, analysis)
-	s.logger.Debug("Analyzed a version", "addon", version.Addon, "duration", time.Since(started))
+	s.logger.Debug("Analyzed a version", "addon", version.AddonLog, "duration", time.Since(started))
 	// A file with video and no audio plays silent everywhere: said once
 	// per version, for a user who reports it to tell the file from a play.
 	video := slices.ContainsFunc(analysis.Streams, func(s media.Stream) bool { return s.Type == "video" && !s.AttachedPicture })
 	audio := slices.ContainsFunc(analysis.Streams, func(s media.Stream) bool { return s.Type == "audio" })
 	if video && !audio {
 		if _, logged := s.silent.LoadOrStore(version.ID, struct{}{}); !logged {
-			s.logger.Info("A version has no audio track", "version", version.Name, "addon", version.Addon, "tracks", len(analysis.Streams))
+			s.logger.Info("A version has no audio track", "version", version.Name, "addon", version.AddonLog, "tracks", len(analysis.Streams))
 		}
 	}
 	if analyzed := s.analyzed.Load(); analyzed != nil {

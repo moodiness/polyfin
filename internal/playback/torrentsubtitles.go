@@ -290,7 +290,7 @@ func (s *Service) listTorrentSubtitles(ctx context.Context, version library.Vers
 		s.torrentFiles.mu.Lock()
 		s.torrentFiles.lists[version.ID] = list
 		s.torrentFiles.mu.Unlock()
-		s.logger.Debug("Listed the subtitle files of a torrent", "addon", version.Addon, "files", len(list))
+		s.logger.Debug("Listed the subtitle files of a torrent", "addon", version.AddonLog, "files", len(list))
 		return nil, nil
 	})
 	return err

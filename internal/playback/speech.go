@@ -197,14 +197,14 @@ func (s *Service) findSpeech(ctx context.Context, version library.Version) {
 	kind, reference, err := s.speechReference(ctx, version)
 	if err != nil {
 		s.speech.failed.Put(version.ID, err)
-		s.logger.Info("The speech of a version could not be found", "addon", version.Addon, "error", err)
+		s.logger.Info("The speech of a version could not be found", "addon", version.AddonLog, "error", err)
 		return
 	}
 	if err := s.saveSpeech(ctx, version.ID, kind, reference); err != nil {
 		s.logger.Warn("Saving the speech of a version failed", "error", err)
 		return
 	}
-	s.logger.Debug("Found when a version has speech", "addon", version.Addon, "reference", kind,
+	s.logger.Debug("Found when a version has speech", "addon", version.AddonLog, "reference", kind,
 		"speech", speech.Total(reference.Speech).Round(time.Second), "duration", time.Since(started).Round(time.Millisecond))
 }
 
@@ -221,7 +221,7 @@ func (s *Service) speechReference(ctx context.Context, version library.Version) 
 	}
 	reference, err := s.audioReference(ctx, version, analysis)
 	if errors.Is(err, errNoSpeech) {
-		s.logger.Info("A version has no speech reference", "addon", version.Addon, "reason", err)
+		s.logger.Info("A version has no speech reference", "addon", version.AddonLog, "reason", err)
 		return speechNone, speech.Reference{}, nil
 	}
 	if err != nil {
@@ -323,7 +323,7 @@ func (s *Service) audioReference(ctx context.Context, version library.Version, a
 		reference.Speech = append(reference.Speech, speech.Detect(samples, window.Start)...)
 	}
 	if budget != nil {
-		s.logger.Debug("Read the stretches of a version's audio", "addon", version.Addon, "stretch", stretch, "read", budget.read.Load())
+		s.logger.Debug("Read the stretches of a version's audio", "addon", version.AddonLog, "stretch", stretch, "read", budget.read.Load())
 	}
 	if speech.Total(reference.Speech) < minSpeech {
 		return speech.Reference{}, fmt.Errorf("%w: its audio has too little speech", errNoSpeech)

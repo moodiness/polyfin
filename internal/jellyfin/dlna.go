@@ -458,7 +458,7 @@ func (h *Handler) playDLNAVideo(w http.ResponseWriter, r *http.Request, play dln
 		err := h.Playback.Serve(counter, r, chosen.version, playback.Delivery{Relay: true, ContentType: resource.MimeType})
 		stop()
 		if err != nil && r.Context().Err() == nil {
-			h.Logger.Warn("A DLNA device's file could not be served", "addon", chosen.version.Addon, "error", err)
+			h.Logger.Warn("A DLNA device's file could not be served", "addon", chosen.version.AddonLog, "error", err)
 		}
 		h.reachedDLNA(r.Context(), current, fraction(h.dlna.sent(current), size, runtime))
 		return
@@ -510,7 +510,7 @@ func (h *Handler) playDLNAVideo(w http.ResponseWriter, r *http.Request, play dln
 	case errors.Is(err, hls.ErrBusy):
 		w.WriteHeader(http.StatusServiceUnavailable)
 	case err != nil && r.Context().Err() == nil && !errors.Is(err, hls.ErrStopped):
-		h.Logger.Warn("A DLNA device's conversion failed", "addon", chosen.version.Addon, "error", err)
+		h.Logger.Warn("A DLNA device's conversion failed", "addon", chosen.version.AddonLog, "error", err)
 	}
 }
 
@@ -743,7 +743,7 @@ func (h *Handler) playDLNAChannel(w http.ResponseWriter, r *http.Request, play d
 	err = h.Playback.ServeChannel(w, r.WithContext(ctx), version, true)
 	stop()
 	if err != nil && r.Context().Err() == nil {
-		h.Logger.Warn("A DLNA device's channel could not be served", "addon", version.Addon, "error", err)
+		h.Logger.Warn("A DLNA device's channel could not be served", "addon", version.AddonLog, "error", err)
 	}
 }
 

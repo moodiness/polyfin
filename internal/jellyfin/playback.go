@@ -444,7 +444,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	for _, version := range p.versions {
 		release, err := h.Playback.Hold(playback.ForUser(r.Context(), user.ID), version)
 		if err != nil {
-			h.Logger.Info("A replay could not play: its provider's connections are all in use", "addon", version.Addon)
+			h.Logger.Info("A replay could not play: its provider's connections are all in use", "addon", version.AddonLog)
 			h.refusePlay(w, r, user, item, "NoCompatibleStream", plays.FailedLimit)
 			return
 		}
@@ -739,7 +739,7 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		}
 		if err != nil {
 			if r.Context().Err() == nil {
-				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.AddonLog, "error", err)
 			}
 			return decided{unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}, false
 		}
@@ -942,7 +942,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 	streamed := decision.Streamed()
 	if decision.HLS {
 		if _, err := h.Playback.Plan(r.Context(), version); err != nil {
-			h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+			h.Logger.Info("A version cannot be streamed over HLS", "addon", version.AddonLog, "error", err)
 			streamed = false
 		}
 	}
@@ -1314,12 +1314,12 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// checked: they choose what is offered, and a play started before a
 	// rule hid its version asks for it again as it seeks.
 	if analysis, known := h.Playback.Analyzed(r.Context(), version.ID); known && overUserLimit(int64(user.MaxBitrate), analysis.Bitrate) {
-		h.Logger.Info("A version above the user's bitrate limit was refused", "addon", version.Addon)
+		h.Logger.Info("A version above the user's bitrate limit was refused", "addon", version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if !user.FitsGroup(h.versionHeight(r.Context(), version)) {
-		h.Logger.Info("A version taller than the user's quality group was refused", "addon", version.Addon)
+		h.Logger.Info("A version taller than the user's quality group was refused", "addon", version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -1338,7 +1338,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	})
 	link := func(target, name string) string { return h.liveLink(r, item.ID, grantToken())(target, name) }
 	if err := h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay, ContentType: contentType, Link: link}); err != nil && r.Context().Err() == nil {
-		h.Logger.Warn("A stream could not be served", "addon", version.Addon, "error", err)
+		h.Logger.Warn("A stream could not be served", "addon", version.AddonLog, "error", err)
 		h.streamFailed(r, user, item, query(r, "deviceId"))
 	}
 }

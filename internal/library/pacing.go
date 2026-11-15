@@ -452,7 +452,7 @@ func (s *Service) streamsOutcome(ctx context.Context, addon addons.Addon, err er
 	case ctx.Err() == nil && stremio.FailureOf(err) == stremio.FailureTimeout:
 		if pause, started := s.pace.streamsTimedOut(host, addon.ID); started {
 			s.logger.Info("An addon did not answer requests for streams in time: Polyfin's background requests to its server pause",
-				"addon", addon.Manifest.Name, "timeouts", timeoutsInARow, "wait", pause)
+				"addon", addon.LogName(), "timeouts", timeoutsInARow, "wait", pause)
 		}
 	}
 }
@@ -490,6 +490,6 @@ func refusedNotices(notices []stremio.Stream) bool {
 func (s *Service) refusedFor(addon addons.Addon, wait time.Duration) {
 	if s.pace.refused(stremio.HostOf(addon.ManifestURL), wait) {
 		s.logger.Info("An addon refused a request for its rate: Polyfin's background requests to its server pause", "addon",
-			addon.Manifest.Name, "wait", min(wait, paceWaitMost))
+			addon.LogName(), "wait", min(wait, paceWaitMost))
 	}
 }

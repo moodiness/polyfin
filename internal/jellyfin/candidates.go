@@ -170,7 +170,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				wait = endedTorrentWait
 			}
 			if err := h.Playback.TorrentAdmittedWithin(detached.Context(), version, wait); err != nil {
-				h.Logger.Info("A torrent version is passed over: as many torrents run as Torrents at once allows", "addon", version.Addon)
+				h.Logger.Info("A torrent version is passed over: as many torrents run as Torrents at once allows", "addon", version.AddonLog)
 				start.tried(version, err)
 				outcomes.note(n, TryTorrentCap, nil)
 				return tried{n: n, unreadable: true, unstarted: true}
@@ -190,7 +190,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 					// The play is decided, or gave up: it waits no more.
 					return tried{n: n}
 				}
-				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
+				h.Logger.Info("A version could not be analyzed", "addon", version.AddonLog, "error", err)
 				start.tried(version, err)
 				unstarted := version.Torrent != nil && playback.TorrentUnstarted(err)
 				if unstarted {
@@ -219,10 +219,10 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				return tried{n: n, unreadable: true, unstarted: true}
 			}
 			if permits != allowed {
-				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
+				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.AddonLog)
 				outcomes.note(n, TryConversionCap, nil)
 			} else {
-				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit or quality group, or cannot be streamed", "addon", version.Addon)
+				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit or quality group, or cannot be streamed", "addon", version.AddonLog)
 				outcomes.note(n, TryUnplayable, nil)
 			}
 			return tried{n: n}
@@ -264,7 +264,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				result.decided = &states[n].decided
 				if n > 0 && states[0] != nil && states[0].plays {
 					h.Logger.Info("Prefer versions the app plays without conversion passed over the first version, which the app plays only converted",
-						"item", p.item.ID, "passed", p.versions[c.order[0]].Addon, "addon", states[n].decided.version.Addon)
+						"item", p.item.ID, "passed", p.versions[c.order[0]].AddonLog, "addon", states[n].decided.version.AddonLog)
 				}
 			}
 			break
@@ -298,14 +298,14 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 					receiving = true
 					if !waitingOn[n] {
 						waitingOn[n] = true
-						h.Logger.Info("A torrent version is slow to start but its pieces keep coming: the play waits on for it", "addon", version.Addon)
+						h.Logger.Info("A torrent version is slow to start but its pieces keep coming: the play waits on for it", "addon", version.AddonLog)
 					}
 					continue
 				}
 				// Its result, should it still come, replaces this.
 				states[n] = &tried{n: n, unstarted: true}
 				result.unstarted = true
-				h.Logger.Info("A torrent version took too long to start for the play; it is read on for the next one", "addon", version.Addon)
+				h.Logger.Info("A torrent version took too long to start for the play; it is read on for the next one", "addon", version.AddonLog)
 			}
 			if receiving {
 				lateTimer.Reset(min(playback.TorrentPlayCheck, h.Playback.TorrentPlayMost()-time.Since(waited)))

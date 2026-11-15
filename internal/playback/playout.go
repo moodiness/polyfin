@@ -159,7 +159,7 @@ func (s *Service) programmer(playouts Playouts, id accounts.ID) hls.PlayoutNext 
 			if ctx.Err() != nil {
 				return hls.PlayoutPiece{}, nil, ctx.Err()
 			}
-			s.logger.Info("A version of a programme could not air", "channel", channel.Name, "programme", airing.Entry.Name, "addon", versions[current.tried].Addon,
+			s.logger.Info("A version of a programme could not air", "channel", channel.Name, "programme", airing.Entry.Name, "addon", versions[current.tried].AddonLog,
 				"error", err)
 		}
 		current.slate = true

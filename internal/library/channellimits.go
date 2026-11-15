@@ -153,7 +153,7 @@ func (s *Service) ChannelChoices(ctx context.Context) ([]ChannelGroupChoice, []C
 		if !ok {
 			index = len(groups)
 			byKey[key] = index
-			source := cmp.Or(src.addon.addon.Manifest.Name, src.catalog.Name)
+			source := cmp.Or(src.addon.addon.Name(), src.catalog.Name)
 			if catalog := src.catalog.Name; catalog != "" && catalog != source {
 				source += " › " + catalog
 			}

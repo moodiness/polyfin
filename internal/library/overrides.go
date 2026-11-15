@@ -922,8 +922,8 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	for i, err := range errs {
 		if err != nil {
 			src := sources[i]
-			s.logger.Debug("A search catalog could not be read", "addon", src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "error", err)
-			failures = append(failures, SearchFailure{Addon: src.addon.addon.Manifest.Name, Failure: cmp.Or(stremio.FailureOf(err), SearchFailed), Err: err})
+			s.logger.Debug("A search catalog could not be read", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
+			failures = append(failures, SearchFailure{Addon: src.addon.addon.Name(), Failure: cmp.Or(stremio.FailureOf(err), SearchFailed), Err: err})
 		}
 	}
 	titles := interleave(sources, lists)
@@ -935,7 +935,7 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 			continue
 		}
 		r.Parent = nil
-		results = append(results, RemoteResult{Item: item, Provider: title.src.addon.addon.Manifest.Name})
+		results = append(results, RemoteResult{Item: item, Provider: title.src.addon.addon.Name()})
 		records = append(records, r)
 	}
 	err = s.save(ctx, records)

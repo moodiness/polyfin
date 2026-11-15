@@ -44,8 +44,10 @@ type Version struct {
 	Protection *drm.Protection
 	Filename   string
 	Size       int64
-	// Addon is the name of the addon that listed the stream.
-	Addon string
+	// Addon is the name of the addon that listed the stream, as Polyfin
+	// shows it (see addons.Addon.Name), and AddonLog as logs name it (see
+	// addons.Addon.LogName).
+	Addon, AddonLog string
 	// Origin is where the stream was listed, to ask again for it when its
 	// link expires.
 	Origin Origin
@@ -600,7 +602,7 @@ func (s *Service) buildVersions(t target, serving []streamSource, lists [][]stre
 		// hide others; it is told once, when first listed.
 		if version.Labels.Elsewhere != "" && !remembered[version.ID] {
 			if _, known := s.versions.Get(version.ID); !known {
-				s.logger.Debug("A version names another title", "addon", version.Addon, "names", version.Labels.Elsewhere)
+				s.logger.Debug("A version names another title", "addon", version.AddonLog, "names", version.Labels.Elsewhere)
 			}
 		}
 		if !remembered[version.ID] {
@@ -869,7 +871,8 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 		Protection: stream.Protection,
 		Filename:   stream.BehaviorHints.Filename,
 		Size:       int64(stream.BehaviorHints.VideoSize),
-		Addon:      entry.addon.Manifest.Name,
+		Addon:      entry.addon.Name(),
+		AddonLog:   entry.addon.LogName(),
 		Origin:     Origin{Addon: entry.addon.ID, Type: source.contentType, ID: source.id},
 		Confined:   entry.confined,
 		Runtime:    t.runtime,
@@ -902,7 +905,7 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 			continue
 		}
 		version.Subtitles = append(version.Subtitles, ExternalSubtitle{ID: subtitleID(entry.addon.ID, subtitle), Language: subtitle.Lang,
-			URL: subtitle.URL, Addon: entry.addon.Manifest.Name, Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
+			URL: subtitle.URL, Addon: entry.addon.Name(), Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
 			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
 	}
 	version.LocalFolder = entry.addon.Local()
@@ -1037,7 +1040,7 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 	return shared(ctx, s, flight, func(ctx context.Context) ([]stremio.Stream, error) {
 		asked, done := s.ask(followKey{listStreams, key})
 		defer done()
-		s.logger.Debug("An addon is asked for streams", "addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id)
+		s.logger.Debug("An addon is asked for streams", "addon", entry.addon.LogName(), "type", key.contentType, "id", key.id)
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if userWaited := s.streamLogs.ended(flight); err != nil {
 			s.streamsFailed(ctx, entry, key, userWaited, err)
@@ -1412,7 +1415,7 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 			wg.Go(func() {
 				subtitles, err := s.subtitleList(ctx, entry, t)
 				if err != nil && ctx.Err() == nil {
-					s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
+					s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.LogName(), "error", err)
 				}
 				lists[i] = subtitles
 			})
@@ -1430,7 +1433,7 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 						detached, done := s.detached(ctx)
 						defer done()
 						if _, err := s.subtitleList(detached, entry, t); err != nil && detached.Err() == nil {
-							s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
+							s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.LogName(), "error", err)
 						}
 					}()
 				}
@@ -1453,7 +1456,7 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 			}
 			seen[file] = true
 			result = append(result, ExternalSubtitle{ID: file, Language: subtitle.Lang, URL: subtitle.URL,
-				Addon: serving[i].addon.Manifest.Name, Confined: serving[i].confined})
+				Addon: serving[i].addon.Name(), Confined: serving[i].confined})
 		}
 	}
 	return result, complete, nil

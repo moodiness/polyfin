@@ -193,7 +193,7 @@ func (s *Service) shown(ctx context.Context, v view, metaType, id string, base s
 		if err == nil {
 			return translation(base, kept.value)
 		}
-		s.logger.Debug("An addon could not describe a title in its language", "addon", entry.addon.Manifest.Name, "error", err)
+		s.logger.Debug("An addon could not describe a title in its language", "addon", entry.addon.LogName(), "error", err)
 	}
 	return base
 }
@@ -223,7 +223,7 @@ func (s *Service) readTranslations(ctx context.Context, titles []untranslated) {
 		reading := Background(detached)
 		for _, t := range titles {
 			if _, err := s.keptMeta(reading, t.entry, t.metaType, t.id); err != nil && reading.Err() == nil {
-				s.logger.Debug("An addon could not describe a title in its language", "addon", t.entry.addon.Manifest.Name, "error", err)
+				s.logger.Debug("An addon could not describe a title in its language", "addon", t.entry.addon.LogName(), "error", err)
 			}
 		}
 	}()

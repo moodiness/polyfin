@@ -236,10 +236,10 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 // recorded as none.
 func (s *Service) liveFailed(ctx context.Context, version library.Version, err error, kept bool) {
 	if errors.Is(err, context.Canceled) {
-		s.logger.Debug("A channel's stream was left as it started", "addon", version.Addon, "stream", version.Name, "error", err)
+		s.logger.Debug("A channel's stream was left as it started", "addon", version.AddonLog, "stream", version.Name, "error", err)
 		return
 	}
-	s.logger.Info("A channel's stream failed", "addon", version.Addon, "stream", version.Name, "failure", LiveFailure(err), "error", err)
+	s.logger.Info("A channel's stream failed", "addon", version.AddonLog, "stream", version.Name, "failure", LiveFailure(err), "error", err)
 	s.report(ctx, version, err)
 	if kept && LiveFailure(err) != LiveRefused {
 		s.fail(version, err)

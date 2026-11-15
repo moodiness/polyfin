@@ -56,7 +56,8 @@ func TestAKeptAnalysisRefusesAnErrorFileAtItsFirstByte(t *testing.T) {
 	host := &outageHost{errorFile: make([]byte, errorFileSize)}
 	host.down.Store(true)
 	s := newService(t, host, "ffprobe", nil)
-	version := library.Version{ID: accounts.ID{41}, Addon: "addon", URL: "https://93.184.216.34/episode.mkv", Size: size}
+	version := library.Version{ID: accounts.ID{41}, Addon: "addon", Origin: library.Origin{Addon: accounts.ID{9}}, URL: "https://93.184.216.34/episode.mkv",
+		Size: size}
 	s.keepAnalysis(t.Context(), version, media.Analysis{Size: size, Duration: 43 * time.Minute}, time.Now())
 	// Kept in the database, as after a restart: a play reads it first.
 	s.analyses.Delete(version.ID)
@@ -93,7 +94,8 @@ func TestVersionsRefusedForAnErrorFileAreTriedAgainOnceTheHostRecovers(t *testin
 	host := &outageHost{file: make([]byte, size), errorFile: make([]byte, errorFileSize)}
 	s := newService(t, host, "ffprobe", nil)
 	version := func(id byte) library.Version {
-		return library.Version{ID: accounts.ID{id}, Addon: "addon", URL: "https://93.184.216.34/" + string('a'+rune(id)) + ".mkv", Size: size}
+		return library.Version{ID: accounts.ID{id}, Addon: "addon", Origin: library.Origin{Addon: accounts.ID{9}},
+			URL: "https://93.184.216.34/" + string('a'+rune(id)) + ".mkv", Size: size}
 	}
 	read := func(v library.Version) error {
 		src := s.OpenSource(v)
@@ -143,7 +145,8 @@ func TestAnAnalysisOfAnotherFileDoesNotRefuseTheFile(t *testing.T) {
 	for _, announced := range []int64{size, 0} {
 		host := &outageHost{file: make([]byte, size)}
 		s := newService(t, host, "ffprobe", nil)
-		version := library.Version{ID: accounts.ID{51}, Addon: "addon", URL: "https://93.184.216.34/movie.mkv", Size: announced}
+		version := library.Version{ID: accounts.ID{51}, Addon: "addon", Origin: library.Origin{Addon: accounts.ID{9}}, URL: "https://93.184.216.34/movie.mkv",
+			Size: announced}
 		s.keepAnalysis(t.Context(), version, media.Analysis{Size: errorFileSize, Duration: time.Minute}, time.Now())
 		src := s.OpenSource(version)
 		got, err := src.Size(t.Context())

@@ -41,7 +41,7 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 			if how == fromAddons {
 				var err error
 				if described, err = s.meta(ctx, candidate, meta.Type, id); err != nil {
-					s.logger.Debug("An addon could not describe an IPTV title", "addon", candidate.addon.Manifest.Name, "error", err)
+					s.logger.Debug("An addon could not describe an IPTV title", "addon", candidate.addon.LogName(), "error", err)
 					continue
 				}
 			} else if kept, ok := s.keptDescription(ctx, candidate, metaKey{candidate.addon.ID, meta.Type, id}, how); ok {

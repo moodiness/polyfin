@@ -130,7 +130,7 @@ func (h *Handler) logPlay(r *http.Request, item accounts.ID, version library.Ver
 	if !h.Logger.Enabled(r.Context(), slog.LevelDebug) {
 		return
 	}
-	attrs := []any{"app", callerFrom(r.Context()).Device.Client, "item", item, "addon", version.Addon}
+	attrs := []any{"app", callerFrom(r.Context()).Device.Client, "item", item, "addon", version.AddonLog}
 	switch {
 	case decision.DirectPlay:
 		h.Logger.Debug("A version plays as it is", attrs...)

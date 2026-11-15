@@ -568,7 +568,7 @@ func (s *Service) runJob(job ocrJob) string {
 		if !passing(job.version, err) {
 			s.pictures.failed.Put(job.track.key, err)
 		}
-		s.logger.Info("A picture subtitle track could not be read into text", "addon", job.version.Addon, "error", err)
+		s.logger.Info("A picture subtitle track could not be read into text", "addon", job.version.AddonLog, "error", err)
 	}
 	return missing
 }
@@ -665,7 +665,7 @@ func (s *Service) readPictures(ctx context.Context, job ocrJob) (string, error) 
 	s.pictures.mu.Lock()
 	s.pictures.generation++
 	s.pictures.mu.Unlock()
-	s.logger.Info("Read a picture subtitle track into text", "addon", job.version.Addon, "language", language, "pictures", pictures,
+	s.logger.Info("Read a picture subtitle track into text", "addon", job.version.AddonLog, "language", language, "pictures", pictures,
 		"cues", len(cues), "duration", time.Since(started).Round(time.Millisecond))
 	return "", nil
 }

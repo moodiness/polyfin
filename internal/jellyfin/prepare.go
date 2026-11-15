@@ -341,21 +341,21 @@ func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 	// Endless analyzes it as a channel's, which is all its play reads.
 	if library.AddonVideoVersion(version) {
 		if endless, err := h.Playback.Endless(ctx, version); err != nil || endless {
-			h.Logger.Debug("Prepared a live version ahead of playback", "addon", version.Addon, "live", endless, "error", err)
+			h.Logger.Debug("Prepared a live version ahead of playback", "addon", version.AddonLog, "live", endless, "error", err)
 			return
 		}
 	}
 	analysis, err := h.Playback.Analyze(ctx, version)
 	if err != nil {
-		h.Logger.Debug("A version could not be analyzed ahead of playback", "addon", version.Addon, "error", err)
+		h.Logger.Debug("A version could not be analyzed ahead of playback", "addon", version.AddonLog, "error", err)
 		return
 	}
 	// A version without an index still plays as it is; a first play would
 	// find that out the same way. One with an index has the bytes of its
 	// first segment warmed in the background (see playback.Service.Warm).
 	if _, err := h.Playback.Plan(ctx, version); err != nil {
-		h.Logger.Debug("A version's keyframe index could not be read ahead of playback", "addon", version.Addon, "error", err)
+		h.Logger.Debug("A version's keyframe index could not be read ahead of playback", "addon", version.AddonLog, "error", err)
 	}
 	h.Playback.SubtitlesLocated(ctx, version, analysis)
-	h.Logger.Debug("Prepared a version ahead of playback", "addon", version.Addon, "duration", time.Since(started))
+	h.Logger.Debug("Prepared a version ahead of playback", "addon", version.AddonLog, "duration", time.Since(started))
 }

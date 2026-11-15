@@ -34,7 +34,7 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 		ctx := context.WithoutCancel(ctx)
 		in, release, err := s.probeInput(ctx, version)
 		if err != nil {
-			s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.Addon, "error", err)
+			s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.AddonLog, "error", err)
 			s.unmaster(version, err)
 			return analysis, nil
 		}
@@ -47,7 +47,7 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 			}
 			found, err := s.ffprobe().MasteringDisplay(ctx, in, stream.Index)
 			if err != nil {
-				s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.Addon, "error", err)
+				s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.AddonLog, "error", err)
 				s.unmaster(version, err)
 				return analysis, nil
 			}
