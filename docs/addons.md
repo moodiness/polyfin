@@ -133,6 +133,8 @@ API details: [Used by in the admin API](jellyfin-api.md#used-by-in-the-admin-api
 
 A torrent that cannot play is left out of the versions. So a title whose addons list only torrents has no version then.
 
+Polyfin never takes streams from a video site itself: it plays only what an addon or a source lists. So a YouTube video or a web page an addon lists stays unplayable, and a title's trailer plays in its site's own player, with that site's ads and rules. An addon that lists `http` links plays them as it plays any link, and the addon, with the administrator who installs it, answers for them.
+
 Every rule from an addon's streams to a title's versions, in the order Polyfin applies them, is in [Which streams become versions](versions.md#which-streams-become-versions).
 
 ## Identifiers addons accept
