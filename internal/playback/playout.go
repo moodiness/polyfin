@@ -234,7 +234,7 @@ func (s *Service) programmePiece(ctx context.Context, version library.Version, o
 	} else {
 		src := s.open(version)
 		unurge := src.Urge()
-		target, unregister := s.loopback.register(src)
+		target, unregister := s.loopback.register(version, src)
 		r.Input = target
 		release = func() {
 			unregister()

@@ -279,15 +279,16 @@ func TestReadsWithinABudgetFetchNoMoreThanIt(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = loopback.Close() })
-			src := sources.Open(accounts.ID{1}, source.Location{URL: addon.URL + "/version.mkv"}, nil)
+			version := library.Version{ID: accounts.ID{1}, URL: addon.URL + "/version.mkv"}
+			src := sources.Open(version.ID, source.Location{URL: version.URL}, nil)
 			defer src.Release()
 			register := loopback.register
 			if tc.budgeted {
-				register = func(src *source.Source) (string, func()) {
-					return loopback.registerWithin(src, &readBudget{limit: budget})
+				register = func(version library.Version, src *source.Source) (string, func()) {
+					return loopback.registerWithin(version, src, &readBudget{limit: budget})
 				}
 			}
-			input, release := register(src)
+			input, release := register(version, src)
 			defer release()
 			ffmpeg := newSmallBuffers(t).client
 			// read reads n bytes from off, all that is served for n < 0,

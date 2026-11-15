@@ -305,7 +305,7 @@ func (c *carry) input(ctx context.Context, sw versionSwitch, switched int) (hls.
 	}
 	src := c.s.open(sw.to)
 	unurge := src.Urge()
-	target, unregister := c.s.loopback.register(src)
+	target, unregister := c.s.loopback.register(sw.to, src)
 	done := make(chan struct{})
 	go c.s.watchSource(sw.to, src, done)
 	failed := src.Failed()

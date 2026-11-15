@@ -339,7 +339,7 @@ func (s *Service) audioInput(version library.Version) (input string, options []s
 	}
 	src := s.open(version)
 	unurge := src.Urge()
-	target, free := s.loopback.register(src)
+	target, free := s.loopback.register(version, src)
 	return target, nil, func() { free(); unurge(); src.Release() }, nil
 }
 
@@ -363,7 +363,7 @@ func (s *Service) ReadAudio(ctx context.Context, version library.Version, read f
 	}
 	src := s.open(version)
 	defer src.Release()
-	target, free := s.loopback.register(src)
+	target, free := s.loopback.register(version, src)
 	defer free()
 	return read(ctx, target, nil)
 }

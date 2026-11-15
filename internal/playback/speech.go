@@ -307,7 +307,7 @@ func (s *Service) audioReference(ctx context.Context, version library.Version, a
 	windows := speechWindows(analysis.Duration, stretch)
 	src := s.open(version)
 	defer src.Release()
-	input, release := s.loopback.registerWithin(src, budget)
+	input, release := s.loopback.registerWithin(version, src, budget)
 	defer release()
 	var reference speech.Reference
 	for _, window := range windows {

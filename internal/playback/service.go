@@ -761,7 +761,7 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		// kept for playback.
 		src := s.open(version)
 		defer src.Release()
-		target, release := s.loopback.register(src)
+		target, release := s.loopback.register(version, src)
 		defer release()
 		started := time.Now()
 		probing, stop := context.WithCancel(ctx)
@@ -1137,6 +1137,12 @@ type Delivery struct {
 	// as: the player downloads them. A player sent to the source gets the
 	// name too, though the source's answer decides there.
 	Attachment string
+	// Link names the files an HLS playlist the version answers refers to,
+	// given each address and the name to give its file, for a player the
+	// playlist is relayed to: Polyfin's addresses, which relay the files
+	// with the headers the source needs (see ServeLive). Without it, a
+	// playlist is relayed as it is.
+	Link func(target, name string) string
 }
 
 // Serve answers a player's request for a version's bytes. The player is

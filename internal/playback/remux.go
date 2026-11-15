@@ -79,16 +79,17 @@ type Remux struct {
 
 // Plan returns how a version is cut into segments, reading its keyframe
 // index on first use. A file of a container whose index Polyfin does not
-// read, MPEG-TS, an MPEG program stream or AVI (see unindexedFormat), is
-// cut every few seconds (see hls.NewGridPlan): it plays over HLS only
-// converted, as Jellyfin plays such files, with FFmpeg reading it from
-// before the time asked (see hls.Plan.Searched). So is a version read from
-// its input (see LocalInputs) whose keyframes the disc does not tell, and
-// an MPEG-TS file of a local folder or a share whose keyframes could not
-// be read from the whole file, or not yet within scanWait for a play,
-// which those that could are cut on (see scannedKeyframes). The bytes of
-// its first segment are warmed meanwhile, unless a warm of the version ran
-// lately (see Warm), in the background when ctx is.
+// read, MPEG-TS, an MPEG program stream or AVI, and an HLS playlist (see
+// unindexedFormat), is cut every few seconds (see hls.NewGridPlan): it
+// plays over HLS only converted, as Jellyfin plays such files, with FFmpeg
+// reading it from before the time asked (see hls.Plan.Searched). So is a
+// version read from its input (see LocalInputs) whose keyframes the disc
+// does not tell, and an MPEG-TS file of a local folder or a share whose
+// keyframes could not be read from the whole file, or not yet within
+// scanWait for a play, which those that could are cut on (see
+// scannedKeyframes). The bytes of its first segment are warmed meanwhile,
+// unless a warm of the version ran lately (see Warm), in the background
+// when ctx is.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	plan, err := s.plan(ctx, version)
 	if err == nil && !plan.Grid() {
@@ -160,6 +161,11 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 		}
 		return plan.Searched(), nil
 	}
+	// An HLS playlist has no index to read: FFmpeg finds the segment of a
+	// time by the playlist, and searches it.
+	if HLS(analysis) {
+		return hls.NewGridPlan(analysis.Duration).Searched(), nil
+	}
 	times, err := s.keyframes(ctx, version, analysis)
 	if errors.Is(err, container.ErrNoIndex) && unindexedFormat(analysis) {
 		return hls.NewGridPlan(analysis.Duration).Searched(), nil
@@ -173,6 +179,15 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 // transportStream reports whether an analysis is of an MPEG-TS file.
 func transportStream(analysis media.Analysis) bool {
 	return slices.Contains(strings.Split(analysis.Format, ","), "mpegts")
+}
+
+// adtsFramed reports whether an analysis is of a file whose AAC audio may
+// be framed as MPEG-TS carries it (see hls.Remux.ADTS): an MPEG-TS file,
+// or an HLS playlist, whose segments mostly are MPEG-TS. FFmpeg's filter
+// that reframes it leaves AAC framed otherwise, as fragmented MP4
+// segments hold it, as it is: live streams are repackaged so already.
+func adtsFramed(analysis media.Analysis) bool {
+	return transportStream(analysis) || HLS(analysis)
 }
 
 // GridPlanned reports, reading nothing of its source, whether the HLS plan
@@ -199,23 +214,25 @@ func (s *Service) GridPlanned(version library.Version, analysis media.Analysis) 
 	return !saved
 }
 
-// searchedFormat reports whether an analysis is of an MPEG-TS file or an
-// MPEG program stream, such as a .mpg or .vob file: FFmpeg seeks in both
-// by searching their timestamps (see hls.Plan.Searched), which may start
-// anywhere.
+// searchedFormat reports whether an analysis is of an MPEG-TS file, an
+// MPEG program stream, such as a .mpg or .vob file, or an HLS playlist:
+// FFmpeg seeks in each by searching their timestamps (see
+// hls.Plan.Searched), which may start anywhere, a playlist's within the
+// segment it finds the time asked in.
 func searchedFormat(analysis media.Analysis) bool {
 	formats := strings.Split(analysis.Format, ",")
-	return slices.Contains(formats, "mpegts") || slices.Contains(formats, "mpeg")
+	return slices.Contains(formats, "mpegts") || slices.Contains(formats, "mpeg") || HLS(analysis)
 }
 
 // unindexedFormat reports whether an analysis is of a file whose
 // container has no keyframe index Polyfin reads, which is cut every few
-// seconds and searched (see Plan): an MPEG-TS file or an MPEG program
-// stream, which have none, or an AVI file. An AVI index lists frames in
-// decoding order, without the times they show at, which B-frames
-// reorder: FFmpeg copies such video with wrong times, so its video is
-// converted, as Jellyfin converts the H.264 of AVI files; and a keyframe
-// FFmpeg seeks to may show after the time asked, as in a searched file.
+// seconds and searched (see Plan): an MPEG-TS file, an MPEG program
+// stream or an HLS playlist, which have none, or an AVI file. An AVI index
+// lists frames in decoding order, without the times they show at, which
+// B-frames reorder: FFmpeg copies such video with wrong times, so its
+// video is converted, as Jellyfin converts the H.264 of AVI files; and a
+// keyframe FFmpeg seeks to may show after the time asked, as in a
+// searched file.
 func unindexedFormat(analysis media.Analysis) bool {
 	return searchedFormat(analysis) || slices.Contains(strings.Split(analysis.Format, ","), "avi")
 }
@@ -724,7 +741,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		// ones of the host.
 		src := s.open(remux.Version)
 		unurge := src.Urge()
-		target, unregister := s.loopback.register(src)
+		target, unregister := s.loopback.register(remux.Version, src)
 		done := make(chan struct{})
 		go s.watchSource(remux.Version, src, done)
 		release := func() {
@@ -746,7 +763,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if plan.Grid() || unindexedFormat(analysis) {
 			r.InputOptions = []string{"-start_at_zero"}
 		}
-		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
+		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && adtsFramed(analysis) {
 			r.ADTS = true
 		}
 		remux.convert(&r, video, TuningOf(s.settings()))

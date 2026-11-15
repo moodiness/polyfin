@@ -66,7 +66,7 @@ func (s *Service) progressiveOpener(remux Remux) hls.Opener {
 		}
 		src := s.open(remux.Version)
 		unurge := src.Urge()
-		target, unregister := s.loopback.register(src)
+		target, unregister := s.loopback.register(remux.Version, src)
 		done := make(chan struct{})
 		go s.watchSource(remux.Version, src, done)
 		release := func() {
@@ -81,7 +81,7 @@ func (s *Service) progressiveOpener(remux Remux) hls.Opener {
 		if unindexedFormat(analysis) {
 			r.InputOptions = []string{"-start_at_zero"}
 		}
-		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
+		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && adtsFramed(analysis) {
 			r.ADTS = true
 		}
 		remux.convert(&r, video, TuningOf(s.settings()))

@@ -330,7 +330,13 @@ func (s *Service) limited(ctx context.Context, version library.Version) bool {
 // DASH manifest, whose files are fetched one by one, rather than of one
 // endless stream.
 func Manifest(analysis media.Analysis) bool {
-	return strings.Contains(","+analysis.Format+",", ",hls,") || DASH(analysis)
+	return HLS(analysis) || DASH(analysis)
+}
+
+// HLS reports whether an analysis is of an HLS playlist, live or
+// finished.
+func HLS(analysis media.Analysis) bool {
+	return strings.Contains(","+analysis.Format+",", ",hls,")
 }
 
 // Redirectable reports whether a player may be sent to a version's source
@@ -808,7 +814,9 @@ func (l *loopback) liveURL(key, target, name string) string {
 // serveLive answers FFmpeg's and ffprobe's requests for a live stream
 // registered on the loopback interface: /live/{key}/{target}/{name}, or
 // /live/{key}/~{origin}/{path} for a file a DASH manifest names (see
-// folderURL).
+// folderURL). The files a version's playlist names are served under its
+// source's key (see servePlaylist), counted by its budget when it has
+// one.
 func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.SplitN(rest, "/", 3)
 	if len(parts) != 3 {
@@ -817,7 +825,14 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 	}
 	l.mu.Lock()
 	live, ok := l.feeds[parts[0]]
+	var budget *readBudget
+	if reg := l.sources[parts[0]]; reg != nil {
+		budget = reg.budget
+	}
 	l.mu.Unlock()
+	if budget != nil {
+		w = budgetWriter{w, budget}
+	}
 	target := ""
 	switch {
 	case strings.HasPrefix(parts[1], "~"):

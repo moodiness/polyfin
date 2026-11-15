@@ -188,7 +188,7 @@ func (s *Service) probeInput(ctx context.Context, version library.Version) (in m
 		return in, func() {}, err
 	}
 	src := s.open(version)
-	target, unregister := s.loopback.register(src)
+	target, unregister := s.loopback.register(version, src)
 	return media.Input{Path: target}, func() {
 		unregister()
 		src.Release()
