@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -1330,7 +1331,13 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if contentType == "" {
 		contentType = mimeTypes[containerOfName(version.Filename)]
 	}
-	if err := h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay, ContentType: contentType}); err != nil && r.Context().Err() == nil {
+	// The files of an HLS playlist relayed are the same play's (see
+	// liveFile), named with a grant signed once one is named.
+	grantToken := sync.OnceValue(func() string {
+		return h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: h.mediaDevice(r), Relay: true})
+	})
+	link := func(target, name string) string { return h.liveLink(r, item.ID, grantToken())(target, name) }
+	if err := h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay, ContentType: contentType, Link: link}); err != nil && r.Context().Err() == nil {
 		h.Logger.Warn("A stream could not be served", "addon", version.Addon, "error", err)
 		h.streamFailed(r, user, item, query(r, "deviceId"))
 	}

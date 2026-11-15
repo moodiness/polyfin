@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"cmp"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -1017,7 +1018,8 @@ func (h *Handler) liveLink(r *http.Request, channel accounts.ID, grant string) f
 }
 
 // liveFile relays a file a relayed playlist names, for the grant it was
-// signed for.
+// signed for: of a channel's stream, a video playing live, or a version
+// analyzed as an HLS playlist (see playback.Service.Serve).
 func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 	token := query(r, grantParameter)
 	grant, err := h.Playback.Signer().Verify(token)
@@ -1032,19 +1034,27 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	channel, err := h.played(r.Context(), user, opened)
-	if err != nil || channel.Kind != library.KindChannel && !library.AddonVideo(channel) {
+	item, err := h.played(r.Context(), user, opened)
+	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	version, err := h.Library.Version(r.Context(), user, channel.ID, grant.Version)
-	if err != nil || !h.playsLive(r.Context(), channel, version) {
+	version, err := h.Library.Version(r.Context(), user, item.ID, grant.Version)
+	if err != nil || !h.playsLive(r.Context(), item, version) && !h.relaysPlaylist(r.Context(), version) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	if err := h.Playback.ServeLive(w, r, version, string(target), h.liveLink(r, channel.ID, token)); err != nil && r.Context().Err() == nil {
-		h.Logger.Debug("A file of a channel's stream could not be relayed", "addon", version.Addon, "error", err)
+	if err := h.Playback.ServeLive(w, r, version, string(target), h.liveLink(r, item.ID, token)); err != nil && r.Context().Err() == nil {
+		h.Logger.Debug("A file of a relayed playlist could not be relayed", "addon", version.Addon, "error", err)
 	}
+}
+
+// relaysPlaylist reports whether a version is relayed as an HLS
+// playlist whose files are relayed too: analyzed as one (see
+// playback.Service.Serve).
+func (h *Handler) relaysPlaylist(ctx context.Context, version library.Version) bool {
+	analysis, ok := h.Playback.Analyzed(ctx, version.ID)
+	return ok && playback.HLS(analysis)
 }
 
 // livePlaylist serves the playlists of a channel converted by FFmpeg: the
