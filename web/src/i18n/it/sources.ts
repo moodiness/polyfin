@@ -94,6 +94,16 @@ const sources: typeof en = {
       'Usalo dopo aver riconfigurato l’add-on nella sua pagina di configurazione. Le sue librerie vengono mantenute, e i suoi elenchi delle versioni vengono dimenticati, così ogni titolo lo interpella di nuovo.',
     replaceSubmit: 'Sostituisci',
     replaced: 'L’indirizzo del manifest è stato sostituito.',
+    configure: 'Configura',
+    configureLabel: (name: string) => `Configura ${name}`,
+    configureHelp: 'Apre la sua pagina di configurazione in una nuova scheda.',
+    configured: 'Dopo la configurazione',
+    configuredHelp:
+      'Se la pagina di configurazione ti ha dato un nuovo link di installazione, incollalo qui e sostituisci l’indirizzo; se ha salvato le tue impostazioni dalla sua parte e il link è rimasto uguale, scegli «L’indirizzo non è cambiato» per rileggere il suo manifest.',
+    installLink: 'Nuovo link di installazione',
+    installLinkHint:
+      'Le sue librerie vengono mantenute, e i suoi elenchi delle versioni vengono dimenticati, così ogni titolo lo interpella di nuovo.',
+    addressUnchanged: 'L’indirizzo non è cambiato',
     librariesFollowed: (names: string) =>
       `Librerie che hanno seguito il nuovo identificativo del loro catalogo: ${names}.`,
     librariesRemoved: (names: string) => `Librerie rimosse con il loro catalogo: ${names}.`,

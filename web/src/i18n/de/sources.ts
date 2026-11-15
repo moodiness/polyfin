@@ -94,6 +94,16 @@ const sources: typeof en = {
       'Verwende dies, nachdem du das Add-on auf seiner Konfigurationsseite neu eingerichtet hast. Seine Bibliotheken bleiben erhalten, und seine Versionslisten werden vergessen, damit jeder Titel es erneut fragt.',
     replaceSubmit: 'Ersetzen',
     replaced: 'Die Manifest-Adresse wurde ersetzt.',
+    configure: 'Konfigurieren',
+    configureLabel: (name: string) => `${name} konfigurieren`,
+    configureHelp: 'Öffnet seine Konfigurationsseite in einem neuen Tab.',
+    configured: 'Nach der Konfiguration',
+    configuredHelp:
+      'Hat die Konfigurationsseite einen neuen Installationslink gegeben, füge ihn hier ein und ersetze die Adresse; hat sie deine Einstellungen bei sich gespeichert und ist der Link gleich geblieben, wähle „Die Adresse hat sich nicht geändert“, um sein Manifest erneut zu lesen.',
+    installLink: 'Neuer Installationslink',
+    installLinkHint:
+      'Seine Bibliotheken bleiben erhalten, und seine Versionslisten werden vergessen, damit jeder Titel es erneut fragt.',
+    addressUnchanged: 'Die Adresse hat sich nicht geändert',
     librariesFollowed: (names: string) =>
       `Bibliotheken, die der neuen Kennung ihres Katalogs gefolgt sind: ${names}.`,
     librariesRemoved: (names: string) => `Mit ihrem Katalog entfernte Bibliotheken: ${names}.`,

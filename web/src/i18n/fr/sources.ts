@@ -94,6 +94,16 @@ const sources: typeof en = {
       'À utiliser après avoir reconfiguré l’addon sur sa page de configuration. Ses bibliothèques sont conservées, et ses listes de versions sont oubliées, pour que chaque titre lui redemande.',
     replaceSubmit: 'Remplacer',
     replaced: 'L’adresse du manifeste a été remplacée.',
+    configure: 'Configurer',
+    configureLabel: (name: string) => `Configurer ${name}`,
+    configureHelp: 'Ouvre sa page de configuration dans un nouvel onglet.',
+    configured: 'Une fois configuré',
+    configuredHelp:
+      'Si la page de configuration a donné un nouveau lien d’installation, collez-le ici et remplacez l’adresse\u202f; si elle a gardé vos réglages de son côté et que son lien n’a pas changé, choisissez «\u202fL’adresse n’a pas changé\u202f» pour relire son manifeste.',
+    installLink: 'Nouveau lien d’installation',
+    installLinkHint:
+      'Ses bibliothèques sont conservées, et ses listes de versions sont oubliées, pour que chaque titre lui redemande.',
+    addressUnchanged: 'L’adresse n’a pas changé',
     librariesFollowed: (names: string) =>
       `Bibliothèques qui ont suivi le nouvel identifiant de leur catalogue\u202f: ${names}.`,
     librariesRemoved: (names: string) =>

@@ -95,6 +95,16 @@ const sources: typeof en = {
       'Úselo después de volver a configurar la extensión en su página de configuración. Sus bibliotecas se conservan, y sus listas de versiones se olvidan para que cada título vuelva a consultarla.',
     replaceSubmit: 'Reemplazar',
     replaced: 'Se ha reemplazado la dirección del manifiesto.',
+    configure: 'Configurar',
+    configureLabel: (name: string) => `Configurar ${name}`,
+    configureHelp: 'Abre su página de configuración en una pestaña nueva.',
+    configured: 'Una vez configurada',
+    configuredHelp:
+      'Si la página de configuración le dio un nuevo enlace de instalación, péguelo aquí y reemplace la dirección; si guardó sus ajustes por su lado y el enlace sigue igual, elija «La dirección no ha cambiado» para volver a leer su manifiesto.',
+    installLink: 'Nuevo enlace de instalación',
+    installLinkHint:
+      'Sus bibliotecas se conservan, y sus listas de versiones se olvidan para que cada título vuelva a consultarla.',
+    addressUnchanged: 'La dirección no ha cambiado',
     librariesFollowed: (names: string) =>
       `Bibliotecas que siguieron el nuevo identificador de su catálogo: ${names}.`,
     librariesRemoved: (names: string) => `Bibliotecas eliminadas con su catálogo: ${names}.`,

@@ -94,6 +94,16 @@ const sources: typeof en = {
       'Use isto depois de reconfigurar o complemento na página de configuração dele. As bibliotecas dele são mantidas, e as listas de versões dele são esquecidas, para que cada título o consulte de novo.',
     replaceSubmit: 'Substituir',
     replaced: 'O endereço do manifesto foi substituído.',
+    configure: 'Configurar',
+    configureLabel: (name: string) => `Configurar ${name}`,
+    configureHelp: 'Abre a página de configuração dele em uma nova aba.',
+    configured: 'Depois de configurar',
+    configuredHelp:
+      'Se a página de configuração deu um novo link de instalação, cole-o aqui e substitua o endereço; se ela guardou suas configurações do lado dela e o link continua o mesmo, escolha “O endereço não mudou” para ler o manifesto dele de novo.',
+    installLink: 'Novo link de instalação',
+    installLinkHint:
+      'As bibliotecas dele são mantidas, e as listas de versões dele são esquecidas, para que cada título o consulte de novo.',
+    addressUnchanged: 'O endereço não mudou',
     librariesFollowed: (names: string) =>
       `Bibliotecas que seguiram o novo identificador do catálogo: ${names}.`,
     librariesRemoved: (names: string) => `Bibliotecas removidas com o catálogo: ${names}.`,

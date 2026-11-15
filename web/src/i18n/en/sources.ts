@@ -92,6 +92,16 @@ const sources = {
       'Use this after reconfiguring the addon on its configure page. Its libraries are kept, and its version lists are forgotten, so that each title asks it again.',
     replaceSubmit: 'Replace',
     replaced: 'The manifest address was replaced.',
+    configure: 'Configure',
+    configureLabel: (name: string) => `Configure ${name}`,
+    configureHelp: 'Opens its configure page in a new tab.',
+    configured: 'Once configured',
+    configuredHelp:
+      'If the configure page gave a new install link, paste it here and replace the address; if it kept your settings on its side and its link stayed the same, choose “The address didn’t change” to read its manifest again.',
+    installLink: 'New install link',
+    installLinkHint:
+      'Its libraries are kept, and its version lists are forgotten, so that each title asks it again.',
+    addressUnchanged: 'The address didn’t change',
     librariesFollowed: (names: string) =>
       `Libraries that followed their catalog’s new identifier: ${names}.`,
     librariesRemoved: (names: string) => `Libraries removed with their catalog: ${names}.`,

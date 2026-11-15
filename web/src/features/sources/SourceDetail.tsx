@@ -1,6 +1,7 @@
 import {
   ArrowsClockwiseIcon,
   DotsThreeIcon,
+  GearIcon,
   LinkSimpleIcon,
   PencilSimpleIcon,
   TrashIcon,
@@ -8,6 +9,7 @@ import {
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  addonConfigureUrl,
   deleteAddon,
   fetchAddonRemoval,
   queryClient,
@@ -29,6 +31,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  ExternalButtonLink,
   Field,
   FieldError,
   IconButton,
@@ -120,6 +123,8 @@ export function SourceDetail({
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [confirmingAll, setConfirmingAll] = useState(false)
+  // Once configured: the panel Configure opens beside the addon's configure page.
+  const [configuring, setConfiguring] = useState(false)
 
   const fallbackScope: Scope = scope ?? 'shared'
   const toggle = useSourceToggle(fallbackScope, addon.id)
@@ -159,6 +164,7 @@ export function SourceDetail({
     onSuccess: (updated) => {
       replaceCachedAddon(fallbackScope, updated)
       setConfirmingAll(false)
+      setConfiguring(false)
       toastChanged(text.refreshedAll(updated.name), updated)
     },
     onSettled: () => invalidateScope(fallbackScope),
@@ -232,6 +238,24 @@ export function SourceDetail({
       >
         {iptv && refresh.isPending ? t.lineup.summary.refreshing : refreshLabel}
       </Button>
+      {addon.configurable && (
+        // A link the server answers with a redirect to the configure page, opened by the click
+        // itself, so that no popup blocker stops it, and without a referrer or an opener.
+        <ExternalButtonLink
+          href={addonConfigureUrl(scope, addon.id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          icon={GearIcon}
+          title={text.configureHelp}
+          aria-label={text.configureLabel(addon.name)}
+          onClick={() => {
+            refreshAll.reset()
+            setConfiguring(true)
+          }}
+        >
+          {text.configure}
+        </ExternalButtonLink>
+      )}
       <Menu
         label={text.moreActions(addon.name)}
         align="end"
@@ -546,6 +570,46 @@ export function SourceDetail({
         </Modal>
       )}
 
+      {scope !== null && addon.configurable && (
+        <Modal
+          open={configuring}
+          onClose={() => {
+            setConfiguring(false)
+            refreshAll.reset()
+          }}
+          title={text.configured}
+          width={640}
+        >
+          <div className="flex flex-col gap-5 p-5">
+            <p className="text-body text-ink-2">{text.configuredHelp}</p>
+            <ReplaceForm
+              scope={scope}
+              addon={addon}
+              label={text.installLink}
+              help={`${text.installLinkHint} ${t.sourceAdd.manifestUrlHint}`}
+              doneLabel={t.ui.close}
+              actions={
+                <Button
+                  loading={refreshAll.isPending}
+                  onClick={() => {
+                    refreshAll.reset()
+                    refreshAll.mutate()
+                  }}
+                >
+                  {text.addressUnchanged}
+                </Button>
+              }
+              error={refreshAll.isError ? errorMessage(t, refreshAll.error) : undefined}
+              onDone={(replaced) => {
+                setConfiguring(false)
+                refreshAll.reset()
+                if (replaced !== null) toastChanged(text.replaced, replaced)
+              }}
+            />
+          </div>
+        </Modal>
+      )}
+
       {scope !== null && (
         <ConfirmDialog
           open={confirming}
@@ -693,14 +757,28 @@ function libraryChangesNote(
     .join(' ')
 }
 
-/** A new manifest address for a Stremio or music addon, keeping its libraries. */
+/**
+ * A new manifest address for a Stremio or music addon, keeping its libraries: Replace the address,
+ * and the new install link of Once configured, which gives its own label and help, the actions
+ * beside Replace, their failure, and the label of the button that closes it.
+ */
 function ReplaceForm({
   scope,
   addon,
+  label,
+  help,
+  actions,
+  error,
+  doneLabel,
   onDone,
 }: {
   scope: Scope
   addon: Addon
+  label?: string
+  help?: string
+  actions?: ReactNode
+  error?: string
+  doneLabel?: string
   onDone: (replaced: Addon | null) => void
 }) {
   const { t } = useI18n()
@@ -723,8 +801,8 @@ function ReplaceForm({
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       <Field
-        label={text.newManifestUrl}
-        help={`${text.replaceHint} ${t.sourceAdd.manifestUrlHint}`}
+        label={label ?? text.newManifestUrl}
+        help={help ?? `${text.replaceHint} ${t.sourceAdd.manifestUrlHint}`}
         error={replace.isError ? errorMessage(t, replace.error) : undefined}
       >
         <TextInput
@@ -747,10 +825,12 @@ function ReplaceForm({
         <Button type="submit" variant="primary" loading={replace.isPending}>
           {text.replaceSubmit}
         </Button>
+        {actions}
         <Button variant="ghost" onClick={() => onDone(null)}>
-          {t.common.cancel}
+          {doneLabel ?? t.common.cancel}
         </Button>
       </div>
+      {error !== undefined && <FieldError>{error}</FieldError>}
     </form>
   )
 }
