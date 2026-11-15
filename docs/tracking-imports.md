@@ -32,7 +32,7 @@ Watch data also comes over from other places, the same way:
 |---|---|---|---|
 | Trakt | Its watch history | 250 plays a page, read again only when its last activities changed | Its playback progress |
 | Simkl | Its watched movies, and the watched episodes of its series and anime | One list status at a time, only what changed since the last import | Its paused playbacks, anime included |
-| MDBList | Its watched movies and episodes, without whole series or seasons marked watched without their episodes | 1,000 a page, only what changed since the last import | Its paused playbacks |
+| MDBList | Its watched movies and episodes, without whole series or seasons marked watched without their episodes. A title MDBList marks unwatched, its date set to empty, is not imported. | 1,000 a page, only what changed since the last import | Its paused playbacks |
 | PublicMetaDB | Its watch history | 500 plays a page, whole every time | Its resume points |
 
 Simkl numbers anime as AniDB does. Polyfin translates them to the seasons and episodes of IMDb and TVDB through the [anime mapping](tracking.md#anime).
@@ -86,6 +86,39 @@ Each choice is kept a day, so a mapping contributors correct is followed the nex
 - A title taken off **Continue Watching** gets back only a resume point set after it was taken off (see [Watch state](watch-state.md#watch-state)).
 - A position past **Marked played after (%)** marks the title played. One before **Resume point kept after (%)** is ignored. See [Played and resume thresholds](watch-state.md#played-and-resume-thresholds).
 - Apps see the changes the next time they refresh. An import does not push them through Jellyfin's live connection, which would ask the addons for every title it changed.
+
+Removals on a service are not followed: a title marked unwatched there stays played in Polyfin.
+
+- Simkl and MDBList report what changed, never what was removed.
+- Polyfin keeps no record of which service brought a mark. Plays in Polyfin, or from another service, must stay.
+
+To take a title off your lists in Polyfin, use "Remove from Next Up", "Remove from Continue Watching" or "Hide this title" (see [Watch state](watch-state.md#watch-state)). "Mark unplayed" also removes those plays from the history of every connected service (see [Played marks](tracking.md#played-marks)).
+
+### Dropped series
+
+Each import also reads the series you dropped, under the same history switch:
+
+| Service | What is read |
+|---|---|
+| Trakt | Its dropped shows |
+| Simkl | Its Dropped shows and anime |
+| MDBList | Its dropped shows |
+| AniList, MyAnimeList | Their Dropped entries, through the [anime mapping](tracking.md#anime), with **Import my AniList lists** or **Import my MyAnimeList lists** |
+| PublicMetaDB | Nothing: it has no dropped status |
+
+- Each list is read again whole when the service reports a change, so a series no longer dropped is seen.
+- A series dropped on any connected service leaves **Next Up**, **Upcoming** and **Continue Watching** (its episodes), in every app. Its played marks stay.
+- It comes back when no service lists it as dropped any more, or when an episode is played after the latest of its drop dates: in Polyfin, or an imported later play.
+- The drop date is the service's when it gives one. Otherwise it is when an import first found the series dropped.
+- On hold series stay shown.
+- The list goes when the history switch is turned off or the service disconnected.
+- **My account › Next Up** lists these series below the series taken off, under **Dropped on a tracking service**: each series once, with every service that lists it and its latest drop date. The list is read-only: a series comes back as above.
+
+See [Continue Watching and Next Up](watch-state.md#continue-watching-and-next-up).
+
+**Compared with Jellyfin**
+
+- Jellyfin imports no tracking service and has no dropped rule: its Next Up drops a series only through its watch state. Leaving dropped series out is Polyfin's own.
 
 ### Pace and problems
 

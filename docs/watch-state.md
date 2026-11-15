@@ -9,7 +9,7 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings, a
 - Playback moves the resume point, and marks a title played near its end, with Jellyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)).
 - **Continue Watching** lists titles under way; **Next Up**, the next episode of each series watched (see [Continue Watching and Next Up](#continue-watching-and-next-up)).
 - The **Upcoming** row lists coming episodes of series watched or marked favorite.
-- Next Up and Upcoming look at the 50 series watched last, as each series asks its addon for episodes. An imported history can hold hundreds (see [Importing your watch history](tracking-imports.md#importing-your-watch-history)).
+- Next Up and Upcoming look at the 50 series watched last, as each series asks its addon for episodes. Series dropped on a tracking service do not count in the 50. An imported history can hold hundreds (see [Importing your watch history](tracking-imports.md#importing-your-watch-history)).
 - Marking a series or season played marks its released episodes.
 - Apps keeping Jellyfin's live connection (WebSocket) open hear of changes from the user's other apps at once.
 
@@ -36,6 +36,7 @@ The web player has these actions in its ⋮ menus (see [Web player](web-client.m
 | **Continue Watching** | Each title | **Remove** |
 | **Next Up** | Each episode | **Remove** |
 | **Next Up**, below the episodes | Each series taken off | **Show again** |
+| **Next Up**, below the series taken off, under **Dropped on a tracking service** | Each series dropped on a connected tracking service, once, with the services that list it and its latest drop date | None |
 | **Hidden titles** | Each hidden title | **Show again** |
 
 Other apps see the change at their next refresh.
@@ -86,6 +87,13 @@ While it is off:
 - Removing it again counts from the new removal.
 - Tracking services are not told. Deleting the user deletes their removals.
 
+A series dropped on a connected tracking service is left out too (see [Dropped series](tracking-imports.md#dropped-series)):
+
+- of every app's Next Up, DLNA's too, of Upcoming, and of Continue Watching for its episodes;
+- until no service lists it as dropped any more, or an episode is played after its latest drop date, in Polyfin or by an imported later play.
+
+Asked for that series alone, Next Up still answers. Its played marks stay. **My account › Next Up** lists it under **Dropped on a tracking service**.
+
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Remove from Continue Watching also takes the series off Next Up** | **My account › Next Up** | Off | "Remove from Continue Watching" on an episode, season or series also takes its series off Next Up. **Reset my preferences** turns it off. |
@@ -104,6 +112,7 @@ The web player's home keeps its rows for a minute.
 - The web player keeps its rows for a minute on Jellyfin too: queries stay fresh a minute ([queryClient.ts](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/utils/query/queryClient.ts#L12-L50)), and server announcements do not reach them ([QueryClientEventHandler.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/QueryClientEventHandler.tsx#L20)). Reported upstream as jellyfin/jellyfin-web#8543. Asking again after a played change is Polyfin's own. On Jellyfin, a card marked played stays until the home redraws over a minute after last asking.
 - "Enable Rewatching in Next Up" (`enableRewatching`) follows Jellyfin 12.4, off unless the app sends it ([TvShowsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L90-L91)). The episode played last has the latest played date. The rewatch's next is the first played, released episode after it, specials left out ([NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L119-L156), [NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L249-L306)). It is left out when under way, dated with the previous play, and listed beside the next unplayed episode ([TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L154-L176), [TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L242-L248)). It applies to `seriesId` requests too, as in Jellyfin. DLNA's Next Up and next-episode preloading leave it off.
 - Jellyfin 12.4 takes a series off Next Up only through its watch state: marked played, or every played or started episode marked unplayed ([TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L71-L171), [NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L42-L70)). Remove from Next Up, its routes `DELETE` and `POST /Polyfin/UserItems/{itemId}/NextUp`, and its tie to Remove from Continue Watching are Polyfin's own.
+- Jellyfin 12.4 has no tracking import and no dropped rule. Leaving series dropped on a tracking service out is Polyfin's own.
 
 ### Track choices
 

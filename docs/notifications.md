@@ -182,6 +182,8 @@ A user follows two kinds of series, as the Upcoming row of Jellyfin apps shows t
 - the series they played an episode of (the 50 most recently played);
 - the series they marked favorite.
 
+A series dropped on a connected tracking service is not followed (see [Dropped series](tracking-imports.md#dropped-series)).
+
 Every two hours, starting five minutes after Polyfin starts, Polyfin looks at these series for episodes that became available.
 
 - Only users with a target for new episodes, the weekly summary or the month in review are looked at.
