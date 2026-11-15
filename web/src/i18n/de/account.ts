@@ -155,6 +155,10 @@ const account: typeof en = {
       nextUpEmptyHelp: 'Die Serien, die du schaust, erscheinen hier mit ihrer nächsten Folge.',
       nextUpRemovedList: 'Aus „Als Nächstes“ entfernte Serien',
       nextUpRemovedOn: 'Entfernt',
+      nextUpDroppedList: 'Auf einem Tracking-Dienst abgebrochen',
+      nextUpDroppedHelp:
+        'Sie kehren in „Als Nächstes“, „Demnächst“ und Weiterschauen zurück, sobald der Dienst sie nicht mehr als abgebrochen führt oder du eine ihrer Folgen abspielst.',
+      nextUpDroppedOn: (service: string) => `Auf ${service} abgebrochen`,
       nextUpShowLabel: (name: string) => `${name} wieder in „Als Nächstes“ anzeigen`,
       nextUpShown: (name: string) => `${name} ist wieder in „Als Nächstes“.`,
       withResume: 'Aus Weiterschauen entfernen nimmt die Serie auch aus „Als Nächstes“',

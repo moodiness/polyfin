@@ -2600,10 +2600,21 @@ export const showOwnHidden = (id: string) => request<void>('DELETE', `/account/h
 type NextUpRemoval = { item: AccountTitle; removedAt: string }
 
 /**
- * The user's Next Up: its episodes, the series taken off it, and whether Remove from Continue
- * Watching also takes a series off Next Up.
+ * A series dropped on tracking services, which keeps it out of Next Up: the services in the
+ * Tracking page's order, and the latest of their drop dates.
  */
-export type OwnNextUp = { items: AccountTitle[]; removed: NextUpRemoval[]; withResume: boolean }
+type NextUpDropped = { item: AccountTitle; services: TrackingServiceName[]; droppedAt: string }
+
+/**
+ * The user's Next Up: its episodes, the series taken off it, those dropped on a tracking service,
+ * and whether Remove from Continue Watching also takes a series off Next Up.
+ */
+export type OwnNextUp = {
+  items: AccountTitle[]
+  removed: NextUpRemoval[]
+  dropped: NextUpDropped[]
+  withResume: boolean
+}
 
 export const fetchOwnNextUp = (signal?: AbortSignal) =>
   request<OwnNextUp>('GET', '/account/next-up', undefined, signal)

@@ -155,6 +155,10 @@ const account: typeof en = {
       nextUpEmptyHelp: 'As séries que você está assistindo aparecem aqui com o próximo episódio.',
       nextUpRemovedList: 'Séries removidas de A seguir',
       nextUpRemovedOn: 'Removida',
+      nextUpDroppedList: 'Abandonadas em um serviço de acompanhamento',
+      nextUpDroppedHelp:
+        'Elas voltam para A seguir, Em breve e Continuar assistindo assim que o serviço deixar de marcá-las como abandonadas ou você reproduzir um dos episódios delas.',
+      nextUpDroppedOn: (service: string) => `Abandonada no ${service}`,
       nextUpShowLabel: (name: string) => `Mostrar ${name} em A seguir novamente`,
       nextUpShown: (name: string) => `${name} voltou para A seguir.`,
       withResume: 'Remover de Continuar assistindo também tira a série de A seguir',

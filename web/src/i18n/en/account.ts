@@ -157,6 +157,10 @@ const account = {
       nextUpEmptyHelp: 'The series you are watching show here with their next episode.',
       nextUpRemovedList: 'Series taken off Next Up',
       nextUpRemovedOn: 'Removed',
+      nextUpDroppedList: 'Dropped on a tracking service',
+      nextUpDroppedHelp:
+        'They come back to Next Up, Upcoming and Continue Watching once you take them off the service’s Dropped list, or play one of their episodes.',
+      nextUpDroppedOn: (service: string) => `Dropped on ${service}`,
       nextUpShowLabel: (name: string) => `Show ${name} in Next Up again`,
       nextUpShown: (name: string) => `${name} is back in Next Up.`,
       withResume: 'Remove from Continue Watching also takes the series off Next Up',

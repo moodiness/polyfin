@@ -40,6 +40,7 @@ import {
   SkeletonRows,
   useToast,
 } from '@/ui'
+import { serviceNames } from './serviceNames'
 
 /**
  * The poster of a title, or the icon of its kind when it has none or fails to load. Shared by My
@@ -159,7 +160,7 @@ export function ResumeList() {
  * whether Remove from Continue Watching also takes a series off Next Up.
  */
 export function NextUpList() {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const text = t.account.watching
   const toast = useToast()
   const nextUp = useQuery({
@@ -250,6 +251,41 @@ export function NextUpList() {
                   >
                     {text.showAgain}
                   </Button>
+                }
+              />
+            ))}
+          </RowList>
+        </>
+      )}
+      {nextUp.data.dropped.length > 0 && (
+        <>
+          <div>
+            <p className="text-small font-medium text-ink-2">{text.nextUpDroppedList}</p>
+            <p className="mt-1 max-w-[72ch] text-small text-ink-2">{text.nextUpDroppedHelp}</p>
+          </div>
+          <RowList aria-label={text.nextUpDroppedList}>
+            {nextUp.data.dropped.map((entry) => (
+              <Row
+                key={entry.item.id}
+                leading={<TitlePoster title={entry.item} />}
+                title={entry.item.name}
+                muted
+                meta={
+                  // The services never truncate. From md up the date follows them after a
+                  // separator; on a phone it takes its own line, the only part that may be cut.
+                  <span className="min-w-0">
+                    {text.kinds[entry.item.kind] ?? entry.item.kind}
+                    {' · '}
+                    {text.nextUpDroppedOn(
+                      new Intl.ListFormat(language, { type: 'conjunction' }).format(
+                        entry.services.map((service) => serviceNames[service] ?? service),
+                      ),
+                    )}
+                    <span className="max-md:hidden">{' · '}</span>
+                    <span className="max-md:block max-md:truncate">
+                      <RelativeTime iso={entry.droppedAt} />
+                    </span>
+                  </span>
                 }
               />
             ))}

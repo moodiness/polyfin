@@ -154,6 +154,10 @@ const account: typeof en = {
       nextUpEmptyHelp: 'Le serie che stai guardando compaiono qui con il loro prossimo episodio.',
       nextUpRemovedList: 'Serie rimosse da «Prossimo»',
       nextUpRemovedOn: 'Rimossa',
+      nextUpDroppedList: 'Abbandonate su un servizio di monitoraggio',
+      nextUpDroppedHelp:
+        'Tornano in «Prossimo», «In arrivo» e «Continua a guardare» appena il servizio non le segna più come abbandonate o riproduci uno dei loro episodi.',
+      nextUpDroppedOn: (service: string) => `Abbandonata su ${service}`,
       nextUpShowLabel: (name: string) => `Mostra di nuovo ${name} in «Prossimo»`,
       nextUpShown: (name: string) => `${name} è di nuovo in «Prossimo».`,
       withResume: 'Rimuovere da «Continua a guardare» toglie anche la serie da «Prossimo»',

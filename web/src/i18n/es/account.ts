@@ -156,6 +156,10 @@ const account: typeof en = {
       nextUpEmptyHelp: 'Las series que está viendo se muestran aquí con su siguiente episodio.',
       nextUpRemovedList: 'Series eliminadas de «A continuación»',
       nextUpRemovedOn: 'Eliminada',
+      nextUpDroppedList: 'Abandonadas en un servicio de seguimiento',
+      nextUpDroppedHelp:
+        'Vuelven a «A continuación», «Próximamente» y «Seguir viendo» en cuanto el servicio deje de marcarlas como abandonadas o reproduzcas uno de sus episodios.',
+      nextUpDroppedOn: (service: string) => `Abandonada en ${service}`,
       nextUpShowLabel: (name: string) => `Volver a mostrar ${name} en «A continuación»`,
       nextUpShown: (name: string) => `${name} vuelve a estar en «A continuación».`,
       withResume: 'Eliminar de «Seguir viendo» también quita la serie de «A continuación»',

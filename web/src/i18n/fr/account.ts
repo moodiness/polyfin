@@ -156,6 +156,10 @@ const account: typeof en = {
       nextUpEmptyHelp: 'Les séries que vous regardez s’affichent ici avec leur prochain épisode.',
       nextUpRemovedList: 'Séries retirées de «\u202fÀ suivre\u202f»',
       nextUpRemovedOn: 'Retirée',
+      nextUpDroppedList: 'Abandonnées sur un service de suivi',
+      nextUpDroppedHelp:
+        'Elles reviennent dans «\u202fÀ suivre\u202f», «\u202fÀ venir\u202f» et «\u202fContinuer de regarder\u202f» dès que le service ne les indique plus comme abandonnées, ou que vous lisez l’un de leurs épisodes.',
+      nextUpDroppedOn: (service: string) => `Abandonnée sur ${service}`,
       nextUpShowLabel: (name: string) => `Afficher de nouveau ${name} dans «\u202fÀ suivre\u202f»`,
       nextUpShown: (name: string) => `${name} est de retour dans «\u202fÀ suivre\u202f».`,
       withResume:
