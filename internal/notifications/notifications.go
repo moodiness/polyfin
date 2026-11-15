@@ -260,10 +260,12 @@ type Library interface {
 }
 
 // UserData tells which series each user follows: those they played an
-// episode of, and their favorites; userdata.Store is one.
+// episode of, and their favorites, but those they dropped on a tracking
+// service; userdata.Store is one.
 type UserData interface {
 	Episodes(ctx context.Context, user accounts.ID) ([]userdata.Entry, error)
 	Favorites(ctx context.Context, user accounts.ID) ([]userdata.Entry, error)
+	DroppedSeries(ctx context.Context, user accounts.ID) (map[accounts.ID]bool, error)
 }
 
 // History sums the playbacks of a week, a month or a year for the

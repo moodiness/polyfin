@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"time"
 
@@ -102,7 +103,9 @@ func (s *Service) CheckEpisodes(ctx context.Context) {
 
 // followed lists the series user follows: those they played an episode
 // of, the most recently played first, up to followedLimit, then their
-// favorites that are not episodes, some of which are series.
+// favorites that are not episodes, some of which are series. The series
+// they dropped on a tracking service, and that a later play did not take
+// back (see userdata.Store.Dropped), are not followed.
 func (s *Service) followed(ctx context.Context, user accounts.ID) ([]accounts.ID, error) {
 	watched, err := s.userData.Episodes(ctx, user)
 	if err != nil {
@@ -112,8 +115,16 @@ func (s *Service) followed(ctx context.Context, user accounts.ID) ([]accounts.ID
 	if err != nil {
 		return nil, err
 	}
+	dropped, err := s.userData.DroppedSeries(ctx, user)
+	if err != nil {
+		return nil, err
+	}
 	var series []accounts.ID
-	seen := map[accounts.ID]bool{}
+	// The dropped series count as seen, so that none is followed.
+	seen := maps.Clone(dropped)
+	if seen == nil {
+		seen = map[accounts.ID]bool{}
+	}
 	for _, e := range watched {
 		if e.Played && !seen[e.Series] && len(series) < followedLimit {
 			seen[e.Series] = true

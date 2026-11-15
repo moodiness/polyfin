@@ -7,6 +7,7 @@ import (
 	"html"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -159,10 +160,31 @@ func (l *fakeLibrary) set(series accounts.ID, episodes ...library.Item) {
 	l.episodes[series] = episodes
 }
 
-// fakeUserData tells which series users played and marked favorite.
+// fakeUserData tells which series users played, marked favorite and
+// dropped on a tracking service.
 type fakeUserData struct {
 	mu                  sync.Mutex
 	episodes, favorites map[accounts.ID][]userdata.Entry
+	dropped             map[accounts.ID]map[accounts.ID]bool
+}
+
+func (u *fakeUserData) DroppedSeries(_ context.Context, user accounts.ID) (map[accounts.ID]bool, error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return maps.Clone(u.dropped[user]), nil
+}
+
+// drop records that user dropped series on a tracking service.
+func (u *fakeUserData) drop(user, series accounts.ID) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.dropped == nil {
+		u.dropped = map[accounts.ID]map[accounts.ID]bool{}
+	}
+	if u.dropped[user] == nil {
+		u.dropped[user] = map[accounts.ID]bool{}
+	}
+	u.dropped[user][series] = true
 }
 
 func (u *fakeUserData) Episodes(_ context.Context, user accounts.ID) ([]userdata.Entry, error) {
@@ -634,6 +656,46 @@ func TestNewEpisodesAreToldOncePerEpisodeOfFollowedSeries(t *testing.T) {
 	h.idle(t)
 	if a, b, c := len(h.targets.at("/member")), len(h.targets.at("/admin")), len(h.targets.at("/server")); a != 2 || b != 1 || c != 2 {
 		t.Errorf("after looking again: %d, %d and %d messages", a, b, c)
+	}
+}
+
+// A series the user dropped on a tracking service is not followed, played
+// or favorite: its new episodes are not told to them, while another user
+// following it still hears of them.
+func TestNewEpisodesOfDroppedSeriesAreNotTold(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.add(t, &h.member, h.webhook("/member", NewEpisode))
+	h.add(t, &h.admin, h.webhook("/admin", NewEpisode))
+
+	kept, played, favorite := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
+	h.userData.played(h.member.ID, kept)
+	h.userData.played(h.member.ID, played)
+	h.userData.favorite(h.member.ID, favorite)
+	h.userData.drop(h.member.ID, played)
+	h.userData.drop(h.member.ID, favorite)
+	h.userData.played(h.admin.ID, played)
+	now := time.Now()
+	episode := func(series accounts.ID, number int, released time.Duration) library.Item {
+		date := now.Add(released)
+		return library.Item{ID: accounts.ID{series[0], byte(number)}, Kind: library.KindEpisode, Name: "Episode " + string(rune('A'+number)),
+			SeriesID: series, SeriesName: "Series " + string(rune('0'+series[0])), ParentIndexNumber: 1, IndexNumber: number, PremiereDate: &date, Available: true}
+	}
+	for _, series := range []accounts.ID{kept, played, favorite} {
+		h.library.set(series, episode(series, 1, -48*time.Hour))
+	}
+	h.CheckEpisodes(t.Context())
+	h.idle(t)
+	for _, series := range []accounts.ID{kept, played, favorite} {
+		h.library.set(series, episode(series, 1, -48*time.Hour), episode(series, 2, -time.Minute))
+	}
+	h.CheckEpisodes(t.Context())
+	h.idle(t)
+	if got := h.targets.at("/member"); len(got) != 1 || got[0].body["title"] != "New episode of Series 1" {
+		t.Errorf("member's target: %v, want the kept series' episode only", types(got))
+	}
+	if got := h.targets.at("/admin"); len(got) != 1 || got[0].body["title"] != "New episode of Series 2" {
+		t.Errorf("admin's target: %v, want the episode of the series they follow", types(got))
 	}
 }
 
