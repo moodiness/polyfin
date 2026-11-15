@@ -30,6 +30,29 @@ type ManifestBehavior struct {
 	// EpgProvider marks an addon whose live TV catalogs taking the date
 	// extra return a programme guide, Stremio's Native EPG.
 	EpgProvider bool `json:"epgProvider,omitempty"`
+	// Configurable marks an addon with a configure page (see
+	// ConfigureURL).
+	Configurable bool `json:"configurable,omitempty"`
+}
+
+// ConfigureURL is the address of the configure page of the addon
+// manifestURL installs, and whether it has one: its manifest URL with the
+// manifest.json ending its path replaced by configure, the query kept, as
+// Stremio opens it (stremio-web src/routes/Addons/Addons.js, line 107 at
+// ca3d0ec1: transportUrl.replace('manifest.json', 'configure')). An
+// address whose path does not end in manifest.json has none. It holds
+// the addon's settings and keys, as the manifest URL does: it is never
+// logged.
+func ConfigureURL(manifestURL string) (string, bool) {
+	parsed, err := url.Parse(manifestURL)
+	if err != nil || parsed.Host == "" || !strings.HasSuffix(parsed.Path, "/manifest.json") {
+		return "", false
+	}
+	parsed.Path = strings.TrimSuffix(parsed.Path, "manifest.json") + "configure"
+	if parsed.RawPath != "" {
+		parsed.RawPath = strings.TrimSuffix(parsed.RawPath, "manifest.json") + "configure"
+	}
+	return parsed.String(), true
 }
 
 // Resource is a resource the addon serves. Manifests list resources either

@@ -218,6 +218,25 @@ func (a Addon) Eclipse() bool { return a.Kind == KindEclipse && a.Music != nil }
 // Eclipse addon, or a local music folder.
 func (a Addon) HasMusic() bool { return a.Music != nil }
 
+// ConfigureURL is the address of the addon's configure page, and whether
+// it has one: a Stremio or Eclipse addon whose manifest declares itself
+// configurable, at a manifest URL ending in manifest.json (see
+// stremio.ConfigureURL). IPTV sources and local folders have none. The
+// address holds the addon's settings and keys: it is never logged.
+func (a Addon) ConfigureURL() (string, bool) {
+	if !a.Stremio() && !a.Eclipse() || !a.Manifest.BehaviorHints.Configurable {
+		return "", false
+	}
+	return stremio.ConfigureURL(a.ManifestURL)
+}
+
+// Configurable reports whether the addon has a configure page (see
+// ConfigureURL).
+func (a Addon) Configurable() bool {
+	_, ok := a.ConfigureURL()
+	return ok
+}
+
 // ListsVersions reports whether the addon lists streams of movies or
 // episodes: versions of titles, which the version rules order.
 func (a Addon) ListsVersions() bool {
@@ -594,6 +613,78 @@ func addons(ctx context.Context, db queryer, scope Scope) ([]Addon, error) {
 
 func (s *Store) addon(ctx context.Context, db queryer, scope Scope, id accounts.ID) (Addon, error) {
 	return scanAddon(db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2", id, scope.Owner))
+}
+
+// InScope returns the addon id of the scope, read from the database:
+// ErrNotFound when it is another scope's, or no addon's.
+func (s *Store) InScope(ctx context.Context, scope Scope, id accounts.ID) (Addon, error) {
+	return s.addon(ctx, s.db, scope, id)
+}
+
+// Unread is an addon whose stored manifest predates the configure hint
+// (see HintsUnread), and whether its requests must stay on public
+// addresses: a user's own addon, unless the user is an administrator.
+type Unread struct {
+	Addon    Addon
+	Confined bool
+}
+
+// HintsUnread lists the Stremio and Eclipse addons, the server's then
+// users' own, whose stored manifest predates the configure hint, which
+// Polyfin did not keep before: their behaviorHints.configurable is yet
+// to be read (see ReadHint and SetHint).
+func (s *Store) HintsUnread(ctx context.Context) ([]Unread, error) {
+	rows, err := s.db.Query(ctx, "SELECT "+addonColumns+`,
+		owner_id IS NOT NULL AND NOT coalesce((SELECT u.is_administrator FROM users u WHERE u.id = addons.owner_id), false)
+		FROM addons WHERE NOT hints_read AND kind IN ($1, $2) ORDER BY owner_id NULLS FIRST, position, created_at`, KindStremio, KindEclipse)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unread, error) {
+		var u Unread
+		var err error
+		u.Addon, err = scanAddon(row, &u.Confined)
+		return u, err
+	})
+}
+
+// ReadHint downloads the manifest of addon and reads its configure hint
+// alone: nothing else of the manifest is kept. confined keeps the request
+// on public addresses (see stremio.Client).
+func (s *Store) ReadHint(ctx context.Context, addon Addon, confined bool) (bool, error) {
+	body, err := s.client.Fetch(ctx, addon.ManifestURL, addon.ManifestURL, confined)
+	if err != nil {
+		return false, err
+	}
+	var manifest struct {
+		BehaviorHints struct {
+			Configurable bool `json:"configurable"`
+		} `json:"behaviorHints"`
+	}
+	if err := json.Unmarshal(body, &manifest); err != nil {
+		return false, fmt.Errorf("%w: %v", stremio.ErrInvalidManifest, err)
+	}
+	return manifest.BehaviorHints.Configurable, nil
+}
+
+// SetHint stores the configure hint read of the addon id's manifest, and
+// marks it read. Only the hint changes: the rest of the stored manifest,
+// its libraries and when it was refreshed stay as they are. It reports
+// false, changing nothing, when the hint was stored meanwhile, by a
+// refresh or a new address, or the addon was removed.
+func (s *Store) SetHint(ctx context.Context, id accounts.ID, configurable bool) (bool, error) {
+	tag, err := s.db.Exec(ctx, `UPDATE addons SET hints_read = true,
+		manifest = CASE WHEN $2 THEN manifest || jsonb_build_object('behaviorHints',
+			coalesce(manifest->'behaviorHints', '{}'::jsonb) || '{"configurable": true}'::jsonb) ELSE manifest END
+		WHERE id = $1 AND NOT hints_read`, id, configurable)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	s.changed()
+	return true, nil
 }
 
 // Find returns an installed addon by identifier, whoever installed it.
@@ -1281,7 +1372,10 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 		for _, r := range renames {
 			moved[CatalogKey{Type: r.CatalogType, ID: r.To}] = CatalogKey{Type: r.CatalogType, ID: r.From}
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now()
+		// The manifest downloaded holds the configure hint: no background
+		// read of it is left to make (see HintsUnread).
+		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now(),
+			hints_read = true
 			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, manifestURL, encoded,
 			settleKeys(old.LibraryKeys, manifest, moved)))
 		var pgErr *pgconn.PgError

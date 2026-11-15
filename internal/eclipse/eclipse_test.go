@@ -1,6 +1,7 @@
 package eclipse
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -77,6 +78,32 @@ func TestSettingsReduceToOneValueAndTravelAsQuery(t *testing.T) {
 		{"preferOpus": "maybe"}, {"unknown": "x"}} {
 		if _, err := m.CheckSettings(bad); !errors.Is(err, ErrInvalidSettings) {
 			t.Errorf("%v accepted", bad)
+		}
+	}
+}
+
+// An addon declaring itself configurable keeps it as it is stored, and
+// tells the libraries' view of it.
+func TestTheConfigurableHintIsKept(t *testing.T) {
+	t.Parallel()
+	for manifest, want := range map[string]bool{
+		`{"id":"a","name":"A","version":"1","resources":["search","stream"],"behaviorHints":{"configurable":true}}`: true,
+		`{"id":"a","name":"A","version":"1","resources":["search","stream"]}`:                                       false,
+	} {
+		parsed, err := ParseManifest([]byte(manifest))
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(parsed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored Manifest
+		if err := json.Unmarshal(encoded, &stored); err != nil {
+			t.Fatal(err)
+		}
+		if stored.BehaviorHints.Configurable != want || stored.Stremio().BehaviorHints.Configurable != want {
+			t.Errorf("%s: stored %s", manifest, encoded)
 		}
 	}
 }

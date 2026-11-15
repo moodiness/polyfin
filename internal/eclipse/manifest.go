@@ -63,6 +63,15 @@ type Manifest struct {
 	ContentType string    `json:"contentType,omitempty"`
 	Settings    []Setting `json:"settings,omitempty"`
 	Catalogs    []Catalog `json:"catalogs,omitempty"`
+	// BehaviorHints holds hints about the addon as a whole.
+	BehaviorHints Behavior `json:"behaviorHints,omitzero"`
+}
+
+// Behavior holds hints about an Eclipse addon as a whole.
+type Behavior struct {
+	// Configurable marks an addon with a configure page, as a Stremio
+	// addon's manifest marks it (see stremio.ConfigureURL).
+	Configurable bool `json:"configurable,omitempty"`
 }
 
 // Catalog is a row of items of one type the addon lists.
@@ -182,12 +191,13 @@ func ParseManifest(data []byte) (Manifest, error) {
 		ContentType string            `json:"contentType"`
 		Settings    []json.RawMessage `json:"settings"`
 		Catalogs    []Catalog         `json:"catalogs"`
+		Behavior    Behavior          `json:"behaviorHints"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Manifest{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
 	}
 	m := Manifest{ID: strings.TrimSpace(raw.ID), Name: strings.TrimSpace(raw.Name), Version: strings.TrimSpace(string(raw.Version)),
-		Description: raw.Description, Resources: resourceNames(raw.Resources), Types: raw.Types}
+		Description: raw.Description, Resources: resourceNames(raw.Resources), Types: raw.Types, BehaviorHints: raw.Behavior}
 	if m.ID == "" || m.Name == "" || m.Version == "" || len(m.Resources) == 0 {
 		return Manifest{}, fmt.Errorf("%w: id, name, version and resources are required", ErrInvalidManifest)
 	}
@@ -339,7 +349,8 @@ func (m Manifest) Stremio() stremio.Manifest {
 	if m.Has("search") {
 		catalogs = append(catalogs, stremio.Catalog{Type: TypeTrack, ID: MyMusic, Name: MyMusicName})
 	}
-	return stremio.Manifest{ID: m.ID, Version: m.Version, Name: m.Name, Description: m.Description, Logo: m.Icon, Catalogs: catalogs}
+	return stremio.Manifest{ID: m.ID, Version: m.Version, Name: m.Name, Description: m.Description, Logo: m.Icon, Catalogs: catalogs,
+		BehaviorHints: stremio.ManifestBehavior{Configurable: m.BehaviorHints.Configurable}}
 }
 
 // ErrInvalidSettings reports settings values the manifest does not allow.
