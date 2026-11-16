@@ -152,13 +152,53 @@ func TestTheBestRecentTimingsApplyAtStart(t *testing.T) {
 }
 
 // A timing at startup on a busy server changes nothing and is not kept:
-// the best recent timings stay in force, and the GPU is timed again
-// later, once Polyfin has been quiet a while.
+// the best recent timings stay in force, and the GPU is timed again 30
+// to 60 minutes later, once Polyfin has done no work for the quiet
+// window. The test drives the clock, runs the retry itself and hears
+// each look at whether Polyfin is quiet: nothing hangs on real time.
 func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	t.Parallel()
 	m, f, path, log := timedManager(t, busy)
 	keep(t, path, kept(nvidiaKey, 24*time.Hour, usualSpeeds))
-	m.retime.after = func() time.Duration { return 300 * time.Millisecond }
+	var clock atomic.Pointer[time.Time]
+	setClock := func(at time.Time) { clock.Store(&at) }
+	start := time.Now().UTC().Truncate(time.Second)
+	setClock(start)
+	m.retime.clock = func() time.Time { return *clock.Load() }
+	type retry struct {
+		delay time.Duration
+		run   func()
+	}
+	retries := make(chan retry, 1)
+	m.retime.later = func(delay time.Duration, run func()) func() bool {
+		retries <- retry{delay, run}
+		return func() bool { return true }
+	}
+	type look struct {
+		at    time.Time
+		quiet bool
+	}
+	looks := make(chan look, 1)
+	m.retime.polled = func(at time.Time, quiet bool) {
+		select {
+		case looks <- look{at, quiet}:
+		default:
+		}
+	}
+	// lookAt waits for Polyfin to look whether it is quiet at the time at.
+	lookAt := func(at time.Time) bool {
+		t.Helper()
+		for deadline := time.After(30 * time.Second); ; {
+			select {
+			case l := <-looks:
+				if l.at.Equal(at) {
+					return l.quiet
+				}
+			case <-deadline:
+				t.Fatalf("Polyfin did not look at %v", at)
+			}
+		}
+	}
 	// The test reads the file once written: on Windows, a read under way
 	// makes the rename in its place fail, and the rename the read. It
 	// looks at the GPU chosen once the timing made again is in force: the
@@ -172,8 +212,17 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	m.files = 1
 	m.mu.Unlock()
 	m.SelectHardware("nvenc", "")
-	// The retry the busy timing schedules counts among the timings Close
-	// waits for: the test waits for the processor's timing instead.
+	var again retry
+	select {
+	case again = <-retries:
+	case <-time.After(30 * time.Second):
+		t.Fatal("no timing made again after the busy one")
+	}
+	if again.delay < 30*time.Minute || again.delay >= time.Hour {
+		t.Errorf("timed again %v later", again.delay)
+	}
+	// The retry counts among the timings Close waits for: the test waits
+	// for the processor's timing instead.
 	eventually(t, "the timings at startup", m.processorTimed.Load)
 	hw := m.Hardware()
 	if hw.HDRSpeed != 1.3 || !hw.VulkanDecoding || m.HDRPath(hw).Reason != HDRKeepsUp || m.ToneMappedHeight() != 1080 {
@@ -188,35 +237,42 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 			t.Errorf("did not log %s: %s", want, log)
 		}
 	}
-	// The timing made again waits for the file's conversion to end, then
-	// for the quiet after it.
+	// The retry is due: it waits while the file converts, then for the
+	// quiet window after Polyfin last saw it convert.
 	f.set(chainTimes{sdrMemory: at(3.6), sdrGPU: at(0.5), hdrMemory: at(1.2), hdrGPU: at(1.6), processor: at(2.0)})
-	time.Sleep(500 * time.Millisecond)
-	if len(writes) != 0 {
-		t.Fatalf("timed again while a file converts: %+v", keptIn(t, path))
+	go again.run()
+	working := start.Add(again.delay)
+	setClock(working)
+	if lookAt(working) {
+		t.Fatal("quiet while a file converts")
 	}
-	quiet := time.Now()
 	m.mu.Lock()
 	m.files = 0
 	m.mu.Unlock()
+	window := m.retime.quiet
+	setClock(working.Add(window - time.Nanosecond))
+	if lookAt(working.Add(window - time.Nanosecond)) {
+		t.Fatal("quiet before the window ended")
+	}
+	if len(writes) != 0 || len(applied) != 0 {
+		t.Fatalf("timed again before the window ended: %+v", keptIn(t, path))
+	}
+	quiet := working.Add(window)
+	setClock(quiet)
 	select {
 	case <-applied:
 	case <-time.After(30 * time.Second):
 		t.Fatal("the timing made again did not happen")
 	}
-	// It wrote the GPU's timing, then the processor's.
+	// It wrote the GPU's timing, then the processor's, both at the time
+	// the window ended.
 	for range 2 {
 		if err := <-writes; err != nil {
 			t.Fatalf("the timing made again was not kept: %v", err)
 		}
 	}
-	if got := keptIn(t, path); len(got) != 3 {
-		t.Fatalf("kept %+v", got)
-	}
-	// Polyfin looks at its work every poll: it may have seen the file's
-	// conversion end up to a poll before the test let it.
-	if got := keptIn(t, path)[1]; got.At.Before(quiet.Add(m.retime.quiet-2*m.retime.poll)) || !near(got.Speeds[chainHDRGPU], 1.6) {
-		t.Errorf("timed again at %v, quiet from %v: %+v", got.At, quiet, got)
+	if got := keptIn(t, path); len(got) != 3 || !got[1].At.Equal(quiet) || !got[2].At.Equal(quiet) || !near(got[1].Speeds[chainHDRGPU], 1.6) {
+		t.Errorf("kept %+v, quiet from %v", got, quiet)
 	}
 	if hw := m.Hardware(); m.detected["nvenc"] != hw || !near(hw.HDRSpeed, 1.6) || !near(m.HDRPath(hw).ProcessorSpeed, 2.0) || len(writes) != 0 {
 		t.Errorf("after the timing made again: %+v, %+v", hw, m.HDRPath(hw))
@@ -293,7 +349,7 @@ func TestWorkStartingStopsATimingMadeAgain(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("the timing was not made again")
 	}
 	if hw := m.Hardware(); !near(hw.HDRSpeed, 1.6) || len(keptIn(t, path)) != 4 {

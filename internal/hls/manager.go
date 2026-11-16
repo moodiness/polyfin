@@ -955,7 +955,7 @@ func (m *Manager) Close() {
 		cancel()
 	}
 	if m.retime.retry != nil {
-		m.retime.retry.Stop()
+		m.retime.retry()
 		m.retime.retry = nil
 	}
 	m.stopProgressives(func(Key) bool { return true })

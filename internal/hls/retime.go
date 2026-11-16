@@ -37,15 +37,28 @@ type retimer struct {
 	otherWork atomic.Pointer[func() bool]
 	seen      atomic.Int64
 	timed     atomic.Int64
-	// retry makes a busy timing again later, nil when none waits; under
-	// Manager.mu.
-	retry *time.Timer
-	// quiet, poll and after stand for quietFor, quietPoll and the delay
-	// of a retry when set, for tests; applied hears each timing made
-	// again once all it found is in force, for tests.
+	// retry stops the busy timing made again later, nil when none
+	// waits; under Manager.mu.
+	retry func() bool
+	// For tests: clock stands for time.Now, the time quiet, retries and
+	// timings kept count by; quiet and poll for quietFor and quietPoll;
+	// later runs a retry after its delay in place of time.AfterFunc,
+	// returning what stops it; polled hears each look at whether Polyfin
+	// is quiet, at what time and with what answer; applied hears each
+	// timing made again once all it found is in force.
+	clock       func() time.Time
 	quiet, poll time.Duration
-	after       func() time.Duration
+	later       func(delay time.Duration, run func()) (stop func() bool)
+	polled      func(now time.Time, quiet bool)
 	applied     func()
+}
+
+// now is the time quiet, retries and timings kept count by.
+func (r *retimer) now() time.Time {
+	if r.clock != nil {
+		return r.clock()
+	}
+	return time.Now()
 }
 
 // UseOtherWork has busy report the heavy work Polyfin does besides its
@@ -80,7 +93,7 @@ func (m *Manager) watchWork() {
 			return
 		case <-ticker.C:
 			if m.working() {
-				m.retime.seen.Store(time.Now().UnixNano())
+				m.retime.seen.Store(m.retime.now().UnixNano())
 			}
 		}
 	}
@@ -89,13 +102,17 @@ func (m *Manager) watchWork() {
 // quiet reports whether Polyfin did no work for quietFor, or, by hand,
 // does none now.
 func (m *Manager) quiet(byHand bool) bool {
-	now := time.Now()
-	if m.working() {
+	now := m.retime.now()
+	quiet := !m.working()
+	if !quiet {
 		m.retime.seen.Store(now.UnixNano())
-		return false
+	} else if !byHand {
+		quiet = now.Sub(time.Unix(0, m.retime.seen.Load())) >= cmp.Or(m.retime.quiet, quietFor)
 	}
-	wait := cmp.Or(m.retime.quiet, quietFor)
-	return byHand || now.Sub(time.Unix(0, m.retime.seen.Load())) >= wait
+	if m.retime.polled != nil {
+		m.retime.polled(now, quiet)
+	}
+	return quiet
 }
 
 // Retime times the GPU chosen and the processor's HDR tone mapping again,
@@ -117,7 +134,7 @@ func (m *Manager) Retime(ctx context.Context, byHand bool) error {
 		case <-ctx.Done():
 		}
 	}()
-	began := time.Now().UnixNano()
+	began := m.retime.now().UnixNano()
 	for {
 		if err := m.waitQuiet(ctx, byHand); err != nil {
 			return err
@@ -200,7 +217,7 @@ func (m *Manager) timeAgain(parent context.Context, began int64) error {
 		m.setProcessorSpeed(speed)
 		busy = busy || processorBusy
 	}
-	m.retime.timed.Store(time.Now().UnixNano())
+	m.retime.timed.Store(m.retime.now().UnixNano())
 	m.logHDRPath()
 	if busy {
 		m.retryLater()
@@ -222,11 +239,8 @@ func (m *Manager) retryLater() {
 		return
 	}
 	delay := retryAfter + rand.N(retryJitter)
-	if m.retime.after != nil {
-		delay = m.retime.after()
-	}
 	m.logger.Info("Timing again once the server is quiet", "after", delay.Round(time.Minute))
-	m.retime.retry = time.AfterFunc(delay, func() {
+	run := func() {
 		m.mu.Lock()
 		m.retime.retry = nil
 		if m.closed {
@@ -237,7 +251,12 @@ func (m *Manager) retryLater() {
 		m.mu.Unlock()
 		defer m.measuring.Done()
 		_ = m.Retime(context.Background(), false)
-	})
+	}
+	if m.retime.later != nil {
+		m.retime.retry = m.retime.later(delay, run)
+		return
+	}
+	m.retime.retry = time.AfterFunc(delay, run).Stop
 }
 
 // stopRetry forgets the retry due, once a timing was not busy.
@@ -245,7 +264,7 @@ func (m *Manager) stopRetry() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.retime.retry != nil {
-		m.retime.retry.Stop()
+		m.retime.retry()
 		m.retime.retry = nil
 	}
 }
@@ -259,7 +278,7 @@ func (m *Manager) settleGPU(base, measured Hardware, found chainTimings) (Hardwa
 	if !m.timings.on() {
 		return measured, false
 	}
-	key, now := m.timingKey(&base), time.Now()
+	key, now := m.timingKey(&base), m.retime.now()
 	best, _ := m.timings.best(m.logger, key, now)
 	if below := found.below(best); len(below) > 0 {
 		m.logger.Info("Timed while the server was busy: kept the best recent timings", "timed", "gpu", "below", below)
@@ -277,7 +296,7 @@ func (m *Manager) settleProcessor(hw *Hardware, speed float64) (float64, bool) {
 	if !m.timings.on() {
 		return speed, false
 	}
-	key, now := m.timingKey(hw), time.Now()
+	key, now := m.timingKey(hw), m.retime.now()
 	found := chainTimings{Speeds: map[string]float64{chainProcessor: speed}}
 	best, _ := m.timings.best(m.logger, key, now)
 	if below := found.below(best); len(below) > 0 {
@@ -296,7 +315,7 @@ func (m *Manager) applyBest(hw *Hardware) *Hardware {
 	if !m.timings.on() {
 		return hw
 	}
-	best, n := m.timings.best(m.logger, m.timingKey(hw), time.Now())
+	best, n := m.timings.best(m.logger, m.timingKey(hw), m.retime.now())
 	if n == 0 {
 		return hw
 	}
