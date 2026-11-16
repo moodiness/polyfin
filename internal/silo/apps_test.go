@@ -561,8 +561,7 @@ func TestEpisodeCardsCarryTheirParentsArtwork(t *testing.T) {
 // keys the contract requires: no reset of an Apple push installation, no
 // Discover rows of requests, no box sets in a library or a search, and
 // the members the contract added since, all off or empty. The rating
-// sources are not shown, and the letter index is refused as not
-// supported.
+// sources are not shown.
 func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, browsing)
@@ -591,11 +590,6 @@ func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 	}
 	if w := h.do(http.MethodGet, "/api/v2/capabilities/ratings", nil); silotest.CheckUnsupported(w.Body.Bytes(), "/api/v2/capabilities/ratings") != nil {
 		t.Errorf("the rating sources: %s", w.Body)
-	}
-	letters := map[string]any{"library_id": h.profile, "match": "all", "groups": []any{}, "order": "asc"}
-	if w := h.do(http.MethodPost, "/api/v2/catalog/letters", letters); w.Code != http.StatusNotImplemented ||
-		problemCode(w) != "capability_unsupported" {
-		t.Errorf("the letter index: %d %s", w.Code, w.Body)
 	}
 	w := h.do(http.MethodGet, "/api/v2/user/libraries", nil)
 	var libraries struct {

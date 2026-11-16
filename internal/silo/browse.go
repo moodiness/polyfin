@@ -901,6 +901,10 @@ func (s *Server) listingAsked(w http.ResponseWriter, r *http.Request, v viewer, 
 			query.Set("SortOrder", "Descending")
 		}
 	}
+	if sort == "title" {
+		// Title order sorts by the sort name (see letters.go).
+		query.Set("Fields", query.Get("Fields")+",SortName")
+	}
 	l.term = strings.TrimSpace(cmp.Or(q.Get("q"), q.Get("name_prefix")))
 	if l.term != "" {
 		query.Set("SearchTerm", l.term)
@@ -935,6 +939,13 @@ func (s *Server) catalogOf(w http.ResponseWriter, r *http.Request, v viewer, q u
 	if !ok {
 		return
 	}
+	seek, seeking, ok := seekAsked(w, q, in)
+	if !ok {
+		return
+	}
+	if seeking {
+		start = seek
+	}
 	f, ok := filterAsked(w, q, in)
 	if !ok {
 		return
@@ -946,6 +957,15 @@ func (s *Server) catalogOf(w http.ResponseWriter, r *http.Request, v viewer, q u
 	if l.none {
 		writeJSON(w, http.StatusOK, pageOf(nil, start, limit, 0))
 		return
+	}
+	if titleOrdered(q) && l.section == nil {
+		// A library Polyfin stores pages in its order by name; another list
+		// keeps its order (see letters.go).
+		page, handled, a, err := s.titlePage(r, v, l, f, strings.HasPrefix(q.Get("sort"), "-"), start, limit)
+		if handled {
+			s.writePage(w, r, page, a, err)
+			return
+		}
 	}
 	switch {
 	case l.section != nil:
@@ -1016,8 +1036,11 @@ func pageOf(all []catalogItem, start, limit, total int) catalogPage {
 // searchCapabilities tells the apps searches are available, through the
 // catalog's q, and people searches, among the people credited in titles
 // the user may see (people_media_scope: the Apple app searches people only
-// then), and box sets while they are on (box_sets: the Apple app reads a
-// movie's box set only then).
+// then), box sets while they are on (box_sets: the Apple app reads a
+// movie's box set only then), and the letters of a list in title order
+// (letter_index, see letters.go), which neither app reads: both ask for
+// the letters, which a library Polyfin does not store declines with 501,
+// and take a 404, 405 or 501 as no index.
 func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
 		Allowed          bool   `json:"allowed"`
@@ -1025,7 +1048,8 @@ func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ vi
 		Revision         string `json:"revision"`
 		PeopleMediaScope bool   `json:"people_media_scope"`
 		BoxSets          bool   `json:"box_sets"`
-	}{true, "available", "polyfin-1", true, s.boxSetsOn()})
+		LetterIndex      bool   `json:"letter_index"`
+	}{true, "available", "polyfin-1", true, s.boxSetsOn(), true})
 }
 
 // itemOf reads an item's description, answering the request when the

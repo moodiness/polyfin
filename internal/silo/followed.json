@@ -41,6 +41,7 @@
         "iosApp/iosApp/Pairing/Approver/TVApprovalModel.swift",
         "iosApp/iosApp/Pairing/PairingDeviceAPI.swift",
         "iosApp/iosApp/Screens/Auth/QRLoginViewModel.swift",
+        "iosApp/iosApp/Screens/Browse/BrowseViewModel.swift",
         "iosApp/iosApp/Screens/Browse/FilterView.swift",
         "iosApp/iosApp/Screens/Browse/Filtering/CatalogQueryBuilder.swift",
         "iosApp/iosApp/Screens/Browse/Filtering/CatalogSortKey.swift",
@@ -63,6 +64,7 @@
       "files": [
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/DeviceLoginRouteParser.kt",
+        "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/screens/browse/CatalogLetterJump.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/screens/libraries/LibrariesScreen.kt",
         "androidTvApp/src/androidMain/kotlin/org/siloserver/silo/tv/ui/screens/browse/TvBrowseViewModel.kt",
         "androidTvApp/src/androidMain/kotlin/org/siloserver/silo/tv/watchnext/WatchNextHomeSync.kt",

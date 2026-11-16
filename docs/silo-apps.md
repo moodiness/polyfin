@@ -91,6 +91,19 @@ A library opens on its titles, page by page.
 - **The first page:** what the user is watching in the library, and its latest titles. A library of collections shows instead a row for each of its first 24 collections.
 - **Shuffle:** a library, a series, a season or a collection. No title plays twice until all have played, and a series plays one of its episodes.
 
+#### Title order and A to Z
+
+In title order, a library of an IPTV source's movies or series, or of a local folder, shows an A to Z bar beside its titles, and tapping a letter jumps to its first title.
+
+- **Which libraries:**
+  - A library of an IPTV source's movies or series, or of a local folder, sorts all its titles by title, up to 50,000 and its **Maximum titles**. Polyfin keeps every one of them, so it reads them at once.
+  - A library of an addon's catalog, or of collections, keeps its catalog's order in title order, as in Jellyfin apps, and shows no bar: Polyfin reads such a catalog a page at a time, and reading one whole could take thousands of requests. Only a list that fits on one page comes sorted by title.
+  - Filtered, an IPTV or local folder library sorts the titles kept among the first 2,000 read, as filtered pages count them (see [Filters](#filters)). A search and favorites keep their order and show no bar.
+- **How titles sort:** by their sort name, the one set in the metadata editor or else their name, without regard to case or accents, so "Éclair" is under E. Articles count: "The Hobbit" is under T, unless its sort name is "Hobbit, The".
+- **#:** a title that starts with a digit, a symbol or a letter of another alphabet. Digits and most symbols sort before A, other alphabets after Z, so the titles under # can sit at both ends of the list.
+- **What the user may see:** the bar, the pages and the jumps keep to the user's parental control and blocked genres, without the titles they hid. A title hidden leaves them at once.
+- **One order a visit:** Polyfin keeps a library's title order 2 minutes, so that the pages and the bar of one visit follow it. Titles added meanwhile show after that.
+
 ### Filters
 
 The filter button shows in three places:
@@ -215,7 +228,6 @@ During and after a playback:
 - **Features the apps hide:** downloads, Watch together, remote control, notifications and push, requests, subtitle searches, AI subtitles or translations, books, diagnostics uploads, external sign-in, settings synced from the app, and the app's welcome tour.
   - The app is told each is not supported, and hides it.
   - The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
-- **Jumping to a letter in a library:** the letter index is refused as not supported, so the apps show no letters to jump to.
 - **The apps' own collections:** the app lists none, and making or changing one is refused as not supported. Make collections in Jellyfin apps or the web player.
 - **Taking a series off Next Up:** refused as not supported. Playing the series moves it on.
 - **Hiding watches from the history:** mark a title unplayed instead.

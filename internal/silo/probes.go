@@ -123,15 +123,13 @@ func init() {
 
 // unsupportedOperations are the operations the apps call regardless of a
 // discovery document, of features Polyfin does not serve: settings synced
-// from the apps, the onboarding tour, which the apps skip on this answer,
-// and the letter index of a title-ordered library, without which the apps
-// show no letters to jump to.
+// from the apps, and the onboarding tour, which the apps skip on this
+// answer.
 var unsupportedOperations = []string{
 	"GET /api/v2/settings/values/effective", "POST /api/v2/settings/values/effective", "GET /api/v2/settings/values",
 	"GET /api/v2/settings/values/{key}", "PUT /api/v2/settings/values/{key}", "DELETE /api/v2/settings/values/{key}",
 	"PUT /api/v2/settings/values/nav.shortcuts/item", "GET /api/v2/settings/contract",
 	"GET /api/v2/onboarding/state", "GET /api/v2/onboarding/flow", "PUT /api/v2/onboarding/progress",
-	"POST /api/v2/catalog/letters",
 }
 
 // branding names the server, before signing in: the apps show it.

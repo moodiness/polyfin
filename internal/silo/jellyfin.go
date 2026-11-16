@@ -132,6 +132,7 @@ type queryResult struct {
 type item struct {
 	Id                       string
 	Name                     string
+	SortName                 string
 	OriginalTitle            string
 	Type                     string
 	CollectionType           string

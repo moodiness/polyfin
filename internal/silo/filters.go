@@ -38,6 +38,7 @@ import (
 func (s *Server) filterRoutes() {
 	s.mux.HandleFunc("GET /api/v2/catalog/filters", s.profiled(s.catalogFilters))
 	s.mux.HandleFunc("POST /api/v2/catalog/query", s.profiled(s.catalogQuery))
+	s.mux.HandleFunc("POST /api/v2/catalog/letters", s.profiled(s.letters))
 }
 
 const (
@@ -409,8 +410,10 @@ func (j judge) holds(r rule, i item, listedAs string) bool {
 }
 
 // stream is a listing of the Jellyfin API that titles are read from, and
-// the genre it lists the titles of, if any.
+// the genre it lists the titles of, if any. Its path is /Items, or the
+// order by name of a library (see nameStreams).
 type stream struct {
+	path  string
 	query url.Values
 	genre string
 }
@@ -516,7 +519,7 @@ func (s *Server) scan(r *http.Request, v viewer, streams []stream, want int, kee
 				query.Set("Limit", strconv.Itoa(scanChunk))
 				query.Set("EnableTotalRecordCount", "true")
 				var result queryResult
-				if a, err = s.call(r, v, http.MethodGet, "/Items?"+query.Encode(), nil, &result); err != nil || !a.ok() {
+				if a, err = s.call(r, v, http.MethodGet, cmp.Or(rd.path, "/Items")+"?"+query.Encode(), nil, &result); err != nil || !a.ok() {
 					return nil, false, a, err
 				}
 				rd.pending, rd.next = result.Items, rd.next+len(result.Items)
@@ -595,6 +598,7 @@ func (s *Server) catalogQuery(w http.ResponseWriter, r *http.Request, v viewer) 
 		Order        string          `json:"order"`
 		Limit        *int            `json:"limit"`
 		Cursor       string          `json:"cursor"`
+		Seek         *int64          `json:"seek"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -610,6 +614,9 @@ func (s *Server) catalogQuery(w http.ResponseWriter, r *http.Request, v viewer) 
 	}
 	if body.Limit != nil {
 		q.Set("limit", strconv.Itoa(*body.Limit))
+	}
+	if body.Seek != nil {
+		q.Set("seek", strconv.FormatInt(*body.Seek, 10))
 	}
 	switch body.Order {
 	case "", "asc":

@@ -1946,6 +1946,45 @@ func (s *Service) DrawPool(ctx context.Context, user accounts.User, parent accou
 	return page, true, err
 }
 
+// StoredNamePool bounds the titles of a library whose titles Polyfin
+// stores that a listing of them by name sorts: every one, up to this.
+const StoredNamePool = 50000
+
+// NamePool lists the titles of library parent that a listing of them by
+// name sorts, when Polyfin stores them (see stored): every one, up to
+// StoredNamePool and the library's maximum, read from the database, with
+// what the user may see only. bound is how many it read at most, so that
+// a page of fewer, and not More, holds every title it sorts. stored is
+// false for a library whose catalog an addon pages through, which is not
+// read: a listing by name keeps its catalog's order, as Jellyfin apps
+// see it. ok is false when parent is not one of the user's libraries.
+func (s *Service) NamePool(ctx context.Context, user accounts.User, parent accounts.ID, genre string) (page Page, bound int, stored, ok bool,
+	err error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return Page{}, 0, false, false, err
+	}
+	l, ok := v.library(parent)
+	if !ok || !l.stored() {
+		return Page{}, 0, false, ok, nil
+	}
+	bound = StoredNamePool
+	if l.maxItems > 0 {
+		bound = min(bound, l.maxItems)
+	}
+	page, err = s.Children(ctx, user, parent, 0, bound, genre)
+	return page, bound, true, true, err
+}
+
+// stored reports whether Polyfin stores the library's titles, so that it
+// lists them all without asking an addon: an IPTV source's movies or
+// series, or a local folder's videos. A library of collections, and a
+// music library, are not.
+func (l library) stored() bool {
+	a := l.addon.addon
+	return l.catalog.Type != "collection" && !a.HasMusic() && (a.IPTV() && !LiveCatalog(l.catalog.Type) || a.Local())
+}
+
 // upTo lists the children of parent from start for a listing of count as
 // Whole does, reading up to most of them; atOnce lists them without
 // waiting for addons, for parents that read no catalog.

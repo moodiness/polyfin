@@ -302,6 +302,15 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 - A folder lists its videos in the order its addon gives them, whatever `SortBy` asks, unless the listing is `Recursive` and names item types, as jellyfin-web's **Videos** view does: Jellyfin sorts a folder's children as asked, and jellyfin-web asks a folder's page for them by name.
 - A folder of a home videos library answers `/Shows/{id}/Episodes` and `/Shows/{id}/Seasons` with 404 in Jellyfin ([TvShowsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L261-L264)) as in Polyfin; shown as a show, the title answers them.
 
+### Libraries by name for Silo's apps
+
+Silo's apps sort a library by title and jump to a letter (see [Title order and A to Z](silo-apps.md#title-order-and-a-to-z)). Polyfin's answers to them read two routes of its own, which take `ParentId`, a library, with `IncludeItemTypes`, `Recursive` and `Genres` as `/Items` does, and `SortOrder`. Another parent answers 404, a hidden library 401, and a library whose titles Polyfin does not store, an addon's catalog or a library of collections, 501.
+
+- `GET /Polyfin/NameOrder` lists a page of the library's titles by name, from `StartIndex`, `Limit` of them, as `/Items` answers, with `Fields`. `TotalRecordCount` is the number of titles sorted.
+- `GET /Polyfin/NameOrder/Letters` answers `Total`, `Whole` (the order holds the whole library), `Letters`, each a `Letter` (A to Z or `#`), its `Count` and the `Position` of its first title, and `Runs`, the blocks of consecutive titles of one letter, each a `Letter` and a `Position`.
+- The order is that of every title of an IPTV source's movies or series, or of a local folder, up to 50,000 and the library's maximum, by sort name without regard to case or accents, within the user's parental control and blocked genres, without the titles they hid. It is kept 2 minutes for a user and their limits.
+- The Jellyfin API's own listings keep their catalog's order.
+
 ### Libraries hidden from the top bar for apps
 
 - The web player's Polyfin script reads the choice from `GET /Polyfin/UserViews` (see [Libraries left out of the web player menus](jellyfin-compatibility.md#libraries-left-out-of-the-web-player-menus)) and hides the library's links with a style. `/UserViews` and every other answer list the library as before.
