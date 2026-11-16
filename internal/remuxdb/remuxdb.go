@@ -152,12 +152,15 @@ func (s *Service) Describe(ctx context.Context, versions []library.Version) {
 		return
 	}
 	answered := make([]chan struct{}, 0, len(titles))
+	// started is taken before the timer below: a lookup measures how long
+	// it took from it, so one Describe stopped waiting for took as long.
+	started := s.now()
 	for title, versions := range titles {
 		l, asking := s.asking[title]
 		if !asking {
 			l = &lookup{done: make(chan struct{})}
 			s.asking[title] = l
-			go s.run(title, settings.RemuxDBURL, l)
+			go s.run(title, settings.RemuxDBURL, l, started)
 		}
 		l.versions = append(l.versions, versions...)
 		answered = append(answered, l.done)
@@ -199,11 +202,11 @@ func (s *Service) OnDescribed(late func(versions []library.Version)) {
 
 // run asks RemuxDB at base about title, then describes the versions of l
 // from its answer, and tells those it described when Describe stopped
-// waiting for it (see OnDescribed). When RemuxDB fails, none is
-// described: they are asked about again once RemuxDB may be.
-func (s *Service) run(title, base string, l *lookup) {
+// waiting for it (see OnDescribed): started is when Describe asked, before
+// it started waiting. When RemuxDB fails, none is described: they are
+// asked about again once RemuxDB may be.
+func (s *Service) run(title, base string, l *lookup, started time.Time) {
 	defer close(l.done)
-	started := s.now()
 	ctx, cancel := context.WithTimeout(context.Background(), askTimeout)
 	files, err := s.fetch(ctx, base, title)
 	cancel()
@@ -220,7 +223,8 @@ func (s *Service) run(title, base string, l *lookup) {
 		s.pause(title, err)
 		return
 	}
-	// Describe waits as long from when it asked at the earliest.
+	// Describe waits as long from when it asked at the earliest, so an
+	// answer it stopped waiting for took as long from started.
 	waited := s.now().Sub(started) >= s.wait
 	described := 0
 	for _, version := range l.versions {
