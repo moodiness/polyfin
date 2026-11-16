@@ -25,7 +25,8 @@ import (
 // app refuses what is kept, the connection stops until the user signs in
 // again. Disconnecting forgets it, signing out first the session Polyfin
 // opened, and takes off the watchlist the titles its imports alone put
-// there.
+// there. Each session Polyfin opens is either the one a connection keeps
+// or signed out, the one an app renewed as its connection went too.
 //
 // A member's connections are imported while the setting that lets users
 // import their watch history allows it; an administrator's always.
@@ -231,9 +232,23 @@ func (s *Service) signOut(signIn SignIn, app string) {
 	s.release(&signIn, app)
 }
 
+// unkept is what of signIn, a sign-in no longer kept, Polyfin signs out
+// while kept is kept: not the secret or the session they share, as
+// signing in again may give the same session, and a renewal may keep it.
+func unkept(signIn, kept SignIn) SignIn {
+	signIn.Owned = signIn.Owned && signIn.Secret != kept.Secret
+	if signIn.Session == kept.Session {
+		signIn.Session = ""
+	}
+	return signIn
+}
+
 // connect saves the connection c, in place of the one there was, whose
 // session is signed out when Polyfin opened it, and returns when it was
-// made. When saving fails, the session c keeps open is signed out.
+// made. When saving fails, the session c keeps open is signed out. The
+// sign-in signed out is the one the row holds as it is deleted: a renewal
+// saved before is signed out with it, and one saved after finds no row
+// (see renew).
 func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, error) {
 	connectedAt := s.now().UTC().Truncate(time.Microsecond)
 	sealed, err := s.seal(c.signIn)
@@ -262,13 +277,8 @@ func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, err
 		return time.Time{}, err
 	}
 	if previous.found {
-		// Signing in again may give the same session: it stays.
 		if old, err := s.open(previous.stored, previous.owned); err == nil {
-			old.Owned = old.Owned && old.Secret != c.signIn.Secret
-			if old.Session == c.signIn.Session {
-				old.Session = ""
-			}
-			s.signOut(old, c.key.app)
+			s.signOut(unkept(old, c.signIn), c.key.app)
 		}
 	}
 	s.logger.Info("A user stays connected to an app", "user_id", c.key.user.String(), "app", c.key.app)
@@ -437,11 +447,12 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.User, app string)
 }
 
 // Disconnect forgets user's connection to app, stopping its import, after
-// signing out the sessions Polyfin opened. A key the user pasted is only
-// forgotten. The titles its library alone put on the watchlist leave it:
-// an import saves the library only while the connection exists, locking
-// it, so that it saves before the connection is deleted, and its titles
-// are dropped, or sees it deleted and saves nothing.
+// signing out the sessions Polyfin opened: those the row holds as it is
+// deleted (see connect). A key the user pasted is only forgotten. The
+// titles its library alone put on the watchlist leave it: an import saves
+// the library only while the connection exists, locking it, so that it
+// saves before the connection is deleted, and its titles are dropped, or
+// sees it deleted and saves nothing.
 // Disconnecting an app not connected does nothing.
 func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) error {
 	if s.db == nil {
@@ -481,9 +492,11 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 // in the background once the deletion is committed (see
 // accounts.Store.OnDelete), with the account user holds for an import, and
 // stops the imports of their connections. Keys the user pasted are only
-// forgotten, and sign-ins the server's key cannot open too.
+// forgotten, and sign-ins the server's key cannot open too. The
+// connections read stay locked until the deletion ends: a renewal waits
+// for it, and finds no row (see renew).
 func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (func(), error) {
-	rows, err := tx.Query(ctx, "SELECT app, sign_in, owned FROM app_connections WHERE user_id = $1", user)
+	rows, err := tx.Query(ctx, "SELECT app, sign_in, owned FROM app_connections WHERE user_id = $1 FOR UPDATE", user)
 	if err != nil {
 		return nil, err
 	}
@@ -603,7 +616,8 @@ func (s *Service) startConnection(key connectionKey) {
 
 // importConnection reads the account of the connection key names again,
 // keeping the sign-in the app renewed, and merges the profile chosen into
-// the user's data, as the first import did, without its addons.
+// the user's data, as the first import did, without its addons. A sign-in
+// renewed as the connection is replaced or removed is signed out.
 func (s *Service) importConnection(ctx context.Context, key connectionKey) {
 	c, err := s.connection(ctx, key.user, key.app)
 	if err != nil {
@@ -621,8 +635,14 @@ func (s *Service) importConnection(ctx context.Context, key connectionKey) {
 	}
 	renewed.Owned, renewed.Profile = c.signIn.Owned, c.signIn.Profile
 	if renewed != c.signIn || account.Name != "" && account.Name != c.Account {
-		if err := s.renew(key, c.ConnectedAt, renewed, account.Name); err != nil {
+		if saved, err := s.renew(key, c.ConnectedAt, renewed, account.Name); err != nil {
 			s.logger.Warn("The renewed sign-in of an app connection could not be saved", "app", key.app, "error", err)
+		} else if !saved {
+			// Its user signed in again, disconnected or was deleted
+			// meanwhile, signing out the sign-in the connection held:
+			// what the app renewed is kept by no one.
+			s.signOut(unkept(renewed, c.signIn), key.app)
+			return
 		}
 	}
 	if ctx.Err() != nil {
@@ -698,19 +718,20 @@ func (s *Service) connectionExists(key connectionKey, connectedAt time.Time) fun
 }
 
 // renew saves the sign-in the app renewed of the connection key names
-// made at connectedAt, and the account's name when the app gave one.
+// made at connectedAt, and the account's name when the app gave one, and
+// reports whether it did: not when the connection was replaced or removed.
 // Saved at once: the app refuses the one it replaced.
-func (s *Service) renew(key connectionKey, connectedAt time.Time, signIn SignIn, account string) error {
+func (s *Service) renew(key connectionKey, connectedAt time.Time, signIn SignIn, account string) (bool, error) {
 	sealed, err := s.seal(signIn)
 	if err != nil {
-		return err
+		return false, err
 	}
 	// The server stopping does not lose it.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err = s.db.Exec(ctx, `UPDATE app_connections SET sign_in = $4, account = CASE WHEN $5 = '' THEN account ELSE $5 END
+	tag, err := s.db.Exec(ctx, `UPDATE app_connections SET sign_in = $4, account = CASE WHEN $5 = '' THEN account ELSE $5 END
 		WHERE user_id = $1 AND app = $2 AND connected_at = $3`, key.user, key.app, connectedAt, sealed, account)
-	return err
+	return tag.RowsAffected() == 1, err
 }
 
 // record saves how an import of the connection key names, made at
