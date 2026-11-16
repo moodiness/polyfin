@@ -560,7 +560,9 @@ func TestEpisodeCardsCarryTheirParentsArtwork(t *testing.T) {
 // The documents the apps read of features Polyfin does not offer hold the
 // keys the contract requires: no reset of an Apple push installation, no
 // Discover rows of requests, no box sets in a library or a search, and
-// the members the contract added since, all off or empty.
+// the members the contract added since, all off or empty. The rating
+// sources are not shown, and the letter index is refused as not
+// supported.
 func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, browsing)
@@ -570,16 +572,30 @@ func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 		{"/api/v2/requests/status", "remove_failed_supported"},
 		{"/api/v2/notifications/push/devices/capabilities", "binds_login_session"},
 		{"/api/v2/settings/contract/capabilities", "supports_overlay_images"}, {"/api/v2/settings/overlay-config", "images"},
-		{"/api/v2/settings/overlay-config", "image_uploads_available"}} {
+		{"/api/v2/settings/overlay-config", "image_uploads_available"}, {"/api/v2/notifications/capabilities", "series.bulk_mute"},
+		{"/api/v2/capabilities/ratings", "sources"}} {
 		var doc map[string]any
 		w := h.do(http.MethodGet, tc.path, nil)
 		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &doc) != nil {
 			t.Errorf("%s: %d %s", tc.path, w.Code, w.Body)
 			continue
 		}
-		if list, isList := doc[tc.key].([]any); doc[tc.key] != false && (!isList || len(list) != 0) {
-			t.Errorf("%s: %s is %v", tc.path, tc.key, doc[tc.key])
+		key := tc.key
+		if parent, child, nested := strings.Cut(key, "."); nested {
+			doc, _ = doc[parent].(map[string]any)
+			key = child
 		}
+		if list, isList := doc[key].([]any); doc[key] != false && (!isList || len(list) != 0) {
+			t.Errorf("%s: %s is %v", tc.path, tc.key, doc[key])
+		}
+	}
+	if w := h.do(http.MethodGet, "/api/v2/capabilities/ratings", nil); silotest.CheckUnsupported(w.Body.Bytes(), "/api/v2/capabilities/ratings") != nil {
+		t.Errorf("the rating sources: %s", w.Body)
+	}
+	letters := map[string]any{"library_id": h.profile, "match": "all", "groups": []any{}, "order": "asc"}
+	if w := h.do(http.MethodPost, "/api/v2/catalog/letters", letters); w.Code != http.StatusNotImplemented ||
+		problemCode(w) != "capability_unsupported" {
+		t.Errorf("the letter index: %d %s", w.Code, w.Body)
 	}
 	w := h.do(http.MethodGet, "/api/v2/user/libraries", nil)
 	var libraries struct {
@@ -588,5 +604,86 @@ func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &libraries) != nil || len(libraries.Items) != 1 ||
 		libraries.Items[0]["box_sets_enabled"] != false || silotest.CheckLibraries(w.Body.Bytes()) != nil {
 		t.Errorf("libraries: %d %s", w.Code, w.Body)
+	}
+}
+
+// The profile list holds the user's one profile, which may not make
+// requests, and says no other can be made, so that the apps' profile
+// menu offers no Add Profile.
+func TestProfileListOffersNoOtherProfile(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, browsing)
+	w := h.do(http.MethodGet, "/api/v2/profiles", nil, "X-Profile-Id", "")
+	var list struct {
+		Items []struct {
+			RequestsAllowed *bool `json:"requests_allowed"`
+		} `json:"items"`
+		RequestsAllowedSupported *bool `json:"requests_allowed_supported"`
+		MaxProfiles              *int  `json:"max_profiles"`
+	}
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 1 ||
+		list.Items[0].RequestsAllowed == nil || *list.Items[0].RequestsAllowed || list.RequestsAllowedSupported == nil ||
+		*list.RequestsAllowedSupported || list.MaxProfiles == nil || *list.MaxProfiles != 1 {
+		t.Errorf("profiles: %d %s", w.Code, w.Body)
+	}
+	if err := silotest.CheckProfiles(w.Body.Bytes()); err != nil {
+		t.Error(err)
+	}
+	for _, data := range []string{`{"items":[{"id":"1","requests_allowed":false}],"requests_allowed_supported":false}`,
+		`{"items":[{"id":"1","requests_allowed":false}],"requests_allowed_supported":false,"max_profiles":5}`} {
+		if silotest.CheckProfiles([]byte(data)) == nil {
+			t.Errorf("%s offers Add Profile, and passes", data)
+		}
+	}
+}
+
+// The sorts the apps offer order as their Jellyfin counterparts, in the
+// direction asked, asked in the query or in a query body; those Jellyfin
+// has no order for list in the default order, as with no sort.
+func TestCatalogSortsOrderAsJellyfinDoes(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, browsing)
+	order := func(t *testing.T, method, path string, body any) (string, string) {
+		t.Helper()
+		before := len(h.jellyfin.called(http.MethodGet, "/Items"))
+		w := h.do(method, path, body)
+		if w.Code != http.StatusOK || silotest.CheckCatalogPage(w.Body.Bytes()) != nil {
+			t.Fatalf("%s %s %v: %d %s", method, path, body, w.Code, w.Body)
+		}
+		calls := h.jellyfin.called(http.MethodGet, "/Items")
+		if len(calls) != before+1 {
+			t.Fatalf("%s %s %v asked Jellyfin %d times", method, path, body, len(calls)-before)
+		}
+		q := calls[len(calls)-1].query
+		return q.Get("SortBy"), q.Get("SortOrder")
+	}
+	for sort, want := range map[string]string{"content_rating": "OfficialRating,SortName", "rating_imdb": "CommunityRating,SortName",
+		"rating_tmdb": "CommunityRating,SortName", "date_viewed": "DatePlayed,SortName", "plays": "PlayCount,SortName",
+		"latest_episode_added": "DateLastContentAdded,SortName", "resolution": "", "bitrate": "", "progress": "",
+		"last_air_date": ""} {
+		wantOrder := map[bool]string{true: "Descending", false: "Ascending"}
+		for _, desc := range []bool{false, true} {
+			if want == "" {
+				wantOrder[desc] = ""
+			}
+			prefix, direction := "", "asc"
+			if desc {
+				prefix, direction = "-", "desc"
+			}
+			if by, got := order(t, http.MethodGet, "/api/v2/catalog?source=query&sort="+prefix+sort, nil); by != want || got != wantOrder[desc] {
+				t.Errorf("sort=%s%s: SortBy %q, SortOrder %q", prefix, sort, by, got)
+			}
+			body := map[string]any{"source": "query", "sort": sort, "order": direction, "limit": 50}
+			if by, got := order(t, http.MethodPost, "/api/v2/catalog/query", body); by != want || got != wantOrder[desc] {
+				t.Errorf("%s %s in a body: SortBy %q, SortOrder %q", sort, direction, by, got)
+			}
+		}
+	}
+	if by, got := order(t, http.MethodGet, "/api/v2/catalog?source=query", nil); by != "" || got != "" {
+		t.Errorf("no sort: SortBy %q, SortOrder %q", by, got)
+	}
+	if w := h.do(http.MethodGet, "/api/v2/catalog?source=query&sort=shoe_size", nil); w.Code != http.StatusUnprocessableEntity &&
+		w.Code != http.StatusBadRequest {
+		t.Errorf("an unknown sort: %d %s", w.Code, w.Body)
 	}
 }

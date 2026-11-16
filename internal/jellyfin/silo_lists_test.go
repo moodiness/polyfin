@@ -598,7 +598,7 @@ func TestSiloAppsStartupProbes(t *testing.T) {
 	for _, path := range []string{"/api/v2/capabilities/downloads", "/api/v2/capabilities/metadata-ai", "/api/v2/diagnostics/capabilities",
 		"/api/v2/devices/push/apple/capabilities", "/api/v2/playback/sessions/control/capabilities", "/api/v2/subtitles/providers/status",
 		"/api/v2/subtitles/ai/status", "/api/v2/requests/status", "/api/v2/settings/contract/capabilities",
-		"/api/v2/auth/external-sign-in/capabilities", "/api/v2/auth/oauth/capabilities"} {
+		"/api/v2/auth/external-sign-in/capabilities", "/api/v2/auth/oauth/capabilities", "/api/v2/capabilities/ratings"} {
 		var doc map[string]any
 		r.get(t, path, r.token, r.profile, &doc)
 	}

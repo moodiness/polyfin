@@ -109,6 +109,8 @@ func appsAccept(path string, data []byte) error {
 	switch {
 	case target.Path == "/api/v2/user/libraries":
 		return silotest.CheckLibraries(data)
+	case target.Path == "/api/v2/profiles":
+		return silotest.CheckProfiles(data)
 	case target.Path == "/api/v2/home/sections", len(segments) == 3 && segments[0] == "library" && segments[2] == "sections":
 		return silotest.CheckSections(data, limit)
 	case len(segments) == 4 && segments[0] == "home" && segments[3] == "items":
@@ -151,7 +153,8 @@ func appsAccept(path string, data []byte) error {
 		return silotest.CheckCalendar(data)
 	case target.Path == "/api/v2/images/capabilities":
 		return silotest.CheckImageCapabilities(data)
-	case (strings.HasSuffix(target.Path, "/capabilities") || strings.HasSuffix(target.Path, "/status")) &&
+	case (strings.HasSuffix(target.Path, "/capabilities") || strings.HasSuffix(target.Path, "/status") ||
+		strings.HasPrefix(target.Path, "/api/v2/capabilities/")) &&
 		!slices.Contains([]string{"/api/v2/catalog/search/capabilities", "/api/v2/shuffles/capabilities",
 			"/api/v2/collections/capabilities"}, target.Path):
 		return silotest.CheckUnsupported(data, target.Path)

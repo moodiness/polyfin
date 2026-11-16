@@ -209,7 +209,11 @@ func CheckImageCapabilities(data []byte) error {
 // APIv2SubtitleProviderStatus, APIv2SubtitleAIStatus,
 // APIv2DiagnosticsCapabilities, RequestsFeatureStatus,
 // APIv2ApplePushCapability, APIv2SettingsContractCapabilities,
-// APIv2OAuthCapabilities, APIv2ExternalSignInCapabilities).
+// APIv2OAuthCapabilities, APIv2ExternalSignInCapabilities). The rating
+// sources shown, which both apps' sort menus read, want a state: Apple
+// APIv2RatingsCapability (Networking/APIv2/APIv2Client+Ratings.swift),
+// Android RatingsCapability (shared network/api/RatingsCapabilityApi.kt),
+// which show no source unless it is available.
 var appRequired = map[string]map[string]string{
 	"/api/v2/subtitles/providers/status": {"enabled": "b", "revision": "s", "state": "s", "allowed": "b"},
 	"/api/v2/subtitles/ai/status":        {"enabled": "b", "transcribe_enabled": "b", "revision": "s", "state": "s", "allowed": "b"},
@@ -224,6 +228,7 @@ var appRequired = map[string]map[string]string{
 		"client_families": "a", "supports_batched_effective": "b"},
 	"/api/v2/auth/oauth/capabilities":            {"state": "s"},
 	"/api/v2/auth/external-sign-in/capabilities": {"state": "s"},
+	"/api/v2/capabilities/ratings":               {"state": "s"},
 }
 
 // CheckUnsupported checks the discovery document of a feature Polyfin does

@@ -8,9 +8,10 @@ import (
 
 // markerKinds are the kinds of marker the apps take from marker_segments:
 // Apple PlayerMarkerTimeline.Kind (Screens/Player/PlayerMarkerTimeline.swift)
-// knows intro, credits and recap, Android MarkerKind
-// (domain/player/MarkerTimeline.kt) preview too. Each leaves out the
-// kinds it does not know.
+// and Android MarkerKind (domain/player/MarkerTimeline.kt) know intro,
+// credits, recap and preview; the Apple app draws a preview on its
+// timeline (PlayerMarkerTimeline.bands) and never skips it. Each leaves
+// out the kinds it does not know.
 var markerKinds = []string{"intro", "credits", "recap", "preview"}
 
 // markerSources are the classes of source the contract gives a

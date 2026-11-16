@@ -53,7 +53,7 @@ The apps can do the following.
 
 - **Connecting:** the server's information, identity and setup state.
 - **Signing in:** with a name and password, or on a TV with a code; staying signed in, and signing out.
-- **Profiles:** each Polyfin user is one profile, named after them, without a PIN.
+- **Profiles:** each Polyfin user is one profile, named after them, without a PIN. The apps offer no profile to add.
 - **Sign-in screen:** it shows the server's name.
 - **Addresses for the user's other devices:** the app offers the **Public address**, under **Settings › Notifications**, then the **Address on the local network**, under **Settings › General**. It offers none when both are empty.
 - **Artwork:** at the width each screen draws it.
@@ -82,7 +82,10 @@ The apps list the libraries the user sees in Jellyfin apps, in the order the use
 
 A library opens on its titles, page by page.
 
-- **Sort:** by title, year, release date, date added, rating, runtime or at random.
+- **Sort:** by title, year, release date, date added, content rating, runtime, rating, last played, play count, latest episode added or at random.
+  - The IMDb and TMDB ratings give the same order: Jellyfin's community rating, the one rating it keeps.
+  - Resolution, bitrate, progress and last air date keep the default order, so a library opens whichever sort the app kept.
+  - The apps offer no Rotten Tomatoes sort: Polyfin tells them it shows no rating source.
 - **Narrow:** to its favorites or a search.
 - **A library of collections:** it opens on the titles of its collections, each once, in its order.
 - **The first page:** what the user is watching in the library, and its latest titles. A library of collections shows instead a row for each of its first 24 collections.
@@ -212,6 +215,7 @@ During and after a playback:
 - **Features the apps hide:** downloads, Watch together, remote control, notifications and push, requests, subtitle searches, AI subtitles or translations, books, diagnostics uploads, external sign-in, settings synced from the app, and the app's welcome tour.
   - The app is told each is not supported, and hides it.
   - The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
+- **Jumping to a letter in a library:** the letter index is refused as not supported, so the apps show no letters to jump to.
 - **The apps' own collections:** the app lists none, and making or changing one is refused as not supported. Make collections in Jellyfin apps or the web player.
 - **Taking a series off Next Up:** refused as not supported. Playing the series moves it on.
 - **Hiding watches from the history:** mark a title unplayed instead.
@@ -233,7 +237,7 @@ During and after a playback:
 The watch details of a movie or an episode give each version's skip markers. They are the segments Jellyfin apps get for that version (see [Skip buttons](skip-segments.md)).
 
 - **Skip intro and credits buttons**, under **Settings › Content**, must be on. With it off, versions have no markers.
-- The Apple apps offer to skip intros, recaps and credits. The Android apps offer to skip previews too.
+- The Apple apps offer to skip intros, recaps and credits, and draw previews on the timeline. The Android apps offer to skip previews too.
 
 The markers come in these fields:
 

@@ -238,6 +238,7 @@ type profile struct {
 	MaxContentRating           string   `json:"max_content_rating"`
 	MaxAdvisoryAge             *int     `json:"max_advisory_age"`
 	RequireAdvisoryAge         bool     `json:"require_advisory_age"`
+	RequestsAllowed            bool     `json:"requests_allowed"`
 	QualityPreference          string   `json:"quality_preference"`
 	MaxPlaybackQuality         string   `json:"max_playback_quality"`
 	Language                   string   `json:"language"`
@@ -257,7 +258,10 @@ type profile struct {
 
 // profiles lists the one profile each user has, named after them. The
 // user's limits are the server's to apply, wherever they browse: the
-// profile itself restricts nothing more.
+// profile itself restricts nothing more. A user has no more profiles, and
+// none makes requests, which Polyfin does not offer. With max_profiles at
+// 1, the apps' profile menu offers no Add Profile, whose creation Polyfin
+// refuses (see silotest.CheckProfiles).
 func (s *Server) profiles(w http.ResponseWriter, _ *http.Request, v viewer) {
 	created := instant(v.user.CreatedAt)
 	writeJSON(w, http.StatusOK, struct {
@@ -265,8 +269,10 @@ func (s *Server) profiles(w http.ResponseWriter, _ *http.Request, v viewer) {
 		AvatarUploadEnabled         bool      `json:"avatar_upload_enabled"`
 		MaxAdvisoryAgeSupported     bool      `json:"max_advisory_age_supported"`
 		RequireAdvisoryAgeSupported bool      `json:"require_advisory_age_supported"`
+		RequestsAllowedSupported    bool      `json:"requests_allowed_supported"`
+		MaxProfiles                 int       `json:"max_profiles"`
 	}{Items: []profile{{ID: v.user.ID.String(), Name: v.user.Name, AvatarSource: "none", IsPrimary: true,
-		QualityPreference: "auto", AllowedLibraryIDs: []string{}, CreatedAt: created, UpdatedAt: created}}})
+		QualityPreference: "auto", AllowedLibraryIDs: []string{}, CreatedAt: created, UpdatedAt: created}}, MaxProfiles: 1})
 }
 
 // instant writes a time as the API does: RFC 3339 in UTC, to the

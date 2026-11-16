@@ -735,8 +735,17 @@ var catalogTypes = map[string]string{"movie": "Movie", "series": "Series", "epis
 	"video_with_episodes": "Movie,Series,Episode"}
 
 // catalogSorts are the Jellyfin API's orders a catalog's sort stands for.
+// The apps offer every sort of Silo's web client (Apple CatalogSortKey,
+// Screens/Browse/Filtering/CatalogSortKey.swift; Android CatalogSortField,
+// shared catalog/sort/CatalogSort.kt), and keep the one picked. Jellyfin
+// keeps one rating, so both ratings order by it. The sorts Jellyfin has
+// no order for list in the default order, as with no sort, so that a
+// library opens whichever sort the app kept.
 var catalogSorts = map[string]string{"title": "SortName", "year": "ProductionYear,SortName", "release_date": "PremiereDate,SortName",
-	"added_at": "DateCreated,SortName", "rating": "CommunityRating,SortName", "runtime": "Runtime,SortName", "random": "Random"}
+	"added_at": "DateCreated,SortName", "rating": "CommunityRating,SortName", "runtime": "Runtime,SortName", "random": "Random",
+	"content_rating": "OfficialRating,SortName", "rating_imdb": "CommunityRating,SortName", "rating_tmdb": "CommunityRating,SortName",
+	"date_viewed": "DatePlayed,SortName", "plays": "PlayCount,SortName", "latest_episode_added": "DateLastContentAdded,SortName",
+	"resolution": "", "bitrate": "", "progress": "", "last_air_date": ""}
 
 // cursor is where a catalog page starts, written for the apps.
 func cursor(start int) string {
@@ -826,7 +835,7 @@ func (s *Server) listingAsked(w http.ResponseWriter, r *http.Request, v viewer, 
 	sort := strings.TrimPrefix(q.Get("sort"), "-")
 	order, ok := catalogSorts[sort]
 	if sort != "" && !ok {
-		validationProblem(w, "query.sort", "unknown_sort_field", "This server sorts by title, year, release_date, added_at, rating, runtime or random.")
+		validationProblem(w, "query.sort", "unknown_sort_field", "This server does not know this sort.")
 		return listing{}, false
 	}
 	l := listing{source: cmp.Or(q.Get("source"), "query")}

@@ -55,8 +55,10 @@ const revision = "polyfin-1"
 // subtitles, books, diagnostics uploads, push notifications and the
 // notification inbox, remote control, subtitle searches and their timing,
 // requests, external sign-in, invitations, watch-together, theme music,
-// settings synced from the apps and the apps' onboarding tour. Each holds
-// what the contract requires, all off.
+// settings synced from the apps, the apps' onboarding tour, and the
+// rating sources shown, which the apps' sort menus read to list the
+// sorts by a source's rating. Each holds what the contract requires, all
+// off.
 var unsupportedDocuments = map[string]map[string]any{
 	"/api/v2/capabilities/downloads": {"bounded_creation": false, "subscription_mutations": false, "bounded_subscription_sync": false,
 		"subscription_reads": false, "bounded_manifests": false, "file_delivery": false, "enabled": false, "download_allowed": false,
@@ -79,7 +81,7 @@ var unsupportedDocuments = map[string]map[string]any{
 		"webhooks":     map[string]any{"available": false, "max_per_profile": 0, "supported_types": []any{}},
 		"email":        map[string]any{"available": false, "modes": []any{}, "digest_hour": 0},
 		"discord":      map[string]any{"available": false, "modes": []any{}, "digest_hour": 0},
-		"series":       map[string]any{"available": false, "mute": false}},
+		"series":       map[string]any{"available": false, "mute": false, "bulk_mute": false}},
 	"/api/v2/playback/sessions/control/capabilities": {"available": false, "protocol": ""},
 	"/api/v2/subtitles/providers/status":             {"schema_version": 1, "enabled": false, "providers": []any{}},
 	"/api/v2/subtitles/ai/status":                    {"enabled": false, "transcribe_enabled": false},
@@ -102,6 +104,7 @@ var unsupportedDocuments = map[string]map[string]any{
 		"scopes": []any{}, "client_families": []any{}, "supports_batched_effective": false, "supports_idempotent_writes": false,
 		"supports_atomic_shortcuts": false, "supports_device_rename": false, "supports_overlay_images": false},
 	"/api/v2/onboarding/capabilities": {"available": false, "revision_guarded": false},
+	"/api/v2/capabilities/ratings":    {"sources": []any{}},
 }
 
 // publicDocuments are the documents read before signing in, which carry
@@ -120,13 +123,15 @@ func init() {
 
 // unsupportedOperations are the operations the apps call regardless of a
 // discovery document, of features Polyfin does not serve: settings synced
-// from the apps, and the onboarding tour, which the apps skip on this
-// answer.
+// from the apps, the onboarding tour, which the apps skip on this answer,
+// and the letter index of a title-ordered library, without which the apps
+// show no letters to jump to.
 var unsupportedOperations = []string{
 	"GET /api/v2/settings/values/effective", "POST /api/v2/settings/values/effective", "GET /api/v2/settings/values",
 	"GET /api/v2/settings/values/{key}", "PUT /api/v2/settings/values/{key}", "DELETE /api/v2/settings/values/{key}",
 	"PUT /api/v2/settings/values/nav.shortcuts/item", "GET /api/v2/settings/contract",
 	"GET /api/v2/onboarding/state", "GET /api/v2/onboarding/flow", "PUT /api/v2/onboarding/progress",
+	"POST /api/v2/catalog/letters",
 }
 
 // branding names the server, before signing in: the apps show it.
