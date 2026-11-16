@@ -48,6 +48,25 @@ func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, err
 	return s.overridden(channels), s.save(ctx, records)
 }
 
+// ChannelPage lists the user's channels as Channels does, but records
+// none of them: the function it returns records those of a page an
+// answer shows, which apps find again by their identifiers. A guide
+// lists hundreds of channels a page at a time, out of thousands.
+func (s *Service) ChannelPage(ctx context.Context, user accounts.User) ([]Item, func(context.Context, []Item) error, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, nil, err
+	}
+	channels, records := s.channels(ctx, v)
+	return s.overridden(channels), func(ctx context.Context, shown []Item) error {
+		ids := make(map[accounts.ID]bool, len(shown))
+		for _, channel := range shown {
+			ids[channel.ID] = true
+		}
+		return s.save(ctx, slices.DeleteFunc(slices.Clone(records), func(r record) bool { return !ids[r.ID] }))
+	}, nil
+}
+
 // channels lists the channels of a view, with the records that find them
 // again. A catalog that cannot be read is left out, as from a collection.
 // The channels the user's channel rule hides are left out too, but keep
@@ -255,8 +274,17 @@ type GuideQuery struct {
 	// Keep keeps the programmes it accepts; nil keeps all.
 	Keep func(Item) bool
 	// Limit, when positive, lists the first Limit programmes kept, by
-	// start time then channel number, and reads the guide no further.
+	// start time then channel number (by channel number with ByChannel),
+	// and reads the guide no further.
 	Limit int
+	// ByChannel lists the programmes by channel number, then by start
+	// time, as On Now lists what airs: with a Limit, only the first
+	// channels' programmes are read, as many as it takes.
+	ByChannel bool
+	// Shown, when set, is the part of the listing an answer shows, which
+	// apps find again: only its programmes and channels are recorded. A
+	// listing counted further than its page records its page.
+	Shown func(programs []Item) []Item
 	// Kept lists the channels and Native EPG programmes of the catalog
 	// pages kept only, asking no addon, and has those missing fetched in
 	// the background for the next listing (see keptOrLater): what airs
@@ -326,7 +354,7 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 		}
 	}
 	var mu sync.Mutex
-	var programs []Item
+	var natives []Item
 	var records []record
 	seen := map[accounts.ID]bool{}
 	// native are the channels with Native EPG programmes, aired or not.
@@ -356,7 +384,7 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 						continue
 					}
 					seen[program.ID] = true
-					programs = append(programs, program)
+					natives = append(natives, program)
 					records = append(records, record{ID: program.ID, Key: programKey(channel.StremioID, programmeID(video)), Kind: KindProgram,
 						Parent: &channel.ID, Channel: channel.StremioID, Video: &video, Confined: src.addon.confined})
 				}
@@ -365,16 +393,6 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 		})
 	}
 	_ = group.Wait()
-	guided, err := s.guidePrograms(ctx, v, byStremioID, native, q, keep)
-	if err != nil {
-		return nil, err
-	}
-	for _, program := range guided {
-		if !seen[program.ID] {
-			seen[program.ID] = true
-			programs = append(programs, program)
-		}
-	}
 	// The channels Polyfin airs have programmes over the days the guides
 	// span.
 	airsFrom, airsTo := from, to
@@ -384,23 +402,58 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 	if airsTo.After(last) {
 		airsTo = last
 	}
-	programs = append(programs, s.virtualPrograms(v, byStremioID, airsFrom, airsTo, keep)...)
-	slices.SortStableFunc(programs, func(a, b Item) int {
-		if c := a.StartDate.Compare(*b.StartDate); c != 0 {
-			return c
+	// listed lists the programmes of channels, a part of byStremioID: their
+	// Native EPG programmes, then those of their XMLTV guides, then those of
+	// the channels Polyfin airs.
+	listed := func(channels map[string]Item, guideQuery GuideQuery) ([]Item, error) {
+		var programs []Item
+		for _, program := range natives {
+			if _, ok := channels[program.Channel.StremioID]; ok {
+				programs = append(programs, program)
+			}
 		}
-		return CompareChannelNumbers(a.Channel.Number, b.Channel.Number)
-	})
+		var guided []Item
+		var err error
+		if guideQuery.Limit <= 0 && to.Sub(from) <= airingSpan {
+			guided, err = s.airingGuidePrograms(ctx, v, channels, native, from, to, keep)
+		} else {
+			guided, err = s.guidePrograms(ctx, v, channels, native, guideQuery, keep)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, program := range guided {
+			if !seen[program.ID] {
+				seen[program.ID] = true
+				programs = append(programs, program)
+			}
+		}
+		return append(programs, s.virtualPrograms(v, channels, airsFrom, airsTo, keep)...), nil
+	}
+	var programs []Item
+	if q.ByChannel && q.Limit > 0 {
+		programs, err = firstChannelsPrograms(byStremioID, q, firstChannels, listed)
+	} else {
+		programs, err = listed(byStremioID, q)
+	}
+	if err != nil {
+		return nil, err
+	}
+	sortPrograms(programs, q.ByChannel)
 	if q.Limit > 0 && len(programs) > q.Limit {
 		programs = programs[:q.Limit]
 	}
-	// Only the Native EPG programmes listed are kept, and the channels of
-	// the programmes listed, which their programmes are found again by.
-	listed, channels := map[accounts.ID]bool{}, map[string]bool{}
-	for _, program := range programs {
-		listed[program.ID], channels[program.Channel.StremioID] = true, true
+	// Only the Native EPG programmes shown are kept, and the channels of
+	// the programmes shown, which their programmes are found again by.
+	shown := programs
+	if q.Shown != nil {
+		shown = q.Shown(programs)
 	}
-	records = slices.DeleteFunc(records, func(r record) bool { return !listed[r.ID] })
+	listedIDs, channels := map[accounts.ID]bool{}, map[string]bool{}
+	for _, program := range shown {
+		listedIDs[program.ID], channels[program.Channel.StremioID] = true, true
+	}
+	records = slices.DeleteFunc(records, func(r record) bool { return !listedIDs[r.ID] })
 	for _, r := range channelRecords {
 		if r.Meta != nil && channels[r.Meta.ID] {
 			records = append(records, r)
@@ -497,17 +550,45 @@ var programRefs = cache.New[accounts.ID, programRef](200_000, 24*time.Hour)
 
 func rememberProgram(id accounts.ID, ref programRef) { programRefs.Put(id, ref) }
 
+// programMisses remembers the identifiers lately searched among the
+// guides' programmes in vain, each with the state of the guides it was
+// searched in (see guideState): apps ask for folders of their own, the
+// Live TV view among them, which no item has, and each would otherwise
+// search every programme again. A miss holds while the guides keep their
+// downloads and mappings: a new download, or a channel mapped anew, may
+// hold the programme, which is searched again.
+var programMisses = cache.New[accounts.ID, string](10_000, time.Hour)
+
+// guideState sums up what an identifier is searched in among the guides'
+// programmes: each guide's current download, and the channels mapped to
+// them, which a mapping made or changed moves.
+func (s *Service) guideState(ctx context.Context) (string, error) {
+	var state string
+	err := s.db.QueryRow(ctx, `SELECT (SELECT count(*) || ':' || coalesce(string_agg(id::text || '@' || generation, ',' ORDER BY id), '')
+		FROM live_guides) || '|' || (SELECT count(*) || ':' || coalesce(max(xmin::text::bigint), 0) FROM live_guide_maps)`).Scan(&state)
+	return state, err
+}
+
 // unsavedProgram describes an XMLTV programme of one of the user's
 // channels by its identifier, which no item keeps: from the programmes
 // listed lately, else by searching the guides' programmes of the channels
-// mapped to one. An identifier of no programme is ErrNotFound.
+// mapped to one, unless the same guides were searched for it in vain
+// lately (see programMisses). An identifier of no programme is
+// ErrNotFound.
 func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (Item, error) {
 	ref, ok := programRefs.Get(id)
 	if !ok {
+		state, err := s.guideState(ctx)
+		if err != nil {
+			return Item{}, err
+		}
+		if missed, ok := programMisses.Get(id); ok && missed == state {
+			return Item{}, ErrNotFound
+		}
 		var found bool
-		var err error
 		if ref, found, err = s.searchProgram(ctx, id); err != nil || !found {
 			if err == nil {
+				programMisses.Put(id, state)
 				err = ErrNotFound
 			}
 			return Item{}, err
