@@ -129,10 +129,12 @@ func TestPathsReachTheirOwner(t *testing.T) {
 	t.Parallel()
 	h := handler(database{})
 	for target, want := range map[string]string{
-		"/admin/api/users":    "admin api",
-		"/admin/api/missing":  "admin api",
-		"/Users/Me":           "jellyfin",
-		"/System/Info/Public": "jellyfin",
+		"/admin/api/users":   "admin api",
+		"/admin/api/missing": "admin api",
+		// An addon's configure link, which needs no session.
+		"/admin/configure/token": "admin api",
+		"/Users/Me":              "jellyfin",
+		"/System/Info/Public":    "jellyfin",
 		// Without a web client, as before it.
 		"/web/index.html": "jellyfin",
 		"/web":            "jellyfin",

@@ -42,7 +42,8 @@ type Options struct {
 	Database Pinger
 	// Admin is the built admin application: index.html and its assets.
 	Admin fs.FS
-	// AdminAPI serves /admin/api/.
+	// AdminAPI serves /admin/api/, and the addons' configure links under
+	// /admin/configure/.
 	AdminAPI http.Handler
 	// Jellyfin serves every path not owned by Polyfin itself.
 	Jellyfin http.Handler
@@ -133,6 +134,7 @@ func New(options Options) http.Handler {
 		http.Redirect(w, r, target, http.StatusFound)
 	})
 	mux.Handle("/admin/api/", rootOnly(options.AdminAPI, options.Jellyfin))
+	mux.Handle("/admin/configure/", rootOnly(options.AdminAPI, options.Jellyfin))
 	// No method in the pattern: it would conflict with "/admin/api/", which
 	// must answer every method. adminApp restricts methods itself.
 	mux.Handle("/admin/", rootOnly(adminApp(options.Admin, options.brotliTurn, options.Logger), options.Jellyfin))
