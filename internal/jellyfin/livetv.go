@@ -144,12 +144,21 @@ func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail b
 		if item.ParentIndexNumber > 0 {
 			dto.ParentIndexNumber = new(item.ParentIndexNumber)
 		}
-		flags := programFlags(item)
-		for flag, field := range map[string]**bool{"movie": &dto.IsMovie, "series": &dto.IsSeries, "news": &dto.IsNews,
-			"kids": &dto.IsKids, "sports": &dto.IsSports} {
-			if flags[flag] {
-				*field = new(true)
-			}
+		categories := programCategoriesOf(item)
+		if categories.movie {
+			dto.IsMovie = new(true)
+		}
+		if categories.series {
+			dto.IsSeries = new(true)
+		}
+		if categories.news {
+			dto.IsNews = new(true)
+		}
+		if categories.kids {
+			dto.IsKids = new(true)
+		}
+		if categories.sports {
+			dto.IsSports = new(true)
 		}
 		if item.Repeat {
 			dto.IsRepeat = new(true)
@@ -160,22 +169,41 @@ func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail b
 // programFlags classifies a programme by its categories, as Jellyfin
 // classifies guide programmes: movie, series, news, kids or sports.
 func programFlags(item library.Item) map[string]bool {
+	c := programCategoriesOf(item)
 	flags := map[string]bool{}
-	for _, genre := range item.Genres {
-		switch strings.ToLower(strings.TrimSpace(genre)) {
-		case "movie", "movies", "film":
-			flags["movie"] = true
-		case "series", "show":
-			flags["series"] = true
-		case "news":
-			flags["news"] = true
-		case "kids", "children", "family":
-			flags["kids"] = true
-		case "sports", "sport":
-			flags["sports"] = true
+	for flag, set := range map[string]bool{"movie": c.movie, "series": c.series, "news": c.news, "kids": c.kids, "sports": c.sports} {
+		if set {
+			flags[flag] = true
 		}
 	}
 	return flags
+}
+
+// programCategories are the categories Jellyfin classifies guide
+// programmes in (see programCategoriesOf).
+type programCategories struct {
+	movie, series, news, kids, sports bool
+}
+
+// programCategoriesOf classifies a programme by its genres, without the
+// map programFlags makes: listings classify each programme of a guide.
+func programCategoriesOf(item library.Item) programCategories {
+	var c programCategories
+	for _, genre := range item.Genres {
+		switch strings.ToLower(strings.TrimSpace(genre)) {
+		case "movie", "movies", "film":
+			c.movie = true
+		case "series", "show":
+			c.series = true
+		case "news":
+			c.news = true
+		case "kids", "children", "family":
+			c.kids = true
+		case "sports", "sport":
+			c.sports = true
+		}
+	}
+	return c
 }
 
 // channelPlaceholder stands for a channel's streams in its details.
@@ -690,6 +718,13 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		userData := q.EnableUserData == nil || *q.EnableUserData
 		images := q.EnableImages == nil || *q.EnableImages
 		from2, to2 := bounds(len(programs), start, limit)
+		// jellyfin-web's guide gets the programmes as Jellyfin describes
+		// them for its request, streamed (see writeLeanPrograms); other
+		// listings keep the full description.
+		if !recommended && !userData && !images {
+			h.writeLeanPrograms(w, r, programs[from2:to2], len(programs), start, fields)
+			return
+		}
 		dtos := make([]BaseItemDto, 0, to2-from2)
 		var state userState
 		if userData {
@@ -758,9 +793,15 @@ func (q programQuery) keeps(p library.Item, now time.Time) bool {
 	}) {
 		return false
 	}
-	flags := programFlags(p)
-	for flag, want := range map[string]*bool{"movie": q.IsMovie, "series": q.IsSeries, "news": q.IsNews, "kids": q.IsKids, "sports": q.IsSports} {
-		if want != nil && *want != flags[flag] {
+	if q.IsMovie == nil && q.IsSeries == nil && q.IsNews == nil && q.IsKids == nil && q.IsSports == nil {
+		return true
+	}
+	c := programCategoriesOf(p)
+	for _, filter := range []struct {
+		want *bool
+		is   bool
+	}{{q.IsMovie, c.movie}, {q.IsSeries, c.series}, {q.IsNews, c.news}, {q.IsKids, c.kids}, {q.IsSports, c.sports}} {
+		if filter.want != nil && *filter.want != filter.is {
 			return false
 		}
 	}

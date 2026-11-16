@@ -142,7 +142,9 @@ func TestOnNowListsTheFirstChannels(t *testing.T) {
 
 // Like Jellyfin's, a programme listing without EnableImages has no image
 // tags, and one without EnableUserData no user data; both are given by
-// default. jellyfin-web's guide asks for neither.
+// default. jellyfin-web's guide asks for neither, and gets programmes as
+// Jellyfin describes them then: without IsFolder, LocationType, nor
+// PrimaryImageAspectRatio, which it was not asked for.
 func TestProgrammesFollowEnableImagesAndEnableUserData(t *testing.T) {
 	t.Parallel()
 	s, token, _ := guidedTV(t)
@@ -179,12 +181,21 @@ func TestProgrammesFollowEnableImagesAndEnableUserData(t *testing.T) {
 			t.Errorf("ImageBlurHashes, which Jellyfin always gives: %s", lean[i]["ImageBlurHashes"])
 		}
 		// The rest is the same.
+		left := 0
 		for key, value := range full[i] {
-			if key != "ImageTags" && key != "BackdropImageTags" && key != "UserData" && string(lean[i][key]) != string(value) {
+			switch key {
+			case "ImageTags", "BackdropImageTags", "UserData", "IsFolder", "LocationType", "PrimaryImageAspectRatio":
+				if _, ok := lean[i][key]; ok {
+					t.Errorf("without images nor user data, %s: %s", key, lean[i][key])
+				}
+				continue
+			}
+			left++
+			if string(lean[i][key]) != string(value) {
 				t.Errorf("%s: %s, %s by default", key, lean[i][key], value)
 			}
 		}
-		if len(lean[i]) != len(full[i])-3 {
+		if len(lean[i]) != left {
 			t.Errorf("fields without images nor user data %d, by default %d", len(lean[i]), len(full[i]))
 		}
 	}
