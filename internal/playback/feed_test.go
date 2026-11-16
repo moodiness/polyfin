@@ -129,10 +129,6 @@ func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
 // its request ends, which closes it.
 func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 	reader, writer := io.Pipe()
-	l.mu.Lock()
-	l.open++
-	l.most = max(l.most, l.open)
-	l.mu.Unlock()
 	go func() {
 		defer writer.Close()
 		for n := 0; chunks < 0 || n < chunks; n++ {
@@ -145,6 +141,16 @@ func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 		}
 		<-ctx.Done()
 	}()
+	return l.counted(ctx, reader)
+}
+
+// counted answers an MPEG-TS stream's body, counted as open until its
+// request ends, which closes it.
+func (l *liveSource) counted(ctx context.Context, reader io.ReadCloser) *http.Response {
+	l.mu.Lock()
+	l.open++
+	l.most = max(l.most, l.open)
+	l.mu.Unlock()
 	body := &countedBody{ReadCloser: reader, close: func() {
 		if l.closing != nil {
 			<-l.closing
@@ -158,7 +164,7 @@ func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 }
 
 // paced answers an MPEG-TS stream the test paces (see liveSource.more),
-// open until its request ends.
+// counted as open until its request ends.
 func (l *liveSource) paced(ctx context.Context) *http.Response {
 	reader, writer := io.Pipe()
 	go func() {
@@ -187,8 +193,7 @@ func (l *liveSource) paced(ctx context.Context) *http.Response {
 			}
 		}
 	}()
-	context.AfterFunc(ctx, func() { _ = reader.Close() })
-	return answer(http.StatusOK, "video/mp2t", reader)
+	return l.counted(ctx, reader)
 }
 
 // countedBody stops counting its connection when closed, then closes it:
