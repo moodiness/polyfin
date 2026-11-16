@@ -160,9 +160,12 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	keep(t, path, kept(nvidiaKey, 24*time.Hour, usualSpeeds))
 	m.retime.after = func() time.Duration { return 300 * time.Millisecond }
 	// The test reads the file once written: on Windows, a read under way
-	// makes the rename in its place fail, and the rename the read.
-	writes := make(chan error, 8)
+	// makes the rename in its place fail, and the rename the read. It
+	// looks at the GPU chosen once the timing made again is in force: the
+	// GPU's timing goes in place before the processor's is kept.
+	writes, applied := make(chan error, 8), make(chan struct{}, 1)
 	m.timings.wrote = func(err error) { writes <- err }
+	m.retime.applied = func() { applied <- struct{}{} }
 	// A file converts meanwhile, which the timing at startup does not
 	// wait for.
 	m.mu.Lock()
@@ -196,15 +199,15 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	m.mu.Lock()
 	m.files = 0
 	m.mu.Unlock()
-	// The timing made again writes the GPU's timing, then the processor's.
+	select {
+	case <-applied:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the timing made again did not happen")
+	}
+	// It wrote the GPU's timing, then the processor's.
 	for range 2 {
-		select {
-		case err := <-writes:
-			if err != nil {
-				t.Fatalf("the timing made again was not kept: %v", err)
-			}
-		case <-time.After(30 * time.Second):
-			t.Fatal("the timing made again did not happen")
+		if err := <-writes; err != nil {
+			t.Fatalf("the timing made again was not kept: %v", err)
 		}
 	}
 	if got := keptIn(t, path); len(got) != 3 {
@@ -215,8 +218,7 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	if got := keptIn(t, path)[1]; got.At.Before(quiet.Add(m.retime.quiet-2*m.retime.poll)) || !near(got.Speeds[chainHDRGPU], 1.6) {
 		t.Errorf("timed again at %v, quiet from %v: %+v", got.At, quiet, got)
 	}
-	eventually(t, "the path of the timing made again", func() bool { return near(m.Hardware().HDRSpeed, 1.6) })
-	if hw := m.Hardware(); m.detected["nvenc"] != hw || !near(m.HDRPath(hw).ProcessorSpeed, 2.0) {
+	if hw := m.Hardware(); m.detected["nvenc"] != hw || !near(hw.HDRSpeed, 1.6) || !near(m.HDRPath(hw).ProcessorSpeed, 2.0) || len(writes) != 0 {
 		t.Errorf("after the timing made again: %+v, %+v", hw, m.HDRPath(hw))
 	}
 }

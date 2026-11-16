@@ -41,9 +41,11 @@ type retimer struct {
 	// Manager.mu.
 	retry *time.Timer
 	// quiet, poll and after stand for quietFor, quietPoll and the delay
-	// of a retry when set, for tests.
+	// of a retry when set, for tests; applied hears each timing made
+	// again once all it found is in force, for tests.
 	quiet, poll time.Duration
 	after       func() time.Duration
+	applied     func()
 }
 
 // UseOtherWork has busy report the heavy work Polyfin does besides its
@@ -204,6 +206,9 @@ func (m *Manager) timeAgain(parent context.Context, began int64) error {
 		m.retryLater()
 	} else {
 		m.stopRetry()
+	}
+	if m.retime.applied != nil {
+		m.retime.applied()
 	}
 	return nil
 }
