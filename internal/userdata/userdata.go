@@ -252,6 +252,22 @@ func (s *Store) WatchedSeries(ctx context.Context, user accounts.ID) ([]Watched,
 	})
 }
 
+// PlayedSeries lists the series one of whose episodes the user played, in
+// the order their first played episode comes in Episodes: the latest
+// played first, those played without a date last, ties by episode. Only
+// the series are read, not their episodes.
+func (s *Store) PlayedSeries(ctx context.Context, user accounts.ID) ([]accounts.ID, error) {
+	rows, err := s.db.Query(ctx, `SELECT series_id FROM (
+			SELECT DISTINCT ON (series_id) series_id, last_played_at, item_id FROM user_data
+			WHERE user_id = $1 AND series_id IS NOT NULL AND played
+			ORDER BY series_id, last_played_at DESC NULLS LAST, item_id) latest
+		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+}
+
 // SeriesEpisodes is Episodes for the episodes of series only.
 func (s *Store) SeriesEpisodes(ctx context.Context, user accounts.ID, series []accounts.ID) ([]Entry, error) {
 	if len(series) == 0 {
