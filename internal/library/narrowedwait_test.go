@@ -17,11 +17,12 @@ import (
 )
 
 // slowCatalogs serves addon, but answers the catalog pages whose path
-// slow matches after delay, as a busy addon does, and counts the pages
-// asked and those answered, by path.
+// slow matches once gate is closed, or after delay when gate is nil, as a
+// busy addon does, and counts the pages asked and those answered, by path.
 type slowCatalogs struct {
 	addon *fakeAddon
 	slow  func(path string) bool
+	gate  chan struct{}
 	delay time.Duration
 
 	mu            sync.Mutex
@@ -44,8 +45,15 @@ func (a *slowCatalogs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.arrived = append(a.arrived, arrival{path, time.Now()})
 		a.mu.Unlock()
 		if a.slow(path) {
+			// Of the gate and the delay, the one not used is nil: it
+			// never answers.
+			var later <-chan time.Time
+			if a.gate == nil {
+				later = time.After(a.delay)
+			}
 			select {
-			case <-time.After(a.delay):
+			case <-a.gate:
+			case <-later:
 			case <-r.Context().Done():
 				return
 			}
@@ -101,16 +109,24 @@ func (e env) installServing(scope addons.Scope, handler http.Handler) {
 	}
 }
 
-// A genre's page offered by catalogs of a busy addon answers within
-// narrowedWait: its counts at once, from what is read already, and its
+// A genre's page offered by catalogs of a busy addon answers once its
+// wait ends: its counts at once, from what is read already, and its
 // listing with the titles of the catalogs read by then, then the titles
 // kept of the genre, each user's limits applying, more to follow. The
 // catalogs are read on, each page once, and the next listing is whole.
+// The busy catalogs answer when the test lets them, and the test ends
+// the listings' waits (see narrowedEnd): what a listing counts does not
+// depend on how fast the machine runs.
 func TestAGenrePageAnswersWithinItsWait(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
-	const wait = 400 * time.Millisecond
-	e.service.SetNarrowedWait(wait)
+	// Each listing's wait ends when the test ends it.
+	waits := make(chan chan<- time.Time, 8)
+	e.service.narrowedEnd = func(time.Duration) <-chan time.Time {
+		end := make(chan time.Time, 1)
+		waits <- end
+		return end
+	}
 	title := func(id, name, rating string, genres ...string) stremio.Meta {
 		return stremio.Meta{ID: id, Type: "movie", Name: name, ReleaseInfo: "2001", Released: "2001-05-05T00:00:00.000Z", Genres: genres,
 			Extras: &stremio.Extras{Certification: rating}}
@@ -130,7 +146,7 @@ func TestAGenrePageAnswersWithinItsWait(t *testing.T) {
 		kept[item.Name] = item.ID
 	}
 	// Eight catalogs offer Drama, as many as the addon is asked pages at
-	// once: two answer at once, six in 1.5 s.
+	// once: two answer at once, six once the test lets them.
 	picks := &fakeAddon{
 		manifest: stremio.Manifest{ID: "picks", Name: "Picks", Version: "1", Types: []string{"movie"}, Resources: []stremio.Resource{{Name: "catalog"}}},
 		catalogs: map[string][]stremio.Meta{},
@@ -153,7 +169,7 @@ func TestAGenrePageAnswersWithinItsWait(t *testing.T) {
 			}
 		}
 	}
-	busy := &slowCatalogs{addon: picks, delay: 1500 * time.Millisecond, asked: map[string]int{}, served: map[string]int{},
+	busy := &slowCatalogs{addon: picks, gate: make(chan struct{}), asked: map[string]int{}, served: map[string]int{},
 		slow: func(path string) bool {
 			return !strings.Contains(path, "/pick0/") && !strings.Contains(path, "/pick1/")
 		}}
@@ -163,67 +179,93 @@ func TestAGenrePageAnswersWithinItsWait(t *testing.T) {
 	}
 	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13)})
 
-	page := func(user accounts.User, atOnce bool, count int) (Page, time.Duration) {
+	drama := func(option string) bool { return option == "Drama" }
+	page := func(user accounts.User, atOnce bool, count int) Page {
 		t.Helper()
 		read := t.Context()
 		if atOnce {
 			read = AtOnce(read)
 		}
-		started := time.Now()
-		page, err := e.service.GenreTitles(read, user, []string{"Drama"}, func(option string) bool { return option == "Drama" },
-			[]Kind{KindMovie}, 0, count)
+		page, err := e.service.GenreTitles(read, user, []string{"Drama"}, drama, []Kind{KindMovie}, 0, count)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return page, time.Since(started)
+		return page
 	}
 
-	// The page's counts answer at once, long before the busy catalogs,
-	// and start reading them.
-	if counted, took := page(e.member, true, 100); took >= busy.delay || counted.Total == 0 || !counted.More {
-		t.Errorf("the counts, cold: %d titles, more %v, in %v", counted.Total, counted.More, took)
+	// The page's counts answer at once, while the busy catalogs have not
+	// answered, and start reading them.
+	if counted := page(e.member, true, 100); counted.Total == 0 || !counted.More {
+		t.Errorf("the counts, cold: %d titles, more %v", counted.Total, counted.More)
 	}
-	// The listing waits for them, then lists the two that answered, then
-	// the titles kept, but those the user hid.
-	for deadline := time.Now().Add(10 * time.Second); ; {
-		if pages, _ := busy.answered("/pick0/"); pages == 1 {
-			if pages, _ := busy.answered("/pick1/"); pages == 1 {
-				break
-			}
+	// The two quick catalogs answer: the counts then count their titles,
+	// and the titles kept, but the one the user hid.
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if counted := page(e.member, true, 100); counted.Total == 15 {
+			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("the quick catalogs did not answer")
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
-	// A restricted user opens the page meanwhile.
-	var restricted Page
-	var restrictedErr error
-	var both sync.WaitGroup
-	both.Go(func() {
-		restricted, restrictedErr = e.service.GenreTitles(t.Context(), child, []string{"Drama"}, func(option string) bool { return option == "Drama" },
-			[]Kind{KindMovie}, 0, 12)
-	})
-	listed, took := page(e.member, false, 12)
-	both.Wait()
-	if restrictedErr != nil {
-		t.Fatal(restrictedErr)
+	// The listing, and a restricted user's opened meanwhile, wait for the
+	// busy catalogs until their waits end.
+	type listing struct {
+		page Page
+		err  error
 	}
-	if took < wait || took > wait+time.Second {
-		t.Errorf("the listing, cold, answered in %v", took)
+	open := func(user accounts.User) <-chan listing {
+		listed := make(chan listing, 1)
+		go func() {
+			page, err := e.service.GenreTitles(t.Context(), user, []string{"Drama"}, drama, []Kind{KindMovie}, 0, 12)
+			listed <- listing{page, err}
+		}()
+		return listed
 	}
-	got := names(listed.Items)
+	member, restricted := open(e.member), open(child)
+	var ends []chan<- time.Time
+	for len(ends) < 2 {
+		select {
+		case end := <-waits:
+			ends = append(ends, end)
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%d listings waited for the busy catalogs, want 2", len(ends))
+		}
+	}
+	select {
+	case <-member:
+		t.Fatal("the listing answered before its wait ended")
+	case <-restricted:
+		t.Fatal("the restricted user's listing answered before its wait ended")
+	default:
+	}
+	for _, end := range ends {
+		end <- time.Now()
+	}
+	// The listing then lists the two catalogs that answered, then the
+	// titles kept, but those the user hid.
+	listed := <-member
+	if listed.err != nil {
+		t.Fatal(listed.err)
+	}
+	got := names(listed.page.Items)
 	if len(got) != 12 || !slices.Equal(slices.Sorted(slices.Values(got[:10])), quick) || !slices.Equal(got[10:], []string{"Ash Road", "Blue Hour"}) ||
-		listed.Total != 15 || !listed.More {
-		t.Errorf("the listing, cold: %v, total %d, more %v", got, listed.Total, listed.More)
+		listed.page.Total != 15 || !listed.page.More {
+		t.Errorf("the listing, cold: %v, total %d, more %v", got, listed.page.Total, listed.page.More)
 	}
 	// The restricted user's has their limits: no title rated R.
-	if got := names(restricted.Items); len(got) != 12 || slices.Contains(got, "Pick 0-4") || slices.Contains(got, "Cold Night") ||
-		!slices.Equal(got[9:], []string{"Ash Road", "Blue Hour", "Fern Hill"}) || !restricted.More {
-		t.Errorf("for a restricted user, cold: %v, total %d", got, restricted.Total)
+	listed = <-restricted
+	if listed.err != nil {
+		t.Fatal(listed.err)
+	}
+	if got := names(listed.page.Items); len(got) != 12 || slices.Contains(got, "Pick 0-4") || slices.Contains(got, "Cold Night") ||
+		!slices.Equal(got[9:], []string{"Ash Road", "Blue Hour", "Fern Hill"}) || !listed.page.More {
+		t.Errorf("for a restricted user, cold: %v, total %d", got, listed.page.Total)
 	}
 
-	// The catalogs are read on, each page once whoever asked for it.
+	// The busy catalogs answer; they are read on, each page once whoever
+	// asked for it.
+	close(busy.gate)
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		if pages, _ := busy.answered("genre=Drama"); pages == catalogHostFetches {
@@ -234,19 +276,20 @@ func TestAGenrePageAnswersWithinItsWait(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	whole, took := page(e.member, false, 100)
+	// The next listing, whose wait the test never ends, lists them all.
+	whole := page(e.member, false, 100)
 	if pages, most := busy.answered("genre=Drama"); pages != catalogHostFetches || most != 1 {
 		t.Errorf("%d catalog pages asked, one %d times", pages, most)
 	}
 	got = names(whole.Items)
 	if len(got) != 44 || !slices.Equal(slices.Sorted(slices.Values(got[:40])), all) ||
 		!slices.Equal(got[40:], []string{"Ash Road", "Blue Hour", "Cold Night", "Gray Dock"}) || whole.Total != 44 || whole.More {
-		t.Errorf("the listing, once read: %d titles in %v, total %d, more %v: %v", len(got), took, whole.Total, whole.More, got)
+		t.Errorf("the listing, once read: %d titles, total %d, more %v: %v", len(got), whole.Total, whole.More, got)
 	}
-	if counted, _ := page(e.member, true, 100); counted.Total != 44 || counted.More {
+	if counted := page(e.member, true, 100); counted.Total != 44 || counted.More {
 		t.Errorf("the counts, once read: %d titles, more %v", counted.Total, counted.More)
 	}
-	restrictedWhole, _ := page(child, false, 100)
+	restrictedWhole := page(child, false, 100)
 	if got := names(restrictedWhole.Items); len(got) != 43 || slices.Contains(got, "Pick 0-4") || slices.Contains(got, "Cold Night") {
 		t.Errorf("for a restricted user, once read: %d titles: %v", len(got), got)
 	}

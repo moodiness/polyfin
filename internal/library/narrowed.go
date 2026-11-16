@@ -154,14 +154,12 @@ func (s *Service) mergedWithin(ctx context.Context, v view, sources []source, st
 		return titles, total, !complete, nil
 	}
 	results := s.readOn(ctx, v, sources, start, count)
-	timer := time.NewTimer(time.Until(deadline))
-	defer timer.Stop()
 	select {
 	case result := <-results:
 		return result.titles, result.total, false, result.err
 	case <-ctx.Done():
 		return nil, 0, false, ctx.Err()
-	case <-timer.C:
+	case <-s.narrowedEnd(time.Until(deadline)):
 	}
 	titles, total, complete := s.mergedReady(ctx, v, sources, start, count)
 	return titles, total, !complete, nil

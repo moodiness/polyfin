@@ -162,8 +162,11 @@ type Service struct {
 	wholeWait time.Duration
 	keptWait  time.Duration
 	// narrowedWait bounds how long a genre's, studio's or year's page
-	// waits for its catalogs (see Narrowed).
+	// waits for its catalogs (see Narrowed), and narrowedEnd gives what
+	// ends that wait, the time left given: time.After, which tests
+	// replace to end it by hand.
 	narrowedWait time.Duration
+	narrowedEnd  func(left time.Duration) <-chan time.Time
 	// lifetime ends with the server: the reads no request waits for any
 	// more end with it (see EndWith).
 	lifetime context.Context
@@ -419,6 +422,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		wholeWait:      wholeListingWait,
 		keptWait:       keptListingWait,
 		narrowedWait:   narrowedWait,
+		narrowedEnd:    time.After,
 		lifetime:       context.Background(),
 		creditsWait:    titleCreditsWait,
 		searchGrace:    searchGrace,
