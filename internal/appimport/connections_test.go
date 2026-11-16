@@ -31,8 +31,10 @@ type fakeSource struct {
 	accepted map[string]bool
 	rotate   bool
 	fail     error
-	// reads are the secrets read with, signedOut those signed out.
+	// reads are the secrets read with, signedOut those signed out;
+	// signingOut is closed at the next sign-out, then replaced.
 	reads, signedOut []string
+	signingOut       chan struct{}
 	renewals         int
 	// signOutFails fails the sign-outs; hang has them wait for their
 	// context to end, and fail.
@@ -72,6 +74,8 @@ func (f *fakeSource) SignOut(ctx context.Context, signIn SignIn) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.signedOut = append(f.signedOut, signIn.Secret)
+	close(f.signingOut)
+	f.signingOut = make(chan struct{})
 	return nil
 }
 
@@ -152,7 +156,7 @@ func newConnectionHarness(t *testing.T) connectionHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := &fakeSource{accepted: map[string]bool{}}
+	source := &fakeSource{accepted: map[string]bool{}, signingOut: make(chan struct{})}
 	log := &lockedBuffer{}
 	imports := &atomic.Bool{}
 	imports.Store(true)
@@ -334,13 +338,14 @@ func TestStayingConnectedKeepsTheSignInAndImportsAgain(t *testing.T) {
 	}
 
 	// Alice signs in again: the new sign-in replaces the one refused,
-	// which Polyfin signs out, and the connection runs again.
+	// which Polyfin signs out in the background, and the connection runs
+	// again.
 	h.source.set(func(f *fakeSource) { f.accepted["signed-in-again"] = true })
 	c = h.connected(t, alice, alice, account, SignIn{Secret: "signed-in-again", Owned: true}, Choice{Profile: "2"})
 	if c.Problem != "" || c.LastImport == nil || c.LastImport.Problem != "" {
 		t.Errorf("signed in again: %+v", c)
 	}
-	if signedOut := h.source.signedOutSecrets(); !slices.Equal(signedOut, []string{"renewed-secret-c"}) {
+	if signedOut := h.waitSignedOut(t, 1); !slices.Equal(signedOut, []string{"renewed-secret-c"}) {
 		t.Errorf("signed out: %v", signedOut)
 	}
 
@@ -394,11 +399,7 @@ func TestPastedKeysAreNeverSignedOut(t *testing.T) {
 	h.Hold(bob.ID, Account{App: "stremio", SignIn: &SignIn{Secret: "pasted, never imported"}})
 	h.Hold(bob.ID, Account{App: "stremio", SignIn: &SignIn{Secret: "replaced", Owned: true}})
 	h.Hold(bob.ID, Account{App: "stremio", SignIn: &SignIn{Secret: "expired", Owned: true}})
-	deadline := time.Now().Add(5 * time.Second)
-	for len(h.source.signedOutSecrets()) < 2 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if signedOut := h.source.signedOutSecrets(); !slices.Equal(signedOut, []string{"replaced", "expired"}) {
+	if signedOut := h.waitSignedOut(t, 2); !slices.Equal(signedOut, []string{"expired", "replaced"}) {
 		t.Errorf("signed out: %v", signedOut)
 	}
 }

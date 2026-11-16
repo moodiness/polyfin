@@ -11,20 +11,23 @@ import (
 )
 
 // waitSignedOut waits until the fake app signed out n sessions, and
-// returns their secrets, sorted.
+// returns their secrets, sorted: Polyfin signs out in the background, in
+// no set order.
 func (h connectionHarness) waitSignedOut(t *testing.T, n int) []string {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
 	for {
-		signedOut := h.source.signedOutSecrets()
+		h.source.mu.Lock()
+		signedOut, next := slices.Clone(h.source.signedOut), h.source.signingOut
+		h.source.mu.Unlock()
 		if len(signedOut) >= n {
 			slices.Sort(signedOut)
 			return signedOut
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-next:
+		case <-time.After(10 * time.Second):
 			t.Fatalf("signed out: %v, want %d", signedOut, n)
 		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 
