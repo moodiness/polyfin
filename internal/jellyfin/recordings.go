@@ -1169,13 +1169,53 @@ func (h *Handler) mayWatchActive(ctx context.Context, user accounts.User, id acc
 // addTimers adds to the DTOs of programmes their timers and series timers,
 // as Jellyfin describes guide programmes.
 func (h *Handler) addTimers(ctx context.Context, dtos []BaseItemDto) {
+	h.markTimers(ctx, len(dtos), func(i int) (timedProgramme, bool) {
+		id, ok := parseGUID(dtos[i].Id)
+		if !ok || dtos[i].Type != "Program" {
+			return timedProgramme{}, false
+		}
+		p := timedProgramme{id: id, name: dtos[i].Name}
+		if dtos[i].ChannelId != nil {
+			p.channel, p.onChannel = parseGUID(*dtos[i].ChannelId)
+		}
+		return p, true
+	}, func(i int, marks timerMarks) {
+		if marks.timer != "" {
+			dtos[i].TimerId, dtos[i].Status = marks.timer, marks.status
+		}
+		if marks.seriesTimer != "" {
+			dtos[i].SeriesTimerId = marks.seriesTimer
+		}
+	})
+}
+
+// timedProgramme is what markTimers matches a programme's timers by: its
+// identifier, its name and, when onChannel, its channel.
+type timedProgramme struct {
+	id        accounts.ID
+	name      string
+	channel   accounts.ID
+	onChannel bool
+}
+
+// timerMarks are a programme's timers as Jellyfin marks guide programmes:
+// the timer recording it and its status, unless cancelled or failed, and
+// the series timer recording it; empty when none.
+type timerMarks struct {
+	timer, status, seriesTimer string
+}
+
+// markTimers finds the timers of n programmes, programme(i) describing
+// the i-th, false for one that is not a programme, and gives mark those
+// of each programme a timer records.
+func (h *Handler) markTimers(ctx context.Context, n int, programme func(i int) (timedProgramme, bool), mark func(i int, marks timerMarks)) {
 	if !h.recordable() {
 		return
 	}
 	var ids []accounts.ID
-	for _, dto := range dtos {
-		if id, ok := parseGUID(dto.Id); ok && dto.Type == "Program" {
-			ids = append(ids, id)
+	for i := range n {
+		if p, ok := programme(i); ok {
+			ids = append(ids, p.id)
 		}
 	}
 	if len(ids) == 0 {
@@ -1192,26 +1232,31 @@ func (h *Handler) addTimers(ctx context.Context, dtos []BaseItemDto) {
 		}
 		return
 	}
-	for i := range dtos {
-		id, ok := parseGUID(dtos[i].Id)
-		if !ok || dtos[i].Type != "Program" {
+	for i := range n {
+		p, ok := programme(i)
+		if !ok {
 			continue
 		}
-		if t, ok := timers[id]; ok {
+		var marks timerMarks
+		if t, ok := timers[p.id]; ok {
 			if t.Status != recordings.StatusCancelled && t.Status != recordings.StatusError {
-				dtos[i].TimerId, dtos[i].Status = t.ID.String(), string(t.Status)
+				marks.timer, marks.status = t.ID.String(), string(t.Status)
 			}
 			if t.SeriesTimer != nil {
-				dtos[i].SeriesTimerId = t.SeriesTimer.String()
-				continue
+				marks.seriesTimer = t.SeriesTimer.String()
 			}
 		}
-		for _, st := range series {
-			if strings.EqualFold(strings.TrimSpace(st.Name), strings.TrimSpace(dtos[i].Name)) &&
-				(st.RecordAnyChannel || dtos[i].ChannelId != nil && *dtos[i].ChannelId == st.Channel.String()) {
-				dtos[i].SeriesTimerId = st.ID.String()
-				break
+		if marks.seriesTimer == "" {
+			for _, st := range series {
+				if strings.EqualFold(strings.TrimSpace(st.Name), strings.TrimSpace(p.name)) &&
+					(st.RecordAnyChannel || p.onChannel && p.channel == st.Channel) {
+					marks.seriesTimer = st.ID.String()
+					break
+				}
 			}
+		}
+		if marks != (timerMarks{}) {
+			mark(i, marks)
 		}
 	}
 }
