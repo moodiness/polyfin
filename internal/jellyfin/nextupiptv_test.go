@@ -265,13 +265,14 @@ func TestNextUpLooksAtTheFiftySeriesWatchedLast(t *testing.T) {
 }
 
 // Next Up of IPTV series, right after a restart and again: it describes
-// each series once, writes and locks no item, the episodes stored before
-// the restart being known, and its statements stay within a few per
-// series, what it records after its answer included: once per series
-// after the restart, two look-ups each, then nothing while the lists stay
-// the same. Reading every episode the user has data of, describing each
-// series twice and merging every episode of every series after each
-// restart took several times as many.
+// each series once after the restart, in one statement each, then from the
+// descriptions kept, its source checked once; it writes and locks no
+// item, the episodes stored before the restart being known, and its
+// statements stay within a few per series after the restart, what it
+// records after its answer included (two look-ups each), then none per
+// series while the lists stay the same. Reading every episode the user
+// has data of, describing each series twice and merging every episode of
+// every series after each restart took several times as many.
 func TestIPTVNextUpStatementsAfterARestart(t *testing.T) {
 	t.Parallel()
 	const series = 8
@@ -305,7 +306,8 @@ func TestIPTVNextUpStatementsAfterARestart(t *testing.T) {
 	t.Cleanup(server.Close)
 	restarted := x
 	restarted.url = server.URL
-	details := regexp.MustCompile(`\bFROM iptv_details\b`)
+	details := regexp.MustCompile(`\biptv_details\b`)
+	checks := regexp.MustCompile(`\bFROM iptv_sources WHERE addon_id\b`)
 	for _, when := range []string{"after the restart", "again"} {
 		counter.reset()
 		if got, _ := restarted.list(t, "/Shows/NextUp"); !slices.Equal(got, want) {
@@ -313,19 +315,22 @@ func TestIPTVNextUpStatementsAfterARestart(t *testing.T) {
 		}
 		// What it records after its answer counts too.
 		episodesRecorded(t, options.Library)
-		described := 0
+		described, checked := 0, 0
 		counter.mu.Lock()
 		for sql, sent := range counter.sent {
 			if details.MatchString(sql) {
 				described += sent
 			}
+			if checks.MatchString(sql) {
+				checked += sent
+			}
 		}
 		counter.mu.Unlock()
 		n := counter.statements.Load()
 		t.Logf("Next Up %s: %d statements, %d writing or locking items\n%s", when, n, counter.itemWrites.Load(), counter.mostSent(5))
-		budget := 3*series + 12
+		budget, read := 12, 0
 		if when == "after the restart" {
-			budget += 2 * series
+			budget, read = 3*series+12, series
 		}
 		if n > int64(budget) {
 			t.Errorf("Next Up %s: %d statements for %d series", when, n, series)
@@ -333,8 +338,8 @@ func TestIPTVNextUpStatementsAfterARestart(t *testing.T) {
 		if writes := counter.itemWrites.Load(); writes != 0 {
 			t.Errorf("Next Up %s: %d statements wrote or locked items", when, writes)
 		}
-		if described != series {
-			t.Errorf("Next Up %s: the series' details read %d times for %d series", when, described, series)
+		if described != read || checked != 1 {
+			t.Errorf("Next Up %s: the series' details read %d times for %d series, their source checked %d times", when, described, series, checked)
 		}
 	}
 }

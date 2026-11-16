@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -127,9 +128,10 @@ func (h *Handler) listAhead(user accounts.User, items []library.Item) {
 // title already, by details opened meanwhile, is joined, not asked again.
 // With prepare, the first version a play would read is then analyzed (see
 // prepareVersions). It is background work, whose requests to addons are
-// paced (see library.Background).
+// paced (see library.Background). An IPTV source is checked once for the
+// listing, which describes its title more than once (see iptv.CheckOnce).
 func (h *Handler) listVersions(user accounts.User, title accounts.ID, prepare bool) {
-	ctx, cancel := context.WithTimeout(library.Background(context.Background()), preparationTimeout)
+	ctx, cancel := context.WithTimeout(iptv.CheckOnce(library.Background(context.Background())), preparationTimeout)
 	defer cancel()
 	versions, err := h.Library.Versions(ctx, user, title)
 	if err != nil {

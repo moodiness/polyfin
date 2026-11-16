@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -311,6 +312,8 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	if hasParent {
 		within = &parent
 	}
+	// The answer's items read the IPTV sources as Next Up did.
+	r = r.WithContext(iptv.CheckOnce(r.Context()))
 	items, err := h.nextUpItems(r.Context(), user, series, within, cutoff, resumable, rewatching)
 	if err != nil {
 		h.internalError(w, r, err)
@@ -335,8 +338,10 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 // series none of whose episodes is played comes after the others, dated
 // as never played (TVSeriesManager.GetNextUpBatched). A series being
 // rewatched can show twice, its next unplayed episode and the next one
-// of the rewatch, each dated with the play it follows.
+// of the rewatch, each dated with the play it follows. The IPTV sources
+// of the series are checked once for all of them (see iptv.CheckOnce).
 func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries, parent *accounts.ID, cutoff *time.Time, resumable, rewatching bool) ([]library.Item, error) {
+	ctx = iptv.CheckOnce(ctx)
 	var candidates []watching
 	if oneSeries != nil {
 		// A series asked for is considered whatever the user did with it.
@@ -500,22 +505,26 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	watched, err := h.UserData.Episodes(r.Context(), user.ID)
+	// The IPTV sources of the series are checked once for all of them,
+	// the answer's items included.
+	ctx := iptv.CheckOnce(r.Context())
+	r = r.WithContext(ctx)
+	played, err := h.UserData.PlayedSeries(ctx, user.ID)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	favorites, err := h.UserData.Favorites(r.Context(), user.ID)
+	favorites, err := h.UserData.Favorites(ctx, user.ID)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	hidden, err := h.Library.HiddenTitles(r.Context(), user)
+	hidden, err := h.Library.HiddenTitles(ctx, user)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	dropped, err := h.UserData.DroppedSeries(r.Context(), user.ID)
+	dropped, err := h.UserData.DroppedSeries(ctx, user.ID)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -528,10 +537,10 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 		seen = map[accounts.ID]bool{}
 	}
 	maps.Copy(seen, dropped)
-	for _, e := range watched {
-		if e.Played && !seen[e.Series] && len(candidates) < watchedSeriesLimit {
-			seen[e.Series] = true
-			candidates = append(candidates, e.Series)
+	for _, series := range played {
+		if !seen[series] && len(candidates) < watchedSeriesLimit {
+			seen[series] = true
+			candidates = append(candidates, series)
 		}
 	}
 	// Favorites are items of every kind. Favorite episodes, which name
@@ -548,7 +557,7 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	// Episodes are listed first, those of every series at once: it turns
 	// down a favorite that is not a series without asking its addon for
 	// it. None are when they could not be recorded.
-	listed, err := h.Library.SeriesEpisodes(r.Context(), user, candidates)
+	listed, err := h.Library.SeriesEpisodes(ctx, user, candidates)
 	if err != nil {
 		listed = nil
 	}
@@ -564,8 +573,8 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 			limiter <- struct{}{}
 			defer func() { <-limiter }()
 			if hasParent {
-				series, err := h.Library.Item(r.Context(), user, candidate)
-				if err != nil || !h.within(r.Context(), user, series, parent) {
+				series, err := h.Library.Item(ctx, user, candidate)
+				if err != nil || !h.within(ctx, user, series, parent) {
 					return
 				}
 			}

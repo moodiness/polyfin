@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -155,6 +156,8 @@ func (h *Handler) NextUpRemovals(ctx context.Context, user accounts.User) ([]Nex
 	if err != nil || len(removals) == 0 {
 		return nil, err
 	}
+	// The IPTV sources of the series are checked once for all of them.
+	ctx = iptv.CheckOnce(ctx)
 	latest, err := h.latestPlayed(ctx, user.ID)
 	if err != nil {
 		return nil, err
@@ -212,16 +215,13 @@ func (h *Handler) nextUpRemovals(ctx context.Context, user accounts.ID) (map[acc
 // latestPlayed returns, for each series, the latest date the user played
 // or started one of its episodes.
 func (h *Handler) latestPlayed(ctx context.Context, user accounts.ID) (map[accounts.ID]*time.Time, error) {
-	entries, err := h.UserData.Episodes(ctx, user)
+	watched, err := h.UserData.WatchedSeries(ctx, user)
 	if err != nil {
 		return nil, err
 	}
-	latest := map[accounts.ID]*time.Time{}
-	for _, e := range entries {
-		// Entries come latest first.
-		if _, seen := latest[e.Series]; !seen && e.LastPlayed != nil {
-			latest[e.Series] = e.LastPlayed
-		}
+	latest := make(map[accounts.ID]*time.Time, len(watched))
+	for _, w := range watched {
+		latest[w.Series] = &w.Latest
 	}
 	return latest, nil
 }
