@@ -32,7 +32,7 @@ At startup, Polyfin encodes a few frames with each encoder of the system's metho
 - **Skipped:** when **Settings › Conversion (transcoding)** chooses a GPU.
 - **VAAPI:** it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
 - **A method that fails:** when all its encoders fail, the log says `A GPU method does not encode`, with the method, the encoder and the end of what FFmpeg wrote. The line has the level of the line that tells what video is converted on: information under **Automatic**, a warning when the settings choose that method.
-- **Then:** it measures, in the background, which way converts faster on that GPU, in a few seconds (see [Frames on the GPU](#frames-on-the-gpu)).
+- **Then:** it measures, in the background, which way converts faster on that GPU, in a few seconds (see [Frames on the GPU](#frames-on-the-gpu)). It measures again when the server is quiet, and keeps the best of the last 7 days (see [When Polyfin times again](#when-polyfin-times-again)).
 
 **On arm64:** VAAPI is tried only where libva is installed. The arm64 image has no libva, nor the AMD and Intel drivers VAAPI uses. There, VAAPI is not tried, and the log says `VAAPI is not offered here: libva is not installed`. On amd64, and on an arm64 system with libva, a failure gives FFmpeg's own reason.
 
@@ -71,7 +71,7 @@ Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones get drivers from 
 
 ### Frames on the GPU
 
-A GPU's decoded frames can stay in its memory until it encodes them. They can also come back to memory for the filters, then go to the GPU again. Either may be faster, depending on the card and its driver. Polyfin measures both ways at startup, and uses the faster one for each kind of conversion:
+A GPU's decoded frames can stay in its memory until it encodes them. They can also come back to memory for the filters, then go to the GPU again. Either may be faster, depending on the card and its driver. Polyfin measures both ways at startup and again when the server is quiet, and uses the faster one for each kind of conversion, from the best timing of the last 7 days (see [When Polyfin times again](#when-polyfin-times-again)):
 
 - **SDR video kept on the GPU:** it is scaled there, with `scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel through VAAPI, `scale_vt` with VideoToolbox, `scale_qsv` on Intel through QSV, or `vpp_amf` on AMD through AMF.
   - It is deinterlaced there with the matching filter: `yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`, `yadif_videotoolbox`, or `vpp_qsv`'s deinterlacer. AMF has none.
@@ -82,7 +82,7 @@ A GPU's decoded frames can stay in its memory until it encodes them. They can al
 
 Each measurement converts 2 seconds of generated 4K video to 1080p both ways.
 
-- **The log:** it shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`).
+- **The log:** it shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). A way that failed adds why: `memory_error` through memory, `gpu_error` on the GPU, with FFmpeg's message or `FFmpeg reached the 20 s limit`.
 - **Before it ends:** conversions that start go through memory.
 - **Next:** the GPU's HDR tone mapping, on every GPU that tone maps, and the processor's tone mapping are measured (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 
@@ -92,6 +92,22 @@ Frames always go through memory in these cases:
 - formats unchecked under **Read these formats on the graphics card**;
 - tone mapping on the processor;
 - a GPU where the way through its memory failed.
+
+### When Polyfin times again
+
+A server busy with other conversions at startup times its GPU and processor too slow. So Polyfin keeps its timings and times again later.
+
+- **Kept timings:** each timing that is not busy is kept in `gpu-timings.json`, in the data folder, never in the database. They are kept per GPU method, device, encoders, GPU model, driver, FFmpeg build and number of processors. A missing, unreadable or foreign file is ignored; the log says `The timings kept are ignored` for the last two.
+- **A new history:** another GPU, driver or FFmpeg build starts a new one. Timings older than 7 days are dropped.
+- **At startup:** the best of each chain over the last 7 days applies as soon as the GPU is chosen: the SDR and HDR chains with their speeds, and the processor's speed, so its 1080p or 720p cap. The log says `Applied the best recent timings`. Then the timings run as before.
+- **No kept timing:** at the first start, or with a new GPU, driver or FFmpeg build, the timing applies whatever it is, as before.
+- **A busy timing:** one where a chain converts under 60 % of its best of the last 7 days, or fails where its best converted. The log says `Timed while the server was busy: kept the best recent timings`, with `timed=gpu` or `timed=processor` and the chains in `below`. It is neither kept nor applied, and the best stays in force. Polyfin times again 30 to 60 minutes later, once quiet, until a timing is not busy: the log says `Timing again once the server is quiet`, with the wait in `after`.
+- **A timing not busy:** it is kept, and the best of the last 7 days applies. A timing a little lower than the best thus changes nothing.
+- **Quiet:** for 10 minutes, Polyfin itself did none of this: convert video (playbacks, channels, conversions streamed as one file), convert a file whole, record, air a channel it makes, or run a heavy scheduled task (Make thumbnails, Find commercials in recordings, Scan local folders, Back up the database). Only Polyfin's own work counts, not other programs.
+- **The scheduled task:** "Time the graphics card", under Maintenance, every 24 hours by default. It waits for quiet, then times the GPU chosen, if any, and the processor's HDR tone mapping again. Started by hand, it times as soon as none of that work runs, without the 10 minutes (see [Scheduled tasks](administration.md#scheduled-tasks)).
+- **Work that starts during a timing:** it stops the timing, and the log says `Work started during the timing: it is tried again when the server is quiet`. The timing waits for the next quiet window.
+- **Playbacks:** new timings apply to playbacks starting afterwards. Those under way keep their way to the end.
+- **Unchanged:** the thresholds have no extra margin, and each run still converts 2 seconds of 4K test pattern, within 20 seconds.
 
 ### Giving the container an NVIDIA GPU
 
@@ -145,11 +161,11 @@ When HDR video is converted to SDR, Polyfin tone maps it. HDR tone mapped to SDR
 | VideoToolbox, on macOS | `scale_vt`, through the system's own tone mapping to BT.709 | 4K | HDR10 and HLG. No Dolby Vision profile 5. |
 | Processor, elsewhere | FFmpeg's tone mapping filter | **Maximum quality of HDR converted by the processor** | No Dolby Vision profile 5. |
 
-**The processor's cap with Automatic:** Polyfin measures the processor at startup, in the background. It converts 2 seconds of generated 4K HDR10 to 1080p the way conversions run on the server: decoded and encoded on the GPU when there is one.
+**The processor's cap with Automatic:** Polyfin measures the processor at startup and again when the server is quiet, in the background, and keeps the best of the last 7 days (see [When Polyfin times again](#when-polyfin-times-again)). It converts 2 seconds of generated 4K HDR10 to 1080p the way conversions run on the server: decoded and encoded on the GPU when there is one.
 
 - 1080p when that runs at 1.5 times real time or faster.
-- Else 720p, which also applies until the measurement ends, or when it fails.
-- The log shows the speed and the height chosen (`Timed the processor's HDR tone mapping`).
+- Else 720p, which also applies until the first measurement ends, or when it fails.
+- The log shows the speed and the height chosen (`Timed the processor's HDR tone mapping`). A failed one adds `error`, with FFmpeg's message or `FFmpeg reached the 20 s limit`.
 
 **AMD GPUs never tone map:** Their HDR is tone mapped on the processor. Their Linux driver failed each way Polyfin tried with FFmpeg:
 
@@ -184,7 +200,7 @@ flowchart TD
 
 Tone mapping costs a GPU more than scaling SDR, and a small or older card can fall behind playback. An NVIDIA Quadro P2000 tone maps 4K HDR10 to 1080p at about half real time.
 
-So Polyfin also times the HDR tone mapping of each GPU that does it, at startup, in the background, the way conversions run:
+So Polyfin also times the HDR tone mapping of each GPU that does it, at startup and again when the server is quiet, in the background, the way conversions run, and keeps the best of the last 7 days (see [When Polyfin times again](#when-polyfin-times-again)):
 
 - It converts 2 seconds of generated 4K HDR10 to 1080p. On Intel and VideoToolbox, it uses an x265 sample carrying its mastering display.
 - When that is slower than real time, it converts to 720p too.
@@ -203,7 +219,7 @@ Exceptions:
 
 Where HDR goes, and why:
 
-- **The log:** it shows each timing: `Timed the GPU's conversion chains` with `kind=HDR` on NVIDIA, `Timed the GPU's HDR tone mapping` on Intel and VideoToolbox, `Timed the GPU's HDR tone mapping at a lower height` and `Timed the processor's HDR tone mapping`.
+- **The log:** it shows each timing: `Timed the GPU's conversion chains` with `kind=HDR` on NVIDIA, `Timed the GPU's HDR tone mapping` on Intel and VideoToolbox, `Timed the GPU's HDR tone mapping at a lower height` and `Timed the processor's HDR tone mapping`. A failed chain adds `memory_error` or `gpu_error`, the three others `error`: FFmpeg's message, or `FFmpeg reached the 20 s limit`.
 - **The choice:** it then logs as `Chose where HDR is tone mapped`. It has `tone_mapping=gpu` or `processor`, the GPU's `height`, the speeds and the `reason`: `keepsUp`, `notTimed`, `processorFaster`, `lowerHeight` or `noneKeepsUp`.
 - **With Detailed log (to diagnose a problem) on:** each conversion's `Started a remux` line has `tone_mapping=gpu` or `processor` for HDR. It adds `tone_mapping_reason` when the GPU does not tone map it at full height: `slow_gpu` (with the speeds), `turned_off` or `unsupported`.
 - **Detected on this server**, in **Settings › Conversion (transcoding) › Graphics card**, and **System › Health › Transcoder** show **HDR titles**: where they are converted, and why, with the speeds.
@@ -220,7 +236,7 @@ Where HDR goes, and why:
 | **Convert HDR to SDR (tone mapping)** | **Settings › Conversion (transcoding) › HDR** | On | Off: HDR converts without tone mapping and looks pale, without the processor's cap. Dolby Vision without an HDR10 layer is then not converted. |
 | **Tone mapping method** | **Settings › Conversion (transcoding) › HDR** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA GPU, Hable on the processor), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA GPUs only: the processor's filter has none and uses Hable. Intel GPUs and VideoToolbox use their own curve and ignore the method. |
 | **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding) › HDR** | On | NVIDIA GPUs, Intel GPUs through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K, unless too slow for it (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)). Off: the processor tone maps it on every GPU, a way out when a GPU's colors look wrong. Dolby Vision without an HDR10 layer is then not converted. |
-| **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding) › HDR** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
+| **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding) › HDR** | **Automatic (measured)** | **Automatic** (1080p or 720p, as measured at startup and again when the server is quiet, the best of the last 7 days, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
 | **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding) › HDR** | 0 (the video's), or 100 to 10,000 nits | Processor only. GPUs do not take it, so it is hidden when an NVIDIA GPU tone maps, unless the GPU is too slow for HDR. |
 | **Highlight desaturation (0 = off)** | **Settings › Conversion (transcoding) › HDR** | 0 to 10 | Processor only, shown as the peak is. |
 

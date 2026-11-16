@@ -271,6 +271,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Schedule series recordings | For the new programmes of each series recording |
 | Find commercials in recordings | While **Find commercials in recordings** is on, in **Settings › Recordings** |
 | Back up the database | Every day at 4:00, while backups are on (see [Backups](backups.md)) |
+| Time the graphics card | Every 24 hours, once Polyfin has been quiet for 10 minutes: times the graphics card and the processor's HDR tone mapping again (see [When Polyfin times again](gpus-and-hdr.md#when-polyfin-times-again)). Started by hand, it times as soon as no video is converted. |
 | Build taste profiles | Every hour, for the users whose watch data, hidden titles or access changed, and once a day for every user |
 | Clean the playback history | For the playbacks older than the days to keep set in **Settings › Playback** |
 | Empty the cache of files being read | Never. Rarely needed, as the cache's size and days already bound it (see [Keeping the files read across restarts](reading-the-sources.md#keeping-the-files-read-across-restarts)) |
@@ -305,7 +306,7 @@ Each task allows some types, and a shortest interval:
 |---|---|---|
 | Record ended accounts, Record expired share links | interval, startup | 10 minutes |
 | Read the libraries' first pages, Add the episodes of watchlist series, Build taste profiles, Clean up removed sources | all four | 15 minutes |
-| Look for versions of watchlist titles, Make thumbnails | daily, weekly, interval | 1 hour |
+| Look for versions of watchlist titles, Make thumbnails, Time the graphics card | daily, weekly, interval | 1 hour |
 | Clean the activity log, Clean the playback history, Delete old recordings, Find commercials in recordings | all four | 1 hour |
 | Read every collection | daily, weekly, interval | 12 hours |
 | Refresh ratings | daily, weekly, interval | 24 hours |
