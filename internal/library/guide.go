@@ -110,6 +110,11 @@ func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 			}
 		}
 	}
+	// The programmes stored before their titles were folded, and those an
+	// archive kept, which are copied without, are folded now.
+	if err := s.foldGuideTitles(ctx); err != nil {
+		return err
+	}
 	if !s.sweepDue(s.now()) {
 		return nil
 	}
@@ -390,7 +395,7 @@ func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g add
 				}
 				select {
 				case rows <- []any{g.ID, generation, p.Channel, p.Start, p.Stop, p.Title, p.SubTitle, p.Description, nonNilStrings(p.Categories),
-					positive(p.Season), positive(p.Episode), p.Icon, p.New, p.PreviouslyShown}:
+					positive(p.Season), positive(p.Episode), p.Icon, p.New, p.PreviouslyShown, iptv.Fold(p.Title)}:
 					return nil
 				case <-ctx.Done():
 					return ctx.Err()
@@ -399,7 +404,7 @@ func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g add
 	}()
 	source := &programmeRows{rows: rows}
 	written, copyErr := s.db.CopyFrom(ctx, pgx.Identifier{"live_guide_programmes"}, []string{"guide_id", "generation", "xmltv_id", "starts_at",
-		"ends_at", "title", "subtitle", "description", "categories", "season", "episode", "icon", "is_new", "previously_shown"}, source)
+		"ends_at", "title", "subtitle", "description", "categories", "season", "episode", "icon", "is_new", "previously_shown", "search"}, source)
 	if copyErr != nil {
 		cancel()
 		for range rows {
@@ -506,8 +511,9 @@ func (r *stallReader) Read(p []byte) (int, error) {
 // mapped to. A channel two catalogs list takes the programmes of the first
 // one's mapping; a channel has one programme from each start. With a limit,
 // the guide is read a window at a time from q.From until enough are kept.
-// Every programme read is remembered by its identifier (see
-// unsavedProgram).
+// A listing marked by WithProgrammeNames reads only the programmes whose
+// folded title holds its text (see guidesearch.go). Every programme read
+// is remembered by its identifier (see unsavedProgram).
 func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string]Item, skip map[string]bool, q GuideQuery,
 	keep func(Item) bool) ([]Item, error) {
 	order := map[addons.LibraryKey]int{}
@@ -577,13 +583,26 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 		at      int64
 	}
 	starts := map[start]bool{}
+	named, filtered := programmeNames(ctx)
+	if filtered {
+		if err := s.foldGuideTitles(ctx); err != nil {
+			return nil, err
+		}
+	}
 	read := func(from, to time.Time) error {
-		rows, err := s.db.Query(ctx, `SELECT c.channel_id, p.guide_id, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description,
+		query, args := `SELECT c.channel_id, p.guide_id, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description,
 			p.categories, coalesce(p.season, 0), coalesce(p.episode, 0), p.icon, p.is_new, p.previously_shown
 			FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::int[]) AS c (channel_id, guide_id, xmltv_id, rank)
 			JOIN live_guides g ON g.id = c.guide_id
 			JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = c.xmltv_id
-			WHERE p.ends_at > $5 AND p.starts_at < $6 ORDER BY p.starts_at, c.rank`, channelIDs, guideIDs, xmltvIDs, ranks, from, to)
+			WHERE p.ends_at > $5 AND p.starts_at < $6`, []any{channelIDs, guideIDs, xmltvIDs, ranks, from, to}
+		if filtered {
+			// Planned for the text searched each time: a plan made for any
+			// text reads the whole guide (see guidesearch.go).
+			query += ` AND p.search LIKE $7`
+			args = append([]any{pgx.QueryExecModeDescribeExec}, append(args, containsPattern(named))...)
+		}
+		rows, err := s.db.Query(ctx, query+` ORDER BY p.starts_at, c.rank`, args...)
 		if err != nil {
 			return err
 		}
