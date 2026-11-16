@@ -56,6 +56,16 @@ type CollectionCreationResult struct {
 // server.
 var collectionsViewID, _ = accounts.ParseID(nameID("view", "collections"))
 
+// ownView reports whether id is one of the views Polyfin answers itself
+// that hold no title of a library: the Live TV view, the Playlists view
+// and the recordings folder. No item has their identifier, and looking
+// one up would search the guide's programmes before failing (see
+// library.Service.Item), so listings that ask what they hold name them
+// first.
+func ownView(id accounts.ID) bool {
+	return id == liveTvViewID || id == playlistsViewID || id == recordingsFolderID
+}
+
 // collectionKinds are the items a collection holds. Like Jellyfin's, a
 // collection holds titles, home videos among them, their seasons and
 // episodes, folders of videos, other groups and channels; Polyfin leaves
@@ -356,6 +366,10 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 	var within accounts.ID
 	if hasParent && parent != collectionsViewID {
 		if !onlyCollections {
+			return false
+		}
+		// Polyfin's own views are no library: they list as they do.
+		if ownView(parent) {
 			return false
 		}
 		folder, err := h.Library.Item(r.Context(), user, parent)

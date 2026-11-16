@@ -112,10 +112,12 @@ var liveShapes = shapeRules{
 		"CurrentProgram": {"*"},
 		"Name":           {"*"}, "ETag": {"*"}, "VideoType": {"*"},
 		// Jellyfin leaves these out of programmes; Polyfin sends them on
-		// every item, and images whether asked or not.
-		"IsFolder":     {"livetv-program", "livetv-guided-programs", "livetv-guided-recommended"},
-		"LocationType": {"livetv-program", "livetv-guided-programs", "livetv-guided-recommended"},
-		"ImageTags":    {"livetv-guided-programs"}, "BackdropImageTags": {"livetv-channels", "livetv-guided-programs"},
+		// every item, and images whether asked or not but in programme
+		// listings, which leave them out without EnableImages as Jellyfin
+		// does (livetv-guided-programs asks for none).
+		"IsFolder":          {"livetv-program", "livetv-guided-programs", "livetv-guided-recommended"},
+		"LocationType":      {"livetv-program", "livetv-guided-programs", "livetv-guided-recommended"},
+		"BackdropImageTags": {"livetv-channels"},
 		// The Live TV view has an image of Polyfin's, its emblem, which is
 		// wide; Jellyfin's has none.
 		"PrimaryImageAspectRatio": {"livetv-channel-items", "livetv-view"}, "Container": {"livetv-channel"},

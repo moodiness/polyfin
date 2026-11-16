@@ -435,6 +435,11 @@ So what airs now never waits for an addon:
 - **What it lists:** the programmes of the channels and guide days Polyfin keeps, and those of IPTV sources and of channels of your titles.
 - **What it lacks:** a catalog never read yet, a day's Native EPG guide not read yet, or a catalog whose addon does not answer. Polyfin reads them in the background, and they show from the next load of the page, once read.
 - **Other pages:** the guide, the list of channels and the Live TV page's other rows still wait for a catalog or a guide day not read yet, as before.
+- **How much it reads:** the programmes airing now on the first channels by number only: 200 of them, or four times as many as the section shows when that is more. Only the channels shown are recorded.
+
+**Compared with Jellyfin**
+
+- Jellyfin reads the same number of programmes airing now, and counts only those ([LiveTvManager.cs, lines 289 to 301](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/LiveTvManager.cs#L289-L301)). It picks them by start date and a score of the user's channels; Polyfin lists them by channel number.
 
 ## Programme reminders
 

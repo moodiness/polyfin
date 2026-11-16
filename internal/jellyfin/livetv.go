@@ -30,6 +30,11 @@ var liveTvViewID, _ = accounts.ParseID(nameID("view", "livetv"))
 // guideDays is how far the guide reaches, Jellyfin's default.
 const guideDays = 7
 
+// recommendedReach is the fewest programmes airing now Jellyfin reads for
+// its recommended ones, of which it counts those it read: 200, or four
+// times the limit (see programs).
+const recommendedReach = 200
+
 // liveTvRoutes registers Jellyfin's Live TV API: the channels of the
 // users' live TV catalogs and the programmes of their addons' guides.
 func (h *Handler) liveTvRoutes(rt *router) {
@@ -325,20 +330,32 @@ func (h *Handler) liveChannels(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	channels, err := h.Library.Channels(r.Context(), user)
+	// Only the channels of the page asked are recorded, and their state
+	// read, but when only favorites are listed.
+	channels, record, err := h.Library.ChannelPage(r.Context(), user)
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
-	state, err := h.userState(r.Context(), user, channels)
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
+	var state userState
 	if favoriteSet {
+		if state, err = h.userState(r.Context(), user, channels); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
 		channels = slices.DeleteFunc(channels, func(c library.Item) bool { return state.of(c).IsFavorite != favorite })
 	}
 	from, to := bounds(len(channels), start, limit)
+	if err := record(r.Context(), channels[from:to]); err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	if !favoriteSet {
+		if state, err = h.userState(r.Context(), user, channels[from:to]); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+	}
 	fields := requestedFields(r)
 	var airing map[accounts.ID]library.Item
 	if current || !currentSet {
@@ -442,7 +459,10 @@ type programQuery struct {
 	HasAired, IsAiring                                 *bool
 	IsMovie, IsSeries, IsNews, IsKids, IsSports        *bool
 	EnableUserData, EnableTotalRecordCount             *bool
-	StartIndex, Limit                                  *int
+	// EnableImages false leaves the programmes' image tags out, as
+	// Jellyfin's DtoOptions does (see programs).
+	EnableImages      *bool
+	StartIndex, Limit *int
 	// channels are the ChannelIds that are identifiers, read once.
 	channels map[accounts.ID]bool
 }
@@ -515,7 +535,7 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 	}
 	readCategories(b, r, &q)
 	for name, field := range map[string]**bool{"hasAired": &q.HasAired, "isAiring": &q.IsAiring, "enableUserData": &q.EnableUserData,
-		"enableTotalRecordCount": &q.EnableTotalRecordCount} {
+		"enableTotalRecordCount": &q.EnableTotalRecordCount, "enableImages": &q.EnableImages} {
 		if value, ok := b.bool(r, name); ok {
 			*field = new(value)
 		}
@@ -619,13 +639,26 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		// What airs now, as recommended (On Now), is read from the pages
 		// Polyfin keeps, those missing fetched for the next time:
 		// jellyfin-web's home waits for this request before it fills any
-		// of its rows.
+		// of its rows. It is listed by channel.
 		guide.Kept = recommended && airing
+		guide.ByChannel = recommended && airing
 		if len(q.ChannelIds) > 0 {
 			guide.Channels = slices.Collect(maps.Keys(q.channels))
 		}
 		counted := q.EnableTotalRecordCount == nil || *q.EnableTotalRecordCount
-		if limit >= 0 && !counted && !byName && !descending && !(recommended && airing) {
+		switch {
+		case recommended && airing && limit > 0 && !descending:
+			// Like Jellyfin, which reads at most max(4 * limit, 200)
+			// programmes airing now and counts those it read
+			// (src/Jellyfin.LiveTv/LiveTvManager.cs,
+			// GetRecommendedProgramsInternal), On Now reads the first
+			// channels' only, and records the page it shows.
+			guide.Limit = max(max(start, 0)+limit, 4*limit, recommendedReach)
+			guide.Shown = func(programs []library.Item) []library.Item {
+				from, to := bounds(len(programs), start, limit)
+				return programs[from:to]
+			}
+		case limit >= 0 && !counted && !byName && !descending:
 			guide.Limit = max(start, 0) + limit
 		}
 		programs, err := h.Library.Guide(r.Context(), user, guide)
@@ -633,13 +666,9 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 			h.browseError(w, r, err)
 			return
 		}
-		// Recommended programmes airing now are listed by channel, those to
-		// come by start time.
-		if recommended && airing {
-			slices.SortStableFunc(programs, func(a, b library.Item) int {
-				return library.CompareChannelNumbers(a.Channel.Number, b.Channel.Number)
-			})
-		} else if byName {
+		// Recommended programmes airing now are listed by channel (see
+		// library.GuideQuery.ByChannel), those to come by start time.
+		if byName && !guide.ByChannel {
 			slices.SortStableFunc(programs, func(a, b library.Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 		}
 		if descending {
@@ -649,23 +678,63 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		for _, field := range q.Fields {
 			fields[strings.ToLower(field)] = true
 		}
+		// Like Jellyfin's LiveTvController, whose DtoOptions take
+		// EnableImages and EnableUserData (Jellyfin.Api/Extensions/
+		// DtoExtensions.cs, AddAdditionalDtoOptions: images unless false,
+		// user data unless false), the user data is neither read nor
+		// given without EnableUserData, and the image tags are left out
+		// without EnableImages (Emby.Server.Implementations/Dto/
+		// DtoService.cs: ImageTags only with EnableImages, BackdropImageTags
+		// only within DtoOptions.GetImageLimit, which is 0 without them).
+		// jellyfin-web's guide asks for neither, for hundreds of channels.
+		userData := q.EnableUserData == nil || *q.EnableUserData
+		images := q.EnableImages == nil || *q.EnableImages
 		from2, to2 := bounds(len(programs), start, limit)
 		dtos := make([]BaseItemDto, 0, to2-from2)
-		state, err := h.userState(r.Context(), user, programs[from2:to2])
-		if err != nil {
-			h.internalError(w, r, err)
-			return
+		var state userState
+		if userData {
+			if state, err = h.userState(r.Context(), user, programs[from2:to2]); err != nil {
+				h.internalError(w, r, err)
+				return
+			}
 		}
 		for _, program := range programs[from2:to2] {
 			dto := h.newItemDto(program, fields, false, state)
-			if q.EnableUserData != nil && !*q.EnableUserData {
+			if !userData {
 				dto.UserData = UserItemData{}
 			}
 			dtos = append(dtos, dto)
 		}
 		h.addTimers(r.Context(), dtos)
+		if !images {
+			writeJSON(w, http.StatusOK, programsWithoutImages(dtos, len(programs), start))
+			return
+		}
 		writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: len(programs), StartIndex: start})
 	}
+}
+
+// imagelessProgram is a programme's DTO without images: its image tags
+// are left out, as Jellyfin leaves out what it does not set.
+type imagelessProgram struct {
+	*BaseItemDto
+	ImageTags         map[string]string `json:",omitzero"`
+	BackdropImageTags []string          `json:",omitzero"`
+}
+
+// programsWithoutImages is the listing of programmes asked for without
+// images (EnableImages false): a QueryResult whose items have no image
+// tags.
+func programsWithoutImages(dtos []BaseItemDto, total, start int) any {
+	items := make([]imagelessProgram, len(dtos))
+	for i := range dtos {
+		items[i].BaseItemDto = &dtos[i]
+	}
+	return struct {
+		Items            []imagelessProgram
+		TotalRecordCount int
+		StartIndex       int
+	}{items, total, start}
 }
 
 // keeps reports whether a programme matches the query's filters.

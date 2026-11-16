@@ -874,6 +874,8 @@ Channels, the programme guide, recordings and HDHomeRun tuners use Jellyfin's Li
 - XMLTV programmes the guide marks previously shown, and not new, are repeats (`IsRepeat`), as Jellyfin reads XMLTV guides.
 - `/LiveTv/GuideInfo` still answers the seven days Jellyfin's guide spans.
 - `/LiveTv/Programs/Recommended?isAiring=true` answers from the channel and guide pages Polyfin keeps, and never waits for an addon. A page it lacks is fetched in the background, once for every request that needs it meanwhile, and listed from the next request. jellyfin-web's home fills none of its rows before this request answers (see [On Now](live-tv.md#on-now)).
+- `/LiveTv/Programs/Recommended?isAiring=true` with a `limit` lists the programmes airing now on the first channels by number, and reads no further than Jellyfin does: `TotalRecordCount` counts at most 200 programmes, or four times the limit when higher, as Jellyfin counts those it read ([LiveTvManager.cs, lines 289 to 301](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/LiveTvManager.cs#L289-L301)).
+- `/LiveTv/Programs`, posted or not, and `/LiveTv/Programs/Recommended` follow `EnableImages` and `EnableUserData`, both on unless `false`, as Jellyfin's do ([DtoExtensions.cs, lines 57 to 81](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Extensions/DtoExtensions.cs#L57-L81)). Without images, a programme has no `ImageTags` nor `BackdropImageTags`, and keeps an empty `ImageBlurHashes`, as in Jellyfin ([DtoService.cs, lines 1143 to 1175](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Dto/DtoService.cs#L1143-L1175)). Without user data, it has no `UserData`. jellyfin-web's guide asks for neither.
 
 ### Programme reminder routes
 
