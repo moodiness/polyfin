@@ -865,6 +865,9 @@ type Manager struct {
 	// vendor, when set, tells the PCI vendor of a render node in place of
 	// Linux, for tests.
 	vendor func(node string) string
+	// removed, when set, hears each removal of a stopped encoding's
+	// segments, and how it ended, for tests.
+	removed func(dir string, err error)
 	// system is the GOOS whose GPU methods detection tries (see methods):
 	// runtime.GOOS; arch, its GOARCH.
 	system, arch string
@@ -1368,7 +1371,7 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 		p.used = time.Now()
 		requested := p.requested
 		p.mu.Unlock()
-		e = &encoding{m: m, key: key, dir: filepath.Join(m.dir, key.name()), opened: make(chan struct{}),
+		e = &encoding{m: m, key: key, opened: make(chan struct{}),
 			changed: make(chan struct{}), quit: make(chan struct{}), playback: p, requested: requested}
 		m.encodings[key] = e
 		stale := m.keepPlayback(key)
@@ -1410,6 +1413,7 @@ func (e *encoding) waitOpen(ctx context.Context) error {
 type encoding struct {
 	m   *Manager
 	key Key
+	// dir holds the segments, set once opened.
 	dir string
 	// opened is closed once remux, release and err are set.
 	opened  chan struct{}
@@ -1438,8 +1442,11 @@ type encoding struct {
 	playback *playback
 	used     time.Time
 	linger   *time.Timer
-	// runs counts the FFmpeg processes started, which tests read.
+	// runs counts the FFmpeg processes started, which tests read; jobs
+	// counts the jobs running, each until it ended and closed the segment
+	// it was writing (see stop).
 	runs    int
+	jobs    sync.WaitGroup
 	stopped bool
 	// quit is closed once the encoding is stopped.
 	quit chan struct{}
@@ -1501,11 +1508,15 @@ func (e *encoding) open(ctx context.Context, open Opener) {
 		e.err = err
 		return
 	}
-	if err := os.MkdirAll(e.dir, 0o700); err != nil {
+	// A folder of its own: one of the same key started as this one stops
+	// does not have its segments removed with this one's (see stop).
+	dir, err := os.MkdirTemp(e.m.dir, "encoding-")
+	if err != nil {
 		release()
 		e.err = err
 		return
 	}
+	e.dir = dir
 	input := remux
 	e.remux, e.release, e.lookback, e.input = remux, release, remux.Lookback, &input
 	e.ready = make([]bool, remux.Plan.Len())
@@ -1905,7 +1916,14 @@ func (e *encoding) prune(n int) {
 	}
 }
 
-// stop ends the encoding and removes its segments.
+// stopWait bounds how long stop waits for the jobs it ended to end.
+const stopWait = time.Second
+
+// stop ends the encoding and removes its segments, once its jobs ended:
+// a job closes the segment it was writing as it ends, and Windows removes
+// no file a handle holds without FILE_SHARE_DELETE, as os.CreateTemp's,
+// nor the folder holding it. Jobs that outlast stopWait, FFmpeg slow to
+// end, have them removed as they end.
 func (e *encoding) stop() {
 	<-e.opened
 	e.mu.Lock()
@@ -1928,8 +1946,31 @@ func (e *encoding) stop() {
 		return
 	}
 	release()
-	if err := os.RemoveAll(e.dir); err != nil {
+	ended := make(chan struct{})
+	go func() {
+		e.jobs.Wait()
+		close(ended)
+	}()
+	select {
+	case <-ended:
+		e.removeSegments()
+	case <-time.After(stopWait):
+		go func() {
+			<-ended
+			e.removeSegments()
+		}()
+	}
+}
+
+// removeSegments removes the folder of a stopped encoding (see
+// removeAllShared), and tells removed.
+func (e *encoding) removeSegments() {
+	err := removeAllShared(e.dir)
+	if err != nil {
 		e.m.logger.Warn("The segments of an encoding could not be removed", "error", err)
+	}
+	if e.m.removed != nil {
+		e.m.removed(e.dir, err)
 	}
 }
 
@@ -1988,7 +2029,7 @@ func (e *encoding) start(n int) {
 	}
 	j := &job{start: n, next: n, end: plan.stretchEnd(n), fast: fast, cancel: cancel, progressed: time.Now(), lookback: e.lookback, input: input}
 	e.job = j
-	go e.run(ctx, j)
+	e.jobs.Go(func() { e.run(ctx, j) })
 }
 
 // progress records that a job made progress.

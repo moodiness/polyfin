@@ -336,6 +336,13 @@ func TestOnlyTheSamePlaybackTakesKeptVideoOver(t *testing.T) {
 	t.Parallel()
 	k := newKeptPlayback(t, TS)
 	k.m.LimitConversions(func() int { return 0 })
+	removed := make(chan string, 16)
+	k.m.removed = func(dir string, _ error) {
+		select {
+		case removed <- dir:
+		default:
+		}
+	}
 	first := k.key("web-1", 1)
 	k.segment(first, 0)
 	k.m.Stop("web-1")
@@ -364,6 +371,15 @@ func TestOnlyTheSamePlaybackTakesKeptVideoOver(t *testing.T) {
 	k.m.mu.Unlock()
 	if still {
 		t.Error("the video kept on the device runs on beside its other quality")
+	}
+	// Its segments are removed once its FFmpeg ended, which a loaded
+	// machine may make come after the stop.
+	for dir := ""; dir != kept.dir; {
+		select {
+		case dir = <-removed:
+		case <-time.After(30 * time.Second):
+			t.Fatal("the segments of the ended kept video were never removed")
+		}
 	}
 	if _, err := os.Stat(kept.dir); !os.IsNotExist(err) {
 		t.Errorf("the segments of the ended kept video: %v", err)

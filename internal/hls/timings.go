@@ -299,6 +299,13 @@ func retryShared(op func() error) error {
 	}
 }
 
+// removeAllShared removes a folder of segments, trying again a moment
+// while another program holds a file in it, as Windows tells: a player
+// still reading a segment, or an antivirus.
+func removeAllShared(dir string) error {
+	return retryShared(func() error { return os.RemoveAll(dir) })
+}
+
 // timingKey is what timings of hw, the GPU conversions run on, nil for
 // none, hold for (see timingKey).
 func (m *Manager) timingKey(hw *Hardware) timingKey {
