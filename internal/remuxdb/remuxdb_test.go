@@ -391,15 +391,36 @@ func TestALateAnswerIsTold(t *testing.T) {
 	t.Parallel()
 	db := newRemuxDB(t)
 	s := service(db, &accounts.Settings{})
-	var told [][]library.Version
-	s.OnDescribed(func(versions []library.Version) { told = append(told, versions) })
+	var (
+		mu   sync.Mutex
+		told [][]library.Version
+	)
+	telling := make(chan struct{}, 8)
+	s.OnDescribed(func(versions []library.Version) {
+		mu.Lock()
+		told = append(told, versions)
+		mu.Unlock()
+		telling <- struct{}{}
+	})
+	toldIDs := func() []accounts.ID {
+		mu.Lock()
+		defer mu.Unlock()
+		var ids []accounts.ID
+		for _, versions := range told {
+			for _, v := range versions {
+				ids = append(ids, v.ID)
+			}
+		}
+		slices.SortFunc(ids, func(a, b accounts.ID) int { return slices.Compare(a[:], b[:]) })
+		return ids
+	}
 	known := version(1, "tt0133093", "The.Movie.2160p.mkv", 10_000_000_000)
 	unknown := version(2, "tt0133093", "Another.Movie.mkv", 1_000)
 	// Within the wait: the hook runs before Describe hears the answer.
 	s.wait = time.Minute
 	s.Describe(t.Context(), []library.Version{known})
-	if told != nil {
-		t.Fatalf("an answer in time told %+v", told)
+	if ids := toldIDs(); ids != nil {
+		t.Fatalf("an answer in time told %v", ids)
 	}
 
 	other := version(3, "tt0903747:1:2", "Show.S01E02.mkv", 1_000)
@@ -412,17 +433,17 @@ func TestALateAnswerIsTold(t *testing.T) {
 	asking := []*lookup{s.asking["tt0133093"], s.asking["tt0903747:1:2"]}
 	s.mu.Unlock()
 	close(hold)
+	// The late answer about the movie tells its known version: wait for
+	// the hook, then for both lookups, after which nothing else is told.
+	select {
+	case <-telling:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("a late answer told nothing, told %v", toldIDs())
+	}
 	for _, l := range asking {
 		<-l.done
 	}
-	var ids []accounts.ID
-	for _, versions := range told {
-		for _, v := range versions {
-			ids = append(ids, v.ID)
-		}
-	}
-	slices.SortFunc(ids, func(a, b accounts.ID) int { return slices.Compare(a[:], b[:]) })
-	if !slices.Equal(ids, []accounts.ID{known.ID}) {
+	if ids := toldIDs(); !slices.Equal(ids, []accounts.ID{known.ID}) {
 		t.Errorf("told %v, want the known version alone", ids)
 	}
 }
