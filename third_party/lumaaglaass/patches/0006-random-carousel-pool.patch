@@ -1,0 +1,21 @@
+diff --git a/assets/lumaaglaass.js b/assets/lumaaglaass.js
+index d26a86c..d44873c 100644
+--- a/assets/lumaaglaass.js
++++ b/assets/lumaaglaass.js
+@@ -708,10 +708,13 @@
+         }
+         return list;
+     };
+-    // Random items - A one-item probe gives the total, then a window at a random index reaches the
+-    // whole catalog even when a client ignores random sorting.
++    // Random items - A one-item probe of the random listing gives its total, then a window at a random
++    // index under it reaches the whole listing even when a client ignores random sorting. The probe
++    // sorts at random too, as the window does: Jellyfin's total is the whole library, while Polyfin
++    // draws among a library's first titles, reports those as the total and keeps the draw, which the
++    // window then pages through. A total of the unsorted library would put the window past the draw.
+     async function randomItems(api, userId, query, limit) {
+-        const probe = await api.getItems(userId, { ...query, Limit: 1 });
++        const probe = await api.getItems(userId, { ...query, SortBy: 'Random', Limit: 1 });
+         if (!probe?.Items?.length) return [];
+         const start = Math.floor(Math.random() * Math.max(1, (probe.TotalRecordCount || 0) - limit + 1));
+         const result = await api.getItems(userId, { ...query, SortBy: 'Random', StartIndex: start, Limit: limit });

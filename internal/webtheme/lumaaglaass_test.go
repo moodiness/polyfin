@@ -95,8 +95,8 @@ const start = () => vm.runInNewContext(script, context)
 const theme = () => context.__lumaaGlaass
 `
 
-// runTheme runs the theme's script in themePage, then steps, and returns
-// what the steps logged.
+// runTheme runs the theme's script in themePage, then steps, which may
+// await, and returns what the steps logged.
 func runTheme(t *testing.T, steps string) []string {
 	t.Helper()
 	node, err := exec.LookPath("node")
@@ -107,7 +107,7 @@ func runTheme(t *testing.T, steps string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := themePage + "try {\n" + steps + "\n} catch (error) {\n  log.push('harness: ' + error.stack)\n}\nprocess.stdout.write(JSON.stringify(log))\n"
+	harness := themePage + ";(async () => {\ntry {\n" + steps + "\n} catch (error) {\n  log.push('harness: ' + error.stack)\n}\nprocess.stdout.write(JSON.stringify(log))\n})()\n"
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
 	command.Stdin = strings.NewReader(string(script))
 	output, err := command.Output()
@@ -200,5 +200,41 @@ log.push('three batches: ' + (passes - before) + ' passes')
 				t.Errorf("\n got  %q\n want %q", got, test.want)
 			}
 		})
+	}
+}
+
+// The random carousel reads its total from the random listing its window
+// pages through: Polyfin draws among a library's first titles and reports
+// those as the listing's total, so a window placed under the total of the
+// unsorted library (8,111 titles) would be past the draw and empty
+// (patches/0006-random-carousel-pool.patch in third_party/lumaaglaass).
+func TestTheRandomCarouselStaysInTheDraw(t *testing.T) {
+	t.Parallel()
+	got := runTheme(t, `
+// randomItems alone, with the highest random index and no shuffle.
+const at = script.indexOf('async function randomItems(')
+const randomItems = vm.runInNewContext(script.slice(at, script.indexOf('\n    }\n', at) + 6) + ';randomItems',
+  { shuffle: list => list, Math: Object.assign(Object.create(Math), { random: () => 0.999 }) })
+// Polyfin's answers: a draw of 100 titles at random, the library's 8,111
+// otherwise.
+const titles = (from, count) => Array.from({ length: Math.max(0, count) }, (_, i) => ({ Id: 'title-' + (from + i) }))
+const api = {
+  async getItems(userId, query) {
+    const total = query.SortBy === 'Random' ? 100 : 8111
+    const from = query.StartIndex || 0
+    log.push('listing: ' + (query.SortBy || 'unsorted') + ' from ' + from + ' limit ' + query.Limit + ' of ' + query.ParentId)
+    return { Items: titles(from, Math.min(query.Limit, total - from)), TotalRecordCount: total }
+  },
+}
+const items = await randomItems(api, 'user', { ParentId: 'movies' }, 10)
+log.push('items: ' + items.map(item => item.Id).join(' '))
+`)
+	want := []string{
+		"listing: Random from 0 limit 1 of movies",
+		"listing: Random from 90 limit 10 of movies",
+		"items: title-90 title-91 title-92 title-93 title-94 title-95 title-96 title-97 title-98 title-99",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("\n got  %q\n want %q", got, want)
 	}
 }
