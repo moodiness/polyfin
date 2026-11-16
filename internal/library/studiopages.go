@@ -50,11 +50,25 @@ import (
 // What it costs: TMDB's discover is asked studioDiscoverPages requests a
 // kind, kept in memory a day (see tmdb.Client), and one request for the
 // IMDb identifier of each title the user's addons describe by IMDb
-// identifier only, kept in the database (see knownfor.go).
+// identifier only, kept in the database (see knownfor.go). Listing the
+// studios (see Studios) reads, for each library of an IPTV source whose
+// stored lists and options did not change since the last listing, one
+// statement, the source's version, and the titles the studio index keeps;
+// for one that changed, its catalog once, counted once; for another
+// library, its catalog's pages, as its listings read them (see
+// studioindex.go). The titles of a library of one catalog are not saved.
+// Then the studios of every title, from memory as far as their kept
+// details are remembered (see titleCreditsMemory), and the logos of the
+// studios, in one statement.
 //
 // The studios listed (see Studios) are those of the first CreditsPassMost
 // titles of each library of movies or series the user reaches, those
-// whose details are kept, as their pages show them.
+// whose details are kept, as their pages show them. Which titles those are
+// follows the catalogs at once: an IPTV source's stored lists by its
+// version, the others by being read at each listing; what each shows
+// follows its kept details and an administrator's edits at once, as they
+// are read at each listing, and so do the user's parental control and
+// hidden titles, whose listings are not read from the index.
 
 const (
 	// studioDiscoverPages is how many pages of TMDB's discover a studio's
@@ -284,24 +298,13 @@ func (s *Service) Studios(ctx context.Context, user accounts.User, parent accoun
 		if l.item.CollectionType != "movies" && l.item.CollectionType != "tvshows" || parent != (accounts.ID{}) && l.item.ID != parent {
 			continue
 		}
-		for start := 0; start < CreditsPassMost; {
-			page, err := s.Children(titles, user, l.item.ID, start, min(movieIDsPage, CreditsPassMost-start), "")
-			if err != nil {
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
-				s.logger.Debug("A library's titles could not be listed for its studios", "library", l.item.Name, "error", err)
-				break
+		listed, err := s.studioTitles(titles, v, user, l)
+		items = append(items, listed...)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
-			for _, item := range page.Items {
-				if item.Kind == KindMovie || item.Kind == KindSeries {
-					items = append(items, item)
-				}
-			}
-			start += len(page.Items)
-			if len(page.Items) == 0 || !page.More && start >= page.Total {
-				break
-			}
+			s.logger.Debug("A library's titles could not be listed for its studios", "library", l.item.Name, "error", err)
 		}
 	}
 	byName := map[string]*Studio{}

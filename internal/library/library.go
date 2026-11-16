@@ -196,6 +196,9 @@ type Service struct {
 	guides guideState
 	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
 	iptv IPTV
+	// studioIndex remembers what Studios read of the stored lists of IPTV
+	// sources (see studioindex.go).
+	studioIndex studioIndex
 	// local answers for Polyfin's own local folders (see UseLocal).
 	local Local
 	// anime maps anime between identifiers and numberings, for the stream
