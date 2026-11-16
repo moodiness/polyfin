@@ -598,14 +598,11 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 			FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::int[]) AS c (channel_id, guide_id, xmltv_id, rank)
 			JOIN live_guides g ON g.id = c.guide_id
 			JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = c.xmltv_id
-			WHERE p.ends_at > $5 AND p.starts_at < $6`, []any{channelIDs, guideIDs, xmltvIDs, ranks, from, to}
+			WHERE p.ends_at > $5 AND p.starts_at < $6 ORDER BY p.starts_at, c.rank`, []any{channelIDs, guideIDs, xmltvIDs, ranks, from, to}
 		if filtered {
-			// Planned for the text searched each time: a plan made for any
-			// text reads the whole guide (see guidesearch.go).
-			query += ` AND p.search LIKE $7`
-			args = append([]any{pgx.QueryExecModeDescribeExec}, append(args, containsPattern(named))...)
+			query, args = searchedProgrammes, append([]any{pgx.QueryExecModeDescribeExec}, append(args, containsPattern(named))...)
 		}
-		rows, err := s.db.Query(ctx, query+` ORDER BY p.starts_at, c.rank`, args...)
+		rows, err := s.db.Query(ctx, query, args...)
 		if err != nil {
 			return err
 		}
