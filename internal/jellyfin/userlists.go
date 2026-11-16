@@ -183,24 +183,40 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		h.writeItems(w, r, user, nil, start, 0)
 		return
 	}
-	items, err := h.resumeItems(r.Context(), user, entries, kinds)
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
 	term := strings.ToLower(strings.TrimSpace(query(r, "searchTerm")))
 	var playing map[accounts.ID]bool
 	if excludeActive {
 		playing = h.playingItems(r, user)
 	}
-	items = slices.DeleteFunc(items, func(item library.Item) bool {
-		return !keep(item) || playing[item.ID] || (term != "" && !strings.Contains(strings.ToLower(item.Name), term))
-	})
-	if hasParent {
-		items = h.keepWithin(r.Context(), user, items, parent, itself)
-	} else if items, err = h.withoutHomeExcludes(r.Context(), user, items); err != nil {
-		h.internalError(w, r, err)
-		return
+	// Without a total to count, as the home asks, only the entries the
+	// page needs are described, in order, more as some are left out:
+	// those past it would not change the answer.
+	need := -1
+	if !countAll && limit >= 0 {
+		need = max(start, 0) + limit
+	}
+	var items []library.Item
+	for next := 0; next < len(entries) && (need < 0 || len(items) < need); {
+		batch := entries[next:]
+		if need >= 0 {
+			batch = batch[:min(len(batch), need-len(items))]
+		}
+		next += len(batch)
+		described, err := h.resumeItems(r.Context(), user, batch, kinds)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		described = slices.DeleteFunc(described, func(item library.Item) bool {
+			return !keep(item) || playing[item.ID] || (term != "" && !strings.Contains(strings.ToLower(item.Name), term))
+		})
+		if hasParent {
+			described = h.keepWithin(r.Context(), user, described, parent, itself)
+		} else if described, err = h.withoutHomeExcludes(r.Context(), user, described); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		items = append(items, described...)
 	}
 	page := window(items, start, limit)
 	total := len(items)
@@ -321,26 +337,19 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 // rewatched can show twice, its next unplayed episode and the next one
 // of the rewatch, each dated with the play it follows.
 func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries, parent *accounts.ID, cutoff *time.Time, resumable, rewatching bool) ([]library.Item, error) {
-	entries, err := h.UserData.Episodes(ctx, user.ID)
-	if err != nil {
-		return nil, err
-	}
-	data := make(map[accounts.ID]userdata.Data, len(entries))
 	var candidates []watching
-	seen := map[accounts.ID]bool{}
-	for _, e := range entries {
-		data[e.Item] = e.Data
-		// Entries come latest first: a series' first one with a date
-		// carries its latest.
-		if e.LastPlayed != nil && !seen[e.Series] {
-			seen[e.Series] = true
-			candidates = append(candidates, watching{series: e.Series, latest: e.LastPlayed})
-		}
-	}
 	if oneSeries != nil {
 		// A series asked for is considered whatever the user did with it.
 		candidates = []watching{{series: *oneSeries}}
 	} else {
+		watched, err := h.UserData.WatchedSeries(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		candidates = make([]watching, len(watched))
+		for i, w := range watched {
+			candidates[i] = watching{series: w.Series, latest: &w.Latest}
+		}
 		hidden, err := h.Library.HiddenTitles(ctx, user)
 		if err != nil {
 			return nil, err
@@ -399,35 +408,67 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 		}
 		candidates = candidates[:n]
 	}
-	// The episodes of every series are listed at once; a series they
-	// could not be recorded for is left out, as are all of them when none
-	// could be.
+	// The episodes of every series are listed at once, while the user's
+	// data of them is read; a series they could not be recorded for is
+	// left out, as are all of them when none could be. The episodes Next
+	// Up shows are recorded before it answers, the others after it (see
+	// library.Service.PickedEpisodes).
 	series := make([]accounts.ID, len(candidates))
 	for i, c := range candidates {
 		series[i] = c.series
 	}
-	listed, err := h.Library.SeriesEpisodes(ctx, user, series)
-	if err != nil {
-		listed = nil
-	}
+	var data map[accounts.ID]userdata.Data
+	var dataErr error
+	read := make(chan struct{})
+	go func() {
+		defer close(read)
+		var entries []userdata.Entry
+		if entries, dataErr = h.UserData.SeriesEpisodes(ctx, user.ID, series); dataErr == nil {
+			data = make(map[accounts.ID]userdata.Data, len(entries))
+			for _, e := range entries {
+				data[e.Item] = e.Data
+			}
+		}
+	}()
 	type entry struct {
 		episode library.Item
 		date    *time.Time
 	}
-	var next []entry
-	for _, candidate := range candidates {
-		episodes, ok := listed[candidate.series]
-		if !ok || candidate.removed != nil && !releasedSince(episodes, *candidate.removed) {
-			continue
+	removed := make(map[accounts.ID]*time.Time, len(candidates))
+	for _, c := range candidates {
+		removed[c.series] = c.removed
+	}
+	found := make(map[accounts.ID][]entry, len(candidates))
+	listed, err := h.Library.PickedEpisodes(ctx, user, series, func(series accounts.ID, episodes []library.Item) []library.Item {
+		<-read
+		if at := removed[series]; at != nil && !releasedSince(episodes, *at) {
+			return nil
 		}
+		var picked []library.Item
 		if episode, date, ok := nextEpisode(episodes, data, resumable); ok {
-			next = append(next, entry{episode: episode, date: date})
+			found[series] = append(found[series], entry{episode: episode, date: date})
+			picked = append(picked, episode)
 		}
 		if !rewatching {
-			continue
+			return picked
 		}
 		if episode, date, ok := rewatchEpisode(episodes, data); ok {
-			next = append(next, entry{episode: episode, date: date})
+			found[series] = append(found[series], entry{episode: episode, date: date})
+			picked = append(picked, episode)
+		}
+		return picked
+	})
+	if err != nil {
+		listed = nil
+	}
+	<-read
+	if dataErr != nil {
+		return nil, dataErr
+	}
+	var next []entry
+	for _, candidate := range candidates {
+		if _, ok := listed[candidate.series]; ok {
+			next = append(next, found[candidate.series]...)
 		}
 	}
 	// The latest played first; series with no episode played, without a

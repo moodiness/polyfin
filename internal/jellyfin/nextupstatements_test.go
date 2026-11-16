@@ -177,6 +177,7 @@ func TestNextUpStatementsStayWithinABudget(t *testing.T) {
 	t.Cleanup(server.Close)
 	restarted := s
 	restarted.url = server.URL
+	// Each call counts what it records after its answer too.
 	nextUp := func() {
 		t.Helper()
 		counter.reset()
@@ -184,6 +185,7 @@ func TestNextUpStatementsStayWithinABudget(t *testing.T) {
 		if status := restarted.get(t, "/Shows/NextUp", token, &page); status != http.StatusOK || len(page.Items) != series {
 			t.Fatalf("Next Up: %d, %d items", status, len(page.Items))
 		}
+		episodesRecorded(t, options.Library)
 	}
 	nextUp()
 	nextUp()

@@ -197,6 +197,10 @@ func TestListingStatementsStayWithinABudget(t *testing.T) {
 			if status != http.StatusOK {
 				t.Fatalf("%s: %d", request.name, status)
 			}
+			// Next Up records the episodes it does not show after its
+			// answer, which counts too: once after the restart, then
+			// nothing, the lists being the same.
+			episodesRecorded(t, options.Library)
 		}
 		if len(listed) != request.items {
 			t.Fatalf("%s: %d items", request.name, len(listed))
