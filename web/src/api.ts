@@ -1074,10 +1074,16 @@ export type Addon = {
   libraries?: LibraryChanges
   refreshedAt: string
   /**
-   * A Stremio or Eclipse addon with a configure page, which `addonConfigureUrl` opens. Its address
-   * holds the addon's settings and keys: no answer carries it.
+   * A Stremio or Eclipse addon with a configure page. Its address holds the addon's settings and
+   * keys: no answer carries it.
    */
   configurable: boolean
+  /**
+   * The link Configure opens, `/admin/configure/<token>`: signed for the user and this addon, it
+   * opens the configure page from any browser or app, without a session, for 10 minutes. Absent
+   * unless the addon is configurable and the user may replace its address.
+   */
+  configureLink?: string
   /**
    * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;
    * 'm3u', 'xtream' or 'hdhomerun' (an HDHomeRun tuner, the server's only) for an IPTV source,
@@ -4289,13 +4295,6 @@ export const refreshAddon = (scope: Scope, id: string) =>
 /** Refresh everything: the manifest again, and the addon's pages, descriptions and version lists made old. */
 export const refreshAddonAll = (scope: Scope, id: string) =>
   request<Addon>('POST', `${scopePath(scope)}/addons/${seg(id)}/refresh-all`)
-
-/**
- * The link of Configure on an addon's page, opened in a new tab: the server answers it with a
- * redirect to the addon's configure page, whose address never reaches the app.
- */
-export const addonConfigureUrl = (scope: Scope, id: string) =>
-  `${apiBase}${scopePath(scope)}/addons/${seg(id)}/configure`
 
 export const addIptvSource = (scope: Scope, source: NewIptvSource) =>
   request<Addon>('POST', `${scopePath(scope)}/iptv`, source)

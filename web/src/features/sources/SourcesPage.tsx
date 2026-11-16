@@ -91,6 +91,9 @@ function RowControls({
 
 const wideQuery = '(min-width: 1024px)'
 
+/** How often the addon lists are read again: their configure links are valid 10 minutes. */
+const configureLinkRenewal = 5 * 60_000
+
 /** Whether the list and the source's page fit side by side. */
 function useWide(): boolean {
   return useSyncExternalStore(
@@ -236,14 +239,19 @@ export function SourcesPage({
     })
   }
 
+  // The addons' configure links are valid 10 minutes: the lists are read again every 5 minutes
+  // while the page shows, and as it shows again (React Query's default on focus, the answers being
+  // older than their 5 seconds by then), so that Configure always opens a valid one.
   const shared = useQuery({
     queryKey: queryKeys.addons('shared'),
     queryFn: ({ signal }) => fetchAddons('shared', signal),
     enabled: content,
+    refetchInterval: configureLinkRenewal,
   })
   const mine = useQuery({
     queryKey: queryKeys.addons('me'),
     queryFn: ({ signal }) => fetchAddons('me', signal),
+    refetchInterval: configureLinkRenewal,
   })
   const all = useQuery({
     queryKey: queryKeys.sources,

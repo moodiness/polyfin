@@ -9,7 +9,6 @@ import {
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
-  addonConfigureUrl,
   deleteAddon,
   fetchAddonRemoval,
   queryClient,
@@ -238,11 +237,13 @@ export function SourceDetail({
       >
         {iptv && refresh.isPending ? t.lineup.summary.refreshing : refreshLabel}
       </Button>
-      {addon.configurable && (
-        // A link the server answers with a redirect to the configure page, opened by the click
-        // itself, so that no popup blocker stops it, and without a referrer or an opener.
+      {addon.configureLink !== undefined && (
+        // A link signed for the user, which the server answers with a redirect to the configure
+        // page, from any browser or app, as it needs no session. Opened by the click itself, so
+        // that no popup blocker stops it, without a referrer or an opener. The page renews it
+        // before its 10 minutes run out (see SourcesPage).
         <ExternalButtonLink
-          href={addonConfigureUrl(scope, addon.id)}
+          href={addon.configureLink}
           target="_blank"
           rel="noopener noreferrer"
           icon={GearIcon}
