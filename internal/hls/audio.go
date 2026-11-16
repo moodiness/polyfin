@@ -378,7 +378,7 @@ func (e *audioEncoding) stop() {
 		return
 	}
 	e.free()
-	if err := os.RemoveAll(e.dir); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeAllShared(e.dir); err != nil && !errors.Is(err, os.ErrNotExist) {
 		e.m.logger.Warn("The segments of an audio conversion could not be removed", "error", err)
 	}
 }

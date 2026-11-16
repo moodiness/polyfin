@@ -468,7 +468,7 @@ func (p *playout) stop() {
 	p.mu.Unlock()
 	p.cancel()
 	<-p.done
-	if err := os.RemoveAll(p.dir); err != nil {
+	if err := removeAllShared(p.dir); err != nil {
 		p.m.logger.Warn("The segments of a channel's playout could not be removed", "error", err)
 	}
 }

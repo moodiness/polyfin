@@ -411,7 +411,7 @@ func (t *track) stop() {
 	t.signal()
 	t.mu.Unlock()
 	t.release()
-	if err := os.RemoveAll(t.dir); err != nil {
+	if err := removeAllShared(t.dir); err != nil {
 		t.m.logger.Warn("The audio segments of a kept conversion could not be removed", "error", err)
 	}
 }

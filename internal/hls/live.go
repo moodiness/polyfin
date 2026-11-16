@@ -349,7 +349,7 @@ func liveBackoff(quick int) time.Duration {
 // initialization segment. The caller holds l.mu.
 func (l *live) start() (*liveRun, error) {
 	if l.run == nil {
-		if err := os.RemoveAll(l.dir); err != nil {
+		if err := removeAllShared(l.dir); err != nil {
 			return nil, err
 		}
 	}
@@ -551,7 +551,7 @@ func (l *live) stop() {
 	if l.release != nil {
 		l.release()
 	}
-	if err := os.RemoveAll(l.dir); err != nil {
+	if err := removeAllShared(l.dir); err != nil {
 		l.m.logger.Warn("The segments of a live encoding could not be removed", "error", err)
 	}
 }
