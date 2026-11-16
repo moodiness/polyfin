@@ -374,6 +374,7 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 		return addons.Addon{}, err
 	}
 	addon.UsedBy = usedBy
+	s.analyzeTitles(ctx)
 	s.forget(addon.ID)
 	return addon, nil
 }
@@ -467,6 +468,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		return nil
 	})
 	if err == nil && (refetched || changes.Options != nil) {
+		s.analyzeTitles(ctx)
 		s.lineupChanged(ctx, id)
 	}
 	s.forget(id)
@@ -634,6 +636,7 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 			return reconcile(ctx, tx, addon.ID, at)
 		})
 		if err == nil {
+			s.analyzeTitles(ctx)
 			s.lineupChanged(ctx, addon.ID)
 		}
 		return nil, err
