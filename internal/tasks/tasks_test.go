@@ -168,6 +168,33 @@ func TestATaskRunsOnceAtATimeAndStopsWhenCancelled(t *testing.T) {
 	}
 }
 
+// A heavy task running, or being cancelled, tells heavy work; a light one
+// does not.
+func TestAHeavyTaskRunningTellsHeavyWork(t *testing.T) {
+	t.Parallel()
+	registry := New(quiet())
+	release := make(chan struct{})
+	wait := func(ctx context.Context) error {
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return nil
+	}
+	registry.Register(Task{Key: "Thumbnails", Heavy: true, Text: map[string]Text{"en": {Name: "Thumbnails"}}, Run: wait})
+	registry.Register(Task{Key: "Sweep", Text: map[string]Text{"en": {Name: "Sweep"}}, Run: wait})
+	registry.Start(t.Context())
+	_ = registry.Run(ID("Sweep"))
+	waitFor(t, func() bool { info, _ := registry.Task(ID("Sweep"), "en"); return info.State == Running })
+	if registry.HeavyRunning() {
+		t.Error("a light task tells heavy work")
+	}
+	_ = registry.Run(ID("Thumbnails"))
+	waitFor(t, registry.HeavyRunning)
+	close(release)
+	waitFor(t, func() bool { return !registry.HeavyRunning() })
+}
+
 // An interval task first runs its stagger after its interval, so that
 // tasks of one interval do not run in the same second.
 func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {

@@ -71,7 +71,11 @@ type Task struct {
 	// Enabled, when set, tells whether the triggers run the task: a task
 	// disabled runs by hand only, as Jellyfin's disabled tasks.
 	Enabled func() bool
-	Run     func(ctx context.Context) error
+	// Heavy tells a task loading the processor, the disks or the GPU,
+	// such as making thumbnails: work that waits for quiet waits for it
+	// too (see HeavyRunning).
+	Heavy bool
+	Run   func(ctx context.Context) error
 }
 
 // State is a task's state, as Jellyfin's TaskState.
@@ -443,6 +447,13 @@ func (r *Registry) Task(id, language string) (Info, bool) {
 		return e.info(language), true
 	}
 	return Info{}, false
+}
+
+// HeavyRunning reports whether a heavy task runs, or is being cancelled.
+func (r *Registry) HeavyRunning() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.ContainsFunc(r.tasks, func(e *entry) bool { return e.Heavy && e.state != Idle })
 }
 
 // ErrUnknown reports a task identifier no task has.
