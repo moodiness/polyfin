@@ -149,8 +149,10 @@ type timingsFile struct {
 type timingStore struct {
 	path string
 	// identify tells what a timing of a GPU, nil for none, holds for, in
-	// place of the system, for tests.
+	// place of the system, and wrote hears each write of the file and how
+	// it ended, for tests.
 	identify func(hw *Hardware) timingKey
+	wrote    func(error)
 	mu       sync.Mutex
 	loaded   bool
 	kept     []keptTiming
@@ -184,7 +186,11 @@ func (s *timingStore) load(logger *slog.Logger) {
 		return
 	}
 	s.loaded = true
-	data, err := os.ReadFile(s.path)
+	var data []byte
+	err := retryShared(func() (err error) {
+		data, err = os.ReadFile(s.path)
+		return err
+	})
 	if errors.Is(err, fs.ErrNotExist) {
 		return
 	}
@@ -241,7 +247,11 @@ func (s *timingStore) add(logger *slog.Logger, key timingKey, found chainTimings
 	if extra := len(s.kept) - keptTimings; extra > 0 {
 		s.kept = slices.Delete(s.kept, 0, extra)
 	}
-	if err := s.write(); err != nil {
+	err := s.write()
+	if s.wrote != nil {
+		s.wrote(err)
+	}
+	if err != nil {
 		logger.Warn("The timings could not be kept", "file", s.path, "error", err)
 	}
 }
@@ -264,12 +274,29 @@ func (s *timingStore) write() error {
 		err = closeErr
 	}
 	if err == nil {
-		err = os.Rename(temp.Name(), s.path)
+		err = retryShared(func() error { return os.Rename(temp.Name(), s.path) })
 	}
 	if err != nil {
 		_ = os.Remove(temp.Name())
 	}
 	return err
+}
+
+// sharedWait bounds how long retryShared tries again.
+const sharedWait = 500 * time.Millisecond
+
+// retryShared runs op, again for up to sharedWait while it fails because
+// another program holds the file, as Windows tells: an antivirus or an
+// indexer reading it, which a rename in its place or a read meets.
+func retryShared(op func() error) error {
+	delay := 2 * time.Millisecond
+	for deadline := time.Now().Add(sharedWait); ; delay = min(2*delay, 50*time.Millisecond) {
+		err := op()
+		if err == nil || !heldElsewhere(err) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(delay)
+	}
 }
 
 // timingKey is what timings of hw, the GPU conversions run on, nil for

@@ -159,6 +159,10 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	m, f, path, log := timedManager(t, busy)
 	keep(t, path, kept(nvidiaKey, 24*time.Hour, usualSpeeds))
 	m.retime.after = func() time.Duration { return 300 * time.Millisecond }
+	// The test reads the file once written: on Windows, a read under way
+	// makes the rename in its place fail, and the rename the read.
+	writes := make(chan error, 8)
+	m.timings.wrote = func(err error) { writes <- err }
 	// A file converts meanwhile, which the timing at startup does not
 	// wait for.
 	m.mu.Lock()
@@ -185,14 +189,27 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	// for the quiet after it.
 	f.set(chainTimes{sdrMemory: at(3.6), sdrGPU: at(0.5), hdrMemory: at(1.2), hdrGPU: at(1.6), processor: at(2.0)})
 	time.Sleep(500 * time.Millisecond)
-	if got := keptIn(t, path); len(got) != 1 {
-		t.Fatalf("timed again while a file converts: %+v", got)
+	if len(writes) != 0 {
+		t.Fatalf("timed again while a file converts: %+v", keptIn(t, path))
 	}
 	quiet := time.Now()
 	m.mu.Lock()
 	m.files = 0
 	m.mu.Unlock()
-	eventually(t, "the timing made again", func() bool { return len(keptIn(t, path)) == 3 })
+	// The timing made again writes the GPU's timing, then the processor's.
+	for range 2 {
+		select {
+		case err := <-writes:
+			if err != nil {
+				t.Fatalf("the timing made again was not kept: %v", err)
+			}
+		case <-time.After(30 * time.Second):
+			t.Fatal("the timing made again did not happen")
+		}
+	}
+	if got := keptIn(t, path); len(got) != 3 {
+		t.Fatalf("kept %+v", got)
+	}
 	// Polyfin looks at its work every poll: it may have seen the file's
 	// conversion end up to a poll before the test let it.
 	if got := keptIn(t, path)[1]; got.At.Before(quiet.Add(m.retime.quiet-2*m.retime.poll)) || !near(got.Speeds[chainHDRGPU], 1.6) {
