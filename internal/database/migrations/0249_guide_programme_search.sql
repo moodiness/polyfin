@@ -2,7 +2,7 @@
 -- as Polyfin folds names (lower case, without accents: iptv.Fold), with
 -- LIKE: Polyfin writes it as it stores a guide. It is NULL where it is not
 -- written yet, as for the programmes stored before, which Polyfin folds
--- in the background, and before any search reads them (see
+-- after a guide's download, and before any search reads them (see
 -- library.Service.foldGuideTitles). A trigram index serves the searches
 -- when the server has pg_trgm (see search_indexes); without it they read
 -- the guide's programmes and test the column, only slower.

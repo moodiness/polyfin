@@ -110,11 +110,6 @@ func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 			}
 		}
 	}
-	// The programmes stored before their titles were folded, and those an
-	// archive kept, which are copied without, are folded now.
-	if err := s.foldGuideTitles(ctx); err != nil {
-		return err
-	}
 	if !s.sweepDue(s.now()) {
 		return nil
 	}
@@ -300,7 +295,7 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			s.rememberRetry(g.ID, next)
 			return nil, err
 		}
-		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 			kept, err := keepArchived(ctx, tx, g, generation, at, archives)
 			if err != nil {
 				return err
@@ -318,6 +313,13 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			}
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
+		// The programmes an archive kept are copied without their folded
+		// titles, and those stored before Polyfin kept them may remain:
+		// they are folded now, as a download writes, not at each check.
+		return nil, s.foldGuideTitles(ctx)
 	})
 	return err
 }

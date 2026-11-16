@@ -22,9 +22,10 @@ import (
 // is folded by Polyfin, not by PostgreSQL, whose lower case and accents
 // differ from Go's: the programmes stored without it, before Polyfin kept
 // it, and those an archive keeps, which are copied without, are folded by
-// foldGuideTitles, before any search reads them. The search's own test
-// still decides which programmes are kept, as for the Native EPG's
-// programmes and those of the channels Polyfin airs.
+// foldGuideTitles after each guide's download and before any search reads
+// them, never at an idle guide check, which sends its checks only. The
+// search's own test still decides which programmes are kept, as for the
+// Native EPG's programmes and those of the channels Polyfin airs.
 
 // programmeNamesKey marks the context of a listing of programmes that keeps
 // only those whose folded name holds a text (see WithProgrammeNames).
