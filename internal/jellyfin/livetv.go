@@ -276,20 +276,20 @@ func (h *Handler) searchLiveTv(r *http.Request, user accounts.User, term string,
 	holds := func(name string) bool { return strings.Contains(iptv.Fold(name), folded) }
 	var found []library.Item
 	if channels {
-		all, err := h.Library.Channels(r.Context(), user)
+		// Only the channels found are recorded, not every channel tested.
+		matched, err := h.Library.SearchChannels(r.Context(), user, holds, limit)
 		if err != nil {
 			return nil, err
 		}
-		for _, channel := range all {
-			if holds(channel.Name) && (limit < 0 || len(found) < limit) {
-				found = append(found, channel)
-			}
-		}
+		found = append(found, matched...)
 	}
 	if programs {
 		now := time.Now()
-		guide, err := h.Library.Guide(r.Context(), user, library.GuideQuery{From: now, To: now.AddDate(0, 0, guideDays),
-			Keep: func(p library.Item) bool { return holds(p.Name) && categories.keeps(p, now) }, Limit: max(limit, 0)})
+		// The guides are read for the programmes whose title holds the
+		// term alone (see library.WithProgrammeNames).
+		guide, err := h.Library.Guide(library.WithProgrammeNames(r.Context(), folded), user, library.GuideQuery{From: now,
+			To: now.AddDate(0, 0, guideDays), Keep: func(p library.Item) bool { return holds(p.Name) && categories.keeps(p, now) },
+			Limit: max(limit, 0)})
 		if err != nil {
 			return nil, err
 		}
