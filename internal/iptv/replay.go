@@ -35,8 +35,12 @@ func (s *Service) Archives(ctx context.Context, source accounts.ID) (map[string]
 		return nil, err
 	}
 	result, err, _ := s.flight.Do("archives "+source.String(), func() (any, error) {
-		rows, err := s.db.Query(ctx, `SELECT id, days FROM (SELECT l.id, `+archiveSQL+` AS days `+channelJoins+`
-			WHERE l.addon_id = $1 AND i.live_tv AND `+shownSQL+`) a WHERE days IS NOT NULL`, source)
+		// archiveSQL, set-based: one pass over the source's streams rather
+		// than a sub-plan per channel.
+		rows, err := s.db.Query(ctx, `SELECT DISTINCT ON (l.id) l.id, e.catchup_days `+channelJoins+`
+			JOIN iptv_streams s ON s.addon_id = l.addon_id AND s.channel_id = l.id AND s.enabled
+			JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key AND e.catchup <> '' AND e.catchup_days > 0
+			WHERE l.addon_id = $1 AND i.live_tv AND `+shownSQL+` ORDER BY l.id, `+streamOrder, source)
 		if err != nil {
 			return nil, err
 		}
