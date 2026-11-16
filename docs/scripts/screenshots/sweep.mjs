@@ -614,11 +614,13 @@ function inspect(language) {
     })
   }
 
-  // The pages it links to, not the API's files it offers to download.
+  // The pages it links to, not the API's files it offers to download, nor the configure links,
+  // which send the browser to the addon's own page.
   const links = [...document.querySelectorAll('a[href]')]
     .map((link) => new URL(link.href, location.href))
     .filter((link) => link.origin === location.origin && link.pathname.startsWith('/admin/'))
     .filter((link) => !link.pathname.startsWith('/admin/api/'))
+    .filter((link) => !link.pathname.startsWith('/admin/configure/'))
     .map((link) => link.pathname.replace(/^\/admin/, '').replace(/\/$/, '') || '/')
   return { found, links: [...new Set(links)] }
 }
