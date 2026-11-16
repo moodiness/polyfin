@@ -41,7 +41,7 @@ func TestASlowGPUHDRChainIsTimedLower(t *testing.T) {
 		{"Intel, failing", intel, chainTimes{}, 0, 0, ""},
 	} {
 		m, f := measuringManager(t, tc.times)
-		got := m.measure(t.Context(), tc.hw)
+		got, _ := m.measure(t.Context(), tc.hw)
 		if math.Abs(got.HDRSpeed-tc.speed) > 0.01 || math.Abs(got.LowHDRSpeed-tc.low) > 0.01 {
 			t.Errorf("%s: HDR at %.2fx, %.2fx lower, want %.2fx and %.2fx", tc.name, got.HDRSpeed, got.LowHDRSpeed, tc.speed, tc.low)
 		}

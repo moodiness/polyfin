@@ -13,12 +13,13 @@ import (
 
 // chainTimes are the injected durations of the timed conversions, by kind
 // and chain; a missing one fails. hdrDevice is the tone mapping of Intel's
-// GPU or of VideoToolbox, and hdrLow any GPU's HDR chain to 720p.
-// checkFails fails the Vulkan decoding check, sampleFails the making of
-// the samples, and brokenDeinterlacers the check of those deinterlacers.
+// GPU or of VideoToolbox, hdrLow any GPU's HDR chain to 720p, and
+// processor the processor's tone mapping. checkFails fails the Vulkan
+// decoding check, sampleFails the making of the samples, and
+// brokenDeinterlacers the check of those deinterlacers.
 type chainTimes struct {
 	sdrMemory, sdrGPU, hdrMemory, hdrGPU time.Duration
-	hdrDevice, hdrLow                    time.Duration
+	hdrDevice, hdrLow, processor         time.Duration
 	checkFails, sampleFails              bool
 	brokenDeinterlacers                  []string
 }
@@ -83,6 +84,8 @@ func (f *fakeRunner) run(_ context.Context, args []string) (time.Duration, error
 	case strings.Contains(vf, "scale_cuda") || strings.Contains(vf, "scale_vaapi") || strings.Contains(vf, "scale_vt") ||
 		strings.Contains(vf, "scale_qsv") || strings.Contains(vf, "vpp_amf"):
 		return answer("sdr gpu", f.times.sdrGPU)
+	case strings.Contains(vf, "zscale="):
+		return answer("processor", f.times.processor)
 	case strings.HasPrefix(vf, "scale=w=1920:h=1080"):
 		return answer("sdr memory", f.times.sdrMemory)
 	}
@@ -137,9 +140,14 @@ func TestTheFasterChainIsKeptForEachKind(t *testing.T) {
 		{"VAAPI faster through memory", vaapi, chainTimes{sdrMemory: time.Second / 2, sdrGPU: time.Second}, false, false, nil},
 	} {
 		m, f := measuringManager(t, tc.times)
-		got := m.measure(t.Context(), tc.hw)
+		got, found := m.measure(t.Context(), tc.hw)
 		if got.Resident != tc.resident || got.VulkanDecoding != tc.vulkan || !slices.Equal(got.Deinterlacers, tc.deinterlacers) {
 			t.Errorf("%s: resident %v, Vulkan decoding %v, deinterlacers %v", tc.name, got.Resident, got.VulkanDecoding, got.Deinterlacers)
+		}
+		// The speeds kept tell the same choices, once kept and read again.
+		if kept := found.apply(tc.hw); kept.Resident != got.Resident || kept.VulkanDecoding != got.VulkanDecoding ||
+			!slices.Equal(kept.Deinterlacers, got.Deinterlacers) || kept.HDRSpeed != got.HDRSpeed || kept.LowHDRSpeed != got.LowHDRSpeed {
+			t.Errorf("%s: the speeds kept give %+v, the timing %+v", tc.name, kept, got)
 		}
 		if tc.times.sampleFails {
 			continue

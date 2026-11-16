@@ -841,21 +841,27 @@ type Manager struct {
 	olderMu              sync.Mutex
 	fetching             bool
 	fetchErr             error
-	// measuring counts the timings under way (see measureLater and
-	// timeToneMappingLater), and timingGPU those of the GPU's chains; run,
-	// when set, runs FFmpeg in their place, for tests.
+	// measuring counts the timings under way (see measureLater,
+	// timeToneMappingLater and retryLater), and timingGPU those of the
+	// GPU's chains at its detection; run, when set, runs FFmpeg in their
+	// place, for tests.
 	measuring sync.WaitGroup
 	timingGPU sync.WaitGroup
 	run       func(ctx context.Context, args []string) (time.Duration, error)
-	// toneMappingTimed times HDR tone mapped on the processor once, and
-	// toneMappedHeight keeps the height it chose, 0 until then (see
-	// ToneMappedHeight); toneMappingSpeed, the speed it timed, as
+	// toneMappingTimed times HDR tone mapped on the processor first at
+	// startup (Retime times it again when the server is quiet), and
+	// toneMappedHeight keeps the height its speed gives, 0 until then
+	// (see ToneMappedHeight); toneMappingSpeed, that speed, as
 	// math.Float64bits, 0 until then and when it failed; processorTimed
 	// tells that timing ended, or never runs (see logHDRPath).
 	toneMappingTimed sync.Once
 	toneMappedHeight atomic.Int32
 	toneMappingSpeed atomic.Uint64
 	processorTimed   atomic.Bool
+	// timings keeps the timings of the last days (see UseTimings), and
+	// retime makes them again when Polyfin is quiet (see Retime).
+	timings timingStore
+	retime  retimer
 	// vendor, when set, tells the PCI vendor of a render node in place of
 	// Linux, for tests.
 	vendor func(node string) string
@@ -930,7 +936,9 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		kept: map[Key]*keeping{}, playouts: map[string]*playout{}}
 	m.linger.Store(int64(variantLinger))
 	m.keepFor.Store(int64(keepFor))
+	m.retime.seen.Store(time.Now().UnixNano())
 	go m.stopIdle()
+	go m.watchWork()
 	return m, nil
 }
 
@@ -945,6 +953,10 @@ func (m *Manager) Close() {
 	close(m.done)
 	for _, cancel := range m.recordings {
 		cancel()
+	}
+	if m.retime.retry != nil {
+		m.retime.retry.Stop()
+		m.retime.retry = nil
 	}
 	m.stopProgressives(func(Key) bool { return true })
 	m.mu.Unlock()

@@ -489,7 +489,7 @@ func TestVideoToolboxChainsAreTimed(t *testing.T) {
 	t.Parallel()
 	m, f := measuringManager(t, chainTimes{sdrMemory: time.Second, sdrGPU: time.Second / 2, brokenDeinterlacers: []string{"yadif_videotoolbox"}})
 	m.can = capabilities{encoders: everyEncoder, filters: everyFilter}
-	hw := m.measure(t.Context(), Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox", "hevc_videotoolbox"}})
+	hw, _ := m.measure(t.Context(), Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox", "hevc_videotoolbox"}})
 	if !hw.Resident || len(hw.Deinterlacers) != 0 {
 		t.Errorf("%+v", hw)
 	}
@@ -505,7 +505,7 @@ func TestVideoToolboxChainsAreTimed(t *testing.T) {
 	// QSV's deinterlacer is checked on QSV frames.
 	m, f = measuringManager(t, chainTimes{sdrMemory: time.Second, sdrGPU: time.Second / 2})
 	m.can = capabilities{encoders: everyEncoder, filters: everyFilter}
-	if hw := m.measure(t.Context(), Hardware{Method: "qsv", Encoders: []string{"h264_qsv"}}); !hw.Resident || !slices.Equal(hw.Deinterlacers, []string{"vpp_qsv"}) {
+	if hw, _ := m.measure(t.Context(), Hardware{Method: "qsv", Encoders: []string{"h264_qsv"}}); !hw.Resident || !slices.Equal(hw.Deinterlacers, []string{"vpp_qsv"}) {
 		t.Errorf("QSV: %+v", hw)
 	}
 	if check := f.runs["deinterlacer vpp_qsv"]; !contains(check, "-vf", "format=nv12,hwupload,hwmap=derive_device=qsv,format=qsv,vpp_qsv=deinterlace=advanced,hwdownload,format=nv12") {

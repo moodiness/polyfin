@@ -21,8 +21,9 @@ import (
 // SDR (see Resident) and tone mapped there from Vulkan frames (see
 // VulkanDecoding) or by the GPU's own video processing (see
 // deviceToneMapping), or come back to memory for the filters and go to
-// the GPU again to be encoded: Polyfin times both at startup and keeps the
-// faster for each kind of conversion. Burned subtitles, tone mapping on
+// the GPU again to be encoded: Polyfin times both at startup and again
+// when the server is quiet, keeps the best timings of the last 7 days and
+// the faster for each kind of conversion. Burned subtitles, tone mapping on
 // the processor and decoding left to the processor go through memory. A
 // GPU that cannot decode a codec leaves it to FFmpeg's own decoder, and
 // the conversion looks the same either way.
@@ -34,10 +35,10 @@ type Hardware struct {
 	Method string
 	// Device is the render node VAAPI opens.
 	Device string
-	// Encoders are those that encoded on it at startup, such as h264_nvenc.
+	// Encoders are those that encoded on it when timed, such as h264_nvenc.
 	Encoders []string
 	// ToneMapping is set when the GPU also scales video and tone maps HDR
-	// to SDR, which a short HDR10 sample proved at startup. NVIDIA's do it
+	// to SDR, which a short HDR10 sample proved when timed. NVIDIA's do it
 	// through libplacebo on their Vulkan driver, which applies Dolby
 	// Vision's metadata. Intel's do it through their video processing,
 	// tonemap_vaapi on Linux and vpp_qsv on Windows, for HDR10 whose
@@ -55,8 +56,8 @@ type Hardware struct {
 	// Resident is set when SDR frames the GPU decoded stay in its memory to
 	// be scaled, by scale_cuda, scale_vaapi, scale_vt, scale_qsv or
 	// vpp_amf, and encoded, which worked and was faster than going through
-	// memory at startup. Deinterlacers are the deinterlacing filters that
-	// deinterlaced such frames at startup, and those a GPU tone maps:
+	// memory when timed. Deinterlacers are the deinterlacing filters that
+	// deinterlaced such frames when timed, and those a GPU tone maps:
 	// yadif_cuda and bwdif_cuda, deinterlace_vaapi, yadif_videotoolbox,
 	// or vpp_qsv.
 	Resident      bool
@@ -64,15 +65,16 @@ type Hardware struct {
 	// VulkanDecoding is set when the GPU of ToneMapping also decodes HEVC
 	// in 10 bits into Vulkan frames, which libplacebo tone maps as they
 	// are, rather than into memory it uploads them from again, and that
-	// was faster at startup. FFmpeg maps no CUDA frame to Vulkan, nor back:
+	// was faster when timed. FFmpeg maps no CUDA frame to Vulkan, nor back:
 	// libplacebo's output, at the size converted to, goes to NVENC through
 	// memory.
 	VulkanDecoding bool
 	// HDRSpeed is how many times real time the GPU of ToneMapping tone
-	// mapped a 4K HDR10 sample to 1080p at startup, through the chain
-	// conversions take; LowHDRSpeed, timed only when HDRSpeed is under
-	// real time, the same to LowToneMappedHeight. 0 when not timed, or
-	// when the timing failed. See HDRPath.
+	// mapped a 4K HDR10 sample to 1080p, through the chain conversions
+	// take; LowHDRSpeed, timed only when HDRSpeed is under real time, the
+	// same to LowToneMappedHeight. Timed at startup and again when the
+	// server is quiet, the best of the last 7 days kept. 0 when not timed,
+	// or when the timing failed. See HDRPath.
 	HDRSpeed, LowHDRSpeed float64
 	// FFmpeg is the FFmpeg the GPU encodes with when it is not the
 	// Manager's own: the one for NVIDIA drivers older than 610 (see
@@ -128,9 +130,10 @@ func (m *Manager) methods() []gpuMethod {
 // name, that one only; with none, none. Each want is detected once:
 // choosing it again switches to what was found, encodings already running
 // going on as they started. It reports false when no GPU encodes, and
-// conversions then run on the processor. The GPU's conversion chains are
-// then timed in the background (see measure): conversions starting before
-// that ends go through memory.
+// conversions then run on the processor. The best timings kept of the last
+// 7 days apply at once (see UseTimings); the GPU's conversion chains are
+// then timed in the background (see measure): without timings kept,
+// conversions starting before that ends go through memory.
 func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	m.detecting.Lock()
 	defer m.detecting.Unlock()
@@ -139,6 +142,7 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	if !done {
 		var failures []gpuFailure
 		hw, failures = m.detect(want, device)
+		hw = m.applyBest(hw)
 		m.detected[want] = hw
 		if m.failed == nil {
 			m.failed = map[string][]gpuFailure{}
@@ -409,14 +413,15 @@ func (m *Manager) vendorOf(node string) string {
 // hdrTags tags test pattern as HDR10.
 const hdrTags = "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc"
 
-// sampleLength is how long the samples timed at startup last: 4K at 24
-// frames a second, about half a second to convert each way on a GPU.
+// sampleLength is how long the samples timed last: 4K at 24 frames a
+// second, about half a second to convert each way on a GPU.
 const sampleLength = 2 * time.Second
 
 // measureLater times hw's conversion chains in the background (see
-// measure), then puts what it found in hw's place, as the choice of want
-// and as the GPU chosen, unless another was chosen meanwhile. Close stops
-// it.
+// measure), after any other timing, then puts what they tell in hw's
+// place (see settleGPU), as the choice of want and as the GPU chosen,
+// unless another was chosen meanwhile. A timing made while the server was
+// busy is made again later. Close stops it.
 func (m *Manager) measureLater(want string, hw *Hardware) {
 	if hw == nil {
 		return
@@ -435,16 +440,22 @@ func (m *Manager) measureLater(want string, hw *Hardware) {
 			case <-ctx.Done():
 			}
 		}()
-		measured := m.measure(ctx, *hw)
-		m.detecting.Lock()
-		if m.detected[want] == hw {
-			m.detected[want] = &measured
+		m.retime.run.Lock()
+		base := hw.untimed()
+		measured, found := m.measure(ctx, base)
+		if ctx.Err() != nil {
+			m.retime.run.Unlock()
+			return
 		}
-		m.detecting.Unlock()
+		timed, busy := m.settleGPU(base, measured, found)
+		m.retime.run.Unlock()
 		// A GPU chosen again once the processor is timed tells where HDR
 		// now goes; at startup, the processor's timing tells it.
-		if m.hardware.CompareAndSwap(hw, &measured) && m.processorTimed.Load() {
+		if m.putTimed(want, hw, &timed) && m.processorTimed.Load() {
 			m.logHDRPath()
+		}
+		if busy {
+			m.retryLater()
 		}
 	}()
 }
@@ -488,18 +499,19 @@ func speedOf(d time.Duration, err error) float64 {
 // deinterlaced a quarter of a second there: a filter FFmpeg lists may
 // still fail, or crash, on a GPU. On every GPU that tone maps, it keeps
 // how fast the chain HDR takes converted (see HDRSpeed). It logs what it
-// timed.
-func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
+// timed, and tells how fast each chain converted (see chainTimings).
+func (m *Manager) measure(ctx context.Context, hw Hardware) (Hardware, chainTimings) {
+	var found chainTimings
 	i := slices.IndexFunc(hardwareMethods, func(c gpuMethod) bool { return c.method == hw.Method })
 	if i < 0 || len(hw.Encoders) == 0 {
-		return hw
+		return hw, found
 	}
 	method := hardwareMethods[i]
 	ctx = withFFmpeg(ctx, hw.FFmpeg)
 	dir, err := os.MkdirTemp(m.dir, "measure-")
 	if err != nil {
 		m.logger.Warn("The GPU's conversions could not be timed", "error", err)
-		return hw
+		return hw, found
 	}
 	defer os.RemoveAll(dir)
 	pattern := []string{"-f", "lavfi", "-i", "testsrc2=size=3840x2160:rate=24", "-t", strconv.FormatFloat(sampleLength.Seconds(), 'f', -1, 64)}
@@ -528,22 +540,26 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 				gpu.Resident = true
 				t := m.timeChains(ctx, sdr, encoder, VideoEncoding{Hardware: &memory}, VideoEncoding{Hardware: &gpu})
 				hw.Resident = t.gpuWins()
-				m.logChoice("SDR", hw.Resident, t)
+				found.set(chainSDRMemory, t.memory, t.memoryErr)
+				found.set(chainSDRGPU, t.gpu, t.gpuErr)
+				m.logChoice(ctx, "SDR", hw.Resident, t)
 			}
 		}
 	}
 	if hw.Resident || hw.ToneMapping && hw.Method != "cuda" {
+		found.Deinterlacers = []string{}
 		for _, name := range method.deinterlacers {
 			if m.HasFilters(name) && m.deinterlaces(ctx, hw, name) {
 				hw.Deinterlacers = append(hw.Deinterlacers, name)
+				found.Deinterlacers = append(found.Deinterlacers, name)
 			}
 		}
 	}
 	if !hw.ToneMapping || ctx.Err() != nil {
-		return hw
+		return hw, found
 	}
 	if hw.Method != "cuda" {
-		return m.timeDeviceToneMapping(ctx, hw, dir, pattern, encoder)
+		return m.timeDeviceToneMapping(ctx, hw, &found, dir, pattern, encoder), found
 	}
 	// Only libplacebo, on NVIDIA's GPUs, takes Vulkan frames. The HDR
 	// sample is HEVC in 10 bits, as HDR files are, from the GPU's encoder
@@ -556,10 +572,10 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 	case slices.Contains(m.can.encoders, "libx265"):
 		encode = []string{"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error"}
 	default:
-		return hw
+		return hw, found
 	}
 	if _, err := m.timed(ctx, slices.Concat(probeStart, pattern, encode, []string{hdr})); err != nil {
-		return hw
+		return hw, found
 	}
 	memory, gpu := hw, hw
 	gpu.VulkanDecoding = true
@@ -576,39 +592,45 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 		t = m.timeChains(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &memory}, VideoEncoding{ToneMap: true, Hardware: &gpu})
 	}
 	hw.VulkanDecoding = t.gpuWins()
-	m.logChoice("HDR", hw.VulkanDecoding, t)
+	found.set(chainHDRMemory, t.memory, t.memoryErr)
+	found.set(chainHDRGPU, t.gpu, t.gpuErr)
+	m.logChoice(ctx, "HDR", hw.VulkanDecoding, t)
 	if hw.VulkanDecoding {
-		return m.timeLowerToneMapping(ctx, hw, hdr, encoder, t.gpu, t.gpuErr)
+		return m.timeLowerToneMapping(ctx, hw, &found, hdr, encoder, t.gpu, t.gpuErr), found
 	}
-	return m.timeLowerToneMapping(ctx, hw, hdr, encoder, t.memory, t.memoryErr)
+	return m.timeLowerToneMapping(ctx, hw, &found, hdr, encoder, t.memory, t.memoryErr), found
 }
 
 // timeDeviceToneMapping times the tone mapping of Intel's GPU or of
 // VideoToolbox (see deviceToneMapping): a 4K HDR10 sample from x265, which
 // writes the mastering display tonemap_vaapi and vpp_qsv need, converted
 // to 1080p as conversions run, then lower when that is under real time.
-func (m *Manager) timeDeviceToneMapping(ctx context.Context, hw Hardware, dir string, pattern []string, encoder string) Hardware {
+// It keeps how fast in found.
+func (m *Manager) timeDeviceToneMapping(ctx context.Context, hw Hardware, found *chainTimings, dir string, pattern []string, encoder string) Hardware {
 	hdr := filepath.Join(dir, "hdr10.mkv")
 	if _, err := m.timed(ctx, slices.Concat(probeStart, pattern, []string{"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast",
 		"-x265-params", hdr10Params, hdr})); err != nil {
 		return hw
 	}
 	took, err := m.timeChain(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &hw}, 1080)
-	m.logger.Info("Timed the GPU's HDR tone mapping", "height", 1080, "speed", speed(took, err))
-	return m.timeLowerToneMapping(ctx, hw, hdr, encoder, took, err)
+	found.set(chainHDRGPU, took, err)
+	m.logTimed(ctx, "Timed the GPU's HDR tone mapping", err, "height", 1080, "speed", speed(took, err))
+	return m.timeLowerToneMapping(ctx, hw, found, hdr, encoder, took, err)
 }
 
 // timeLowerToneMapping keeps how fast hw tone mapped HDR to 1080p, in took
 // or failing with err (see HDRSpeed). When that is under real time, it
-// times the same chain to LowToneMappedHeight, and logs it.
-func (m *Manager) timeLowerToneMapping(ctx context.Context, hw Hardware, sample, encoder string, took time.Duration, err error) Hardware {
+// times the same chain to LowToneMappedHeight, keeps how fast in found,
+// and logs it.
+func (m *Manager) timeLowerToneMapping(ctx context.Context, hw Hardware, found *chainTimings, sample, encoder string, took time.Duration, err error) Hardware {
 	hw.HDRSpeed = speedOf(took, err)
 	if hw.HDRSpeed == 0 || hw.HDRSpeed >= realTime || ctx.Err() != nil {
 		return hw
 	}
 	took, err = m.timeChain(ctx, sample, encoder, VideoEncoding{ToneMap: true, Hardware: &hw}, LowToneMappedHeight)
 	hw.LowHDRSpeed = speedOf(took, err)
-	m.logger.Info("Timed the GPU's HDR tone mapping at a lower height", "height", LowToneMappedHeight, "speed", speed(took, err))
+	found.set(chainHDRLow, took, err)
+	m.logTimed(ctx, "Timed the GPU's HDR tone mapping at a lower height", err, "height", LowToneMappedHeight, "speed", speed(took, err))
 	return hw
 }
 
@@ -628,24 +650,49 @@ func (m *Manager) timeChain(ctx context.Context, sample, encoder string, v Video
 	return m.timed(ctx, slices.Concat(probeStart, v.inputs(), []string{"-i", sample, "-vf", v.filters(), "-c:v", encoder, "-f", "null", "-"}))
 }
 
-// logChoice logs the chain chosen for a kind of conversion, and the speed
-// of each.
-func (m *Manager) logChoice(kind string, gpu bool, t timing) {
-	chain := "memory"
-	if gpu {
-		chain = "gpu"
+// logChoice logs the chain chosen for a kind of conversion, the speed of
+// each, and why a chain failed; nothing once ctx ended, as when a timing
+// made again stops.
+func (m *Manager) logChoice(ctx context.Context, kind string, gpu bool, t timing) {
+	if ctx.Err() != nil {
+		return
 	}
-	m.logger.Info("Timed the GPU's conversion chains", "kind", kind, "chain", chain,
-		"memory_speed", speed(t.memory, t.memoryErr), "gpu_speed", speed(t.gpu, t.gpuErr))
+	attrs := []any{"kind", kind, "chain", chainName(gpu), "memory_speed", speed(t.memory, t.memoryErr), "gpu_speed", speed(t.gpu, t.gpuErr)}
+	if t.memoryErr != nil {
+		attrs = append(attrs, "memory_error", t.memoryErr.Error())
+	}
+	if t.gpuErr != nil {
+		attrs = append(attrs, "gpu_error", t.gpuErr.Error())
+	}
+	m.logger.Info("Timed the GPU's conversion chains", attrs...)
+}
+
+// logTimed logs msg, a timing, with attrs, and why it failed with err;
+// nothing once ctx ended.
+func (m *Manager) logTimed(ctx context.Context, msg string, err error, attrs ...any) {
+	if ctx.Err() != nil {
+		return
+	}
+	if err != nil {
+		attrs = append(attrs, "error", err.Error())
+	}
+	m.logger.Info(msg, attrs...)
 }
 
 // probeStart opens FFmpeg's command lines testing the GPU.
 var probeStart = []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 
-// timed runs FFmpeg with args, within 20 s, and reports how long it took,
-// or why it failed with the end of what FFmpeg wrote, through m.run when
-// tests set it: the FFmpeg ctx names (see withFFmpeg), else the one the
-// Manager runs.
+// timingLimit bounds each run of FFmpeg testing or timing the GPU.
+const timingLimit = 20 * time.Second
+
+// errTimingLimit tells a run of FFmpeg stopped at timingLimit, as on a
+// GPU or a server too busy, or a driver that hangs.
+var errTimingLimit = errors.New("FFmpeg reached the 20 s limit")
+
+// timed runs FFmpeg with args, within timingLimit, and reports how long
+// it took, or why it failed (see runError), through m.run when tests set
+// it: the FFmpeg ctx names (see withFFmpeg), else the one the Manager
+// runs.
 func (m *Manager) timed(ctx context.Context, args []string) (time.Duration, error) {
 	if m.run != nil {
 		return m.run(ctx, args)
@@ -654,17 +701,31 @@ func (m *Manager) timed(ctx context.Context, args []string) (time.Duration, erro
 	if !ok {
 		binary = m.ffmpegPath()
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	limited, cancel := context.WithTimeout(ctx, timingLimit)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.CommandContext(limited, binary, args...)
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	started := time.Now()
 	err := cmd.Run()
-	if err != nil {
-		err = fmt.Errorf("FFmpeg failed: %w: %s", err, bytes.TrimSpace(stderr.bytes()))
+	return time.Since(started), runError(ctx, limited, err, stderr.bytes())
+}
+
+// runError is why a run of FFmpeg under limited, within ctx, failed with
+// err: errTimingLimit once limited's deadline passed while ctx goes on,
+// else err; each with the end of what FFmpeg wrote. Nil without err.
+func runError(ctx, limited context.Context, err error, wrote []byte) error {
+	if err == nil {
+		return nil
 	}
-	return time.Since(started), err
+	wrote = bytes.TrimSpace(wrote)
+	if ctx.Err() == nil && errors.Is(limited.Err(), context.DeadlineExceeded) {
+		if len(wrote) == 0 {
+			return errTimingLimit
+		}
+		return fmt.Errorf("%w: %s", errTimingLimit, wrote)
+	}
+	return fmt.Errorf("FFmpeg failed: %w: %s", err, wrote)
 }
 
 // succeeds reports whether the FFmpeg hw encodes with ends well with args

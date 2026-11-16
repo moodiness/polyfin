@@ -29,7 +29,8 @@ const (
 )
 
 // HDRPath is where HDR a GPU tone maps is tone mapped instead, as the
-// timings at startup chose it: the GPU's HDR chain to 1080p (see
+// timings chose it, made at startup and again when the server is quiet,
+// the best of the last 7 days kept: the GPU's HDR chain to 1080p (see
 // Hardware.HDRSpeed), then to LowToneMappedHeight when that is under real
 // time, and the processor's tone mapping (see timeToneMapping). A GPU
 // keeping up tone maps HDR at any height. One slower than real time hands
@@ -49,7 +50,8 @@ type HDRPath struct {
 	Reason string
 	// GPUSpeed, LowSpeed and ProcessorSpeed are how many times real time
 	// the GPU tone mapped to 1080p, then to LowToneMappedHeight, and the
-	// processor to 1080p, at startup; 0 when not timed, or failed.
+	// processor to 1080p, the best of the last 7 days; 0 when not timed,
+	// or failed.
 	GPUSpeed, LowSpeed, ProcessorSpeed float64
 }
 
@@ -105,7 +107,7 @@ func (m *Manager) logHDRPath() {
 		"gpu_speed", speedText(path.GPUSpeed), "low_speed", speedText(path.LowSpeed), "processor_speed", speedText(path.ProcessorSpeed))
 }
 
-// speedText writes a speed timed at startup as the log shows it: "0.5x",
+// speedText writes a timed speed as the log shows it: "0.5x",
 // or "none" when not timed.
 func speedText(speed float64) string {
 	if speed <= 0 {

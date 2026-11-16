@@ -565,8 +565,9 @@ func newHardwareJSON(hw *hls.Hardware, path hls.HDRPath, gpuToneMapping bool) *h
 // Path "gpu" or "processor", Height the height the GPU tone maps them up
 // to, 0 for any, and Reason why: one of hls's HDR reasons, or "turnedOff"
 // when the settings turn tone mapping on the GPU off. GPUSpeed, LowSpeed
-// and ProcessorSpeed are the timings at startup it follows, in times real
-// time, 0 when not timed (see hls.HDRPath).
+// and ProcessorSpeed are the timings it follows, made at startup and again
+// when the server is quiet, the best of the last 7 days kept, in times
+// real time, 0 when not timed (see hls.HDRPath).
 type hdrPathJSON struct {
 	Path           string  `json:"path"`
 	Height         int     `json:"height"`

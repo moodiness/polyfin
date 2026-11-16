@@ -46,13 +46,14 @@ type Capabilities struct {
 	// zscale and tonemap.
 	ToneMapping bool
 	// ToneMappedHeight caps video the processor tone maps: the settings'
-	// ProcessorToneMappingHeight, or with Automatic the height a timing at
-	// startup chose (see hls.Manager.ToneMappedHeight). 0 is 720p.
+	// ProcessorToneMappingHeight, or with Automatic the height the timings
+	// chose (see hls.Manager.ToneMappedHeight). 0 is 720p.
 	ToneMappedHeight int
 	// Hardware is the GPU video is converted on, nil for none.
 	Hardware *hls.Hardware
 	// HDR is where HDR Hardware would tone map is tone mapped, as the
-	// timings at startup chose it (see hls.HDRPath).
+	// timings chose it, made at startup and again when the server is
+	// quiet, the best of the last 7 days kept (see hls.HDRPath).
 	HDR hls.HDRPath
 	// Tuning is how the settings tune conversions.
 	Tuning Tuning
