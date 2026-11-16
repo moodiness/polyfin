@@ -586,8 +586,8 @@ const settings: typeof en = {
         'La tarjeta gráfica de este servidor no puede hacerlo: el procesador convierte HDR a SDR.',
       processorToneMappingHeight: 'Calidad máxima del HDR convertido por el procesador',
       processorToneMappingHeightHelp:
-        'Convertir HDR a SDR supone mucho trabajo para el procesador: unas cuatro veces la propia codificación a 1080p. Automático mide este servidor al iniciarse: 1080p si convierte al menos una vez y media más rápido de lo que se reproduce el vídeo; si no, 720p, que también se usa hasta que termina la medición. Por encima de 1080p solo cuenta cuando una tarjeta gráfica codifica el vídeo: por sí solo, el procesador se detiene en 1080p.',
-      toneMappingHeightAuto: 'Automático (medido al iniciar)',
+        'Convertir HDR a SDR supone mucho trabajo para el procesador: unas cuatro veces la propia codificación a 1080p. Automático mide este servidor al iniciarse y de nuevo cuando está tranquilo, y conserva la mejor medición de los últimos 7 días: 1080p si convierte al menos una vez y media más rápido de lo que se reproduce el vídeo; si no, 720p, que también se usa hasta que termina la primera medición. Por encima de 1080p solo cuenta cuando una tarjeta gráfica codifica el vídeo: por sí solo, el procesador se detiene en 1080p.',
+      toneMappingHeightAuto: 'Automático (medido)',
       height4k: '4K',
       measuredHeight: (height: number) => `Medido: ${height}p`,
       upToHeight: (height: number) => `hasta ${height}p`,

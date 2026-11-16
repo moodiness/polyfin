@@ -486,7 +486,7 @@ const settings = {
       qualityFactor: 'Takes a quality number',
       processor: 'Encoders on the processor',
       processorToneMapping: 'HDR to SDR on the processor',
-      /** Where HDR titles are converted to SDR, and why, as the timings at startup chose it. */
+      /** Where HDR titles are converted to SDR, and why, as the timings, at startup and again when quiet, chose it. */
       hdrPath: {
         term: 'HDR titles',
         gpu: 'Converted to SDR on the card',
@@ -581,8 +581,8 @@ const settings = {
         'The graphics card on this server cannot do it: the processor converts HDR to SDR.',
       processorToneMappingHeight: 'Maximum quality of HDR converted by the processor',
       processorToneMappingHeightHelp:
-        'Converting HDR to SDR is heavy work for the processor: about four times the encoding itself at 1080p. Automatic times this server at startup: 1080p when it converts at least one and a half times as fast as the video plays, else 720p, which is also used until the timing ends. Above 1080p only counts when a graphics card encodes the video: on its own, the processor stops at 1080p.',
-      toneMappingHeightAuto: 'Automatic (measured at startup)',
+        'Converting HDR to SDR is heavy work for the processor: about four times the encoding itself at 1080p. Automatic times this server at startup and again when it is quiet, and keeps the best timing of the last 7 days: 1080p when it converts at least one and a half times as fast as the video plays, else 720p, which is also used until the first timing ends. Above 1080p only counts when a graphics card encodes the video: on its own, the processor stops at 1080p.',
+      toneMappingHeightAuto: 'Automatic (measured)',
       height4k: '4K',
       measuredHeight: (height: number) => `Measured: ${height}p`,
       upToHeight: (height: number) => `up to ${height}p`,

@@ -43,7 +43,7 @@ export default function ConversionSection(api: SectionFormApi) {
    * processor, unless the card is too slow for HDR and the processor takes it.
    */
   const placeboToneMaps = gpuToneMaps && gpu?.method === 'cuda' && gpu.hdr?.path !== 'processor'
-  /** Where HDR titles go, as the timings at startup chose it and the form's setting says. */
+  /** Where HDR titles go, as the timings, at startup and again when quiet, chose it and the form's setting says. */
   const hdrPath =
     gpu?.hdr && form.toneMapping
       ? hdrPathText(gpu.hdr, c.hdrPath, language, form.gpuToneMapping)

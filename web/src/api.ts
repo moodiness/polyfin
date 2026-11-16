@@ -619,7 +619,7 @@ export type Settings = {
   toneMappingDesat: number
   /** Tone maps HDR on a GPU that can (NVIDIA, Intel through VAAPI or QSV, VideoToolbox); off, the processor does. */
   gpuToneMapping: boolean
-  /** Most height of HDR the processor tone maps: 720 to 2160, 0 for Automatic (measured at startup). */
+  /** Most height of HDR the processor tone maps: 720 to 2160, 0 for Automatic (measured). */
   processorToneMappingHeight: number
   /** Deinterlacer, and whether it makes a frame of each field. */
   deinterlaceMethod: DeinterlaceMethod
@@ -936,10 +936,10 @@ type ConversionGPU = {
 }
 
 /**
- * Where the HDR titles a graphics card tone maps are tone mapped, as the timings at startup
- * chose it: on the card (`gpu`), up to `height` when it is not 0, or on the processor. The
- * speeds are in times real time, 0 when not measured: the card's to 1080p, to 720p
- * (`lowSpeed`, measured when the first is under 1), and the processor's to 1080p.
+ * Where the HDR titles a graphics card tone maps are tone mapped, as the timings, at startup and
+ * again when quiet, chose it: on the card (`gpu`), up to `height` when it is not 0, or on the
+ * processor. The speeds are in times real time, 0 when not measured: the card's to 1080p, to
+ * 720p (`lowSpeed`, measured when the first is under 1), and the processor's to 1080p.
  */
 export type HDRPath = {
   path: 'gpu' | 'processor'
@@ -967,7 +967,7 @@ type ConversionHardware = {
   encoders: string[]
   /** Whether FFmpeg tone maps HDR on the processor. */
   toneMapping: boolean
-  /** Height Automatic caps HDR tone mapped on the processor at, as measured at startup (720 until then); 0 when it cannot. */
+  /** Height Automatic caps HDR tone mapped on the processor at, as the timings, at startup and again when quiet, measured it (720 until the first ends); 0 when it cannot. */
   toneMappingHeight: number
   /** Whether FFmpeg has the bwdif deinterlacer. */
   bwdif: boolean
