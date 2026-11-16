@@ -373,6 +373,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 		segments.UseOlderDriverFFmpeg(tools.OlderDriver(filepath.Join(cfg.DataDir, "tools"), manifest))
 	}
 	settings := store.Settings()
+	// The timings of the GPU and the processor of the last days, kept in
+	// the data folder, apply as soon as the GPU is chosen.
+	segments.UseTimings(filepath.Join(cfg.DataDir, "gpu-timings.json"))
 	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	// The reads no request waits for any more, such as a genre page's
@@ -435,6 +438,8 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	registry := tasks.New(logger)
 	registerTasks(registry, store, activityLog, lib, channels, logger)
 	registry.Register(emptySourceCacheTask(sources, logger))
+	registry.Register(timeGraphicsCardTask(segments))
+	segments.UseOtherWork(registry.HeavyRunning)
 	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		return err
@@ -1186,6 +1191,7 @@ func registerLocalFoldersTask(registry *tasks.Registry, folders *localfiles.Serv
 		},
 		Triggers: []tasks.Trigger{tasks.AtStartup(), tasks.Every(localfiles.ScanCheck)},
 		Limits:   tasks.Limits{Locked: tasks.LockedSettings},
+		Heavy:    true,
 		Run:      func(ctx context.Context) error { return folders.ScanDue(ctx, tasks.ByHand(ctx)) },
 	})
 }
@@ -1207,6 +1213,7 @@ func registerThumbnailsTask(registry *tasks.Registry, images *thumbnails.Service
 		},
 		Triggers: []tasks.Trigger{tasks.Daily(3 * time.Hour)},
 		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: time.Hour},
+		Heavy:    true,
 		Run: func(ctx context.Context) error {
 			return images.MakeLocal(ctx, func(ctx context.Context, each func(library.Version, string) error) error {
 				return lib.LocalVersions(ctx, accounts.ID{}, func(item library.Item, version library.Version) error {
@@ -1304,6 +1311,7 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 		},
 		Triggers: []tasks.Trigger{tasks.Every(commercials.RunInterval)},
 		Limits:   tasks.Limits{MinInterval: time.Hour},
+		Heavy:    true,
 		Run:      breaks.Run,
 	})
 }
@@ -1326,6 +1334,7 @@ func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
 		Triggers: []tasks.Trigger{tasks.Daily(backup.DefaultTime)},
 		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: 6 * time.Hour},
 		Enabled:  backups.Available,
+		Heavy:    true,
 		Run:      backups.Run,
 	})
 }
@@ -1473,6 +1482,27 @@ func emptySourceCacheTask(sources *source.Cache, logger *slog.Logger) tasks.Task
 			logger.Info("The cache of files being read was emptied", "freed_bytes", sources.Empty())
 			return nil
 		},
+	}
+}
+
+// timeGraphicsCardTask times the GPU chosen and the processor's HDR
+// tone mapping again once Polyfin is quiet, every 24 hours, and at once
+// when started by hand (see hls.Manager.Retime).
+func timeGraphicsCardTask(segments *hls.Manager) tasks.Task {
+	return tasks.Task{
+		Key:      "TimeGraphicsCard",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Time the graphics card", Description: "Times again how fast the graphics card converts video, and how fast the processor converts HDR to SDR, once Polyfin has converted nothing for 10 minutes; the best timings of the last 7 days are kept. Started by hand, it times as soon as nothing is converted."},
+			"fr":    {Name: "Chronométrer la carte graphique", Description: "Chronomètre à nouveau la vitesse à laquelle la carte graphique convertit la vidéo, et celle à laquelle le processeur convertit le HDR en SDR, une fois que Polyfin n’a rien converti pendant 10 minutes\u202f; les meilleurs temps des 7 derniers jours sont gardés. Lancée à la main, elle chronomètre dès que rien n’est converti."},
+			"de":    {Name: "Grafikkarte messen", Description: "Misst erneut, wie schnell die Grafikkarte Video konvertiert und wie schnell der Prozessor HDR zu SDR konvertiert, sobald Polyfin 10 Minuten lang nichts konvertiert hat; die besten Messungen der letzten 7 Tage werden behalten. Von Hand gestartet, misst sie, sobald nichts konvertiert wird."},
+			"es":    {Name: "Cronometrar la tarjeta gráfica", Description: "Vuelve a medir la velocidad a la que la tarjeta gráfica convierte el vídeo y el procesador convierte HDR a SDR, cuando Polyfin no ha convertido nada durante 10 minutos; se conservan las mejores mediciones de los últimos 7 días. Iniciada a mano, mide en cuanto no se convierte nada."},
+			"it":    {Name: "Cronometra la scheda grafica", Description: "Misura di nuovo la velocità con cui la scheda grafica converte il video e il processore converte da HDR a SDR, quando Polyfin non ha convertito nulla per 10 minuti; si conservano le misure migliori degli ultimi 7 giorni. Avviata a mano, misura appena nulla viene convertito."},
+			"pt-BR": {Name: "Cronometrar a placa de vídeo", Description: "Mede de novo a velocidade com que a placa de vídeo converte vídeo e o processador converte HDR para SDR, quando o Polyfin não converteu nada por 10 minutos; as melhores medições dos últimos 7 dias são mantidas. Iniciada manualmente, mede assim que nada estiver sendo convertido."},
+		},
+		Triggers: []tasks.Trigger{tasks.Every(24 * time.Hour)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: time.Hour},
+		Run:      func(ctx context.Context) error { return segments.Retime(ctx, tasks.ByHand(ctx)) },
 	}
 }
 
