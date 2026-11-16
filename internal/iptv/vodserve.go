@@ -336,26 +336,32 @@ func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string
 
 // titleMeta describes a title a source shows: its list data, completed by
 // its details when they are known or the request opens it (see Opening),
-// and, for a series, its episodes.
+// and, for a series, its episodes: the description kept (see
+// descriptions.go), unless opening the title asks its provider for its
+// details.
 func (s *Service) titleMeta(ctx context.Context, source accounts.ID, typ, key string) (stremio.Meta, error) {
+	kept, err := s.description(ctx, source, typ, key)
+	if err != nil {
+		return stremio.Meta{}, err
+	}
+	if !IsOpening(ctx) || !kept.fetchDue(s.now()) {
+		return kept.meta(source), nil
+	}
 	t, err := s.title(ctx, source, typ, key)
 	if err != nil {
 		return stremio.Meta{}, err
 	}
-	meta := listingMeta(source, t.Title)
-	d, err := s.details(ctx, source, t, IsOpening(ctx))
+	d, err := s.details(ctx, source, t, true)
 	if err != nil {
 		return stremio.Meta{}, err
 	}
-	if d != nil {
-		d.apply(source, t.Title, &meta)
-	}
+	var videos []stremio.Video
 	if typ == typeSeries && t.kind != addons.KindXtream {
-		if meta.Videos, err = s.m3uEpisodes(ctx, source, key); err != nil {
+		if videos, err = s.m3uEpisodes(ctx, source, key); err != nil {
 			return stremio.Meta{}, err
 		}
 	}
-	return meta, nil
+	return describedTitle(source, t.Title, t.kind, d, videos), nil
 }
 
 // m3uEpisodes lists an M3U series' episodes.
@@ -509,6 +515,9 @@ func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle
 		_, err = s.db.Exec(ctx, `INSERT INTO iptv_details (addon_id, type, key, version, fetched_at, details) VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (addon_id, type, key) DO UPDATE SET version = excluded.version, fetched_at = excluded.fetched_at, details = excluded.details`,
 			source, t.Type, t.Key, t.Version, s.now(), fetched)
+		if err == nil {
+			s.descriptions.forget(source, t.Type, t.Key)
+		}
 		return fetched, err
 	})
 	if err != nil {
@@ -764,11 +773,10 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 }
 
 // Enrichment reports whether a source describes its titles through the
-// server's metadata addons.
+// server's metadata addons, read once for a request marked by CheckOnce.
 func (s *Service) Enrichment(ctx context.Context, source accounts.ID) bool {
-	var on bool
-	_ = s.db.QueryRow(ctx, "SELECT enrichment FROM iptv_sources WHERE addon_id = $1", source).Scan(&on)
-	return on
+	state, err := s.sourceState(ctx, source)
+	return err == nil && state.enrichment
 }
 
 // VODCounts count a source's titles: movies and series in its lists,

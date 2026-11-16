@@ -103,6 +103,10 @@ type Service struct {
 	// details (see Pacer).
 	pacer *Pacer
 
+	// descriptions keeps titles' descriptions decoded (see
+	// descriptions.go).
+	descriptions descriptions
+
 	// scans are the tuners' channel scans under way, followed every
 	// scanPoll (see Scan); tunerPort and tunerAddresses are where
 	// discovery asks (see UseTunerDiscovery).
