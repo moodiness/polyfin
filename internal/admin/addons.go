@@ -38,9 +38,13 @@ type addonJSON struct {
 	CatalogCount int       `json:"catalogCount"`
 	RefreshedAt  time.Time `json:"refreshedAt"`
 	// Configurable tells a Stremio or Eclipse addon with a configure
-	// page, which GET …/configure opens (see configureAddon). Its address
-	// holds the addon's settings and keys, and is in no answer.
+	// page. Its address holds the addon's settings and keys, and is in no
+	// answer.
 	Configurable bool `json:"configurable"`
+	// ConfigureLink is the link Configure opens, signed for the caller and
+	// valid configureLinkLife (see configureLink); empty but for a
+	// configurable addon whose address the caller may replace.
+	ConfigureLink string `json:"configureLink,omitempty"`
 	// Kind is "stremio" for a Stremio addon, "eclipse" for an Eclipse
 	// music addon, which Music then describes, "m3u", "xtream" or
 	// "hdhomerun" for an IPTV source, which Source then describes, or
@@ -329,6 +333,7 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Addon) (addonJSON, error) {
 	result := newAddonJSON(addon)
 	if addon.Stremio() || addon.Eclipse() {
+		result.ConfigureLink = h.configureLink(r, scope, addon)
 		return result, nil
 	}
 	if addon.Local() {
@@ -1045,41 +1050,6 @@ func (h *handler) refreshAddonAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.answerAddonChanges(w, r, scope, http.StatusOK, addon, &changes, err)
-}
-
-// configureAddon answers Configure on an addon's page, a link the admin
-// app opens in a new tab: 303 to the addon's configure page (see
-// addons.Addon.ConfigureURL), 404 not_configurable for an addon without
-// one. Its address holds the addon's settings and keys: it is only read
-// here, for whoever may replace the address (the server's addons for
-// administrators, a user's own while they may have some), sent to the
-// browser in this answer only, without a referrer, and never logged.
-func (h *handler) configureAddon(w http.ResponseWriter, r *http.Request) {
-	scope, ok := h.scope(w, r)
-	if !ok || h.personalAddonsRefused(w, r, scope) {
-		return
-	}
-	id, ok := pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	addon, err := h.Addons.InScope(r.Context(), scope, id)
-	if addonError(w, err) {
-		return
-	}
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
-	address, ok := addon.ConfigureURL()
-	if !ok {
-		writeError(w, http.StatusNotFound, "not_configurable")
-		return
-	}
-	w.Header().Set("Location", address)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Referrer-Policy", "no-referrer")
-	w.WriteHeader(http.StatusSeeOther)
 }
 
 func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {

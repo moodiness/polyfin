@@ -33,6 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/oidc"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
@@ -220,6 +221,9 @@ type Options struct {
 	// replaced, and makes what it gave old on Refresh everything; nil
 	// forgets none.
 	AddonCaches AddonCaches
+	// Signer signs the configure links of addons with the server's secret
+	// (see configureLink); nil gives none.
+	Signer *playback.Signer
 	// Restart stops Polyfin as a signal does, for its container's restart
 	// policy, its service manager or Polyfin Desktop to start it again; it
 	// returns at once. Nil offers no restart.
@@ -278,7 +282,8 @@ type handler struct {
 	nowPlayingLinks nowPlayingLinks
 }
 
-// New returns the handler of every /admin/api/ route.
+// New returns the handler of every /admin/api/ route, and of the configure
+// links under /admin/configure/ (see openConfigureLink).
 func New(options Options) http.Handler {
 	h := &handler{Options: options, now: time.Now}
 	if options.Now != nil {
@@ -300,6 +305,8 @@ func New(options Options) http.Handler {
 	h.provider = oidc.New(&http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: providerTimeout}, h.now)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
+	// A configure link opens with no session, from any browser or app.
+	mux.HandleFunc("GET "+configureLinkPath+"{token}", h.openConfigureLink)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
 	mux.HandleFunc("POST /admin/api/session", h.signIn)
 	mux.HandleFunc("POST /admin/api/session/jellyfin", h.signInWithJellyfin)
@@ -580,7 +587,6 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.updateAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh", h.signedIn(h.refreshAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh-all", h.signedIn(h.refreshAddonAll))
-	mux.Handle("GET /admin/api/scopes/{scope}/addons/{id}/configure", h.signedIn(h.configureAddon))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.removeAddon))
 	mux.Handle("GET /admin/api/scopes/{scope}/addons/{id}/removal", h.signedIn(h.addonRemoval))
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))

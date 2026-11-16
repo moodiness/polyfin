@@ -831,6 +831,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 		// Replacing an addon's address forgets its version lists, and
 		// Refresh everything makes what it gave old.
 		AddonCaches: lib,
+		// Configure links are signed with the server's secret, as
+		// playback grants are.
+		Signer: new(playback.NewSigner(secret)),
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,
