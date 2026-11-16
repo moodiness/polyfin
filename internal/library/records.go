@@ -3,6 +3,8 @@ package library
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"hash/maphash"
@@ -89,29 +91,15 @@ type record struct {
 
 // save stores records, merging each into the stored record of its item
 // with savedData, and leaves out those it saved before that left their
-// item as it is stored (see savedRecords).
+// item as it is stored (see savedRecords), since this start or before it
+// (see fingerprinted).
 func (s *Service) save(ctx context.Context, records []record) error {
 	if len(records) == 0 {
 		return nil
 	}
 	unique := inLockOrder(records)
 	for i, r := range unique {
-		if r.Meta != nil || r.Video != nil && r.Video.Streams != nil {
-			trimmed := *r
-			if r.Meta != nil {
-				preview := *r.Meta
-				preview.Videos = nil
-				trimmed.Meta = &preview
-			}
-			// A video's own streams are read from its title's description
-			// (see embed), whose links change.
-			if r.Video != nil {
-				video := *r.Video
-				video.Streams = nil
-				trimmed.Video = &video
-			}
-			unique[i] = &trimmed
-		}
+		unique[i] = r.stored()
 	}
 	ids, keys, kinds, data, err := columns(unique)
 	if err != nil {
@@ -126,24 +114,152 @@ func (s *Service) save(ctx context.Context, records []record) error {
 	if err != nil {
 		return err
 	}
-	n := 0
-	for i := range ids {
-		if !kept[i] {
-			ids[n], keys[n], kinds[n], data[n], hashes[n] = ids[i], keys[i], kinds[i], data[i], hashes[i]
-			n++
+	var fingerprints []int64
+	// leaveOut leaves out the records kept tells.
+	leaveOut := func() int {
+		n := 0
+		for i := range ids {
+			if !kept[i] {
+				unique[n], ids[n], keys[n], kinds[n], data[n], hashes[n] = unique[i], ids[i], keys[i], kinds[i], data[i], hashes[i]
+				if fingerprints != nil {
+					fingerprints[n] = fingerprints[i]
+				}
+				n++
+			}
 		}
+		unique, ids, keys, kinds, data, hashes = unique[:n], ids[:n], keys[:n], kinds[:n], data[:n], hashes[:n]
+		if fingerprints != nil {
+			fingerprints = fingerprints[:n]
+		}
+		return n
 	}
-	if n == 0 {
+	if leaveOut() == 0 {
 		return nil
 	}
-	ids, keys, kinds, data, hashes = ids[:n], keys[:n], kinds[:n], data[:n], hashes[:n]
+	// Those an earlier start saved, mostly the first time a start lists
+	// them, are known by their fingerprints.
+	fingerprints = make([]int64, len(data))
+	for i := range data {
+		fingerprints[i] = fingerprint(data[i])
+	}
+	known, err := s.fingerprinted(ctx, ids, fingerprints)
+	if err != nil {
+		return err
+	}
+	if len(known) > 0 {
+		s.saved.learn(generation, s.addons.Changes(), ids, hashes, known, func(int) bool { return false })
+		kept = make([]bool, len(ids))
+		for i, id := range ids {
+			_, kept[i] = known[id]
+		}
+		if leaveOut() == 0 {
+			return nil
+		}
+	}
 	stored, taken, err := s.upsertColumns(ctx, ids, keys, kinds, data, savedData)
 	if err != nil {
 		return err
 	}
 	// A record whose key is another item's was not stored as it is.
-	s.saved.learn(generation, s.addons.Changes(), ids, hashes, stored, func(i int) bool { return slices.Contains(taken, keys[i]) })
+	skip := func(i int) bool { return slices.Contains(taken, keys[i]) }
+	s.saved.learn(generation, s.addons.Changes(), ids, hashes, stored, skip)
+	s.keepFingerprints(ctx, unique, fingerprints, stored, skip)
 	return nil
+}
+
+// stored is the record as a save stores it: a title's preview without
+// its videos, and a video without its own streams, which are read from
+// its title's description (see embed), whose links change.
+func (r *record) stored() *record {
+	if r.Meta == nil && (r.Video == nil || r.Video.Streams == nil) {
+		return r
+	}
+	trimmed := *r
+	if r.Meta != nil {
+		preview := *r.Meta
+		preview.Videos = nil
+		trimmed.Meta = &preview
+	}
+	if r.Video != nil {
+		video := *r.Video
+		video.Streams = nil
+		trimmed.Video = &video
+	}
+	return &trimmed
+}
+
+// fingerprint is the fingerprint of encoded record data that
+// item_records keeps: unlike savedHash, the same from one start to the
+// next.
+func fingerprint(data string) int64 {
+	sum := sha256.Sum256([]byte(data))
+	return int64(binary.BigEndian.Uint64(sum[:8]))
+}
+
+// fingerprinted returns, of the items ids, the versions of those stored
+// as a record of the given fingerprint left them (see keepFingerprints):
+// a save leaves the record out, as it would leave the item as it is.
+func (s *Service) fingerprinted(ctx context.Context, ids []accounts.ID, fingerprints []int64) (map[accounts.ID]uint32, error) {
+	rows, err := s.db.Query(ctx, `SELECT f.item_id, f.version FROM unnest($1::uuid[], $2::bigint[]) AS r(id, fingerprint)
+		JOIN item_records f ON f.item_id = r.id AND f.fingerprint = r.fingerprint
+		JOIN items i ON i.id = f.item_id AND i.xmin = f.version`, ids, fingerprints)
+	if err != nil {
+		return nil, err
+	}
+	known := map[accounts.ID]uint32{}
+	var id accounts.ID
+	var version uint32
+	_, err = pgx.ForEachRow(rows, []any{&id, &version}, func() error {
+		known[id] = version
+		return nil
+	})
+	return known, err
+}
+
+// keepFingerprints keeps, for the next starts, the fingerprints of the
+// records a save merged, with the versions stored gives their items, but
+// those skip reports. What it keeps holds whatever the catalog arrivals
+// are, unlike what savedRecords learns: a record is kept only when its
+// item is stored with the record's catalog, as merging it again then
+// leaves the item as it is (see savedData). A record another catalog's
+// listing left as it was is merged after each start, to tell whether that
+// catalog still lists the title. As a memory, it may fail: an item deleted
+// meanwhile is then saved again next time.
+func (s *Service) keepFingerprints(ctx context.Context, records []*record, fingerprints []int64, stored map[accounts.ID]uint32, skip func(i int) bool) {
+	ids := make([]accounts.ID, 0, len(records))
+	versions := make([]int64, 0, len(records))
+	kept := make([]int64, 0, len(records))
+	catalogs := make([]string, 0, len(records))
+	for i, r := range records {
+		version, ok := stored[r.ID]
+		if !ok || skip(i) {
+			continue
+		}
+		catalog, err := json.Marshal(struct {
+			Addon       *accounts.ID `json:"addon,omitempty"`
+			CatalogType string       `json:"catalogType,omitempty"`
+			CatalogID   string       `json:"catalogId,omitempty"`
+		}{r.Addon, r.CatalogType, r.CatalogID})
+		if err != nil {
+			return
+		}
+		ids, versions, kept, catalogs = append(ids, r.ID), append(versions, int64(version)), append(kept, fingerprints[i]), append(catalogs, string(catalog))
+	}
+	if len(ids) == 0 {
+		return
+	}
+	// In identifier order, as upserts lock items (see inLockOrder).
+	if _, err := s.db.Exec(ctx, `INSERT INTO item_records (item_id, version, fingerprint)
+		SELECT i.id, i.xmin, r.fingerprint FROM unnest($1::uuid[], $2::bigint[], $3::bigint[], $4::jsonb[]) AS r(id, version, fingerprint, catalog)
+			JOIN items i ON i.id = r.id AND i.xmin::text::bigint = r.version
+			WHERE (i.data->'addon', i.data->'catalogType', i.data->'catalogId')
+				IS NOT DISTINCT FROM (r.catalog->'addon', r.catalog->'catalogType', r.catalog->'catalogId')
+			ORDER BY i.id
+		ON CONFLICT (item_id) DO UPDATE SET version = excluded.version, fingerprint = excluded.fingerprint
+			WHERE NOT (item_records.version = excluded.version AND item_records.fingerprint = excluded.fingerprint)`,
+		ids, versions, kept, catalogs); err != nil && ctx.Err() == nil {
+		s.logger.Debug("The fingerprints of saved records could not be kept", "error", err)
+	}
 }
 
 // stillStored tells which of the items ids are stored at the version
@@ -190,7 +306,7 @@ const (
 
 // savedRecords remembers, of the items saves stored lately, the records
 // that leave them as they are stored. Listings save every title, season
-// and episode they list, and Next Up and the notifications every episode
+// and episode they list, and Upcoming and the notifications every episode
 // of whole series, while what they save seldom changes: a save leaves
 // those records out, sparing the database an upsert's look-ups and row
 // locks. A title several catalogs list is known by the record of each,
@@ -203,6 +319,12 @@ const (
 // A save's merge also reads the catalog arrivals (see savedData): their
 // deletions forget everything (see forgetAllSaved), and so does a change
 // of the addons or libraries, as removing an addon deletes its arrivals.
+//
+// It starts empty: what it learned before is kept in the database as
+// fingerprints (see keepFingerprints), which a save reads, in one
+// statement, for the records it does not know, so that the first listing
+// after a start leaves out what it left as it was before the start, and
+// merges only what changed meanwhile, the record or its item.
 type savedRecords struct {
 	mu sync.Mutex
 	// known holds the items' versions and records, made on first use.
@@ -291,12 +413,14 @@ func (m *savedRecords) forgetAll() {
 	m.generation++
 }
 
-// forgetAllSaved forgets what saves learned of every item: catalog
-// arrivals were deleted, which a save's merge reads (see savedData).
+// forgetAllSaved forgets what saves learned of every item, and which
+// series' episodes were recorded (see episodeRecording): catalog arrivals
+// were deleted, which a save's merge reads (see savedData), or items.
 func (s *Service) forgetAllSaved() {
 	s.saved.mu.Lock()
-	defer s.saved.mu.Unlock()
 	s.saved.forgetAll()
+	s.saved.mu.Unlock()
+	s.forgetRecordedEpisodes()
 }
 
 // saveNew stores the records of identifiers Polyfin does not know yet,

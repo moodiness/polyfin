@@ -368,6 +368,83 @@ func TestListingsSaveRowsChangedBehindThem(t *testing.T) {
 	}
 }
 
+// After a restart, the first listings merge only the records that changed
+// while Polyfin was down, and the items changed or deleted meanwhile: the
+// others, stored as they would be merged, are neither written nor locked.
+func TestARestartMergesOnlyWhatChangedMeanwhile(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	addon := listingAddon()
+	e.install(addons.Shared(), addon)
+	show := itemID(titleKey(KindSeries, "tt100"))
+	list := func(e env) []accounts.ID {
+		t.Helper()
+		ids := append(e.listed(e.member, "Top"), e.listed(e.member, "Shows")...)
+		seasons, err := e.service.Seasons(t.Context(), e.member, show)
+		if err != nil {
+			t.Fatal(err)
+		}
+		episodes, err := e.service.SeriesEpisodes(t.Context(), e.member, []accounts.ID{show})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range slices.Concat(seasons, episodes[show]) {
+			ids = append(ids, item.ID)
+		}
+		return ids
+	}
+	ids := list(e)
+	if len(ids) != 14 {
+		t.Fatalf("%d items listed", len(ids))
+	}
+	list(e)
+
+	// While Polyfin is down, the addon renames a movie, another movie's
+	// row is changed, and a third one's deleted.
+	renamed, changed, deleted := itemID(titleKey(KindMovie, "tt0")), itemID(titleKey(KindMovie, "tt1")), itemID(titleKey(KindMovie, "tt2"))
+	addon.mu.Lock()
+	top := slices.Clone(addon.catalogs["movie/top"])
+	top[0].Name = "Movie 0, renamed"
+	addon.catalogs["movie/top"] = top
+	addon.mu.Unlock()
+	if _, err := e.service.db.Exec(t.Context(), `UPDATE items SET data = jsonb_set(data, '{meta,name}', '"Changed"') WHERE id = $1`, changed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.db.Exec(t.Context(), "DELETE FROM items WHERE id = $1", deleted); err != nil {
+		t.Fatal(err)
+	}
+	// The catalog is read again after the restart, none of its pages kept.
+	if _, err := e.service.db.Exec(t.Context(), "DELETE FROM catalog_pages"); err != nil {
+		t.Fatal(err)
+	}
+	unchanged := slices.DeleteFunc(slices.Clone(ids), func(id accounts.ID) bool { return id == renamed || id == changed || id == deleted })
+	versions, updates := e.itemVersions(unchanged), e.itemUpdates()
+
+	restarted := e.restarted()
+	list(restarted)
+	for id, name := range map[accounts.ID]string{renamed: "Movie 0, renamed", changed: "Movie 1", deleted: "Movie 2"} {
+		if r, err := restarted.service.load(t.Context(), id); err != nil || r.Meta == nil || r.Meta.Name != name || r.Parent == nil {
+			t.Errorf("%s after the restart: %+v %v", name, r, err)
+		}
+	}
+	if again := e.itemVersions(unchanged); !maps.Equal(again, versions) {
+		t.Errorf("unchanged rows written or locked: %v, then %v", versions, again)
+	}
+	if n := e.itemUpdates() - updates; n != 2 {
+		t.Errorf("%d rows updated, want the renamed and the changed movie", n)
+	}
+
+	// What the restart merged is known by the next one too.
+	versions, updates = e.itemVersions(ids), e.itemUpdates()
+	list(e.restarted())
+	if again := e.itemVersions(ids); !maps.Equal(again, versions) {
+		t.Errorf("rows written or locked after a second restart: %v, then %v", versions, again)
+	}
+	if n := e.itemUpdates() - updates; n != 0 {
+		t.Errorf("%d rows updated after a second restart", n)
+	}
+}
+
 // A movie two catalogs list keeps the catalog that listed it first, and
 // that catalog's library as its folder, however often either is read
 // again, which then writes nothing; once that catalog no longer lists it,
