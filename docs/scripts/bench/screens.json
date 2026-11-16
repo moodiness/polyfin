@@ -8,7 +8,7 @@
     {
       "name": "Home",
       "budget": {
-        "warmP95": 1000
+        "warmP95": 400
       },
       "waves": [
         [
@@ -368,7 +368,7 @@
     {
       "name": "Search, common word",
       "budget": {
-        "warmP95": 350
+        "warmP95": 120
       },
       "waves": [
         [
@@ -429,7 +429,7 @@
     {
       "name": "Search, rare word",
       "budget": {
-        "warmP95": 650
+        "warmP95": 100
       },
       "waves": [
         [

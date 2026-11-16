@@ -24,10 +24,10 @@ node docs/scripts/bench/bench.mjs \
   --database-url postgresql://polyfin:password@127.0.0.1:5432/postgres
 ```
 
-- **Time:** the first run seeds the bench database in about 6 minutes: the import itself takes 10 seconds, the users' history the rest (each series a user watches is opened once, and Polyfin asks a provider for one title a second). The next runs reuse it. Replaying takes about 4 minutes: 20 warm runs of each screen, about 40 seconds, then 20 cold ones, each right after a restart of Polyfin, about 3 minutes.
+- **Time:** the first run seeds the bench database in about 6 minutes: the import itself takes 10 seconds, the users' history the rest (each series a user watches is opened once, and Polyfin asks a provider for one title a second). The next runs reuse it. Replaying takes about 4 minutes: 20 warm runs of each screen, about 40 seconds, then 20 cold ones, each right after a restart of Polyfin, about 3 minutes. A run that seeds replays the warm runs once more before autovacuum's first visit, about 40 seconds more.
 - **Quiet:** run it on a machine doing nothing else. Other work moves the times more than the budgets allow for.
-- **Output:** a table of the screens, then, with `--requests`, one line per request. Polyfin's processor and memory use follow.
-- **Exit code:** 1 when a screen's warm p95 passes its budget, or on an error.
+- **Output:** a table of the screens, then, with `--requests`, one line per request. A run that seeds prints the same before autovacuum's first visit first (see below), and with `--during-import` while the first import runs. Polyfin's processor and memory use follow.
+- **Exit code:** 1 when a screen's warm p95 passes its budget, settled or before autovacuum's first visit, when a screen is slower before autovacuum's first visit than settled (see below), or on an error.
 - **Log:** Polyfin's log is kept in the bench's folder, `polyfin-bench-<database>` in the system's temporary folder.
 
 | Option            | Default                         | What it does                                                                                                                       |
@@ -43,6 +43,14 @@ node docs/scripts/bench/bench.mjs \
 | `--requests`      | off                             | Prints each request's times too.                                                                                                   |
 | `--json`          | none                            | A file to write every time measured, with the seed's counts.                                                                       |
 | `--provider-port` | 47391                           | The port of the synthetic provider. The bench database keeps its address: keep the same port.                                      |
+
+### Before autovacuum's first visit
+
+PostgreSQL's autovacuum counts a table's rows a minute or more after they are written, three minutes on a busy server. Until then the planner has only the statistics Polyfin takes itself, and a table it never analyzed is planned as small: a read that is fast on the settled server may read thousands of rows there. Polyfin analyzes what it writes in bulk at once, the guides' programmes and the IPTV titles.
+
+So each run that seeds, the first one, `--fresh` or `--during-import`, keeps autovacuum away from every table of the bench database, from Polyfin's first start until the users' history is filled. It then replays the screens, warm only, and prints the tables whose statistics count less than half their rows (`Statistics behind`). Autovacuum is let back and the database analyzed before the settled runs. A run that reuses the bench database skips it: its window has passed.
+
+The run fails when a screen passes its budget there, or when its warm p50 there is more than a quarter, and at least 20 ms, above the settled one: the statistics Polyfin takes itself should plan its reads as autovacuum's do. Before a release, run it with `--fresh --during-import`, which covers both. The window the IPTV titles had before Polyfin analyzed them fails it: each title lookup of Next Up read every title of its type, and Home's warm p50 was 293 to 304 ms against 188 to 212 settled.
 
 ## The library
 
@@ -76,15 +84,15 @@ An identifier in a request is kept as where it came from: the signed-in user, `{
 
 Each screen's `budget.warmP95`, in milliseconds, in `screens.json`, is its warm p95 measured with some room, so that noise does not fail the run. Lower a budget when a change makes a screen faster, so that the bench keeps it; raise one only on purpose, in the change that needs it.
 
-They were set from Polyfin 0.78.0 on an Apple M1 Max, with PostgreSQL 18 in a container on the same machine, about a third above the warm p95, Home's more as it varies most (a p95 of 757 ms in an earlier run):
+They are set about a third above the highest warm p95 measured, rounded up, on an Apple M1 Max, with PostgreSQL 18 in a container on the same machine. Home, Search, common word and Search, rare word were lowered on 2026-11-16, from Polyfin 0.79.0's release run (20 runs, below) and the highest warm p95 measured on its code in other runs (Home 299, common word 88, rare word 72). The guide's budgets were set from 0.78.0 (warm p95 197 and 176) and are kept.
 
 | Screen              | Warm p50 | Warm p95 | Budget |
 | ------------------- | -------: | -------: | -----: |
-| Home                |      526 |      578 |   1000 |
-| Guide               |      184 |      197 |    250 |
-| Guide, scrolled     |      171 |      176 |    250 |
-| Search, common word |      230 |      263 |    350 |
-| Search, rare word   |      470 |      498 |    650 |
+| Home                |      200 |      243 |    400 |
+| Guide               |      179 |      186 |    250 |
+| Guide, scrolled     |      173 |      178 |    250 |
+| Search, common word |       79 |       83 |    120 |
+| Search, rare word   |       55 |       60 |    100 |
 
 ## Capture the screens again
 

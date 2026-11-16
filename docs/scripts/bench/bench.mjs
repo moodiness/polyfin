@@ -1,6 +1,7 @@
 // The large-library bench: seeds the bench database (or reuses it), replays the requests
 // jellyfin-web sends for the home page, the live TV guide and search, cold and warm, prints the
-// times, and exits with 1 when a screen's warm p95 passes its budget. See README.md.
+// times, and exits with 1 when a screen's warm p95 passes its budget. A seed replays them once
+// more before autovacuum's first visit, under the same budgets. See README.md.
 import { readFile, writeFile } from 'node:fs/promises'
 import {
   jellyfinClient,
@@ -25,7 +26,7 @@ await run(async () => {
   const file = JSON.parse(await readFile(screensFile, 'utf8'))
   const runs = Number(values.runs)
   const coldRuns = Number(values['cold-runs'])
-  const results = { importing: null, settled: null }
+  const results = { importing: null, window: null, settled: null }
 
   if (values['during-import']) values.fresh = true
   const stage = await startStage(values, {
@@ -33,6 +34,7 @@ await run(async () => {
       ? ({ polyfin, settled, since }) =>
           measureWhileImporting(file, polyfin, settled, since, results)
       : undefined,
+    onWindow: ({ polyfin, behind }) => measureWindow(file, polyfin, runs, behind, results),
   })
   const { polyfin } = stage
   log(`Polyfin at ${polyfin.url}, pid ${polyfin.pid}`)
@@ -69,8 +71,22 @@ await run(async () => {
     console.log('\nWhile the first import runs')
     report(file, results.importing, values.requests)
   }
+  const failed = []
+  if (results.window) {
+    console.log("\nBefore autovacuum's first visit")
+    const behind = results.window.behind
+    console.log(
+      behind.length
+        ? `Statistics behind: ${behind.map((t) => `${t.table} (${t.counted} of ${t.rows} rows)`).join(', ')}`
+        : 'Statistics behind: none',
+    )
+    for (const name of report(file, results.window, values.requests, true)) {
+      failed.push(`${name} over budget before autovacuum's first visit`)
+    }
+  }
   console.log('\nSettled')
-  const failed = report(file, settled, values.requests, true)
+  failed.push(...report(file, settled, values.requests, true).map((name) => `${name} over budget`))
+  if (results.window) failed.push(...compareWindow(file, results.window, settled))
   console.log(
     `\nPolyfin: ${describeProcess(settled.process.warm, 'warm')}` +
       (settled.process.cold ? `; ${describeProcess(settled.process.cold, 'cold')}` : ''),
@@ -83,7 +99,7 @@ await run(async () => {
     log(`Wrote ${values.json}`)
   }
   if (failed.length) {
-    console.log(`\nOver budget: ${failed.join(', ')}`)
+    console.log(`\nFailed: ${failed.join(', ')}`)
     return 1
   }
   return 0
@@ -93,6 +109,58 @@ await run(async () => {
 async function signIn(polyfin) {
   const client = await jellyfinClient(polyfin.url, viewer)
   return { ...client, base: polyfin.url }
+}
+
+/**
+ * Prints each screen's warm p50 before autovacuum's first visit against the settled one, and
+ * returns the screens slower there by more than a quarter and 20 ms: the statistics Polyfin
+ * takes itself should plan its reads as autovacuum's do.
+ */
+function compareWindow(file, window, settled) {
+  const rows = []
+  const failed = []
+  for (const screen of file.screens) {
+    const p50 = (measured) =>
+      percentile(
+        measured.screens[screen.name].warm.map((run) => run.ms),
+        50,
+      )
+    const before = p50(window)
+    const after = p50(settled)
+    const slower = before > after * 1.25 && before - after >= 20
+    if (slower) failed.push(`${screen.name} slower before autovacuum's first visit`)
+    rows.push([
+      screen.name,
+      ms(before),
+      ms(after),
+      `${(((before - after) / after) * 100).toFixed(0)} %${slower ? ' SLOWER' : ''}`,
+    ])
+  }
+  console.log("\nWarm p50 before autovacuum's first visit, against settled")
+  table(['Screen', 'Before', 'Settled', 'Difference'], rows)
+  return failed
+}
+
+/**
+ * Replays the screens once the users' history is filled, autovacuum kept away since the first
+ * start, so with only the statistics Polyfin takes itself: as in the minutes after a first
+ * import, before autovacuum's first visit, for a user with a history. Warm runs only, after one
+ * to warm up.
+ */
+async function measureWindow(file, polyfin, runs, behind, results) {
+  const client = await signIn(polyfin)
+  const window = { screens: {}, process: {}, behind }
+  for (const screen of file.screens) window.screens[screen.name] = { warm: [], cold: [] }
+  log(`Before autovacuum's first visit: ${runs} runs of each screen, after one to warm up`)
+  await measured(polyfin, window.process, 'warm', async () => {
+    for (const screen of file.screens) {
+      await replayScreen(screen, client)
+      for (let i = 0; i < runs; i++) {
+        window.screens[screen.name].warm.push(await replayScreen(screen, client))
+      }
+    }
+  })
+  results.window = window
 }
 
 /**

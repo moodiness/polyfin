@@ -168,9 +168,10 @@ function benchDir(database) {
 /**
  * Starts the stage: the provider, then Polyfin on the bench database, seeded first when it is
  * missing, seeded by another version or --fresh is given. Returns the stage and the seed's
- * state; onImporting, when given, runs while the first import runs, before the users' history.
+ * state; onImporting, when given, runs while the first import runs, before the users' history;
+ * onWindow, when given, once the history is filled, before autovacuum's first visit (see seed).
  */
-export async function startStage(values, { onImporting } = {}) {
+export async function startStage(values, { onImporting, onWindow } = {}) {
   const name = values.database
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`invalid database name ${name}`)
   const dir = benchDir(name)
@@ -203,7 +204,7 @@ export async function startStage(values, { onImporting } = {}) {
   await mkdir(dir, { recursive: true })
   await query(values['database-url'], `CREATE DATABASE ${name}`)
   const polyfin = await startPolyfin(values, own, dir)
-  state = await seed({ values, provider, polyfin, databaseUrl: own, onImporting })
+  state = await seed({ values, provider, polyfin, databaseUrl: own, onImporting, onWindow })
   state.version = seedVersion
   state.port = polyfin.port
   await writeFile(stateFile, JSON.stringify(state, null, 2))
@@ -493,8 +494,14 @@ async function settle(databaseUrl, since, polyfin, quiet) {
  * an IPTV source with Movies and Series on (its libraries), the first import, then the users'
  * history. Riley played 300 movies, has 200 series under way (a few of the longest among them),
  * favorites and a Watchlist; the others a little of each.
+ *
+ * With onWindow, autovacuum is kept away from every table from the start until onWindow has
+ * run: its first visit comes a minute or more after a first import, and until then the planner
+ * has only the statistics Polyfin takes itself. onWindow gets the tables whose statistics count
+ * less than half their rows.
  */
-async function seed({ values, provider, polyfin, databaseUrl, onImporting }) {
+async function seed({ values, provider, polyfin, databaseUrl, onImporting, onWindow }) {
+  if (onWindow) await holdAutovacuum(databaseUrl, true)
   const api = adminClient(polyfin.url)
   const setupCode = await waitFor(() => polyfin.log().match(/setup_code=([A-Z0-9]{4}-[A-Z0-9]{4})/))
   await api.post('/admin/api/setup', {
@@ -536,6 +543,10 @@ async function seed({ values, provider, polyfin, databaseUrl, onImporting }) {
 
   const history = await fillHistory(polyfin, provider)
   const after = await stored(databaseUrl)
+  if (onWindow) {
+    await onWindow({ polyfin, behind: await statisticsBehind(databaseUrl) })
+    await holdAutovacuum(databaseUrl, false)
+  }
   await query(databaseUrl, 'VACUUM ANALYZE')
   return {
     seededAt: new Date().toISOString(),
@@ -546,6 +557,40 @@ async function seed({ values, provider, polyfin, databaseUrl, onImporting }) {
     stored: after,
     sizes: await tableSizes(databaseUrl),
   }
+}
+
+/** Keeps autovacuum away from every table of the bench database, or lets it back. */
+async function holdAutovacuum(databaseUrl, hold) {
+  const tables = await query(
+    databaseUrl,
+    `SELECT format('%I', relname) AS name FROM pg_class
+     WHERE relkind = 'r' AND relnamespace = 'public'::regnamespace`,
+  )
+  const change = hold ? 'SET (autovacuum_enabled = false)' : 'RESET (autovacuum_enabled)'
+  await query(
+    databaseUrl,
+    tables.rows.map((table) => `ALTER TABLE ${table.name} ${change};`).join('\n'),
+  )
+}
+
+/**
+ * The tables of 1,000 rows or more whose statistics count less than half of them, never
+ * analyzed (-1) or analyzed before they filled. The activity statistics only pick the tables to
+ * count: their row counts lag behind the writes, and may count a table's rows twice.
+ */
+async function statisticsBehind(databaseUrl) {
+  const tables = await query(
+    databaseUrl,
+    `SELECT format('%I', s.relname) AS name, s.relname AS table, c.reltuples::bigint::int AS counted
+     FROM pg_stat_user_tables s JOIN pg_class c ON c.oid = s.relid
+     WHERE s.n_live_tup >= 1000 ORDER BY s.n_live_tup DESC`,
+  )
+  const behind = []
+  for (const { name, table, counted } of tables.rows) {
+    const { rows } = (await query(databaseUrl, `SELECT count(*)::int AS rows FROM ${name}`)).rows[0]
+    if (counted < rows / 2) behind.push({ table, counted, rows })
+  }
+  return behind
 }
 
 async function waitFor(check, ms = 60000) {
