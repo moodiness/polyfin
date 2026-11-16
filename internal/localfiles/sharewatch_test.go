@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -91,10 +90,11 @@ func davRemote(t *testing.T, address, user, password string) remote {
 	return r
 }
 
-// newShareWatchTest polls a WebDAV share of movies serving dir, scanned
-// first; each scan of the watch is a scan of the fake, and told.
+// newShareWatchTest polls a WebDAV share of movies serving dir, at its
+// server's /movies, scanned first; each scan of the watch is a scan of
+// the fake, and told.
 func newShareWatchTest(t *testing.T, dir string, folders func(address string) func(context.Context) ([]watchFolder, error)) (*watchTest,
-	*fakeShares, string) {
+	*fakeShares, *davServer) {
 	t.Helper()
 	server := serveWebDAV(t, dir, "reader", "pass phrase")
 	address := server.URL + "/movies"
@@ -112,7 +112,7 @@ func newShareWatchTest(t *testing.T, dir string, folders func(address string) fu
 		cancel()
 		wg.Wait()
 	})
-	return &watchTest{t: t, w: w, wg: wg, scans: scans}, shares, address
+	return &watchTest{t: t, w: w, wg: wg, scans: scans}, shares, server
 }
 
 // oneShare lists the share at an address as the folder id.
@@ -128,7 +128,7 @@ func TestShareWatchScansAfterFilesAdded(t *testing.T) {
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	write(t, filepath.Join(dir, "movies", "Shows", "Old", "The General (1926).mkv"), 10)
 	id := testID(1)
-	wt, _, _ := newShareWatchTest(t, dir, oneShare(id))
+	wt, _, server := newShareWatchTest(t, dir, oneShare(id))
 	wt.start()
 
 	write(t, filepath.Join(dir, "movies", "Shows", "Old", "The Gold Rush (1925).mkv"), 10)
@@ -147,9 +147,7 @@ func TestShareWatchScansAfterFilesAdded(t *testing.T) {
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "poster.jpg"), 10)
 	wt.scanned(id)
 	wt.still()
-	if err := os.Remove(filepath.Join(dir, "movies", "Shows", "Old", "The General (1926).mkv")); err != nil {
-		t.Fatal(err)
-	}
+	server.remove(t, filepath.Join(dir, "movies", "Shows", "Old", "The General (1926).mkv"))
 	wt.scanned(id)
 	wt.still()
 }
@@ -199,7 +197,8 @@ func TestShareWatchFailure(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
-	wt, shares, address := newShareWatchTest(t, dir, oneShare(id))
+	wt, shares, server := newShareWatchTest(t, dir, oneShare(id))
+	address := server.URL + "/movies"
 	good := shares.r
 	wt.start()
 
@@ -282,7 +281,8 @@ func TestShareWatchDropsStalePolls(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
-	wt, shares, address := newShareWatchTest(t, dir, oneShare(id))
+	wt, shares, server := newShareWatchTest(t, dir, oneShare(id))
+	address := server.URL + "/movies"
 	wt.w.polls[id] = &polling{address: address, cancel: func() {}}
 	wt.w.polled = make(chan sharePolled, 1)
 	p := newSharePoll(id, address, testEvery)

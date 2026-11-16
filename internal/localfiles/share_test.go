@@ -19,11 +19,21 @@ import (
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
+// davServer is a WebDAV share a test serves. Each request holds serving
+// for reading while it is served (see remove).
+type davServer struct {
+	*httptest.Server
+	serving sync.RWMutex
+}
+
 // serveWebDAV serves dir over WebDAV to user with password, as a NAS does.
-func serveWebDAV(t *testing.T, dir, user, password string) *httptest.Server {
+func serveWebDAV(t *testing.T, dir, user, password string) *davServer {
 	t.Helper()
 	handler := &webdav.Handler{FileSystem: webdav.Dir(dir), LockSystem: webdav.NewMemLS()}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := &davServer{}
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.serving.RLock()
+		defer s.serving.RUnlock()
 		if u, p, ok := r.BasicAuth(); !ok || u != user || p != password {
 			w.Header().Set("WWW-Authenticate", `Basic realm="share"`)
 			http.Error(w, "sign in", http.StatusUnauthorized)
@@ -31,8 +41,22 @@ func serveWebDAV(t *testing.T, dir, user, password string) *httptest.Server {
 		}
 		handler.ServeHTTP(w, r)
 	}))
-	t.Cleanup(server.Close)
-	return server
+	t.Cleanup(s.Close)
+	return s
+}
+
+// remove removes a file of the share once the requests being served are
+// done, and before the next is. The server opens each file of a folder
+// it lists (see webdav's props) with os.OpenFile, which on Windows shares
+// it for reading and writing, not deleting: a file it has open cannot be
+// removed there, as it can be on a NAS.
+func (s *davServer) remove(t *testing.T, name string) {
+	t.Helper()
+	s.serving.Lock()
+	defer s.serving.Unlock()
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // content is a file's bytes, each telling its offset.
