@@ -316,6 +316,7 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 		if err != nil {
 			return nil, err
 		}
+		s.analyzeGuides(ctx)
 		// The programmes an archive kept are copied without their folded
 		// titles, and those stored before Polyfin kept them may remain:
 		// they are folded now, as a download writes, not at each check.
