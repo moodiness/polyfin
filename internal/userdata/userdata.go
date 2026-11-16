@@ -224,6 +224,44 @@ func (s *Store) Episodes(ctx context.Context, user accounts.ID) ([]Entry, error)
 		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
 }
 
+// Watched is a series whose episodes a user played or started, with the
+// latest date they did.
+type Watched struct {
+	Series accounts.ID
+	Latest time.Time
+}
+
+// WatchedSeries lists the series one of whose episodes has a date, the
+// user having played or started it, the latest first: in the order their
+// first episode with a date comes in Episodes, its date the series'
+// latest. Only the series are read, not their episodes.
+func (s *Store) WatchedSeries(ctx context.Context, user accounts.ID) ([]Watched, error) {
+	rows, err := s.db.Query(ctx, `SELECT series_id, last_played_at FROM (
+			SELECT DISTINCT ON (series_id) series_id, last_played_at, item_id FROM user_data
+			WHERE user_id = $1 AND series_id IS NOT NULL AND last_played_at IS NOT NULL
+			ORDER BY series_id, last_played_at DESC, item_id) latest
+		ORDER BY last_played_at DESC, item_id`, user)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Watched, error) {
+		var w Watched
+		err := row.Scan(&w.Series, &w.Latest)
+		w.Latest = w.Latest.UTC()
+		return w, err
+	})
+}
+
+// SeriesEpisodes is Episodes for the episodes of series only.
+func (s *Store) SeriesEpisodes(ctx context.Context, user accounts.ID, series []accounts.ID) ([]Entry, error) {
+	if len(series) == 0 {
+		return nil, nil
+	}
+	return s.entries(ctx, "SELECT "+columns+` FROM user_data
+		WHERE user_id = $1 AND series_id = ANY($2) AND (played OR position_ticks > 0 OR last_played_at IS NOT NULL)
+		ORDER BY last_played_at DESC NULLS LAST, item_id`, user, series)
+}
+
 // Change applies change to the data of each item, in one transaction, and
 // returns the data of the items afterwards, in order. An item listed twice
 // is changed once.
