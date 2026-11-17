@@ -197,6 +197,9 @@ type Service struct {
 	// guides is what the refreshes of the guides remember between runs
 	// (see guideState).
 	guides guideState
+	// programs finds the guides' programmes by identifier (see
+	// programindex.go).
+	programs programIndex
 	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
 	iptv IPTV
 	// studioIndex remembers what Studios read of the stored lists of IPTV
@@ -436,6 +439,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		smartWait:      smartWait,
 		hintSpacing:    hintSpacing,
 		personLookups:  personLookups{slots: make(chan struct{}, personLookupsAtOnce)},
+		programs:       newProgramIndex(),
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])

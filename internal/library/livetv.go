@@ -544,20 +544,11 @@ type programRef struct {
 }
 
 // programRefs remembers the XMLTV programmes listed lately by their
-// identifier, for apps that open one; past it, or after a restart, the
-// guide is searched (see unsavedProgram).
+// identifier, for apps that open one; past it, or after a restart, they
+// are found in the index of the guides (see unsavedProgram).
 var programRefs = cache.New[accounts.ID, programRef](200_000, 24*time.Hour)
 
 func rememberProgram(id accounts.ID, ref programRef) { programRefs.Put(id, ref) }
-
-// programMisses remembers the identifiers lately searched among the
-// guides' programmes in vain, each with the state of the guides it was
-// searched in (see guideState): apps ask for folders of their own, the
-// Live TV view among them, which no item has, and each would otherwise
-// search every programme again. A miss holds while the guides keep their
-// downloads and mappings: a new download, or a channel mapped anew, may
-// hold the programme, which is searched again.
-var programMisses = cache.New[accounts.ID, string](10_000, time.Hour)
 
 // guideState sums up what an identifier is searched in among the guides'
 // programmes: each guide's current download, and the channels mapped to
@@ -571,9 +562,9 @@ func (s *Service) guideState(ctx context.Context) (string, error) {
 
 // unsavedProgram describes an XMLTV programme of one of the user's
 // channels by its identifier, which no item keeps: from the programmes
-// listed lately, else by searching the guides' programmes of the channels
-// mapped to one, unless the same guides were searched for it in vain
-// lately (see programMisses). An identifier of no programme is
+// listed lately, else from the index of the guides' programmes of the
+// channels mapped to one, built again once a download or a mapping
+// changed them (see programIndex). An identifier of no programme is
 // ErrNotFound.
 func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (Item, error) {
 	ref, ok := programRefs.Get(id)
@@ -582,16 +573,12 @@ func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (I
 		if err != nil {
 			return Item{}, err
 		}
-		if missed, ok := programMisses.Get(id); ok && missed == state {
-			return Item{}, ErrNotFound
-		}
-		var found bool
-		if ref, found, err = s.searchProgram(ctx, id); err != nil || !found {
-			if err == nil {
-				programMisses.Put(id, state)
-				err = ErrNotFound
-			}
+		table, err := s.programTable(ctx, state)
+		if err != nil {
 			return Item{}, err
+		}
+		if ref, ok = table.find(id); !ok {
+			return Item{}, ErrNotFound
 		}
 	}
 	stored, err := s.load(ctx, itemID(channelKey(ref.channel)))
@@ -651,24 +638,6 @@ func (s *Service) guideProgramme(ctx context.Context, ref programRef) (xmltv.Pro
 		return xmltv.Programme{}, ErrNotFound
 	}
 	return p, err
-}
-
-// searchProgram finds the guide programme an identifier names among those
-// of the channels mapped to a guide: an identifier is a hash of its
-// channel's Stremio identifier and its start (see programKey).
-func (s *Service) searchProgram(ctx context.Context, id accounts.ID) (programRef, bool, error) {
-	var ref programRef
-	err := s.db.QueryRow(ctx, `SELECT c.data->'meta'->>'id', p.guide_id, p.xmltv_id, p.starts_at
-		FROM live_guide_maps m JOIN items c ON c.id = m.channel_id AND c.kind = 'channel'
-		JOIN live_guides g ON g.id = m.guide_id
-		JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = m.xmltv_id
-		WHERE substring(sha256(convert_to('polyfin:item:program|' || (c.data->'meta'->>'id') || '|' ||
-			to_char(p.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'UTF8')) FOR 16) = $1 LIMIT 1`, id[:]).
-		Scan(&ref.channel, &ref.guide, &ref.xmltvID, &ref.start)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return programRef{}, false, nil
-	}
-	return ref, err == nil, err
 }
 
 // SweepPrograms deletes the programmes kept as items that ended more than
