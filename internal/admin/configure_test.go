@@ -132,10 +132,31 @@ func (c configureAPI) links(b browser, path string) map[string]string {
 // redirect, in language: the status, the redirect, and the page.
 func (c configureAPI) open(link, language string) (int, string, string, http.Header) {
 	c.t.Helper()
-	client := &http.Client{Transport: testTransport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	request, _ := http.NewRequestWithContext(c.t.Context(), http.MethodGet, c.url+link, nil)
+	header := map[string]string{}
 	if language != "" {
-		request.Header.Set("Accept-Language", language)
+		header["Accept-Language"] = language
+	}
+	return c.send(http.MethodGet, link, header)
+}
+
+// post presses Continue on link's page, as a browser without any cookie
+// posts the form from Polyfin's own origin, following no redirect.
+func (c configureAPI) post(link string) (int, string, string, http.Header) {
+	c.t.Helper()
+	return c.send(http.MethodPost, link, map[string]string{"Origin": c.url, "Sec-Fetch-Site": "same-origin"})
+}
+
+// send requests link with header, without any cookie, following no
+// redirect: the status, the redirect, and the page.
+func (c configureAPI) send(method, link string, header map[string]string) (int, string, string, http.Header) {
+	c.t.Helper()
+	client := &http.Client{Transport: testTransport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	request, _ := http.NewRequestWithContext(c.t.Context(), method, c.url+link, nil)
+	if method == http.MethodPost {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	for name, value := range header {
+		request.Header.Set(name, value)
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -159,9 +180,12 @@ func (c configureAPI) token(shared bool, addon string, user accounts.ID, expires
 }
 
 // The addon JSON carries a configure link for whoever may replace the
-// address, which opens the configure page from a browser with no
-// session; the address is in no answer, and nothing is logged.
-func TestAConfigureLinkOpensWithoutASession(t *testing.T) {
+// address. Opened from a browser with no session, it answers Polyfin's
+// own page, naming the addon and the host of its configure page, never a
+// redirect; Continue, posted from that page, leads to the configure page,
+// once. The address is in no answer but that redirect, and nothing is
+// logged.
+func TestAConfigureLinkOpensAPageWhoseContinueLeadsOnce(t *testing.T) {
 	t.Parallel()
 	c := newConfigureAPI(t)
 	shared := c.links(c.administrator, "/scopes/shared/addons")
@@ -178,16 +202,41 @@ func TestAConfigureLinkOpensWithoutASession(t *testing.T) {
 		t.Errorf("an administrator got a link for a user's own addon: %v", every)
 	}
 
+	host := strings.TrimPrefix(c.addonServer.URL, "http://")
 	for link, want := range map[string]string{
 		shared[c.configurable]: c.addonServer.URL + "/secret/configure?token=k",
 		own[c.mine]:            c.addonServer.URL + "/secret/mine/configure?token=m",
 	} {
-		status, location, _, header := c.open(link, "")
+		status, location, page, header := c.open(link, "")
+		if status != http.StatusOK || location != "" {
+			t.Errorf("opening a link: %d %q, want the page", status, location)
+		}
+		if !strings.Contains(page, "Polyfin will open the configure page of Top, on "+host+".") ||
+			!strings.Contains(page, `<form method="post" action="`+link+`"><button type="submit">Continue</button></form>`) {
+			t.Errorf("the page: %s", page)
+		}
+		if strings.Contains(page, "/secret/") || strings.Contains(page, "token=") || strings.Contains(page, "<script") {
+			t.Errorf("the page holds the address or a script: %s", page)
+		}
+		policy := header.Get("Content-Security-Policy")
+		if !strings.Contains(policy, "default-src 'none'") || !strings.Contains(policy, "form-action 'self' "+c.addonServer.URL+";") ||
+			header.Get("Cache-Control") != "no-store" || header.Get("Referrer-Policy") != "same-origin" {
+			t.Errorf("the page's headers: %v", header)
+		}
+
+		status, location, _, header = c.post(link)
 		if status != http.StatusSeeOther || location != want {
-			t.Errorf("opening a link: %d %q, want %q", status, location, want)
+			t.Errorf("Continue: %d %q, want %q", status, location, want)
 		}
 		if header.Get("Referrer-Policy") != "no-referrer" || header.Get("Cache-Control") != "no-store" {
-			t.Errorf("headers: %v", header)
+			t.Errorf("Continue's headers: %v", header)
+		}
+		// The link is used up.
+		if status, location, page, _ := c.post(link); status != http.StatusNotFound || location != "" || !strings.Contains(page, "This link isn’t valid.") {
+			t.Errorf("Continue again: %d %q", status, location)
+		}
+		if status, _, _, _ := c.open(link, ""); status != http.StatusNotFound {
+			t.Errorf("opening a used link: %d", status)
 		}
 	}
 	// The old route that needed the session is gone.
@@ -246,6 +295,10 @@ func TestAnExpiredOrChangedConfigureLinkTellsSo(t *testing.T) {
 			t.Errorf("headers: %v", header)
 		}
 	}
+	// Continue on a page opened before the link expired is refused too.
+	if status, location, page, _ := c.post(link); status != http.StatusGone || location != "" || !strings.Contains(page, "This link has expired.") {
+		t.Errorf("Continue on an expired link: %d %q", status, location)
+	}
 	// An expired link that was also changed is only not valid.
 	if status, _, _, _ := c.open(configureLinkPath+string(flipped)+"."+mark, ""); status != http.StatusNotFound {
 		t.Errorf("an expired and changed link: %d", status)
@@ -268,6 +321,10 @@ func TestAConfigureLinkChecksTheRightsAgain(t *testing.T) {
 		if status != http.StatusNotFound || location != "" || !strings.Contains(page, "This link isn’t valid.") {
 			t.Errorf("%s: %d %q %s", name, status, location, page)
 		}
+		// Continue checks the link as the page does.
+		if status, location, _, _ := c.post(link); status != http.StatusNotFound || location != "" {
+			t.Errorf("%s, Continue: %d %q", name, status, location)
+		}
 	}
 	soon := time.Now().Add(configureLinkLife)
 
@@ -289,8 +346,20 @@ func TestAConfigureLinkChecksTheRightsAgain(t *testing.T) {
 	if _, err := c.testAPI.store.UpdateUser(t.Context(), c.memberUser.ID, accounts.UserChanges{IsDisabled: new(false)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if status, _, _, _ := c.open(ownLink, ""); status != http.StatusSeeOther {
+	if status, _, _, _ := c.open(ownLink, ""); status != http.StatusOK {
 		t.Fatalf("the member enabled again: %d", status)
+	}
+	// An ended account, as a disabled one.
+	today := accounts.Day(time.Now())
+	if _, err := c.testAPI.store.UpdateUser(t.Context(), c.memberUser.ID, accounts.UserChanges{EndsOn: &today}, nil); err != nil {
+		t.Fatal(err)
+	}
+	invalid("an ended member", ownLink)
+	if _, err := c.testAPI.store.UpdateUser(t.Context(), c.memberUser.ID, accounts.UserChanges{EndsOn: new(time.Time{})}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if status, _, _, _ := c.open(ownLink, ""); status != http.StatusOK {
+		t.Fatalf("the member's account no longer ending: %d", status)
 	}
 	if _, err := c.testAPI.store.UpdateUser(t.Context(), c.adminUser.ID, accounts.UserChanges{IsAdministrator: new(false)}, nil); err != nil {
 		t.Fatal(err)
@@ -302,7 +371,7 @@ func TestAConfigureLinkChecksTheRightsAgain(t *testing.T) {
 	invalid("a member without their own addons", ownLink)
 
 	// The addon no longer has a configure page.
-	if status, _, _, _ := c.open(bossLink, ""); status != http.StatusSeeOther {
+	if status, _, _, _ := c.open(bossLink, ""); status != http.StatusOK {
 		t.Fatalf("the other administrator's link: %d", status)
 	}
 	c.hinting.Store(false)
@@ -311,4 +380,30 @@ func TestAConfigureLinkChecksTheRightsAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalid("an addon no longer configurable", bossLink)
+}
+
+// Continue must come from the page Polyfin answered: a post from another
+// origin, one the browser says is not same-origin, or one without an
+// Origin is refused, and the link stays usable.
+func TestContinueIsRefusedFromAnotherOrigin(t *testing.T) {
+	t.Parallel()
+	c := newConfigureAPI(t)
+	link := c.links(c.administrator, "/scopes/shared/addons")[c.configurable]
+	for name, header := range map[string]map[string]string{
+		"another origin":        {"Origin": "https://elsewhere.example", "Sec-Fetch-Site": "cross-site"},
+		"another origin alone":  {"Origin": "https://elsewhere.example"},
+		"a null origin":         {"Origin": "null", "Sec-Fetch-Site": "cross-site"},
+		"a same-site page":      {"Origin": c.url, "Sec-Fetch-Site": "same-site"},
+		"no origin":             {},
+		"no origin, same-site":  {"Sec-Fetch-Site": "same-site"},
+		"no origin, user typed": {"Sec-Fetch-Site": "none"},
+	} {
+		status, location, _, _ := c.send(http.MethodPost, link, header)
+		if status != http.StatusForbidden || location != "" {
+			t.Errorf("%s: %d %q", name, status, location)
+		}
+	}
+	if status, location, _, _ := c.post(link); status != http.StatusSeeOther || location == "" {
+		t.Errorf("Continue from the page afterwards: %d %q", status, location)
+	}
 }

@@ -280,6 +280,9 @@ type handler struct {
 	// nowPlayingLinks keeps which titles of Now playing link to the web
 	// player (see linkTitles).
 	nowPlayingLinks nowPlayingLinks
+	// configureUses are the configure links used up (see
+	// continueConfigureLink).
+	configureUses configureUses
 }
 
 // New returns the handler of every /admin/api/ route, and of the configure
@@ -305,8 +308,10 @@ func New(options Options) http.Handler {
 	h.provider = oidc.New(&http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: providerTimeout}, h.now)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
-	// A configure link opens with no session, from any browser or app.
+	// A configure link opens with no session, from any browser or app: a
+	// page whose Continue posts back before the configure page opens.
 	mux.HandleFunc("GET "+configureLinkPath+"{token}", h.openConfigureLink)
+	mux.HandleFunc("POST "+configureLinkPath+"{token}", h.continueConfigureLink)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
 	mux.HandleFunc("POST /admin/api/session", h.signIn)
 	mux.HandleFunc("POST /admin/api/session/jellyfin", h.signInWithJellyfin)
