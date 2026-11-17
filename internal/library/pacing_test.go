@@ -186,6 +186,13 @@ func newPaceEnv(t *testing.T, titleCount int, refuse func(http.ResponseWriter)) 
 // paceState counts the background requests waiting for their turn, and
 // those under way.
 func (e paceEnv) paceState() (queued, running int) {
+	queued, running, _ = e.paceParked()
+	return queued, running
+}
+
+// paceParked is paceState with, of the requests waiting, those asleep
+// until a change or their time (see kindPace).
+func (e paceEnv) paceParked() (queued, running, parked int) {
 	p := e.service.pace
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -193,9 +200,10 @@ func (e paceEnv) paceState() (queued, running int) {
 		for _, k := range h.kinds {
 			queued += len(k.queue)
 			running += k.running
+			parked += k.parked
 		}
 	}
-	return queued, running
+	return queued, running, parked
 }
 
 // background lists the versions of titles at once as background work,
@@ -218,14 +226,15 @@ func (e paceEnv) background(titles []accounts.ID) (*atomic.Int64, []atomic.Int64
 }
 
 // quiet waits until each of titles is done or waits for its turn, none
-// under way, the first waiting for the clock, and reports whether all
-// are done.
+// under way, every one waiting asleep, the first for the clock, and
+// reports whether all are done. A request woken by a change that has not
+// looked at the pace again yet may still stop the wait it set, or go.
 func (e paceEnv) quiet(done *atomic.Int64, titles int) bool {
 	e.t.Helper()
 	eventually(e.t, "the titles to be done or wait for their turn", func() bool {
-		queued, running := e.paceState()
+		queued, running, parked := e.paceParked()
 		_, timed := e.clock.first()
-		return int(done.Load())+queued == titles && running == 0 && (queued == 0 || timed)
+		return int(done.Load())+queued == titles && running == 0 && parked == queued && (queued == 0 || timed)
 	})
 	return int(done.Load()) == titles
 }

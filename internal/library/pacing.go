@@ -133,11 +133,14 @@ func (h *hostPace) pausedUntil() time.Time {
 
 // kindPace holds the requests of a kind sent to a server within its
 // window, the oldest first, the background ones under way, and those
-// waiting, in their order.
+// waiting, in their order. parked counts those of queue asleep until the
+// server's next change, or the time they wait for, which they set before
+// sleeping: once each one is, nothing moves until either comes.
 type kindPace struct {
 	sent    []time.Time
 	running int
 	queue   []*paceTurn
+	parked  int
 }
 
 // paceTurn is a background request waiting for its turn; a later one
@@ -177,6 +180,9 @@ func (p *pacing) host(host string) *hostPace {
 func (h *hostPace) change() {
 	close(h.changed)
 	h.changed = make(chan struct{})
+	for kind := range h.kinds {
+		h.kinds[kind].parked = 0
+	}
 }
 
 // trim forgets the requests sent before window.
@@ -235,12 +241,13 @@ func (p *pacing) wait(ctx context.Context, host string, kind paceKind, later boo
 			}, nil
 		}
 		changed := h.changed
-		p.mu.Unlock()
 		var timeout <-chan time.Time
 		stop := func() bool { return false }
 		if left > 0 {
 			timeout, stop = p.after(left)
 		}
+		k.parked++
+		p.mu.Unlock()
 		select {
 		case <-changed:
 		case <-timeout:
@@ -254,6 +261,10 @@ func (p *pacing) wait(ctx context.Context, host string, kind paceKind, later boo
 		}
 		stop()
 		p.mu.Lock()
+		if changed == h.changed {
+			// Woken by its time: no change unparked it.
+			k.parked--
+		}
 	}
 }
 
