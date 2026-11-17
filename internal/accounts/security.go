@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 )
@@ -81,14 +82,20 @@ func (s *Store) SignOutInactiveDevices(ctx context.Context) (int, error) {
 }
 
 // SweepInactiveDevices signs out the devices left unused (see
-// SignOutInactiveDevices) and logs how many; the task scheduler runs it at
-// start, then every DeviceSweepInterval.
+// SignOutInactiveDevices) and forgets how those still signed in but unused
+// for UnusedDevicePlay play (see ForgetUnusedDevicePlays), and logs how
+// many; the task scheduler runs it at start, then every
+// DeviceSweepInterval.
 func (s *Store) SweepInactiveDevices(ctx context.Context, logger *slog.Logger) error {
 	signedOut, err := s.SignOutInactiveDevices(ctx)
 	if signedOut > 0 {
 		logger.Info("Signed out devices left unused", "devices", signedOut, "days", s.Settings().InactiveDeviceDays)
 	}
-	return err
+	forgotten, forgetErr := s.ForgetUnusedDevicePlays(ctx)
+	if forgotten > 0 {
+		logger.Debug("Forgot the device profiles of devices left unused", "devices", forgotten)
+	}
+	return errors.Join(err, forgetErr)
 }
 
 // followedLevel is a log level that follows the settings' DetailedLog.

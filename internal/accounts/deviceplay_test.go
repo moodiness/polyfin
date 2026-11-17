@@ -3,8 +3,10 @@ package accounts
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
 
 // How a device plays is kept for a signed-in device, replaced as it
@@ -56,5 +58,62 @@ func TestDevicePlayIsKeptForSignedInDevices(t *testing.T) {
 	}
 	if _, ok, _ := store.DevicePlay(ctx, tv.ID); ok {
 		t.Error("kept for a device signed out")
+	}
+}
+
+// The sweep of unused devices forgets how the devices unused for
+// UnusedDevicePlay play, even while unused devices stay signed in, and
+// keeps how the others play.
+func TestUnusedDevicesForgetHowTheyPlay(t *testing.T) {
+	t.Parallel()
+	store := newStore(t)
+	ctx := t.Context()
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	_, tv, _ := store.SignInDevice(ctx, alice.ID, device("tv"))
+	phoneToken, phone, err := store.SignInDevice(ctx, alice.ID, device("phone"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	play := DevicePlay{Profile: json.RawMessage(`{"Name":"app"}`)}
+	for _, d := range []Device{tv, phone} {
+		if err := store.SetDevicePlay(ctx, d.ID, play); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	later := clockAt(store, now)
+	lastUsed := func(d Device, ago time.Duration) {
+		t.Helper()
+		if _, err := store.db.Exec(ctx, "UPDATE devices SET last_activity_at = $2 WHERE id = $1", d.ID, now.Add(-ago)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lastUsed(tv, UnusedDevicePlay-time.Hour)
+	lastUsed(phone, UnusedDevicePlay+time.Hour)
+	kept := func(d Device) bool {
+		t.Helper()
+		_, ok, err := store.DevicePlay(ctx, d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	sweep := func() {
+		t.Helper()
+		if err := store.SweepInactiveDevices(ctx, slog.New(slog.DiscardHandler)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sweep()
+	if kept(phone) || !kept(tv) {
+		t.Errorf("after the sweep: the phone's kept %v, the TV's %v", kept(phone), kept(tv))
+	}
+	later(2 * time.Hour)
+	sweep()
+	if kept(tv) {
+		t.Error("the TV's kept once unused for as long")
+	}
+	if !signedIn(ctx, store, phoneToken) {
+		t.Error("the sweep signed the phone out")
 	}
 }

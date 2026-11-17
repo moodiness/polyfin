@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -16,6 +17,14 @@ const MaxDevicePlayProfile = 64 << 10
 
 // ErrDevicePlayTooLarge reports a device profile over MaxDevicePlayProfile.
 var ErrDevicePlayTooLarge = errors.New("device profile too large to keep")
+
+// UnusedDevicePlay is how long the profile of a device left unused is
+// kept (see ForgetUnusedDevicePlays). Settings.InactiveDeviceDays signs
+// such a device out, its profile with it, but never by default, and N
+// sign-ins would keep N profiles: a profile goes after as long as Jellyfin
+// handlers keep it in memory. The device, once back, names versions with
+// how they play from its next PlaybackInfo.
+const UnusedDevicePlay = 30 * 24 * time.Hour
 
 // DevicePlay is how a device told it plays, kept across restarts: the
 // device profile, as JSON, of its last PlaybackInfo and the bitrate it
@@ -64,4 +73,12 @@ func (s *Store) DevicePlay(ctx context.Context, device ID) (DevicePlay, bool, er
 func (s *Store) ForgetDevicePlay(ctx context.Context, device ID) error {
 	_, err := s.db.Exec(ctx, "DELETE FROM device_play_profiles WHERE device_id = $1", device)
 	return err
+}
+
+// ForgetUnusedDevicePlays forgets how the devices unused for
+// UnusedDevicePlay play, signed in as they stay, and returns how many.
+func (s *Store) ForgetUnusedDevicePlays(ctx context.Context) (int, error) {
+	tag, err := s.db.Exec(ctx, `DELETE FROM device_play_profiles p USING devices d
+		WHERE d.id = p.device_id AND d.last_activity_at < $1`, s.now().Add(-UnusedDevicePlay))
+	return int(tag.RowsAffected()), err
 }
