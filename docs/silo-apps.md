@@ -90,6 +90,7 @@ A library opens on its titles, page by page.
 - **A library of collections:** it opens on the titles of its collections, each once, in its order.
 - **The first page:** what the user is watching in the library, and its latest titles. A library of collections shows instead a row for each of its first 24 collections.
 - **Shuffle:** a library, a series, a season or a collection. No title plays twice until all have played, and a series plays one of its episodes.
+- **Its count:** the Android app's library bar on phones shows how many titles a library holds when Polyfin knows it whole: always for an IPTV source's movies or series, and for a catalog read to its end, such as one that fits on a page. While an addon's catalog, or a local folder, is known only as far as it was read, the bar shows no count rather than a short one.
 
 #### Title order and A to Z
 

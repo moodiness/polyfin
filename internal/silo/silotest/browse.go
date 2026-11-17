@@ -81,6 +81,12 @@ func CheckLibraries(data []byte) error {
 // 0 for none) answers at most that many cards, and an item_limit no
 // larger: Apple SiloAPI.withSectionItemLimit and SectionRowLimit.capped
 // (Networking/SectionRowLimit.swift), Android HomeSectionsV2Api.list.
+// A row of collections (section_type collection_posters, with
+// collections) is one Polyfin does not answer: both apps read
+// collections as optional, empty when absent, and leave out a card they
+// cannot read (Apple ResolvedSection, Networking/Models.swift; Android
+// ResolvedSection, shared model/section/SectionModels.kt), so a row of
+// titles, Polyfin's collection rows among them, reads as before.
 func checkSection(c *checker, section object, where string, limit int) {
 	c.has(section, where, map[string]string{"id": "s", "section_type": "s", "title": "s", "items": "a"})
 	if id, _ := section["id"].(string); strings.TrimSpace(id) == "" {

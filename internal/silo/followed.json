@@ -2,13 +2,13 @@
   "contract": {
     "repository": "Silo-Server/silo-server",
     "path": "contracts/api/v2/openapi.json",
-    "commit": "17d5376cea9a8d2e6c69a276a5a37fd3b88f92a8",
-    "sha256": "e3817943346b0aaecdada1072160771ad6c8318b65e5d20602c883c35c4d48bc"
+    "commit": "c58c0bb9394868f42d058cf8749de46921886420",
+    "sha256": "8115f78349b0e39c8d9bab832e86b4b8ddedb9491301f9dc212247c94080dedc"
   },
   "apps": [
     {
       "repository": "Silo-Server/silo-apple",
-      "commit": "dce56e3c5f0ad137ee8208fb79c7ffd0e9210135",
+      "commit": "6eea7cf74eef8359b736561513b3160e5274a99f",
       "files": [
         "iosApp/iosApp/Components/ProfileMenuRow.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2AuthModels.swift",
@@ -60,12 +60,13 @@
     },
     {
       "repository": "Silo-Server/silo-android",
-      "commit": "fe3d9c8afe364e719e040c5a92e0ad27e5b125e1",
+      "commit": "db87f835ff908dd31a8473c66408ddeeb2e926ba",
       "files": [
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/DeviceLoginRouteParser.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/screens/browse/CatalogLetterJump.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/screens/libraries/LibrariesScreen.kt",
+        "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/screens/libraries/LibraryDock.kt",
         "androidTvApp/src/androidMain/kotlin/org/siloserver/silo/tv/ui/screens/browse/TvBrowseViewModel.kt",
         "androidTvApp/src/androidMain/kotlin/org/siloserver/silo/tv/watchnext/WatchNextHomeSync.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/catalog/filter/CatalogFilterState.kt",
@@ -93,6 +94,7 @@
         "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/SimilarCardsV2Api.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/UserLibrariesV2.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/WatchDetailV2Api.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/repository/CatalogRepository.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/repository/DeviceLoginRepository.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/repository/DeviceSignInMachine.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/repository/SequencedPlayback.kt",

@@ -992,8 +992,15 @@ func (s *Server) catalogOf(w http.ResponseWriter, r *http.Request, v viewer, q u
 	s.writePage(w, r, page, a, err)
 }
 
+// partialTotal is the header the Jellyfin API's listing answers with when
+// its total counts only the titles read so far of an addon's catalog,
+// which may list more (see library.Page.Partial).
+const partialTotal = "X-Polyfin-Partial-Total"
+
 // listPage reads a page of the Jellyfin API's listing query, which starts
-// at start.
+// at start. Its total is exact but for an addon's catalog read in part:
+// the Android app shows a library's count, read from a page of one title,
+// only when total_exact is not false (see silotest.CheckLibraryCount).
 func (s *Server) listPage(r *http.Request, v viewer, query url.Values, start int) (catalogPage, answer, error) {
 	var result queryResult
 	a, err := s.call(r, v, http.MethodGet, "/Items?"+query.Encode(), nil, &result)
@@ -1002,7 +1009,7 @@ func (s *Server) listPage(r *http.Request, v viewer, query url.Values, start int
 	}
 	items := cards(r, result.Items)
 	total := max(result.TotalRecordCount, start+len(result.Items))
-	page := catalogPage{Items: items, Total: total, TotalExact: true, WindowCursor: cursor(0)}
+	page := catalogPage{Items: items, Total: total, TotalExact: a.header.Get(partialTotal) != "true", WindowCursor: cursor(0)}
 	if next := start + len(result.Items); len(result.Items) > 0 && next < total {
 		page.Page = pageInfo{HasMore: true, NextCursor: cursor(next)}
 	}

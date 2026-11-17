@@ -996,7 +996,7 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	// An IPTV source's movies and series are paged and counted from its
 	// stored lists, whole, but for a restricted user, one who hid titles,
 	// or a listing narrowed by rating, which leaves titles out as it reads.
-	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.narrows() && len(v.hidden) == 0 && src.date == "" {
+	if s.storedWindow(v, src) {
 		return s.iptv.CatalogWindow(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, start, count)
 	}
 	var collected []stremio.Meta
@@ -1269,6 +1269,10 @@ type Page struct {
 	// Total is the number of children, or a lower bound when More is true.
 	Total int
 	More  bool
+	// Partial is set when Total is a lower bound: it counts the titles
+	// read so far of a catalog that may list more. An IPTV source's stored
+	// lists are counted whole, so their pages are never partial.
+	Partial bool
 }
 
 // Children lists a folder's children: a library's titles or collections, a
@@ -1468,6 +1472,9 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		s.addGenerated(ctx, v, items, records)
 	}
 	result := page(items, start, totalWithinMax(total, l.maxItems))
+	// A catalog without pages is read whole, and an IPTV source's stored
+	// lists are counted whole: only a paged catalog's total can be short.
+	result.Partial = result.More && src.paged() && !s.storedWindow(v, src)
 	if result.More && !first {
 		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.window(ctx, v, src, start+count, count) })
 	}
@@ -1563,9 +1570,17 @@ func totalWithinMax(total, most int) int {
 	return min(total, most)
 }
 
-// page makes a Page of a window of children, out of total.
+// page makes a Page of a window of children, out of total, which counts
+// the children read so far when more may follow.
 func page(items []Item, start, total int) Page {
-	return Page{Items: items, Total: total, More: start+len(items) < total}
+	more := start+len(items) < total
+	return Page{Items: items, Total: total, More: more, Partial: more}
+}
+
+// storedWindow reports whether window reads src from an IPTV source's
+// stored lists, which it counts whole.
+func (s *Service) storedWindow(v view, src source) bool {
+	return src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.narrows() && len(v.hidden) == 0 && src.date == ""
 }
 
 // prefetchLimit bounds the listings read ahead at once.

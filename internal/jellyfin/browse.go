@@ -589,8 +589,18 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			"checked", asked.Sub(begun).Round(time.Millisecond), "read", read.Round(time.Millisecond),
 			"described", (took - read - asked.Sub(begun)).Round(time.Millisecond))
 	}
+	if page.Partial {
+		// For Silo's apps, which show a library's count only when it is
+		// exact (see package silo): Jellyfin apps ignore the header.
+		w.Header().Set(partialTotalHeader, "true")
+	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: page.Total, StartIndex: start})
 }
+
+// partialTotalHeader marks a listing whose TotalRecordCount counts only
+// the titles read so far of a catalog that may list more (see
+// library.Page.Partial).
+const partialTotalHeader = "X-Polyfin-Partial-Total"
 
 // hiddenLibrary answers a listing of one of the server's libraries the
 // user does not see as Jellyfin answers one of a folder the user may not
