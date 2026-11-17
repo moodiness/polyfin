@@ -22,28 +22,52 @@ import (
 )
 
 // The files of the labelled movie: one stream each, its labels its file
-// name, and the ending item details give it for jellyfin-web in Chrome.
+// name, and the ending item details give it for jellyfin-web in Chrome;
+// hdr marks the one whose ending depends on the server's tone mapping.
 var labelledFiles = []struct {
 	filename, english, french string
+	hdr                       bool
 }{
 	// Estimated from the labels: H.264 and AAC in MP4 plays as it is.
-	{"Movie.1080p.WEB-DL.AAC2.0.H.264.mp4", "(likely direct play)", "(lecture directe probable)"},
+	{"Movie.1080p.WEB-DL.AAC2.0.H.264.mp4", "(likely direct play)", "(lecture directe probable)", false},
 	// Dolby Vision over HDR10, which Chrome cannot show, whatever its
-	// profile, and which the test server, without FFmpeg, cannot tone map.
-	{"Movie.2160p.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265.mkv", "(likely cannot play here)", "(probablement illisible ici)"},
+	// profile: converted for its HDR where the server tones it down, else
+	// it cannot play.
+	{"Movie.2160p.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265.mkv", "", "", true},
 	// HEVC Chrome takes, 8 or 10 bits, with DTS it does not.
-	{"Movie.1080p.BluRay.DTS-HD.MA.5.1.x265.mkv", "(likely converted: audio)", "(conversion probable\u202f: audio)"},
+	{"Movie.1080p.BluRay.DTS-HD.MA.5.1.x265.mkv", "(likely converted: audio)", "(conversion probable\u202f: audio)", false},
 	// No codec named: no ending.
-	{"Movie.1080p.WEB-DL.mkv", "", ""},
+	{"Movie.1080p.WEB-DL.mkv", "", "", false},
 	// Two audio tracks, AAC played as it is, AC-3 converted: which one
 	// plays decides, so no ending rather than a guess.
-	{"Movie.1080p.MULTi.AAC2.0.AC3.5.1.x264.mkv", "", ""},
+	{"Movie.1080p.MULTi.AAC2.0.AC3.5.1.x264.mkv", "", "", false},
 	// Described: its description, HEVC and AAC, wins over its labels'
 	// E-AC-3.
-	{"Movie.Described.2160p.HEVC.DDP5.1.mkv", "(direct play)", "(lecture directe)"},
+	{"Movie.Described.2160p.HEVC.DDP5.1.mkv", "(direct play)", "(lecture directe)", false},
 	// Analyzed as H.264 and AAC in MP4: the analysis wins over the labels'
 	// DTS and over its description's TrueHD.
-	{"Movie.Analysed.1080p.HEVC.DTS.mkv", "(direct play)", "(lecture directe)"},
+	{"Movie.Analysed.1080p.HEVC.DTS.mkv", "(direct play)", "(lecture directe)", false},
+}
+
+// fakeFFmpeg writes an FFmpeg that lists the encoders the label tests
+// convert with, and the filters that tone HDR down when toneMaps is set,
+// and fails at anything else: the server's capabilities, whatever FFmpeg
+// the environment has.
+func fakeFFmpeg(t *testing.T, toneMaps bool) string {
+	t.Helper()
+	filters := ""
+	if toneMaps {
+		filters = ` ... zscale V->V Apply resizing\n ... tonemap V->V Tone map\n`
+	}
+	script := "#!/bin/sh\ncase \"$2\" in\n" +
+		"-encoders) printf ' V....D libx264 H.264\\n V....D libx265 HEVC\\n A....D aac AAC\\n' ;;\n" +
+		"-filters) printf '" + filters + "' ;;\n" +
+		"*) exit 1 ;;\nesac\n"
+	path := filepath.Join(t.TempDir(), "ffmpeg")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 // labelledDescriptions is what a fake RemuxDB knows of the labelled
@@ -66,9 +90,24 @@ const labelledDescriptions = `[
 // estimate, in the server language: only when the labels name both
 // codecs and what they leave open changes nothing. A description, then
 // an analysis, give the exact ending instead. The estimate names the
-// version only: its track menus list no track the labels suggest.
+// version only: its track menus list no track the labels suggest. The
+// server's tone mapping decides how its HDR version likely plays.
 func TestVersionNamesEstimateHowVersionsPlayFromTheirLabels(t *testing.T) {
 	t.Parallel()
+	t.Run("tone mapping", func(t *testing.T) {
+		t.Parallel()
+		estimateFromLabels(t, true)
+	})
+	t.Run("without tone mapping", func(t *testing.T) {
+		t.Parallel()
+		estimateFromLabels(t, false)
+	})
+}
+
+// estimateFromLabels checks the endings of the labelled movie on a server
+// that tones HDR down, toneMaps, or not.
+func estimateFromLabels(t *testing.T, toneMaps bool) {
+	t.Helper()
 	descriptions := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/media/tt7160/versions" {
 			http.NotFound(w, r)
@@ -77,10 +116,19 @@ func TestVersionNamesEstimateHowVersionsPlayFromTheirLabels(t *testing.T) {
 		_, _ = io.WriteString(w, labelledDescriptions)
 	}))
 	t.Cleanup(descriptions.Close)
-	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
+	s := newServerConverting(t, 10, "ffprobe-not-installed", fakeFFmpeg(t, toneMaps), nil, func(o *Options, _ *pgxpool.Pool) {
 		o.RemuxDB = remuxdb.New(testServerID, "test", slog.New(slog.DiscardHandler), o.Accounts.Settings)
 	})
 	s.setting(t, func(settings *accounts.Settings) { settings.RemuxDB, settings.RemuxDBURL = true, descriptions.URL })
+	want := func(english, french string, hdr bool) (string, string) {
+		switch {
+		case !hdr:
+			return english, french
+		case toneMaps:
+			return "(likely converted: HDR)", "(conversion probable\u202f: HDR)"
+		}
+		return "(likely cannot play here)", "(probablement illisible ici)"
+	}
 	var streams []stremio.Stream
 	for i, file := range labelledFiles {
 		// A minute at 8 Mb/s, the movie's runtime.
@@ -156,8 +204,9 @@ func TestVersionNamesEstimateHowVersionsPlayFromTheirLabels(t *testing.T) {
 	details("describing")
 	sources := details("in English")
 	for _, file := range labelledFiles {
-		if got := ending(sources[file.filename]); got != file.english {
-			t.Errorf("%s: %q, want %q", file.filename, got, file.english)
+		english, _ := want(file.english, file.french, file.hdr)
+		if got := ending(sources[file.filename]); got != english {
+			t.Errorf("%s: %q, want %q", file.filename, got, english)
 		}
 	}
 	// The estimate is in the name alone: the version estimated to play as
@@ -174,8 +223,9 @@ func TestVersionNamesEstimateHowVersionsPlayFromTheirLabels(t *testing.T) {
 	s.setting(t, func(settings *accounts.Settings) { settings.Language = "fr" })
 	sources = details("in French")
 	for _, file := range labelledFiles {
-		if got := ending(sources[file.filename]); got != file.french {
-			t.Errorf("%s in French: %q, want %q", file.filename, got, file.french)
+		_, french := want(file.english, file.french, file.hdr)
+		if got := ending(sources[file.filename]); got != french {
+			t.Errorf("%s in French: %q, want %q", file.filename, got, french)
 		}
 	}
 }

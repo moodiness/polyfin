@@ -140,8 +140,21 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 
 // newServerReaching is newProbingServer whose requests to sources go
 // through reach, when set: a test serves a source on a public address
-// from a local server with it, never reaching that address.
+// from a local server with it, never reaching that address. Remuxes run
+// FFmpeg when tests are given one.
 func newServerReaching(t *testing.T, failures int, ffprobe string, reach func(source.Opener) source.Opener,
+	configure ...func(*Options, *pgxpool.Pool)) testServer {
+	t.Helper()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		ffmpeg = "ffmpeg-not-installed"
+	}
+	return newServerConverting(t, failures, ffprobe, ffmpeg, reach, configure...)
+}
+
+// newServerConverting is newServerReaching converting with the FFmpeg at
+// ffmpeg, whatever the environment gives.
+func newServerConverting(t *testing.T, failures int, ffprobe, ffmpeg string, reach func(source.Opener) source.Opener,
 	configure ...func(*Options, *pgxpool.Pool)) testServer {
 	t.Helper()
 	pool := migrated.New(t)
@@ -180,11 +193,7 @@ func newServerReaching(t *testing.T, failures int, ffprobe string, reach func(so
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)
-	// Remuxes run FFmpeg when tests are given one.
-	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
-	if ffmpeg == "" {
-		ffmpeg = "ffmpeg-not-installed"
-	}
+	// Conversions run the FFmpeg given.
 	segments, err := hls.NewManager(ffmpeg, t.TempDir(), logger)
 	if err != nil {
 		t.Fatal(err)

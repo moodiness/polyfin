@@ -55,6 +55,7 @@ func TestPlayNoteNamesTheFirstReason(t *testing.T) {
 // the exact one, worded as likely, in English and French, and at most 45
 // characters in every language, whatever the reason.
 func TestLikelyNoteWordsTheEstimate(t *testing.T) {
+	t.Parallel()
 	video, audio := &VideoConversion{}, &AudioConversion{}
 	for _, tc := range []struct {
 		decision     Decision
