@@ -46,6 +46,9 @@ await run(async () => {
     settled.screens[screen.name] = { warm: [], cold: [] }
   }
 
+  // Polyfin times the GPU's conversions at each start, a few seconds of FFmpeg that slow
+  // every request meanwhile: the warm runs measure the server once it has done.
+  await polyfin.conversionsDone()
   log(`Warm: ${runs} runs of each screen, after one to warm up`)
   await measured(polyfin, settled.process, 'warm', async () => {
     for (const screen of file.screens) {

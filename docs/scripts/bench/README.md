@@ -26,6 +26,7 @@ node docs/scripts/bench/bench.mjs \
 
 - **Time:** the first run seeds the bench database in about 6 minutes: the import itself takes 10 seconds, the users' history the rest (each series a user watches is opened once, and Polyfin asks a provider for one title a second). The next runs reuse it. Replaying takes about 4 minutes: 20 warm runs of each screen, about 40 seconds, then 20 cold ones, each right after a restart of Polyfin, about 3 minutes. A run that seeds replays the warm runs once more before autovacuum's first visit, about 40 seconds more.
 - **Quiet:** run it on a machine doing nothing else. Other work moves the times more than the budgets allow for.
+- **Polyfin's start:** at each start Polyfin times the GPU's conversions, a few seconds of FFmpeg that slow every request meanwhile. The warm runs wait until it has run no FFmpeg for a second, a minute at most; the cold runs, which measure a start, do not.
 - **Output:** a table of the screens, then, with `--requests`, one line per request. A run that seeds prints the same before autovacuum's first visit first (see below), and with `--during-import` while the first import runs. Polyfin's processor and memory use follow.
 - **Exit code:** 1 when a screen's warm p95 passes its budget, settled or before autovacuum's first visit, when a screen is slower before autovacuum's first visit than settled (see below), or on an error.
 - **Log:** Polyfin's log is kept in the bench's folder, `polyfin-bench-<database>` in the system's temporary folder.

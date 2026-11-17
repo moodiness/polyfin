@@ -343,6 +343,28 @@ async function startPolyfin(values, databaseUrl, dir, port) {
       const seconds = parts.reduce((total, part) => total * 60 + part, 0)
       return { cpu: seconds, rss: Number(rss) / 1024 }
     },
+    /**
+     * Waits until Polyfin has run no process of its own for a second, at most a minute: at
+     * each start it times the GPU's conversions with FFmpeg for a few seconds, which slows
+     * every request that runs meanwhile.
+     */
+    async conversionsDone() {
+      const children = () => {
+        try {
+          return (
+            execFileSync('pgrep', ['-P', String(current.child.pid)], {
+              encoding: 'utf8',
+            }).trim() !== ''
+          )
+        } catch {
+          return false
+        }
+      }
+      for (let quiet = 0, waited = 0; quiet < 10 && waited < 600; waited++) {
+        quiet = children() ? 0 : quiet + 1
+        await sleep(100)
+      }
+    },
   }
   cleanups.push(() => stop(current))
   return polyfin
