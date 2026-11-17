@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
@@ -130,12 +132,61 @@ func (h *Handler) dtos(r *http.Request, user accounts.User, items []library.Item
 	return h.listDtos(r, user, items, fields, state), nil
 }
 
+// listingAtOnce bounds the items of a listing described at once when
+// their versions are read (see versionFields). Each reads what is known
+// of its versions in a few statements, one after the other: the home
+// page's Next Up, 24 episodes, waited for them one item at a time. The
+// bound leaves most of the database pool (10 connections) to the other
+// rows of the same page, which run beside it.
+const listingAtOnce = 4
+
+// versionFields reports whether fields ask for what a movie's or an
+// episode's known versions tell (see listDto): then each item reads them.
+func versionFields(fields fieldSet) bool {
+	for _, field := range []string{"MediaSources", "MediaStreams", "Chapters", "Path", "CanDownload", "Trickplay"} {
+		if fields.has(field) {
+			return true
+		}
+	}
+	return false
+}
+
 // listDtos describes listed items, with what the user did with them in
-// state.
+// state, in their order. Items whose versions are read are described
+// listingAtOnce at a time. A panic while describing one is raised again
+// here, in the request, as it was when they were described one by one.
 func (h *Handler) listDtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, state userState) []BaseItemDto {
-	result := make([]BaseItemDto, 0, len(items))
-	for _, item := range items {
-		result = append(result, h.listDto(r, user, item, fields, state))
+	result := make([]BaseItemDto, len(items))
+	if len(items) < 2 || !versionFields(fields) {
+		for i, item := range items {
+			result[i] = h.listDto(r, user, item, fields, state)
+		}
+		return result
+	}
+	var (
+		group    errgroup.Group
+		mu       sync.Mutex
+		panicked any
+	)
+	group.SetLimit(listingAtOnce)
+	for i, item := range items {
+		group.Go(func() error {
+			defer func() {
+				if p := recover(); p != nil {
+					mu.Lock()
+					if panicked == nil {
+						panicked = p
+					}
+					mu.Unlock()
+				}
+			}()
+			result[i] = h.listDto(r, user, item, fields, state)
+			return nil
+		})
+	}
+	_ = group.Wait()
+	if panicked != nil {
+		panic(panicked)
 	}
 	return result
 }
