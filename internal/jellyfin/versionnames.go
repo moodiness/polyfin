@@ -1,10 +1,9 @@
 package jellyfin
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"math"
 	"net/http"
 	"strconv"
@@ -110,20 +109,36 @@ func sizeName(size int64, language string) string {
 // lists for the device profile it is sent; item details, where apps read
 // names but which know no profile, name them for the device profile known
 // for the device asking (see knownPlay), kept in the database across
-// restarts until the device signs out (see devicePlayOf). Only versions
+// restarts until the device signs out or goes unused for
+// accounts.UnusedDevicePlay (see devicePlayOf). Only versions
 // whose tracks are known, analyzed or described before any play, are
 // named: naming reads nothing.
 
 // devicePlay is what a device told of how it plays: the device profile
 // and the bitrate its last PlaybackInfo asked for, else the profile its
-// session's capabilities carried, which fromCapabilities tells. encoded is
-// the profile as kept in the database, which tells a profile changed. A
-// devicePlay without a profile stands for a device that told none.
+// session's capabilities carried, which fromCapabilities tells. sum is the
+// SHA-256 of the profile as kept in the database, which tells a profile
+// changed, and length the length of that JSON. A devicePlay without a
+// profile stands for a device that told none.
 type devicePlay struct {
 	profile          *playback.DeviceProfile
 	bitrate          looseInt
 	fromCapabilities bool
-	encoded          []byte
+	sum              [sha256.Size]byte
+	length           int
+}
+
+// playsBytes bounds the device profiles kept in memory, as devicePlay.size
+// counts them: more than a thousand devices with the profiles apps send,
+// and 170 with profiles as large as accounts.MaxDevicePlayProfile allows.
+const playsBytes = 32 << 20
+
+// size is about what play takes in memory, as the cache of plays counts
+// it: three times its profile's length in JSON. Parsed, the profiles apps
+// send take 0.9 to 1.6 times their length, lists of empty entries up to
+// 2.7 times.
+func (play devicePlay) size() int {
+	return 3 * play.length
 }
 
 // keepPlayTimeout bounds the write of what a device told of how it plays,
@@ -156,31 +171,39 @@ func (h *Handler) rememberCapabilities(ctx context.Context, profile *playback.De
 }
 
 // keepPlay keeps play for device, in memory and, when it changed, in the
-// database. A profile larger than accounts.MaxDevicePlayProfile is kept
-// in memory only, and the one kept before is forgotten.
+// database. Neither keeps a profile over accounts.MaxDevicePlayProfile in
+// JSON, nor one with a list over its bound (see
+// playback.DeviceProfile.Bounded): the device is then as before it told
+// any, the profile kept before forgotten.
 func (h *Handler) keepPlay(ctx context.Context, device accounts.ID, play devicePlay) {
 	encoded, err := json.Marshal(play.profile)
 	if err != nil {
 		return
 	}
-	play.encoded = encoded
 	known, _ := h.devicePlayOf(ctx, device)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), keepPlayTimeout)
+	defer cancel()
+	if len(encoded) > accounts.MaxDevicePlayProfile || !play.profile.Bounded() {
+		h.Logger.Debug("A device profile is too large to keep", "bytes", len(encoded))
+		h.plays.Put(device, devicePlay{})
+		if known.profile == nil {
+			return
+		}
+		if err := h.Accounts.ForgetDevicePlay(ctx, device); err != nil {
+			h.Logger.Warn("A device profile could not be forgotten", "error", err)
+		}
+		return
+	}
+	play.sum, play.length = sha256.Sum256(encoded), len(encoded)
 	h.plays.Put(device, play)
-	if bytes.Equal(known.encoded, encoded) && known.bitrate == play.bitrate && known.fromCapabilities == play.fromCapabilities {
+	if known.sum == play.sum && known.bitrate == play.bitrate && known.fromCapabilities == play.fromCapabilities {
 		return
 	}
 	stored := accounts.DevicePlay{Profile: encoded, FromCapabilities: play.fromCapabilities}
 	if play.bitrate.set {
 		stored.Bitrate = &play.bitrate.value
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), keepPlayTimeout)
-	defer cancel()
-	err = h.Accounts.SetDevicePlay(ctx, device, stored)
-	if errors.Is(err, accounts.ErrDevicePlayTooLarge) {
-		h.Logger.Debug("A device profile is too large to keep across restarts", "bytes", len(encoded))
-		err = h.Accounts.ForgetDevicePlay(ctx, device)
-	}
-	if err != nil {
+	if err := h.Accounts.SetDevicePlay(ctx, device, stored); err != nil {
 		h.Logger.Warn("A device profile could not be kept across restarts", "error", err)
 	}
 }
@@ -214,17 +237,17 @@ func (h *Handler) devicePlayOf(ctx context.Context, device accounts.ID) (deviceP
 }
 
 // storedPlay is a devicePlay as the database kept it; one whose profile
-// cannot be read stands for none.
+// cannot be read, or has a list over its bound, stands for none.
 func storedPlay(stored accounts.DevicePlay) devicePlay {
 	var profile playback.DeviceProfile
-	if err := json.Unmarshal(stored.Profile, &profile); err != nil {
+	if err := json.Unmarshal(stored.Profile, &profile); err != nil || !profile.Bounded() {
 		return devicePlay{}
 	}
 	encoded, err := json.Marshal(&profile)
 	if err != nil {
 		return devicePlay{}
 	}
-	play := devicePlay{profile: &profile, fromCapabilities: stored.FromCapabilities, encoded: encoded}
+	play := devicePlay{profile: &profile, fromCapabilities: stored.FromCapabilities, sum: sha256.Sum256(encoded), length: len(encoded)}
 	if stored.Bitrate != nil {
 		play.bitrate = looseInt{value: *stored.Bitrate, set: true}
 	}

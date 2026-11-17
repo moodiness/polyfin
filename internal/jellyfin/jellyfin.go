@@ -236,7 +236,9 @@ type Handler struct {
 	transcodings *cache.Cache[string, TranscodingInfo]
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer), as kept in
-	// the database, or that the device told none (see devicePlayOf).
+	// the database, or that the device told none (see devicePlayOf). Kept
+	// for accounts.UnusedDevicePlay, as the database keeps a profile, and
+	// bounded in bytes (see playsBytes).
 	plays *cache.Cache[accounts.ID, devicePlay]
 	// scripted are the devices whose web player runs Polyfin's script, as
 	// they read the user's sound (see boostRelay).
@@ -289,7 +291,7 @@ func New(options Options) *Handler {
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
 		qualities:      cache.New[string, []int](2000, 12*time.Hour),
 		transcodings:   cache.New[string, TranscodingInfo](2000, 12*time.Hour),
-		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
+		plays:          cache.New[accounts.ID, devicePlay](1000, accounts.UnusedDevicePlay).Sized(playsBytes, devicePlay.size),
 		scripted:       cache.New[accounts.ID, struct{}](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),

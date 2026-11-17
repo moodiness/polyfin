@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -146,8 +145,9 @@ func (s testServer) detailsNames(t *testing.T, user accounts.User, token, item s
 // A device's last profile and bitrate are kept across restarts: after a
 // restart, item details name the versions as before it, without a play.
 // The profile is written when it changes only, and a changed one replaces
-// it. A profile too large to keep is kept in memory only. API keys keep
-// none, and a device signed out or a user deleted leaves none behind.
+// it (see TestProfilesOverTheirBoundsAreNotKept for one too large to
+// keep). API keys keep none, and a device signed out or a user deleted
+// leaves none behind.
 func TestVersionNamesSurviveARestart(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
@@ -191,23 +191,6 @@ func TestVersionNamesSurviveARestart(t *testing.T) {
 	if got := r.detailsNames(t, r.user, r.token, r.movie); !slices.Equal(got, noAAC) {
 		t.Errorf("after another restart: %q, want %q", got, noAAC)
 	}
-
-	// A profile too large to keep names versions until the next restart,
-	// the one kept before forgotten.
-	var large map[string]any
-	if err := json.Unmarshal(p.profile(t, "jellyfin-web-chrome"), &large); err != nil {
-		t.Fatal(err)
-	}
-	large["Name"] = strings.Repeat("x", accounts.MaxDevicePlayProfile)
-	encoded, _ := json.Marshal(large)
-	r.ask(t, r.token, r.movie, encoded, nil)
-	if got := r.detailsNames(t, r.user, r.token, r.movie); !slices.Equal(got, chrome) {
-		t.Errorf("for a large profile: %q, want %q", got, chrome)
-	}
-	if kept, ok := r.keptPlay(t, "member", "tv"); ok {
-		t.Errorf("a large profile kept: %+v", kept)
-	}
-	r.ask(t, r.token, r.movie, r.profile(t, "jellyfin-web-chrome"), nil)
 
 	// An API key keeps nothing.
 	_, key, err := r.store.CreateAPIKey(t.Context(), "Script")

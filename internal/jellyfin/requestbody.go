@@ -6,6 +6,8 @@ import (
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"reflect"
+
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // bodyOptions read a request body as Jellyfin's JSON settings do
@@ -18,12 +20,16 @@ import (
 // strict, as in Jellyfin. Apps differ in which form they send: a device
 // profile's MaxAudioChannels comes as "2" from jellyfin-web and as 2 from
 // an app that sends numbers. The hand-written readers, such as
-// parseDisplayPreferences, follow the same rules (see jsonString).
+// parseDisplayPreferences, follow the same rules (see jsonString). The
+// lists of a device profile are read to their bounds (see boundedList).
 var bodyOptions = jsonv2.JoinOptions(json.DefaultOptionsV1(), jsonv2.WithUnmarshalers(jsonv2.JoinUnmarshalers(
 	jsonv2.UnmarshalFromFunc(stringFromScalar),
 	numberFromString[int](), numberFromString[int8](), numberFromString[int16](), numberFromString[int32](), numberFromString[int64](),
 	numberFromString[uint](), numberFromString[uint8](), numberFromString[uint16](), numberFromString[uint32](), numberFromString[uint64](),
 	numberFromString[float32](), numberFromString[float64](),
+	boundedList[playback.DirectPlayProfile](playback.MaxProfileEntries), boundedList[playback.TranscodingProfile](playback.MaxProfileEntries),
+	boundedList[playback.ContainerProfile](playback.MaxProfileEntries), boundedList[playback.CodecProfile](playback.MaxProfileEntries),
+	boundedList[playback.SubtitleProfile](playback.MaxProfileEntries), boundedList[playback.ProfileCondition](playback.MaxProfileConditions),
 )))
 
 // unmarshalBody reads a JSON request body into into with bodyOptions.
@@ -44,6 +50,45 @@ func stringFromScalar(decoder *jsontext.Decoder, into *string) error {
 		return nil
 	}
 	return errors.ErrUnsupported
+}
+
+// boundedList reads a JSON array into a list of its first bound entries
+// and one more, which tells the array is longer than bound (see
+// playback.DeviceProfile.Bounded): the entries past it are skipped, so
+// that a long array of small values in a request body takes no more
+// memory than its bound. Other tokens are read as usual.
+func boundedList[T any](bound int) *jsonv2.Unmarshalers {
+	return jsonv2.UnmarshalFromFunc(func(decoder *jsontext.Decoder, into *[]T) error {
+		if decoder.PeekKind() != jsontext.KindBeginArray {
+			return errors.ErrUnsupported
+		}
+		if _, err := decoder.ReadToken(); err != nil {
+			return err
+		}
+		// An empty array stays an empty list, not none, as it would read.
+		list := (*into)[:0]
+		if list == nil {
+			list = []T{}
+		}
+		for decoder.PeekKind() != jsontext.KindEndArray {
+			if len(list) > bound {
+				if err := decoder.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			var entry T
+			if err := jsonv2.UnmarshalDecode(decoder, &entry); err != nil {
+				return err
+			}
+			list = append(list, entry)
+		}
+		if _, err := decoder.ReadToken(); err != nil {
+			return err
+		}
+		*into = list
+		return nil
+	})
 }
 
 // number is a Go number a request body may hold.

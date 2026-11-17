@@ -292,7 +292,7 @@ Version order, pins, blocks and the 15 minutes a failed version is left out appl
 The setting orders each app's version menu for that app, so **Play** starts the version the menu shows. "Without conversion" means played as it is, or repackaged with tracks copied.
 
 - Item details and `PlaybackInfo` list these versions first, after the other steps of the [version order](#version-order).
-- Polyfin learns how the app plays from the device's last `PlaybackInfo` profile, or its session capabilities. It keeps this across restarts until the device signs out.
+- Polyfin learns how the app plays from the device's last `PlaybackInfo` profile, or its session capabilities. It keeps this across restarts until the device signs out or goes 30 days unused.
 - It judges each version as [version names](#version-names) do, reading nothing. A version neither analyzed nor described by RemuxDB counts as needing conversion.
 - Each app gets its own order: two devices of a user may list versions differently. The title's own identifier stands for the asking device's first version.
 - A version above the user's **Maximum quality** never counts as playing without conversion.
@@ -522,7 +522,8 @@ With **Prefer versions the app plays without conversion** on, apps still list an
   - So most versions of a title with many get no ending until played.
 - `PlaybackInfo` names every listed version for the app's device profile.
 - Item details use each device's last `PlaybackInfo` profile and bitrate, else its session capabilities' profile. The web player's version menu, Android TV's **Select version** and Swiftfin's menu read these.
-- Polyfin keeps that profile across restarts and updates, until the device signs out or is removed.
+- Polyfin keeps that profile across restarts and updates, until the device signs out, is removed or goes 30 days unused.
+- It keeps no profile over 64 KB, nor one with a list of more than 256 profiles or 64 conditions; apps send far less. The device then gets names without an ending, as before its first play.
 - Until the app has played once on that device, item details names have no ending, unless its session capabilities carried a profile. The web player sends none there.
 - In the web player, the title page a playback returns to, or the one Back shows again, takes the names the details give then.
 - Names assume the tracks the user's preferences choose; picking others may change how it plays.
