@@ -186,6 +186,9 @@ type liveState struct {
 	times liveTimes
 	// opens counts the occupants opened (see openingLocked).
 	opens uint64
+	// awaiting, when set, hears each makeRoom about to wait for the
+	// connections of feeds closing, for tests.
+	awaiting func(closing []*feed)
 }
 
 // opening is when an occupant took its source's connection: at, by the
@@ -544,6 +547,17 @@ func (f *feed) close() {
 	if st.feeds[f.version.ID] == f {
 		delete(st.feeds, f.version.ID)
 	}
+	st.closingLocked(f)
+	st.mu.Unlock()
+	if f.cancel != nil {
+		f.cancel()
+	}
+	f.finish(nil)
+}
+
+// closingLocked counts a feed among those closing, until its connection
+// is closed (see makeRoom). The caller holds st.mu.
+func (st *liveState) closingLocked(f *feed) {
 	select {
 	case <-f.closed:
 	default:
@@ -552,11 +566,6 @@ func (f *feed) close() {
 		}
 		st.closing[f] = true
 	}
-	st.mu.Unlock()
-	if f.cancel != nil {
-		f.cancel()
-	}
-	f.finish(nil)
 }
 
 // evict closes a feed for another channel's stream: its readers end with
@@ -678,6 +687,12 @@ func (f *feed) open(user accounts.ID, recording bool) {
 			case errors.Is(err, io.EOF):
 				err = nil
 			}
+			// The connection closes as open returns: the source counts it
+			// until then, while the readers read what the feed kept.
+			st := &f.s.feeds
+			st.mu.Lock()
+			st.closingLocked(f)
+			st.mu.Unlock()
 			f.finish(err)
 			f.close()
 			return
@@ -814,10 +829,11 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 		inUse = ErrTunersInUse
 	}
 	st.mu.Lock()
+	awaiting := st.awaiting
 	var open []occupant
 	var closing []*feed
 	for _, other := range st.feeds {
-		if other != self && other.source == source && !other.finished() {
+		if other != self && other.source == source && !other.finished() && !st.closing[other] {
 			open = append(open, other)
 		}
 	}
@@ -834,6 +850,9 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 	st.mu.Unlock()
 	if len(open)+len(closing) < limit {
 		return false, nil
+	}
+	if len(closing) > 0 && awaiting != nil {
+		awaiting(closing)
 	}
 	for _, other := range closing {
 		other.awaitClosed()

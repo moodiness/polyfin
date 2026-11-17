@@ -87,6 +87,10 @@ func (l *liveSource) Open(ctx context.Context, _, target string, _ http.Header, 
 		return answer(http.StatusOK, "video/mp2t", io.MultiReader(bytes.NewReader(bytes.Repeat(tsChunk, 4)), failing{})), nil
 	case strings.HasPrefix(name, "paced"):
 		return l.paced(ctx), nil
+	case strings.HasPrefix(name, "ending"):
+		// What readers start from, then the end of the stream, as a
+		// source ending it: the feed ends by itself.
+		return l.counted(ctx, io.NopCloser(bytes.NewReader(bytes.Repeat(tsChunk, keyframeWait/len(tsChunk)+1)))), nil
 	case strings.HasPrefix(name, "late"):
 		response := l.stream(ctx, -1)
 		body := response.Body
@@ -145,7 +149,8 @@ func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 }
 
 // counted answers an MPEG-TS stream's body, counted as open until its
-// request ends, which closes it.
+// request ends or the body is closed, which closes it, as an HTTP
+// response's body closes its connection.
 func (l *liveSource) counted(ctx context.Context, reader io.ReadCloser) *http.Response {
 	l.mu.Lock()
 	l.open++
@@ -160,7 +165,7 @@ func (l *liveSource) counted(ctx context.Context, reader io.ReadCloser) *http.Re
 		l.mu.Unlock()
 	}}
 	context.AfterFunc(ctx, func() { _ = body.Close() })
-	return answer(http.StatusOK, "video/mp2t", body)
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"video/mp2t"}}, Body: body}
 }
 
 // paced answers an MPEG-TS stream the test paces (see liveSource.more),

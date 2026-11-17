@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -147,6 +148,53 @@ func TestARecordingTakesAWatchedChannelsTuner(t *testing.T) {
 		if err := reads(r); err != nil {
 			t.Errorf("a recording lost its tuner: %v", err)
 		}
+	}
+}
+
+// A channel whose source ended the stream, a viewer still on it, holds
+// its tuner until its connection is closed: a channel opened meanwhile
+// waits for that, and the tuner is never taken twice.
+func TestAnEndedChannelHoldsItsTunerUntilClosed(t *testing.T) {
+	t.Parallel()
+	source := accounts.ID{7}
+	s, src := tunerService(t, iptv.Limit{Connections: 1, Tuners: true})
+	// The source holds each connection whose request ended until the
+	// test lets it close (see liveSource.closing).
+	src.closing = make(chan struct{})
+	var release sync.Once
+	closeConnections := func() { release.Do(func() { close(src.closing) }) }
+	defer closeConnections()
+	waited := make(chan struct{})
+	s.feeds.awaiting = func(closing []*feed) {
+		closeConnections()
+		for _, f := range closing {
+			<-f.closed
+		}
+		close(waited)
+	}
+	ended, err := s.openFeed(ForUser(t.Context(), accounts.ID{1}), channelVersion(1, "ending-1.ts", source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ended.Close()
+	// The viewer reads the channel to its end: the feed ended, and its
+	// connection stays open until the source lets it close.
+	if _, err := io.Copy(io.Discard, ended); err != nil {
+		t.Fatal(err)
+	}
+	next, err := s.openFeed(ForUser(t.Context(), accounts.ID{2}), channelVersion(2, "paced-2.ts", source))
+	if err != nil {
+		t.Fatalf("a channel once the ended one's tuner was free: %v", err)
+	}
+	defer next.Close()
+	select {
+	case <-waited:
+	default:
+		t.Error("a channel opened without waiting for the ended one's connection to close")
+	}
+	closeConnections()
+	if _, _, most := src.counts(); most != 1 {
+		t.Errorf("%d tuners at once, want 1", most)
 	}
 }
 
