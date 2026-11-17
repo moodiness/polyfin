@@ -2886,49 +2886,71 @@ func seasons(series Item, meta stremio.Meta, posters map[int]string, w words, no
 	return result
 }
 
+// episodes lists the episodes of a series described by meta, as aired, of
+// one season when season is set (see episodeOrder and episodeItem).
 func episodes(series Item, meta stremio.Meta, posters map[int]string, season *int, w words, now time.Time) []Item {
-	var result []Item
-	for _, video := range meta.Videos {
-		number := int(video.Season)
-		if season != nil && number != *season {
-			continue
-		}
-		item := Item{
-			ID:                itemID(episodeKey(video.ID)),
-			Kind:              KindEpisode,
-			Name:              video.DisplayName(),
-			ParentID:          itemID(seasonKey(meta.ID, number)),
-			Overview:          video.Overview,
-			PremiereDate:      parseDate(video.Released),
-			Runtime:           parseRuntime(string(video.Runtime)),
-			Images:            Images{Primary: video.Thumbnail, Backdrop: series.Images.Backdrop},
-			SeriesID:          series.ID,
-			SeriesName:        series.Name,
-			SeriesPoster:      series.Images.Primary,
-			SeasonID:          itemID(seasonKey(meta.ID, number)),
-			SeasonName:        w.seasonName(number),
-			SeasonPoster:      posters[number],
-			IndexNumber:       video.EpisodeNumber(),
-			ParentIndexNumber: number,
-			Available:         released(video, now),
-			StremioType:       meta.Type,
-			StremioID:         video.ID,
-		}
-		if item.Name == "" {
-			item.Name = w.episodeName(item.IndexNumber)
-		}
-		if item.PremiereDate != nil {
-			item.ProductionYear = item.PremiereDate.Year()
-		}
-		result = append(result, item)
+	order := episodeOrder(meta, season)
+	if len(order) == 0 {
+		return nil
 	}
-	slices.SortStableFunc(result, func(a, b Item) int {
-		if a.ParentIndexNumber != b.ParentIndexNumber {
-			return a.ParentIndexNumber - b.ParentIndexNumber
-		}
-		return a.IndexNumber - b.IndexNumber
-	})
+	result := make([]Item, len(order))
+	for i, video := range order {
+		result[i] = episodeItem(series, meta, posters, w, now, meta.Videos[video])
+	}
 	return result
+}
+
+// episodeOrder returns the indexes of meta's videos in the order their
+// episodes are listed as aired: by season, then number, those of one
+// season only when season is set.
+func episodeOrder(meta stremio.Meta, season *int) []int {
+	order := make([]int, 0, len(meta.Videos))
+	for i, video := range meta.Videos {
+		if season == nil || int(video.Season) == *season {
+			order = append(order, i)
+		}
+	}
+	slices.SortStableFunc(order, func(a, b int) int {
+		if seasonA, seasonB := int(meta.Videos[a].Season), int(meta.Videos[b].Season); seasonA != seasonB {
+			return seasonA - seasonB
+		}
+		return meta.Videos[a].EpisodeNumber() - meta.Videos[b].EpisodeNumber()
+	})
+	return order
+}
+
+// episodeItem describes video, an episode of the series described by
+// meta, as episodes lists it.
+func episodeItem(series Item, meta stremio.Meta, posters map[int]string, w words, now time.Time, video stremio.Video) Item {
+	number := int(video.Season)
+	item := Item{
+		ID:                itemID(episodeKey(video.ID)),
+		Kind:              KindEpisode,
+		Name:              video.DisplayName(),
+		ParentID:          itemID(seasonKey(meta.ID, number)),
+		Overview:          video.Overview,
+		PremiereDate:      parseDate(video.Released),
+		Runtime:           parseRuntime(string(video.Runtime)),
+		Images:            Images{Primary: video.Thumbnail, Backdrop: series.Images.Backdrop},
+		SeriesID:          series.ID,
+		SeriesName:        series.Name,
+		SeriesPoster:      series.Images.Primary,
+		SeasonName:        w.seasonName(number),
+		SeasonPoster:      posters[number],
+		IndexNumber:       video.EpisodeNumber(),
+		ParentIndexNumber: number,
+		Available:         released(video, now),
+		StremioType:       meta.Type,
+		StremioID:         video.ID,
+	}
+	item.SeasonID = item.ParentID
+	if item.Name == "" {
+		item.Name = w.episodeName(item.IndexNumber)
+	}
+	if item.PremiereDate != nil {
+		item.ProductionYear = item.PremiereDate.Year()
+	}
+	return item
 }
 
 // Seasons lists a series' seasons, in its order (see episodeorder.go).
@@ -2975,66 +2997,13 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 // together, and the episodes recorded at once: Upcoming lists those of up
 // to 50 series. It fails when the episodes could not be recorded.
 func (s *Service) SeriesEpisodes(ctx context.Context, user accounts.User, series []accounts.ID) (map[accounts.ID][]Item, error) {
-	return s.PickedEpisodes(ctx, user, series, func(_ accounts.ID, episodes []Item) []Item { return episodes })
-}
-
-// PickedEpisodes is SeriesEpisodes for the episodes pick keeps of each
-// series, given all of them, in order: those are recorded with the
-// series' seasons before it returns, and the others after the request,
-// once per list (see episodeRecording). Next Up keeps one or two episodes
-// of each of up to 50 series, of thousands of episodes: recording them
-// all checked each one's record at every call.
-func (s *Service) PickedEpisodes(ctx context.Context, user accounts.User, series []accounts.ID,
-	pick func(series accounts.ID, episodes []Item) []Item) (map[accounts.ID][]Item, error) {
-	v, err := s.view(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-	if ctx, err = s.withPreloaded(ctx, series); err != nil {
-		return nil, err
-	}
-	type listed struct {
-		episodes []Item
-		records  []record
-	}
-	found := make([]*listed, len(series))
-	var g errgroup.Group
-	g.SetLimit(6)
-	for i, id := range series {
-		g.Go(func() error {
-			if episodes, records, err := s.orderedEpisodes(ctx, v, id, nil); err == nil {
-				found[i] = &listed{episodes: episodes, records: records}
-			}
-			return nil
-		})
-	}
-	_ = g.Wait()
-	result := make(map[accounts.ID][]Item, len(series))
-	var records []record
-	unpicked := map[accounts.ID][]record{}
-	for i, id := range series {
-		if found[i] == nil {
-			continue
+	return s.PickedEpisodes(ctx, user, series, func(_ accounts.ID, episodes []EpisodeOutline) []int {
+		all := make([]int, len(episodes))
+		for i := range all {
+			all[i] = i
 		}
-		picked := pick(id, s.overridden(found[i].episodes))
-		result[id] = picked
-		kept := make(map[accounts.ID]bool, len(picked))
-		for _, episode := range picked {
-			kept[episode.ID] = true
-		}
-		for _, r := range found[i].records {
-			if r.Kind != KindEpisode || kept[r.ID] {
-				records = append(records, r)
-			}
-		}
-		if len(picked) < len(found[i].episodes) {
-			unpicked[id] = found[i].records
-		}
-	}
-	// The others are recorded after the request, as the series' listing
-	// would (see episodeRecording).
-	s.recordEpisodesLater(ctx, unpicked)
-	return result, s.save(ctx, records)
+		return all
+	})
 }
 
 // orderedEpisodes lists a series' episodes for v as Episodes does, with

@@ -298,6 +298,21 @@ func (l *episodeLayout) place(episode *Item) {
 // order's, the hidden specials included, or one of the series' own as
 // aired; found is false when there is no such season.
 func (l *episodeLayout) arrange(episodes []Item, season *accounts.ID) (result []Item, found bool) {
+	order, found := l.arrangement(len(episodes), func(i int) string { return episodes[i].StremioID },
+		func(i int) accounts.ID { return episodes[i].SeasonID }, season)
+	for _, i := range order {
+		episode := episodes[i]
+		l.place(&episode)
+		result = append(result, episode)
+	}
+	return result, found
+}
+
+// arrangement is arrange for count episodes listed as aired, by their
+// videos and the identifiers of their seasons as aired: it returns where
+// each episode it lists comes among them, in the order's order.
+func (l *episodeLayout) arrangement(count int, videoOf func(int) string, seasonID func(int) accounts.ID, season *accounts.ID) (order []int,
+	found bool) {
 	rank := map[string]int{}
 	for _, s := range l.seasons {
 		for _, video := range s.videos {
@@ -314,27 +329,26 @@ func (l *episodeLayout) arrange(episodes []Item, season *accounts.ID) (result []
 		}
 	}
 	found = season == nil || own != nil
-	for _, episode := range episodes {
-		_, listed := rank[episode.StremioID]
+	for i := range count {
+		_, listed := rank[videoOf(i)]
 		switch {
-		case own != nil && !slices.Contains(own.videos, episode.StremioID):
+		case own != nil && !slices.Contains(own.videos, videoOf(i)):
 			continue
-		case own == nil && season != nil && episode.SeasonID != *season:
+		case own == nil && season != nil && seasonID(i) != *season:
 			continue
 		case own == nil && season != nil:
 			found = true
 		}
-		if !listed && l.hidden != nil && slices.Contains(l.hidden.videos, episode.StremioID) {
+		if !listed && l.hidden != nil && slices.Contains(l.hidden.videos, videoOf(i)) {
 			continue
 		}
-		l.place(&episode)
-		result = append(result, episode)
+		order = append(order, i)
 	}
 	// Episodes the order does not know, which a description read since
 	// may add, come last.
-	slices.SortStableFunc(result, func(a, b Item) int {
-		ra, okA := rank[a.StremioID]
-		rb, okB := rank[b.StremioID]
+	slices.SortStableFunc(order, func(a, b int) int {
+		ra, okA := rank[videoOf(a)]
+		rb, okB := rank[videoOf(b)]
 		switch {
 		case okA && okB:
 			return ra - rb
@@ -345,7 +359,7 @@ func (l *episodeLayout) arrange(episodes []Item, season *accounts.ID) (result []
 		}
 		return 0
 	})
-	return result, found
+	return order, found
 }
 
 // seasonItem describes a season of an episode group's order, of series,

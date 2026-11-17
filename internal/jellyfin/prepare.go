@@ -299,12 +299,13 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item
 // in their order, the next of its season, else the first of the next one,
 // if it is out. Specials are left out, as Next Up leaves them out.
 func episodeAfter(episodes []library.Item, current accounts.ID) (library.Item, bool) {
-	regular := regularEpisodes(episodes)
-	i := slices.IndexFunc(regular, func(e library.Item) bool { return e.ID == current })
-	if i < 0 || i+1 == len(regular) || !regular[i+1].Available {
+	outlines := library.Outlines(episodes)
+	regular := regularEpisodes(outlines)
+	i := slices.IndexFunc(regular, func(place int) bool { return outlines[place].ID == current })
+	if i < 0 || i+1 == len(regular) || !outlines[regular[i+1]].Available {
 		return library.Item{}, false
 	}
-	return regular[i+1], true
+	return episodes[regular[i+1]], true
 }
 
 // unanalyzed reports whether a version is neither analyzed nor recently

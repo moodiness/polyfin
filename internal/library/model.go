@@ -585,9 +585,14 @@ func people(meta stremio.Meta) []Person {
 
 // released reports whether an episode can already be watched.
 func released(video stremio.Video, now time.Time) bool {
+	return releasedOn(video, parseDate(video.Released), now)
+}
+
+// releasedOn is released for an episode released on date, its Released
+// as read (see parseDate).
+func releasedOn(video stremio.Video, date *time.Time, now time.Time) bool {
 	if video.Available != nil {
 		return *video.Available
 	}
-	date := parseDate(video.Released)
 	return date == nil || !date.After(now)
 }

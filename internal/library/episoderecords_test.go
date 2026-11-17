@@ -39,7 +39,7 @@ func TestUnpickedEpisodesAreRecordedOncePerList(t *testing.T) {
 	pickFirst := func() {
 		t.Helper()
 		ctx, cancel := context.WithCancel(t.Context())
-		listed, err := e.service.PickedEpisodes(ctx, e.member, []accounts.ID{show}, func(_ accounts.ID, all []Item) []Item { return all[:1] })
+		listed, err := e.service.PickedEpisodes(ctx, e.member, []accounts.ID{show}, func(_ accounts.ID, _ []EpisodeOutline) []int { return []int{0} })
 		cancel()
 		if err != nil || len(listed[show]) != 1 || listed[show][0].ID != episodes[0] {
 			t.Fatalf("picked: %+v %v", listed, err)
@@ -74,18 +74,17 @@ func TestUnpickedEpisodesAreRecordedOncePerList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, records, err := e.service.orderedEpisodes(t.Context(), v, show, nil)
+	list, err := e.service.listedEpisodes(t.Context(), v, show)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, r := range records {
-		if r.ID == episodes[4] {
-			video := *r.Video
-			video.Title = "Renamed"
-			records[i].Video = &video
+	list.meta.Videos = slices.Clone(list.meta.Videos)
+	for i, video := range list.meta.Videos {
+		if itemID(episodeKey(video.ID)) == episodes[4] {
+			list.meta.Videos[i].Title = "Renamed"
 		}
 	}
-	e.service.recordEpisodesLater(context.Background(), map[accounts.ID][]record{show: records})
+	e.service.recordEpisodesLater(context.Background(), map[accounts.ID]*outlinedEpisodes{show: list})
 	recorded()
 	if r, ok := stored(episodes[4]); !ok || r.Video == nil || r.Video.Title != "Renamed" {
 		t.Errorf("the changed episode: %+v %v", r.Video, ok)

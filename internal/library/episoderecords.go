@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"encoding/json"
 	"hash/maphash"
 	"math"
 	"sync"
@@ -19,23 +18,24 @@ const recordedSeries = 1 << 12
 // seasons, as the series' listing records them: Next Up shows one or two
 // episodes of each series it lists, and the others are found by name
 // (see SearchEpisodes) and opened by identifier as before. It records
-// one series at a time for the whole server, from the records the
-// request listed, asking no addon, and does a series' again only once
-// its list changed, as a fingerprint of its encoded records tells: a
-// list that stays the same costs its encoding, not a save's look-ups.
-// A failed save is logged and tried again at the next listing of the
-// series. The server stopping ends it, forgetting what waits.
+// one series at a time for the whole server, from the list the request
+// made, whose records it makes then, asking no addon, and does a
+// series' again only once its list changed, as its stamp tells: a list
+// that stays the same costs the hash of what it is made of, neither its
+// records nor a save's look-ups. A failed save is logged and tried again
+// at the next listing of the series. The server stopping ends it,
+// forgetting what waits.
 type episodeRecording struct {
 	mu sync.Mutex
-	// waiting holds the records of each series to record, the latest
+	// waiting holds the list of each series to record, the latest
 	// listing's, and queue the series in the order they came.
-	waiting map[accounts.ID][]record
+	waiting map[accounts.ID]*outlinedEpisodes
 	queue   []accounts.ID
 	// running tells whether a worker records the queue.
 	running bool
-	// recorded holds the fingerprint of the list last recorded of each
-	// series, made on first use; generation counts the times it was
-	// forgotten (see forgetRecordedEpisodes).
+	// recorded holds the stamp of the list last recorded of each series
+	// (see outlinedEpisodes.stamp), made on first use; generation counts
+	// the times it was forgotten (see forgetRecordedEpisodes).
 	recorded   *cache.Cache[accounts.ID, uint64]
 	generation uint64
 	// idle is closed once the queue is empty and no worker runs, for
@@ -43,27 +43,27 @@ type episodeRecording struct {
 	idle chan struct{}
 }
 
-// recordedSeed seeds the fingerprints of the lists episodeRecording
-// remembers, which live in memory only.
+// recordedSeed seeds the stamps of the lists episodeRecording remembers,
+// which live in memory only.
 var recordedSeed = maphash.MakeSeed()
 
-// recordEpisodesLater queues the records of each series listed, to be
+// recordEpisodesLater queues the list of each series listed, to be
 // recorded once ctx, the listing's request, ends: the request never waits
-// for them, nor shares the database with them.
-func (s *Service) recordEpisodesLater(ctx context.Context, listed map[accounts.ID][]record) {
+// for them, nor shares the database with them, nor makes their records.
+func (s *Service) recordEpisodesLater(ctx context.Context, listed map[accounts.ID]*outlinedEpisodes) {
 	if len(listed) == 0 {
 		return
 	}
 	m := &s.episodeRecords
 	m.mu.Lock()
 	if m.waiting == nil {
-		m.waiting = map[accounts.ID][]record{}
+		m.waiting = map[accounts.ID]*outlinedEpisodes{}
 	}
-	for id, records := range listed {
+	for id, list := range listed {
 		if _, queued := m.waiting[id]; !queued {
 			m.queue = append(m.queue, id)
 		}
-		m.waiting[id] = records
+		m.waiting[id] = list
 	}
 	start := !m.running
 	if start {
@@ -100,7 +100,7 @@ func (s *Service) recordEpisodes() {
 		}
 		id := m.queue[0]
 		m.queue = m.queue[1:]
-		records := m.waiting[id]
+		list := m.waiting[id]
 		delete(m.waiting, id)
 		if m.recorded == nil {
 			m.recorded = cache.New[accounts.ID, uint64](recordedSeries, math.MaxInt64)
@@ -109,14 +109,11 @@ func (s *Service) recordEpisodes() {
 		generation := m.generation
 		m.mu.Unlock()
 
-		fingerprint, err := listFingerprint(records)
-		if err == nil && known && fingerprint == recorded {
+		stamp := list.stamp()
+		if known && stamp == recorded {
 			continue
 		}
-		if err == nil {
-			err = s.save(ctx, records)
-		}
-		if err != nil {
+		if err := s.save(ctx, list.records(nil)); err != nil {
 			if ctx.Err() == nil {
 				s.logger.Debug("The episodes of a series could not be recorded", "series", id, "error", err)
 			}
@@ -124,29 +121,10 @@ func (s *Service) recordEpisodes() {
 		}
 		m.mu.Lock()
 		if m.generation == generation {
-			m.recorded.Put(id, fingerprint)
+			m.recorded.Put(id, stamp)
 		}
 		m.mu.Unlock()
 	}
-}
-
-// listFingerprint is the fingerprint of the records of a series' list,
-// in their order, as a save stores them: encoded straight into the hash,
-// as it runs at every Next Up.
-func listFingerprint(records []record) (uint64, error) {
-	var h maphash.Hash
-	h.SetSeed(recordedSeed)
-	encoder := json.NewEncoder(&h)
-	for i := range records {
-		r := records[i].stored()
-		_, _ = h.Write(r.ID[:])
-		_, _ = h.WriteString(r.Key)
-		// Each record ends with a new line.
-		if err := encoder.Encode(r); err != nil {
-			return 0, err
-		}
-	}
-	return h.Sum64(), nil
 }
 
 // forgetRecordedEpisodes forgets which lists were recorded: their items

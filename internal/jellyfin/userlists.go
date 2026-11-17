@@ -443,23 +443,23 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 	for _, c := range candidates {
 		removed[c.series] = c.removed
 	}
-	found := make(map[accounts.ID][]entry, len(candidates))
-	listed, err := h.Library.PickedEpisodes(ctx, user, series, func(series accounts.ID, episodes []library.Item) []library.Item {
+	// The dates of the episodes picked of each series, in the order they
+	// were picked: their items come in that order.
+	dates := make(map[accounts.ID][]*time.Time, len(candidates))
+	listed, err := h.Library.PickedEpisodes(ctx, user, series, func(series accounts.ID, episodes []library.EpisodeOutline) []int {
 		<-read
 		if at := removed[series]; at != nil && !releasedSince(episodes, *at) {
 			return nil
 		}
-		var picked []library.Item
+		var picked []int
 		if episode, date, ok := nextEpisode(episodes, data, resumable); ok {
-			found[series] = append(found[series], entry{episode: episode, date: date})
-			picked = append(picked, episode)
+			picked, dates[series] = append(picked, episode), append(dates[series], date)
 		}
 		if !rewatching {
 			return picked
 		}
 		if episode, date, ok := rewatchEpisode(episodes, data); ok {
-			found[series] = append(found[series], entry{episode: episode, date: date})
-			picked = append(picked, episode)
+			picked, dates[series] = append(picked, episode), append(dates[series], date)
 		}
 		return picked
 	})
@@ -472,8 +472,8 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 	}
 	var next []entry
 	for _, candidate := range candidates {
-		if _, ok := listed[candidate.series]; ok {
-			next = append(next, found[candidate.series]...)
+		for i, episode := range listed[candidate.series] {
+			next = append(next, entry{episode: episode, date: dates[candidate.series][i]})
 		}
 	}
 	// The latest played first; series with no episode played, without a
@@ -600,34 +600,34 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 // order: the first released, unplayed episode after the furthest one
 // played, or the first episode when none was played. Specials are left
 // out. A next episode already started is only offered when resumable is
-// set. date is when the furthest played episode was played, nil when none
-// was.
-func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, resumable bool) (library.Item, *time.Time, bool) {
+// set. It returns the episode's place among episodes; date is when the
+// furthest played episode was played, nil when none was.
+func nextEpisode(episodes []library.EpisodeOutline, data map[accounts.ID]userdata.Data, resumable bool) (int, *time.Time, bool) {
 	regular := regularEpisodes(episodes)
 	furthest := -1
-	for i, episode := range regular {
-		if data[episode.ID].Played {
+	for i, place := range regular {
+		if data[episodes[place].ID].Played {
 			furthest = i
 		}
 	}
 	var date *time.Time
 	if furthest >= 0 {
-		date = data[regular[furthest].ID].LastPlayed
+		date = data[episodes[regular[furthest]].ID].LastPlayed
 	}
-	for _, episode := range regular[furthest+1:] {
-		if !episode.Available {
+	for _, place := range regular[furthest+1:] {
+		if !episodes[place].Available {
 			break
 		}
-		d := data[episode.ID]
+		d := data[episodes[place].ID]
 		if d.Played {
 			continue
 		}
 		if d.Position > 0 && !resumable {
-			return library.Item{}, nil, false
+			return 0, nil, false
 		}
-		return episode, date, true
+		return place, date, true
 	}
-	return library.Item{}, nil, false
+	return 0, nil, false
 }
 
 // rewatchEpisode picks the next episode of a rewatch among a series'
@@ -636,38 +636,46 @@ func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, re
 // (NextUpService.GetNextUpEpisodesBatch, lastWatchedByDateInfo and
 // seriesNextPlayedIdMap). Specials are left out. When that episode has a
 // resume point, there is none: Jellyfin asks for it without resumable
-// episodes (TVSeriesManager.DetermineNextEpisodeForRewatching). date is
-// when the episode played last was played.
-func rewatchEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data) (library.Item, *time.Time, bool) {
+// episodes (TVSeriesManager.DetermineNextEpisodeForRewatching). It
+// returns the episode's place among episodes; date is when the episode
+// played last was played.
+func rewatchEpisode(episodes []library.EpisodeOutline, data map[accounts.ID]userdata.Data) (int, *time.Time, bool) {
 	regular := regularEpisodes(episodes)
 	last := -1
 	var date *time.Time
-	for i, episode := range regular {
-		d := data[episode.ID]
+	for i, place := range regular {
+		d := data[episodes[place].ID]
 		if d.Played && d.LastPlayed != nil && (date == nil || d.LastPlayed.After(*date)) {
 			last, date = i, d.LastPlayed
 		}
 	}
 	if last < 0 {
-		return library.Item{}, nil, false
+		return 0, nil, false
 	}
-	for _, episode := range regular[last+1:] {
-		d := data[episode.ID]
-		if !episode.Available || !d.Played {
+	for _, place := range regular[last+1:] {
+		d := data[episodes[place].ID]
+		if !episodes[place].Available || !d.Played {
 			continue
 		}
 		if d.Position > 0 {
-			return library.Item{}, nil, false
+			return 0, nil, false
 		}
-		return episode, date, true
+		return place, date, true
 	}
-	return library.Item{}, nil, false
+	return 0, nil, false
 }
 
-// regularEpisodes are a series' episodes, in order, without the specials,
-// which Next Up leaves out: those its order shows in season 0.
-func regularEpisodes(episodes []library.Item) []library.Item {
-	return slices.DeleteFunc(slices.Clone(episodes), func(e library.Item) bool { return e.ShownPlace().Season == 0 })
+// regularEpisodes are the places of a series' episodes, in order, but
+// those of the specials, which Next Up leaves out: those its order shows
+// in season 0.
+func regularEpisodes(episodes []library.EpisodeOutline) []int {
+	regular := make([]int, 0, len(episodes))
+	for place, episode := range episodes {
+		if episode.Place.Season != 0 {
+			regular = append(regular, place)
+		}
+	}
+	return regular
 }
 
 // before reports whether date a comes strictly before date b, a missing

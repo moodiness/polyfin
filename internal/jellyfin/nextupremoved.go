@@ -192,7 +192,7 @@ func (h *Handler) NextUpRemovals(ctx context.Context, user accounts.User) ([]Nex
 		if !ok || item.Kind != library.KindSeries || removalLifted(removal.At, latest[removal.Series]) {
 			continue
 		}
-		if episodes, ok := listed[item.ID]; !ok || !releasedSince(episodes, removal.At) {
+		if episodes, ok := listed[item.ID]; !ok || !releasedSince(library.Outlines(episodes), removal.At) {
 			result = append(result, NextUpRemoval{Item: item, At: removal.At})
 		}
 	}
@@ -235,9 +235,9 @@ func removalLifted(removed time.Time, latest *time.Time) bool {
 
 // releasedSince reports whether one of a series' regular episodes was
 // released after t: an episode with no date, or not out yet, never was.
-func releasedSince(episodes []library.Item, t time.Time) bool {
-	for _, episode := range regularEpisodes(episodes) {
-		if episode.Available && episode.PremiereDate != nil && episode.PremiereDate.After(t) {
+func releasedSince(episodes []library.EpisodeOutline, t time.Time) bool {
+	for _, place := range regularEpisodes(episodes) {
+		if episode := episodes[place]; episode.Available && episode.PremiereDate != nil && episode.PremiereDate.After(t) {
 			return true
 		}
 	}

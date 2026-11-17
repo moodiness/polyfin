@@ -633,6 +633,19 @@ func setImage(images *Images, imageType, url string) {
 	}
 }
 
+// outline sets on an episode's outline what apply sets of it on the
+// episode's item: its air date, and its season's name where it shows
+// (see EpisodeOutline). What apply changes of an episode must change here
+// too.
+func (set *overrideSet) outline(o *EpisodeOutline) {
+	if own, ok := set.fields[o.ID]; ok && own.PremiereDate != nil {
+		o.PremiereDate = new(*own.PremiereDate)
+	}
+	if season, ok := set.fields[o.Place.SeasonID]; ok && season.Name != nil {
+		o.Place.SeasonName = *season.Name
+	}
+}
+
 // apply sets on item what administrators changed of it and of the items
 // it shows: its series, season and album, its channel, the people it
 // credits and its artists. Seasons and episodes follow the ratings set on
