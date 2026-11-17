@@ -21,6 +21,44 @@ type DeviceProfile struct {
 	SubtitleProfiles                 []SubtitleProfile
 }
 
+// The bounds of a device profile's lists, which a profile kept for its
+// device stays within: MaxProfileEntries for its lists of profiles,
+// MaxProfileConditions for each list of conditions. They stand well
+// above what apps send: Jellyfin for Android's integrated player lists 19
+// direct play, 19 container and 31 codec profiles, jellyfin-web 11
+// transcoding profiles, Swiftfin 38 subtitle profiles, and no app more
+// than 7 conditions in a list.
+const (
+	MaxProfileEntries    = 256
+	MaxProfileConditions = 64
+)
+
+// Bounded reports whether every list of p is within its bound (see
+// MaxProfileEntries).
+func (p *DeviceProfile) Bounded() bool {
+	if len(p.DirectPlayProfiles) > MaxProfileEntries || len(p.TranscodingProfiles) > MaxProfileEntries ||
+		len(p.ContainerProfiles) > MaxProfileEntries || len(p.CodecProfiles) > MaxProfileEntries ||
+		len(p.SubtitleProfiles) > MaxProfileEntries {
+		return false
+	}
+	for _, profile := range p.TranscodingProfiles {
+		if len(profile.Conditions) > MaxProfileConditions {
+			return false
+		}
+	}
+	for _, profile := range p.ContainerProfiles {
+		if len(profile.Conditions) > MaxProfileConditions {
+			return false
+		}
+	}
+	for _, profile := range p.CodecProfiles {
+		if len(profile.Conditions) > MaxProfileConditions || len(profile.ApplyConditions) > MaxProfileConditions {
+			return false
+		}
+	}
+	return true
+}
+
 // DirectPlayProfile is a combination of container and codecs the app plays
 // as is. Lists are comma-separated; an empty list allows anything.
 type DirectPlayProfile struct {
