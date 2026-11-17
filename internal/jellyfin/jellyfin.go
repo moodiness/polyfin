@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/audiosegments"
@@ -267,9 +265,9 @@ type Handler struct {
 	// nameOrders are the orders of libraries' titles by name for Silo's
 	// apps, kept for drawLife (see nameorder.go).
 	nameOrders *cache.Cache[drawKey, nameOrder]
-	// nameFlight sorts a library by name once for the requests that ask
-	// it at the same time.
-	nameFlight singleflight.Group
+	// nameBuilds sorts a library by name once for the requests that ask
+	// it at the same time, a few at once on the server.
+	nameBuilds *nameBuilds
 }
 
 // New returns the Jellyfin API handler.
@@ -307,9 +305,11 @@ func New(options Options) *Handler {
 	h.draws = cache.NewLasting[drawKey, draw](1000, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
 		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })
 	// Orders by name hold whole stored libraries: their size is reckoned
-	// rather than measured, which would encode every title at each order.
+	// from a measure of a title's (see nameOrderTitleSize), rather than
+	// measured at each order, which would encode every title.
 	h.nameOrders = cache.NewLasting[drawKey, nameOrder](100, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
 		Sized(128<<20, func(o nameOrder) int { return len(o.items) * nameOrderTitleSize })
+	h.nameBuilds = newNameBuilds()
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.syncPlay.ended = h.groupEnded
 	h.listings = newListings(h.listVersions)

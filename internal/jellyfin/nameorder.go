@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -30,6 +30,13 @@ import (
 // every library in title order. The Jellyfin API's own listings keep
 // their order.
 //
+// One order holds every kind of title of a library, for a user, their
+// limits and the titles they hid, and a genre: each listing keeps the
+// kinds it asks for (includeItemTypes, excludeItemTypes, mediaTypes,
+// filters) as it pages, so that listings asking for other kinds share it.
+// At most nameSortsAtOnce orders are sorted at once on the server, and a
+// sort stops once no listing waits for it.
+//
 // GET /Polyfin/NameOrder lists a page of that order as /Items does, from
 // startIndex, limit titles, in ascending or descending order (sortOrder).
 // GET /Polyfin/NameOrder/Letters answers its letters (see library.Letters)
@@ -46,12 +53,97 @@ type nameOrder struct {
 	whole bool
 }
 
-// nameOrderTitleSize is about what a title of an order by name takes in
-// memory, with its key: the cache of orders bounds their total by it.
-const nameOrderTitleSize = 2048
+// kept is the order of the titles keep keeps.
+func (o nameOrder) kept(keep func(library.Item) bool) nameOrder {
+	kept := nameOrder{whole: o.whole}
+	for i, item := range o.items {
+		if keep(item) {
+			kept.items, kept.keys = append(kept.items, item), append(kept.keys, o.keys[i])
+		}
+	}
+	return kept
+}
 
-// nameOrderOf returns the order by name of the listing r asks for, or
-// answers r and returns false.
+// nameOrderTitleSize is what a title of an order by name takes in memory,
+// with its key: an order of 50,000 IPTV movies, names of 30 characters
+// without posters, held 64.3 MB, 1,286 bytes a title, and posters and
+// longer names add some. The cache of orders bounds their total by it.
+const nameOrderTitleSize = 1536
+
+// nameSortsAtOnce bounds the orders by name sorted at once on the server.
+const nameSortsAtOnce = 2
+
+// nameBuilds are the orders by name being sorted, one for each key, which
+// the listings that ask for it wait for together.
+type nameBuilds struct {
+	mu     sync.Mutex
+	builds map[drawKey]*nameBuild
+	// sorts holds a token for each sort under way (see nameSortsAtOnce).
+	sorts chan struct{}
+}
+
+// nameBuild is an order being sorted: the listings waiting for it, and its
+// result once done is closed. Its sort stops when the last waiter leaves.
+type nameBuild struct {
+	done    chan struct{}
+	order   nameOrder
+	err     error
+	waiters int
+	stop    context.CancelFunc
+	stopped bool
+}
+
+func newNameBuilds() *nameBuilds {
+	return &nameBuilds{builds: map[drawKey]*nameBuild{}, sorts: make(chan struct{}, nameSortsAtOnce)}
+}
+
+// wait returns the order under key, sorted by sort once for the listings
+// that ask for it meanwhile. The sort runs under ctx's values, and stops
+// when every listing waiting for it has given up.
+func (b *nameBuilds) wait(ctx context.Context, key drawKey, sort func(context.Context) (nameOrder, error)) (nameOrder, error) {
+	b.mu.Lock()
+	build, ok := b.builds[key]
+	if !ok || build.stopped {
+		sorting, stop := context.WithCancel(context.WithoutCancel(ctx))
+		build = &nameBuild{done: make(chan struct{}), stop: stop}
+		b.builds[key] = build
+		go b.run(sorting, key, build, sort)
+	}
+	build.waiters++
+	b.mu.Unlock()
+	select {
+	case <-build.done:
+		return build.order, build.err
+	case <-ctx.Done():
+		b.mu.Lock()
+		if build.waiters--; build.waiters == 0 {
+			build.stopped = true
+			build.stop()
+		}
+		b.mu.Unlock()
+		return nameOrder{}, ctx.Err()
+	}
+}
+
+func (b *nameBuilds) run(ctx context.Context, key drawKey, build *nameBuild, sort func(context.Context) (nameOrder, error)) {
+	defer build.stop()
+	select {
+	case b.sorts <- struct{}{}:
+		build.order, build.err = sort(ctx)
+		<-b.sorts
+	case <-ctx.Done():
+		build.err = ctx.Err()
+	}
+	b.mu.Lock()
+	if b.builds[key] == build {
+		delete(b.builds, key)
+	}
+	b.mu.Unlock()
+	close(build.done)
+}
+
+// nameOrderOf returns the order by name of the listing r asks for, with
+// the kinds of titles it keeps, or answers r and returns false.
 func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErrors) (accounts.User, nameOrder, bool) {
 	parent, hasParent := b.guid(r, "parentId")
 	user, ok := h.viewer(w, r, b, unknownListingUser)
@@ -80,19 +172,19 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 		h.internalError(w, r, err)
 		return accounts.User{}, nameOrder{}, false
 	}
-	// Hiding a title sorts again, so that positions follow at once.
-	key.order = "name|" + hiddenFingerprint(hidden)
+	// One order holds every kind; hiding a title sorts again, so that
+	// positions follow at once.
+	key.kinds, key.order = "", "name|"+hiddenFingerprint(hidden)
+	keep := itemTypeFilter(r)
 	if order, ok := h.nameOrders.Get(key); ok {
-		return user, order, true
+		return user, order.kept(keep), true
 	}
-	// The apps ask a list's first page and its letters at once: one of
-	// them sorts, the other waits for it, even when the app gives up on
-	// the one that sorts.
-	shared := r.WithContext(context.WithoutCancel(r.Context()))
-	built, err, _ := h.nameFlight.Do(fmt.Sprint(key), func() (any, error) {
-		return h.sortByName(shared, user, parent, genre, hidden, key)
+	order, err := h.nameBuilds.wait(r.Context(), key, func(ctx context.Context) (nameOrder, error) {
+		return h.sortByName(ctx, user, parent, genre, hidden, key)
 	})
 	switch {
+	case r.Context().Err() != nil:
+		// The app gave up waiting.
 	case errors.Is(err, errNotLibrary):
 		notFoundProblem(w)
 	case errors.Is(err, errNotStored):
@@ -100,7 +192,7 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 	case err != nil:
 		h.browseError(w, r, err)
 	default:
-		return user, built.(nameOrder), true
+		return user, order.kept(keep), true
 	}
 	return accounts.User{}, nameOrder{}, false
 }
@@ -114,13 +206,15 @@ var (
 	errNotStored = errors.New("not a stored library")
 )
 
-// sortByName sorts the titles of a library r lists by name, and keeps the
-// order under key once it holds every title it sorts: those of the whole
-// library, or as many as library.NamePool reads at most.
-func (h *Handler) sortByName(r *http.Request, user accounts.User, parent accounts.ID, genre string, hidden library.HiddenTitles,
+// sortByName sorts every title of a library by name, as a listing of its
+// titles through its folders reads them, and keeps the order under key
+// once it holds every title it sorts: those of the whole library, or as
+// many as library.NamePool reads at most.
+func (h *Handler) sortByName(ctx context.Context, user accounts.User, parent accounts.ID, genre string, hidden library.HiddenTitles,
 	key drawKey) (nameOrder, error) {
-	keep := itemTypeFilter(r)
-	page, bound, stored, isLibrary, err := h.Library.NamePool(listingContext(r, keep), user, parent, genre)
+	every := func(library.Kind) bool { return true }
+	listing := library.WithTitlesThrough(library.WithKinds(library.WithOpening(ctx), every))
+	page, bound, stored, isLibrary, err := h.Library.NamePool(listing, user, parent, genre)
 	switch {
 	case err != nil:
 		return nameOrder{}, err
@@ -129,7 +223,7 @@ func (h *Handler) sortByName(r *http.Request, user accounts.User, parent account
 	case !stored:
 		return nameOrder{}, errNotStored
 	}
-	items := hidden.Without(slices.DeleteFunc(slices.Clone(page.Items), func(item library.Item) bool { return !keep(item) }))
+	items := hidden.Without(slices.Clone(page.Items))
 	library.SortByName(items, false)
 	order := nameOrder{items: items, keys: make([]string, len(items)), whole: !page.More}
 	for i, item := range items {

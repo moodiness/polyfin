@@ -308,7 +308,7 @@ Silo's apps sort a library by title and jump to a letter (see [Title order and A
 
 - `GET /Polyfin/NameOrder` lists a page of the library's titles by name, from `StartIndex`, `Limit` of them, as `/Items` answers, with `Fields`. `TotalRecordCount` is the number of titles sorted.
 - `GET /Polyfin/NameOrder/Letters` answers `Total`, `Whole` (the order holds the whole library), `Letters`, each a `Letter` (A to Z or `#`), its `Count` and the `Position` of its first title, and `Runs`, the blocks of consecutive titles of one letter, each a `Letter` and a `Position`.
-- The order is that of every title of an IPTV source's movies or series, or of a local folder, up to 50,000 and the library's maximum, by sort name without regard to case or accents, within the user's parental control and blocked genres, without the titles they hid. It is kept 2 minutes for a user and their limits.
+- The order is that of every title of an IPTV source's movies or series, or of a local folder, up to 50,000 and the library's maximum, by sort name without regard to case or accents, within the user's parental control and blocked genres, without the titles they hid. It is kept 2 minutes for a user and their limits, for every kind of title: each listing keeps the kinds its `IncludeItemTypes`, `ExcludeItemTypes`, `MediaTypes` and `Filters` ask for. Two orders are sorted at once on the server at most, the others waiting their turn, and a sort stops once no listing waits for it.
 - The Jellyfin API's own listings keep their catalog's order.
 
 ### Libraries hidden from the top bar for apps
