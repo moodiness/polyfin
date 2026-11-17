@@ -234,12 +234,14 @@ type Watched struct {
 // WatchedSeries lists the series one of whose episodes has a date, the
 // user having played or started it, the latest first: in the order their
 // first episode with a date comes in Episodes, its date the series'
-// latest. Only the series are read, not their episodes.
+// latest. Only the series are read, not their episodes, in the order of
+// the index user_data_series_latest: no episode has a null date here, so
+// NULLS LAST changes nothing but lets the index give the order.
 func (s *Store) WatchedSeries(ctx context.Context, user accounts.ID) ([]Watched, error) {
 	rows, err := s.db.Query(ctx, `SELECT series_id, last_played_at FROM (
 			SELECT DISTINCT ON (series_id) series_id, last_played_at, item_id FROM user_data
 			WHERE user_id = $1 AND series_id IS NOT NULL AND last_played_at IS NOT NULL
-			ORDER BY series_id, last_played_at DESC, item_id) latest
+			ORDER BY series_id, last_played_at DESC NULLS LAST, item_id) latest
 		ORDER BY last_played_at DESC, item_id`, user)
 	if err != nil {
 		return nil, err
@@ -255,7 +257,8 @@ func (s *Store) WatchedSeries(ctx context.Context, user accounts.ID) ([]Watched,
 // PlayedSeries lists the series one of whose episodes the user played, in
 // the order their first played episode comes in Episodes: the latest
 // played first, those played without a date last, ties by episode. Only
-// the series are read, not their episodes.
+// the series are read, not their episodes, in the order of the index
+// user_data_series_latest.
 func (s *Store) PlayedSeries(ctx context.Context, user accounts.ID) ([]accounts.ID, error) {
 	rows, err := s.db.Query(ctx, `SELECT series_id FROM (
 			SELECT DISTINCT ON (series_id) series_id, last_played_at, item_id FROM user_data
