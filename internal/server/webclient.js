@@ -324,7 +324,10 @@
 //     its Id, GroupId, HostName, and the title's ItemName and SeriesName.
 //     It shows a prompt at the top right of the page, across the bottom
 //     on a narrow screen, which leaves the page usable: who invites, the
-//     title, Join, focused, and Not now. Join joins the group with
+//     title, Join, and Not now. The prompt takes the focus itself, not
+//     Join, so a key meant for the page joins nothing; while the user
+//     types in a field or a video plays, it leaves the focus where it is.
+//     Join joins the group with
 //     Jellyfin's POST /SyncPlay/Join, jellyfin-web then following the
 //     group as when its SyncPlay menu joins one; Not now, or Escape,
 //     posts /Polyfin/SyncPlay/Invitations/{Id}/Decline. Another
@@ -3145,7 +3148,10 @@
         // a second later, and would stop the title started meanwhile. It
         // pings the group then, the stop done.
         var ready = nextPing(10000)
-        return send('POST', 'SyncPlay/New', { GroupName: say('groupName').replace('{name}', host.Name || '') }).then(function (joined) {
+        var groupName = say('groupName').replace('{name}', function () {
+          return host.Name || ''
+        })
+        return send('POST', 'SyncPlay/New', { GroupName: groupName }).then(function (joined) {
           return ready.then(function () {
             return joined
           })
@@ -3358,8 +3364,19 @@
         }
         var sent = names('sent')
         var soon = names('soon')
-        if (sent) toast(say(again ? 'invitedMore' : 'invitedSent').replace('{names}', sent), again ? 0 : 10000)
-        if (soon) toast(say('invitedSoon').replace('{names}', soon))
+        if (sent)
+          toast(
+            say(again ? 'invitedMore' : 'invitedSent').replace('{names}', function () {
+              return sent
+            }),
+            again ? 0 : 10000
+          )
+        if (soon)
+          toast(
+            say('invitedSoon').replace('{names}', function () {
+              return soon
+            })
+          )
         if (outcomes.indexOf('failed') >= 0) toast(say('inviteFailed'))
       })
     )
@@ -3389,7 +3406,10 @@
     var later = inviteButton('button-cancel polyfinInviteLater', say('inviteLater'))
     var heading = element('h2', 'polyfinInviteTitle', say('watchTogether'))
     heading.id = 'polyfinPromptTitle'
-    var text = element('p', 'polyfinInviteText', say('invitePrompt').replace('{host}', String(invite.HostName || '')))
+    var host = say('invitePrompt').replace('{host}', function () {
+      return String(invite.HostName || '')
+    })
+    var text = element('p', 'polyfinInviteText', host)
     text.id = 'polyfinPromptText'
     var parts = [heading, text]
     if (invite.ItemName) {
@@ -3439,7 +3459,22 @@
     later.addEventListener('click', quietly(decline))
     inviteKeys(card, decline)
     document.body.appendChild(card)
-    join.focus()
+    // The card takes the focus, not Join: a key meant for the page then
+    // answers nothing until the user moves to a button. It leaves the
+    // focus alone in a field being typed in, or while a video plays.
+    card.tabIndex = -1
+    if (!busy()) card.focus()
+  }
+  // busy tells whether the user is typing in a field or watching a video,
+  // when a prompt nobody asked for leaves the focus where it is.
+  function busy() {
+    var focused = document.activeElement
+    if (focused && (focused.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName || ''))) return true
+    var videos = document.querySelectorAll('video')
+    for (var i = 0; i < videos.length; i++) {
+      if (!videos[i].paused && !videos[i].ended) return true
+    }
+    return false
   }
   // inviteStyle adds the look of the picker and the prompt, once: a panel
   // in the middle of a dimmed page for the picker; at the top right for

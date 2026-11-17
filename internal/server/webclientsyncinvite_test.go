@@ -37,7 +37,7 @@ func TestWatchTogetherInvitesPeople(t *testing.T) {
 	const ready = "toast Your SyncPlay group is ready, paused. The others join it on their own device, from the SyncPlay button" +
 		" (the people icon at the top). Press Play once they are in. (10s)"
 	const invite = `POST Polyfin/SyncPlay/Invitations {"GroupId":"g1","UserId":"u2"}`
-	const prompt = "prompt alertdialog | Watch together | Morgan invites you to watch together. | Show / Pilot | Not now, Join | focus Join"
+	const prompt = "prompt alertdialog | Watch together | Morgan invites you to watch together. | Show / Pilot | Not now, Join | focus the prompt"
 	scenarios := map[string]string{
 		// The host.
 		"inviting Sam": started + picker + ", tick Sam, Invite, " + invite + ", nothing shown, focus Play, " +
@@ -72,20 +72,29 @@ func TestWatchTogetherInvitesPeople(t *testing.T) {
 		"a prompt, Join": prompt + `, Join, POST SyncPlay/Join {"GroupId":"g1"}, nothing shown, focus Play`,
 		"a prompt, Join failing": prompt + `, Join, POST SyncPlay/Join {"GroupId":"g1"} (500), nothing shown, focus Play, ` +
 			"toast The group could not be joined. Try again from the SyncPlay button (the people icon at the top).",
-		"a prompt, Not now":                    prompt + ", Not now, POST Polyfin/SyncPlay/Invitations/i1/Decline, nothing shown, focus Play",
-		"a prompt, Escape":                     prompt + ", Escape, POST Polyfin/SyncPlay/Invitations/i1/Decline, nothing shown, focus Play",
-		"a prompt, by keyboard":                prompt + ", ArrowLeft: focus Not now, Tab: focus Join, Tab: focus Not now, Shift+Tab: focus Join",
+		"a prompt, Not now": prompt + ", Not now, POST Polyfin/SyncPlay/Invitations/i1/Decline, nothing shown, focus Play",
+		"a prompt, Escape":  prompt + ", Escape, POST Polyfin/SyncPlay/Invitations/i1/Decline, nothing shown, focus Play",
+		"a prompt, by keyboard": prompt + ", Tab: focus Not now, ArrowRight: focus Join, ArrowLeft: focus Not now, Shift+Tab: focus Join, " +
+			`POST SyncPlay/Join {"GroupId":"g1"}, Enter: focus Play, nothing shown, focus Play`,
 		"a prompt, joined on another device":   prompt + ", told Joined i1, nothing shown, focus Play",
 		"a prompt, declined on another device": prompt + ", told Declined i1, nothing shown, focus Play",
 		"a prompt, its group ended":            prompt + ", told Ended i1, nothing shown, focus Play",
 		"a prompt, another invitation ended":   prompt + ", told Expired i0, " + prompt,
 		"a prompt, replaced": prompt + ", told Invited i2, " +
-			"prompt alertdialog | Watch together | Robin invites you to watch together. | Amber Road | Not now, Join | focus Join",
+			"prompt alertdialog | Watch together | Robin invites you to watch together. | Amber Road | Not now, Join | focus the prompt",
 		"a prompt, expiring":                       prompt + ", 5 minutes, nothing shown, focus Play",
 		"a prompt, through the message event":      prompt + `, Join, POST SyncPlay/Join {"GroupId":"g1"}, nothing shown, focus Play`,
 		"a prompt, the user elsewhere on the page": prompt + ", Not now, POST Polyfin/SyncPlay/Invitations/i1/Decline, nothing shown, focus Search",
 		"a prompt, in German": "prompt alertdialog | Gemeinsam ansehen | Morgan lädt dich zum gemeinsamen Ansehen ein. | Show / Pilot |" +
-			" Nicht jetzt, Beitreten | focus Beitreten",
+			" Nicht jetzt, Beitreten | focus the prompt",
+		// Typing in a field, or watching a video, the user keeps the focus,
+		// and a key meant for the page joins nothing.
+		"a prompt, typing in the search field": strings.Replace(prompt, "focus the prompt", "focus Search", 1) +
+			", Space: focus Search, Enter: focus Search, " + strings.Replace(prompt, "focus the prompt", "focus Search", 1),
+		"a prompt, during a video": strings.Replace(prompt, "focus the prompt", "focus Play", 1) +
+			", Space: focus Play, Enter: focus Play, " + strings.Replace(prompt, "focus the prompt", "focus Play", 1),
+		// A name shows as written, whatever characters it holds.
+		"a prompt, from a name with a dollar": strings.Replace(prompt, "Morgan invites", "Sam $& $` $' invites", 1),
 	}
 	const harness = scriptRunner + `
 const { script, scenarios, page } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
@@ -178,9 +187,11 @@ const settle = async (times) => { for (let i = 0; i < (times || 20); i++) await 
       querySelectorAll: (selector) => body.querySelectorAll(selector),
     }
     // The page, with a control focused.
-    const play = new Element('button')
-    play.textContent = name.includes('elsewhere') ? 'Search' : 'Play'
+    const typing = name.includes('search field')
+    const play = new Element(typing ? 'input' : 'button')
+    play.textContent = name.includes('elsewhere') || typing ? 'Search' : 'Play'
     body.appendChild(play)
+    if (name.includes('video')) body.appendChild(Object.assign(new Element('video'), { paused: false, ended: false }))
     play.focus()
     const failure = (status) => Object.assign(new Error('HTTP ' + status), { status })
     const subscribers = {}
@@ -246,7 +257,8 @@ const settle = async (times) => { for (let i = 0; i < (times || 20); i++) await 
       addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
     })
     // What shows: the picker or the prompt, with the control focused.
-    const focusName = () => (active && active.type === 'checkbox' ? active.parentNode.textContent : active ? active.textContent : 'none')
+    const focusName = () => (active && active.type === 'checkbox' ? active.parentNode.textContent
+      : active && active.classList.contains('polyfinInvitePrompt') ? 'the prompt' : active ? active.textContent : 'none')
     const describe = (dialog, kind) => [kind + ' ' + dialog.getAttribute('role') + (dialog.getAttribute('aria-modal') ? ' ' + dialog.getAttribute('aria-modal') : ''),
       ...dialog.children.map((part) => part.className === 'polyfinInviteList'
         ? part.children.map((label) => (label.children[0].checked ? '[x] ' : '[ ] ') + label.textContent).join(', ')
@@ -262,15 +274,23 @@ const settle = async (times) => { for (let i = 0; i < (times || 20); i++) await 
     }
     const button = (text) => body.querySelectorAll('button').find((b) => b.textContent === text)
     const press = (text) => { did.push(text); button(text).click() }
+    // A key goes to the focused control, which a button answers as a
+    // browser does when nothing prevented it: Enter on keydown, Space on
+    // keyup, by a click.
     const key = (key, shiftKey) => {
       if (key === 'Escape') did.push(key)
-      active.dispatch('keydown', { key, shiftKey })
-      if (key !== 'Escape') did.push((shiftKey ? 'Shift+' : '') + key + ': focus ' + focusName())
+      const target = active
+      let prevented = false
+      target.dispatch('keydown', { key, shiftKey, preventDefault() { prevented = true } })
+      if (key === ' ') target.dispatch('keyup', { key, preventDefault() { prevented = true } })
+      if (!prevented && target.tagName === 'BUTTON' && (key === 'Enter' || key === ' ')) target.click()
+      if (key !== 'Escape') did.push((shiftKey ? 'Shift+' : '') + (key === ' ' ? 'Space' : key) + ': focus ' + focusName())
     }
     const tick = (who) => { did.push('tick ' + who); body.querySelectorAll('label').find((l) => l.textContent === who).children[0].click() }
     await settle()
     if (name.startsWith('a prompt')) {
-      const invite = { Id: 'i1', State: 'Invited', GroupId: 'g1', GroupName: 'Morgan’s group', HostName: 'Morgan', ItemId: 'e1',
+      const invite = { Id: 'i1', State: 'Invited', GroupId: 'g1', GroupName: 'Morgan’s group',
+        HostName: name.includes('dollar') ? "Sam $& $\x60 $'" : 'Morgan', ItemId: 'e1',
         ItemName: 'Pilot', SeriesName: 'Show', ExpiresAt: '2026-11-10T20:05:00.0000000Z' }
       send('PolyfinSyncPlayInvite', invite)
       shown()
@@ -287,10 +307,10 @@ const settle = async (times) => { for (let i = 0; i < (times || 20); i++) await 
         did.push('5 minutes')
         timers.filter((timer) => timer.delay === 300000).forEach((timer) => timer.run())
       } else if (name.includes('keyboard')) {
-        key('ArrowLeft'); key('Tab'); key('Tab'); key('Tab', true)
-        results[name] = did.join(', ')
-        continue
-      } else if (name.includes('German')) {
+        key('Tab'); key('ArrowRight'); key('ArrowLeft'); key('Tab', true); key('Enter')
+      } else if (name.includes('search field') || name.includes('video')) {
+        key(' '); key('Enter')
+      } else if (name.includes('German') || name.includes('dollar')) {
         results[name] = did.join(', ')
         continue
       } else if (name.includes('Escape')) {
