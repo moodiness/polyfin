@@ -684,7 +684,7 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 ### Version names for apps
 
 - Only `MediaSources[].Name` changes. `Id` and `ETag` stay, so the web player keeps a picked version selected.
-- With **Version names** on **Short**, `Name` is the short name Polyfin writes (see [Version names](versions.md#version-names)), for movies and episodes, the same in item details, listings and `PlaybackInfo`. On **As the addon writes them**, it is the addon's name. Either may end with how the app plays it.
+- With **Version names** on **Short**, `Name` is the short name Polyfin writes (see [Version names](versions.md#version-names)), for movies and episodes, the same in item details, listings and `PlaybackInfo`. On **As the addon writes them**, it is the addon's name. Either may end with how the app plays it, or, for a version whose tracks are unknown, how it likely plays it, estimated from its labels.
 
 ### Version badges for apps
 

@@ -517,9 +517,15 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 | "(cannot play here)" | It needs a conversion the server or user may not have (see [Transcoding](transcoding.md)) |
 
 - Converted names give the first reason in the table that applies.
-- Only versions analyzed or described by [RemuxDB](#tracks-from-remuxdb) get an ending. Naming reads nothing: it runs a play's decision on what is known.
+- Versions analyzed or described by [RemuxDB](#tracks-from-remuxdb) get an exact ending. Naming reads nothing: it runs a play's decision on what is known.
   - Opening a title analyzes its first two versions, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on. Each playback reads up to three.
-  - So most versions of a title with many get no ending until played.
+  - An analysis wins over a description; either replaces an estimate at the next listing.
+- The others get an estimate from their labels, worded as one: "(likely direct play)", "(likely direct stream)", "(likely converted: audio)"; in French, "(lecture directe probable)", "(flux direct probable)", "(conversion probable : audio)".
+  - The labels must name the video codec and an audio codec. Polyfin builds the tracks they suggest, typical values filling the rest, and runs the same decision.
+  - When what the labels leave open could change the ending, there is none: two audio codecs played differently, an unknown container, height or channel count, or a Dolby Vision profile the labels do not tell.
+  - Estimates may be wrong: the track the user's language picks, the Dolby Vision profile or a subtitle can change how a version plays. Checked against analyses on a real server, 95 % of estimates matched for the web player; the others said converted where the file played as it is, or gave another reason for a conversion.
+  - The estimate is in the name only: track menus, the version picked and how it plays are unchanged.
+  - For exact endings before a play, turn on **Describe versions from RemuxDB**, under **Settings › Playback**. It sends titles' IMDb identifiers to a third party, and stays off by default.
 - `PlaybackInfo` names every listed version for the app's device profile.
 - Item details use each device's last `PlaybackInfo` profile and bitrate, else its session capabilities' profile. The web player's version menu, Android TV's **Select version** and Swiftfin's menu read these.
 - Polyfin keeps that profile across restarts and updates, until the device signs out, is removed or goes 30 days unused.
@@ -528,7 +534,7 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 - In the web player, the title page a playback returns to, or the one Back shows again, takes the names the details give then.
 - Names assume the tracks the user's preferences choose; picking others may change how it plays.
 - Names use **Language of generated names** (see [Getting started](getting-started.md#language-of-generated-names)): in French, "(lecture directe)", "(flux direct)", "(converti : HDR)", "(illisible ici)".
-- Endings are at most 30 characters; apps cutting names to one line may hide them.
+- Endings are at most 30 characters, and estimates at most 45; apps cutting names to one line may hide them.
 
 Polyfin reads no keyframe index for addon MPEG-TS files, MPEG program streams (`.mpg`, `.mpeg`, `.vob`), AVI files or HLS playlists (see [Streams that are HLS playlists](playback.md#streams-that-are-hls-playlists)), so over HLS their video is converted.
 
