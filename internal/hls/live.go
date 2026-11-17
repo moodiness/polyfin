@@ -167,11 +167,19 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 			m.mu.Unlock()
 			return nil, ErrBusy
 		}
+		// A folder of its own: one of the same key started as this one
+		// stops does not have its segments removed with this one's (see
+		// stop).
+		dir, err := os.MkdirTemp(m.dir, "live-")
+		if err != nil {
+			m.mu.Unlock()
+			return nil, err
+		}
 		if replaced != nil {
 			delete(m.lives, replaced.key)
 		}
 		now := time.Now()
-		l = &live{m: m, key: key, dir: filepath.Join(m.dir, "live-"+key.name()), used: now, created: now}
+		l = &live{m: m, key: key, dir: dir, used: now, created: now}
 		m.lives[key] = l
 	}
 	m.mu.Unlock()
@@ -333,7 +341,7 @@ func (l *live) ensure(ctx context.Context, open Opener) (*liveRun, error) {
 		}
 		l.remux, l.release, l.opened = remux, release, true
 	}
-	return l.start()
+	return l.start(), nil
 }
 
 // liveBackoff is how long after a run that ended quickly, the quick-th in
@@ -342,20 +350,12 @@ func liveBackoff(quick int) time.Duration {
 	return time.Second << min(max(quick-1, 0), 2)
 }
 
-// start runs FFmpeg into the encoding's directory, emptied on the first
-// run only, numbering segments on from the last run's, so that a player
-// that reloads the playlist does not see the stream go back; a run after
-// the first starts its playlist with a discontinuity, and writes its own
-// initialization segment. The caller holds l.mu.
-func (l *live) start() (*liveRun, error) {
-	if l.run == nil {
-		if err := removeAllShared(l.dir); err != nil {
-			return nil, err
-		}
-	}
-	if err := os.MkdirAll(l.dir, 0o700); err != nil {
-		return nil, err
-	}
+// start runs FFmpeg into the encoding's directory, numbering segments on
+// from the last run's, so that a player that reloads the playlist does not
+// see the stream go back; a run after the first starts its playlist with
+// a discontinuity, and writes its own initialization segment. The caller
+// holds l.mu.
+func (l *live) start() *liveRun {
 	ctx, cancel := context.WithCancel(context.Background())
 	previous := l.run
 	run := &liveRun{started: time.Now(), cancel: cancel, done: make(chan struct{})}
@@ -411,7 +411,7 @@ func (l *live) start() (*liveRun, error) {
 		close(run.done)
 		l.mu.Unlock()
 	}()
-	return run, nil
+	return run
 }
 
 // watchStall ends run, which runs, once it made no segment for the

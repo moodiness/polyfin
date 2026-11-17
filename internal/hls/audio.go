@@ -3,8 +3,6 @@ package hls
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -116,16 +114,12 @@ type AudioKey struct {
 	Format  Format
 }
 
-func (k AudioKey) name() string {
-	sum := sha256.Sum256([]byte("audio\x00" + k.Session + "\x00" + k.Format.Extension()))
-	return hex.EncodeToString(sum[:12])
-}
-
 // audioEncoding is one conversion of a track into segments for a play
 // session.
 type audioEncoding struct {
-	m      *Manager
-	key    AudioKey
+	m   *Manager
+	key AudioKey
+	// dir holds the segments, set once opened.
 	dir    string
 	opened chan struct{}
 	audio  Audio
@@ -176,7 +170,7 @@ func (m *Manager) audioFile(ctx context.Context, key AudioKey, open AudioOpener,
 	}
 	e := m.audios[key]
 	if e == nil {
-		e = &audioEncoding{m: m, key: key, dir: filepath.Join(m.dir, key.name()), opened: make(chan struct{}), used: time.Now()}
+		e = &audioEncoding{m: m, key: key, opened: make(chan struct{}), used: time.Now()}
 		m.audios[key] = e
 		m.mu.Unlock()
 		e.open(ctx, open)
@@ -209,11 +203,15 @@ func (e *audioEncoding) open(ctx context.Context, open AudioOpener) {
 		e.err = err
 		return
 	}
-	if err := os.MkdirAll(e.dir, 0o700); err != nil {
+	// A folder of its own: one of the same key started as this one stops
+	// does not have its segments removed with this one's (see stop).
+	dir, err := os.MkdirTemp(e.m.dir, "audio-")
+	if err != nil {
 		free()
 		e.err = err
 		return
 	}
+	e.dir = dir
 	e.audio, e.plan, e.free = audio, plan, free
 }
 

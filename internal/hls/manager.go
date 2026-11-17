@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -719,12 +717,6 @@ type Key struct {
 	// segments (see Plan.FastFrom): its video is never kept, the plan of
 	// a session taking it over having none, or others.
 	FastStart bool
-}
-
-func (k Key) name() string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{k.Session, strconv.Itoa(k.Audio), k.Format.Extension(), strconv.Itoa(k.Variant),
-		k.User, k.Device, k.Version, k.Video}, "\x00")))
-	return hex.EncodeToString(sum[:12])
 }
 
 // playback is the key the variants of a playback share.
