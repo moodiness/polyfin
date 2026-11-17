@@ -273,74 +273,102 @@ func TestNextUpLooksAtTheFiftySeriesWatchedLast(t *testing.T) {
 // series while the lists stay the same. Reading every episode the user
 // has data of, describing each series twice and merging every episode of
 // every series after each restart took several times as many.
+//
+// With the fields the home page asks for, Path among them, each episode
+// shown reads what is known of its versions too: its streams come from
+// its series' description kept, so the series' details are still read
+// once after the restart and never again, in a few statements per episode
+// shown. Each episode read its series' title and details, and decoded
+// them, for its streams.
 func TestIPTVNextUpStatementsAfterARestart(t *testing.T) {
 	t.Parallel()
-	const series = 8
-	x := newIPTVShows(t, series, 3, 10)
-	base := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
-	for i := range series {
-		x.played(t, fmt.Sprintf("Show %02d", i), "S2E4", base.Add(time.Duration(i)*time.Hour))
-	}
-	want, _ := x.list(t, "/Shows/NextUp")
-	if len(want) != series {
-		t.Fatalf("Next Up before the restart: %q", want)
-	}
+	for _, c := range []struct {
+		name, query string
+		// perEpisode are the statements each episode shown adds: its
+		// record and its series' (see library.Service.CachedVersions),
+		// and its series' title for its streams.
+		perEpisode int
+	}{
+		{"plain", "", 0},
+		{"home page", "?limit=24&fields=PrimaryImageAspectRatio,DateCreated,Path,MediaSourceCount", 3},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			const series = 8
+			x := newIPTVShows(t, series, 3, 10)
+			base := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+			for i := range series {
+				x.played(t, fmt.Sprintf("Show %02d", i), "S2E4", base.Add(time.Duration(i)*time.Hour))
+			}
+			path := "/Shows/NextUp" + c.query
+			want, _ := x.list(t, path)
+			if len(want) != series {
+				t.Fatalf("Next Up before the restart: %q", want)
+			}
 
-	// A restart, whose library, IPTV sources and users' data count their
-	// statements.
-	counter := &statementCounter{}
-	config := x.pool.Config()
-	config.ConnConfig.Tracer = counter
-	counted, err := pgxpool.NewWithConfig(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(counted.Close)
-	options := x.handler.Options
-	options.Library = library.New(counted, x.addons, options.Stremio, options.Logger, x.store.Settings)
-	options.Library.SetFollowUps()
-	options.IPTV = iptv.New(counted, x.addons, options.Stremio, options.Logger, x.store.Settings)
-	options.Library.UseIPTV(options.IPTV)
-	options.UserData = userdata.New(counted)
-	server := httptest.NewServer(New(options))
-	t.Cleanup(server.Close)
-	restarted := x
-	restarted.url = server.URL
-	details := regexp.MustCompile(`\biptv_details\b`)
-	checks := regexp.MustCompile(`\bFROM iptv_sources WHERE addon_id\b`)
-	for _, when := range []string{"after the restart", "again"} {
-		counter.reset()
-		if got, _ := restarted.list(t, "/Shows/NextUp"); !slices.Equal(got, want) {
-			t.Errorf("Next Up %s: %q, want %q", when, got, want)
-		}
-		// What it records after its answer counts too.
-		episodesRecorded(t, options.Library)
-		described, checked := 0, 0
-		counter.mu.Lock()
-		for sql, sent := range counter.sent {
-			if details.MatchString(sql) {
-				described += sent
+			// A restart, whose library, IPTV sources and users' data count
+			// their statements.
+			counter := &statementCounter{}
+			config := x.pool.Config()
+			config.ConnConfig.Tracer = counter
+			counted, err := pgxpool.NewWithConfig(t.Context(), config)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if checks.MatchString(sql) {
-				checked += sent
+			t.Cleanup(counted.Close)
+			options := x.handler.Options
+			options.Library = library.New(counted, x.addons, options.Stremio, options.Logger, x.store.Settings)
+			options.Library.SetFollowUps()
+			options.IPTV = iptv.New(counted, x.addons, options.Stremio, options.Logger, x.store.Settings)
+			options.Library.UseIPTV(options.IPTV)
+			options.UserData = userdata.New(counted)
+			server := httptest.NewServer(New(options))
+			t.Cleanup(server.Close)
+			restarted := x
+			restarted.url = server.URL
+			details := regexp.MustCompile(`\biptv_details\b`)
+			checks := regexp.MustCompile(`\bFROM iptv_sources WHERE addon_id\b`)
+			for _, when := range []string{"after the restart", "again"} {
+				counter.reset()
+				if got, _ := restarted.list(t, path); !slices.Equal(got, want) {
+					t.Errorf("Next Up %s: %q, want %q", when, got, want)
+				}
+				// What it records after its answer counts too.
+				episodesRecorded(t, options.Library)
+				described, checked := 0, 0
+				counter.mu.Lock()
+				for sql, sent := range counter.sent {
+					if details.MatchString(sql) {
+						described += sent
+					}
+					if checks.MatchString(sql) {
+						checked += sent
+					}
+				}
+				counter.mu.Unlock()
+				n := counter.statements.Load()
+				t.Logf("Next Up %s: %d statements, %d writing or locking items\n%s", when, n, counter.itemWrites.Load(), counter.mostSent(8))
+				budget, read := 12, 0
+				if when == "after the restart" {
+					budget, read = 3*series+12, series
+					if c.perEpisode > 0 {
+						// The version blocks and pins, which each of the
+						// episodes described at once may read before they
+						// are kept.
+						budget += 2 * listingAtOnce
+					}
+				}
+				if budget += c.perEpisode * series; n > int64(budget) {
+					t.Errorf("Next Up %s: %d statements for %d series", when, n, series)
+				}
+				if writes := counter.itemWrites.Load(); writes != 0 {
+					t.Errorf("Next Up %s: %d statements wrote or locked items", when, writes)
+				}
+				if described != read || checked != 1 {
+					t.Errorf("Next Up %s: the series' details read %d times for %d series, their source checked %d times", when, described, series, checked)
+				}
 			}
-		}
-		counter.mu.Unlock()
-		n := counter.statements.Load()
-		t.Logf("Next Up %s: %d statements, %d writing or locking items\n%s", when, n, counter.itemWrites.Load(), counter.mostSent(5))
-		budget, read := 12, 0
-		if when == "after the restart" {
-			budget, read = 3*series+12, series
-		}
-		if n > int64(budget) {
-			t.Errorf("Next Up %s: %d statements for %d series", when, n, series)
-		}
-		if writes := counter.itemWrites.Load(); writes != 0 {
-			t.Errorf("Next Up %s: %d statements wrote or locked items", when, writes)
-		}
-		if described != read || checked != 1 {
-			t.Errorf("Next Up %s: the series' details read %d times for %d series, their source checked %d times", when, described, series, checked)
-		}
+		})
 	}
 }
 

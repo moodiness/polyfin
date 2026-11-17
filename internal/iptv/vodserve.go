@@ -713,8 +713,8 @@ func (t storedTitle) vodStream(quality, address string, headers map[string]strin
 }
 
 // vodStreams lists the stream of a movie or an episode a source shows: an
-// Xtream account's file, whose episode needs its series' details (asked
-// when unknown: playing opens it), or an M3U entry's address.
+// Xtream account's file, whose episode needs its series' details (see
+// episodeDetails), or an M3U entry's address.
 func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if key, ok := strings.CutPrefix(id, "vod:"); ok {
 		t, err := s.title(ctx, source, typeMovie, key)
@@ -760,7 +760,7 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 		}
 		return []stremio.Stream{t.vodStream(quality, address, headers)}, nil
 	}
-	d, err := s.details(ctx, source, t, true)
+	d, err := s.episodeDetails(ctx, source, t)
 	if err != nil || d == nil {
 		return nil, err
 	}
@@ -770,6 +770,21 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 	}
 	e := d.Episodes[index]
 	return []stremio.Stream{t.vodStream(e.Quality, accountOf(t.kind, t.manifestAddress).vodURL("series", key, e.Extension), nil)}, nil
+}
+
+// episodeDetails returns the details of series t, which hold the files of
+// its episodes: those of its description kept (see descriptions.go),
+// under the same check of its source's version, while they are fresh,
+// else details', which asks the provider for them when they are unknown,
+// of another version of the series, or old: playing opens it. A listing
+// of episodes needs their streams, one episode at a time, and would
+// otherwise read and decode the series' details, every episode of them,
+// for each one.
+func (s *Service) episodeDetails(ctx context.Context, source accounts.ID, t storedTitle) (*details, error) {
+	if kept, err := s.description(ctx, source, typeSeries, t.Key); err == nil && kept.title.Version == t.Version && !kept.fetchDue(s.now()) {
+		return kept.details, nil
+	}
+	return s.details(ctx, source, t, true)
 }
 
 // Enrichment reports whether a source describes its titles through the
