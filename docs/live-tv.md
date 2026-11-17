@@ -415,7 +415,7 @@ XMLTV programmes appear wherever Native EPG programmes do, with the same filters
 - **Categories:** a guide category such as "Movie", "News" or "Sports" marks programmes as a Native EPG genre does.
 - **Recommended programmes:** those airing now are listed by channel number, those to come by start time.
 - **Reading:** XMLTV programmes are read from the guide when asked. A guide page reads only its channels' programmes. A listing by start time, such as the upcoming rows of the Live TV page, reads no further than it shows.
-- **Storage:** XMLTV programmes are not stored apart from the guide. A programme opened by its identifier is found again in the guide.
+- **Storage:** XMLTV programmes are not stored apart from the guide. A programme opened by its identifier, by an app that listed it before a restart, is found in an index of the guides' programmes kept in memory, about 5 MB for 170,000 programmes on mapped channels. The first lookup that needs it builds it, and the first after a guide download or a mapping change builds it again. An identifier of no programme is answered from it too.
 - **Images:** a programme's image, its guide's `icon`, is relayed for the programmes listed in the last day, as images are served without signing in.
 - **Native EPG programmes:** those listed are kept, and deleted two days after they end, unless a recording or a timer names them.
 
