@@ -52,6 +52,15 @@ const (
 	// maxGroupsLength bounds the groups parameter, as the contract does:
 	// larger filters go in the body of POST /api/v2/catalog/query.
 	maxGroupsLength = 32768
+	// maxGroups and maxRules bound a filter's rule groups and its rules in
+	// all. The apps send a group per facet the sheet offers, 15 at most,
+	// and a rule per value picked in it (Apple CatalogQueryBuilder.build,
+	// Screens/Browse/Filtering/CatalogQueryBuilder.swift; Android
+	// CatalogFilterQueryBuilder.buildGroups, shared
+	// catalog/filter/CatalogFilterState.kt): a sheet offers at most its
+	// genres, content ratings and seven decades, which Polyfin answers.
+	maxGroups = 32
+	maxRules  = 512
 )
 
 // filter is what a page is narrowed to: groups, all or any of which must
@@ -121,6 +130,17 @@ func filterAsked(w http.ResponseWriter, q url.Values, in string) (filter, bool) 
 	if err := json.Unmarshal([]byte(text), &groups); err != nil {
 		validationProblem(w, in+".groups", "invalid", "groups is not a JSON array of rule groups.")
 		return filter{}, false
+	}
+	if len(groups) > maxGroups {
+		validationProblem(w, in+".groups", "out_of_range", "groups holds at most 32 rule groups.")
+		return filter{}, false
+	}
+	rules := 0
+	for _, g := range groups {
+		if rules += len(g.Rules); rules > maxRules {
+			validationProblem(w, in+".groups", "out_of_range", "The rule groups hold at most 512 rules in all.")
+			return filter{}, false
+		}
 	}
 	for _, g := range groups {
 		var group ruleGroup
@@ -468,9 +488,14 @@ func (s *Server) scopeOf(r *http.Request, v viewer, l listing, f filter) (scope,
 		return sc, answered, nil
 	}
 	if genres := f.genres(); len(genres) > 0 && !sc.collections {
+		// A genre its catalogs do not offer lists nothing: it is no stream.
+		offered, a, err := s.offeredGenres(r, v, l)
+		if err != nil || !a.ok() {
+			return scope{}, a, err
+		}
 		j := judge{blocked: v.user.BlockedGenres}
 		for _, genre := range genres {
-			if j.blockedGenre(genre) {
+			if j.blockedGenre(genre) || !offered[strings.ToLower(strings.TrimSpace(genre))] {
 				continue
 			}
 			listed := maps.Clone(base)
@@ -774,4 +799,23 @@ func (s *Server) titleLibraryGenres(r *http.Request, v viewer) ([]string, answer
 		}
 	}
 	return s.catalogGenres(r, v, titled)
+}
+
+// offeredGenres are the genres, in lower case, that the catalogs of what
+// l lists offer: its library's, or those of the user's libraries of
+// titles.
+func (s *Server) offeredGenres(r *http.Request, v viewer, l listing) (map[string]bool, answer, error) {
+	var genres []string
+	var a answer
+	var err error
+	if l.view.Id != "" {
+		genres, a, err = s.catalogGenres(r, v, []item{l.view})
+	} else {
+		genres, a, err = s.titleLibraryGenres(r, v)
+	}
+	offered := make(map[string]bool, len(genres))
+	for _, genre := range genres {
+		offered[strings.ToLower(genre)] = true
+	}
+	return offered, a, err
 }
