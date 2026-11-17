@@ -238,10 +238,11 @@ export function SourceDetail({
         {iptv && refresh.isPending ? t.lineup.summary.refreshing : refreshLabel}
       </Button>
       {addon.configureLink !== undefined && (
-        // A link signed for the user, which the server answers with a redirect to the configure
-        // page, from any browser or app, as it needs no session. Opened by the click itself, so
-        // that no popup blocker stops it, without a referrer or an opener. The page renews it
-        // before its 10 minutes run out (see SourcesPage).
+        // A link signed for the user, which needs no session, so that it opens from any browser or
+        // app: the server answers a page of its own naming the addon and its host, whose Continue
+        // leads to the configure page, once. Opened by the click itself, so that no popup blocker
+        // stops it, without a referrer or an opener. The page renews it before its 10 minutes run
+        // out (see SourcesPage), and at once after each click, as Continue uses it up.
         <ExternalButtonLink
           href={addon.configureLink}
           target="_blank"
@@ -252,6 +253,7 @@ export function SourceDetail({
           onClick={() => {
             refreshAll.reset()
             setConfiguring(true)
+            void queryClient.invalidateQueries({ queryKey: queryKeys.addons(scope) })
           }}
         >
           {text.configure}
