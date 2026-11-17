@@ -3,6 +3,7 @@ package playback
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -146,6 +147,54 @@ func TestARecordingTakesAWatchedChannelsTuner(t *testing.T) {
 		if err := reads(r); err != nil {
 			t.Errorf("a recording lost its tuner: %v", err)
 		}
+	}
+}
+
+// Channels opened within one tick of the clock, as Windows' is, have the
+// same time by it: the first opened is still the oldest. Each recording
+// due takes the tuner of the first channel opened that none records.
+// Every round has a tuner of its own, its channels the same time.
+func TestRecordingsTakeTheFirstOpenedChannelsTuners(t *testing.T) {
+	t.Parallel()
+	const tuners = 6
+	s, _ := tunerService(t, iptv.Limit{Connections: tuners, Tuners: true})
+	round := func(source accounts.ID) {
+		t.Helper()
+		channel := func(n int) library.Version {
+			return channelVersion(source[0]*16+byte(n), fmt.Sprintf("paced-%d.ts", n), source)
+		}
+		var watched []*feedReader
+		for n := 1; n <= tuners; n++ {
+			r, err := s.openFeed(ForUser(t.Context(), accounts.ID{byte(n)}), channel(n))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			watched = append(watched, r)
+		}
+		at := time.Now()
+		s.feeds.mu.Lock()
+		for _, f := range s.feeds.feeds {
+			if f.source == source {
+				f.opened.at = at
+			}
+		}
+		s.feeds.mu.Unlock()
+		for n := 1; n <= 3; n++ {
+			recorded, err := s.openFeed(forRecording(t.Context()), channel(tuners+n))
+			if err != nil {
+				t.Fatalf("tuner %d, recording %d: %v", source[0], n, err)
+			}
+			defer recorded.Close()
+			for i, r := range watched {
+				if err := reads(r); errors.Is(err, ErrTunersInUse) != (i < n) {
+					t.Errorf("tuner %d, after recording %d, channel %d watched: %v", source[0], n, i+1, err)
+				}
+			}
+		}
+	}
+	for n := range byte(8) {
+		round(accounts.ID{n + 1})
 	}
 }
 

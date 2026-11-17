@@ -18,7 +18,7 @@ type hold struct {
 	st      *liveState
 	version accounts.ID
 	source  accounts.ID
-	opened  time.Time
+	opened  opening
 	// ready is closed once room was made for the hold, or not: failed
 	// then tells why, and the requests that joined it meanwhile fail too.
 	ready  chan struct{}
@@ -29,7 +29,7 @@ type hold struct {
 	grace *time.Timer
 }
 
-func (h *hold) since() time.Time { return h.opened }
+func (h *hold) since() opening { return h.opened }
 
 func (h *hold) unread() bool {
 	h.st.mu.Lock()
@@ -79,7 +79,7 @@ func (s *Service) Hold(ctx context.Context, version library.Version) (release fu
 	h := st.holds[version.ID]
 	fresh := h == nil
 	if fresh {
-		h = &hold{st: st, version: version.ID, source: version.Origin.Addon, opened: time.Now(), ready: make(chan struct{})}
+		h = &hold{st: st, version: version.ID, source: version.Origin.Addon, opened: st.openingLocked(), ready: make(chan struct{})}
 		st.holds[version.ID] = h
 	}
 	h.users++

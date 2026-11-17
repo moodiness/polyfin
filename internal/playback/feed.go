@@ -2,6 +2,7 @@ package playback
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -183,6 +184,29 @@ type liveState struct {
 	health      func(ctx context.Context, version library.Version, failure string)
 	// times are the times of live streams, defaultLiveTimes when unset.
 	times liveTimes
+	// opens counts the occupants opened (see openingLocked).
+	opens uint64
+}
+
+// opening is when an occupant took its source's connection: at, by the
+// clock, and n, the order it did among the service's occupants, which
+// tells apart two the clock gives the same time, as Windows' does within
+// one of its ticks.
+type opening struct {
+	at time.Time
+	n  uint64
+}
+
+// compare orders openings from the first to the last.
+func (o opening) compare(other opening) int {
+	return cmp.Or(o.at.Compare(other.at), cmp.Compare(o.n, other.n))
+}
+
+// openingLocked is the opening of an occupant opening now. The caller
+// holds st.mu.
+func (st *liveState) openingLocked() opening {
+	st.opens++
+	return opening{at: time.Now(), n: st.opens}
 }
 
 // LiveSources sets how many streams a source may play at once
@@ -240,7 +264,7 @@ type feed struct {
 	s       *Service
 	version library.Version
 	source  accounts.ID
-	opened  time.Time
+	opened  opening
 	times   liveTimes
 	// closed is closed once the connection to the source is.
 	closed chan struct{}
@@ -328,7 +352,7 @@ func (s *Service) openFeed(ctx context.Context, version library.Version) (*feedR
 			f = nil
 		}
 		if f == nil {
-			f = &feed{s: s, version: version, source: version.Origin.Addon, opened: time.Now(), times: st.timingLocked(),
+			f = &feed{s: s, version: version, source: version.Origin.Addon, opened: st.openingLocked(), times: st.timingLocked(),
 				ready: make(chan struct{}), closed: make(chan struct{}), buf: make([]byte, feedBuffer), changed: make(chan struct{}),
 				readers: map[*feedReader]bool{}, index: newTSIndex()}
 			st.feeds[version.ID] = f
@@ -718,7 +742,7 @@ func (s *Service) closeIdle(f *feed) bool {
 // Hold).
 type occupant interface {
 	// since is when it took the connection.
-	since() time.Time
+	since() opening
 	// unread reports whether no one uses it: it only lingers for its
 	// grace.
 	unread() bool
@@ -733,7 +757,7 @@ type occupant interface {
 	evict(cause error)
 }
 
-func (f *feed) since() time.Time { return f.opened }
+func (f *feed) since() opening { return f.opened }
 
 func (f *feed) unread() bool {
 	f.mu.Lock()
@@ -818,7 +842,7 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 	if len(open) < limit {
 		return freed, nil
 	}
-	slices.SortFunc(open, func(a, b occupant) int { return a.since().Compare(b.since()) })
+	slices.SortFunc(open, func(a, b occupant) int { return a.since().compare(b.since()) })
 	idle := func(other occupant) bool { return other.unread() }
 	mine := func(other occupant) bool { return other.onlyFor(user) }
 	if tuner {
