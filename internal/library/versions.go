@@ -884,6 +884,8 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	version.Labels.Tier, version.Labels.Audio, version.Labels.Edition = ReadRelease([]string{t.name, t.videoName}, stream.Name, stream.Title,
 		stream.Description, stream.BehaviorHints.Filename)
+	version.Labels.AudioCodecs = ReadAudioCodecs([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description,
+		stream.BehaviorHints.Filename)
 	// A local folder's file is the episode its folder placed it at, which
 	// its show's numbering may map from the numbers its name tells (see
 	// localfiles' numbering.go): its name names no other title.

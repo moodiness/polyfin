@@ -46,19 +46,29 @@ const (
 // the labels name none (see ReadRelease).
 //
 // HDR is the kind of HDR video the labels name, the best of HDRKinds they
-// name: empty when they name none, as "HDR" alone does.
+// name: empty when they name none, as "HDR" alone does. HDR10Base is set
+// when labels naming Dolby Vision also name HDR, HDR10 or HDR10+: an
+// HDR10 base layer, which Dolby Vision profiles 7 and 8.1 carry and
+// profile 5 lacks.
+//
+// AudioCodecs are the audio codecs the labels name, of the Label audio
+// codecs, in the order they name them (see ReadAudioCodecs): what an
+// estimate of how an app plays the version reads while its tracks are
+// unknown (see LabelAnalyses).
 type Labels struct {
-	Codec     string
-	Range     DynamicRange
-	HDR       string
-	Languages []string
-	Multi     bool
-	Regions   []string
-	Releases  []string
-	Elsewhere string
-	Tier      string
-	Audio     AudioFormat
-	Edition   string
+	Codec       string
+	Range       DynamicRange
+	HDR         string
+	HDR10Base   bool
+	Languages   []string
+	Multi       bool
+	Regions     []string
+	Releases    []string
+	Elsewhere   string
+	Tier        string
+	Audio       AudioFormat
+	Edition     string
+	AudioCodecs []string
 }
 
 // labelCodecs are the video codecs labels name, by the words naming them;
@@ -152,7 +162,7 @@ func ReadLabels(title string, labels ...string) Labels {
 	for _, word := range labelWords(title) {
 		inTitle[strings.ToLower(word)] = true
 	}
-	codecClash, standard := false, false
+	codecClash, standard, hdr10 := false, false, false
 	setCodec := func(codec string) {
 		if read.Codec != "" && read.Codec != codec {
 			codecClash = true
@@ -195,9 +205,11 @@ func ReadLabels(title string, labels ...string) Labels {
 			switch {
 			case highRangeWords[lower] || lower == "dolby" && next == "vision":
 				read.Range = HighRange
-				if kind := hdrKind(label, lower, next); kind != "" && listRank(HDRKinds, kind) < listRank(HDRKinds, read.HDR) {
+				kind := hdrKind(label, lower, next)
+				if kind != "" && listRank(HDRKinds, kind) < listRank(HDRKinds, read.HDR) {
 					read.HDR = kind
 				}
+				hdr10 = hdr10 || lower == "hdr" || kind == "hdr10" || kind == "hdr10plus"
 			case lower == "sdr":
 				standard = true
 			case multiWords[lower] && !subtitles[i]:
@@ -222,6 +234,7 @@ func ReadLabels(title string, labels ...string) Labels {
 	if codecClash {
 		read.Codec = ""
 	}
+	read.HDR10Base = read.HDR == "dv" && hdr10
 	if read.Range == UnknownRange && (standard || read.Codec != "" || LabelHeight(labels...) > 0) {
 		read.Range = StandardRange
 	}
