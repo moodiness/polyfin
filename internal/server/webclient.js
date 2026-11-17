@@ -108,6 +108,11 @@
 // picked on the page, by name, where the menus still list them. A push
 // heard while a video plays is kept for the page shown again; the check
 // waits for the video to end, and for the page's menus to lose focus.
+// The page of the title the route left last is checked as it is shown
+// again, push or not, as after its video: when the tracks are the same but
+// the details name the versions otherwise, as once a first play made the
+// device's profile known and the names say how each version plays, the
+// version menu takes their names in place, the version picked staying.
 //
 // Third, on the same page, it holds the play buttons (.btnPlay, .btnResume,
 // .btnReplay) until a version is known, as /Polyfin/Items/{id}/Versions and
@@ -1975,8 +1980,11 @@
     againTimer = null
     againAt = 0
     // A check due waits through the routes that show no title, as a
-    // video's, for its page to be shown again.
-    if (id && tracksDue !== id) tracksDue = ''
+    // video's, for its page to be shown again. The title the route left
+    // last is checked as it comes back: jellyfin-web shows its own copy of
+    // the page, whose version names may have changed since, as a first
+    // play makes the device's profile known.
+    if (id && tracksDue !== id) tracksDue = id === left ? id : ''
     clearTimeout(tracksTimer)
     tracksTimer = null
     if (refreshing) refreshing.observer.disconnect()
@@ -2106,6 +2114,7 @@
         for (var i = 0; i < sources.length; i++) {
           if (sources[i].Id === menu.value) {
             if (lacking(page, sources[i])) refresh(page, menu)
+            else place(menu, sources)
             return
           }
         }

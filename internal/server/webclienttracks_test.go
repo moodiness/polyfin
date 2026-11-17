@@ -18,11 +18,13 @@ import (
 // the menus still list them, through jellyfin-web's renders. It never
 // changes the page while a video plays or while a menu has focus, checks
 // once for the pushes that come within the second, and checks the page
-// shown again after a video when the push came during it. It runs in
-// Node.js, in a context that stands for the browser: a title page with its
-// version, video, audio and subtitle menus, which a small jellyfin-web fills
-// as jellyfin-web 12.4 does (itemDetails/index.js, renderTrackSelections and
-// the version menu's change), a clock and timers the harness moves on.
+// shown again, after a video or another page, push or not: the version
+// names the details give then, such as how each version plays, replace
+// those of jellyfin-web's copy. It runs in Node.js, in a context that
+// stands for the browser: a title page with its version, video, audio and
+// subtitle menus, which a small jellyfin-web fills as jellyfin-web 12.4
+// does (itemDetails/index.js, renderTrackSelections and the version menu's
+// change), a clock and timers the harness moves on.
 func TestTitlePagesRefreshTheirTrackMenusOnceAVersionIsAnalyzed(t *testing.T) {
 	t.Parallel()
 	node, err := exec.LookPath("node")
@@ -39,7 +41,9 @@ func TestTitlePagesRefreshTheirTrackMenusOnceAVersionIsAnalyzed(t *testing.T) {
 		// "pick <menu> <value>" picks as a user does; "tick" runs the next
 		// timers due, logging "idle" when there is none; "menus" logs the menus:
 		// the version picked, then the tracks listed by type, "*" before
-		// those picked.
+		// those picked; "note" has the details name every version with how
+		// it plays, as once the device's profile is known; "names" logs the
+		// version menu's names.
 		picked string
 		steps  []string
 		want   []string
@@ -100,6 +104,20 @@ func TestTitlePagesRefreshTheirTrackMenusOnceAVersionIsAnalyzed(t *testing.T) {
 		"no check while the page is left": {
 			steps: []string{"route", "analyze t", "push", "home", "tick", "menus"},
 			want:  slices.Concat(opened, []string{"idle", bare})},
+		// The first play makes the device's profile known: the details now
+		// name the versions with how they play, which the page shown again
+		// after the video, jellyfin-web's copy, lists without a push, the
+		// version picked and its tracks staying.
+		"names a play changed show once back": {
+			steps: []string{"route", "names", "video", "note", "back", "tick", "names", "menus"},
+			want: slices.Concat(opened, []string{"names Version t | Version v1", "ask", details,
+				"names Version t (direct play) | Version v1 (direct play)", bare})},
+		"so do they on the way back from another page": {
+			steps: []string{"route", "home", "note", "back", "tick", "names", "tick"},
+			want:  slices.Concat(opened, []string{"ask", details, "names Version t (direct play) | Version v1 (direct play)", "idle"})},
+		"the page opened anew is not checked": {
+			steps: []string{"route", "note", "tick", "names"},
+			want:  slices.Concat(opened, []string{"names Version t | Version v1"})},
 	}
 
 	const harness = scriptRunner + `
@@ -141,7 +159,9 @@ async function run(scenario) {
       { Type: 'Audio', Index: 2, DisplayTitle: 'French AAC' }, { Type: 'Subtitle', Index: 3, DisplayTitle: 'English' },
       { Type: 'Subtitle', Index: 4, DisplayTitle: 'File' }]
     : [{ Type: 'Subtitle', Index: 0, DisplayTitle: 'File' }]
-  const source = (id) => ({ Id: id, Name: 'Version ' + short(id), MediaStreams: streams(id), DefaultAudioStreamIndex: analyzed.has(id) ? 1 : undefined })
+  let noted = false
+  const source = (id) => ({ Id: id, Name: 'Version ' + short(id) + (noted ? ' (direct play)' : ''), MediaStreams: streams(id),
+    DefaultAudioStreamIndex: analyzed.has(id) ? 1 : undefined })
   const sources = () => [source(TITLE), source('v1')]
   function select(name) {
     const element = {
@@ -293,6 +313,7 @@ async function run(scenario) {
       // jellyfin-web shows the page as it was, its tracks the defaults of
       // its own copy.
       video = false
+      shown = true
       asked = false
       history.pushState(null, '', route)
       renderTrackSelections(current, true)
@@ -301,6 +322,8 @@ async function run(scenario) {
     } else if (verb === 'playing') video = true
     else if (verb === 'stopped') video = false
     else if (verb === 'analyze') analyzed.add(args[0] === 't' ? TITLE : args[0])
+    else if (verb === 'note') noted = true
+    else if (verb === 'names') log.push('names ' + menus.source.children.map((o) => o.textContent).join(' | '))
     else if (verb === 'push') {
       const message = { MessageType: 'PolyfinVersions', MessageId: 'm',
         Data: { ItemId: args[0] === 'other' ? 'f'.repeat(32) : TITLE.toUpperCase(), Pending: 0, Count: 2, Known: 2, AddVersions: true, Tracks: true } }
