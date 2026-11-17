@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -317,6 +318,32 @@ func (h *Handler) playbackNamer(item library.Item, request playbackInfoRequest, 
 func (h *Handler) playName(n *versionNamer, p playable, version library.Version, streams []playback.MediaStream, analysis media.Analysis) string {
 	decision, playable := h.listedDecision(p, version, streams, analysis, n.request, n.allowed)
 	return p.name(version) + " " + playback.PlayNote(decision, playable, n.language)
+}
+
+// likelyName is a version's name ending with how n's app likely plays it
+// while its tracks are unknown, estimated from the tracks its labels
+// suggest (see library.LabelAnalyses) as playName decides it, worded as
+// an estimate (see playback.LikelyNote). Labels that tell too little, or
+// whose open points would change the ending, leave the name as it is:
+// no ending rather than a guess.
+func (h *Handler) likelyName(ctx context.Context, n *versionNamer, p playable, version library.Version) string {
+	name := p.name(version)
+	analyses := library.LabelAnalyses(version, cmp.Or(version.Runtime, p.item.Runtime))
+	if len(analyses) == 0 {
+		return name
+	}
+	externals := h.externals(ctx, p, version)
+	ending := ""
+	for _, analysis := range analyses {
+		streams := playback.MediaStreams(analysis, externals, n.language)
+		decision, playable := h.listedDecision(p, version, streams, analysis, n.request, n.allowed)
+		note := playback.LikelyNote(decision, playable, n.language)
+		if ending != "" && note != ending {
+			return name
+		}
+		ending = note
+	}
+	return name + " " + ending
 }
 
 // listedDecision decides how an app plays a version, for its request,

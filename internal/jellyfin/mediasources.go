@@ -308,7 +308,8 @@ func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) 
 // device profile: playable as it is, unless it is not one file, its tracks
 // as far as it was analyzed, or, until it is, as RemuxDB describes its
 // file. With n, a version whose tracks are known is named for n's profile
-// (see playName).
+// (see playName); one whose tracks are unknown, with an estimate from its
+// labels, which names it only (see likelyName).
 func (h *Handler) describedSource(r *http.Request, p playable, version library.Version, id accounts.ID, n *versionNamer) MediaSourceInfo {
 	analysis, analyzed := h.Playback.Analyzed(r.Context(), version.ID)
 	known := analyzed
@@ -327,6 +328,8 @@ func (h *Handler) describedSource(r *http.Request, p playable, version library.V
 		if n != nil {
 			source.Name = h.playName(n, p, version, source.MediaStreams, analysis)
 		}
+	} else if n != nil {
+		source.Name = h.likelyName(r.Context(), n, p, version)
 	}
 	source.DefaultSubtitleStreamIndex = p.tracks.subtitle(source.MediaStreams, source.DefaultAudioStreamIndex)
 	return source
