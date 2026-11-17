@@ -47,7 +47,7 @@ A file whose tracks carry no default flag has its first track checked even when 
 - "(converted: reason)";
 - "(cannot play here)" when it needs a conversion the server or the user may not have.
 
-See [Version names](versions.md#version-names).
+Names say how a version plays once the app has played something on that device, which Polyfin remembers across restarts, and only for versions analyzed or described: the first two when a title opens, with **Prepare playback in advance** on, and up to three at each playback. See [Version names](versions.md#version-names).
 
 ### Direct play turned off by the app
 

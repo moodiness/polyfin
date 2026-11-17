@@ -267,7 +267,7 @@ const settings = {
     versionNameChoices: { addon: 'As the addon writes them', short: 'Short' },
     nameHowVersionsPlay: 'Say in version names how they play',
     nameHowVersionsPlayHelp:
-      'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with the app’s request, HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback, or before that in its session’s capabilities, so names say nothing before a device’s first play, unless its capabilities carried a profile, or after a restart, and nothing for a version not analyzed or described by RemuxDB yet. Names are in the language of generated names. Nothing is read for them.',
+      'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with the app’s request, HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback on that device, or before that in its session’s capabilities, and keeps it across restarts until the device signs out: names say nothing until the app has played once on that device, unless its capabilities carried a profile. Only versions analyzed or described get an ending: the first two when a title opens, with “Prepare playback in advance” on, and up to three at a playback. Names are in the language of generated names. Nothing is read for them.',
     versionOrderGroup: 'Version order',
     versionOrder: {
       label: 'Order versions by',

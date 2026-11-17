@@ -172,7 +172,7 @@ In apps:
 - In the web player, the track menus (Video, Audio, Subtitles) fill once the selected version is analyzed, without reloading the tab: by a torrent version's first play, or a later [RemuxDB](#tracks-from-remuxdb) description.
   - Polyfin tells the page within a second; the page waits a second more, so versions analyzed together refresh it once.
   - The selected version and picked audio and subtitle tracks, by name, stay selected where listed.
-  - Tracks found during a play show on return to the page. Nothing changes during a video or with a menu open.
+  - Tracks found during a play show on return to the page, and so do [version names](#version-names) that now say how each version plays. Nothing changes during a video or with a menu open.
   - A page is told for 2 minutes after it opened or last asked for versions.
 - In the web player, a movie's or episode's Play, Resume and Play from the start buttons wait for a version.
   - While none is known and addons are asked, they are greyed and disabled, with a small spinner and the tooltip "Looking for sources…". They return with the first version, without reload.
@@ -292,7 +292,7 @@ Version order, pins, blocks and the 15 minutes a failed version is left out appl
 The setting orders each app's version menu for that app, so **Play** starts the version the menu shows. "Without conversion" means played as it is, or repackaged with tracks copied.
 
 - Item details and `PlaybackInfo` list these versions first, after the other steps of the [version order](#version-order).
-- Polyfin learns how the app plays from the device's last `PlaybackInfo` profile since the server started, or its session capabilities. It keeps this in memory until the device signs out.
+- Polyfin learns how the app plays from the device's last `PlaybackInfo` profile, or its session capabilities. It keeps this across restarts until the device signs out.
 - It judges each version as [version names](#version-names) do, reading nothing. A version neither analyzed nor described by RemuxDB counts as needing conversion.
 - Each app gets its own order: two devices of a user may list versions differently. The title's own identifier stands for the asking device's first version.
 - A version above the user's **Maximum quality** never counts as playing without conversion.
@@ -518,9 +518,13 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 
 - Converted names give the first reason in the table that applies.
 - Only versions analyzed or described by [RemuxDB](#tracks-from-remuxdb) get an ending. Naming reads nothing: it runs a play's decision on what is known.
+  - Opening a title analyzes its first two versions, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on. Each playback reads up to three.
+  - So most versions of a title with many get no ending until played.
 - `PlaybackInfo` names every listed version for the app's device profile.
 - Item details use each device's last `PlaybackInfo` profile and bitrate, else its session capabilities' profile. The web player's version menu, Android TV's **Select version** and Swiftfin's menu read these.
-- Without such a profile, after sign-out or after a restart, item details names have no ending.
+- Polyfin keeps that profile across restarts and updates, until the device signs out or is removed.
+- Until the app has played once on that device, item details names have no ending, unless its session capabilities carried a profile. The web player sends none there.
+- In the web player, the title page a playback returns to, or the one Back shows again, takes the names the details give then.
 - Names assume the tracks the user's preferences choose; picking others may change how it plays.
 - Names use **Language of generated names** (see [Getting started](getting-started.md#language-of-generated-names)): in French, "(lecture directe)", "(flux direct)", "(converti : HDR)", "(illisible ici)".
 - Endings are at most 30 characters; apps cutting names to one line may hide them.
