@@ -334,7 +334,7 @@ function StremioPinForm({
 }
 
 /** Sign-in codes about the backend's address, or the account, shown under that field. */
-const backendCodes = ['invalid_nuvio_address', 'nuvio_unreachable', 'not_nuvio']
+const backendCodes = ['invalid_nuvio_address', 'private_network', 'nuvio_unreachable', 'not_nuvio']
 const accountCodes = ['nuvio_sign_in_refused']
 
 /**
@@ -368,7 +368,12 @@ function NuvioSignInForm({
   })
 
   const code = signIn.error instanceof ApiError ? signIn.error.code : null
-  const message = signIn.isError ? errorMessage(t, signIn.error) : undefined
+  // A member's backend on a local network answers as their addons do; the words are the backend's.
+  const message = !signIn.isError
+    ? undefined
+    : code === 'private_network'
+      ? text.backendPrivateNetwork
+      : errorMessage(t, signIn.error)
   const backendError = code !== null && backendCodes.includes(code) ? message : undefined
   const passwordError = code !== null && accountCodes.includes(code) ? message : undefined
   const otherError = signIn.isError

@@ -314,7 +314,9 @@ const account: typeof en = {
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Backend Nuvio',
       backendHelp:
-        'Lascia vuoto per usare quello di Nuvio. Funziona anche un backend self-hosted, al suo indirizzo, anche sulla rete locale.',
+        'Lascia vuoto per usare quello di Nuvio. Funziona anche un backend self-hosted, al suo indirizzo, pubblico, o sulla rete locale quando accede un amministratore.',
+      backendPrivateNetwork:
+        'Questo backend si trova su un indirizzo di rete locale. Solo gli amministratori possono accedere a un backend di questo tipo.',
       email: 'Email',
       password: 'Password',
       passwordHelp:

@@ -322,7 +322,9 @@ const account: typeof en = {
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Serveur Nuvio',
       backendHelp:
-        'Laissez vide pour celui de Nuvio. Un serveur auto-hébergé fonctionne aussi, à son adresse, y compris sur le réseau local.',
+        'Laissez vide pour celui de Nuvio. Un serveur auto-hébergé fonctionne aussi\u202f: à une adresse publique, ou sur le réseau local si c’est un administrateur qui se connecte.',
+      backendPrivateNetwork:
+        'Ce serveur se trouve à une adresse du réseau local. Seuls les administrateurs peuvent se connecter à ce type de serveur.',
       email: 'E-mail',
       password: 'Mot de passe',
       passwordHelp:

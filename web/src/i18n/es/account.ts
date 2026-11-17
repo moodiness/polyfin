@@ -318,7 +318,9 @@ const account: typeof en = {
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Servidor de Nuvio',
       backendHelp:
-        'Déjelo vacío para usar el de Nuvio. También funciona un servidor autoalojado, en su dirección, incluso en la red local.',
+        'Déjelo vacío para usar el de Nuvio. También funciona un servidor autoalojado, en su dirección, pública, o en la red local cuando inicia sesión un administrador.',
+      backendPrivateNetwork:
+        'Este servidor está en una dirección de red local. Solo los administradores pueden iniciar sesión en este tipo de servidor.',
       email: 'Correo electrónico',
       password: 'Contraseña',
       passwordHelp:

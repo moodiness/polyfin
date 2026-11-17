@@ -371,7 +371,7 @@ Someone watching in Nuvio or Stremio on some devices and Polyfin on others can s
 | App | Kept |
 |---|---|
 | Stremio | The account's auth key. One got by link code or password is not signed out after the import; a pasted key is kept as is. For a PIN profile, also the session opened with the PIN, never the PIN. |
-| Nuvio | The backend's address, the chosen profile, and the session's refresh token, saved again whenever Nuvio renews it at an import. |
+| Nuvio | The backend's address, the chosen profile, and the session's refresh token, saved again whenever Nuvio renews it at an import. Also whether the backend must stay on a public address, as when the connection was made (see [Nuvio](#nuvio)). |
 
 The password is never kept. Each user has one connection per app. Signing in again with **Stay connected** replaces it and signs out the sessions Polyfin opened before.
 
@@ -411,10 +411,10 @@ API details: [App connections](jellyfin-api.md#app-connections-for-apps).
 
 A Nuvio account has up to 6 profiles. Each keeps watched movies and episodes with dates, resume points, a library and addons. Polyfin reads all at once from the account backup that Nuvio's own scripts use to move accounts.
 
-- **Nuvio backend**: empty for Nuvio's own, or a self-hosted backend's address, local network included.
+- **Nuvio backend**: empty for Nuvio's own, or a self-hosted backend's address. A user's own backend must be on a public address, like their addons, redirects included; an administrator's, for themselves or for a user, may be on the local network.
 - **Email** and **Password**: as in Nuvio's apps. **Sign in to Nuvio** signs in, reads the account, and signs out unless you stay connected.
 
-The page says so for a wrong email or password, an address where nothing answers, or one where something other than a Nuvio backend answers. If Nuvio asks to wait before signing in again, Polyfin waits up to 30 seconds, twice at most, then says so. Polyfin reads backup version 1, and refuses other versions, saying so, until it supports them.
+The page says so for a wrong email or password, a user's backend on a local network, an address where nothing answers, or one where something other than a Nuvio backend answers. If Nuvio asks to wait before signing in again, Polyfin waits up to 30 seconds, twice at most, then says so. Polyfin reads backup version 1, and refuses other versions, saying so, until it supports them.
 
 What comes over, per profile:
 

@@ -31,6 +31,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/appimport"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // App names Nuvio among the apps imported from.
@@ -110,29 +111,40 @@ type Options struct {
 	Anime *anime.Service
 	// Version is Polyfin's, which the backend is told.
 	Version string
+	// Confined is the client of members' requests; nil reaches public
+	// addresses only, checked when connecting, as members' addons do.
+	// Tests give one reaching their backend on the loopback.
+	Confined *http.Client
 }
 
 // Reader reads Nuvio accounts.
 type Reader struct {
 	anime   *anime.Service
 	version string
-	client  *http.Client
-	timing  timing
+	// client reaches any address, for administrators; confined, public
+	// addresses only, for members, as their addons do.
+	client, confined *http.Client
+	timing           timing
 }
 
 // New returns a reader with options. Its transport is its own, a clone of
 // the default one: whoever closes the idle connections of
 // http.DefaultTransport, as httptest.Server.Close does, cannot break a
 // request whose answer without a body has just put its connection back
-// among the idle ones (#958).
+// among the idle ones (#958). The confined client's is its own too.
 func New(options Options) *Reader {
+	confined := options.Confined
+	if confined == nil {
+		confined = stremio.HTTPClient(true)
+	}
 	return &Reader{anime: options.Anime, version: options.Version, client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
-		timing: defaultTiming}
+		confined: confined, timing: defaultTiming}
 }
 
 // ParseBackend reads the address of a Nuvio backend as a user types it:
 // the official one when empty, https:// when it names none. A
-// self-hosted backend may be on the local network.
+// self-hosted backend may be on the local network, for an administrator
+// only (see Reader.Read).
 func ParseBackend(text string) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -156,14 +168,17 @@ func ParseBackend(text string) (string, error) {
 // the account's backup, and returns the account with each of its
 // profiles. It signs out, unless keep asks to stay connected: then the
 // account holds the session's refresh token, which reads it again (see
-// Reread). It fails with ErrInvalidAddress, ErrUnreachable, ErrNotNuvio,
-// ErrSignInRefused, ErrRateLimited or a BackupError.
-func (r *Reader) Read(ctx context.Context, address, email, password string, keep bool) (appimport.Account, error) {
+// Reread). Confined, for a member, it reaches public addresses only,
+// checked when connecting, redirects included, and so does the sign-in
+// kept. It fails with ErrInvalidAddress, stremio.ErrPrivateNetwork,
+// ErrUnreachable, ErrNotNuvio, ErrSignInRefused, ErrRateLimited or a
+// BackupError.
+func (r *Reader) Read(ctx context.Context, address, email, password string, keep, confined bool) (appimport.Account, error) {
 	backend, err := ParseBackend(address)
 	if err != nil {
 		return appimport.Account{}, err
 	}
-	s, err := r.open(ctx, backend)
+	s, err := r.open(ctx, backend, confined)
 	if err != nil {
 		return appimport.Account{}, err
 	}
@@ -200,7 +215,7 @@ func (r *Reader) Read(ctx context.Context, address, email, password string, keep
 	if keep && t.RefreshToken != "" {
 		kept = true
 		account.Name = strings.TrimSpace(t.User.Email)
-		account.SignIn, account.StayConnected = &appimport.SignIn{Secret: t.RefreshToken, Backend: backend, Owned: true}, true
+		account.SignIn, account.StayConnected = &appimport.SignIn{Secret: t.RefreshToken, Backend: backend, Owned: true, Confined: confined}, true
 	}
 	return account, nil
 }
@@ -216,9 +231,12 @@ type token struct {
 }
 
 // open reads the configuration of the backend at backend, and returns a
-// session about to sign in there.
-func (r *Reader) open(ctx context.Context, backend string) (*session, error) {
-	s := &session{r: r, backend: backend}
+// session about to sign in there, confined or not.
+func (r *Reader) open(ctx context.Context, backend string, confined bool) (*session, error) {
+	s := &session{r: r, backend: backend, client: r.client}
+	if confined {
+		s.client = r.confined
+	}
 	var configuration struct {
 		PublishableKey string `json:"publishable_key"`
 	}
@@ -280,7 +298,7 @@ func (s *session) refresh(ctx context.Context, refresh string) (token, error) {
 // refuses the refresh token or the session, appimport.ErrAppUnreachable,
 // appimport.ErrAppRateLimited, ErrNotNuvio or a BackupError.
 func (r *Reader) Reread(ctx context.Context, signIn appimport.SignIn) (appimport.Account, appimport.SignIn, error) {
-	s, err := r.open(ctx, signIn.Backend)
+	s, err := r.open(ctx, signIn.Backend, signIn.Confined)
 	if err != nil {
 		return appimport.Account{}, signIn, rereadError(err)
 	}
@@ -306,7 +324,7 @@ func rereadError(err error) error {
 	switch {
 	case errors.Is(err, errRefused):
 		return appimport.ErrSignInRefused
-	case errors.Is(err, ErrUnreachable):
+	case errors.Is(err, ErrUnreachable), errors.Is(err, stremio.ErrPrivateNetwork):
 		return appimport.ErrAppUnreachable
 	case errors.Is(err, ErrRateLimited):
 		return appimport.ErrAppRateLimited
@@ -320,7 +338,7 @@ func rereadError(err error) error {
 func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) error {
 	ctx, cancel := context.WithTimeout(ctx, r.timing.signOut)
 	defer cancel()
-	s, err := r.open(ctx, signIn.Backend)
+	s, err := r.open(ctx, signIn.Backend, signIn.Confined)
 	if err != nil {
 		return err
 	}
@@ -352,6 +370,7 @@ func notFound(err error) error {
 type session struct {
 	r       *Reader
 	backend string
+	client  *http.Client
 	// key is the backend's publishable key, token the session's.
 	key, token string
 }
@@ -367,6 +386,8 @@ func (s *session) send(ctx context.Context, method, path string, body []byte, in
 			return ctx.Err()
 		}
 		switch {
+		case errors.Is(err, stremio.ErrPrivateNetwork):
+			return err
 		case err != nil:
 			return ErrUnreachable
 		case status == http.StatusOK:
@@ -421,7 +442,7 @@ func (s *session) do(ctx context.Context, method, path string, body []byte) (int
 	if s.token != "" {
 		request.Header.Set("Authorization", "Bearer "+s.token)
 	}
-	response, err := s.r.client.Do(request)
+	response, err := s.client.Do(request)
 	if err != nil {
 		return 0, nil, nil, err
 	}

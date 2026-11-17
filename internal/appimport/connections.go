@@ -86,6 +86,10 @@ type SignIn struct {
 	// password, rather than the user pasting a key their own app holds:
 	// Polyfin signs it out when it no longer keeps it.
 	Owned bool `json:"-"`
+	// Confined tells a sign-in a member made, which reaches public
+	// addresses only, as their addons do: Nuvio's backend. Kept with the
+	// connection, every later read stays confined.
+	Confined bool `json:"-"`
 }
 
 // opened reports whether signIn keeps a session Polyfin opened, which it
@@ -189,9 +193,9 @@ func (s *Service) seal(signIn SignIn) (string, error) {
 	return s.box.Seal(string(data)), nil
 }
 
-// open reads a sign-in stored, owned or not: secrets.ErrUnreadable when the
-// key cannot open it.
-func (s *Service) open(stored string, owned bool) (SignIn, error) {
+// open reads a sign-in stored, owned or not, confined or not:
+// secrets.ErrUnreadable when the key cannot open it.
+func (s *Service) open(stored string, owned, confined bool) (SignIn, error) {
 	opened, err := s.box.Open(stored)
 	if err != nil {
 		return SignIn{}, err
@@ -200,7 +204,7 @@ func (s *Service) open(stored string, owned bool) (SignIn, error) {
 	if err := json.Unmarshal([]byte(opened), &signIn); err != nil {
 		return SignIn{}, err
 	}
-	signIn.Owned = owned
+	signIn.Owned, signIn.Confined = owned, confined
 	return signIn, nil
 }
 
@@ -253,22 +257,23 @@ func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, err
 	connectedAt := s.now().UTC().Truncate(time.Microsecond)
 	sealed, err := s.seal(c.signIn)
 	var previous struct {
-		stored string
-		owned  bool
-		found  bool
+		stored          string
+		owned, confined bool
+		found           bool
 	}
 	if err == nil {
 		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-			err := tx.QueryRow(ctx, "DELETE FROM app_connections WHERE user_id = $1 AND app = $2 RETURNING sign_in, owned", c.key.user,
-				c.key.app).Scan(&previous.stored, &previous.owned)
+			err := tx.QueryRow(ctx, "DELETE FROM app_connections WHERE user_id = $1 AND app = $2 RETURNING sign_in, owned, confined",
+				c.key.user, c.key.app).Scan(&previous.stored, &previous.owned, &previous.confined)
 			switch {
 			case err == nil:
 				previous.found = true
 			case !errors.Is(err, pgx.ErrNoRows):
 				return err
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO app_connections (user_id, app, sign_in, owned, account, connected_at, connected_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.key.user, c.key.app, sealed, c.signIn.Owned, c.account, connectedAt, c.by)
+			_, err = tx.Exec(ctx, `INSERT INTO app_connections (user_id, app, sign_in, owned, confined, account, connected_at, connected_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, c.key.user, c.key.app, sealed, c.signIn.Owned, c.signIn.Confined, c.account,
+				connectedAt, c.by)
 			return err
 		})
 	}
@@ -277,7 +282,7 @@ func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, err
 		return time.Time{}, err
 	}
 	if previous.found {
-		if old, err := s.open(previous.stored, previous.owned); err == nil {
+		if old, err := s.open(previous.stored, previous.owned, previous.confined); err == nil {
 			s.signOut(unkept(old, c.signIn), c.key.app)
 		}
 	}
@@ -286,7 +291,7 @@ func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, err
 }
 
 // connectionColumns are what a connection's status reads.
-const connectionColumns = `c.app, c.sign_in, c.owned, c.account, c.connected_at, c.connected_by, coalesce(b.name, ''),
+const connectionColumns = `c.app, c.sign_in, c.owned, c.confined, c.account, c.connected_at, c.connected_by, coalesce(b.name, ''),
 	coalesce(c.problem, ''), c.last_import_at, c.read, c.played, c.resumed, c.watchlist, c.unmatched, coalesce(c.last_problem, '')`
 
 // storedConnection is a connection as the database holds it, its sign-in
@@ -301,12 +306,12 @@ type storedConnection struct {
 func (s *Service) scanConnection(row pgx.Row) (storedConnection, error) {
 	var c storedConnection
 	var stored string
-	var owned bool
+	var owned, confined bool
 	var by *accounts.ID
 	var last *time.Time
 	var result ConnectionImport
-	if err := row.Scan(&c.App, &stored, &owned, &c.Account, &c.ConnectedAt, &by, &c.ConnectedByName, &c.Problem, &last, &result.Read,
-		&result.Played, &result.Resumed, &result.Watchlist, &result.Unmatched, &result.Problem); err != nil {
+	if err := row.Scan(&c.App, &stored, &owned, &confined, &c.Account, &c.ConnectedAt, &by, &c.ConnectedByName, &c.Problem, &last,
+		&result.Read, &result.Played, &result.Resumed, &result.Watchlist, &result.Unmatched, &result.Problem); err != nil {
 		return c, err
 	}
 	if by != nil {
@@ -317,7 +322,7 @@ func (s *Service) scanConnection(row pgx.Row) (storedConnection, error) {
 		c.LastImport = &result
 	}
 	var err error
-	if c.signIn, err = s.open(stored, owned); err != nil {
+	if c.signIn, err = s.open(stored, owned, confined); err != nil {
 		return c, errUnopened
 	}
 	return c, nil
@@ -446,9 +451,10 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.User, app string)
 	return c.Connection, nil
 }
 
-// Disconnect forgets user's connection to app, stopping its import, after
-// signing out the sessions Polyfin opened: those the row holds as it is
-// deleted (see connect). A key the user pasted is only forgotten. The
+// Disconnect forgets user's connection to app, stopping its import, and
+// signs out in the background, bounded and detached from ctx, the
+// sessions Polyfin opened: those the row holds as it is deleted (see
+// connect). A key the user pasted is only forgotten. The
 // titles its library alone put on the watchlist leave it: an import saves
 // the library only while the connection exists, locking it, so that it
 // saves before the connection is deleted, and its titles are dropped, or
@@ -466,19 +472,19 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 	}
 	s.mu.Unlock()
 	var stored string
-	var owned bool
-	err := s.db.QueryRow(ctx, "DELETE FROM app_connections WHERE user_id = $1 AND app = $2 RETURNING sign_in, owned", user, app).
-		Scan(&stored, &owned)
+	var owned, confined bool
+	err := s.db.QueryRow(ctx, "DELETE FROM app_connections WHERE user_id = $1 AND app = $2 RETURNING sign_in, owned, confined", user,
+		app).Scan(&stored, &owned, &confined)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if signIn, err := s.open(stored, owned); err == nil && signIn.opened() {
-		if source := s.sources[app]; source != nil {
-			s.signOutNow(ctx, source, signIn, app)
-		}
+	if signIn, err := s.open(stored, owned, confined); err == nil {
+		// In the background, as the row is gone: a client leaving now
+		// does not leave the session open.
+		s.signOut(signIn, app)
 	}
 	s.logger.Info("A user disconnected an app", "user_id", user.String(), "app", app)
 	if s.watchlist != nil {
@@ -496,7 +502,7 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 // connections read stay locked until the deletion ends: a renewal waits
 // for it, and finds no row (see renew).
 func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (func(), error) {
-	rows, err := tx.Query(ctx, "SELECT app, sign_in, owned FROM app_connections WHERE user_id = $1 FOR UPDATE", user)
+	rows, err := tx.Query(ctx, "SELECT app, sign_in, owned, confined FROM app_connections WHERE user_id = $1 FOR UPDATE", user)
 	if err != nil {
 		return nil, err
 	}
@@ -507,12 +513,12 @@ func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (fun
 	var sessions []owned
 	for rows.Next() {
 		var app, stored string
-		var isOwned bool
-		if err := rows.Scan(&app, &stored, &isOwned); err != nil {
+		var isOwned, confined bool
+		if err := rows.Scan(&app, &stored, &isOwned, &confined); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		if signIn, err := s.open(stored, isOwned); err == nil && signIn.opened() {
+		if signIn, err := s.open(stored, isOwned, confined); err == nil && signIn.opened() {
 			sessions = append(sessions, owned{app, signIn})
 		}
 	}
@@ -633,7 +639,7 @@ func (s *Service) importConnection(ctx context.Context, key connectionKey) {
 	if renewed.Secret == "" {
 		renewed = c.signIn
 	}
-	renewed.Owned, renewed.Profile = c.signIn.Owned, c.signIn.Profile
+	renewed.Owned, renewed.Confined, renewed.Profile = c.signIn.Owned, c.signIn.Confined, c.signIn.Profile
 	if renewed != c.signIn || account.Name != "" && account.Name != c.Account {
 		if saved, err := s.renew(key, c.ConnectedAt, renewed, account.Name); err != nil {
 			s.logger.Warn("The renewed sign-in of an app connection could not be saved", "app", key.app, "error", err)

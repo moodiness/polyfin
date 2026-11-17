@@ -319,7 +319,9 @@ const account = {
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Nuvio backend',
       backendHelp:
-        'Leave it empty for Nuvio’s own. A self-hosted backend works too, at its address, on the local network as well.',
+        'Leave it empty for Nuvio’s own. A self-hosted backend works too, at a public address, or on the local network when an administrator signs in.',
+      backendPrivateNetwork:
+        'This backend is on a local network address. Only administrators can sign in to such a backend.',
       email: 'Email',
       password: 'Password',
       passwordHelp:

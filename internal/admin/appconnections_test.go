@@ -67,7 +67,7 @@ func newAppConnectionsAPI(t *testing.T) appConnectionsAPI {
 		o.Logger = logger
 		a.lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
 		a.data, a.installed, a.pool = userdata.New(deps.pool), deps.addons, deps.pool
-		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3"})
+		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3", Confined: nuviotest.Loopback()})
 		o.Stremio = stremioimport.New(stremioimport.Options{Metas: stremiotest.SampleMetas(), Version: "1.2.3", API: a.fake.API,
 			Link: a.fake.Link})
 		o.AppImport = appimport.New(appimport.Options{Settings: o.Accounts.Settings, Titles: a.lib, UserData: a.data, Addons: deps.addons,
@@ -310,9 +310,8 @@ func TestUsersStayConnectedToStremio(t *testing.T) {
 	if status, _, _ := bob.call(http.MethodDelete, "/account/app-connections/stremio", nil); status != http.StatusNoContent {
 		t.Fatalf("disconnecting: %d", status)
 	}
-	if a.fake.Open() != 0 {
-		t.Errorf("%d sessions open", a.fake.Open())
-	}
+	// In the background.
+	fakeOpen(t, a.fake, 0)
 	if c := connectionOf(t, bob, "/account/app-import", "stremio"); c != nil {
 		t.Errorf("after disconnecting: %v", c)
 	}
@@ -421,9 +420,7 @@ func TestUsersStayConnectedToNuvio(t *testing.T) {
 	if status, _, _ := bob.call(http.MethodDelete, "/account/app-connections/nuvio", nil); status != http.StatusNoContent {
 		t.Fatalf("disconnecting: %d", status)
 	}
-	if backend.Open() != 0 {
-		t.Errorf("%d sessions open after disconnecting", backend.Open())
-	}
+	fakeOpen(t, backend, 0)
 }
 
 func TestAppConnectionsFollowTheirPermissions(t *testing.T) {
@@ -483,9 +480,7 @@ func TestAppConnectionsFollowTheirPermissions(t *testing.T) {
 	if status, _, _ := bob.call(http.MethodDelete, "/account/app-connections/stremio", nil); status != http.StatusNoContent {
 		t.Errorf("Bob disconnects with the setting off: %d", status)
 	}
-	if a.fake.Open() != 0 {
-		t.Errorf("%d sessions open", a.fake.Open())
-	}
+	fakeOpen(t, a.fake, 0)
 }
 
 func TestUsersStayConnectedToAStremioProfile(t *testing.T) {

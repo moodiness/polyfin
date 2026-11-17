@@ -228,7 +228,8 @@ func (h *handler) readNuvio(target appImportTarget) http.HandlerFunc {
 		if !decode(w, r, &body) {
 			return
 		}
-		account, err := h.Nuvio.Read(r.Context(), body.Backend, body.Email, body.Password, body.StayConnected)
+		// A member's backend is on a public address, as their addons are.
+		account, err := h.Nuvio.Read(r.Context(), body.Backend, body.Email, body.Password, body.StayConnected, confined(r))
 		var unsupported *nuvio.BackupError
 		if errors.As(err, &unsupported) {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": "nuvio_backup_unsupported", "version": unsupported.Version})
@@ -240,6 +241,7 @@ func (h *handler) readNuvio(target appImportTarget) http.HandlerFunc {
 			code   string
 		}{
 			{nuvio.ErrInvalidAddress, http.StatusBadRequest, "invalid_nuvio_address"},
+			{stremio.ErrPrivateNetwork, http.StatusForbidden, "private_network"},
 			// Not 401, which the admin app reads as its own session ending.
 			{nuvio.ErrSignInRefused, http.StatusBadRequest, "nuvio_sign_in_refused"},
 			{nuvio.ErrUnreachable, http.StatusBadGateway, "nuvio_unreachable"},

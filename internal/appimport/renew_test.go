@@ -119,7 +119,7 @@ func (r renewal) check(t *testing.T, how string, signedOut ...string) {
 	}
 	if how == "signed in again" {
 		stored, owned := r.stored(t, r.alice.ID)
-		if signIn, err := r.open(stored, owned); err != nil || signIn.Secret != "alice-second" {
+		if signIn, err := r.open(stored, owned, false); err != nil || signIn.Secret != "alice-second" {
 			t.Errorf("the connection kept: %+v %v", signIn, err)
 		}
 	}
@@ -187,7 +187,7 @@ func TestASignInRenewedBeforeItsConnectionGoesIsSignedOutWithIt(t *testing.T) {
 			}
 			<-titles.entered
 			stored, owned := r.stored(t, r.alice.ID)
-			if signIn, err := r.open(stored, owned); err != nil || signIn.Secret != "renewed-secret-b" {
+			if signIn, err := r.open(stored, owned, false); err != nil || signIn.Secret != "renewed-secret-b" {
 				t.Fatalf("the renewal saved: %+v %v", signIn, err)
 			}
 			r.leave(t, how, false)

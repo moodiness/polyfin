@@ -4,15 +4,20 @@
 package nuviotest
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // Key is the publishable key the fake serves.
@@ -57,6 +62,48 @@ func New(t *testing.T) *Backend {
 	t.Cleanup(server.Close)
 	b.URL = server.URL
 	return b
+}
+
+// Loopback is a client for members' requests that reaches the fake on the
+// loopback, for tests not about their confinement (see
+// nuvio.Options.Confined).
+func Loopback() *http.Client {
+	return &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}
+}
+
+// Confined is a client confined as members' requests are, which takes
+// front, the address of a test server on the loopback, for a public one:
+// every other address is checked when connecting, those redirects lead
+// to included.
+func Confined(t *testing.T, front string) *http.Client {
+	t.Helper()
+	parsed, err := url.Parse(front)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := stremio.HTTPClient(true)
+	transport := client.Transport.(*http.Transport)
+	confined := transport.DialContext
+	var direct net.Dialer
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address == parsed.Host {
+			return direct.DialContext(ctx, network, address)
+		}
+		return confined(ctx, network, address)
+	}
+	return client
+}
+
+// Redirect serves, until the test ends, a server answering every request
+// with a 307 to the same path and query at target, and returns its
+// address.
+func Redirect(t *testing.T, target string) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL
 }
 
 // Set changes the fake under its lock.

@@ -317,7 +317,9 @@ const account: typeof en = {
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Backend do Nuvio',
       backendHelp:
-        'Deixe em branco para usar o do próprio Nuvio. Um backend auto-hospedado também funciona, no endereço dele, inclusive na rede local.',
+        'Deixe em branco para usar o do próprio Nuvio. Um backend auto-hospedado também funciona, no endereço dele, público, ou na rede local quando um administrador entra.',
+      backendPrivateNetwork:
+        'Este backend está em um endereço da rede local. Somente administradores podem entrar em um backend desse tipo.',
       email: 'E-mail',
       password: 'Senha',
       passwordHelp:

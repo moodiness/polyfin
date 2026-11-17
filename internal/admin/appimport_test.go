@@ -24,8 +24,17 @@ import (
 
 // appImportAPI serves the admin API with imports from apps, the Stremio
 // accounts on a fake Stremio, and returns the library, the user data and
-// the addons they write to, the fake, and the watchlists.
+// the addons they write to, the fake, and the watchlists. Members reach
+// a Nuvio backend on the loopback.
 func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *addons.Store, *stremiotest.Fake, *watchlist.Store) {
+	t.Helper()
+	return confinedAppImportAPI(t, nuviotest.Loopback())
+}
+
+// confinedAppImportAPI is appImportAPI, members' Nuvio requests sent with
+// confined.
+func confinedAppImportAPI(t *testing.T, confined *http.Client) (testAPI, *library.Service, *userdata.Store, *addons.Store,
+	*stremiotest.Fake, *watchlist.Store) {
 	t.Helper()
 	var lib *library.Service
 	var data *userdata.Store
@@ -36,7 +45,7 @@ func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *ad
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
 		data, installed, lists = userdata.New(deps.pool), deps.addons, watchlisttest.Store(deps.pool)
-		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3"})
+		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3", Confined: confined})
 		o.Stremio = stremioimport.New(stremioimport.Options{Metas: stremiotest.SampleMetas(), Version: "1.2.3", API: fake.API,
 			Link: fake.Link})
 		o.AppImport = appimport.New(appimport.Options{Settings: o.Accounts.Settings, Titles: lib, UserData: data, Addons: deps.addons,
@@ -281,6 +290,42 @@ func TestAppImportsFollowTheirPermissions(t *testing.T) {
 	}
 }
 
+// A member's Nuvio backend is on a public address, as their addons are,
+// checked at each redirect; an administrator's may be on the local
+// network, for themselves or for a member.
+func TestAMembersNuvioBackendIsOnAPublicAddress(t *testing.T) {
+	t.Parallel()
+	backend := nuviotest.New(t)
+	backend.Set(func(b *nuviotest.Backend) {
+		b.Email, b.Password = "bob@example.com", "bob's password"
+		b.Backup = nuviotest.Backup(1, nuviotest.Sample("https://first.example/u/secret/manifest.json",
+			"https://second.example/u/other-secret"))
+	})
+	// front stands for a backend on a public address, redirecting to the
+	// one on the loopback.
+	front := nuviotest.Redirect(t, backend.URL)
+	api, _, _, _, _, _ := confinedAppImportAPI(t, nuviotest.Confined(t, front))
+	admin, bob := api.signedIn("root", true), api.signedIn("bob", false)
+	userPath := "/users/" + api.userID("bob").String() + "/app-import/nuvio"
+
+	for _, address := range []string{backend.URL, front} {
+		signIn := map[string]any{"backend": address, "email": "bob@example.com", "password": "bob's password"}
+		reached := len(backend.Requests())
+		if status, body, _ := bob.call(http.MethodPost, "/account/app-import/nuvio", signIn); status != http.StatusForbidden ||
+			body["error"] != "private_network" {
+			t.Errorf("Bob's backend at %s: %d %v", address, status, body)
+		}
+		if n := len(backend.Requests()); n != reached {
+			t.Errorf("Bob's backend at %s was reached %d times", address, n-reached)
+		}
+		for _, path := range []string{"/account/app-import/nuvio", userPath} {
+			if status, body, _ := admin.call(http.MethodPost, path, signIn); status != http.StatusOK {
+				t.Errorf("the administrator's backend at %s, %s: %d %v", address, path, status, body)
+			}
+		}
+	}
+}
+
 // stremioSample puts the sample account on the fake (see
 // stremiotest.Sample), with the addon at first, and returns the auth key
 // the user's browser holds.
@@ -465,9 +510,9 @@ func profileOf(t *testing.T, read map[string]any, name string) map[string]any {
 	return nil
 }
 
-// fakeOpen waits for the sessions open on fake to be want, and fails
-// unless they become so.
-func fakeOpen(t *testing.T, fake *stremiotest.Fake, want int) {
+// fakeOpen waits for the sessions open on fake, a fake Stremio or Nuvio
+// backend, to be want, and fails unless they become so.
+func fakeOpen(t *testing.T, fake interface{ Open() int }, want int) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for fake.Open() != want {

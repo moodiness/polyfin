@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/appimport"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio/nuviotest"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 const (
@@ -42,7 +43,7 @@ func at(text string) time.Time {
 func TestAnAccountIsReadSignedInThenSignedOut(t *testing.T) {
 	t.Parallel()
 	b := backend(t)
-	account, err := New(Options{Version: "1.2.3"}).Read(t.Context(), b.URL+"/", " "+email+" ", password, false)
+	account, err := New(Options{Version: "1.2.3"}).Read(t.Context(), b.URL+"/", " "+email+" ", password, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestReadingFailsWithWhatWentWrong(t *testing.T) {
 	t.Parallel()
 	b := backend(t)
 	r := New(Options{Version: "1.2.3"})
-	if _, err := r.Read(t.Context(), b.URL, email, "wrong", false); !errors.Is(err, ErrSignInRefused) {
+	if _, err := r.Read(t.Context(), b.URL, email, "wrong", false, false); !errors.Is(err, ErrSignInRefused) {
 		t.Errorf("a wrong password: %v", err)
 	}
 	for _, request := range b.Requests() {
@@ -147,7 +148,7 @@ func TestReadingFailsWithWhatWentWrong(t *testing.T) {
 
 	// Another version of the backup: refused, signed out still.
 	b.Set(func(b *nuviotest.Backend) { b.Backup = nuviotest.Backup(2, map[string]any{}) })
-	_, err := r.Read(t.Context(), b.URL, email, password, false)
+	_, err := r.Read(t.Context(), b.URL, email, password, false, false)
 	var unsupported *BackupError
 	if !errors.As(err, &unsupported) || unsupported.Version != 2 || !errors.Is(err, ErrUnsupportedBackup) ||
 		!strings.Contains(err.Error(), "version 2") {
@@ -159,15 +160,15 @@ func TestReadingFailsWithWhatWentWrong(t *testing.T) {
 
 	web := httptest.NewServer(http.NotFoundHandler())
 	defer web.Close()
-	if _, err := r.Read(t.Context(), web.URL, email, password, false); !errors.Is(err, ErrNotNuvio) {
+	if _, err := r.Read(t.Context(), web.URL, email, password, false, false); !errors.Is(err, ErrNotNuvio) {
 		t.Errorf("not a Nuvio backend: %v", err)
 	}
 	web.Close()
-	if _, err := r.Read(t.Context(), web.URL, email, password, false); !errors.Is(err, ErrUnreachable) {
+	if _, err := r.Read(t.Context(), web.URL, email, password, false, false); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("nothing answers: %v", err)
 	}
 	for _, address := range []string{"ftp://nuvio.example", "https://user:secret@nuvio.example", "https://nuvio.example/?a=b"} {
-		if _, err := r.Read(t.Context(), address, email, password, false); !errors.Is(err, ErrInvalidAddress) {
+		if _, err := r.Read(t.Context(), address, email, password, false, false); !errors.Is(err, ErrInvalidAddress) {
 			t.Errorf("%q: %v", address, err)
 		}
 	}
@@ -185,7 +186,7 @@ func TestABackendAskingToWaitIsWaitedFor(t *testing.T) {
 	b.Set(func(b *nuviotest.Backend) { b.Limited, b.RetryAfter = 1, "1" })
 	r := New(Options{Version: "1.2.3"})
 	started := time.Now()
-	if _, err := r.Read(t.Context(), b.URL, email, password, false); err != nil {
+	if _, err := r.Read(t.Context(), b.URL, email, password, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if waited := time.Since(started); waited < time.Second {
@@ -194,7 +195,7 @@ func TestABackendAskingToWaitIsWaitedFor(t *testing.T) {
 	// Longer than a sign-in waits: it says so at once.
 	b.Set(func(b *nuviotest.Backend) { b.Limited, b.RetryAfter = 1, "120" })
 	started = time.Now()
-	if _, err := r.Read(t.Context(), b.URL, email, password, false); !errors.Is(err, ErrRateLimited) || time.Since(started) > 10*time.Second {
+	if _, err := r.Read(t.Context(), b.URL, email, password, false, false); !errors.Is(err, ErrRateLimited) || time.Since(started) > 10*time.Second {
 		t.Errorf("a long wait: %v after %v", err, time.Since(started))
 	}
 }
@@ -220,7 +221,7 @@ func TestStayingConnectedKeepsAndRenewsTheSession(t *testing.T) {
 
 	// Read to stay connected, the session stays open, and the account
 	// holds its refresh token, the backend's address, and its email.
-	account, err := r.Read(t.Context(), b.URL, email, password, true)
+	account, err := r.Read(t.Context(), b.URL, email, password, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestStayingConnectedKeepsAndRenewsTheSession(t *testing.T) {
 	}
 
 	// The backend ending the account's sessions refuses the refresh token.
-	account, err = r.Read(t.Context(), b.URL, email, password, true)
+	account, err = r.Read(t.Context(), b.URL, email, password, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,5 +281,58 @@ func TestStayingConnectedKeepsAndRenewsTheSession(t *testing.T) {
 	// Signing out a session the backend ended already is no failure.
 	if err := r.SignOut(t.Context(), *account.SignIn); err != nil {
 		t.Errorf("signing out a session ended: %v", err)
+	}
+}
+
+func TestAConfinedSignInStaysOnPublicAddresses(t *testing.T) {
+	t.Parallel()
+	b := backend(t)
+	// front stands for a backend on a public address, redirecting to the
+	// one on the loopback.
+	front := nuviotest.Redirect(t, b.URL)
+	r := New(Options{Version: "1.2.3", Confined: nuviotest.Confined(t, front)})
+
+	// Confined, neither the loopback nor a redirect to it is reached.
+	for _, address := range []string{b.URL, front} {
+		if _, err := r.Read(t.Context(), address, email, password, true, true); !errors.Is(err, stremio.ErrPrivateNetwork) {
+			t.Errorf("confined, %s: %v", address, err)
+		}
+	}
+	if n := len(b.Requests()); n != 0 {
+		t.Fatalf("the backend was reached %d times", n)
+	}
+
+	// Not confined, an administrator's reaches both.
+	account, err := r.Read(t.Context(), front, email, password, true, false)
+	if err != nil || account.SignIn.Confined {
+		t.Fatalf("not confined: %+v %v", account.SignIn, err)
+	}
+
+	// A sign-in kept confined is read again and signed out confined: its
+	// backend is not reached.
+	kept := *account.SignIn
+	kept.Confined = true
+	for _, address := range []string{b.URL, front} {
+		kept.Backend = address
+		reached := len(b.Requests())
+		if _, _, err := r.Reread(t.Context(), kept); !errors.Is(err, appimport.ErrAppUnreachable) {
+			t.Errorf("read again confined, %s: %v", address, err)
+		}
+		if err := r.SignOut(t.Context(), kept); !errors.Is(err, stremio.ErrPrivateNetwork) {
+			t.Errorf("signed out confined, %s: %v", address, err)
+		}
+		if n := len(b.Requests()); n != reached {
+			t.Errorf("confined, %s was reached %d times", address, n-reached)
+		}
+	}
+	kept.Confined = false
+	if _, _, err := r.Reread(t.Context(), kept); err != nil {
+		t.Errorf("read again not confined: %v", err)
+	}
+
+	// On a public address, a confined sign-in is kept confined.
+	public := New(Options{Version: "1.2.3", Confined: nuviotest.Confined(t, b.URL)})
+	if account, err := public.Read(t.Context(), b.URL, email, password, true, true); err != nil || !account.SignIn.Confined {
+		t.Errorf("confined on a public address: %+v %v", account.SignIn, err)
 	}
 }
