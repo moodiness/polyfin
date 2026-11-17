@@ -745,7 +745,7 @@ jobs:
           if [ "$RUNNER_OS" = Linux ]; then
             # PostgreSQL's own packages, signed with the key checked here,
             # without the cluster Debian's packaging would make.
-            curl -fsSLo "$temp/pgdg.asc" https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$temp/pgdg.asc" https://www.postgresql.org/media/keys/ACCC4CF8.asc
             echo "0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76  $temp/pgdg.asc" | sha256sum -c -
             sudo install -d /usr/share/postgresql-common/pgdg /etc/postgresql-common/createcluster.d
             sudo cp "$temp/pgdg.asc" /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
