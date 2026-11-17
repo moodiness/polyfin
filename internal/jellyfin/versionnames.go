@@ -1,11 +1,15 @@
 package jellyfin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -105,18 +109,26 @@ func sizeName(size int64, language string) string {
 // plays each (see playback.PlayNote): PlaybackInfo names every version it
 // lists for the device profile it is sent; item details, where apps read
 // names but which know no profile, name them for the device profile known
-// for the device asking (see knownPlay), kept in memory until the device
-// signs out or the server stops. Only versions whose tracks are known,
-// analyzed or described by RemuxDB, are named: naming reads nothing.
+// for the device asking (see knownPlay), kept in the database across
+// restarts until the device signs out (see devicePlayOf). Only versions
+// whose tracks are known, analyzed or described before any play, are
+// named: naming reads nothing.
 
 // devicePlay is what a device told of how it plays: the device profile
 // and the bitrate its last PlaybackInfo asked for, else the profile its
-// session's capabilities carried, which fromCapabilities tells.
+// session's capabilities carried, which fromCapabilities tells. encoded is
+// the profile as kept in the database, which tells a profile changed. A
+// devicePlay without a profile stands for a device that told none.
 type devicePlay struct {
 	profile          *playback.DeviceProfile
 	bitrate          looseInt
 	fromCapabilities bool
+	encoded          []byte
 }
+
+// keepPlayTimeout bounds the write of what a device told of how it plays,
+// which the request it came with does not wait for when it ends first.
+const keepPlayTimeout = 5 * time.Second
 
 // rememberPlay keeps the device profile and the bitrate of a PlaybackInfo
 // for the device asking, as the app sent them.
@@ -125,7 +137,7 @@ func (h *Handler) rememberPlay(ctx context.Context, request playbackInfoRequest)
 	if request.DeviceProfile == nil || c.APIKey != nil || c.Device.ID == (accounts.ID{}) {
 		return
 	}
-	h.plays.Put(c.Device.ID, devicePlay{profile: request.DeviceProfile, bitrate: request.MaxStreamingBitrate})
+	h.keepPlay(ctx, c.Device.ID, devicePlay{profile: request.DeviceProfile, bitrate: request.MaxStreamingBitrate})
 }
 
 // rememberCapabilities keeps the device profile a session's capabilities
@@ -137,22 +149,98 @@ func (h *Handler) rememberCapabilities(ctx context.Context, profile *playback.De
 	if profile == nil || c.APIKey != nil || c.Device.ID == (accounts.ID{}) {
 		return
 	}
-	if known, ok := h.plays.Get(c.Device.ID); ok && !known.fromCapabilities {
+	if known, ok := h.devicePlayOf(ctx, c.Device.ID); ok && !known.fromCapabilities {
 		return
 	}
-	h.plays.Put(c.Device.ID, devicePlay{profile: profile, fromCapabilities: true})
+	h.keepPlay(ctx, c.Device.ID, devicePlay{profile: profile, fromCapabilities: true})
+}
+
+// keepPlay keeps play for device, in memory and, when it changed, in the
+// database. A profile larger than accounts.MaxDevicePlayProfile is kept
+// in memory only, and the one kept before is forgotten.
+func (h *Handler) keepPlay(ctx context.Context, device accounts.ID, play devicePlay) {
+	encoded, err := json.Marshal(play.profile)
+	if err != nil {
+		return
+	}
+	play.encoded = encoded
+	known, _ := h.devicePlayOf(ctx, device)
+	h.plays.Put(device, play)
+	if bytes.Equal(known.encoded, encoded) && known.bitrate == play.bitrate && known.fromCapabilities == play.fromCapabilities {
+		return
+	}
+	stored := accounts.DevicePlay{Profile: encoded, FromCapabilities: play.fromCapabilities}
+	if play.bitrate.set {
+		stored.Bitrate = &play.bitrate.value
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), keepPlayTimeout)
+	defer cancel()
+	err = h.Accounts.SetDevicePlay(ctx, device, stored)
+	if errors.Is(err, accounts.ErrDevicePlayTooLarge) {
+		h.Logger.Debug("A device profile is too large to keep across restarts", "bytes", len(encoded))
+		err = h.Accounts.ForgetDevicePlay(ctx, device)
+	}
+	if err != nil {
+		h.Logger.Warn("A device profile could not be kept across restarts", "error", err)
+	}
+}
+
+// devicePlayOf returns what device told of how it plays: as kept in
+// memory, else in the database, which memory then keeps, that it told
+// nothing included, unless something was kept meanwhile; false when it
+// told no profile.
+func (h *Handler) devicePlayOf(ctx context.Context, device accounts.ID) (devicePlay, bool) {
+	if play, ok := h.plays.Get(device); ok {
+		return play, play.profile != nil
+	}
+	stored, ok, err := h.Accounts.DevicePlay(ctx, device)
+	if err != nil {
+		if ctx.Err() == nil {
+			h.Logger.Warn("A device profile kept across restarts could not be read", "error", err)
+		}
+		return devicePlay{}, false
+	}
+	var play devicePlay
+	if ok {
+		play = storedPlay(stored)
+	}
+	h.plays.Update(device, func(kept devicePlay, found bool) (devicePlay, bool) {
+		if found {
+			play = kept
+		}
+		return play, !found
+	})
+	return play, play.profile != nil
+}
+
+// storedPlay is a devicePlay as the database kept it; one whose profile
+// cannot be read stands for none.
+func storedPlay(stored accounts.DevicePlay) devicePlay {
+	var profile playback.DeviceProfile
+	if err := json.Unmarshal(stored.Profile, &profile); err != nil {
+		return devicePlay{}
+	}
+	encoded, err := json.Marshal(&profile)
+	if err != nil {
+		return devicePlay{}
+	}
+	play := devicePlay{profile: &profile, fromCapabilities: stored.FromCapabilities, encoded: encoded}
+	if stored.Bitrate != nil {
+		play.bitrate = looseInt{value: *stored.Bitrate, set: true}
+	}
+	return play
 }
 
 // knownPlay returns the request a PlaybackInfo of the device asking would
 // make, from its device profile known (see devicePlay), limited for user as
 // PlaybackInfo limits it, and the device; false when the caller is no
-// device, or the device has told no profile since the server started.
+// device, or the device never told a profile since it signed in.
 func (h *Handler) knownPlay(ctx context.Context, user accounts.User) (playbackInfoRequest, accounts.ID, bool) {
 	c := callerFrom(ctx)
 	if c.APIKey != nil || c.Device.ID == (accounts.ID{}) {
 		return playbackInfoRequest{}, accounts.ID{}, false
 	}
-	play, ok := h.plays.Get(c.Device.ID)
+	play, ok := h.devicePlayOf(ctx, c.Device.ID)
 	if !ok {
 		return playbackInfoRequest{}, accounts.ID{}, false
 	}

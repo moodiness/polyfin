@@ -235,7 +235,8 @@ type Handler struct {
 	// /Sessions between its encodings (see transcodingInfo).
 	transcodings *cache.Cache[string, TranscodingInfo]
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
-	// which item details name versions for (see detailsNamer).
+	// which item details name versions for (see detailsNamer), as kept in
+	// the database, or that the device told none (see devicePlayOf).
 	plays *cache.Cache[accounts.ID, devicePlay]
 	// scripted are the devices whose web player runs Polyfin's script, as
 	// they read the user's sound (see boostRelay).
