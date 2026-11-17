@@ -58,6 +58,46 @@ func PlayNote(decision Decision, playable bool, language string) string {
 	if !ok {
 		w = playNotes["en"]
 	}
+	return note(w, decision, playable)
+}
+
+// likelyNotes are the endings of each server language that tell how a
+// version likely plays, estimated from its labels: as playNotes, the
+// reasons the same.
+var likelyNotes = map[string]noteWords{
+	"en": {directPlay: "(likely direct play)", directStream: "(likely direct stream)", converted: "(likely converted)",
+		convertedFor: "(likely converted: %s)", cannotPlay: "(likely cannot play here)"},
+	"fr": {directPlay: "(lecture directe probable)", directStream: "(flux direct probable)", converted: "(conversion probable)",
+		convertedFor: "(conversion probable\u202f: %s)", cannotPlay: "(probablement illisible ici)"},
+	"de": {directPlay: "(vermutlich direktes Abspielen)", directStream: "(vermutlich direkter Stream)", converted: "(vermutlich konvertiert)",
+		convertedFor: "(vermutlich konvertiert: %s)", cannotPlay: "(vermutlich nicht abspielbar)"},
+	"es": {directPlay: "(probable reproducción directa)", directStream: "(probable transmisión directa)", converted: "(probablemente convertida)",
+		convertedFor: "(probablemente convertida: %s)", cannotPlay: "(probablemente no reproducible)"},
+	"it": {directPlay: "(probabile riproduzione diretta)", directStream: "(probabile stream diretto)", converted: "(probabilmente convertita)",
+		convertedFor: "(probabilmente convertita: %s)", cannotPlay: "(probabilmente non riproducibile)"},
+	"pt-BR": {directPlay: "(provável reprodução direta)", directStream: "(provável stream direto)", converted: "(provavelmente convertida)",
+		convertedFor: "(provavelmente convertida: %s)", cannotPlay: "(provavelmente não reproduzível)"},
+}
+
+// LikelyNote is PlayNote for a decision made on the tracks a version's
+// labels suggest while its own are unknown: the same ending, worded as an
+// estimate, "(likely direct play)" or "(likely converted: audio)". It is
+// 45 characters at most.
+func LikelyNote(decision Decision, playable bool, language string) string {
+	match := i18n.Match(language)
+	w, ok := playNotes[match]
+	likely, known := likelyNotes[match]
+	if !ok || !known {
+		w, likely = playNotes["en"], likelyNotes["en"]
+	}
+	w.directPlay, w.directStream, w.converted, w.convertedFor, w.cannotPlay =
+		likely.directPlay, likely.directStream, likely.converted, likely.convertedFor, likely.cannotPlay
+	return note(w, decision, playable)
+}
+
+// note is the ending in w telling how a decision plays a version (see
+// PlayNote).
+func note(w noteWords, decision Decision, playable bool) string {
 	has := func(reasons ...string) bool {
 		return slices.ContainsFunc(decision.Reasons, func(reason string) bool { return slices.Contains(reasons, reason) })
 	}
