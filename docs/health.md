@@ -28,7 +28,7 @@ Under **Checks**, a tile for each main part tells its state at a glance: **Addon
 | **Artwork** | The artwork downloads that failed in the last hour, by kind and by server, and the servers waited for (see [Artwork and people](#artwork-and-people)) |
 | **People** | Whether a TMDB API key is saved, and how people's lookups on TMDB stand (see [Artwork and people](#artwork-and-people)) |
 | **Polyfin** | Memory, goroutines, uptime and version, and **Download the goroutines** (below) |
-| **Stored keys** | Whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it. Unencrypted keys are a warning; keys that cannot be decrypted are an error (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)) |
+| **Stored keys** | Whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it. No key set is a warning, before any key is stored too; keys that cannot be decrypted are an error (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)) |
 | **Known proxies** | While some are listed by host name, the addresses each name resolves to (see [Proxies by name](reverse-proxy.md#proxies-by-name)) |
 
 **Backups** problems:

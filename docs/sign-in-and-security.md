@@ -34,7 +34,7 @@ In the admin app, after a right password, the sign-in page asks for the code, or
 - Wrong codes count as wrong passwords toward the client's failed attempts (429 once too many). They also count toward the account's, whatever the client, with the same limit.
 - A right password between wrong codes does not reset them. They do not count toward **Block an account after this many wrong passwords (0 = never)**.
 - Each code counts toward the limit on arrival, before checking, as passwords, PINs and tokens do. Of codes sent at once, those past the limit are refused unchecked.
-- The key is encrypted with `POLYFIN_SECRET_KEY`, like other stored keys, and never shown again once set up (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+- The key is encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise, like other stored keys, and never shown again once set up (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 
 Turning it on or off keeps open sessions, in the admin app and Jellyfin apps. Sign out devices you no longer trust under **My account › Devices**.
 
@@ -94,7 +94,7 @@ To set it up:
 | **Issuer** | **Settings › Security** | Empty, off | The provider's issuer, exactly as its discovery document gives it, `http://` or `https://`, without a query or fragment. Polyfin reads `<issuer>/.well-known/openid-configuration`. `http://` is accepted for a provider on your own network, but see the warning below. |
 | **Button name** | **Settings › Security** | Empty | What the buttons say after "Sign in with", up to 64 bytes. Empty shows the issuer's host name. |
 | **Client ID** | **Settings › Security** | Empty, off | The ID the provider gave Polyfin's client. |
-| **Client secret** | **Settings › Security** | Empty | A confidential client's secret, sent with HTTP Basic authentication, or in the form when the provider lists only `client_secret_post`. Kept encrypted with `POLYFIN_SECRET_KEY`, and never shown again. |
+| **Client secret** | **Settings › Security** | Empty | A confidential client's secret, sent with HTTP Basic authentication, or in the form when the provider lists only `client_secret_post`. Encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise, and never shown again. |
 | **Claim naming the user** | **Settings › Security** | `preferred_username` | The ID token's claim compared with account names the first time someone signs in; the verified email comes next. |
 | **Create accounts** | **Settings › Security** | Off | Creates an account, signing in through the provider only, for someone no account matches. Off, they are refused. |
 | **Administrators' claim**, **Administrators' value** | **Settings › Security** | Empty | Both set, someone whose claim is the value, or a list holding it, becomes an administrator on sign-in. With the claim `groups`, Polyfin asks for the `groups` scope when the provider lists it. |
@@ -176,7 +176,7 @@ Jellyfin apps cannot open the provider's page. They use Quick Connect: the app s
 - Someone whose account is refused counts as no wrong guess.
 - No token, code, state or secret is logged or sent back.
 - The browser gets its device's Jellyfin access token, as a password sign-in gives it, through a one-time ticket valid 2 minutes, in a cookie the page cannot read.
-- The client secret is stored encrypted with `POLYFIN_SECRET_KEY` (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+- The client secret is encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 - The activity log records sign-ins, refused ones with the name the provider gave, and accounts created.
 
 **Compared with Jellyfin**

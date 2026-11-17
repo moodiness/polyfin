@@ -50,9 +50,10 @@ const notifications = {
     discordAsWebhook:
       'This is a Discord webhook: Polyfin sends it Discord’s own message, as to a Discord target.',
     addressHelp: {
-      webhook: 'It is kept encrypted and never shown again: only its host is.',
+      webhook:
+        'It is never shown again, only its host is. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
       discord:
-        'In Discord: the channel’s settings, Integrations, Webhooks, Copy Webhook URL. It is kept encrypted and never shown again.',
+        'In Discord: the channel’s settings, Integrations, Webhooks, Copy Webhook URL. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
     },
     savedAddress: (host: string) => `Saved, at ${host}.`,
     ntfyServer: 'ntfy server',
@@ -61,7 +62,8 @@ const notifications = {
     topicHelp:
       'The topic you subscribe to in the ntfy app. Anyone who knows a topic on a public server can read it: choose one that is hard to guess.',
     token: 'Access token',
-    tokenHelp: 'For a topic that needs signing in. It is kept encrypted and never shown again.',
+    tokenHelp:
+      'For a topic that needs signing in. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
     emailAddress: 'Email address',
     emailAddressHelp: 'Where the messages go.',
     chat: 'Chat',
@@ -69,19 +71,19 @@ const notifications = {
       'The chat’s number, such as -1001234567890, or a public channel’s name, such as @news_example. Add the bot to the chat first.',
     botToken: 'Bot token',
     botTokenHelp:
-      'BotFather gives it when the bot is created. It is kept encrypted and never shown again.',
+      'BotFather gives it when the bot is created. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
     gotifyServer: 'Gotify server',
     gotifyServerHelp: 'Its address, such as https://gotify.example.org.',
     appToken: 'Application token',
     appTokenHelp: {
       gotify:
-        'In Gotify: Apps, Create Application, then copy its token. It is kept encrypted and never shown again.',
+        'In Gotify: Apps, Create Application, then copy its token. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
       pushover:
-        'The API token of an application created on Pushover. It is kept encrypted and never shown again.',
+        'The API token of an application created on Pushover. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
     },
     userKey: 'User key',
     userKeyHelp:
-      'Shown on Pushover’s dashboard once signed in, or a group key. It is kept encrypted and never shown again.',
+      'Shown on Pushover’s dashboard once signed in, or a group key. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
     events: 'Events',
     eventsHelp: {
       server: 'What it is told of, for every user.',

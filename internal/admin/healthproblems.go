@@ -577,7 +577,8 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			}
 			add(p)
 		}
-		if !h.Health.SecretKey && report.Plaintext > 0 {
+		// Before the first secret too: whatever is saved next is stored as is.
+		if !h.Health.SecretKey {
 			add(warning("secrets:plaintext", problemSecretsPlaintext, "secrets"))
 		}
 	}

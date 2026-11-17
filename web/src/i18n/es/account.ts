@@ -337,10 +337,15 @@ const account: typeof en = {
       stayConnected: 'Permanecer conectado',
       stayConnectedHelp: {
         nuvio: (every: string) =>
-          `Polyfin conserva la sesión, cifrada, nunca su contraseña, y vuelve a importar el perfil elegido ${every}. Solo lee la cuenta. Puede desconectarse en cualquier momento.`,
+          `Polyfin conserva la sesión, nunca su contraseña, y vuelve a importar el perfil elegido ${every}. La sesión se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no. Solo lee la cuenta. Puede desconectarse en cualquier momento.`,
         stremio: (every: string) =>
-          `Polyfin conserva la clave de autenticación, cifrada, y para un perfil con PIN la sesión de ese perfil, nunca el PIN, y vuelve a importar el perfil elegido ${every}. Solo lee la cuenta. Puede desconectarse en cualquier momento. Las condiciones de Stremio prohíben extraer sus datos por medios automatizados: leer su cuenta ${every} acentúa esa zona gris más que una importación puntual.`,
+          `Polyfin conserva la clave de autenticación, y para un perfil con PIN la sesión de ese perfil, nunca el PIN, y vuelve a importar el perfil elegido ${every}. Se cifran si el servidor tiene una POLYFIN_SECRET_KEY, y se guardan tal cual si no. Solo lee la cuenta. Puede desconectarse en cualquier momento. Las condiciones de Stremio prohíben extraer sus datos por medios automatizados: leer su cuenta ${every} acentúa esa zona gris más que una importación puntual.`,
       },
+      unencrypted:
+        'Este servidor no tiene clave secreta: un inicio de sesión guardado para permanecer conectado se almacenaría sin cifrar.',
+      unencryptedAdministrator:
+        'Este servidor no tiene POLYFIN_SECRET_KEY: un inicio de sesión guardado para permanecer conectado se almacenaría sin cifrar. Defina la clave y reinicie Polyfin para cifrarlo.',
+      unencryptedDocs: 'Claves y tokens guardados',
       staysConnected: (every: string) =>
         `Permanece conectado: este perfil se vuelve a importar ${every}, de la misma forma. Las extensiones solo se instalan ahora.`,
       wholeAccount: 'Toda la cuenta',

@@ -375,7 +375,7 @@ Someone watching in Nuvio or Stremio on some devices and Polyfin on others can s
 
 The password is never kept. Each user has one connection per app. Signing in again with **Stay connected** replaces it and signs out the sessions Polyfin opened before.
 
-**How it is protected:** It is stored encrypted with `POLYFIN_SECRET_KEY`, like tracking tokens (see [Configuration](configuration.md)). It is never shown, sent to the browser, or logged. Without the key it is stored as is, and **System › Health** warns. A connection the key cannot decrypt counts as none: sign in again.
+**How it is protected:** It is encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise, like tracking tokens (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)). It is never shown, sent to the browser, or logged. Without the key, a note beside **Stay connected** says the sign-in kept would be stored unencrypted; to an administrator, it also says to set the key, with a link to that page. **System › Health** warns too. A connection the key cannot decrypt counts as none: sign in again.
 
 **The imports:**
 
@@ -437,7 +437,7 @@ A Stremio account keeps the user's installed addons and a library. For each titl
 - **Email and password**: as in Stremio's apps. **Sign in to Stremio** signs in, reads the account, and signs out unless you stay connected. Facebook or Apple accounts have no password: use a link code.
 - **An auth key**: the key Stremio's web app keeps after you sign in there. Run `JSON.parse(localStorage.getItem("profile")).auth.key` in the browser console on that page. **Read the account** reads with it and does not sign it out, which would sign your browser out too.
 
-The key Polyfin gets or is given serves this one read. It stays in memory for the read only, never logged nor sent to the browser. It is stored, encrypted, only to stay connected (see [Staying connected](#staying-connected)). A wrong email or password, a refused key, or Stremio not answering each say so.
+The key Polyfin gets or is given serves this one read. It stays in memory for the read only, never logged nor sent to the browser. It is stored only to stay connected, encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise (see [Staying connected](#staying-connected)). A wrong email or password, a refused key, or Stremio not answering each say so.
 
 What comes over:
 

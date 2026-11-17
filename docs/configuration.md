@@ -278,7 +278,7 @@ How the key applies:
 
 - At startup, the secrets still stored unencrypted are encrypted in place, in one go. Running again changes nothing.
 - New values are written encrypted, and read back decrypted.
-- Without the key, nothing changes from earlier versions. Secrets are stored as they are, and **System › Health** shows a warning while any is stored that way.
+- Without the key, nothing changes from earlier versions. Secrets are stored as they are, and **System › Health** shows a warning while the key is not set, before the first secret is stored too. **Stay connected**, under **Import from an app**, says so as well (see [Staying connected](moving-to-polyfin.md#staying-connected)).
 
 **A missing, changed or wrong key:** Polyfin still starts while encrypted secrets exist.
 

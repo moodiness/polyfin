@@ -4012,6 +4012,8 @@ export type OwnAppImport = {
   import: AppImportStatus | null
   connections: AppConnection[]
   importEveryMinutes: number
+  /** The server has POLYFIN_SECRET_KEY: a sign-in kept to stay connected is stored encrypted. */
+  secretKey: boolean
 }
 
 export const fetchOwnAppImport = (signal?: AbortSignal) =>
@@ -4038,6 +4040,8 @@ export type UserAppImport = {
   import: AppImportStatus | null
   connections: AppConnection[]
   importEveryMinutes: number
+  /** The server has POLYFIN_SECRET_KEY: a sign-in kept to stay connected is stored encrypted. */
+  secretKey: boolean
 }
 
 export const fetchUserAppImport = (id: string, signal?: AbortSignal) =>

@@ -79,7 +79,7 @@ const settings = {
       'The update API of a tool you run beside Polyfin to update its container, such as http://updater:8080/v1/update. Update now, on Home, sends it a POST request without a body. Empty hides Update now.',
     updateToolToken: 'Update tool token',
     updateToolTokenHelp:
-      'Sent as an Authorization: Bearer header with each request, when the tool asks for one. Stored encrypted, as the other secrets.',
+      'Sent as an Authorization: Bearer header with each request, when the tool asks for one. Encrypted when the server has a POLYFIN_SECRET_KEY, as the other secrets, and stored as is otherwise.',
     localDiscovery: 'Answer local network discovery',
     localDiscoveryHelp:
       'Jellyfin and Emby apps that look for servers on the local network find Polyfin and list it, so its address does not have to be typed. They ask on UDP port 7359, and Polyfin answers only addresses of the local network. Applies at once, without a restart. In Docker, this needs host networking or the published port 7359/udp: see the installation docs.',
@@ -401,7 +401,8 @@ const settings = {
     smtpUser: 'SMTP user',
     smtpUserHelp: 'Empty to send without signing in.',
     smtpPassword: 'SMTP password',
-    smtpPasswordHelp: 'It is kept encrypted and never shown again.',
+    smtpPasswordHelp:
+      'It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
     smtpFrom: 'Sender address',
     smtpFromHelp: 'The address messages come from, such as polyfin@example.org.',
     smtpFromName: 'Sender name',
@@ -800,7 +801,7 @@ const settings = {
       clientIdHelp: 'The ID the provider gave Polyfin’s client. Empty turns the sign-in off.',
       clientSecret: 'Client secret',
       clientSecretHelp:
-        'The secret of a confidential client; leave it empty for a public client. It is kept encrypted with POLYFIN_SECRET_KEY and never shown again.',
+        'The secret of a confidential client; leave it empty for a public client. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
       userClaim: 'Claim naming the user',
       userClaimHelp:
         'The claim of the ID token compared with account names, without regard to case, the first time someone signs in: preferred_username by default. The verified email comes next. Later sign-ins find the same account whatever the claim says.',
@@ -844,7 +845,7 @@ const settings = {
         'Let’s Encrypt issues certificates only once its terms of service, at letsencrypt.org/repository, are agreed to.',
       challenge: 'Challenge',
       challengeHelp:
-        'How Let’s Encrypt checks that the names point at this server. HTTP-01: Polyfin answers on its HTTP port, which the internet’s port 80 must reach. TLS-ALPN-01: Polyfin answers on its HTTPS port, which the internet’s port 443 must reach. The certificate, its key and the account’s key are kept in the database, the keys encrypted with POLYFIN_SECRET_KEY, and the certificate is renewed once a third of its lifetime remains.',
+        'How Let’s Encrypt checks that the names point at this server. HTTP-01: Polyfin answers on its HTTP port, which the internet’s port 80 must reach. TLS-ALPN-01: Polyfin answers on its HTTPS port, which the internet’s port 443 must reach. The certificate, its key and the account’s key are kept in the database, the keys encrypted when the server has a POLYFIN_SECRET_KEY, and the certificate is renewed once a third of its lifetime remains.',
       challenges: {
         'http-01': 'HTTP-01 (port 80 to the HTTP port)',
         'tls-alpn-01': 'TLS-ALPN-01 (port 443 to the HTTPS port)',
@@ -988,7 +989,7 @@ const settings = {
       `After each backup, Polyfin deletes its oldest backups past this number. Other files in the folder are never touched. From ${r.min} to ${r.max}; ${r.default} by default.`,
     backupPassphrase: 'Backup passphrase',
     backupPassphraseHelp: (min: number) =>
-      `Encrypts each backup as it is written, in the folder and at every destination, which then cannot read it. At least ${min} characters. It is kept encrypted and never shown again.`,
+      `Encrypts each backup as it is written, in the folder and at every destination, which then cannot read it. At least ${min} characters. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.`,
     backupPassphraseNew:
       'Keep this passphrase somewhere other than this server, such as a password manager: a lost passphrase means lost backups. Nobody can restore them without it, Polyfin included. Check it with the eye before saving. Backups already made stay as they are.',
     backupPassphraseRemoved:

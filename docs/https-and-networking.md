@@ -72,7 +72,7 @@ Polyfin looks at the files every minute, and reads them again when they change. 
 
 Polyfin obtains one certificate for every host name, with an account key of its own. It keeps in the database:
 
-- the account key, the certificate and its private key, the keys encrypted with `POLYFIN_SECRET_KEY` as the other [stored keys](configuration.md#stored-keys-and-tokens), so that backups hold them;
+- the account key, the certificate and its private key, the keys encrypted when the server has a `POLYFIN_SECRET_KEY` as the other [stored keys](configuration.md#stored-keys-and-tokens), so that backups hold them;
 - the challenge and the ACME server the certificate came from.
 
 | Event | What Polyfin does |

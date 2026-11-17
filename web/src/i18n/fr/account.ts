@@ -341,10 +341,15 @@ const account: typeof en = {
       stayConnected: 'Rester connecté',
       stayConnectedHelp: {
         nuvio: (every: string) =>
-          `Polyfin garde la session, chiffrée, jamais votre mot de passe, et importe de nouveau le profil choisi ${every}. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment.`,
+          `Polyfin garde la session, jamais votre mot de passe, et importe de nouveau le profil choisi ${every}. La session est chiffrée si le serveur a une POLYFIN_SECRET_KEY, et enregistrée telle quelle sinon. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment.`,
         stremio: (every: string) =>
-          `Polyfin garde la clé d’authentification, chiffrée, et pour un profil à code PIN la session de ce profil, jamais le code, et importe de nouveau le profil choisi ${every}. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment. Les conditions de Stremio interdisent d’extraire ses données par des moyens automatisés\u202f: lire votre compte ${every} rend cette zone grise plus marquée qu’une importation ponctuelle.`,
+          `Polyfin garde la clé d’authentification, et pour un profil à code PIN la session de ce profil, jamais le code, et importe de nouveau le profil choisi ${every}. Elles sont chiffrées si le serveur a une POLYFIN_SECRET_KEY, et enregistrées telles quelles sinon. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment. Les conditions de Stremio interdisent d’extraire ses données par des moyens automatisés\u202f: lire votre compte ${every} rend cette zone grise plus marquée qu’une importation ponctuelle.`,
       },
+      unencrypted:
+        'Ce serveur n’a pas de clé secrète\u202f: une connexion gardée pour rester connecté y serait enregistrée sans chiffrement.',
+      unencryptedAdministrator:
+        'Ce serveur n’a pas de POLYFIN_SECRET_KEY\u202f: une connexion gardée pour rester connecté y serait enregistrée sans chiffrement. Définissez la clé, puis redémarrez Polyfin, pour la chiffrer.',
+      unencryptedDocs: 'Clés et jetons enregistrés',
       staysConnected: (every: string) =>
         `Vous restez connecté\u202f: ce profil est importé de nouveau ${every}, de la même façon. Les addons ne sont installés que maintenant.`,
       wholeAccount: 'Tout le compte',

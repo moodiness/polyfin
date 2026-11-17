@@ -53,9 +53,10 @@ const notifications: typeof en = {
     discordAsWebhook:
       'C’est un webhook Discord\u202f: Polyfin lui envoie le message propre à Discord, comme à une cible Discord.',
     addressHelp: {
-      webhook: 'Elle est gardée chiffrée et n’est plus jamais affichée\u202f: seul son hôte l’est.',
+      webhook:
+        'Elle n’est plus jamais affichée, seul son hôte l’est. Elle est chiffrée si le serveur a une POLYFIN_SECRET_KEY, et enregistrée telle quelle sinon.',
       discord:
-        'Dans Discord\u202f: les paramètres du salon, Intégrations, Webhooks, Copier l’URL du webhook. Elle est gardée chiffrée et n’est plus jamais affichée.',
+        'Dans Discord\u202f: les paramètres du salon, Intégrations, Webhooks, Copier l’URL du webhook. Elle n’est plus jamais affichée. Elle est chiffrée si le serveur a une POLYFIN_SECRET_KEY, et enregistrée telle quelle sinon.',
     },
     savedAddress: (host: string) => `Enregistrée, sur ${host}.`,
     ntfyServer: 'Serveur ntfy',
@@ -65,7 +66,7 @@ const notifications: typeof en = {
       'Le sujet auquel vous vous abonnez dans l’appli ntfy. Sur un serveur public, quiconque connaît un sujet peut le lire\u202f: choisissez-en un difficile à deviner.',
     token: 'Jeton d’accès',
     tokenHelp:
-      'Pour un sujet qui demande une connexion. Il est gardé chiffré et n’est plus jamais affiché.',
+      'Pour un sujet qui demande une connexion. Il n’est plus jamais affiché. Il est chiffré si le serveur a une POLYFIN_SECRET_KEY, et enregistré tel quel sinon.',
     emailAddress: 'Adresse e-mail',
     emailAddressHelp: 'Où vont les messages.',
     chat: 'Discussion',
@@ -73,19 +74,19 @@ const notifications: typeof en = {
       'Le numéro de la discussion, comme -1001234567890, ou le nom d’une chaîne publique, comme @news_example. Ajoutez d’abord le bot à la discussion.',
     botToken: 'Jeton du bot',
     botTokenHelp:
-      'BotFather le donne à la création du bot. Il est gardé chiffré et n’est plus jamais affiché.',
+      'BotFather le donne à la création du bot. Il n’est plus jamais affiché. Il est chiffré si le serveur a une POLYFIN_SECRET_KEY, et enregistré tel quel sinon.',
     gotifyServer: 'Serveur Gotify',
     gotifyServerHelp: 'Son adresse, comme https://gotify.example.org.',
     appToken: 'Jeton de l’application',
     appTokenHelp: {
       gotify:
-        'Dans Gotify\u202f: Apps, Create Application, puis copiez son jeton. Il est gardé chiffré et n’est plus jamais affiché.',
+        'Dans Gotify\u202f: Apps, Create Application, puis copiez son jeton. Il n’est plus jamais affiché. Il est chiffré si le serveur a une POLYFIN_SECRET_KEY, et enregistré tel quel sinon.',
       pushover:
-        'Le jeton d’API d’une application créée sur Pushover. Il est gardé chiffré et n’est plus jamais affiché.',
+        'Le jeton d’API d’une application créée sur Pushover. Il n’est plus jamais affiché. Il est chiffré si le serveur a une POLYFIN_SECRET_KEY, et enregistré tel quel sinon.',
     },
     userKey: 'Clé d’utilisateur',
     userKeyHelp:
-      'Affichée sur le tableau de bord de Pushover une fois connecté, ou une clé de groupe. Elle est gardée chiffrée et n’est plus jamais affichée.',
+      'Affichée sur le tableau de bord de Pushover une fois connecté, ou une clé de groupe. Elle n’est plus jamais affichée. Elle est chiffrée si le serveur a une POLYFIN_SECRET_KEY, et enregistrée telle quelle sinon.',
     events: 'Événements',
     eventsHelp: {
       server: 'Ce qui lui est signalé, pour tous les utilisateurs.',

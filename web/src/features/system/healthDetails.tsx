@@ -817,9 +817,7 @@ function Secrets({ health }: { health: Health }) {
             value: secrets.encrypted ? (
               <StatusPill tone="ok">{text.encrypted}</StatusPill>
             ) : (
-              <StatusPill tone={secrets.plaintext > 0 ? 'warn' : 'muted'}>
-                {text.notEncrypted}
-              </StatusPill>
+              <StatusPill tone="warn">{text.notEncrypted}</StatusPill>
             ),
           },
           { label: text.storedPlain, value: secrets.plaintext },

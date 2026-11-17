@@ -289,6 +289,7 @@ export default function AccountRoute() {
                 }
                 own
                 importEveryMinutes={ownAppImport.data.importEveryMinutes}
+                secretKey={ownAppImport.data.secretKey}
               />
             )}
           </div>

@@ -336,10 +336,15 @@ const account: typeof en = {
       stayConnected: 'Permanecer conectado',
       stayConnectedHelp: {
         nuvio: (every: string) =>
-          `O Polyfin guarda a sessão, criptografada, nunca a sua senha, e importa novamente o perfil escolhido ${every}. Ele apenas lê a conta. Você pode se desconectar a qualquer momento.`,
+          `O Polyfin guarda a sessão, nunca a sua senha, e importa novamente o perfil escolhido ${every}. A sessão é criptografada se o servidor tiver uma POLYFIN_SECRET_KEY, e guardada como está caso contrário. Ele apenas lê a conta. Você pode se desconectar a qualquer momento.`,
         stremio: (every: string) =>
-          `O Polyfin guarda a chave de autenticação, criptografada, e para um perfil com PIN a sessão desse perfil, nunca o PIN, e importa novamente o perfil escolhido ${every}. Ele apenas lê a conta. Você pode se desconectar a qualquer momento. Os termos do Stremio proíbem extrair os dados dele por meios automatizados: ler a sua conta ${every} torna essa zona cinzenta mais acentuada do que uma importação única.`,
+          `O Polyfin guarda a chave de autenticação, e para um perfil com PIN a sessão desse perfil, nunca o PIN, e importa novamente o perfil escolhido ${every}. Elas são criptografadas se o servidor tiver uma POLYFIN_SECRET_KEY, e guardadas como estão caso contrário. Ele apenas lê a conta. Você pode se desconectar a qualquer momento. Os termos do Stremio proíbem extrair os dados dele por meios automatizados: ler a sua conta ${every} torna essa zona cinzenta mais acentuada do que uma importação única.`,
       },
+      unencrypted:
+        'Este servidor não tem chave secreta: um login guardado para permanecer conectado seria armazenado sem criptografia.',
+      unencryptedAdministrator:
+        'Este servidor não tem POLYFIN_SECRET_KEY: um login guardado para permanecer conectado seria armazenado sem criptografia. Defina a chave e reinicie o Polyfin para criptografá-lo.',
+      unencryptedDocs: 'Chaves e tokens armazenados',
       staysConnected: (every: string) =>
         `Você permanece conectado: este perfil é importado novamente ${every}, da mesma forma. Os complementos são instalados apenas agora.`,
       wholeAccount: 'A conta inteira',

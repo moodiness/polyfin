@@ -98,6 +98,7 @@ export default function AppImportRoute() {
                 }
                 own={false}
                 importEveryMinutes={status.data.importEveryMinutes}
+                secretKey={status.data.secretKey}
               />
             </>
           )}

@@ -64,7 +64,7 @@ Targets have two kinds of owners:
 
 ### Secrets
 
-Polyfin stores a target's secrets encrypted with `POLYFIN_SECRET_KEY` (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). The secrets are:
+Polyfin encrypts a target's secrets when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). The secrets are:
 
 - webhook and Discord addresses;
 - ntfy access tokens;
@@ -507,5 +507,5 @@ Each delivery also shows the status the target answered, the start of its answer
 - Each Polyfin target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin user chooses their own targets and events in **My account**, besides the server's ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Polyfin's webhook sends one documented, versioned JSON event rather than templates, and Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
-- Polyfin stores addresses, tokens, keys and the SMTP password encrypted, and shows failing targets ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin stores addresses, tokens, keys and the SMTP password encrypted when the server has a `POLYFIN_SECRET_KEY`, and shows failing targets ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Jellyfin apps see none of this: nothing of it is part of Jellyfin's API ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).

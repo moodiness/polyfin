@@ -53,9 +53,10 @@ const notifications: typeof en = {
     discordAsWebhook:
       'Es un webhook de Discord: Polyfin le envía el mensaje propio de Discord, como a un destino de Discord.',
     addressHelp: {
-      webhook: 'Se guarda cifrada y no se vuelve a mostrar: solo se muestra su host.',
+      webhook:
+        'No se vuelve a mostrar: solo se muestra su host. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
       discord:
-        'En Discord: ajustes del canal, Integraciones, Webhooks, Copiar URL de webhook. Se guarda cifrada y no se vuelve a mostrar.',
+        'En Discord: ajustes del canal, Integraciones, Webhooks, Copiar URL de webhook. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
     },
     savedAddress: (host: string) => `Guardada, en ${host}.`,
     ntfyServer: 'Servidor ntfy',
@@ -65,7 +66,7 @@ const notifications: typeof en = {
       'El tema al que se suscribe en la aplicación ntfy. Cualquiera que conozca un tema de un servidor público puede leerlo: elija uno difícil de adivinar.',
     token: 'Token de acceso',
     tokenHelp:
-      'Para un tema que requiere iniciar sesión. Se guarda cifrado y no se vuelve a mostrar.',
+      'Para un tema que requiere iniciar sesión. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
     emailAddress: 'Dirección de correo electrónico',
     emailAddressHelp: 'Adonde se envían los mensajes.',
     chat: 'Chat',
@@ -73,19 +74,19 @@ const notifications: typeof en = {
       'El número del chat, como -1001234567890, o el nombre de un canal público, como @news_example. Añada antes el bot al chat.',
     botToken: 'Token del bot',
     botTokenHelp:
-      'BotFather lo proporciona al crear el bot. Se guarda cifrado y no se vuelve a mostrar.',
+      'BotFather lo proporciona al crear el bot. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
     gotifyServer: 'Servidor Gotify',
     gotifyServerHelp: 'Su dirección, como https://gotify.example.org.',
     appToken: 'Token de la aplicación',
     appTokenHelp: {
       gotify:
-        'En Gotify: Apps, Create Application y, después, copie su token. Se guarda cifrado y no se vuelve a mostrar.',
+        'En Gotify: Apps, Create Application y, después, copie su token. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
       pushover:
-        'El token de API de una aplicación creada en Pushover. Se guarda cifrado y no se vuelve a mostrar.',
+        'El token de API de una aplicación creada en Pushover. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
     },
     userKey: 'Clave de usuario',
     userKeyHelp:
-      'Se muestra en el panel de Pushover tras iniciar sesión, o una clave de grupo. Se guarda cifrada y no se vuelve a mostrar.',
+      'Se muestra en el panel de Pushover tras iniciar sesión, o una clave de grupo. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
     events: 'Eventos',
     eventsHelp: {
       server: 'De qué se le avisa, para todos los usuarios.',

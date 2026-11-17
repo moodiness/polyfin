@@ -22,6 +22,8 @@ import {
   type StremioLink,
   type StremioUnlock,
 } from '@/api'
+import { docsUrl } from '@/app/Brand'
+import { useSessionUser } from '@/app/session'
 import { TitlesNotFound } from '@/features/imports/TitlesNotFound'
 import { dateTime, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
@@ -57,7 +59,8 @@ const apps: readonly AppKind[] = ['nuvio', 'stremio']
  * account, or a user's, for an administrator. `current` is the import running into that account,
  * else the last one. The app chosen signs in with a form of its own, through `readers`, and the
  * account read then has its profile chosen with its addons: the server holds what it read a few
- * minutes only. `importEveryMinutes` is how often a connection kept is imported again.
+ * minutes only. `importEveryMinutes` is how often a connection kept is imported again, and
+ * `secretKey` whether the server encrypts the sign-in it keeps.
  */
 export default function AppImport({
   current,
@@ -68,6 +71,7 @@ export default function AppImport({
   onStarted,
   own,
   importEveryMinutes,
+  secretKey,
 }: {
   current: AppImportStatus | null
   /** Whether the account's user may add their own addons: the app's are offered only then. */
@@ -80,8 +84,11 @@ export default function AppImport({
   /** The user's own account, under My account. */
   own: boolean
   importEveryMinutes: number
+  /** The server has POLYFIN_SECRET_KEY; without it, a sign-in kept is stored unencrypted. */
+  secretKey: boolean
 }) {
   const { t } = useI18n()
+  const { isAdministrator } = useSessionUser()
   const text = t.account.appImport
   const every = t.account.importEvery(importEveryMinutes)
   const toast = useToast()
@@ -139,6 +146,28 @@ export default function AppImport({
               help={text.stayConnectedHelp[app](every)}
               className="mt-3"
             />
+            {!secretKey && (
+              // Administrators can set the key; members only learn how their sign-in is kept.
+              <Notice
+                tone="warn"
+                action={
+                  isAdministrator && (
+                    <ExternalButtonLink
+                      size="sm"
+                      href={`${docsUrl}/configuration#stored-keys-and-tokens`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      iconEnd={ArrowSquareOutIcon}
+                    >
+                      {text.unencryptedDocs}
+                    </ExternalButtonLink>
+                  )
+                }
+                className="mt-1"
+              >
+                {isAdministrator ? text.unencryptedAdministrator : text.unencrypted}
+              </Notice>
+            )}
           </div>
           {app === 'nuvio' ? (
             <NuvioSignInForm

@@ -338,10 +338,15 @@ const account = {
       stayConnected: 'Stay connected',
       stayConnectedHelp: {
         nuvio: (every: string) =>
-          `Polyfin keeps the session, encrypted, never your password, and imports the profile you choose again ${every}. It only reads the account. You can disconnect at any time.`,
+          `Polyfin keeps the session, never your password, and imports the profile you choose again ${every}. The session is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise. It only reads the account. You can disconnect at any time.`,
         stremio: (every: string) =>
-          `Polyfin keeps the auth key, encrypted, and for a profile with a PIN that profile’s session, never the PIN, and imports the profile you choose again ${every}. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account ${every} makes that grey area more pronounced than a one-off import.`,
+          `Polyfin keeps the auth key, and for a profile with a PIN that profile’s session, never the PIN, and imports the profile you choose again ${every}. They are encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account ${every} makes that grey area more pronounced than a one-off import.`,
       },
+      unencrypted:
+        'This server has no secret key: a sign-in kept to stay connected would be stored unencrypted.',
+      unencryptedAdministrator:
+        'This server has no POLYFIN_SECRET_KEY: a sign-in kept to stay connected would be stored unencrypted. Set the key, then restart Polyfin, to encrypt it.',
+      unencryptedDocs: 'Stored keys and tokens',
       staysConnected: (every: string) =>
         `You stay connected: this profile is imported again ${every}, the same way. Addons are installed now only.`,
       wholeAccount: 'The whole account',

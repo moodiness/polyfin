@@ -82,7 +82,7 @@ const settings: typeof en = {
       'La API de actualización de una herramienta que ejecuta junto a Polyfin para actualizar su contenedor, como http://updater:8080/v1/update. Actualizar ahora, en Inicio, le envía una petición POST sin cuerpo. Vacía, el botón no se muestra.',
     updateToolToken: 'Token de la herramienta de actualización',
     updateToolTokenHelp:
-      'Se envía como cabecera Authorization: Bearer con cada petición, si la herramienta lo pide. Se guarda cifrado, como los demás secretos.',
+      'Se envía como cabecera Authorization: Bearer con cada petición, si la herramienta lo pide. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, como los demás secretos, y se guarda tal cual si no.',
     localDiscovery: 'Responder a la detección en la red local',
     localDiscoveryHelp:
       'Las aplicaciones de Jellyfin y Emby que buscan servidores en la red local encuentran Polyfin y lo muestran, sin necesidad de escribir su dirección. Preguntan por el puerto UDP 7359, y Polyfin solo responde a direcciones de la red local. Se aplica al instante, sin reiniciar. En Docker, requiere la red del host o publicar el puerto 7359/udp: consulte la documentación de instalación.',
@@ -405,7 +405,8 @@ const settings: typeof en = {
     smtpUser: 'Usuario SMTP',
     smtpUserHelp: 'Déjelo vacío para enviar sin iniciar sesión.',
     smtpPassword: 'Contraseña SMTP',
-    smtpPasswordHelp: 'Se guarda cifrada y no se vuelve a mostrar.',
+    smtpPasswordHelp:
+      'No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
     smtpFrom: 'Dirección del remitente',
     smtpFromHelp: 'La dirección desde la que llegan los mensajes, como polyfin@example.org.',
     smtpFromName: 'Nombre del remitente',
@@ -814,7 +815,7 @@ const settings: typeof en = {
         'El ID que el proveedor dio al cliente de Polyfin. Vacío desactiva el inicio de sesión.',
       clientSecret: 'Secreto de cliente',
       clientSecretHelp:
-        'El secreto de un cliente confidencial; déjelo vacío para un cliente público. Se guarda cifrado con POLYFIN_SECRET_KEY y no se vuelve a mostrar.',
+        'El secreto de un cliente confidencial; déjelo vacío para un cliente público. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
       userClaim: 'Claim que nombra al usuario',
       userClaimHelp:
         'El claim del token de ID que se compara con los nombres de las cuentas, sin distinguir mayúsculas, la primera vez que alguien inicia sesión: preferred_username por defecto. Después viene el correo verificado. Los inicios de sesión posteriores encuentran la misma cuenta diga lo que diga el claim.',
@@ -858,7 +859,7 @@ const settings: typeof en = {
         'Let’s Encrypt solo emite certificados una vez aceptadas sus condiciones del servicio, en letsencrypt.org/repository.',
       challenge: 'Desafío',
       challengeHelp:
-        'Cómo comprueba Let’s Encrypt que los nombres apuntan a este servidor. HTTP-01: Polyfin responde en su puerto HTTP, al que debe llegar el puerto 80 de internet. TLS-ALPN-01: Polyfin responde en su puerto HTTPS, al que debe llegar el puerto 443 de internet. El certificado, su clave y la clave de la cuenta se guardan en la base de datos, con las claves cifradas mediante POLYFIN_SECRET_KEY, y el certificado se renueva cuando le queda un tercio de su vigencia.',
+        'Cómo comprueba Let’s Encrypt que los nombres apuntan a este servidor. HTTP-01: Polyfin responde en su puerto HTTP, al que debe llegar el puerto 80 de internet. TLS-ALPN-01: Polyfin responde en su puerto HTTPS, al que debe llegar el puerto 443 de internet. El certificado, su clave y la clave de la cuenta se guardan en la base de datos, con las claves cifradas si el servidor tiene una POLYFIN_SECRET_KEY, y el certificado se renueva cuando le queda un tercio de su vigencia.',
       challenges: {
         'http-01': 'HTTP-01 (puerto 80 al puerto HTTP)',
         'tls-alpn-01': 'TLS-ALPN-01 (puerto 443 al puerto HTTPS)',
@@ -1004,7 +1005,7 @@ const settings: typeof en = {
       `Tras cada copia de seguridad, Polyfin borra sus copias más antiguas que superen este número. Los demás archivos de la carpeta nunca se tocan. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
     backupPassphrase: 'Frase de contraseña de las copias de seguridad',
     backupPassphraseHelp: (min: number) =>
-      `Cifra cada copia de seguridad mientras se escribe, en la carpeta y en cada destino, que así no puede leerla. Al menos ${min} caracteres. Se guarda cifrada y no se vuelve a mostrar.`,
+      `Cifra cada copia de seguridad mientras se escribe, en la carpeta y en cada destino, que así no puede leerla. Al menos ${min} caracteres. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.`,
     backupPassphraseNew:
       'Guarde esta frase de contraseña en otro lugar que este servidor, como un gestor de contraseñas: una frase de contraseña perdida significa copias de seguridad perdidas. Nadie puede restaurarlas sin ella, ni siquiera Polyfin. Compruébela con el ojo antes de guardar. Las copias de seguridad ya hechas se quedan como están.',
     backupPassphraseRemoved:

@@ -290,6 +290,30 @@ func TestAppImportsFollowTheirPermissions(t *testing.T) {
 	}
 }
 
+// The import tells, on a member's own route and an administrator's for
+// them, whether the server has POLYFIN_SECRET_KEY: the admin app notes,
+// next to Stay connected, that a sign-in kept would be stored unencrypted
+// only without it.
+func TestAppImportTellsWhetherSignInsKeptAreEncrypted(t *testing.T) {
+	t.Parallel()
+	for _, key := range []bool{false, true} {
+		api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+			o.Health.SecretKey = key
+			o.AppImport = appimport.New(appimport.Options{Settings: o.Accounts.Settings, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+			t.Cleanup(o.AppImport.Close)
+		})
+		admin, bob := api.signedIn("root", true), api.signedIn("bob", false)
+		for _, c := range []struct {
+			b    browser
+			path string
+		}{{bob, "/account/app-import"}, {admin, "/users/" + api.userID("bob").String() + "/app-import"}} {
+			if status, body, _ := c.b.call(http.MethodGet, c.path, nil); status != http.StatusOK || body["secretKey"] != key {
+				t.Errorf("with a key %v, %s: %d %v", key, c.path, status, body)
+			}
+		}
+	}
+}
+
 // A member's Nuvio backend is on a public address, as their addons are,
 // checked at each redirect; an administrator's may be on the local
 // network, for themselves or for a member.

@@ -6,7 +6,10 @@
 //   : ; ? ! and « » apart with a narrow no-break space written \u202f,
 //   never a plain or a no-break one, nor the narrow one as the character:
 //   it fails on any string french-spacing.mjs would change, which writes
-//   them so.
+//   them so;
+// - a message saying a secret is kept or stored encrypted says that it is
+//   only when the server has POLYFIN_SECRET_KEY: in English "encrypted
+//   when", and the key's name in every language.
 //
 // It needs the compiler API of TypeScript 5, which TypeScript 7, the admin
 // app's, no longer has. Run it from web/ as
@@ -178,21 +181,25 @@ function unread(ts) {
     .map((p) => `${p.at} ${p.key}`)
 }
 
+// flatten lists the messages of value by their dotted keys.
+function flatten(value, prefix, out) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [k, v] of Object.entries(value)) flatten(v, prefix ? `${prefix}.${k}` : k, out)
+  } else out.set(prefix, value)
+  return out
+}
+
+// load reads the messages of one area of a language, flattened.
+const load = async (language, area) =>
+  flatten(
+    (await import(pathToFileURL(path.join(i18nDir, language, area + '.ts')).href)).default,
+    '',
+    new Map(),
+  )
+
 // mismatches lists where another language's messages differ in shape from
 // English's.
 async function mismatches() {
-  const flatten = (value, prefix, out) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      for (const [k, v] of Object.entries(value)) flatten(v, prefix ? `${prefix}.${k}` : k, out)
-    } else out.set(prefix, value)
-    return out
-  }
-  const load = async (language, area) =>
-    flatten(
-      (await import(pathToFileURL(path.join(i18nDir, language, area + '.ts')).href)).default,
-      '',
-      new Map(),
-    )
   const found = []
   for (const area of areas) {
     const en = await load('en', area)
@@ -224,20 +231,47 @@ async function mismatches() {
   return found
 }
 
+// unconditional lists the messages that say a secret is kept or stored
+// encrypted without saying it is only with POLYFIN_SECRET_KEY: without it,
+// Polyfin stores secrets as they are.
+async function unconditional() {
+  const claim = /\b(kept|keeps|stored)\b[^.]*\bencrypted\b|\bencrypted\b[^.]*\b(kept|stored)\b/i
+  // A function's words are in its source; its arguments' types are unknown here.
+  const text = (value) => (typeof value === 'function' ? value.toString() : value)
+  const found = []
+  for (const area of areas) {
+    const en = await load('en', area)
+    const claims = [...en].filter(
+      ([, value]) => typeof text(value) === 'string' && claim.test(text(value)),
+    )
+    for (const [key, value] of claims)
+      if (!/\bencrypted when\b/i.test(text(value))) found.push(`en/${area}.ts: ${key}`)
+    for (const language of languages) {
+      const messages = await load(language, area)
+      for (const [key] of claims)
+        if (!String(text(messages.get(key))).includes('POLYFIN_SECRET_KEY'))
+          found.push(`${language}/${area}.ts: ${key}`)
+    }
+  }
+  return found
+}
+
 const ts = typescript('i18n-check.mjs')
 const notRead = unread(ts)
 const different = await mismatches()
 const spaced = frenchSpacing(ts)
+const encrypted = await unconditional()
 for (const line of notRead) console.log(`unread: ${line}`)
 for (const line of different) console.log(`differs: ${line}`)
+for (const line of encrypted) console.log(`encrypted without POLYFIN_SECRET_KEY: ${line}`)
 // The strings as written, the no-break characters named, so that the
 // finding tells them from a plain space and from \u202f.
 const spaces = (source) =>
   source.replace(/[\u00a0\u202f]/g, (c) => `[U+${c.charCodeAt(0).toString(16).toUpperCase()}]`)
 for (const { at, key, source } of spaced) console.log(`spacing: ${at} ${key}: ${spaces(source)}`)
-if (notRead.length || different.length || spaced.length) {
+if (notRead.length || different.length || spaced.length || encrypted.length) {
   console.error(
-    `${notRead.length} English messages no code reads, ${different.length} differences between languages, ${spaced.length} French texts with a space before a sign or inside « » other than \\u202f (run scripts/french-spacing.mjs)`,
+    `${notRead.length} English messages no code reads, ${different.length} differences between languages, ${spaced.length} French texts with a space before a sign or inside « » other than \\u202f (run scripts/french-spacing.mjs), ${encrypted.length} messages saying a secret is kept encrypted without POLYFIN_SECRET_KEY`,
   )
   process.exit(1)
 }

@@ -333,10 +333,15 @@ const account: typeof en = {
       stayConnected: 'Verbunden bleiben',
       stayConnectedHelp: {
         nuvio: (every: string) =>
-          `Polyfin speichert die Sitzung verschlüsselt, niemals dein Passwort, und importiert das gewählte Profil ${every} erneut. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen.`,
+          `Polyfin speichert die Sitzung, niemals dein Passwort, und importiert das gewählte Profil ${every} erneut. Die Sitzung wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen.`,
         stremio: (every: string) =>
-          `Polyfin speichert den Authentifizierungsschlüssel verschlüsselt, bei einem Profil mit PIN auch die Sitzung dieses Profils, niemals die PIN, und importiert das gewählte Profil ${every} erneut. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen. Die Nutzungsbedingungen von Stremio verbieten das Auslesen der Daten mit automatisierten Mitteln: Dein Konto ${every} auszulesen, macht diese Grauzone deutlicher als ein einmaliger Import.`,
+          `Polyfin speichert den Authentifizierungsschlüssel, bei einem Profil mit PIN auch die Sitzung dieses Profils, niemals die PIN, und importiert das gewählte Profil ${every} erneut. Sie werden verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen. Die Nutzungsbedingungen von Stremio verbieten das Auslesen der Daten mit automatisierten Mitteln: Dein Konto ${every} auszulesen, macht diese Grauzone deutlicher als ein einmaliger Import.`,
       },
+      unencrypted:
+        'Dieser Server hat keinen geheimen Schlüssel: Eine Anmeldung, die gespeichert wird, um verbunden zu bleiben, läge dort unverschlüsselt.',
+      unencryptedAdministrator:
+        'Dieser Server hat keinen POLYFIN_SECRET_KEY: Eine Anmeldung, die gespeichert wird, um verbunden zu bleiben, läge dort unverschlüsselt. Lege den Schlüssel fest und starte Polyfin neu, um sie zu verschlüsseln.',
+      unencryptedDocs: 'Gespeicherte Schlüssel und Tokens',
       staysConnected: (every: string) =>
         `Du bleibst verbunden: Dieses Profil wird ${every} auf die gleiche Weise erneut importiert. Add-ons werden nur jetzt installiert.`,
       wholeAccount: 'Das gesamte Konto',

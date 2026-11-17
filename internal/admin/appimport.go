@@ -65,8 +65,9 @@ func (h *handler) userAppImportTarget(w http.ResponseWriter, r *http.Request) (a
 // ownAppImport answers whether the user may import from an app, whether
 // they may add their own addons, and whether parental control or blocked
 // genres keep them from it, the import into their account running, else
-// the last one, null when none, their connections, and how often, in
-// minutes, connections are imported.
+// the last one, null when none, their connections, how often, in minutes,
+// connections are imported, and whether the server has a secret key to
+// encrypt the sign-in a connection keeps.
 func (h *handler) ownAppImport(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
 	enabled := h.AppImport != nil && h.Accounts.Settings().ServerImports
@@ -86,7 +87,8 @@ func (h *handler) ownAppImport(w http.ResponseWriter, r *http.Request) {
 		Import             *appImportJSON      `json:"import"`
 		Connections        []appConnectionJSON `json:"connections"`
 		ImportEveryMinutes int                 `json:"importEveryMinutes"`
-	}{enabled, appAddonsAllowed(settings, user), user.Restricted(), current, connections, settings.ImportEveryMinutes})
+		SecretKey          bool                `json:"secretKey"`
+	}{enabled, appAddonsAllowed(settings, user), user.Restricted(), current, connections, settings.ImportEveryMinutes, h.Health.SecretKey})
 }
 
 // appAddonsAllowed reports whether an import may install addons as user's
@@ -99,8 +101,8 @@ func appAddonsAllowed(settings accounts.Settings, user accounts.User) bool {
 // userAppImport answers, to an administrator, whether the user the path
 // names may add their own addons, and whether parental control or blocked
 // genres keep them from it, the import into their account running, else
-// the last one, their connections, and how often, in minutes, connections
-// are imported.
+// the last one, their connections, how often, in minutes, connections
+// are imported, and whether the server has a secret key, as ownAppImport.
 func (h *handler) userAppImport(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.userAppImportTarget(w, r)
 	if !ok {
@@ -117,7 +119,9 @@ func (h *handler) userAppImport(w http.ResponseWriter, r *http.Request) {
 		Import             *appImportJSON      `json:"import"`
 		Connections        []appConnectionJSON `json:"connections"`
 		ImportEveryMinutes int                 `json:"importEveryMinutes"`
-	}{appAddonsAllowed(settings, user), user.Restricted(), newAppImportJSON(h.AppImport.Current(user.ID)), connections, settings.ImportEveryMinutes})
+		SecretKey          bool                `json:"secretKey"`
+	}{appAddonsAllowed(settings, user), user.Restricted(), newAppImportJSON(h.AppImport.Current(user.ID)), connections, settings.ImportEveryMinutes,
+		h.Health.SecretKey})
 }
 
 // appConnections lists user's connections, or answers why it could not.

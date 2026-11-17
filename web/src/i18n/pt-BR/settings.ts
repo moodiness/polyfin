@@ -80,7 +80,7 @@ const settings: typeof en = {
       'A API de atualização de uma ferramenta que você executa ao lado do Polyfin para atualizar o contêiner, como http://updater:8080/v1/update. Atualizar agora, no Início, envia a ela uma requisição POST sem corpo. Vazio, o botão não aparece.',
     updateToolToken: 'Token da ferramenta de atualização',
     updateToolTokenHelp:
-      'Enviado no cabeçalho Authorization: Bearer em cada requisição, se a ferramenta pedir um. Guardado criptografado, como os outros segredos.',
+      'Enviado no cabeçalho Authorization: Bearer em cada requisição, se a ferramenta pedir um. Criptografado se o servidor tiver uma POLYFIN_SECRET_KEY, como os outros segredos, e guardado como está caso contrário.',
     localDiscovery: 'Responder à descoberta na rede local',
     localDiscoveryHelp:
       'Aplicativos Jellyfin e Emby que procuram servidores na rede local encontram o Polyfin e o listam, sem que seja preciso digitar o endereço. Eles perguntam na porta UDP 7359, e o Polyfin responde apenas a endereços da rede local. Aplica-se imediatamente, sem reinicialização. No Docker, isso exige a rede do host ou a porta 7359/udp publicada: consulte a documentação de instalação.',
@@ -404,7 +404,8 @@ const settings: typeof en = {
     smtpUser: 'Usuário SMTP',
     smtpUserHelp: 'Vazio para enviar sem login.',
     smtpPassword: 'Senha SMTP',
-    smtpPasswordHelp: 'Ela é guardada criptografada e nunca mais é exibida.',
+    smtpPasswordHelp:
+      'Ela nunca mais é exibida. Ela é criptografada se o servidor tiver uma POLYFIN_SECRET_KEY, e guardada como está caso contrário.',
     smtpFrom: 'Endereço do remetente',
     smtpFromHelp: 'O endereço de onde as mensagens vêm, como polyfin@example.org.',
     smtpFromName: 'Nome do remetente',
@@ -807,7 +808,7 @@ const settings: typeof en = {
       clientIdHelp: 'O ID que o provedor deu ao cliente do Polyfin. Vazio desativa o login.',
       clientSecret: 'Segredo do cliente',
       clientSecretHelp:
-        'O segredo de um cliente confidencial; deixe vazio para um cliente público. Ele é guardado criptografado com POLYFIN_SECRET_KEY e nunca mais é exibido.',
+        'O segredo de um cliente confidencial; deixe vazio para um cliente público. Ele nunca mais é exibido. Ele é criptografado se o servidor tiver uma POLYFIN_SECRET_KEY, e guardado como está caso contrário.',
       userClaim: 'Claim que nomeia o usuário',
       userClaimHelp:
         'O claim do token de ID comparado com os nomes das contas, sem diferenciar maiúsculas, na primeira vez que alguém entra: preferred_username por padrão. Depois vem o e-mail verificado. Os logins seguintes encontram a mesma conta, diga o que disser o claim.',
@@ -851,7 +852,7 @@ const settings: typeof en = {
         'O Let’s Encrypt só emite certificados depois que seus termos de serviço, em letsencrypt.org/repository, forem aceitos.',
       challenge: 'Desafio',
       challengeHelp:
-        'Como o Let’s Encrypt verifica que os nomes apontam para este servidor. HTTP-01: o Polyfin responde na sua porta HTTP, que a porta 80 da internet deve alcançar. TLS-ALPN-01: o Polyfin responde na sua porta HTTPS, que a porta 443 da internet deve alcançar. O certificado, sua chave e a chave da conta são guardados no banco de dados, as chaves criptografadas com POLYFIN_SECRET_KEY, e o certificado é renovado quando resta um terço da sua validade.',
+        'Como o Let’s Encrypt verifica que os nomes apontam para este servidor. HTTP-01: o Polyfin responde na sua porta HTTP, que a porta 80 da internet deve alcançar. TLS-ALPN-01: o Polyfin responde na sua porta HTTPS, que a porta 443 da internet deve alcançar. O certificado, sua chave e a chave da conta são guardados no banco de dados, as chaves criptografadas se o servidor tiver uma POLYFIN_SECRET_KEY, e o certificado é renovado quando resta um terço da sua validade.',
       challenges: {
         'http-01': 'HTTP-01 (porta 80 para a porta HTTP)',
         'tls-alpn-01': 'TLS-ALPN-01 (porta 443 para a porta HTTPS)',
@@ -994,7 +995,7 @@ const settings: typeof en = {
       `Após cada backup, o Polyfin exclui os backups mais antigos além deste número. Outros arquivos da pasta nunca são alterados. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     backupPassphrase: 'Frase secreta dos backups',
     backupPassphraseHelp: (min: number) =>
-      `Criptografa cada backup enquanto ele é gravado, na pasta e em cada destino, que assim não consegue lê-lo. Pelo menos ${min} caracteres. Ela é guardada criptografada e nunca mais é exibida.`,
+      `Criptografa cada backup enquanto ele é gravado, na pasta e em cada destino, que assim não consegue lê-lo. Pelo menos ${min} caracteres. Ela nunca mais é exibida. Ela é criptografada se o servidor tiver uma POLYFIN_SECRET_KEY, e guardada como está caso contrário.`,
     backupPassphraseNew:
       'Guarde esta frase secreta em outro lugar que não este servidor, como um gerenciador de senhas: uma frase secreta perdida significa backups perdidos. Ninguém consegue restaurá-los sem ela, nem o Polyfin. Confira-a com o olho antes de salvar. Os backups já feitos continuam como estão.',
     backupPassphraseRemoved:

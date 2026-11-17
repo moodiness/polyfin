@@ -51,9 +51,10 @@ const notifications: typeof en = {
     discordAsWebhook:
       'Das ist ein Discord-Webhook: Polyfin sendet ihm Discords eigene Nachricht, wie einem Discord-Ziel.',
     addressHelp: {
-      webhook: 'Sie wird verschlüsselt gespeichert und nie wieder angezeigt, nur ihr Host.',
+      webhook:
+        'Sie wird nie wieder angezeigt, nur ihr Host. Sie wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
       discord:
-        'In Discord: Kanaleinstellungen, Integrationen, Webhooks, Webhook-URL kopieren. Sie wird verschlüsselt gespeichert und nie wieder angezeigt.',
+        'In Discord: Kanaleinstellungen, Integrationen, Webhooks, Webhook-URL kopieren. Sie wird nie wieder angezeigt. Sie wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
     },
     savedAddress: (host: string) => `Gespeichert, bei ${host}.`,
     ntfyServer: 'ntfy-Server',
@@ -63,7 +64,7 @@ const notifications: typeof en = {
       'Das Topic, das du in der ntfy-App abonnierst. Jeder, der ein Topic auf einem öffentlichen Server kennt, kann es lesen: Wähle eines, das schwer zu erraten ist.',
     token: 'Zugriffstoken',
     tokenHelp:
-      'Für ein Topic, das eine Anmeldung erfordert. Es wird verschlüsselt gespeichert und nie wieder angezeigt.',
+      'Für ein Topic, das eine Anmeldung erfordert. Es wird nie wieder angezeigt. Es wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
     emailAddress: 'E-Mail-Adresse',
     emailAddressHelp: 'Wohin die Nachrichten gehen.',
     chat: 'Chat',
@@ -71,19 +72,19 @@ const notifications: typeof en = {
       'Die Nummer des Chats, etwa -1001234567890, oder der Name eines öffentlichen Kanals, etwa @news_example. Füge den Bot zuerst zum Chat hinzu.',
     botToken: 'Bot-Token',
     botTokenHelp:
-      'BotFather gibt es beim Erstellen des Bots aus. Es wird verschlüsselt gespeichert und nie wieder angezeigt.',
+      'BotFather gibt es beim Erstellen des Bots aus. Es wird nie wieder angezeigt. Es wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
     gotifyServer: 'Gotify-Server',
     gotifyServerHelp: 'Seine Adresse, etwa https://gotify.example.org.',
     appToken: 'Anwendungstoken',
     appTokenHelp: {
       gotify:
-        'In Gotify: Apps, Create Application, dann das Token kopieren. Es wird verschlüsselt gespeichert und nie wieder angezeigt.',
+        'In Gotify: Apps, Create Application, dann das Token kopieren. Es wird nie wieder angezeigt. Es wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
       pushover:
-        'Das API-Token einer auf Pushover erstellten Anwendung. Es wird verschlüsselt gespeichert und nie wieder angezeigt.',
+        'Das API-Token einer auf Pushover erstellten Anwendung. Es wird nie wieder angezeigt. Es wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
     },
     userKey: 'Benutzerschlüssel',
     userKeyHelp:
-      'Wird nach der Anmeldung im Pushover-Dashboard angezeigt, oder ein Gruppenschlüssel. Er wird verschlüsselt gespeichert und nie wieder angezeigt.',
+      'Wird nach der Anmeldung im Pushover-Dashboard angezeigt, oder ein Gruppenschlüssel. Er wird nie wieder angezeigt. Er wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
     events: 'Ereignisse',
     eventsHelp: {
       server: 'Worüber es informiert wird, für alle Benutzer.',

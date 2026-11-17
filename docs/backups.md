@@ -68,7 +68,7 @@ Set a **Backup passphrase**, under **Settings › Backups**, to encrypt every ba
 - An encrypted backup is named `polyfin-YYYYMMDD-HHMMSS.dump.enc`, in the folder and at every destination.
 - A destination then holds nothing it can read.
 - Retention counts both kinds of names. The backups made before the passphrase was set stay as they are until retention deletes them.
-- The passphrase is stored encrypted with `POLYFIN_SECRET_KEY`, like the other [stored keys](configuration.md#stored-keys-and-tokens), and never shown again.
+- The passphrase is encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise, like the other [stored keys](configuration.md#stored-keys-and-tokens), and never shown again.
 - When that key cannot decrypt the passphrase, backups fail rather than be written unencrypted: enter the passphrase again.
 
 A lost passphrase means lost backups. Nobody can restore an encrypted backup without the passphrase it was made with, Polyfin included.

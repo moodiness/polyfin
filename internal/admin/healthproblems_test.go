@@ -166,6 +166,16 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 		t.Errorf("with a key: %+v", told)
 	}
 
+	// Without a key, before any secret is stored: whatever is saved next
+	// is stored as is, which the warning tells beforehand.
+	noneYet := *options
+	noneYet.Health.Secrets = func(context.Context) (secrets.Report, error) { return secrets.Report{}, nil }
+	if told, _ := HealthProblems(noneYet)(t.Context()); !slices.ContainsFunc(told, func(p notifications.Problem) bool {
+		return p.Key == "secrets:plaintext"
+	}) {
+		t.Errorf("without a key, none stored yet: %+v", told)
+	}
+
 	down.Store(true)
 	if got := problems("en"); !reflect.DeepEqual(got, []healthProblemJSON{{Key: "database", Code: problemDatabase, Tone: "error",
 		To: "/system/health#database"}}) {

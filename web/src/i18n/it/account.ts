@@ -333,10 +333,15 @@ const account: typeof en = {
       stayConnected: 'Resta connesso',
       stayConnectedHelp: {
         nuvio: (every: string) =>
-          `Polyfin conserva la sessione, cifrata, mai la tua password, e importa di nuovo il profilo che scegli ${every}. Si limita a leggere l’account. Puoi disconnetterti in qualsiasi momento.`,
+          `Polyfin conserva la sessione, mai la tua password, e importa di nuovo il profilo che scegli ${every}. La sessione viene cifrata se il server ha una POLYFIN_SECRET_KEY, e conservata così com’è altrimenti. Si limita a leggere l’account. Puoi disconnetterti in qualsiasi momento.`,
         stremio: (every: string) =>
-          `Polyfin conserva la chiave di autenticazione, cifrata, e per un profilo con PIN la sessione di quel profilo, mai il PIN, e importa di nuovo il profilo che scegli ${every}. Si limita a leggere l’account. Puoi disconnetterti in qualsiasi momento. I termini di Stremio vietano di estrarne i dati con mezzi automatizzati: leggere il tuo account ${every} rende questa zona grigia più marcata rispetto a un’importazione singola.`,
+          `Polyfin conserva la chiave di autenticazione, e per un profilo con PIN la sessione di quel profilo, mai il PIN, e importa di nuovo il profilo che scegli ${every}. Vengono cifrate se il server ha una POLYFIN_SECRET_KEY, e conservate così come sono altrimenti. Si limita a leggere l’account. Puoi disconnetterti in qualsiasi momento. I termini di Stremio vietano di estrarne i dati con mezzi automatizzati: leggere il tuo account ${every} rende questa zona grigia più marcata rispetto a un’importazione singola.`,
       },
+      unencrypted:
+        'Questo server non ha una chiave segreta: un accesso conservato per restare connesso verrebbe salvato senza cifratura.',
+      unencryptedAdministrator:
+        'Questo server non ha una POLYFIN_SECRET_KEY: un accesso conservato per restare connesso verrebbe salvato senza cifratura. Imposta la chiave, poi riavvia Polyfin, per cifrarlo.',
+      unencryptedDocs: 'Chiavi e token salvati',
       staysConnected: (every: string) =>
         `Resti connesso: questo profilo viene importato di nuovo ${every}, allo stesso modo. Gli add-on vengono installati solo ora.`,
       wholeAccount: 'L’intero account',

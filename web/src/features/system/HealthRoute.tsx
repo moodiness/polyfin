@@ -689,7 +689,7 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
           ? { tone: 'danger', word: text.unreadable }
           : secrets.encrypted
             ? { tone: 'ok', word: words.encrypted }
-            : { tone: secrets.plaintext > 0 ? 'warn' : 'muted', word: words.notEncrypted },
+            : { tone: 'warn', word: words.notEncrypted },
       title: secrets.encrypted ? words.keySet : words.keyNotSet,
       body: <Said label={text.storedPlain}>{number(secrets.plaintext)}</Said>,
       foot: (
