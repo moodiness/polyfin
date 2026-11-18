@@ -285,10 +285,11 @@ Targets that chose **Health problem found** before this event existed have it ch
 
 ### Blocked accounts
 
-The wrong password that blocks an account is told once, while **Block an account after this many wrong passwords** is set in **Settings › Security** (see [Blocking after wrong passwords](sign-in-and-security.md#blocking-after-wrong-passwords)).
+The wrong password that blocks an address for an account is told once, while **Block an account after this many wrong passwords** is set in **Settings › Security** (see [Blocking after wrong passwords](sign-in-and-security.md#blocking-after-wrong-passwords)). The block is of the address named as the last attempt's: the account still signs in from other addresses, and from devices it already used.
 
 - Neither the attempts during the block nor the right password then tell it again.
-- A new block after the first one ends is told again.
+- A new block after the first one ends is told again, and so is the block of another address.
+- A wrong current password given to change a password counts and is told as one at sign-in.
 - Attempts refused for their address, after too many failed sign-ins from it (429), never reach the account and are not told: they come all the time from anywhere on the internet.
 
 | Who | Title | Message | Opens |

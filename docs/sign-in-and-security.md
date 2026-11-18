@@ -171,7 +171,7 @@ Polyfin skips its own two-step code after the provider, which asked for its own 
 - An administrator required to use two-step sign-in signs in through the provider without setting it up.
 - A web player signed in through the provider also opens the admin app without a code, unlike one signed in with Quick Connect (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
-Likewise, the block after wrong passwords blocks passwords only (see [Blocking after wrong passwords](#blocking-after-wrong-passwords)). An account blocked by someone guessing its password still signs in through the provider, which checked its own credentials, and stays blocked for passwords.
+Likewise, the block after wrong passwords blocks passwords only (see [Blocking after wrong passwords](#blocking-after-wrong-passwords)). An account someone is guessing the password of still signs in through the provider, which checked its own credentials, from the blocked address too.
 
 <a id="jellyfin-apps-1"></a>
 
@@ -215,7 +215,7 @@ API details: [Identity provider sign-in](jellyfin-api.md#identity-provider-sign-
 | **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows under **My account** the imports from a Jellyfin, Emby or Plex server, a Letterboxd export and an app (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history) and [Importing from an app](moving-to-polyfin.md#importing-from-an-app)). |
 | **Allow share links** | **Settings › Security** | Off | Lets users with **Can share titles** give a movie or episode to someone without an account, through an expiring link (see [Share links](invite-and-share-links.md#share-links)). Off, every link is refused but kept. |
 | **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often apps users stay connected to, and watch histories from tracking services, are imported again (see [How often connected accounts are imported](moving-to-polyfin.md#how-often-connected-accounts-are-imported)). |
-| **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
+| **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an address's sign-ins to an account for 15 minutes after that many wrong passwords in a row from it. |
 | **Require two-step sign-in for administrators** | **Settings › Security** | Off | Administrators must enter an authenticator app code after their password (see [Two-step sign-in](#two-step-sign-in)). |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps unused for that many days. |
 | **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | Reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names their requests' client (see [Known proxies](reverse-proxy.md#known-proxies)). |
@@ -261,14 +261,19 @@ Polyfin counts each client's failed attempts by its address: wrong passwords, co
 
 ### Blocking after wrong passwords
 
-After that many wrong passwords in a row, from a Jellyfin app or the admin app, the account refuses every sign-in for 15 minutes. The right password then gets a wrong password's answer.
+After that many wrong passwords in a row from one address, from a Jellyfin app or the admin app, the account refuses the password sign-ins of that address for 15 minutes. The right password then gets a wrong password's answer there. Other addresses sign in to the account as before, so wrong passwords from one address do not keep the account's owner out from elsewhere.
 
-The count restarts after:
+- **Addresses:** an IPv6 address counts with its whole /64 network, which one client holds. Behind a reverse proxy missing from **Known proxies**, every client has the proxy's address, and one block is everyone's (see [Known proxies](reverse-proxy.md#known-proxies)).
+- **Devices already used:** a Jellyfin app the account signed in from before still signs in from a blocked address, with the right password. A wrong password from it is refused and counted. The admin app names no device, so it follows the address alone.
+- **Password changes:** the current password given to change one's password counts as a password at sign-in does, in the admin app and in Jellyfin apps. While the address is blocked, the right one is refused too.
+- **How many addresses:** Polyfin keeps the wrong passwords of 64 addresses per account. One more replaces the address whose last wrong password is the oldest.
 
-- a sign-in;
-- a new password set by an administrator;
-- **Unblock** on the user's page under **Users**, which shows until when the account is blocked;
-- setting the limit to 0.
+The count of an address restarts after:
+
+- a sign-in from it, or its right current password at a password change;
+- a new password, set by an administrator or by the user, for every address;
+- **Unblock** on the user's page under **Users**, which shows until when the account's latest block lasts, and ends every block of the account;
+- setting the limit to 0, for every account.
 
 Each block is told once to notification targets that chose **Account blocked** (see [Blocked accounts](notifications.md#blocked-accounts)):
 
@@ -279,7 +284,7 @@ Attempts from a client refused for a while after too many failed sign-ins from i
 
 **Compared with Jellyfin**
 
-- Jellyfin disables the account until an administrator enables it. Polyfin only blocks it for a while, so the last administrator can never be locked out for good.
+- Jellyfin disables the account until an administrator enables it. Polyfin only blocks one address for a while, so nobody can keep an account's owner out with wrong passwords, the last administrator included.
 
 API details: [Wrong password blocking](jellyfin-api.md#wrong-password-blocking-for-apps).
 

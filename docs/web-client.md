@@ -315,10 +315,11 @@ sequenceDiagram
 - **Who it works for:** only the signed-in device of a user who may sign in now.
 - **Who it does not work for:**
   - an API key, which has no user;
-  - a disabled or blocked account, or one outside its allowed hours;
+  - a disabled account, or one outside its allowed hours;
   - a user outside the local network who may not connect from outside it;
   - an account with [two-step sign-in](sign-in-and-security.md#two-step-sign-in), or an administrator required to set it up. These sign in with their password and their code.
-- **Identity provider:** a web player signed in through the identity provider still hands over its sign-in, with two-step sign-in or after a block for wrong passwords. The provider asked for its own steps.
+- **Identity provider:** a web player signed in through the identity provider still hands over its sign-in with two-step sign-in. The provider asked for its own second step.
+- **Blocks after wrong passwords:** they refuse an address's passwords, not this hand-over, which comes from a device the account signed in from.
 - **Unknown tokens:** an unknown token counts as a wrong password toward the client's failed attempts.
 - **No usable token:** the admin app shows its sign-in page.
 

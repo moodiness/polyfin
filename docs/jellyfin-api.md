@@ -29,8 +29,10 @@ Apps sign in with a name and password, or with Quick Connect, as on Jellyfin. Th
 
 ### Wrong password blocking for apps
 
-- Jellyfin apps read the limit (-1 when there is none) and the count in the user's policy, as `LoginAttemptsBeforeLockout` and `InvalidLoginAttemptCount`.
+- Jellyfin apps read the limit (-1 when there is none) and the count in the user's policy, as `LoginAttemptsBeforeLockout` and `InvalidLoginAttemptCount`. The count is the highest among the addresses that sent wrong passwords for the account.
 - The limit is the server's, so a policy an app posts does not change it, nor the count.
+- `POST /Users/AuthenticateByName` from a blocked address answers 401, as for a wrong password, unless its `DeviceId` is one the account signed in from before. `POST /Users/Password` then answers 403 to the right `CurrentPw` too, as `PUT /admin/api/account/password` does (`wrong_password`).
+- `PUT /admin/api/account/password` answers 429 `too_many_attempts` once the client, or the user from any client, sent too many wrong current passwords, as the sign-in does.
 
 ### Identity provider sign-in for apps
 
