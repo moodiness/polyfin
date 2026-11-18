@@ -132,12 +132,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, migrations []migration) er
 		}
 	}()
 
-	if _, err := conn.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
-		version integer PRIMARY KEY,
-		name text NOT NULL,
-		checksum text NOT NULL,
-		applied_at timestamptz NOT NULL DEFAULT now()
-	)`); err != nil {
+	if _, err := conn.Exec(ctx, createSchemaMigrations); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 	rows, _ := conn.Query(ctx, "SELECT version, checksum FROM schema_migrations")
@@ -177,6 +172,47 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, migrations []migration) er
 			return err
 		})
 		if err != nil {
+			return fmt.Errorf("apply migration %04d_%s: %w", m.version, m.name, err)
+		}
+	}
+	return nil
+}
+
+// createSchemaMigrations makes the table recording the migrations applied.
+const createSchemaMigrations = `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version integer PRIMARY KEY,
+		name text NOT NULL,
+		checksum text NOT NULL,
+		applied_at timestamptz NOT NULL DEFAULT now()
+	)`
+
+// MigrateAs makes, in tx's transaction, the schema of a database that
+// applied the migrations applied, their checksums by version, as
+// CheckApplied takes them: it applies those migrations as this build
+// ships them, in order, to a database holding none of Polyfin's tables,
+// and records them. A restore makes the schema of a backup with it,
+// before it loads the backup's rows, so that a failure rolls the whole
+// restore back; Migrate applies the other migrations afterwards.
+func MigrateAs(ctx context.Context, tx pgx.Tx, applied map[int]string) error {
+	migrations, err := shippedMigrations()
+	if err != nil {
+		return err
+	}
+	if err := checkApplied(applied, migrations); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, createSchemaMigrations); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+	for _, m := range migrations {
+		if _, done := applied[m.version]; !done {
+			continue
+		}
+		if _, err := tx.Exec(ctx, m.sql); err != nil {
+			return fmt.Errorf("apply migration %04d_%s: %w", m.version, m.name, err)
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations (version, name, checksum) VALUES ($1, $2, $3)",
+			m.version, m.name, m.checksum); err != nil {
 			return fmt.Errorf("apply migration %04d_%s: %w", m.version, m.name, err)
 		}
 	}
