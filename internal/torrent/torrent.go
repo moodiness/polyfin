@@ -58,6 +58,12 @@ const (
 	// index.
 	readWindow = 16 << 20
 	edgePieces = 2
+	// inflightRoom is how many bytes of pieces a torrent downloads at
+	// once, each a whole buffer in memory until it is checked: four read
+	// windows, as that of a read and those of the reads before it whose
+	// blocks still come. A torrent of longer pieces has room for those
+	// one read asks for, up to twice as much (see torrent.room).
+	inflightRoom = 4 * readWindow
 	// unchokeSlots is how many interested peers are shared with at once,
 	// while sharing.
 	unchokeSlots = 4
@@ -122,6 +128,11 @@ type torrent struct {
 	reads      map[*Reader]readSpan
 	files      []File
 	changed    chan struct{}
+	// inflightBytes counts the bytes of the pieces in flight, which are
+	// bounded, and held tells that a piece could not start for want of
+	// room since they were last sorted out (see inflightOf and shed).
+	inflightBytes int64
+	held          bool
 	// flowing is closed, and replaced, as a block of a piece arrives, and
 	// as the route is found down within its grace, at waitedOn: the reads
 	// waiting for pieces tell their callers to wait on (see
@@ -379,6 +390,11 @@ func (t *torrent) fail(err error) {
 	for _, p := range t.peers {
 		peers = append(peers, p)
 	}
+	// The pieces in flight are forgotten with the torrent, and their room
+	// given back to the others.
+	for index := range t.inflight {
+		t.drop(index)
+	}
 	t.signal()
 	t.mu.Unlock()
 	t.cancel()
@@ -405,8 +421,9 @@ func (t *torrent) recovered(what string, then func(error)) {
 	}
 }
 
-// watch chooses the peers shared with, and asks again for the blocks peers
-// dropped (see reask), until the torrent stops. A panic stops the torrent.
+// watch chooses the peers shared with, asks again for the blocks peers
+// dropped (see reask), and sorts out the pieces in flight (see shed),
+// until the torrent stops. A panic stops the torrent.
 func (t *torrent) watch() {
 	defer t.recovered("watch of its peers", func(err error) {
 		t.engine.failed(err)
@@ -426,6 +443,9 @@ func (t *torrent) watch() {
 			t.mu.Unlock()
 		case <-stale.C:
 			t.reask()
+			t.mu.Lock()
+			t.shed()
+			t.mu.Unlock()
 		}
 	}
 }
@@ -1337,10 +1357,13 @@ func (f File) pieces(length int64) (first, last int) {
 // room in the store for the pieces read now. A read asks for them again
 // each time it moves past the back half of the window last asked (see
 // Reader.ReadAtProgress), so the window rolls ahead of it, never past
-// its bound. The lock is held.
+// its bound. Pieces shorter than a block count for a block each: an info
+// dictionary may tell pieces of a byte, and the window, which wanted
+// lists at each block received, holds no more pieces than readWindow
+// holds blocks. The lock is held.
 func (t *torrent) window() int {
 	length := t.info.PieceLength
-	return int(max(1, min(max(4, readWindow/length), t.engine.store.budget()/length/2)))
+	return int(max(1, min(max(4, readWindow/max(length, blockSize)), t.engine.store.budget()/length/2)))
 }
 
 // needed lists the pieces the reads wait for, those of their spans, up
@@ -1369,18 +1392,207 @@ func blockOf(in *inflightPiece, index, i int) block {
 	return block{piece: index, offset: offset, length: min(blockSize, int64(len(in.data))-offset)}
 }
 
+// noRoom stands for a piece that cannot start for want of room: it has no
+// block to ask for.
+var noRoom = &inflightPiece{}
+
 // inflightOf is the piece index being downloaded, started when it is
-// not. The lock is held.
+// not. A piece in flight is a whole buffer in memory until it is checked,
+// so the bytes of them all are bounded: the torrent's by its room, and
+// every torrent's together by the engine's (see Engine.admit). A piece
+// that would pass either does not start: noRoom is returned, of which
+// nothing is asked. It starts once a piece in flight is kept or dropped,
+// as the peers are asked again then, and shed makes room for it when it
+// is wanted more than one in flight. The lock is held.
 func (t *torrent) inflightOf(index int) *inflightPiece {
 	in := t.inflight[index]
 	if in == nil {
 		size := t.info.pieceSize(index)
+		if t.inflightBytes+weight(size) > t.room() || !t.engine.admit(weight(size), t.inflightBytes == 0) {
+			t.held = true
+			return noRoom
+		}
+		t.inflightBytes += weight(size)
 		blocks := int((size + blockSize - 1) / blockSize)
 		in = &inflightPiece{data: make([]byte, size), got: make([]bool, blocks), requested: make([]time.Time, blocks),
 			asks: make([]uint8, blocks), left: blocks}
 		t.inflight[index] = in
 	}
 	return in
+}
+
+// room is how many bytes of pieces the torrent may have in flight: those
+// one read asks for at once, its window and the edges of its file, which
+// is inflightRoom at least, and twice that at most: two of the longest
+// pieces. The lock is held.
+func (t *torrent) room() int64 {
+	return min(max(inflightRoom, int64(t.window()+2*edgePieces)*t.info.PieceLength), 2*inflightRoom)
+}
+
+// fits reports whether one more piece may start now (see inflightOf). The
+// lock is held.
+func (t *torrent) fits() bool {
+	size := weight(t.info.PieceLength)
+	return t.inflightBytes == 0 ||
+		t.inflightBytes+size <= t.room() && t.engine.inflightBytes.Load()+size <= t.engine.inflightRoom()
+}
+
+// weight is what a piece of size bytes counts for among those in flight:
+// its bytes, and a block's at least, for what is kept beside them, so
+// that pieces of a few bytes are no more at once than the room holds
+// blocks.
+func weight(size int64) int64 {
+	return max(size, blockSize)
+}
+
+// drop forgets a piece in flight, whole or not, and gives its room back.
+// The lock is held.
+func (t *torrent) drop(index int) {
+	in := t.inflight[index]
+	if in == nil {
+		return
+	}
+	delete(t.inflight, index)
+	t.inflightBytes -= weight(int64(len(in.data)))
+	t.engine.inflightBytes.Add(-weight(int64(len(in.data))))
+}
+
+// asked reports whether a peer is asked for a block of the piece.
+func (in *inflightPiece) asked() bool {
+	return slices.ContainsFunc(in.asks, func(asks uint8) bool { return asks > 0 })
+}
+
+// unask takes back the blocks of a piece the peers were asked for. The
+// lock is held.
+func (t *torrent) unask(index int) {
+	for _, p := range t.peers {
+		for b := range p.requests {
+			if b.piece == index {
+				t.forget(p, b)
+				p.send(msgCancel, requestPayload(b))
+			}
+		}
+	}
+}
+
+// shed sorts out the pieces in flight, so that none stays for nothing and
+// no read waits for room behind a piece less wanted than its own.
+//
+// A piece no read wants any more, as its read closed or moved away, is
+// dropped once no peer is asked for a block of it: what the peers were
+// asked for still comes, and what came of a piece dropped is asked again
+// should a read come back to it.
+//
+// A piece that waits for room (see inflightOf) while a peer could be
+// asked for it takes the room of the pieces less wanted than it, whose
+// requests are cancelled: those no read wants, then, when a read waits
+// for it, those fetched ahead of the reads and at the edges of the files.
+// It takes too the room of those wanted as much that no peer is asked
+// for: they wait for a peer that left or choked. The least wanted go
+// first, no more of them than a piece needs, and the peers are asked
+// again. So a read waits for room only behind pieces other reads wait
+// for and peers are asked for.
+//
+// Called as a read closes or moves, and by watch as often as reask: not
+// at each block. The lock is held.
+func (t *torrent) shed() {
+	held := t.held
+	t.held = false
+	if t.info == nil || t.err != nil || len(t.inflight) == 0 {
+		return
+	}
+	// want is how much each piece is wanted: 2 when a read waits for it,
+	// 1 when it is fetched ahead, 0 otherwise, and place where it stands
+	// among those wanted.
+	type wish struct{ want, place int }
+	wanted := t.wanted()
+	wishes := make(map[int]wish, len(wanted))
+	for place, index := range wanted {
+		wishes[index] = wish{want: 1, place: place}
+	}
+	for _, index := range t.needed() {
+		wishes[index] = wish{want: 2, place: wishes[index].place}
+	}
+	for index, in := range t.inflight {
+		if wishes[index].want == 0 && in.left > 0 && !in.asked() {
+			t.drop(index)
+		}
+	}
+	// Nothing more to do while every piece that was to start did.
+	fits := t.fits()
+	if fits && !held {
+		return
+	}
+	// free are the peers that may be asked for more, and piece the one
+	// wanted most, need telling how much, that waits for one of them.
+	var free []*peer
+	for _, p := range t.peers {
+		select {
+		case <-p.closed:
+		default:
+			if !p.choked && len(p.requests) < pipeline {
+				free = append(free, p)
+			}
+		}
+	}
+	piece, need := 0, 0
+	for _, index := range wanted {
+		if w := wishes[index].want; w > need && t.inflight[index] == nil &&
+			slices.ContainsFunc(free, func(p *peer) bool { return index < len(p.has) && p.has[index] }) {
+			piece, need = index, w
+		}
+	}
+	if need == 0 {
+		return
+	}
+	if !fits {
+		type idle struct {
+			wish
+			index int
+			asked bool
+		}
+		var yield []idle
+		for index, in := range t.inflight {
+			// A whole piece is being checked: it is kept or dropped then.
+			if w, asked := wishes[index], in.asked(); in.left > 0 && (w.want < need || w.want == need && !asked) {
+				yield = append(yield, idle{wish: w, index: index, asked: asked})
+			}
+		}
+		slices.SortFunc(yield, func(a, b idle) int {
+			switch {
+			case a.want != b.want:
+				return a.want - b.want
+			case a.asked != b.asked:
+				if b.asked {
+					return -1
+				}
+				return 1
+			}
+			return b.place - a.place
+		})
+		for _, y := range yield {
+			if t.fits() {
+				break
+			}
+			if y.asked {
+				t.unask(y.index)
+			}
+			t.drop(y.index)
+		}
+		if !t.fits() {
+			return
+		}
+	}
+	// The piece starts before any other takes the room made for it, and
+	// the peers are asked: those whose requests were cancelled too.
+	t.inflightOf(piece)
+	for _, p := range t.peers {
+		select {
+		case <-p.closed:
+		default:
+			t.fill(p)
+		}
+	}
 }
 
 // fill asks a peer that unchoked Polyfin for the blocks it lacks, up to
@@ -1455,6 +1667,11 @@ func (t *torrent) endgame(p *peer, now time.Time) {
 	var blocks []held
 	for _, index := range t.needed() {
 		in := t.inflight[index]
+		if in == nil && !t.fits() {
+			// A piece that waits for room (see inflightOf) is none to
+			// ask yet: the endgame is of those in flight.
+			continue
+		}
 		if in == nil {
 			// A piece not asked yet: not the endgame.
 			return
@@ -1544,7 +1761,7 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 func (t *torrent) discard(p *peer, index int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	delete(t.inflight, index)
+	t.drop(index)
 	t.fill(p)
 }
 
@@ -1553,7 +1770,7 @@ func (t *torrent) discard(p *peer, index int) {
 func (t *torrent) completed(index int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	delete(t.inflight, index)
+	t.drop(index)
 	if t.err != nil {
 		return
 	}
@@ -1760,6 +1977,9 @@ func (r *Reader) ReadAtProgress(p []byte, off int64, progress func()) (int, erro
 			for _, peer := range t.peers {
 				t.fill(peer)
 			}
+			// The pieces the read left behind give their room, and the
+			// one it waits for is not held behind them (see shed).
+			t.shed()
 		}
 		t.mu.Unlock()
 		if err != nil {
@@ -1807,6 +2027,7 @@ func (r *Reader) ReadAtProgress(p []byte, off int64, progress func()) (int, erro
 func (r *Reader) Close() error {
 	r.t.mu.Lock()
 	delete(r.t.reads, r)
+	r.t.shed()
 	r.t.mu.Unlock()
 	return nil
 }

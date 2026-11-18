@@ -218,6 +218,9 @@ type Engine struct {
 	noUDP      bool
 	udpRoute   Route
 	sharedOut  atomic.Int64
+	// inflightBytes counts the bytes of the pieces every torrent is
+	// downloading (see admit).
+	inflightBytes atomic.Int64
 	// unstarted is the last torrent that did not start in time, and when;
 	// nil once another started since.
 	unstarted   *StartError
@@ -1000,6 +1003,37 @@ func (e *Engine) Uploaded() int64 {
 
 func (e *Engine) countUpload(n int64) {
 	e.sharedOut.Add(n)
+}
+
+// maxInflight bounds the bytes of the pieces the torrents are downloading
+// together, each a whole buffer in memory until it is checked and kept:
+// sixteen read windows, or four of the longest pieces.
+const maxInflight = 16 * readWindow
+
+// inflightRoom is how many bytes of pieces the torrents may have in
+// flight together: maxInflight, and no more than the Budget lets them
+// keep once checked.
+func (e *Engine) inflightRoom() int64 {
+	return min(maxInflight, e.store.budget())
+}
+
+// admit counts size bytes more among the pieces in flight, unless they
+// would pass inflightRoom. The first piece of a torrent that has none in
+// flight is always admitted: a torrent downloads one piece at a time at
+// least, whatever the others hold, so that none keeps another from
+// playing. The bytes in flight thus stay within inflightRoom and one
+// piece for each torrent running past those that fill it.
+func (e *Engine) admit(size int64, first bool) bool {
+	room := e.inflightRoom()
+	for {
+		held := e.inflightBytes.Load()
+		if !first && held+size > room {
+			return false
+		}
+		if e.inflightBytes.CompareAndSwap(held, held+size) {
+			return true
+		}
+	}
 }
 
 // Close stops every torrent, and the route: a WireGuard tunnel stops.

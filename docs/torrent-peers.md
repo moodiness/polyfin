@@ -24,6 +24,9 @@ Every connection on this page goes through the torrents' route alone (see [Route
 - It never fetches the pieces of the files after it, such as the next episode of a season's pack or the files beside the video.
 - Measured on the local test swarm: a 9.2 MB video played whole, followed by 1.9 MB of other files in 256 KiB pieces. Polyfin downloads none of the other files, but the piece of the subtitle file it fetches on purpose (see [Subtitle files inside the torrent](torrents.md#subtitle-files-inside-the-torrent)).
 - Pieces are kept on disk within a quarter of **Disk space for files being read (GB)** (**Settings › Playback**). They count in Health's **Source cache**.
+- A piece being downloaded is held in memory until it is whole and checked. A torrent holds 64 MiB of such pieces at most, or 128 MiB when its pieces are longer than 8 MiB. All torrents together hold 256 MiB, and never more than their pieces may take on disk. A torrent that downloads no piece always starts one, so that no torrent keeps another from playing.
+- When that room is full, the next pieces wait until one is checked. A piece a read waits for takes the place of the pieces fetched ahead of the reads.
+- A piece no read wants any more, as after a seek, is dropped once the peers are asked for no block of it. Its blocks are asked again if a read comes back to it.
 - A read fetches 16 MiB ahead, 4 pieces at least, within half the room that disk space leaves for the torrent's pieces.
 - The window rolls with the read. Once a read moves past the first half of the pieces last asked for, the peers are asked for the next ones, so that they arrive before the read reaches them.
 - Measured on the local test swarm, a file in 4 MiB pieces is read at 1 MiB a second, and downloaded at 16 Mb/s. No read waits but those of the first pieces, as the play starts.
