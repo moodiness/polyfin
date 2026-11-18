@@ -72,6 +72,12 @@ type Config struct {
 	// the cache, unless the settings choose other folders for what it holds
 	// (see ChooseFolders), and the default recordings and backups folders.
 	DataDir string
+	// MoveDataDirTo is set when DataDir is the default data folder of
+	// earlier versions, in the system's temporary folder, kept as it is
+	// there and POLYFIN_DATA_DIR is not set (see EarlierDataDir): the
+	// default one, where its files are to be moved. System › Health tells
+	// both.
+	MoveDataDirTo string
 	// FontsDir holds the fallback fonts apps load to render subtitles, read
 	// with the folders within, which also write the names of generated
 	// images.
@@ -127,13 +133,6 @@ const defaultFontsDir = "/usr/share/fonts"
 
 // DefaultWebDir is the folder the Docker image puts jellyfin-web in.
 const DefaultWebDir = "/usr/share/polyfin/jellyfin-web"
-
-// DefaultDataDir is the folder Polyfin keeps its files in when
-// POLYFIN_DATA_DIR is not set: a polyfin folder in the system's temporary
-// folder.
-func DefaultDataDir() string {
-	return filepath.Join(os.TempDir(), "polyfin")
-}
 
 // Load reads the configuration through getenv, normally os.Getenv. Only
 // the variables still read can make it fail; those copied into the
@@ -236,7 +235,11 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	switch {
 	case cfg.DataDir == "":
-		cfg.DataDir = DefaultDataDir()
+		dir, moveTo, err := chooseDataDir(DefaultDataDir, EarlierDataDir())
+		if err != nil {
+			errs = append(errs, err)
+		}
+		cfg.DataDir, cfg.MoveDataDirTo = dir, moveTo
 	case !filepath.IsAbs(cfg.DataDir):
 		errs = append(errs, fmt.Errorf("POLYFIN_DATA_DIR: %q is not an absolute path", cfg.DataDir))
 	default:
@@ -320,7 +323,8 @@ func PrepareFolder(dir string, create bool) error {
 		return fmt.Errorf("%q is not an absolute path", dir)
 	}
 	if create {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		// For Polyfin's user alone: the backups hold the whole database.
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 	}
