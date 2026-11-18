@@ -78,8 +78,13 @@ func (c Cached) ReadAt(_ context.Context, p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-// Fetch returns the n bytes at off, or fewer at the end of the source.
+// Fetch returns the n bytes at off, or fewer at the end of the source. A
+// range starting before the source or of a negative length is refused, as
+// Source refuses it.
 func (c Cached) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	if off < 0 || n < 0 {
+		return nil, fmt.Errorf("fetching %d bytes at %d: invalid range", n, off)
+	}
 	if size, known := c.KnownSize(); known {
 		n = int(max(0, min(int64(n), size-off)))
 	}

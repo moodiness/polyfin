@@ -49,3 +49,33 @@ func TestCachedReadsWithoutRequests(t *testing.T) {
 		t.Errorf("%d requests to the host", after-requests)
 	}
 }
+
+// A range of a negative length, or starting before the source, is an
+// error from the cache as it is from the source, not an empty answer.
+func TestCachedRefusesNegativeRanges(t *testing.T) {
+	t.Parallel()
+	_, server := newOrigin(t, 2*blockSize)
+	cache := newCache(t, 1<<30)
+	id := accounts.ID{8}
+	src := cache.Open(id, Location{URL: server.URL + "/movie.mkv"}, nil)
+	defer src.Release()
+	ctx := t.Context()
+	if _, err := src.ReadAt(ctx, make([]byte, blockSize), 0); err != nil {
+		t.Fatal(err)
+	}
+	cached, ok := cache.Cached(id)
+	if !ok {
+		t.Fatal("the source read is not cached")
+	}
+	for _, r := range []struct {
+		off int64
+		n   int
+	}{{0, -1}, {100, -1 << 20}, {-1, 10}} {
+		if got, err := cached.Fetch(ctx, r.off, r.n); err == nil || got != nil {
+			t.Errorf("%d bytes at %d from the cache: %d bytes, %v", r.n, r.off, len(got), err)
+		}
+		if got, err := src.Fetch(ctx, r.off, r.n); err == nil || got != nil {
+			t.Errorf("%d bytes at %d from the source: %d bytes, %v", r.n, r.off, len(got), err)
+		}
+	}
+}
