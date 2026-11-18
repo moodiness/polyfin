@@ -997,6 +997,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'security',
+    anchor: 'signing-secret',
+    label: (t) => s(t).signingSecret,
+    help: (t) => s(t).signingSecretHelp,
+    keywords: ['POLYFIN_SECRET_KEY', 'grant', 'HMAC'],
+  },
+  {
+    section: 'security',
     anchor: 'provider-setup',
     label: (t) => p(t).title,
     help: (t) => `${p(t).intro} ${p(t).redirectUriHelp}`,

@@ -172,6 +172,11 @@ const home: typeof en = {
       waiting: 'Warte, bis Polyfin wieder antwortet…',
       waitingLong: (seconds: number) =>
         `Polyfin antwortet seit ${seconds} Sekunden nicht. Wenn nichts es wieder startet, starte es auf dem Host.`,
+      secretTitle: 'Neues Signaturgeheimnis erstellen',
+      secretText:
+        'Polyfin erstellt ein neues Signaturgeheimnis und startet dann neu: Es beendet, was es gerade tut, Wiedergaben und Aufnahmen eingeschlossen, und beendet sich. Alle Wiedergabeadressen, Live-Stream-Links, Bildadressen und Konfigurieren-Links, die es zuvor vergeben hat, funktionieren nicht mehr. Apps bleiben angemeldet und fragen erneut an, was sie abspielen, sobald es antwortet.',
+      secretConfirm: 'Erstellen und neu starten',
+      secretAnyway: 'Trotzdem erstellen und neu starten',
       installTitle: (version: string) => `Polyfin ${version} installieren`,
       installText:
         'Polyfin Desktop lädt die neue Version herunter und prüft sie, stoppt dann Polyfin, installiert sie und startet sie, wie Polyfin installieren in seinem Menü. Wiedergaben und Aufnahmen enden in der Zeit.',

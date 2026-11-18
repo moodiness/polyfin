@@ -46,6 +46,7 @@ import MetricsToken from './MetricsToken'
 import { FieldRow, ListRows, PlainRow, SettingsGroup, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
+import SigningSecret from './SigningSecret'
 import LabelRules from './LabelRules'
 import SourceCache from './SourceCache'
 import VersionOrder, { CodecOrder, EditionOrder, SourceOrder } from './VersionOrder'
@@ -1114,6 +1115,7 @@ function Security({ form, update, error, number, range, saved, minMax }: Section
       >
         <ProxyList value={form.knownProxies} onValue={(knownProxies) => update({ knownProxies })} />
       </FieldRow>
+      <SigningSecret />
     </SettingsGroup>
   )
 }

@@ -247,6 +247,10 @@ const settings: typeof en = {
     newMetricsTokenConfirm:
       'Le jeton actuel cesse aussitôt de fonctionner\u202f: Prometheus a besoin du nouveau pour lire les métriques.',
     newMetricsTokenMade: 'Nouveau jeton des métriques créé',
+    signingSecret: 'Secret de signature',
+    signingSecretHelp:
+      'Polyfin signe les adresses qu’il donne aux applis pour lire et pour afficher des images, avec un secret gardé dans sa base de données. Avec POLYFIN_SECRET_KEY, une copie de la base de données seule ne signe rien\u202f; sans elle, le secret est aussi lisible que le reste de la base de données. Créez-en un nouveau si une copie de la base de données ou une sauvegarde a pu tomber en d’autres mains\u202f: Polyfin redémarre, et toute adresse signée auparavant cesse de fonctionner.',
+    newSigningSecret: 'Créer un nouveau secret de signature',
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',

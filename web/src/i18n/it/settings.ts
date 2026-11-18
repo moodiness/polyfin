@@ -248,6 +248,10 @@ const settings: typeof en = {
     newMetricsTokenConfirm:
       'Il token attuale smette subito di funzionare: Prometheus ha bisogno di quello nuovo per leggere le metriche.',
     newMetricsTokenMade: 'Nuovo token delle metriche creato',
+    signingSecret: 'Segreto di firma',
+    signingSecretHelp:
+      'Polyfin firma gli indirizzi che dà alle app per riprodurre e per mostrare le immagini, con un segreto conservato nel suo database. Con POLYFIN_SECRET_KEY, una copia del database da sola non firma nulla; senza, il segreto è leggibile quanto il resto del database. Creane uno nuovo se una copia del database o un backup può essere finito in altre mani: Polyfin si riavvia, e ogni indirizzo firmato prima smette di funzionare.',
+    newSigningSecret: 'Crea un nuovo segreto di firma',
     legacyWarningTitle: 'Avviso di sicurezza',
     legacyWarning:
       'I metodi legacy possono inviare le credenziali negli URL, che finiscono nei log, nella cronologia del browser e nei proxy. Attiva questa opzione solo se un’applicazione che usi non riesce ad accedere in altro modo.',

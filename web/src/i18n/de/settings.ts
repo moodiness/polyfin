@@ -246,6 +246,10 @@ const settings: typeof en = {
     newMetricsTokenConfirm:
       'Das aktuelle Token funktioniert sofort nicht mehr: Prometheus braucht das neue, um die Metriken zu lesen.',
     newMetricsTokenMade: 'Neues Metrik-Token erstellt',
+    signingSecret: 'Signaturgeheimnis',
+    signingSecretHelp:
+      'Polyfin signiert die Adressen, die es Apps zum Abspielen und für Bilder gibt, mit einem Geheimnis in seiner Datenbank. Mit POLYFIN_SECRET_KEY signiert eine Kopie der Datenbank allein nichts; ohne ihn ist das Geheimnis so lesbar wie der Rest der Datenbank. Erstelle ein neues, wenn eine Kopie der Datenbank oder ein Backup in fremde Hände gelangt sein könnte: Polyfin startet neu, und jede zuvor signierte Adresse funktioniert nicht mehr.',
+    newSigningSecret: 'Neues Signaturgeheimnis erstellen',
     legacyWarningTitle: 'Sicherheitswarnung',
     legacyWarning:
       'Veraltete Methoden können Anmeldedaten in URLs senden, die in Protokollen, im Browserverlauf und in Proxys landen. Schalte dies nur ein, wenn sich eine deiner Apps sonst nicht anmelden kann.',

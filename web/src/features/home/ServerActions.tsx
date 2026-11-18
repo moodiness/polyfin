@@ -8,6 +8,7 @@ import {
   fetchServerActions,
   installDesktopUpdate,
   queryKeys,
+  replaceSigningSecret,
   restartServer,
   type DesktopUpdate,
   type ServerActions,
@@ -33,7 +34,8 @@ export function useServerActions() {
   })
 }
 
-export type ServerAction = 'restart' | 'install' | 'update'
+/** Restart, Polyfin Desktop's install and Update now, on Home; a new signing secret, in the settings. */
+export type ServerAction = 'restart' | 'install' | 'update' | 'secret'
 
 /**
  * At the foot of Home's Server state: Restart, and Update now while an update tool is set. Each
@@ -137,12 +139,18 @@ export function ActionDialog({
     queryFn: ({ signal }) => fetchOwnTwoStep(signal),
   })
   const version = actions.desktopUpdate?.version ?? ''
-  const unknown = action === 'restart' && actions.restart === 'unknown'
+  // A new signing secret restarts Polyfin, with what a restart asks and warns of.
+  const restarts = action === 'restart' || action === 'secret'
+  const unknown = restarts && actions.restart === 'unknown'
   const mutation = useMutation({
     mutationFn: async (confirmation: TwoStepConfirmation): Promise<Phase> => {
       switch (action) {
         case 'restart': {
           const { startedAt } = await restartServer(confirmation, unknown)
+          return { kind: 'waiting', since: startedAt, gone: false }
+        }
+        case 'secret': {
+          const { startedAt } = await replaceSigningSecret(confirmation, unknown)
           return { kind: 'waiting', since: startedAt, gone: false }
         }
         case 'install':
@@ -186,19 +194,24 @@ export function ActionDialog({
   const title =
     action === 'restart'
       ? text.restartTitle
-      : action === 'install'
-        ? text.installTitle(version)
-        : text.updateTitle
+      : action === 'secret'
+        ? text.secretTitle
+        : action === 'install'
+          ? text.installTitle(version)
+          : text.updateTitle
   const confirm =
     action === 'restart'
       ? unknown
         ? text.restartAnyway
         : text.restartConfirm
-      : action === 'install'
-        ? text.installConfirm
-        : text.updateConfirm
-  const pending =
-    action === 'restart' ? text.restarting : action === 'install' ? text.installing : text.sending
+      : action === 'secret'
+        ? unknown
+          ? text.secretAnyway
+          : text.secretConfirm
+        : action === 'install'
+          ? text.installConfirm
+          : text.updateConfirm
+  const pending = restarts ? text.restarting : action === 'install' ? text.installing : text.sending
 
   return (
     <Modal
@@ -233,8 +246,8 @@ export function ActionDialog({
         }}
       >
         <p className="text-control text-ink-2">
-          {action === 'restart'
-            ? `${text.restartText}${actions.restart === 'unknown' ? '' : ` ${text.restartBy[actions.restart]}`}`
+          {restarts
+            ? `${action === 'secret' ? text.secretText : text.restartText}${actions.restart === 'unknown' ? '' : ` ${text.restartBy[actions.restart]}`}`
             : action === 'install'
               ? text.installText
               : text.updateText}

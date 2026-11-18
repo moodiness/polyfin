@@ -175,6 +175,11 @@ const home = {
       waiting: 'Waiting for Polyfin to answer again…',
       waitingLong: (seconds: number) =>
         `Polyfin has not answered for ${seconds} seconds. If nothing starts it again, start it on the host.`,
+      secretTitle: 'Make a new signing secret',
+      secretText:
+        'Polyfin makes a new signing secret, then restarts: it stops what it is doing, playbacks and recordings included, and exits. Every playback address, live stream link, image address and Configure link it gave before stops working. Apps stay signed in, and ask again for what they play once it answers.',
+      secretConfirm: 'Make it and restart',
+      secretAnyway: 'Make it and restart anyway',
       installTitle: (version: string) => `Install Polyfin ${version}`,
       installText:
         'Polyfin Desktop downloads the new version and checks it, then stops Polyfin, installs it and starts it, as Install Polyfin does in its menu. Playbacks and recordings stop meanwhile.',

@@ -5914,6 +5914,13 @@ export const fetchServerActions = (signal?: AbortSignal) =>
 export const restartServer = (confirmation: TwoStepConfirmation, anyway: boolean) =>
   request<{ startedAt: string }>('POST', '/server/restart', { ...confirmation, anyway })
 
+/**
+ * Makes a new signing secret, then restarts Polyfin as `restartServer` does, with its confirmation
+ * and its answer: everything Polyfin signed before stops working.
+ */
+export const replaceSigningSecret = (confirmation: TwoStepConfirmation, anyway: boolean) =>
+  request<{ startedAt: string }>('POST', '/server/signing-secret', { ...confirmation, anyway })
+
 /** Has Polyfin Desktop install the update it offers, as its tray's Install Polyfin does. */
 export const installDesktopUpdate = (confirmation: TwoStepConfirmation, version: string) =>
   request<{ version: string }>('POST', '/server/desktop-update', { ...confirmation, version })

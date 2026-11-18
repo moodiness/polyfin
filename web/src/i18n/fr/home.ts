@@ -175,6 +175,11 @@ const home: typeof en = {
       waiting: 'En attente de la réponse de Polyfin…',
       waitingLong: (seconds: number) =>
         `Polyfin ne répond plus depuis ${seconds} secondes. Si rien ne le relance, démarrez-le sur l’hôte.`,
+      secretTitle: 'Créer un nouveau secret de signature',
+      secretText:
+        'Polyfin crée un nouveau secret de signature, puis redémarre\u202f: il arrête ce qu’il fait, lectures et enregistrements compris, et se termine. Toutes les adresses de lecture, les liens de direct, les adresses d’images et les liens «\u202fConfigurer\u202f» qu’il a donnés auparavant cessent de fonctionner. Les applis restent connectées, et redemandent ce qu’elles lisent dès qu’il répond.',
+      secretConfirm: 'Créer et redémarrer',
+      secretAnyway: 'Créer et redémarrer quand même',
       installTitle: (version: string) => `Installer Polyfin ${version}`,
       installText:
         'Polyfin Desktop télécharge la nouvelle version et la vérifie, puis arrête Polyfin, l’installe et la démarre, comme «\u202fInstaller Polyfin\u202f» dans son menu. Les lectures et les enregistrements s’arrêtent pendant ce temps.',

@@ -243,6 +243,10 @@ const settings = {
     newMetricsTokenConfirm:
       'The current token stops working at once: Prometheus needs the new one to read the metrics.',
     newMetricsTokenMade: 'New metrics token made',
+    signingSecret: 'Signing secret',
+    signingSecretHelp:
+      'Polyfin signs the addresses it gives apps to play and to show images, with a secret kept in its database. With POLYFIN_SECRET_KEY set, a copy of the database alone signs nothing; without it, the secret is as readable as the rest of the database. Make a new one if a copy of the database or a backup may be in other hands: Polyfin restarts, and every address signed before stops working.',
+    newSigningSecret: 'Make a new signing secret',
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',

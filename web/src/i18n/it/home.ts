@@ -172,6 +172,11 @@ const home: typeof en = {
       waiting: 'In attesa che Polyfin risponda di nuovo…',
       waitingLong: (seconds: number) =>
         `Polyfin non risponde da ${seconds} secondi. Se niente lo riavvia, avvialo sull’host.`,
+      secretTitle: 'Crea un nuovo segreto di firma',
+      secretText:
+        'Polyfin crea un nuovo segreto di firma, poi si riavvia: interrompe ciò che sta facendo, riproduzioni e registrazioni comprese, e termina. Tutti gli indirizzi di riproduzione, i link delle dirette, gli indirizzi delle immagini e i link di Configura che ha dato prima smettono di funzionare. Le app restano connesse, e richiedono ciò che riproducono appena risponde.',
+      secretConfirm: 'Crea e riavvia',
+      secretAnyway: 'Crea e riavvia comunque',
       installTitle: (version: string) => `Installa Polyfin ${version}`,
       installText:
         'Polyfin Desktop scarica la nuova versione e la verifica, poi ferma Polyfin, la installa e la avvia, come Installa Polyfin nel suo menu. Riproduzioni e registrazioni si fermano nel frattempo.',
