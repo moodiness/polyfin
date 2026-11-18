@@ -36,7 +36,7 @@ func dashTrack(t *testing.T, ffmpeg string) (templated, ranged map[string][]byte
 	for layout, options := range layouts {
 		dir := t.TempDir()
 		args := slices.Concat([]string{"-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=4", "-c:a", "aac", "-f", "dash", "-seg_duration", "2"},
-			options, []string{filepath.Join(dir, "manifest.mpd")})
+			options, []string{dashOutput(dir)})
 		if output, err := exec.Command(ffmpeg, args...).CombinedOutput(); err != nil {
 			t.Fatalf("encoding: %v %s", err, output)
 		}

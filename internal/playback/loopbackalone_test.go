@@ -253,6 +253,15 @@ func dashFFprobe(t *testing.T) (ffmpeg, ffprobe string) {
 	return ffmpeg, ffprobe
 }
 
+// dashOutput is the manifest FFmpeg's DASH muxer writes into dir, its path
+// written with / alone: the muxer writes the other files into the folder
+// before the manifest's last / (libavformat/dashenc.c), and with Windows'
+// \ alone into the current folder, where FFmpeg runs of other tests write
+// files of the same names.
+func dashOutput(dir string) string {
+	return filepath.ToSlash(filepath.Join(dir, "manifest.mpd"))
+}
+
 // dashVideo encodes two seconds of video as DASH with FFmpeg and returns
 // its initialization and its media segment, by the names a manifest of
 // videoManifest gives them.
@@ -261,7 +270,7 @@ func dashVideo(t *testing.T, ffmpeg string) map[string][]byte {
 	dir := t.TempDir()
 	if output, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=176x144:rate=25:duration=2",
 		"-c:v", "libx264", "-g", "25", "-pix_fmt", "yuv420p", "-f", "dash", "-seg_duration", "2", "-use_template", "1", "-use_timeline", "0",
-		"-init_seg_name", "init.m4s", "-media_seg_name", "chunk-$Number$.m4s", filepath.Join(dir, "manifest.mpd")).CombinedOutput(); err != nil {
+		"-init_seg_name", "init.m4s", "-media_seg_name", "chunk-$Number$.m4s", dashOutput(dir)).CombinedOutput(); err != nil {
 		t.Fatalf("encoding: %v %s", err, output)
 	}
 	files := map[string][]byte{}
