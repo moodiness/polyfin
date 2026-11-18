@@ -274,6 +274,21 @@ func prune[K comparable, E any](entries map[K]E, now time.Time, at func(E) time.
 	}
 }
 
+// forgetDevice drops what the tokens of the device id resolved to, which
+// its next request reads again, and makes the lookups running keep
+// nothing: one of them may have read the device before the change. What
+// the other devices' tokens resolved to stays.
+func (c *signIns) forgetDevice(id ID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.generation++
+	for hash, entry := range c.devices {
+		if entry.device.ID == id {
+			delete(c.devices, hash)
+		}
+	}
+}
+
 // forgetSignIns makes every access token, API key and user be read from
 // the database again. Every change to a user, a device or an API key calls
 // it once the change is stored, so that a user disabled, deleted, signed

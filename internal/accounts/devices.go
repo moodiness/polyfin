@@ -29,6 +29,31 @@ type DeviceInfo struct {
 	Provider bool
 }
 
+// The bounds of what a sign-in keeps of a device, in bytes: its
+// identifier, and each of its name, its app's name and its app's version.
+// The web player's identifier is its browser's user agent and a time, in
+// base64: 170 to 200 bytes for the usual browsers, more than 256 past a
+// user agent of 178. Names and versions are a few tens of bytes.
+const (
+	MaxDeviceIDBytes   = 1024
+	MaxDeviceTextBytes = 256
+)
+
+// MaxUserDevices bounds the devices a user keeps signed in: past it, a
+// sign-in signs out those used longest ago (see SignInDevice).
+const MaxUserDevices = 100
+
+// ErrInvalidDevice reports a sign-in from a device that passes a bound
+// (see DeviceInfo.Bounded).
+var ErrInvalidDevice = errors.New("invalid device")
+
+// Bounded reports whether the device's identifier, name, app and version
+// are each within the bound a sign-in keeps.
+func (info DeviceInfo) Bounded() bool {
+	return len(info.DeviceID) <= MaxDeviceIDBytes && len(info.DeviceName) <= MaxDeviceTextBytes &&
+		len(info.Client) <= MaxDeviceTextBytes && len(info.ClientVersion) <= MaxDeviceTextBytes
+}
+
 // Capabilities are what a signed-in app reports it can play and control.
 type Capabilities struct {
 	PlayableMediaTypes           []string `json:"playableMediaTypes"`
@@ -40,6 +65,35 @@ type Capabilities struct {
 // DefaultCapabilities are those of an app that has not reported any yet.
 func DefaultCapabilities() Capabilities {
 	return Capabilities{PlayableMediaTypes: []string{}, SupportedCommands: []string{}, SupportsPersistentIdentifier: true}
+}
+
+// The bounds of each list of capabilities a device keeps: its entries, and
+// the bytes of each. Jellyfin names five media types and under fifty
+// commands, the longest of 22 letters.
+const (
+	MaxCapabilityEntries = 64
+	MaxCapabilityBytes   = 64
+)
+
+// ErrInvalidCapabilities reports capabilities that pass a bound (see
+// Capabilities.Bounded): SetCapabilities stores none of them, and the
+// device keeps those it had.
+var ErrInvalidCapabilities = errors.New("invalid capabilities")
+
+// Bounded reports whether both lists are within MaxCapabilityEntries
+// entries of MaxCapabilityBytes bytes.
+func (c Capabilities) Bounded() bool {
+	for _, list := range [][]string{c.PlayableMediaTypes, c.SupportedCommands} {
+		if len(list) > MaxCapabilityEntries {
+			return false
+		}
+		for _, entry := range list {
+			if len(entry) > MaxCapabilityBytes {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Device is a Jellyfin app signed in as a user. Each holds one access token.
@@ -82,11 +136,21 @@ func scanDevice(row pgx.Row, extra ...any) (Device, error) {
 // the device comes back Unfamiliar when the account never used it, unless
 // it is the account's first. Admin sessions opened with a token of the
 // device identifier, whoever's, end (see CreateDeviceAdminSession).
+//
+// A device past a bound (see DeviceInfo.Bounded) is ErrInvalidDevice, and
+// nothing is stored. A user keeps MaxUserDevices devices signed in: past
+// them, those used longest ago, by their last activity, are signed out
+// through the same path as any other sign-out, the device signing in
+// never. A user who held more before the bound is brought down to it.
 func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (string, Device, error) {
+	if !info.Bounded() {
+		return "", Device{}, ErrInvalidDevice
+	}
 	// The device's previous token, if any, stops working.
 	defer s.forgetSignIns()
 	token, hash := newToken()
 	var device Device
+	var signedOut []ID
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var err error
 		device, err = scanDevice(tx.QueryRow(ctx, `INSERT INTO devices AS d
@@ -103,6 +167,21 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 				last_activity_at = greatest(d.last_activity_at, now())
 			RETURNING `+deviceColumns,
 			user, hash, info.DeviceID, info.DeviceName, info.Client, info.ClientVersion, info.RemoteAddress, info.Provider))
+		if err != nil {
+			return err
+		}
+		// The user's sign-ins wait for one another from here to their
+		// commit, so that each counts the devices the others added.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", "devices:"+user.String()); err != nil {
+			return err
+		}
+		// The activity of a device is written once a minute while it asks
+		// for anything, as one that is playing does with its progress: it
+		// is among the latest, and goes after every device left unused.
+		signedOut, err = deletedDevices(tx.Query(ctx, `DELETE FROM devices WHERE id IN (
+				SELECT id FROM devices WHERE user_id = $1 AND id <> $2
+				ORDER BY last_activity_at DESC, created_at DESC, id OFFSET $3)
+			RETURNING id`, user, device.ID, MaxUserDevices-1))
 		if err != nil {
 			return err
 		}
@@ -129,6 +208,7 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 	if err != nil {
 		return "", Device{}, err
 	}
+	s.notifySignOut(signedOut)
 	return token, device, nil
 }
 
@@ -248,7 +328,10 @@ func (s *Store) SignedIn(ctx context.Context, id ID) (bool, error) {
 // SetCapabilities records what a signed-in app reported it supports.
 func (s *Store) SetCapabilities(ctx context.Context, device ID, capabilities Capabilities) error {
 	// Requests carry the device, capabilities included.
-	defer s.forgetSignIns()
+	defer s.signIns.forgetDevice(device)
+	if !capabilities.Bounded() {
+		return ErrInvalidCapabilities
+	}
 	if capabilities.PlayableMediaTypes == nil {
 		capabilities.PlayableMediaTypes = []string{}
 	}
