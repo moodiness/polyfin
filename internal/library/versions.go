@@ -1276,59 +1276,275 @@ func fileIdentity(link, filename string, size int64) string {
 // one stream on each side counts, so that two streams of an answer never
 // share an identity. answer itself is left as it is.
 func carryIdentities(answer, before []stremio.Stream) []stremio.Stream {
+	carried, _ := carriedIdentities(answer, before)
+	return carried
+}
+
+// carryCost is what carrying identities took: the links parsed, and the
+// pairs of streams compared (see sameFile).
+type carryCost struct{ parsed, compared int }
+
+// carriedIdentities is carryIdentities, and tells what it took. An addon
+// lists as many streams as it likes, and Polyfin compares its answers by
+// itself (see followUpList): so each link is parsed once, and each stream
+// compared with a few others (see sameFiles), whatever the lists hold.
+func carriedIdentities(answer, before []stremio.Stream) (carried []stremio.Stream, cost carryCost) {
 	listed := make(map[string]bool, len(answer))
 	for _, stream := range answer {
 		listed[streamIdentity(stream)] = true
 	}
 	known := make(map[string]bool, len(before))
-	var gone []stremio.Stream
-	for _, stream := range before {
+	// gone are the streams of before the answer no longer lists, and
+	// added, below, those of answer that may be one of them: both by
+	// their place in their list.
+	var gone []int
+	for j, stream := range before {
 		identity := streamIdentity(stream)
 		if !known[identity] && !listed[identity] && listable(stream) {
-			gone = append(gone, stream)
+			gone = append(gone, j)
 		}
 		known[identity] = true
 	}
 	if len(gone) == 0 {
-		return answer
+		return answer, cost
 	}
-	// match is, for each stream of answer, the one stream of gone it may
-	// be, -1 for none or several; claims counts, for each stream of gone,
-	// the streams of answer that may be it.
-	match := make([]int, len(answer))
-	claims := make([]int, len(gone))
+	var added []int
 	for i, stream := range answer {
-		match[i] = -1
-		if !listable(stream) || known[streamIdentity(stream)] {
-			continue
-		}
-		several := false
-		for j, old := range gone {
-			if !sameFile(old, stream) {
-				continue
-			}
-			claims[j]++
-			several = several || match[i] >= 0
-			match[i] = j
-		}
-		if several {
-			match[i] = -1
+		if listable(stream) && !known[streamIdentity(stream)] {
+			added = append(added, i)
 		}
 	}
-	var carried []stremio.Stream
-	for i, j := range match {
-		if j < 0 || claims[j] != 1 {
+	was, is := make([]streamFile, len(gone)), make([]streamFile, len(added))
+	for n, j := range gone {
+		was[n] = fileOf(before[j], &cost)
+	}
+	for n, i := range added {
+		is[n] = fileOf(answer[i], &cost)
+	}
+	// match holds, for each stream added, the streams of gone it may be,
+	// and claims, for each stream of gone, the streams added that may be
+	// it: two of them when there are more. A stream that may be several,
+	// or that several may be, keeps its own identity: none is picked for
+	// it, the first found no more than another.
+	match, claims := sameFiles(was, is, &cost), sameFiles(is, was, &cost)
+	for n, i := range added {
+		m := match[n].of[0]
+		if match[n].count != 1 || claims[m].count != 1 {
 			continue
 		}
 		if carried == nil {
 			carried = slices.Clone(answer)
 		}
-		carried[i].Identity = streamIdentity(gone[j])
+		carried[i].Identity = streamIdentity(before[gone[m]])
 	}
 	if carried == nil {
-		return answer
+		return answer, cost
 	}
-	return carried
+	return carried, cost
+}
+
+// streamFile is what tells the file of a stream (see sameFile), its link
+// parsed once.
+type streamFile struct {
+	// torrent tells a torrent's file, whose link is its magnet link (see
+	// torrentLink). Another stream's link is its address, of which host
+	// and last are the host and the last part of the path (see linkFile).
+	torrent          bool
+	link, host, last string
+	// filename and size are the file's, as the addon tells them: "" and 0
+	// when it does not.
+	filename string
+	size     int64
+	// name is the stream's name and description (see versionName), for an
+	// address with a last part.
+	name string
+}
+
+// fileOf is what tells the file of stream.
+func fileOf(stream stremio.Stream, cost *carryCost) streamFile {
+	file := streamFile{torrent: stream.Torrent(), link: stream.URL,
+		filename: stream.BehaviorHints.Filename, size: max(int64(stream.BehaviorHints.VideoSize), 0)}
+	if file.torrent {
+		file.link = torrentLink(stream)
+		return file
+	}
+	cost.parsed++
+	if file.host, file.last = linkFile(stream.URL); file.last != "" {
+		file.name = versionName(stream)
+	}
+	return file
+}
+
+// The ways two streams are the same file (see sameFile), each with what
+// both streams share then (see sameKey): the magnet link of two torrents'
+// files; else the address; the file's name; the address's host and the
+// last part of its path, with the stream's name and description; that
+// host and last part, which is the file's name as one of the two streams
+// tells it (see streamFile.keys).
+const (
+	sameMagnet = iota
+	sameAddress
+	sameFilename
+	sameName
+	sameLastNamed
+	sameLast
+)
+
+// sameKey is what two streams share when they are the same file in one of
+// the ways above.
+type sameKey struct {
+	way   int
+	texts [3]string
+}
+
+// keys appends to keys what f shares with the streams that are its file,
+// one key for each way sameFile tells: the keys to index f under or,
+// looking, those to look for the streams indexed.
+func (f streamFile) keys(keys []sameKey, looking bool) []sameKey {
+	if f.torrent {
+		return append(keys, sameKey{sameMagnet, [3]string{f.link}})
+	}
+	keys = append(keys, sameKey{sameAddress, [3]string{f.link}})
+	if f.filename != "" {
+		keys = append(keys, sameKey{sameFilename, [3]string{f.filename}})
+	}
+	if f.last == "" {
+		return keys
+	}
+	keys = append(keys, sameKey{sameName, [3]string{f.host, f.last, f.name}})
+	// The last part of the path is the file's name as one of the two
+	// streams tells it. The streams that tell it are indexed apart, where
+	// every stream looks for them, and they look among all the streams.
+	named := f.filename == f.last
+	if named || looking {
+		keys = append(keys, sameKey{sameLastNamed, [3]string{f.host, f.last}})
+	}
+	if named || !looking {
+		keys = append(keys, sameKey{sameLast, [3]string{f.host, f.last}})
+	}
+	return keys
+}
+
+// pair holds two streams at most, by their place in a list: the first two
+// added.
+type pair struct {
+	count int
+	of    [2]int
+}
+
+// add adds the stream at place i, unless p holds it, or two others.
+func (p *pair) add(i int) {
+	if p.count < len(p.of) && (p.count == 0 || p.of[0] != i) {
+		p.of[p.count] = i
+		p.count++
+	}
+}
+
+// sharers are the streams that share a key, by their place in their list:
+// the first two and, once there are more, all of them by class, two at
+// most for each (see fileClass).
+type sharers struct {
+	first   pair
+	classes map[fileClass]pair
+}
+
+// fileClass tells apart the streams that share a key by what else
+// sameFile compares, the file's name and size: a class holds the streams
+// that tell its filename and its size, whatever name they tell when
+// anyName is set, whatever size when anySize is.
+type fileClass struct {
+	filename         string
+	size             int64
+	anyName, anySize bool
+}
+
+// add adds the stream at place i of files.
+func (s *sharers) add(i int, files []streamFile) {
+	if s.classes == nil && s.first.count < len(s.first.of) {
+		s.first.add(i)
+		return
+	}
+	if s.classes == nil {
+		s.classes = make(map[fileClass]pair)
+		for _, j := range s.first.of {
+			s.classify(j, files[j])
+		}
+	}
+	s.classify(i, files[i])
+}
+
+// classify adds the stream at place i, whose file is file, to the four
+// classes that hold it.
+func (s *sharers) classify(i int, file streamFile) {
+	for _, class := range [...]fileClass{
+		{file.filename, file.size, false, false},
+		{"", file.size, true, false},
+		{file.filename, 0, false, true},
+		{"", 0, true, true},
+	} {
+		p := s.classes[class]
+		p.add(i)
+		s.classes[class] = p
+	}
+}
+
+// allowed appends to among the streams of s that file may be: both while s
+// holds no more, else two at most of each class whose name and size agree
+// with file's (see sameFile): its own or none, or any where file tells
+// none. Every stream of these classes agrees with file, so two of each
+// tell whether file has one match, or several.
+func (s sharers) allowed(among []int, file streamFile) []int {
+	if s.classes == nil {
+		return append(among, s.first.of[:s.first.count]...)
+	}
+	names, sizes := []string{file.filename, ""}, []int64{file.size, 0}
+	anyName, anySize := file.filename == "", file.size == 0
+	if anyName {
+		names = names[1:]
+	}
+	if anySize {
+		sizes = sizes[1:]
+	}
+	for _, filename := range names {
+		for _, size := range sizes {
+			p := s.classes[fileClass{filename, size, anyName, anySize}]
+			among = append(among, p.of[:p.count]...)
+		}
+	}
+	return among
+}
+
+// sameFiles returns, for each of streams, which of others are its file
+// (see sameFile), by their place in others: two of them when there are
+// more. A stream is compared with the others that share a key with it
+// (see streamFile.keys), a few of them however many do (see
+// sharers.allowed): the work grows as the streams, not as their product.
+func sameFiles(others, streams []streamFile, cost *carryCost) []pair {
+	index := make(map[sameKey]sharers, len(others))
+	var keys []sameKey
+	for i, other := range others {
+		keys = other.keys(keys[:0], false)
+		for _, key := range keys {
+			sharing := index[key]
+			sharing.add(i, others)
+			index[key] = sharing
+		}
+	}
+	found := make([]pair, len(streams))
+	var among []int
+	for n, stream := range streams {
+		keys = stream.keys(keys[:0], true)
+		for _, key := range keys {
+			among = index[key].allowed(among[:0], stream)
+			for _, i := range among {
+				cost.compared++
+				if sameFile(others[i], stream) {
+					found[n].add(i)
+				}
+			}
+		}
+	}
+	return found
 }
 
 // sameFile tells whether b, in an addon's answer, is the file a was in the
@@ -1339,23 +1555,21 @@ func carryIdentities(answer, before []stremio.Stream) []stremio.Stream {
 // the last part of its path, and either that part is the file's name, as
 // one of the streams tells it, or the stream keeps its name and
 // description.
-func sameFile(a, b stremio.Stream) bool {
-	ha, hb := a.BehaviorHints, b.BehaviorHints
-	if ha.Filename != "" && hb.Filename != "" && ha.Filename != hb.Filename || ha.VideoSize > 0 && hb.VideoSize > 0 && ha.VideoSize != hb.VideoSize {
+func sameFile(a, b streamFile) bool {
+	if a.filename != "" && b.filename != "" && a.filename != b.filename || a.size > 0 && b.size > 0 && a.size != b.size {
 		return false
 	}
-	if a.Torrent() || b.Torrent() {
+	if a.torrent || b.torrent {
 		// A torrent's file is the same one at the same magnet link alone.
-		return a.Torrent() && b.Torrent() && torrentLink(a) == torrentLink(b)
+		return a.torrent && b.torrent && a.link == b.link
 	}
-	if a.URL == b.URL || ha.Filename != "" && ha.Filename == hb.Filename {
+	if a.link == b.link || a.filename != "" && a.filename == b.filename {
 		return true
 	}
-	host, file := linkFile(a.URL)
-	if otherHost, otherFile := linkFile(b.URL); file == "" || host != otherHost || file != otherFile {
+	if a.last == "" || a.host != b.host || a.last != b.last {
 		return false
 	}
-	return file == ha.Filename || file == hb.Filename || versionName(a) == versionName(b)
+	return a.last == a.filename || a.last == b.filename || a.name == b.name
 }
 
 // linkFile is a link's host and the last part of its path, which is empty
