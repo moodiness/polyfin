@@ -45,7 +45,9 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 			if !media.NeedsMasteringProbe(stream) {
 				continue
 			}
-			found, err := s.ffprobe().MasteringDisplay(ctx, in, stream.Index)
+			prober := s.ffprobe()
+			prober.Reads = fileReading(version, analysis)
+			found, err := prober.MasteringDisplay(ctx, in, stream.Index)
 			if err != nil {
 				s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.AddonLog, "error", err)
 				s.unmaster(version, err)

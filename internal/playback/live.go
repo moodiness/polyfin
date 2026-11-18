@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -194,6 +195,14 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 	defer cancel()
 	live := s.loopback.registerLiveFor(version, userOf(ctx))
 	defer live.release()
+	// ffprobe reads a playlist or a manifest as one only where the feed
+	// found one, which the loopback interface then rewrites.
+	switch {
+	case dash:
+		prober.Reads = s.loopback.manifestAt(live.target)
+	case errors.Is(err, errManifest):
+		prober.Reads = media.Playlist
+	}
 	analysis, err := prober.ProbeLive(probeCtx, live.target, options...)
 	timedOut := probeCtx.Err() != nil
 	if err == nil && dash {
@@ -340,6 +349,34 @@ func HLS(analysis media.Analysis) bool {
 	return strings.Contains(","+analysis.Format+",", ",hls,")
 }
 
+// fileReading is what FFmpeg and ffprobe may read as a version's source
+// registered on the loopback interface (see register), found to hold
+// analysis: they are given its demuxers alone (see media.Opens). It is an
+// HLS playlist only where the interface rewrites one (see servePlaylist),
+// and never a DASH manifest, which the interface would serve as the bytes
+// it is: an analysis kept from before the demuxers were named may tell
+// one.
+func fileReading(version library.Version, analysis media.Analysis) media.Reading {
+	if version.Torrent == nil && HLS(analysis) {
+		return media.Playlist
+	}
+	return media.File
+}
+
+// liveReading is what FFmpeg and ffprobe may read as the live stream
+// registered at target (see registerKey), found to hold analysis: a DASH
+// manifest, which the loopback interface then answers alone there (see
+// manifestAt), an HLS playlist, or one endless stream.
+func (l *loopback) liveReading(target string, analysis media.Analysis) media.Reading {
+	switch {
+	case DASH(analysis):
+		return l.manifestAt(target)
+	case HLS(analysis):
+		return media.Playlist
+	}
+	return media.File
+}
+
 // Redirectable reports whether a player may be sent to a version's source
 // itself: the source needs no headers and is on a public address.
 func (s *Service) Redirectable(ctx context.Context, version library.Version) bool {
@@ -369,10 +406,12 @@ func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version libr
 // liveRelay names the files a relayed live stream refers to: link a file,
 // given its address and the name to give it; folder an origin's root on
 // the loopback interface (see rewriteManifest), nil for a player, to which
-// no DASH manifest is relayed.
+// no DASH manifest is relayed. manifest tells an answer FFmpeg reads as a
+// DASH manifest whatever it holds (see manifestAt).
 type liveRelay struct {
-	link   func(target, name string) string
-	folder func(origin string) string
+	link     func(target, name string) string
+	folder   func(origin string) string
+	manifest bool
 }
 
 // serveLive is ServeLive, relaying FFmpeg a DASH manifest when
@@ -440,7 +479,9 @@ func (s *Service) serveLive(w http.ResponseWriter, r *http.Request, version libr
 	}
 	// A DASH manifest is rewritten for FFmpeg however the source answered,
 	// a part of it from its first byte included, as FFmpeg asks for it.
-	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable && dashAnswer(response, body) {
+	// What FFmpeg reads as one is rewritten as one whatever it holds: its
+	// XML library reads more documents than their first bytes tell.
+	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable && (relay.manifest || dashAnswer(response, body)) {
 		if relay.folder == nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)
 			return errPlayerManifest
@@ -570,9 +611,24 @@ func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) 
 	return out.Bytes(), nil
 }
 
+// attributeSpace is the white space FFmpeg skips between the attributes of
+// a tag, and ends an unquoted value at (av_isspace).
+const attributeSpace = " \t\n\v\f\r"
+
+// lineRead is how much of a playlist's line FFmpeg reads, in bytes: it
+// drops what follows (parse_playlist's line of MAX_URL_SIZE in hls.c).
+const lineRead = 4095
+
 // rewriteAttributes rewrites the URI attributes of a tag's attribute list,
-// read as FFmpeg reads one: KEY=VALUE pairs apart by commas, each value
-// within double quotes or up to the next comma. The URI is written quoted.
+// read as FFmpeg reads one (ff_parse_key_value in libavformat/utils.c):
+// KEY=VALUE pairs apart by commas or white space, each key up to its equal
+// sign, each value within double quotes, where a backslash takes the next
+// character as it is, or up to the next comma or white space. The URI is
+// written quoted. A line FFmpeg would read otherwise than it is written
+// here is refused: one whose address holds a quote or a backslash, which
+// a quoted value cannot hold for every reader, and one FFmpeg would cut
+// (see lineRead) within the origin of an address written here, which
+// would then name another.
 func rewriteAttributes(line string, rewrite func(string) (string, error)) (string, error) {
 	colon := strings.IndexByte(line, ':')
 	if colon < 0 {
@@ -582,7 +638,7 @@ func rewriteAttributes(line string, rewrite func(string) (string, error)) (strin
 	out.WriteString(line[:colon+1])
 	rest := line[colon+1:]
 	for rest != "" {
-		skipped := len(rest) - len(strings.TrimLeft(rest, " \t,"))
+		skipped := len(rest) - len(strings.TrimLeft(rest, attributeSpace+","))
 		out.WriteString(rest[:skipped])
 		rest = rest[skipped:]
 		equal := strings.IndexByte(rest, '=')
@@ -592,26 +648,43 @@ func rewriteAttributes(line string, rewrite func(string) (string, error)) (strin
 		}
 		key := rest[:equal]
 		rest = rest[equal+1:]
-		var value, raw string
+		value, end := "", 0
 		if strings.HasPrefix(rest, `"`) {
-			end := strings.IndexByte(rest[1:], '"')
-			if end < 0 {
-				value, raw, rest = rest[1:], rest, ""
-			} else {
-				value, raw, rest = rest[1:end+1], rest[:end+2], rest[end+2:]
+			var unescaped strings.Builder
+			for end = 1; end < len(rest) && rest[end] != '"'; end++ {
+				if rest[end] == '\\' {
+					if end+1 == len(rest) {
+						// FFmpeg stops at a backslash that ends the line.
+						break
+					}
+					end++
+				}
+				unescaped.WriteByte(rest[end])
 			}
+			if end < len(rest) && rest[end] == '"' {
+				end++
+			}
+			value = unescaped.String()
 		} else {
-			end := strings.IndexByte(rest, ',')
-			if end < 0 {
+			if end = strings.IndexAny(rest, attributeSpace+","); end < 0 {
 				end = len(rest)
 			}
-			value, raw, rest = rest[:end], rest[:end], rest[end:]
+			value = rest[:end]
 		}
+		raw := rest[:end]
+		rest = rest[end:]
 		out.WriteString(key + "=")
 		if strings.EqualFold(strings.TrimSpace(key), "URI") {
 			rewritten, err := rewrite(value)
 			if err != nil {
 				return "", err
+			}
+			origin := 0
+			if scheme := strings.Index(rewritten, "://"); scheme >= 0 {
+				origin = scheme + len("://") + len(strings.SplitN(rewritten[scheme+len("://"):], "/", 2)[0])
+			}
+			if start := out.Len() + 1; strings.ContainsAny(rewritten, `"\`) || start < lineRead && start+origin > lineRead {
+				return "", fmt.Errorf("%w: an address FFmpeg would read otherwise", ErrUnsafePlaylist)
 			}
 			raw = `"` + rewritten + `"`
 		}
@@ -719,6 +792,7 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 			r.InputOptions = shortProbe
 			s.refreshShape(ctx, remux.Version)
 		}
+		r.InputOptions = slices.Concat(r.InputOptions, media.Opens(r.Input, s.loopback.liveReading(r.Input, analysis)))
 		if audio, ok := streamOf(analysis, r.Audio); ok && audio.Codec == "aac" {
 			r.ADTS = true
 		}
@@ -774,10 +848,12 @@ type liveTarget struct {
 	version library.Version
 	// refused is the refusal of the source the last request was answered
 	// with, nil for none; answered the last file that answered no media,
-	// at answeredAt. They are guarded by the loopback's mu.
+	// at answeredAt; manifest whether FFmpeg reads the stream as a DASH
+	// manifest (see manifestAt). They are guarded by the loopback's mu.
 	refused    error
 	answered   error
 	answeredAt time.Time
+	manifest   bool
 }
 
 func (l *loopback) registerKey(version library.Version, key string) liveRegistration {
@@ -863,6 +939,13 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 		link:   func(file, name string) string { return l.liveURL(parts[0], file, name) },
 		folder: func(origin string) string { return l.folderURL(parts[0], origin) },
 	}
+	l.mu.Lock()
+	if live.manifest && parts[1] == "-" {
+		// The stream's own address answers its manifest, never a feed's
+		// bytes.
+		target, relay.manifest = live.version.URL, true
+	}
+	l.mu.Unlock()
 	if _, rest, ok := strings.Cut(parts[0], "."); ok {
 		if rest == recordingSuffix {
 			r = r.WithContext(forRecording(r.Context()))

@@ -144,6 +144,9 @@ type Prober struct {
 	// Path is the ffprobe executable.
 	Path    string
 	Timeout time.Duration
+	// Reads is what Polyfin found the source ffprobe reads on its loopback
+	// interface to be: a file unless set (see Opens).
+	Reads Reading
 }
 
 // Probe analyzes the source at url, which ffprobe reads over HTTP. A PQ
@@ -317,11 +320,12 @@ func (p Prober) probe(ctx context.Context, url string, options ...string) (Analy
 var analysisSections = []string{"-show_format", "-show_streams", "-show_chapters"}
 
 // run runs ffprobe on url with options, which choose what it shows, and
-// returns its JSON output, reconnecting when asked.
+// returns its JSON output, reconnecting when asked. It names what ffprobe
+// may open for a source on the loopback interface (see Opens).
 func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 	defer cancel()
-	args := append([]string{"-v", "error", "-print_format", "json"}, options...)
+	args := slices.Concat([]string{"-v", "error", "-print_format", "json"}, options, Opens(url, p.Reads))
 	if reconnect {
 		args = append(args, "-reconnect", "1", "-reconnect_streamed", "1")
 	}

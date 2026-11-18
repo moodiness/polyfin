@@ -263,7 +263,16 @@ func (l *loopback) registerWithin(version library.Version, src *source.Source, b
 	return "http://" + l.listener.Addr().String() + "/" + key, release
 }
 
+// serve answers what the loopback interface serves. FFmpeg and ffprobe
+// are given the listener as their HTTP proxy (see media.Opens), so that
+// an address they would fetch themselves is asked here instead: a request
+// for another host than the listener's own, or for a tunnel to one, is
+// refused.
 func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodConnect || r.URL.Host != "" && r.URL.Host != l.listener.Addr().String() {
+		http.Error(w, "the loopback interface relays its own addresses only", http.StatusForbidden)
+		return
+	}
 	if rest, ok := strings.CutPrefix(r.URL.Path, "/live/"); ok {
 		l.serveLive(w, r, rest)
 		return

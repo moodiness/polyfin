@@ -827,7 +827,7 @@ func copyPictures(ctx context.Context, ffmpeg, dir string, in media.Input, strea
 	// The track keeps the source's timestamps as the remuxes of the file
 	// read them (-copyts, from zero for those that shift them), so that its
 	// cues are on the timeline of the track's other deliveries.
-	args := append([]string{"-nostdin", "-v", "error", "-copyts"}, in.Args()...)
+	args := slices.Concat([]string{"-nostdin", "-v", "error", "-copyts"}, in.Args(), media.Opens(in.Path, media.File))
 	if zeroAt >= 0 {
 		args = append(args, "-start_at_zero")
 	}

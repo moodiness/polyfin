@@ -235,7 +235,7 @@ func (s *Service) programmePiece(ctx context.Context, version library.Version, o
 		src := s.open(version)
 		unurge := src.Urge()
 		target, unregister := s.loopback.register(version, src)
-		r.Input = target
+		r.Input, r.InputOptions = target, media.Opens(target, fileReading(version, analysis))
 		release = func() {
 			unregister()
 			unurge()

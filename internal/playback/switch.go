@@ -310,6 +310,7 @@ func (c *carry) input(ctx context.Context, sw versionSwitch, switched int) (hls.
 	go c.s.watchSource(sw.to, src, done)
 	failed := src.Failed()
 	r.Input, r.Failed, r.Failure = target, failed, func() error { return failureOf(src, failed) }
+	r.InputOptions = slices.Concat(r.InputOptions, media.Opens(r.Input, fileReading(sw.to, sw.analysis)))
 	r.Shift = sw.shift
 	r.Switch = c.switchFrom(sw.to, switched)
 	return r, func() {

@@ -763,6 +763,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if plan.Grid() || unindexedFormat(analysis) {
 			r.InputOptions = []string{"-start_at_zero"}
 		}
+		r.InputOptions = slices.Concat(r.InputOptions, media.Opens(r.Input, fileReading(remux.Version, analysis)))
 		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && adtsFramed(analysis) {
 			r.ADTS = true
 		}

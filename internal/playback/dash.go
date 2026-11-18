@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -58,15 +59,16 @@ func DASH(analysis media.Analysis) bool {
 	return strings.Contains(","+analysis.Format+",", ",dash,")
 }
 
-// dashStart reports whether head, the first bytes of an answer, starts a
-// DASH manifest: its MPD element, after a byte order mark, white space,
-// an XML declaration or comments.
+// dashStart reports whether head, the first bytes of an answer, would
+// start a DASH manifest for FFmpeg, whose probe (dash_probe in dashdec.c)
+// looks for the start of an MPD element anywhere in what it read, as text
+// (up to a NUL), without regard to case. A file of video starts with a
+// NUL too early to hold one by chance.
 func dashStart(head []byte) bool {
-	text := bytes.TrimLeft(bytes.TrimPrefix(head, []byte("\xef\xbb\xbf")), " \t\r\n")
-	if bytes.HasPrefix(text, []byte("<MPD")) {
-		return true
+	if end := bytes.IndexByte(head, 0); end >= 0 {
+		head = head[:end]
 	}
-	return (bytes.HasPrefix(text, []byte("<?xml")) || bytes.HasPrefix(text, []byte("<!--"))) && bytes.Contains(text, []byte("<MPD"))
+	return bytes.Contains(bytes.ToLower(head), []byte("<mpd"))
 }
 
 // dashAnswer reports whether a response is a DASH manifest: by its type,
@@ -139,23 +141,65 @@ func readManifest(data []byte) (manifestInfo, error) {
 	}
 }
 
-// manifestDecoder reads the tokens of a manifest as written, its bytes in
-// whatever encoding it declares taken as they are: only its addresses
-// matter, which are ASCII.
+// manifestDecoder reads the tokens of a manifest as written, its bytes
+// taken as they are: only its addresses matter, which are ASCII. A
+// manifest whose declared encoding would have FFmpeg read other
+// characters than its bytes is refused first (see asciiDeclared).
 func manifestDecoder(data []byte) *xml.Decoder {
 	d := xml.NewDecoder(bytes.NewReader(data))
 	d.CharsetReader = func(_ string, input io.Reader) (io.Reader, error) { return input, nil }
 	return d
 }
 
+var (
+	// xmlDeclaration is what an XML declaration holds after its name: its
+	// version, then the encoding and the standalone declaration it may
+	// have.
+	xmlDeclaration = regexp.MustCompile(`^\s+version\s*=\s*["']1\.[0-9]+["'](\s+encoding\s*=\s*["']([A-Za-z0-9._-]+)["'])?(\s+standalone\s*=\s*["'](yes|no)["'])?\s*$`)
+	// asciiEncoding are the encodings whose ASCII characters are the bytes
+	// of ASCII, and no other bytes.
+	asciiEncoding = regexp.MustCompile(`^(?i:utf-8|us-ascii|iso-8859-[0-9]{1,2}|windows-125[0-9])$`)
+)
+
+// asciiDeclared reports whether an XML declaration, what follows its
+// name, declares no encoding or one of asciiEncoding. FFmpeg's XML
+// library decodes a manifest from the encoding it declares, where the
+// rewriting reads its bytes: in another encoding, UTF-7 or UTF-16 for
+// one, an address may be written in bytes that are none to the rewriting,
+// so that such a manifest, or one whose declaration reads otherwise, is
+// refused.
+func asciiDeclared(declaration []byte) bool {
+	found := xmlDeclaration.FindSubmatch(declaration)
+	return found != nil && (found[2] == nil || asciiEncoding.Match(found[2]))
+}
+
 // addressAttributes are the attributes of a DASH manifest's elements that
-// hold an address, a template's included.
+// hold an address, a template's included. FFmpeg's dash demuxer reads a
+// template's addresses from a segment list's attributes too
+// (parse_manifest_representation in dashdec.c).
 var addressAttributes = map[string][]string{
 	"SegmentTemplate":     {"media", "initialization", "index"},
+	"SegmentList":         {"media", "initialization"},
 	"SegmentURL":          {"media", "index"},
 	"Initialization":      {"sourceURL"},
 	"RepresentationIndex": {"sourceURL"},
 	"BitstreamSwitching":  {"sourceURL"},
+}
+
+// manifestElements are the elements the rewriting knows by name.
+var manifestElements = []string{"MPD", "Period", "BaseURL", "SegmentTemplate", "SegmentList", "SegmentURL", "Initialization",
+	"RepresentationIndex", "BitstreamSwitching"}
+
+// manifestElement is the name the rewriting knows an element by: FFmpeg's
+// dash demuxer compares the names of elements without regard to case
+// (av_strcasecmp in dashdec.c), so that a baseurl is a BaseURL to it.
+func manifestElement(name xml.Name) string {
+	for _, known := range manifestElements {
+		if strings.EqualFold(name.Local, known) {
+			return known
+		}
+	}
+	return name.Local
 }
 
 // manifestFrame is an element of a manifest being rewritten: inherited is
@@ -186,7 +230,12 @@ type manifestFrame struct {
 // one that plays now: FFmpeg's demuxer plays one period, the longest
 // (dashdec.c, parse_manifest), where a live stream's current period has
 // no duration yet. Any address that is not HTTP refuses the manifest, as
-// FFmpeg would read it itself.
+// FFmpeg would read it itself. So does what FFmpeg's XML library would
+// read otherwise than the rewriting does: an encoding that is not ASCII's
+// (see asciiDeclared), a document type declaration, whose declarations
+// give elements attributes and text written nowhere else, an element
+// within a BaseURL, whose text FFmpeg reads with its own, and a document
+// whose first element is not an MPD.
 func rewriteManifest(data []byte, base *url.URL, folder func(origin string) string) ([]byte, error) {
 	link := func(target *url.URL) (string, error) {
 		if target.Scheme != "http" && target.Scheme != "https" || target.Host == "" {
@@ -206,7 +255,7 @@ func rewriteManifest(data []byte, base *url.URL, folder func(origin string) stri
 	var out bytes.Buffer
 	var stack []manifestFrame
 	var periods [][2]int
-	periodStart, dynamic := 0, false
+	periodStart, dynamic, rooted := 0, false, false
 	var text strings.Builder
 	last := int64(0)
 	for {
@@ -224,13 +273,26 @@ func rewriteManifest(data []byte, base *url.URL, folder func(origin string) stri
 			inherited = stack[len(stack)-1].base
 		}
 		switch t := token.(type) {
+		case xml.ProcInst:
+			if t.Target == "xml" && !asciiDeclared(raw[len("<?xml"):len(raw)-len("?>")]) {
+				return nil, fmt.Errorf("%w: a manifest in an encoding that is not read as ASCII", ErrUnsafePlaylist)
+			}
+			out.Write(raw)
+		case xml.Directive:
+			return nil, fmt.Errorf("%w: a manifest with a document type declaration", ErrUnsafePlaylist)
 		case xml.StartElement:
-			if len(stack) == 1 && t.Name.Local == "Period" {
+			name := manifestElement(t.Name)
+			switch {
+			case len(stack) == 0 && name != "MPD":
+				return nil, fmt.Errorf("%w: a manifest whose first element is not an MPD", ErrUnsafePlaylist)
+			case len(stack) > 0 && stack[len(stack)-1].name == "BaseURL":
+				return nil, fmt.Errorf("%w: a BaseURL that holds an element", ErrUnsafePlaylist)
+			case len(stack) == 1 && name == "Period":
 				periodStart = out.Len()
 			}
 			changed := false
 			for i, a := range t.Attr {
-				if !slices.Contains(addressAttributes[t.Name.Local], a.Name.Local) {
+				if !slices.Contains(addressAttributes[name], a.Name.Local) {
 					continue
 				}
 				rewritten, err := rewriteAddress(a.Value, inherited, link)
@@ -246,10 +308,11 @@ func rewriteManifest(data []byte, base *url.URL, folder func(origin string) stri
 			} else {
 				out.Write(raw)
 			}
-			stack = append(stack, manifestFrame{name: t.Name.Local, inherited: inherited, base: inherited})
-			if len(stack) == 1 && t.Name.Local == "MPD" {
+			stack = append(stack, manifestFrame{name: name, inherited: inherited, base: inherited})
+			rooted = true
+			if len(stack) == 1 {
 				for _, a := range t.Attr {
-					dynamic = dynamic || a.Name.Local == "type" && strings.TrimSpace(a.Value) == "dynamic"
+					dynamic = dynamic || a.Name.Local == "type" && strings.EqualFold(strings.TrimSpace(a.Value), "dynamic")
 				}
 				if !named {
 					own, err := link(base.ResolveReference(&url.URL{Path: "./"}))
@@ -301,6 +364,9 @@ func rewriteManifest(data []byte, base *url.URL, folder func(origin string) stri
 			out.Write(raw)
 		}
 	}
+	if !rooted {
+		return nil, fmt.Errorf("%w: a manifest without an MPD", ErrUnsafePlaylist)
+	}
 	rewritten := out.Bytes()
 	if !dynamic || len(periods) < 2 {
 		return rewritten, nil
@@ -323,7 +389,7 @@ func mpdBase(data []byte) (bool, error) {
 		}
 		switch t := token.(type) {
 		case xml.StartElement:
-			if depth == 1 && t.Name.Local == "BaseURL" {
+			if depth == 1 && manifestElement(t.Name) == "BaseURL" {
 				return true, nil
 			}
 			depth++
@@ -367,19 +433,16 @@ func rewriteAddress(value string, base *url.URL, link func(*url.URL) (string, er
 	return root + path, nil
 }
 
-// hasScheme reports whether an address starts with a scheme, as
-// "https:" or "data:" do.
+// hasScheme reports whether an address starts with a scheme for FFmpeg,
+// which takes for one whatever comes before a colon that no slash,
+// question mark or number sign precedes (ff_url_decompose in url.c), a
+// template's identifier included: FFmpeg resolves an address before it
+// fills its template in, so that $RepresentationID$://host/ is an
+// absolute address to it, of the scheme its representation's identifier
+// spells.
 func hasScheme(address string) bool {
-	i := strings.IndexAny(address, ":/?#$")
-	if i <= 0 || address[i] != ':' {
-		return false
-	}
-	for j, r := range address[:i] {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || j > 0 && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.')) {
-			return false
-		}
-	}
-	return true
+	i := strings.IndexAny(address, ":/?#")
+	return i >= 0 && address[i] == ':'
 }
 
 // writeStart writes a start tag, its names as written, its attributes'
@@ -410,14 +473,37 @@ func (l *loopback) folderURL(key, origin string) string {
 	return "http://" + l.listener.Addr().String() + "/live/" + key + "/~" + base64.RawURLEncoding.EncodeToString([]byte(origin)) + "/"
 }
 
+// manifestAt has the loopback interface answer the address of the live
+// stream registered at target (see registerKey) with a DASH manifest it
+// rewrote alone, whatever the source answers there, and returns what
+// FFmpeg and ffprobe may then read the stream as: a manifest, or a file
+// when no stream is registered there. FFmpeg's dash demuxer reads a
+// manifest again as it plays, without telling what it is by its first
+// bytes: its XML library reads a document whose MPD comes after any
+// length of comments, or in another encoding, so that an answer is never
+// left to its first bytes there (see dashAnswer).
+func (l *loopback) manifestAt(target string) media.Reading {
+	rest, _ := strings.CutPrefix(target, "http://"+l.listener.Addr().String()+"/live/")
+	key, _, _ := strings.Cut(rest, "/")
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	live := l.feeds[key]
+	if live == nil {
+		return media.File
+	}
+	live.manifest = true
+	return media.Manifest
+}
+
 // folderTarget is the address of a file of an origin a request names on
 // the loopback interface (see folderURL): the path and query that follow
-// the origin's encoding, as FFmpeg asked them. It reports false for an
-// address that is not of the origin.
+// the origin's encoding, as FFmpeg asked them, after the listener's own
+// address when FFmpeg asks it as its proxy (see media.Opens). It reports
+// false for an address that is not of the origin.
 func folderTarget(r *http.Request, key, encoded string) (string, bool) {
 	origin, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(encoded, "~"))
 	prefix := "/live/" + key + "/" + encoded + "/"
-	rest, found := strings.CutPrefix(r.RequestURI, prefix)
+	rest, found := strings.CutPrefix(strings.TrimPrefix(r.RequestURI, "http://"+r.Host), prefix)
 	if err != nil || !found {
 		return "", false
 	}
@@ -614,7 +700,9 @@ func (s *Service) checkDASH(ctx context.Context, version library.Version, analys
 	if !ok {
 		return nil
 	}
-	decodes, err := s.ffprobe().Decodes(ctx, media.Input{Path: target, Options: options}, video.Index)
+	prober := s.ffprobe()
+	prober.Reads = s.loopback.manifestAt(target)
+	decodes, err := prober.Decodes(ctx, media.Input{Path: target, Options: options}, video.Index)
 	if err != nil {
 		return err
 	}

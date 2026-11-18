@@ -311,7 +311,7 @@ func (s *Service) audioReference(ctx context.Context, version library.Version, a
 	defer release()
 	var reference speech.Reference
 	for _, window := range windows {
-		samples, err := s.decodeSpeech(ctx, input, window)
+		samples, err := s.decodeSpeech(ctx, input, media.Opens(input, fileReading(version, analysis)), window)
 		if budget != nil && budget.over() {
 			return speech.Reference{}, fmt.Errorf("%w: it read more than %d MB", errNoSpeech, s.speech.budget/1_000_000)
 		}
@@ -362,13 +362,14 @@ func (s *Service) ownFile(version library.Version) bool {
 	return strings.HasPrefix(version.URL, "http://"+s.loopback.listener.Addr().String()+"/")
 }
 
-// decodeSpeech decodes a window of the first audio track of input as the
-// samples speech.Detect reads: fewer when the version ends sooner.
-func (s *Service) decodeSpeech(ctx context.Context, input string, window speech.Span) ([]int16, error) {
+// decodeSpeech decodes a window of the first audio track of input, read
+// with FFmpeg's input options, as the samples speech.Detect reads: fewer
+// when the version ends sooner.
+func (s *Service) decodeSpeech(ctx context.Context, input string, options []string, window speech.Span) ([]int16, error) {
 	decoding, stop := context.WithCancel(ctx)
 	defer stop()
 	sink := &sampleSink{want: int((window.End-window.Start).Seconds()*speech.SampleRate) * 2, full: stop}
-	audio := hls.Audio{Input: input, Encoder: "pcm_s16le", SampleRate: speech.SampleRate, Channels: 1}
+	audio := hls.Audio{Input: input, InputOptions: options, Encoder: "pcm_s16le", SampleRate: speech.SampleRate, Channels: 1}
 	if err := s.segments.Convert(decoding, audio, "s16le", window.Start, sink); err != nil {
 		return nil, err
 	}

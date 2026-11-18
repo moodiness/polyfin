@@ -707,8 +707,16 @@ func TestTextCopiesOfProgramStreamsMatchTheirHLSVideo(t *testing.T) {
 				t.Errorf("the remux's plan: grid %v, searched %v", r.Plan.Grid(), r.Plan.IsSearched())
 			}
 			// The remux's options, on the file itself, which a loose VOB's
-			// remux reads through the source cache.
-			played := framesOf(t, ffmpeg, r.InputOptions, vob)
+			// remux reads through the source cache: all but those that name
+			// what FFmpeg may open of the loopback interface, which a path
+			// is not.
+			options := slices.Clone(r.InputOptions)
+			for _, name := range []string{"-protocol_whitelist", "-format_whitelist", "-http_proxy"} {
+				if i := slices.Index(options, name); i >= 0 {
+					options = slices.Delete(options, i, i+2)
+				}
+			}
+			played := framesOf(t, ffmpeg, options, vob)
 			release()
 			for i, cue := range cues {
 				if got, want := frameAt(played, cue.Start.Seconds()), frameAt(source, shown[i]); got == "" || got != want {

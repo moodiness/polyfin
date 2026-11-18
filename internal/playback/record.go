@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +57,7 @@ func (s *Service) Record(ctx context.Context, user accounts.ID, version library.
 		case Manifest(analysis):
 			r.InputOptions = media.LiveOptions
 		}
+		r.InputOptions = slices.Concat(r.InputOptions, media.Opens(r.Input, s.loopback.liveReading(r.Input, analysis)))
 		return r, func() { release(); _ = held.Close() }, nil
 	}, path)
 }

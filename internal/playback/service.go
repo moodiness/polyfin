@@ -774,6 +774,15 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		defer src.Release()
 		target, release := s.loopback.register(version, src)
 		defer release()
+		// A track's DASH manifest is read as it plays (see audioInput): at
+		// the live stream's address, where the loopback interface rewrites
+		// it.
+		manifest := version.Audio != nil && version.Audio.Manifest == "dash"
+		if manifest {
+			var free func()
+			target, free = s.loopback.registerLive(version)
+			defer free()
+		}
 		started := time.Now()
 		probing, stop := context.WithCancel(ctx)
 		failed := src.Failed()
@@ -804,6 +813,21 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 			}
 		}
 		if err == nil {
+			// ffprobe reads a playlist as one only where Polyfin found one,
+			// which the loopback interface then rewrites (see servePlaylist),
+			// within the time ffprobe has; a torrent's file never is one.
+			switch {
+			case manifest:
+				prober.Reads = s.loopback.manifestAt(target)
+			case version.Torrent == nil:
+				sniffed := time.Now()
+				sniffing, cancel := context.WithTimeout(reading, prober.Timeout)
+				if startsPlaylist(sniffing, src) {
+					prober.Reads = media.Playlist
+				}
+				cancel()
+				prober.Timeout -= time.Since(sniffed)
+			}
 			analysis, err = probe(prober, reading, target)
 		}
 		stop()
@@ -880,15 +904,19 @@ func (s *Service) keepAnalysis(ctx context.Context, version library.Version, ana
 // playlist does. A source that cannot be read is left to the analysis,
 // which tells why.
 func notPlaylist(ctx context.Context, src *source.Source) error {
-	head := make([]byte, 16)
-	n, err := src.ReadAt(ctx, head, 0)
-	if n == 0 && err != nil {
-		return nil
-	}
-	if bytes.HasPrefix(bytes.TrimPrefix(head[:n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U")) {
+	if startsPlaylist(ctx, src) {
 		return ErrPlaylistReplay
 	}
 	return nil
+}
+
+// startsPlaylist reports whether src starts as an HLS playlist does, as
+// the loopback interface tells one it rewrites (see servePlaylist); not
+// when it cannot be read.
+func startsPlaylist(ctx context.Context, src *source.Source) bool {
+	head := make([]byte, 16)
+	n, _ := src.ReadAt(ctx, head, 0)
+	return bytes.HasPrefix(bytes.TrimPrefix(head[:n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
 }
 
 // failureOf is why src failed, when failed, its Failed channel, closed.

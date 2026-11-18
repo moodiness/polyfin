@@ -3,7 +3,6 @@ package playback
 import (
 	"cmp"
 	"context"
-	"errors"
 	"io"
 	"os"
 	"slices"
@@ -312,17 +311,14 @@ func (s AudioSource) stream() MediaStream {
 	return m
 }
 
-// ErrUnsupportedSource reports a track stream FFmpeg may not read for a
-// user: a DASH manifest of a source confined to public addresses, whose
-// segments FFmpeg would fetch itself.
-var ErrUnsupportedSource = errors.New("the track's stream cannot be read within its source's rules")
-
 // audioInput is where FFmpeg reads a track from, through the source rules:
-// a file through the shared source cache, an HLS playlist through the
-// loopback interface, which rewrites the addresses it lists, and a DASH
-// manifest directly, only for a source that may reach any address. release
-// frees what it holds.
-func (s *Service) audioInput(version library.Version) (input string, options []string, release func(), err error) {
+// a file through the shared source cache, and an HLS playlist or a DASH
+// manifest through the loopback interface, which rewrites the addresses
+// they name, so that their files are fetched with the headers the source
+// needs and within its confinement. Its options name what FFmpeg may open
+// of what the loopback interface serves (see media.Opens): a file's as
+// its analysis found it. release frees what it holds.
+func (s *Service) audioInput(ctx context.Context, version library.Version) (input string, options []string, release func()) {
 	manifest := ""
 	if version.Audio != nil {
 		manifest = version.Audio.Manifest
@@ -330,17 +326,16 @@ func (s *Service) audioInput(version library.Version) (input string, options []s
 	switch manifest {
 	case "hls":
 		target, free := s.loopback.registerLive(version)
-		return target, media.LiveOptions, free, nil
+		return target, slices.Concat(media.LiveOptions, media.Opens(target, media.Playlist)), free
 	case "dash":
-		if version.Confined || len(version.Headers) > 0 {
-			return "", nil, nil, ErrUnsupportedSource
-		}
-		return version.URL, nil, func() {}, nil
+		target, free := s.loopback.registerLive(version)
+		return target, media.Opens(target, s.loopback.manifestAt(target)), free
 	}
 	src := s.open(version)
 	unurge := src.Urge()
 	target, free := s.loopback.register(version, src)
-	return target, nil, func() { free(); unurge(); src.Release() }, nil
+	analysis, _ := s.Analyzed(ctx, version.ID)
+	return target, media.Opens(target, fileReading(version, analysis)), func() { free(); unurge(); src.Release() }
 }
 
 // ReadAudio has read run on a track's stream as a conversion reads it
@@ -354,10 +349,7 @@ func (s *Service) ReadAudio(ctx context.Context, version library.Version, read f
 		manifest = version.Audio.Manifest
 	}
 	if manifest == "hls" || manifest == "dash" {
-		input, options, release, err := s.audioInput(version)
-		if err != nil {
-			return err
-		}
+		input, options, release := s.audioInput(ctx, version)
 		defer release()
 		return read(ctx, input, options)
 	}
@@ -365,7 +357,8 @@ func (s *Service) ReadAudio(ctx context.Context, version library.Version, read f
 	defer src.Release()
 	target, free := s.loopback.register(version, src)
 	defer free()
-	return read(ctx, target, nil)
+	analysis, _ := s.Analyzed(ctx, version.ID)
+	return read(ctx, target, media.Opens(target, fileReading(version, analysis)))
 }
 
 // audio describes a conversion to target, read from version.
@@ -392,10 +385,7 @@ func (target *AudioTarget) Downmix(channels int, layout string, t Tuning) {
 // ConvertAudio streams a track converted to target in format, an FFmpeg
 // muxer, from start, to w.
 func (s *Service) ConvertAudio(ctx context.Context, version library.Version, target *AudioTarget, format string, start time.Duration, w io.Writer) error {
-	input, options, release, err := s.audioInput(version)
-	if err != nil {
-		return err
-	}
+	input, options, release := s.audioInput(ctx, version)
 	defer release()
 	return s.segments.Convert(ctx, audioConversion(input, options, target), format, start, w)
 }
@@ -417,10 +407,7 @@ func (r AudioRemux) key() hls.AudioKey {
 
 func (s *Service) audioOpener(r AudioRemux) hls.AudioOpener {
 	return func(ctx context.Context) (hls.Audio, hls.Plan, func(), error) {
-		input, options, release, err := s.audioInput(r.Version)
-		if err != nil {
-			return hls.Audio{}, hls.Plan{}, nil, err
-		}
+		input, options, release := s.audioInput(ctx, r.Version)
 		return audioConversion(input, options, r.Target), hls.AudioPlan(r.Duration), release, nil
 	}
 }

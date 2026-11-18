@@ -38,8 +38,8 @@ const timestampsBack = time.Second
 // src/Jellyfin.MediaEncoding.Keyframes/FfProbe at v12.4). ctx bounds the
 // read, which Timeout does not: it takes as long as reading the file does.
 func (p Prober) Keyframes(ctx context.Context, url string) ([]time.Duration, error) {
-	command := exec.CommandContext(ctx, p.Path, "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "packet=pts_time,flags:format=start_time", "-of", "csv=p=1", "-i", url)
+	command := exec.CommandContext(ctx, p.Path, slices.Concat([]string{"-v", "error", "-select_streams", "v:0",
+		"-show_entries", "packet=pts_time,flags:format=start_time", "-of", "csv=p=1"}, Opens(url, p.Reads), []string{"-i", url})...)
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe: %w", err)
