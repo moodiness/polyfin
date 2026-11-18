@@ -1,9 +1,12 @@
 package thumbnails
 
 import (
+	"math"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 func secondsOf(values ...float64) []time.Duration {
@@ -101,5 +104,69 @@ func TestTheStepGrowsWithTheRuntime(t *testing.T) {
 	}
 	if got := thumbnailTimes(25*time.Second, 10*time.Second); !slices.Equal(got, secondsOf(0, 10, 20)) {
 		t.Errorf("times %v", got)
+	}
+}
+
+// A version has 172,800 thumbnails at most, those of ten days at the
+// shortest interval of the settings: one of ten days has all of them at
+// every interval, and one whose duration gives more has none, whatever
+// the duration, and nothing is sized by it.
+func TestThumbnailsAreCountedWithinABound(t *testing.T) {
+	t.Parallel()
+	const shortest, longest = accounts.MinTrickplayInterval * time.Second, accounts.MaxTrickplayInterval * time.Second
+	if longestVersion != 240*time.Hour || maxThumbnails != 172_800 || time.Duration(maxThumbnails)*shortest != longestVersion {
+		t.Fatalf("%d thumbnails at most, for %v at one every %v", maxThumbnails, longestVersion, shortest)
+	}
+	// Ten days, and what is shorter, at every interval of the settings.
+	for seconds := accounts.MinTrickplayInterval; seconds <= accounts.MaxTrickplayInterval; seconds++ {
+		interval := time.Duration(seconds) * time.Second
+		for _, duration := range []time.Duration{time.Nanosecond, 2 * time.Hour, longestVersion - time.Nanosecond, longestVersion} {
+			if count := thumbnailCount(duration, interval); !spreads(duration, interval) || count < 1 || count > maxThumbnails {
+				t.Fatalf("%v at one every %v: %d thumbnails, none made", duration, interval, count)
+			}
+		}
+	}
+	// At the bound, every thumbnail: ten days at both ends of the
+	// settings, and the longest version the longest interval allows.
+	for _, tc := range []struct {
+		duration, interval time.Duration
+		want               int
+	}{
+		{longestVersion, shortest, maxThumbnails},
+		{longestVersion, longest, 14_400},
+		{time.Duration(maxThumbnails) * longest, longest, maxThumbnails},
+	} {
+		times := thumbnailTimes(tc.duration, tc.interval)
+		if len(times) != tc.want || times[len(times)-1] != tc.duration-tc.interval {
+			t.Errorf("%v at one every %v: %d thumbnail times, want %d up to %v", tc.duration, tc.interval, len(times), tc.want, tc.duration-tc.interval)
+		}
+	}
+	// Past it, none: by one thumbnail, by 104 days, by 285 years and by
+	// the longest time there is, which is counted without wrapping.
+	const declared = 9_000_000_000 * time.Second
+	for _, tc := range []struct{ duration, interval time.Duration }{
+		{longestVersion + time.Nanosecond, shortest},
+		{time.Duration(maxThumbnails)*longest + time.Nanosecond, longest},
+		{declared / 1000, 10 * time.Second},
+		{declared, shortest},
+		{declared, 10 * time.Second},
+		{declared, longest},
+		{math.MaxInt64, shortest},
+		{math.MaxInt64, longest},
+	} {
+		if count := thumbnailCount(tc.duration, tc.interval); count <= maxThumbnails {
+			t.Errorf("%v at one every %v counts %d thumbnails", tc.duration, tc.interval, count)
+		}
+		// Checked first: the times are asked for only once known to be
+		// none.
+		if spreads(tc.duration, tc.interval) {
+			t.Fatalf("%v at one every %v has thumbnails", tc.duration, tc.interval)
+		}
+		if times := thumbnailTimes(tc.duration, tc.interval); times != nil {
+			t.Errorf("%v at one every %v: %d thumbnail times", tc.duration, tc.interval, len(times))
+		}
+	}
+	if thumbnailCount(0, shortest) != 0 || thumbnailCount(-time.Hour, shortest) != 0 || spreads(0, shortest) || spreads(time.Hour, 0) {
+		t.Error("a version without a duration, or thumbnails without an interval, are counted")
 	}
 }

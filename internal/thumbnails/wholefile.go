@@ -92,6 +92,9 @@ func (s *Service) decodeFile(ctx context.Context, version library.Version, analy
 		interval = fileChapterInterval
 	}
 	count := thumbnailCount(analysis.Duration, interval)
+	if want.trickplay && count > maxThumbnails {
+		return reads{}, fmt.Errorf("%w: %d thumbnails, more than a version has", errNoVideo, count)
+	}
 	_, hdr := s.decoder(stream)
 	var filters []string
 	if want.trickplay {
@@ -189,7 +192,9 @@ func (s *Service) decodeFile(ctx context.Context, version library.Version, analy
 
 // fileThumbnails packs the count thumbnails FFmpeg writes, those past
 // count left out; the last one written stands for those it did not write,
-// as its fps filter may stop short of the end.
+// as its fps filter may stop short of the end. A count past maxThumbnails
+// is refused, and no more than that are packed: the tiles kept until all
+// are made are those of maxThumbnails at most.
 type fileThumbnails struct {
 	tiles *tiler
 	count int
@@ -198,7 +203,7 @@ type fileThumbnails struct {
 }
 
 func (f *fileThumbnails) add(_ int, img *image.YCbCr) error {
-	if f.added == f.count {
+	if f.added >= min(f.count, maxThumbnails) {
 		return nil
 	}
 	f.last = keepImage(f.last, img)
@@ -207,6 +212,9 @@ func (f *fileThumbnails) add(_ int, img *image.YCbCr) error {
 }
 
 func (f *fileThumbnails) finish() (Info, [][]byte, error) {
+	if f.count > maxThumbnails {
+		return Info{}, nil, fmt.Errorf("%w: %d thumbnails, more than a version has", errNoVideo, f.count)
+	}
 	for ; f.added < f.count; f.added++ {
 		if err := f.tiles.add(f.last); err != nil {
 			return Info{}, nil, err

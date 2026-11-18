@@ -2,7 +2,9 @@ package thumbnails
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"math"
@@ -36,12 +38,16 @@ const (
 )
 
 // tiler packs thumbnails into tiles, row by row, as Jellyfin does: every
-// tile is a full grid, the last one's free places black.
+// tile is a full grid, the last one's free places black. Its tiles weigh
+// limit at most, maxTileBytes when zero (tests lower it): the tile that
+// passes it fails the set, whose tiles are dropped.
 type tiler struct {
 	info   Info
 	canvas *image.YCbCr
 	placed int
 	tiles  [][]byte
+	weight int64
+	limit  int64
 }
 
 // newTiler packs count thumbnails, one every interval.
@@ -131,6 +137,11 @@ func (t *tiler) flush() error {
 	tile, err := encodeJPEG(t.canvas)
 	if err != nil {
 		return err
+	}
+	t.weight += int64(len(tile))
+	if limit := cmp.Or(t.limit, maxTileBytes); t.weight > limit {
+		t.tiles = nil
+		return fmt.Errorf("%w: its thumbnails weigh more than the %d bytes a set may", errNoVideo, limit)
 	}
 	t.tiles = append(t.tiles, tile)
 	// Jellyfin's peak bandwidth: the tile's bits over the seconds its

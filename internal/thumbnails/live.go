@@ -37,6 +37,10 @@ const liveInterval = 30 * time.Second
 // the processor.
 var errConverting = errors.New("a conversion runs on the processor")
 
+// errHeld stops a pass that keeps maxFrameBytes of decoded keyframes: the
+// thumbnails they give are kept, and the next pass makes the following.
+var errHeld = errors.New("the keyframes of a pass are all it keeps")
+
 // live extends, every LiveEvery, the thumbnails of the versions played
 // now, one at a time.
 func (s *Service) live(ctx context.Context) {
@@ -153,6 +157,10 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 		return 0, nil
 	}
 	interval := time.Duration(settings.TrickplayInterval) * time.Second
+	if !spreads(analysis.Duration, interval) {
+		// Too long to have thumbnails, as one without a duration has none.
+		return 0, nil
+	}
 	info, exists, err := s.trickplaySet(ctx, version.ID, settings.TrickplayWidth)
 	switch {
 	case err != nil:
@@ -192,6 +200,7 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 	filters := []string{thumbnailFilter(info.Width, hdr)}
 	images := map[int]*image.YCbCr{}
 	var last *image.YCbCr
+	var held int64
 	err = video.ReadFrames(ctx, src, order, func(index int, frame []byte) error {
 		if guarded && s.converting() {
 			return errConverting
@@ -200,6 +209,7 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 		switch {
 		case err == nil:
 			last = decoded[0]
+			held += imageBytes(last)
 		case ctx.Err() != nil:
 			return ctx.Err()
 		case !errors.Is(err, errNoImage) || last == nil:
@@ -207,6 +217,9 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 		}
 		// A keyframe that does not decode shows the one before.
 		images[index] = last
+		if held > s.frameBudget() {
+			return errHeld
+		}
 		return nil
 	})
 	added := 0
@@ -216,7 +229,7 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 	if added == 0 {
 		return 0, err
 	}
-	if err != nil && !errors.Is(err, source.ErrNotCached) && !errors.Is(err, errConverting) {
+	if err != nil && !errors.Is(err, source.ErrNotCached) && !errors.Is(err, errConverting) && !errors.Is(err, errHeld) {
 		return 0, err
 	}
 	perTile := info.TileWidth * info.TileHeight

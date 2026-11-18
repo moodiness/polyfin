@@ -204,8 +204,19 @@ type Service struct {
 	// while the settings turn the images off.
 	skipped *cache.Cache[accounts.ID, string]
 
-	// budget is that above, which tests lower.
-	budget int
+	// budget is that above, which tests lower, as they do frameBytes, the
+	// most the decoded keyframes kept for one set weigh: maxFrameBytes
+	// when zero.
+	budget     int
+	frameBytes int64
+}
+
+// frameBudget is the most the decoded keyframes kept for one set weigh.
+func (s *Service) frameBudget() int64 {
+	if s.frameBytes > 0 {
+		return s.frameBytes
+	}
+	return maxFrameBytes
 }
 
 // New starts the service, which Close stops.
@@ -517,9 +528,12 @@ func (s *Service) playsFile(url string) bool {
 
 // wanted is what a version lacks of what the settings turn on. partial
 // describes the thumbnails a play made of the set to complete, at
-// interval; none when its ThumbnailCount is 0.
+// interval; none when its ThumbnailCount is 0. tooLong tells a version
+// whose thumbnails are on and not made, as its duration gives more than
+// a version has (see spreads).
 type wanted struct {
 	trickplay bool
+	tooLong   bool
 	width     int
 	interval  time.Duration
 	partial   Info
@@ -565,7 +579,7 @@ func (s *Service) generate(ctx context.Context, j job) {
 	}
 	s.touch(ctx, version.ID)
 	if !want.trickplay && len(want.chapters) == 0 {
-		if _, video := videoStream(analysis); !video || analysis.Duration <= 0 {
+		if _, video := videoStream(analysis); !video || analysis.Duration <= 0 || want.tooLong {
 			s.recordFailure(ctx, version, errNoVideo)
 			return
 		}
@@ -708,7 +722,8 @@ func lasting(err error) bool {
 }
 
 // errNoVideo reports a version without a video track, or without a
-// duration to spread thumbnails over.
+// duration thumbnails spread over: none, or one that gives more
+// thumbnails than a version has.
 var errNoVideo = errors.New("no video to make images of")
 
 // wanted reads what a version lacks of the images the settings turn on:
@@ -716,7 +731,9 @@ var errNoVideo = errors.New("no video to make images of")
 func (s *Service) wanted(ctx context.Context, version accounts.ID, analysis media.Analysis) (wanted, error) {
 	settings := s.Settings()
 	var want wanted
-	if settings.Trickplay && analysis.Duration > 0 {
+	want.tooLong = settings.Trickplay && analysis.Duration > 0 &&
+		!spreads(analysis.Duration, time.Duration(settings.TrickplayInterval)*time.Second)
+	if settings.Trickplay && analysis.Duration > 0 && !want.tooLong {
 		info, exists, err := s.trickplaySet(ctx, version, settings.TrickplayWidth)
 		if err != nil {
 			return wanted{}, err
@@ -829,12 +846,19 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	// with its time: the images shown are chosen by time, whatever the
 	// order the keyframes were read in.
 	var frames []decodedFrame
+	var held int64
 	done := map[int]bool{}
 	decodeFrame := func(index int, frame []byte) error {
 		done[index] = true
 		images, err := s.decode(ctx, hw, video, frame, filters, false)
 		switch {
 		case err == nil:
+			for _, img := range images {
+				held += imageBytes(img)
+			}
+			if held > s.frameBudget() {
+				return fmt.Errorf("%w: its keyframes weigh more than the %d bytes a set may keep", errNoVideo, s.frameBudget())
+			}
 			frames = append(frames, decodedFrame{at: video.Keyframes[index], images: images})
 			return nil
 		case ctx.Err() != nil:
