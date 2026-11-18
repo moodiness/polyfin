@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgproto3"
 )
 
 // The tests that run PostgreSQL need its server programs, version 18:
@@ -350,6 +351,99 @@ func TestProbeTellsNoClusterFromAnotherService(t *testing.T) {
 	}
 }
 
+// What answers on the port a lock file names and asks for the password as
+// it is, or as an MD5 digest, or asks for none, is told the user and the
+// database and nothing more. It is not the cluster, which signs in with
+// SCRAM alone: the lock file is removed as for a port nothing answers on.
+func TestProbeGivesThePasswordToSCRAMAlone(t *testing.T) {
+	t.Parallel()
+	for name, answer := range map[string][]pgproto3.BackendMessage{
+		"asked as it is":         {&pgproto3.AuthenticationCleartextPassword{}},
+		"asked as an MD5 digest": {&pgproto3.AuthenticationMD5Password{Salt: [4]byte{1, 2, 3, 4}}},
+		"not asked":              {&pgproto3.AuthenticationOk{}, &pgproto3.ReadyForQuery{TxStatus: 'I'}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			type heard struct {
+				after []byte
+				err   error
+			}
+			connections := make(chan heard, 2)
+			go func() {
+				defer close(connections)
+				for {
+					conn, err := listener.Accept()
+					if err != nil {
+						return
+					}
+					after, err := answerStartup(conn, answer)
+					connections <- heard{after, err}
+				}
+			}()
+			dir := t.TempDir()
+			port := listener.Addr().(*net.TCPAddr).Port
+			lock := filepath.Join(dir, lockFile)
+			content := "999999\n" + dir + "\n1700000000\n" + strconv.Itoa(port) + "\n\n127.0.0.1\n"
+			if err := os.WriteFile(lock, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			c := &Cluster{Bin: t.TempDir(), Dir: dir, password: "0123456789abcdef0123456789abcdef0123456789abcdef"}
+			if got := c.probe(context.Background(), port); got != none {
+				t.Errorf("probe = %v, want none", got)
+			}
+			if err := c.recover(context.Background()); err != nil {
+				t.Errorf("recover: %v", err)
+			}
+			if _, err := os.Stat(lock); !os.IsNotExist(err) {
+				t.Errorf("the lock file is still there: %v", err)
+			}
+			listener.Close()
+			count := 0
+			for h := range connections {
+				count++
+				if h.err != nil {
+					t.Errorf("the listener: %v", h.err)
+				}
+				if len(h.after) != 0 {
+					t.Errorf("the listener heard %q after its answer", h.after)
+				}
+			}
+			if count != 2 {
+				t.Errorf("%d connections, want the probe's and the recovery's", count)
+			}
+		})
+	}
+}
+
+// answerStartup reads a connection's first message, sends answer, and
+// returns what the client says next, which it refuses as a wrong
+// password.
+func answerStartup(conn net.Conn, answer []pgproto3.BackendMessage) ([]byte, error) {
+	defer conn.Close()
+	backend := pgproto3.NewBackend(conn, conn)
+	if _, err := backend.ReceiveStartupMessage(); err != nil {
+		return nil, err
+	}
+	for _, message := range answer {
+		backend.Send(message)
+	}
+	if err := backend.Flush(); err != nil {
+		return nil, err
+	}
+	said := make([]byte, 1024)
+	n, _ := conn.Read(said)
+	if n > 0 {
+		backend.Send(&pgproto3.ErrorResponse{Severity: "FATAL", Code: "28P01", Message: "password authentication failed"})
+		_ = backend.Flush()
+	}
+	return said[:n], nil
+}
+
 func TestInitdbArgumentsAndURL(t *testing.T) {
 	t.Parallel()
 	args := strings.Join(initdbArgs("/data/postgresql.new", "/data/.password-1"), " ")
@@ -359,7 +453,7 @@ func TestInitdbArgumentsAndURL(t *testing.T) {
 		}
 	}
 	c := &Cluster{password: "abc123", port: 54321}
-	if got := c.URL(); got != "postgresql://polyfin:abc123@127.0.0.1:54321/polyfin?sslmode=disable" {
+	if got := c.URL(); got != "postgresql://polyfin:abc123@127.0.0.1:54321/polyfin?sslmode=disable&require_auth=scram-sha-256" {
 		t.Errorf("URL = %q", got)
 	}
 	env := environment([]string{"PATH=/bin", "PGDATA=/elsewhere", "PGPASSWORD=x", "HOME=/home/a"})

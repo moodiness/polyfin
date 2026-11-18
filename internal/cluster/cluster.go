@@ -339,9 +339,14 @@ func (c *Cluster) URL() string {
 	return c.url(Database)
 }
 
+// url is the URL of database in the cluster. Signing in takes SCRAM, the
+// method the cluster is made with, and no other: the password is sent
+// neither as it is nor as an MD5 digest, whatever answers on the port
+// asks for, and what lets anyone in is not taken for the cluster.
 func (c *Cluster) url(database string) string {
 	u := url.URL{Scheme: "postgresql", User: url.UserPassword(User, c.password),
-		Host: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.port)), Path: "/" + database, RawQuery: "sslmode=disable"}
+		Host: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.port)), Path: "/" + database,
+		RawQuery: "sslmode=disable&require_auth=scram-sha-256"}
 	return u.String()
 }
 
@@ -427,7 +432,8 @@ func (c *Cluster) recover(ctx context.Context) error {
 
 // probe tells what answers on port. A PostgreSQL that takes the password,
 // or that is starting, recovering or stopping, is the cluster; one that
-// refuses the password is another.
+// refuses the password is another; one that asks for it otherwise than
+// with SCRAM, or does not ask, is given nothing and counts as none.
 func (c *Cluster) probe(ctx context.Context, port int) state {
 	saved := c.port
 	c.port = port
