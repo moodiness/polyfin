@@ -132,12 +132,62 @@ func newHTTPClient(confined bool) *http.Client {
 // from the internet.
 var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 
+// reserved are the other ranges that are not the internet's, although
+// they are neither private nor link-local: an address there leads nowhere
+// or, on some networks, to a host of the network itself.
+var reserved = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),        // this network
+	netip.MustParsePrefix("192.0.0.0/24"),     // protocol assignments
+	netip.MustParsePrefix("192.88.99.0/24"),   // 6to4 relays
+	netip.MustParsePrefix("198.18.0.0/15"),    // benchmarking
+	netip.MustParsePrefix("240.0.0.0/4"),      // reserved
+	netip.MustParsePrefix("168.63.129.16/32"), // a cloud platform's own services, as its virtual machines reach them
+	netip.MustParsePrefix("64:ff9b:1::/48"),   // NAT64 within a network
+	netip.MustParsePrefix("2001::/32"),        // Teredo
+	netip.MustParsePrefix("::ffff:0:0:0/96"),  // IPv4-translated
+	netip.MustParsePrefix("fec0::/10"),        // site-local
+}
+
+// The IPv6 prefixes whose addresses stand for an IPv4 address, which a
+// gateway of the network reaches for them: NAT64's well-known prefix and
+// IPv4-compatible addresses hold it in their last four bytes, 6to4
+// addresses after their prefix.
+var (
+	nat64          = netip.MustParsePrefix("64:ff9b::/96")
+	ipv4Compatible = netip.MustParsePrefix("::/96")
+	sixToFour      = netip.MustParsePrefix("2002::/16")
+)
+
 // Public reports whether ip is an address on the internet, which confined
-// requests may reach: not loopback, link-local, private, nor in the shared
-// address space of carrier-grade NAT.
+// requests may reach: not loopback, link-local, private, in the shared
+// address space of carrier-grade NAT, nor in a range reserved for
+// something else (see reserved). An IPv6 address that stands for an IPv4
+// address is public when that address is, so that a network reaching
+// IPv4 through NAT64 still reaches the internet. NAT64's prefix for use
+// within a network is refused whole: where it holds the IPv4 address
+// depends on the network. The ranges kept for documentation stay public:
+// they are not routed, so a request there reaches nothing.
 func Public(ip netip.Addr) bool {
-	ip = ip.Unmap()
-	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !cgnat.Contains(ip)
+	// A prefix holds no address with a zone.
+	ip = ip.Unmap().WithZone("")
+	if ip.Is6() {
+		raw := ip.As16()
+		switch {
+		case nat64.Contains(ip), ipv4Compatible.Contains(ip):
+			ip = netip.AddrFrom4([4]byte(raw[12:]))
+		case sixToFour.Contains(ip):
+			ip = netip.AddrFrom4([4]byte(raw[2:6]))
+		}
+	}
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() || cgnat.Contains(ip) {
+		return false
+	}
+	for _, prefix := range reserved {
+		if prefix.Contains(ip) {
+			return false
+		}
+	}
+	return true
 }
 
 // CheckPublic reports ErrPrivateNetwork when host is, or resolves to, an
