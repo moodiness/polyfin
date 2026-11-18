@@ -30,6 +30,16 @@ var followUpDelays = []time.Duration{10 * time.Second, 30 * time.Second}
 // the answer instead.
 const staleLists = 24 * time.Hour
 
+// streamListBytes is the memory the stream lists kept may take, and
+// subtitleListBytes that of the subtitle lists, and of the answers of
+// notices alone (see listSize). The largest list an addon's answer
+// decodes to is smaller, with what it keeps of the list it replaces (see
+// stremio.MaxListed and merge).
+const (
+	streamListBytes   = 128 << 20
+	subtitleListBytes = 32 << 20
+)
+
 // The lists followed up.
 const (
 	listStreams   = "streams"
@@ -55,6 +65,10 @@ func (l list[T]) state(now time.Time, life time.Duration) (fresh, kept bool) {
 	age := now.Sub(l.at)
 	return age <= life && !l.restored, age <= life+staleLists
 }
+
+// listSize is the size of a list kept: the memory its items hold,
+// whatever they are written in (see cache.MemorySize).
+func listSize[T any](l list[T]) int { return cache.MemorySize(l.items) }
 
 // listKind names the lists of T, and tells how to merge them: usable picks
 // the items that count, playable streams or subtitles that can be
@@ -94,7 +108,9 @@ func (k listKind[T]) count(items []T) int {
 }
 
 // merge lists answer, given at, followed by the usable items of extras it
-// lacks.
+// lacks, up to stremio.MaxListed items in all: answers that replace one
+// another before their follow-ups end do not make a list grow without
+// end.
 func (k listKind[T]) merge(answer, extras []T, at time.Time) list[T] {
 	merged := list[T]{items: answer, answer: len(answer), at: at}
 	if len(extras) == 0 {
@@ -106,6 +122,9 @@ func (k listKind[T]) merge(answer, extras []T, at time.Time) list[T] {
 	}
 	var lacking []T
 	for _, item := range extras {
+		if len(answer)+len(lacking) >= stremio.MaxListed {
+			break
+		}
 		if id := k.identity(item); k.usable(item) && !listed[id] {
 			listed[id] = true
 			lacking = append(lacking, item)

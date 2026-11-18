@@ -48,6 +48,12 @@ const (
 	staleCatalogs = 24 * time.Hour
 	// metaKept is how long a description is kept, stale ones included.
 	metaKept = 7 * 24 * time.Hour
+	// keptBytes is the memory the catalog pages kept may take, and as much
+	// again the descriptions; searchBytes that of searches' pages (see
+	// fetchedSize). The largest page or description an addon's answer
+	// decodes to is smaller (see stremio.MaxMetas).
+	keptBytes   = 96 << 20
+	searchBytes = 24 << 20
 )
 
 // fetched is what an addon gave, at the time it gave it.
@@ -59,9 +65,10 @@ type fetched[T any] struct {
 // fresh reports whether f is at most life old at now.
 func (f fetched[T]) fresh(now time.Time, life time.Duration) bool { return now.Sub(f.at) <= life }
 
-// fetchedSize is the size of what an addon gave, as the JSON of its value
-// measures it (see cache.Sized).
-func fetchedSize[T any](f fetched[T]) int { return cache.JSONSize(f.value) }
+// fetchedSize is the size of what an addon gave: the memory its value
+// holds, whatever it is written in (see cache.MemorySize). An empty
+// title of a page counts for what it takes, not for its few bytes of JSON.
+func fetchedSize[T any](f fetched[T]) int { return cache.MemorySize(f.value) }
 
 // keptCatalogLife is how long catalog pages and automatic images are kept,
 // stale ones included.
@@ -477,7 +484,10 @@ func (s *Service) refreshPage(ctx context.Context, src source, key pageKey, seen
 	})
 }
 
-// loadPage reads a page kept in the database, and keeps it in memory.
+// loadPage reads a page kept in the database, and keeps it in memory. A
+// page too large for memory, kept before the lists of an answer were
+// bounded, is not read: the addon is asked again, and its answer replaces
+// it, rather than read it at every request.
 func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetched[[]stremio.Meta], bool) {
 	if !key.kept() {
 		return fetched[[]stremio.Meta]{}, false
@@ -499,7 +509,8 @@ func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetche
 	}
 	s.checkMetas(kept.value, key.catalogType, true)
 	s.pages.Put(key, kept)
-	return kept, true
+	_, held := s.pages.Get(key)
+	return kept, held
 }
 
 // storePage keeps a page in the database. A page the addon gave again
@@ -658,7 +669,8 @@ func (s *Service) refreshMeta(ctx context.Context, addon installed, key metaKey,
 // loadMeta reads a description kept in the database, and keeps it in
 // memory. An addon's notice kept as the title's description, before such
 // answers were refused (see stremio.Meta.Describes), is not read: the
-// title is described again.
+// title is described again. Nor is a description too large for memory,
+// as loadPage tells of a page.
 func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (fetched[stremio.Meta], bool) {
 	var data []byte
 	var kept fetched[stremio.Meta]
@@ -675,7 +687,9 @@ func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (f
 		return kept, false
 	}
 	s.correctMeta(&kept.value, key.metaType)
-	return s.keepMeta(ctx, addon, key, kept, false), true
+	kept = s.keepMeta(ctx, addon, key, kept, false)
+	_, held := s.metas.Get(key)
+	return kept, held
 }
 
 // keepMeta keeps a description of key, which the verdicts known corrected

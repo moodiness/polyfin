@@ -3,6 +3,7 @@ package cache
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -71,8 +72,10 @@ func NewLasting[K comparable, V any](capacity int, lifetime func() time.Duration
 // sizes of the values kept, as size tells them, add up to more than
 // maxBytes, the least recently used entries are evicted. A value larger
 // than maxBytes on its own is not kept. size is called once for each value
-// stored, which keeps its size; JSONSize suits values decoded from JSON.
-// Sized is called on a new cache, before it is used.
+// stored, which keeps its size; JSONSize suits values decoded from JSON
+// that Polyfin or a service it trusts wrote, MemorySize those decoded from
+// what any other host sends. Sized is called on a new cache, before it is
+// used.
 func (c *Cache[K, V]) Sized(maxBytes int, size func(V) int) *Cache[K, V] {
 	c.size, c.maxBytes = size, maxBytes
 	return c
@@ -99,6 +102,64 @@ type counter int
 func (n *counter) Write(p []byte) (int, error) {
 	*n += counter(len(p))
 	return len(p), nil
+}
+
+// MemorySize estimates the memory value holds, a size for Sized that
+// counts a value by what it takes rather than by what it is written in:
+// its own size, the bytes of its strings, the elements of its slices,
+// used or spare, the keys and values of its maps, and what its pointers
+// lead to, each time one is met. An element that holds nothing counts
+// for its size, where its JSON is a few bytes: this suits values decoded
+// from what another host sends. A value is followed maxDepth deep.
+func MemorySize[V any](value V) int {
+	v := reflect.ValueOf(&value).Elem()
+	return int(v.Type().Size()) + beyond(v, 0)
+}
+
+// maxDepth is how deep MemorySize follows a value: past any value the
+// caches keep, and what ends the reading of one that leads to itself.
+const maxDepth = 64
+
+// beyond is the memory v leads to beyond its own size, depth deep in the
+// value measured.
+func beyond(v reflect.Value, depth int) int {
+	if depth > maxDepth {
+		return 0
+	}
+	n := 0
+	switch v.Kind() {
+	case reflect.String:
+		return v.Len()
+	case reflect.Slice:
+		element := v.Type().Elem()
+		n = v.Cap() * int(element.Size())
+		if element.Kind() <= reflect.Complex128 {
+			// Numbers lead nowhere.
+			return n
+		}
+		for i := range v.Len() {
+			n += beyond(v.Index(i), depth+1)
+		}
+	case reflect.Array:
+		for i := range v.Len() {
+			n += beyond(v.Index(i), depth+1)
+		}
+	case reflect.Struct:
+		for i := range v.NumField() {
+			n += beyond(v.Field(i), depth+1)
+		}
+	case reflect.Pointer, reflect.Interface:
+		if !v.IsNil() {
+			target := v.Elem()
+			n = int(target.Type().Size()) + beyond(target, depth+1)
+		}
+	case reflect.Map:
+		for entry := v.MapRange(); entry.Next(); {
+			key, value := entry.Key(), entry.Value()
+			n += int(key.Type().Size()+value.Type().Size()) + beyond(key, depth+1) + beyond(value, depth+1)
+		}
+	}
+	return n
 }
 
 // Len is the number of entries kept, expired ones not dropped yet included.

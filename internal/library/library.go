@@ -420,7 +420,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		now:      time.Now,
 		settings: settings,
 		metas: cache.NewLasting[metaKey, fetched[stremio.Meta]](4000, func() time.Duration { return metaKept }, time.Now).
-			Sized(64<<20, fetchedSize[stremio.Meta]),
+			Sized(keptBytes, fetchedSize[stremio.Meta]),
 		versions:       cache.New[accounts.ID, Version](20000, versionsTTL),
 		asked:          cache.New[askedKey, *asked](maxAsked, askedFor),
 		followUps:      followUps{running: map[followKey]*followUp{}},
@@ -449,9 +449,9 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		programRefs:    cache.New[accounts.ID, programRef](200_000, 24*time.Hour),
 	}
 	clock := func() time.Time { return s.now() }
-	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])
+	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(keptBytes, fetchedSize[[]stremio.Meta])
 	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
-		Sized(16<<20, fetchedSize[[]stremio.Meta])
+		Sized(searchBytes, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)
 	s.catalogSlots = newAddonSlots[string](catalogHostFetches)
 	s.failedRefreshes = cache.NewLasting[pageKey, time.Time](4000, func() time.Duration { return failedRefreshWait }, clock)
@@ -459,9 +459,11 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.prefetches = make(chan struct{}, prefetchLimit)
 	s.translations = make(chan struct{}, translationReaders)
 	s.readAhead = true
-	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
-	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
-	s.noticed = cache.NewLasting[streamKey, []stremio.Stream](2000, func() time.Duration { return noticeLife }, clock)
+	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock).Sized(streamListBytes, listSize[stremio.Stream])
+	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock).
+		Sized(subtitleListBytes, listSize[stremio.Subtitle])
+	s.noticed = cache.NewLasting[streamKey, []stremio.Stream](2000, func() time.Duration { return noticeLife }, clock).
+		Sized(subtitleListBytes, cache.MemorySize[[]stremio.Stream])
 	s.failedLately = cache.NewLasting[streamKey, struct{}](2000, func() time.Duration { return failedFor }, clock)
 	s.musicCache = newMusicCaches(s)
 	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)

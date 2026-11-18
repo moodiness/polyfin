@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 func TestALifetimeChangeAppliesToKeptEntries(t *testing.T) {
@@ -352,5 +353,43 @@ func TestJSONSizeIsTheLengthOfTheEncoding(t *testing.T) {
 	}
 	if got := JSONSize(make(chan int)); got != 0 {
 		t.Errorf("a value JSON cannot encode: %d", got)
+	}
+}
+
+// MemorySize counts a value for what it holds in memory: an element that
+// holds nothing for its size, where its JSON is a few bytes, a text for
+// its bytes, a slice for its capacity, and what maps and pointers lead to.
+func TestMemorySizeCountsWhatAValueHolds(t *testing.T) {
+	t.Parallel()
+	type element struct {
+		Name  string
+		Tags  []string
+		Next  *element
+		Bytes []byte
+		Named map[string]string
+		count int
+	}
+	const size, text, header = int(unsafe.Sizeof(element{})), int(unsafe.Sizeof("")), int(unsafe.Sizeof([]element{}))
+	empties := make([]element, 1000)
+	if got := MemorySize(empties); got != header+1000*size {
+		t.Errorf("1000 empty elements: %d, want %d", got, header+1000*size)
+	}
+	if written := JSONSize(empties); written >= 1000*size {
+		t.Errorf("the JSON of 1000 empty elements is %d bytes, no less than they take", written)
+	}
+	full := element{Name: "four", Tags: append(make([]string, 0, 8), "a", "bc"), Next: &element{Name: "x"}, Bytes: make([]byte, 3, 10),
+		Named: map[string]string{"k": "vv"}, count: 7}
+	want := size + len("four") + (8*text + len("a") + len("bc")) + (size + len("x")) + 10 + (2*text + len("k") + len("vv"))
+	if got := MemorySize(full); got != want {
+		t.Errorf("a full element: %d, want %d", got, want)
+	}
+	if got := MemorySize[any](full); got != int(unsafe.Sizeof(any(nil)))+want {
+		t.Errorf("behind an interface: %d", got)
+	}
+	// A value that leads to itself is followed no further than maxDepth.
+	loop := &element{Name: "loop"}
+	loop.Next = loop
+	if got := MemorySize(loop); got < size || got > 2*maxDepth*size {
+		t.Errorf("a value that leads to itself: %d", got)
 	}
 }
