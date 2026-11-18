@@ -253,19 +253,22 @@ func withNewline(s string) string {
 // one. Like Parse, it reads text that is not valid UTF-8 as Windows-1252.
 // Lines of the [Events] section other than Dialogue lines (Comment,
 // Picture, ...) are dropped: players show none of them. A script whose
-// [Events] section has no Format line gets the standard one.
+// [Events] section has no Format line gets the standard one. A script
+// that holds more than MaxCues Dialogue lines is refused with
+// ErrTooManyCues.
 func ParseScript(data []byte) (*Script, error) {
 	text := DecodeText(data)
 	if !isScript(text) {
 		return nil, ErrUnsupported
 	}
-	script, _ := parseScript(text)
-	return script, nil
+	script, _, err := parseScript(text)
+	return script, err
 }
 
 // parseScript reads the script text holds, reporting whether it is an
-// SSA (v4) script.
-func parseScript(text string) (*Script, bool) {
+// SSA (v4) script; ErrTooManyCues when it holds more than MaxCues
+// Dialogue lines.
+func parseScript(text string) (*Script, bool, error) {
 	var (
 		script   Script
 		ssa      bool
@@ -306,7 +309,7 @@ func parseScript(text string) (*Script, bool) {
 					standard(footer)
 				}
 				script.Footer = []byte(text[footer:])
-				return &script, ssa
+				return &script, ssa, nil
 			}
 			switch strings.ToLower(line) {
 			case "[events]":
@@ -330,6 +333,9 @@ func parseScript(text string) (*Script, bool) {
 				standard(start)
 			}
 			if event, ok := format.parseDialogue(line[len("Dialogue:"):]); ok {
+				if len(script.Events) == MaxCues {
+					return nil, ssa, ErrTooManyCues
+				}
 				script.Events = append(script.Events, event)
 			}
 		}
@@ -342,7 +348,7 @@ func parseScript(text string) (*Script, bool) {
 	default:
 		script.Header = []byte(withNewline(text) + "\n[Events]\n" + formatLine(ssa))
 	}
-	return &script, ssa
+	return &script, ssa, nil
 }
 
 // Bytes writes the script: its header, its events as Dialogue lines and
@@ -409,20 +415,34 @@ func (s *Script) Cues() []Cue {
 		}
 	}
 	slices.SortStableFunc(cues, func(a, b Cue) int { return cmp.Compare(a.Start, b.Start) })
-	unique := cues[:0]
+	cues, _ = withoutRepeats(cues)
+	return cues
+}
+
+// shown is what makes two cues the same for Cues: their times and their
+// lines, joined by the line break none of them holds.
+type shown struct {
+	start, end time.Duration
+	lines      string
+}
+
+// withoutRepeats keeps the first of the cues that show the same lines at
+// the same times, in their order, writing over cues. Each cue is looked
+// up once among those kept, however many start together: lookups counts
+// them.
+func withoutRepeats(cues []Cue) (kept []Cue, lookups int) {
+	kept = cues[:0]
+	seen := make(map[shown]struct{}, len(cues))
 	for _, cue := range cues {
-		duplicate := false
-		for i := len(unique) - 1; i >= 0 && unique[i].Start == cue.Start; i-- {
-			if unique[i].End == cue.End && slices.Equal(unique[i].Lines, cue.Lines) {
-				duplicate = true
-				break
-			}
+		key := shown{cue.Start, cue.End, strings.Join(cue.Lines, "\n")}
+		lookups++
+		if _, repeated := seen[key]; repeated {
+			continue
 		}
-		if !duplicate {
-			unique = append(unique, cue)
-		}
+		seen[key] = struct{}{}
+		kept = append(kept, cue)
 	}
-	return unique
+	return kept, lookups
 }
 
 // scriptLayout reads from a script header the number of fields of its
@@ -529,13 +549,20 @@ type MatroskaEvent struct {
 // CodecPrivate is the header, its blocks the events, in ReadOrder (ties by
 // Start). The header ends with the standard Format line, the order of the
 // fields of blocks, whatever the CodecPrivate gives. Blocks not shaped as
-// the format says are dropped.
+// the format says are dropped. A track of more than MaxCues blocks is
+// refused with ErrTooManyCues.
 func MatroskaScript(codecPrivate []byte, events []MatroskaEvent) (*Script, error) {
+	if len(events) > MaxCues {
+		return nil, ErrTooManyCues
+	}
 	text := DecodeText(bytes.TrimRight(codecPrivate, "\x00"))
 	if !isScript(text) {
 		return nil, ErrUnsupported
 	}
-	private, ssa := parseScript(text)
+	private, ssa, err := parseScript(text)
+	if err != nil {
+		return nil, err
+	}
 	header := strings.TrimSuffix(string(private.Header), "\n")
 	at := strings.LastIndexByte(header, '\n') + 1
 	if format, rewrite := parseFormat(header[at:], ssa); rewrite || format.count != len(eventFields) ||

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -139,6 +140,100 @@ Dialogue: 0,0:00:09.00,0:00:10.00,Default,,0,0,0,,{\an8}
 	}
 	if got := parsed.Cues(); len(got) != 1 || !slices.Equal(got[0].Lines, []string{"Soft", "break"}) {
 		t.Errorf("wrap style 2: %q", got)
+	}
+}
+
+// sameCue reports two cues showing the same lines at the same times.
+func sameCue(a, b Cue) bool {
+	return a.Start == b.Start && a.End == b.End && slices.Equal(a.Lines, b.Lines)
+}
+
+// comparedInPairs is the rule withoutRepeats follows, as comparing each
+// cue with the cues kept of the same start gives it.
+func comparedInPairs(cues []Cue) []Cue {
+	var kept []Cue
+	for _, cue := range cues {
+		repeated := false
+		for i := len(kept) - 1; i >= 0 && kept[i].Start == cue.Start; i-- {
+			if sameCue(kept[i], cue) {
+				repeated = true
+				break
+			}
+		}
+		if !repeated {
+			kept = append(kept, cue)
+		}
+	}
+	return kept
+}
+
+// Removing the cues that repeat another looks each cue up once, however
+// many start together: twice the cues at one instant cost twice the
+// lookups. The cues kept are those comparing them in pairs keeps, in the
+// same order: a sign drawn in four layers is one cue, whatever comes
+// between its events, while events that differ by their end, their start
+// or the way their text is cut into lines keep their cues.
+func TestCuesAreLookedUpOnceHoweverManyStartTogether(t *testing.T) {
+	t.Parallel()
+	together := func(count int) []Cue {
+		cues := make([]Cue, count)
+		for i := range cues {
+			cues[i] = Cue{Start: time.Second, End: 2 * time.Second, Lines: []string{strconv.Itoa(i)}}
+		}
+		return cues
+	}
+	for _, count := range []int{1000, 2000} {
+		kept, lookups := withoutRepeats(together(count))
+		if len(kept) != count || lookups != count {
+			t.Errorf("%d cues at one instant: %d kept after %d lookups, want one lookup for each", count, len(kept), lookups)
+		}
+	}
+
+	events := `Dialogue: 0,0:00:03.00,0:00:04.00,Sign,,0,0,0,,{\pos(10,10)}SIGN
+Dialogue: 1,0:00:03.00,0:00:04.00,Sign,,0,0,0,,{\bord0}SIGN
+Dialogue: 2,0:00:03.00,0:00:04.00,Sign,,0,0,0,,{\blur2}SIGN
+Dialogue: 0,0:00:03.00,0:00:05.00,Sign,,0,0,0,,SIGN
+Dialogue: 0,0:00:03.00,0:00:04.00,Sign,,0,0,0,,OTHER
+Dialogue: 3,0:00:03.00,0:00:04.00,Sign,,0,0,0,,SIGN
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Two\Nlines
+Dialogue: 1,0:00:01.00,0:00:02.00,Default,,0,0,0,,Two\Nlines
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Two lines
+Dialogue: 0,0:00:06.00,0:00:07.00,Sign,,0,0,0,,SIGN
+Dialogue: 1,0:00:03.00,0:00:05.00,Sign,,0,0,0,,SIGN
+`
+	parsed, err := ParseScript([]byte(scriptHeader + events))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Cue{
+		{Start: time.Second, End: 2 * time.Second, Lines: []string{"Two", "lines"}},
+		{Start: time.Second, End: 2 * time.Second, Lines: []string{"Two lines"}},
+		{Start: 3 * time.Second, End: 4 * time.Second, Lines: []string{"SIGN"}},
+		{Start: 3 * time.Second, End: 5 * time.Second, Lines: []string{"SIGN"}},
+		{Start: 3 * time.Second, End: 4 * time.Second, Lines: []string{"OTHER"}},
+		{Start: 6 * time.Second, End: 7 * time.Second, Lines: []string{"SIGN"}},
+	}
+	if got := parsed.Cues(); !slices.EqualFunc(got, want, sameCue) {
+		t.Errorf("got %q", got)
+	}
+
+	// 125 instants of 40 cues each, sorted by their start as Cues sorts
+	// them: 9 of each instant differ by their end or their lines (three
+	// texts, each of one line with either end or of two lines), and the
+	// others repeat one of them, most with other cues in between.
+	var mixed []Cue
+	for i := range 5000 {
+		start := time.Duration(i/40) * time.Second
+		lines := []string{"line " + strconv.Itoa(i%3)}
+		if i%4 == 0 {
+			lines = append(lines, "second")
+		}
+		mixed = append(mixed, Cue{Start: start, End: start + time.Duration(1+i%2)*time.Second, Lines: lines})
+	}
+	wantMixed := comparedInPairs(mixed)
+	gotMixed, lookups := withoutRepeats(slices.Clone(mixed))
+	if !slices.EqualFunc(gotMixed, wantMixed, sameCue) || lookups != len(mixed) || len(gotMixed) != 125*9 {
+		t.Errorf("%d cues: %d kept after %d lookups, %d by comparing them in pairs", len(mixed), len(gotMixed), lookups, len(wantMixed))
 	}
 }
 
@@ -303,5 +398,44 @@ func TestMatroskaScript(t *testing.T) {
 	if got := string(ssa.Bytes()); !strings.HasSuffix(got, "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"+
 		"Dialogue: Marked=0,0:00:01.00,0:00:02.00,Default,,0,0,0,,SSA\n[Fonts]\nfontname: a.ttf\n") {
 		t.Errorf("ssa: got\n%s", got)
+	}
+}
+
+// A script holds at most MaxCues Dialogue lines and a Matroska track as
+// many blocks: one more, and the file is refused. Lines that are not
+// events count for nothing.
+func TestScriptsOfTooManyEventsAreRefused(t *testing.T) {
+	t.Parallel()
+	const event = "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hi\n"
+	most := scriptHeader + "Comment: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Not shown\nDialogue: not an event\n" +
+		strings.Repeat(event, MaxCues)
+	script, err := ParseScript([]byte(most))
+	if err != nil || len(script.Events) != MaxCues {
+		t.Fatalf("a script of %d events: %v", MaxCues, err)
+	}
+	if cues, err := Parse([]byte(most)); err != nil || len(cues) != 1 {
+		t.Errorf("the cues of a script of %d events: %d, %v", MaxCues, len(cues), err)
+	}
+	if script, err := ParseScript([]byte(most + event)); !errors.Is(err, ErrTooManyCues) || script != nil {
+		t.Errorf("a script of one event more: %v", err)
+	}
+	if cues, err := Parse([]byte(most + event)); !errors.Is(err, ErrTooManyCues) || cues != nil {
+		t.Errorf("the cues of a script of one event more: %d, %v", len(cues), err)
+	}
+
+	private := []byte("[Script Info]\nScriptType: v4.00+\n\n[Events]\n")
+	blocks := make([]MatroskaEvent, MaxCues+1)
+	for i := range blocks {
+		blocks[i] = MatroskaEvent{Start: time.Second, Duration: time.Second, Data: []byte("0,0,Default,,0,0,0,,Hi")}
+	}
+	if script, err := MatroskaScript(private, blocks[:MaxCues]); err != nil || len(script.Events) != MaxCues {
+		t.Errorf("a track of %d blocks: %v", MaxCues, err)
+	}
+	if script, err := MatroskaScript(private, blocks); !errors.Is(err, ErrTooManyCues) || script != nil {
+		t.Errorf("a track of one block more: %v", err)
+	}
+	// A CodecPrivate holding the events itself is read as a script is.
+	if _, err := MatroskaScript([]byte(most+event), blocks[:1]); !errors.Is(err, ErrTooManyCues) {
+		t.Errorf("a CodecPrivate of %d events: %v", MaxCues+1, err)
 	}
 }

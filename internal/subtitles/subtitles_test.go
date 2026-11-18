@@ -106,6 +106,28 @@ func TestOtherFilesAreRefused(t *testing.T) {
 	}
 }
 
+// A SubRip or WebVTT file holds at most MaxCues cues: one more, and it is
+// refused. Blocks that are not cues count for nothing.
+func TestFilesOfTooManyCuesAreRefused(t *testing.T) {
+	t.Parallel()
+	const cue = "00:00:01,000 --> 00:00:02,000\nHi\n\n"
+	most := strings.Repeat(cue, MaxCues)
+	if cues, err := Parse([]byte(most)); err != nil || len(cues) != MaxCues {
+		t.Errorf("a SubRip file of %d cues: %d, %v", MaxCues, len(cues), err)
+	}
+	if cues, err := Parse([]byte(most + cue)); !errors.Is(err, ErrTooManyCues) || cues != nil {
+		t.Errorf("a SubRip file of one cue more: %d, %v", len(cues), err)
+	}
+	const note = "WEBVTT\n\nNOTE not a cue\n\n"
+	most = note + strings.Repeat("00:01.000 --> 00:02.000\nHi\n\n", MaxCues)
+	if cues, err := Parse([]byte(most)); err != nil || len(cues) != MaxCues {
+		t.Errorf("a WebVTT file of %d cues: %d, %v", MaxCues, len(cues), err)
+	}
+	if cues, err := Parse([]byte(most + "00:01.000 --> 00:02.000\nHi\n")); !errors.Is(err, ErrTooManyCues) || cues != nil {
+		t.Errorf("a WebVTT file of one cue more: %d, %v", len(cues), err)
+	}
+}
+
 func TestPlayerFormats(t *testing.T) {
 	t.Parallel()
 	cues := []Cue{

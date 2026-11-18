@@ -21,6 +21,16 @@ import (
 // ASS/SSA script.
 var ErrUnsupported = errors.New("unsupported subtitle format")
 
+// MaxCues bounds the cues read from a file: the cues of a SubRip or
+// WebVTT file, the Dialogue lines of a script, the blocks of a Matroska
+// track. A movie's dialogue is a few thousand cues, and heavy ASS
+// typesetting tens of thousands of lines: the bound leaves several times
+// that.
+const MaxCues = 200_000
+
+// ErrTooManyCues reports a file that holds more than MaxCues cues.
+var ErrTooManyCues = errors.New("too many subtitle cues")
+
 // Cue is a text shown between two instants.
 type Cue struct {
 	Start, End time.Duration
@@ -31,16 +41,23 @@ type Cue struct {
 
 // Parse reads a SubRip or WebVTT file, or the text an ASS or SSA script
 // shows (see Script.Cues). Text that is not valid UTF-8 is read as
-// Windows-1252, the usual encoding of subtitles that are not UTF-8.
+// Windows-1252, the usual encoding of subtitles that are not UTF-8. A
+// file that holds more than MaxCues cues is refused with ErrTooManyCues.
 func Parse(data []byte) ([]Cue, error) {
 	text := DecodeText(data)
 	if isScript(text) {
-		script, _ := parseScript(text)
+		script, _, err := parseScript(text)
+		if err != nil {
+			return nil, err
+		}
 		return script.Cues(), nil
 	}
 	var cues []Cue
 	for block := range strings.SplitSeq(text, "\n\n") {
 		if cue, ok := parseBlock(strings.Split(strings.Trim(block, "\n"), "\n")); ok {
+			if len(cues) == MaxCues {
+				return nil, ErrTooManyCues
+			}
 			cues = append(cues, cue)
 		}
 	}
