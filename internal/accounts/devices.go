@@ -225,6 +225,26 @@ func (s *Store) Device(ctx context.Context, id ID) (Device, error) {
 	return scanDevice(s.db.QueryRow(ctx, "SELECT "+deviceColumns+" FROM devices d WHERE d.id = $1", id))
 }
 
+// SignedIn reports whether the device of identifier id is signed in: as
+// it was found less than signInLife ago, else as the database tells. The
+// media requests that carry a grant given to a device ask at every range
+// and segment, and a device signed out since is refused from its next
+// request (see forgetSignIns). Only devices found are remembered, as only
+// tokens that resolved are.
+func (s *Store) SignedIn(ctx context.Context, id ID) (bool, error) {
+	now := s.now()
+	if s.signIns.signedIn(id, now) {
+		return true, nil
+	}
+	generation := s.signIns.current()
+	var found bool
+	if err := s.db.QueryRow(ctx, "SELECT EXISTS (SELECT FROM devices WHERE id = $1)", id).Scan(&found); err != nil || !found {
+		return false, err
+	}
+	s.signIns.keepSignedIn(id, now, generation)
+	return true, nil
+}
+
 // SetCapabilities records what a signed-in app reported it supports.
 func (s *Store) SetCapabilities(ctx context.Context, device ID, capabilities Capabilities) error {
 	// Requests carry the device, capabilities included.

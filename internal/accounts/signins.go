@@ -19,7 +19,9 @@ const maxSignIns = 4096
 
 // signIns remembers the access tokens and API keys resolved lately, by the
 // hash of the token, and the users read lately, by identifier: streams,
-// HLS segments and admin requests read their user on every request.
+// HLS segments and admin requests read their user on every request. It
+// remembers too the devices found signed in lately, by identifier, for
+// the media requests that name their device and carry no token.
 // generation counts the changes that forgot them: a lookup that started
 // before one keeps nothing, as what it read may be what the change
 // replaced.
@@ -29,6 +31,7 @@ type signIns struct {
 	devices    map[string]resolvedDevice
 	keys       map[string]resolvedKey
 	users      map[ID]resolvedUser
+	found      map[ID]time.Time
 }
 
 // resolvedDevice is a device and its user as resolved at a time.
@@ -96,6 +99,33 @@ func (c *signIns) deviceByID(id ID, now time.Time) (Device, bool) {
 		}
 	}
 	return Device{}, false
+}
+
+// signedIn reports whether the device of identifier id was found signed
+// in recently.
+func (c *signIns) signedIn(id ID, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	at, ok := c.found[id]
+	return ok && now.Sub(at) < signInLife
+}
+
+// keepSignedIn remembers that the device of identifier id was found
+// signed in at a time, in a lookup started in generation, unless a change
+// came since.
+func (c *signIns) keepSignedIn(id ID, at time.Time, generation uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if generation != c.generation {
+		return
+	}
+	if c.found == nil {
+		c.found = map[ID]time.Time{}
+	}
+	if _, ok := c.found[id]; !ok && len(c.found) >= maxSignIns {
+		prune(c.found, at, func(found time.Time) time.Time { return found })
+	}
+	c.found[id] = at
 }
 
 // touched records the activity written for the device of hash and its
@@ -219,8 +249,8 @@ func (c *signIns) forgetUser(id ID) {
 	delete(c.users, id)
 }
 
-// forget drops every token and user remembered, and makes the lookups
-// running keep nothing.
+// forget drops every token, user and device remembered, and makes the
+// lookups running keep nothing.
 func (c *signIns) forget() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -228,6 +258,7 @@ func (c *signIns) forget() {
 	clear(c.devices)
 	clear(c.keys)
 	clear(c.users)
+	clear(c.found)
 }
 
 // prune drops the expired entries of a full map, or every entry when none

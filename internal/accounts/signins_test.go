@@ -319,3 +319,82 @@ func TestRememberedTokensAreBounded(t *testing.T) {
 		t.Error("the newest token was not kept")
 	}
 }
+
+// A device found signed in is remembered as briefly as a resolved token,
+// so that the media requests that name it ask the database once in that
+// time, and its sign-out, however it comes, is seen from the next
+// request, the user's other devices staying signed in.
+func TestDevicesFoundSignedInAreKeptBriefly(t *testing.T) {
+	t.Parallel()
+	store := newStore(t)
+	ctx := t.Context()
+	now := time.Now()
+	store.now = func() time.Time { return now }
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	signIn := func(name string) (string, Device) {
+		t.Helper()
+		token, signed, err := store.SignInDevice(ctx, alice.ID, device(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return token, signed
+	}
+	found := func(id ID) bool {
+		t.Helper()
+		signedIn, err := store.SignedIn(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signedIn
+	}
+	_, tv := signIn("tv")
+	if !found(tv.ID) {
+		t.Fatal("a device signed in is not found")
+	}
+	if found(ID{1, 2, 3}) {
+		t.Error("a device that never signed in is found")
+	}
+	// A row removed behind the server's back is not missed while the
+	// device is remembered: the lookup did not ask the database.
+	if _, err := store.db.Exec(ctx, "DELETE FROM devices WHERE id = $1", tv.ID); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(signInLife - time.Second)
+	if !found(tv.ID) {
+		t.Error("the device was asked for again within the life")
+	}
+	now = now.Add(time.Second)
+	if found(tv.ID) {
+		t.Error("the device is still found past the life")
+	}
+
+	// Signed out by its app, removed by an administrator, or with every
+	// device of the account at a password change: seen at once.
+	phoneToken, phone := signIn("phone")
+	_, tablet := signIn("tablet")
+	_, laptop := signIn("laptop")
+	for _, signed := range []Device{phone, tablet, laptop} {
+		if !found(signed.ID) {
+			t.Fatalf("%s is not found signed in", signed.DeviceID)
+		}
+	}
+	if err := store.SignOutDevice(ctx, phoneToken); err != nil {
+		t.Fatal(err)
+	}
+	if found(phone.ID) || !found(tablet.ID) || !found(laptop.ID) {
+		t.Errorf("after the phone signed out: phone %v, tablet %v, laptop %v", found(phone.ID), found(tablet.ID), found(laptop.ID))
+	}
+	if err := store.RevokeDevice(ctx, alice.ID, tablet.ID); err != nil {
+		t.Fatal(err)
+	}
+	if found(tablet.ID) || !found(laptop.ID) {
+		t.Errorf("after the tablet was removed: tablet %v, laptop %v", found(tablet.ID), found(laptop.ID))
+	}
+	password := "a brand new password"
+	if _, err := store.UpdateUser(ctx, alice.ID, UserChanges{Password: &password}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if found(laptop.ID) {
+		t.Error("a device is still found after its account's password changed")
+	}
+}
