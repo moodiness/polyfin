@@ -33,6 +33,9 @@ type Fonts struct {
 	// chosen remembers the font of each character written so far, nil
 	// for those no font has.
 	chosen map[rune]*sfnt.Font
+
+	// measured, which tests set, is told of each character measured.
+	measured func()
 }
 
 // NewFonts returns the fonts of dir; an empty or missing folder gives Go
