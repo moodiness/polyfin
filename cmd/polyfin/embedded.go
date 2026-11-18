@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/cluster"
+	"github.com/moodiness/polyfin/internal/config"
+	"github.com/moodiness/polyfin/internal/discovery"
 )
 
 // watchInterval is how often polyfin serve checks that the database it
@@ -35,8 +37,14 @@ type embeddedDatabase struct {
 
 // startEmbedded makes the cluster at first start, then starts it, with
 // the server programs of the first folder of path, a list as PATH is,
-// that has pg_ctl.
+// that has pg_ctl. The cluster is in the data folder, which is made or
+// checked first, as serve does (see config.PrepareDataFolder): this runs
+// before it. A fault of a folder that was chosen is left for serve to
+// tell.
 func startEmbedded(ctx context.Context, path, dataDir string, logger *slog.Logger) (*embeddedDatabase, error) {
+	if _, err := config.PrepareDataFolder(dataDir, discovery.InContainer()); err != nil {
+		return nil, err
+	}
 	bin, err := serverPrograms(path)
 	if err != nil {
 		return nil, err

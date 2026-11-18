@@ -112,7 +112,7 @@ Environment:
   POLYFIN_DATABASE_URL  PostgreSQL URL (required, unless POLYFIN_DATABASE is embedded)
   POLYFIN_DATABASE      embedded: run PostgreSQL 18 in the folder postgresql of POLYFIN_DATA_DIR, with the server programs found in PATH, instead of POLYFIN_DATABASE_URL (default: none)
   POLYFIN_SECRET_KEY    key the stored keys and tokens are encrypted with: 32 bytes in base64, from openssl rand -base64 32 (default: none, stored unencrypted)
-  POLYFIN_DATA_DIR      absolute path of the folder Polyfin keeps its files in: the cache, and the default recordings and backups folders (default: a polyfin folder in the system's temporary folder)
+  POLYFIN_DATA_DIR      absolute path of the folder Polyfin keeps its files in: the cache, and the default recordings and backups folders (default: polyfin-server in the configuration folder of the user Polyfin runs as)
   POLYFIN_LISTEN        HTTP address (default :8096)
   POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
@@ -266,13 +266,18 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	if err := process.KillChildrenOnExit(); err != nil {
 		logger.Warn("The programs Polyfin runs may outlive it if it is killed", "error", err)
 	}
+	// The data folder is made for Polyfin's user alone. The default one
+	// of earlier versions is not used when another account made it or can
+	// write into it; a folder that was chosen is, and its fault is told.
+	dataFolderFault, err := prepareDataFolder(cfg, logger)
+	if err != nil {
+		return err
+	}
 	// A crash of this run is written to the data folder too, for the next
 	// start to tell; the last run's, if any, is told once the notifications
 	// are made, below.
-	var crashed *crashes.Report
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
-		logger.Warn("A crash of Polyfin would not be kept: the data folder cannot be made", "error", err)
-	} else if crashed, err = crashes.Watch(cfg.DataDir); err != nil {
+	crashed, err := crashes.Watch(cfg.DataDir)
+	if err != nil {
 		logger.Warn("A crash of Polyfin would not be kept", "error", err)
 	}
 	adminApp, err := webui.Assets()
@@ -879,6 +884,8 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 			StreamsTimingOut: lib.StreamsTimingOut,
 			Cache:            sources,
 			Folders:          work,
+			MoveDataDirTo:    cfg.MoveDataDirTo,
+			DataFolderFault:  dataFolderFault,
 			Encoder:          segments,
 			NVIDIADriver:     segments.NVIDIADriver,
 			Thumbnails:       images,

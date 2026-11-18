@@ -70,11 +70,11 @@ Folders:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `POLYFIN_DATA_DIR` | `polyfin` in the system temporary directory; `/data` in the Docker image, a volume | Where Polyfin keeps its files, as an absolute path. See [Data folder](#data-folder). |
+| `POLYFIN_DATA_DIR` | `polyfin-server` in the configuration folder of the user Polyfin runs as, such as `~/.config/polyfin-server`; `/data` in the Docker image, a volume | Where Polyfin keeps its files, as an absolute path. See [Data folder](#data-folder). |
 | `POLYFIN_FONTS_DIR` | `/usr/share/fonts`, with DejaVu in the Docker image | Fallback fonts apps load to render subtitles whose own fonts are missing. |
 | `POLYFIN_WEB_DIR` | `/usr/share/polyfin/jellyfin-web`, where the Docker image puts jellyfin-web | Folder of jellyfin-web, the web player served at `/web/`. See [Web player](web-client.md). |
 
-- **Data folder:** a path that is not absolute stops Polyfin from starting.
+- **Data folder:** a path that is not absolute stops Polyfin from starting, and so does one that is no folder. A folder that another account of the system can change is told in **System › Health** (see [Data folder](#data-folder)).
 - **Fallback fonts:** apps get the `.ttf`, `.otf`, `.woff` and `.woff2` files of the folder and its subfolders (see [Subtitles](subtitles.md)).
   - Mount more fonts there for other scripts.
   - A missing folder offers none.
@@ -133,6 +133,40 @@ At the `info` level, Polyfin logs each Jellyfin endpoint an app calls that it do
 
 - **Parts of `cache`:** the settings can move each to another folder (see [Folders for conversion, files being read and the cache](#folders-for-conversion-files-being-read-and-the-cache)).
 - **Recordings and backups:** they go elsewhere when their settings name other folders.
+
+Without `POLYFIN_DATA_DIR`, the data folder is `polyfin-server` in the configuration folder of the user Polyfin runs as, which the other accounts of the system cannot write into:
+
+| System | Data folder without the variable |
+| --- | --- |
+| Linux | `$XDG_CONFIG_HOME/polyfin-server`, else `~/.config/polyfin-server` |
+| macOS | `~/Library/Application Support/polyfin-server` |
+| Windows | `%AppData%\polyfin-server` |
+| Docker image | `/data`: the image sets the variable |
+
+- **A service started without `HOME`:** the folder is in the home its user has in the system's user database. When neither tells a home, Polyfin does not start: set `POLYFIN_DATA_DIR`.
+- **Created for that user alone:** Polyfin creates a missing data folder with mode 0700, and so its default `recordings` and `backups` folders. A folder that exists keeps its mode.
+  - To keep other accounts from reading an older data folder, run `chmod 700` on it.
+  - To let another account read the recordings or the backups, give them folders of their own in the settings.
+
+Polyfin looks at the data folder each time it starts. What is no folder, and a missing folder it cannot create, stop it. A folder that another account of the system can change does not: the log at each start, and **System › Health**, say what is wrong and give the command that mends it.
+
+| The data folder | What mends it |
+| --- | --- |
+| Belongs to another user than the one Polyfin runs as | `chown`, to give it to that user |
+| Can be written by its group or by others | `chmod go-w` |
+
+- **Why it is told:** an account that can write into the folder can replace the backups Polyfin restores, the programs it runs and the files it serves. On a system with no other account, nobody can.
+- **After the command:** restart Polyfin. It looks at the folder when it starts.
+- **A link:** a data folder that is a symbolic link is followed, and the folder it leads to is the one looked at.
+- **In a container:** nothing is looked for. A volume has the owner and the mode its host gave it. Polyfin tells a container by the file Docker or Podman puts in it.
+- **On Windows:** nothing is looked for. A folder has no owner and no mode of this kind there.
+
+Earlier versions kept these files in `polyfin` in the system's temporary folder when `POLYFIN_DATA_DIR` was not set. A server that still has that folder, and no `polyfin-server` folder yet, keeps using it:
+
+- **A warning:** the log at each start, and **System › Health**, name the folder and the one to move it to. Many systems empty their temporary folder at each boot.
+- **Moving it:** stop Polyfin, move the folder, as with `mv /tmp/polyfin ~/.config/polyfin-server` on Linux, then start Polyfin. To keep the files elsewhere, move them there and set `POLYFIN_DATA_DIR`.
+- **Refused:** nobody chose that folder, and another account can make it before Polyfin does. So Polyfin does not start when it is a link, another user's, or writable by its group or by others, whether `POLYFIN_DATA_DIR` names it or not. Create the new folder, as with `mkdir -p -m 700 ~/.config/polyfin-server`, or name another folder in `POLYFIN_DATA_DIR`: Polyfin then leaves the temporary folder alone.
+- **Once the system emptied it:** Polyfin starts in the new folder, empty, as it started in a new temporary folder before.
 
 ### Polyfin Desktop
 
