@@ -31,6 +31,17 @@ import (
 // maxPlaylist bounds the HLS playlists a live relay reads and rewrites.
 const maxPlaylist = 4 << 20
 
+// A relayed playlist is bounded as written too, where each address is a
+// link of Polyfin's, hundreds of bytes however short the address was:
+// maxPlaylistAddresses bounds the addresses it names, its lines and its
+// tags' URI attributes together, and maxPlaylistWritten its bytes once
+// rewritten. A day of 2-second segments, or of 4-second ones each with
+// its key, names 43,200.
+const (
+	maxPlaylistAddresses = 50_000
+	maxPlaylistWritten   = 32 << 20
+)
+
 // liveBandwidth stands for the bitrate of a live stream that announces
 // none, in a master playlist that must give one: players only compare it
 // with other variants, and there is one.
@@ -571,9 +582,16 @@ var ErrUnsafePlaylist = errors.New("the playlist names an address that cannot be
 // a segment but after #EXT-X-STREAM-INF, which names a variant's
 // playlist. Inline data: addresses stay as they are; any other address
 // that is not HTTP, or does not parse, refuses the playlist, as FFmpeg
-// would fetch it itself.
+// would fetch it itself. So does a playlist past maxPlaylistAddresses or
+// maxPlaylistWritten, as soon as it passes one: nothing more is built.
+// The playlist is written whole before any of it is sent, so that a
+// refusal is still an answer of its own.
 func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) string) ([]byte, error) {
+	addresses, linked := 0, 0
 	rewrite := func(ref string, segment bool) (string, error) {
+		if addresses++; addresses > maxPlaylistAddresses {
+			return "", fmt.Errorf("%w: more than %d addresses", ErrUnsafePlaylist, maxPlaylistAddresses)
+		}
 		ref = strings.TrimSpace(ref)
 		if strings.HasPrefix(strings.ToLower(ref), "data:") {
 			return ref, nil
@@ -587,12 +605,18 @@ func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) 
 		if segment {
 			name = segmentName(name)
 		}
-		return link(address, name), nil
+		named := link(address, name)
+		if linked += len(named); linked > maxPlaylistWritten {
+			return "", fmt.Errorf("%w: more than %d bytes once rewritten", ErrUnsafePlaylist, maxPlaylistWritten)
+		}
+		return named, nil
 	}
 	var out bytes.Buffer
+	out.Grow(len(data))
 	variant := false
-	lines := strings.FieldsFunc(string(data), func(r rune) bool { return r == '\r' || r == '\n' || r == 0 })
-	for _, line := range lines {
+	// The lines are read in data, one at a time, not held as a list.
+	for read := range bytes.FieldsFuncSeq(data, func(r rune) bool { return r == '\r' || r == '\n' || r == 0 }) {
+		line := string(read)
 		var err error
 		switch {
 		case strings.HasPrefix(line, "#"):
@@ -604,6 +628,9 @@ func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) 
 		}
 		if err != nil {
 			return nil, err
+		}
+		if out.Len()+len(line)+1 > maxPlaylistWritten {
+			return nil, fmt.Errorf("%w: more than %d bytes once rewritten", ErrUnsafePlaylist, maxPlaylistWritten)
 		}
 		out.WriteString(line)
 		out.WriteByte('\n')

@@ -40,6 +40,7 @@ An addon's stream may be an HLS playlist rather than one file. A finished playli
 - **Refused:** a playlist that names an address that is not HTTP is refused, and so is a line FFmpeg would read otherwise than Polyfin wrote it: an inline key (`data:`) that holds a quote or a backslash, or a tag of more than 4095 bytes cut within an address. The stream fails rather than being read past Polyfin.
 - **Byte ranges:** a segment or a section named with `EXT-X-BYTERANGE` is fetched as that range.
 - **Still finished:** the playlist keeps its tags, `#EXT-X-ENDLIST` included, so it keeps its duration and seeking.
+- **Bounds:** a playlist names up to 50,000 addresses, its segments, keys, sections and other playlists together, and holds up to 32 MB once each is replaced by Polyfin's. A longer one is not relayed: the stream fails, and an app that asked for the playlist receives a `502`. A day of 4-second segments names 21,600 addresses.
 - **Played as it is:** an app that plays HLS, such as jellyfin-web, gets the playlist. It is sent to the source when it can reach it itself, and relayed as above otherwise.
 - **Over HLS:** Polyfin reads no keyframe index from a playlist. It is cut every few seconds, and its video is converted, as for addon MPEG-TS files (see [Version names](versions.md#version-names)).
 - **Not kept:** the files a playlist names are fetched at each request, outside the source cache. A seek fetches its segment again.
