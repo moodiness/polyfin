@@ -473,6 +473,9 @@ const common: typeof en = {
     invalid_events: 'Un des événements choisis n’est pas disponible pour cette cible.',
     invalid_reminder_settings: 'Choisissez 1, 5, 10, 15, 30 ou 60 minutes.',
     too_many_targets: 'Il y a déjà 20 cibles. Supprimez-en une pour en ajouter une autre.',
+    test_too_soon:
+      'Un test a été envoyé à cette cible il y a moins de trente secondes, ou elle a atteint son nombre de messages par minute. Réessayez dans un instant.',
+    too_many_tests: 'Au plus 10 tests peuvent être envoyés par heure. Réessayez plus tard.',
     invalid_per_minute: 'Messages par minute\u202f: de 1 à 60, ou vide pour aucune limite.',
     invalid_group_minutes:
       'Regroupement\u202f: de 1 à 1 440 minutes, ou vide pour tout envoyer aussitôt.',

@@ -461,6 +461,9 @@ const common: typeof en = {
     invalid_events: 'Uno degli eventi scelti non è disponibile per questa destinazione.',
     invalid_reminder_settings: 'Scegli 1, 5, 10, 15, 30 o 60 minuti.',
     too_many_targets: 'Ci sono già 20 destinazioni. Eliminane una per aggiungerne un’altra.',
+    test_too_soon:
+      'Questa destinazione ha ricevuto un test meno di mezzo minuto fa, oppure ha raggiunto i suoi messaggi al minuto. Riprova tra un momento.',
+    too_many_tests: 'Si possono inviare al massimo 10 test all’ora. Riprova più tardi.',
     invalid_per_minute: 'Messaggi al minuto: da 1 a 60, oppure vuoto per nessun limite.',
     invalid_group_minutes: 'Raggruppamento: da 1 a 1.440 minuti, oppure vuoto per inviare subito.',
     invalid_summary:

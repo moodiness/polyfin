@@ -438,6 +438,9 @@ const common = {
     invalid_events: 'One of the events chosen is not available for this target.',
     invalid_reminder_settings: 'Choose 1, 5, 10, 15, 30 or 60 minutes.',
     too_many_targets: 'There are 20 targets already. Delete one to add another.',
+    test_too_soon:
+      'This target was sent a test less than half a minute ago, or has reached its messages a minute. Try again in a moment.',
+    too_many_tests: 'At most 10 tests can be sent in an hour. Try again later.',
     invalid_per_minute: 'Messages a minute: 1 to 60, or empty for no limit.',
     invalid_group_minutes: 'Grouping: 1 to 1,440 minutes, or empty to send each at once.',
     invalid_summary: 'Only the weekly summary, the month and the year in review have a preview.',

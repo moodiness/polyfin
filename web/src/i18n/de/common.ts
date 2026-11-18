@@ -480,6 +480,10 @@ const common: typeof en = {
     invalid_events: 'Eines der gewählten Ereignisse ist für dieses Ziel nicht verfügbar.',
     invalid_reminder_settings: 'Wähle 1, 5, 10, 15, 30 oder 60 Minuten.',
     too_many_targets: 'Es gibt bereits 20 Ziele. Lösche eines, um ein weiteres hinzuzufügen.',
+    test_too_soon:
+      'Dieses Ziel hat vor weniger als einer halben Minute einen Test erhalten oder seine Nachrichten pro Minute erreicht. Versuche es gleich noch einmal.',
+    too_many_tests:
+      'Pro Stunde können höchstens 10 Tests gesendet werden. Versuche es später erneut.',
     invalid_per_minute: 'Nachrichten pro Minute: 1 bis 60, oder leer für keine Begrenzung.',
     invalid_group_minutes: 'Bündeln: 1 bis 1.440 Minuten, oder leer, um alles sofort zu senden.',
     invalid_summary:

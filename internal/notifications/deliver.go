@@ -135,7 +135,8 @@ func (s *Service) release(id accounts.ID, g *group) {
 
 // capWait is how long the target id, t, waits before its next message
 // for its cap of messages a minute: zero when it may send now. It forgets
-// the messages sent more than a minute ago. It is called with s.mu held.
+// the messages sent more than a minute ago, and counts the sends under
+// way (see begin). It is called with s.mu held.
 func (s *Service) capWait(id accounts.ID, t target) time.Duration {
 	now := s.now()
 	recent := s.recent[id]
@@ -147,10 +148,37 @@ func (s *Service) capWait(id accounts.ID, t target) time.Duration {
 	} else {
 		s.recent[id] = recent
 	}
-	if t.perMinute == 0 || len(recent) < t.perMinute {
+	if t.perMinute == 0 || len(recent)+s.underWay[id] < t.perMinute {
 		return 0
 	}
+	if len(recent) == 0 {
+		// Sends under way hold every place, and will for a minute once
+		// they are done.
+		return s.timing.minute
+	}
 	return recent[0].Add(s.timing.minute).Sub(now)
+}
+
+// begin holds a place in the cap of the target id, t, for a send that
+// capWait allowed, until sent counts it: a queued message and a test,
+// which are sent side by side, then never pass the cap together. It is
+// called with s.mu held.
+func (s *Service) begin(id accounts.ID, t target) {
+	if t.perMinute > 0 {
+		s.underWay[id]++
+	}
+}
+
+// sent counts toward the cap of the target id, t, the send that began,
+// from now, whatever came of it. It is called with s.mu held.
+func (s *Service) sent(id accounts.ID, t target) {
+	if t.perMinute == 0 {
+		return
+	}
+	if s.underWay[id]--; s.underWay[id] <= 0 {
+		delete(s.underWay, id)
+	}
+	s.recent[id] = append(s.recent[id], s.now())
 }
 
 // drive sends the messages of a lane until none waits.
@@ -172,7 +200,9 @@ func (s *Service) drive(id accounts.ID, l *lane) {
 		// deleted or turned off drops it.
 		wait := time.Duration(0)
 		if ok && t.enabled {
-			wait = s.capWait(id, t)
+			if wait = s.capWait(id, t); wait == 0 {
+				s.begin(id, t)
+			}
 		}
 		s.mu.Unlock()
 		if wait == 0 && ok && t.enabled {
@@ -209,9 +239,7 @@ func (s *Service) attempt(id accounts.ID, l *lane, t target, d *delivery, confin
 	}
 	failures := l.failures
 	// Each request counts toward the cap, whatever came of it.
-	if t.perMinute > 0 {
-		s.recent[id] = append(s.recent[id], s.now())
-	}
+	s.sent(id, t)
 	s.mu.Unlock()
 	switch res.outcome {
 	case delivered:
@@ -461,15 +489,108 @@ type TestResult struct {
 	Target    Target
 }
 
+// MaxTestsPerHour bounds the tests an owner may ask for in any hour, over
+// all their targets; the server's targets count together.
+const MaxTestsPerHour = 10
+
+// maxTestOwners bounds the owners whose tests of the last hour are kept:
+// past it, another owner's test waits until the hour of one has passed.
+const maxTestOwners = 1000
+
+var (
+	// ErrTestTooSoon reports a test asked of a target that was sent one a
+	// moment ago, or whose cap of messages a minute is reached.
+	ErrTestTooSoon = errors.New("notification target tested too soon")
+	// ErrTooManyTests reports a test asked by an owner whose tests of the
+	// last hour number MaxTestsPerHour.
+	ErrTooManyTests = errors.New("too many notification tests")
+)
+
+// TestRefused is a test that was not sent, for now: Reason is
+// ErrTestTooSoon or ErrTooManyTests, which it unwraps to, and Wait how
+// long until the test may be asked again.
+type TestRefused struct {
+	Reason error
+	Wait   time.Duration
+}
+
+func (e *TestRefused) Error() string { return e.Reason.Error() }
+
+func (e *TestRefused) Unwrap() error { return e.Reason }
+
+// askedTest is a test that was allowed: of which target, and when.
+type askedTest struct {
+	target accounts.ID
+	at     time.Time
+}
+
+// allowTest counts a test of the target id, t, asked by owner, nil for
+// the server's, or answers the TestRefused that tells why it may not be
+// sent now. A target is sent a test at most every timing.testEvery, the
+// targets of an owner MaxTestsPerHour tests in any hour, and a test takes
+// a place in the target's cap of messages a minute, as a message does
+// (see begin). A refused test counts for nothing. The tests are kept in
+// memory, an hour at most, for maxTestOwners owners at most: a restart
+// forgets them, as it does the caps' minutes.
+func (s *Service) allowTest(owner *accounts.User, id accounts.ID, t target) error {
+	var key accounts.ID
+	if owner != nil {
+		key = owner.ID
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	// The tests of more than an hour ago are forgotten, and an owner with
+	// their last: leaves is how long until the next owner is.
+	leaves := time.Hour
+	for other, tests := range s.tests {
+		for len(tests) > 0 && now.Sub(tests[0].at) >= time.Hour {
+			tests = tests[1:]
+		}
+		if len(tests) == 0 {
+			delete(s.tests, other)
+			continue
+		}
+		s.tests[other] = tests
+		leaves = min(leaves, tests[len(tests)-1].at.Add(time.Hour).Sub(now))
+	}
+	tests := s.tests[key]
+	for _, test := range tests {
+		if since := now.Sub(test.at); test.target == id && since < s.timing.testEvery {
+			return &TestRefused{Reason: ErrTestTooSoon, Wait: s.timing.testEvery - since}
+		}
+	}
+	if len(tests) >= MaxTestsPerHour {
+		return &TestRefused{Reason: ErrTooManyTests, Wait: tests[0].at.Add(time.Hour).Sub(now)}
+	}
+	if len(tests) == 0 && len(s.tests) >= maxTestOwners {
+		return &TestRefused{Reason: ErrTooManyTests, Wait: leaves}
+	}
+	if wait := s.capWait(id, t); wait > 0 {
+		return &TestRefused{Reason: ErrTestTooSoon, Wait: wait}
+	}
+	s.tests[key] = append(tests, askedTest{target: id, at: now})
+	s.begin(id, t)
+	return nil
+}
+
 // Test sends a test message to the target id of owner, once, at once, and
-// records what came of it as a message would.
+// records what came of it as a message would. A test asked too soon after
+// another, or one too many, is not sent: the error is a TestRefused (see
+// allowTest).
 func (s *Service) Test(ctx context.Context, owner *accounts.User, id accounts.ID) (TestResult, error) {
 	t, err := s.load(ctx, owner, id)
 	if err != nil {
 		return TestResult{}, err
 	}
+	if err := s.allowTest(owner, id, t); err != nil {
+		return TestResult{}, err
+	}
 	ev, queued := s.testEvent(), s.now()
 	res := s.send(t, ev, owner != nil && !owner.IsAdministrator)
+	s.mu.Lock()
+	s.sent(id, t)
+	s.mu.Unlock()
 	switch res.outcome {
 	case unreadable:
 		return TestResult{}, ErrUnreadable

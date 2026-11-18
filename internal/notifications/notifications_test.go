@@ -495,6 +495,8 @@ func TestChatServicesRefusingAndRateLimiting(t *testing.T) {
 	h := newHarness(t)
 	// Long enough for Telegram's wait below, short enough to wait for.
 	h.timing.giveUp = 3 * time.Second
+	// A target is tested several times in a row.
+	h.timing.testEvery = 0
 	telegram, gotify, pushover := h.chatServices(t, RecordingFinished)
 	for _, refusal := range []struct {
 		target  Target
@@ -992,6 +994,8 @@ func TestDeliveryRetriesWaitsAndGivesUp(t *testing.T) {
 func TestRefusingTargetsAreMarkedFailing(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
+	// The target is tested twice in a row.
+	h.timing.testEvery = 0
 	target := h.add(t, nil, h.webhook("/gone", RecordingFinished))
 	h.targets.then("/gone", status(http.StatusNotFound))
 	h.RecordingEnded(t.Context(), recordings.Ended{Recording: accounts.ID{1}, User: &h.member.ID, Name: "Show"})

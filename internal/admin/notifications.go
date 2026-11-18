@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -147,6 +148,8 @@ func notificationError(w http.ResponseWriter, err error) bool {
 		{notifications.ErrInvalidEvents, http.StatusBadRequest, "invalid_events"},
 		{notifications.ErrTooManyTargets, http.StatusConflict, "too_many_targets"},
 		{notifications.ErrUnreadable, http.StatusConflict, "target_unreadable"},
+		{notifications.ErrTestTooSoon, http.StatusTooManyRequests, "test_too_soon"},
+		{notifications.ErrTooManyTests, http.StatusTooManyRequests, "too_many_tests"},
 		{notifications.ErrInvalidPerMinute, http.StatusBadRequest, "invalid_per_minute"},
 		{notifications.ErrInvalidGroupMinutes, http.StatusBadRequest, "invalid_group_minutes"},
 		{notifications.ErrNoPreview, http.StatusBadRequest, "invalid_summary"},
@@ -251,7 +254,11 @@ func (n notificationRoutes) remove(w http.ResponseWriter, r *http.Request) {
 }
 
 // test sends a test message to a target, at once, and answers what came
-// of it: 200 whether the target accepted it or not.
+// of it: 200 whether the target accepted it or not. A test asked too soon
+// after another of the target, or while the target's cap of messages a
+// minute is reached, is not sent: 429 test_too_soon; nor is one past the
+// tests an owner's targets may be sent in an hour: 429 too_many_tests.
+// Both come with Retry-After.
 func (n notificationRoutes) test(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
@@ -262,6 +269,9 @@ func (n notificationRoutes) test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := n.h.Notifications.Test(r.Context(), n.owner(r), id)
+	if refused := (*notifications.TestRefused)(nil); errors.As(err, &refused) {
+		w.Header().Set("Retry-After", strconv.Itoa(int((refused.Wait+time.Second-1)/time.Second)))
+	}
 	if notificationError(w, err) {
 		return
 	} else if err != nil {

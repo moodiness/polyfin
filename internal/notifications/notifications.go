@@ -351,6 +351,9 @@ type timing struct {
 	// minute is the minute of the targets' caps and groupings: tests
 	// shorten it.
 	minute time.Duration
+	// testEvery is how often a target may be sent a test (see
+	// Service.Test).
+	testEvery time.Duration
 	// failureQuiet is how long a failed play of a user and title is not
 	// told again.
 	failureQuiet time.Duration
@@ -364,6 +367,7 @@ var defaultTiming = timing{
 	retryFirst:       30 * time.Second,
 	retryMax:         10 * time.Minute,
 	giveUp:           time.Hour,
+	testEvery:        30 * time.Second,
 	unreachableAfter: 3,
 	episodesFirst:    5 * time.Minute,
 	episodesEvery:    2 * time.Hour,
@@ -445,6 +449,11 @@ type Service struct {
 	// failures are when each user's failed play of a title was last told,
 	// by user and title (see failures.go).
 	failures map[failureKey]time.Time
+	// underWay counts, by target, the sends that began and are not in
+	// recent yet, and tests are the tests allowed within the last hour,
+	// by owner, the zero identifier for the server's (see deliver.go).
+	underWay map[accounts.ID]int
+	tests    map[accounts.ID][]askedTest
 	// health are the problems found, by key (see health.go).
 	health map[string]*healthState
 	// episodesMu and healthMu serialize the looks at the series, and at
@@ -495,6 +504,8 @@ func New(options Options) *Service {
 		held:        map[accounts.ID]*group{},
 		recent:      map[accounts.ID][]time.Time{},
 		failures:    map[failureKey]time.Time{},
+		underWay:    map[accounts.ID]int{},
+		tests:       map[accounts.ID][]askedTest{},
 		summarySent: map[string]time.Time{},
 		loaded:      make(chan struct{}),
 	}

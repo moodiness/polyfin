@@ -465,7 +465,7 @@ The admin API serves the targets, the SMTP settings and the summary previews. Je
 | `POST …/targets` | | Adds a target. |
 | `PATCH …/targets/{id}` | | Changes one; fields left out keep their values. |
 | `DELETE …/targets/{id}` | | Deletes one. |
-| `POST …/targets/{id}/test` | | Sends a test message, answering `delivered`, the `status` (an HTTP status, or an SMTP code for email), and the target. |
+| `POST …/targets/{id}/test` | | Sends a test message, answering `delivered`, the `status` (an HTTP status, or an SMTP code for email), and the target. A test that is not sent answers 429 with `Retry-After`: `test_too_soon` within half a minute of the target's last test, or while the target has had its messages of the minute; `too_many_tests` after ten tests of the owner's targets in an hour. |
 | `GET …/targets/{id}/deliveries` | | Lists a target's recent deliveries: `id`, `eventId`, `type`, `title`, `events`, `outcome`, `status` (null when the target did not answer), `error` (null when it accepted the message), `attempts`, `queuedAt` and `at`. |
 
 ### Target fields

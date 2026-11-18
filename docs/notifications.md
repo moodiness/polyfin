@@ -95,7 +95,7 @@ Each target shows its state:
 
 ### Sending a test
 
-**Send a test** sends a test message at once and tells whether the target accepted it.
+**Send a test** sends a test message at once and tells whether the target accepted it. Tests are spaced: a target is sent one test in half a minute, and your own targets ten tests an hour between them, as are the server's; asked for sooner, a test is not sent, and Polyfin says to try again later.
 
 - When the target refused it, the result shows the start of its answer, up to 200 characters, such as Discord's `{"message":"Cannot send an empty message","code":50006}`.
 - That answer keeps nothing of the target's address, its path, its tokens or its topic, even in part: what it repeats of them shows as ….
@@ -469,7 +469,7 @@ Each target's form has two fields that pace its messages:
 
 | Field | Values | What it does |
 |---|---|---|
-| **Messages a minute, at most** | 1 to 60, empty for no limit | Past it, the next messages wait their turn, in order, until a minute has passed since the oldest of the last ones. Each request counts, retries included; **Send a test** does not. |
+| **Messages a minute, at most** | 1 to 60, empty for no limit | Past it, the next messages wait their turn, in order, until a minute has passed since the oldest of the last ones. Each request counts, retries included, and so does **Send a test**, which is not sent while the target has had its messages of the minute. |
 | **Group plays and new episodes, in minutes** | 1 to 1,440, empty to send each at once | The playback events, shared links played and new episodes wait that long after the first of them, then go as one message. |
 
 A group goes as "3 notifications", with a line per event: its title, then its message.
