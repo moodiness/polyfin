@@ -189,6 +189,7 @@ A [torrent version](torrents.md) offers the text subtitle files of its torrent t
 
 - **Formats:** SubRip (`.srt`), ASS (`.ass`), SSA (`.ssa`) and WebVTT (`.vtt`).
 - **Size:** up to 8 MiB per file.
+- **Number:** up to 500 files for a video, the first in the torrent's order.
 
 Which files go with the video:
 

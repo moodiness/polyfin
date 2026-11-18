@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
@@ -36,6 +38,10 @@ var torrentSubtitleFormats = map[string]string{".srt": "srt", ".ass": "ass", ".s
 // subtitle downloads are bounded: a larger one is not listed.
 const maxTorrentSubtitle = 8 << 20
 
+// maxTorrentSubtitles bounds the subtitle files listed for one video, far
+// above those a release carries: the first in the torrent's order.
+const maxTorrentSubtitles = 500
+
 // torrentSubtitleWait bounds the fetch of a subtitle file: the torrent's
 // start, when it stopped, and the wait for its pieces (see pieceWait).
 func (s *Service) torrentSubtitleWait() time.Duration {
@@ -60,6 +66,31 @@ type torrentSubtitle struct {
 	SubtitleTags
 }
 
+// videoStem names a video among those of a folder as SubtitleNamed
+// compares names, in any letter case: its name without its extension,
+// folded (see foldRune), and how long that name was before.
+type videoStem struct {
+	folded string
+	length int
+}
+
+// foldRune returns the first, in Unicode's order, of the letters r is
+// equal to in any letter case, so that two names strings.EqualFold tells
+// equal are written the same once each of their letters went through it.
+func foldRune(r rune) rune {
+	if r < utf8.RuneSelf {
+		if 'a' <= r && r <= 'z' {
+			r -= 'a' - 'A'
+		}
+		return r
+	}
+	first := r
+	for other := unicode.SimpleFold(r); other != r; other = unicode.SimpleFold(other) {
+		first = min(first, other)
+	}
+	return first
+}
+
 // torrentSubtitles lists, among a torrent's files, in their order, the
 // text subtitle files that go with played, the video a version plays:
 //   - in its folder, those whose name begins with its own, as Jellyfin
@@ -76,31 +107,59 @@ type torrentSubtitle struct {
 // In a season's pack, a file of another episode is thus left out. What a
 // name tells past the video's, or past its episode, or the whole name
 // but a leading number, gives the file's language, title and flags (see
-// ReadSubtitleTags). Files larger than maxTorrentSubtitle are left out.
-func torrentSubtitles(played torrent.File, files []torrent.File) []torrentSubtitle {
+// ReadSubtitleTags). Files larger than maxTorrentSubtitle are left out,
+// and those past maxTorrentSubtitles.
+//
+// The work grows as the files do: a name is looked up among the folder's
+// videos, at each of its dots, rather than compared with each of them,
+// and lookups counts that. It ends with ctx's error once ctx ended.
+func torrentSubtitles(ctx context.Context, played torrent.File, files []torrent.File) (list []torrentSubtitle, lookups int, err error) {
 	dir, stem := path.Dir(played.Path), fileStem(played.Path)
 	episode, isEpisode := episodename.Of(played.Path)
-	var longer []string
+	longer := map[videoStem]bool{}
 	videos := 0
-	for _, f := range files {
+	for i, f := range files {
+		if i%1024 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, 0, err
+			}
+		}
 		if f.Padding || path.Dir(f.Path) != dir || !episodename.Video(f.Path) {
 			continue
 		}
 		videos++
 		if other := fileStem(f.Path); len(other) > len(stem) {
-			longer = append(longer, other)
+			longer[videoStem{strings.Map(foldRune, other), len(other)}] = true
 		}
 	}
 	// named reads the name of a file named after the video, not after a
-	// video whose longer name begins with the same.
+	// video whose longer name begins with the same: what the name holds
+	// before each of its dots past the video's name, then the whole name,
+	// is looked up among the longer names. A dot is the same byte in the
+	// name and in the folded one, and no letter's bytes hold one.
 	named := func(name string) (string, bool) {
 		rest, ok := SubtitleNamed(stem, name)
-		for _, other := range longer {
-			if _, theirs := SubtitleNamed(other, name); theirs {
-				return "", false
+		if !ok || len(longer) == 0 {
+			return rest, ok
+		}
+		folded := strings.Map(foldRune, name)
+		for i, j := 0, 0; ; i, j = i+1, j+1 {
+			dot := strings.IndexByte(name[i:], '.')
+			if dot < 0 {
+				i, j = len(name), len(folded)
+			} else {
+				i, j = i+dot, j+strings.IndexByte(folded[j:], '.')
+			}
+			if i > len(stem) {
+				lookups++
+				if longer[videoStem{folded[:j], i}] {
+					return "", false
+				}
+			}
+			if dot < 0 {
+				return rest, ok
 			}
 		}
-		return rest, ok
 	}
 	// ofEpisode reads what a name tells past the episode it tells, and
 	// reports whether it tells one, and whether that one is the video's.
@@ -116,8 +175,12 @@ func torrentSubtitles(played torrent.File, files []torrent.File) []torrentSubtit
 		}
 		return rest, true, isEpisode && e == episode
 	}
-	var list []torrentSubtitle
 	for i, f := range files {
+		if i%1024 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, lookups, err
+			}
+		}
 		format := torrentSubtitleFormats[strings.ToLower(path.Ext(f.Path))]
 		if format == "" || f.Padding || f.Length > maxTorrentSubtitle {
 			continue
@@ -150,9 +213,12 @@ func torrentSubtitles(played torrent.File, files []torrent.File) []torrentSubtit
 		}
 		if ok {
 			list = append(list, torrentSubtitle{index: i, path: f.Path, format: format, SubtitleTags: ReadSubtitleTags(rest)})
+			if len(list) == maxTorrentSubtitles {
+				break
+			}
 		}
 	}
-	return list
+	return list, lookups, nil
 }
 
 // fileStem is a file's name without its folder and extension.
@@ -282,7 +348,10 @@ func (s *Service) listTorrentSubtitles(ctx context.Context, version library.Vers
 		if err != nil {
 			return nil, err
 		}
-		list := torrentSubtitles(played, files)
+		list, _, err := torrentSubtitles(wait, played, files)
+		if err != nil {
+			return nil, err
+		}
 		if err := s.keepTorrentSubtitles(wait, version.ID, list); err != nil {
 			s.logger.Warn("Saving the subtitle files of a torrent failed", "error", err)
 			return nil, nil
