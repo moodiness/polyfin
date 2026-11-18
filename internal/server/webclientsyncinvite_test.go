@@ -17,7 +17,8 @@ import (
 // instead. The keyboard stays in the picker. Clicks pass through the
 // toasts, which lie over the video's Play button. An invitation pushed on the
 // socket shows a prompt, which Join answers with Jellyfin's
-// POST /SyncPlay/Join, and Not now or Escape by declining it; an end of
+// POST /SyncPlay/Join, and Not now or Escape by declining it; from the
+// prompt itself, any key that moves the focus goes to Not now; an end of
 // the invitation heard on the socket closes it, as does its expiry. It
 // runs in Node.js, in a context that stands for the browser and
 // jellyfin-web.
@@ -38,6 +39,7 @@ func TestWatchTogetherInvitesPeople(t *testing.T) {
 		" (the people icon at the top). Press Play once they are in. (10s)"
 	const invite = `POST Polyfin/SyncPlay/Invitations {"GroupId":"g1","UserId":"u2"}`
 	const prompt = "prompt alertdialog | Watch together | Morgan invites you to watch together. | Show / Pilot | Not now, Join | focus the prompt"
+	const declined = "POST Polyfin/SyncPlay/Invitations/i1/Decline, "
 	scenarios := map[string]string{
 		// The host.
 		"inviting Sam": started + picker + ", tick Sam, Invite, " + invite + ", nothing shown, focus Play, " +
@@ -76,6 +78,14 @@ func TestWatchTogetherInvitesPeople(t *testing.T) {
 		"a prompt, Escape":  prompt + ", Escape, POST Polyfin/SyncPlay/Invitations/i1/Decline, nothing shown, focus Play",
 		"a prompt, by keyboard": prompt + ", Tab: focus Not now, ArrowRight: focus Join, ArrowLeft: focus Not now, Shift+Tab: focus Join, " +
 			`POST SyncPlay/Join {"GroupId":"g1"}, Enter: focus Play, nothing shown, focus Play`,
+		// From the prompt itself, a key that moves backward goes to Not
+		// now as one that moves forward does, never to Join.
+		"a prompt, then ArrowLeft Enter":       prompt + ", ArrowLeft: focus Not now, " + declined + "Enter: focus Play, nothing shown, focus Play",
+		"a prompt, then ArrowUp Space":         prompt + ", ArrowUp: focus Not now, " + declined + "Space: focus Play, nothing shown, focus Play",
+		"a prompt, then Shift+Tab Enter":       prompt + ", Shift+Tab: focus Not now, " + declined + "Enter: focus Play, nothing shown, focus Play",
+		"a prompt, then Shift+Tab Space":       prompt + ", Shift+Tab: focus Not now, " + declined + "Space: focus Play, nothing shown, focus Play",
+		"a prompt, then ArrowRight Enter":      prompt + ", ArrowRight: focus Not now, " + declined + "Enter: focus Play, nothing shown, focus Play",
+		"a prompt, then ArrowDown Space":       prompt + ", ArrowDown: focus Not now, " + declined + "Space: focus Play, nothing shown, focus Play",
 		"a prompt, joined on another device":   prompt + ", told Joined i1, nothing shown, focus Play",
 		"a prompt, declined on another device": prompt + ", told Declined i1, nothing shown, focus Play",
 		"a prompt, its group ended":            prompt + ", told Ended i1, nothing shown, focus Play",
@@ -306,6 +316,11 @@ const settle = async (times) => { for (let i = 0; i < (times || 20); i++) await 
       } else if (name.includes('expiring')) {
         did.push('5 minutes')
         timers.filter((timer) => timer.delay === 300000).forEach((timer) => timer.run())
+      } else if (name.includes(', then ')) {
+        for (const pressed of name.split(', then ')[1].split(' ')) {
+          if (pressed === 'Shift+Tab') key('Tab', true)
+          else key(pressed === 'Space' ? ' ' : pressed)
+        }
       } else if (name.includes('keyboard')) {
         key('Tab'); key('ArrowRight'); key('ArrowLeft'); key('Tab', true); key('Enter')
       } else if (name.includes('search field') || name.includes('video')) {

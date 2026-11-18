@@ -3231,7 +3231,10 @@
   }
   // inviteKeys keeps the keyboard in a dialog: Tab and the arrows move
   // between its controls, as a remote's arrows do, Enter ticks a box, and
-  // Escape runs leave. jellyfin-web hears none of these keys meanwhile.
+  // Escape runs leave. From the dialog itself, which the prompt focuses,
+  // every one of them goes to the first control, the one that declines:
+  // no single key leads from the page to Join. jellyfin-web hears none of
+  // these keys meanwhile.
   function inviteKeys(dialog, leave) {
     dialog.addEventListener(
       'keydown',
@@ -3248,7 +3251,7 @@
           })
           var at = stops.indexOf(focused)
           var back = key === 'Tab' ? !!event.shiftKey : /Up|Left/.test(key)
-          var next = stops[(at + (back ? stops.length - 1 : 1) + (at < 0 && back ? 1 : 0)) % stops.length]
+          var next = at < 0 ? stops[0] : stops[(at + (back ? stops.length - 1 : 1)) % stops.length]
           if (next) next.focus()
         } else {
           return
