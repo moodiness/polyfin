@@ -45,6 +45,41 @@ const (
 // FFmpeg reads it as it is.
 var errNoSentinel = errors.New("no sentinel can be added to the subtitle file")
 
+const (
+	// maxIndexBytes bounds a VobSub pair's .idx file, held whole to add
+	// the sentinel: a track lists a movie's pictures, a thousand or two,
+	// in under 50 bytes each, and FFmpeg reads 32 tracks.
+	maxIndexBytes = 4 << 20
+	// maxBurnBytes bounds a .sub or PGS file copied into the encoding's
+	// folder: what playback allows a picture file read whole.
+	maxBurnBytes = 256 << 20
+)
+
+// errIndexTooLarge marks an .idx file past maxIndexBytes. No sentinel is
+// added to it, and FFmpeg is not given it either: FFmpeg keeps in memory
+// an entry for each line of an .idx file it opens, several times the
+// file's size.
+var errIndexTooLarge = fmt.Errorf("%w: its .idx file is larger than %d bytes", errNoSentinel, maxIndexBytes)
+
+// bounded reads r until it has given left bytes, then fails with over if
+// r holds more: it reads one byte past the bound at most.
+type bounded struct {
+	r    io.Reader
+	left int64
+	over error
+}
+
+func (b *bounded) Read(p []byte) (int, error) {
+	if int64(len(p)) > b.left+1 {
+		p = p[:b.left+1]
+	}
+	n, err := b.r.Read(p)
+	if b.left -= int64(n); b.left < 0 {
+		return 0, b.over
+	}
+	return n, err
+}
+
 // sentinelTime is when the sentinel of a version lasting duration, zero
 // when not known, is shown, before each format's own limits.
 func sentinelTime(duration time.Duration) time.Duration {
@@ -57,7 +92,8 @@ func sentinelTime(duration time.Duration) time.Duration {
 // burnCopy is the copy, with a sentinel, of a subtitle file that the jobs
 // of an encoding burn in: made once at name, by the first job that needs
 // it, and removed with the encoding's folder. file is what FFmpeg reads
-// once made: the copy, or the file itself when no copy could be made.
+// once made: the copy, the file itself when no copy could be made, or
+// nothing when the file is not to be burned in (see sentinelCopy).
 type burnCopy struct {
 	name string
 	mu   sync.Mutex
@@ -66,7 +102,8 @@ type burnCopy struct {
 }
 
 // burnInput returns input reading the encoding's copy of the subtitle file
-// it burns in, made at the first call (see writeBurnCopy), or input itself
+// it burns in, made at the first call (see writeBurnCopy), input burning
+// nothing in when the file is refused (see sentinelCopy), or input itself
 // when it burns none. A job stopped while the copy is made leaves it to
 // the next.
 func (e *encoding) burnInput(ctx context.Context, input *Remux) *Remux {
@@ -99,11 +136,16 @@ func (e *encoding) burnInput(ctx context.Context, input *Remux) *Remux {
 // sentinelCopy writes a copy of the subtitle file r burns in, with a
 // sentinel, at name and the file's extension, and returns its path and
 // true; when it cannot, it logs why and returns the file r burns in and
-// false.
+// false, or no file and false for a VobSub pair whose .idx file is past
+// maxIndexBytes: the conversion then burns nothing in.
 func (m *Manager) sentinelCopy(ctx context.Context, r *Remux, name string) (string, bool) {
 	original := r.Encode.BurnFile
 	file, err := writeBurnCopy(ctx, original, name, sentinelTime(max(r.Duration, r.Plan.duration)+r.Shift))
 	if err != nil {
+		if errors.Is(err, errIndexTooLarge) {
+			m.logger.Warn("A subtitle file is not burned in: its .idx file is larger than a movie's", "file", original, "limit", maxIndexBytes)
+			return "", false
+		}
 		if ctx.Err() == nil {
 			m.logger.Info("A subtitle file is burned in as it is, without a sentinel: FFmpeg 9.0 may stop for good at its end", "file", original, "error", err)
 		}
@@ -128,8 +170,9 @@ func burning(r *Remux, file string) *Remux {
 // .idx file, by path or http URL, with a sentinel at, or later in a file
 // with later pictures, at name and its extension, and returns the copy's
 // path: name.sup, or name.idx beside name.sub. A file whose format or
-// layout it does not know is errNoSentinel; nothing is left behind on an
-// error.
+// layout it does not know, or a PGS or .sub file past maxBurnBytes, is
+// errNoSentinel, and an .idx file past maxIndexBytes errIndexTooLarge;
+// nothing is left behind on an error.
 func writeBurnCopy(ctx context.Context, original, name string, at time.Duration) (string, error) {
 	if len(original) < 4 || original[len(original)-4] != '.' {
 		return "", errNoSentinel
@@ -137,7 +180,9 @@ func writeBurnCopy(ctx context.Context, original, name string, at time.Duration)
 	switch strings.ToLower(original[len(original)-3:]) {
 	case "sup":
 		out := name + ".sup"
-		if err := writeCopy(ctx, original, out, func(w io.Writer, r io.Reader) error { return copyPGS(w, r, at) }); err != nil {
+		if err := writeCopy(ctx, original, out, func(w io.Writer, r io.Reader) error {
+			return copyPGS(w, &bounded{r: r, left: maxBurnBytes, over: errNoSentinel}, at)
+		}); err != nil {
 			return "", err
 		}
 		return out, nil
@@ -148,32 +193,33 @@ func writeBurnCopy(ctx context.Context, original, name string, at time.Duration)
 		if original[len(original)-3:] == "IDX" {
 			sub = original[:len(original)-3] + "SUB"
 		}
-		var idx []byte
-		if err := readSource(ctx, original, func(r io.Reader) (err error) {
-			idx, err = io.ReadAll(r)
+		var read strings.Builder
+		if err := readSource(ctx, original, func(r io.Reader) error {
+			_, err := io.Copy(&read, &bounded{r: r, left: maxIndexBytes, over: errIndexTooLarge})
 			return err
 		}); err != nil {
 			return "", err
 		}
+		idx := read.String()
 		if err := writeCopy(ctx, sub, name+".sub", func(w io.Writer, r io.Reader) error {
-			size, err := io.Copy(w, r)
+			size, err := io.Copy(w, &bounded{r: r, left: maxBurnBytes, over: errNoSentinel})
 			if err != nil {
 				return err
 			}
-			marked, packs, err := vobSubSentinel(string(idx), size, at)
+			marked, packs, err := vobSubSentinel(idx, size, at)
 			if err != nil {
 				return err
 			}
 			if _, err := w.Write(packs); err != nil {
 				return err
 			}
-			idx = []byte(marked)
+			idx = marked
 			return nil
 		}); err != nil {
 			return "", err
 		}
 		out := name + ".idx"
-		if err := os.WriteFile(out, idx, 0o600); err != nil {
+		if err := os.WriteFile(out, []byte(idx), 0o600); err != nil {
 			_ = os.Remove(out)
 			_ = os.Remove(name + ".sub")
 			return "", err
@@ -345,11 +391,10 @@ const vobSubTracks = 32
 // video. An .idx file FFmpeg would refuse, or whose times would pass the
 // last it can write, is errNoSentinel.
 func vobSubSentinel(idx string, size int64, at time.Duration) (string, []byte, error) {
-	lines := strings.SplitAfter(idx, "\n")
 	type track struct {
 		index int
-		// after is the line of the track's last picture, and delay the
-		// delay in effect there.
+		// after is where the line of the track's last picture ends, and
+		// delay the delay in effect there.
 		after int
 		delay time.Duration
 	}
@@ -357,8 +402,9 @@ func vobSubSentinel(idx string, size int64, at time.Duration) (string, []byte, e
 	byIndex := map[int]*track{}
 	current := -1
 	var delay, latest time.Duration
-	for i, line := range lines {
-		line = strings.TrimRight(line, "\r\n")
+	for start, end := 0, 0; start < len(idx); start = end {
+		end = lineEnd(idx, start)
+		line := strings.TrimRight(idx[start:end], "\r\n")
 		switch {
 		case strings.HasPrefix(line, "id:"):
 			// FFmpeg takes a line it cannot read for index 0.
@@ -388,7 +434,7 @@ func vobSubSentinel(idx string, size int64, at time.Duration) (string, []byte, e
 				byIndex[current] = tr
 				tracks = append(tracks, tr)
 			}
-			tr.after, tr.delay = i, delay
+			tr.after, tr.delay = end, delay
 		case strings.HasPrefix(line, "delay:"):
 			m := idxDelay.FindStringSubmatch(line)
 			if m == nil {
@@ -419,11 +465,11 @@ func vobSubSentinel(idx string, size int64, at time.Duration) (string, []byte, e
 			return "", nil, errNoSentinel
 		}
 		ending := "\n"
-		if strings.HasSuffix(lines[tr.after], "\r\n") {
+		if strings.HasSuffix(idx[:tr.after], "\r\n") {
 			ending = "\r\n"
 		}
 		var listed strings.Builder
-		if !strings.HasSuffix(lines[tr.after], "\n") {
+		if !strings.HasSuffix(idx[:tr.after], "\n") {
 			listed.WriteString(ending)
 		}
 		for _, t := range []time.Duration{first, first + time.Second} {
@@ -436,11 +482,21 @@ func vobSubSentinel(idx string, size int64, at time.Duration) (string, []byte, e
 	}
 	var out strings.Builder
 	out.Grow(len(idx) + len(tracks)*2*48)
-	for i, line := range lines {
-		out.WriteString(line)
-		out.WriteString(added[i])
+	for start, end := 0, 0; start < len(idx); start = end {
+		end = lineEnd(idx, start)
+		out.WriteString(idx[start:end])
+		out.WriteString(added[end])
 	}
 	return out.String(), packs, nil
+}
+
+// lineEnd is where the line of idx that starts at start ends, its line
+// feed counted.
+func lineEnd(idx string, start int) int {
+	if n := strings.IndexByte(idx[start:], '\n'); n >= 0 {
+		return start + n + 1
+	}
+	return len(idx)
 }
 
 // vobSubPack appends to packs a 2048-byte pack of the .sub file of a
