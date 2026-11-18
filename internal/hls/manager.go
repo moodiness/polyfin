@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/subtitles"
+	"github.com/moodiness/polyfin/internal/workfolder"
 )
 
 const (
@@ -916,12 +917,10 @@ type Manager struct {
 
 // NewManager returns a manager running FFmpeg from ffmpegPath and keeping
 // segments under dir, which it empties first: segments are not reused
-// across runs.
+// across runs. A folder Polyfin did not make is not emptied, and no
+// manager is returned for it (see workfolder.ErrOccupied).
 func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
-	if err := os.RemoveAll(dir); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := workfolder.Segments.Empty(dir); err != nil {
 		return nil, err
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), system: runtime.GOOS, arch: runtime.GOARCH,

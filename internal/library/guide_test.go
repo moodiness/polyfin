@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/workfolder"
 )
 
 // guideServer serves an XMLTV guide, compressed, counting downloads; status
@@ -343,7 +344,7 @@ func TestXMLTVGuidesInZIPArchives(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	_ = os.WriteFile(filepath.Join(dir, "guide-left.zip"), []byte("left by a crash"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "guide-123456.zip"), []byte("left by a crash"), 0o600)
 	if err := e.service.SpoolGuidesIn(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +364,7 @@ func TestXMLTVGuidesInZIPArchives(t *testing.T) {
 	}
 	empty := func(when string) {
 		t.Helper()
-		if left, err := os.ReadDir(dir); err != nil || len(left) > 0 {
+		if left, err := os.ReadDir(dir); err != nil || len(left) != 1 || left[0].Name() != workfolder.Marker {
 			t.Errorf("%s: left in the cache folder: %v %v", when, left, err)
 		}
 	}

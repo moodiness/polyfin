@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/workfolder"
 )
 
 // pieceKey names a piece of a torrent.
@@ -44,12 +46,10 @@ type storedPiece struct {
 }
 
 // newStore returns a store in dir, removing what a previous run left
-// there: it is not trusted.
+// there: it is not trusted. A folder Polyfin did not make is not emptied,
+// and no store is returned for it (see workfolder.ErrOccupied).
 func newStore(dir string, budget func() int64, logger *slog.Logger) (*store, error) {
-	if err := os.RemoveAll(dir); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := workfolder.Torrents.Empty(dir); err != nil {
 		return nil, err
 	}
 	return &store{dir: dir, budget: budget, logger: logger, pieces: map[pieceKey]*storedPiece{}, runs: map[Hash]uint64{}}, nil

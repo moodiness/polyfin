@@ -86,6 +86,7 @@ import (
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/virtualtv"
 	"github.com/moodiness/polyfin/internal/watchlist"
+	"github.com/moodiness/polyfin/internal/workfolder"
 	webui "github.com/moodiness/polyfin/web"
 )
 
@@ -388,8 +389,19 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 		logger.Warn("A folder the settings choose cannot be written into: the data folder's cache is used instead until the next start",
 			"folder", unwritable.Name, "path", unwritable.Folder, "error", unwritable.Err)
 	}
+	// A folder chosen that holds, under the name of a folder emptied at
+	// start, files Polyfin did not make is left as it is and told the same
+	// way: only the folders Polyfin made are emptied (see workfolder).
+	for _, occupied := range work.Occupied {
+		logger.Warn("A folder the settings choose holds files Polyfin did not make where it would empty a folder at start: "+
+			"it is left as it is, and the data folder's cache is used instead until the next start",
+			"folder", occupied.Name, "path", occupied.Folder, "holds", occupied.Holds)
+	}
 	if err := work.ClearUnused(cfg.DataDir); err != nil {
 		logger.Warn("The folders of the data folder's cache left unused could not be removed", "error", err)
+	}
+	if err := work.MarkOwn(cfg.DataDir); err != nil {
+		logger.Warn("The folders of the data folder's cache emptied at start could not be marked as Polyfin's", "error", err)
 	}
 	sources, err := source.New(work.Sources(), func() source.Policy { return playback.SourcePolicy(store.Settings()) }, addonClient, logger)
 	if err != nil {
@@ -530,7 +542,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	// files written meanwhile go in the cache folder, emptied at start, as
 	// the system's temporary folder is read-only in the image's container.
 	ocrDir := work.OCR()
-	if err := errors.Join(os.RemoveAll(ocrDir), os.MkdirAll(ocrDir, 0o700)); err != nil {
+	if err := workfolder.OCR.Empty(ocrDir); err != nil {
 		return fmt.Errorf("prepare the OCR directory: %w", err)
 	}
 	player.UseTesseract(cfg.FFmpeg, ocrDir, &ocr.Tesseract{Path: cfg.Tesseract, DataDir: cfg.TessdataDir, TempDir: ocrDir})

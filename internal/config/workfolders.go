@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/workfolder"
 )
 
 // The names of the folders the settings choose for the files Polyfin
@@ -31,6 +32,11 @@ type Folders struct {
 	// written into at start: the cache in the data folder takes their
 	// place meanwhile.
 	Unwritable []UnwritableFolder
+	// Occupied are the folders the settings chose that held at start,
+	// under the name of a folder Polyfin empties, files it did not make:
+	// they are left as they are, and the cache in the data folder takes
+	// their place meanwhile.
+	Occupied []OccupiedFolder
 }
 
 // UnwritableFolder is a folder the settings chose that Polyfin could not
@@ -42,11 +48,39 @@ type UnwritableFolder struct {
 	Err    error
 }
 
+// OccupiedFolder is a folder the settings chose where Polyfin found at
+// start, under the name of a folder it empties, files it did not make:
+// Name is ConversionFolder, ReadingFolder or CacheFolder, and Holds the
+// name of that folder within Folder, as "torrents".
+type OccupiedFolder struct {
+	Name   string
+	Folder string
+	Holds  string
+}
+
+// emptied are the folders of a run that are emptied at its start, each
+// in the folder of one setting, with what tells it from a folder Polyfin
+// did not make.
+var emptied = []struct {
+	kind    workfolder.Kind
+	setting string
+	dir     func(Folders) string
+}{
+	{workfolder.Segments, ConversionFolder, Folders.Segments},
+	{workfolder.Torrents, ReadingFolder, Folders.Torrents},
+	{workfolder.Guides, CacheFolder, Folders.Guides},
+	{workfolder.OCR, CacheFolder, Folders.OCR},
+}
+
 // ChooseFolders returns the folders of a run on a server keeping its files
 // in dataDir: those settings chose, each checked as the recordings and
 // backup folders are (see PrepareFolder), and the cache in the data folder
 // for those it leaves empty or Polyfin cannot write into. A folder chosen
-// is never created: it is where a disk or a memory folder is mounted.
+// is never created: it is where a disk or a memory folder is mounted. Nor
+// is one emptied of what Polyfin did not make: where a folder emptied at
+// start would take the place of an administrator's files (see
+// workfolder.Kind.Check), the folder chosen is left as it is, and the
+// cache in the data folder is used for it too.
 func ChooseFolders(dataDir string, settings accounts.Settings) Folders {
 	place := accounts.DefaultCacheFolder(dataDir)
 	folders := Folders{Conversion: place, Reading: place, Cache: place}
@@ -65,9 +99,31 @@ func ChooseFolders(dataDir string, settings accounts.Settings) Folders {
 			folders.Unwritable = append(folders.Unwritable, UnwritableFolder{Name: f.name, Folder: f.chosen, Err: err})
 			continue
 		}
+		if held := occupied(f.name, f.chosen, place); held != nil {
+			folders.Occupied = append(folders.Occupied, held...)
+			continue
+		}
 		*f.into = f.chosen
 	}
 	return folders
+}
+
+// occupied returns, for the folder chosen for a setting, each folder
+// emptied at start that would be one Polyfin did not make. The cache in
+// the data folder, place, is Polyfin's own even when a setting names it
+// (see MarkOwn).
+func occupied(setting, chosen, place string) []OccupiedFolder {
+	if filepath.Clean(chosen) == filepath.Clean(place) {
+		return nil
+	}
+	there := Folders{Conversion: chosen, Reading: chosen, Cache: chosen}
+	var held []OccupiedFolder
+	for _, e := range emptied {
+		if dir := e.dir(there); e.setting == setting && errors.Is(e.kind.Check(dir), workfolder.ErrOccupied) {
+			held = append(held, OccupiedFolder{Name: setting, Folder: chosen, Holds: filepath.Base(dir)})
+		}
+	}
+	return held
 }
 
 // Segments is the folder of the segments of conversions and
@@ -114,6 +170,23 @@ func (f Folders) ClearUnused(dataDir string) error {
 			continue
 		}
 		errs = append(errs, os.RemoveAll(unused))
+	}
+	return errors.Join(errs...)
+}
+
+// MarkOwn marks as made by Polyfin the folders of the cache in the data
+// folder dataDir that the run empties at its start: the data folder is
+// Polyfin's own, so whatever one of them holds, a run before left it
+// there, of whichever version, and it is emptied as it always was. In a
+// folder the settings chose, such a folder is told from an
+// administrator's by what it holds alone (see ChooseFolders).
+func (f Folders) MarkOwn(dataDir string) error {
+	place := filepath.Clean(accounts.DefaultCacheFolder(dataDir))
+	var errs []error
+	for _, e := range emptied {
+		if dir := e.dir(f); filepath.Dir(dir) == place {
+			errs = append(errs, workfolder.Mark(dir))
+		}
 	}
 	return errors.Join(errs...)
 }

@@ -9,7 +9,6 @@ import (
 	"io"
 	"maps"
 	"net/http"
-	"os"
 	"slices"
 	"sync"
 	"time"
@@ -21,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/workfolder"
 	"github.com/moodiness/polyfin/internal/xmltv"
 )
 
@@ -70,12 +70,11 @@ var errTooManyProgrammes = errors.New("too many programmes")
 // SpoolGuidesIn sets the folder XMLTV guides in ZIP archives are written
 // to while they are read, which reading one needs: a folder of Polyfin's
 // cache, writable in a read-only container. What a previous run left there
-// is removed. It is called before guides are fetched.
+// is removed, unless Polyfin did not make the folder: it is then left as
+// it is and refused (see workfolder.ErrOccupied). It is called before
+// guides are fetched.
 func (s *Service) SpoolGuidesIn(dir string) error {
-	if err := os.RemoveAll(dir); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := workfolder.Guides.Empty(dir); err != nil {
 		return err
 	}
 	s.guideDir = dir
