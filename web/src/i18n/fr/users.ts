@@ -136,7 +136,7 @@ const users: typeof en = {
     noPersonalAddons: 'Sans addons personnels',
     blockedUntil: (time: string) => `Bloqué jusqu’à ${time}`,
     blockedHelp:
-      'Trop de mots de passe faux ont été saisis pour ce compte\u202f: il ne peut pas se connecter avant cette heure, même avec le bon mot de passe.',
+      'Trop de mots de passe faux ont été saisis pour ce compte depuis une même adresse\u202f: les connexions depuis cette adresse sont refusées jusqu’à cette heure, même avec le bon mot de passe. Les autres adresses, et les appareils que le compte a déjà utilisés, se connectent toujours.',
     unblock: 'Débloquer',
     unblocking: 'Déblocage…',
     unblocked: 'Le compte est débloqué.',

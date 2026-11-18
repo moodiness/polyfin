@@ -785,7 +785,7 @@ const settings: typeof en = {
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Bloquear una cuenta tras este número de contraseñas incorrectas (0 = nunca)',
     loginAttemptsHelp: (r: RangeText) =>
-      `Tras este número de contraseñas incorrectas seguidas, la cuenta no puede iniciar sesión durante 15 minutos, ni siquiera con la contraseña correcta. Un administrador puede desbloquearla antes en la página Usuarios. 0, o de ${r.min} a ${r.max}.`,
+      `Tras este número de contraseñas incorrectas seguidas desde una misma dirección, esa dirección no puede iniciar sesión en la cuenta durante 15 minutos, ni siquiera con la contraseña correcta. Las demás direcciones y los dispositivos que la cuenta ya ha usado siguen iniciando sesión. Un administrador puede desbloquear la cuenta antes en la página Usuarios. 0, o de ${r.min} a ${r.max}.`,
     twoStepAdministrators: 'Exigir el inicio de sesión en dos pasos a los administradores',
     twoStepAdministratorsHelp:
       'Los administradores inician sesión en esta aplicación de administración con un código de una aplicación de autenticación después de su contraseña. Quien no lo haya configurado lo hace justo después de su contraseña, antes de obtener una sesión. A partir de entonces, su contraseña sola no inicia sesión en ninguna aplicación de Jellyfin: debe usar Quick Connect, aprobado aquí. Las sesiones y los dispositivos ya conectados siguen conectados. Desactivado de forma predeterminada.',

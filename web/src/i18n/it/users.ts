@@ -136,7 +136,7 @@ const users: typeof en = {
     noPersonalAddons: 'Nessun add-on personale',
     blockedUntil: (time: string) => `Bloccato fino alle ${time}`,
     blockedHelp:
-      'Sono state inserite troppe password errate per questo account: non può accedere fino ad allora, nemmeno con la password corretta.',
+      'Sono state inserite troppe password errate per questo account da uno stesso indirizzo: gli accessi da quell’indirizzo sono rifiutati fino ad allora, anche con la password corretta. Gli altri indirizzi e i dispositivi già usati dall’account continuano ad accedere.',
     unblock: 'Sblocca',
     unblocking: 'Sblocco…',
     unblocked: 'L’account è sbloccato.',

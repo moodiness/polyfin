@@ -135,7 +135,7 @@ const users: typeof en = {
     noPersonalAddons: 'Sin extensiones propias',
     blockedUntil: (time: string) => `Bloqueado hasta las ${time}`,
     blockedHelp:
-      'Se han introducido demasiadas contraseñas incorrectas para esta cuenta: no puede iniciar sesión hasta entonces, ni siquiera con la contraseña correcta.',
+      'Se han introducido demasiadas contraseñas incorrectas para esta cuenta desde una misma dirección: los inicios de sesión desde esa dirección se rechazan hasta entonces, incluso con la contraseña correcta. Las demás direcciones y los dispositivos que la cuenta ya ha usado siguen iniciando sesión.',
     unblock: 'Desbloquear',
     unblocking: 'Desbloqueando…',
     unblocked: 'La cuenta está desbloqueada.',

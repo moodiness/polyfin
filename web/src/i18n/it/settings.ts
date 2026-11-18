@@ -789,7 +789,7 @@ const settings: typeof en = {
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Blocca un account dopo questo numero di password errate (0 = mai)',
     loginAttemptsHelp: (r: RangeText) =>
-      `Dopo questo numero di password errate consecutive, l’account non può accedere per 15 minuti, nemmeno con la password corretta. Un amministratore può sbloccarlo prima dalla pagina Utenti. 0, oppure da ${r.min} a ${r.max}.`,
+      `Dopo questo numero di password errate consecutive da uno stesso indirizzo, quell’indirizzo non può accedere all’account per 15 minuti, nemmeno con la password corretta. Gli altri indirizzi e i dispositivi già usati dall’account continuano ad accedere. Un amministratore può sbloccare l’account prima dalla pagina Utenti. 0, oppure da ${r.min} a ${r.max}.`,
     twoStepAdministrators: 'Richiedi l’accesso in due passaggi per gli amministratori',
     twoStepAdministratorsHelp:
       'Gli amministratori accedono a questa applicazione di amministrazione con un codice di un’applicazione di autenticazione dopo la password. Chi non l’ha ancora configurato lo fa subito dopo la password, prima di ottenere una sessione. Da quel momento la sola password non consente l’accesso a nessuna applicazione Jellyfin: si usa Quick Connect, approvato qui. Le sessioni e i dispositivi già connessi restano connessi. Disattivato per impostazione predefinita.',

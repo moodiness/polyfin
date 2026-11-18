@@ -787,7 +787,7 @@ const settings: typeof en = {
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
     loginAttemptsHelp: (r: RangeText) =>
-      `Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de ${r.min} à ${r.max}.`,
+      `Après ce nombre de mots de passe faux à la suite depuis une même adresse, cette adresse ne peut plus se connecter au compte pendant 15 minutes, même avec le bon mot de passe. Les autres adresses, et les appareils que le compte a déjà utilisés, se connectent toujours. Un administrateur peut débloquer le compte plus tôt depuis la page Utilisateurs. 0, ou de ${r.min} à ${r.max}.`,
     twoStepAdministrators: 'Exiger la connexion en deux étapes des administrateurs',
     twoStepAdministratorsHelp:
       'Les administrateurs se connectent à cette appli d’administration avec un code d’une application d’authentification après leur mot de passe. Celui qui ne l’a pas configurée le fait juste après son mot de passe, avant d’obtenir une session. Son mot de passe seul ne le connecte alors plus à aucune appli Jellyfin\u202f: il utilise Quick Connect, approuvé ici. Les sessions et appareils déjà connectés le restent. Désactivé par défaut.',

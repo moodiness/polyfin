@@ -131,7 +131,7 @@ const users = {
     noPersonalAddons: 'No own addons',
     blockedUntil: (time: string) => `Blocked until ${time}`,
     blockedHelp:
-      'Too many wrong passwords were entered for this account: it cannot sign in until then, even with the right password.',
+      'Too many wrong passwords were entered for this account from one address: sign-ins from that address are refused until then, even with the right password. Other addresses, and devices the account already used, still sign in.',
     unblock: 'Unblock',
     unblocking: 'Unblocking…',
     unblocked: 'The account is unblocked.',

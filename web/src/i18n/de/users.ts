@@ -135,7 +135,7 @@ const users: typeof en = {
     noPersonalAddons: 'Keine eigenen Add-ons',
     blockedUntil: (time: string) => `Gesperrt bis ${time}`,
     blockedHelp:
-      'Für dieses Konto wurden zu oft falsche Passwörter eingegeben: Es kann sich bis dahin nicht anmelden, auch nicht mit dem richtigen Passwort.',
+      'Für dieses Konto wurden von einer Adresse zu oft falsche Passwörter eingegeben: Anmeldungen von dieser Adresse werden bis dahin abgelehnt, auch mit dem richtigen Passwort. Andere Adressen und Geräte, die das Konto schon verwendet hat, melden sich weiterhin an.',
     unblock: 'Entsperren',
     unblocking: 'Wird entsperrt…',
     unblocked: 'Das Konto ist entsperrt.',

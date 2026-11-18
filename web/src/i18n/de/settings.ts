@@ -779,7 +779,7 @@ const settings: typeof en = {
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Konto nach so vielen falschen Passwörtern sperren (0 = nie)',
     loginAttemptsHelp: (r: RangeText) =>
-      `Nach so vielen falschen Passwörtern in Folge kann sich das Konto 15 Minuten lang nicht anmelden, selbst mit dem richtigen Passwort. Ein Administrator kann es auf der Seite Benutzer früher entsperren. 0 oder von ${r.min} bis ${r.max}.`,
+      `Nach so vielen falschen Passwörtern in Folge von einer Adresse kann sich diese Adresse 15 Minuten lang nicht beim Konto anmelden, selbst mit dem richtigen Passwort. Andere Adressen und Geräte, die das Konto schon verwendet hat, melden sich weiterhin an. Ein Administrator kann das Konto auf der Seite Benutzer früher entsperren. 0 oder von ${r.min} bis ${r.max}.`,
     twoStepAdministrators: 'Zweistufige Anmeldung für Administratoren verlangen',
     twoStepAdministratorsHelp:
       'Administratoren melden sich bei dieser Admin-App nach ihrem Passwort mit einem Code aus einer Authenticator-App an. Wer sie noch nicht eingerichtet hat, tut dies direkt nach dem Passwort, bevor eine Sitzung entsteht. Ihr Passwort allein meldet sie dann bei keiner Jellyfin-App mehr an: Sie nutzen Quick Connect, hier bestätigt. Bereits angemeldete Sitzungen und Geräte bleiben angemeldet. Standardmäßig aus.',

@@ -133,7 +133,7 @@ const users: typeof en = {
     noPersonalAddons: 'Sem complementos próprios',
     blockedUntil: (time: string) => `Bloqueado até ${time}`,
     blockedHelp:
-      'Foram digitadas senhas incorretas demais para esta conta: ela não pode entrar até esse horário, mesmo com a senha correta.',
+      'Foram digitadas senhas incorretas demais para esta conta a partir de um mesmo endereço: os logins desse endereço são recusados até esse horário, mesmo com a senha correta. Os outros endereços e os dispositivos que a conta já usou continuam entrando.',
     unblock: 'Desbloquear',
     unblocking: 'Desbloqueando…',
     unblocked: 'A conta foi desbloqueada.',
