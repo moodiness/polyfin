@@ -67,6 +67,10 @@ func readCredentials(r *http.Request, legacy bool) credentials {
 // parseParameters reads comma-separated key=value pairs whose keys match
 // without regard to case and whose values may be quoted. Values are
 // form-decoded, as apps escape spaces and punctuation in device names.
+// What names the app or its device past the bound a sign-in keeps (see
+// accounts.DeviceInfo.Bounded) reads as not sent: a sign-in is then
+// refused as one that does not name its device, and a signed-in request,
+// served for the device its token signed in, carries it no further.
 func parseParameters(input string) credentials {
 	var c credentials
 	for input != "" {
@@ -94,18 +98,26 @@ func parseParameters(input string) credentials {
 		}
 		switch strings.ToLower(key) {
 		case "client":
-			c.Client = value
+			c.Client = atMost(value, accounts.MaxDeviceTextBytes)
 		case "device":
-			c.Device = value
+			c.Device = atMost(value, accounts.MaxDeviceTextBytes)
 		case "deviceid":
-			c.DeviceID = value
+			c.DeviceID = atMost(value, accounts.MaxDeviceIDBytes)
 		case "version":
-			c.Version = value
+			c.Version = atMost(value, accounts.MaxDeviceTextBytes)
 		case "token":
 			c.Token = value
 		}
 	}
 	return c
+}
+
+// atMost returns value, or nothing when it is longer than bound bytes.
+func atMost(value string, bound int) string {
+	if len(value) > bound {
+		return ""
+	}
+	return value
 }
 
 // caller is the signed-in user and device of an authenticated request.

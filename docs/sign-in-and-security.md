@@ -291,3 +291,13 @@ API details: [Wrong password blocking](jellyfin-api.md#wrong-password-blocking-f
 ### Signing out unused devices
 
 Polyfin signs out Jellyfin apps unused for that many days, at startup and hourly. It closes their connections and removes them from SyncPlay groups, as any sign-out does. Admin app sessions are not affected.
+
+### Signed-in devices per user
+
+A user keeps up to 100 Jellyfin apps signed in at once. When one more signs in, Polyfin signs out the one used longest ago, by its last activity, as any sign-out does. An app that is playing reports its progress, so it is not the one chosen while another was left unused.
+
+A browser in a private window, or one that clears its storage, signs in as a new device each time: such devices are the first the limit signs out. To sign out a device before that, use **Devices** on the user's page under **Users**, or **My account › Devices**.
+
+Apps name themselves and their device when they sign in. Polyfin refuses a sign-in whose app name, device name or version is longer than 256 bytes, or whose device identifier is longer than 1,024.
+
+API details: [Device bounds for apps](jellyfin-api.md#device-bounds-for-apps).

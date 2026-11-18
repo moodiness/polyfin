@@ -49,6 +49,13 @@ Apps sign in with a name and password, or with Quick Connect, as on Jellyfin. Th
 - A user is named with `userId` or `/Users/{id}/…`. Without one, `/Users/Me` answers 400, as in Jellyfin.
 - `/Auth/Keys` lists a key made from a Jellyfin app in full only on the next listing, then its identifier. `DELETE /Auth/Keys/{key}` accepts the identifier as well as the key.
 
+### Device bounds for apps
+
+- A sign-in keeps the `Client`, `Device` and `Version` of the `Authorization` header up to 256 bytes each and the `DeviceId` up to 1,024, counted once decoded. A longer value reads as not sent: `/Users/AuthenticateByName`, `/Users/AuthenticateWithQuickConnect` and `/QuickConnect/Initiate` answer 400, as to a header that names no device, and `POST /admin/api/provider/web` answers 400 `invalid_request`. Nothing is stored, and the password is not read.
+- A signed-in request is served for the device its token signed in, whatever its header names. A device signed in under longer values before these bounds keeps its token.
+- `POST /Sessions/Capabilities` and `POST /Sessions/Capabilities/Full` take up to 64 `PlayableMediaTypes` and 64 `SupportedCommands`, of 64 bytes each, more than Jellyfin's media types and commands make. Past a bound the answer is 400: the device keeps the capabilities it had, and the `DeviceProfile` sent along is not kept.
+- A user keeps 100 devices signed in. One more sign-in signs out the device whose last activity is the oldest, never the one signing in: its token answers 401, its WebSocket closes and it leaves its SyncPlay group, as after `POST /Sessions/Logout`. A user who held more devices before the bound is brought down to it by their next sign-in.
+
 ### Local network discovery for apps
 
 - Polyfin listens on UDP port 7359, IPv4 and IPv6. A datagram that holds `who is JellyfinServer?`, in any letter case, as Jellyfin 12.4 reads it, gets one answer, sent to its sender: `{"Address":"http://192.168.1.10:8096","Id":"<server ID>","Name":"<server name>","EndpointAddress":null}`. Polyfin answers Emby's `who is EmbyServer?` the same way, which Jellyfin 12.4 leaves unanswered.

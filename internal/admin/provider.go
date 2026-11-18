@@ -496,7 +496,7 @@ func (h *handler) providerWebSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 	info := accounts.DeviceInfo{DeviceID: param("DeviceId"), DeviceName: param("Device"), Client: param("Client"),
 		ClientVersion: param("Version"), RemoteAddress: client, Provider: true}
-	if info.DeviceID == "" || info.DeviceName == "" || info.Client == "" || info.ClientVersion == "" {
+	if info.DeviceID == "" || info.DeviceName == "" || info.Client == "" || info.ClientVersion == "" || !info.Bounded() {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}

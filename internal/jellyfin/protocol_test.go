@@ -236,10 +236,14 @@ func TestRouterLogsLongRequestsShort(t *testing.T) {
 	if want := "/" + strings.Repeat("a", maxLogged-1) + "…"; line.Path != want {
 		t.Errorf("path %q, want %q", line.Path, want)
 	}
-	// The client's and version's cut falls inside "é", which is dropped
-	// whole.
-	if line.Client != strings.Repeat("a", maxLogged-1)+"…" || line.Version != line.Client || len(line.Method) > maxLogged+len("…") {
+	// The client and the version pass the bound a sign-in keeps, and read
+	// as not sent (see parseParameters). A cut that falls inside "é"
+	// drops it whole.
+	if line.Client != "" || line.Version != "" || len(line.Method) > maxLogged+len("…") {
 		t.Errorf("logged %+v", line)
+	}
+	if cut := truncate(long); cut != strings.Repeat("a", maxLogged-1)+"…" {
+		t.Errorf("a cut inside a character: %q", cut)
 	}
 	// Paths that differ only past the cut are one shape.
 	if len(unmatched.logged) != 1 {

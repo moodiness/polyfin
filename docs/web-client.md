@@ -326,7 +326,7 @@ sequenceDiagram
 The session lasts as long as the web player's sign-in it came from. It ends when:
 
 - the web player signs out, with **Sign out**;
-- its device is signed out, from **Devices** in **My account** or on the user's page, or for not being used (see [Signing out unused devices](sign-in-and-security.md#signing-out-unused-devices));
+- its device is signed out, from **Devices** in **My account** or on the user's page, for not being used (see [Signing out unused devices](sign-in-and-security.md#signing-out-unused-devices)), or as the user's device used longest ago when they sign in on more than 100 (see [Signed-in devices per user](sign-in-and-security.md#signed-in-devices-per-user));
 - someone signs in to the web player in that browser again, the same user or another.
 
 An admin app left open then shows, at its next request, the user the web player is signed in as now. When the web player is signed out, it shows its sign-in page. The next person to use the browser never finds the admin app signed in as the one before.

@@ -208,7 +208,8 @@ func (h *Handler) capabilities(w http.ResponseWriter, r *http.Request) {
 
 // fullCapabilities records the capabilities an app reports in a JSON body,
 // and the device profile it may carry, as Jellyfin's ClientCapabilitiesDto
-// does (see rememberCapabilities).
+// does (see rememberCapabilities). Capabilities past their bounds are
+// refused before the profile is kept (see saveCapabilities).
 func (h *Handler) fullCapabilities(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ClientCapabilities
@@ -218,17 +219,31 @@ func (h *Handler) fullCapabilities(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	h.rememberCapabilities(r.Context(), body.DeviceProfile)
-	h.saveCapabilities(w, r, accounts.Capabilities{
+	capabilities := accounts.Capabilities{
 		PlayableMediaTypes:           body.PlayableMediaTypes,
 		SupportedCommands:            body.SupportedCommands,
 		SupportsMediaControl:         body.SupportsMediaControl,
 		SupportsPersistentIdentifier: body.SupportsPersistentIdentifier,
-	})
+	}
+	if !capabilities.Bounded() {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
+	h.rememberCapabilities(r.Context(), body.DeviceProfile)
+	h.saveCapabilities(w, r, capabilities)
 }
 
+// saveCapabilities records the capabilities of the caller's device. Lists
+// longer than Jellyfin's media types and commands make, or with a longer
+// entry (see accounts.Capabilities.Bounded), are a bad request, as a body
+// Jellyfin cannot read is, and the device keeps the capabilities it had.
 func (h *Handler) saveCapabilities(w http.ResponseWriter, r *http.Request, capabilities accounts.Capabilities) {
-	if err := h.Accounts.SetCapabilities(r.Context(), callerFrom(r.Context()).Device.ID, capabilities); err != nil {
+	err := h.Accounts.SetCapabilities(r.Context(), callerFrom(r.Context()).Device.ID, capabilities)
+	if errors.Is(err, accounts.ErrInvalidCapabilities) {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
+	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
