@@ -116,6 +116,12 @@ const (
 	// (config.ConversionFolder and the others), Path is the folder and
 	// Error why; the data folder's cache keeps its files until the next.
 	problemFolderUnwritable = "folder_unwritable"
+	// A folder the settings chose held at start, under the name of a
+	// folder Polyfin empties, files it did not make, and was left as it
+	// is: Folder names the setting, Path is the folder and Name what it
+	// holds, as "torrents"; the data folder's cache keeps Polyfin's files
+	// until the next start.
+	problemFolderOccupied = "folder_occupied"
 	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
 	// version it needs.
 	problemNVIDIADriver = "nvidia_driver"
@@ -313,6 +319,21 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		p := warning("folder_unwritable:"+unwritable.Name, problemFolderUnwritable, "")
 		p.To = workFolderAnchors[unwritable.Name]
 		p.Folder, p.Path, p.Error = unwritable.Name, unwritable.Folder, unwritable.Err.Error()
+		add(p)
+	}
+	// A folder the settings chose that Polyfin left as it is at start,
+	// as it would have emptied files it did not make there: told while
+	// the setting names that folder, another one applying at the next
+	// start.
+	settings := h.Accounts.Settings()
+	chosen := map[string]string{"conversion": settings.ConversionFolder, "reading": settings.ReadingFolder, "cache": settings.CacheFolder}
+	for _, occupied := range h.Health.Folders.Occupied {
+		if chosen[occupied.Name] != occupied.Folder {
+			continue
+		}
+		p := warning("folder_occupied:"+occupied.Name+":"+occupied.Holds, problemFolderOccupied, "")
+		p.To = workFolderAnchors[occupied.Name]
+		p.Folder, p.Path, p.Name = occupied.Name, occupied.Folder, occupied.Holds
 		add(p)
 	}
 
@@ -1172,6 +1193,14 @@ func (p healthProblemJSON) text(language string) string {
 			"%s, %s, non è scrivibile: nel frattempo Polyfin tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.",
 			"%s, %s, não pode ser gravada: enquanto isso, o Polyfin guarda esses arquivos no cache da sua pasta de dados. Torne a pasta gravável ou escolha outra, depois reinicie o Polyfin."},
 			workFolders[p.Folder].In(language), p.Path)
+	case problemFolderOccupied:
+		return say(i18n.Text{"%s, %s, already holds “%s”, which Polyfin did not make: Polyfin leaves it as it is, and keeps its own files in its data folder’s cache meanwhile. Choose another folder, or move “%[3]s” elsewhere, then restart Polyfin.",
+			"%s, %s, contient déjà «\u202f%s\u202f», que Polyfin n’a pas créé\u202f: Polyfin le laisse tel quel, et garde ses propres fichiers dans le cache de son dossier de données en attendant. Choisissez un autre dossier, ou déplacez «\u202f%[3]s\u202f» ailleurs, puis redémarrez Polyfin.",
+			"%s, %s, enthält bereits „%s“, das Polyfin nicht angelegt hat: Polyfin lässt es unverändert und legt seine eigenen Dateien bis dahin im Cache seines Datenordners ab. Wähle einen anderen Ordner oder verschiebe „%[3]s“ an einen anderen Ort, und starte Polyfin dann neu.",
+			"%s, %s, ya contiene «%s», que Polyfin no creó: Polyfin lo deja como está y, mientras tanto, guarda sus propios archivos en la caché de su carpeta de datos. Elija otra carpeta, o mueva «%[3]s» a otro lugar, y luego reinicie Polyfin.",
+			"%s, %s, contiene già «%s», che Polyfin non ha creato: Polyfin lo lascia com’è e nel frattempo tiene i propri file nella cache della sua cartella dei dati. Scegli un’altra cartella, oppure sposta «%[3]s» altrove, poi riavvia Polyfin.",
+			"%s, %s, já contém “%s”, que o Polyfin não criou: o Polyfin o deixa como está e, enquanto isso, guarda seus próprios arquivos no cache da sua pasta de dados. Escolha outra pasta, ou mova “%[3]s” para outro lugar, depois reinicie o Polyfin."},
+			workFolders[p.Folder].In(language), p.Path, p.Name)
 	case problemDesktopRolledBack:
 		return say(i18n.Text{"Polyfin Desktop went back to version %s, as version %s did not start: %s. That version is no longer offered; the next one will be.",
 			"Polyfin Desktop est revenu à la version %s, car la version %s n’a pas démarré\u202f: %s. Cette version n’est plus proposée\u202f; la suivante le sera.",

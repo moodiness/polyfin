@@ -328,6 +328,8 @@ const system = {
           `The copy of the web player theme misses ${missing} of its ${files} files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.`,
         folderUnwritable: (name: string, path: string) =>
           `${name} (${path}): Polyfin cannot write into this folder, and keeps these files in its data folder’s cache meanwhile. Make the folder writable or choose another, then restart Polyfin.`,
+        folderOccupied: (name: string, path: string, held: string) =>
+          `${name} (${path}): this folder already holds “${held}”, which Polyfin did not make. Polyfin leaves it as it is, and keeps its own files in its data folder’s cache meanwhile. Choose another folder, or move “${held}” elsewhere, then restart Polyfin.`,
         nvidiaDriver: (version: string) =>
           `The NVIDIA graphics card does not convert video: its driver is older than version ${version}, which FFmpeg needs for NVENC. Update the driver to use the card.`,
         nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>

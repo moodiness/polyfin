@@ -347,6 +347,8 @@ const system: typeof en = {
           `La copie du thème du lecteur web n’a plus ${missing} de ses ${files} fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système\u202f: les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.`,
         folderUnwritable: (name: string, path: string) =>
           `${name} (${path})\u202f: Polyfin ne peut pas écrire dans ce dossier, et garde ces fichiers dans le cache de son dossier de données en attendant. Rendez le dossier accessible en écriture ou choisissez-en un autre, puis redémarrez Polyfin.`,
+        folderOccupied: (name: string, path: string, held: string) =>
+          `${name} (${path})\u202f: ce dossier contient déjà «\u202f${held}\u202f», que Polyfin n’a pas créé. Polyfin le laisse tel quel, et garde ses propres fichiers dans le cache de son dossier de données en attendant. Choisissez un autre dossier, ou déplacez «\u202f${held}\u202f» ailleurs, puis redémarrez Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La carte graphique NVIDIA ne convertit pas la vidéo\u202f: son pilote est antérieur à la version ${version}, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.`,
         nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>

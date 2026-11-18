@@ -263,6 +263,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.collationVersion(problem.name, problem.previous, problem.version)
     case 'folder_unwritable':
       return text.folderUnwritable(health.folderTitle[problem.folder], problem.path)
+    case 'folder_occupied':
+      return text.folderOccupied(health.folderTitle[problem.folder], problem.path, problem.name)
     case 'connection_stopped':
       return problem.kind === 'app'
         ? text.appStopped(t.account.appImport.apps[problem.name], problem.owner.name)

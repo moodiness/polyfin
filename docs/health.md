@@ -164,6 +164,14 @@ A new version's server ended 3 times before it answered, so Polyfin Desktop retu
 
 Polyfin could not write into the **Conversion folder**, **Folder for files being read** or **Cache folder** when it started, such as when a disk is not mounted. This is a warning naming the folder, with a link to its setting. The data folder's `cache` holds those files until a start finds the folder writable (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)).
 
+### Folder left as it is
+
+The **Conversion folder**, **Folder for files being read** or **Cache folder** already held, when Polyfin started, files Polyfin did not make under the name of a folder it empties at each start: `segments`, `torrents`, `guides` or `ocr`. This is a warning naming the folder and what it holds, with a link to its setting.
+
+- Polyfin left these files as they are. The data folder's `cache` holds its own files meanwhile.
+- Choose another folder, or move what the warning names elsewhere, then restart Polyfin.
+- It goes once the setting names another folder (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)).
+
 ### Stopped connection
 
 A user's app connection or tracking service stopped, its app or service having refused what Polyfin kept. This is a warning, one per user and app or service, which opens the user's page (see [Stopped connections](notifications.md#stopped-connections)).

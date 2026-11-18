@@ -350,6 +350,8 @@ const system: typeof en = {
           `Alla copia del tema del lettore web mancano ${missing} dei suoi ${files} file nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema: nel frattempo i browser li caricano dai loro indirizzi originali, il che richiede internet. Aggiorna la copia in Impostazioni › Lettore web, oppure scegli un altro tema.`,
         folderUnwritable: (name: string, path: string) =>
           `${name} (${path}): Polyfin non può scrivere in questa cartella e nel frattempo tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.`,
+        folderOccupied: (name: string, path: string, held: string) =>
+          `${name} (${path}): questa cartella contiene già «${held}», che Polyfin non ha creato. Polyfin lo lascia com’è e nel frattempo tiene i propri file nella cache della sua cartella dei dati. Scegli un’altra cartella, oppure sposta «${held}» altrove, poi riavvia Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione ${version}, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.`,
         nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>

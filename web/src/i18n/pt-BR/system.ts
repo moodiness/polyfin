@@ -342,6 +342,8 @@ const system: typeof en = {
           `Faltam à cópia do tema do player web ${missing} dos seus ${files} arquivos na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema: enquanto isso, os navegadores os carregam dos endereços originais, o que exige internet. Atualize a cópia em Configurações › Player web, ou escolha outro tema.`,
         folderUnwritable: (name: string, path: string) =>
           `${name} (${path}): o Polyfin não consegue gravar nesta pasta e, enquanto isso, guarda esses arquivos no cache da sua pasta de dados. Torne a pasta gravável ou escolha outra, depois reinicie o Polyfin.`,
+        folderOccupied: (name: string, path: string, held: string) =>
+          `${name} (${path}): esta pasta já contém “${held}”, que o Polyfin não criou. O Polyfin o deixa como está e, enquanto isso, guarda seus próprios arquivos no cache da sua pasta de dados. Escolha outra pasta, ou mova “${held}” para outro lugar, depois reinicie o Polyfin.`,
         nvidiaDriver: (version: string) =>
           `A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão ${version}, de que o FFmpeg precisa para o NVENC. Atualize o driver para usar a placa.`,
         nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>

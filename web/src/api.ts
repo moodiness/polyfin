@@ -5548,6 +5548,13 @@ export type HealthProblem = {
    * why; the cache in the data folder keeps its files until the next start.
    */
   | { code: 'folder_unwritable'; folder: WorkFolderName; path: string; error: string }
+  /**
+   * A folder the settings chose was left as it is at start: under `name`, the name of a folder
+   * Polyfin empties at each start, as `torrents`, it holds files Polyfin did not make. `path` is the
+   * folder chosen; the cache in the data folder keeps Polyfin's files until the next start. Given
+   * while the setting names that folder.
+   */
+  | { code: 'folder_occupied'; folder: WorkFolderName; path: string; name: string }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'

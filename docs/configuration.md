@@ -266,6 +266,14 @@ Polyfin never creates one of these folders. It is where a disk or a memory folde
 - The problem links to its setting.
 - Polyfin keeps those files in the data folder's `cache` meanwhile, until a start finds the folder writable.
 
+**Folders Polyfin did not make:** in a folder chosen, Polyfin empties `segments`, `torrents`, `guides` and `ocr` only when it made them. It writes a file named `.polyfin-work` in each of them when it makes it. At each start, it empties one that holds this file, or nothing.
+
+- A folder chosen that already holds other files under one of these names is left as it is, such as a disk whose `torrents` folder belongs to another program. It is a problem in **System › Health**, which names the setting, the folder and what it holds.
+- Polyfin keeps its files in the data folder's `cache` meanwhile. Choose another folder, or move what the problem names elsewhere, then restart Polyfin.
+- The problem goes once the setting names another folder.
+- After an upgrade from a version that did not write `.polyfin-work`, a folder holding only files and folders with the names that version gave them is emptied as before, and gets the file. One that holds anything else beside them is left as it is.
+- In the data folder's `cache`, the four folders are emptied at each start, whatever they hold.
+
 **Free space:** **System › Health** and the `polyfin_disk_free_bytes` metric give the free space of each folder (see [Metrics](metrics-and-api-keys.md#metrics)). They list `conversion` and `reading` besides `cache` when each is another folder than those before it.
 
 **Polyfin Desktop:** the folders are folders of the computer, as its recordings folder is, such as `D:\Polyfin\Conversion`.

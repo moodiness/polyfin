@@ -345,6 +345,8 @@ const system: typeof en = {
           `A la copia del tema del reproductor web le faltan ${missing} de sus ${files} archivos en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema: mientras tanto, los navegadores los cargan desde sus direcciones originales, lo que requiere internet. Actualice la copia en Ajustes › Reproductor web, o elija otro tema.`,
         folderUnwritable: (name: string, path: string) =>
           `${name} (${path}): Polyfin no puede escribir en esta carpeta y, mientras tanto, guarda estos archivos en la caché de su carpeta de datos. Haga que la carpeta admita escritura o elija otra, y luego reinicie Polyfin.`,
+        folderOccupied: (name: string, path: string, held: string) =>
+          `${name} (${path}): esta carpeta ya contiene «${held}», que Polyfin no creó. Polyfin lo deja como está y, mientras tanto, guarda sus propios archivos en la caché de su carpeta de datos. Elija otra carpeta, o mueva «${held}» a otro lugar, y luego reinicie Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión ${version}, que FFmpeg necesita para NVENC. Actualice el controlador para usar la tarjeta.`,
         nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
