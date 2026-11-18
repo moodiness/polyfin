@@ -439,13 +439,15 @@ func processingError(w http.ResponseWriter, status int) {
 	_, _ = w.Write([]byte("Error processing request."))
 }
 
+// internalError answers a request that failed, and logs it with its
+// route, never its path: a share link's and an API key's hold them.
 func (h *Handler) internalError(w http.ResponseWriter, r *http.Request, err error) {
 	// An app that stops waiting cancels its request: nothing failed, and
 	// nobody reads the answer.
 	if r.Context().Err() != nil {
-		h.Logger.Debug("An app abandoned a Jellyfin API request", "method", r.Method, "path", r.URL.Path)
+		h.Logger.Debug("An app abandoned a Jellyfin API request", "method", r.Method, "path", logs.Route(r))
 		return
 	}
-	h.Logger.Error("Jellyfin API request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+	h.Logger.Error("Jellyfin API request failed", "method", r.Method, "path", logs.Route(r), "error", err)
 	processingError(w, http.StatusInternalServerError)
 }

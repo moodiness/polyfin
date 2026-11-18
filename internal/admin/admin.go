@@ -746,14 +746,16 @@ func decodeUpTo(w http.ResponseWriter, r *http.Request, into any, limit int64) b
 	return true
 }
 
+// internalError answers a request that failed, and logs it with its
+// route, never its path: an invite's and a configure link's hold them.
 func (h *handler) internalError(w http.ResponseWriter, r *http.Request, err error) {
 	// The admin app leaving a page cancels the requests it polls with:
 	// nothing failed, and nobody reads the answer.
 	if r.Context().Err() != nil {
-		h.Logger.Debug("The admin app abandoned a request", "method", r.Method, "path", r.URL.Path)
+		h.Logger.Debug("The admin app abandoned a request", "method", r.Method, "path", logs.Route(r))
 		return
 	}
-	h.Logger.Error("Admin API request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+	h.Logger.Error("Admin API request failed", "method", r.Method, "path", logs.Route(r), "error", err)
 	writeError(w, http.StatusInternalServerError, "internal")
 }
 

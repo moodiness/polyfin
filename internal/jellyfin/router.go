@@ -21,13 +21,16 @@ type router struct {
 }
 
 type route struct {
-	method   string
+	method string
+	// pattern is the method and the path given to handle, as
+	// http.ServeMux names its routes.
+	pattern  string
 	segments []string
 	handler  http.Handler
 }
 
 func (rt *router) handle(method, pattern string, handler http.Handler) {
-	rt.routes = append(rt.routes, route{method: method, segments: split(pattern), handler: handler})
+	rt.routes = append(rt.routes, route{method: method, pattern: method + " " + pattern, segments: split(pattern), handler: handler})
 }
 
 func split(path string) []string {
@@ -76,6 +79,8 @@ func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for name, value := range bestValues {
 		r.SetPathValue(name, value)
 	}
+	// As http.ServeMux does: a failed request is logged with its route.
+	r.Pattern = rt.routes[best].pattern
 	rt.routes[best].handler.ServeHTTP(w, r)
 }
 

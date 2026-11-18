@@ -310,7 +310,10 @@ func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error
 	if r.Context().Err() != nil {
 		return
 	}
-	s.options.Logger.Error("A request of Silo's apps failed", "method", r.Method, "path", r.URL.Path, "error", err)
+	// The route, as the Jellyfin API and the admin app log theirs (see
+	// logs.Route): the pattern without its method, never the path.
+	route := r.Pattern[strings.IndexByte(r.Pattern, ' ')+1:]
+	s.options.Logger.Error("A request of Silo's apps failed", "method", r.Method, "path", route, "error", err)
 	problem(w, http.StatusInternalServerError, "internal_error", "The server could not answer.")
 }
 
