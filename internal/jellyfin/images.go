@@ -699,14 +699,28 @@ func (f failedDownload) dead() bool {
 	return f.status == http.StatusNotFound || f.failures >= imageDeadAfter
 }
 
-// failed remembers that the download of target failed with err, answering
-// status, for as long as imageCache tells, and counts it (see
-// failureEvent): a host that asked to wait is asked nothing meanwhile,
-// and one that showed it was overloaded is spared.
-func (c *imageCache) failed(target string, status int, err error) failedDownload {
+// artworkKey is the key the artwork at target is kept by, and its failed
+// downloads remembered by. A download confined to public addresses has
+// its own: a confined request is answered neither an image nor a failure
+// that a request reaching the local network met, nor the other way
+// round. An image kept by its address alone, as all were before the two
+// were told apart, is one downloaded without confinement.
+func artworkKey(target string, confined bool) string {
+	if confined {
+		return target + "\x00confined"
+	}
+	return target
+}
+
+// failed remembers that the download of target, confined or not, failed
+// with err, answering status, for as long as imageCache tells, and counts
+// it (see failureEvent): a host that asked to wait is asked nothing
+// meanwhile, and one that showed it was overloaded is spared.
+func (c *imageCache) failed(target string, confined bool, status int, err error) failedDownload {
 	now := c.now()
+	key := artworkKey(target, confined)
 	failures := 1
-	if before, ok := c.failures.Get(target); ok {
+	if before, ok := c.failures.Get(key); ok {
 		failures = before.failures + 1
 	}
 	life := imageMissingLife
@@ -721,7 +735,7 @@ func (c *imageCache) failed(target string, status int, err error) failedDownload
 		c.spare(target)
 	}
 	failed := failedDownload{downloadError{status, err}, failures, now.Add(life)}
-	c.failures.Put(target, failed)
+	c.failures.Put(key, failed)
 	c.count(target, status, err, now)
 	return failed
 }
@@ -736,13 +750,14 @@ func (c *imageCache) isDead(target string) bool {
 	return dead
 }
 
-// forget forgets the failures of the images at targets, and whether they
-// were found dead, and has their hosts that asked to wait asked again:
-// each is downloaded at its next request.
+// forget forgets the failures of the images at targets, confined or not,
+// and whether they were found dead, and has their hosts that asked to
+// wait asked again: each is downloaded at its next request.
 func (c *imageCache) forget(targets []string) {
 	hosts := map[string]bool{}
 	for _, target := range targets {
 		c.failures.Delete(target)
+		c.failures.Delete(artworkKey(target, true))
 		c.dead.Delete(target)
 		if parsed, err := url.Parse(target); err == nil && parsed.Host != "" {
 			hosts[parsed.Host] = true
@@ -772,13 +787,15 @@ func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined,
 }
 
 // downloadArtwork is fetchArtworkHeld, for warming a poster when warming
-// (see fetchFor and host).
+// (see fetchFor and host). The image kept, and the failure remembered,
+// are those of a download confined as this one is (see artworkKey).
 func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, iptv, warming bool, hold func(context.Context) (func(), error)) (artwork, error) {
-	if failed, ok := h.images.failures.Get(target); ok && h.images.now().Before(failed.until) {
+	key := artworkKey(target, confined)
+	if failed, ok := h.images.failures.Get(key); ok && h.images.now().Before(failed.until) {
 		failed.downloadError = downloadError{failed.status, fmt.Errorf("the last download failed: %w", failed.err)}
 		return artwork{}, failed
 	}
-	return h.images.fetchFor(ctx, target, warming, func(ctx context.Context) (artwork, error) {
+	return h.images.fetchFor(ctx, key, warming, func(ctx context.Context) (artwork, error) {
 		release, err := h.images.host(ctx, target, iptv, warming)
 		if err != nil {
 			return artwork{}, err
@@ -800,9 +817,9 @@ func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, 
 			case stremio.StatusOf(err) == http.StatusNotFound, stremio.StatusOf(err) == http.StatusGone:
 				status = http.StatusNotFound
 			}
-			return artwork{}, h.images.failed(target, status, err)
+			return artwork{}, h.images.failed(target, confined, status, err)
 		}
-		h.images.failures.Delete(target)
+		h.images.failures.Delete(key)
 		return artwork{body: body, contentType: contentType}, nil
 	})
 }

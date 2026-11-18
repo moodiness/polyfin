@@ -178,7 +178,7 @@ func (h *Handler) warmImage(ctx context.Context, poster warmedPoster) ([]string,
 	if err != nil {
 		return nil, false
 	}
-	keys = []string{poster.url}
+	keys = []string{artworkKey(poster.url, poster.confined)}
 	if resizable(original.contentType) {
 		config, _, err := original.decodeConfig()
 		if err != nil {

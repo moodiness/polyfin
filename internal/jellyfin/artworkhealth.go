@@ -226,12 +226,14 @@ func (h *Handler) artworkDead(ctx context.Context, id accounts.ID, found library
 	}
 }
 
-// ArtworkFailing reports whether the download of the artwork at url
-// failed last, or found it dead (see library.ArtworkFailures).
+// ArtworkFailing reports whether the download of the artwork at url,
+// confined or not, failed last, or found it dead (see
+// library.ArtworkFailures).
 func (h *Handler) ArtworkFailing(url string) bool {
 	h.images.open(h.imageDir(), h.Logger)
 	_, failed := h.images.failures.Get(url)
-	return failed || h.images.isDead(url)
+	_, refused := h.images.failures.Get(artworkKey(url, true))
+	return failed || refused || h.images.isDead(url)
 }
 
 // ArtworkDead reports whether the artwork at url was found dead (see
