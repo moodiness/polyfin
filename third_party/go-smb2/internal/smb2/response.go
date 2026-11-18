@@ -1489,7 +1489,14 @@ func (r ChangeNotifyResponseDecoder) IsInvalid() bool {
 		return false
 	}
 
-	if uint32(off)+length > uint32(len(r))+64 {
+	// The buffer follows the header and this structure's 8 bytes, and ends
+	// within the response. The sum is made in 64 bits, as in the other
+	// decoders: in 32 bits it wraps.
+	if off < 64+8 {
+		return true
+	}
+
+	if uint64(len(r))+64 < uint64(off)+uint64(length) {
 		return true
 	}
 
@@ -1511,15 +1518,16 @@ func (r ChangeNotifyResponseDecoder) OutputBufferLength() uint32 {
 // Output returns the raw FILE_NOTIFY_INFORMATION chain, or nil when the server
 // reported no individual records.
 func (r ChangeNotifyResponseDecoder) Output() []byte {
-	off := r.OutputBufferOffset()
-	length := r.OutputBufferLength()
+	off := int(r.OutputBufferOffset())
+	length := uint64(r.OutputBufferLength())
 
-	if length == 0 {
+	// Offsets in the response are from the start of the SMB2 header. A
+	// buffer IsInvalid refuses is not sliced.
+	if length == 0 || off < 64+8 || uint64(len(r))+64 < uint64(off)+length {
 		return nil
 	}
 
-	// Offsets in the response are from the start of the SMB2 header.
-	return r[off-64 : uint32(off-64)+length]
+	return r[off-64 : off-64+int(length)]
 }
 
 // FileNotifyInformationDecoder decodes one FILE_NOTIFY_INFORMATION record.
@@ -1535,14 +1543,17 @@ func (c FileNotifyInformationDecoder) IsInvalid() bool {
 		return true
 	}
 
-	if uint32(len(c)) < 12+c.FileNameLength() {
+	// In 64 bits: in 32 bits, 12 plus a length near the top wraps.
+	end := 12 + uint64(c.FileNameLength())
+	if uint64(len(c)) < end {
 		return true
 	}
 
 	// A non-final record must not point outside the buffer, and must move
-	// forward — a zero or backward offset would loop.
-	if next := c.NextEntryOffset(); next != 0 {
-		if next < 12 || uint32(len(c)) < next {
+	// forward, past its own name: a zero or backward offset would loop, and
+	// records that overlap would each be decoded with the names of the next.
+	if next := uint64(c.NextEntryOffset()); next != 0 {
+		if next < end || uint64(len(c)) < next {
 			return true
 		}
 	}
@@ -1563,7 +1574,11 @@ func (c FileNotifyInformationDecoder) FileNameLength() uint32 {
 }
 
 func (c FileNotifyInformationDecoder) FileName(mc utf16le.MapChars) string {
-	return utf16le.Decode(c[12:12+c.FileNameLength()], mc)
+	end := 12 + uint64(c.FileNameLength())
+	if uint64(len(c)) < end {
+		return ""
+	}
+	return utf16le.Decode(c[12:end], mc)
 }
 
 // ----------------------------------------------------------------------------

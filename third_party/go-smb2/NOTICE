@@ -18,5 +18,17 @@ Polyfin's go.mod replaces the module with. It is changed as follows:
   - Share.OpenNotify, which opens a folder to watch with the right to list
     it only, sharing read, write and delete access, so that watching a
     folder does not keep others from renaming or deleting it.
+- The decoders that pull request added check what a CHANGE_NOTIFY
+  response says of itself before reading it, as the library's other
+  decoders do (internal/smb2/response.go):
+  - ChangeNotifyResponseDecoder.IsInvalid refuses an output buffer said
+    before the end of the response's own fields, and adds its offset and
+    length in 64 bits; Output returns nothing for a buffer IsInvalid
+    refuses;
+  - FileNotifyInformationDecoder.IsInvalid adds the length of the name in
+    64 bits, and refuses a next record said before the end of this one's
+    name; FileName returns nothing for a name longer than its record;
+  - File.notify (notify.go) refuses records longer than the buffer it
+    asked for.
 - The library's tests, examples, test data, README and CI files are left
   out.

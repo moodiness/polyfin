@@ -200,6 +200,11 @@ func (f *File) notify(fs *Share, opts NotifyOptions) ([]FileNotification, error)
 		// Legal: the server reported that something changed without listing it.
 		return nil, nil
 	}
+	// The records fit in the buffer asked for: a longer answer is not one
+	// to this request, and is not decoded.
+	if uint64(len(out)) > uint64(bufSize) {
+		return nil, &InvalidResponseError{"change notify response longer than the buffer asked for"}
+	}
 
 	var notifications []FileNotification
 	for {
