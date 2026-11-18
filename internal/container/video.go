@@ -222,7 +222,8 @@ func videoCues(cues []byte, track, scale uint64) ([]videoCue, error) {
 }
 
 // mp4VideoFrames reads the first video track of an MP4 file: its sample
-// description, and the times and places of its sync samples.
+// description, and the times and places of its sync samples, which stay
+// in the slices they were read into.
 func mp4VideoFrames(f *file) (*Video, error) {
 	t, movieTimescale, err := mp4Video(f)
 	if err != nil {
@@ -261,27 +262,11 @@ func mp4VideoFrames(f *file) (*Video, error) {
 	if err := v.describe(stsd); err != nil {
 		return nil, err
 	}
-	places, err := sampleRanges(samples, stsz, stsc, stco, wide)
-	if err != nil {
+	v.Keyframes = times
+	if v.frames, _, err = sampleRanges(samples, stsz, stsc, stco, wide, f.size); err != nil {
 		return nil, err
 	}
-	type keyframe struct {
-		time  time.Duration
-		place Range
-	}
-	keyframes := make([]keyframe, len(times))
-	for i := range times {
-		if places[i].Off < 0 || places[i].Off >= f.size || int64(places[i].N) > f.size-places[i].Off {
-			return nil, fmt.Errorf("sample %d past the end of the file: %w", samples[i], errInvalid)
-		}
-		keyframes[i] = keyframe{times[i], places[i]}
-	}
-	slices.SortStableFunc(keyframes, func(a, b keyframe) int { return cmp.Compare(a.time, b.time) })
-	keyframes = slices.CompactFunc(keyframes, func(a, b keyframe) bool { return a.time == b.time })
-	for _, k := range keyframes {
-		v.Keyframes = append(v.Keyframes, k.time)
-		v.frames = append(v.frames, frameAt{off: k.place.Off, n: int64(k.place.N)})
-	}
+	v.inOrder()
 	return v, nil
 }
 
@@ -388,31 +373,31 @@ func appendID(b []byte, id uint32) []byte {
 	return append(b, byte(id))
 }
 
-// sampleRanges returns where samples, ascending, are in the file, from
-// the sample sizes (stsz), the samples of each chunk (stsc) and where
-// each chunk starts (stco, or co64 when wide).
-func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool) ([]Range, error) {
+// sampleRanges returns where samples, ascending, are in a file of size
+// bytes, from the sample sizes (stsz), the samples of each chunk (stsc)
+// and where each chunk starts (stco, or co64 when wide). When stsz gives
+// one size for every sample, their count is only declared: a sample's
+// place in its chunk is computed. When it lists their sizes, the place is
+// the sum of those before it in the chunk, read one by one, as many as
+// the table holds at most. walked counts the sizes read so, for tests.
+func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool, size int64) (frames []frameAt, walked int, err error) {
 	if len(stsz) < 12 {
-		return nil, fmt.Errorf("stsz of %d bytes: %w", len(stsz), errInvalid)
+		return nil, 0, fmt.Errorf("stsz of %d bytes: %w", len(stsz), errInvalid)
 	}
-	uniform := binary.BigEndian.Uint32(stsz[4:])
+	uniform := int64(binary.BigEndian.Uint32(stsz[4:]))
 	total := uint64(binary.BigEndian.Uint32(stsz[8:]))
 	var sizes []byte
 	if uniform == 0 {
 		if total > uint64(len(stsz)-12)/4 {
-			return nil, fmt.Errorf("stsz of %d entries in %d bytes: %w", total, len(stsz), errInvalid)
+			return nil, 0, fmt.Errorf("stsz of %d entries in %d bytes: %w", total, len(stsz), errInvalid)
 		}
 		sizes = stsz[12 : 12+total*4]
-	}
-	sizeOf := func(sample uint64) int64 {
-		if sizes == nil {
-			return int64(uniform)
-		}
-		return int64(binary.BigEndian.Uint32(sizes[sample*4:]))
+	} else if uniform > maxFrame && len(samples) > 0 {
+		return nil, 0, fmt.Errorf("sample %d of %d bytes: %w", samples[0], uniform, errInvalid)
 	}
 	chunks, err := table(stsc, "stsc", 12)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	width := 4
 	if wide {
@@ -420,7 +405,7 @@ func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool) ([]Range
 	}
 	offsets, err := table(stco, "stco", width)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	chunkCount := uint64(len(offsets) / width)
 	chunkOffset := func(chunk uint64) int64 {
@@ -430,7 +415,20 @@ func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool) ([]Range
 		return int64(binary.BigEndian.Uint32(offsets[chunk*4:]))
 	}
 
-	result := make([]Range, len(samples))
+	// place returns the n bytes within bytes into the chunk at off, which
+	// starts in the file, when they are a frame in the file. within is
+	// far below what an int64 holds: a sum or a product of 32-bit sizes.
+	place := func(sample uint64, off, within, n int64) (frameAt, error) {
+		if n > maxFrame {
+			return frameAt{}, fmt.Errorf("sample %d of %d bytes: %w", sample, n, errInvalid)
+		}
+		if within >= size-off || n > size-off-within {
+			return frameAt{}, fmt.Errorf("sample %d past the end of the file: %w", sample, errInvalid)
+		}
+		return frameAt{off: off + within, n: n}, nil
+	}
+
+	frames = make([]frameAt, len(samples))
 	next := 0
 	sample := uint64(0)
 	for entry := 0; entry*12 < len(chunks) && next < len(samples); entry++ {
@@ -441,36 +439,53 @@ func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool) ([]Range
 			last = uint64(binary.BigEndian.Uint32(chunks[(entry+1)*12:]))
 		}
 		if first == 0 || last < first || last > chunkCount+1 || perChunk == 0 {
-			return nil, fmt.Errorf("stsc entry %d: %w", entry, errInvalid)
+			return nil, walked, fmt.Errorf("stsc entry %d: %w", entry, errInvalid)
 		}
 		for chunk := first; chunk < last && next < len(samples); chunk++ {
 			end := sample + perChunk
 			if end > total {
-				return nil, fmt.Errorf("chunk %d past the last sample: %w", chunk, errInvalid)
+				return nil, walked, fmt.Errorf("chunk %d past the last sample: %w", chunk, errInvalid)
 			}
 			if samples[next] >= end {
 				sample = end
 				continue
 			}
+			// A chunk is checked to start in the file before its samples
+			// are placed from its start.
 			off := chunkOffset(chunk - 1)
-			for s := sample; s < end && next < len(samples); s++ {
-				n := sizeOf(s)
-				if samples[next] == s {
-					if n > maxFrame {
-						return nil, fmt.Errorf("sample %d of %d bytes: %w", s, n, errInvalid)
+			if off < 0 || off >= size {
+				return nil, walked, fmt.Errorf("chunk %d past the end of the file: %w", chunk, errInvalid)
+			}
+			if uniform != 0 {
+				// A sample's number in its chunk is 32-bit and its size
+				// maxFrame at most: their product fits.
+				for ; next < len(samples) && samples[next] < end; next++ {
+					if frames[next], err = place(samples[next], off, int64(samples[next]-sample)*uniform, uniform); err != nil {
+						return nil, walked, err
 					}
-					result[next] = Range{Off: off, N: int(n)}
+				}
+				sample = end
+				continue
+			}
+			within := int64(0)
+			for s := sample; s < end && next < len(samples); s++ {
+				n := int64(binary.BigEndian.Uint32(sizes[s*4:]))
+				walked++
+				if samples[next] == s {
+					if frames[next], err = place(s, off, within, n); err != nil {
+						return nil, walked, err
+					}
 					next++
 				}
-				off += n
+				within += n
 			}
 			sample = end
 		}
 	}
 	if next < len(samples) {
-		return nil, fmt.Errorf("sample %d in no chunk: %w", samples[next], errInvalid)
+		return nil, walked, fmt.Errorf("sample %d in no chunk: %w", samples[next], errInvalid)
 	}
-	return result, nil
+	return frames, walked, nil
 }
 
 // ReadFrames reads the keyframes numbered by indexes, in the order of

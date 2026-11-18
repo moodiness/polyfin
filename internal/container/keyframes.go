@@ -40,9 +40,13 @@ const (
 	// maxIndex bounds what is allocated for one index structure, Cues or
 	// a sample table, so that a hostile file cannot exhaust memory.
 	maxIndex = 64 << 20
-	// maxKeyframes bounds the times returned, for files that claim every
-	// one of a huge number of samples is a keyframe.
-	maxKeyframes = 1 << 23
+	// maxKeyframes bounds the keyframes read from one index, which a few
+	// bytes of a file may claim: every one of a huge number of samples.
+	// Three hours of video whose every frame is a keyframe, at 60 frames
+	// a second, have 648,000; this many last 4 h 51 min so, and 12 days
+	// with a keyframe a second. What is built to read an index, kept of
+	// it and saved follows this bound, not a count a file declares.
+	maxKeyframes = 1 << 20
 	// maxTopLevel bounds the top-level elements or boxes walked to find
 	// the index: a few come before it, and each may cost a read.
 	maxTopLevel = 64

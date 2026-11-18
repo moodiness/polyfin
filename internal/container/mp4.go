@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sort"
 	"time"
 )
 
@@ -206,11 +207,15 @@ func (t track) syncSamples(f *file, movieTimescale uint32) ([]uint64, []time.Dur
 		total += uint64(binary.BigEndian.Uint32(entry))
 	}
 	// Sync samples are numbered from 1; without stss every sample is one.
+	// Either way a file has maxKeyframes at most.
 	var syncs []uint64
 	if hasStss {
 		numbers, err := table(stss, "stss", 4)
 		if err != nil {
 			return nil, nil, err
+		}
+		if len(numbers)/4 > maxKeyframes {
+			return nil, nil, fmt.Errorf("%d sync samples: %w", len(numbers)/4, errInvalid)
 		}
 		syncs = make([]uint64, 0, len(numbers)/4)
 		for entry := range slices.Chunk(numbers, 4) {
@@ -221,8 +226,9 @@ func (t track) syncSamples(f *file, movieTimescale uint32) ([]uint64, []time.Dur
 		slices.Sort(syncs)
 		syncs = slices.Compact(syncs)
 	} else {
-		if total > maxKeyframes {
-			return nil, nil, fmt.Errorf("%d samples, all sync: %w", total, errInvalid)
+		// A sample takes a byte of its file at least.
+		if total > maxKeyframes || total > uint64(f.size) {
+			return nil, nil, fmt.Errorf("%d samples, all sync, in a file of %d bytes: %w", total, f.size, errInvalid)
 		}
 		syncs = make([]uint64, total)
 		for i := range syncs {
@@ -278,6 +284,35 @@ func (t track) syncSamples(f *file, movieTimescale uint32) ([]uint64, []time.Dur
 		times = append(times, d+delay)
 	}
 	return syncs, times, nil
+}
+
+// inOrder sorts the keyframes of v by their times, each with its place,
+// and keeps the first of those sharing a time, in the slices that hold
+// them: nothing is built beside them. Sync samples come in the order of
+// their times in all but odd files, which alone are sorted.
+func (v *Video) inOrder() {
+	if !slices.IsSorted(v.Keyframes) {
+		sort.Stable(byTime{v})
+	}
+	kept := 0
+	for i, at := range v.Keyframes {
+		if kept > 0 && at == v.Keyframes[kept-1] {
+			continue
+		}
+		v.Keyframes[kept], v.frames[kept] = at, v.frames[i]
+		kept++
+	}
+	v.Keyframes, v.frames = v.Keyframes[:kept], v.frames[:kept]
+}
+
+// byTime orders the keyframes of a Video by their times.
+type byTime struct{ v *Video }
+
+func (b byTime) Len() int           { return len(b.v.Keyframes) }
+func (b byTime) Less(i, j int) bool { return b.v.Keyframes[i] < b.v.Keyframes[j] }
+func (b byTime) Swap(i, j int) {
+	b.v.Keyframes[i], b.v.Keyframes[j] = b.v.Keyframes[j], b.v.Keyframes[i]
+	b.v.frames[i], b.v.frames[j] = b.v.frames[j], b.v.frames[i]
 }
 
 // edit is the start of an edit list, as FFmpeg applies it: media is the
