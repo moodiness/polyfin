@@ -198,10 +198,21 @@ func inviteError(w http.ResponseWriter, err error) bool {
 	return false
 }
 
+// sentByAnotherSite reports whether a page of another site had the
+// browser send r as one of its resources, an image or a frame's content,
+// as the browser itself tells: the person asked for nothing, so what it
+// answers is no failed attempt of theirs. Opening a link from another
+// site is a document of its own, and is theirs; a client that tells
+// nothing of where its requests come from is treated as before.
+func sentByAnotherSite(r *http.Request) bool {
+	return r.Header.Get("Sec-Fetch-Site") == "cross-site" && r.Header.Get("Sec-Fetch-Dest") != "document"
+}
+
 // publicInvite answers whether an invite's link may still create an
 // account, with the server's name, for the guest's page, which needs no
 // session. A token that is no invite's counts as a wrong password does
-// toward the client's failed attempts.
+// toward the client's failed attempts, unless a page of another site had
+// the browser ask (see sentByAnotherSite).
 func (h *handler) publicInvite(w http.ResponseWriter, r *http.Request) {
 	attempt := h.reserve(w, forwarded.Client(r))
 	if attempt == nil {
@@ -209,7 +220,7 @@ func (h *handler) publicInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	defer attempt.Cancel()
 	_, err := h.Accounts.InviteByToken(r.Context(), r.PathValue("token"))
-	if errors.Is(err, accounts.ErrInviteUnknown) {
+	if errors.Is(err, accounts.ErrInviteUnknown) && !sentByAnotherSite(r) {
 		attempt.Fail()
 	}
 	if inviteError(w, err) {

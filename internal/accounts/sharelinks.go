@@ -228,6 +228,13 @@ func revokeShareLinks(ctx context.Context, tx pgx.Tx, users ...ID) error {
 	return err
 }
 
+// WellFormedShareToken reports whether token has the shape of a share
+// link's token, whether or not a link bears it.
+func WellFormedShareToken(token string) bool {
+	_, _, ok := parseLinkToken(token)
+	return ok
+}
+
 // ShareLinkByToken returns the link of token while it opens its title,
 // with its user as they are now. ErrShareLinkUnknown reports a token that
 // is no link's; ErrShareLinkRevoked and ErrShareLinkExpired a link that

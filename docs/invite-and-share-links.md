@@ -46,7 +46,7 @@ The activity log records each account, as "sam joined through alex's invite", th
 ### How links are kept safe
 
 - A token is the invite's ID plus 32 random bytes, as many as an admin session's. Polyfin stores only the random part's SHA-256 hash, compared in constant time.
-- An unknown token counts as a wrong password toward the client's failed sign-ins. After too many, the client is refused for a while (429), as on the sign-in page.
+- An unknown token counts as a wrong password toward the client's failed sign-ins. After too many, the client is refused for a while (429), as on the sign-in page. A request that a page of another site has the browser send, as an image for example, counts nothing: the person asked for nothing.
 - Uses are counted, with the link locked, in the transaction creating the account. Two guests on the last use create one account; the other is told the link is used up.
 - A refused name or password uses nothing up.
 - The guest sends only a name and password; anything else is ignored, as settings come from the link.
@@ -130,7 +130,7 @@ The activity log records each link made, revoked or expired, and each guest play
 ### How share links are kept safe
 
 - Tokens work as invite tokens: ID plus 32 random bytes, only their SHA-256 hash kept, compared in constant time (see [How links are kept safe](#how-links-are-kept-safe)).
-- An unknown token counts as a failed sign-in of the client; after too many, it is refused for a while (429).
+- An unknown token counts toward the client's unknown share links, which are counted apart from failed sign-ins, with the same limit: after too many, the client's share links are refused for a while (429). Unknown links never refuse a sign-in, and wrong passwords never refuse a link. Text that has not a token's shape is refused without counting. A request that a page of another site has the browser send, as an image for example, counts nothing either.
 - The token opens the page's routes only: the Jellyfin API, admin API and web player refuse it as unknown.
 - The guest's play session is signed for no one, so the API's own HLS routes refuse it too.
 - The server fixes what is converted and sent at playback start; guest requests cannot change it.

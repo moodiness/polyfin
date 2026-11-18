@@ -340,6 +340,12 @@ func (h *handler) providerCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: providerCookieName, Path: providerPath, MaxAge: -1, HttpOnly: true,
 		Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
+	if state == "" || sentByAnotherSite(r) {
+		// No flow began in this browser, or a page of another site had
+		// the browser ask: nobody's attempt, so nothing is counted.
+		providerBack(w, r, app, "provider_state")
+		return
+	}
 	client := forwarded.Client(r)
 	attempt, _ := h.SignIns.Reserve(client)
 	if attempt == nil {

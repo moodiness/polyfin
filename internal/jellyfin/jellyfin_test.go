@@ -225,6 +225,7 @@ func newServerConverting(t *testing.T, failures int, ffprobe, ffmpeg string, rea
 		Accounts:      store,
 		QuickConnect:  quickconnect.New(),
 		SignIns:       throttle.New(failures, time.Minute),
+		ShareLinks:    throttle.New(failures, time.Minute),
 		WebSocketPort: 8096,
 		Library:       lib,
 		IPTV:          channels,

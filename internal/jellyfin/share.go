@@ -319,12 +319,27 @@ type shareError struct {
 	code   string
 }
 
+// sentByAnotherSite reports whether a page of another site had the
+// browser send r as one of its resources, an image for example, as the
+// browser itself tells: the person asked for nothing. A link opened
+// from another site is a document of its own, and is theirs. The admin
+// API's invite route has the same rule.
+func sentByAnotherSite(r *http.Request) bool {
+	return r.Header.Get("Sec-Fetch-Site") == "cross-site" && r.Header.Get("Sec-Fetch-Dest") != "document"
+}
+
 // openShare reads the link of the request's token, while it opens its
-// title, with its sharer as they are now. A client that failed too many
-// sign-ins is refused first; a token that is no link's counts as a failed
-// sign-in of the client.
+// title, with its sharer as they are now. A client that asked for too
+// many links that do not exist is refused first; a token that is no
+// link's counts as one more, in a count of the share links' own: it
+// never refuses a sign-in, nor do wrong passwords refuse a link. Text
+// that is no token at all is refused without counting, and what a page
+// of another site has the browser ask for counts nothing either.
 func (h *Handler) openShare(r *http.Request) (accounts.ShareLink, accounts.User, *shareError) {
-	attempt, _ := h.SignIns.Reserve(forwarded.Client(r))
+	if !accounts.WellFormedShareToken(r.PathValue("token")) {
+		return accounts.ShareLink{}, accounts.User{}, &shareError{http.StatusNotFound, "unknown"}
+	}
+	attempt, _ := h.ShareLinks.Reserve(forwarded.Client(r))
 	if attempt == nil {
 		return accounts.ShareLink{}, accounts.User{}, &shareError{http.StatusTooManyRequests, "too_many_attempts"}
 	}
@@ -334,7 +349,9 @@ func (h *Handler) openShare(r *http.Request) (accounts.ShareLink, accounts.User,
 	link, user, err := h.Accounts.ShareLinkByToken(r.Context(), r.PathValue("token"))
 	switch {
 	case errors.Is(err, accounts.ErrShareLinkUnknown):
-		attempt.Fail()
+		if !sentByAnotherSite(r) {
+			attempt.Fail()
+		}
 		return link, user, &shareError{http.StatusNotFound, "unknown"}
 	case errors.Is(err, accounts.ErrShareLinkExpired):
 		return link, user, &shareError{http.StatusGone, "expired"}

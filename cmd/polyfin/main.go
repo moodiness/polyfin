@@ -298,6 +298,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	}
 	quickConnect := quickconnect.New()
 	signIns := throttle.New(signInFailures, signInWindow)
+	// Share links asked for that do not exist are counted apart, with the
+	// same limits: they never refuse a sign-in, nor wrong passwords a link.
+	shareLinks := throttle.New(signInFailures, signInWindow)
 	// The client of a request is read behind the known proxies, for every
 	// route; System › Health names the proxies missing from them. Their
 	// host names are resolved now, at each change of the settings, every
@@ -700,6 +703,7 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 		Accounts:     store,
 		QuickConnect: quickConnect,
 		SignIns:      signIns,
+		ShareLinks:   shareLinks,
 		// Blocked accounts and sign-ins on new devices are told through the
 		// notifications, made below.
 		AccountBlocked: func(user accounts.User, attempt accounts.DeviceInfo) { notifier.AccountBlocked(user, attempt) },

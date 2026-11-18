@@ -58,6 +58,9 @@ type Options struct {
 	QuickConnect *quickconnect.Store
 	// SignIns throttles failed password sign-ins per client address.
 	SignIns *throttle.Failures
+	// ShareLinks throttles, per client address, the share links asked for
+	// that do not exist, apart from the sign-ins.
+	ShareLinks *throttle.Failures
 	// AccountBlocked is told of the wrong password that blocked an
 	// account, with the app and address it came from, and NewDevice of a
 	// sign-in from a device the account never used; nil tells nothing.
