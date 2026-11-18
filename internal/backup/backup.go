@@ -292,6 +292,15 @@ func (s *Service) dump(ctx context.Context, dir string, started time.Time, suffi
 	args := []string{"--format=custom", "--no-password"}
 	var sealed *sealedFile
 	if passphrase == "" {
+		// The file is Polyfin's own from its first byte: pg_dump, which
+		// would make it for whoever the umask lets read, opens and
+		// empties the one it finds, whose mode stays. It is given the
+		// file's name, not the file as its standard output: there it
+		// appends the table of contents it rewrites once the data is
+		// written, instead of writing it over the first.
+		if err := createEmpty(partial); err != nil {
+			return "", 0, err
+		}
 		args = append(args, "--file="+partial)
 	} else if sealed, err = createSealed(partial, passphrase); err != nil {
 		return "", 0, err
@@ -339,6 +348,16 @@ func (s *Service) dump(ctx context.Context, dir string, started time.Time, suffi
 	}
 	syncDir(dir)
 	return name, info.Size(), nil
+}
+
+// createEmpty creates the file at path, empty and readable only by its
+// owner; it fails when there is one already.
+func createEmpty(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // sealedFile is a new file an encrypted backup is written to.
