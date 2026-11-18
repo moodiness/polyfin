@@ -2,7 +2,9 @@ package localfiles
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -38,6 +40,9 @@ type s3Share struct {
 	pathStyle bool
 	client    *http.Client
 	now       func() time.Time
+	// bounds bound what is read and kept of one folder's listing, answer
+	// being a page of it.
+	bounds listBounds
 }
 
 func newS3(u *url.URL, access shareAccess) (*s3Share, error) {
@@ -54,7 +59,7 @@ func newS3(u *url.URL, access shareAccess) (*s3Share, error) {
 	transport.ResponseHeaderTimeout = 30 * time.Second
 	return &s3Share{endpoint: endpoint, bucket: u.Host, prefix: strings.Trim(u.Path, "/"),
 		key: sigv4.Key{Access: access.user, Secret: access.password, Region: region}, pathStyle: usesPathStyle(endpoint, u.Host),
-		client: &http.Client{Transport: transport}, now: time.Now}, nil
+		client: &http.Client{Transport: transport}, now: time.Now, bounds: folderBounds}, nil
 }
 
 // usesPathStyle tells whether a bucket is reached with its name in the
@@ -159,18 +164,16 @@ func s3Failure(response *http.Response) error {
 	return statusError(response.StatusCode)
 }
 
-// s3Listing is a page of ListObjectsV2's answer.
-type s3Listing struct {
-	Contents []struct {
-		Key          string `xml:"Key"`
-		Size         int64  `xml:"Size"`
-		LastModified string `xml:"LastModified"`
-	} `xml:"Contents"`
-	CommonPrefixes []struct {
-		Prefix string `xml:"Prefix"`
-	} `xml:"CommonPrefixes"`
-	IsTruncated           bool   `xml:"IsTruncated"`
-	NextContinuationToken string `xml:"NextContinuationToken"`
+// s3Object and s3Folder are an object and a folder of a page of
+// ListObjectsV2's answer.
+type s3Object struct {
+	Key          string `xml:"Key"`
+	Size         int64  `xml:"Size"`
+	LastModified string `xml:"LastModified"`
+}
+
+type s3Folder struct {
+	Prefix string `xml:"Prefix"`
 }
 
 func (c *s3Share) list(ctx context.Context, rel string) ([]remoteEntry, error) {
@@ -178,9 +181,25 @@ func (c *s3Share) list(ctx context.Context, rel string) ([]remoteEntry, error) {
 	if prefix != "" {
 		prefix += "/"
 	}
-	var entries []remoteEntry
-	seen := map[string]bool{}
-	tokens := map[string]bool{}
+	kept := folderList{bounds: c.bounds}
+	// An entry listed again, as a storage may, is kept once.
+	type listed struct {
+		name   string
+		folder bool
+	}
+	seen := map[listed]bool{}
+	keep := func(entry remoteEntry) error {
+		if seen[listed{entry.name, entry.folder}] {
+			return nil
+		}
+		if err := kept.keep(entry); err != nil {
+			return err
+		}
+		seen[listed{kept.entries[len(kept.entries)-1].name, entry.folder}] = true
+		return nil
+	}
+	// The tokens are told apart by their sums: a token may be long.
+	tokens := map[[sha256.Size]byte]bool{}
 	token := ""
 	for range maxListPages {
 		query := url.Values{"list-type": {"2"}, "prefix": {prefix}, "delimiter": {"/"}}
@@ -196,41 +215,67 @@ func (c *s3Share) list(ctx context.Context, rel string) ([]remoteEntry, error) {
 			response.Body.Close()
 			return nil, err
 		}
-		var page s3Listing
-		err = xml.NewDecoder(io.LimitReader(response.Body, 64<<20)).Decode(&page)
+		// A page is read entry by entry, never whole, each within the
+		// bounds of one.
+		truncated, next := false, ""
+		err = eachElement(response.Body, c.bounds, func(decoder *xml.Decoder, start xml.StartElement) error {
+			switch start.Name.Local {
+			case "CommonPrefixes":
+				if err := kept.another(); err != nil {
+					return err
+				}
+				var folder s3Folder
+				if err := decoder.DecodeElement(&folder, &start); err != nil {
+					return err
+				}
+				name, ok := strings.CutPrefix(folder.Prefix, prefix)
+				name = strings.TrimSuffix(name, "/")
+				if ok && name != "" && !strings.Contains(name, "/") {
+					return keep(remoteEntry{name: name, folder: true})
+				}
+				return nil
+			case "Contents":
+				if err := kept.another(); err != nil {
+					return err
+				}
+				var object s3Object
+				if err := decoder.DecodeElement(&object, &start); err != nil {
+					return err
+				}
+				// The empty object some tools make for a folder is no file.
+				name, ok := strings.CutPrefix(object.Key, prefix)
+				if ok && name != "" && !strings.Contains(name, "/") {
+					modified, _ := time.Parse(time.RFC3339Nano, object.LastModified)
+					return keep(remoteEntry{name: name, size: object.Size, modified: modified})
+				}
+				return nil
+			case "IsTruncated":
+				return decoder.DecodeElement(&truncated, &start)
+			case "NextContinuationToken":
+				return decoder.DecodeElement(&next, &start)
+			}
+			return decoder.Skip()
+		})
 		response.Body.Close()
+		var bound *shareBound
+		if errors.As(err, &bound) {
+			return nil, err
+		}
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", errShareUnreachable, err)
 		}
-		// An entry listed again, as a storage may, is kept once.
-		for _, folder := range page.CommonPrefixes {
-			name, ok := strings.CutPrefix(folder.Prefix, prefix)
-			name = strings.TrimSuffix(name, "/")
-			if ok && name != "" && !strings.Contains(name, "/") && !seen[name+"/"] {
-				seen[name+"/"] = true
-				entries = append(entries, remoteEntry{name: name, folder: true})
-			}
-		}
-		for _, object := range page.Contents {
-			// The empty object some tools make for a folder is no file.
-			name, ok := strings.CutPrefix(object.Key, prefix)
-			if ok && name != "" && !strings.Contains(name, "/") && !seen[name] {
-				seen[name] = true
-				modified, _ := time.Parse(time.RFC3339Nano, object.LastModified)
-				entries = append(entries, remoteEntry{name: name, size: object.Size, modified: modified})
-			}
-		}
-		if !page.IsTruncated || page.NextContinuationToken == "" {
-			if len(entries) == 0 && rel == "" && c.prefix != "" {
+		if !truncated || next == "" {
+			if len(kept.entries) == 0 && rel == "" && c.prefix != "" {
 				return nil, c.notFolder(ctx)
 			}
-			return entries, nil
+			return kept.entries, nil
 		}
-		if tokens[page.NextContinuationToken] {
+		sum := sha256.Sum256([]byte(next))
+		if tokens[sum] {
 			return nil, fmt.Errorf("%w: the storage lists the same objects again", errShareUnreachable)
 		}
-		tokens[page.NextContinuationToken] = true
-		token = page.NextContinuationToken
+		tokens[sum] = true
+		token = next
 	}
 	return nil, fmt.Errorf("%w: more than %d pages in one folder", errShareUnreachable, maxListPages)
 }

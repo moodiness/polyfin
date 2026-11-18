@@ -34,14 +34,27 @@ type rcloneShare struct {
 	remote, folder string
 	user, password string
 	client         *http.Client
+	// bounds bound what is read and kept of one folder's listing.
+	bounds listBounds
 }
+
+// maxCallBytes bounds the answer of a call read whole, the remotes an
+// instance knows or what it tells of one file; rcloneListBytes the answer
+// listing a folder, which rclone lists whole in one answer, some hundreds
+// of bytes an entry, and which is read item by item.
+const (
+	maxCallBytes    = 1 << 20
+	rcloneListBytes = 256 << 20
+)
 
 func newRclone(u *url.URL, access shareAccess) *rcloneShare {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConnsPerHost = 8
 	transport.ResponseHeaderTimeout = 30 * time.Second
+	bounds := folderBounds
+	bounds.answer = rcloneListBytes
 	return &rcloneShare{base: &url.URL{Scheme: "http", Host: u.Host}, remote: access.remote, folder: strings.Trim(u.Path, "/"),
-		user: access.user, password: access.password, client: &http.Client{Transport: transport}}
+		user: access.user, password: access.password, client: &http.Client{Transport: transport}, bounds: bounds}
 }
 
 func (c *rcloneShare) close() { c.client.CloseIdleConnections() }
@@ -97,10 +110,19 @@ type errRclone struct {
 func (e *errRclone) Error() string { return fmt.Sprintf("rclone answered %d: %s", e.status, e.message) }
 
 // call calls a method of the remote control interface with input, and
-// reads its answer into output. A method the instance refuses the user
+// reads its answer, of maxCallBytes at most, into output; its errors are
+// those of answered.
+func (c *rcloneShare) call(ctx context.Context, method string, input, output any) error {
+	return c.answered(ctx, method, input, func(body io.Reader) error {
+		return json.NewDecoder(io.LimitReader(body, maxCallBytes)).Decode(output)
+	})
+}
+
+// answered calls a method of the remote control interface with input,
+// and has read read its answer. A method the instance refuses the user
 // for is errShareRefused, one finding nothing fs.ErrNotExist; another
 // error it answers is an *errRclone.
-func (c *rcloneShare) call(ctx context.Context, method string, input, output any) error {
+func (c *rcloneShare) answered(ctx context.Context, method string, input any, read func(body io.Reader) error) error {
 	body, err := json.Marshal(input)
 	if err != nil {
 		return err
@@ -114,10 +136,12 @@ func (c *rcloneShare) call(ctx context.Context, method string, input, output any
 	defer response.Body.Close()
 	switch response.StatusCode {
 	case http.StatusOK:
-		if err := json.NewDecoder(io.LimitReader(response.Body, 256<<20)).Decode(output); err != nil {
+		err := read(response.Body)
+		var bound *shareBound
+		if err != nil && !errors.As(err, &bound) {
 			return fmt.Errorf("%w: %v", errShareUnreachable, err)
 		}
-		return nil
+		return err
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return errShareRefused
 	case http.StatusNotFound:
@@ -222,26 +246,91 @@ func (c *rcloneShare) remotePath(rel string) string {
 }
 
 func (c *rcloneShare) list(ctx context.Context, rel string) ([]remoteEntry, error) {
-	var answer struct {
-		List []rcloneItem `json:"list"`
-	}
-	err := c.call(ctx, "operations/list", map[string]string{"fs": c.fsName(), "remote": c.remotePath(rel)}, &answer)
+	kept := folderList{bounds: c.bounds}
+	input := map[string]string{"fs": c.fsName(), "remote": c.remotePath(rel)}
+	err := c.answered(ctx, "operations/list", input, func(body io.Reader) error {
+		return listedItems(body, c.bounds, func(item rcloneItem) error {
+			if err := kept.another(); err != nil {
+				return err
+			}
+			if item.Name == "" || strings.Contains(item.Name, "/") {
+				return nil
+			}
+			entry := remoteEntry{name: item.Name, folder: item.IsDir}
+			if !item.IsDir {
+				entry.size = item.Size
+				entry.modified, _ = time.Parse(time.RFC3339Nano, item.ModTime)
+			}
+			return kept.keep(entry)
+		})
+	})
 	if err != nil {
 		return nil, c.listFailure(ctx, rel, err)
 	}
-	entries := make([]remoteEntry, 0, len(answer.List))
-	for _, item := range answer.List {
-		if item.Name == "" || strings.Contains(item.Name, "/") {
-			continue
+	return kept.entries, nil
+}
+
+// listedItems reads the answer of operations/list item by item, never
+// whole, within b: read is given each item of its list in turn.
+func listedItems(body io.Reader, b listBounds, read func(item rcloneItem) error) error {
+	in := newBoundedReader(body, b)
+	decoder := json.NewDecoder(in)
+	err := func() error {
+		if opened, err := decoder.Token(); err != nil {
+			return err
+		} else if opened != json.Delim('{') {
+			return errors.New("the answer is no object")
 		}
-		entry := remoteEntry{name: item.Name, folder: item.IsDir}
-		if !item.IsDir {
-			entry.size = item.Size
-			entry.modified, _ = time.Parse(time.RFC3339Nano, item.ModTime)
+		for {
+			in.next(decoder.InputOffset())
+			if !decoder.More() {
+				return nil
+			}
+			key, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			in.next(decoder.InputOffset())
+			if key != "list" {
+				var skipped json.RawMessage
+				if err := decoder.Decode(&skipped); err != nil {
+					return err
+				}
+				continue
+			}
+			opened, err := decoder.Token()
+			switch {
+			case err != nil:
+				return err
+			case opened == nil:
+				// An empty folder.
+				continue
+			case opened != json.Delim('['):
+				return errors.New("the answer's list is no array")
+			}
+			for {
+				in.next(decoder.InputOffset())
+				if !decoder.More() {
+					break
+				}
+				var item rcloneItem
+				if err := decoder.Decode(&item); err != nil {
+					return err
+				}
+				if err := read(item); err != nil {
+					return err
+				}
+			}
+			// The list's end: an answer cut short has none.
+			if _, err := decoder.Token(); err != nil {
+				return fmt.Errorf("the answer's list has no end: %w", err)
+			}
 		}
-		entries = append(entries, entry)
+	}()
+	if in.over != nil {
+		return in.over
 	}
-	return entries, nil
+	return err
 }
 
 // listFailure tells why a folder could not be listed: a remote the

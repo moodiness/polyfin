@@ -32,6 +32,8 @@ type webdavShare struct {
 	base           *url.URL
 	user, password string
 	client         *http.Client
+	// bounds bound what is read and kept of one folder's listing.
+	bounds listBounds
 }
 
 func newWebDAV(u *url.URL, user, password string) *webdavShare {
@@ -40,7 +42,7 @@ func newWebDAV(u *url.URL, user, password string) *webdavShare {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConnsPerHost = 8
 	transport.ResponseHeaderTimeout = 30 * time.Second
-	return &webdavShare{base: &base, user: user, password: password, client: &http.Client{Transport: transport}}
+	return &webdavShare{base: &base, user: user, password: password, client: &http.Client{Transport: transport}, bounds: folderBounds}
 }
 
 func (c *webdavShare) close() { c.client.CloseIdleConnections() }
@@ -125,29 +127,24 @@ func (c *webdavShare) list(ctx context.Context, rel string) ([]remoteEntry, erro
 	if response.StatusCode != http.StatusMultiStatus {
 		return nil, statusError(response.StatusCode)
 	}
-	// The answer is read entry by entry, never whole.
-	decoder := xml.NewDecoder(response.Body)
-	var entries []remoteEntry
+	// The answer is read entry by entry, never whole, each within the
+	// bounds of one.
+	kept := folderList{bounds: c.bounds}
 	self := path.Clean(folder.Path)
-	for {
-		token, err := decoder.Token()
-		if errors.Is(err, io.EOF) {
-			return entries, nil
+	err = eachElement(response.Body, c.bounds, func(decoder *xml.Decoder, start xml.StartElement) error {
+		if start.Name.Space != "DAV:" || start.Name.Local != "response" {
+			return decoder.Skip()
 		}
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", errShareUnreachable, err)
-		}
-		start, ok := token.(xml.StartElement)
-		if !ok || start.Name.Space != "DAV:" || start.Name.Local != "response" {
-			continue
+		if err := kept.another(); err != nil {
+			return err
 		}
 		var r davResponse
 		if err := decoder.DecodeElement(&r, &start); err != nil {
-			return nil, fmt.Errorf("%w: %v", errShareUnreachable, err)
+			return err
 		}
 		href, err := url.Parse(r.Href)
 		if err != nil {
-			continue
+			return nil
 		}
 		entryPath := path.Clean(href.Path)
 		var entry *remoteEntry
@@ -163,12 +160,21 @@ func (c *webdavShare) list(ctx context.Context, rel string) ([]remoteEntry, erro
 		case entry == nil:
 		case entryPath == self:
 			if !entry.folder {
-				return nil, errIsFile
+				return errIsFile
 			}
 		case path.Dir(entryPath) == self:
-			entries = append(entries, *entry)
+			return kept.keep(*entry)
 		}
+		return nil
+	})
+	var bound *shareBound
+	switch {
+	case err == nil:
+		return kept.entries, nil
+	case errors.Is(err, errIsFile), errors.As(err, &bound):
+		return nil, err
 	}
+	return nil, fmt.Errorf("%w: %v", errShareUnreachable, err)
 }
 
 func (c *webdavShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, time.Time, error) {
