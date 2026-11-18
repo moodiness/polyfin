@@ -144,7 +144,12 @@ type Config struct {
 	// besides those the addon's sources name (see BootstrapNodes); none
 	// when empty, as in tests.
 	Bootstrap []string
-	Logger    *slog.Logger
+	// Public reports whether an address is on the internet, where alone
+	// the trackers and DHT nodes a stream's sources name, and the peers
+	// and nodes a swarm tells, are reached; nil for stremio.Public. Tests,
+	// whose trackers and peers are on the loopback, replace it.
+	Public func(netip.Addr) bool
+	Logger *slog.Logger
 }
 
 // Engine runs the torrents being played.

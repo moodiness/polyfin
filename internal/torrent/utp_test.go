@@ -299,7 +299,7 @@ func BenchmarkUTPSwarm(b *testing.B) {
 					}
 					tracker := torrenttest.HTTPTracker(b, "127.0.0.1", listed...)
 					e, err := New(Config{Settings: proxied(proxy).get, Dir: b.TempDir(), Budget: func() int64 { return 64 << 20 },
-						Logger: slog.New(slog.DiscardHandler)})
+						Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 					if err != nil {
 						b.Fatal(err)
 					}

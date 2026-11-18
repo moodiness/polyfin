@@ -626,6 +626,24 @@ func (r *wireGuardRoute) resolve(ctx context.Context, run *tunnelRun, address st
 	return netip.AddrPort{}, fmt.Errorf("look %s up over the WireGuard tunnel: no address", host)
 }
 
+// lookup is the address Dial, or a UDP socket's WriteTo, reaches for
+// address (see resolver). As Dial, it checks the tunnel first for a
+// connection.
+func (r *wireGuardRoute) lookup(ctx context.Context, address string, tcp bool) (netip.AddrPort, error) {
+	if tcp {
+		if err := r.Check(ctx); err != nil {
+			return netip.AddrPort{}, err
+		}
+	}
+	run, err := r.stack()
+	if err != nil {
+		return netip.AddrPort{}, err
+	}
+	ctx, cancel := run.bound(ctx)
+	defer cancel()
+	return r.resolve(ctx, run, address, tcp)
+}
+
 func (r *wireGuardRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 	if err := r.Check(ctx); err != nil {
 		return nil, err

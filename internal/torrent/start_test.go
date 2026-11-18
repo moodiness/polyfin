@@ -60,7 +60,7 @@ func (r *records) logged(parts ...string) bool {
 func newEngineWith(t *testing.T, settings *testSettings, change func(*Config)) *Engine {
 	t.Helper()
 	config := Config{Settings: settings.get, Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 },
-		Linger: 50 * time.Millisecond, Logger: slog.New(slog.DiscardHandler)}
+		Linger: 50 * time.Millisecond, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)}
 	change(&config)
 	e, err := New(config)
 	if err != nil {

@@ -87,6 +87,10 @@ type torrent struct {
 	engine *Engine
 	hash   Hash
 	route  Route
+	// internet is route for what nobody of the server chose: the trackers
+	// and DHT nodes a listing names, and the nodes the DHT tells. It
+	// reaches public addresses only (see publicRoute).
+	internet publicRoute
 	// udp tells whether the route carries UDP: UDP trackers and the DHT.
 	udp bool
 	// run is the store's number for this run of the torrent (see
@@ -145,6 +149,10 @@ type torrent struct {
 	extra     map[string]bool
 	extraCtx  context.Context
 	stopExtra context.CancelFunc
+	// settings are the trackers of the settings, the administrator's,
+	// whether a listing names them too or not: they alone are reached
+	// wherever they are, on the local network too.
+	settings map[string]bool
 	// reached are the peers the torrent connected to, the latest last,
 	// keptPeers at most, and closest the DHT nodes nearest the torrent
 	// that answered its last lookup: both are kept once it stops, for its
@@ -202,7 +210,8 @@ func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
 		trackers: slices.Clone(spec.Trackers), nodes: slices.Clone(spec.Nodes), dht: spec.DHT,
 		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]candidate{},
 		flags: map[netip.AddrPort]byte{}, reads: map[*Reader]readSpan{}, changed: make(chan struct{}),
-		flowing: make(chan struct{}), announces: map[string]error{}, extra: map[string]bool{}}
+		flowing: make(chan struct{}), announces: map[string]error{}, extra: map[string]bool{}, settings: map[string]bool{}}
+	t.internet = publicRoute{Route: route, public: e.public}
 	t.extraCtx, t.stopExtra = context.WithCancel(ctx)
 	return t
 }
@@ -262,6 +271,9 @@ func (t *torrent) start(extra []string) {
 	go t.guard()
 	go t.connect()
 	t.mu.Lock()
+	t.trust(extra)
+	t.trackers = slices.DeleteFunc(t.trackers, func(tracker string) bool { return !t.takes(tracker) })
+	t.nodes = slices.DeleteFunc(t.nodes, func(node string) bool { return !t.internet.allowsNode(node) })
 	t.addExtra(extra)
 	trackers := slices.Clone(t.trackers)
 	t.mu.Unlock()
@@ -269,6 +281,32 @@ func (t *torrent) start(extra []string) {
 		t.goAnnounce(tracker)
 	}
 	go t.lookup()
+}
+
+// trust records extra, the trackers of the settings now, as the
+// administrator's. The lock is held.
+func (t *torrent) trust(extra []string) {
+	for _, tracker := range extra {
+		t.settings[tracker] = true
+	}
+}
+
+// takes reports whether the torrent announces to a tracker a listing
+// names: not to an address that is not public, which a tracker of the
+// settings alone may have. The lock is held.
+func (t *torrent) takes(tracker string) bool {
+	return t.settings[tracker] || t.internet.allowsTracker(tracker)
+}
+
+// routeTo is the route to a tracker: the torrent's as it is for one of
+// the settings, and on public addresses only for any other.
+func (t *torrent) routeTo(tracker string) Route {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.settings[tracker] {
+		return t.route
+	}
+	return t.internet
 }
 
 // goAnnounce announces the torrent to a tracker until it stops, or, for
@@ -286,11 +324,16 @@ func (t *torrent) goAnnounce(tracker string) {
 }
 
 // merge adds the trackers and nodes of another listing of the torrent,
-// and extra, the trackers of the settings now.
+// those on addresses that are not public left out, and extra, the
+// trackers of the settings now.
 func (t *torrent) merge(spec Spec, extra []string) {
 	t.mu.Lock()
+	t.trust(extra)
 	var added []string
 	for _, tracker := range spec.Trackers {
+		if !t.takes(tracker) {
+			continue
+		}
 		if t.extra[tracker] {
 			// Announced already, now named by a listing too.
 			delete(t.extra, tracker)
@@ -303,7 +346,7 @@ func (t *torrent) merge(spec Spec, extra []string) {
 	}
 	added = append(added, t.addExtra(extra)...)
 	for _, node := range spec.Nodes {
-		if !slices.Contains(t.nodes, node) {
+		if t.internet.allowsNode(node) && !slices.Contains(t.nodes, node) {
 			t.nodes = append(t.nodes, node)
 		}
 	}
@@ -480,12 +523,13 @@ func later(a, b time.Time) time.Time {
 	return a
 }
 
-// addPeers queues peers to connect to.
+// addPeers queues peers to connect to: those a tracker, the DHT or a
+// peer told that are on the internet, as a swarm's peers are.
 func (t *torrent) addPeers(peers []netip.AddrPort) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, address := range peers {
-		if !address.IsValid() || address.Port() == 0 || t.knows(address) || len(t.known) > 2000 {
+		if !address.IsValid() || address.Port() == 0 || !t.engine.public(address.Addr()) || t.knows(address) || len(t.known) > 2000 {
 			continue
 		}
 		t.known[address] = candidate{}
@@ -936,7 +980,7 @@ func (t *torrent) announce(ctx context.Context, tracker string) {
 	event := "started"
 	failures := 0
 	for {
-		answer, err := announceTo(ctx, t.route, tracker, t.announced(event), t.udp)
+		answer, err := announceTo(ctx, t.routeTo(tracker), tracker, t.announced(event), t.udp)
 		if errors.Is(err, errTrackerUDP) {
 			return
 		}
@@ -965,7 +1009,7 @@ func (t *torrent) announce(ctx context.Context, tracker string) {
 			if event == "" && !t.failed() {
 				// The tracker forgets Polyfin, over the route still up.
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				_, _ = announceTo(ctx, t.route, tracker, t.announced("stopped"), t.udp)
+				_, _ = announceTo(ctx, t.routeTo(tracker), tracker, t.announced("stopped"), t.udp)
 				cancel()
 			}
 			return
@@ -1033,7 +1077,7 @@ func (t *torrent) lookup() {
 // dhtEvery, past the wait for its start. The lookup stops as soon as the
 // torrent's info tells it is private.
 func (t *torrent) lookupOnce(starts []string) bool {
-	conn, err := t.route.ListenPacket(t.ctx)
+	conn, err := t.internet.ListenPacket(t.ctx)
 	if err != nil {
 		return false
 	}
@@ -1054,7 +1098,7 @@ func (t *torrent) lookupOnce(starts []string) bool {
 		t.mu.Unlock()
 	}()
 	found := false
-	closest, _ := lookupPeers(ctx, conn, t.hash, starts, func(peers []netip.AddrPort) {
+	closest, _ := lookupPeers(ctx, conn, t.hash, starts, t.engine.public, func(peers []netip.AddrPort) {
 		found = true
 		t.addPeers(peers)
 	})
@@ -1159,9 +1203,10 @@ func (t *torrent) handle(p *peer, id byte, payload []byte) error {
 	return nil
 }
 
-// learnNode keeps the DHT node a peer runs, to look the torrent up from.
+// learnNode keeps the DHT node a peer runs, to look the torrent up from,
+// when the peer is on the internet.
 func (t *torrent) learnNode(p *peer, port uint16) {
-	if port == 0 {
+	if port == 0 || !t.engine.public(p.address.Addr()) {
 		return
 	}
 	address := netip.AddrPortFrom(p.address.Addr(), port).String()

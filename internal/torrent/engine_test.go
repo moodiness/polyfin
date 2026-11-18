@@ -38,7 +38,7 @@ func (t *testSettings) set(change func(*Settings)) {
 func newEngine(t testing.TB, settings *testSettings, budget int64) *Engine {
 	t.Helper()
 	e, err := New(Config{Settings: settings.get, Dir: t.TempDir(), Budget: func() int64 { return budget },
-		Linger: 50 * time.Millisecond, Logger: slog.New(slog.DiscardHandler)})
+		Linger: 50 * time.Millisecond, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}

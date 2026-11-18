@@ -486,6 +486,16 @@ Some addons list a torrent without any tracker: the stream then has an info hash
 - A change applies to the torrents that start next, and to those running as another playback joins them.
 - The log line of a torrent that did not start counts those trackers apart (see [When torrents do not start](#when-torrents-do-not-start)).
 
+### Public addresses only
+
+A stream's trackers and DHT nodes, and the peers and nodes a swarm tells, are reached on public addresses only: never on the loopback, a private or link-local address, or the shared range of carrier-grade NAT. So an addon's stream, a tracker's answer or a peer cannot have Polyfin send to the route's local network.
+
+- **Trackers and DHT nodes of `sources`:** one named by an address that is not public is left out, and the stream plays with its other sources.
+- **Names:** through a network interface and a WireGuard tunnel, Polyfin looks the name up, and reaches it only at a public address. A SOCKS5 proxy looks names up itself and tells no address, so Polyfin cannot check what a name leads to there. Have the proxy refuse local addresses if it can reach a local network.
+- **Peers and nodes:** those a tracker, the DHT or a peer tells on an address that is not public are not dialed nor asked, for every torrent.
+- **Redirects:** an HTTP or HTTPS tracker that answers with a redirect is not followed, and counts as a tracker that did not answer. Give the tracker's final address.
+- **Trackers added to every torrent** are yours, and are not restricted: one on your local network is asked as before. The peers it lists are still reached on public addresses only.
+
 ## Reading and storage
 
 A torrent version is read through the source cache, as a link is. FFmpeg, ffprobe and apps read it the same way. It is always relayed, never sent to an app.

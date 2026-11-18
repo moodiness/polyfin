@@ -219,6 +219,15 @@ func (r *interfaceRoute) resolve(ctx context.Context, network, address string) (
 	return netip.AddrPortFrom(ips[0].Unmap(), uint16(n)), nil
 }
 
+// lookup is the address Dial, or a UDP socket's WriteTo, reaches for
+// address (see resolver).
+func (r *interfaceRoute) lookup(ctx context.Context, address string, tcp bool) (netip.AddrPort, error) {
+	if tcp {
+		return r.resolve(ctx, "tcp", address)
+	}
+	return r.resolve(ctx, "udp", address)
+}
+
 func (r *interfaceRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 	if err := r.Check(ctx); err != nil {
 		return nil, err

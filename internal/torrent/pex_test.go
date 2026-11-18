@@ -38,12 +38,14 @@ func pexPayload(added []netip.AddrPort, flags byte, dropped ...netip.AddrPort) [
 		"added6": a6, "added6.f": bytes.Repeat([]byte{flags}, len(a6)/18), "dropped": d4, "dropped6": d6})
 }
 
-// addresses are n addresses of 10.0.0.0/8 from first, on port 6881.
+// addresses are n addresses of 127.0.0.0/8 from first, on port 6881: the
+// loopback stands for the internet in these tests (see
+// torrenttest.OnLoopback), and none is dialed.
 func addresses(first, n int) []netip.AddrPort {
 	list := make([]netip.AddrPort, n)
 	for i := range list {
 		k := first + i
-		list[i] = netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, byte(k >> 16), byte(k >> 8), byte(k)}), 6881)
+		list[i] = netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, byte(k >> 16), byte(k >> 8), byte(k)}), 6881)
 	}
 	return list
 }
@@ -211,9 +213,9 @@ func TestPeerExchangeLimits(t *testing.T) {
 		t.Parallel()
 		tr := newTorrentOf(t, 1)
 		v6 := netip.MustParseAddrPort("[2001:db8::7]:6881")
-		mapped := netip.AddrPortFrom(netip.AddrFrom16(netip.MustParseAddr("10.9.9.9").As16()), 6881)
+		mapped := netip.AddrPortFrom(netip.AddrFrom16(netip.MustParseAddr("127.9.9.9").As16()), 6881)
 		payload := encode(map[string]any{
-			"added":    string(netip.MustParseAddr("10.1.1.1").AsSlice()) + "\x1a\xe1" + string(netip.MustParseAddr("10.1.1.2").AsSlice()) + "\x00\x00",
+			"added":    string(netip.MustParseAddr("127.1.1.1").AsSlice()) + "\x1a\xe1" + string(netip.MustParseAddr("127.1.1.2").AsSlice()) + "\x00\x00",
 			"added.f":  "\x04\x04",
 			"added6":   string(v6.Addr().AsSlice()) + "\x1a\xe1" + string(mapped.Addr().AsSlice()) + "\x1a\xe1" + string(make([]byte, 16)) + "\x1a\xe1",
 			"added6.f": "\x02\x00\x00",
@@ -221,7 +223,7 @@ func TestPeerExchangeLimits(t *testing.T) {
 		if _, err := read(t, tr, pex(payload)); !errors.Is(err, io.EOF) {
 			t.Fatal(err)
 		}
-		want := map[netip.AddrPort]byte{netip.MustParseAddrPort("10.1.1.1:6881"): pexUTP, v6: pexSeed, netip.MustParseAddrPort("10.9.9.9:6881"): 0}
+		want := map[netip.AddrPort]byte{netip.MustParseAddrPort("127.1.1.1:6881"): pexUTP, v6: pexSeed, netip.MustParseAddrPort("127.9.9.9:6881"): 0}
 		if !maps.Equal(tr.flags, want) || len(tr.queue) != 3 {
 			t.Fatalf("kept %v, queued %v", tr.flags, tr.queue)
 		}
@@ -283,6 +285,7 @@ func FuzzPEX(f *testing.F) {
 	f.Add(pexPayload(addresses(0, maxPEXEntries), 0))
 	f.Add([]byte("de"))
 	s := newFuzzSwarm(f, false)
+	e := fuzzEngine(f, nil)
 	f.Fuzz(func(t *testing.T, payload []byte) {
 		added, dropped, err := parsePEX(payload)
 		if err == nil {
@@ -303,7 +306,7 @@ func FuzzPEX(f *testing.F) {
 		}
 		// Many peers send it, before and after the info: what the
 		// torrent keeps stays within its bounds.
-		tr := newTorrent(nil, Spec{Hash: s.tor.Hash}, nil, false)
+		tr := newTorrent(e, Spec{Hash: s.tor.Hash}, nil, false)
 		defer tr.cancel()
 		for k := range 2 * maxPEXPeers / maxPEXEntries {
 			p := newPeer(tr, &streamConn{}, netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(k+1)))

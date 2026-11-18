@@ -15,6 +15,7 @@ Every connection on this page goes through the torrents' route alone (see [Route
 - An announce tells the trackers a port of the dynamic range (49152 to 65535), the same for the whole run, though nothing listens on it. Trackers refuse port 0, and many refuse 6881 to 6889.
 - The info hash and the peer ID are escaped byte by byte.
 - A tracker that refuses the announce has its own reason logged at debug level, with its host.
+- What a stream's `sources`, a tracker's answer, the DHT or a peer names is reached on public addresses only (see [Public addresses only](torrents.md#public-addresses-only)).
 
 ## Pieces and reading ahead
 

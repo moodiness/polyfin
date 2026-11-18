@@ -339,7 +339,7 @@ func fuzzEngine(tb testing.TB, logger *slog.Logger, swarms ...fuzzSwarm) *Engine
 		logger = slog.New(slog.DiscardHandler)
 	}
 	e, err := New(Config{Settings: func() Settings { return Settings{Enabled: true, UploadMbps: 1000} }, Dir: tb.TempDir(),
-		Budget: func() int64 { return 64 << 20 }, Logger: logger})
+		Budget: func() int64 { return 64 << 20 }, Public: torrenttest.OnLoopback, Logger: logger})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -626,7 +626,7 @@ func FuzzDHTLookup(f *testing.F) {
 	f.Fuzz(func(t *testing.T, stream []byte) {
 		conn := &datagramConn{datagrams: frames(stream), from: netip.MustParseAddrPort("127.0.0.1:6881")}
 		seen := map[netip.AddrPort]bool{}
-		closest, err := lookupPeers(context.Background(), conn, hash, []string{"127.0.0.1:6881"}, func(peers []netip.AddrPort) {
+		closest, err := lookupPeers(context.Background(), conn, hash, []string{"127.0.0.1:6881"}, torrenttest.OnLoopback, func(peers []netip.AddrPort) {
 			for _, peer := range peers {
 				if !peer.IsValid() || peer.Port() == 0 || seen[peer] {
 					t.Fatalf("a peer at %v, or found twice", peer)

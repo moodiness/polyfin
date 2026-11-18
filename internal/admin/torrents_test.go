@@ -43,7 +43,8 @@ func TestHealthTellsWhyTorrentsDoNotPlay(t *testing.T) {
 				t.Fatal(err)
 			}
 			engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
-				Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+				Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, Public: torrenttest.OnLoopback,
+				Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -74,7 +75,8 @@ func TestHealthTellsATorrentDidNotStart(t *testing.T) {
 		}
 		var err error
 		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: time.Second, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: time.Second, Public: torrenttest.OnLoopback,
+			Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +138,8 @@ func TestHealthCountsWhyATorrentsPeersDidNotConnect(t *testing.T) {
 		}
 		var err error
 		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: 10 * time.Second, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: 10 * time.Second, Public: torrenttest.OnLoopback,
+			Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -179,7 +182,8 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 		o.Backups = backup.New(backup.Config{Folder: func() string { return settings().BackupDir(dataDir) }, DB: d.pool, Settings: settings,
 			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, Public: torrenttest.OnLoopback,
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -268,7 +272,8 @@ func TestHealthTellsTheAddonNamedNoTracker(t *testing.T) {
 		}
 		var err error
 		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: time.Second, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: time.Second, Public: torrenttest.OnLoopback,
+			Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}

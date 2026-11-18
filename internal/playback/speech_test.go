@@ -440,7 +440,7 @@ func TestATorrentsFirstPlayDownloadsNothingForItsSpeech(t *testing.T) {
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
 	proxy := torrenttest.StartProxy(t, true, "", "")
 	engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return torrent.Settings{Enabled: true, Proxy: proxy.Address()} },
-		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, Logger: slog.New(slog.DiscardHandler)})
+		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}

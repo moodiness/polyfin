@@ -105,7 +105,7 @@ func TestTorrentVersions(t *testing.T) {
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, _ *pgxpool.Pool) {
 		var err error
 		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 }, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 }, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -207,7 +207,7 @@ func TestATorrentVersionPlaysAgainOnceItsRouteIsBack(t *testing.T) {
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, _ *pgxpool.Pool) {
 		var err error
 		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 }, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 }, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -362,7 +362,7 @@ func newTorrentPlayWith(t *testing.T, ffprobe string, waits torrentWaits, tors [
 		var err error
 		p.engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
 			Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: waits.start, PieceTimeout: waits.piece,
-			RouteCheck: waits.routeCheck, Logger: slog.New(slog.DiscardHandler)})
+			RouteCheck: waits.routeCheck, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -67,7 +67,7 @@ func torrentTitlesOf(t *testing.T, ffprobe string, media []byte) torrentTitles {
 	p.testServer = newProbingServer(t, 10, ffprobe, func(options *Options, _ *pgxpool.Pool) {
 		var err error
 		p.engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
-			Dir: p.pieces, Budget: func() int64 { return 64 << 20 }, Logger: slog.New(slog.DiscardHandler)})
+			Dir: p.pieces, Budget: func() int64 { return 64 << 20 }, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}

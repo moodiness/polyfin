@@ -76,7 +76,8 @@ func newSlowTorrent(t *testing.T, ffprobe string, id byte, data []byte, analysis
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
 	proxy := torrenttest.StartProxy(t, true, "", "")
 	config := torrent.Config{Settings: func() torrent.Settings { return torrent.Settings{Enabled: true, Proxy: proxy.Address()} },
-		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: 2 * time.Second, Logger: slog.New(slog.DiscardHandler)}
+		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: 2 * time.Second, Public: torrenttest.OnLoopback,
+		Logger: slog.New(slog.DiscardHandler)}
 	for _, c := range configure {
 		c(&config)
 	}

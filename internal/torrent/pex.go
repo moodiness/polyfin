@@ -138,6 +138,10 @@ func (t *torrent) receivedPEX(p *peer, payload []byte) error {
 	}
 	t.dropPEX(dropped)
 	for _, a := range added {
+		if !t.engine.public(a.address.Addr()) {
+			// A swarm's peers are on the internet.
+			continue
+		}
 		if _, kept := t.flags[a.address]; !kept && len(t.flags) >= maxPEXPeers {
 			continue
 		} else if !kept && t.peers[a.address] == nil && !t.knows(a.address) {

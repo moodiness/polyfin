@@ -25,6 +25,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // File is a file of a torrent built for a test.
@@ -836,6 +838,12 @@ func HTTPTracker(tb testing.TB, host string, peers ...netip.AddrPort) *Tracker {
 // URL is the tracker's announce URL.
 func (t *Tracker) URL() string { return t.server.URL + "/announce" }
 
+// PublicURL is the tracker's announce URL at Public, where a Proxy and a
+// WireGuardServer reach it.
+func (t *Tracker) PublicURL() string {
+	return "http://" + Through(netip.MustParseAddrPort(t.server.Listener.Addr().String())).String() + "/announce"
+}
+
 // Announces lists the events of the announces received, "" for regular
 // ones.
 func (t *Tracker) Announces() []string {
@@ -1043,7 +1051,10 @@ func (d *DHTNode) Drop(n int) {
 }
 
 // Proxy is a SOCKS5 proxy on the loopback interface, with or without UDP
-// ASSOCIATE. It records the addresses it is asked to reach.
+// ASSOCIATE. It records the addresses it is asked to reach. As through a
+// WireGuardServer, a target at Public is the same port on 127.0.0.1, and
+// its answers come from Public. Any other address off the loopback is
+// recorded, and not reached.
 type Proxy struct {
 	listener net.Listener
 	address  string
@@ -1320,13 +1331,14 @@ func (p *Proxy) serve(conn net.Conn) {
 	case request[1] == 1:
 		p.record("tcp " + target)
 		p.mu.Lock()
-		refused := p.refuse[target]
+		// An address elsewhere is refused: nothing leaves the loopback.
+		refused := p.refuse[target] || elsewhere(onLoopback(target))
 		delete(p.refuse, target)
 		p.mu.Unlock()
 		var upstream net.Conn
 		var err error
 		if !refused {
-			upstream, err = net.DialTimeout("tcp", target, 10*time.Second)
+			upstream, err = net.DialTimeout("tcp", onLoopback(target), 10*time.Second)
 		}
 		if refused || err != nil {
 			_, _ = conn.Write(append([]byte{5, 5, 0}, bound...))
@@ -1364,6 +1376,8 @@ func (p *Proxy) serve(conn net.Conn) {
 // relay forwards a client's datagrams and the answers to them.
 func (p *Proxy) relay(relay *net.UDPConn) {
 	var client netip.AddrPort
+	// public are the targets on the loopback reached at Public.
+	public := map[netip.AddrPort]bool{}
 	buffer := make([]byte, 65536)
 	for {
 		n, from, err := relay.ReadFromUDPAddrPort(buffer)
@@ -1391,14 +1405,47 @@ func (p *Proxy) relay(relay *net.UDPConn) {
 				}
 				resolved = addr.AddrPort()
 			}
+			if resolved.Addr() == Public {
+				resolved = netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, 0, 0, 1}), resolved.Port())
+				public[resolved] = true
+			}
+			if !resolved.Addr().IsLoopback() {
+				continue
+			}
 			_, _ = relay.WriteToUDPAddrPort(buffer[3+(n-3-r.Len()):n], resolved)
 			continue
 		}
 		header := []byte{0, 0, 0, 1}
+		if public[from] {
+			from = Through(from)
+		}
 		header = append(header, from.Addr().AsSlice()...)
 		header = binary.BigEndian.AppendUint16(header, from.Port())
 		_, _ = relay.WriteToUDPAddrPort(append(header, buffer[:n]...), client)
 	}
+}
+
+// onLoopback is target, a host and a port, with Public replaced by
+// 127.0.0.1.
+func onLoopback(target string) string {
+	if ap, err := netip.ParseAddrPort(target); err == nil && ap.Addr() == Public {
+		return net.JoinHostPort("127.0.0.1", strconv.Itoa(int(ap.Port())))
+	}
+	return target
+}
+
+// elsewhere reports whether target, a host and a port, is an IP address
+// off the loopback interface.
+func elsewhere(target string) bool {
+	ap, err := netip.ParseAddrPort(target)
+	return err == nil && !ap.Addr().Unmap().IsLoopback()
+}
+
+// OnLoopback is a torrent.Config's Public for the tests whose trackers,
+// DHT nodes and peers are on the loopback interface: the loopback stands
+// for the internet there, besides the public addresses.
+func OnLoopback(ip netip.Addr) bool {
+	return ip.Unmap().IsLoopback() || stremio.Public(ip)
 }
 
 // isTarget tells whether a datagram comes from an address the client sent

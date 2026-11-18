@@ -61,14 +61,19 @@ func announceTo(ctx context.Context, route Route, raw string, a announce, udp bo
 }
 
 // routeClient is an HTTP client every connection of which goes through
-// route; it never uses the environment's proxy.
+// route; it never uses the environment's proxy, and follows no redirect:
+// a tracker answers an announce itself, and a redirect would name an
+// address nobody chose.
 func routeClient(route Route) *http.Client {
-	return &http.Client{Transport: &http.Transport{
-		Proxy:               nil,
-		DialContext:         func(ctx context.Context, _, address string) (net.Conn, error) { return route.Dial(ctx, address) },
-		TLSHandshakeTimeout: 15 * time.Second,
-		DisableKeepAlives:   true,
-	}}
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy:               nil,
+			DialContext:         func(ctx context.Context, _, address string) (net.Conn, error) { return route.Dial(ctx, address) },
+			TLSHandshakeTimeout: 15 * time.Second,
+			DisableKeepAlives:   true,
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 func announceHTTP(ctx context.Context, route Route, u *url.URL, a announce) (trackerAnswer, error) {

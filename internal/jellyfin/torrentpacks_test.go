@@ -72,7 +72,7 @@ func TestASeasonPackWithoutAnIndexPlaysTheEpisode(t *testing.T) {
 	proxy := torrenttest.StartProxy(t, true, "", "")
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, _ *pgxpool.Pool) {
 		engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
-			Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 }, Logger: slog.New(slog.DiscardHandler)})
+			Dir: t.TempDir(), Budget: func() int64 { return 64 << 20 }, Public: torrenttest.OnLoopback, Logger: slog.New(slog.DiscardHandler)})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -37,11 +37,13 @@ type dhtNode struct {
 
 // lookupPeers looks hash up on the DHT from the nodes starts, and sends the
 // peers found to found until the lookup ends or ctx is done: then no query
-// is sent, and the answer awaited is given up at once. It returns the
-// addresses of the nodes that answered, the closest to hash first,
-// dhtKept at most: the next lookup starts from them, nearer the nodes
-// that keep the torrent's peers than the starting nodes are.
-func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []string, found func([]netip.AddrPort)) ([]string, error) {
+// is sent, and the answer awaited is given up at once. Of the nodes an
+// answer names, only those public says are on the internet are asked. It
+// returns the addresses of the nodes that answered, the closest to hash
+// first, dhtKept at most: the next lookup starts from them, nearer the
+// nodes that keep the torrent's peers than the starting nodes are.
+func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []string, public func(netip.Addr) bool,
+	found func([]netip.AddrPort)) ([]string, error) {
 	if len(starts) == 0 {
 		return nil, errors.New("no DHT node to start from")
 	}
@@ -150,7 +152,7 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 			var id Hash
 			copy(id[:], compact[:20])
 			for _, address := range compactPeers(compact[20:26], 4) {
-				if a := address.String(); !known[a] && address != from {
+				if a := address.String(); !known[a] && address != from && public(address.Addr()) {
 					known[a] = true
 					nodes = append(nodes, &dhtNode{id: id, address: a})
 				}
