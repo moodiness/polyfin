@@ -368,19 +368,20 @@ jellyfin-web and the fonts come from the Docker image's stages, through `files.s
 
 ### The release signing key
 
-The release workflow signs each release's manifest with the private key in the repository secret `POLYFIN_RELEASE_SIGNING_KEY`.
+The release workflow signs each release's manifest with the private key in the secret `POLYFIN_RELEASE_SIGNING_KEY`, kept in the repository's environment `release`.
 
 - **Renewal:** `.github/workflows/desktop-manifests.yml` renews the manifests of the 10 latest releases every Monday with that key, each only once its signature checks.
 - **Tool:** both workflows use `cmd/polyfin-release-sign`.
 - **Public keys:** the app carries the two public keys of `releaseKeys`, in `internal/desktop/update/manifest.go`.
+- **Environment:** three jobs read the key, and each names the environment `release`: the release's `Check the release signing key`, which runs nothing else, its job that signs the manifest, and the renewal. The environment accepts the tags `v*` and the branch `main` only, so a job that does not name it, or a run of another branch, never gets the key.
 
-A release stops at its step `Check the release signing key` while the secret is missing, or while its public key is not one the app carries. The packages it would publish could never be installed by an update.
+A release stops at its job `Check the release signing key` while the secret is missing, or while its public key is not one the app carries. The packages it would publish could never be installed by an update.
 
 Once, on a computer you trust, before the first release with signed manifests:
 
 1. Make two key pairs: `go run ./cmd/polyfin-release-sign keygen -out release.key`, then `go run ./cmd/polyfin-release-sign keygen -out spare.key`. Each writes its private key to the file, readable by you only, and prints its public key.
 2. Put both public keys in `releaseKeys`, separated by a comma, and commit them.
-3. Store the signing key as the secret: `gh secret set POLYFIN_RELEASE_SIGNING_KEY < release.key`, or paste the file's line under the repository's Settings › Secrets and variables › Actions. Then remove `release.key`, or keep it offline.
+3. Store the signing key as the environment's secret: `gh secret set POLYFIN_RELEASE_SIGNING_KEY --env release < release.key`, or paste the file's line under the repository's Settings › Environments › release. Then remove `release.key`, or keep it offline.
 4. Keep `spare.key` offline, never in the repository's secrets.
 
 `polyfin-release-sign` also checks keys and manifests:

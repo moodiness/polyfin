@@ -273,13 +273,6 @@ jobs:
           sudo ip link set pf0 up
           sudo -E env "PATH=$PATH" GOCACHE="$RUNNER_TEMP/root-go-build" POLYFIN_TEST_TORRENT_INTERFACE=pf0 \
             go test -count=1 -run 'Interface|Missing' ./internal/torrent
-      - name: Check the release signing key
-        # Before anything is published: Polyfin Desktop installs no update
-        # whose manifest a key it carries did not sign (docs/desktop.md).
-        if: github.event_name == 'push' && github.ref_type == 'tag'
-        env:
-          POLYFIN_RELEASE_SIGNING_KEY: ${{ secrets.POLYFIN_RELEASE_SIGNING_KEY }}
-        run: go run ./cmd/polyfin-release-sign key
       - name: Build production binary and verify its version
         env:
           VERSION: ${{ needs.tested.outputs.version }}
@@ -909,10 +902,33 @@ jobs:
       - name: See the image become healthy with its own database, stop cleanly and recover after a kill
         run: make image-health-embedded
 
+  signing-key:
+    # Before anything is published, as the publish job needs this one:
+    # Polyfin Desktop installs no update whose manifest a key it carries
+    # did not sign (docs/desktop.md). The key is read here, in the job
+    # that signs the manifest and in the desktop-manifests workflow, and
+    # nowhere else: each names the environment that holds it, and this
+    # job runs nothing but the check (docs/development.md).
+    name: Check the release signing key
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: tested
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    environment: release
+    steps:
+      - *checkout
+      - *setup-go
+      - name: Check the release signing key
+        env:
+          POLYFIN_RELEASE_SIGNING_KEY: ${{ secrets.POLYFIN_RELEASE_SIGNING_KEY }}
+        run: go run ./cmd/polyfin-release-sign key
+
   publish:
     name: Publish multi-platform image to GHCR
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [tested, check, race, jellyfin, thirtytwo, image]
+    needs: [tested, check, race, jellyfin, thirtytwo, image, signing-key]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1404,6 +1420,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    environment: release
     steps:
       - *checkout
       - *setup-go
