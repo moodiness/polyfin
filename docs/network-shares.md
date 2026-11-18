@@ -27,7 +27,7 @@ Without this, such storage has to be mounted on the host, for example with `rclo
 | SMB share | `smb://` then server, share, and folder if the videos are not at its root: `smb://nas.local/media/movies` | Another port than 445 follows the name: `smb://nas.local:4450/media`. SMB 2 and 3 with NTLM sign-in. SMB 1 is not supported. |
 | WebDAV folder | Its address: `https://nas.local/dav/movies` | HTTP Basic sign-in. Prefer `https://`: `http://` sends the password unencrypted. |
 | S3 bucket | `s3://` then bucket, and prefix if the videos are not at its root: `s3://media/movies` | Takes an **Endpoint** and a **Region** (below). |
-| SFTP folder | `sftp://` then server and the folder's full path: `sftp://nas.local/srv/media/movies` | Another port than 22 follows the name: `sftp://nas.local:2222/srv/media/movies`. Symbolic links on the server are followed. |
+| SFTP folder | `sftp://` then server and the folder's full path: `sftp://nas.local/srv/media/movies` | Another port than 22 follows the name: `sftp://nas.local:2222/srv/media/movies`. Symbolic links on the server are followed, except a link to a folder that leads to its own folder or to one above it. |
 | rclone remote | `rclone://` then the instance's host and port, and the path: `rclone://rclone:5572/movies` | Read through an rclone instance (below). |
 
 The address holds no user or password. They have fields of their own, and an address holding them is refused.
@@ -113,6 +113,7 @@ A folder moved to another server forgets the former server's key.
   - WebDAV, S3 and rclone: HTTP keep-alive;
   - SFTP: one SSH connection per folder, made again when it drops.
 - **Scans** list the share folder by folder. Network listings are slower than a disk's, but a scan reads only new or changed files, so only the first scan is long.
+- **Limits:** one scan reads folders up to 32 deep, 1,000,000 folders and 4,000,000 files, and of one folder 500,000 entries, each named by at most 1,024 bytes. A share that holds more fails its scan with the limit it met (see [Health](#health)): add parts of it as separate folders.
 - **Schedule:** shares follow the same schedule as local folders (see [Scanning](local-folders.md#scanning)), and are watched for changes (see [Watching for changes](local-folders.md#watching-for-changes)).
 - **Network:** a video plays only as fast as the network carries it. A high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
 
@@ -130,10 +131,16 @@ A share Polyfin cannot read is reported on its page and under **System › Healt
 | `unreadable` | The user may not list the folder. |
 | `not_folder` | The address is a file. |
 | `host_key_changed` | An SFTP server offers another host key than the one saved (see [SFTP host keys](#sftp-host-keys)). |
+| `too_deep` | The share's folders go more than 32 deep. A link on the server that leads back to a folder above it makes such folders. |
+| `too_many_folders` | The share holds more than 1,000,000 folders. |
+| `too_many_files` | The share holds more than 4,000,000 files, counting those beside the videos or the tracks, such as subtitles and images. |
+| `listing_too_large` | One folder of the share lists more than 500,000 entries, a name longer than 1,024 bytes, or an answer larger than Polyfin reads: 64 MiB from a WebDAV server or for a page of a bucket, 256 MiB from rclone. The server's log tells which, and in which folder. |
 
 An empty prefix of a bucket is an empty folder: S3 cannot tell it from a prefix that does not exist.
 
 As with a local folder, the files found before stay in the library while the share cannot be read. A NAS that is off for a while empties no library.
+
+A share that met one of the limits of a scan (`too_deep`, `too_many_folders`, `too_many_files` or `listing_too_large`) keeps its schedule, and can be scanned by hand. Each scan reads it up to the limit again, so the listings that watch a share for changes have it scanned once more, then no longer until a scan reads it whole. An SMB server that tells of its changes still has it scanned after them.
 
 A share that was read but cannot be listed while watched is a warning under **System › Health**. The reason is `unreachable`, `refused` or `host_key_changed`. It keeps its schedule meanwhile, and is scanned again once it answers.
 

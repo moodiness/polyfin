@@ -1196,7 +1196,9 @@ export type LocalFolder = {
   scannedAt: string | null
   /**
    * Why the last scan could not read the folder: 'missing', 'unreadable', 'not_folder', or for a
-   * share 'unreachable', 'refused', and for an SFTP folder 'host_key_changed'; else empty.
+   * share 'unreachable', 'refused', for an SFTP folder 'host_key_changed', and for a share that
+   * holds more than one scan reads 'too_deep', 'too_many_folders', 'too_many_files' or
+   * 'listing_too_large'; else empty.
    */
   error: string
   /** Whether a scan is under way. */

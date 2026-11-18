@@ -479,6 +479,14 @@ const sources: typeof en = {
         'Die Freigabe lehnt den Benutzer oder das Passwort ab: Prüfe beides und gib es erneut ein.',
       host_key_changed:
         'Der SFTP-Server bietet einen anderen Hostschlüssel an als den, der bei der ersten Verbindung gespeichert wurde, und Polyfin lehnt ihn ab. Wenn die Änderung erwartet ist, akzeptiere den neuen Schlüssel unter „Ordner bearbeiten“.',
+      too_deep:
+        'Die Ordner der Freigabe sind mehr als 32 Ebenen tief verschachtelt, und Polyfin hat dort aufgehört. Ein Link auf dem Server, der zu einem Ordner über ihm zurückführt, erzeugt solche Ordner: Entferne ihn oder füge einen Ordner der Freigabe hinzu, der ihn nicht enthält.',
+      too_many_folders:
+        'Die Freigabe enthält mehr als 1.000.000 Ordner, mehr als Polyfin in einem Scan liest. Füge Teile davon als getrennte Ordner hinzu.',
+      too_many_files:
+        'Die Freigabe enthält mehr als 4.000.000 Dateien, mehr als Polyfin in einem Scan liest. Füge Teile davon als getrennte Ordner hinzu.',
+      listing_too_large:
+        'Ein Ordner der Freigabe listet mehr auf, als Polyfin von einem Ordner liest: mehr als 500.000 Einträge, einen Namen von mehr als 1.024 Bytes oder eine zu große Antwort des Servers. Das Serverprotokoll nennt, welches dieser Limits erreicht wurde und in welchem Ordner.',
     } as Record<string, string>,
     keptNote:
       'Die bisher gefundenen Dateien bleiben in der Bibliothek, bis der Ordner wieder gelesen werden kann.',

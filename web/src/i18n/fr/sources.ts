@@ -487,6 +487,14 @@ const sources: typeof en = {
         'Le partage refuse l’utilisateur ou le mot de passe\u202f: vérifiez-les, et saisissez-les à nouveau.',
       host_key_changed:
         'Le serveur SFTP présente une autre clé d’hôte que celle enregistrée à la première connexion, et Polyfin la refuse. Si ce changement est attendu, acceptez la nouvelle clé sous Modifier le dossier.',
+      too_deep:
+        'Les dossiers du partage s’emboîtent sur plus de 32 niveaux, et Polyfin s’est arrêté là. Un lien sur le serveur qui ramène à un dossier situé au-dessus de lui crée de tels dossiers\u202f: supprimez-le, ou ajoutez un dossier du partage qui ne le contient pas.',
+      too_many_folders:
+        'Le partage contient plus de 1 000 000 de dossiers, plus que Polyfin n’en lit en une analyse. Ajoutez-en des parties comme dossiers séparés.',
+      too_many_files:
+        'Le partage contient plus de 4 000 000 de fichiers, plus que Polyfin n’en lit en une analyse. Ajoutez-en des parties comme dossiers séparés.',
+      listing_too_large:
+        'Un dossier du partage liste plus que ce que Polyfin lit d’un dossier\u202f: plus de 500 000 entrées, un nom de plus de 1 024 octets, ou une réponse du serveur trop grande. Le journal du serveur indique laquelle de ces limites, et dans quel dossier.',
     } as Record<string, string>,
     keptNote:
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',

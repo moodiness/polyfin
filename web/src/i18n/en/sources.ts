@@ -463,6 +463,14 @@ const sources = {
       refused: 'The share refuses the user or password: check them, and enter them again.',
       host_key_changed:
         'The SFTP server offers another host key than the one saved at the first connection, and Polyfin refuses it. If the change is expected, accept the new key under Edit the folder.',
+      too_deep:
+        'The share’s folders go more than 32 deep, and Polyfin stopped there. A link on the server that leads back to a folder above it makes such folders: remove it, or add a folder of the share that leaves it out.',
+      too_many_folders:
+        'The share holds more than 1,000,000 folders, more than Polyfin reads in one scan. Add parts of it as separate folders.',
+      too_many_files:
+        'The share holds more than 4,000,000 files, more than Polyfin reads in one scan. Add parts of it as separate folders.',
+      listing_too_large:
+        'A folder of the share lists more than Polyfin reads of one folder: more than 500,000 entries, a name longer than 1,024 bytes, or an answer from the server too large. The server’s log tells which, and in which folder.',
     } as Record<string, string>,
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',

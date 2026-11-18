@@ -885,6 +885,13 @@ func (p healthProblemJSON) text(language string) string {
 		case p.Failure == "refused":
 			return say(i18n.Text{"%s: the network share refuses Polyfin’s user or password.",
 				"%s\u202f: le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.", "%s: Die Netzwerkfreigabe lehnt den Benutzer oder das Passwort von Polyfin ab.", "%s: el recurso compartido de red rechaza el usuario o la contraseña de Polyfin.", "%s: la condivisione di rete rifiuta l’utente o la password di Polyfin.", "%s: o compartilhamento de rede recusa o usuário ou a senha do Polyfin."}, name)
+		case p.Failure == "too_deep" || p.Failure == "too_many_folders" || p.Failure == "too_many_files" || p.Failure == "listing_too_large":
+			return say(i18n.Text{"%s: this network share holds more than Polyfin reads in one scan. Its page tells which limit it met.",
+				"%s\u202f: ce partage réseau contient plus que ce que Polyfin lit en une analyse. Sa page indique la limite atteinte.",
+				"%s: Diese Netzwerkfreigabe enthält mehr, als Polyfin in einem Scan liest. Ihre Seite nennt das erreichte Limit.",
+				"%s: este recurso compartido de red contiene más de lo que Polyfin lee en un escaneo. Su página indica el límite alcanzado.",
+				"%s: questa condivisione di rete contiene più di quanto Polyfin legga in una scansione. La sua pagina indica il limite raggiunto.",
+				"%s: este compartilhamento de rede contém mais do que o Polyfin lê em um rastreamento. A página dele indica o limite atingido."}, name)
 		case p.Share != "":
 			return say(i18n.Text{"%s: Polyfin cannot read this network share. Check its address, and that its user may read it.",
 				"%s\u202f: Polyfin ne peut pas lire ce partage réseau. Vérifiez son adresse, et que son utilisateur peut le lire.", "%s: Polyfin kann diese Netzwerkfreigabe nicht lesen. Prüfe ihre Adresse und ob ihr Benutzer sie lesen darf.", "%s: Polyfin no puede leer este recurso compartido de red. Compruebe su dirección y que su usuario tiene permiso de lectura.", "%s: Polyfin non riesce a leggere questa condivisione di rete. Verifica il suo indirizzo e che il suo utente possa leggerla.", "%s: o Polyfin não consegue ler este compartilhamento de rede. Verifique o endereço dele e se o usuário dele tem permissão de leitura."}, name)

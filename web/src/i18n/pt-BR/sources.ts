@@ -481,6 +481,14 @@ const sources: typeof en = {
         'O compartilhamento recusa o usuário ou a senha: verifique-os e digite-os novamente.',
       host_key_changed:
         'O servidor SFTP apresenta uma chave de host diferente da salva na primeira conexão, e o Polyfin a recusa. Se a mudança for esperada, aceite a nova chave em Editar a pasta.',
+      too_deep:
+        'As pastas do compartilhamento têm mais de 32 níveis de profundidade, e o Polyfin parou aí. Um link no servidor que leva de volta a uma pasta acima dele cria pastas assim: remova-o, ou adicione uma pasta do compartilhamento que não o contenha.',
+      too_many_folders:
+        'O compartilhamento contém mais de 1.000.000 de pastas, mais do que o Polyfin lê em um rastreamento. Adicione partes dele como pastas separadas.',
+      too_many_files:
+        'O compartilhamento contém mais de 4.000.000 de arquivos, mais do que o Polyfin lê em um rastreamento. Adicione partes dele como pastas separadas.',
+      listing_too_large:
+        'Uma pasta do compartilhamento lista mais do que o Polyfin lê de uma pasta: mais de 500.000 entradas, um nome de mais de 1.024 bytes ou uma resposta do servidor grande demais. O registro do servidor indica qual desses limites, e em qual pasta.',
     } as Record<string, string>,
     keptNote:
       'Os arquivos encontrados antes permanecem na biblioteca até que a pasta possa ser lida novamente.',

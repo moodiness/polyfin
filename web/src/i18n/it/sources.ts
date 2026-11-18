@@ -483,6 +483,14 @@ const sources: typeof en = {
       refused: 'La condivisione rifiuta l’utente o la password: verificali e inseriscili di nuovo.',
       host_key_changed:
         'Il server SFTP presenta una chiave host diversa da quella salvata alla prima connessione, e Polyfin la rifiuta. Se la modifica è prevista, accetta la nuova chiave in Modifica la cartella.',
+      too_deep:
+        'Le cartelle della condivisione sono annidate per più di 32 livelli, e Polyfin si è fermato lì. Un collegamento sul server che riporta a una cartella sopra di sé crea cartelle di questo tipo: rimuovilo, oppure aggiungi una cartella della condivisione che non lo contenga.',
+      too_many_folders:
+        'La condivisione contiene più di 1.000.000 di cartelle, più di quante Polyfin ne legga in una scansione. Aggiungine alcune parti come cartelle separate.',
+      too_many_files:
+        'La condivisione contiene più di 4.000.000 di file, più di quanti Polyfin ne legga in una scansione. Aggiungine alcune parti come cartelle separate.',
+      listing_too_large:
+        'Una cartella della condivisione elenca più di quanto Polyfin legga di una cartella: più di 500.000 voci, un nome di più di 1.024 byte o una risposta del server troppo grande. Il log del server indica quale di questi limiti, e in quale cartella.',
     } as Record<string, string>,
     keptNote:
       'I file trovati in precedenza restano nella libreria finché la cartella non potrà essere letta di nuovo.',

@@ -201,6 +201,8 @@ const system: typeof en = {
           `${name}: el recurso compartido de red rechaza el usuario o la contraseña de Polyfin.`,
         shareHostKey: (name: string) =>
           `${name}: el servidor SFTP presenta una clave de host distinta de la guardada, y Polyfin la rechaza hasta que se acepte.`,
+        shareTooLarge: (name: string) =>
+          `${name}: este recurso compartido de red contiene más de lo que Polyfin lee en un escaneo. Su página indica el límite alcanzado.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin no puede vigilar los cambios de esta carpeta local: se ha alcanzado el límite de carpetas vigiladas del sistema. Se sigue escaneando según su programación. Aumente fs.inotify.max_user_watches en el host.`,
         folderInstanceLimit: (name: string) =>

@@ -124,6 +124,9 @@ export function hostErrorFileText(
   )
 }
 
+/** The failures of a share's scan that met a limit of what one scan reads. */
+const shareLimits = ['too_deep', 'too_many_folders', 'too_many_files', 'listing_too_large']
+
 /** What a problem the server found says. */
 export function problemText(t: Messages, language: string, problem: HealthProblem): string {
   const health = t.system.health
@@ -201,6 +204,7 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       if (problem.failure === 'unreachable') return text.shareUnreachable(problem.name)
       if (problem.failure === 'refused') return text.shareRefused(problem.name)
       if (problem.failure === 'host_key_changed') return text.shareHostKey(problem.name)
+      if (shareLimits.includes(problem.failure)) return text.shareTooLarge(problem.name)
       return problem.share !== undefined ? text.share(problem.name) : text.folder(problem.name)
     case 'folder_unwatched':
       if (problem.share !== undefined) {

@@ -200,6 +200,8 @@ const system: typeof en = {
           `${name}: Die Netzwerkfreigabe lehnt den Benutzer oder das Passwort von Polyfin ab.`,
         shareHostKey: (name: string) =>
           `${name}: Der SFTP-Server bietet einen anderen Hostschlüssel an als den gespeicherten, und Polyfin lehnt ihn ab, bis er akzeptiert wird.`,
+        shareTooLarge: (name: string) =>
+          `${name}: Diese Netzwerkfreigabe enthält mehr, als Polyfin in einem Scan liest. Ihre Seite nennt das erreichte Limit.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin kann diesen lokalen Ordner nicht auf Änderungen überwachen: Das Systemlimit für überwachte Ordner ist erreicht. Er wird weiterhin nach seinem Zeitplan gescannt. Erhöhe fs.inotify.max_user_watches auf dem Host.`,
         folderInstanceLimit: (name: string) =>

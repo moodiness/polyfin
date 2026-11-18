@@ -383,7 +383,10 @@ func newRemote(access shareAccess, keys hostKeys) (remote, error) {
 
 // shareFailure tells why a share cannot be read, as a folder's Error.
 func shareFailure(err error) string {
+	var bound *shareBound
 	switch {
+	case errors.As(err, &bound):
+		return bound.failure
 	case errors.Is(err, errShareRefused):
 		return errRefused
 	case errors.Is(err, errShareHostKey):
@@ -507,8 +510,18 @@ func (s *Service) offerHostKey(id accounts.ID, address, key string) {
 // playlists among them (see walked), and their side files, one folder
 // after the other, from the listings alone, with the print of each folder
 // it listed (see folderPrint). The folders it could not list, missing or
-// refused, are skipped. A share that stops answering fails the walk.
+// refused, are skipped. A share that stops answering fails the walk, as
+// does one that holds more than shareWalk bounds a walk to.
 func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
+	return shareWalk.walk(ctx, r, root, kind)
+}
+
+// walk walks a share as walkShare does, within b: a share whose folders
+// go deeper, or which holds more folders or files, fails it, as does a
+// folder listing more than is read of one. Folders nested without end, as
+// a link to a folder above it makes them where the server follows it, end
+// the walk so rather than never.
+func (b walkBounds) walk(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
 	list := listing{files: map[string]found{}, sides: map[string]found{}, prints: map[string]uint64{},
 		open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
 			file, _, err := r.open(ctx, rel)
@@ -516,9 +529,11 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 		}}
 	type pending struct {
 		rel     string
+		depth   int
 		listed  bool
 		entries []remoteEntry
 	}
+	count := walkCount{bounds: b}
 	queue := []pending{{rel: "", listed: true, entries: root}}
 	for len(queue) > 0 {
 		if ctx.Err() != nil {
@@ -536,9 +551,16 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 				list.skipped = append(list.skipped, next.rel)
 				continue
 			}
+			var bound *shareBound
+			if errors.As(err, &bound) {
+				return listing{}, bound.in(next.rel)
+			}
 			if err != nil {
 				return listing{}, err
 			}
+		}
+		if err := count.listed(next.rel, entries); err != nil {
+			return listing{}, err
 		}
 		list.prints[next.rel] = folderPrint(kind, next.rel, entries)
 		for _, e := range entries {
@@ -548,13 +570,22 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 			}
 			if e.folder {
 				if !skippedIn(kind, e.name) {
+					if err := count.folder(rel, next.depth+1); err != nil {
+						return listing{}, err
+					}
 					// Listed once its turn comes, so that one folder's
 					// entries at most are held at once.
-					queue = append(queue, pending{rel: rel})
+					queue = append(queue, pending{rel: rel, depth: next.depth + 1})
 				}
 				continue
 			}
-			switch file, side := walked(kind, rel); {
+			file, side := walked(kind, rel)
+			if file || side {
+				if err := count.file(rel); err != nil {
+					return listing{}, err
+				}
+			}
+			switch {
 			case file:
 				list.files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
 			case side:
@@ -616,7 +647,17 @@ func (s *Service) shareFiles(ctx context.Context, id accounts.ID, address, user,
 			return listing{}, "", ctx.Err()
 		}
 		s.logger.Warn("A network share cannot be read", "address", address, "error", err)
-		return listing{}, shareFailure(err), nil
+		failure = shareFailure(err)
+		if metBound(failure) {
+			// The polls compare the share with the prints of its last
+			// scan: they would find it changed at every round, and have it
+			// walked up to its bound each time. Without them, they ask for
+			// one more scan, then leave it to its schedule.
+			s.mu.Lock()
+			delete(s.prints, id)
+			s.mu.Unlock()
+		}
+		return listing{}, failure, nil
 	}
 	return list, "", nil
 }

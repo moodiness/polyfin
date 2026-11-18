@@ -279,6 +279,11 @@ func (s *sftpShare) list(ctx context.Context, rel string) ([]remoteEntry, error)
 				if err != nil {
 					continue
 				}
+				if target.IsDir() && leadsBack(client, dir, info.Name()) {
+					// Unless it leads to a folder that holds this one:
+					// its folders would be listed again under it.
+					continue
+				}
 				info = namedInfo{target, info.Name()}
 			}
 			switch {
@@ -294,6 +299,41 @@ func (s *sftpShare) list(ctx context.Context, rel string) ([]remoteEntry, error)
 		return nil, err
 	}
 	return entries, nil
+}
+
+// leadsBack tells whether a link of the folder dir leads to dir or to a
+// folder above it: entered, it would list the same folders again under
+// itself, without end. The target is the one the server resolves the
+// link to and, for a server that resolves none, the one the link names;
+// the folder is at dir, and where the server resolves dir to. A link
+// that leads back by another way is entered, and the bounds of the walk
+// end what it starts.
+func leadsBack(client *sftp.Client, dir, name string) bool {
+	link := path.Join(dir, name)
+	dirs := []string{dir}
+	if real, err := client.RealPath(dir); err == nil && real != dir {
+		dirs = append(dirs, real)
+	}
+	holds := func(target string) bool {
+		target = path.Clean(target)
+		for _, dir := range dirs {
+			if target == "/" || target == dir || strings.HasPrefix(dir, target+"/") {
+				return true
+			}
+		}
+		return false
+	}
+	if real, err := client.RealPath(link); err == nil && holds(real) {
+		return true
+	}
+	target, err := client.ReadLink(link)
+	if err != nil {
+		return false
+	}
+	if !path.IsAbs(target) {
+		target = path.Join(dir, target)
+	}
+	return holds(target)
 }
 
 // namedInfo is the target of a link, under the link's name.

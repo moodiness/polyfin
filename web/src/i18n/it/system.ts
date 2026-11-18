@@ -202,6 +202,8 @@ const system: typeof en = {
           `${name}: la condivisione di rete rifiuta l’utente o la password di Polyfin.`,
         shareHostKey: (name: string) =>
           `${name}: il server SFTP presenta una chiave host diversa da quella salvata e Polyfin la rifiuta finché non viene accettata.`,
+        shareTooLarge: (name: string) =>
+          `${name}: questa condivisione di rete contiene più di quanto Polyfin legga in una scansione. La sua pagina indica il limite raggiunto.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin non riesce a monitorare le modifiche di questa cartella locale: è stato raggiunto il limite di cartelle monitorate del sistema. Viene comunque scansionata secondo la sua pianificazione. Aumenta fs.inotify.max_user_watches sull’host.`,
         folderInstanceLimit: (name: string) =>

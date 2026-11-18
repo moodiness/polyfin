@@ -362,8 +362,10 @@ type NewFolder struct {
 // is stored, how its last scan went
 // (CheckedAt is the last attempt, ScannedAt the last scan that could read
 // the folder, Error the code of the last failure: "missing",
-// "unreadable", "not_folder", or for a share "unreachable", "refused" or
-// "host_key_changed"),
+// "unreadable", "not_folder", or for a share "unreachable", "refused",
+// "host_key_changed", or the bound a share that holds more than one scan
+// reads met, "too_deep", "too_many_folders", "too_many_files" or
+// "listing_too_large"),
 // whether a scan is under way, its files, those matched to a title, how,
 // and the others, the links made by hand, and the episodes given by hand
 // to the titles of shows' discs. Unwatched tells why a

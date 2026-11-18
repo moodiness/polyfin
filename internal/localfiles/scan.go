@@ -442,6 +442,12 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		failure = errUnreadable
 	}
 	if failure != "" {
+		if metBound(failure) {
+			// A walk that met a bound may have lasted long: the next scan
+			// on schedule comes a whole interval after its end, not at
+			// once.
+			at = s.now()
+		}
 		// What was found before stays.
 		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
 		return err
