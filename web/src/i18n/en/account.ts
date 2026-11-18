@@ -213,7 +213,9 @@ const account = {
       serverKind: 'Server',
       address: 'Server address',
       addressHelp:
-        'The address the server opens at in a browser, such as http://192.168.1.10:8096.',
+        'The address the server opens at in a browser, such as https://jellyfin.example.com: a public address, or one on the local network when an administrator imports.',
+      privateNetwork:
+        'This server is on a local network address. Only administrators can import from such a server: ask one of them to run the import.',
       name: 'Your user name there',
       password: 'Your password there',
       passwordHelp:
@@ -243,7 +245,9 @@ const account = {
       switching: 'Switching…',
       server: 'Server',
       serverHelp:
-        'The Plex servers this profile reaches. Polyfin reaches the one chosen at the addresses Plex gives for it.',
+        'The Plex servers this profile reaches. Polyfin reaches the one chosen at the addresses Plex gives for it: the public ones, and those on the local network when an administrator imports.',
+      privateNetwork:
+        'This server did not answer at a public address, and its other addresses are on a local network. Only administrators can import from such a server: ask one of them to run the import.',
       owned: (name: string) => `${name} (yours)`,
       noServers: 'This profile reaches no Plex server.',
       watchlist: 'Watchlist to my Watchlist',

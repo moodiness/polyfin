@@ -2,6 +2,7 @@ import { ArrowSquareInIcon, ArrowSquareOutIcon, SignInIcon } from '@phosphor-ico
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useEffectEvent, useState, type ReactNode } from 'react'
 import {
+  ApiError,
   choosePlexProfile,
   dropPlexSignIn,
   pollPlexSignIn,
@@ -161,13 +162,18 @@ export function PlexImportForm({
 
   const chosen = account?.profiles.find((p) => p.id === profile)
   const profileChanged = account !== null && profile !== account.profile
+  // A member's server on a local network is refused as their addons are; the words are the server's.
+  const serverError =
+    start.error instanceof ApiError && start.error.code === 'private_network'
+      ? text.privateNetwork
+      : undefined
   const error = signIn.isError
     ? errorMessage(t, signIn.error)
     : failure !== null
       ? errorMessage(t, failure)
       : switchProfile.isError
         ? errorMessage(t, switchProfile.error)
-        : start.isError
+        : start.isError && !serverError
           ? errorMessage(t, start.error)
           : undefined
 
@@ -223,7 +229,7 @@ export function PlexImportForm({
               <Notice>{text.noServers}</Notice>
             ) : (
               <>
-                <Field label={text.server} help={text.serverHelp}>
+                <Field label={text.server} help={text.serverHelp} error={serverError}>
                   <Select
                     value={server}
                     options={account.servers.map((s) => ({

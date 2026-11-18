@@ -6,12 +6,15 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // Under My account, a user imports their own watch history from another
 // Jellyfin or Emby server, signing in there as themselves, or from their
 // Letterboxd export file (see letterboxd.go). The password is used for that
-// import only: never stored, never answered back.
+// import only: never stored, never answered back. A member's server is on
+// a public address, as their addons are; an administrator's may be on the
+// local network.
 
 // ownImport answers whether the user may import their own watch history,
 // whether they may import a Letterboxd export and the server's metadata
@@ -54,7 +57,9 @@ func (h *handler) ownImport(w http.ResponseWriter, r *http.Request) {
 // (see startLetterboxd), or that of the user signing in to a Jellyfin or
 // Emby server with the name and password given. One import from a server
 // runs at a time on the whole server, and one import into an account:
-// while either runs, it answers 409 server_import_running.
+// while either runs, it answers 409 server_import_running. A member's
+// server on a local network, or leading there, answers 403
+// private_network, as their addons do.
 func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 	if !h.Accounts.Settings().ServerImports {
 		writeError(w, http.StatusForbidden, "server_imports_disabled")
@@ -115,6 +120,10 @@ func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, jellyfinimport.ErrRunning) {
 		// Another user's, or the administrator's: the caller waits for it.
 		writeError(w, http.StatusConflict, "server_import_running")
+		return
+	}
+	if errors.Is(err, stremio.ErrPrivateNetwork) {
+		writeError(w, http.StatusForbidden, "private_network")
 		return
 	}
 	if jellyfinError(w, err) {

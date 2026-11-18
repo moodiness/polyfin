@@ -62,8 +62,15 @@ export default function ServerImport({ own }: { own: OwnImport }) {
 
   const code = start.error instanceof ApiError ? start.error.code : null
   const server = kind === 'letterboxd' || kind === 'plex' ? 'jellyfin' : kind
-  const message = start.isError ? serverError(t, server, start.error) : undefined
-  const addressError = code !== null && addressCodes.includes(code) ? message : undefined
+  // A member's server on a local network answers as their addons do; the words are the server's.
+  const privateNetwork = code === 'private_network'
+  const message = !start.isError
+    ? undefined
+    : privateNetwork
+      ? text.privateNetwork
+      : serverError(t, server, start.error)
+  const addressError =
+    code !== null && (privateNetwork || addressCodes.includes(code)) ? message : undefined
   const passwordError = code !== null && accountCodes.includes(code) ? message : undefined
   const otherError = start.isError && !addressError && !passwordError ? message : undefined
 

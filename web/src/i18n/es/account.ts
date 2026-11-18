@@ -211,7 +211,9 @@ const account: typeof en = {
       serverKind: 'Servidor',
       address: 'Dirección del servidor',
       addressHelp:
-        'La dirección con la que se abre el servidor en un navegador, por ejemplo http://192.168.1.10:8096.',
+        'La dirección con la que se abre el servidor en un navegador, por ejemplo https://jellyfin.example.com: una dirección pública, o de la red local cuando importa un administrador.',
+      privateNetwork:
+        'Este servidor está en una dirección de red local. Solo los administradores pueden importar desde este tipo de servidor: pida a uno de ellos que inicie la importación.',
       name: 'Su nombre de usuario en ese servidor',
       password: 'Su contraseña en ese servidor',
       passwordHelp:
@@ -241,7 +243,9 @@ const account: typeof en = {
       switching: 'Cambiando…',
       server: 'Servidor',
       serverHelp:
-        'Los servidores Plex a los que accede este perfil. Polyfin llega al elegido por las direcciones que Plex da para él.',
+        'Los servidores Plex a los que accede este perfil. Polyfin llega al elegido por las direcciones que Plex da para él: las públicas, y las de la red local cuando importa un administrador.',
+      privateNetwork:
+        'Este servidor no respondió en ninguna dirección pública, y sus otras direcciones están en una red local. Solo los administradores pueden importar desde este tipo de servidor: pida a uno de ellos que inicie la importación.',
       owned: (name: string) => `${name} (suyo)`,
       noServers: 'Este perfil no accede a ningún servidor Plex.',
       watchlist: 'Watchlist a mi lista de reproducción «Para ver»',

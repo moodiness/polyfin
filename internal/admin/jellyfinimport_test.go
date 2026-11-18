@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/appimport/nuvio/nuviotest"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -105,8 +106,16 @@ func fakeJellyfin(t *testing.T) string {
 }
 
 // jellyfinImportAPI serves the admin API with Jellyfin imports, and returns
-// the library and user data they write to.
+// the library and user data they write to. Members reach a server on the
+// loopback.
 func jellyfinImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store) {
+	t.Helper()
+	return confinedJellyfinImportAPI(t, nuviotest.Loopback())
+}
+
+// confinedJellyfinImportAPI is jellyfinImportAPI, the requests of
+// members' own imports sent with confined.
+func confinedJellyfinImportAPI(t *testing.T, confined *http.Client) (testAPI, *library.Service, *userdata.Store) {
 	t.Helper()
 	var lib *library.Service
 	var data *userdata.Store
@@ -115,7 +124,7 @@ func jellyfinImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
 		data = userdata.New(deps.pool)
 		o.JellyfinImport = jellyfinimport.New(jellyfinimport.Options{Settings: o.Accounts.Settings, Titles: lib, UserData: data,
-			Version: "1.2.3", Logger: logger})
+			Version: "1.2.3", Logger: logger, Confined: confined})
 		t.Cleanup(o.JellyfinImport.Close)
 	})
 	return api, lib, data

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/appimport/nuvio/nuviotest"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -22,18 +23,30 @@ import (
 // sign-in and import: a PIN Plex claims with the account token once
 // claimed is closed, the account and the server it reaches, and the
 // server's library, where the server's token for the account has played
-// one movie. It records the tokens signed out.
+// one movie. It records the tokens signed out, and the requests the
+// server received.
 type fakePlexAccount struct {
 	tv, server string
 	claimed    chan struct{}
 	mu         sync.Mutex
 	signedOut  []string
+	got        []string
+}
+
+// reached lists the requests the Plex Media Server received.
+func (f *fakePlexAccount) reached() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.got)
 }
 
 func newFakePlexAccount(t *testing.T) *fakePlexAccount {
 	t.Helper()
 	f := &fakePlexAccount{claimed: make(chan struct{})}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.got = append(f.got, r.Method+" "+r.URL.Path)
+		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.URL.Path == "/identity":
@@ -102,7 +115,8 @@ func TestPlexSignInImportsTheCallersOwnWatchData(t *testing.T) {
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
 		data = userdata.New(deps.pool)
 		o.JellyfinImport = jellyfinimport.New(jellyfinimport.Options{Settings: o.Accounts.Settings, Titles: lib, UserData: data,
-			Version: "1.2.3", Logger: logger, PlexTV: jellyfinimport.PlexTV{API: plex.tv, SignIn: plex.tv + "/auth", Discover: plex.tv}})
+			Version: "1.2.3", Logger: logger, PlexTV: jellyfinimport.PlexTV{API: plex.tv, SignIn: plex.tv + "/auth", Discover: plex.tv},
+			Confined: nuviotest.Loopback()})
 		t.Cleanup(o.JellyfinImport.Close)
 	})
 	member, other := api.signedIn("member", false), api.signedIn("other", false)

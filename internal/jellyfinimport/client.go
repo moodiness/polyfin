@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // The ways reading a server fails.
@@ -82,6 +84,9 @@ type client struct {
 	s            *Service
 	kind         Kind
 	address, key string
+	// confined tells the client of an import a member started for
+	// themselves: each of its requests reaches public addresses only.
+	confined bool
 	// session tells that key is the token of a session the client signed
 	// in, which signOut ends.
 	session bool
@@ -100,7 +105,9 @@ func (c *client) get(ctx context.Context, path string, query url.Values, into an
 
 // send sends a request, a GET or a POST of body as JSON, and reads the
 // answer into into. It waits as long as the server asks when it answers
-// too many requests, and tries again after failures.
+// too many requests, and tries again after failures, but for a confined
+// request led to a local network address: that fails at once, with
+// stremio.ErrPrivateNetwork.
 func (c *client) send(ctx context.Context, method, path string, query url.Values, body []byte, into any) error {
 	failures, waits := 0, 0
 	for {
@@ -114,6 +121,8 @@ func (c *client) send(ctx context.Context, method, path string, query url.Values
 		}
 		var wait time.Duration
 		switch {
+		case errors.Is(err, stremio.ErrPrivateNetwork):
+			return stremio.ErrPrivateNetwork
 		case err == nil && status == http.StatusOK:
 			if err := json.Unmarshal(answer, into); err != nil {
 				// The path tells where, never the query or the key.
@@ -190,7 +199,11 @@ func (c *client) do(ctx context.Context, method, path string, query url.Values, 
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := c.s.client.Do(request)
+	sender := c.s.client
+	if c.confined {
+		sender = c.s.confined
+	}
+	response, err := sender.Do(request)
 	if err != nil {
 		return 0, nil, nil, err
 	}

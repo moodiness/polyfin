@@ -9,7 +9,8 @@
 // accounts; and, as asked (see Extras), the ratings, the collections and the
 // playlists. A user may also import their own watch data into their own
 // account, signing in to a Jellyfin or Emby server as themselves (see
-// Service.ImportOwn).
+// Service.ImportOwn): unless they are an administrator, from a server on
+// a public address only.
 //
 // Titles are found by their IMDb, TMDB or TVDB identifiers, episodes by
 // their series' and their numbers, as the watch histories of tracking
@@ -62,6 +63,7 @@ import (
 	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playlists"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
@@ -166,6 +168,11 @@ type Options struct {
 	// PlexTV replaces the addresses of Plex's online services, for tests:
 	// its empty fields are Plex's own.
 	PlexTV PlexTV
+	// Confined is the client of the imports members start for themselves;
+	// nil reaches public addresses only, checked when connecting, as
+	// members' addons do. Tests give one reaching their server on the
+	// loopback.
+	Confined *http.Client
 }
 
 // timing is how the service paces its requests. Tests shorten it.
@@ -209,9 +216,12 @@ type Service struct {
 	playlists   *playlists.Store
 	version     string
 	logger      *slog.Logger
-	client      *http.Client
-	timing      timing
-	now         func() time.Time
+	// client reaches any address, for administrators; confined, public
+	// addresses only, for the imports members start for themselves, as
+	// their addons do.
+	client, confined *http.Client
+	timing           timing
+	now              func() time.Time
 	// device names Polyfin to plex.tv and to Plex Media Servers, which
 	// list the devices reading them; plexTV are Plex's online services.
 	device string
@@ -240,12 +250,16 @@ type Service struct {
 // a clone of the default one: whoever closes the idle connections of
 // http.DefaultTransport, as httptest.Server.Close does, cannot break a
 // request whose answer without a body has just put its connection back
-// among the idle ones (#958).
+// among the idle ones (#958). The confined client's is its own too.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	device := options.PlexClient
 	if device == "" {
 		device = newID()
+	}
+	confined := options.Confined
+	if confined == nil {
+		confined = stremio.HTTPClient(true)
 	}
 	return &Service{
 		settings:    options.Settings,
@@ -258,6 +272,7 @@ func New(options Options) *Service {
 		version:     options.Version,
 		logger:      options.Logger,
 		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		confined:    confined,
 		timing:      defaultTiming,
 		now:         time.Now,
 		device:      device,
@@ -653,8 +668,12 @@ func (s *Service) Start(ctx context.Context, connection Connection, by accounts.
 // the server's users, which a user's session may not, and reads the user
 // signed in as themselves only: even a server that answers every user with
 // the session's data gives them their own. The session ends with the
-// import, and the password is not kept. It fails as Start does, or with
-// ErrNotSignedIn for a Plex server or without a name.
+// import, and the password is not kept. Unless user is an administrator,
+// the import reaches public addresses only, checked when connecting,
+// redirects included, from its first request to the session's end. It
+// fails as Start does, with stremio.ErrPrivateNetwork for such a user's
+// server on a local network, or with ErrNotSignedIn for a Plex server or
+// without a name.
 func (s *Service) ImportOwn(ctx context.Context, connection Connection, user accounts.User) (*Status, error) {
 	if connection.Kind == Plex || connection.Name == "" {
 		return nil, ErrNotSignedIn
@@ -663,7 +682,7 @@ func (s *Service) ImportOwn(ctx context.Context, connection Connection, user acc
 		return nil, ErrRunning
 	}
 	address, err := ParseAddress(connection.Address)
-	c := &client{s: s, kind: connection.Kind, address: address}
+	c := &client{s: s, kind: connection.Kind, address: address, confined: !user.IsAdministrator}
 	started := false
 	defer func() {
 		if !started {

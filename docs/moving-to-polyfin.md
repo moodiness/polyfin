@@ -226,13 +226,14 @@ API details: [Emby and Plex import](jellyfin-api.md#emby-and-plex-import-for-app
 **Import from another server**, under **My account**, lets each user import their own history from a Jellyfin, Emby or Plex server when an administrator could not. Examples: a server without API keys, unknown passwords, or a Plex server where the owner's token reads only other accounts' plays (see [Plex](#plex)). It also takes a Letterboxd export file (see [Letterboxd](#letterboxd)).
 
 - **Server**: **Jellyfin**, **Emby**, **Plex** (see [Plex, signing in](#plex-signing-in)), or **Letterboxd (export file)**.
-- **Server address**, **Your user name there** and **Your password there**, empty if none.
+- **Server address**, **Your user name there** and **Your password there**, empty if none. A user's own server must be on a public address, like their addons, redirects included. An administrator's, imported for the server or for their own account, may be on the local network.
 
 **Import my watch history** signs in as the user, as the server's apps do. It imports into their own Polyfin account only: played movies and episodes, resume points and favorites. **Also bring** adds their ratings, the server's collections and their playlists, as for an administrator (see [Ratings, collections and playlists](#ratings-collections-and-playlists)). **Collections** shows only for users who may manage collections. Matching and merging are the administrator's. The section then shows the import and its result: what was added and the titles not found.
 
 Polyfin never lists the server's users, which a user's session may not. It reads only the signed-in user, even from a server that answers everyone with the session's data. It signs out when done. The password serves this import only and is never kept.
 
 - One server import runs at a time on the whole server, and one import per account, from a server or Letterboxd. Another is refused meanwhile (`server_import_running`): try again a few minutes later.
+- A user whose server is on the local network is told so at the address, or for Plex at the server (`private_network`). An administrator imports it instead, with **Import from another server** at the top of **Users**.
 - Users see only their own imports: the section shows their latest, from a server or Letterboxd. The administrator's **Import from another server** page shows the running or last server import, and who started it.
 - **Users may import their watch history from another server or app**, under **Settings › Security**, is on by default. Off, the section is hidden, Letterboxd included, the API refuses (`server_imports_disabled`), and the import from an app is off too (see [Importing from an app](#importing-from-an-app)).
 
@@ -243,7 +244,7 @@ API details: [Own watch history import](jellyfin-api.md#own-watch-history-import
 Choose **Plex**, then **Sign in with Plex**. **Open Plex’s sign-in page** opens Plex's page in a new tab to sign in, as on any Plex app. Polyfin never sees the Plex password. Then the section names the account and lists the Plex servers it reaches, the one administrators last imported from first.
 
 - **Plex Home profile**, for a Plex Home account: whose data comes over, the signed-in account first. A managed profile has no sign-in of its own, as Plex says (see Plex's support article "Managed Accounts"). A Home member signs in, picks it here with its **Profile PIN** if any, and **Use this profile** switches as Plex's apps do.
-- **Server**: the server to import from. Polyfin tries the addresses Plex gives: local network first, then remote, then Plex relays. Each is an address the server import takes. One counts only when the server answers with its own machine identifier.
+- **Server**: the server to import from. Polyfin tries the addresses Plex gives: local network first, then remote, then Plex relays. Each is an address the server import takes. One counts only when the server answers with its own machine identifier. A user's own import tries the public addresses only, redirects included. An administrator's tries those on the local network too.
 - **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, kept by Plex with the account, not a server, go to the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), a show as its aired episodes. Like a one-off app import's library, they stay until removed.
 
 **Import my watch history** reads the server with the profile's own token, as the owner's import reads the owner, into the user's own account only:

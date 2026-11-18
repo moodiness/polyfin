@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // A user imports their own watch data from a Plex Media Server by signing
@@ -470,9 +471,13 @@ func (s *Service) DropPlexSignIn(user accounts.ID) {
 // and its Watchlist. It reaches the server by the addresses plex.tv gives,
 // local first, then remote, then relayed, each an address ParseAddress
 // takes, whose /identity names the server. The import takes the sign-in
-// over and signs it out of Plex once it ends. It fails with ErrRunning,
+// over and signs it out of Plex once it ends. Unless user is an
+// administrator, the server is probed and read at public addresses only,
+// checked when connecting, redirects included. It fails with ErrRunning,
 // ErrPlexSignInEnded, ErrNotSignedIn before Plex signed the user in,
-// ErrPlexUnknownServer or ErrPlexServerUnreachable, keeping the sign-in.
+// ErrPlexUnknownServer, ErrPlexServerUnreachable, or, for such a user's
+// server that answered at none of its addresses, one of which is on a
+// local network, stremio.ErrPrivateNetwork, keeping the sign-in.
 func (s *Service) ImportOwnPlex(ctx context.Context, user accounts.User, server string, extras Extras) (*Status, error) {
 	if !s.claim() {
 		return nil, ErrRunning
@@ -497,7 +502,8 @@ func (s *Service) ImportOwnPlex(ctx context.Context, user accounts.User, server 
 		return nil, ErrPlexUnknownServer
 	}
 	resource := held.servers[i]
-	address, err := s.reachPlex(ctx, resource)
+	confined := !user.IsAdministrator
+	address, err := s.reachPlex(ctx, resource, confined)
 	if err != nil {
 		return nil, err
 	}
@@ -507,7 +513,7 @@ func (s *Service) ImportOwnPlex(ctx context.Context, user accounts.User, server 
 	status := s.newStatus(Server{Kind: Plex, Name: resource.Name, Address: address, MachineID: resource.ClientIdentifier}, user, true, extras)
 	status.Users = []UserStatus{{JellyfinID: held.profile, JellyfinName: held.profileName, User: user.ID, UserName: user.Name,
 		State: UserWaiting}}
-	c := &client{s: s, kind: Plex, address: address, key: resource.AccessToken}
+	c := &client{s: s, kind: Plex, address: address, key: resource.AccessToken, confined: confined}
 	snapshot, err := s.launch(status, c, nil, plex, signOut)
 	if started = err == nil; !started {
 		for _, token := range signOut {
@@ -729,16 +735,19 @@ type xmlAnswer struct {
 // reachPlex returns the address of resource that answers as it: its local
 // addresses first, then its remote ones, then those relayed by Plex, each
 // an address ParseAddress takes, whose /identity names the server's
-// machine identifier.
-func (s *Service) reachPlex(ctx context.Context, resource plexResource) (string, error) {
+// machine identifier. Confined, it asks public addresses only, and fails
+// with stremio.ErrPrivateNetwork rather than ErrPlexServerUnreachable
+// when one of the addresses was on a local network.
+func (s *Service) reachPlex(ctx context.Context, resource plexResource, confined bool) (string, error) {
 	connections := slices.Clone(resource.Connections)
 	slices.SortStableFunc(connections, func(a, b plexConnection) int { return a.rank() - b.rank() })
+	refused := false
 	for _, connection := range connections {
 		address, err := ParseAddress(connection.URI)
 		if err != nil {
 			continue
 		}
-		probe := &client{s: s, kind: Plex, address: address}
+		probe := &client{s: s, kind: Plex, address: address, confined: confined}
 		var identity struct {
 			MediaContainer struct {
 				MachineIdentifier string `json:"machineIdentifier"`
@@ -753,6 +762,10 @@ func (s *Service) reachPlex(ctx context.Context, resource plexResource) (string,
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
+		refused = refused || errors.Is(err, stremio.ErrPrivateNetwork)
+	}
+	if refused {
+		return "", stremio.ErrPrivateNetwork
 	}
 	return "", ErrPlexServerUnreachable
 }

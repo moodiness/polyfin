@@ -21,6 +21,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/appimport/nuvio/nuviotest"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
@@ -317,7 +318,8 @@ type harness struct {
 }
 
 // newHarness is a service on a fresh database reading a fake Jellyfin
-// server two items a page, without waiting between requests.
+// server two items a page, without waiting between requests. Users who
+// are no administrators reach it on the loopback too.
 func newHarness(t *testing.T) harness {
 	t.Helper()
 	pool := migrated.New(t)
@@ -332,7 +334,7 @@ func newHarness(t *testing.T) harness {
 	data := userdata.New(pool)
 	links := importlinks.New(importlinks.Options{DB: pool, Settings: store.Settings, Titles: lib, UserData: data, Logger: logger})
 	s := New(Options{Settings: store.Settings, Titles: lib, UserData: data, Links: links, Version: "1.2.3", Logger: logger,
-		Collections: collections.New(pool), Playlists: playlists.New(pool)})
+		Collections: collections.New(pool), Playlists: playlists.New(pool), Confined: nuviotest.Loopback()})
 	s.timing.gap, s.timing.retryFirst, s.timing.pageSize = 0, time.Millisecond, 2
 	t.Cleanup(s.Close)
 	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, links: links, addons: installed, f: newFakeJellyfin(t)}
