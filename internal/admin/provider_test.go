@@ -32,10 +32,94 @@ func (api testAPI) withProvider(configure func(*accounts.Settings)) *oidctest.Pr
 	return provider
 }
 
+// allowLink gives user an administrator's permission to be linked at the
+// next sign-in through the provider of the person it is named after.
+func (api testAPI) allowLink(user accounts.User) {
+	api.t.Helper()
+	if _, err := api.store.UpdateUser(api.t.Context(), user.ID, accounts.UserChanges{ProviderLinkAllowed: new(true)}, nil); err != nil {
+		api.t.Fatal(err)
+	}
+}
+
+// linked links user to subject at provider, as My account does from a
+// session of the user.
+func (api testAPI) linked(user accounts.User, provider *oidctest.Provider, subject string) {
+	api.t.Helper()
+	token, _, err := api.store.CreateAdminSession(api.t.Context(), user.ID)
+	if err == nil {
+		_, err = api.store.LinkProvider(api.t.Context(), user.ID, accounts.HashAdminToken(token),
+			accounts.ProviderIdentity{Issuer: provider.URL, Subject: subject})
+	}
+	if err != nil {
+		api.t.Fatal(err)
+	}
+}
+
 // providerSignIn follows the browser from the sign-in button of app
 // through the provider, which signs in at once, to the callback, and
 // returns where the callback sends it, and the callback's address.
 func (b browser) providerSignIn(app string) (*url.URL, *url.URL) {
+	b.api.t.Helper()
+	return b.throughProvider(b.api.url + providerPath + "start?app=" + app)
+}
+
+// startLink starts the link of the browser's account as My account does,
+// and returns the address of the provider's page it is given.
+func (b browser) startLink() string {
+	b.api.t.Helper()
+	status, body, _ := b.call(http.MethodPost, "/account/provider/link", nil)
+	address, _ := body["address"].(string)
+	if status != http.StatusOK || address == "" {
+		b.api.t.Fatalf("link started: %d %v", status, body)
+	}
+	return address
+}
+
+// endLink opens address, which startLink gave, follows the browser
+// through the provider, which signs in at once, to the callback, and
+// returns what the callback sends My account (see linkOutcome), and the
+// callback's answer.
+func (b browser) endLink(address string) (string, *http.Response) {
+	b.api.t.Helper()
+	client := *b.client
+	client.CheckRedirect = func(request *http.Request, _ []*http.Request) error {
+		if request.URL.Path == "/authorize" || request.URL.Path == providerCallbackPath {
+			return nil
+		}
+		return http.ErrUseLastResponse
+	}
+	response, err := client.Get(address)
+	if err != nil {
+		b.api.t.Fatal(err)
+	}
+	response.Body.Close()
+	return linkOutcome(b.end(response)), response
+}
+
+// linkOutcome is what the callback sends My account: "linked", or what
+// went wrong. A browser sent anywhere else reads as that address.
+func linkOutcome(location *url.URL) string {
+	if location.Path != providerLinkPage || location.Fragment != "provider" {
+		return "sent to " + location.String()
+	}
+	return location.Query().Get("providerLink")
+}
+
+// accountLinked tells whether My account says the browser's account is
+// linked.
+func (b browser) accountLinked() bool {
+	b.api.t.Helper()
+	status, body, _ := b.call(http.MethodGet, "/account/provider", nil)
+	if status != http.StatusOK {
+		b.api.t.Fatalf("link state: %d %v", status, body)
+	}
+	return body["linked"] == true
+}
+
+// throughProvider opens address, the start of a sign-in, follows the
+// browser through the provider, which signs in at once, to the callback,
+// and returns where the callback sends it, and the callback's address.
+func (b browser) throughProvider(address string) (*url.URL, *url.URL) {
 	b.api.t.Helper()
 	var callback *url.URL
 	client := *b.client
@@ -49,7 +133,7 @@ func (b browser) providerSignIn(app string) (*url.URL, *url.URL) {
 		}
 		return http.ErrUseLastResponse
 	}
-	response, err := client.Get(b.api.url + providerPath + "start?app=" + app)
+	response, err := client.Get(address)
 	if err != nil {
 		b.api.t.Fatal(err)
 	}
@@ -107,10 +191,9 @@ func (b browser) sessionUser() map[string]any {
 
 // The sign-in pages offer the provider once it and the public address
 // are set, and the admin app signs in through it: the person the provider
-// signs in gets the account their claim names, without regard to case,
-// and is linked to it, so that a later sign-in finds it whatever the
-// claim then says.
-func TestProviderSignsInToTheAdminAppByTheClaim(t *testing.T) {
+// signs in gets the account linked to them, whatever their claim says
+// then and later.
+func TestProviderSignsInToTheAdminAppByTheLink(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	alice := api.createUser("Alice", false)
@@ -123,7 +206,8 @@ func TestProviderSignsInToTheAdminAppByTheClaim(t *testing.T) {
 	if offered["name"] != "Example ID" || offered["start"] != api.url+"/admin/api/provider/start" {
 		t.Fatalf("provider offered: %v", body["provider"])
 	}
-	provider.SignInAs("alice-at-provider", map[string]any{"preferred_username": "alice"})
+	api.linked(alice, provider, "alice-at-provider")
+	provider.SignInAs("alice-at-provider", map[string]any{"preferred_username": "someone-else"})
 	b := api.browser()
 	if location, _ := b.providerSignIn("admin"); outcome(location) != "" {
 		t.Fatalf("sent to %s", location)
@@ -139,12 +223,14 @@ func TestProviderSignsInToTheAdminAppByTheClaim(t *testing.T) {
 	}
 }
 
-// Without the claim, the verified email names the account; an email the
-// provider says is not verified names none.
-func TestProviderMatchesByEmail(t *testing.T) {
+// Without the claim, the verified email names the account an
+// administrator allowed to be linked; an email the provider says is not
+// verified names none.
+func TestProviderLinksAnAllowedAccountByItsVerifiedEmail(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	carol := api.createUser("carol@example.org", false)
+	api.allowLink(carol)
 	provider := api.withProvider(nil)
 	// An email the provider says is not verified, or says nothing of,
 	// names no account.
@@ -201,6 +287,8 @@ func TestProviderGroupMakesAdministrators(t *testing.T) {
 	api.createUser("root", true)
 	erin := api.createUser("erin", false)
 	frank := api.createUser("frank", false)
+	api.allowLink(erin)
+	api.allowLink(frank)
 	provider := api.withProvider(func(s *accounts.Settings) { s.ProviderAdminClaim, s.ProviderAdminValue = "groups", "media-admins" })
 	provider.SignInAs("frank-at-provider", map[string]any{"preferred_username": "frank", "groups": []string{"family"}})
 	if location, _ := api.browser().providerSignIn("admin"); outcome(location) != "" {
@@ -227,6 +315,7 @@ func TestProviderOnlyAccountsRefuseTheirPassword(t *testing.T) {
 	api := newTestAPI(t, 10)
 	admin := api.signedIn("root", true)
 	grace := api.createUser("grace", false)
+	api.allowLink(grace)
 	signIn := func() int {
 		status, _, _ := api.browser().call(http.MethodPost, "/session", map[string]string{"name": "grace", "password": "correct horse"})
 		return status
@@ -287,7 +376,7 @@ func TestProviderRefusesBadIDTokens(t *testing.T) {
 func TestProviderStatesAreUsedOnce(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 100)
-	api.createUser("alice", false)
+	api.allowLink(api.createUser("alice", false))
 	provider := api.withProvider(nil)
 	provider.SignInAs("alice-at-provider", map[string]any{"preferred_username": "alice"})
 	b := api.browser()
@@ -363,6 +452,7 @@ func TestProviderRefusesDisabledAccounts(t *testing.T) {
 	api := newTestAPI(t, 10)
 	admin := api.signedIn("root", true)
 	ivan := api.createUser("ivan", false)
+	api.allowLink(ivan)
 	if status, _, _ := admin.call(http.MethodPatch, "/users/"+ivan.ID.String(), map[string]any{"isDisabled": true}); status != http.StatusOK {
 		t.Fatal(status)
 	}
@@ -394,6 +484,7 @@ func TestProviderSignsInTheWebClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := api.withProvider(nil)
+	api.linked(judy, provider, "judy-at-provider")
 	provider.SignInAs("judy-at-provider", map[string]any{"preferred_username": "judy"})
 	b := api.browser()
 	location, _ := b.providerSignIn("web")
@@ -446,6 +537,7 @@ func TestProviderSessionApprovesQuickConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := api.withProvider(nil)
+	api.linked(root, provider, "root-at-provider")
 	provider.SignInAs("root-at-provider", map[string]any{"preferred_username": "root"})
 	b := api.browser()
 	if location, _ := b.providerSignIn("admin"); outcome(location) != "" || b.sessionUser()["id"] != root.ID.String() {

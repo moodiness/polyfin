@@ -321,6 +321,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET "+providerPath+"start", h.providerStart)
 	mux.HandleFunc("GET "+providerCallbackPath, h.providerCallback)
 	mux.HandleFunc("POST "+providerWebPath, h.providerWebSignIn)
+	mux.Handle("GET /admin/api/account/provider", h.signedIn(h.ownProvider))
+	mux.Handle("POST /admin/api/account/provider/link", h.signedIn(h.startProviderLink))
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
@@ -860,6 +862,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidUpdateToolURL, http.StatusBadRequest, "invalid_update_tool_url"},
 		{accounts.ErrInvalidUpdateToolToken, http.StatusBadRequest, "invalid_update_tool_token"},
 		{accounts.ErrInvalidProvider, http.StatusBadRequest, "invalid_provider"},
+		{accounts.ErrProviderLinkRefused, http.StatusConflict, "provider_link_refused"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidSourceCache, http.StatusBadRequest, "invalid_source_cache"},
 		{accounts.ErrInvalidPreload, http.StatusBadRequest, "invalid_preload"},

@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype/zeronull"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/i18n"
@@ -149,6 +150,14 @@ type User struct {
 	// ProviderOnly has the user sign in through the identity provider
 	// alone: their password is refused (see Authenticate).
 	ProviderOnly bool
+	// ProviderIssuer is the issuer of the identity provider the account
+	// is linked at, to the person who signs in as it there; empty without
+	// a link (see ProviderLinked). ProviderLinkAllowed is an
+	// administrator's permission to link the account at the next sign-in
+	// through the provider of the person it is named after, once (see
+	// Store.ProviderUser).
+	ProviderIssuer      string
+	ProviderLinkAllowed bool
 	// WebTheme is the user's web player theme, one of WebThemes, empty for
 	// the server's (see Settings.WebThemeOf); WebThemeLocked keeps the user
 	// from changing it themselves (see SetOwnWebTheme).
@@ -269,6 +278,9 @@ type UserChanges struct {
 	MetadataLanguage *string
 	// ProviderOnly, see User.
 	ProviderOnly *bool
+	// ProviderLinkAllowed, see User: turning it on for an administrator
+	// or an account with two-step sign-in is ErrProviderLinkRefused.
+	ProviderLinkAllowed *bool
 	// WebTheme and WebThemeLocked, see User: WebTheme is one of WebThemes
 	// or empty. Whether the Custom theme is offered is the caller's to
 	// check.
@@ -380,6 +392,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
 	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, ends_at, can_share, group_id, own_sections, metadata_language, two_step, torrent_streams, " +
+	"provider_issuer, provider_link_allowed, " +
 	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume, " +
 	"boost_volume, convert_sound, interface_size"
 
@@ -394,6 +407,7 @@ func (user *User) fields() []any {
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.EndsAt, &user.CanShare,
 		&user.GroupID, &user.OwnSections, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
+		(*zeronull.Text)(&user.ProviderIssuer), &user.ProviderLinkAllowed,
 		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
 		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize}
 }
@@ -888,6 +902,11 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 	}
 	if membership.takeValues {
 		if updated, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET "+groupCopy+" WHERE id = $1 RETURNING "+userColumns, id)); err != nil {
+			return User{}, nil, err
+		}
+	}
+	if changes.ProviderLinkAllowed != nil {
+		if updated, err = allowProviderLink(ctx, tx, updated, *changes.ProviderLinkAllowed); err != nil {
 			return User{}, nil, err
 		}
 	}

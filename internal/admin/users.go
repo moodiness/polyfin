@@ -81,6 +81,15 @@ type userJSON struct {
 	// ProviderOnly tells whether the user signs in through the identity
 	// provider only, their password refused.
 	ProviderOnly bool `json:"providerOnly"`
+	// ProviderLinked tells whether the account is linked to someone at
+	// the identity provider set up, who signs in as it there; withPins
+	// reads it from providerIssuer, the issuer of the account's link.
+	ProviderLinked bool `json:"providerLinked"`
+	providerIssuer string
+	// ProviderLinkAllowed tells whether an administrator allowed the
+	// account to be linked at the next sign-in through the provider of
+	// the person it is named after; the link turns it off.
+	ProviderLinkAllowed bool `json:"providerLinkAllowed"`
 }
 
 // limitsJSON are the settings a group holds, as a user's JSON and a
@@ -266,15 +275,17 @@ type passwordResetPinJSON struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-// withPins adds to users the password reset PINs still valid, and the
-// names of their groups.
+// withPins adds to users the password reset PINs still valid, the names
+// of their groups, and whether they are linked at the identity provider.
 func (h *handler) withPins(r *http.Request, users ...userJSON) ([]userJSON, error) {
 	pins, err := h.Accounts.PasswordResetPINs(r.Context())
 	if err != nil {
 		return nil, err
 	}
 	var names map[string]string
+	issuer := h.Accounts.Settings().ProviderIssuer
 	for i, user := range users {
+		users[i].ProviderLinked = user.providerIssuer != "" && user.providerIssuer == issuer
 		id, _ := accounts.ParseID(user.ID)
 		if pin, ok := pins[id]; ok {
 			users[i].PasswordResetPin = &passwordResetPinJSON{Pin: pin.PIN, ExpiresAt: pin.ExpiresAt}
@@ -354,6 +365,7 @@ func newUserJSON(user accounts.User) userJSON {
 		TwoStep:      user.TwoStep,
 		ProviderOnly: user.ProviderOnly,
 	}
+	result.providerIssuer, result.ProviderLinkAllowed = user.ProviderIssuer, user.ProviderLinkAllowed
 	if user.GroupID != nil {
 		result.GroupID = new(user.GroupID.String())
 	}
@@ -1425,6 +1437,9 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		AudioRegion *string `json:"audioRegion"`
 		// ProviderOnly, see userJSON.
 		ProviderOnly *bool `json:"providerOnly"`
+		// ProviderLinkAllowed, see userJSON: 409 provider_link_refused
+		// for an administrator or an account with two-step sign-in.
+		ProviderLinkAllowed *bool `json:"providerLinkAllowed"`
 		// WebTheme and WebThemeLocked, see userJSON.
 		WebTheme       *string `json:"webTheme"`
 		WebThemeLocked *bool   `json:"webThemeLocked"`
@@ -1467,6 +1482,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	changes.IsDisabled = body.IsDisabled
 	changes.OwnSections = body.OwnSections
 	changes.ProviderOnly = body.ProviderOnly
+	changes.ProviderLinkAllowed = body.ProviderLinkAllowed
 	if changes.Group, ok = groupParam(w, body.GroupID); !ok {
 		return
 	}

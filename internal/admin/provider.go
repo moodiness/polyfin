@@ -22,7 +22,8 @@ import (
 // it on to the provider with a state, a nonce and a PKCE challenge; the
 // provider sends it back to providerCallback, which checks the state
 // against the browser's cookie, takes it once, exchanges the code and
-// checks the ID token (see package oidc), then finds the account.
+// checks the ID token (see package oidc), then finds the account linked
+// to the person.
 //
 // For the admin app, the callback opens an admin session and goes to the
 // admin app. For the web client, it gives the browser a ticket, in a
@@ -30,6 +31,11 @@ import (
 // script trades the ticket, with jellyfin-web's device, for a Jellyfin
 // sign-in of that device, keeps it where jellyfin-web reads it, and opens
 // the web client again, signed in.
+//
+// A signed-in user links their account from My account: startProviderLink
+// sends their browser to the provider as a sign-in does, and the callback
+// links the person the provider signed in to the account that asked. It
+// signs nobody in.
 //
 // No token, code, state or secret is ever logged or answered, but the
 // Jellyfin access token of the device signing in, which is answered to
@@ -59,16 +65,27 @@ const (
 	providerTimeout = 15 * time.Second
 )
 
-// The apps a provider's sign-in is for: the admin app, or jellyfin-web.
+// The apps a provider's sign-in is for: the admin app, or jellyfin-web;
+// and My account, which links the signed-in user's account.
 const (
 	providerAdminApp = "admin"
 	providerWebApp   = "web"
+	providerLinkApp  = "link"
 )
 
-// providerFlow is a sign-in under way at the provider.
+// providerLinkPage is where a link asked from My account comes back to.
+const providerLinkPage = "/admin/me/account"
+
+// providerFlow is a sign-in under way at the provider. For My account,
+// user is the account that asked for its link and session the hash of
+// the admin session's token it asked from: the provider's answer is a
+// navigation from another site, which the session's cookie does not
+// come with.
 type providerFlow struct {
-	flow oidc.Flow
-	app  string
+	flow    oidc.Flow
+	app     string
+	user    accounts.ID
+	session []byte
 }
 
 // once keeps values under random tokens, each taken once before it
@@ -168,11 +185,15 @@ func providerAnswer(w http.ResponseWriter) {
 }
 
 // providerBack sends the browser back to app, with what went wrong, a
-// code its page explains, or "signed-in" for the web client.
+// code its page explains, or "signed-in" for the web client and "linked"
+// for My account.
 func providerBack(w http.ResponseWriter, r *http.Request, app, outcome string) {
 	address := "/admin/?provider=" + url.QueryEscape(outcome)
-	if app == providerWebApp {
+	switch app {
+	case providerWebApp:
 		address = "/web/?polyfinProvider=" + url.QueryEscape(outcome)
+	case providerLinkApp:
+		address = providerLinkPage + "?providerLink=" + url.QueryEscape(outcome) + "#provider"
 	}
 	http.Redirect(w, r, address, http.StatusSeeOther)
 }
@@ -184,62 +205,136 @@ func secureRequest(r *http.Request) bool {
 }
 
 // providerStart sends the browser to the provider's sign-in page, for the
-// admin app or, with ?app=web, for the web client. The flow's state is
-// kept providerFlowLifetime, and given to the browser in a cookie the
-// callback reads, so that a return to another browser, or a state made
-// up, fails. The provider not set, or not reachable, sends the browser
-// back with provider_off or provider_unreachable.
+// admin app or, with ?app=web, for the web client. The provider not set,
+// or not reachable, sends the browser back with provider_off or
+// provider_unreachable.
 func (h *handler) providerStart(w http.ResponseWriter, r *http.Request) {
 	providerAnswer(w)
 	app := providerAdminApp
 	if r.URL.Query().Get("app") == providerWebApp {
 		app = providerWebApp
 	}
+	address, outcome := h.beginProvider(w, r, providerFlow{app: app})
+	if outcome != "" {
+		providerBack(w, r, app, outcome)
+		return
+	}
+	http.Redirect(w, r, address, http.StatusSeeOther)
+}
+
+// beginProvider starts pending at the provider and returns the address
+// of the provider's sign-in page for it. The flow's state is kept
+// providerFlowLifetime, and given to the browser in a cookie the callback
+// reads, so that a return to another browser, or a state made up, fails.
+// The provider not set, or not reachable, returns what went wrong
+// instead: provider_off or provider_unreachable.
+func (h *handler) beginProvider(w http.ResponseWriter, r *http.Request, pending providerFlow) (address, outcome string) {
 	settings := h.Accounts.Settings()
 	if offeredProvider(settings) == nil {
-		providerBack(w, r, app, "provider_off")
-		return
+		return "", "provider_off"
 	}
-	flow := oidc.NewFlow()
-	address, err := h.provider.AuthorizationURL(r.Context(), providerConfig(settings), flow)
+	pending.flow = oidc.NewFlow()
+	address, err := h.provider.AuthorizationURL(r.Context(), providerConfig(settings), pending.flow)
 	if err != nil {
 		h.Logger.Warn("The identity provider could not be reached", "issuer", settings.ProviderIssuer, "error", err)
-		providerBack(w, r, app, "provider_unreachable")
-		return
+		return "", "provider_unreachable"
 	}
 	now := h.now()
-	h.providerFlows.add(flow.State, providerFlow{flow: flow, app: app}, now.Add(providerFlowLifetime), now)
+	h.providerFlows.add(pending.flow.State, pending, now.Add(providerFlowLifetime), now)
 	http.SetCookie(w, &http.Cookie{
 		Name:     providerCookieName,
-		Value:    app + "." + flow.State,
+		Value:    pending.app + "." + pending.flow.State,
 		Path:     providerPath,
 		MaxAge:   int(providerFlowLifetime.Seconds()),
 		HttpOnly: true,
 		Secure:   secureRequest(r),
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, address, http.StatusSeeOther)
+	return address, ""
+}
+
+// ownProvider answers whether the signed-in user's account is linked to
+// someone at the identity provider set up, who signs in as it there. It
+// names nobody.
+func (h *handler) ownProvider(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"linked": sessionFrom(r.Context()).User.ProviderLinked(h.Accounts.Settings())})
+}
+
+// startProviderLink starts the link of the signed-in user's account to
+// whoever the provider signs in next in this browser: it answers the
+// address of the provider's sign-in page, for the browser to open, and
+// keeps with the flow the account and the session that asked. The session
+// stands for the account's own password and code, so an administrator
+// and an account with two-step sign-in link themselves this way. It is a
+// POST the session's cookie comes with, never a link another site can
+// send a browser to. 409 provider_link_taken when the account is linked
+// already, 409 provider_off without a provider, 502 provider_unreachable.
+func (h *handler) startProviderLink(w http.ResponseWriter, r *http.Request) {
+	providerAnswer(w)
+	session := sessionFrom(r.Context())
+	if session.User.ProviderLinked(h.Accounts.Settings()) {
+		writeError(w, http.StatusConflict, "provider_link_taken")
+		return
+	}
+	address, outcome := h.beginProvider(w, r, providerFlow{app: providerLinkApp, user: session.User.ID, session: session.TokenHash})
+	switch outcome {
+	case "":
+		writeJSON(w, http.StatusOK, map[string]string{"address": address})
+	case "provider_off":
+		writeError(w, http.StatusConflict, outcome)
+	default:
+		writeError(w, http.StatusBadGateway, outcome)
+	}
+}
+
+// completeProviderLink ends a link asked from My account: identity, the
+// person the provider signed in, is linked to the account that asked,
+// while the session it asked from still stands. It opens no session and
+// makes nobody an administrator. The session ended, or the account gone,
+// sends the browser back with provider_state; a person linked to another
+// account, or an account linked to someone else, with
+// provider_link_taken.
+func (h *handler) completeProviderLink(w http.ResponseWriter, r *http.Request, pending providerFlow, identity accounts.ProviderIdentity) {
+	user, err := h.Accounts.LinkProvider(r.Context(), pending.user, pending.session, identity)
+	switch {
+	case errors.Is(err, accounts.ErrNotFound):
+		providerBack(w, r, providerLinkApp, "provider_state")
+	case errors.Is(err, accounts.ErrProviderLinked):
+		providerBack(w, r, providerLinkApp, "provider_link_taken")
+	case err != nil:
+		h.Logger.Error("A link with the identity provider failed", "error", err)
+		providerBack(w, r, providerLinkApp, "internal")
+	default:
+		h.Logger.Info("Account linked to the identity provider", "user", user.Name)
+		h.Activity.UserChanged(r.Context(), user)
+		providerBack(w, r, providerLinkApp, "linked")
+	}
 }
 
 // providerCallback ends a sign-in at the provider. It counts as a sign-in
 // with a password does toward the client's failed attempts: a state that
 // is not the browser's, unknown, used or expired, and a code or an ID
 // token refused count as wrong passwords, and are not written to the
-// activity log, which is for people. Someone the provider signed in whom
-// no account matches, and an account disabled or ended, are written to it
-// as refused sign-ins; outside the account's allowed hours, the sign-in is
-// refused as with a password.
+// activity log, which is for people. Someone the provider signed in to
+// whom no account is linked, and for whom none may be linked or created,
+// and an account disabled or ended, are written to it as refused
+// sign-ins; outside the account's allowed hours, the sign-in is refused
+// as with a password.
 //
-// The account found, by its link to the person, else by the claim naming
-// the user, else by the verified email (see accounts.Store.ProviderUser),
-// signs in without its second step, which the provider asks for, as
-// Jellyfin's SSO plugins do; wrong passwords, which block passwords, do
-// not block it.
+// The account found by its link to the person (see
+// accounts.Store.ProviderUser) signs in without its second step, which
+// the provider asks for, as Jellyfin's SSO plugins do; wrong passwords,
+// which block passwords, do not block it. An account that bears the
+// person's name is not theirs for that: no account and such an account
+// are one answer, provider_no_account, which does not tell which names
+// exist.
+//
+// A link asked from My account ends here too (see completeProviderLink).
 func (h *handler) providerCallback(w http.ResponseWriter, r *http.Request) {
 	providerAnswer(w)
 	app, state := providerAdminApp, ""
 	if cookie, err := r.Cookie(providerCookieName); err == nil {
-		if before, after, ok := strings.Cut(cookie.Value, "."); ok && (before == providerAdminApp || before == providerWebApp) {
+		if before, after, ok := strings.Cut(cookie.Value, "."); ok && (before == providerAdminApp || before == providerWebApp || before == providerLinkApp) {
 			app, state = before, after
 		}
 	}
@@ -292,14 +387,17 @@ func (h *handler) providerCallback(w http.ResponseWriter, r *http.Request) {
 		Administrator: settings.ProviderAdminClaim != "" && settings.ProviderAdminValue != "" &&
 			claims.Has(settings.ProviderAdminClaim, settings.ProviderAdminValue),
 	}
+	if app == providerLinkApp {
+		h.completeProviderLink(w, r, pending, identity)
+		return
+	}
 	shown := identity.Name
 	if shown == "" {
 		shown = identity.Email
 	}
 	user, created, err := h.Accounts.ProviderUser(r.Context(), identity, settings.ProviderCreateAccounts)
 	switch {
-	case errors.Is(err, accounts.ErrNoProviderAccount), errors.Is(err, accounts.ErrProviderLinked),
-		errors.Is(err, accounts.ErrInvalidName), errors.Is(err, accounts.ErrNameTaken):
+	case errors.Is(err, accounts.ErrNoProviderAccount), errors.Is(err, accounts.ErrInvalidName), errors.Is(err, accounts.ErrNameTaken):
 		h.Activity.SignInFailed(r.Context(), shown, client)
 		providerBack(w, r, app, "provider_no_account")
 		return
