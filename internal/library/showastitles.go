@@ -279,7 +279,9 @@ func (s *Service) FollowTitles(ctx context.Context, before, after []addons.Libra
 // their videos, to the items they become as the catalog's library shows
 // them as movies and shows, when shown is set, or as home videos (see
 // FollowTitles). The records of the items given anything are stored, so
-// that the lists of users' data find them before any listing does.
+// that the lists of users' data find them before any listing does. A
+// user's own library moves what that user did alone: items are shared,
+// and what the others did with them stays where it is.
 func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown bool) error {
 	addon, err := json.Marshal(key.AddonID)
 	if err != nil {
@@ -296,7 +298,11 @@ func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown
 	}
 	// A title's kind on either side is its kept description's, when one
 	// is kept (see shownKind and otherKind).
-	entry, _ := s.addons.Find(ctx, key.AddonID)
+	entry, owner, _ := s.addons.FindOwner(ctx, key.AddonID)
+	var only *accounts.ID
+	if owner != (accounts.ID{}) {
+		only = &owner
+	}
 	described := func(r record) (stremio.Meta, bool) {
 		return s.keptDescription(ctx, installed{addon: entry}, metaKey{key.AddonID, r.Meta.Type, r.Meta.ID}, inDatabase)
 	}
@@ -352,7 +358,7 @@ func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown
 		return nil
 	}
 	videos, err := s.loadWhere(ctx, `starts_with(key, $1) AND data->>'seriesId' = ANY($2)
-		AND EXISTS (SELECT 1 FROM user_data u WHERE u.item_id = items.id)`, fromVideo, ids)
+		AND EXISTS (SELECT 1 FROM user_data u WHERE u.item_id = items.id AND ($3::uuid IS NULL OR u.user_id = $3))`, fromVideo, ids, only)
 	if err != nil {
 		return err
 	}
@@ -393,7 +399,7 @@ func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown
 		moves = append(moves, userdata.Move{From: []accounts.ID{r.ID}, To: []userdata.Item{to}})
 	}
 	// The titles whose users' data or videos move are recorded.
-	given, err := s.withUserData(ctx, titles)
+	given, err := s.withUserData(ctx, titles, only)
 	if err != nil {
 		return err
 	}
@@ -406,12 +412,16 @@ func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown
 		return err
 	}
 	settings := s.settings()
-	return userdata.New(s.db).Follow(ctx, moves, userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent})
+	thresholds := userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent}
+	if only != nil {
+		return userdata.New(s.db).FollowOf(ctx, *only, moves, thresholds)
+	}
+	return userdata.New(s.db).Follow(ctx, moves, thresholds)
 }
 
 // withUserData tells, by Stremio identifier, which titles among records
-// some user has data of.
-func (s *Service) withUserData(ctx context.Context, records []record) (map[string]bool, error) {
+// some user has data of, or only when set.
+func (s *Service) withUserData(ctx context.Context, records []record, only *accounts.ID) (map[string]bool, error) {
 	ids := make([]accounts.ID, 0, len(records))
 	byID := make(map[accounts.ID]string, len(records))
 	for _, r := range records {
@@ -420,7 +430,7 @@ func (s *Service) withUserData(ctx context.Context, records []record) (map[strin
 			byID[r.ID] = r.Meta.ID
 		}
 	}
-	rows, err := s.db.Query(ctx, "SELECT DISTINCT item_id FROM user_data WHERE item_id = ANY($1)", ids)
+	rows, err := s.db.Query(ctx, "SELECT DISTINCT item_id FROM user_data WHERE item_id = ANY($1) AND ($2::uuid IS NULL OR user_id = $2)", ids, only)
 	if err != nil {
 		return nil, err
 	}

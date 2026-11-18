@@ -389,10 +389,7 @@ type Move struct {
 // moves: the item it comes from loses it once an item it goes to records
 // as recent a play.
 func (s *Store) Follow(ctx context.Context, moves []Move, thresholds Thresholds) error {
-	var from []accounts.ID
-	for _, move := range moves {
-		from = append(from, move.From...)
-	}
+	from := movedFrom(moves)
 	if len(from) == 0 {
 		return nil
 	}
@@ -404,6 +401,27 @@ func (s *Store) Follow(ctx context.Context, moves []Move, thresholds Thresholds)
 	if err != nil {
 		return err
 	}
+	return s.follow(ctx, users, moves, thresholds)
+}
+
+// FollowOf is Follow for what user did alone: the moves of a user's own
+// library, which leave every other user's data where it is.
+func (s *Store) FollowOf(ctx context.Context, user accounts.ID, moves []Move, thresholds Thresholds) error {
+	return s.follow(ctx, []accounts.ID{user}, moves, thresholds)
+}
+
+// movedFrom are the items the moves come from.
+func movedFrom(moves []Move) []accounts.ID {
+	var from []accounts.ID
+	for _, move := range moves {
+		from = append(from, move.From...)
+	}
+	return from
+}
+
+// follow is Follow for the data of users.
+func (s *Store) follow(ctx context.Context, users []accounts.ID, moves []Move, thresholds Thresholds) error {
+	from := movedFrom(moves)
 	for _, user := range users {
 		kept, err := s.Get(ctx, user, from)
 		if err != nil {

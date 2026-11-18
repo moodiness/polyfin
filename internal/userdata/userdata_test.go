@@ -232,6 +232,34 @@ func TestDataFollowsAsAnImport(t *testing.T) {
 	}
 }
 
+// What one user did with items follows them alone when the moves are
+// theirs, as those of their own library are: another user's data on the
+// same items stays where it is.
+func TestOneUsersDataFollowsAlone(t *testing.T) {
+	t.Parallel()
+	store, alice, bob := setup(t)
+	at := time.Date(2026, 9, 1, 20, 0, 0, 0, time.UTC)
+	from, to := accounts.ID{1}, accounts.ID{2}
+	for _, user := range []accounts.ID{alice, bob} {
+		if _, err := store.Change(t.Context(), user, []Item{{ID: from}}, func(d *Data) {
+			d.Position, d.Runtime, d.LastPlayed, d.Favorite = 30*time.Minute, 2*time.Hour, &at, true
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.FollowOf(t.Context(), alice, []Move{{From: []accounts.ID{from}, To: []Item{{ID: to}}}}, jellyfin); err != nil {
+		t.Fatal(err)
+	}
+	hers, err := store.Get(t.Context(), alice, []accounts.ID{from, to})
+	if err != nil || hers[from].Position != 0 || !hers[from].Favorite || hers[to].Position != 30*time.Minute || !hers[to].Favorite {
+		t.Errorf("the user's own: %+v %v", hers, err)
+	}
+	his, err := store.Get(t.Context(), bob, []accounts.ID{from, to})
+	if _, moved := his[to]; err != nil || moved || his[from].Position != 30*time.Minute || !his[from].Favorite {
+		t.Errorf("another user's: %+v %v", his, err)
+	}
+}
+
 // A title taken off Continue Watching keeps its played state, plays and
 // date, and an import brings back only a resume point set after that.
 func TestARemovedResumePointComesBackOnlyNewer(t *testing.T) {
