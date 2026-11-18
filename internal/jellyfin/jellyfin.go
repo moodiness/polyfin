@@ -208,6 +208,9 @@ type Handler struct {
 	// starts are the plays whose torrents' starts the web client tells
 	// (see startprogress.go).
 	starts starts
+	// subtitleReads shares the reads of subtitle files and remembers the
+	// files refused for their size (see subtitleFile).
+	subtitleReads subtitleReads
 	// customCss hashes the Custom theme's CSS, for the address the web
 	// client loads it from (see brandingCss).
 	customCss webtheme.Hasher

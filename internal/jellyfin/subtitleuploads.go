@@ -114,7 +114,8 @@ func (h *Handler) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	if text, err := readSubtitleText(data); err != nil || len(text.cues) == 0 {
+	// A text too large to keep would never be served (see subtitleFile).
+	if text, err := readSubtitleText(data); err != nil || len(text.cues) == 0 || text.size() > keptSubtitleTexts {
 		processingError(w, http.StatusBadRequest)
 		return
 	}

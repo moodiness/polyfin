@@ -122,6 +122,47 @@ func TestUsersWhoManageSubtitlesAddFilesAdministratorsDeleteThem(t *testing.T) {
 	}
 }
 
+// A file whose text would be refused when served is refused when added,
+// as a file that is not a subtitle is: a script of more events than
+// subtitles reads, and a file whose text is larger than the texts kept.
+// The check and the cache of subtitle texts agree on the largest text.
+func TestAFileThatWouldNotBeServedIsRefusedWhenAdded(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	p.testServer.user("adding", func(c *accounts.UserChanges) { c.SubtitleManagement = new(true) })
+	token := p.signIn("adding", "phone")
+	add := func(format, data string) int {
+		t.Helper()
+		status, _ := p.call(http.MethodPost, "/Videos/"+p.movie+"/Subtitles", app("phone", token),
+			map[string]any{"Language": "eng", "Format": format, "Data": base64.StdEncoding.EncodeToString([]byte(data))})
+		return status
+	}
+	for name, file := range map[string][2]string{
+		"not a subtitle":              {"srt", "hello"},
+		"a script of too many events": {"ass", tooManyEvents()},
+		"a text too large to keep":    {"srt", tooLargeText()},
+	} {
+		if status := add(file[0], file[1]); status != http.StatusBadRequest {
+			t.Errorf("%s: %d", name, status)
+		}
+	}
+	if status := add("srt", smallSubtitle); status != http.StatusNoContent {
+		t.Errorf("a small file: %d", status)
+	}
+	var added int
+	if err := p.pool.QueryRow(t.Context(), "SELECT count(*) FROM uploaded_subtitles").Scan(&added); err != nil || added != 1 {
+		t.Errorf("%d files added, want the small one: %v", added, err)
+	}
+	keeps := func(bytes int) bool {
+		return p.handler.subtitleCache.Update(accounts.ID{0xff}, func(subtitleText, bool) (subtitleText, bool) {
+			return subtitleText{bytes: bytes}, true
+		})
+	}
+	if !keeps(keptSubtitleTexts) || keeps(keptSubtitleTexts+1) {
+		t.Errorf("the cache keeps a text of %d bytes: %v, and one byte more: %v", keptSubtitleTexts, keeps(keptSubtitleTexts), keeps(keptSubtitleTexts+1))
+	}
+}
+
 func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)

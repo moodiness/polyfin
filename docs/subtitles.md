@@ -17,6 +17,8 @@ Apps get seven kinds of subtitles:
 | Text copies of picture subtitles, with **Turn picture subtitles into text** on (see [Picture subtitles read into text](#picture-subtitles-read-into-text)) | The version of the picture track |
 
 - Each app gets every kind in the format it takes.
+- A text subtitle of more than 200,000 cues is not served as a file: apps get the error Jellyfin gives for a subtitle it cannot serve, and an app cannot add such a file. The `Dialogue` lines of an ASS file count as its cues.
+- Polyfin keeps the text of the subtitle files it read lately, 32 MiB in all. A file whose text alone takes more is not served either.
 - Apps can save the user's subtitle language and subtitle mode, which choose the default track (see [Playback](playback.md#versions-and-analysis)).
 - A user who chose no language gets the server's **Default subtitle language**, under their own mode (see [Default audio and subtitle languages](audio-and-subtitle-tracks.md#default-audio-and-subtitle-languages)).
 

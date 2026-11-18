@@ -557,6 +557,7 @@ func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 	if kept, ok := h.subtitleFiles.Get(id); ok {
 		for _, file := range kept.Files {
 			h.subtitleCache.Delete(file.ID)
+			h.subtitleReads.forget(file.ID)
 		}
 		h.subtitleFiles.Delete(id)
 	}

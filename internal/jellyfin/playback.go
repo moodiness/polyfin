@@ -1622,13 +1622,10 @@ func (h *Handler) pgsFile(w http.ResponseWriter, r *http.Request, file library.E
 // maxSubtitleBytes bounds subtitle downloads.
 const maxSubtitleBytes = 8 << 20
 
-// subtitleFile reads a subtitle file, downloading an addon's, keeping it
-// for a while. A file inside a torrent is fetched from its swarm once,
-// then kept (see playback.Service.TorrentSubtitle).
-func (h *Handler) subtitleFile(ctx context.Context, file library.ExternalSubtitle) (subtitleText, error) {
-	if text, ok := h.subtitleCache.Get(file.ID); ok {
-		return text, nil
-	}
+// readSubtitleFile reads a subtitle file, downloading an addon's. A file
+// inside a torrent is fetched from its swarm once, then kept (see
+// playback.Service.TorrentSubtitle). subtitleFile keeps what it reads.
+func (h *Handler) readSubtitleFile(ctx context.Context, file library.ExternalSubtitle) (subtitleText, error) {
 	if file.Uploaded || file.Torrent != nil {
 		var data []byte
 		var err error
@@ -1644,7 +1641,6 @@ func (h *Handler) subtitleFile(ctx context.Context, file library.ExternalSubtitl
 		if err != nil {
 			return subtitleText{}, err
 		}
-		h.subtitleCache.Put(file.ID, text)
 		return text, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -1665,7 +1661,6 @@ func (h *Handler) subtitleFile(ctx context.Context, file library.ExternalSubtitl
 	if err != nil {
 		return subtitleText{}, err
 	}
-	h.subtitleCache.Put(file.ID, text)
 	return text, nil
 }
 
