@@ -793,8 +793,13 @@ func (r *blockReader) parse(ctx context.Context, cue cueBlock, at int64, data []
 }
 
 // fetch reads the n bytes at off through the Fetcher, within the bytes
-// fetched for a track.
+// fetched for a track. A length below zero is refused before it is
+// counted: it would give bytes back to the track, and Fetchers do not all
+// refuse it.
 func (r *blockReader) fetch(ctx context.Context, off, n int64) ([]byte, error) {
+	if n < 0 {
+		return nil, fmt.Errorf("track %d: fetching %d bytes at %d: %w", r.number, n, off, errInvalid)
+	}
 	if r.fetched.Add(n) > maxFetched {
 		return nil, fmt.Errorf("track %d needs more than %d bytes read: %w", r.number, maxFetched, errInvalid)
 	}
