@@ -433,7 +433,7 @@ In an order:
 
 An uploaded or downloaded image:
 
-- must be a JPEG, PNG or WebP picture of up to 10 MB;
+- must be a JPEG, PNG or WebP picture of up to 10 MB, and of up to 8K (7,680 by 4,320), or 6,000 by 4,000 at 16 bits a channel: scaling a larger one down would take more than 768 MB of memory;
 - is scaled down to 3,840 pixels, and kept in the database, as profile pictures are;
 - wins over the image Polyfin draws (see [Generated images](#generated-images)).
 

@@ -41,6 +41,11 @@ const (
 	// MaxUploadedImageSide is the longest side uploaded artwork is kept at:
 	// a backdrop's on a 4K screen.
 	MaxUploadedImageSide = 3840
+	// MaxUploadedImageMemory bounds what normalizing uploaded artwork may
+	// hold (see accounts.NormalizeImage), most of it to scale a larger
+	// picture down to MaxUploadedImageSide: an 8K one fits, 7,680 by
+	// 4,320, and one of 6,000 by 4,000 at 16 bits a channel.
+	MaxUploadedImageMemory = 768 << 20
 	// uploadedScheme starts the URL standing for uploaded artwork in
 	// Images, which images are served and tagged by (see UploadedImage).
 	uploadedScheme = "polyfin-upload:"
@@ -519,7 +524,7 @@ func (s *Service) UploadImage(ctx context.Context, id accounts.ID, imageType str
 	if !ok {
 		return ErrUnsupportedImageType
 	}
-	picture, err := accounts.NormalizeImage(data, MaxUploadedImageBytes, MaxUploadedImageSide)
+	picture, err := accounts.NormalizeImage(ctx, data, MaxUploadedImageBytes, MaxUploadedImageSide, MaxUploadedImageMemory)
 	if err != nil {
 		return err
 	}
