@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"strings"
@@ -162,7 +163,12 @@ func TestInterfaceGoingDown(t *testing.T) {
 func interfaceGoingDown(t *testing.T, ip func(...string), name, host string, tor *torrenttest.Torrent, seeder *torrenttest.Peer) {
 	tracker := torrenttest.HTTPTracker(t, host, seeder.Address())
 	settings := &testSettings{s: Settings{Enabled: true, Interface: name, DownloadMbps: 1}}
-	e := newEngine(t, settings, 64<<20)
+	// The dummy interface's address is a private one: the tracker and the
+	// seeder there stand for hosts of the internet, the only ones a
+	// stream's tracker may be on (see publicRoute).
+	e := newEngineWith(t, settings, func(c *Config) {
+		c.Public = func(ip netip.Addr) bool { return torrenttest.OnLoopback(ip) || ip.Unmap().String() == host }
+	})
 	// The torrent stops once its route gave no answer, and its peer no
 	// byte, for the grace, shortened here.
 	e.routeGrace = time.Second
