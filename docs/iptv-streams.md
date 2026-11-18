@@ -47,6 +47,7 @@ A channel whose address is a DASH manifest (MPD), live or static, plays as other
 
 - Every address the manifest names, its `BaseURL`s, segment templates and lists, is rewritten to go through Polyfin.
 - A manifest that names an address that is not HTTP is refused. So is one FFmpeg would read otherwise than Polyfin does: in an encoding other than UTF-8, ASCII, ISO 8859 or Windows-125x, with a document type declaration (`<!DOCTYPE`), with an element inside a `BaseURL`, or whose template spells an address's scheme with `$RepresentationID$` or `$Bandwidth$`.
+- A manifest is refused too if it names a host longer than 259 bytes (a DNS name and a port), rewrites more than 100,000 addresses, or would hold more than 32 MiB once rewritten.
 - Elements are known whatever the case of their names, as FFmpeg knows them.
 - A live manifest of several periods plays its last one, the one airing. FFmpeg plays one period of a manifest.
 - Segment templates, timelines and lists play as FFmpeg reads them.

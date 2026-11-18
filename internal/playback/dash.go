@@ -211,6 +211,18 @@ type manifestFrame struct {
 	based           bool
 }
 
+// A manifest is bounded as written too, where each address rewritten
+// holds the folder of its origin, its host with it, and each BaseURL the
+// path of its parent's: maxManifestAddresses bounds the addresses
+// rewritten, maxManifestWritten the bytes of the manifest once rewritten,
+// and maxManifestHost the host of an address, a DNS name's 253 bytes and
+// a port. A manifest of 4 MiB whose addresses are whole holds some 70,000.
+const (
+	maxManifestAddresses = 100_000
+	maxManifestWritten   = 32 << 20
+	maxManifestHost      = 253 + len(":65535")
+)
+
 // rewriteManifest names every address of a DASH manifest, whose own
 // address is base, on the loopback interface, so that FFmpeg's dash
 // demuxer fetches its files through Polyfin too, with the headers the
@@ -235,17 +247,30 @@ type manifestFrame struct {
 // (see asciiDeclared), a document type declaration, whose declarations
 // give elements attributes and text written nowhere else, an element
 // within a BaseURL, whose text FFmpeg reads with its own, and a document
-// whose first element is not an MPD.
+// whose first element is not an MPD. A manifest past maxManifestAddresses
+// or maxManifestWritten, or naming a host past maxManifestHost, is
+// refused too, as soon as it passes one: no more of it is written.
 func rewriteManifest(data []byte, base *url.URL, folder func(origin string) string) ([]byte, error) {
+	addresses, linked := 0, 0
 	link := func(target *url.URL) (string, error) {
 		if target.Scheme != "http" && target.Scheme != "https" || target.Host == "" {
 			return "", fmt.Errorf("%w: %q", ErrUnsafePlaylist, target.Redacted())
+		}
+		if len(target.Host) > maxManifestHost {
+			return "", fmt.Errorf("%w: a host of more than %d bytes", ErrUnsafePlaylist, maxManifestHost)
+		}
+		if addresses++; addresses > maxManifestAddresses {
+			return "", fmt.Errorf("%w: more than %d addresses", ErrUnsafePlaylist, maxManifestAddresses)
 		}
 		rest := strings.TrimPrefix(target.EscapedPath(), "/")
 		if target.RawQuery != "" {
 			rest += "?" + target.RawQuery
 		}
-		return folder(target.Scheme+"://"+target.Host) + rest, nil
+		address := folder(target.Scheme+"://"+target.Host) + rest
+		if linked += len(address); linked > maxManifestWritten {
+			return "", fmt.Errorf("%w: more than %d bytes once rewritten", ErrUnsafePlaylist, maxManifestWritten)
+		}
+		return address, nil
 	}
 	named, err := mpdBase(data)
 	if err != nil {
@@ -259,6 +284,11 @@ func rewriteManifest(data []byte, base *url.URL, folder func(origin string) stri
 	var text strings.Builder
 	last := int64(0)
 	for {
+		// What the last element wrote is counted before the next is read,
+		// and before the end.
+		if out.Len() > maxManifestWritten {
+			return nil, fmt.Errorf("%w: more than %d bytes once rewritten", ErrUnsafePlaylist, maxManifestWritten)
+		}
 		token, err := d.RawToken()
 		if errors.Is(err, io.EOF) {
 			break
