@@ -82,6 +82,9 @@ const (
 	// tailWindows is how many windows the end of a file read to find
 	// Cues no SeekHead lists takes.
 	tailWindows = 4
+	// maxCuesTried is how many elements shaped as Cues a search for Cues
+	// no SeekHead lists reads through: a file has one.
+	maxCuesTried = 8
 )
 
 // Matroska is a Matroska or WebM file whose head was read: where its
@@ -269,7 +272,7 @@ func openMatroska(f *file) (*Matroska, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.trackList, err = parseTracks(data)
+	m.trackList, err = parseTracks(f.ctx, data)
 	if err != nil {
 		return nil, err
 	}
@@ -344,8 +347,12 @@ func findCues(f *file, segment element, firstCluster int64, track uint64) ([]byt
 	}
 	// The ID may appear by chance in frame data, so a candidate is only
 	// taken when it ends where the Segment or a top-level element begins,
-	// and holds nothing but CuePoints.
+	// and holds nothing but CuePoints. Each candidate taken is read to
+	// its end, as long as the tail may be: the search gives up after
+	// maxCuesTried of them, so that its work does not grow with their
+	// number.
 	cuesID := []byte{0x1C, 0x53, 0xBB, 0x6B}
+	tried := 0
 	for i := bytes.LastIndex(tail, cuesID); i >= 0; i = bytes.LastIndex(tail[:i], cuesID) {
 		h, err := parseHeader(tail[i:])
 		if err != nil || h.unknown || h.size > int64(len(tail)-i-h.length) {
@@ -358,6 +365,10 @@ func findCues(f *file, segment element, firstCluster int64, track uint64) ([]byt
 				continue
 			}
 		}
+		if tried == maxCuesTried {
+			return nil, ErrNoIndex
+		}
+		tried++
 		data := tail[i+h.length : next]
 		if times, err := cueTimes(data, track, 1); err == nil && len(times) > 0 {
 			return data, nil

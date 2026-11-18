@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"compress/zlib"
+	"context"
 	"fmt"
 	"io"
 	"slices"
@@ -52,8 +53,9 @@ const (
 const (
 	// maxTracks bounds the TrackEntries kept, far above what files hold;
 	// maxPrivate bounds the size of a CodecPrivate once decoded, and
-	// maxPrivates the size of them all, so that compressed ones cannot
-	// exhaust memory.
+	// maxPrivates what decoding them all may produce, those that do not
+	// decode included, so that compressed ones cannot exhaust memory nor
+	// keep a processor.
 	maxTracks   = 1 << 16
 	maxPrivate  = 16 << 20
 	maxPrivates = 64 << 20
@@ -71,8 +73,8 @@ type trackList struct {
 	frames map[uint64][]contentEncoding
 }
 
-// parseTracks reads the TrackEntries of a Tracks element.
-func parseTracks(data []byte) (trackList, error) {
+// parseTracks reads the TrackEntries of a Tracks element, until ctx ends.
+func parseTracks(ctx context.Context, data []byte) (trackList, error) {
 	list := trackList{frames: map[uint64][]contentEncoding{}}
 	budget := int64(maxPrivates)
 	err := children(data, func(id uint32, entry []byte) error {
@@ -81,6 +83,11 @@ func parseTracks(data []byte) (trackList, error) {
 		}
 		if len(list.tracks) == maxTracks {
 			return fmt.Errorf("more than %d tracks: %w", maxTracks, errInvalid)
+		}
+		// Several callers read on behalf of no request: the budget bounds
+		// the work whether ctx ends or not.
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		track, encodings, err := parseTrack(entry, &budget)
 		list.tracks = append(list.tracks, track)
@@ -97,7 +104,8 @@ func parseTracks(data []byte) (trackList, error) {
 }
 
 // parseTrack reads a TrackEntry, and the content encodings to undo on its
-// frames. Decoding its CodecPrivate takes from budget. The error tells
+// frames. Decoding its CodecPrivate takes from budget, whether it decodes
+// or not, and is not tried once budget is spent. The error tells
 // that the TrackEntry's structure, TrackNumber or TrackType does not read:
 // the track is then returned as far as it was read, not Decodable.
 func parseTrack(entry []byte, budget *int64) (Track, []contentEncoding, error) {
@@ -149,12 +157,11 @@ func parseTrack(entry []byte, budget *int64) (Track, []contentEncoding, error) {
 		}
 	}
 	if len(onPrivate) > 0 && private != nil {
-		decoded, err := decode(private, onPrivate, min(maxPrivate, *budget))
+		decoded, err := decodePrivate(private, onPrivate, budget)
 		if err != nil {
 			track.Decodable = false
 			return track, nil, nil
 		}
-		*budget -= int64(len(decoded))
 		track.CodecPrivate = decoded
 	}
 	return track, onFrames, nil
@@ -212,30 +219,61 @@ func parseEncodings(data []byte) ([]contentEncoding, error) {
 // limit bytes.
 func decode(data []byte, encodings []contentEncoding, limit int64) ([]byte, error) {
 	for _, encoding := range encodings {
-		switch encoding.algorithm {
-		case compressionZlib:
-			r, err := zlib.NewReader(bytes.NewReader(data))
-			if err != nil {
-				return nil, fmt.Errorf("zlib content: %v: %w", err, errInvalid)
-			}
-			inflated, err := io.ReadAll(io.LimitReader(r, limit+1))
-			if err != nil {
-				return nil, fmt.Errorf("zlib content: %v: %w", err, errInvalid)
-			}
-			if int64(len(inflated)) > limit {
-				return nil, fmt.Errorf("zlib content of more than %d bytes: %w", limit, errInvalid)
-			}
-			data = inflated
-		case compressionStripped:
-			if int64(len(encoding.settings)+len(data)) > limit {
-				return nil, fmt.Errorf("content of more than %d bytes: %w", limit, errInvalid)
-			}
-			data = slices.Concat(encoding.settings, data)
-		default:
-			return nil, fmt.Errorf("content compressed with algorithm %d: %w", encoding.algorithm, errInvalid)
+		var err error
+		if data, _, err = undo(data, encoding, limit); err != nil {
+			return nil, err
 		}
 	}
 	return data, nil
+}
+
+// decodePrivate undoes encodings on a CodecPrivate, each within maxPrivate
+// and what budget has left. The bytes undoing each made are taken from
+// budget whether it could be undone or not: an inflation that fails past
+// its limit made as many as one that fits. Nothing is undone once budget
+// is spent, so the CodecPrivates of a file never make more than
+// maxPrivates bytes and one, however many its TrackEntries.
+func decodePrivate(data []byte, encodings []contentEncoding, budget *int64) ([]byte, error) {
+	for _, encoding := range encodings {
+		if *budget <= 0 {
+			return nil, fmt.Errorf("CodecPrivates decoding to more than %d bytes: %w", maxPrivates, errInvalid)
+		}
+		decoded, made, err := undo(data, encoding, min(maxPrivate, *budget))
+		*budget -= made
+		if err != nil {
+			return nil, err
+		}
+		data = decoded
+	}
+	return data, nil
+}
+
+// undo undoes encoding on data, failing rather than producing more than
+// limit bytes. made is how many bytes it produced, failing or not.
+func undo(data []byte, encoding contentEncoding, limit int64) (decoded []byte, made int64, err error) {
+	switch encoding.algorithm {
+	case compressionZlib:
+		r, err := zlib.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, 0, fmt.Errorf("zlib content: %v: %w", err, errInvalid)
+		}
+		inflated, err := io.ReadAll(io.LimitReader(r, limit+1))
+		made = int64(len(inflated))
+		if err != nil {
+			return nil, made, fmt.Errorf("zlib content: %v: %w", err, errInvalid)
+		}
+		if made > limit {
+			return nil, made, fmt.Errorf("zlib content of more than %d bytes: %w", limit, errInvalid)
+		}
+		return inflated, made, nil
+	case compressionStripped:
+		if int64(len(encoding.settings)+len(data)) > limit {
+			return nil, 0, fmt.Errorf("content of more than %d bytes: %w", limit, errInvalid)
+		}
+		decoded = slices.Concat(encoding.settings, data)
+		return decoded, int64(len(decoded)), nil
+	}
+	return nil, 0, fmt.Errorf("content compressed with algorithm %d: %w", encoding.algorithm, errInvalid)
 }
 
 // text reads a string element, which may be padded with zeros.
