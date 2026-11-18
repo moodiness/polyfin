@@ -325,7 +325,8 @@ func (s *Service) shareDVDTitles(ctx context.Context, d discInput) ([]dvdChoice,
 		return nil, err
 	}
 	defer release()
-	return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file(name) }, chooseTitles)
+	files := listedOf(fsys)
+	return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return files.open(name) }, chooseTitles)
 }
 
 // errNotDVD reports IFO files that do not describe a DVD's titles.
@@ -338,6 +339,15 @@ const ifoSector = 2048
 // maxTitles bounds the titles a DVD has: its title search table holds at
 // most 99.
 const maxTitles = 99
+
+// maxChapters bounds the chapters a DVD's title has: 99, as its titles.
+const maxChapters = 99
+
+// maxDVDParts bounds the parts read for a DVD's titles together, the
+// cells of their program chains: more than twice what 99 titles of one
+// chain of 255 cells each hold, when a movie plays a few dozen cells. A
+// DVD whose IFO files describe more is not read as one.
+const maxDVDParts = 1 << 16
 
 // dvdChoice is a DVD's title chosen as one of its movies or episodes: its
 // number on the disc, its title set, how long it plays, and the bytes of
@@ -382,7 +392,10 @@ func dvdTitles(dir string, choose chooser) ([]dvdChoice, error) {
 // files list, opened by their name in upper case: for a movies folder
 // (see chooseTitles), its main title, the longest, first, then the others
 // long enough to be movies, each playing mostly cells the titles before it
-// do not; for a show's disc, its episodes (see chooseEpisodes).
+// do not; for a show's disc, its episodes (see chooseEpisodes). The titles
+// are read set by set, so that one set's IFO file is held at a time: on a
+// share, each is read whole. IFO files describing more parts than
+// maxDVDParts are not a DVD's.
 func dvdTitlesOf(open func(name string) (io.ReaderAt, error), choose chooser) ([]dvdChoice, error) {
 	vmg, err := open("VIDEO_TS.IFO")
 	if err != nil {
@@ -392,20 +405,30 @@ func dvdTitlesOf(open func(name string) (io.ReaderAt, error), choose chooser) ([
 	if err != nil {
 		return nil, err
 	}
-	sets := map[int]io.ReaderAt{}
 	candidates := make([]titleCandidate, len(titles))
-	for i, t := range titles {
-		vts, ok := sets[t.set]
-		if !ok {
-			if vts, err = open(fmt.Sprintf("VTS_%02d_0.IFO", t.set)); err != nil {
-				return nil, err
-			}
-			sets[t.set] = vts
+	read := map[int]bool{}
+	parts := 0
+	for i, first := range titles {
+		if read[first.set] {
+			continue
 		}
-		if candidates[i], err = readTitle(vts, t); err != nil {
+		read[first.set] = true
+		vts, err := open(fmt.Sprintf("VTS_%02d_0.IFO", first.set))
+		if err != nil {
 			return nil, err
 		}
-		candidates[i].number = i + 1
+		for j := i; j < len(titles); j++ {
+			if titles[j].set != first.set {
+				continue
+			}
+			if candidates[j], err = readTitle(vts, titles[j]); err != nil {
+				return nil, err
+			}
+			candidates[j].number = j + 1
+			if parts += len(candidates[j].parts); parts > maxDVDParts {
+				return nil, fmt.Errorf("%w: more than %d cells", errNotDVD, maxDVDParts)
+			}
+		}
 	}
 	var chosen []dvdChoice
 	for _, i := range choose(candidates) {
@@ -422,7 +445,8 @@ type dvdTitle struct {
 	set, number, chapters int
 }
 
-// readTitles reads the titles of VIDEO_TS.IFO, in their order on the disc.
+// readTitles reads the titles of VIDEO_TS.IFO, in their order on the disc:
+// maxTitles at most, of maxChapters chapters each at most.
 func readTitles(vmg io.ReaderAt) ([]dvdTitle, error) {
 	head := make([]byte, 0xC8)
 	if _, err := vmg.ReadAt(head, 0); err != nil {
@@ -448,7 +472,7 @@ func readTitles(vmg io.ReaderAt) ([]dvdTitle, error) {
 	for i := range titles {
 		entry := data[12*i:]
 		titles[i] = dvdTitle{chapters: int(binary.BigEndian.Uint16(entry[2:])), set: int(entry[6]), number: int(entry[7])}
-		if titles[i].set == 0 || titles[i].set > maxTitles || titles[i].number == 0 {
+		if titles[i].set == 0 || titles[i].set > maxTitles || titles[i].number == 0 || titles[i].chapters > maxChapters {
 			return nil, fmt.Errorf("%w: title %d", errNotDVD, i+1)
 		}
 	}
@@ -497,7 +521,8 @@ type programChain struct {
 }
 
 // titleChains reads the program chains a title of the title set vts plays,
-// in the order of its chapters, each once.
+// in the order of its chapters, each once: by its number, and by where it
+// is, as two numbers may name the same chain.
 func titleChains(vts io.ReaderAt, t dvdTitle) ([]programChain, error) {
 	head := make([]byte, 0xD0)
 	if _, err := vts.ReadAt(head, 0); err != nil {
@@ -528,6 +553,7 @@ func titleChains(vts io.ReaderAt, t dvdTitle) ([]programChain, error) {
 	}
 	n := int(binary.BigEndian.Uint16(count))
 	seen := map[int]bool{}
+	read := map[int64]bool{}
 	var list []programChain
 	for i := 0; i < len(entries); i += 4 {
 		chain := int(binary.BigEndian.Uint16(entries[i:]))
@@ -543,6 +569,11 @@ func titleChains(vts io.ReaderAt, t dvdTitle) ([]programChain, error) {
 			return nil, fmt.Errorf("%w: %v", errNotDVD, err)
 		}
 		at := chains + int64(binary.BigEndian.Uint32(pointer))
+		if read[at] {
+			// Another number of a chain read before.
+			continue
+		}
+		read[at] = true
 		pgc := make([]byte, 0xEC)
 		if _, err := vts.ReadAt(pgc, at); err != nil {
 			return nil, fmt.Errorf("%w: %v", errNotDVD, err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -452,5 +453,247 @@ func TestDVDMoviesAreTitles(t *testing.T) {
 	}
 	if _, err := e.service.Keyframes(t.Context(), key); !errors.Is(err, errNoKeyframes) {
 		t.Errorf("the other movie's keyframes: %v", err)
+	}
+}
+
+// chainCells is how many cells each program chain writeChainIFOs writes
+// has: as many as a chain holds.
+const chainCells = 255
+
+// writeChainIFOs writes in the VIDEO_TS folder dir the IFO files of a DVD
+// of titles titles, each the first title of title set 1, of chapters
+// chapters, each chapter in the program chain of its number, of
+// chainCells cells of a minute: the chains apart from one another, or all
+// at one place.
+func writeChainIFOs(t *testing.T, dir string, titles, chapters int, apart bool) {
+	t.Helper()
+	vmg := make([]byte, 2*ifoSector)
+	copy(vmg, "DVDVIDEO-VMG")
+	binary.BigEndian.PutUint32(vmg[0xC4:], 1)
+	binary.BigEndian.PutUint16(vmg[ifoSector:], uint16(titles))
+	for i := range titles {
+		entry := vmg[ifoSector+8+12*i:]
+		binary.BigEndian.PutUint16(entry[2:], uint16(chapters))
+		entry[6], entry[7] = 1, 1
+	}
+	// The chapter table at sector 1, then the chain table, then the chains.
+	chainSector := 1 + (12+4*chapters+ifoSector-1)/ifoSector
+	first, size, places := 8+8*chapters, 0xEC+24*chainCells, 1
+	if apart {
+		places = chapters
+	}
+	vts := make([]byte, chainSector*ifoSector+first+places*size)
+	copy(vts, "DVDVIDEO-VTS")
+	binary.BigEndian.PutUint32(vts[0xC8:], 1)
+	binary.BigEndian.PutUint32(vts[0xCC:], uint32(chainSector))
+	table, chains := vts[ifoSector:], vts[chainSector*ifoSector:]
+	binary.BigEndian.PutUint16(table, 1)
+	binary.BigEndian.PutUint32(table[8:], 12)
+	binary.BigEndian.PutUint16(chains, uint16(chapters))
+	for i := range chapters {
+		binary.BigEndian.PutUint16(table[12+4*i:], uint16(i+1))
+		binary.BigEndian.PutUint16(table[12+4*i+2:], 1)
+		binary.BigEndian.PutUint32(chains[8+8*i+4:], uint32(first+i%places*size))
+	}
+	for place := range places {
+		chain := chains[first+place*size:]
+		chain[3] = chainCells
+		copy(chain[4:], []byte{0, 1, 0, 0xC0})
+		binary.BigEndian.PutUint16(chain[0xE8:], 0xEC)
+		for j := range chainCells {
+			cell := chain[0xEC+24*j:]
+			copy(cell[4:], []byte{0, 1, 0, 0xC0})
+			binary.BigEndian.PutUint32(cell[8:], uint32(place*10000+j*10))
+			binary.BigEndian.PutUint32(cell[20:], uint32(place*10000+j*10+9))
+		}
+	}
+	writeFiles(t, dir, map[string][]byte{"VIDEO_TS.IFO": vmg, "VTS_01_0.IFO": vts})
+}
+
+// ifoReads opens the IFO files of the VIDEO_TS folder dir for dvdTitlesOf,
+// and counts what is read of them: the files opened, in order, the cells
+// read, by whole tables of chainCells, and the reads of a file made after
+// another was opened.
+type ifoReads struct {
+	dir          string
+	opened       []string
+	cells, stale int
+}
+
+func (c *ifoReads) open(name string) (io.ReaderAt, error) {
+	data, err := os.ReadFile(filepath.Join(c.dir, name))
+	c.opened = append(c.opened, name)
+	return ifoReader{name: name, r: readerOf(data), counts: c}, err
+}
+
+// ifoReader is an IFO file ifoReads opened.
+type ifoReader struct {
+	name   string
+	r      io.ReaderAt
+	counts *ifoReads
+}
+
+func (r ifoReader) ReadAt(p []byte, off int64) (int, error) {
+	if len(p) == 24*chainCells {
+		r.counts.cells += chainCells
+	}
+	if r.name != r.counts.opened[len(r.counts.opened)-1] {
+		r.counts.stale++
+	}
+	return r.r.ReadAt(p, off)
+}
+
+// A title of more chapters than a DVD's title has is not a DVD's: its
+// IFO files are refused before a title set is opened, and no cell is
+// read.
+func TestDVDTitlesOfMoreChaptersThanADVDHasAreRefused(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeChainIFOs(t, dir, 2, 1000, false)
+	reads := &ifoReads{dir: dir}
+	titles, err := dvdTitlesOf(reads.open, chooseTitles)
+	if !errors.Is(err, errNotDVD) || titles != nil {
+		t.Fatalf("titles of 1000 chapters: %v %v", titles, err)
+	}
+	if !slices.Equal(reads.opened, []string{"VIDEO_TS.IFO"}) || reads.cells != 0 {
+		t.Errorf("read before the refusal: %v, %d cells", reads.opened, reads.cells)
+	}
+	if _, err := dvdTitles(dir, chooseEpisodes); !errors.Is(err, errNotDVD) {
+		t.Errorf("from the folder: %v", err)
+	}
+
+	// As many chapters as a title has are read.
+	dir = t.TempDir()
+	writeChainIFOs(t, dir, 1, maxChapters, true)
+	if titles, err := movieTitles(dir); err != nil || !slices.Equal(titles, []dvdChoice{{title: 1, set: 1}}) {
+		t.Errorf("a title of %d chapters: %v %v", maxChapters, titles, err)
+	}
+}
+
+// The program chains of a title that are at one place are one chain,
+// whatever their numbers: its cells are read once, and it plays once.
+func TestDVDChainsAtOnePlaceAreReadOnce(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeChainIFOs(t, dir, 1, maxChapters, false)
+	reads := &ifoReads{dir: dir}
+	var read []titleCandidate
+	titles, err := dvdTitlesOf(reads.open, func(candidates []titleCandidate) []int {
+		read = candidates
+		return []int{0}
+	})
+	if err != nil || len(titles) != 1 || len(read) != 1 {
+		t.Fatalf("the title: %v %v", titles, err)
+	}
+	if len(read[0].parts) != chainCells || read[0].length != time.Minute || reads.cells != chainCells {
+		t.Errorf("%d chains at one place: %d parts, %v, %d cells read", maxChapters, len(read[0].parts), read[0].length, reads.cells)
+	}
+}
+
+// A DVD whose titles play more parts together than maxDVDParts is not
+// read as one, and its reading stops at the title that passes the bound:
+// a scan keeps its largest set as one movie in a movies folder, and
+// leaves it out of a shows folder. One within the bound is read whole.
+func TestDVDsOfMorePartsThanADVDHoldsAreNotRead(t *testing.T) {
+	t.Parallel()
+	const titleParts = maxChapters * chainCells
+	dir := t.TempDir()
+	writeChainIFOs(t, dir, 2, maxChapters, true)
+	reads := &ifoReads{dir: dir}
+	parts := 0
+	count := func(candidates []titleCandidate) []int {
+		for _, c := range candidates {
+			parts += len(c.parts)
+		}
+		return chooseTitles(candidates)
+	}
+	if titles, err := dvdTitlesOf(reads.open, count); err != nil || len(titles) != 1 || parts != 2*titleParts || reads.cells != parts {
+		t.Fatalf("two titles of %d parts: %v %v, %d parts, %d cells read", titleParts, titles, err, parts, reads.cells)
+	}
+
+	// Four such titles pass the bound at the third.
+	if 2*titleParts > maxDVDParts || 3*titleParts <= maxDVDParts {
+		t.Fatalf("maxDVDParts is %d: the test's titles have %d parts each", maxDVDParts, titleParts)
+	}
+	dir = t.TempDir()
+	writeChainIFOs(t, dir, 4, maxChapters, true)
+	reads, parts = &ifoReads{dir: dir}, 0
+	titles, err := dvdTitlesOf(reads.open, count)
+	if !errors.Is(err, errNotDVD) || titles != nil || parts != 0 {
+		t.Fatalf("four titles of %d parts: %v %v, %d parts chosen among", titleParts, titles, err, parts)
+	}
+	if reads.cells != 3*titleParts {
+		t.Errorf("%d cells read, want those of 3 titles, %d", reads.cells, 3*titleParts)
+	}
+
+	// What a scan keeps of it.
+	files := map[string]found{
+		"Movie/VIDEO_TS/VIDEO_TS.IFO": {size: 10}, "Movie/VIDEO_TS/VTS_01_1.VOB": {size: 100},
+		"Movie/VIDEO_TS/VTS_02_1.VOB": {size: 200}, "Movie/VIDEO_TS/VTS_02_2.VOB": {size: 50},
+	}
+	read := func(string) ([]dvdChoice, error) { return dvdTitles(dir, chooseTitles) }
+	if got := dvdEntries(files, read, false); len(got) != 1 || got["Movie/VIDEO_TS/VTS_02_1.VOB"].size != 250 {
+		t.Errorf("in a movies folder: %v", got)
+	}
+	if got := dvdEntries(files, read, true); len(got) != 0 {
+		t.Errorf("in a shows folder: %v", got)
+	}
+}
+
+// A DVD's titles are read set by set, each set's IFO file opened once and
+// not read again once the next is opened, so that one is held at a time;
+// each title stays the one of its number.
+func TestDVDSetsAreReadOneAtATime(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeIFOs(t, dir, ifoTitle{set: 1, seconds: 5400}, ifoTitle{set: 2, seconds: 600}, ifoTitle{set: 1, seconds: 90},
+		ifoTitle{set: 2, seconds: 3000})
+	reads := &ifoReads{dir: dir}
+	var read []titleCandidate
+	_, err := dvdTitlesOf(reads.open, func(candidates []titleCandidate) []int {
+		read = candidates
+		return nil
+	})
+	if err != nil || len(read) != 4 {
+		t.Fatalf("the titles: %v %v", read, err)
+	}
+	for i, seconds := range []int{5400, 600, 90, 3000} {
+		if read[i].number != i+1 || read[i].length.Truncate(time.Second) != time.Duration(seconds)*time.Second {
+			t.Errorf("title %d: number %d, %v", i+1, read[i].number, read[i].length)
+		}
+	}
+	if !slices.Equal(reads.opened, []string{"VIDEO_TS.IFO", "VTS_01_0.IFO", "VTS_02_0.IFO"}) || reads.stale != 0 {
+		t.Errorf("opened %v, %d reads of a file after the next was opened", reads.opened, reads.stale)
+	}
+}
+
+// The title of a DVD on a share is laid out from its folder's listing,
+// listed once, whatever its cells: its IFO files and its VOB are opened
+// once each, and each cell located in the VOB without another listing.
+func TestShareDVDCellsAreLocatedFromTheirFoldersListing(t *testing.T) {
+	t.Parallel()
+	const folder, chains = "Movie (2008)/VIDEO_TS", 20
+	dir := t.TempDir()
+	writeChainIFOs(t, dir, 1, chains, true)
+	share := &listedRemote{files: map[string][]byte{folder + "/VTS_01_1.VOB": nil},
+		sizes: map[string]int64{folder + "/VTS_01_1.VOB": chains * 10000 * ifoSector}}
+	for _, name := range []string{"VIDEO_TS.IFO", "VTS_01_0.IFO"} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		share.files[folder+"/"+name] = data
+	}
+	files := listedOf(&shareFS{ctx: t.Context(), r: share, dir: folder})
+	locate := locator(files, folder, nil)
+	open := func(name string) (*io.SectionReader, error) { return files.open(name) }
+	pieces, _, err := dvdPieces(open, 1, func(name string, start, end int64) ([]titlePiece, error) {
+		return locate([]string{name}, start, end)
+	})
+	if err != nil || len(pieces) != chains*chainCells || pieces[1] != (titlePiece{folder + "/VTS_01_1.VOB", 10 * ifoSector, 10 * ifoSector}) {
+		t.Fatalf("%d pieces, %v", len(pieces), err)
+	}
+	if share.lists != 1 || share.opens != 3 {
+		t.Errorf("%d folders listed, %d files opened", share.lists, share.opens)
 	}
 }
