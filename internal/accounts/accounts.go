@@ -328,6 +328,10 @@ type Store struct {
 	// guards them.
 	leaversMu sync.Mutex
 	leavers   []Leaver
+	// everywhere are told of each account signed out everywhere (see
+	// OnSignOutEverywhere); everywhereMu guards them.
+	everywhereMu sync.Mutex
+	everywhere   []func(user ID)
 }
 
 // Option completes a store.
@@ -350,6 +354,25 @@ func (s *Store) OnSignOut(f func(devices []ID)) {
 func (s *Store) notifySignOut(devices []ID) {
 	if f := s.signedOut.Load(); f != nil && len(devices) > 0 {
 		(*f)(devices)
+	}
+}
+
+// OnSignOutEverywhere adds f to those told of each account signed out
+// everywhere, by a new password or by being disabled, once it is done:
+// what was granted to the account outside the database, and waits in
+// memory, ends with its devices and sessions. f must not wait.
+func (s *Store) OnSignOutEverywhere(f func(user ID)) {
+	s.everywhereMu.Lock()
+	defer s.everywhereMu.Unlock()
+	s.everywhere = append(s.everywhere, f)
+}
+
+func (s *Store) notifySignOutEverywhere(user ID) {
+	s.everywhereMu.Lock()
+	told := slices.Clone(s.everywhere)
+	s.everywhereMu.Unlock()
+	for _, f := range told {
+		f(user)
 	}
 }
 
@@ -789,13 +812,20 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 	s.forgetSignIns()
 	if err == nil {
 		s.notifySignOut(signedOut)
+		// A list, even empty, is an account signed out everywhere (see
+		// applyUserChanges).
+		if signedOut != nil {
+			s.notifySignOutEverywhere(id)
+		}
 	}
 	return updated, err
 }
 
 // applyUserChanges applies changes, prepared as u, to the account id in tx,
-// and returns it with the devices it signed out. It takes the
-// administrators' lock first, which also serializes the changes to groups.
+// and returns it with the devices it signed out: nil unless it signed the
+// account out everywhere, and then a list, empty when no device was signed
+// in. It takes the administrators' lock first, which also serializes the
+// changes to groups.
 func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges, u userUpdate, keep signIn) (User, []ID, error) {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
 		return User{}, nil, err
@@ -1026,6 +1056,8 @@ func requireAnotherAdministrator(ctx context.Context, tx pgx.Tx, except ID) erro
 	return nil
 }
 
+// signOutEverywhere ends the devices and admin sessions of user, but the
+// one kept, and returns the devices signed out: a list, never nil.
 func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keep signIn) ([]ID, error) {
 	// The admin session kept keeps the web client's sign-in it was taken
 	// from, whose end would end it (see CreateDeviceAdminSession), as Jellyfin
@@ -1038,5 +1070,8 @@ func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keep signIn) ([]
 	}
 	_, err = tx.Exec(ctx,
 		"DELETE FROM admin_sessions WHERE user_id = $1 AND token_hash IS DISTINCT FROM $2", user, keep.adminSession)
+	if devices == nil {
+		devices = []ID{}
+	}
 	return devices, err
 }

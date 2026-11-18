@@ -500,6 +500,83 @@ func TestSignedOutDevicesAreToldOf(t *testing.T) {
 	expect("deleting", bobTV)
 }
 
+// An account signed out everywhere, by a new password, whoever set it, or
+// by being disabled, is told of once to everyone who asked, with or
+// without a device signed in. Another change of the account is not, nor a
+// device signed out alone, nor a password change refused.
+func TestAccountsSignedOutEverywhereAreToldOf(t *testing.T) {
+	t.Parallel()
+	store := newStore(t)
+	ctx := t.Context()
+	var told, also []ID
+	store.OnSignOutEverywhere(func(user ID) { told = append(told, user) })
+	store.OnSignOutEverywhere(func(user ID) { also = append(also, user) })
+	expect := func(what string, want ...ID) {
+		t.Helper()
+		if !slices.Equal(told, want) || !slices.Equal(also, want) {
+			t.Errorf("%s: told of %v and %v, want %v", what, told, also, want)
+		}
+		told, also = nil, nil
+	}
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	bob := mustCreate(t, store, NewUser{Name: "bob", Password: "correct horse"})
+	expect("creating accounts")
+
+	// No device is signed in yet.
+	if err := store.ChangePassword(ctx, alice.ID, "correct horse", "battery staple", nil); err != nil {
+		t.Fatal(err)
+	}
+	expect("alice's own password change", alice.ID)
+	if err := store.ChangePassword(ctx, alice.ID, "wrong horse", "another staple", nil); !errors.Is(err, ErrWrongPassword) {
+		t.Fatalf("a password change with a wrong current password: %v", err)
+	}
+	expect("a password change refused")
+
+	token, tv, _ := store.SignInDevice(ctx, alice.ID, device("tv"))
+	_, phone, _ := store.SignInDevice(ctx, alice.ID, device("phone"))
+	if err := store.ChangePasswordFromDevice(ctx, alice.ID, "battery staple", "correct horse", phone.ID); err != nil {
+		t.Fatal(err)
+	}
+	expect("a password change from a device", alice.ID)
+	if signedIn(ctx, store, token) {
+		t.Errorf("the TV %v is signed in after the password change", tv.ID)
+	}
+	next := "another horse entirely"
+	if _, err := store.UpdateUser(ctx, alice.ID, UserChanges{Password: &next}, nil); err != nil {
+		t.Fatal(err)
+	}
+	expect("an administrator's new password", alice.ID)
+	_, pin, err := store.RequestPasswordReset(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect("asking for a reset PIN")
+	if _, err := store.RedeemPasswordResetPIN(ctx, pin.PIN); err != nil {
+		t.Fatal(err)
+	}
+	expect("a password reset", alice.ID)
+
+	if _, err := store.UpdateUser(ctx, alice.ID, UserChanges{IsHidden: new(true)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	expect("hiding")
+	token, _, _ = store.SignInDevice(ctx, bob.ID, device("tv"))
+	if err := store.SignOutDevice(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	expect("a device signing out")
+	for _, what := range []string{"disabling", "disabling again"} {
+		if _, err := store.UpdateUser(ctx, bob.ID, UserChanges{IsDisabled: new(true)}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if what == "disabling" {
+			expect(what, bob.ID)
+		} else {
+			expect(what)
+		}
+	}
+}
+
 func TestAdminSessionsExpireAndRenew(t *testing.T) {
 	t.Parallel()
 	store := newStore(t)
