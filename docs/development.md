@@ -4,7 +4,7 @@ This page is for contributors who change Polyfin's code or its documentation. It
 
 ## Requirements
 
-- Go 1.27.1.
+- Go 1.27.4.
 - Node.js 24.
 - A PostgreSQL 18 server.
 - FFmpeg 9.0 (`ffmpeg` and `ffprobe`), to play titles: the version the image ships and the tests run with.

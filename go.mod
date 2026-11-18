@@ -1,6 +1,6 @@
 module github.com/moodiness/polyfin
 
-go 1.27.1
+go 1.27.4
 
 require (
 	fyne.io/systray v1.12.2
