@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -151,10 +152,9 @@ type replanBody struct {
 // choice is what a plan is decided from: the client, the quality and
 // tracks asked, and whether the file may play as it is.
 type choice struct {
-	capabilities clientCapabilities
-	context      playbackContext
-	quality      string
-	bitrateKbps  int64
+	client      client
+	quality     string
+	bitrateKbps int64
 	// audio is the audio track asked, by its place among the version's
 	// audio tracks, nil for the server's choice; subtitle is the subtitle
 	// asked, by its place among the version's subtitles (see
@@ -181,14 +181,18 @@ type session struct {
 	version      string
 	playState
 	// replans are the answers of the last replans, by their identifier,
-	// in the order of replanOrder.
+	// in the order of replanOrder; replanSize is their size in all.
 	replans     map[string][]byte
 	replanOrder []string
+	replanSize  int
 	// The last progress sample applied, and the stop received.
 	sequence int64
 	sample   sample
 	stopID   string
-	seen     time.Time
+	// stopped tells the store, which does not take mu, that the stop was
+	// received.
+	stopped atomic.Bool
+	seen    time.Time
 }
 
 // playState is what a plan is decided from, and the current plan: the
@@ -219,47 +223,119 @@ type sample struct {
 	IsPaused bool    `json:"is_paused"`
 }
 
-// sessionLifetime is how long a playback nobody stopped is kept unused.
-const sessionLifetime = 24 * time.Hour
+const (
+	// sessionLifetime is how long a playback nobody stopped is kept unused.
+	sessionLifetime = 24 * time.Hour
+	// sessionsKept bounds the playbacks each user keeps, and maxSessions
+	// those of all users. Each device plays one title at a time, and a
+	// playback whose app left without stopping it waits a day for the app
+	// to come back: sixteen leave a user's devices room for both. Past a
+	// bound the first to go is a stopped playback, kept only to answer its
+	// stop again, then the one unused the longest (see older).
+	sessionsKept = 16
+	maxSessions  = 1024
+	// sweepInterval is how long at least passes between two walks of the
+	// sessions for those unused.
+	sweepInterval = 10 * time.Minute
+)
 
+// sessions are the playbacks kept. byUser lists each user's, so that a
+// start reads its user's alone, and a request of a session looks it up.
 type sessions struct {
-	mu   sync.Mutex
-	byID map[string]*session
+	mu     sync.Mutex
+	byID   map[string]*session
+	byUser map[accounts.ID][]*session
+	// swept is when the sessions were last walked for those unused; walks
+	// counts the walks of them all, which the tests read.
+	swept time.Time
+	walks int
 }
 
-func newSessions() *sessions { return &sessions{byID: map[string]*session{}} }
+func newSessions() *sessions {
+	return &sessions{byID: map[string]*session{}, byUser: map[accounts.ID][]*session{}}
+}
 
-// sweep forgets the sessions unused for a day; s.mu is held.
+// forget drops a session; s.mu is held.
+func (s *sessions) forget(found *session) {
+	delete(s.byID, found.id)
+	mine := slices.DeleteFunc(s.byUser[found.user], func(other *session) bool { return other == found })
+	if len(mine) == 0 {
+		delete(s.byUser, found.user)
+		return
+	}
+	s.byUser[found.user] = mine
+}
+
+// sweep forgets the sessions unused for a day, walking them once per
+// sweepInterval at most; s.mu is held.
 func (s *sessions) sweep(now time.Time) {
-	for key, other := range s.byID {
+	if since := now.Sub(s.swept); since >= 0 && since < sweepInterval {
+		return
+	}
+	s.swept = now
+	s.walks++
+	for _, other := range s.byID {
 		if now.Sub(other.seen) > sessionLifetime {
-			delete(s.byID, key)
+			s.forget(other)
 		}
 	}
 }
 
-// get is a session of user, locked: done unlocks it.
+// older orders two sessions as they go once a user or the server keeps
+// too many: a stopped one first, then the one unused the longest.
+func older(a, b *session) int {
+	if stopped := a.stopped.Load(); stopped != b.stopped.Load() {
+		if stopped {
+			return -1
+		}
+		return 1
+	}
+	return a.seen.Compare(b.seen)
+}
+
+// get is a session of user, used within sessionLifetime, locked: done
+// unlocks it. It looks the session up and walks none.
 func (s *sessions) get(id string, user accounts.ID, now time.Time) (*session, func(), bool) {
 	s.mu.Lock()
-	s.sweep(now)
 	found, ok := s.byID[id]
-	if ok && found.user == user {
+	if ok = ok && found.user == user && now.Sub(found.seen) <= sessionLifetime; ok {
 		found.seen = now
 	}
 	s.mu.Unlock()
-	if !ok || found.user != user {
+	if !ok {
 		return nil, nil, false
 	}
 	found.mu.Lock()
 	return found, found.mu.Unlock, true
 }
 
-// add keeps a session started at its seen time.
-func (s *sessions) add(found *session) {
+// add keeps a session started at its seen time, and returns those it
+// forgot for it: its user keeps sessionsKept, and the server maxSessions.
+// Only a server that keeps maxSessions walks them all for the one to go.
+func (s *sessions) add(found *session) []*session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sweep(found.seen)
+	var forgotten []*session
+	for mine := s.byUser[found.user]; len(mine) >= sessionsKept; mine = s.byUser[found.user] {
+		oldest := slices.MinFunc(mine, older)
+		s.forget(oldest)
+		forgotten = append(forgotten, oldest)
+	}
+	for len(s.byID) >= maxSessions {
+		s.walks++
+		var oldest *session
+		for _, other := range s.byID {
+			if oldest == nil || older(other, oldest) < 0 {
+				oldest = other
+			}
+		}
+		s.forget(oldest)
+		forgotten = append(forgotten, oldest)
+	}
 	s.byID[found.id] = found
+	s.byUser[found.user] = append(s.byUser[found.user], found)
+	return forgotten
 }
 
 func randomID() string {
@@ -318,12 +394,23 @@ func rungOf(quality string) (rung, bool) {
 	return rungs[i], true
 }
 
-// deviceProfile is the Jellyfin device profile that stands for the
-// client: the files it plays as they are, the HLS it plays converted, and
-// text subtitles as WebVTT files beside the video.
-func deviceProfile(c choice) playback.DeviceProfile {
-	containers, video, audio := c.capabilities.Containers, c.capabilities.CodecsVideo, c.capabilities.CodecsAudio
-	if original, ok := c.context.Deliveries[originalHTTP]; ok && original.Enabled && original.SupportedOnDevice {
+// client is what plans read of the capabilities an app told with a start
+// or a replan, which a session keeps in place of the app's own lists: the
+// containers it plays as they are, with their video and audio codecs,
+// each list as joined writes one; the codecs and the segments of the HLS
+// it plays converted; and the height of the tallest picture it shows, 0
+// for any.
+type client struct {
+	containers, video, audio     string
+	hlsVideo, hlsAudio, segments string
+	height                       int
+}
+
+// clientOf reads the client of an app's capabilities, whose lists are
+// within their bounds (see listsBounded).
+func clientOf(capabilities clientCapabilities, context playbackContext) client {
+	containers, video, audio := capabilities.Containers, capabilities.CodecsVideo, capabilities.CodecsAudio
+	if original, ok := context.Deliveries[originalHTTP]; ok && original.Enabled && original.SupportedOnDevice {
 		if len(original.Containers) > 0 {
 			containers = original.Containers
 		}
@@ -334,17 +421,8 @@ func deviceProfile(c choice) playback.DeviceProfile {
 			audio = decoded
 		}
 	}
-	profile := playback.DeviceProfile{Name: appName}
-	if c.original {
-		for _, container := range strings.Split(joined(containers), ",") {
-			if container != "" {
-				profile.DirectPlayProfiles = append(profile.DirectPlayProfiles, playback.DirectPlayProfile{Container: container,
-					VideoCodec: joined(video), AudioCodec: joined(audio), Type: "Video"})
-			}
-		}
-	}
 	hlsVideo, hlsAudio, segments := []string{"h264"}, []string{"aac"}, "ts"
-	if hls, ok := c.context.Deliveries["hls"]; ok && hls.Enabled {
+	if hls, ok := context.Deliveries["hls"]; ok && hls.Enabled {
 		for _, codec := range []string{"hevc", "av1"} {
 			if slices.Contains(hls.VideoCodecs, codec) {
 				hlsVideo = append(hlsVideo, codec)
@@ -359,10 +437,73 @@ func deviceProfile(c choice) playback.DeviceProfile {
 			segments = "mp4"
 		}
 	}
-	profile.TranscodingProfiles = []playback.TranscodingProfile{{Container: segments, Type: "Video", VideoCodec: strings.Join(hlsVideo, ","),
-		AudioCodec: strings.Join(hlsAudio, ","), Protocol: "hls", Context: "Streaming", MinSegments: "1", BreakOnNonKeyFrames: true}}
+	return client{containers: joined(containers), video: joined(video), audio: joined(audio), hlsVideo: strings.Join(hlsVideo, ","),
+		hlsAudio: strings.Join(hlsAudio, ","), segments: segments, height: heights[strings.ToLower(capabilities.MaxResolution)]}
+}
+
+// The bounds of what a session keeps of the app's own words: each list
+// of containers or codecs plans read holds maxNames names of maxName
+// bytes at most, and the identifiers of an attempt, a replan and a stop,
+// and the quality asked, maxIdentifier bytes.
+const (
+	maxNames      = 64
+	maxName       = 64
+	maxIdentifier = 128
+)
+
+// short reports whether a text of a body, under the name the body gives
+// it, is within maxIdentifier, answering the request when it is not.
+func short(w http.ResponseWriter, name, text string) bool {
+	if len(text) <= maxIdentifier {
+		return true
+	}
+	validationProblem(w, "body."+name, "out_of_range", name+" is at most "+strconv.Itoa(maxIdentifier)+" bytes.")
+	return false
+}
+
+// listsBounded reports whether the lists plans read of an app's
+// capabilities (see clientOf) are within maxNames and maxName, answering
+// the request when one is not. The deliveries plans do not read are not
+// kept, and so not bounded.
+func listsBounded(w http.ResponseWriter, capabilities clientCapabilities, context playbackContext) bool {
+	type list struct {
+		name  string
+		names []string
+	}
+	lists := []list{{"client_capabilities.containers", capabilities.Containers}, {"client_capabilities.codecs_video", capabilities.CodecsVideo},
+		{"client_capabilities.codecs_audio", capabilities.CodecsAudio}}
+	for _, delivery := range []string{originalHTTP, "hls"} {
+		told, under := context.Deliveries[delivery], "client_playback_context.deliveries."+delivery+"."
+		lists = append(lists, list{under + "containers", told.Containers}, list{under + "video_codecs", told.VideoCodecs},
+			list{under + "audio_decode_codecs", told.AudioDecode}, list{under + "audio_passthrough_codecs", told.AudioPassthrough})
+	}
+	for _, l := range lists {
+		if len(l.names) > maxNames || slices.ContainsFunc(l.names, func(name string) bool { return len(name) > maxName }) {
+			validationProblem(w, "body."+l.name, "out_of_range",
+				"A list of containers or codecs holds at most "+strconv.Itoa(maxNames)+" names of at most "+strconv.Itoa(maxName)+" bytes.")
+			return false
+		}
+	}
+	return true
+}
+
+// deviceProfile is the Jellyfin device profile that stands for the
+// client: the files it plays as they are, the HLS it plays converted, and
+// text subtitles as WebVTT files beside the video.
+func deviceProfile(c choice) playback.DeviceProfile {
+	profile := playback.DeviceProfile{Name: appName}
+	if c.original {
+		for _, container := range strings.Split(c.client.containers, ",") {
+			if container != "" {
+				profile.DirectPlayProfiles = append(profile.DirectPlayProfiles, playback.DirectPlayProfile{Container: container,
+					VideoCodec: c.client.video, AudioCodec: c.client.audio, Type: "Video"})
+			}
+		}
+	}
+	profile.TranscodingProfiles = []playback.TranscodingProfile{{Container: c.client.segments, Type: "Video", VideoCodec: c.client.hlsVideo,
+		AudioCodec: c.client.hlsAudio, Protocol: "hls", Context: "Streaming", MinSegments: "1", BreakOnNonKeyFrames: true}}
 	height := heights[strings.ToLower(c.quality)]
-	if limit := heights[strings.ToLower(c.capabilities.MaxResolution)]; limit > 0 && (height == 0 || limit < height) {
+	if limit := c.client.height; limit > 0 && (height == 0 || limit < height) {
 		height = limit
 	}
 	if height > 0 {
@@ -886,6 +1027,10 @@ func (s *Server) startPlayback(w http.ResponseWriter, r *http.Request, v viewer)
 	if !decode(w, r, &body) {
 		return
 	}
+	if !short(w, "playback_attempt_id", body.PlaybackAttemptID) || !short(w, "quality_preference", body.QualityPreference) ||
+		!listsBounded(w, body.Capabilities, body.Context) {
+		return
+	}
 	switch {
 	case body.ProtocolVersion != planProtocol:
 		validationProblem(w, "body.protocol_version", "unsupported", "This server plans protocol 3.")
@@ -908,7 +1053,7 @@ func (s *Server) startPlayback(w http.ResponseWriter, r *http.Request, v viewer)
 	}
 	found := &session{id: newSessionID(), user: v.user.ID, device: v.device.DeviceInfo, token: v.token, installation: body.InstallationID,
 		attempt: body.PlaybackAttemptID, file: body.FileID, version: version.String(), replans: map[string][]byte{}, seen: s.options.now(),
-		playState: playState{choice: choice{capabilities: body.Capabilities, context: body.Context, quality: body.QualityPreference, original: true,
+		playState: playState{choice: choice{client: clientOf(body.Capabilities, body.Context), quality: body.QualityPreference, original: true,
 			bitrateKbps: bitrateOf(body.BandwidthCapKbps, body.BandwidthEstimate), renditions: negotiated(body.ClientFeatures),
 			audio:    trackPlace(body.AudioTrackID, body.AudioTrackIndex, "audio"),
 			subtitle: trackPlace(body.SubtitleTrackID, body.SubtitleTrackIndex, "subtitle")}}}
@@ -925,7 +1070,9 @@ func (s *Server) startPlayback(w http.ResponseWriter, r *http.Request, v viewer)
 			s.internalError(w, r, err)
 			return
 		}
-		s.sessions.add(found)
+		for _, other := range s.sessions.add(found) {
+			s.left(r, other, v)
+		}
 	}
 	writeJSON(w, http.StatusCreated, d)
 }
@@ -1006,6 +1153,10 @@ func (s *Server) replan(w http.ResponseWriter, r *http.Request, v viewer) {
 	if !decode(w, r, &body) {
 		return
 	}
+	if !short(w, "replan_request_id", body.ReplanRequestID) || !short(w, "quality_preference", body.QualityPreference) ||
+		!listsBounded(w, body.Capabilities, body.Context) {
+		return
+	}
 	found, done, ok := s.sessions.get(r.PathValue("session"), v.user.ID, s.options.now())
 	if !ok {
 		problem(w, http.StatusNotFound, "not_found", "No such playback.")
@@ -1030,7 +1181,7 @@ func (s *Server) replan(w http.ResponseWriter, r *http.Request, v viewer) {
 	previous := found.playSession
 	found.position = body.PositionSeconds
 	c := &found.choice
-	c.capabilities, c.context = body.Capabilities, body.Context
+	c.client = clientOf(body.Capabilities, body.Context)
 	c.quality, c.bitrateKbps = body.QualityPreference, bitrateOf(body.BandwidthCapKbps, body.BandwidthEstimate)
 	if selected := body.SelectedTracks.Audio; selected != nil {
 		c.audio = trackPlace(&selected.ID, selected.Index, "audio")
@@ -1080,19 +1231,45 @@ func (s *Server) replan(w http.ResponseWriter, r *http.Request, v viewer) {
 	writeRaw(w, http.StatusOK, data)
 }
 
-// maxReplans is how many replans a session keeps the answers of, for
-// their replays.
-const maxReplans = 32
+const (
+	// maxReplans is how many replans a session keeps the answers of, for
+	// their replays, and replanBytes how many bytes of them: an answer
+	// lists the version's tracks, and is as long as they are many.
+	maxReplans  = 32
+	replanBytes = 16 << 10
+)
 
 // keepReplan keeps the answer of a replan, forgetting the oldest past
-// maxReplans.
+// maxReplans answers or replanBytes. The last answer stays whatever its
+// length, which the version's tracks bound: an app that lost it asks the
+// same replan again.
 func (found *session) keepReplan(id string, data []byte) {
-	if len(found.replanOrder) >= maxReplans {
-		delete(found.replans, found.replanOrder[0])
-		found.replanOrder = found.replanOrder[1:]
-	}
 	found.replans[id] = data
 	found.replanOrder = append(found.replanOrder, id)
+	found.replanSize += len(data)
+	for len(found.replanOrder) > 1 && (len(found.replanOrder) > maxReplans || found.replanSize > replanBytes) {
+		oldest := found.replanOrder[0]
+		found.replanSize -= len(found.replans[oldest])
+		delete(found.replans, oldest)
+		found.replanOrder = found.replanOrder[1:]
+	}
+}
+
+// left ends what a session forgotten for another one still does. One of
+// the user who starts the other has its conversion stopped, as an app
+// that gives a play session up stops it, unless its stop was received.
+// One of another user, forgotten for the server's bound, is not stopped
+// in that user's name by this request: the Jellyfin API ends the
+// playback of an app that asks nothing more.
+func (s *Server) left(r *http.Request, other *session, v viewer) {
+	if other.user != v.user.ID {
+		return
+	}
+	other.mu.Lock()
+	defer other.mu.Unlock()
+	if other.stopID == "" {
+		s.stopPlaySession(r, other, other.playSession)
+	}
 }
 
 // writeRaw answers a JSON body already encoded, which no cache keeps.
@@ -1173,6 +1350,9 @@ func (s *Server) stop(w http.ResponseWriter, r *http.Request, v viewer) {
 		validationProblem(w, "body.stop_id", "required", "A stop has an identifier.")
 		return
 	}
+	if !short(w, "stop_id", body.StopID) {
+		return
+	}
 	found, done, ok := s.sessions.get(r.PathValue("session"), v.user.ID, s.options.now())
 	if !ok {
 		problem(w, http.StatusNotFound, "not_found", "No such playback.")
@@ -1198,6 +1378,7 @@ func (s *Server) stop(w http.ResponseWriter, r *http.Request, v viewer) {
 		return
 	}
 	found.stopID, found.position = body.StopID, position
+	found.stopped.Store(true)
 	// The stop is kept a while, for a replay: the media are no longer
 	// served.
 	found.stream, found.subtitles = "", nil

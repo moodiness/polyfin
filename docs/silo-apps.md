@@ -214,6 +214,8 @@ During and after a playback:
 
 - **Skip buttons:** for the intro, recap and credits, and in the Android apps for previews, those Jellyfin apps get (see [Skip markers](#skip-markers)).
 - **Progress and stop:** these reports, numbered per installation, keep the resume point.
+- **Playbacks kept:** each user keeps their 16 most recent playbacks, and the server 1,024 in all. One more ends a stopped playback first, then the one unused the longest. A playback nobody used for a day is forgotten too. A playback no longer kept answers as unknown (404), and its resume point stays.
+- **What the app sends:** each list of containers or codecs holds up to 64 names of 64 bytes, and the identifiers of an attempt, a new plan and a stop, like the quality asked, 128 bytes. A request past that is refused (422).
 - **Marking:** a title played or unplayed.
 - **Diagnostics:** the apps' reports on their playbacks are accepted, and the failures they report are logged.
 
