@@ -41,6 +41,20 @@ const minEpisode = 3 * time.Minute
 // the first by number.
 const maxDiscEpisodes = 40
 
+// maxEpisodeTitles and maxEpisodeRanges bound the titles of a show's disc
+// compared with one another to choose its episodes, those at least
+// minEpisode long, and the ranges they play together (see ranges): a
+// disc's episodes, the titles replaying or chaining them and its long
+// extras are a few dozen, a few hundred at most, and each plays a few
+// ranges, as the cells or clips that follow one another are one. Of a
+// disc of more, the first titles by number within both bounds are
+// compared, and the others left out: the comparisons take a few seconds
+// at most.
+const (
+	maxEpisodeTitles = 1024
+	maxEpisodeRanges = 1 << 14
+)
+
 // chooseEpisodes chooses the episodes of a show's disc among its
 // candidates, and returns their indexes, in the order of their numbers:
 // the titles at least minEpisode long, but those playing the same parts
@@ -48,8 +62,16 @@ const maxDiscEpisodes = 40
 // mostly parts of two or more other titles, each wholly within it. A title
 // replaying an episode with another audio track counts once, and one
 // chaining a disc's episodes, whatever its order or its own short parts,
-// is left out. At most maxDiscEpisodes are kept.
+// is left out. At most maxDiscEpisodes are kept, chosen among the titles
+// maxEpisodeTitles and maxEpisodeRanges allow.
 func chooseEpisodes(candidates []titleCandidate) []int {
+	episodes, _ := comparedEpisodes(candidates)
+	return episodes
+}
+
+// comparedEpisodes is chooseEpisodes, with how many times it compared two
+// titles.
+func comparedEpisodes(candidates []titleCandidate) (episodes []int, compared int) {
 	var long []int
 	parts := map[int]ranges{}
 	for i, c := range candidates {
@@ -61,14 +83,27 @@ func chooseEpisodes(candidates []titleCandidate) []int {
 			parts[i] = r
 		}
 	}
-	var episodes []int
+	// The titles compared: the first by number, within both bounds.
+	slices.SortFunc(long, func(a, b int) int {
+		return cmp.Or(cmp.Compare(candidates[a].number, candidates[b].number), cmp.Compare(a, b))
+	})
+	kept, budget := 0, maxEpisodeRanges
+	for kept < min(len(long), maxEpisodeTitles) && parts[long[kept]].count() <= budget {
+		budget -= parts[long[kept]].count()
+		kept++
+	}
+	long = long[:kept]
 	for _, i := range long {
 		own, size := parts[i], parts[i].size()
 		var within []ranges
 		repeated := false
 		for _, j := range long {
+			if j == i {
+				continue
+			}
+			compared++
 			other := parts[j]
-			if j == i || other.overlap(own) != other.size() {
+			if other.overlap(own) != other.size() {
 				continue
 			}
 			if own.overlap(other) == size {
@@ -86,10 +121,7 @@ func chooseEpisodes(candidates []titleCandidate) []int {
 		}
 		episodes = append(episodes, i)
 	}
-	slices.SortFunc(episodes, func(a, b int) int {
-		return cmp.Or(cmp.Compare(candidates[a].number, candidates[b].number), cmp.Compare(a, b))
-	})
-	return episodes[:min(len(episodes), maxDiscEpisodes)]
+	return episodes[:min(len(episodes), maxDiscEpisodes)], compared
 }
 
 // ranges are the parts of a disc a title plays, by their source (see
@@ -139,6 +171,15 @@ func (r ranges) size() uint64 {
 		for _, x := range list {
 			n += x[1] - x[0]
 		}
+	}
+	return n
+}
+
+// count is how many ranges r holds.
+func (r ranges) count() int {
+	n := 0
+	for _, list := range r {
+		n += len(list)
 	}
 	return n
 }

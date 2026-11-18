@@ -264,7 +264,8 @@ func readDisc(r io.ReaderAt, kind string) (storedImage, error) {
 		return storedImage{}, err
 	}
 	if _, err := fsys.names("VIDEO_TS"); err == nil {
-		titles, err := dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file("VIDEO_TS", name) }, titleChooser(kind))
+		files := listedOf(fsys)
+		titles, err := dvdTitlesOf(func(name string) (io.ReaderAt, error) { return files.open("VIDEO_TS", name) }, titleChooser(kind))
 		switch {
 		case kind == KindShows && len(titles) == 0:
 			return storedImage{}, errNoEpisodes
@@ -302,14 +303,17 @@ func readDisc(r io.ReaderAt, kind string) (storedImage, error) {
 	return storedImage{}, err
 }
 
-// maxImagePlaylists bounds the bytes of playlists read in an image, those
-// of a disc hiding its movie among hundreds of playlists included: a few
-// KB each as a rule.
+// maxImagePlaylists bounds the bytes of playlists read in an image, and
+// in a disc's folder (see playlistEntries), those of a disc hiding its
+// movie among hundreds of playlists included: a few KB each as a rule.
 const maxImagePlaylists = 16 << 20
 
 // imagePlaylists are the titles of a Blu-ray image, its playlists chosen
 // by choose (see discTitles), the main title first; an error when none can
-// be read.
+// be read. Its PLAYLIST folder is listed once, and each playlist opened
+// from its entry there, the first of each number, rather than looked up
+// by its path, which reads the folder again. An image of more playlists
+// than maxDiscPlaylists has none read.
 func imagePlaylists(fsys discFS, choose chooser) ([]playlist, error) {
 	streams, err := fsys.names("BDMV", "STREAM")
 	if err != nil {
@@ -319,18 +323,29 @@ func imagePlaylists(fsys discFS, choose chooser) ([]playlist, error) {
 	for _, name := range streams {
 		clips[strings.ToUpper(strings.TrimSuffix(name, path.Ext(name)))] = true
 	}
-	names, err := fsys.names("BDMV", "PLAYLIST")
+	entries, err := fsys.files("BDMV", "PLAYLIST")
 	if err != nil {
 		return nil, err
 	}
+	listed := 0
+	for _, entry := range entries {
+		if playlistFile("BDMV/PLAYLIST/" + entry.name) {
+			listed++
+		}
+	}
+	if listed > maxDiscPlaylists {
+		return nil, fmt.Errorf("the image holds %d playlists, more than %d", listed, maxDiscPlaylists)
+	}
 	var playlists []playlist
+	read := map[int]bool{}
 	budget := int64(maxImagePlaylists)
-	for _, name := range names {
-		_, number, ok := discPlaylist("BDMV/PLAYLIST/" + name)
-		if !ok {
+	for _, entry := range entries {
+		_, number, ok := discPlaylist("BDMV/PLAYLIST/" + entry.name)
+		if !ok || read[number] {
 			continue
 		}
-		file, err := fsys.file("BDMV", "PLAYLIST", name)
+		read[number] = true
+		file, err := entry.open()
 		if err != nil || file.Size() > maxPlaylistSize {
 			continue
 		}
@@ -366,6 +381,28 @@ type discFS interface {
 	names(path ...string) ([]string, error)
 	// file opens the file at path.
 	file(path ...string) (*io.SectionReader, error)
+	// files lists the entries of the folder at path, the folder itself
+	// and its parent left out, with what opens each: the files of a
+	// folder are read without looking each up by its path again.
+	files(path ...string) ([]fsEntry, error)
+}
+
+// fsEntry is an entry of a folder of a disc's file system: its name;
+// open, which opens the file it is, from where the folder says it is; and
+// place, which tells where the file's bytes are.
+type fsEntry struct {
+	name  string
+	open  func() (*io.SectionReader, error)
+	place func() (filePlace, error)
+}
+
+// filePlace is where the bytes of a disc's file are, and how many: in an
+// image, its extents in the image, in order; in a disc's folder on a
+// share, rel, its path in the share's folder.
+type filePlace struct {
+	rel   string
+	spans []span
+	size  int64
 }
 
 // errNotDisc reports an image whose file systems hold no disc.
@@ -389,17 +426,117 @@ func openDiscFS(r io.ReaderAt) (discFS, error) {
 	return openUDF(r)
 }
 
-// readDiscFile reads a file of a disc image's file system at path, at
-// most limit bytes.
-func readDiscFile(fsys discFS, limit int64, path ...string) ([]byte, error) {
-	file, err := fsys.file(path...)
+// listedFS finds the files of a disc's file system by their path, any
+// case. It lists each folder once, and opens and locates its files from
+// the listing: the files of one folder, as a title's clip information or
+// its clips, cost a listing and what each takes, where looking each up
+// by its path lists the folders above it again.
+type listedFS struct {
+	fsys    discFS
+	folders map[string]listedFolder
+	places  map[string]filePlace
+}
+
+// listedFolder is a folder listedFS listed: its entries, and their names.
+type listedFolder struct {
+	entries []fsEntry
+	names   folderNames
+}
+
+// listedOf is fsys, its folders listed once each.
+func listedOf(fsys discFS) *listedFS {
+	return &listedFS{fsys: fsys, folders: map[string]listedFolder{}, places: map[string]filePlace{}}
+}
+
+// entry finds the entry at names in its folder's listing.
+func (l *listedFS) entry(names ...string) (fsEntry, error) {
+	if len(names) == 0 {
+		return fsEntry{}, errNotDisc
+	}
+	dir, name := names[:len(names)-1], names[len(names)-1]
+	key := strings.Join(dir, "/")
+	f, ok := l.folders[key]
+	if !ok {
+		entries, err := l.fsys.files(dir...)
+		if err != nil {
+			return fsEntry{}, err
+		}
+		f = listedFolder{entries: entries, names: namesOf(len(entries), func(i int) string { return entries[i].name })}
+		l.folders[key] = f
+	}
+	i, ok := f.names.find(name)
+	if !ok {
+		return fsEntry{}, fmt.Errorf("%w: no %s in %q", errNotDisc, name, key)
+	}
+	return f.entries[i], nil
+}
+
+// open opens the file at names.
+func (l *listedFS) open(names ...string) (*io.SectionReader, error) {
+	entry, err := l.entry(names...)
+	if err != nil {
+		return nil, err
+	}
+	return entry.open()
+}
+
+// read reads the file at names, of limit bytes at most.
+func (l *listedFS) read(limit int64, names ...string) ([]byte, error) {
+	file, err := l.open(names...)
 	if err != nil {
 		return nil, err
 	}
 	if file.Size() > limit {
-		return nil, fmt.Errorf("%s is too large", strings.Join(path, "/"))
+		return nil, fmt.Errorf("%s is too large", strings.Join(names, "/"))
 	}
 	return io.ReadAll(file)
+}
+
+// place tells where the bytes of the file at names are, asking its file
+// system once for each file.
+func (l *listedFS) place(names ...string) (filePlace, error) {
+	key := strings.Join(names, "/")
+	if place, ok := l.places[key]; ok {
+		return place, nil
+	}
+	entry, err := l.entry(names...)
+	if err != nil {
+		return filePlace{}, err
+	}
+	place, err := entry.place()
+	if err == nil {
+		l.places[key] = place
+	}
+	return place, err
+}
+
+// folderNames finds an entry of a folder by its name, any case: the
+// entry of that very name, else the first whose name differs by its case.
+type folderNames struct {
+	exact, folded map[string]int
+}
+
+// namesOf indexes the names of a folder's n entries, name telling each.
+func namesOf(n int, name func(i int) string) folderNames {
+	names := folderNames{exact: make(map[string]int, n), folded: make(map[string]int, n)}
+	for i := range n {
+		if _, ok := names.exact[name(i)]; !ok {
+			names.exact[name(i)] = i
+		}
+		if _, ok := names.folded[strings.ToUpper(name(i))]; !ok {
+			names.folded[strings.ToUpper(name(i))] = i
+		}
+	}
+	return names
+}
+
+// find tells which entry is named name.
+func (f folderNames) find(name string) (int, bool) {
+	if i, ok := f.exact[name]; ok {
+		return i, true
+	}
+	i, ok := f.folded[strings.ToUpper(name)]
+	return i, ok
 }
 
 // udfVolume reports whether the image r has a UDF file system: an NSR

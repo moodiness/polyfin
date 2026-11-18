@@ -3,6 +3,7 @@ package localfiles
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -322,5 +323,66 @@ func TestShareShowDiscsAreEpisodes(t *testing.T) {
 		got["The Lone Ranger/Season 01/Disc 1/VIDEO_TS/VTS_01_1.VOB#3"] != "unmatched: disc_episode" ||
 		got["The Lone Ranger/Season 01/Disc 2/BDMV/PLAYLIST/00002.mpls"] != "unmatched: disc_episode" {
 		t.Errorf("files: %v", got)
+	}
+}
+
+// The episodes of a show's disc are chosen among a bounded number of its
+// titles, the first by number: however many titles a disc lists, those
+// compared with one another, and the ranges they play, stay within
+// maxEpisodeTitles and maxEpisodeRanges, and the disc's first titles give
+// the episodes they gave.
+func TestEpisodesAreChosenAmongABoundedNumberOfTitles(t *testing.T) {
+	t.Parallel()
+	part := func(source string, from, to uint64, minutes int) titlePart {
+		return titlePart{key: source, length: time.Duration(minutes) * time.Minute, source: source, from: from, to: to}
+	}
+	title := func(number int, parts ...titlePart) titleCandidate {
+		c := titleCandidate{number: number, parts: parts}
+		for _, p := range parts {
+			c.length += p.length
+		}
+		return c
+	}
+	// A disc's first titles, a play all and its three episodes, after as
+	// many titles as asked, each of ranges ranges of a clip of its own,
+	// apart from one another, from the highest number down.
+	disc := func(titles, ranges int) []titleCandidate {
+		candidates := make([]titleCandidate, 0, titles+4)
+		for number := titles + 3; number > 3; number-- {
+			clip := fmt.Sprintf("%06d", number)
+			parts := make([]titlePart, ranges)
+			for i := range parts {
+				parts[i] = part(clip, uint64(i*10), uint64(i*10+5), 4)
+			}
+			candidates = append(candidates, title(number, parts...))
+		}
+		return append(candidates, title(0, part("00001", 0, 300, 66)), title(1, part("00001", 0, 100, 22)),
+			title(2, part("00001", 100, 200, 22)), title(3, part("00001", 200, 300, 22)))
+	}
+	want := make([]int, maxDiscEpisodes)
+	for i := range want {
+		want[i] = i + 1
+	}
+	for _, tc := range []struct {
+		titles, ranges, compared int
+	}{
+		{30, 1, 34},
+		{3000, 1, maxEpisodeTitles},
+		{100_000, 1, maxEpisodeTitles},
+		{1000, 100, 4 + (maxEpisodeRanges-4)/100},
+	} {
+		candidates := disc(tc.titles, tc.ranges)
+		episodes, compared := comparedEpisodes(candidates)
+		// Each title compared, with each other at most.
+		if bound := tc.compared * (tc.compared - 1); compared > bound {
+			t.Fatalf("%d titles of %d ranges: %d comparisons, more than the %d of %d titles", tc.titles, tc.ranges, compared, bound, tc.compared)
+		}
+		var got []int
+		for _, i := range episodes {
+			got = append(got, candidates[i].number)
+		}
+		if !slices.Equal(got, want[:min(len(want), tc.titles+3)]) {
+			t.Errorf("%d titles of %d ranges: episodes %v", tc.titles, tc.ranges, got)
+		}
 	}
 }

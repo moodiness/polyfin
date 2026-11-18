@@ -164,14 +164,36 @@ func (img *isoImage) file(path ...string) (*io.SectionReader, error) {
 	return img.reader(entry), nil
 }
 
-// spansOf locates the file at path in the image: one extent.
-func (img *isoImage) spansOf(path ...string) ([]span, error) {
-	entry, err := img.lookup(path...)
+// files lists the folder at path's entries, each opened and located from
+// its record: a file is one extent.
+func (img *isoImage) files(path ...string) ([]fsEntry, error) {
+	dir, err := img.lookup(path...)
 	if err != nil {
 		return nil, err
 	}
-	if entry.dir {
-		return nil, fmt.Errorf("%w: %s is a folder", errNotISO, entry.name)
+	entries, err := img.list(dir)
+	if err != nil {
+		return nil, err
 	}
-	return []span{{at: entry.at, n: entry.size}}, nil
+	files := make([]fsEntry, len(entries))
+	for i, e := range entries {
+		file := func() error {
+			if e.dir {
+				return fmt.Errorf("%w: %s is a folder", errNotISO, e.name)
+			}
+			return nil
+		}
+		files[i] = fsEntry{name: e.name, open: func() (*io.SectionReader, error) {
+			if err := file(); err != nil {
+				return nil, err
+			}
+			return img.reader(e), nil
+		}, place: func() (filePlace, error) {
+			if err := file(); err != nil {
+				return filePlace{}, err
+			}
+			return filePlace{spans: []span{{at: e.at, n: e.size}}, size: e.size}, nil
+		}}
+	}
+	return files, nil
 }

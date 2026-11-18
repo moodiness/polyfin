@@ -135,6 +135,51 @@ func (f *shareFS) file(names ...string) (*io.SectionReader, error) {
 	return io.NewSectionReader(&seekReaderAt{f: file}, 0, entry.size), nil
 }
 
+// files lists the folder at names' entries, each opened and located from
+// the listing, its path not looked up again.
+func (f *shareFS) files(names ...string) ([]fsEntry, error) {
+	rel, entry, err := f.find(names...)
+	if err != nil {
+		return nil, err
+	}
+	if !entry.folder {
+		return nil, fmt.Errorf("%w: %s is no folder", errNotDisc, rel)
+	}
+	entries, err := f.r.list(f.ctx, rel)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]fsEntry, len(entries))
+	for i, e := range entries {
+		at := path.Join(rel, e.name)
+		isFile := func() error {
+			if e.folder {
+				return fmt.Errorf("%w: %s is a folder", errNotDisc, at)
+			}
+			return nil
+		}
+		files[i] = fsEntry{name: e.name, open: func() (*io.SectionReader, error) {
+			if err := isFile(); err != nil {
+				return nil, err
+			}
+			file, _, err := f.r.open(f.ctx, at)
+			if err != nil {
+				return nil, err
+			}
+			f.mu.Lock()
+			f.opened = append(f.opened, file)
+			f.mu.Unlock()
+			return io.NewSectionReader(&seekReaderAt{f: file}, 0, e.size), nil
+		}, place: func() (filePlace, error) {
+			if err := isFile(); err != nil {
+				return filePlace{}, err
+			}
+			return filePlace{rel: at, size: e.size}, nil
+		}}
+	}
+	return files, nil
+}
+
 // close closes the files opened.
 func (f *shareFS) close() {
 	f.mu.Lock()
@@ -190,9 +235,11 @@ const alignedUnit = 32 * 192
 // protocol reads it: each play item's clip, from the aligned unit of the
 // entry point at or before its in time to that of the first entry point
 // at or after its out time, or the clip's end. Each clip is located by
-// locate, in a file of the share's folder.
-func blurayPieces(fsys discFS, number int, locate func(names []string, start, end int64) ([]titlePiece, error)) ([]titlePiece, error) {
-	data, err := readDiscFile(fsys, maxPlaylistSize, "BDMV", "PLAYLIST", fmt.Sprintf("%05d.mpls", number))
+// locate, in a file of the share's folder. The disc's files are found in
+// files, its folders listed once each, whatever the play items; a title
+// of more clips than maxTitleClips is not laid out.
+func blurayPieces(files *listedFS, number int, locate func(names []string, start, end int64) ([]titlePiece, error)) ([]titlePiece, error) {
+	data, err := files.read(maxPlaylistSize, "BDMV", "PLAYLIST", fmt.Sprintf("%05d.mpls", number))
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +253,10 @@ func blurayPieces(fsys discFS, number int, locate func(names []string, start, en
 	for _, part := range p.clips {
 		points, ok := entries[part.clip]
 		if !ok {
-			data, err := readDiscFile(fsys, maxClipInfoSize, "BDMV", "CLIPINF", part.clip+".clpi")
+			if len(entries) == maxTitleClips {
+				return nil, fmt.Errorf("the title plays more than %d clips", maxTitleClips)
+			}
+			data, err := files.read(maxClipInfoSize, "BDMV", "CLIPINF", part.clip+".clpi")
 			if err != nil {
 				return nil, err
 			}
@@ -219,11 +269,11 @@ func blurayPieces(fsys discFS, number int, locate func(names []string, start, en
 			entries[part.clip] = points
 		}
 		names := []string{"BDMV", "STREAM", part.clip + ".m2ts"}
-		clip, err := fsys.file(names...)
+		clip, err := files.place(names...)
 		if err != nil {
 			return nil, err
 		}
-		start, end := clipRange(points, uint64(part.in)*2, uint64(part.out)*2, clip.Size())
+		start, end := clipRange(points, uint64(part.in)*2, uint64(part.out)*2, clip.size)
 		located, err := locate(names, start, end)
 		if err != nil {
 			return nil, err
@@ -275,6 +325,25 @@ func shareTitle(rel string) bool {
 	return playlist || imageFile(rel) || dvd && dvdSet(rel) > 0
 }
 
+// locator locates the bytes of the files of a disc on a share, at disc in
+// the share's folder, its folder's or its image's: each by its path in
+// folder of files, from start to end, as the parts of files of the share's
+// folder they are (see filePlace). A file is found in its folder's
+// listing, and placed once, however many times it is located.
+func locator(files *listedFS, disc string, folder []string) func(names []string, start, end int64) ([]titlePiece, error) {
+	return func(names []string, start, end int64) ([]titlePiece, error) {
+		names = slices.Concat(folder, names)
+		place, err := files.place(names...)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path.Join(disc, path.Join(names...)), err)
+		}
+		if place.rel != "" {
+			return []titlePiece{{rel: place.rel, at: start, n: end - start}}, nil
+		}
+		return slicePieces(disc, place.spans, start, end), nil
+	}
+}
+
 // layout lays out the title of a disc on a share the version key names,
 // d (see blurayPieces and dvdPieces), or returns the layout kept.
 func (s *Service) layout(ctx context.Context, key accounts.ID, d discInput) (titleLayout, error) {
@@ -298,32 +367,12 @@ func (s *Service) layout(ctx context.Context, key accounts.ID, d discInput) (tit
 	if d.kind == DiscDVD && d.image {
 		folder = []string{"VIDEO_TS"}
 	}
-	locate := func(names []string, start, end int64) ([]titlePiece, error) {
-		names = slices.Concat(folder, names)
-		rel := path.Join(d.path, path.Join(names...))
-		if folder, ok := fsys.(*shareFS); ok {
-			found, _, err := folder.find(names...)
-			if err != nil {
-				return nil, err
-			}
-			return []titlePiece{{rel: found, at: start, n: end - start}}, nil
-		}
-		image, ok := fsys.(interface {
-			spansOf(path ...string) ([]span, error)
-		})
-		if !ok {
-			return nil, fmt.Errorf("%s: %w", rel, errNotDisc)
-		}
-		spans, err := image.spansOf(names...)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", rel, err)
-		}
-		return slicePieces(d.path, spans, start, end), nil
-	}
+	files := listedOf(fsys)
+	locate := locator(files, d.path, folder)
 	layout := titleLayout{size: d.size, modified: d.modified}
 	if d.kind == DiscDVD {
 		open := func(name string) (*io.SectionReader, error) {
-			return fsys.file(slices.Concat(folder, []string{name})...)
+			return files.open(slices.Concat(folder, []string{name})...)
 		}
 		layout.pieces, layout.languages, err = dvdPieces(open, d.title, func(name string, start, end int64) ([]titlePiece, error) {
 			return locate([]string{name}, start, end)
@@ -332,7 +381,7 @@ func (s *Service) layout(ctx context.Context, key accounts.ID, d discInput) (tit
 			layout.length, err = dvdLength(open, d.title)
 		}
 	} else {
-		layout.pieces, err = blurayPieces(fsys, d.title, locate)
+		layout.pieces, err = blurayPieces(files, d.title, locate)
 	}
 	if err != nil {
 		return titleLayout{}, err

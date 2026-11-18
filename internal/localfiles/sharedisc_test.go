@@ -3,6 +3,7 @@ package localfiles
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -234,5 +235,96 @@ func TestBrokenDVDTitlesFail(t *testing.T) {
 	want := []titlePiece{{"VTS_01_1.VOB", 2 * ifoSector, 4 * ifoSector}, {"VTS_01_2.VOB", 2 * ifoSector, 4 * ifoSector}}
 	if err != nil || !slices.Equal(pieces, want) {
 		t.Errorf("pieces: %+v %v", pieces, err)
+	}
+}
+
+// The title of a Blu-ray disc on a share is laid out from its folders'
+// listings, each listed once, whatever its play items: in the disc's
+// folder, each clip's information is opened once, and no stream; in an
+// image, a title of twice the clips has about twice the bytes read. A
+// title of more clips than maxTitleClips is not laid out.
+func TestShareTitlesAreLaidOutFromTheirFoldersListings(t *testing.T) {
+	t.Parallel()
+	const disc = "Movie (2008)"
+	share := func(dir string, files map[string][]byte) (*listedRemote, *listedFS) {
+		r := &listedRemote{files: map[string][]byte{}, sizes: map[string]int64{}}
+		for rel, data := range files {
+			r.files[dir+"/"+rel] = data
+		}
+		return r, listedOf(&shareFS{ctx: t.Context(), r: r, dir: dir})
+	}
+
+	// A disc's folder: PLAYLIST, CLIPINF and STREAM, each found through
+	// the disc's folder and BDMV, then listed.
+	const few = 1000
+	for _, clips := range []int{few, 2 * few, maxTitleClips} {
+		_, _, files := clipsDisc(t, clips)
+		r, fsys := share(disc, files)
+		pieces, err := blurayPieces(fsys, 0, locator(fsys, disc, nil))
+		if err != nil || len(pieces) != clips || pieces[1] != (titlePiece{disc + "/BDMV/STREAM/00001.m2ts", 0, clipStream}) {
+			t.Fatalf("%d clips: %d pieces, %v", clips, len(pieces), err)
+		}
+		if r.lists > 9 || r.opens != clips+1 {
+			t.Errorf("%d clips: %d folders listed, %d files opened", clips, r.lists, r.opens)
+		}
+	}
+	_, _, files := clipsDisc(t, maxTitleClips+1)
+	r, fsys := share(disc, files)
+	if pieces, err := blurayPieces(fsys, 0, locator(fsys, disc, nil)); err == nil || r.opens != maxTitleClips+1 {
+		t.Errorf("%d clips: %d pieces, %d files opened, %v", maxTitleClips+1, len(pieces), r.opens, err)
+	}
+
+	// As many play items as a title has parts, of four clips.
+	items := make([]mplsItem, maxTitlePieces)
+	for i := range items {
+		items[i] = mplsItem{fmt.Sprintf("%05d", i%4), 1}
+	}
+	_, _, files = clipsDisc(t, 4)
+	files["BDMV/PLAYLIST/00000.mpls"] = mplsOf(t, items...)
+	r, fsys = share(disc, files)
+	if pieces, err := blurayPieces(fsys, 0, locator(fsys, disc, nil)); err != nil || len(pieces) != len(items) || r.lists > 9 || r.opens != 5 {
+		t.Errorf("%d play items: %d pieces, %d folders listed, %d files opened, %v", len(items), len(pieces), r.lists, r.opens, err)
+	}
+
+	// An image on a share: each clip costs its entries in CLIPINF and in
+	// STREAM, its information and, in a UDF file system, two file entries.
+	const image = "Movie (2008).iso"
+	for name, build := range map[string]func(clips int) []byte{
+		"ISO 9660": func(clips int) []byte {
+			playlist, clip, _ := clipsDisc(t, clips)
+			return blurayISO(1, playlist, clips, clip)
+		},
+		"UDF 2.50": func(clips int) []byte {
+			_, _, files := clipsDisc(t, clips)
+			return buildUDF(files, udfLayout{metadata: true})
+		},
+		"UDF 2.01": func(clips int) []byte {
+			_, _, files := clipsDisc(t, clips)
+			return buildUDF(files, udfLayout{})
+		},
+	} {
+		read := func(clips int) int64 {
+			counted := &countedImage{r: readerOf(build(clips))}
+			fsys, err := openDiscFS(counted)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			counted.bytes = 0
+			files := listedOf(fsys)
+			pieces, err := blurayPieces(files, 0, locator(files, image, nil))
+			if err != nil || len(pieces) != clips || pieces[1].rel != image || pieces[1].n != clipStream {
+				t.Fatalf("%s: %d clips: %d pieces, %v", name, clips, len(pieces), err)
+			}
+			return counted.bytes
+		}
+		small, large := read(few), read(2*few)
+		t.Logf("%s: %d bytes read for %d clips, %d for %d", name, small, few, large, 2*few)
+		// Three sectors a clip, and the folders above them.
+		if bound := func(clips int64) int64 { return clips*3*isoSector + 64*isoSector }; small > bound(few) || large > bound(2*few) {
+			t.Errorf("%s: %d bytes read for %d clips, %d for %d", name, small, few, large, 2*few)
+		}
+		if large > 2*small+small/10 {
+			t.Errorf("%s: %d bytes read for %d clips, %d for twice as many", name, small, few, large)
+		}
 	}
 }

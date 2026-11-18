@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -152,32 +151,52 @@ func epEntries(data []byte, start, coarse, fine int) ([]epEntry, error) {
 	return entries, nil
 }
 
-// titleKeyframes maps the entry points of a playlist's clips, by clip,
-// onto its title's timeline: each play item's, from its in time to its
-// out time, follow the items before it. An entry point just before an
-// item's in time, within epPrecision, starts it.
-func titleKeyframes(p playlist, points map[string][]uint64) []time.Duration {
+// maxTitleKeyframes bounds the keyframes of a title, and the entry points
+// read of its clips together: more than a title of three days has with an
+// entry point every half second, when a disc's longest titles play for
+// hours, with an entry point a second or so.
+const maxTitleKeyframes = 1 << 19
+
+// titleKeyframes maps the entry points of a playlist's clips, by clip, in
+// order, onto its title's timeline: each play item's, from its in time to
+// its out time, follow the items before it. An entry point just before an
+// item's in time, within epPrecision, starts it. Each item's are found by
+// their order, not by reading all its clip's. A title of more keyframes
+// than maxTitleKeyframes, as one whose play items each play a clip's
+// entry points again, has none read (see errNoKeyframes).
+func titleKeyframes(p playlist, points map[string][]uint64) ([]time.Duration, error) {
 	var times []time.Duration
 	var offset uint64
 	for _, part := range p.clips {
 		in, out := uint64(part.in)*2, uint64(part.out)*2
-		for _, pts := range points[part.clip] {
-			if pts+epPrecision <= in || pts >= out {
-				continue
+		list := points[part.clip]
+		first, _ := slices.BinarySearchFunc(list, in, func(pts, in uint64) int {
+			if pts+epPrecision <= in {
+				return -1
+			}
+			return 1
+		})
+		for _, pts := range list[first:] {
+			if pts >= out {
+				break
+			}
+			if len(times) == maxTitleKeyframes {
+				return nil, fmt.Errorf("%w: the title lists more than %d", errNoKeyframes, maxTitleKeyframes)
 			}
 			at := offset + max(pts, in) - in
 			times = append(times, time.Duration(at)*time.Second/90000)
 		}
 		offset += out - in
 	}
-	return times
+	return times, nil
 }
 
 // Keyframes reads the keyframe times of the version key names (see
 // Input), on its title's timeline: a Blu-ray disc's playlist's, from its
 // clips' EP maps, in its folder or in an image's file system (see
 // openDiscFS). Those of a DVD and of a title libbluray chooses are not
-// read.
+// read. The disc's folders are listed once each, whatever the clips of
+// the title (see discReader and folderReader).
 func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, error) {
 	d, err := s.disc(ctx, key)
 	if err != nil {
@@ -186,16 +205,13 @@ func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, e
 	if d.kind != DiscBluRay || d.title < 0 {
 		return nil, errNoKeyframes
 	}
-	read := func(fsys discFS) func(names ...string) ([]byte, error) {
-		return func(names ...string) ([]byte, error) { return readDiscFile(fsys, maxClipInfoSize, names...) }
-	}
 	if d.share {
 		fsys, release, err := s.shareDiscFS(ctx, d)
 		if err != nil {
 			return nil, err
 		}
 		defer release()
-		return blurayKeyframes(read(fsys), d.title)
+		return blurayKeyframes(discReader(fsys, maxClipInfoSize), d.title)
 	}
 	if !d.image {
 		return blurayKeyframes(folderReader(d.path), d.title)
@@ -209,14 +225,21 @@ func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, e
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errNoKeyframes, err)
 	}
-	return blurayKeyframes(read(fsys), d.title)
+	return blurayKeyframes(discReader(fsys, maxClipInfoSize), d.title)
 }
 
 // maxTitleClipInfo bounds the bytes of clip information read for a title.
 const maxTitleClipInfo = 64 << 20
 
+// maxTitleClips bounds the clips whose information is read for a title:
+// a title cut into many clips, as one of several cuts of a movie is,
+// plays a few hundred. Each is a file opened, on a share too.
+const maxTitleClips = 2048
+
 // blurayKeyframes reads the keyframe times of a disc's playlist number,
-// read reading the disc's files by their path, any case.
+// read reading the disc's files by their path, any case. A title of more
+// clips than maxTitleClips, or whose clips list more entry points than
+// maxTitleKeyframes together, has none read (see errNoKeyframes).
 func blurayKeyframes(read func(names ...string) ([]byte, error), number int) ([]time.Duration, error) {
 	data, err := read("BDMV", "PLAYLIST", fmt.Sprintf("%05d.mpls", number))
 	if err != nil {
@@ -227,10 +250,13 @@ func blurayKeyframes(read func(names ...string) ([]byte, error), number int) ([]
 		return nil, err
 	}
 	points := map[string][]uint64{}
-	budget := maxTitleClipInfo
+	budget, listed := maxTitleClipInfo, 0
 	for _, part := range p.clips {
 		if _, ok := points[part.clip]; ok {
 			continue
+		}
+		if len(points) == maxTitleClips {
+			return nil, fmt.Errorf("%w: the title plays more than %d clips", errNoKeyframes, maxTitleClips)
 		}
 		data, err := read("BDMV", "CLIPINF", part.clip+".clpi")
 		if err != nil {
@@ -242,28 +268,39 @@ func blurayKeyframes(read func(names ...string) ([]byte, error), number int) ([]
 		if points[part.clip], err = readEPMap(data); err != nil {
 			return nil, fmt.Errorf("clip %s: %w", part.clip, err)
 		}
+		if listed += len(points[part.clip]); listed > maxTitleKeyframes {
+			return nil, fmt.Errorf("%w: its clips list more than %d entry points", errNoKeyframes, maxTitleKeyframes)
+		}
 	}
-	return titleKeyframes(p, points), nil
+	return titleKeyframes(p, points)
 }
 
 // folderReader reads the files of the disc folder dir by their path, any
-// case, through no symbolic link leading out of it.
+// case, through no symbolic link leading out of it. It lists each folder
+// once, as discReader does.
 func folderReader(dir string) func(names ...string) ([]byte, error) {
+	type folder struct {
+		entries []os.DirEntry
+		names   folderNames
+	}
+	folders := map[string]folder{}
 	return func(names ...string) ([]byte, error) {
 		at := dir
 		for _, name := range names {
-			entries, err := os.ReadDir(at)
-			if err != nil {
-				return nil, err
+			f, ok := folders[at]
+			if !ok {
+				entries, err := os.ReadDir(at)
+				if err != nil {
+					return nil, err
+				}
+				f = folder{entries: entries, names: namesOf(len(entries), func(i int) string { return entries[i].Name() })}
+				folders[at] = f
 			}
-			i := slices.IndexFunc(entries, func(e os.DirEntry) bool { return e.Name() == name })
-			if i < 0 {
-				i = slices.IndexFunc(entries, func(e os.DirEntry) bool { return strings.EqualFold(e.Name(), name) })
-			}
-			if i < 0 {
+			i, ok := f.names.find(name)
+			if !ok {
 				return nil, fmt.Errorf("%w: no %s in %s", os.ErrNotExist, name, at)
 			}
-			at = filepath.Join(at, entries[i].Name())
+			at = filepath.Join(at, f.entries[i].Name())
 		}
 		real, err := filepath.EvalSymlinks(at)
 		if err != nil || !within(dir, real) {
@@ -280,4 +317,12 @@ func folderReader(dir string) func(names ...string) ([]byte, error) {
 		}
 		return data, err
 	}
+}
+
+// discReader reads the files of a disc's file system by their path, any
+// case, each of limit bytes at most, its folders listed once each (see
+// listedFS).
+func discReader(fsys discFS, limit int64) func(names ...string) ([]byte, error) {
+	files := listedOf(fsys)
+	return func(names ...string) ([]byte, error) { return files.read(limit, names...) }
 }

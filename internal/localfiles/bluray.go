@@ -99,6 +99,12 @@ var errNotPlaylist = errors.New("not a Blu-ray playlist")
 // maxPlaylistSize bounds the playlist files read: a few KB as a rule.
 const maxPlaylistSize = 1 << 20
 
+// maxDiscPlaylists bounds the playlists read of one disc, in its folder or
+// in an image: a disc holds a few, or dozens, and one hiding its movie
+// among decoys hundreds, a few thousand at most. A disc of more has none
+// read, as one whose playlists cannot be read.
+const maxDiscPlaylists = 4096
+
 // readPlaylist reads a playlist file: its play items, the clip each plays
 // (its first angle's), and the times it plays it from and to, in units of
 // 45 kHz.
@@ -307,22 +313,32 @@ func collapseDiscs(kind string, files map[string]found, open func(rel string) (i
 // titles of a movies folder's disc other than its main one are marked as
 // such. A playlist that cannot be read, or plays a stream the walk did not
 // find, is left out; none is kept when the first title is too short for
-// FFmpeg to play (see minPlayable).
+// FFmpeg to play (see minPlayable), nor of a disc of more playlists than
+// maxDiscPlaylists, or whose playlists weigh more than an image's may
+// (see maxImagePlaylists).
 func playlistEntries(d discFiles, open func(rel string) (io.ReadCloser, error), kind string) map[string]found {
+	if len(d.playlists) > maxDiscPlaylists {
+		return nil
+	}
 	clips := map[string]found{}
 	for rel, f := range d.streams {
 		clips[strings.ToUpper(strings.TrimSuffix(path.Base(rel), path.Ext(rel)))] = f
 	}
 	var playlists []playlist
 	paths := map[int]string{}
+	budget := int64(maxImagePlaylists)
 	for rel := range d.playlists {
 		_, number, _ := discPlaylist(rel)
 		file, err := open(rel)
 		if err != nil {
 			continue
 		}
-		p, err := readPlaylist(file)
+		limited := &io.LimitedReader{R: file, N: maxPlaylistSize}
+		p, err := readPlaylist(limited)
 		file.Close()
+		if budget -= maxPlaylistSize - limited.N; budget < 0 {
+			return nil
+		}
 		if err != nil || slices.ContainsFunc(p.clips, func(part clipPart) bool { _, ok := clips[part.clip]; return !ok }) {
 			continue
 		}

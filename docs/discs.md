@@ -51,6 +51,7 @@ In a shows folder, a show's disc is its episodes, its playlists chosen otherwise
 **Limits:**
 
 - A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream as one file. That file plays as it is when the app takes it. A movie split over several streams then plays its largest stream only.
+- A disc of more than 4,096 playlists, or whose playlists weigh more than 16 MiB together, has none of them read, in its folder or in an image: it is a disc whose playlists cannot be read. Discs hold dozens of playlists of a few KB each, and those hiding their movie among decoys a few hundred.
 - On a network share, a disc is read as on a local folder (see [Discs on shares](#discs-on-shares)).
 - There is no direct play and no download of a playlist. No thumbnails or chapter images are made for it.
 - A seek starts FFmpeg one segment early, as its Blu-ray reader lands on the keyframe after the time asked. The first segment after a seek takes a little longer to come.

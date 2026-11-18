@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -389,5 +390,157 @@ func TestImageMoviesAreTitles(t *testing.T) {
 	}
 	if got := e.files(addon.ID)["Nosferatu (1922).iso#1"]; got != "tt0063350" {
 		t.Errorf("after a scan: %s", got)
+	}
+}
+
+// playlistsISO is an ISO 9660 image of a Blu-ray disc of count playlists
+// (see blurayISO), without clip information.
+func playlistsISO(count int, playlist []byte) []byte { return blurayISO(count, playlist, 0, nil) }
+
+// blurayISO is an ISO 9660 image of a Blu-ray disc: BDMV/PLAYLIST holds
+// playlists playlists, NNNNN.MPLS, each the bytes of playlist,
+// BDMV/CLIPINF clips clip information files, NNNNN.CLPI, each the bytes
+// of clip, and BDMV/STREAM their streams, NNNNN.M2TS, of clipStream
+// bytes each, or 00001.M2TS, empty, without clips: the files of a folder
+// all at one place of the image.
+func blurayISO(playlists int, playlist []byte, clips int, clip []byte) []byte {
+	record := func(name string, dir bool, sector, size int) []byte {
+		r := make([]byte, 33+len(name))
+		r[0] = byte(len(r))
+		binary.LittleEndian.PutUint32(r[2:], uint32(sector))
+		binary.LittleEndian.PutUint32(r[10:], uint32(size))
+		if dir {
+			r[25] = 2
+		}
+		r[32] = byte(len(name))
+		copy(r[33:], name)
+		return r
+	}
+	sectors := func(size int) int { return (size + isoSector - 1) / isoSector }
+	listing := func(count int, extension string, sector, size int) []byte {
+		var entries []byte
+		for i := range count {
+			entries = append(entries, record(fmt.Sprintf("%05d.%s", i, extension), false, sector, size)...)
+		}
+		return entries
+	}
+	const streamAt, root, bdmv, playlistAt = 19, 20, 21, 23
+	clipAt := playlistAt + sectors(len(playlist))
+	playlistList := listing(playlists, "MPLS", playlistAt, len(playlist))
+	clipList := listing(clips, "CLPI", clipAt, len(clip))
+	streamList := record("00001.M2TS", false, 0, 0)
+	if clips > 0 {
+		streamList = listing(clips, "M2TS", streamAt, clipStream)
+	}
+	playlistsAt := clipAt + sectors(len(clip))
+	clipsAt := playlistsAt + sectors(len(playlistList))
+	streamsAt := clipsAt + sectors(len(clipList))
+	img := make([]byte, (streamsAt+sectors(len(streamList)))*isoSector)
+	volume := img[16*isoSector:]
+	volume[0] = 1
+	copy(volume[1:], "CD001")
+	binary.LittleEndian.PutUint16(volume[128:], isoSector)
+	copy(volume[156:], record("\x00", true, root, isoSector))
+	copy(img[root*isoSector:], record("BDMV", true, bdmv, isoSector))
+	copy(img[bdmv*isoSector:], slices.Concat(record("STREAM", true, streamsAt, len(streamList)),
+		record("PLAYLIST", true, playlistsAt, len(playlistList)), record("CLIPINF", true, clipsAt, len(clipList))))
+	copy(img[playlistAt*isoSector:], playlist)
+	copy(img[clipAt*isoSector:], clip)
+	copy(img[playlistsAt*isoSector:], playlistList)
+	copy(img[clipsAt*isoSector:], clipList)
+	copy(img[streamsAt*isoSector:], streamList)
+	return img
+}
+
+// countedImage counts the bytes read of an image.
+type countedImage struct {
+	r     io.ReaderAt
+	bytes int64
+}
+
+func (c *countedImage) ReadAt(p []byte, off int64) (int, error) {
+	n, err := c.r.ReadAt(p, off)
+	c.bytes += int64(n)
+	return n, err
+}
+
+// An image's playlists are opened from its PLAYLIST folder, listed once,
+// in an ISO 9660 file system and in a UDF one: an image of twice the
+// playlists has about twice the bytes read, each playlist costing its
+// entry in the folder, its own bytes and, in a UDF file system, its file
+// entry.
+func TestImagePlaylistsAreOpenedFromTheirFolder(t *testing.T) {
+	t.Parallel()
+	playlist := mplsOf(t, mplsItem{"00001", 1320})
+	udf := func(layout udfLayout) func(count int) []byte {
+		return func(count int) []byte {
+			files := map[string][]byte{"BDMV/STREAM/00001.m2ts": nil}
+			for i := range count {
+				files[fmt.Sprintf("BDMV/PLAYLIST/%05d.mpls", i)] = playlist
+			}
+			return buildUDF(files, layout)
+		}
+	}
+	for name, image := range map[string]func(count int) []byte{
+		"ISO 9660": func(count int) []byte { return playlistsISO(count, playlist) },
+		"UDF 2.50": udf(udfLayout{metadata: true}),
+		"UDF 2.01": udf(udfLayout{}),
+	} {
+		read := func(count int) int64 {
+			counted := &countedImage{r: readerOf(image(count))}
+			fsys, err := openDiscFS(counted)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			counted.bytes = 0
+			titles, err := imagePlaylists(fsys, chooseTitles)
+			if err != nil || len(titles) != 1 || titles[0].number != 0 || len(titles[0].clips) != 1 {
+				t.Fatalf("%s: %d playlists: %v %v", name, count, titles, err)
+			}
+			return counted.bytes
+		}
+		const few = 1000
+		small, large := read(few), read(2*few)
+		t.Logf("%s: %d bytes read for %d playlists, %d for %d", name, small, few, large, 2*few)
+		// A sector and a half a playlist, and the folders above them.
+		if bound := func(count int64) int64 { return count*3*isoSector/2 + 32*isoSector }; small > bound(few) || large > bound(2*few) {
+			t.Errorf("%s: %d bytes read for %d playlists, %d for %d", name, small, few, large, 2*few)
+		}
+		if large > 2*small+small/10 {
+			t.Errorf("%s: %d bytes read for %d playlists, %d for twice as many", name, small, few, large)
+		}
+	}
+}
+
+// An image of more playlists than maxDiscPlaylists has none read: in a
+// movies folder it is a Blu-ray disc's whose title FFmpeg's reader
+// chooses, in a shows folder no disc's. One of as many is read.
+func TestImagesOfTooManyPlaylistsHaveNoneRead(t *testing.T) {
+	t.Parallel()
+	playlist := mplsOf(t, mplsItem{"00001", 1320})
+	image, err := readDisc(readerOf(playlistsISO(maxDiscPlaylists, playlist)), KindMovies)
+	if err != nil || image.kind != imageBluRay || image.title != 0 || !slices.Equal(image.lengths, []time.Duration{22 * time.Minute}) {
+		t.Errorf("%d playlists: %+v %v", maxDiscPlaylists, image, err)
+	}
+
+	img := playlistsISO(maxDiscPlaylists+1, playlist)
+	counted := &countedImage{r: readerOf(img)}
+	fsys, err := openDiscFS(counted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counted.bytes = 0
+	if titles, err := imagePlaylists(fsys, chooseTitles); err == nil {
+		t.Errorf("%d playlists were read: %d titles", maxDiscPlaylists+1, len(titles))
+	}
+	// The folders' entries, and no playlist: 43 bytes an entry.
+	if listing := int64(maxDiscPlaylists+1) * 43; counted.bytes > listing+8*isoSector {
+		t.Errorf("%d bytes read, the PLAYLIST folder is %d", counted.bytes, listing)
+	}
+	if image, err := readDisc(readerOf(img), KindMovies); err != nil || image.kind != imageBluRay || image.title != -1 || image.lengths != nil {
+		t.Errorf("in a movies folder: %+v %v", image, err)
+	}
+	if image, err := readDisc(readerOf(img), KindShows); !errors.Is(err, errNoEpisodes) || image.kind != "" {
+		t.Errorf("in a shows folder: %+v %v", image, err)
 	}
 }

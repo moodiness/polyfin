@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -86,6 +87,18 @@ func writeMPLS(t *testing.T, path string, items ...mplsItem) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// mplsOf is the playlist file writeMPLS writes of items.
+func mplsOf(t *testing.T, items ...mplsItem) []byte {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "00000.mpls")
+	writeMPLS(t, path, items...)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 // A playlist file tells the clips it plays, in order, and for how long.
@@ -368,5 +381,57 @@ func TestDiscStreamsBecomePlaylists(t *testing.T) {
 	e.idle(share.ID)
 	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"The General (1926)/BDMV/PLAYLIST/00000.mpls": "tt0017925"}) {
 		t.Errorf("a share: %v", got)
+	}
+}
+
+// A disc folder of more playlists than maxDiscPlaylists, or of playlists
+// weighing more together than an image's may, has none read: a scan of a
+// movies folder keeps its largest stream, as of a disc whose playlists
+// cannot be read, and one of a shows folder leaves it out. A disc within
+// both bounds has its titles.
+func TestDiscsOfTooManyPlaylistsHaveNoneRead(t *testing.T) {
+	t.Parallel()
+	playlist := mplsOf(t, mplsItem{"00001", 1320})
+	disc := func(folder string, playlists int) map[string]found {
+		files := map[string]found{folder + "/BDMV/STREAM/00001.m2ts": {size: 500}, folder + "/BDMV/STREAM/00002.m2ts": {size: 900}}
+		for i := range playlists {
+			files[fmt.Sprintf("%s/BDMV/PLAYLIST/%05d.mpls", folder, i)] = found{size: int64(len(playlist))}
+		}
+		return files
+	}
+	opened := 0
+	open := func(data []byte) func(string) (io.ReadCloser, error) {
+		return func(string) (io.ReadCloser, error) {
+			opened++
+			return io.NopCloser(bytes.NewReader(data)), nil
+		}
+	}
+	title := map[string]found{"Movie (2008)/BDMV/PLAYLIST/00000.mpls": {size: 500, length: 22 * time.Minute}}
+	stream := map[string]found{"Movie (2008)/BDMV/STREAM/00002.m2ts": {size: 900}}
+	// A playlist as large as one is read, most of it padding.
+	large := append(slices.Clone(playlist), make([]byte, maxPlaylistSize-len(playlist))...)
+	const weighing = maxImagePlaylists / maxPlaylistSize
+	for _, tc := range []struct {
+		name      string
+		kind      string
+		folder    string
+		playlists int
+		data      []byte
+		want      map[string]found
+		opened    int
+	}{
+		{"as many playlists as a disc has", KindMovies, "Movie (2008)", maxDiscPlaylists, playlist, title, maxDiscPlaylists},
+		{"more playlists", KindMovies, "Movie (2008)", maxDiscPlaylists + 1, playlist, stream, 0},
+		{"more playlists of a show's disc", KindShows, "Show/Disc 1", maxDiscPlaylists + 1, playlist, map[string]found{}, 0},
+		{"playlists weighing as much as a disc's may", KindMovies, "Movie (2008)", weighing, large, title, weighing},
+		{"playlists weighing more", KindMovies, "Movie (2008)", weighing + 1, large, stream, weighing + 1},
+		{"a show's disc's playlists weighing more", KindShows, "Show/Disc 1", weighing + 1, large, map[string]found{}, weighing + 1},
+	} {
+		files := disc(tc.folder, tc.playlists)
+		opened = 0
+		collapseDiscs(tc.kind, files, open(tc.data))
+		if !maps.Equal(files, tc.want) || opened != tc.opened {
+			t.Errorf("%s: %v, %d playlists opened", tc.name, files, opened)
+		}
 	}
 }

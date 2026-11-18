@@ -518,6 +518,46 @@ func (img *udfImage) file(path ...string) (*io.SectionReader, error) {
 	return img.reader(node), nil
 }
 
+// files lists the folder at path's entries, each opened from the file
+// entry its identifier names.
+func (img *udfImage) files(path ...string) ([]fsEntry, error) {
+	dir, err := img.lookup(path...)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := img.list(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]fsEntry, len(entries))
+	for i, e := range entries {
+		file := func() (udfNode, error) {
+			node, err := img.node(e.at)
+			if err == nil && node.dir && e.dir {
+				err = fmt.Errorf("%w: %s is a folder", errNotUDF, e.name)
+			}
+			return node, err
+		}
+		files[i] = fsEntry{name: e.name, open: func() (*io.SectionReader, error) {
+			node, err := file()
+			if err != nil {
+				return nil, err
+			}
+			return img.reader(node), nil
+		}, place: func() (filePlace, error) {
+			node, err := file()
+			if err != nil {
+				return filePlace{}, err
+			}
+			if node.embedded != nil {
+				return filePlace{}, fmt.Errorf("%w: %s is no file of extents", errNotUDF, e.name)
+			}
+			return filePlace{spans: node.spans, size: node.size}, nil
+		}}
+	}
+	return files, nil
+}
+
 // spanReader reads the bytes of spans of r, one after the other.
 type spanReader struct {
 	r     io.ReaderAt
@@ -547,16 +587,4 @@ func (s spanReader) ReadAt(p []byte, off int64) (int, error) {
 		return read, io.EOF
 	}
 	return read, nil
-}
-
-// spansOf locates the file at path in the image: its extents, in order.
-func (img *udfImage) spansOf(path ...string) ([]span, error) {
-	node, err := img.lookup(path...)
-	if err != nil {
-		return nil, err
-	}
-	if node.dir || node.embedded != nil {
-		return nil, fmt.Errorf("%w: %s is no file of extents", errNotUDF, strings.Join(path, "/"))
-	}
-	return node.spans, nil
 }
