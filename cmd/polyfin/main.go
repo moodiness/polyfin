@@ -943,7 +943,8 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 			// Silo's apps, while the settings allow them, through the
 			// Jellyfin API's answers.
 			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI, Genres: jellyfinAPI.CatalogGenres,
-				DB: pool, QuickConnect: quickConnect, BoxSets: movieCollections, Logger: logger, ContainerTracks: jellyfinAPI.ContainerTracks}),
+				DB: pool, QuickConnect: quickConnect, SignIns: signIns, BoxSets: movieCollections, Logger: logger,
+				ContainerTracks: jellyfinAPI.ContainerTracks}),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

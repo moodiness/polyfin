@@ -33,6 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/boxset"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/throttle"
 )
 
 // Accounts is what the API reads and does of the accounts.
@@ -65,6 +66,10 @@ type Options struct {
 	// QuickConnect holds the requests TVs sign in with a code through
 	// (see deviceLoginRoutes).
 	QuickConnect *quickconnect.Store
+	// SignIns throttles failed sign-ins: the codes a signed-in user looks
+	// up, approves or denies that no TV waits with count toward it, as
+	// in the Jellyfin API and the admin app (see deviceByCode).
+	SignIns *throttle.Failures
 	// BoxSets knows the TMDB collections of movies, which the apps show as
 	// box sets (see boxsets.go); nil for none.
 	BoxSets *boxset.Store

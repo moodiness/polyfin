@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/diskspace"
+	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/mediasegments"
@@ -1253,38 +1254,97 @@ func (h *handler) revokeOwnDevice(w http.ResponseWriter, r *http.Request) {
 	h.revokeDevice(w, r, sessionFrom(r.Context()).User.ID, "id")
 }
 
-// quickConnectRequest describes the device waiting behind a code. A code
-// already decided, or withdrawn, waits no more.
-func (h *handler) quickConnectRequest(w http.ResponseWriter, r *http.Request) {
+// quickConnectPending is the request waiting behind a code, for the
+// signed-in user who gives it, or false after answering: 409
+// quick_connect_disabled, 404 unknown_code for a code no request waits
+// with, already decided or withdrawn ones included, or 429. Such a code
+// counts as a wrong password does, toward the attempts of the user and of
+// their client's address, in the Jellyfin API and Silo's apps too (see
+// quickconnect.AttemptKey); a known one counts for nothing.
+func (h *handler) quickConnectPending(w http.ResponseWriter, r *http.Request, code string) (quickconnect.Request, bool) {
 	if !h.Accounts.Settings().QuickConnectEnabled {
 		writeError(w, http.StatusConflict, "quick_connect_disabled")
+		return quickconnect.Request{}, false
+	}
+	attempt := h.reserve(w, forwarded.Client(r), quickconnect.AttemptKey(sessionFrom(r.Context()).User.ID))
+	if attempt == nil {
+		return quickconnect.Request{}, false
+	}
+	defer attempt.Cancel()
+	request, err := h.QuickConnect.ByCode(code)
+	if err != nil || request.State != quickconnect.Pending {
+		attempt.Fail()
+		writeError(w, http.StatusNotFound, "unknown_code")
+		return quickconnect.Request{}, false
+	}
+	return request, true
+}
+
+// quickConnectRequest describes the device waiting behind a code to the
+// signed-in user about to approve it. The names are the device's own
+// words; address is where the server saw it ask from, and network tells
+// that place from the user's: "own", their own address, "local", both on
+// the local network, or "other". identity tells whether the approval asks
+// who they are (see quickConnectApprove).
+func (h *handler) quickConnectRequest(w http.ResponseWriter, r *http.Request) {
+	request, ok := h.quickConnectPending(w, r, r.PathValue("code"))
+	if !ok {
 		return
 	}
-	request, err := h.QuickConnect.ByCode(r.PathValue("code"))
-	if err != nil || request.State != quickconnect.Pending {
-		writeError(w, http.StatusNotFound, "unknown_code")
-		return
+	network := "other"
+	switch {
+	case quickconnect.SameClient(request.Origin.Address, forwarded.Client(r)):
+		network = "own"
+	case request.Origin.Local && forwarded.InLocalNetwork(r):
+		network = "local"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"deviceName":  request.DeviceName,
 		"appName":     request.AppName,
 		"appVersion":  request.AppVersion,
 		"requestedAt": request.CreatedAt,
+		"address":     request.Origin.Address,
+		"network":     network,
+		"identity":    sessionFrom(r.Context()).User.TwoStep,
 	})
 }
 
+// quickConnectApprove approves a code for the signed-in user: the device
+// waiting behind it then signs in as them, without their password. The
+// code alone does not approve, since a link carries one: confirmation is
+// the code as the person entered it from their device's screen, and must
+// be the same; 400 unconfirmed_code otherwise. A user with two-step
+// sign-in also confirms who they are, with a code or their password (see
+// checkIdentity), since the device signs in without the second step; 403
+// identity_required without either.
 func (h *handler) quickConnectApprove(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Code string `json:"code"`
+		Code         string   `json:"code"`
+		Confirmation string   `json:"confirmation"`
+		Identity     identity `json:"identity"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if !h.Accounts.Settings().QuickConnectEnabled {
-		writeError(w, http.StatusConflict, "quick_connect_disabled")
+	if !quickconnect.SameCode(body.Code, body.Confirmation) {
+		writeError(w, http.StatusBadRequest, "unconfirmed_code")
 		return
 	}
-	if err := h.QuickConnect.Authorize(body.Code, sessionFrom(r.Context()).User.ID); err != nil {
+	request, ok := h.quickConnectPending(w, r, body.Code)
+	if !ok {
+		return
+	}
+	user := sessionFrom(r.Context()).User
+	if user.TwoStep {
+		if body.Identity == (identity{}) {
+			writeError(w, http.StatusForbidden, "identity_required")
+			return
+		}
+		if !h.checkIdentity(w, r, user, body.Identity) {
+			return
+		}
+	}
+	if err := h.QuickConnect.Authorize(request.Code, user.ID); err != nil {
 		writeError(w, http.StatusNotFound, "unknown_code")
 		return
 	}

@@ -306,6 +306,9 @@ func New(options Options) http.Handler {
 	// of the default one: whoever closes the idle connections of
 	// http.DefaultTransport cannot break a sign-in (#958).
 	h.provider = oidc.New(&http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: providerTimeout}, h.now)
+	// A sign-in waiting for its second step ends with the account's
+	// sessions when the account is signed out everywhere.
+	options.Accounts.OnSignOutEverywhere(h.steps.forget)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	// A configure link opens with no session, from any browser or app: a

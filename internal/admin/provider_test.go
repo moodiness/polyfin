@@ -513,11 +513,14 @@ func TestProviderSignsInTheWebClient(t *testing.T) {
 	if status, _ := api.browser().exchange(api.jellyfinToken(judy)); status != http.StatusUnauthorized {
 		t.Errorf("a password device of a two-step account: %d", status)
 	}
-	request, err := api.quickConnect.Initiate("tv-id", "Living room TV", "Swiftfin", "1.3")
+	request, err := api.quickConnect.Initiate(fromHome, "tv-id", "Living room TV", "Swiftfin", "1.3")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status, _, _ := admin.call(http.MethodPost, "/quick-connect", map[string]string{"code": request.Code}); status != http.StatusNoContent {
+	// The account has two-step sign-in: the approval asks who they are.
+	confirmed := approval(request.Code)
+	confirmed["identity"] = map[string]string{"password": "correct horse"}
+	if status, _, _ := admin.call(http.MethodPost, "/quick-connect", confirmed); status != http.StatusNoContent {
 		t.Fatalf("approval: %d", status)
 	}
 	if approved, _ := api.quickConnect.BySecret(request.Secret); approved.User == nil || *approved.User != judy.ID {
@@ -543,11 +546,11 @@ func TestProviderSessionApprovesQuickConnect(t *testing.T) {
 	if location, _ := b.providerSignIn("admin"); outcome(location) != "" || b.sessionUser()["id"] != root.ID.String() {
 		t.Fatalf("sent to %s", location)
 	}
-	request, err := api.quickConnect.Initiate("tv-id", "Living room TV", "Swiftfin", "1.3")
+	request, err := api.quickConnect.Initiate(fromHome, "tv-id", "Living room TV", "Swiftfin", "1.3")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status, _, _ := b.call(http.MethodPost, "/quick-connect", map[string]string{"code": request.Code}); status != http.StatusNoContent {
+	if status, _, _ := b.call(http.MethodPost, "/quick-connect", approval(request.Code)); status != http.StatusNoContent {
 		t.Fatalf("approval: %d", status)
 	}
 	if approved, _ := api.quickConnect.BySecret(request.Secret); approved.User == nil || *approved.User != root.ID {

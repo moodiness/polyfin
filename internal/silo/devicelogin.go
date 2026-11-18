@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,7 +26,10 @@ import (
 // ended by Quick Connect's lifetime; and signed in to by Jellyfin's
 // /Users/AuthenticateWithQuickConnect, which refuses a disabled or ended
 // account. The code has the eight digits Silo's apps take; the TV's
-// secret, its device_code, signs in once.
+// secret, its device_code, signs in once. A request keeps the address it
+// was opened from, which the lookup answers as ip_address_hint, and the
+// codes no TV waits with count toward the sign-in throttle (see
+// deviceByCode).
 //
 // Quick Connect's setting turns it on and off. Polyfin does not approve
 // Jellyfin apps' 6-digit codes from Silo's apps (jellyfin_quick_connect),
@@ -148,14 +152,8 @@ func (s *Server) deviceStart(w http.ResponseWriter, r *http.Request) {
 	if len(platform) > 64 || !utf8.ValidString(platform) {
 		platform = ""
 	}
-	request, err := s.options.QuickConnect.InitiateSilo(device.DeviceID, device.DeviceName, platform, device.Client, device.ClientVersion)
-	if errors.Is(err, quickconnect.ErrFull) {
-		// Too many TVs wait with a code: the apps retry a 429 as Silo's
-		// sign-in limit, and tell the user after a minute of them.
-		w.Header().Set("Retry-After", "60")
-		problem(w, http.StatusTooManyRequests, "rate_limited", "Too many devices are signing in; try again later.")
-		return
-	}
+	request, err := s.options.QuickConnect.InitiateSilo(quickconnect.Origin{Address: forwarded.Client(r), Local: forwarded.InLocalNetwork(r)},
+		device.DeviceID, device.DeviceName, platform, device.Client, device.ClientVersion)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -291,14 +289,27 @@ func (s *Server) deviceCancel(w http.ResponseWriter, r *http.Request) {
 	}{deviceStates[state]})
 }
 
-// deviceByCode is the request of Silo's apps behind a code, or false after
-// answering that there is none.
-func (s *Server) deviceByCode(w http.ResponseWriter, code string) (quickconnect.Request, bool) {
+// deviceByCode is the request of Silo's apps behind a code, for the
+// signed-in user who gives it, or false after answering that there is
+// none. Such a code counts as a wrong password does, toward the attempts
+// of the user and of their client's address, in the Jellyfin API and the
+// admin app too (see quickconnect.AttemptKey): past them the answer is
+// 429, as the apps read Silo's sign-in limit, and the requests waiting
+// stay as they are. A known code counts for nothing.
+func (s *Server) deviceByCode(w http.ResponseWriter, r *http.Request, v viewer, code string) (quickconnect.Request, bool) {
 	if s.deviceLoginOff(w) {
 		return quickconnect.Request{}, false
 	}
+	attempt, wait := s.options.SignIns.Reserve(forwarded.Client(r), quickconnect.AttemptKey(v.user.ID))
+	if attempt == nil {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		problem(w, http.StatusTooManyRequests, "rate_limited", "Too many attempts; try again later.")
+		return quickconnect.Request{}, false
+	}
+	defer attempt.Cancel()
 	request, err := s.options.QuickConnect.ByCode(code)
 	if err != nil || request.Kind != quickconnect.Silo {
+		attempt.Fail()
 		problem(w, http.StatusNotFound, "not_found", "No TV is waiting with this code.")
 		return quickconnect.Request{}, false
 	}
@@ -306,9 +317,10 @@ func (s *Server) deviceByCode(w http.ResponseWriter, code string) (quickconnect.
 }
 
 // deviceLookup describes a TV's request to the signed-in user about to
-// decide it, and then tells them where it stands.
-func (s *Server) deviceLookup(w http.ResponseWriter, r *http.Request, _ viewer) {
-	request, ok := s.deviceByCode(w, r.URL.Query().Get("code"))
+// decide it, with the address it was opened from, and then tells them
+// where it stands.
+func (s *Server) deviceLookup(w http.ResponseWriter, r *http.Request, v viewer) {
+	request, ok := s.deviceByCode(w, r, v, r.URL.Query().Get("code"))
 	if !ok {
 		return
 	}
@@ -330,25 +342,25 @@ func (s *Server) deviceLookup(w http.ResponseWriter, r *http.Request, _ viewer) 
 		Temporary      bool   `json:"temporary"`
 		ServerID       string `json:"server_id"`
 		ServerName     string `json:"server_name"`
-	}{deviceStates[request.State], code, "", request.DeviceName, request.DevicePlatform, "", instant(request.CreatedAt),
+	}{deviceStates[request.State], code, "", request.DeviceName, request.DevicePlatform, request.Origin.Address, instant(request.CreatedAt),
 		instant(request.ExpiresAt()), "device_login", false, s.options.ServerID, settings.ServerName})
 }
 
 // deviceApprove approves a TV's code for the signed-in user, once: the TV
 // then signs in as them.
 func (s *Server) deviceApprove(w http.ResponseWriter, r *http.Request, v viewer) {
-	s.decideDevice(w, r, "approved", func(code string) error { return s.options.QuickConnect.Authorize(code, v.user.ID) })
+	s.decideDevice(w, r, v, "approved", func(code string) error { return s.options.QuickConnect.Authorize(code, v.user.ID) })
 }
 
 // deviceDeny turns a TV's code down: the TV says the sign-in was declined.
-func (s *Server) deviceDeny(w http.ResponseWriter, r *http.Request, _ viewer) {
-	s.decideDevice(w, r, "denied", s.options.QuickConnect.Deny)
+func (s *Server) deviceDeny(w http.ResponseWriter, r *http.Request, v viewer) {
+	s.decideDevice(w, r, v, "denied", s.options.QuickConnect.Deny)
 }
 
 // decideDevice decides, with decide, the code the request's body names,
 // and answers the state it took. A token of a browser link names nothing:
 // Polyfin's links carry the code.
-func (s *Server) decideDevice(w http.ResponseWriter, r *http.Request, status string, decide func(code string) error) {
+func (s *Server) decideDevice(w http.ResponseWriter, r *http.Request, v viewer, status string, decide func(code string) error) {
 	var body struct {
 		Code  string `json:"code"`
 		Token string `json:"token"`
@@ -360,7 +372,7 @@ func (s *Server) decideDevice(w http.ResponseWriter, r *http.Request, status str
 		validationProblem(w, "body.code", "required", "The code the TV shows is required.")
 		return
 	}
-	request, ok := s.deviceByCode(w, body.Code)
+	request, ok := s.deviceByCode(w, r, v, body.Code)
 	if !ok {
 		return
 	}

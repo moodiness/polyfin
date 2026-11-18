@@ -326,6 +326,9 @@ func New(options Options) *Handler {
 		}
 	})
 	options.Accounts.OnSignOut(h.signedOut)
+	// What a user approved in Quick Connect ends with their devices when
+	// their account is signed out everywhere.
+	options.Accounts.OnSignOutEverywhere(options.QuickConnect.Withdraw)
 	if options.Thumbnails != nil {
 		options.Thumbnails.WatchPlaybacks(h.thumbnailPlaybacks)
 	}

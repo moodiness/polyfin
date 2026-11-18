@@ -497,7 +497,7 @@ func TestQuickConnectApproval(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	member := api.signedIn("member", false)
-	request, err := api.quickConnect.Initiate("tv-id", "Living room TV", "Swiftfin", "1.3")
+	request, err := api.quickConnect.Initiate(fromHome, "tv-id", "Living room TV", "Swiftfin", "1.3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +508,7 @@ func TestQuickConnectApproval(t *testing.T) {
 	if status != http.StatusOK || body["deviceName"] != "Living room TV" || body["appName"] != "Swiftfin" {
 		t.Fatalf("lookup: %d %v", status, body)
 	}
-	if status, _, _ := member.call(http.MethodPost, "/quick-connect", map[string]string{"code": request.Code}); status != http.StatusNoContent {
+	if status, _, _ := member.call(http.MethodPost, "/quick-connect", approval(request.Code)); status != http.StatusNoContent {
 		t.Fatalf("approval: %d", status)
 	}
 	approved, _ := api.quickConnect.BySecret(request.Secret)
@@ -526,7 +526,7 @@ func TestQuickConnectApprovesASiloCodeOnce(t *testing.T) {
 	api := newTestAPI(t, 10)
 	member := api.signedIn("member", false)
 	other := api.signedIn("other", false)
-	request, err := api.quickConnect.InitiateSilo("tv-id", "Living room", "tvos", "Silo", "2.0")
+	request, err := api.quickConnect.InitiateSilo(fromHome, "tv-id", "Living room", "tvos", "Silo", "2.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,13 +534,13 @@ func TestQuickConnectApprovesASiloCodeOnce(t *testing.T) {
 	if status, body, _ := member.call(http.MethodGet, "/quick-connect/"+request.Code, nil); status != http.StatusOK || body["deviceName"] != "Living room" {
 		t.Fatalf("lookup: %d %v", status, body)
 	}
-	if status, _, _ := member.call(http.MethodPost, "/quick-connect", map[string]string{"code": shown}); status != http.StatusNoContent {
+	if status, _, _ := member.call(http.MethodPost, "/quick-connect", approval(shown)); status != http.StatusNoContent {
 		t.Fatalf("approval: %d", status)
 	}
 	if status, body, _ := other.call(http.MethodGet, "/quick-connect/"+request.Code, nil); status != http.StatusNotFound || body["error"] != "unknown_code" {
 		t.Errorf("lookup once approved: %d %v", status, body)
 	}
-	if status, body, _ := other.call(http.MethodPost, "/quick-connect", map[string]string{"code": request.Code}); status != http.StatusNotFound || body["error"] != "unknown_code" {
+	if status, body, _ := other.call(http.MethodPost, "/quick-connect", approval(request.Code)); status != http.StatusNotFound || body["error"] != "unknown_code" {
 		t.Errorf("another approval: %d %v", status, body)
 	}
 	approved, _ := api.quickConnect.BySecret(request.Secret)

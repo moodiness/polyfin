@@ -79,6 +79,19 @@ func (p *pendingSteps) remove(token string) {
 	delete(p.steps, string(accounts.HashAdminToken(token)))
 }
 
+// forget ends the steps under way for user, when their account is signed
+// out everywhere: a step taken with the password before does not open a
+// session after.
+func (p *pendingSteps) forget(user accounts.ID) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for key, step := range p.steps {
+		if step.user == user {
+			delete(p.steps, key)
+		}
+	}
+}
+
 func setStepCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     stepCookieName,

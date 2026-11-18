@@ -69,6 +69,8 @@ const common = {
     not_revealable: 'This connection holds no key to show.',
     unknown_code: 'No device is waiting with this code. It may have expired or been mistyped.',
     quick_connect_disabled: 'Quick Connect is turned off on this server.',
+    unconfirmed_code: 'Type the code the device shows before approving it.',
+    identity_required: 'Confirm it is you with a two-step code or your password.',
     name_taken: 'This name is already used by another user.',
     invalid_invite_uses: 'Accounts an invite link may create must be a whole number from 1 to 100.',
     invalid_invite_expiry: 'Choose when the invite link expires from the list.',

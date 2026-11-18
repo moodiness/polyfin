@@ -3,11 +3,14 @@ package jellyfin
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/throttle"
 )
 
 const quickConnectDisabled = "Quick connect is disabled"
@@ -39,11 +42,10 @@ func (h *Handler) quickConnectInitiate(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	request, err := h.QuickConnect.Initiate(c.DeviceID, c.Device, c.Client, c.Version)
-	if errors.Is(err, quickconnect.ErrFull) {
-		processingError(w, http.StatusServiceUnavailable)
-		return
-	}
+	// The request keeps where it was asked from, which the approver is
+	// shown, and which bounds the requests one client holds.
+	request, err := h.QuickConnect.Initiate(quickconnect.Origin{Address: forwarded.Client(r), Local: forwarded.InLocalNetwork(r)},
+		c.DeviceID, c.Device, c.Client, c.Version)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -64,11 +66,27 @@ func (h *Handler) quickConnectConnect(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newQuickConnectResult(request))
 }
 
+// quickConnectAttempt counts a code before it is looked up, toward the
+// attempts of the user who gives it and of their client's address, as a
+// password is counted (see reserve), or answers 429 when one of them
+// exhausted its failed attempts, and then returns nil. An unknown code is
+// a failed attempt; a known one is taken back.
+func (h *Handler) quickConnectAttempt(w http.ResponseWriter, r *http.Request, user accounts.ID) *throttle.Attempt {
+	attempt, wait := h.SignIns.Reserve(forwarded.Client(r), quickconnect.AttemptKey(user))
+	if attempt == nil {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		processingError(w, http.StatusTooManyRequests)
+	}
+	return attempt
+}
+
 // quickConnectAuthorize approves a code for the caller or, for an
 // administrator, for the user named by userId. A code is approved once, as
 // Jellyfin refuses a request already authorized
 // (Emby.Server.Implementations/QuickConnect/QuickConnectManager.cs,
-// AuthorizeRequest, lines 146-149 at v12.4).
+// AuthorizeRequest, lines 146-149 at v12.4). Codes that no request waits
+// with count toward the caller's attempts (see quickConnectAttempt): past
+// them the answer is 429, and the requests waiting stay as they are.
 func (h *Handler) quickConnectAuthorize(w http.ResponseWriter, r *http.Request) {
 	if !h.Accounts.Settings().QuickConnectEnabled {
 		writeJSON(w, http.StatusUnauthorized, quickConnectDisabled)
@@ -88,7 +106,13 @@ func (h *Handler) quickConnectAuthorize(w http.ResponseWriter, r *http.Request) 
 		}
 		user = id
 	}
+	attempt := h.quickConnectAttempt(w, r, caller.User.ID)
+	if attempt == nil {
+		return
+	}
+	defer attempt.Cancel()
 	if err := h.QuickConnect.Authorize(query(r, "code"), user); err != nil {
+		attempt.Fail()
 		processingError(w, http.StatusNotFound)
 		return
 	}
@@ -99,7 +123,9 @@ func (h *Handler) quickConnectAuthorize(w http.ResponseWriter, r *http.Request) 
 // request's secret. Like Jellyfin, the secret of a Jellyfin app's request
 // stays valid until the request expires, so an app retrying after a network
 // error is not refused; that of one of Silo's apps signs in once (see
-// quickconnect.Store.Redeem).
+// quickconnect.Store.Redeem). It signs in the device that asked, by its
+// identifier, and no other; and no longer once the approver's account was
+// signed out everywhere (see quickconnect.Store.Withdraw).
 func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Request) {
 	c := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	var body struct{ Secret string }
@@ -112,7 +138,7 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 		return
 	}
 	request, err := h.QuickConnect.BySecret(body.Secret)
-	if err != nil || request.State != quickconnect.Approved {
+	if err != nil || request.State != quickconnect.Approved || request.DeviceID != c.DeviceID {
 		processingError(w, http.StatusNotFound)
 		return
 	}

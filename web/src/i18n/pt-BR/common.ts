@@ -67,6 +67,8 @@ const common: typeof en = {
     unknown_code:
       'Nenhum dispositivo está aguardando com este código. Ele pode ter expirado ou sido digitado incorretamente.',
     quick_connect_disabled: 'O Quick Connect está desativado neste servidor.',
+    unconfirmed_code: 'Digite o código que o dispositivo exibe antes de aprová-lo.',
+    identity_required: 'Confirme que é você com um código de duas etapas ou a sua senha.',
     name_taken: 'Este nome já está sendo usado por outro usuário.',
     invalid_invite_uses:
       'As contas que um link de convite pode criar devem ser um número inteiro de 1 a 100.',

@@ -21,6 +21,21 @@ const home: typeof en = {
     device: 'Dispositivo',
     app: 'Aplicativo',
     requested: 'Solicitado',
+    address: 'Endereço',
+    network: {
+      own: 'Seu endereço',
+      local: 'Sua rede local',
+      other: 'Outra rede',
+    },
+    claims:
+      'O próprio dispositivo informa seu nome e seu aplicativo. O endereço é aquele de onde o Polyfin recebeu a solicitação.',
+    otherNetwork:
+      'Este dispositivo faz a solicitação a partir de uma rede diferente da sua. Aprove-o somente se você mesmo iniciou este login, em um dispositivo que está à sua frente.',
+    linked:
+      'Você chegou aqui por um link ou um código QR. Para aprovar este dispositivo, digite o código exibido na tela dele.',
+    linkedHint: 'Digite o código que o dispositivo exibe. Os códigos expiram após 10 minutos.',
+    identity:
+      'Sua conta usa o login em duas etapas, e este dispositivo vai entrar sem ele. Confirme que é você.',
     approve: 'Aprovar e conectar este dispositivo',
     approving: 'Aprovando…',
     approved: (device: string, user: string) => `${device} agora está conectado como ${user}.`,

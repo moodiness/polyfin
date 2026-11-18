@@ -21,6 +21,22 @@ const home: typeof en = {
     device: 'Appareil',
     app: 'Application',
     requested: 'Demande',
+    address: 'Adresse',
+    network: {
+      own: 'Votre adresse',
+      local: 'Votre réseau local',
+      other: 'Un autre réseau',
+    },
+    claims:
+      'L’appareil donne lui-même son nom et son application. L’adresse est celle d’où Polyfin a reçu sa demande.',
+    otherNetwork:
+      'Cet appareil fait sa demande depuis un autre réseau que le vôtre. Ne l’autorisez que si vous avez lancé cette connexion vous-même, sur un appareil que vous avez sous les yeux.',
+    linked:
+      'Vous arrivez ici par un lien ou un code QR. Pour autoriser cet appareil, saisissez le code affiché sur son écran.',
+    linkedHint:
+      'Saisissez le code que l’appareil affiche. Les codes expirent au bout de 10 minutes.',
+    identity:
+      'Votre compte utilise la connexion en deux étapes, et cet appareil se connectera sans elle. Confirmez que c’est bien vous.',
     approve: 'Autoriser et connecter cet appareil',
     approving: 'Autorisation…',
     approved: (device: string, user: string) =>

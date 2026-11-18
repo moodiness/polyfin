@@ -406,3 +406,68 @@ func TestUnreadableTwoStepSecret(t *testing.T) {
 		t.Errorf("turned off: %d %v", status, body)
 	}
 }
+
+// A password change signs the account out everywhere, a sign-in waiting
+// for its code included: the step was taken with the password just
+// replaced, and opens no session after, whoever replaced it.
+func TestAPasswordChangeEndsAPendingSecondStep(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	judy := api.signedIn("judy", false)
+	secret, _ := turnOnTwoStep(t, judy)
+	id, err := accounts.ParseID(judy.sessionUser()["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// refused checks that a step taken before the change ends there.
+	refused := func(waiting browser) {
+		t.Helper()
+		status, body, _ := waiting.call(http.MethodPost, "/session/two-step", map[string]string{"code": code(t, secret, 1)})
+		if status != http.StatusUnauthorized || body["error"] != "two_step_expired" {
+			t.Errorf("the code on the former password's step: %d %v, want 401 two_step_expired", status, body)
+		}
+		if waiting.hasSession() {
+			t.Error("a session from the former password's step")
+		}
+	}
+
+	// The password is entered: no session yet. Then judy replaces it from
+	// her own session, which stays.
+	waiting, status, body := api.password("judy")
+	if status != http.StatusOK || body["twoStep"] != "code" || waiting.hasSession() {
+		t.Fatalf("password: %d %v", status, body)
+	}
+	if status, body, _ := judy.call(http.MethodPut, "/account/password",
+		map[string]string{"currentPassword": "correct horse", "newPassword": "another horse entirely"}); status != http.StatusNoContent {
+		t.Fatalf("judy's own password change: %d %v", status, body)
+	}
+	if !judy.hasSession() {
+		t.Error("the session that changed the password ended")
+	}
+	refused(waiting)
+
+	// So does a step taken with that password, once an administrator
+	// replaced it in turn.
+	again := api.browser()
+	if status, body, _ := again.call(http.MethodPost, "/session", map[string]string{"name": "judy", "password": "another horse entirely"}); status != http.StatusOK ||
+		body["twoStep"] != "code" {
+		t.Fatalf("the new password: %d %v", status, body)
+	}
+	next := "a third horse altogether"
+	if _, err := api.store.UpdateUser(t.Context(), id, accounts.UserChanges{Password: &next}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if judy.hasSession() {
+		t.Error("judy's session after an administrator replaced the password")
+	}
+	refused(again)
+
+	// The password now in use still leads to a step that signs in.
+	last := api.browser()
+	if status, body, _ := last.call(http.MethodPost, "/session", map[string]string{"name": "judy", "password": next}); status != http.StatusOK || body["twoStep"] != "code" {
+		t.Fatalf("the password in use: %d %v", status, body)
+	}
+	if status, body, _ := last.call(http.MethodPost, "/session/two-step", map[string]string{"code": code(t, secret, 1)}); status != http.StatusOK || !last.hasSession() {
+		t.Errorf("the code on the step of the password in use: %d %v", status, body)
+	}
+}

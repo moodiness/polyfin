@@ -361,21 +361,137 @@ func TestSiloTVCodesFollowTheSettings(t *testing.T) {
 	}
 }
 
-// While too many TVs wait with a code, another is told to try again
-// later, as the apps read Silo's sign-in limit.
-func TestSiloTVCodesWhileTooManyWait(t *testing.T) {
+// While as many TVs wait with a code as the server keeps, another still
+// gets one: the oldest request gives way, and no TV is told to try again
+// later.
+func TestSiloTVGetsACodeWhileManyWait(t *testing.T) {
 	t.Parallel()
 	store := quickconnect.New()
-	for n := range 10_000 {
-		if _, err := store.InitiateSilo("tv-"+strconv.Itoa(n), "TV", "tvos", "Silo", "1"); err != nil {
-			break
+	var first, last quickconnect.Request
+	// More than the store keeps, each from an address of its own.
+	for n := range 1200 {
+		from := quickconnect.Origin{Address: "10." + strconv.Itoa(n/250) + "." + strconv.Itoa(n%250) + ".1"}
+		request, err := store.InitiateSilo(from, "tv", "TV", "tvos", "Silo", "1")
+		if err != nil {
+			t.Fatalf("request %d: %v", n+1, err)
 		}
+		if n == 0 {
+			first = request
+		}
+		last = request
 	}
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) { o.QuickConnect = store })
 	allowSilo(t, s)
 	a := servingSilo(t, s)
-	status, data := a.tvCall(t, http.MethodPost, "/api/v2/auth/device/start", map[string]string{"device_name": "Living room"})
-	if status != silotest.DeviceRefusals["busy"] || problemCode(data) != "rate_limited" {
-		t.Errorf("start: %d %s", status, data)
+	_, secret := a.startCode(t)
+	if state, _ := a.poll(t, secret); state != "pending" {
+		t.Errorf("the TV's request while many wait: %s", state)
+	}
+	if _, err := store.BySecret(first.Secret); err == nil {
+		t.Error("the oldest request did not give way")
+	}
+	if _, err := store.BySecret(last.Secret); err != nil {
+		t.Errorf("the request opened just before the TV's: %v", err)
+	}
+}
+
+// The phone about to decide is shown where the server saw the TV ask from,
+// beside the names the TV gave itself.
+func TestSiloLookupTellsWhereATVAskedFrom(t *testing.T) {
+	t.Parallel()
+	a, _ := codeServer(t)
+	a.user("alice", nil)
+	phone, _ := a.signIn(t, "alice")
+	code, _ := a.startCode(t)
+	status, data := a.do(t, http.MethodGet, "/api/v2/auth/device?code="+code, phone, "", nil)
+	var shown struct {
+		DeviceName    string `json:"device_name"`
+		IPAddressHint string `json:"ip_address_hint"`
+	}
+	if status != http.StatusOK || json.Unmarshal(data, &shown) != nil || shown.DeviceName != "Living room" || shown.IPAddressHint != "127.0.0.1" {
+		t.Errorf("the request as the phone sees it: %d %s, want the TV's address 127.0.0.1", status, data)
+	}
+	if _, err := silotest.CheckDeviceLookup(data); err != nil {
+		t.Errorf("lookup: %v: %s", err, data)
+	}
+	request, err := a.handler.QuickConnect.ByCode(code)
+	if want := (quickconnect.Origin{Address: "127.0.0.1", Local: true}); err != nil || request.Origin != want {
+		t.Errorf("the request was opened from %+v, %v, want %+v", request.Origin, err, want)
+	}
+}
+
+// A code no TV waits with counts as a wrong password does, toward the
+// attempts of the user who gives it and of their address, in Silo's
+// lookups, approvals and denials and in the Jellyfin API's approval
+// together: past the limit the answer is the sign-in limit's, for the
+// right code and for another user of the address too, and the TV waits
+// on. A known code counts for nothing.
+func TestSiloUnknownTVCodesCountAsFailedAttempts(t *testing.T) {
+	t.Parallel()
+	const limit = 10
+	a, _ := codeServer(t)
+	a.user("alice", nil)
+	a.user("bob", nil)
+	phone, _ := a.signIn(t, "alice")
+	other, _ := a.signIn(t, "bob")
+	code, secret := a.startCode(t)
+	for n := range 2 * limit {
+		if status, state := a.lookUp(t, phone, code); status != http.StatusOK || state != "pending" {
+			t.Fatalf("lookup %d of the waiting TV: %d %s", n+1, status, state)
+		}
+	}
+	unknown := func(n int) string {
+		number, _ := strconv.Atoi(code)
+		return strconv.Itoa(100_000_000 + (number+1+n)%100_000_000)[1:]
+	}
+	for n := range limit {
+		var status int
+		var data []byte
+		switch n % 4 {
+		case 0:
+			status, data = a.do(t, http.MethodGet, "/api/v2/auth/device?code="+unknown(n), phone, "", nil)
+		case 1:
+			status, data = a.do(t, http.MethodPost, "/api/v2/auth/device/approve", phone, "", map[string]string{"code": unknown(n)})
+		case 2:
+			status, data = a.do(t, http.MethodPost, "/api/v2/auth/device/deny", phone, "", map[string]string{"code": unknown(n)})
+		default:
+			// Silo's session is a Jellyfin device's: its codes count together.
+			status, data = a.call(http.MethodPost, "/QuickConnect/Authorize?code="+unknown(n)[:6], app("pixel", phone), nil)
+		}
+		if status != silotest.DeviceRefusals["unknown"] {
+			t.Fatalf("unknown code %d: %d %s, want 404", n+1, status, data)
+		}
+	}
+	for name, attempt := range map[string]struct{ method, path, token, code string }{
+		"the lookup of another unknown code":        {http.MethodGet, "/api/v2/auth/device?code=" + unknown(limit), phone, ""},
+		"the lookup of the waiting TV":              {http.MethodGet, "/api/v2/auth/device?code=" + code, phone, ""},
+		"the approval of the waiting TV":            {http.MethodPost, "/api/v2/auth/device/approve", phone, code},
+		"the denial of the waiting TV":              {http.MethodPost, "/api/v2/auth/device/deny", phone, code},
+		"another user's denial, from their address": {http.MethodPost, "/api/v2/auth/device/deny", other, code},
+	} {
+		var body any
+		if attempt.code != "" {
+			body = map[string]string{"code": attempt.code}
+		}
+		if status, data := a.do(t, attempt.method, attempt.path, attempt.token, "", body); status != silotest.DeviceRefusals["busy"] || problemCode(data) != "rate_limited" {
+			t.Errorf("%s past the limit: %d %s, want 429 rate_limited", name, status, data)
+		}
+	}
+	if status, data := a.call(http.MethodPost, "/QuickConnect/Authorize?code="+unknown(limit)[:6], app("pixel", phone), nil); status != http.StatusTooManyRequests {
+		t.Errorf("the Jellyfin API's approval past the limit: %d %s, want 429", status, data)
+	}
+	// The answer says when to try again, as Silo's sign-in limit does.
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, a.site+"/api/v2/auth/device?code="+code, nil)
+	request.Header.Set("Authorization", "Bearer "+phone)
+	response, err := testClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusTooManyRequests || response.Header.Get("Retry-After") == "" {
+		t.Errorf("past the limit: %d, Retry-After %q", response.StatusCode, response.Header.Get("Retry-After"))
+	}
+	if state, token := a.poll(t, secret); state != "pending" || token != "" {
+		t.Errorf("the TV after the guesses: %s, want it waiting", state)
 	}
 }

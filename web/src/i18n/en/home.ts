@@ -20,6 +20,22 @@ const home = {
     device: 'Device',
     app: 'App',
     requested: 'Asked',
+    address: 'Address',
+    /** Where the device asks from, told from where the person approving is. */
+    network: {
+      own: 'Your address',
+      local: 'Your local network',
+      other: 'Another network',
+    },
+    claims:
+      'The device gives its name and its app itself. The address is where Polyfin saw it ask from.',
+    otherNetwork:
+      'This device asks from another network than yours. Approve it only if you started this sign-in yourself, on a device in front of you.',
+    linked:
+      'You came here from a link or a QR code. To approve this device, type the code its screen shows.',
+    linkedHint: 'Type the code the device shows. Codes expire after 10 minutes.',
+    identity:
+      'Your account uses two-step sign-in, and this device will sign in without it. Confirm it is you.',
     approve: 'Approve and sign in this device',
     approving: 'Approving…',
     approved: (device: string, user: string) => `${device} is now signed in as ${user}.`,

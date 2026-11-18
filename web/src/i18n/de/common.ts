@@ -71,6 +71,9 @@ const common: typeof en = {
     unknown_code:
       'Kein Gerät wartet mit diesem Code. Er ist möglicherweise abgelaufen oder wurde falsch eingegeben.',
     quick_connect_disabled: 'Quick Connect ist auf diesem Server deaktiviert.',
+    unconfirmed_code: 'Gib den Code ein, den das Gerät anzeigt, bevor du es freigibst.',
+    identity_required:
+      'Bestätige mit einem Zwei-Schritt-Code oder deinem Passwort, dass du es bist.',
     name_taken: 'Dieser Name wird bereits von einem anderen Benutzer verwendet.',
     invalid_invite_uses:
       'Die Anzahl der Konten, die ein Einladungslink erstellen darf, muss eine ganze Zahl von 1 bis 100 sein.',

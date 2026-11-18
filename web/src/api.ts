@@ -320,11 +320,20 @@ export type Device = {
   lastActivityAt: string
 }
 
+/**
+ * The device waiting behind a Quick Connect code. Its names are its own words; `address` is where
+ * the server saw it ask from, and `network` tells that place from the approver's: their own
+ * address, the local network with them, or another network. `identity`: the approval asks who
+ * they are, as their account has two-step sign-in.
+ */
 export type QuickConnectRequest = {
   deviceName: string
   appName: string
   appVersion: string
   requestedAt: string
+  address: string
+  network: 'own' | 'local' | 'other'
+  identity: boolean
 }
 
 /** The skip marker sources, by the names the server gives them. */
@@ -3036,8 +3045,16 @@ export const fetchSummaryPreview = (event: SummaryEvent, user?: string, signal?:
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
   request<QuickConnectRequest>('GET', `/quick-connect/${seg(code)}`, undefined, signal)
 
-export const approveQuickConnect = (code: string) =>
-  request<void>('POST', '/quick-connect', { code })
+/**
+ * Approves a device's code. The code alone approves nothing, as a link carries one: `confirmation`
+ * is the code as the person typed it from the device's screen. `identity` is what an account with
+ * two-step sign-in confirms the approval with.
+ */
+export const approveQuickConnect = (body: {
+  code: string
+  confirmation: string
+  identity?: TwoStepConfirmation
+}) => request<void>('POST', '/quick-connect', body)
 
 export const fetchUsers = (signal?: AbortSignal) =>
   request<User[]>('GET', '/users', undefined, signal)

@@ -69,6 +69,9 @@ const common: typeof en = {
     not_revealable: 'Cette connexion n’a pas de clé à afficher.',
     unknown_code: 'Aucun appareil n’attend avec ce code. Il a peut-être expiré ou été mal saisi.',
     quick_connect_disabled: 'Quick Connect est désactivé sur ce serveur.',
+    unconfirmed_code: 'Saisissez le code que l’appareil affiche avant de l’autoriser.',
+    identity_required:
+      'Confirmez que c’est bien vous avec un code en deux étapes ou votre mot de passe.',
     name_taken: 'Ce nom est déjà utilisé par un autre utilisateur.',
     invalid_invite_uses:
       'Les comptes qu’un lien d’invitation peut créer doivent être un nombre entier de 1 à 100.',

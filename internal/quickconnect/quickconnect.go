@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -22,12 +23,17 @@ import (
 // Lifetime is how long a request stays usable, approved or not.
 const Lifetime = 10 * time.Minute
 
-// maxPending bounds memory if requests are initiated faster than they expire.
+// maxPending bounds memory if requests are initiated faster than they
+// expire: past it, the oldest request gives way to a new one.
 const maxPending = 1000
+
+// maxPerClient is how many requests one client address holds at a time,
+// whatever their state: past it, its oldest gives way to its new one, so
+// that one client cannot take the place of the others' requests.
+const maxPerClient = 5
 
 var (
 	ErrUnknown = errors.New("unknown or expired Quick Connect request")
-	ErrFull    = errors.New("too many pending Quick Connect requests")
 	// ErrDecided is a request already approved, denied, withdrawn or used:
 	// it is decided once, as Jellyfin refuses to authorize a request twice.
 	ErrDecided = errors.New("already decided Quick Connect request")
@@ -63,6 +69,15 @@ const (
 	Collected
 )
 
+// Origin is where a request was opened from.
+type Origin struct {
+	// Address is the client's address, as forwarded.Client tells it.
+	Address string
+	// Local reports whether that address is on the local network, as
+	// forwarded.InLocalNetwork tells it.
+	Local bool
+}
+
 // Request is a pending or decided sign-in.
 type Request struct {
 	Kind       Kind
@@ -76,8 +91,16 @@ type Request struct {
 	AppName        string
 	AppVersion     string
 	CreatedAt      time.Time
+	// Origin is where the app asked from. The names above are the app's
+	// own words; the address is what the server saw.
+	Origin Origin
 	// User is set once a signed-in user approved the code.
 	User *accounts.ID
+
+	// client is the client the request counts toward (see clientOf), and
+	// order its rank among the requests opened: the lowest is the oldest.
+	client string
+	order  uint64
 }
 
 // ExpiresAt is when the request ends, decided or not.
@@ -93,6 +116,8 @@ type Store struct {
 	mu       sync.Mutex
 	bySecret map[string]*Request
 	byCode   map[string]*Request
+	// opened counts the requests ever opened, which orders them.
+	opened uint64
 }
 
 func New() *Store {
@@ -104,29 +129,86 @@ func NewAt(now func() time.Time) *Store {
 	return &Store{now: now, bySecret: map[string]*Request{}, byCode: map[string]*Request{}}
 }
 
+// clientOf is what the requests of one client are counted by: its address,
+// or the /64 of an IPv6 address, which one client holds whole.
+func clientOf(address string) string {
+	parsed, err := netip.ParseAddr(address)
+	if err != nil {
+		return address
+	}
+	parsed = parsed.Unmap().WithZone("")
+	if parsed.Is6() {
+		if prefix, err := parsed.Prefix(64); err == nil {
+			return prefix.String()
+		}
+	}
+	return parsed.String()
+}
+
+// SameClient reports whether two addresses are one client's, as the store
+// counts clients. An address not known is no one's.
+func SameClient(a, b string) bool {
+	return a != "" && b != "" && clientOf(a) == clientOf(b)
+}
+
+// AttemptKey is the key the codes a user tries are counted by in the
+// sign-in throttle, beside their client's address: the Jellyfin API, the
+// admin app and Silo's apps look codes up in this one store, and count the
+// unknown ones together.
+func AttemptKey(user accounts.ID) string {
+	return "quick-connect:" + user.String()
+}
+
+// SameCode reports whether two codes, as typed, are one code: what an
+// approval that names its code twice is checked by.
+func SameCode(a, b string) bool {
+	code := normalized(a)
+	return code != "" && code == normalized(b)
+}
+
 // Initiate registers a Jellyfin app's request for the device and app
-// described.
-func (s *Store) Initiate(deviceID, deviceName, appName, appVersion string) (Request, error) {
-	return s.initiate(Request{Kind: Jellyfin, DeviceID: deviceID, DeviceName: deviceName, AppName: appName, AppVersion: appVersion})
+// described, asked from from.
+func (s *Store) Initiate(from Origin, deviceID, deviceName, appName, appVersion string) (Request, error) {
+	return s.initiate(Request{Kind: Jellyfin, Origin: from, DeviceID: deviceID, DeviceName: deviceName, AppName: appName, AppVersion: appVersion})
 }
 
 // InitiateSilo registers the request of one of Silo's apps.
-func (s *Store) InitiateSilo(deviceID, deviceName, devicePlatform, appName, appVersion string) (Request, error) {
-	return s.initiate(Request{Kind: Silo, DeviceID: deviceID, DeviceName: deviceName, DevicePlatform: devicePlatform,
+func (s *Store) InitiateSilo(from Origin, deviceID, deviceName, devicePlatform, appName, appVersion string) (Request, error) {
+	return s.initiate(Request{Kind: Silo, Origin: from, DeviceID: deviceID, DeviceName: deviceName, DevicePlatform: devicePlatform,
 		AppName: appName, AppVersion: appVersion})
 }
 
+// initiate registers a request, and makes room for it first: a device has
+// one request, its new one replacing its last; a client address has
+// maxPerClient, and the store maxPending, the oldest giving way. A new
+// request is never refused for the number of the others.
 func (s *Store) initiate(request Request) (Request, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.expire()
-	if len(s.bySecret) >= maxPending {
-		return Request{}, ErrFull
+	request.client = clientOf(request.Origin.Address)
+	held := 0
+	for _, other := range s.bySecret {
+		switch {
+		case other.client != request.client:
+		case request.DeviceID != "" && other.DeviceID == request.DeviceID:
+			s.remove(other)
+		default:
+			held++
+		}
+	}
+	for ; held >= maxPerClient; held-- {
+		s.remove(s.oldest(func(other *Request) bool { return other.client == request.client }))
+	}
+	for len(s.bySecret) >= maxPending {
+		s.remove(s.oldest(func(*Request) bool { return true }))
 	}
 	raw := make([]byte, 32)
 	_, _ = rand.Read(raw)
 	request.Secret = strings.ToUpper(hex.EncodeToString(raw))
 	request.CreatedAt = s.now()
+	s.opened++
+	request.order = s.opened
 	length := digits[request.Kind]
 	limit := big.NewInt(1)
 	for range length {
@@ -145,6 +227,22 @@ func (s *Store) initiate(request Request) (Request, error) {
 	s.bySecret[request.Secret] = &request
 	s.byCode[request.Code] = &request
 	return request, nil
+}
+
+// oldest is the request opened first among those counted. There is one.
+func (s *Store) oldest(counted func(*Request) bool) *Request {
+	var first *Request
+	for _, request := range s.bySecret {
+		if counted(request) && (first == nil || request.order < first.order) {
+			first = request
+		}
+	}
+	return first
+}
+
+func (s *Store) remove(request *Request) {
+	delete(s.bySecret, request.Secret)
+	delete(s.byCode, request.Code)
 }
 
 // BySecret returns the request an app polls with its secret.
@@ -245,6 +343,20 @@ func (s *Store) Cancel(secret string) (State, error) {
 	return request.State, nil
 }
 
+// Withdraw takes back every approval a user gave, used or not, when their
+// account is signed out everywhere: an approval given before does not
+// sign a device in after. The requests stand as denied, so that their
+// apps are told, and no one approves them again.
+func (s *Store) Withdraw(user accounts.ID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, request := range s.bySecret {
+		if request.State == Approved && *request.User == user {
+			request.State, request.User = Denied, nil
+		}
+	}
+}
+
 // Clear cancels every request, when Quick Connect is turned off.
 func (s *Store) Clear() {
 	s.mu.Lock()
@@ -255,10 +367,9 @@ func (s *Store) Clear() {
 
 func (s *Store) expire() {
 	now := s.now()
-	for secret, request := range s.bySecret {
+	for _, request := range s.bySecret {
 		if !now.Before(request.ExpiresAt()) {
-			delete(s.bySecret, secret)
-			delete(s.byCode, request.Code)
+			s.remove(request)
 		}
 	}
 }

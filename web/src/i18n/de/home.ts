@@ -21,6 +21,21 @@ const home: typeof en = {
     device: 'Gerät',
     app: 'App',
     requested: 'Angefragt',
+    address: 'Adresse',
+    network: {
+      own: 'Deine Adresse',
+      local: 'Dein lokales Netzwerk',
+      other: 'Ein anderes Netzwerk',
+    },
+    claims:
+      'Seinen Namen und seine App gibt das Gerät selbst an. Die Adresse ist die, von der Polyfin die Anfrage erhalten hat.',
+    otherNetwork:
+      'Dieses Gerät fragt aus einem anderen Netzwerk an als deinem. Gib es nur frei, wenn du diese Anmeldung selbst gestartet hast, auf einem Gerät, das du vor dir hast.',
+    linked:
+      'Du bist über einen Link oder einen QR-Code hierhergekommen. Um dieses Gerät freizugeben, gib den Code ein, den sein Bildschirm anzeigt.',
+    linkedHint: 'Gib den Code ein, den das Gerät anzeigt. Codes laufen nach 10 Minuten ab.',
+    identity:
+      'Dein Konto nutzt die zweistufige Anmeldung, und dieses Gerät meldet sich ohne sie an. Bestätige, dass du es bist.',
     approve: 'Freigeben und dieses Gerät anmelden',
     approving: 'Wird freigegeben…',
     approved: (device: string, user: string) => `${device} ist jetzt als ${user} angemeldet.`,
