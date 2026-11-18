@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/jackc/pgx/v5"
 
@@ -338,11 +339,21 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 }
 
 // savedKeyframes returns a version's saved keyframe times, then
-// remembered.
+// remembered. A row holding more keyframes than an index is read for
+// (see oversized), saved before indexes were bounded so, is not decoded:
+// its version is kept as one whose index cannot be read, as a new read
+// of such a file keeps it, and while it is, its row is not read again.
 func (s *Service) savedKeyframes(ctx context.Context, version accounts.ID) ([]time.Duration, bool) {
+	if err, failed := s.unindexed.Get(version); failed && errors.Is(err, container.ErrUnreadable) {
+		return nil, false
+	}
 	var data []byte
 	err := s.db.QueryRow(ctx, "SELECT keyframes FROM media_keyframes WHERE version_id = $1", version).Scan(&data)
 	if err == nil {
+		if oversized(data) {
+			s.unindexed.Put(version, fmt.Errorf("a saved index of %d bytes lists more than %d keyframes: %w", len(data), maxSavedKeyframes, container.ErrUnreadable))
+			return nil, false
+		}
 		if times, err := decodeKeyframes(data); err == nil {
 			s.indexes.Put(version, times)
 			return times, true
@@ -353,13 +364,57 @@ func (s *Service) savedKeyframes(ctx context.Context, version accounts.ID) ([]ti
 	return nil, false
 }
 
-// saveKeyframes saves and remembers a version's keyframe times.
+// saveKeyframes saves and remembers a version's keyframe times, which is
+// then no longer one whose index cannot be read.
 func (s *Service) saveKeyframes(ctx context.Context, version accounts.ID, times []time.Duration) {
 	if _, err := s.db.Exec(ctx, `INSERT INTO media_keyframes (version_id, keyframes) VALUES ($1, $2)
 		ON CONFLICT (version_id) DO UPDATE SET keyframes = excluded.keyframes, indexed_at = now()`, version, encodeKeyframes(times)); err != nil {
 		s.logger.Warn("Saving a keyframe index failed", "error", err)
 	}
 	s.indexes.Put(version, times)
+	s.unindexed.Delete(version)
+}
+
+const (
+	// maxKeptIndexes and maxKeptOffsets bound the bytes of the keyframe
+	// times and of the keyframe places kept in memory, beside the number
+	// of versions they are kept for. An index read from a container has
+	// about a million keyframes at most, 8 MiB of times and 16 MiB of
+	// places: four and two such are kept. The indexes of most files, a
+	// few thousand keyframes each, come nowhere near filling them.
+	maxKeptIndexes = 32 << 20
+	maxKeptOffsets = 32 << 20
+	// maxSavedKeyframes is how many keyframes a saved index is read back
+	// with at most: as many as are read from a container's index.
+	maxSavedKeyframes = 1 << 20
+)
+
+// indexBytes is what a version's keyframe times take in memory.
+func indexBytes(times []time.Duration) int {
+	return cap(times) * int(unsafe.Sizeof(time.Duration(0)))
+}
+
+// offsetBytes is what a version's keyframe places take in memory.
+func offsetBytes(offsets []container.Keyframe) int {
+	return cap(offsets) * int(unsafe.Sizeof(container.Keyframe{}))
+}
+
+// oversized reports whether a saved index holds more than
+// maxSavedKeyframes keyframes, without decoding it. Its length tells when
+// it is that many bytes at most, a keyframe taking a byte at least; the
+// keyframes of a longer one are counted, each ending with its one byte
+// below 0x80.
+func oversized(data []byte) bool {
+	if len(data) <= maxSavedKeyframes {
+		return false
+	}
+	keyframes := 0
+	for _, b := range data {
+		if b < 0x80 {
+			keyframes++
+		}
+	}
+	return keyframes > maxSavedKeyframes
 }
 
 // encodeKeyframes packs ascending times as varints of the microseconds
