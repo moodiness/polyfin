@@ -27,6 +27,10 @@ const (
 	maxChannels    = 100_000
 	maxVODListSize = 400 << 20
 	maxTitles      = 400_000
+	// maxLoginSize bounds an Xtream account's login answer, a few fields,
+	// and maxCategories the categories read of one of its category lists.
+	maxLoginSize  = 1 << 20
+	maxCategories = 10_000
 	// A list download must answer within listAnswer, send something at
 	// least every listStall and end within listTimeout.
 	listAnswer  = 30 * time.Second
@@ -274,7 +278,7 @@ func fetchXtream(ctx context.Context, client requester, account Account, confine
 			Timezone string `json:"timezone"`
 		} `json:"server_info"`
 	}
-	if err := download(ctx, client, account.api(""), confined, maxListSize, decodeJSON(&login)); err != nil {
+	if err := download(ctx, client, account.api(""), confined, maxLoginSize, decodeJSON(&login)); err != nil {
 		return d, err
 	}
 	if login.UserInfo.Auth != "1" {
@@ -325,18 +329,39 @@ func (a Account) api(action string) string {
 	return address
 }
 
-// xtreamCategories reads the names of a category list of the player API.
+// xtreamCategories reads the names of a category list of the player API,
+// one category at a time; null is a list of none. A list of more than
+// maxCategories is ErrTooLarge.
 func xtreamCategories(ctx context.Context, client requester, account Account, confined bool, action string) (map[text]string, error) {
-	var categories []struct {
-		ID   text   `json:"category_id"`
-		Name string `json:"category_name"`
-	}
-	if err := download(ctx, client, account.api(action), confined, maxListSize, decodeJSON(&categories)); err != nil {
+	var names map[text]string
+	err := download(ctx, client, account.api(action), confined, maxListSize, func(body io.Reader) error {
+		names = map[text]string{}
+		decoder := json.NewDecoder(body)
+		switch opening, err := decoder.Token(); {
+		case err != nil:
+			return jsonError(err)
+		case opening == nil:
+			return nil
+		case opening != json.Delim('['):
+			return ErrInvalidList
+		}
+		for read := 0; decoder.More(); read++ {
+			if read >= maxCategories {
+				return ErrTooLarge
+			}
+			var category struct {
+				ID   text   `json:"category_id"`
+				Name string `json:"category_name"`
+			}
+			if err := decoder.Decode(&category); err != nil {
+				return jsonError(err)
+			}
+			names[category.ID] = strings.TrimSpace(category.Name)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
-	}
-	names := make(map[text]string, len(categories))
-	for _, category := range categories {
-		names[category.ID] = strings.TrimSpace(category.Name)
 	}
 	return names, nil
 }

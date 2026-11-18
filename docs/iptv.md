@@ -102,7 +102,7 @@ An **Xtream Codes account** source takes a **Name**, the **Server address**, a *
 
 ### What is read
 
-- Lists are read as they arrive, up to 100 MB and 100,000 channels.
+- Lists are read as they arrive, up to 100 MB and 100,000 channels. An Xtream account's category list may hold up to 10,000 categories, and its login answer 1 MB: past either, the account cannot be read.
 - A list that cannot be read is not added.
 - Headings that lists put between channels are skipped. These are names without a letter or digit, or drawn with a run of three or more decoration characters, such as `##### NAME #####` or `=== NAME ===`.
 - Addresses and logins are stored as manifest addresses are. They are never shown in full, only the server's scheme and host, and never logged.

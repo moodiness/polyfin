@@ -67,6 +67,8 @@ A playlist's `#KODIPROP` lines, before or after the channel's `#EXTINF` line, ar
 | `inputstream.adaptive.license_key` | ClearKey keys as `kid:key` pairs, in hexadecimal or base64url, several separated by commas, or a JSON Web Key set. Or the address of a ClearKey license server, optionally followed by `\|` and its `Name=value&Name=value` headers. |
 | `inputstream.adaptive.manifest_headers` and `inputstream.adaptive.stream_headers` | `Name=value` pairs separated by `&`. Both become the channel's headers, as Polyfin sends one set with every request of a stream. They come after its `#EXTVLCOPT` and `#EXTHTTP` lines, and before the `\|` pairs of its address. |
 
+A channel's first 64 `#KODIPROP` lines are read; lists write a handful.
+
 FFmpeg decrypts a ClearKey channel with the keys its list gives, by key ID.
 
 - Polyfin passes them as the DASH demuxer's `cenc_decryption_keys` option, which its MP4 demuxer applies as `decryption_keys`.

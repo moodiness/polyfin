@@ -55,7 +55,12 @@ type Entry struct {
 }
 
 // maxLine bounds a playlist line: a line longer than that is not M3U.
-const maxLine = 1 << 20
+// maxProperties bounds the #KODIPROP lines read for an entry, which has a
+// handful: the others are skipped.
+const (
+	maxLine       = 1 << 20
+	maxProperties = 64
+)
 
 // ParseM3U reads an M3U playlist, handing each channel to entry in order:
 // the #EXTINF line's tvg-id, tvg-name, tvg-logo, number (see listNumber)
@@ -124,6 +129,9 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 				current.Group = strings.TrimSpace(text[len("#EXTGRP:"):])
 			}
 		case hasPrefixFold(text, "#KODIPROP:"):
+			if len(properties) >= maxProperties {
+				continue
+			}
 			name, value, _ := strings.Cut(text[len("#KODIPROP:"):], "=")
 			properties = append(properties, [2]string{name, value})
 		case strings.HasPrefix(text, "#"):
