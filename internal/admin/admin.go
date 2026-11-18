@@ -255,6 +255,10 @@ type Options struct {
 	// reads it; empty is defaultRenderNodes. Tests point it at a folder of
 	// their own.
 	renderNodesPattern string
+	// configureRun is signed into every configure link, which so ends
+	// with the process that signed it (see signConfigure); empty has New
+	// draw one. Tests that sign links of their own set it.
+	configureRun string
 }
 
 type handler struct {
@@ -297,6 +301,9 @@ func New(options Options) http.Handler {
 	}
 	if h.renderNodesPattern == "" {
 		h.renderNodesPattern = defaultRenderNodes
+	}
+	if h.configureRun == "" {
+		h.configureRun = newConfigureRun()
 	}
 	// Starting counts as a restart: a restart is refused within a minute
 	// of start-up as within a minute of the last one, which the process

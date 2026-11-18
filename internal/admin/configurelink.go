@@ -2,10 +2,10 @@ package admin
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -31,9 +32,11 @@ import (
 // Continue button. Only Continue, a form posted back to Polyfin from that
 // page, checks the link again and sends the browser to the configure
 // page, once: the link is used up. A program that only reads the link,
-// such as a messenger's preview, gets the page and never the address. The
-// admin app renews the link before it expires. Neither the token nor the
-// address is ever logged.
+// such as a messenger's preview, gets the page and never the address. A
+// link also ends with the process that signed it (see newConfigureRun):
+// after a restart it opens nothing, used or not. The admin app renews the
+// link before it expires, and asks for a new one at each click. Neither
+// the token nor the address is ever logged.
 
 const (
 	// configureLinkPath is where configure links are opened.
@@ -65,7 +68,8 @@ type configureGrant struct {
 
 // configureUses are the configure tokens used up by Continue, by their
 // signature, until they expire; kept in memory, as a token lives
-// configureLinkLife only.
+// configureLinkLife only, and no longer than the process (see
+// newConfigureRun).
 type configureUses struct {
 	mu   sync.Mutex
 	used map[string]time.Time
@@ -100,6 +104,16 @@ func (u *configureUses) use(grant configureGrant, now time.Time) bool {
 	return true
 }
 
+// newConfigureRun draws the value a process signs into its configure
+// links, besides the signer's secret, which outlives a restart: a link
+// signed before a restart then opens nothing, so that one used up, which
+// only this process remembers (see configureUses), never opens again.
+func newConfigureRun() string {
+	var run [16]byte
+	_, _ = rand.Read(run[:])
+	return base64.RawURLEncoding.EncodeToString(run[:])
+}
+
 // mayReplace reports whether user may replace the address of an addon of
 // scope now: an administrator a server addon's, the owner their own while
 // they may have some and no parental control or blocked genres keep them
@@ -124,7 +138,8 @@ func (h *handler) configureLink(r *http.Request, scope addons.Scope, addon addon
 }
 
 // signConfigure is the token of grant: its scope, addon, user and expiry,
-// then their signature, and nothing else.
+// then their signature, and nothing else. The signature covers the
+// process's own value too (see newConfigureRun), which no token holds.
 func (h *handler) signConfigure(grant configureGrant) string {
 	var payload [configurePayload]byte
 	if !grant.shared {
@@ -134,15 +149,15 @@ func (h *handler) signConfigure(grant configureGrant) string {
 	copy(payload[17:33], grant.user[:])
 	binary.BigEndian.PutUint64(payload[33:], uint64(grant.expires.Unix()))
 	encoded := base64.RawURLEncoding.EncodeToString(payload[:])
-	return encoded + "." + h.Signer.Mark(configurePurpose, encoded)
+	return encoded + "." + h.Signer.Mark(configurePurpose, h.configureRun+"."+encoded)
 }
 
 // readConfigureToken checks a configure token's signature, then its
-// expiry: errConfigureInvalid for a token Polyfin did not sign as it is,
-// errConfigureExpired for one past its expiry.
+// expiry: errConfigureInvalid for a token this process did not sign as it
+// is, errConfigureExpired for one past its expiry.
 func (h *handler) readConfigureToken(token string) (configureGrant, error) {
 	encoded, mark, found := strings.Cut(token, ".")
-	if h.Signer == nil || !found || !h.Signer.VerifyMark(configurePurpose, encoded, mark) {
+	if h.Signer == nil || !found || !h.Signer.VerifyMark(configurePurpose, h.configureRun+"."+encoded, mark) {
 		return configureGrant{}, errConfigureInvalid
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(encoded)
@@ -289,13 +304,24 @@ var (
 		"Configura un add-on",
 		"Configurar um complemento",
 	}
+	// configureLeadText names the addon, in each language's quotation
+	// marks, so that a name never reads as a sentence of the page's.
 	configureLeadText = i18n.Text{
-		"Polyfin will open the configure page of %s, on %s.",
-		"Polyfin va ouvrir la page de configuration de %s, sur %s.",
-		"Polyfin öffnet die Konfigurationsseite von %s auf %s.",
-		"Polyfin abrirá la página de configuración de %s, en %s.",
-		"Polyfin aprirà la pagina di configurazione di %s, su %s.",
-		"O Polyfin vai abrir a página de configuração de %s, em %s.",
+		"Polyfin will open the configure page of the addon “%s”.",
+		"Polyfin va ouvrir la page de configuration de l’addon «\u202f%s\u202f».",
+		"Polyfin öffnet die Konfigurationsseite des Add-ons „%s“.",
+		"Polyfin abrirá la página de configuración de la extensión «%s».",
+		"Polyfin aprirà la pagina di configurazione dell’add-on «%s».",
+		"O Polyfin vai abrir a página de configuração do complemento “%s”.",
+	}
+	// configureHostText tells where that page is, in a sentence of its own.
+	configureHostText = i18n.Text{
+		"That page is on %s.",
+		"Cette page se trouve sur %s.",
+		"Diese Seite liegt auf %s.",
+		"Esa página está en %s.",
+		"Quella pagina si trova su %s.",
+		"Essa página fica em %s.",
 	}
 	configureNoteText = i18n.Text{
 		"Continue only if you asked for it from Polyfin yourself: that page holds the addon’s settings and keys. The link works once.",
@@ -339,9 +365,10 @@ var (
 	}
 )
 
-// configurePage is the page of a configure link: one message, and, with
-// Action, a note and the Continue button posting there. It has no script
-// and loads nothing from elsewhere.
+// configurePage is the page of a configure link: one message, or, with
+// Action, the addon's name and the host of its configure page, each in a
+// sentence and an element of its own, a note and the Continue button
+// posting there. It has no script and loads nothing from elsewhere.
 var configurePage = template.Must(template.New("configure").Parse(`<!doctype html>
 <html lang="{{.Language}}">
 <head>
@@ -356,7 +383,9 @@ body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding
 main { max-width: 28rem; padding: 1.75rem 1.5rem; border-radius: 1rem; background: #23222c; overflow-wrap: anywhere; }
 h1 { margin: 0 0 0.75rem; font-size: 1.25rem; line-height: 1.3; }
 p { margin: 0; color: #c4c2d0; }
-p + p { margin-top: 0.75rem; font-size: 0.9375rem; }
+p + p { margin-top: 0.75rem; }
+.note { font-size: 0.9375rem; }
+.host { color: #ecebf3; }
 form { margin: 1.5rem 0 0; }
 button { font: inherit; font-weight: 620; min-height: 2.75rem; padding: 0.5rem 1.25rem; border: 0; border-radius: 0.625rem;
   background: #6366f1; color: #fff; cursor: pointer; }
@@ -366,16 +395,20 @@ button:focus-visible { outline: 2px solid #c7c8ff; outline-offset: 2px; }
   body { background: #f3f2f7; color: #1b1a22; }
   main { background: #fff; }
   p { color: #4a4857; }
+  .host { color: #1b1a22; }
 }
 </style>
 </head>
 <body>
 <main>
 <h1>{{.Title}}</h1>
-<p>{{.Message}}</p>
 {{- if .Action}}
-<p>{{.Note}}</p>
+<p>{{.Lead.Before}}<span class="name">{{.Lead.Value}}</span>{{.Lead.After}}</p>
+<p>{{.Host.Before}}<strong class="host">{{.Host.Value}}</strong>{{.Host.After}}</p>
+<p class="note">{{.Note}}</p>
 <form method="post" action="{{.Action}}"><button type="submit">{{.Continue}}</button></form>
+{{- else}}
+<p>{{.Message}}</p>
 {{- end}}
 </main>
 </body>
@@ -384,10 +417,40 @@ button:focus-visible { outline: 2px solid #c7c8ff; outline-offset: 2px; }
 
 // configurePageData is what configurePage shows.
 type configurePageData struct {
+	// Message is all the page of a link that does not open tells.
 	Language, Title, Message string
-	// Action, Note and Continue are the Continue form's, for a link that
+	// Lead, Host, Action, Note and Continue are those of a link that
 	// opens; empty otherwise.
+	Lead, Host             configureSentence
 	Action, Note, Continue string
+}
+
+// configureSentence is a sentence of the page around the one value it
+// names, which the page sets in an element of its own.
+type configureSentence struct {
+	Before, Value, After string
+}
+
+// configureSentenceOf is text, whose %s stands for value.
+func configureSentenceOf(text, value string) configureSentence {
+	before, after, _ := strings.Cut(text, "%s")
+	return configureSentence{Before: before, Value: value, After: after}
+}
+
+// configureName is an addon's name as the page shows it: on one line,
+// and no longer than a name an administrator gives (addons.MaxNameLength
+// characters, the last an ellipsis when it was cut). A manifest's name
+// has no bound of its own, and its author chose every character: spaces
+// of any kind, line ends and characters that do not print become one
+// space.
+func configureName(name string) string {
+	clean := strings.Join(strings.FieldsFunc(name, func(r rune) bool {
+		return unicode.IsSpace(r) || !unicode.IsPrint(r)
+	}), " ")
+	if runes := []rune(clean); len(runes) > addons.MaxNameLength {
+		clean = strings.TrimRight(string(runes[:addons.MaxNameLength-1]), " ") + "…"
+	}
+	return clean
 }
 
 // configureLanguage is the first of Polyfin's languages the browser of r
@@ -415,7 +478,8 @@ func writeConfigurePage(w http.ResponseWriter, r *http.Request, status int, mess
 var configureOrigin = regexp.MustCompile(`^https?://[A-Za-z0-9.:\[\]-]+$`)
 
 // writeConfigureContinue answers the page of a link that opens: the addon
-// and the host of its configure page, and Continue posting to action.
+// (see configureName) and the host of its configure page, and Continue
+// posting to action.
 //   - Its policy lets the form post to Polyfin only, and the answer to
 //     the post lead to the configure page's origin, which browsers check
 //     the redirect of a form against.
@@ -432,7 +496,8 @@ func writeConfigureContinue(w http.ResponseWriter, r *http.Request, target confi
 	writeConfigureHTML(w, http.StatusOK, formAction, "same-origin", configurePageData{
 		Language: language,
 		Title:    configureTitleText.In(language),
-		Message:  fmt.Sprintf(configureLeadText.In(language), target.name, target.address.Host),
+		Lead:     configureSentenceOf(configureLeadText.In(language), configureName(target.name)),
+		Host:     configureSentenceOf(configureHostText.In(language), target.address.Host),
 		Action:   action,
 		Note:     configureNoteText.In(language),
 		Continue: configureContinueText.In(language),

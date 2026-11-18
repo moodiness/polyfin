@@ -16,12 +16,17 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
-// configureAPI is the admin API with configure links signed by signer,
-// logging everything to log, and the addons a test configures: a
+// configureAPI is the admin API with configure links signed by signer and
+// run, logging everything to log, and the addons a test configures: a
 // configurable server addon, one that is not, and the member's own.
 type configureAPI struct {
 	testAPI
-	signer      playback.Signer
+	signer playback.Signer
+	// run is the value the API's process signs into its links, which
+	// token signs with too; options are the API's own, for a test that
+	// starts it again.
+	run         string
+	options     Options
 	log         *syncBuffer
 	addonStore  *addons.Store
 	addonServer *httptest.Server
@@ -49,11 +54,14 @@ func newConfigureAPI(t *testing.T) configureAPI {
 		_, _ = w.Write([]byte(`{"id": "top` + r.URL.Path + `", "name": "Top", "version": "1.0.0", "resources": ["stream"]` + hints + `}`))
 	}))
 	t.Cleanup(server.Close)
-	c := configureAPI{signer: playback.NewSigner([]byte("configure test secret")), log: new(syncBuffer), addonServer: server, hinting: hinting}
+	c := configureAPI{signer: playback.NewSigner([]byte("configure test secret")), run: "configure test run", log: new(syncBuffer),
+		addonServer: server, hinting: hinting}
 	c.testAPI = newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		o.Signer = &c.signer
+		o.configureRun = c.run
 		o.Logger = slog.New(slog.NewTextHandler(c.log, &slog.HandlerOptions{Level: slog.LevelDebug}))
 		c.addonStore = deps.addons
+		c.options = *o
 	})
 	c.administrator = c.signedIn("administrator", true)
 	c.member = c.signedIn("member", false)
@@ -175,7 +183,7 @@ func (c configureAPI) token(shared bool, addon string, user accounts.ID, expires
 	if err != nil {
 		c.t.Fatal(err)
 	}
-	h := &handler{Options: Options{Signer: &c.signer}}
+	h := &handler{Options: Options{Signer: &c.signer, configureRun: c.run}}
 	return configureLinkPath + h.signConfigure(configureGrant{shared: shared, addon: id, user: user, expires: expires})
 }
 
@@ -211,7 +219,8 @@ func TestAConfigureLinkOpensAPageWhoseContinueLeadsOnce(t *testing.T) {
 		if status != http.StatusOK || location != "" {
 			t.Errorf("opening a link: %d %q, want the page", status, location)
 		}
-		if !strings.Contains(page, "Polyfin will open the configure page of Top, on "+host+".") ||
+		if !strings.Contains(page, `<p>Polyfin will open the configure page of the addon “<span class="name">Top</span>”.</p>`) ||
+			!strings.Contains(page, `<p>That page is on <strong class="host">`+host+`</strong>.</p>`) ||
 			!strings.Contains(page, `<form method="post" action="`+link+`"><button type="submit">Continue</button></form>`) {
 			t.Errorf("the page: %s", page)
 		}
@@ -405,5 +414,134 @@ func TestContinueIsRefusedFromAnotherOrigin(t *testing.T) {
 	}
 	if status, location, _, _ := c.post(link); status != http.StatusSeeOther || location == "" {
 		t.Errorf("Continue from the page afterwards: %d %q", status, location)
+	}
+}
+
+// A link ends with the process that signed it: started again, with the
+// same database and the same signing secret, Polyfin opens no link signed
+// before, used or not, and its own links open as before.
+func TestAConfigureLinkEndsWithTheProcessThatSignedIt(t *testing.T) {
+	t.Parallel()
+	c := newConfigureAPI(t)
+	used := c.links(c.administrator, "/scopes/shared/addons")[c.configurable]
+	unused := c.links(c.member, "/scopes/me/addons")[c.mine]
+	if status, location, _, _ := c.post(used); status != http.StatusSeeOther || location == "" {
+		t.Fatalf("Continue: %d %q", status, location)
+	}
+	if status, _, _, _ := c.open(unused, ""); status != http.StatusOK {
+		t.Fatalf("opening the other link: %d", status)
+	}
+
+	// The process started again draws a value of its own.
+	options := c.options
+	options.configureRun = ""
+	server := httptest.NewServer(New(options))
+	t.Cleanup(server.Close)
+	restarted := c
+	restarted.url = server.URL
+	for name, link := range map[string]string{"a used link": used, "an unused link": unused} {
+		status, location, page, _ := restarted.open(link, "")
+		if status != http.StatusNotFound || location != "" || !strings.Contains(page, "This link isn’t valid.") {
+			t.Errorf("%s, opened after the restart: %d %q %s", name, status, location, page)
+		}
+		if status, location, _, _ := restarted.post(link); status != http.StatusNotFound || location != "" {
+			t.Errorf("%s, Continue after the restart: %d %q", name, status, location)
+		}
+	}
+	// A link the new process signs opens there, once, and not on the old
+	// one, which is another process.
+	boss := restarted.signedIn("boss", true)
+	fresh := restarted.links(boss, "/scopes/shared/addons")[c.configurable]
+	if status, _, _, _ := c.open(fresh, ""); status != http.StatusNotFound {
+		t.Errorf("the new process's link on the old one: %d", status)
+	}
+	if status, _, _, _ := restarted.open(fresh, ""); status != http.StatusOK {
+		t.Errorf("the new process's link: %d", status)
+	}
+	if status, location, _, _ := restarted.post(fresh); status != http.StatusSeeOther || location != c.addonServer.URL+"/secret/configure?token=k" {
+		t.Errorf("Continue on the new process's link: %d %q", status, location)
+	}
+	// The old process still opens its own unused link.
+	if status, location, _, _ := c.post(unused); status != http.StatusSeeOther || location == "" {
+		t.Errorf("Continue on the old process's own link: %d %q", status, location)
+	}
+}
+
+// The page names the addon by at most addons.MaxNameLength characters of
+// its name, on one line, in the language's quotation marks, whatever its
+// manifest wrote, and the host of the configure page in a sentence and an
+// element of its own. A name's markup shows as text.
+func TestTheConfigurePageClipsTheNameAndSetsTheHostApart(t *testing.T) {
+	t.Parallel()
+	const long = "your Polyfin account. Your session has expired: press Continue and sign in again to keep watching. " +
+		"The rest of this notice is shown for every sign-in"
+	const marked = "<b>Top</b>\n\n\"streams\"\u202e &\tmore\u2028here"
+	names := map[string]string{"/long/manifest.json": long, "/marked/manifest.json": marked}
+	manifests := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "named" + r.URL.Path, "name": names[r.URL.Path], "version": "1.0.0",
+			"resources": []string{"stream"}, "behaviorHints": map[string]bool{"configurable": true}})
+	}))
+	t.Cleanup(manifests.Close)
+	c := newConfigureAPI(t)
+	// The member's own addons, installed as an administrator would reach
+	// them: the test's host is on the loopback interface.
+	link := func(path string) string {
+		t.Helper()
+		own, err := c.addonStore.Install(t.Context(), addons.Personal(c.memberUser.ID), manifests.URL+path, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if own.Name() != names[path] {
+			t.Fatalf("the addon's name: %q", own.Name())
+		}
+		found := c.links(c.member, "/scopes/me/addons")[own.ID.String()]
+		if !strings.HasPrefix(found, configureLinkPath) {
+			t.Fatalf("the link of %s: %q", path, found)
+		}
+		return found
+	}
+	host := `<strong class="host">` + strings.TrimPrefix(manifests.URL, "http://") + `</strong>`
+
+	longLink := link("/long/manifest.json")
+	if len(long) <= addons.MaxNameLength {
+		t.Fatal("the long name is not longer than a given name may be")
+	}
+	// The cut falls after a space, which does not show before the ellipsis.
+	shown := strings.TrimRight(long[:addons.MaxNameLength-1], " ") + "…"
+	for language, want := range map[string][2]string{
+		"en":    {`of the addon “<span class="name">` + shown + `</span>”.</p>`, `<p>That page is on ` + host + `.</p>`},
+		"fr":    {"de l’addon «\u202f<span class=\"name\">" + shown + "</span>\u202f».</p>", `<p>Cette page se trouve sur ` + host + `.</p>`},
+		"de":    {`des Add-ons „<span class="name">` + shown + `</span>“.</p>`, `<p>Diese Seite liegt auf ` + host + `.</p>`},
+		"es":    {`de la extensión «<span class="name">` + shown + `</span>».</p>`, `<p>Esa página está en ` + host + `.</p>`},
+		"it":    {`dell’add-on «<span class="name">` + shown + `</span>».</p>`, `<p>Quella pagina si trova su ` + host + `.</p>`},
+		"pt-BR": {`do complemento “<span class="name">` + shown + `</span>”.</p>`, `<p>Essa página fica em ` + host + `.</p>`},
+	} {
+		status, _, page, _ := c.open(longLink, language)
+		if status != http.StatusOK || !strings.Contains(page, want[0]) || !strings.Contains(page, want[1]) {
+			t.Errorf("the page in %s: %d %s", language, status, page)
+		}
+		// Nothing of the name past the bound, and the name once only.
+		if strings.Contains(page, "sign in again") || strings.Contains(page, "every sign-in") || strings.Count(page, long[:20]) != 1 {
+			t.Errorf("the page in %s holds more of the name: %s", language, page)
+		}
+	}
+
+	// Markup shows as text; line ends, tabs and characters that do not
+	// print become one space.
+	status, _, page, _ := c.open(link("/marked/manifest.json"), "en")
+	if status != http.StatusOK ||
+		!strings.Contains(page, `“<span class="name">&lt;b&gt;Top&lt;/b&gt; &#34;streams&#34; &amp; more here</span>”`) ||
+		strings.Contains(page, "<b>") || strings.Contains(page, "\u202e") || strings.Contains(page, "\u2028") {
+		t.Errorf("the page of a name with markup: %d %s", status, page)
+	}
+
+	// A name as long as a given one may be shows whole, by characters and
+	// not bytes; one character more is cut.
+	whole := strings.Repeat("é", addons.MaxNameLength)
+	if got := configureName(whole); got != whole {
+		t.Errorf("a name of %d characters: %q", addons.MaxNameLength, got)
+	}
+	if got, want := configureName(whole+"é"), strings.Repeat("é", addons.MaxNameLength-1)+"…"; got != want {
+		t.Errorf("a name of %d characters: %q, want %q", addons.MaxNameLength+1, got, want)
 	}
 }
