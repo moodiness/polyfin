@@ -100,7 +100,8 @@ func (s *Service) decodeFile(ctx context.Context, version library.Version, analy
 	if len(want.chapters) > 0 {
 		filters = append(filters, chapterFilter(hdr))
 	}
-	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-skip_frame", "nokey", "-i", version.URL}
+	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error", "-skip_frame", "nokey"}, media.Opens(version.URL, media.File)...)
+	args = append(args, "-i", version.URL)
 	// One frame every interval from the start, each the keyframe at its
 	// time, the first padded back to it, and the last kept past the end.
 	pick := "fps=fps=1000/" + strconv.FormatInt(interval.Milliseconds(), 10) + ":start_time=0:eof_action=pass"

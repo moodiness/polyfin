@@ -11,6 +11,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/loudness"
+	"github.com/moodiness/polyfin/internal/media"
 )
 
 // measured is a track of a music folder to measure: its identifier and
@@ -83,7 +84,8 @@ func (s *Service) measureTracks(ctx context.Context, id accounts.ID) error {
 			break
 		}
 		group.Go(func() error {
-			l, err := s.meter.Measure(groupCtx, s.files+track.id.String()+strings.ToLower(path.Ext(track.rel)))
+			address := s.files + track.id.String() + strings.ToLower(path.Ext(track.rel))
+			l, err := s.meter.Measure(groupCtx, address, media.Opens(address, media.File)...)
 			if groupCtx.Err() != nil {
 				return groupCtx.Err()
 			}

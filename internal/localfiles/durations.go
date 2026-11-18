@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/media"
 )
 
 // The lengths of the videos of movies and shows folders are what the
@@ -88,7 +89,8 @@ func (s *Service) storeDurations(ctx context.Context, id accounts.ID, list listi
 func (s *Service) probeDuration(ctx context.Context, target string) (float64, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, s.ffprobe, "-v", "error", "-print_format", "json", "-show_entries", "format=duration", target).Output()
+	out, err := exec.CommandContext(ctx, s.ffprobe, append(append([]string{"-v", "error", "-print_format", "json", "-show_entries", "format=duration"},
+		media.Opens(target, media.File)...), target)...).Output()
 	if err != nil {
 		return 0, err
 	}

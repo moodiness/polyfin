@@ -22,6 +22,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 )
@@ -259,7 +260,8 @@ func parseCreation(value string) (time.Time, bool) {
 func (s *Service) probeVideo(ctx context.Context, target string) (videoProbe, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, s.ffprobe, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", target).Output()
+	out, err := exec.CommandContext(ctx, s.ffprobe, append(append([]string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams"},
+		media.Opens(target, media.File)...), target)...).Output()
 	if err != nil {
 		return videoProbe{}, err
 	}

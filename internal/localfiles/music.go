@@ -28,6 +28,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/loudness"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
@@ -374,7 +375,8 @@ func (b *budgeted) Read(p []byte) (int, error) {
 func (s *Service) probeTrack(ctx context.Context, target string) (trackInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, s.ffprobe, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", target).Output()
+	out, err := exec.CommandContext(ctx, s.ffprobe, append(append([]string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams"},
+		media.Opens(target, media.File)...), target)...).Output()
 	if err != nil {
 		return trackInfo{}, err
 	}
@@ -386,8 +388,8 @@ func (s *Service) probeTrack(ctx context.Context, target string) (trackInfo, err
 func (s *Service) readCover(ctx context.Context, target string) ([]byte, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, s.ffmpeg, "-v", "error", "-nostdin", "-i", target, "-map", "0:v:0", "-frames:v", "1", "-c", "copy",
-		"-f", "image2pipe", "pipe:1")
+	cmd := exec.CommandContext(ctx, s.ffmpeg, append(append([]string{"-v", "error", "-nostdin"}, media.Opens(target, media.File)...),
+		"-i", target, "-map", "0:v:0", "-frames:v", "1", "-c", "copy", "-f", "image2pipe", "pipe:1")...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, "", err

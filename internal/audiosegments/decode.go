@@ -15,8 +15,8 @@ import (
 
 // duration asks ffprobe how long the file at address lasts.
 func duration(ctx context.Context, ffprobe, address string) (time.Duration, error) {
-	cmd := exec.CommandContext(ctx, ffprobe, "-v", "error", "-show_entries", "format=duration",
-		"-of", "default=noprint_wrappers=1:nokey=1", address)
+	cmd := exec.CommandContext(ctx, ffprobe, append(append([]string{"-v", "error", "-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1"}, media.Opens(address, media.File)...), address)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -38,6 +38,7 @@ func listen(ctx context.Context, ffmpeg, address string, start, length time.Dura
 	if start > 0 {
 		args = append(args, "-ss", seconds(start))
 	}
+	args = append(args, media.Opens(address, media.File)...)
 	args = append(args, "-i", address, "-map", "0:a:0", "-t", seconds(length),
 		"-ac", "1", "-ar", strconv.Itoa(sampleRate), "-f", "s16le", "-")
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)

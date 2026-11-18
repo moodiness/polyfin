@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/media"
 )
 
 // Frame makes the image of the video at input, a path or an address FFmpeg
@@ -17,9 +19,9 @@ import (
 // JPEG. The home videos of local folders show it when no image beside
 // them does.
 func Frame(ctx context.Context, ffmpeg, input string, at time.Duration, hdr bool) ([]byte, error) {
-	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-noaccurate_seek",
-		"-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64), "-i", input,
-		"-map", "0:v:0", "-vf", chapterFilter(hdr), "-frames:v", "1", "-f", "yuv4mpegpipe", "pipe:1"}
+	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error", "-noaccurate_seek"}, media.Opens(input, media.File)...)
+	args = append(args, "-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64), "-i", input,
+		"-map", "0:v:0", "-vf", chapterFilter(hdr), "-frames:v", "1", "-f", "yuv4mpegpipe", "pipe:1")
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = &limitedBuffer{b: stderr, limit: 4 << 10}
