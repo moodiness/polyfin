@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/diskspace"
+	"github.com/moodiness/polyfin/internal/relayed"
 )
 
 const (
@@ -1797,13 +1798,11 @@ func (s *Source) serve(w http.ResponseWriter, r *http.Request, streaming bool) (
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return false, err
 	}
+	// The source's own type is answered only when it names media.
 	if w.Header().Get("Content-Type") == "" {
-		contentType := s.ContentType()
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Type", relayed.MediaType(s.ContentType()))
 	}
+	relayed.Sandbox(w.Header())
 	served := &servedReader{reader: reader, ctx: r.Context()}
 	http.ServeContent(w, r, "", time.Time{}, io.NewSectionReader(served, 0, size))
 	return true, served.err

@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/relayed"
 )
 
 const (
@@ -1123,6 +1124,7 @@ func (s *Service) ServeFeed(w http.ResponseWriter, r *http.Request, version libr
 		return err
 	}
 	defer reader.Close()
+	relayed.Sandbox(w.Header())
 	w.Header().Set("Content-Type", "video/mp2t")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)

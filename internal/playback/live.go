@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/relayed"
 	"github.com/moodiness/polyfin/internal/source"
 )
 
@@ -354,10 +355,13 @@ func (s *Service) Redirectable(ctx context.Context, version library.Version) boo
 // playlist naming an address that cannot be rewritten is refused. Other
 // files are relayed as they come, byte ranges included, as EXT-X-BYTERANGE
 // asks them, but for a picture in front of a segment's MPEG-TS, which is
-// skipped (see pictureBefore). When the source does not answer, the player
-// receives a 502 and the error is returned for logging. A file that
-// answered no media, a refusal or a page, returns a fileAnswer telling
-// it, once relayed. A DASH manifest is refused: it plays converted.
+// skipped (see pictureBefore), and for their type, kept only when it
+// names media (see relayed.MediaType); every answer is sandboxed. When
+// the source does not answer, the player receives a 502 and the error is
+// returned for logging. A file that answered no media, a refusal or a
+// page, returns a fileAnswer telling it: a page is not relayed, the
+// player receives a 502; other text is, as bytes. A DASH manifest is
+// refused: it plays converted.
 func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(target, name string) string) error {
 	return s.serveLive(w, r, version, target, liveRelay{link: link})
 }
@@ -374,6 +378,7 @@ type liveRelay struct {
 // serveLive is ServeLive, relaying FFmpeg a DASH manifest when
 // relay.folder is set.
 func (s *Service) serveLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, relay liveRelay) error {
+	relayed.Sandbox(w.Header())
 	link := relay.link
 	// An MPEG-TS stream is read from its feed, shared with every other
 	// reader of the channel.
@@ -464,11 +469,16 @@ func (s *Service) serveLive(w http.ResponseWriter, r *http.Request, version libr
 		_, err = w.Write(rewritten)
 		return err
 	}
-	// What is no media, a page or an empty answer, is relayed as it is,
-	// and told.
+	// What is no media, text or an empty answer, is relayed as it is,
+	// and told, but a page, which is refused: it would be one of
+	// Polyfin's own address.
 	var odd error
 	if head, _ := body.Peek(source.ReplyHead); noMedia(source.Reply{Head: head}) {
 		odd = fileAnswer{name: FileName(target), reply: replyOf(response, body)}
+		if len(head) > 0 && relayed.Page(response.Header.Get("Content-Type"), head) {
+			http.Error(w, "source unavailable", http.StatusBadGateway)
+			return odd
+		}
 	}
 	skip := 0
 	if response.StatusCode == http.StatusOK {
@@ -479,6 +489,7 @@ func (s *Service) serveLive(w http.ResponseWriter, r *http.Request, version libr
 			w.Header().Set(name, value)
 		}
 	}
+	w.Header().Set("Content-Type", relayed.MediaType(response.Header.Get("Content-Type")))
 	if skip > 0 {
 		w.Header().Del("Content-Length")
 		if response.ContentLength > int64(skip) {

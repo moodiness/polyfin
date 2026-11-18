@@ -1160,7 +1160,8 @@ type Delivery struct {
 // redirected to the source when it can fetch it itself: the source needs
 // no headers, is on a public address, and answers now. Otherwise, or when
 // the delivery says so, Polyfin relays the bytes, as it always does those
-// of a version that holds one of its source's connections (see Hold). An
+// of a version that holds one of its source's connections (see Hold), and
+// to a browser that opens the address as a page (see navigation). An
 // expired link is renewed once. A version that is not one file is refused
 // with ErrNoFile.
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
@@ -1168,7 +1169,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.
 		http.Error(w, "not one file", http.StatusNotFound)
 		return ErrNoFile
 	}
-	if !delivery.Relay && !version.HoldsConnection && version.Torrent == nil && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
+	if !delivery.Relay && !navigation(r) && !version.HoldsConnection && version.Torrent == nil && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
 		current, err := s.check(r.Context(), version)
 		if err != nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)
@@ -1180,6 +1181,14 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.
 		return nil
 	}
 	return s.relay(w, r, version, delivery)
+}
+
+// navigation reports whether a browser asks for an address as a page, a
+// link followed or an address typed, rather than a player or a <video>
+// element as media: its Fetch metadata say so. A navigation is never
+// redirected to the address a source chose: the link is one of Polyfin's.
+func navigation(r *http.Request) bool {
+	return r.Header.Get("Sec-Fetch-Mode") == "navigate" || r.Header.Get("Sec-Fetch-Dest") == "document"
 }
 
 // setAttachment names the file an answer saves as, the way Jellyfin

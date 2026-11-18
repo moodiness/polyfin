@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/plays"
+	"github.com/moodiness/polyfin/internal/relayed"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -1613,6 +1614,7 @@ func (h *Handler) pgsFile(w http.ResponseWriter, r *http.Request, file library.E
 		}
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
+	relayed.Sandbox(w.Header())
 	w.WriteHeader(response.StatusCode)
 	_, _ = io.Copy(w, response.Body)
 }

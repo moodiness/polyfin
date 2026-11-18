@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/relayed"
 	"github.com/moodiness/polyfin/internal/source"
 )
 
@@ -27,7 +28,9 @@ var (
 	// forwardedRequest are the player's headers a source needs to answer
 	// byte ranges.
 	forwardedRequest = []string{"Range", "If-Range"}
-	// forwardedResponse are the source's headers a player needs.
+	// forwardedResponse are the source's headers a player needs. Its
+	// Content-Type is forwarded only when it names media (see
+	// relayed.MediaType).
 	forwardedResponse = []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified", "ETag"}
 )
 
@@ -36,10 +39,13 @@ var copyBuffers = sync.Pool{New: func() any { return new([256 << 10]byte) }}
 // relay serves a version to a player, byte ranges included, renewing its
 // link once when it expired. The delivery's content type, when set,
 // replaces the source's: players recognize media by it, and sources often
-// answer application/octet-stream. When the source cannot be reached or
-// does not answer with content, the player receives a 502 and the error is
-// returned for logging; when its source's connections are all in use, a
-// 503. A file analyzed as one, not a live stream, is served from the
+// answer application/octet-stream. The source's own is kept only when it
+// names media, and every answer is sandboxed (see package relayed): a
+// page a source answers is never one of Polyfin's. When the source cannot
+// be reached or does not answer with content, the player receives a 502
+// and the error is returned for logging; when its source's connections
+// are all in use, a 503. A file analyzed as one, not a live stream, is
+// served from the
 // source cache, which reads it the way remuxes do, and so is a file with
 // mirrors, which only the cache reads on from (see open). A version
 // analyzed as an HLS playlist is relayed as a channel's is (see
@@ -47,6 +53,7 @@ var copyBuffers = sync.Pool{New: func() any { return new([256 << 10]byte) }}
 // player would otherwise resolve a relative address against Polyfin's,
 // and fetch a full one without the headers the source needs (#1197).
 func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
+	relayed.Sandbox(w.Header())
 	release, err := s.Hold(r.Context(), version)
 	if err != nil {
 		http.Error(w, "the provider's connections are all in use", http.StatusServiceUnavailable)
@@ -86,6 +93,7 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 			w.Header().Set(name, value)
 		}
 	}
+	w.Header().Set("Content-Type", relayed.MediaType(response.Header.Get("Content-Type")))
 	if delivery.ContentType != "" {
 		w.Header().Set("Content-Type", delivery.ContentType)
 	}

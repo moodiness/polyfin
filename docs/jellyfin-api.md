@@ -640,7 +640,8 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 
 ### Direct play and media source paths for apps
 
-- Direct play answers with a `302` redirect to the provider URL.
+- Direct play answers with a `302` redirect to the provider URL. A request a browser makes to open the address as a page (`Sec-Fetch-Mode: navigate` or `Sec-Fetch-Dest: document`) is relayed instead.
+- Relayed artwork, streams and the files of relayed playlists are answered with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`. Apps, `<img>` and `<video>` elements ignore it.
 - Media sources are `Protocol` `Http`, their `Path` Polyfin's signed address, except for the Jellyfin app for Android's integrated player, which plays a version as it is only from a source described as a file: PlaybackInfo describes its versions that are one file as `Protocol` `File` (see [The integrated player of the Jellyfin app for Android](jellyfin-compatibility.md#the-integrated-player-of-the-jellyfin-app-for-android)).
 
 ### Version picking in PlaybackInfo for apps

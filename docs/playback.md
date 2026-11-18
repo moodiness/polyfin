@@ -27,6 +27,9 @@ flowchart TD
 
 The mode decides server bandwidth.
 
+- **Opened in a browser:** a stream's address opened as a page in a browser, a link followed or an address typed, is relayed rather than redirected. Apps and the web player's video are redirected as before.
+- **Relayed types:** a relayed stream keeps the type its source gives it only when that is a media type, such as `video/mp4` or `audio/aac`. Anything else is passed on as `application/octet-stream`.
+
 API details: [Direct play and media source paths for apps](jellyfin-api.md#direct-play-and-media-source-paths-for-apps).
 
 ### Streams that are HLS playlists
@@ -39,6 +42,7 @@ An addon's stream may be an HLS playlist rather than one file. A finished playli
 - **Played as it is:** an app that plays HLS, such as jellyfin-web, gets the playlist. It is sent to the source when it can reach it itself, and relayed as above otherwise.
 - **Over HLS:** Polyfin reads no keyframe index from a playlist. It is cut every few seconds, and its video is converted, as for addon MPEG-TS files (see [Version names](versions.md#version-names)).
 - **Not kept:** the files a playlist names are fetched at each request, outside the source cache. A seek fetches its segment again.
+- **Media only:** a file a playlist names keeps the type its source gives it only when that is a media type: video, audio, a playlist, WebVTT subtitles or a picture. Anything else is passed on as `application/octet-stream`. A file that is a web page is not relayed: the app receives a `502`.
 
 ## Versions and analysis
 
