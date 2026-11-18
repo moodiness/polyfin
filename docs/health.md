@@ -9,7 +9,7 @@ This page is for administrators. It covers what **System › Health** shows, eac
 Under **Checks**, a tile for each main part tells its state at a glance: **Addons**, **IPTV sources**, **Programme guides**, **Database**, **Transcoder**, **Backups**, **Source cache** and **Stored keys**. The other parts are rows under **Also on this page**, each with its value, when they apply. A tile or a row opens its details over the page, and has its own address, such as `/admin/system/health#process`, which the problems and notifications link to.
 
 - **Addons**, from the requests made for apps since start: last answer, last failure and response time.
-  - **Check**, in its details, asks an addon for its manifest, at most once a minute. For a member's own addon, it reaches only public addresses.
+  - **Check**, in its details, asks an addon for its manifest, at most once a minute. It asks where the addon's own requests go: on public addresses only for a member's own addon and for an addon on a public address (see [What an addon may reach](addons.md#what-an-addon-may-reach)).
   - An addon whose server asked to wait for its catalog pages shows "asked to slow down (too many requests)" until the wait ends, whatever it answered meanwhile (see [Addons that ask to wait](addons.md#addons-that-ask-to-wait)).
 - **IPTV sources** and **Programme guides**.
 - **Network shares**, when there are some. Each is **Notified** of its changes by its server, **Polled** by listing its folders again, **At scans only**, or **Not watched**, with why. Polling runs every 2 minutes by default, 30 for S3 buckets, as each folder's settings ask (see [Local folders](local-folders.md#watching-for-changes)).

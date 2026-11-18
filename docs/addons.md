@@ -31,9 +31,27 @@ These are a starting point: you can turn on any number of catalogs. The message 
 
 The message then says that its catalogs can be turned on in **Content › Libraries**. For a user's own addon, it says **My sources**.
 
-Only administrators can add an addon hosted on a local network address.
+Only administrators can add an addon hosted on a local network address (see [What an addon may reach](#what-an-addon-may-reach)).
 
 API details: [Addons added to a scope](jellyfin-api.md#addons-added-to-a-scope-for-apps).
+
+## What an addon may reach
+
+Polyfin asks an addon for its catalogs and streams, then downloads what its answers name: posters, logos, videos and subtitle files. Where the addon is decides where those may be. The same holds for an [IPTV source](iptv.md) and what its list names.
+
+| The source | Polyfin reaches |
+|---|---|
+| The server's, or an administrator's own, on a local network address | The source itself on the local network only. What it names anywhere: on the local network or on the internet. |
+| The server's, or an administrator's own, on a public address | The source itself, and what it names, on public addresses only, redirects included. |
+| A user's own | The source itself, and what it names, on public addresses only, redirects included. |
+
+- **Naming local addresses:** to let a source name addresses of the local network, add it by its local address, such as `http://192.168.1.20:7000/manifest.json`. A source on a public address reaches public addresses only: a poster, a stream or a subtitle file it names on the local network is refused.
+- **Local addresses:** loopback, private, link-local and unique local addresses, and the range of carrier-grade NAT (`100.64.0.0/10`). A list that is a file of the server counts as local.
+- **Where a source is:** what Polyfin connected to when it last read the manifest or the list, not what a host name resolves to. It is told when the source is added, when its address changes and at each refresh. A name that leads to both is read on the local network when the source answers there, else on the internet.
+- **Redirects:** a source on the local network is asked on the local network only. When its manifest or its answers redirect to a public address, add it by that address instead.
+- **What you enter yourself:** a guide's address, a logo or a stream added to a channel and an image's address are yours, whatever the source. An administrator's may be on the local network.
+- **The source's page:** **Network** tells where Polyfin found the source, for the server's sources and an administrator's own: under **Details** for an addon, beside the address of its list for an IPTV source.
+- **Sources added earlier:** a source added before Polyfin kept this is located when Polyfin starts: by its address when that is an IP address or a file, else by reading it. Until it is read, it counts as on a public address.
 
 ## Personal addons
 

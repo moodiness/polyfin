@@ -1159,6 +1159,7 @@ Administrators add addons to the server's scope, and users to their own, under `
 ### Addons added to a scope for apps
 
 - The answer to `POST /admin/api/scopes/{scope}/addons` tells `enabledLibraries`, how many of the addon's catalogs became libraries, and `libraryLimit`, 20 when none did because the scope had that many libraries already, absent otherwise. An Eclipse addon's `music.rows` counts its catalog rows: with none, "My music" is its library (see [My music](music.md#my-music)).
+- An addon's JSON, from `GET /admin/api/scopes/{scope}/addons` and every answer about an addon or an IPTV source, has `network`: `local` or `public`, where Polyfin found the source when it last read it, empty while that is not told; a local folder is `local` (see [What an addon may reach](addons.md#what-an-addon-may-reach)).
 
 ### Used by in the admin API
 

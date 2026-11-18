@@ -16,7 +16,8 @@ Adding a source takes two steps: the **Account**, then **What to import** and it
 Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
 
 - A user may add their own sources only with **Allow users' own addons** on, the user's **Can add their own addons**, and no parental control or blocked genres (see [Users' own addons](sign-in-and-security.md#users-own-addons)).
-- Only an administrator's source may reach a local network address, or read a file of the server (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
+- Only an administrator's source may be on a local network address, or read a file of the server (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
+- A source on a public address reaches public addresses only, for its list and for the streams and logos the list names. To let a source name addresses of the local network, add it by its local address (see [What an addon may reach](addons.md#what-an-addon-may-reach)).
 
 ### M3U playlists
 
@@ -223,7 +224,7 @@ Edits work one by one, or in bulk by selection, category or keyword.
 
 - A bulk edit first counts what would change.
 - The server pages and searches the lists, so line-ups of tens of thousands of channels stay quick.
-- An added stream's address follows the source's rule for local network addresses. It is never shown in full.
+- An added stream's address is yours, not the source's: an administrator's may be on the local network, a user's own must be public. It is never shown in full.
 
 #### Stream health
 
@@ -336,7 +337,7 @@ Dispatcharr's options go in the addresses' query:
 | `days`, `prev_days` | Bound the guide |
 
 - Dispatcharr serves these addresses only to local networks by default.
-- Polyfin reaches a local network address only from a source an administrator adds to the server.
+- Polyfin reaches a local network address only for a source an administrator adds to the server by its local network address.
 - Channels keep Dispatcharr's numbers, decimals included, its logos, its groups as categories, and its guide.
 
 This is the advised way. It carries everything Dispatcharr curates, needs no login, and lets Dispatcharr enforce the connection limits itself.

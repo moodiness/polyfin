@@ -422,7 +422,7 @@ In an order:
 **Relaying and downloading:**
 
 - Images are relayed by Polyfin, as all artwork is. Apps never reach TMDB or an addon's artwork server.
-- Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon. A user's own addon reaches public addresses only.
+- Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon. A user's own addon reaches public addresses only, and so does a server addon on a public address (see [What an addon may reach](addons.md#what-an-addon-may-reach)).
 - TMDB's answers are kept for 24 hours. At most 4 requests go to TMDB at a time, its images included.
 - Downloading an image is for administrators only. It keeps the image as an upload is kept, below.
 - An address Polyfin did not list for the item and image type is refused, so the server is never sent to an arbitrary address.
