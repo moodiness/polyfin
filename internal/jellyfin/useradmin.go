@@ -339,10 +339,16 @@ func (h *Handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// resetPINsKey counts the wrong PINs entered on the whole server, whichever
+// client entered them, beside those of each client.
+const resetPINsKey = "password-reset-pins"
+
 // redeemPasswordPin resets the password of the users whose PIN is
 // entered: it becomes the PIN, as entered. Like Jellyfin, a PIN that does
 // not match answers 404; unlike Jellyfin, wrong PINs count as failed
-// sign-ins, so that PINs are guessed no faster than passwords.
+// sign-ins, so that PINs are guessed no faster than passwords. No account
+// is named, so every client guesses at the same PINs: a wrong one counts
+// for its client and for the whole server, with the same limit.
 func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 	errs := bindErrors{}
 	raw, ok := requestBody(w, r, "forgotPasswordPinRequest", errs)
@@ -364,9 +370,15 @@ func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer attempt.Cancel()
+	everyone := h.reserve(w, resetPINsKey)
+	if everyone == nil {
+		return
+	}
+	defer everyone.Cancel()
 	users, err := h.Accounts.RedeemPasswordResetPIN(r.Context(), pin)
 	if errors.Is(err, accounts.ErrNotFound) {
 		attempt.Fail()
+		everyone.Fail()
 		processingError(w, http.StatusNotFound)
 		return
 	}
@@ -375,6 +387,7 @@ func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attempt.Succeed()
+	everyone.Succeed()
 	result := PinRedeemResult{Success: true, UsersReset: make([]string, 0, len(users))}
 	for _, user := range users {
 		result.UsersReset = append(result.UsersReset, user.Name)

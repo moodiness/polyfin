@@ -242,6 +242,23 @@ The **Access** section of a user's page under **Users** also holds **Can add the
 
 They come back once both switches are on, and parental control and blocked genres no longer apply. See [Addons and libraries](addons-and-libraries.md).
 
+### Failed attempts
+
+Polyfin counts each client's failed attempts by its address: wrong passwords, codes and PINs, and unknown tokens of invite and share links. No setting changes these limits.
+
+| What is counted | Limit | Past the limit |
+|---|---|---|
+| The failed attempts of a client address | 10 in 15 minutes | Every attempt from the address is refused (429), the right password included. |
+| The wrong two-step codes for an account, whatever the client | 10 in 15 minutes | Every code for the account is refused, the right one included. |
+| The wrong password reset PINs, whatever the client | 10 in 15 minutes | Every PIN is refused, the right one included. |
+
+- **When a limit lifts:** once the oldest of the ten failures is 15 minutes old.
+- **A sign-in does not restart the count:** a right password, code or PIN leaves the failures before it counted, until each is 15 minutes old. A client that signs in to its own account between wrong passwords for another is refused all the same.
+- **IPv6:** the addresses of one /64 count as one client, as one client holds them all. The devices of a network that share a /64 share its count. Each IPv4 address counts alone.
+- **Reset PINs:** a PIN names no account, so every client guesses at the same PINs, and wrong ones count for the whole server. A PIN refused past the limit stays valid for its 30 minutes: enter it again later. An administrator can also set a new password on the user's page under **Users** (see [Forgotten password](metrics-and-api-keys.md#forgotten-password)).
+- **Many addresses:** Polyfin counts the failures of 100,000 addresses at most. Past that, the address whose last failure is the oldest is forgotten first, so that nobody is refused because many others failed.
+- **Behind a reverse proxy:** list the proxy under **Known proxies**, in **Settings › Security**. Otherwise every client counts as the proxy (see [Known proxies](reverse-proxy.md#known-proxies)).
+
 ### Blocking after wrong passwords
 
 After that many wrong passwords in a row, from a Jellyfin app or the admin app, the account refuses every sign-in for 15 minutes. The right password then gets a wrong password's answer.
