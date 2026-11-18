@@ -82,6 +82,12 @@ func (s *Service) playingJobs() []job {
 // A torrent's file keeps its result at each pass, as it gets no other.
 func (s *Service) extendPlaying(ctx context.Context, j job) {
 	version := j.version
+	// A panic leaves the version alone as a read that failed does.
+	defer func() {
+		if cause := recover(); cause != nil {
+			s.unextended.Put(version.ID, s.panicked(j, cause))
+		}
+	}()
 	if !s.Settings().Trickplay || s.converting() {
 		return
 	}

@@ -17,6 +17,7 @@ import (
 	"image"
 	"log/slog"
 	"math"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strings"
@@ -531,6 +532,14 @@ type wanted struct {
 // what the source cache still holds, and nothing else.
 func (s *Service) generate(ctx context.Context, j job) {
 	version := j.version
+	// A panic fails the version as a read that failed does.
+	defer func() {
+		if cause := recover(); cause != nil {
+			err := s.panicked(j, cause)
+			s.failed.Put(version.ID, err)
+			s.recordFailure(ctx, version, err)
+		}
+	}()
 	analysis, ok := s.analysis(ctx, j)
 	if !ok {
 		return
@@ -664,6 +673,17 @@ func failure(err error) []any {
 		return []any{"answer", answer}
 	}
 	return []any{"error", err}
+}
+
+// panicked logs the panic that making the images of a version ended on,
+// with its stack, and returns it as the error its images failed with. The
+// goroutines making images have nothing above them to recover it: the
+// version is left alone as after any failure, and they go on with the
+// others.
+func (s *Service) panicked(j job, cause any) error {
+	s.Logger.Error("Making the images of a version ended on a panic", "title", j.title, "addon", j.version.AddonLog,
+		"version", j.version.ID.String(), "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))
+	return fmt.Errorf("making the images ended on a panic: %v", cause)
 }
 
 // dropHost drops the waiting versions of a paused host: their next play
