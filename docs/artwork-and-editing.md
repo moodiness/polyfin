@@ -74,6 +74,11 @@ Polyfin's own views get an image of their own, with nothing to choose:
 
 Polyfin relays images from the addons' artwork servers, IPTV channel logos included. So Jellyfin apps only ever talk to Polyfin.
 
+Polyfin relays pictures only: JPEG, PNG, GIF, WebP, BMP, ICO and AVIF. It tells them by the image's bytes, not by the type its server gives, and answers with the type of the bytes.
+
+- **SVG is not shown:** an image an artwork server gives as SVG, such as some channel and addon logos, is answered as a missing image. The same goes for anything else that is no picture.
+- **Opened as a page:** a relayed image opened on its own in a browser runs and loads nothing.
+
 ### Downloads
 
 - **Once:** Polyfin downloads an image once, however many apps ask for it at once.

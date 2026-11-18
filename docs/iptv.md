@@ -42,6 +42,7 @@ Polyfin reads these lines of the list:
 - A byte order mark, CRLF line ends and `#EXTGRP` lines are accepted.
 - A decimal number, such as `104.5`, shows as written in apps. The channel sorts after 104 and before 105.
 - An Xtream account's decimal `num` works the same way.
+- A `tvg-logo` must be a picture, such as a PNG or a JPEG. A logo given as SVG is not shown (see [Artwork](artwork-and-editing.md#artwork)).
 
 **Compared with Jellyfin**
 

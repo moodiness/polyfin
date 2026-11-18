@@ -36,6 +36,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/netfail"
+	"github.com/moodiness/polyfin/internal/relayed"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 )
@@ -1160,7 +1161,25 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	case width > 0:
 		image = h.resized(r.Context(), source, image, width)
 	}
-	header.Set("Content-Type", image.contentType)
+	answerPicture(w, r, image)
+}
+
+// answerPicture writes a relayed picture as the answer, with the type its
+// bytes tell, never the one its source gave, sandboxed (see package
+// relayed). What is no raster picture by its bytes, an SVG image kept
+// before only pictures were among them, is answered as a missing image
+// is: 404, and nothing for an app to keep.
+func answerPicture(w http.ResponseWriter, r *http.Request, image artwork) {
+	header := w.Header()
+	contentType, ok := relayed.Picture(image.body)
+	if !ok {
+		header.Del("ETag")
+		header.Del("Cache-Control")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	relayed.Sandbox(header)
+	header.Set("Content-Type", contentType)
 	header.Set("Content-Length", strconv.Itoa(len(image.body)))
 	w.WriteHeader(http.StatusOK)
 	if r.Method != http.MethodHead {

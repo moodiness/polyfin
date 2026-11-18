@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/relayed"
 )
 
 const (
@@ -463,9 +464,12 @@ func (c *Client) Manifest(ctx context.Context, manifestURL string, confined bool
 const maxImageBytes = 15 << 20
 
 // Image downloads artwork referenced by an addon. Only image responses are
-// accepted, so an addon cannot make the server relay arbitrary content. An
-// artwork server that answers 429, or 503, with a Retry-After asks to wait
-// that long, which RetryAfter reads from the error.
+// accepted, so an addon cannot make the server relay arbitrary content,
+// and of those only raster pictures, told by their bytes: the type
+// returned is the bytes', never the one their server gave. Anything else,
+// an SVG image among them, is ErrNoPicture. An artwork server that
+// answers 429, or 503, with a Retry-After asks to wait that long, which
+// RetryAfter reads from the error.
 func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byte, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
@@ -495,5 +499,23 @@ func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byt
 	if len(body) > maxImageBytes {
 		return nil, "", fmt.Errorf("%w: image larger than %d bytes", ErrInvalidResponse, maxImageBytes)
 	}
-	return body, contentType, nil
+	pictureType, ok := relayed.Picture(body)
+	if !ok {
+		return nil, "", noPicture{}
+	}
+	return body, pictureType, nil
+}
+
+// ErrNoPicture reports artwork that is no raster picture by its bytes,
+// whatever type its server gave it (see relayed.Picture).
+var ErrNoPicture = errors.New("the artwork is no picture that is relayed")
+
+// noPicture is ErrNoPicture, and to its callers an image its server does
+// not have: ErrUnreachable, with the status of a missing one for StatusOf.
+type noPicture struct{}
+
+func (noPicture) Error() string { return ErrNoPicture.Error() }
+
+func (noPicture) Unwrap() []error {
+	return []error{ErrNoPicture, ErrUnreachable, httpStatus(http.StatusNotFound)}
 }

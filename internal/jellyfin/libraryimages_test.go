@@ -37,7 +37,7 @@ func TestLibrariesShowTheImageChosen(t *testing.T) {
 			}})
 		case strings.HasSuffix(path, ".jpg"):
 			w.Header().Set("Content-Type", "image/jpeg")
-			_, _ = w.Write([]byte("jpeg " + strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".jpg")))
+			_, _ = w.Write([]byte(jpegStart + "jpeg " + strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".jpg")))
 		default:
 			http.NotFound(w, r)
 		}
@@ -118,7 +118,7 @@ func TestLibrariesShowTheImageChosen(t *testing.T) {
 	if ratio := ratioOf(token); ratio != 16.0/9.0 {
 		t.Errorf("an automatic backdrop's aspect ratio: %v", ratio)
 	}
-	if status, body := download(id); status != http.StatusOK || body != "jpeg backdrop" {
+	if status, body := download(id); status != http.StatusOK || body != jpegStart+"jpeg backdrop" {
 		t.Errorf("downloading the automatic image: %d %q", status, body)
 	}
 	if _, tag := view(kid); tag != "" {

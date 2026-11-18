@@ -48,7 +48,7 @@ func TestSeasonsShowTheirOwnImages(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": show()})
 		case strings.HasSuffix(path, ".jpg"):
 			w.Header().Set("Content-Type", "image/jpeg")
-			_, _ = w.Write([]byte("jpeg " + strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".jpg")))
+			_, _ = w.Write([]byte(jpegStart + "jpeg " + strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".jpg")))
 		default:
 			http.NotFound(w, r)
 		}
@@ -124,7 +124,7 @@ func TestSeasonsShowTheirOwnImages(t *testing.T) {
 	asked := metaRequests.Load()
 	for i, season := range seasons.Items {
 		status, header, body := s.send(http.MethodGet, "/Items/"+season.Id+"/Images/Primary?tag="+season.ImageTags["Primary"], "", "", "")
-		if status != http.StatusOK || string(body) != "jpeg "+want[i] || header.Get("ETag") != `"`+tags[want[i]]+`"` {
+		if status != http.StatusOK || string(body) != jpegStart+"jpeg "+want[i] || header.Get("ETag") != `"`+tags[want[i]]+`"` {
 			t.Errorf("image of season %d: %d %q %s", *season.IndexNumber, status, body, header.Get("ETag"))
 		}
 	}

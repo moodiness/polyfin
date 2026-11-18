@@ -77,6 +77,9 @@ func TestLibraryImages(t *testing.T) {
 		case path == "/page.html":
 			w.Header().Set("Content-Type", "text/html")
 			_, _ = w.Write([]byte("<p>not an image</p>"))
+		case path == "/drawing.svg":
+			w.Header().Set("Content-Type", "image/svg+xml")
+			_, _ = w.Write([]byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -179,6 +182,9 @@ func TestLibraryImages(t *testing.T) {
 			"invalid_image_url"},
 		"not an image address": {"shared", administrator, with(map[string]any{"image": "custom", "url": server.URL + "/page.html"}),
 			http.StatusBadGateway, "image_unreachable"},
+		// An image that is no picture by its bytes, as an upload of it.
+		"the address of an SVG image": {"shared", administrator, with(map[string]any{"image": "custom", "url": server.URL + "/drawing.svg"}),
+			http.StatusBadRequest, "invalid_image"},
 		"not a library": {"shared", administrator, map[string]any{"addonId": addon.ID.String(), "catalogType": "movie", "catalogId": "new",
 			"image": "automatic"}, http.StatusBadRequest, "invalid_library"},
 		"a live TV catalog": {"shared", administrator, map[string]any{"addonId": addon.ID.String(), "catalogType": "tv", "catalogId": "channels",

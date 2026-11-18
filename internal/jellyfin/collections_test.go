@@ -65,7 +65,7 @@ func groupedAddon(t *testing.T) string {
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": meta(parts[2])})
 		case len(parts) == 2 && parts[0] == "poster":
 			w.Header().Set("Content-Type", "image/jpeg")
-			_, _ = w.Write([]byte("poster of " + strings.TrimSuffix(parts[1], ".jpg")))
+			_, _ = w.Write([]byte(jpegStart + "poster of " + strings.TrimSuffix(parts[1], ".jpg")))
 		default:
 			http.NotFound(w, r)
 		}
@@ -414,7 +414,7 @@ func TestCollectionsShowEachUserTheTitlesTheyMaySee(t *testing.T) {
 		if response.StatusCode != http.StatusOK {
 			t.Fatalf("poster: %d %s", response.StatusCode, body)
 		}
-		return string(body)
+		return strings.TrimPrefix(string(body), jpegStart)
 	}
 	for _, tc := range []struct {
 		user, device string

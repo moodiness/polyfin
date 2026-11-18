@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -292,9 +293,13 @@ func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confine
 
 // DownloadImage downloads the picture at address once, from public
 // addresses only when confined, and keeps it as an item's uploaded
-// artwork of imageType (see UploadImage).
+// artwork of imageType (see UploadImage). What its bytes tell is no
+// picture is an invalid image, as an upload of it is.
 func (s *Service) DownloadImage(ctx context.Context, id accounts.ID, imageType, address string, confined bool) error {
 	data, _, err := s.client.Image(ctx, address, confined)
+	if errors.Is(err, stremio.ErrNoPicture) {
+		return accounts.ErrInvalidImage
+	}
 	if err != nil {
 		return err
 	}

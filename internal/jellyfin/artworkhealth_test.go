@@ -66,7 +66,7 @@ func newCountingArt(t *testing.T) *countingArt {
 			return
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
-		_, _ = w.Write([]byte("jpeg bytes"))
+		_, _ = w.Write([]byte(jpegBytes))
 	}))
 	t.Cleanup(a.Close)
 	return a
@@ -274,7 +274,7 @@ func gonePhotoAddon(t *testing.T) string {
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie()})
 		case path == "/poster.jpg":
 			w.Header().Set("Content-Type", "image/jpeg")
-			_, _ = w.Write([]byte("jpeg bytes"))
+			_, _ = w.Write([]byte(jpegBytes))
 		default:
 			http.NotFound(w, r)
 		}

@@ -65,10 +65,5 @@ func (h *Handler) boxSetImage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	header.Set("Content-Type", image.contentType)
-	header.Set("Content-Length", strconv.Itoa(len(image.body)))
-	w.WriteHeader(http.StatusOK)
-	if r.Method != http.MethodHead {
-		_, _ = w.Write(image.body)
-	}
+	answerPicture(w, r, image)
 }

@@ -99,7 +99,7 @@ func catalogAddon(t *testing.T) string {
 			http.NotFound(w, r)
 		case path == "/poster.jpg":
 			w.Header().Set("Content-Type", "image/jpeg")
-			_, _ = w.Write([]byte("jpeg bytes"))
+			_, _ = w.Write([]byte(jpegBytes))
 		default:
 			http.NotFound(w, r)
 		}
@@ -585,7 +585,7 @@ func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
 	body := make([]byte, 64)
 	n, _ := response.Body.Read(body)
 	_ = response.Body.Close()
-	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "image/jpeg" || string(body[:n]) != "jpeg bytes" {
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "image/jpeg" || string(body[:n]) != jpegBytes {
 		t.Fatalf("image: %d %s %q", response.StatusCode, response.Header.Get("Content-Type"), body[:n])
 	}
 	request, _ := http.NewRequest(http.MethodGet, s.url+"/Items/"+movie.Id+"/Images/Primary", nil)

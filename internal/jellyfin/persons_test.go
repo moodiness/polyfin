@@ -114,7 +114,7 @@ func peopleAddon(t *testing.T, peopleSearch bool, requests *addonRequests) strin
 			http.NotFound(w, r)
 		case strings.HasSuffix(path, ".jpg"):
 			w.Header().Set("Content-Type", "image/jpeg")
-			_, _ = w.Write([]byte("jpeg bytes"))
+			_, _ = w.Write([]byte(jpegBytes))
 		default:
 			http.NotFound(w, r)
 		}

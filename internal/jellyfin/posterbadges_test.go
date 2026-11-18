@@ -284,7 +284,7 @@ func TestPosterPreviewsDrawBadgesWhileOff(t *testing.T) {
 func TestPosterTemplateReplacesTheAddonsPosters(t *testing.T) {
 	t.Parallel()
 	b := newBadged(t)
-	templated := bytes.Repeat([]byte("templated "), 10)
+	templated := append([]byte(jpegStart), bytes.Repeat([]byte("templated "), 10)...)
 	posters := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/movie/tt0000.jpg" && r.URL.Path != "/series/tt0100.jpg" {
 			http.NotFound(w, r)

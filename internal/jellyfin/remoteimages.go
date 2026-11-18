@@ -362,14 +362,8 @@ func (h *Handler) remoteImage(w http.ResponseWriter, r *http.Request) {
 			found = h.resized(r.Context(), image.URL, found, image.Width)
 		}
 	}
-	header := w.Header()
-	header.Set("Content-Type", found.contentType)
-	header.Set("Content-Length", strconv.Itoa(len(found.body)))
-	header.Set("Cache-Control", taggedImage)
-	w.WriteHeader(http.StatusOK)
-	if r.Method != http.MethodHead {
-		_, _ = w.Write(found.body)
-	}
+	w.Header().Set("Cache-Control", taggedImage)
+	answerPicture(w, r, found)
 }
 
 // downloadRemoteImage keeps an image listed for an item as its artwork of
