@@ -130,6 +130,10 @@ func matroskaVideo(f *file) (*Video, error) {
 		if point.cluster >= uint64(f.size) || off >= f.size {
 			return nil, m.outside(point.cluster, "Cluster of a keyframe")
 		}
+		// The keyframe is relative bytes into its Cluster's data.
+		if point.relative >= uint64(f.size-off) {
+			return nil, m.outside(point.cluster+min(point.relative, uint64(f.size)), "keyframe")
+		}
 		v.Keyframes = append(v.Keyframes, point.time)
 		v.frames = append(v.frames, frameAt{off: off, relative: int64(point.relative), hasRelative: point.hasRelative})
 	}
@@ -499,7 +503,10 @@ func (r *FrameReader) Read(ctx context.Context, indexes []int, fn func(index int
 			if index < 0 || index >= len(v.frames) {
 				return fmt.Errorf("no keyframe %d", index)
 			}
-			place := r.first(v.frames[index])
+			place, err := r.first(v.frames[index])
+			if err != nil {
+				return fmt.Errorf("keyframe at %v: %w", v.Keyframes[index], err)
+			}
 			if len(batch) > 0 && (!r.ranges || len(batch) == batchFrames || bytes+int64(place.N) > batchBytes) {
 				break
 			}
@@ -545,10 +552,11 @@ type FrameReader struct {
 // first is the range read first for a keyframe: an MP4 sample exactly;
 // for a Matroska block, a guess of its size, from the start of its
 // Cluster until the length of a Cluster header is known, or when its
-// index does not say where in the Cluster the block is.
-func (r *FrameReader) first(place frameAt) Range {
+// index does not say where in the Cluster the block is. A Matroska block
+// its index places where the file has no byte left is unreadable.
+func (r *FrameReader) first(place frameAt) (Range, error) {
 	if !r.v.matroska {
-		return Range{Off: place.off, N: int(place.n)}
+		return Range{Off: place.off, N: int(place.n)}, nil
 	}
 	off := place.off
 	n := r.guess
@@ -562,7 +570,10 @@ func (r *FrameReader) first(place frameAt) Range {
 	default:
 		off += r.header + place.relative
 	}
-	return Range{Off: off, N: int(min(n, r.v.size-off))}
+	if n = min(n, r.v.size-off); n <= 0 {
+		return Range{}, fmt.Errorf("keyframe at %d of a file of %d bytes: %w", off, r.v.size, errInvalid)
+	}
+	return Range{Off: off, N: int(n)}, nil
 }
 
 // fetchBatch reads ranges with one request when the source serves
@@ -594,8 +605,12 @@ func (r *FrameReader) fetchBatch(ctx context.Context, ranges []Range) ([][]byte,
 	return data, nil
 }
 
-// fetch reads exactly the n bytes at off.
+// fetch reads exactly the n bytes at off. A length below zero is refused
+// here, as Fetchers do not all refuse it.
 func (r *FrameReader) fetch(ctx context.Context, off, n int64) ([]byte, error) {
+	if n < 0 {
+		return nil, fmt.Errorf("fetching %d bytes at %d: %w", n, off, errInvalid)
+	}
 	data, err := r.f.Fetch(ctx, off, int(n))
 	if err != nil {
 		return nil, err
