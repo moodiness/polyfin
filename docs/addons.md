@@ -67,6 +67,13 @@ Polyfin refuses any other version, even by its identifier or from a saved link. 
 - Share-link guests play as the user who shared the title.
 - DLNA devices play as the user whose libraries they show.
 
+A user's own addon changes nothing for the other users. Titles, episodes and channels are the same items for everyone, known by the identifier their addon gives them, and an own addon may name one that a server addon lists:
+
+- **Titles and channels a server addon lists:** they keep the server addon's name, texts, artwork, type and rating, for everyone, the own addon's owner included. The owner's libraries and searches still list them as their addon names them; opening one shows the server addon's title.
+- **Titles only an own addon lists:** they are their owner's. Asked by their identifier, they answer other users as titles that do not exist, unless one of that user's addons describes them. The pages of a person, a genre or a studio do not list them to other users, and a person only such titles credit is not found. Administrators, who can edit every item, still open and list them. Once a server addon lists the same title, it is the server's.
+- **Episodes:** an own addon's description does not take an episode from a series a server addon lists.
+- **Libraries shown as movies and shows:** switching an own library between home videos and movies and shows moves its owner's played marks, favorites and resume points, no one else's.
+
 **Compared with Jellyfin**
 
 - An item outside a user's access answers as one that does not exist, as in Jellyfin ([`MediaInfoController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/MediaInfoController.cs#L171-L175), Jellyfin 12.4).
