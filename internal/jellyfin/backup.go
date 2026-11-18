@@ -163,7 +163,8 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, backup.ErrBackupNotFound):
 		notFoundProblem(w)
 	case errors.Is(err, backup.ErrUnreadableSecrets), errors.Is(err, backup.ErrNotABackup), errors.Is(err, backup.ErrNewerBackup),
-		errors.Is(err, backup.ErrChangedBackup), errors.Is(err, backup.ErrNoPgRestore), errors.Is(err, backup.ErrRestoring):
+		errors.Is(err, backup.ErrChangedBackup), errors.Is(err, backup.ErrNoPgRestore), errors.Is(err, backup.ErrRestoring),
+		errors.Is(err, backup.ErrDamagedBackup):
 		h.Logger.Warn("A restore asked for by an app was refused", "file", body.ArchiveFileName, "error", err)
 		processingError(w, http.StatusBadRequest)
 	default:

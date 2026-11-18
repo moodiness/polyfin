@@ -2,28 +2,48 @@ package backup
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
-
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// pg_restore writes a backup as an SQL script, which Polyfin runs itself
-// in one transaction: its statements, and the data of each table as a COPY
-// block, its rows in COPY's text format up to a line `\.`.
+// pg_restore writes the data of a backup as an SQL script: settings, the
+// rows of each table as a COPY block, in COPY's text format up to a line
+// `\.`, and the value of each sequence. Polyfin reads the script, and
+// sends none of its lines to the database: it tells what each line asks
+// for, and a restore then issues statements of its own (see load). A
+// line that is none of those pg_restore writes for Polyfin's tables
+// fails the script.
 
-// copyHeader is the line starting a COPY block: the table, schema
-// qualified, and its columns.
-var copyHeader = regexp.MustCompile(`^COPY ([^ ]+) \((.*)\) FROM stdin;$`)
+// scriptName is a name as pg_dump writes it: as it is when it is made of
+// lower-case letters, digits and underscores, quoted otherwise.
+const scriptName = `(?:[a-z_][a-z0-9_]*|"(?:[^"']|"")+")`
+
+var (
+	// copyHeader is the line starting a COPY block: the table, in public,
+	// and its columns.
+	copyHeader = regexp.MustCompile(`^COPY public\.(` + scriptName + `) \((.+)\) FROM stdin;$`)
+	firstName  = regexp.MustCompile(`^` + scriptName)
+	// sequenceValue is the line setting a sequence of public: its value,
+	// and whether a row took it already.
+	sequenceValue = regexp.MustCompile(`^SELECT pg_catalog\.setval\('public\.(` + scriptName + `)', (-?[0-9]{1,19}), (true|false)\);$`)
+	// setting is a line setting a parameter of the session the script is
+	// written for.
+	setting = regexp.MustCompile(`^SET ([a-z_]+) = ('[^']*'|[A-Za-z0-9_]+);$`)
+)
+
+// emptySearchPath is the line emptying the search path of the session
+// the script is written for.
+const emptySearchPath = `SELECT pg_catalog.set_config('search_path', '', false);`
 
 // errScript reports a script pg_restore would not write.
 var errScript = errors.New("pg_restore wrote a script Polyfin does not read")
 
-// script reads a script: statements between COPY blocks, then each block.
+// script reads a script: what each of its lines asks for, then the rows
+// of each COPY block.
 type script struct {
 	r    *bufio.Reader
 	done bool
@@ -33,53 +53,92 @@ func newScript(r io.Reader) *script {
 	return &script{r: bufio.NewReaderSize(r, 1<<20)}
 }
 
-// statements returns the statements up to the next COPY block or the end,
-// and the block's header, empty at the end. psql's \restrict and
-// \unrestrict lines, which guard psql against a doctored script, are left
-// out: no psql reads it.
-func (s *script) statements() (sql, header string, err error) {
-	var b strings.Builder
+// The kinds of entry: a COPY block, whose rows follow; the value of a
+// sequence; the encoding of the rows.
+const (
+	scriptEnd = iota
+	scriptCopy
+	scriptSequence
+	scriptEncoding
+)
+
+// entry is what a script asks for next: nothing more at its end.
+type entry struct {
+	kind int
+	// name is the table of a COPY block or the sequence, without schema
+	// nor quotes, or the encoding.
+	name string
+	// columns are those of a COPY block.
+	columns []string
+	// value and called are the value of a sequence.
+	value  int64
+	called bool
+}
+
+// next returns the next entry of the script. Comments, the other
+// settings, the search path and psql's \restrict and \unrestrict lines,
+// which guard psql against a doctored script, are passed over: Polyfin
+// runs none of them.
+func (s *script) next() (entry, error) {
 	for !s.done {
 		line, err := s.r.ReadString('\n')
 		if errors.Is(err, io.EOF) {
 			s.done = true
-			if line == "" {
-				break
-			}
 		} else if err != nil {
-			return "", "", err
+			return entry{}, err
 		}
-		trimmed := strings.TrimRight(line, "\r\n")
-		if copyHeader.MatchString(trimmed) {
-			return b.String(), trimmed, nil
-		}
-		if strings.HasPrefix(trimmed, `\restrict `) || strings.HasPrefix(trimmed, `\unrestrict `) {
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" || strings.HasPrefix(line, "--") || line == emptySearchPath ||
+			strings.HasPrefix(line, `\restrict `) || strings.HasPrefix(line, `\unrestrict `) {
 			continue
 		}
-		if strings.HasPrefix(trimmed, `\`) {
-			return "", "", fmt.Errorf("%w: %.40s", errScript, trimmed)
+		if match := setting.FindStringSubmatch(line); match != nil {
+			if match[1] == "client_encoding" {
+				return entry{kind: scriptEncoding, name: strings.Trim(match[2], "'")}, nil
+			}
+			continue
 		}
-		b.WriteString(line)
+		if match := copyHeader.FindStringSubmatch(line); match != nil {
+			if columns, ok := scriptNames(match[2]); ok {
+				return entry{kind: scriptCopy, name: unquoteName(match[1]), columns: columns}, nil
+			}
+		}
+		if match := sequenceValue.FindStringSubmatch(line); match != nil {
+			if value, err := strconv.ParseInt(match[2], 10, 64); err == nil {
+				return entry{kind: scriptSequence, name: unquoteName(match[1]), value: value, called: match[3] == "true"}, nil
+			}
+		}
+		return entry{}, fmt.Errorf("%w: %.40q", errScript, line)
 	}
-	return b.String(), "", nil
+	return entry{}, nil
 }
 
-// copyTarget reads a COPY block's header: its table, without schema, and
-// its columns, quoted or not.
-func copyTarget(header string) (table string, columns []string) {
-	match := copyHeader.FindStringSubmatch(header)
-	if _, name, ok := strings.Cut(match[1], "."); ok {
-		table = name
-	} else {
-		table = match[1]
-	}
-	for column := range strings.SplitSeq(match[2], ", ") {
-		if unquoted, ok := strings.CutPrefix(column, `"`); ok {
-			column = strings.ReplaceAll(strings.TrimSuffix(unquoted, `"`), `""`, `"`)
+// scriptNames reads a list of names, as a COPY block's header separates
+// its columns.
+func scriptNames(list string) ([]string, bool) {
+	var names []string
+	for {
+		name := firstName.FindString(list)
+		if name == "" {
+			return nil, false
 		}
-		columns = append(columns, column)
+		names = append(names, unquoteName(name))
+		if list = list[len(name):]; list == "" {
+			return names, true
+		}
+		var more bool
+		if list, more = strings.CutPrefix(list, ", "); !more {
+			return nil, false
+		}
 	}
-	return strings.Trim(table, `"`), columns
+}
+
+// unquoteName reads a name scriptName matched.
+func unquoteName(name string) string {
+	if unquoted, ok := strings.CutPrefix(name, `"`); ok {
+		return strings.ReplaceAll(strings.TrimSuffix(unquoted, `"`), `""`, `"`)
+	}
+	return name
 }
 
 // copyData is the data of the COPY block being read, as COPY reads it: its
@@ -110,49 +169,18 @@ func (c *copyData) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// drain reads the rest of the block, as when its data is not wanted.
-func (c *copyData) drain() error {
-	_, err := io.Copy(io.Discard, c)
-	return err
-}
-
-// run runs the script on conn, a transaction being open on it.
-func (s *script) run(ctx context.Context, conn *pgconn.PgConn) error {
-	for {
-		sql, header, err := s.statements()
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(sql) != "" {
-			if _, err := conn.Exec(ctx, sql).ReadAll(); err != nil {
-				return err
-			}
-		}
-		if header == "" {
-			return nil
-		}
-		data := &copyData{s: s}
-		if _, err := conn.CopyFrom(ctx, data, strings.TrimSuffix(header, ";")); err != nil {
-			table, _ := copyTarget(header)
-			return fmt.Errorf("restore %s: %w", table, err)
-		}
-		if !data.end {
-			if err := data.drain(); err != nil {
-				return err
-			}
-		}
-	}
-}
-
 // eachRow calls row with each row of every COPY block of the script, its
 // table without schema, and its values by column: NULL is absent.
 func (s *script) eachRow(row func(table string, values map[string]string) error) error {
 	for {
-		_, header, err := s.statements()
-		if err != nil || header == "" {
+		block, err := s.next()
+		if err != nil || block.kind == scriptEnd {
 			return err
 		}
-		name, columns := copyTarget(header)
+		if block.kind != scriptCopy {
+			continue
+		}
+		name, columns := block.name, block.columns
 		for {
 			line, err := s.r.ReadString('\n')
 			if err != nil {

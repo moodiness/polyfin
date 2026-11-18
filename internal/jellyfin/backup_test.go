@@ -191,6 +191,36 @@ func TestAppsCannotRestoreAnEncryptedBackup(t *testing.T) {
 	}
 }
 
+// A file of the folder named as an encrypted backup that is not one is
+// refused by /Backup/Restore with 400, as the admin app refuses it:
+// nothing is restored, and nothing is backed up first.
+func TestAppsCannotRestoreABackupNamedEncryptedThatIsNot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, admin, _, service := backupServer(t, dir, func(c *backup.Config, _ *pgxpool.Pool) {
+		c.PgRestore, c.DatabaseURL = "true", "postgresql://polyfin@127.0.0.1:1/polyfin"
+	})
+	name := "polyfin-20261001-040000.dump.enc"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("PGDMP a dump that is not encrypted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status, body := s.call(http.MethodGet, "/Backup", admin, nil); status != http.StatusOK || !strings.Contains(string(body), name) {
+		t.Errorf("list: %d %s", status, body)
+	}
+	if status, body := s.call(http.MethodPost, "/Backup/Restore", admin, map[string]string{"ArchiveFileName": name}); status != http.StatusBadRequest {
+		t.Errorf("restore: %d %s", status, body)
+	}
+	select {
+	case <-service.Requested():
+		t.Error("a file named as encrypted that is not is restored")
+	default:
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Errorf("the folder after the refusal: %v %v", entries, err)
+	}
+}
+
 // /Backup/Restore restores a backup of the folder as the admin app does:
 // Polyfin backs up the current database, then stops to restore it. A
 // backup holding stored keys the current POLYFIN_SECRET_KEY cannot decrypt

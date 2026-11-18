@@ -382,11 +382,15 @@ func temporaryPath(dir string) string {
 }
 
 // prepare inspects plan's file and keeps it as the backup to restore. An
-// encrypted backup is kept locked, to be opened by Unlock.
+// encrypted backup is kept locked, to be opened by Unlock. A file named
+// as an encrypted backup that is not one is refused: its passphrase
+// would not have been asked for, nor its content checked with it.
 func (s *Service) prepare(ctx context.Context, plan Plan) (Plan, error) {
 	encrypted, err := isEncrypted(plan.path)
 	if err == nil && encrypted {
 		plan.Encrypted, plan.Locked, plan.Unreadable = true, true, map[string]int{}
+	} else if err == nil && encryptedName(plan.File) {
+		err = ErrDamagedBackup
 	} else if err == nil {
 		plan.Unreadable, err = s.inspect(ctx, plan.path)
 	}
@@ -815,16 +819,23 @@ func (s *Service) recordBeforeRestore(ctx context.Context, db DB, name string) {
 	}
 }
 
-// restore runs pg_restore's script of plan's backup in one transaction,
-// after dropping what Polyfin's database holds.
+// restore replaces what Polyfin's database holds with the rows of plan's
+// backup, in one transaction: it drops what the database holds, makes
+// Polyfin's schema as the backup had it with Polyfin's own migrations,
+// and loads into it the rows pg_restore writes (see buildSchema and
+// load).
 func (s *Service) restore(ctx context.Context, plan Plan) error {
+	applied, err := s.appliedIn(ctx, plan.path)
+	if err != nil {
+		return err
+	}
 	conn, err := pgx.Connect(ctx, s.cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer conn.Close(context.WithoutCancel(ctx))
-	cmd := exec.CommandContext(ctx, s.cfg.PgRestore, "--no-owner", "--no-privileges", "--no-publications", "--no-subscriptions",
-		"--no-security-labels", "--no-tablespaces", "--file=-", plan.path)
+	cmd := exec.CommandContext(ctx, s.cfg.PgRestore, "--data-only", "--no-owner", "--no-privileges", "--no-publications",
+		"--no-subscriptions", "--no-security-labels", "--no-tablespaces", "--file=-", plan.path)
 	cmd.Env = environment(os.Environ(), "")
 	output := &tail{}
 	cmd.Stderr = output
@@ -852,7 +863,11 @@ func (s *Service) restore(ctx context.Context, plan Plan) error {
 	if err := dropAll(ctx, tx); err != nil {
 		return failed(fmt.Errorf("empty the database: %w", err))
 	}
-	if err := newScript(bufio.NewReader(stdout)).run(ctx, conn.PgConn()); err != nil {
+	schema, err := buildSchema(ctx, tx, applied)
+	if err != nil {
+		return failed(fmt.Errorf("make Polyfin's schema: %w", err))
+	}
+	if err := newScript(bufio.NewReader(stdout)).load(ctx, tx, schema); err != nil {
 		return failed(err)
 	}
 	if err := cmd.Wait(); err != nil {
@@ -860,6 +875,9 @@ func (s *Service) restore(ctx context.Context, plan Plan) error {
 			return fmt.Errorf("pg_restore failed (%w): %s", err, message)
 		}
 		return fmt.Errorf("pg_restore failed: %w", err)
+	}
+	if err := schema.finish(ctx, tx, applied); err != nil {
+		return err
 	}
 	return tx.Commit(ctx)
 }

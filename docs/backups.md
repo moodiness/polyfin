@@ -155,6 +155,7 @@ An encrypted backup asks for its passphrase first.
 
 - Polyfin decrypts it into the backups folder, checking every chunk.
 - A wrong passphrase can be typed again.
+- A file named `.dump.enc` that is not encrypted is refused as damaged: no backup named as encrypted is restored without its passphrase. A dump decrypted outside Polyfin restores under a name ending in `.dump`.
 
 Then, as for any backup, Polyfin checks it without changing anything:
 
@@ -221,7 +222,9 @@ A new Polyfin, before any administrator exists, can restore a backup instead of 
    - Playbacks, conversions and recordings in progress stop, and the tasks running are cancelled.
    - While the restore runs, apps get `503 Service Unavailable`, and `/healthz` answers.
 3. The backup is restored into Polyfin's database, in one transaction.
-   - What the database user owns there is dropped, and the backup's tables and data are created again.
+   - What the database user owns there is dropped.
+   - Polyfin makes its own tables again, with the migrations the backup applied.
+   - The backup's rows are loaded into them, and its sequences are set.
    - If anything fails, the transaction is rolled back, and the database is exactly as it was.
 4. The restored database is migrated to this Polyfin's schema. Its activity log records who restored which backup.
 5. Polyfin starts again on it, in the same process, and the admin app reloads.
@@ -235,20 +238,28 @@ Afterwards, everything is as it was when the backup was made: users, settings, a
 - **Server identity:** it is the backup's. Apps that knew the server before the backup reconnect without being set up again.
 - **Theme files:** a backup holds the database only. The files of a [copy of a theme](themes-and-custom-code.md#keeping-a-copy-of-a-theme) stay in the data folder. On another system, **Update the copy** downloads them again.
 
+What a restore takes from a backup:
+
+- **Rows only:** the rows of Polyfin's tables, and the values of their sequences. Polyfin reads them from the file and writes them itself. No statement of the file is run.
+- **Polyfin's own schema:** the tables, indexes, constraints, functions and triggers are made by Polyfin's migrations, never from the file.
+- **Nothing else:** a backup that holds rows of a table Polyfin does not have, or anything other than rows in its data, is refused as not being a backup of Polyfin's database. Nothing is restored from it.
+- A table, an index or a view added to Polyfin's database by hand is therefore not restored. A backup that holds such a table is refused: restore it by hand (see [Restoring a backup by hand](#restoring-a-backup-by-hand)).
+
 What the restore needs from PostgreSQL:
 
 - It runs inside Polyfin's own database, rather than in a new database swapped in for it.
 - It needs no other privilege than owning Polyfin's tables, which every setup grants, since Polyfin creates them.
 - It does not need the database user to create or rename databases.
-- The transaction drops and creates every table and index at once. Measured on Polyfin's database at its current migrations, it holds about 6,150 locks at its end, nearly all in PostgreSQL's shared lock table: one for each table, index and sequence dropped and created, and for the objects that depend on them. A migration takes only the locks of the tables it changes.
+- The transaction drops every table and index, and makes them again, at once. Measured on Polyfin's database at its current migrations, it holds about 7,700 locks at its end, nearly all in PostgreSQL's shared lock table: one for each table, index and sequence dropped and created, for the objects that depend on them, and for what the migrations made and replaced on the way. A migration takes only the locks of the tables it changes.
 - PostgreSQL's shared lock table holds `max_locks_per_transaction` (64) for each of its server processes: about 8,700 with PostgreSQL 18's defaults, 100 connections and the background processes. A server set with a smaller `max_connections` or `max_locks_per_transaction` may refuse the restore, with "out of shared memory". The restore then fails without changing anything. Raise `max_locks_per_transaction` to keep a margin: to 128 with 100 connections, to 512 with 20, as the light settings of `compose.yaml` do (see [A light PostgreSQL](installation.md#a-light-postgresql)).
-- The restore leaves out the backup's `GRANT` statements. Privileges granted to other database users on Polyfin's tables must be granted again.
+- The restore makes Polyfin's tables anew. Privileges granted to other database users on them must be granted again.
 
 Jellyfin apps restore a backup of the folder the same way, through `/Backup/Restore` (see [Jellyfin compatibility](jellyfin-compatibility.md#backups)).
 
 - They cannot show the warning about the key, nor ask for a passphrase.
 - A backup holding keys the current key cannot decrypt is refused there with 400.
 - An encrypted backup is refused there with 400 too, with a message to restore it from the admin app.
+- A file named `.dump.enc` that is not encrypted is refused there with 400 as well.
 
 ## Restoring a backup by hand
 
@@ -261,6 +272,7 @@ A backup also restores into the PostgreSQL 18 container with its own `pg_restore
 - When the backups are in Polyfin's data volume, copy the one to restore out of it first: `mkdir -p backups && docker compose cp polyfin:/data/backups/polyfin-20261005-040000.dump backups/`.
 - On Unraid, use `docker stop`, `docker exec` and `docker start` with your containers' names instead.
 - An encrypted backup restores by hand once decrypted. Download it decrypted from the panel, or restore it from the admin app or the setup page, which decrypt it.
+- Unlike a restore from the admin app, `pg_restore` runs everything the file holds, as the database user. Restore by hand only a backup you made yourself and kept where nobody else could change it.
 
 1. Stop Polyfin, so that nothing writes to the database:
 
