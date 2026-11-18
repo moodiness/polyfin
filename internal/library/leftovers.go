@@ -570,8 +570,11 @@ func cleanLeftovers(ctx context.Context, tx pgx.Tx, l leftovers) (Cleaned, error
 		}
 	}
 	// The titles its catalogs listed first, all items scanned once: the
-	// array of their identifiers has them updated by the primary key.
-	if err := exec(&cleaned.Released, `UPDATE items SET data = items.data - '{addon,catalogType,catalogId,confined,parent}'::text[], updated_at = now()
+	// array of their identifiers has them updated by the primary key. A
+	// title released keeps its description, artwork addresses included,
+	// and so whether they are confined to public addresses: the next
+	// catalog that takes it replaces both (see savedData).
+	if err := exec(&cleaned.Released, `UPDATE items SET data = items.data - '{addon,catalogType,catalogId,parent}'::text[], updated_at = now()
 		WHERE items.id = ANY(ARRAY(SELECT id FROM items WHERE kind = ANY($1) AND items.id <> ALL($2) AND (data->'addon' = ANY($3::jsonb[])
 			OR (data->'addon', data->>'catalogType', data->>'catalogId') IN (SELECT a::jsonb, t, c FROM unnest($4::text[], $5::text[], $6::text[]) d(a, t, c)))
 			ORDER BY id FOR UPDATE))`,

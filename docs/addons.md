@@ -320,7 +320,7 @@ Removing a source deletes what belongs to it:
 
 What it leaves:
 
-- **Titles it listed first:** they are released. The next catalog that lists them takes them.
+- **Titles it listed first:** they are released. The next catalog that lists them takes them. Until then, they keep the artwork the source gave them: that of a user's own addon is still downloaded from public addresses only.
 - **Channels of your titles:** a channel airing a removed collection, smart list, series or titles stays, and Health shows it (see [Channel airing a removed source](health.md#channel-airing-a-removed-source)).
 - **Adding it again:** the source gets new libraries. Home rows, library settings and hidden libraries are not restored: users who had one of its libraries hidden see the new ones.
 - **Sources removed another way:** the hourly task "Clean up removed sources" does the same for a user deleted with their own sources, a catalog an addon dropped, or a delete made in the database (see [Scheduled tasks](administration.md#scheduled-tasks)).
