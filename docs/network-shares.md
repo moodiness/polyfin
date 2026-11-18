@@ -94,7 +94,9 @@ When the server later offers another key, Polyfin refuses to connect, as `ssh` d
 - its page shows **Cannot be read** as soon as the server offers the key, before the next scan;
 - **Edit the folder** shows the new key's fingerprint, with **Accept the new key**.
 
-Accept it only when the server was reinstalled or its key changed on purpose. Polyfin then saves it, tries again at once the titles that could not play meanwhile, and scans the folder again.
+Accept it only when the server was reinstalled or its key changed on purpose, after comparing the fingerprint shown with the server's own. Polyfin accepts the key of that fingerprint and no other: it saves it, tries again at once the titles that could not play meanwhile, and scans the folder again.
+
+When the server has offered yet another key by the time you accept, nothing is accepted and the saved key stays. The page says so and shows the fingerprint now offered, to compare again.
 
 A folder moved to another server forgets the former server's key.
 

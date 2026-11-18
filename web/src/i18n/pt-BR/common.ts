@@ -478,6 +478,8 @@ const common: typeof en = {
       'Digite o endpoint como um endereço http:// ou https://, como https://s3.example.org, e uma região de no máximo 64 caracteres sem espaços.',
     invalid_share_key:
       'Cole uma chave privada OpenSSH ou PEM completa e, se houver, a frase secreta que a abre.',
+    offered_host_key_changed:
+      'A chave do host apresentada pelo servidor mudou desde que foi exibida, e nada foi aceito. Compare a impressão digital exibida agora antes de aceitá-la.',
     invalid_rclone_remote:
       'Digite o nome de um dos remotes do rclone, sem dois-pontos nem barra, com no máximo 128 caracteres.',
     invalid_poll_minutes:

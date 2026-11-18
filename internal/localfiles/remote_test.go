@@ -199,7 +199,9 @@ func (f *fakeS3) readRanges() []string {
 }
 
 // fakeSFTP serves the test's disk over SFTP to user, signed in with
-// password or the key authorized, under a host key rekey changes.
+// password or the key authorized, under a host key rekey changes. It
+// keeps the passwords it was sent by the fingerprint of the host key it
+// offered when it got them.
 type fakeSFTP struct {
 	addr           string
 	user, password string
@@ -209,6 +211,7 @@ type fakeSFTP struct {
 	hostKey  ssh.Signer
 	listener net.Listener
 	conns    []net.Conn
+	sent     map[string][]string
 }
 
 // newSigner makes an Ed25519 key.
@@ -270,6 +273,13 @@ func serveSFTP(t *testing.T, user, password string, authorized ssh.PublicKey) *f
 func (f *fakeSFTP) serve(conn net.Conn, hostKey ssh.Signer) {
 	config := &ssh.ServerConfig{
 		PasswordCallback: func(meta ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			f.mu.Lock()
+			if f.sent == nil {
+				f.sent = map[string][]string{}
+			}
+			print := ssh.FingerprintSHA256(hostKey.PublicKey())
+			f.sent[print] = append(f.sent[print], string(password))
+			f.mu.Unlock()
 			if meta.User() == f.user && f.password != "" && string(password) == f.password {
 				return nil, nil
 			}
@@ -313,6 +323,14 @@ func (f *fakeSFTP) serve(conn net.Conn, hostKey ssh.Signer) {
 			}
 		}()
 	}
+}
+
+// sentTo are the passwords the server was sent while it offered the host
+// key of fingerprint print.
+func (f *fakeSFTP) sentTo(print string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.sent[print])
 }
 
 // cut closes the connections open, as a server restarting does.

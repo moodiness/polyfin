@@ -500,6 +500,8 @@ const common: typeof en = {
       'Saisissez le point de terminaison sous forme d’adresse http:// ou https://, comme https://s3.example.org, et une région d’au plus 64 caractères sans espace.',
     invalid_share_key:
       'Collez une clé privée OpenSSH ou PEM entière, et la phrase de passe qui l’ouvre si elle en a une.',
+    offered_host_key_changed:
+      'La clé d’hôte présentée par le serveur a changé depuis son affichage, et rien n’a été accepté. Comparez l’empreinte affichée maintenant avant de l’accepter.',
     invalid_rclone_remote:
       'Saisissez le nom de l’un des remotes de rclone, sans deux-points ni barre oblique, d’au plus 128 caractères.',
     invalid_poll_minutes:

@@ -88,6 +88,9 @@ var (
 	// ErrSearchFailed wraps the error of a search of the metadata addons
 	// (see Service.Search).
 	ErrSearchFailed = errors.New("the metadata addons could not be searched")
+	// ErrOfferedKeyChanged is Update's answer to the acceptance of a host
+	// key that is not the one the folder's SFTP server offers now.
+	ErrOfferedKeyChanged = errors.New("the server does not offer the host key accepted")
 )
 
 // Titles finds titles in the server's metadata addons: library.Service.
@@ -550,8 +553,9 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 //
 // An S3 bucket's endpoint and region, an rclone remote's name, an SFTP
 // folder's private key and passphrase, removed when empty, and how often
-// the folder is listed again for changes change too; AcceptHostKey
-// accepts the host key an SFTP server offered in place of the one saved.
+// the folder is listed again for changes change too; AcceptHostKey is the
+// fingerprint, as Folder gives it, of the host key an SFTP server offered
+// in place of the one saved, which it accepts.
 type Changes struct {
 	Name          *string
 	Path          *string
@@ -566,7 +570,7 @@ type Changes struct {
 	PrivateKey    *string
 	Passphrase    *string
 	PollMinutes   *int
-	AcceptHostKey bool
+	AcceptHostKey string
 }
 
 // Update changes a folder's name, path or address, a share's user or
@@ -586,6 +590,10 @@ type Changes struct {
 // titles follows its files between movies, shows and home videos (see
 // rememberTitles and follow); to or from music, nothing follows. A scan
 // under way stops first.
+//
+// A host key is accepted by the fingerprint the administrator was shown:
+// when the server has offered another key since, or none, nothing changes
+// and Update answers ErrOfferedKeyChanged.
 func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (addons.Addon, error) {
 	current, err := s.Folder(ctx, id)
 	if err != nil {
@@ -662,7 +670,7 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	}
 	moved := location != current.Addon.ManifestURL
 	retyped := kind != current.Kind
-	credentials := user != current.User || changes.Password != nil || !extra.same(stored) || changes.AcceptHostKey
+	credentials := user != current.User || changes.Password != nil || !extra.same(stored) || changes.AcceptHostKey != ""
 	// A folder on another server forgets the host key of the former.
 	rehosted := serverOf(location) != serverOf(current.Addon.ManifestURL)
 	release := func() {}
@@ -695,9 +703,19 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 					return err
 				}
 			}
-			if changes.AcceptHostKey {
-				if _, err := tx.Exec(ctx, `UPDATE local_folders SET share_host_key = share_offered_key, share_offered_key = ''
-					WHERE addon_id = $1 AND share_offered_key <> ''`, id); err != nil {
+			if changes.AcceptHostKey != "" {
+				// The key saved is the one read here, under the row's
+				// lock: a connection offered another key meanwhile
+				// waits, and its key is not the one accepted.
+				var offered string
+				if err := tx.QueryRow(ctx, "SELECT share_offered_key FROM local_folders WHERE addon_id = $1 FOR UPDATE", id).Scan(&offered); err != nil {
+					return err
+				}
+				if offered == "" || Fingerprint(offered) != changes.AcceptHostKey {
+					return ErrOfferedKeyChanged
+				}
+				if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_host_key = $2, share_offered_key = '' WHERE addon_id = $1", id,
+					offered); err != nil {
 					return err
 				}
 			}
@@ -754,7 +772,7 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	if changes.AcceptHostKey || rehosted {
+	if changes.AcceptHostKey != "" || rehosted {
 		// The reader keeps the host key it was made with.
 		s.forgetRemote(id)
 	}

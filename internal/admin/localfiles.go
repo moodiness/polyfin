@@ -201,7 +201,8 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 // rclone remote the remote's name; those three how often they are listed
 // again for changes, in minutes, 0 only at their scans, their kind's
 // default when left out on adding. acceptHostKey accepts the host key an
-// SFTP server offered in place of the one saved.
+// SFTP server offered in place of the one saved, named by its
+// fingerprint as offeredHostKey gave it.
 type folderRequest struct {
 	Name          *string `json:"name"`
 	Path          *string `json:"path"`
@@ -216,7 +217,7 @@ type folderRequest struct {
 	Passphrase    *string `json:"passphrase"`
 	RcloneRemote  *string `json:"rcloneRemote"`
 	PollMinutes   *int    `json:"pollMinutes"`
-	AcceptHostKey bool    `json:"acceptHostKey"`
+	AcceptHostKey string  `json:"acceptHostKey"`
 	// UsedBy is who uses the folder, on adding it; everyone when left
 	// out.
 	UsedBy *usedByJSON `json:"usedBy"`
@@ -262,7 +263,8 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 // user or password, whether its titles show the artwork beside their
 // files, whether its scans read the extras beside them, or what it holds;
 // a new path or address, a new user or password, or what it holds, is
-// scanned at once.
+// scanned at once. A host key accepted that is not the one the server
+// offers now is a conflict, offered_host_key_changed.
 func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {
@@ -278,7 +280,7 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil && body.ReadExtras == nil &&
 		body.Kind == "" && body.Endpoint == nil && body.Region == nil && body.PrivateKey == nil && body.Passphrase == nil &&
-		body.RcloneRemote == nil && body.PollMinutes == nil && !body.AcceptHostKey {
+		body.RcloneRemote == nil && body.PollMinutes == nil && body.AcceptHostKey == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -289,6 +291,10 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 		changes.Kind = &body.Kind
 	}
 	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id, changes)
+	if errors.Is(err, localfiles.ErrOfferedKeyChanged) {
+		writeError(w, http.StatusConflict, "offered_host_key_changed")
+		return
+	}
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 

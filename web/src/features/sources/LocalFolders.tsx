@@ -789,7 +789,8 @@ function HostKey({ folder, addonId }: { folder: LocalFolder; addonId: string }) 
   const text = t.localFolders
   const toast = useToast()
   const accept = useMutation({
-    mutationFn: () => updateLocalFolder(addonId, { acceptHostKey: true }),
+    // The key accepted is the one whose fingerprint shows, not one offered since.
+    mutationFn: () => updateLocalFolder(addonId, { acceptHostKey: folder.offeredHostKey }),
     onSuccess: (updated) => {
       replaceCachedAddon('shared', updated)
       toast(text.hostKeyAccepted)
@@ -804,7 +805,8 @@ function HostKey({ folder, addonId }: { folder: LocalFolder; addonId: string }) 
         </code>
         {folder.offeredHostKey !== '' && (
           <Notice tone="danger">
-            <p>{text.hostKeyOffered(folder.offeredHostKey)}</p>
+            {/* The fingerprint is one long word: it wraps, so that it shows whole to compare. */}
+            <p className="[overflow-wrap:anywhere]">{text.hostKeyOffered(folder.offeredHostKey)}</p>
             <div className="mt-3">
               <Button
                 size="sm"

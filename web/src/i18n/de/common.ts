@@ -507,6 +507,8 @@ const common: typeof en = {
       'Gib den Endpunkt als http://- oder https://-Adresse ein, etwa https://s3.example.org, und eine Region mit höchstens 64 Zeichen ohne Leerzeichen.',
     invalid_share_key:
       'Füge einen vollständigen privaten OpenSSH- oder PEM-Schlüssel ein und, falls vorhanden, die Passphrase, die ihn öffnet.',
+    offered_host_key_changed:
+      'Der vom Server angebotene Hostschlüssel hat sich seit der Anzeige geändert, und nichts wurde akzeptiert. Vergleiche den jetzt angezeigten Fingerabdruck, bevor du ihn akzeptierst.',
     invalid_rclone_remote:
       'Gib den Namen eines rclone-Remotes ein, ohne Doppelpunkt oder Schrägstrich, mit höchstens 128 Zeichen.',
     invalid_poll_minutes:

@@ -3,6 +3,7 @@ package localfiles
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"maps"
@@ -318,7 +319,7 @@ func TestSFTPHostKeys(t *testing.T) {
 		folder.OfferedHostKey != ssh.FingerprintSHA256(other) {
 		t.Fatalf("another host key: %+v %v", folder, err)
 	}
-	if _, err := e.service.Update(t.Context(), addon.ID, Changes{AcceptHostKey: true}); err != nil {
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{AcceptHostKey: folder.OfferedHostKey}); err != nil {
 		t.Fatal(err)
 	}
 	e.idle(addon.ID)
@@ -345,6 +346,110 @@ func TestSFTPHostKeys(t *testing.T) {
 	}
 	if folder, _ := e.service.Folder(t.Context(), addon.ID); folder.Error != "" || folder.Files != 1 {
 		t.Errorf("after the connection closed: %+v", folder)
+	}
+}
+
+// An SFTP server's new host key is accepted by the fingerprint the
+// administrator was shown. When the server has offered another key since,
+// the acceptance is refused: the key saved stays, the key now offered
+// shows, and the folder's password is sent to neither. The key then shown
+// is accepted in turn, the scan signs in to it, and a key offered after
+// that is refused as any other is. A change that names no fingerprint
+// accepts nothing.
+func TestAHostKeyIsAcceptedByTheFingerprintShown(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
+	const password = "pass phrase"
+	server := serveSFTP(t, "reader", password, nil)
+	address := "sftp://" + server.addr + sftpPath(filepath.Join(dir, "movies"))
+	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Server", Path: address, Kind: KindMovies, User: "reader", Password: password})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	folder, err := e.service.Folder(t.Context(), addon.ID)
+	if err != nil || folder.Error != "" || folder.HostKey == "" {
+		t.Fatalf("first connection: %+v %v", folder, err)
+	}
+	saved := folder.HostKey
+
+	// The key the administrator is shown.
+	shown := ssh.FingerprintSHA256(server.rekey(t))
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	folder, err = e.service.Folder(t.Context(), addon.ID)
+	if err != nil || folder.Error != errHostKey || folder.HostKey != saved || folder.OfferedHostKey != shown {
+		t.Fatalf("another host key: %+v %v", folder, err)
+	}
+	// The server offers yet another one before it is accepted.
+	later := ssh.FingerprintSHA256(server.rekey(t))
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		name   string
+		accept string
+		err    error
+	}{
+		{"no fingerprint", "", nil},
+		{"the fingerprint shown", shown, ErrOfferedKeyChanged},
+		{"the fingerprint of the key saved", saved, ErrOfferedKeyChanged},
+		{"a text that is no fingerprint", "true", ErrOfferedKeyChanged},
+	} {
+		if _, err := e.service.Update(t.Context(), addon.ID, Changes{AcceptHostKey: c.accept}); !errors.Is(err, c.err) || err == nil != (c.err == nil) {
+			t.Errorf("%s: accepted with %v, expected %v", c.name, err, c.err)
+		}
+		e.idle(addon.ID)
+		if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+			t.Fatal(err)
+		}
+		folder, err = e.service.Folder(t.Context(), addon.ID)
+		if err != nil || folder.Error != errHostKey || folder.HostKey != saved || folder.OfferedHostKey != later {
+			t.Errorf("%s: the key saved is %s and the key offered %s (%s, %v), expected %s and %s", c.name, folder.HostKey,
+				folder.OfferedHostKey, folder.Error, err, saved, later)
+		}
+		for _, print := range []string{shown, later} {
+			if got := server.sentTo(print); len(got) != 0 {
+				t.Errorf("%s: a key that was not accepted was sent %q", c.name, got)
+			}
+		}
+		if t.Failed() {
+			return
+		}
+	}
+
+	// The key now shown is still the one offered.
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{AcceptHostKey: folder.OfferedHostKey}); err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	folder, err = e.service.Folder(t.Context(), addon.ID)
+	if err != nil || folder.Error != "" || folder.Files != 1 || folder.HostKey != later || folder.OfferedHostKey != "" {
+		t.Fatalf("the host key accepted: %+v %v", folder, err)
+	}
+	if got := server.sentTo(later); !slices.Contains(got, password) {
+		t.Errorf("the key accepted was sent %q", got)
+	}
+	// Accepting it again finds no key offered.
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{AcceptHostKey: later}); !errors.Is(err, ErrOfferedKeyChanged) {
+		t.Errorf("accepted twice: %v", err)
+	}
+
+	// The connections after the acceptance check the key it saved.
+	last := ssh.FingerprintSHA256(server.rekey(t))
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	folder, err = e.service.Folder(t.Context(), addon.ID)
+	if err != nil || folder.Error != errHostKey || folder.HostKey != later || folder.OfferedHostKey != last {
+		t.Errorf("a key offered after the acceptance: %+v %v", folder, err)
+	}
+	if got := slices.Concat(server.sentTo(shown), server.sentTo(last)); len(got) != 0 {
+		t.Errorf("keys that were not accepted were sent %q", got)
 	}
 }
 
@@ -642,7 +747,7 @@ func TestFolderChangesRetryItsVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.idle(addon.ID)
-	server.rekey(t)
+	offered := ssh.FingerprintSHA256(server.rekey(t))
 	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +758,7 @@ func TestFolderChangesRetryItsVersions(t *testing.T) {
 	}{
 		{"a name", Changes{Name: new("Other server")}, false},
 		{"its artwork", Changes{UseArtwork: new(false)}, false},
-		{"the host key accepted", Changes{AcceptHostKey: true}, true},
+		{"the host key accepted", Changes{AcceptHostKey: offered}, true},
 		{"a password", Changes{Password: new("pass phrase")}, true},
 		{"another user", Changes{User: new("other")}, true},
 		{"an address", Changes{Path: new("sftp://" + server.addr + sftpPath(dir))}, true},

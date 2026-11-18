@@ -464,6 +464,8 @@ const common = {
       'Enter the endpoint as an http:// or https:// address, such as https://s3.example.org, and a region of at most 64 characters without spaces.',
     invalid_share_key:
       'Paste a whole OpenSSH or PEM private key, and the passphrase that opens it when it has one.',
+    offered_host_key_changed:
+      'The host key the server offers changed since it was shown, and nothing was accepted. Compare the fingerprint shown now before you accept it.',
     invalid_rclone_remote:
       'Enter the name of one of rclone’s remotes, without a colon or a slash, at most 128 characters.',
     invalid_poll_minutes:

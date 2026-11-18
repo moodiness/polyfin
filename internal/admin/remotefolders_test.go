@@ -163,3 +163,89 @@ func TestRemoteFoldersAPI(t *testing.T) {
 		t.Errorf("remotes: %d %v", status, answer)
 	}
 }
+
+// An SFTP folder's new host key is accepted by its fingerprint, as
+// offeredHostKey gave it: the fingerprint of the key the server offers is
+// answered the folder, with that key saved; another one, as after the
+// server offered yet another key, is a conflict with its own code, and
+// the boolean older clients sent is refused, both leaving the key saved
+// and the key offered as they were.
+func TestAFoldersHostKeyIsAcceptedByItsFingerprint(t *testing.T) {
+	t.Parallel()
+	box, err := secrets.New(bytes.Repeat([]byte{9}, secrets.KeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deps testDeps
+	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
+		deps = d
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		lib := library.New(d.pool, d.addons, d.client, logger, o.Accounts.Settings)
+		folders := localfiles.New(d.pool, d.addons, lib, logger, o.Accounts.Settings, box)
+		t.Cleanup(folders.Close)
+		o.Folders = folders
+	})
+	admin := api.signedIn("root", true)
+	// The server is not reached: an address no server answers at, and the
+	// keys a connection would have kept.
+	status, answer, _ := admin.call(http.MethodPost, "/scopes/shared/folders", map[string]any{"name": "Server",
+		"path": "sftp://127.0.0.1:9/srv/movies", "kind": "movies", "user": "reader", "password": "pass phrase", "pollMinutes": 0})
+	id, _ := answer["id"].(string)
+	if status != http.StatusCreated || id == "" {
+		t.Fatalf("the folder: %d %v", status, answer)
+	}
+	var keys, prints [3]string
+	for i := range keys {
+		public, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := ssh.NewPublicKey(public)
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys[i], prints[i] = string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key))), ssh.FingerprintSHA256(key)
+	}
+	saved, shown, later := 0, 1, 2
+	if _, err := deps.pool.Exec(t.Context(), "UPDATE local_folders SET share_host_key = $2, share_offered_key = $3 WHERE addon_id = $1", id,
+		keys[saved], keys[later]); err != nil {
+		t.Fatal(err)
+	}
+	stored := func() (hostKey, offered string) {
+		t.Helper()
+		if err := deps.pool.QueryRow(t.Context(), "SELECT share_host_key, share_offered_key FROM local_folders WHERE addon_id = $1", id).
+			Scan(&hostKey, &offered); err != nil {
+			t.Fatal(err)
+		}
+		return hostKey, offered
+	}
+
+	for _, test := range []struct {
+		name   string
+		accept any
+		status int
+		code   string
+	}{
+		{"a boolean", true, http.StatusBadRequest, "invalid_request"},
+		{"no fingerprint", "", http.StatusBadRequest, "invalid_request"},
+		{"the fingerprint of a key offered before", prints[shown], http.StatusConflict, "offered_host_key_changed"},
+		{"the fingerprint of the key saved", prints[saved], http.StatusConflict, "offered_host_key_changed"},
+	} {
+		status, answer, _ := admin.call(http.MethodPatch, "/scopes/shared/folders/"+id, map[string]any{"acceptHostKey": test.accept})
+		if status != test.status || answer["error"] != test.code {
+			t.Errorf("%s: %d %v, expected %d %s", test.name, status, answer, test.status, test.code)
+		}
+		if hostKey, offered := stored(); hostKey != keys[saved] || offered != keys[later] {
+			t.Fatalf("%s: the key saved or the key offered changed: %q, %q", test.name, hostKey, offered)
+		}
+	}
+
+	status, answer, _ = admin.call(http.MethodPatch, "/scopes/shared/folders/"+id, map[string]any{"acceptHostKey": prints[later]})
+	if folder, _ := answer["folder"].(map[string]any); status != http.StatusOK || folder["hostKey"] != prints[later] ||
+		folder["offeredHostKey"] != "" {
+		t.Errorf("the fingerprint of the key offered: %d %v", status, answer)
+	}
+	if hostKey, offered := stored(); hostKey != keys[later] || offered != "" {
+		t.Errorf("the key accepted: saved %q, offered %q", hostKey, offered)
+	}
+}

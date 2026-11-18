@@ -1430,7 +1430,8 @@ export type NewLocalFolder = {
 /**
  * A change of a folder; a password, private key or passphrase left out keeps the stored one, an
  * empty one removes it. A new kind scans the folder again as that kind. `acceptHostKey` accepts
- * the host key an SFTP server offers in place of the one saved.
+ * the host key an SFTP server offers in place of the one saved, named by the fingerprint shown,
+ * the folder's `offeredHostKey`; when the server offers another one by then, nothing is accepted.
  */
 export type LocalFolderPatch = Partial<{
   name: string
@@ -1446,7 +1447,7 @@ export type LocalFolderPatch = Partial<{
   passphrase: string
   rcloneRemote: string
   pollMinutes: number
-  acceptHostKey: boolean
+  acceptHostKey: string
 }>
 
 /** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */
