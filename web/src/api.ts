@@ -1118,6 +1118,13 @@ export type Addon = {
   language: string
   /** Who uses a server source; a user's own source is used by everyone, its owner alone seeing it. */
   usedBy: UsedBy
+  /**
+   * Where the source is, as Polyfin last read it: 'local' for one on the local network, whose
+   * answers may name addresses there when it is the server's or an administrator's own, and for
+   * a local folder; 'public' for one on the internet, whose answers may only name public
+   * addresses; '' while it is not told.
+   */
+  network: 'local' | 'public' | ''
 }
 
 /**

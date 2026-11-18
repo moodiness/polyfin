@@ -16,6 +16,7 @@ import {
   type IptvTuner,
   type Scope,
 } from '@/api'
+import { useSessionUser } from '@/app/session'
 import { invalidateLineup, iptvCatalog, lineupPath } from '@/features/iptv/lineup'
 import { Fact, Facts, Group } from '@/features/sources/parts'
 import { errorMessage } from '@/format'
@@ -208,6 +209,9 @@ function Summary({
   const vod = source.vod
   const { liveTv, movies, series } = source.options
   const vodPath = scope === 'shared' ? '/libraries' : '/me/sources'
+  // Told of the server's sources and of an administrator's own (see SourceDetail).
+  const administrator = useSessionUser().isAdministrator
+  const network = scope === 'shared' || administrator ? addon.network : ''
   const figures = 'grid grid-cols-4 gap-2.5 max-lg:grid-cols-2'
   return (
     <div>
@@ -326,6 +330,11 @@ function Summary({
           <Fact label={t.iptv.address} wide>
             <span className="font-mono text-body break-all">{source.address}</span>
           </Fact>
+          {network !== '' && (
+            <Fact label={t.sources.network} wide>
+              {t.sources.networks[network]}
+            </Fact>
+          )}
         </Facts>
         <p className="mt-4 max-w-[66ch] px-2 text-small text-ink-3">{text.refreshHelp}</p>
       </Group>

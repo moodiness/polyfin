@@ -59,6 +59,12 @@ const sources = {
     details: 'Details',
     manifestUrl: 'Manifest address',
     address: 'Address',
+    network: 'Network',
+    networks: {
+      local: 'Local. What it names may be on the local network too.',
+      public:
+        'Internet. What it names on the local network is refused: to allow it, add the source by its address on the local network.',
+    },
     version: 'Version',
     provides: 'Provides',
     types: 'Types',

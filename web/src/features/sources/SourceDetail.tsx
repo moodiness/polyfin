@@ -21,6 +21,7 @@ import {
   type LibraryChanges,
   type Scope,
 } from '@/api'
+import { useSessionUser } from '@/app/session'
 import { IptvSource } from '@/features/iptv/IptvSource'
 import { catalogTypeLabel, errorMessage, languageOptions, stremioLabel } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
@@ -119,6 +120,11 @@ export function SourceDetail({
   const folder = addon.folder
   useFolderScanFollowed(addon)
   const system = useServerSystem()
+  // Where a source is tells what it may name: said of the server's sources and of an
+  // administrator's own. A member's own reach public addresses only, wherever they are.
+  const administrator = useSessionUser().isAdministrator
+  const network =
+    folder === null && (scope === 'me' ? administrator : entry.owner === null) ? addon.network : ''
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [confirmingAll, setConfirmingAll] = useState(false)
@@ -432,6 +438,11 @@ export function SourceDetail({
               >
                 <span className="font-mono text-body break-all">{addon.manifestUrl}</span>
               </Fact>
+              {network !== '' && (
+                <Fact label={text.network} wide>
+                  {text.networks[network]}
+                </Fact>
+              )}
               {folder !== null && folder.share === 's3' && (
                 <Fact label={t.localFolders.endpoint} wide>
                   <span className="font-mono text-body break-all">{folder.endpoint}</span>

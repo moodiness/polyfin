@@ -61,6 +61,12 @@ const sources: typeof en = {
     details: 'Detalles',
     manifestUrl: 'Dirección del manifiesto',
     address: 'Dirección',
+    network: 'Red',
+    networks: {
+      local: 'Local. Lo que indica también puede estar en la red local.',
+      public:
+        'Internet. Lo que indica en la red local se rechaza: para permitirlo, añade la fuente por su dirección en la red local.',
+    },
     version: 'Versión',
     provides: 'Proporciona',
     types: 'Tipos',

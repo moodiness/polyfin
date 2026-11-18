@@ -61,6 +61,12 @@ const sources: typeof en = {
     details: 'Détails',
     manifestUrl: 'Adresse du manifeste',
     address: 'Adresse',
+    network: 'Réseau',
+    networks: {
+      local: 'Local. Ce que la source désigne peut aussi se trouver sur le réseau local.',
+      public:
+        'Internet. Ce que la source désigne sur le réseau local est refusé\u202f: pour l’autoriser, ajoutez-la par son adresse sur le réseau local.',
+    },
     version: 'Version',
     provides: 'Fournit',
     types: 'Types',
