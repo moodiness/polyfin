@@ -127,9 +127,12 @@ type syncRequest struct {
 // server keeps the state of playback and tells members what to do and
 // when, on its clock; members keep in step by themselves.
 type syncGroup struct {
-	sp      *syncPlay
-	id      accounts.ID
-	name    string
+	sp   *syncPlay
+	id   accounts.ID
+	name string
+	// creator is the user who made the group, of whose groups it stays
+	// one until it ends (see syncPlay.room).
+	creator accounts.ID
 	created time.Time
 
 	// mu guards what follows. Messages that changes produce gather in
@@ -156,6 +159,9 @@ type syncGroup struct {
 	// waitDeadline is when a wait for buffering members gives up.
 	waitDeadline time.Time
 	waitTimer    *time.Timer
+	// unattended is since when no member was found to hold a socket, on
+	// the handler's clock: zero while one does (see syncPlay.attended).
+	unattended time.Time
 }
 
 // unlock queues the messages the group's changes produced, and releases
@@ -248,6 +254,26 @@ func (g *syncGroup) info() GroupInfoDto {
 	}
 	return GroupInfoDto{GroupId: g.id.String(), GroupName: g.name, State: g.state.String(), Participants: participants,
 		LastUpdatedAt: Time(time.Now())}
+}
+
+// listed are the titles a listing checks its reader may play, where
+// joining checks the whole queue: the title played, then those after it
+// and round from the queue's start, each once, maxListedTitles at most.
+// A queue of fewer titles is checked whole.
+func (g *syncGroup) listed() []accounts.ID {
+	items := g.queue.items()
+	from := max(g.queue.playing, 0)
+	var titles []accounts.ID
+	for i := range items {
+		item := items[(from+i)%len(items)]
+		if slices.Contains(titles, item) {
+			continue
+		}
+		if titles = append(titles, item); len(titles) == maxListedTitles {
+			break
+		}
+	}
+	return titles
 }
 
 // setState changes the group's state, the next one starting afresh.

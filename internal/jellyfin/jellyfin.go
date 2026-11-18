@@ -328,7 +328,7 @@ func New(options Options) *Handler {
 	h.nameOrders = cache.NewLasting[drawKey, nameOrder](100, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
 		Sized(128<<20, func(o nameOrder) int { return len(o.items) * nameOrderTitleSize })
 	h.nameBuilds = newNameBuilds()
-	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
+	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, h.syncPlayConnected, func() time.Time { return h.now() }, options.Logger)
 	h.syncPlay.ended = h.groupEnded
 	h.listings = newListings(h.listVersions)
 	if options.Library != nil {

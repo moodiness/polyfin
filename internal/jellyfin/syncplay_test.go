@@ -701,7 +701,9 @@ func TestSyncPlayChecksAccessWithoutHoldingGroups(t *testing.T) {
 		delete(gates, user)
 	}
 	messages := make(chan syncMessage, 100)
-	sp := newSyncPlay(canPlay, func(m syncMessage) { messages <- m }, slog.New(slog.DiscardHandler))
+	// Every session is taken to hold a socket.
+	sp := newSyncPlay(canPlay, func(m syncMessage) { messages <- m }, func(accounts.ID) bool { return true }, time.Now,
+		slog.New(slog.DiscardHandler))
 	member := func(user accounts.ID) *groupMember {
 		return &groupMember{device: user, user: user, name: user.String(), ping: defaultPing}
 	}
@@ -724,7 +726,7 @@ func TestSyncPlayChecksAccessWithoutHoldingGroups(t *testing.T) {
 		return g.queue.items()
 	}
 	ctx := t.Context()
-	info := sp.create(member(alice), "group", nil)
+	info, _ := sp.create(member(alice), "group", nil)
 	id, _ := accounts.ParseID(info.GroupId)
 	sp.handle(ctx, alice, syncRequest{kind: "Play", items: []accounts.ID{item1}})
 	g := sp.groupOf(alice)
@@ -1179,5 +1181,294 @@ func TestSyncPlayQueueKeepsTheEntryPlaying(t *testing.T) {
 	q.playIndex(0)
 	if q.previous() || q.playing != 0 {
 		t.Errorf("previous before the first: %d", q.playing)
+	}
+}
+
+// newGroup has the app make a group of name, and gives its identifier.
+func (a syncPlayApp) newGroup(t *testing.T, s testServer, name string) string {
+	t.Helper()
+	status, answer := a.send(t, s, http.MethodPost, "/SyncPlay/New", map[string]any{"GroupName": name})
+	var info GroupInfoDto
+	if status != http.StatusOK || json.Unmarshal(answer, &info) != nil || info.GroupName != name {
+		t.Fatalf("new group of %s: %d %s", a.device, status, answer)
+	}
+	return info.GroupId
+}
+
+// groups lists the groups the app's user sees, each as its name and its
+// participants.
+func (a syncPlayApp) groups(t *testing.T, s testServer) []string {
+	t.Helper()
+	status, answer := a.send(t, s, http.MethodGet, "/SyncPlay/List", nil)
+	var listed []GroupInfoDto
+	if status != http.StatusOK || json.Unmarshal(answer, &listed) != nil {
+		t.Fatalf("groups of %s: %d %s", a.device, status, answer)
+	}
+	groups := []string{}
+	for _, group := range listed {
+		groups = append(groups, group.GroupName+": "+strings.Join(group.Participants, ", "))
+	}
+	return groups
+}
+
+// A user holds maxOwnGroups groups of their making, on however many
+// devices they sign in, with a socket or without: one more replaces the
+// oldest that only their own sessions are in, which are told they left
+// it. Another user lists no more of them than that, keeps a group of
+// their own, and leaves a group by joining or making another, as before.
+func TestSyncPlayGroupsOfAUserAreBounded(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	s.user("alice", nil)
+	s.user("bob", nil)
+	bob := s.syncPlayApp(t, "bob", "bob-tv")
+	bob.newGroup(t, s, "Bob's")
+	bob.expect(t, "GroupJoined", "Stop")
+	// A name stays its creator's choice, of 200 characters at most.
+	name := func(i int) string {
+		prefix := fmt.Sprintf("Group %d ", i)
+		return prefix + strings.Repeat("g", 200-len(prefix))
+	}
+	// listed checks what bob lists: the groups before, alice's groups
+	// from one to another, then the groups after.
+	listed := func(what string, before []string, from, to int, after ...string) {
+		t.Helper()
+		want := slices.Clone(before)
+		for i := from; i <= to; i++ {
+			want = append(want, name(i)+": alice")
+		}
+		if groups := bob.groups(t, s); !slices.Equal(groups, append(want, after...)) {
+			t.Fatalf("%s, bob lists %d groups: %q", what, len(groups), groups)
+		}
+	}
+	first := s.syncPlayApp(t, "alice", "alice-1")
+	first.newGroup(t, s, name(1))
+	first.expect(t, "GroupJoined", "Stop")
+	// Alice's other devices never open a socket.
+	create := func(i int) string {
+		t.Helper()
+		device := fmt.Sprintf("alice-%d", i)
+		return syncPlayApp{device: device, token: s.signIn("alice", device)}.newGroup(t, s, name(i))
+	}
+	for i := 2; i <= maxOwnGroups; i++ {
+		create(i)
+	}
+	listed("with as many groups as a user holds", []string{"Bob's: bob"}, 1, maxOwnGroups)
+
+	// One more ends the oldest, whose session is told it left.
+	create(maxOwnGroups + 1)
+	listed("with one group more", []string{"Bob's: bob"}, 2, maxOwnGroups+1)
+	first.expect(t, "GroupLeft")
+	first.post(t, s, "Pause", nil)
+	first.expect(t, "NotInGroup")
+	const devices = 12
+	var newest string
+	for i := maxOwnGroups + 2; i <= devices; i++ {
+		newest = create(i)
+	}
+	listed("with a group from each device", []string{"Bob's: bob"}, devices-maxOwnGroups+1, devices)
+
+	// Bob joins the newest, which ends his own; then makes another, which
+	// takes him out of hers.
+	bob.post(t, s, "Join", map[string]any{"GroupId": newest})
+	bob.expect(t, "GroupLeft", "GroupJoined", "Stop")
+	listed("once bob joined", nil, devices-maxOwnGroups+1, devices-1, name(devices)+": alice, bob")
+	bob.newGroup(t, s, "Bob's again")
+	bob.expect(t, "GroupLeft", "GroupJoined", "Stop")
+	listed("once bob made a group again", nil, devices-maxOwnGroups+1, devices, "Bob's again: bob")
+}
+
+// A group other users are in is not replaced. When they are in every group
+// a user holds, one more is refused with a 403: its session is told
+// CreateGroupDenied, and stays in the group it is in. Once one of the
+// groups is the user's alone again, it is the one replaced.
+func TestSyncPlayGroupsOtherUsersAreInAreNotReplaced(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	s.user("alice", nil)
+	s.user("bob", nil)
+	var hosts, guests []syncPlayApp
+	var want []string
+	for i := range maxOwnGroups {
+		host := s.syncPlayApp(t, "alice", fmt.Sprintf("alice-%d", i))
+		group := host.newGroup(t, s, fmt.Sprintf("Group %d", i))
+		host.expect(t, "GroupJoined", "Stop")
+		device := fmt.Sprintf("bob-%d", i)
+		guest := syncPlayApp{device: device, token: s.signIn("bob", device)}
+		guest.post(t, s, "Join", map[string]any{"GroupId": group})
+		host.expect(t, "UserJoined")
+		hosts, guests, want = append(hosts, host), append(guests, guest), append(want, fmt.Sprintf("Group %d: alice, bob", i))
+	}
+	refused := func(a syncPlayApp) {
+		t.Helper()
+		status, answer := a.send(t, s, http.MethodPost, "/SyncPlay/New", map[string]any{"GroupName": "One more"})
+		if status != http.StatusForbidden {
+			t.Fatalf("one group more, from %s: %d %s", a.device, status, answer)
+		}
+		a.expect(t, "CreateGroupDenied")
+	}
+	more := s.syncPlayApp(t, "alice", "alice-more")
+	refused(more)
+	refused(hosts[0])
+	if groups := more.groups(t, s); !slices.Equal(groups, want) {
+		t.Fatalf("groups after the refusals: %q", groups)
+	}
+
+	last := maxOwnGroups - 1
+	guests[last].post(t, s, "Leave", nil)
+	hosts[last].expect(t, "UserLeft")
+	more.newGroup(t, s, "One more")
+	more.expect(t, "GroupJoined", "Stop")
+	hosts[last].expect(t, "GroupLeft")
+	if groups := more.groups(t, s); !slices.Equal(groups, append(want[:last:last], "One more: alice")) {
+		t.Fatalf("groups once one was replaced: %q", groups)
+	}
+}
+
+// A group none of whose members holds a socket lasts groupUnattended, on
+// the handler's clock: one made by a session that opens none, or left to
+// such a session by the members that held one. A member that holds a
+// socket keeps the group, whatever the others do, and so does one that
+// opens its socket in time.
+func TestSyncPlayGroupsNobodyIsConnectedToEnd(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	advance := idleClock(s)
+	for _, name := range []string{"alice", "bob", "carol"} {
+		s.user(name, nil)
+	}
+	bob := syncPlayApp{device: "bob-phone", token: s.signIn("bob", "bob-phone")}
+	listed := func(what string, want ...string) {
+		t.Helper()
+		if groups := bob.groups(t, s); !slices.Equal(groups, want) {
+			t.Fatalf("%s, bob lists %q, want %q", what, groups, want)
+		}
+	}
+	// inGroup reports whether a request of the app's for its group is
+	// taken: it is refused once none of its user's sessions is in one.
+	inGroup := func(a syncPlayApp) bool {
+		t.Helper()
+		status, answer := a.send(t, s, http.MethodPost, "/SyncPlay/Pause", nil)
+		if status != http.StatusNoContent && status != http.StatusForbidden {
+			t.Fatalf("pausing from %s: %d %s", a.device, status, answer)
+		}
+		return status == http.StatusNoContent
+	}
+
+	// Alice's session never opens a socket.
+	alice := syncPlayApp{device: "alice-tv", token: s.signIn("alice", "alice-tv")}
+	alice.newGroup(t, s, "Never connected")
+	advance(groupUnattended - time.Second)
+	listed("before the time is up", "Never connected: alice")
+	advance(time.Second)
+	listed("once the time is up")
+	if inGroup(alice) {
+		t.Errorf("alice's session is still in a group that ended")
+	}
+
+	// Carol, who holds a socket, joins such a group, and keeps it.
+	group := alice.newGroup(t, s, "Attended")
+	carol := s.syncPlayApp(t, "carol", "carol-tv")
+	carol.post(t, s, "Join", map[string]any{"GroupId": group})
+	carol.expect(t, "GroupJoined", "Stop")
+	advance(time.Hour)
+	listed("with a member connected", "Attended: alice, carol")
+	// She disconnects, which takes her out at once, as before: the group
+	// lasts groupUnattended from then.
+	_ = carol.socket.conn.CloseNow()
+	eventually(t, "carol leaving the group", func() bool { return slices.Equal(bob.groups(t, s), []string{"Attended: alice"}) })
+	advance(groupUnattended - time.Second)
+	listed("left to a session without a socket", "Attended: alice")
+	advance(time.Second)
+	listed("left to a session without a socket, once the time is up")
+
+	// The server's clean-up ends such a group with nobody asking for it.
+	alice.newGroup(t, s, "Left open")
+	advance(groupUnattended - time.Second)
+	s.handler.syncPlay.endUnattended()
+	if !inGroup(alice) {
+		t.Fatalf("the clean-up ended a group before its time")
+	}
+	advance(time.Second)
+	s.handler.syncPlay.endUnattended()
+	if inGroup(alice) {
+		t.Errorf("the clean-up left a group nobody is connected to")
+	}
+
+	// A session that opens its socket in time keeps its group.
+	alice.newGroup(t, s, "Connected late")
+	advance(groupUnattended - time.Second)
+	var err error
+	if alice.socket, _, err = s.openSocket(t, alice.token); err != nil {
+		t.Fatal(err)
+	}
+	if message := alice.socket.next(t); message.MessageType != "ForceKeepAlive" {
+		t.Fatalf("first message of %s: %+v", alice.device, message)
+	}
+	advance(time.Hour)
+	listed("with its member connected late", "Connected late: alice")
+}
+
+// A listing checks the title a group plays and those after it, each once
+// and maxListedTitles at most, where joining checks the whole queue: a
+// long queue costs those who list groups a bounded number of lookups.
+func TestSyncPlayListingsCheckABoundedPartOfAQueue(t *testing.T) {
+	t.Parallel()
+	alice, bob, carol, dave := randomID(), randomID(), randomID(), randomID()
+	queue := make([]accounts.ID, maxQueueEntries)
+	for i := range queue {
+		queue[i] = randomID()
+	}
+	// The group plays the queue's last title but one: a listing checks it,
+	// the last one, then the queue from its start.
+	playing := len(queue) - 2
+	listed := append(slices.Clone(queue[playing:]), queue[:maxListedTitles-2]...)
+	// Bob may not see a title past those, carol the title played, dave the
+	// queue's first.
+	hidden := map[accounts.ID]accounts.ID{bob: queue[maxListedTitles], carol: queue[playing], dave: queue[0]}
+	var mu sync.Mutex
+	checked := map[accounts.ID][]accounts.ID{}
+	canPlay := func(_ context.Context, user accounts.ID, items []accounts.ID) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		checked[user] = items
+		return !slices.Contains(items, hidden[user])
+	}
+	lastChecked := func(user accounts.ID) []accounts.ID {
+		mu.Lock()
+		defer mu.Unlock()
+		return checked[user]
+	}
+	sp := newSyncPlay(canPlay, func(syncMessage) {}, func(accounts.ID) bool { return true }, time.Now, slog.New(slog.DiscardHandler))
+	member := func(user accounts.ID) *groupMember {
+		return &groupMember{device: user, user: user, name: user.String(), ping: defaultPing}
+	}
+	ctx := t.Context()
+	info, _ := sp.create(member(alice), "group", nil)
+	id := mustID(t, info.GroupId)
+	sp.handle(ctx, alice, syncRequest{kind: "Play", items: queue, index: playing})
+
+	if groups := sp.visible(ctx, bob, nil); len(groups) != 1 {
+		t.Errorf("bob lists %d groups", len(groups))
+	}
+	if got := lastChecked(bob); !slices.Equal(got, listed) {
+		t.Fatalf("a listing checked %d titles, not the %d from the title played", len(got), len(listed))
+	}
+	for name, user := range map[string]accounts.ID{"carol": carol, "dave": dave} {
+		if groups := sp.visible(ctx, user, &id); len(groups) != 0 {
+			t.Errorf("%s reads a group whose next titles they may not see", name)
+		}
+	}
+	// Joining checks every title.
+	sp.join(ctx, member(bob), id)
+	if got := lastChecked(bob); sp.groupOf(bob) != nil || len(got) != len(queue) {
+		t.Errorf("bob joined a group whose queue he may not see, %d of its titles checked", len(got))
+	}
+
+	// A title queued several times is checked once.
+	sp.handle(ctx, alice, syncRequest{kind: "Play", items: []accounts.ID{queue[0], queue[1], queue[0], queue[1], queue[0]}, index: 1})
+	sp.visible(ctx, bob, nil)
+	if got := lastChecked(bob); !slices.Equal(got, []accounts.ID{queue[1], queue[0]}) {
+		t.Errorf("a listing checked %d titles of a queue of two", len(got))
 	}
 }

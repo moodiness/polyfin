@@ -22,6 +22,19 @@ import (
 // stay buffering, as Jellyfin waits.
 const groupWaitTimeout = 30 * time.Second
 
+// Bounds of the groups, which Jellyfin does not have.
+const (
+	// maxOwnGroups bounds the groups a user made that still last: the one
+	// the user watches in, and those left to the people who joined them.
+	maxOwnGroups = 3
+	// groupUnattended is how long a group lasts while none of its members
+	// holds a socket: an app takes part in a group through its socket.
+	groupUnattended = 5 * time.Minute
+	// maxListedTitles bounds the titles of a group's queue that a listing
+	// checks its reader may play.
+	maxListedTitles = 50
+)
+
 // GroupInfoDto describes a SyncPlay group.
 type GroupInfoDto struct {
 	GroupId       string
@@ -101,6 +114,11 @@ type syncPlay struct {
 	canPlay func(ctx context.Context, user accounts.ID, items []accounts.ID) bool
 	// write sends a message to its session.
 	write func(syncMessage)
+	// connected reports whether a session's device holds a socket, and
+	// now is the handler's clock: a group none of whose members holds a
+	// socket ends after groupUnattended (see endUnattended).
+	connected func(device accounts.ID) bool
+	now       func() time.Time
 	// ended, when set, is told of each group that ends, with the
 	// group's locks held.
 	ended  func(group accounts.ID)
@@ -115,10 +133,11 @@ type syncPlay struct {
 // that stopped reading misses the next ones.
 const maxWaiting = 64
 
-func newSyncPlay(canPlay func(context.Context, accounts.ID, []accounts.ID) bool, write func(syncMessage), logger *slog.Logger) *syncPlay {
+func newSyncPlay(canPlay func(context.Context, accounts.ID, []accounts.ID) bool, write func(syncMessage),
+	connected func(accounts.ID) bool, now func() time.Time, logger *slog.Logger) *syncPlay {
 	return &syncPlay{groups: map[accounts.ID]*syncGroup{}, members: map[accounts.ID]*syncGroup{},
-		active: map[accounts.ID]int{}, waitTimeout: groupWaitTimeout, canPlay: canPlay, write: write, logger: logger,
-		outbox: map[accounts.ID][]syncMessage{}}
+		active: map[accounts.ID]int{}, waitTimeout: groupWaitTimeout, canPlay: canPlay, write: write,
+		connected: connected, now: now, logger: logger, outbox: map[accounts.ID][]syncMessage{}}
 }
 
 // deliver queues messages for their sessions, which receive them in the
@@ -172,6 +191,18 @@ func (sp *syncPlay) exists(g *syncGroup) bool {
 	return sp.groups[g.id] == g
 }
 
+// oldestFirst lists the groups, the oldest first.
+func (sp *syncPlay) oldestFirst() []*syncGroup {
+	sp.mu.Lock()
+	groups := make([]*syncGroup, 0, len(sp.groups))
+	for _, g := range sp.groups {
+		groups = append(groups, g)
+	}
+	sp.mu.Unlock()
+	slices.SortFunc(groups, func(a, b *syncGroup) int { return a.created.Compare(b.created) })
+	return groups
+}
+
 // isActive reports whether one of a user's sessions is in a group, which
 // Jellyfin requires of most SyncPlay requests.
 func (sp *syncPlay) isActive(user accounts.ID) bool {
@@ -203,14 +234,63 @@ type nowPlayingTitle struct {
 	paused   bool
 }
 
-// create makes a group of a session, which leaves its group first.
-func (sp *syncPlay) create(member *groupMember, groupName string, playing *nowPlayingTitle) GroupInfoDto {
+// room reports whether user may make a group more. A user holds
+// maxOwnGroups groups of their making: those that last once the session
+// of device left its own. When they are that many, the new group replaces
+// the oldest of them that only the user's sessions are in, which room
+// gives; it is refused when other users are in every one of them. The
+// caller holds joining.
+func (sp *syncPlay) room(user, device accounts.ID) (replaced *syncGroup, ok bool) {
+	held := 0
+	for _, g := range sp.oldestFirst() {
+		if g.creator != user {
+			continue
+		}
+		g.mu.Lock()
+		staying, others := 0, false
+		for _, m := range g.members {
+			if m.device != device {
+				staying++
+				others = others || m.user != user
+			}
+		}
+		g.mu.Unlock()
+		if staying == 0 {
+			continue
+		}
+		held++
+		if replaced == nil && !others {
+			replaced = g
+		}
+	}
+	if held < maxOwnGroups {
+		return nil, true
+	}
+	return replaced, replaced != nil
+}
+
+// create makes a group of a session, which leaves its group first. A user
+// who holds maxOwnGroups groups already has the oldest replaced, its
+// sessions told they left it; when none can be (see room), the creation
+// is refused: the session stays where it is, is told CreateGroupDenied,
+// the update jellyfin-web shows a refused creation for, and create
+// reports false.
+func (sp *syncPlay) create(member *groupMember, groupName string, playing *nowPlayingTitle) (GroupInfoDto, bool) {
+	sp.endUnattended()
 	sp.joining.Lock()
 	defer sp.joining.Unlock()
+	replaced, ok := sp.room(member.user, member.device)
+	if !ok {
+		sp.failed(member.device, accounts.ID{}, "CreateGroupDenied")
+		return GroupInfoDto{}, false
+	}
 	if current := sp.groupOf(member.device); current != nil {
 		sp.leave(current, member.device)
 	}
-	g := &syncGroup{sp: sp, id: randomGUID(), name: groupName, created: time.Now(), queue: newPlayQueue()}
+	if replaced != nil {
+		sp.end(replaced)
+	}
+	g := &syncGroup{sp: sp, id: randomGUID(), name: groupName, creator: member.user, created: time.Now(), queue: newPlayQueue()}
 	g.mu.Lock()
 	defer g.unlock()
 	sp.mu.Lock()
@@ -219,13 +299,15 @@ func (sp *syncPlay) create(member *groupMember, groupName string, playing *nowPl
 	sp.active[member.user]++
 	sp.mu.Unlock()
 	g.create(member, playing)
-	return g.info()
+	sp.attended(g)
+	return g.info(), true
 }
 
 // join adds a session to a group whose queue its user may play. Library
 // lookups may be slow: they are made without holding any lock, and made
 // again if items were queued meanwhile.
 func (sp *syncPlay) join(ctx context.Context, member *groupMember, id accounts.ID) {
+	sp.endUnattended()
 	for {
 		sp.mu.Lock()
 		g := sp.groups[id]
@@ -271,6 +353,7 @@ func (sp *syncPlay) joinChecked(member *groupMember, g *syncGroup, additions int
 		sp.mu.Unlock()
 	}
 	g.join(member)
+	sp.attended(g)
 	return true
 }
 
@@ -307,6 +390,52 @@ func (sp *syncPlay) leave(g *syncGroup, device accounts.ID) {
 		if sp.ended != nil {
 			sp.ended(g.id)
 		}
+		return
+	}
+	// Those who stay may all be without a socket from now on.
+	sp.attended(g)
+}
+
+// end takes every session out of g, which ends it. The caller holds
+// joining.
+func (sp *syncPlay) end(g *syncGroup) {
+	g.mu.Lock()
+	devices := g.recipients(accounts.ID{}, toAll)
+	g.mu.Unlock()
+	for _, device := range devices {
+		sp.leave(g, device)
+	}
+}
+
+// attended reports whether a member of g holds a socket, and notes it:
+// g.unattended is when none was first found to, zero while one does. The
+// caller holds g.
+func (sp *syncPlay) attended(g *syncGroup) bool {
+	if slices.ContainsFunc(g.members, func(m *groupMember) bool { return sp.connected(m.device) }) {
+		g.unattended = time.Time{}
+		return true
+	}
+	if g.unattended.IsZero() {
+		g.unattended = sp.now()
+	}
+	return false
+}
+
+// endUnattended ends the groups none of whose members has held a socket
+// for groupUnattended. A session whose last socket closes leaves at once
+// (see socket): the members without one are sessions that made or joined
+// the group and opened none since, which get none of its messages. A
+// member that holds a socket keeps the group, whatever the others do.
+func (sp *syncPlay) endUnattended() {
+	sp.joining.Lock()
+	defer sp.joining.Unlock()
+	for _, g := range sp.oldestFirst() {
+		g.mu.Lock()
+		ends := !sp.attended(g) && sp.now().Sub(g.unattended) >= groupUnattended
+		g.mu.Unlock()
+		if ends {
+			sp.end(g)
+		}
 	}
 }
 
@@ -340,24 +469,20 @@ func (sp *syncPlay) handle(ctx context.Context, device accounts.ID, r syncReques
 	}
 }
 
-// visible lists the groups whose queue user may play, the oldest first,
-// or only the one of id when id is set.
+// visible lists the groups user may see, the oldest first, or only the
+// one of id when id is set: those whose queue user may play, as far as a
+// listing checks it (see syncGroup.listed).
 func (sp *syncPlay) visible(ctx context.Context, user accounts.ID, id *accounts.ID) []GroupInfoDto {
-	sp.mu.Lock()
-	groups := make([]*syncGroup, 0, len(sp.groups))
-	for _, g := range sp.groups {
-		if id == nil || g.id == *id {
-			groups = append(groups, g)
-		}
-	}
-	sp.mu.Unlock()
-	slices.SortFunc(groups, func(a, b *syncGroup) int { return a.created.Compare(b.created) })
+	sp.endUnattended()
 	infos := []GroupInfoDto{}
-	for _, g := range groups {
+	for _, g := range sp.oldestFirst() {
+		if id != nil && g.id != *id {
+			continue
+		}
 		// Library lookups may be slow: they are made without holding the
 		// group.
 		g.mu.Lock()
-		info, items := g.info(), g.queue.items()
+		info, items := g.info(), g.listed()
 		g.mu.Unlock()
 		if sp.canPlay(ctx, user, items) {
 			infos = append(infos, info)
@@ -458,7 +583,14 @@ func (h *Handler) syncPlayNew(w http.ResponseWriter, r *http.Request) {
 			playing = &nowPlayingTitle{item: title.ID, position: boundedPosition(ticks(now.Position)), paused: now.Paused}
 		}
 	}
-	writeJSON(w, http.StatusOK, h.syncPlay.create(member, strings.TrimSpace(name), playing))
+	info, created := h.syncPlay.create(member, strings.TrimSpace(name), playing)
+	if !created {
+		// Other users are in every group the user holds (see
+		// syncPlay.create): the session was told on its socket.
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 // syncPlayJoin adds the caller's session to a group. A session that joins
@@ -741,4 +873,10 @@ func (h *Handler) writeSyncPlay(m syncMessage) {
 	if err := conn.Write(ctx, websocket.MessageText, socketPayload(m.kind, m.data)); err != nil {
 		h.Logger.Debug("A SyncPlay message could not reach an app", "kind", m.kind, "error", err)
 	}
+}
+
+// syncPlayConnected reports whether a session's device holds a socket,
+// through which alone it gets its group's messages (see writeSyncPlay).
+func (h *Handler) syncPlayConnected(device accounts.ID) bool {
+	return h.sockets.latest(device) != nil
 }

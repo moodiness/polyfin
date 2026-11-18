@@ -137,9 +137,10 @@ How groups behave:
 - Any member can set what plays (up to 5,000 entries), play, pause and seek.
 - Groups start and resume on Polyfin's clock, slightly ahead so every app is ready.
 - Groups wait up to 30 seconds for loading or buffering apps.
-- Every user may create and join groups, but only users who can see everything a group plays can see or join it. Nothing hidden from a member is queued.
+- Every user may create and join groups, but only users who can see everything a group plays can join it. The SyncPlay menu lists a group to users who can see what it plays: the title playing and the titles queued after it, of which the first 50 are checked. Nothing hidden from a member is queued.
+- A user keeps up to 3 groups they created. Creating another ends the oldest one that only their own devices are in. When other people are in all three, the new group is refused until one of them ends.
 - A session leaves when its app disconnects or is signed out (by the app, a password change, or an administrator).
-- A group ends once everyone has left it, and when Polyfin restarts. A new watch together then starts with a new group.
+- A group ends once everyone has left it, and when Polyfin restarts. A group where no app has its live connection open ends after 5 minutes. A new watch together then starts with a new group.
 - Apps need Jellyfin's live connection (WebSocket) open.
 - Some Jellyfin apps don't support SyncPlay, so they can neither create nor join a group. The web player does, and so do the Jellyfin apps that show it, on computers and phones.
 
