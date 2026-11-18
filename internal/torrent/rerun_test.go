@@ -246,7 +246,7 @@ func TestTheSettingsTrackersAreAskedForEveryTorrent(t *testing.T) {
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
 	settings := proxied(torrenttest.StartProxy(t, true, "", ""))
 	settings.set(func(s *Settings) { s.Trackers = []string{tracker.URL()} })
-	e := newEngineWith(t, settings, func(c *Config) { c.StartTimeout = 10 * time.Second })
+	e := newEngine(t, settings, 64<<20)
 	spec, err := NewSpec(tor.HashHex(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -262,10 +262,10 @@ func TestTheSettingsTrackersAreAskedForEveryTorrent(t *testing.T) {
 	empty := torrenttest.HTTPTracker(t, "127.0.0.1")
 	settings = proxied(torrenttest.StartProxy(t, true, "", ""))
 	settings.set(func(s *Settings) { s.Trackers = []string{empty.URL()} })
-	e = newEngineWith(t, settings, func(c *Config) {
-		c.Bootstrap = []string{node.Address()}
-		c.StartTimeout = 10 * time.Second
-	})
+	e = newEngineWith(t, settings, func(c *Config) { c.Bootstrap = []string{node.Address()} })
+	// A lookup whose answer comes later than dhtWait is made again at
+	// once, not dhtAgain later: the start waits on no single datagram.
+	e.dhtAgainWait = 200 * time.Millisecond
 	spec, err = NewSpec(other.HashHex(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -277,7 +277,8 @@ func TestTheSettingsTrackersAreAskedForEveryTorrent(t *testing.T) {
 
 // A private torrent's trackers are its own (BEP 27): once its info tells
 // it is private, the trackers of the settings, announced to while it was
-// not known, are told it stopped.
+// not known, are told it stopped, though the answer to that announce is
+// still awaited: the tracker may have taken it.
 func TestAPrivateTorrentLeavesTheSettingsTrackers(t *testing.T) {
 	t.Parallel()
 	tor := torrenttest.BuildPrivate("A Movie", 64<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(300 << 10)})
@@ -285,9 +286,13 @@ func TestAPrivateTorrentLeavesTheSettingsTrackers(t *testing.T) {
 	none := torrenttest.HTTPTracker(t, "127.0.0.1")
 	own := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
 	added := torrenttest.HTTPTracker(t, "127.0.0.1")
+	added.Hold()
 	settings := proxied(torrenttest.StartProxy(t, true, "", ""))
 	settings.set(func(s *Settings) { s.Trackers = []string{added.URL()} })
-	e := newEngineWith(t, settings, func(c *Config) { c.StartTimeout = 10 * time.Second })
+	e := newEngine(t, settings, 64<<20)
+	// A loopback dial may hang for seconds: the announce that the torrent
+	// stopped has the minute every wait here has.
+	e.stopWait = time.Minute
 	// Its first listing finds no peer: the info is not known yet when the
 	// settings' tracker is announced to.
 	unknown, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + none.URL()})

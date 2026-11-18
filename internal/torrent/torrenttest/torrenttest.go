@@ -153,10 +153,12 @@ type Peer struct {
 	pexFlags byte
 	pexSent  int
 	// released, once Hold is called, holds the blocks asked until it is
-	// closed; delay is how long each block asked waits, one after the
+	// closed, and passes lets one of them through for each value it
+	// holds; delay is how long each block asked waits, one after the
 	// other. requests and cancels count the REQUEST and CANCEL messages
 	// received.
 	released chan struct{}
+	passes   chan struct{}
 	delay    time.Duration
 	requests int
 	cancels  int
@@ -366,11 +368,27 @@ func (p *Peer) PEXSent() int {
 
 // Hold has the seeder hold the blocks it is asked for until Release,
 // as a peer that answers nothing; those cancelled meanwhile are never
-// sent.
+// sent. Pass lets some of them through meanwhile.
 func (p *Peer) Hold() {
 	p.mu.Lock()
 	p.released = make(chan struct{})
+	p.passes = make(chan struct{}, 1024)
 	p.mu.Unlock()
+}
+
+// Pass has a seeder that holds its blocks send the next n of them, in
+// the order they were asked, as a peer that answers part of what it was
+// asked does; a block cancelled meanwhile counts among them, unsent.
+func (p *Peer) Pass(n int) {
+	p.mu.Lock()
+	passes := p.passes
+	p.mu.Unlock()
+	if passes == nil {
+		panic("torrenttest: Pass on a peer that does not hold its blocks")
+	}
+	for range n {
+		passes <- struct{}{}
+	}
 }
 
 // Release sends the blocks held, and those asked next at once, until the
@@ -610,13 +628,14 @@ func (p *Peer) serve(conn net.Conn) {
 			case payload = <-waiting:
 			}
 			p.mu.Lock()
-			released, delay := p.released, p.delay
+			released, passes, delay := p.released, p.passes, p.delay
 			p.mu.Unlock()
 			if released != nil {
 				select {
 				case <-done:
 					return
 				case <-released:
+				case <-passes:
 				}
 			}
 			if delay > 0 {
@@ -807,6 +826,8 @@ type Tracker struct {
 	peers     []netip.AddrPort
 	announces []url.Values
 	remotes   []string
+	// held, once Hold is called, holds the answers until it is closed.
+	held chan struct{}
 }
 
 // HTTPTracker starts an HTTP tracker listing peers, listening on host.
@@ -825,13 +846,23 @@ func HTTPTracker(tb testing.TB, host string, peers ...netip.AddrPort) *Tracker {
 			compact = append(compact, peer.Addr().AsSlice()...)
 			compact = binary.BigEndian.AppendUint16(compact, peer.Port())
 		}
+		held := t.held
 		t.mu.Unlock()
+		if held != nil {
+			select {
+			case <-held:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		_, _ = w.Write(encode(map[string]any{"interval": 60, "peers": string(compact)}))
 	}))
 	t.server.Listener.Close()
 	t.server.Listener = listener
 	t.server.Start()
 	tb.Cleanup(t.server.Close)
+	// The answers held go before the server closes, which waits for them.
+	tb.Cleanup(t.Release)
 	return t
 }
 
@@ -861,6 +892,27 @@ func (t *Tracker) Remotes() []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return slices.Clone(t.remotes)
+}
+
+// Hold has the tracker take the announces and hold its answers until
+// Release, or until the announce is given up, as a slow tracker does.
+func (t *Tracker) Hold() {
+	t.mu.Lock()
+	t.held = make(chan struct{})
+	t.mu.Unlock()
+}
+
+// Release sends the answers held, and those asked next at once.
+func (t *Tracker) Release() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.held != nil {
+		select {
+		case <-t.held:
+		default:
+			close(t.held)
+		}
+	}
 }
 
 // UDPTracker is a UDP tracker (BEP 15) on the loopback interface.

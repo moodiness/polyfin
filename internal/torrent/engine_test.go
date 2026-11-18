@@ -627,8 +627,9 @@ func TestNoTorrentMoreStartsThanAtOnceAllows(t *testing.T) {
 	}
 }
 
-// A read waiting for a piece tells, as its blocks arrive, that bytes are
-// coming, long before the piece is whole and the read returns.
+// A read waiting for a piece tells, as each of its blocks arrives, that
+// bytes are coming, long before the piece is whole and the read returns:
+// a block that arrives while the last one is being told is told too.
 func TestAReadTellsTheBytesComingBeforeItsPiece(t *testing.T) {
 	t.Parallel()
 	tor := torrenttest.Build("A Movie", 256<<10, torrenttest.File{Name: "a-movie.mkv", Data: torrenttest.Bytes(600 << 10)})
@@ -639,7 +640,9 @@ func TestAReadTellsTheBytesComingBeforeItsPiece(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seeder.Delay(50 * time.Millisecond)
+	// The seeder sends a block only once the test lets it through.
+	seeder.Hold()
+	defer seeder.Release()
 	defer e.Play(spec)()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -648,13 +651,49 @@ func TestAReadTellsTheBytesComingBeforeItsPiece(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
+	// The second block's telling lasts until proceed is closed.
+	proceed := make(chan struct{})
+	var once sync.Once
+	goOn := func() { once.Do(func() { close(proceed) }) }
+	defer goOn()
 	var told atomic.Int32
 	got := make([]byte, 256<<10)
-	if _, err := r.ReadAtProgress(got, 0, func() { told.Add(1) }); err != nil || !bytes.Equal(got, tor.Data[:len(got)]) {
-		t.Fatalf("the piece was not read: %v", err)
+	read := make(chan error, 1)
+	go func() {
+		_, err := r.ReadAtProgress(got, 0, func() {
+			if told.Add(1) == 2 {
+				<-proceed
+			}
+		})
+		read <- err
+	}()
+	tr := torrentOf(e, spec.Hash)
+	waitFor(t, "the read to wait for its piece", func() bool {
+		tr.mu.Lock()
+		defer tr.mu.Unlock()
+		span := tr.reads[r]
+		return span.end > span.at
+	})
+	// Blocks come one at a time, fewer than any piece holds.
+	seeder.Pass(1)
+	waitFor(t, "the first block to be told", func() bool { return told.Load() >= 1 })
+	seeder.Pass(1)
+	waitFor(t, "the second block to be told", func() bool { return told.Load() >= 2 })
+	seeder.Pass(1)
+	waitFor(t, "the third block to arrive", func() bool {
+		tr.mu.Lock()
+		defer tr.mu.Unlock()
+		return tr.downBytes >= 3*blockSize
+	})
+	goOn()
+	waitFor(t, "the third block to be told", func() bool { return told.Load() >= 3 })
+	select {
+	case err := <-read:
+		t.Fatalf("the read returned before its piece was whole: %v", err)
+	default:
 	}
-	// The piece's 16 blocks came one by one.
-	if n := told.Load(); n < 8 {
-		t.Fatalf("the read told bytes coming %d times", n)
+	seeder.Release()
+	if err := <-read; err != nil || !bytes.Equal(got, tor.Data[:len(got)]) {
+		t.Fatalf("the piece was not read: %v", err)
 	}
 }
