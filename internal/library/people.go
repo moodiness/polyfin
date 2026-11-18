@@ -315,11 +315,16 @@ func searchesPeople(catalog stremio.Catalog) bool {
 
 // reaches reports whether a user's view reaches a title Polyfin recorded:
 // one of their addons listed it, or one of their addons describes titles
-// of its type and identifier. See also reachesTitle, which must agree.
+// of its type and identifier, unless another user's own addon holds it
+// (see view.others): what is kept of it is that user's, until one of
+// the reader's addons lists it. See also reachesTitle, which must agree.
 func (v view) reaches(r record) bool {
 	if r.Addon != nil {
 		if _, ok := v.addon(*r.Addon); ok {
 			return true
+		}
+		if v.others[*r.Addon] {
+			return false
 		}
 	}
 	return r.Meta != nil && slices.ContainsFunc(v.addons, func(entry installed) bool {
@@ -328,15 +333,22 @@ func (v view) reaches(r record) bool {
 }
 
 // reach is view.reaches as query parameters (see reachesTitle): the addons
-// of the view, encoded as records store them, and the types and identifier
+// of the view, encoded as records store them, the types and identifier
 // prefixes their meta resources serve, an empty prefix serving any
-// identifier.
-func (v view) reach() (addonIDs, types, prefixes []string, err error) {
-	addonIDs, types, prefixes = []string{}, []string{}, []string{}
+// identifier, and the addons of view.others, encoded as well.
+func (v view) reach() (addonIDs, types, prefixes, others []string, err error) {
+	addonIDs, types, prefixes, others = []string{}, []string{}, []string{}, []string{}
+	for id := range v.others {
+		encoded, err := json.Marshal(id)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		others = append(others, string(encoded))
+	}
 	for _, entry := range v.addons {
 		encoded, err := json.Marshal(entry.addon.ID)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		addonIDs = append(addonIDs, string(encoded))
 		manifest := entry.addon.Manifest
@@ -361,14 +373,15 @@ func (v view) reach() (addonIDs, types, prefixes []string, err error) {
 			}
 		}
 	}
-	return addonIDs, types, prefixes, nil
+	return addonIDs, types, prefixes, others, nil
 }
 
 // reachesTitle is view.reaches on the row title of the items table, the
 // parameters of view.reach being at the placeholders addonIDs, types and
-// prefixes.
-func reachesTitle(addonIDs, types, prefixes string) string {
-	return `(title.data->'addon' = ANY(` + addonIDs + `::jsonb[]) OR EXISTS (
+// prefixes, and the addons of view.others, encoded as addonIDs are, at
+// others.
+func reachesTitle(addonIDs, types, prefixes, others string) string {
+	return `(title.data->'addon' = ANY(` + addonIDs + `::jsonb[]) OR NOT coalesce(title.data->'addon' = ANY(` + others + `::jsonb[]), false) AND EXISTS (
 	SELECT 1 FROM unnest(` + types + `::text[], ` + prefixes + `::text[]) AS rule(type, prefix)
 	WHERE title.data->'meta'->>'type' = rule.type AND starts_with(title.data->'meta'->>'id', rule.prefix)))`
 }
@@ -596,11 +609,11 @@ const personName = `lower(person.data->'person'->>'name')`
 
 // peopleFilter selects the people matching q (see People) and the
 // arguments it takes: those credited in a title the user reaches, through
-// the addons, types and prefixes of view.reach, and among titles unless it
-// is nil. Like Jellyfin 12.2, it keeps only the people People can list, so
-// that the count it reports is theirs. It holds only the conditions q
-// sets, so that prepared plans can use the name indexes.
-func peopleFilter(q PeopleQuery, addonIDs, types, prefixes []string, titles []accounts.ID) (string, []any) {
+// the addons, types, prefixes and others of view.reach, and among titles
+// unless it is nil. Like Jellyfin 12.2, it keeps only the people People
+// can list, so that the count it reports is theirs. It holds only the
+// conditions q sets, so that prepared plans can use the name indexes.
+func peopleFilter(q PeopleQuery, addonIDs, types, prefixes, others []string, titles []accounts.ID) (string, []any) {
 	var args []any
 	arg := func(value any) string {
 		args = append(args, value)
@@ -633,7 +646,7 @@ func peopleFilter(q PeopleQuery, addonIDs, types, prefixes []string, titles []ac
 		SELECT 1 FROM jsonb_each(person.data->'credits') AS credit(item, kinds)
 			JOIN items AS title ON title.id = credit.item::uuid
 			CROSS JOIN jsonb_array_elements_text(credit.kinds) AS credited(kind)
-		WHERE ` + reachesTitle(arg(addonIDs), arg(types), arg(prefixes)))
+		WHERE ` + reachesTitle(arg(addonIDs), arg(types), arg(prefixes), arg(others)))
 	if len(q.Types) > 0 {
 		b.WriteString("\n\t\t\tAND lower(credited.kind) = ANY(" + arg(lower(q.Types)) + "::text[])")
 	}
@@ -662,18 +675,18 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 	if err != nil {
 		return nil, 0, err
 	}
-	addonIDs, types, prefixes, err := v.reach()
+	addonIDs, types, prefixes, others, err := v.reach()
 	if err != nil {
 		return nil, 0, err
 	}
 	var titles []accounts.ID
 	if v.restricted() {
-		filter, args := peopleFilter(q, addonIDs, types, prefixes, nil)
+		filter, args := peopleFilter(q, addonIDs, types, prefixes, others, nil)
 		if titles, err = s.visibleCredits(ctx, v, filter, args); err != nil {
 			return nil, 0, err
 		}
 	}
-	filter, args := peopleFilter(q, addonIDs, types, prefixes, titles)
+	filter, args := peopleFilter(q, addonIDs, types, prefixes, others, titles)
 	var total int
 	if err := s.db.QueryRow(ctx, "SELECT count(*) "+filter, args...).Scan(&total); err != nil {
 		return nil, 0, err

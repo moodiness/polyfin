@@ -159,6 +159,14 @@ func (s *Service) save(ctx context.Context, records []record) error {
 			return nil
 		}
 	}
+	// An episode stays its series' when a save would give it to another
+	// that the server's addons do not describe with it (see movedAway).
+	if kept, err = s.movedAway(ctx, unique); err != nil {
+		return err
+	}
+	if kept != nil && leaveOut() == 0 {
+		return nil
+	}
 	stored, taken, err := s.upsertColumns(ctx, ids, keys, kinds, data, savedData)
 	if err != nil {
 		return err
@@ -535,8 +543,18 @@ func (s *Service) upsertColumns(ctx context.Context, ids []accounts.ID, keys, ki
 	return stored, taken, nil
 }
 
-// savedData is the record a save stores: keptData, except for a movie or a
-// series that another catalog lists than the one that listed it first,
+// savedData is the record a save stores. Whose addon names the item comes
+// first (see recordOwner): the record of a user's own addon leaves an
+// item one of the server's addons holds as it is, as items are shared by
+// every user, who would read that user's texts, type and artwork; and
+// the record of another owner's addon, the server's over a user's or one
+// user's over another's, takes the item (keptData), so that a user's own
+// addon never holds a title for the server's catalogs, nor for another
+// user's. An item whose addon was removed, or that names none, is held
+// by no one.
+//
+// Between addons of the same owner it is keptData, except for a movie or
+// a series that another catalog lists than the one that listed it first,
 // while both list it (see listedElsewhere). The title then keeps the
 // first catalog, its kind, its folder and the preview that catalog gave,
 // which go together: the catalog's addon describes it first (see
@@ -547,10 +565,29 @@ func (s *Service) upsertColumns(ctx context.Context, ids []accounts.ID, keys, ki
 // forgetArrivals), lets the next one take it. Titles of other videos
 // follow the catalog that listed them last, which shapes them (see
 // misplaced).
-const savedData = `CASE WHEN ` + listedElsewhere + `
+var savedData = `CASE WHEN ` + recordOwner("items.data") + ` = ` + serverOwner + ` AND ` + recordOwner("excluded.data") + ` <> ` + serverOwner + `
+	THEN items.data
+	WHEN ` + recordOwner("items.data") + ` <> ` + recordOwner("excluded.data") + `
+	THEN ` + keptData + `
+	WHEN ` + listedElsewhere + `
 	THEN items.data || (excluded.data - '{kind,addon,catalogType,catalogId,meta,confined}'::text[]
 		- CASE WHEN items.data ? 'parent' THEN 'parent' ELSE '' END)
 	ELSE ` + keptData + ` END`
+
+// serverOwner is what recordOwner tells of one of the server's addons.
+const serverOwner = `'00000000-0000-0000-0000-000000000000'`
+
+// recordOwner tells in SQL whose addon the record data names: its owner
+// for a user's own addon, serverOwner for one of the server's, and NULL
+// for a record that names no addon, or one removed since. It reads who
+// installed the addon, which never changes, rather than how the addon
+// is reached (Confined), which follows where it is and what its owner
+// may do. An addon's identifier is stored as the array of its bytes.
+func recordOwner(data string) string {
+	return `(SELECT coalesce(owned.owner_id, ` + serverOwner + `) FROM addons owned
+		WHERE owned.id = (SELECT string_agg(lpad(to_hex(b::int), 2, '0'), '' ORDER BY n)
+			FROM jsonb_array_elements_text(` + data + `->'addon') WITH ORDINALITY AS addon(b, n))::uuid)`
+}
 
 // listedElsewhere tells whether the stored record (items.data) of a movie
 // or a series and the new one (excluded.data) name different catalogs

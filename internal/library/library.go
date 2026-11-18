@@ -599,6 +599,11 @@ type view struct {
 	// peopleLanguage is the language people's biographies are asked of
 	// TMDB in (see persondetails.go).
 	peopleLanguage string
+	// others are the addons other users installed for themselves, whose
+	// titles are none of this user's (see reaches and describedTitle):
+	// none for an administrator or an API key, who manage every item,
+	// those of users' own addons included.
+	others map[accounts.ID]bool
 }
 
 // limit is how many items one read of src's catalog fetches at most: the
@@ -673,6 +678,13 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
 		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, channelFilter: user.LiveTvChannels.Filter(), country: settings.RatingCountry,
 		waitRelease: settings.WaitDigitalRelease && s.tmdb.Enabled()}
+	if !user.IsAdministrator {
+		others, err := s.othersOwn(ctx, user.ID)
+		if err != nil {
+			return view{}, err
+		}
+		v.others = others
+	}
 	if user.ID != (accounts.ID{}) {
 		hidden, err := s.hiddenTitles(ctx, user.ID)
 		if err != nil {
@@ -2711,6 +2723,13 @@ func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, b
 	full, described := s.titleMeta(ctx, v, r)
 	if described {
 		meta = full
+	}
+	// The preview of a title another user's own addon holds is that
+	// user's: a title none of this user's addons describes is then none
+	// of theirs. Their own addon, even one they do not use now, shows
+	// them nothing of anyone else; an administrator edits every item.
+	if !described && r.Addon != nil && v.others[*r.Addon] {
+		return Item{}, false, ErrNotFound
 	}
 	// A restricted user's addons are the server's (see view): the
 	// description gives the rating and genres.

@@ -212,9 +212,12 @@ func (v view) rates(r record) bool {
 // its listing, from the server's addons. A listing's genres count only
 // when they include one the user blocks, as a description may give more
 // genres. A title none of the server's addons describes has no rating,
-// and the genres of its listing. stale is set when the traits kept are old
-// enough to be asked again, or were picked for another rating country:
-// they are used meanwhile, scored under the server's.
+// and the genres of its listing, unless it is held by a user's own addon
+// that is none of the view's (see ownedOutside): its type is then that
+// addon's word, which may be one no server addon describes for a title
+// they rate, so its rating stays unknown. stale is set when the traits
+// kept are old enough to be asked again, or were picked for another
+// rating country: they are used meanwhile, scored under the server's.
 func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, stale bool) {
 	// A home video or a plain video has no rating nor genres: it is what
 	// its folder tells, and nothing to look up.
@@ -246,7 +249,7 @@ func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, 
 			t.genres, t.genresKnown = r.Meta.Genres, true
 		}
 	}
-	if !describable {
+	if !describable && !s.ownedOutside(ctx, v, r) {
 		t.ratingKnown, t.genresKnown = true, true
 	}
 	return t, false
