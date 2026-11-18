@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -49,6 +50,25 @@ func LowerPasswordCostForTests() {
 	unknownUserHash = hashPassword("polyfin-unknown-user")
 }
 
+// hashTurns holds a turn for each Argon2id hash under way in the process,
+// those made and those verified together: one for each two of the
+// processors Go runs on, two at least. A hash keeps a processor busy and
+// holds its memory, 19 MiB at the server's cost, until it ends. The other
+// hashes wait for a turn, however many they are: one waiting costs its
+// goroutine alone, and making a hash has no error to give up with.
+var hashTurns = make(chan struct{}, max(2, runtime.GOMAXPROCS(0)/2))
+
+// argonKey is argon2.IDKey, which a test replaces to count the hashes
+// under way.
+var argonKey = argon2.IDKey
+
+// hashInTurn is argon2.IDKey, once a turn is free (see hashTurns).
+func hashInTurn(password, salt []byte, passes, memory uint32, threads uint8, keyLen uint32) []byte {
+	hashTurns <- struct{}{}
+	defer func() { <-hashTurns }()
+	return argonKey(password, salt, passes, memory, threads, keyLen)
+}
+
 var errMalformedHash = errors.New("malformed password hash")
 
 // hashPassword returns a PHC-formatted Argon2id hash, at passwordCost.
@@ -60,7 +80,7 @@ func hashPassword(password string) string {
 func hashAt(cost argonCost, password string) string {
 	salt := make([]byte, argonSaltLen)
 	_, _ = rand.Read(salt)
-	key := argon2.IDKey([]byte(password), salt, cost.time, cost.memory, cost.threads, argonKeyLen)
+	key := hashInTurn([]byte(password), salt, cost.time, cost.memory, cost.threads, argonKeyLen)
 	encode := base64.RawStdEncoding.EncodeToString
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, cost.memory, cost.time, cost.threads, encode(salt), encode(key))
@@ -90,7 +110,7 @@ func verifyPassword(password, encoded string) (bool, error) {
 	if err != nil || len(want) == 0 {
 		return false, errMalformedHash
 	}
-	got := argon2.IDKey([]byte(password), salt, passes, memory, threads, uint32(len(want)))
+	got := hashInTurn([]byte(password), salt, passes, memory, threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 
