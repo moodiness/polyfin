@@ -294,7 +294,8 @@ jobs:
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
             .github/workflows/ci.yml .github/workflows/desktop-package.yml .github/workflows/pages.yml \
-            .github/workflows/desktop-manifests.yml
+            .github/workflows/desktop-manifests.yml .github/workflows/ffmpeg-nvenc13.yml \
+            .github/workflows/silo-follow.yml
           docker run --rm -i \
             ghcr.io/hadolint/hadolint@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
             < Dockerfile
