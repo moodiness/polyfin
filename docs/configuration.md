@@ -259,7 +259,7 @@ The Compose file reads `POSTGRES_PASSWORD` and `POLYFIN_SECRET_KEY` from `.env` 
 
 ## Stored keys and tokens
 
-Polyfin stores a few secrets in its database. With `POLYFIN_SECRET_KEY` set, they are encrypted with AES-256-GCM, so that a copy of the database alone does not hand them out.
+Polyfin stores a few secrets in its database. With `POLYFIN_SECRET_KEY` set, they are encrypted with AES-256-GCM, so that a copy of the database alone does not hand them out. Once Polyfin has read the key and `POLYFIN_DATABASE_URL` at startup, it takes them out of its own environment: the programs it runs, such as FFmpeg, do not receive them.
 
 | Whose | Secrets |
 | --- | --- |

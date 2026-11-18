@@ -140,10 +140,14 @@ func main() {
 	switch command {
 	case "serve":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		code, again := runServe(ctx, os.Getenv)
+		// The environment Polyfin is started with: runServe takes the
+		// variables that hold its credentials out of it, and a start
+		// again gives the new Polyfin all of it.
+		environ := os.Environ()
+		code, again := runServe(ctx, os.Getenv, environ)
 		stop()
 		if again {
-			err := startAgain()
+			err := startAgain(environ)
 			fmt.Fprintln(os.Stderr, "polyfin: start again after the restore:", err)
 			code = 1
 		}
@@ -168,12 +172,23 @@ func main() {
 // runServe runs polyfin serve until it stops, with the database it runs
 // itself when POLYFIN_DATABASE is embedded, and returns the exit code,
 // and whether to start again after a restore. Its own database is stopped
-// before it returns: after the restore, and before a start again.
-func runServe(ctx context.Context, getenv func(string) string) (code int, again bool) {
+// before it returns: after the restore, and before a start again. environ
+// is the environment this process was started with, in os.Environ's form.
+func runServe(ctx context.Context, getenv func(string) string, environ []string) (code int, again bool) {
 	cfg, err := config.Load(getenv)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "polyfin:", err)
 		return 1, false
+	}
+	// The configuration is read: the variables that hold Polyfin's
+	// credentials leave its environment before it runs any program, so
+	// that FFmpeg, ffprobe and Tesseract, which read what sources send,
+	// and every other program it runs, inherit none of them.
+	forgetCredentials(environ)
+	if carried, err := carryPassword(cfg.DatabaseURL, environ); err != nil {
+		slog.New(slog.NewTextHandler(os.Stderr, nil)).Warn("PGPASSWORD stays in the environment of the programs Polyfin runs", "error", err)
+	} else {
+		cfg.DatabaseURL = carried
 	}
 	if cfg.Embedded {
 		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -189,7 +204,7 @@ func runServe(ctx context.Context, getenv func(string) string) (code int, again 
 		cfg.DatabaseURL = db.url()
 	}
 	var restore pendingRestore
-	err = serve(ctx, cfg, &restore)
+	err = serve(ctx, cfg, environ, &restore)
 	// A restart from the admin app exits once Polyfin has stopped, as
 	// on a signal, with exitRestart: Docker's restart policies, on-failure
 	// included, systemd's Restart=on-failure and Polyfin Desktop start a
@@ -214,10 +229,21 @@ func runServe(ctx context.Context, getenv func(string) string) (code int, again 
 	return 0, restart
 }
 
+// forgetCredentials takes the variables of environ that hold a credential
+// of Polyfin's (see config.Credentials) out of this process's environment,
+// which the programs it runs inherit.
+func forgetCredentials(environ []string) {
+	for _, name := range config.Credentials(environ) {
+		_ = os.Unsetenv(name)
+	}
+}
+
 // serve runs Polyfin until ctx ends, until an administrator restores a
 // backup, or restarts Polyfin: restore then holds what Restore needs, once
 // every part of Polyfin has stopped, and errRestart tells a restart.
-func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) error {
+// environ is the environment this process was started with, which the
+// admin app lists the variables of.
+func serve(ctx context.Context, cfg config.Config, environ []string, restore *pendingRestore) error {
 	started := time.Now()
 	// Everything Polyfin runs in the background ends with ctx, or when it
 	// stops to restore a backup.
@@ -876,7 +902,7 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 			// The FFmpeg for NVIDIA drivers older than 610 (#542).
 			OlderDriverFFmpeg: segments.OlderDriverFFmpeg,
 		},
-		Variables:      config.Variables(os.Environ(), cfg),
+		Variables:      config.Variables(environ, cfg),
 		Trackers:       tracking,
 		Backups:        backups,
 		JellyfinImport: fromJellyfin,

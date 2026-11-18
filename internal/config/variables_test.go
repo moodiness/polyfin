@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,64 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 	}
 	if location := databaseLocation("host=db.internal port=5433 user=polyfin password=s3cret dbname=media"); location != "db.internal:5433/media" {
 		t.Errorf("keyword form: %q", location)
+	}
+}
+
+// The variables Polyfin takes out of its environment are the database URL
+// and those of its own named after a password, a token, a key or a
+// secret, which are the values the admin app hides; what the programs
+// Polyfin runs need, and another program's variables, are not among them.
+func TestCredentialsNameTheVariablesThatHoldOne(t *testing.T) {
+	t.Parallel()
+	environ := []string{
+		"PATH=/usr/local/bin:/usr/bin",
+		"HOME=/root",
+		"TMPDIR=/tmp",
+		"LANG=C.UTF-8",
+		"LD_LIBRARY_PATH=/usr/local/nvidia/lib64",
+		"LIBVA_DRIVER_NAME=iHD",
+		"NVIDIA_VISIBLE_DEVICES=all",
+		"CUDA_VISIBLE_DEVICES=0",
+		"HTTP_PROXY=http://proxy.example:3128",
+		"https_proxy=http://proxy.example:3128",
+		"no_proxy=localhost,127.0.0.1",
+		"POLYFIN_DATABASE_URL=postgresql://polyfin:s3cret-pw@db.internal:5432/media",
+		"POLYFIN_DATABASE=",
+		"POLYFIN_SECRET_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"POLYFIN_DATA_DIR=/var/lib/polyfin",
+		"POLYFIN_LISTEN=:8096",
+		"POLYFIN_FFMPEG=/usr/local/bin/ffmpeg",
+		"POLYFIN_DESKTOP=1",
+		"POLYFIN_NVENC13_TOOLS=/tmp/nvenc13.json",
+		"POLYFIN_API_TOKEN=tok-123",
+		"Polyfin_Admin_Password=hunter2",
+		"POLYFIN_EXTRA_FEED=https://feeds.example/list",
+		"SECRET_KEY=of another program",
+		"API_TOKEN=of another program",
+		`=C:=C:\polyfin`,
+	}
+	want := []string{"POLYFIN_DATABASE_URL", "POLYFIN_SECRET_KEY", "POLYFIN_API_TOKEN", "Polyfin_Admin_Password"}
+	got := Credentials(environ)
+	if !slices.Equal(got, want) {
+		t.Errorf("Credentials = %q, want %q", got, want)
+	}
+	cfg, err := Load(func(name string) string {
+		for _, entry := range environ {
+			if key, value, _ := strings.Cut(entry, "="); key == name {
+				return value
+			}
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, variable := range Variables(environ, cfg) {
+		if variable.Set && variable.Hidden && !slices.Contains(got, variable.Name) {
+			t.Errorf("%s, whose value the admin app hides, stays in the environment", variable.Name)
+		}
+	}
+	if Credentials(nil) != nil {
+		t.Error("an empty environment has credentials")
 	}
 }

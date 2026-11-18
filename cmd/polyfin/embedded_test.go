@@ -142,7 +142,7 @@ func TestServeRunsItsOwnDatabase(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		code, again := runServe(ctx, func(name string) string { return env[name] })
+		code, again := runServe(ctx, func(name string) string { return env[name] }, nil)
 		done <- result{code, again}
 	}()
 	client := &http.Client{Timeout: 2 * time.Second}
@@ -193,7 +193,7 @@ func TestServeRefusesTwoDatabases(t *testing.T) {
 		"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin",
 		"POLYFIN_DATA_DIR":     t.TempDir(),
 	}
-	code, again := runServe(context.Background(), func(name string) string { return env[name] })
+	code, again := runServe(context.Background(), func(name string) string { return env[name] }, nil)
 	if code != 1 || again {
 		t.Errorf("runServe = %d, %v; want 1, false", code, again)
 	}

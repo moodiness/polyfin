@@ -123,6 +123,25 @@ func secretName(name string) bool {
 	return false
 }
 
+// Credentials returns the names of the variables environ sets, in
+// os.Environ's form, that hold a credential of Polyfin's: the database
+// URL, with its password, and the POLYFIN_ variables named after a
+// password, a token, a key or a secret, POLYFIN_SECRET_KEY above all.
+// Polyfin takes them out of its environment once it has read them, so
+// that the programs it runs inherit none. The names are compared whatever
+// their case, which Windows does not tell apart.
+func Credentials(environ []string) []string {
+	var names []string
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		upper := strings.ToUpper(name)
+		if upper == "POLYFIN_DATABASE_URL" || strings.HasPrefix(upper, prefix) && secretName(upper) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // databaseLocation is the host and database of a PostgreSQL connection
 // string, a URL or keyword=value pairs, without its user and password.
 func databaseLocation(connection string) string {
