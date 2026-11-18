@@ -286,6 +286,7 @@ A source behaves as an installed addon with one TV catalog:
 - It is listed, ordered, turned off and removed with the addons.
 - Its catalog is enabled in **Content › Libraries**, where its guide panel is, whatever the number of libraries.
 - Its channels play, record, and follow the **Live TV** permission, quality groups, parental control and allowed hours as any channel (see [Users](users.md) and [Live TV](live-tv.md)).
+- Its streams always reach apps through Polyfin: their addresses hold the account, so no app is sent to them, unless **Send apps to the source** is on in **Settings › Playback** (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)).
 - **Edit the account** renames it, and changes its address, login or user agent.
 - A new address or user agent is fetched first. A password left empty keeps the current one.
 

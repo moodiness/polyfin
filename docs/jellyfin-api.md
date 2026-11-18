@@ -687,6 +687,12 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 - Elsewhere, the item's own identifier as a media source (the `mediaSourceId` of `/Videos/{id}/stream`, subtitle and attachment URLs, playback reports) stands for the first version the item's details and `PlaybackInfo` list, after leaving out the versions that failed lately and those the [version order](versions.md#version-order) rules or the user's quality group leave out, and past the torrents that did not start lately, which a play picking no version passes over. A version that fails thus passes the identifier to the next one, wherever its addon is in the addons' order, and the next one's own identifier keeps naming it. With **Prefer versions the app plays without conversion**, it is the first of the order made for the device the request's token belongs to; a media URL with no token stands for the server's order.
 - `StartTimeTicks` in the query or the body tells where an HLS play starts, so that Polyfin reads ahead from there.
 
+### Direct play redirects for apps
+
+- `/Videos/{id}/stream`, `/Audio/{id}/stream`, `/Items/{id}/Download` and `/Items/{id}/File` answer the `302` only for a user who may be sent to the version's source (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)). Other users get `200` or `206` from Polyfin, byte ranges and `HEAD` included, whatever the address's grant asks: the rule is read at each request.
+- For those users, a version that is an HLS playlist is answered on the stream route with its lines replaced by Polyfin's addresses, once it is analyzed. It answers `404` before its analysis and on the download routes, as a DASH manifest does on all of them.
+- `/admin/api/settings` holds the setting as `sendAppsToSource`, a boolean; a `PUT` that leaves it out keeps it.
+
 ### Device profile values for apps
 
 - Polyfin reads the JSON bodies apps send as Jellyfin 12.4 reads them: property names in any letter case, a string field also from a number or a boolean, taken as its JSON text, and a number field also from a string that holds a number, or that is empty for a field that may be null. A boolean must be `true` or `false`, in Jellyfin too.

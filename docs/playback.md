@@ -13,7 +13,7 @@ flowchart TD
   A["App presses Play"] --> P["Polyfin picks<br>a version and<br>signs a URL"]
   P --> Q{"Can the app<br>play the file<br>as it is and<br>reach the source?"}
   Q -->|"yes"| D["Direct play:<br>the app reads<br>the source"]
-  Q -->|"plays it,<br>cannot reach it"| R["Relay: Polyfin<br>reads the source<br>and passes it on"]
+  Q -->|"plays it, cannot<br>reach it, or may not<br>be sent to it"| R["Relay: Polyfin<br>reads the source<br>and passes it on"]
   Q -->|"cannot play it<br>as it is"| F["FFmpeg reads<br>through the<br>source cache"]
   F --> RP["Repackage:<br>tracks copied<br>into HLS"]
   F --> CV["Convert:<br>video or audio<br>re-encoded<br>into HLS"]
@@ -21,8 +21,8 @@ flowchart TD
 
 | Mode | When | What the server does |
 |---|---|---|
-| Direct play | The app plays the version as it is | Redirects to the provider's URL; the stream skips the server |
-| Relay | The app cannot reach the source: request headers, local network address, torrent, or unfollowable redirect | Reads the stream and passes it on |
+| Direct play | The app plays the version as it is, and its user may be sent to the source (see [Who is sent to the source](#who-is-sent-to-the-source)) | Redirects to the provider's URL; the stream skips the server |
+| Relay | The app cannot reach the source: request headers, local network address, torrent, or unfollowable redirect. Or its user may not be sent to it: an IPTV source, or a server addon played by a user who is not an administrator | Reads the stream and passes it on |
 | Repackage or convert | The app cannot play the file as it is | FFmpeg reads through the source cache; Polyfin serves HLS. See [Transcoding](transcoding.md) |
 
 The mode decides server bandwidth.
@@ -95,6 +95,30 @@ The title's page plays the version the app sends. Most apps (the web player, And
 - Video without audio is logged at Info once per version as "A version has no audio track", with the number of tracks found.
 
 API details: [Version picking in PlaybackInfo for apps](jellyfin-api.md#version-picking-in-playbackinfo-for-apps).
+
+## Who is sent to the source
+
+Direct play sends the app to the source's own address. That address can hold what the source was set up with: the key of an addon, or the name and password of an IPTV account. So Polyfin sends an app there only when its user owns the source, and relays the version to everyone else.
+
+| The version comes from | The app is sent to the source |
+|---|---|
+| An IPTV source, the server's or a user's own | Never. Polyfin builds these addresses from the account: channels, movies, episodes and past programmes are relayed, for administrators too |
+| An addon of the server | For an administrator only. Other users get the version relayed |
+| A user's own addon | For that user |
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Send apps to the source** | **Settings › Playback** | Off | Sends every app to the source it can reach, whoever the user and whatever the source, IPTV included. |
+
+- **What the setting discloses:** users who play from a source see its address, with any key, account name or password in it.
+- **What relaying costs:** the stream passes through the server, which downloads it from the source and uploads it to the app. Each of those plays uses the server's bandwidth while it lasts (see [Bandwidth](administration.md#bandwidth)).
+- **What plays the same:** a relayed file seeks and resumes as before, by byte ranges, read through the source cache once the version is analyzed (see [Reading the sources](reading-the-sources.md)). A relayed HLS stream has each address it names replaced by Polyfin's (see [Streams that are HLS playlists](#streams-that-are-hls-playlists)). A relayed MPEG-TS channel is read from the channel's one connection, shared by everyone who watches it (see [How a channel plays](live-tv.md#how-a-channel-plays)).
+- **What may not play:** a source that answers the users' addresses and refuses the server's no longer plays for them. Turn the setting on, or use a source that answers the server.
+- **Playlists:** a playlist's lines are addresses too. For a user who is not sent to the source, a version that is an HLS playlist is relayed only with its lines replaced: it cannot be downloaded, and is refused until its first analysis, which a play makes. A DASH manifest is not passed on as it is: it plays converted.
+- **At each request:** the rule is read when the stream is asked for, not when its address is given. Turning the setting off, or taking an administrator's rights away, applies to the addresses apps already hold.
+- **Not concerned:** DLNA devices, Silo apps and guests of shared links always play through Polyfin. Local files, network shares and torrents are never sent anywhere.
+
+API details: [Direct play redirects for apps](jellyfin-api.md#direct-play-redirects-for-apps).
 
 ## Chapters
 

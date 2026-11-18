@@ -38,11 +38,12 @@ A channel plays as its source streams it, when the app takes that stream. Otherw
 
 | The source streams | How it reaches the app |
 |---|---|
-| HLS | Relayed through Polyfin, with the headers the source needs, unless the app can reach the source itself |
-| MPEG-TS, played as it is (by apps such as Android TV) | Relayed from the channel's connection. When the app can reach the source and the source has no connection limit, the app is sent to the source. |
+| HLS | Relayed through Polyfin, with the headers the source needs, unless the app may be sent to the source and can reach it itself |
+| MPEG-TS, played as it is (by apps such as Android TV) | Relayed from the channel's connection. When the app may be sent to the source, can reach it, and the source has no connection limit, the app is sent to the source. |
 | DASH (an MPD manifest), from an IPTV source or an addon | Always converted: FFmpeg reads the manifest and its segments through Polyfin, and repackages them into HLS |
 
 - **jellyfin-web:** it always gets HLS relayed, as browsers cannot read other sites' playlists.
+- **IPTV sources:** an app is never sent to an IPTV source, whose addresses hold its account, unless **Send apps to the source** is on in **Settings › Playback**. A channel of an addon follows the addon's rule (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)).
 - **Headers:** IPTV channels are requested with the user agent and headers their list or source gives, else a web browser's user agent (see [Headers and user agent](iptv-streams.md#headers-and-user-agent)).
 - **DASH:** a ClearKey stream is decrypted with the keys its list gives. Widevine and PlayReady streams are not played. An app that sends no device profile is offered no DASH stream (see [DASH channels and encryption](iptv-streams.md#dash-channels-and-encryption)).
 - **Running time:** FFmpeg runs from the moment the app opens the channel until it leaves it. A minute without requests stops it.

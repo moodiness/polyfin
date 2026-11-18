@@ -55,6 +55,7 @@ Each movie or episode has one version: the provider's file. For Xtream, it is `/
 
 - The version is labelled with the quality its name gives (4K, FHD, HD, SD), for quality groups.
 - It plays, converts, downloads, and takes thumbnails and subtitles as any title's (see [Playback](playback.md) and [Transcoding](transcoding.md)).
+- It reaches apps through Polyfin, never from the provider's address, which holds the account (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)).
 
 An MPEG-TS file has no index to cut it by its keyframes. This also holds for addons' MPEG-TS files.
 
