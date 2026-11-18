@@ -127,6 +127,15 @@ const (
 	// after a backup restored on another system: Missing counts them, out
 	// of Files. While the Custom theme is chosen and loads the copy only.
 	problemThemeCopyMissing = "theme_copy_missing"
+	// The data folder is the default one of earlier versions, in the
+	// system's temporary folder, which the system may empty: Path is the
+	// folder, MoveTo the default one, where its files are to be moved.
+	problemDataFolderTemporary = "data_folder_temporary"
+	// Another account of the system can change the data folder, which an
+	// administrator chose: Path is the folder, Failure "owner" when
+	// another user owns it, "mode" when its group or others can write
+	// into it, and Command the command that mends it.
+	problemDataFolderShared = "data_folder_shared"
 	// Polyfin Desktop went back to the version that runs, as the new
 	// one's server stopped before it answered: Name is the version that
 	// did not start, Previous the one put back, and Error why. It lasts
@@ -207,6 +216,12 @@ type healthProblemJSON struct {
 	Files    int    `json:"files,omitempty"`
 	Previous string `json:"previous,omitempty"`
 	Version  string `json:"version,omitempty"`
+	// MoveTo, for a data folder in the system's temporary folder, is the
+	// folder its files are to be moved to.
+	MoveTo string `json:"moveTo,omitempty"`
+	// Command, for a data folder another account can change, is the
+	// command that mends it.
+	Command string `json:"command,omitempty"`
 	// Download offers to download the data of a language Tesseract lacks.
 	Download bool `json:"download,omitempty"`
 }
@@ -447,6 +462,18 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 	if back := h.desktopRolledBack(); back != nil {
 		p := warning("desktop_rolled_back:"+back.Version, problemDesktopRolledBack, "process")
 		p.Name, p.Previous, p.Error = back.Version, back.Previous, back.Reason
+		add(p)
+	}
+	if to := h.Health.MoveDataDirTo; to != "" {
+		add(healthProblemJSON{Key: problemDataFolderTemporary, Code: problemDataFolderTemporary, Tone: notifications.SeverityWarning,
+			To: "/system/health", Path: h.DataDir, MoveTo: to})
+	}
+	if fault := h.Health.DataFolderFault; fault != nil {
+		p := healthProblemJSON{Key: problemDataFolderShared, Code: problemDataFolderShared, Tone: notifications.SeverityWarning,
+			To: "/system/health", Path: fault.Dir, Failure: "mode", Command: fault.Command()}
+		if fault.OtherOwner() {
+			p.Failure = "owner"
+		}
 		add(p)
 	}
 	if h.ThemeCopier != nil && h.Accounts.Settings().WebTheme == accounts.WebThemeCustom {
@@ -1153,6 +1180,49 @@ func (p healthProblemJSON) text(language string) string {
 			"Polyfin Desktop è tornato alla versione %s, perché la versione %s non si è avviata: %s. Quella versione non viene più proposta; la prossima sì.",
 			"O Polyfin Desktop voltou para a versão %s, pois a versão %s não iniciou: %s. Essa versão não é mais oferecida; a próxima será."},
 			p.Previous, p.Name, p.Error)
+	case problemDataFolderTemporary:
+		return say(i18n.Text{"Polyfin keeps its files in %s, the default data folder of earlier versions, in the system’s temporary folder, which the system may empty. " +
+			"Stop Polyfin, move this folder to %s, then start Polyfin again; or name the folder to use in POLYFIN_DATA_DIR.",
+			"Polyfin garde ses fichiers dans %s, le dossier de données par défaut des versions précédentes, dans le dossier temporaire du système, que le système peut vider. " +
+				"Arrêtez Polyfin, déplacez ce dossier vers %s, puis redémarrez Polyfin\u202f; ou indiquez le dossier à utiliser dans POLYFIN_DATA_DIR.",
+			"Polyfin legt seine Dateien in %s ab, dem Standard-Datenordner früherer Versionen im temporären Ordner des Systems, den das System leeren kann. " +
+				"Stoppe Polyfin, verschiebe diesen Ordner nach %s und starte Polyfin dann neu; oder gib den zu verwendenden Ordner in POLYFIN_DATA_DIR an.",
+			"Polyfin guarda sus archivos en %s, la carpeta de datos predeterminada de las versiones anteriores, en la carpeta temporal del sistema, que el sistema puede vaciar. " +
+				"Detenga Polyfin, mueva esta carpeta a %s y vuelva a iniciar Polyfin; o indique la carpeta que se debe usar en POLYFIN_DATA_DIR.",
+			"Polyfin tiene i suoi file in %s, la cartella dei dati predefinita delle versioni precedenti, nella cartella temporanea del sistema, che il sistema può svuotare. " +
+				"Arresta Polyfin, sposta questa cartella in %s, poi riavvia Polyfin; oppure indica la cartella da usare in POLYFIN_DATA_DIR.",
+			"O Polyfin guarda seus arquivos em %s, a pasta de dados padrão das versões anteriores, na pasta temporária do sistema, que o sistema pode esvaziar. " +
+				"Pare o Polyfin, mova essa pasta para %s e inicie o Polyfin novamente; ou indique a pasta a usar em POLYFIN_DATA_DIR."},
+			p.Path, p.MoveTo)
+	case problemDataFolderShared:
+		if p.Failure == "owner" {
+			return say(i18n.Text{"Polyfin’s data folder, %s, belongs to another user of this system, who can change the files Polyfin keeps and runs there. " +
+				"Give it to the user Polyfin runs as with %s, then restart Polyfin.",
+				"Le dossier de données de Polyfin, %s, appartient à un autre utilisateur de ce système, qui peut modifier les fichiers que Polyfin y garde et y exécute. " +
+					"Donnez-le à l’utilisateur sous lequel Polyfin s’exécute avec %s, puis redémarrez Polyfin.",
+				"Der Datenordner von Polyfin, %s, gehört einem anderen Benutzer dieses Systems, der die Dateien ändern kann, die Polyfin dort ablegt und ausführt. " +
+					"Übergib ihn mit %s dem Benutzer, unter dem Polyfin läuft, und starte Polyfin dann neu.",
+				"La carpeta de datos de Polyfin, %s, pertenece a otro usuario de este sistema, que puede cambiar los archivos que Polyfin guarda y ejecuta allí. " +
+					"Désela al usuario con el que se ejecuta Polyfin mediante %s y luego reinicie Polyfin.",
+				"La cartella dei dati di Polyfin, %s, appartiene a un altro utente di questo sistema, che può modificare i file che Polyfin vi tiene ed esegue. " +
+					"Assegnala all’utente con cui Polyfin è in esecuzione con %s, poi riavvia Polyfin.",
+				"A pasta de dados do Polyfin, %s, pertence a outro usuário deste sistema, que pode alterar os arquivos que o Polyfin guarda e executa nela. " +
+					"Passe-a para o usuário com que o Polyfin é executado usando %s, depois reinicie o Polyfin."},
+				p.Path, p.Command)
+		}
+		return say(i18n.Text{"Polyfin’s data folder, %s, can be written by its group or by others: another account of this system can change the files Polyfin keeps and runs there. " +
+			"Take that away with %s, then restart Polyfin.",
+			"Le dossier de données de Polyfin, %s, est accessible en écriture à son groupe ou aux autres\u202f: un autre compte de ce système peut modifier les fichiers que Polyfin y garde et y exécute. " +
+				"Retirez ce droit avec %s, puis redémarrez Polyfin.",
+			"Der Datenordner von Polyfin, %s, ist für seine Gruppe oder für andere beschreibbar: Ein anderes Konto dieses Systems kann die Dateien ändern, die Polyfin dort ablegt und ausführt. " +
+				"Entferne dieses Recht mit %s und starte Polyfin dann neu.",
+			"La carpeta de datos de Polyfin, %s, admite escritura de su grupo o de otros: otra cuenta de este sistema puede cambiar los archivos que Polyfin guarda y ejecuta allí. " +
+				"Quite ese permiso con %s y luego reinicie Polyfin.",
+			"La cartella dei dati di Polyfin, %s, è scrivibile dal suo gruppo o da altri: un altro account di questo sistema può modificare i file che Polyfin vi tiene ed esegue. " +
+				"Togli questo permesso con %s, poi riavvia Polyfin.",
+			"A pasta de dados do Polyfin, %s, pode ser gravada pelo grupo dela ou por outros: outra conta deste sistema pode alterar os arquivos que o Polyfin guarda e executa nela. " +
+				"Retire essa permissão com %s, depois reinicie o Polyfin."},
+			p.Path, p.Command)
 	case problemCollationVersion:
 		reindex, refresh := collationCommands(p.Name)
 		return say(i18n.Text{"The collation version of the database %[1]s changed: PostgreSQL recorded %[2]s, and the system’s collation library now provides %[3]s. " +

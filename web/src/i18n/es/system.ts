@@ -327,6 +327,12 @@ const system: typeof en = {
           `${name}: todas las extensiones de metadatos del servidor tienen un idioma, así que describen los títulos en su idioma para todos los usuarios, sea cual sea su idioma de los metadatos. Deje «Idioma de sus descripciones» en «Ninguno» en esta extensión o en otra extensión de metadatos más.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop volvió a la versión ${previous}, ya que la versión ${version} no se inició: ${error}. Esa versión ya no se ofrece; la siguiente sí.`,
+        dataFolderTemporary: (path: string, moveTo: string) =>
+          `Polyfin guarda sus archivos en ${path}, la carpeta de datos predeterminada de las versiones anteriores, en la carpeta temporal del sistema, que el sistema puede vaciar. Detenga Polyfin, mueva esta carpeta a ${moveTo} y vuelva a iniciar Polyfin; o indique la carpeta que se debe usar en POLYFIN_DATA_DIR.`,
+        dataFolderShared: (failure: 'owner' | 'mode', path: string, command: string) =>
+          failure === 'owner'
+            ? `La carpeta de datos de Polyfin, ${path}, pertenece a otro usuario de este sistema, que puede cambiar los archivos que Polyfin guarda y ejecuta allí. Désela al usuario con el que se ejecuta Polyfin mediante ${command} y luego reinicie Polyfin.`
+            : `La carpeta de datos de Polyfin, ${path}, admite escritura de su grupo o de otros: otra cuenta de este sistema puede cambiar los archivos que Polyfin guarda y ejecuta allí. Quite ese permiso con ${command} y luego reinicie Polyfin.`,
         collationVersion: (name: string, recorded: string, actual: string) =>
           `La versión de intercalación (collation) de la base de datos ${name} cambió: PostgreSQL registró ${recorded}, y la biblioteca de intercalación del sistema ahora proporciona ${actual}. Sus índices de texto pueden estar desordenados, lo que puede ocultar filas o duplicarlas.`,
         collationRepair:

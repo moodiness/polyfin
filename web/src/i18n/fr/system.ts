@@ -328,6 +328,12 @@ const system: typeof en = {
           `${name}\u202f: chaque addon de métadonnées du serveur a une langue\u202f: ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop est revenu à la version ${previous}, car la version ${version} n’a pas démarré\u202f: ${error}. Cette version n’est plus proposée\u202f; la suivante le sera.`,
+        dataFolderTemporary: (path: string, moveTo: string) =>
+          `Polyfin garde ses fichiers dans ${path}, le dossier de données par défaut des versions précédentes, dans le dossier temporaire du système, que le système peut vider. Arrêtez Polyfin, déplacez ce dossier vers ${moveTo}, puis redémarrez Polyfin\u202f; ou indiquez le dossier à utiliser dans POLYFIN_DATA_DIR.`,
+        dataFolderShared: (failure: 'owner' | 'mode', path: string, command: string) =>
+          failure === 'owner'
+            ? `Le dossier de données de Polyfin, ${path}, appartient à un autre utilisateur de ce système, qui peut modifier les fichiers que Polyfin y garde et y exécute. Donnez-le à l’utilisateur sous lequel Polyfin s’exécute avec ${command}, puis redémarrez Polyfin.`
+            : `Le dossier de données de Polyfin, ${path}, est accessible en écriture à son groupe ou aux autres\u202f: un autre compte de ce système peut modifier les fichiers que Polyfin y garde et y exécute. Retirez ce droit avec ${command}, puis redémarrez Polyfin.`,
         collationVersion: (name: string, recorded: string, actual: string) =>
           `La version de collation de la base de données ${name} a changé\u202f: PostgreSQL a enregistré ${recorded}, et la bibliothèque de collation du système fournit maintenant ${actual}. Ses index de texte peuvent ne plus être dans l’ordre, ce qui peut masquer des lignes ou les dupliquer.`,
         collationRepair:

@@ -255,6 +255,10 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.themeCopyMissing(problem.missing, problem.files)
     case 'desktop_rolled_back':
       return text.desktopRolledBack(problem.name, problem.previous, problem.error)
+    case 'data_folder_temporary':
+      return text.dataFolderTemporary(problem.path, problem.moveTo)
+    case 'data_folder_shared':
+      return text.dataFolderShared(problem.failure, problem.path, problem.command)
     case 'collation_version':
       return text.collationVersion(problem.name, problem.previous, problem.version)
     case 'folder_unwritable':

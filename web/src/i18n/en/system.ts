@@ -310,6 +310,12 @@ const system = {
           `${name}: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. Keep Language of its descriptions at None on this addon, or on one more metadata addon.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop went back to version ${previous}, as version ${version} did not start: ${error}. That version is no longer offered; the next one will be.`,
+        dataFolderTemporary: (path: string, moveTo: string) =>
+          `Polyfin keeps its files in ${path}, the default data folder of earlier versions, in the system’s temporary folder, which the system may empty. Stop Polyfin, move this folder to ${moveTo}, then start Polyfin again; or name the folder to use in POLYFIN_DATA_DIR.`,
+        dataFolderShared: (failure: 'owner' | 'mode', path: string, command: string) =>
+          failure === 'owner'
+            ? `Polyfin’s data folder, ${path}, belongs to another user of this system, who can change the files Polyfin keeps and runs there. Give it to the user Polyfin runs as with ${command}, then restart Polyfin.`
+            : `Polyfin’s data folder, ${path}, can be written by its group or by others: another account of this system can change the files Polyfin keeps and runs there. Take that away with ${command}, then restart Polyfin.`,
         collationVersion: (name: string, recorded: string, actual: string) =>
           `The collation version of the database ${name} changed: PostgreSQL recorded ${recorded}, and the system’s collation library now provides ${actual}. Its text indexes may be out of order, which can hide rows or duplicate them.`,
         collationRepair:

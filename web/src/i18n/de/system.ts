@@ -330,6 +330,12 @@ const system: typeof en = {
           `${name}: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop ist zu Version ${previous} zurückgekehrt, da Version ${version} nicht gestartet ist: ${error}. Diese Version wird nicht mehr angeboten, die nächste schon.`,
+        dataFolderTemporary: (path: string, moveTo: string) =>
+          `Polyfin legt seine Dateien in ${path} ab, dem Standard-Datenordner früherer Versionen im temporären Ordner des Systems, den das System leeren kann. Stoppe Polyfin, verschiebe diesen Ordner nach ${moveTo} und starte Polyfin dann neu; oder gib den zu verwendenden Ordner in POLYFIN_DATA_DIR an.`,
+        dataFolderShared: (failure: 'owner' | 'mode', path: string, command: string) =>
+          failure === 'owner'
+            ? `Der Datenordner von Polyfin, ${path}, gehört einem anderen Benutzer dieses Systems, der die Dateien ändern kann, die Polyfin dort ablegt und ausführt. Übergib ihn mit ${command} dem Benutzer, unter dem Polyfin läuft, und starte Polyfin dann neu.`
+            : `Der Datenordner von Polyfin, ${path}, ist für seine Gruppe oder für andere beschreibbar: Ein anderes Konto dieses Systems kann die Dateien ändern, die Polyfin dort ablegt und ausführt. Entferne dieses Recht mit ${command} und starte Polyfin dann neu.`,
         collationVersion: (name: string, recorded: string, actual: string) =>
           `Die Collation-Version der Datenbank ${name} hat sich geändert: PostgreSQL hat ${recorded} vermerkt, und die Collation-Bibliothek des Systems liefert jetzt ${actual}. Ihre Textindizes sind womöglich nicht mehr richtig sortiert, wodurch Zeilen verborgen oder doppelt vorhanden sein können.`,
         collationRepair:

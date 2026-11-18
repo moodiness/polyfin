@@ -331,6 +331,12 @@ const system: typeof en = {
           `${name}: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
           `Polyfin Desktop è tornato alla versione ${previous}, perché la versione ${version} non si è avviata: ${error}. Quella versione non viene più proposta; la prossima sì.`,
+        dataFolderTemporary: (path: string, moveTo: string) =>
+          `Polyfin tiene i suoi file in ${path}, la cartella dei dati predefinita delle versioni precedenti, nella cartella temporanea del sistema, che il sistema può svuotare. Arresta Polyfin, sposta questa cartella in ${moveTo}, poi riavvia Polyfin; oppure indica la cartella da usare in POLYFIN_DATA_DIR.`,
+        dataFolderShared: (failure: 'owner' | 'mode', path: string, command: string) =>
+          failure === 'owner'
+            ? `La cartella dei dati di Polyfin, ${path}, appartiene a un altro utente di questo sistema, che può modificare i file che Polyfin vi tiene ed esegue. Assegnala all’utente con cui Polyfin è in esecuzione con ${command}, poi riavvia Polyfin.`
+            : `La cartella dei dati di Polyfin, ${path}, è scrivibile dal suo gruppo o da altri: un altro account di questo sistema può modificare i file che Polyfin vi tiene ed esegue. Togli questo permesso con ${command}, poi riavvia Polyfin.`,
         collationVersion: (name: string, recorded: string, actual: string) =>
           `La versione di collation del database ${name} è cambiata: PostgreSQL ha registrato ${recorded}, e la libreria di collation del sistema ora fornisce ${actual}. I suoi indici di testo potrebbero non essere più in ordine, il che può nascondere righe o duplicarle.`,
         collationRepair:

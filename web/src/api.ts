@@ -5523,6 +5523,16 @@ export type HealthProblem = {
   /** Polyfin Desktop went back to `previous`, as `name` did not start, for `error`. */
   | { code: 'desktop_rolled_back'; name: string; previous: string; error: string }
   /**
+   * The data folder, `path`, is the default one of earlier versions, in the system's temporary
+   * folder: its files are to be moved to `moveTo`, the default one.
+   */
+  | { code: 'data_folder_temporary'; path: string; moveTo: string }
+  /**
+   * Another account of the system can change the data folder, `path`, which an administrator
+   * chose: another user owns it, or its group or others can write into it. `command` mends it.
+   */
+  | { code: 'data_folder_shared'; path: string; failure: 'owner' | 'mode'; command: string }
+  /**
    * The collation version of the database `name` changed: PostgreSQL recorded `previous`, the
    * system's collation library now provides `version`; `kind` is the database's locale provider.
    */

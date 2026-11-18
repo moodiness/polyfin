@@ -1094,6 +1094,8 @@ The admin app reads and saves the settings at `/admin/api/settings`, and the hea
 
 `GET /admin/api/health/problems` lists:
 
+- a data folder in the system's temporary folder as `data_folder_temporary`, with `path`, the folder, and `moveTo`, the default folder its files are to be moved to;
+- a data folder that another account of the system can change as `data_folder_shared`, with `path`, `failure` (`owner` or `mode`) and `command`, the command that mends it;
 - a picture subtitle language as `subtitle_ocr_language`, with `name`, `file`, `download` true when it can be downloaded, and `error`;
 - a return to the previous version of Polyfin Desktop as `desktop_rolled_back`, with `name`, the version that did not start, `previous` and `error`;
 - a collation version of the database that changed as `collation_version`, with `name`, the database, `previous`, the version PostgreSQL recorded, `version`, the one the system provides now, and `kind`, the locale provider (`libc`, `icu` or `builtin`);

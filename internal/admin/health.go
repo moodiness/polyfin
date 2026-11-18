@@ -59,6 +59,16 @@ type HealthSources struct {
 	// OlderDriverFFmpeg tells how the FFmpeg for NVIDIA drivers older than
 	// 610 stands (hls.Manager.OlderDriverFFmpeg); nil tells nothing.
 	OlderDriverFFmpeg func() hls.OlderDriverStatus
+	// MoveDataDirTo is set when the data folder (Options.DataDir) is the
+	// default one of earlier versions, in the system's temporary folder,
+	// kept as it was there (config.Config.MoveDataDirTo): the folder its
+	// files are to be moved to.
+	MoveDataDirTo string
+	// DataFolderFault is set when another account of the system can
+	// change the data folder an administrator chose: another user owns
+	// it, or its group or others can write into it
+	// (config.PrepareDataFolder).
+	DataFolderFault *config.DataFolderFault
 	// Thumbnails makes the scrubbing thumbnails and chapter images.
 	Thumbnails *thumbnails.Service
 	// DatabaseSize measures the database.
