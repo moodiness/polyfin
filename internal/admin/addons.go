@@ -59,6 +59,11 @@ type addonJSON struct {
 	// UsedBy is who uses a server addon; a user's own addon is used by
 	// everyone, its owner being the only one to see it.
 	UsedBy usedByJSON `json:"usedBy"`
+	// Network is where the source is, "local" or "public", as Polyfin
+	// last read it, empty while that is not told (see addons.Network):
+	// only a source on the local network, the server's or an
+	// administrator's own, may name addresses there.
+	Network string `json:"network"`
 	// EnabledLibraries is, in the answer to adding the addon only, how
 	// many of its catalogs that made libraries of.
 	EnabledLibraries *int `json:"enabledLibraries,omitempty"`
@@ -325,6 +330,7 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 		Music:        newMusicJSON(addon),
 		Language:     addon.Language,
 		UsedBy:       newUsedByJSON(addon.UsedBy),
+		Network:      string(addon.Network),
 	}
 }
 

@@ -324,8 +324,8 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string) (storedTitle, error) {
 	var t storedTitle
 	err := scanTitle(s.db.QueryRow(ctx, `SELECT `+titleColumns+`, a.kind, a.manifest_url, a.manifest->>'name',
-		a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.user_agent
-		FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id JOIN addons a ON a.id = t.addon_id LEFT JOIN users u ON u.id = a.owner_id
+		`+addons.ConfinedSQL("a")+`, i.user_agent
+		FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id JOIN addons a ON a.id = t.addon_id
 		WHERE t.addon_id = $1 AND t.type = $2 AND t.key = $3 AND `+shownTitle, source, typ, key), &t, &t.kind, &t.manifestAddress, &t.manifest, &t.confined,
 		&t.userAgent)
 	if errors.Is(err, pgx.ErrNoRows) {

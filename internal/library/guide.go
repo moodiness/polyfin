@@ -449,12 +449,14 @@ func positive(n int) *int {
 // readGuide downloads a guide and reads it (see xmltv.Read). The address
 // never appears in errors: it may embed credentials. A provider that asks
 // to slow down fails it with an iptv.RateLimitError, retried after a
-// backoff (see RefreshGuides). A guide that is a file of the server is
-// read from it, but for a catalog confined to public addresses.
+// backoff (see RefreshGuides). A guide's address is its catalog's owner's
+// choice, not its addon's: it is reached as that owner may, a member's on
+// public addresses only, whose guide may not be a file of the server
+// either.
 func (s *Service) readGuide(ctx context.Context, c addons.LiveCatalog, address string, options xmltv.Options,
 	channel func(xmltv.Channel) error, programme func(xmltv.Programme) error) error {
 	if path, ok := serverfile.Path(address); ok {
-		if c.Confined {
+		if c.Member {
 			return iptv.ErrLocalFile
 		}
 		file, err := serverfile.Open(path)
@@ -474,7 +476,7 @@ func (s *Service) readGuide(ctx context.Context, c addons.LiveCatalog, address s
 		}
 	}
 	answered := time.AfterFunc(guideAnswer, cancel)
-	response, err := s.client.Open(ctx, http.MethodGet, address, http.Header{"Accept": {"application/xml, text/xml, */*"}}, c.Confined)
+	response, err := s.client.Open(ctx, http.MethodGet, address, http.Header{"Accept": {"application/xml, text/xml, */*"}}, c.Member)
 	answered.Stop()
 	if err != nil {
 		return err

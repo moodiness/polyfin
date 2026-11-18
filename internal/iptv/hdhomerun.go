@@ -125,11 +125,13 @@ type lineupJSON struct {
 	Favorite    flag
 }
 
-// tunerGet reads a tuner's JSON document at address into into.
+// tunerGet reads a tuner's JSON document at address into into: a request
+// to the source itself, confined to public addresses or else made to
+// local addresses only (see stremio.Client.OpenSource).
 func tunerGet(ctx context.Context, client *stremio.Client, address string, confined bool, into any) error {
 	ctx, cancel := context.WithTimeout(ctx, tunerAnswer)
 	defer cancel()
-	response, err := client.Open(ctx, http.MethodGet, address, nil, confined)
+	response, err := client.OpenSource(ctx, http.MethodGet, address, nil, confined)
 	if err != nil {
 		return err
 	}
@@ -296,14 +298,18 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 		close(run.done)
 	}
 	base := addon.ManifestURL
+	// The scan asks the tuner as its list is read (see reach).
+	member, confined, err := s.reach(ctx, id)
 	var status statusJSON
-	err = tunerGet(ctx, s.client, base+"/lineup_status.json", false, &status)
+	if err == nil {
+		err = tunerGet(ctx, s.client, base+"/lineup_status.json", confined, &status)
+	}
 	if err == nil {
 		source := cmp.Or(status.Source, "Antenna")
 		if len(status.SourceList) > 0 && !slices.Contains(status.SourceList, source) {
 			source = status.SourceList[0]
 		}
-		err = s.startScan(ctx, base, source)
+		err = s.startScan(ctx, base, source, confined)
 	}
 	if err != nil {
 		finish()
@@ -322,7 +328,7 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 			case <-time.After(poll):
 			}
 			var status statusJSON
-			if err := tunerGet(ctx, s.client, base+"/lineup_status.json", false, &status); err != nil {
+			if err := tunerGet(ctx, s.client, base+"/lineup_status.json", confined, &status); err != nil {
 				s.logger.Warn("A tuner's scan could not be followed", "source", addon.LogName(), "error", err)
 				break
 			}
@@ -333,7 +339,7 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 			run.state = ScanState{Progress: min(max(status.Progress, 0), 100), Found: max(status.Found, 0)}
 			s.scans.mu.Unlock()
 		}
-		if err := s.refresh(ctx, addon, false); err != nil {
+		if err := s.refresh(ctx, addon, member); err != nil {
 			s.logger.Warn("A tuner's line-up could not be read after its scan", "source", addon.LogName(), "error", err)
 		}
 	}()
@@ -341,10 +347,10 @@ func (s *Service) Scan(ctx context.Context, scope addons.Scope, id accounts.ID) 
 }
 
 // startScan asks a tuner to scan its source ("Antenna", "Cable").
-func (s *Service) startScan(ctx context.Context, base, source string) error {
+func (s *Service) startScan(ctx context.Context, base, source string, confined bool) error {
 	ctx, cancel := context.WithTimeout(ctx, tunerAnswer)
 	defer cancel()
-	response, err := s.client.Open(ctx, http.MethodPost, base+"/lineup.post?"+url.Values{"scan": {"start"}, "source": {source}}.Encode(), nil, false)
+	response, err := s.client.OpenSource(ctx, http.MethodPost, base+"/lineup.post?"+url.Values{"scan": {"start"}, "source": {source}}.Encode(), nil, confined)
 	if err != nil {
 		return err
 	}

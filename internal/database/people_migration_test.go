@@ -67,7 +67,9 @@ func TestPeopleOfATMDBIdentifierMoveToIt(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO item_overrides (item_id, fields) VALUES ($1, '{"Name": "Ana A. Actor"}')`, ana); err != nil {
 		t.Fatal(err)
 	}
-	if err := migrate(ctx, pool, migrations); err != nil {
+	// Only up to the migration tested: a later one confines the photos
+	// addons gave people (see addon_network).
+	if err := migrate(ctx, pool, migrations[:at+1]); err != nil {
 		t.Fatal(err)
 	}
 

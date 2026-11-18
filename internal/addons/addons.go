@@ -140,6 +140,10 @@ type Addon struct {
 	// UsedBy is who uses a server addon (see UsedBy); a user's own addon
 	// is used by everyone, its owner being the only one to see it.
 	UsedBy UsedBy
+	// Network is where the addon is, as the connection that last read its
+	// manifest or its list tells; empty when it is not told yet (see
+	// Network and Confined).
+	Network Network
 	// titleCatalogs are its catalogs of other videos whose enabled library
 	// shows their titles as movies and shows (see Library.ShowAs).
 	titleCatalogs []catalogRef
@@ -521,9 +525,15 @@ type Store struct {
 	snapshot atomic.Pointer[snapshot]
 	loading  sync.Mutex
 	// cleanup runs with each removal (see SetCleanup), carry with each
-	// manifest that renames catalogs (see SetCarry).
-	cleanup Cleanup
-	carry   CarryRenames
+	// manifest that renames catalogs (see SetCarry), reconfine when where
+	// a source is changes (see SetReconfine).
+	cleanup   Cleanup
+	carry     CarryRenames
+	reconfine Reconfine
+	// locateWait waits before the sources that could not be read are read
+	// again (see LocateSources), and reports false when ctx ended first;
+	// nil but in tests.
+	locateWait func(ctx context.Context, d time.Duration) bool
 }
 
 func New(db *pgxpool.Pool, client *stremio.Client) *Store {
@@ -540,7 +550,7 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
 	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
-		&addon.ChosenName, &addon.LibraryKeys, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users}, extra...)...)
+		&addon.ChosenName, &addon.LibraryKeys, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users, &addon.Network}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -587,7 +597,8 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 // addons in the query.
 const addonColumns = `id, kind, manifest_url, manifest, settings, enabled, refreshed_at, coalesce(name, ''), library_keys, language, used_by = 'listed',
 	ARRAY(SELECT u.group_id FROM addon_users u WHERE u.addon_id = addons.id AND u.group_id IS NOT NULL ORDER BY u.group_id),
-	ARRAY(SELECT u.user_id FROM addon_users u WHERE u.addon_id = addons.id AND u.user_id IS NOT NULL ORDER BY u.user_id)`
+	ARRAY(SELECT u.user_id FROM addon_users u WHERE u.addon_id = addons.id AND u.user_id IS NOT NULL ORDER BY u.user_id),
+	coalesce(network, '')`
 
 // Addons lists the scope's addons in order. The addons, their manifests
 // and settings are shared with other callers: they must not be changed.
@@ -623,7 +634,7 @@ func (s *Store) InScope(ctx context.Context, scope Scope, id accounts.ID) (Addon
 
 // Unread is an addon whose stored manifest predates the configure hint
 // (see HintsUnread), and whether its requests must stay on public
-// addresses: a user's own addon, unless the user is an administrator.
+// addresses (see Addon.Confined).
 type Unread struct {
 	Addon    Addon
 	Confined bool
@@ -634,8 +645,7 @@ type Unread struct {
 // Polyfin did not keep before: their behaviorHints.configurable is yet
 // to be read (see ReadHint and SetHint).
 func (s *Store) HintsUnread(ctx context.Context) ([]Unread, error) {
-	rows, err := s.db.Query(ctx, "SELECT "+addonColumns+`,
-		owner_id IS NOT NULL AND NOT coalesce((SELECT u.is_administrator FROM users u WHERE u.id = addons.owner_id), false)
+	rows, err := s.db.Query(ctx, "SELECT "+addonColumns+", "+ConfinedSQL("addons")+`
 		FROM addons WHERE NOT hints_read AND kind IN ($1, $2) ORDER BY owner_id NULLS FIRST, position, created_at`, KindStremio, KindEclipse)
 	if err != nil {
 		return nil, err
@@ -745,20 +755,25 @@ func (s *Store) Names(ctx context.Context) (map[string]string, error) {
 }
 
 // fetched is a downloaded manifest: its normalized URL, the kind of addon
-// it describes, what is stored of it, and what libraries see of it.
+// it describes, what is stored of it, what libraries see of it, and the
+// network it was read from (see Network).
 type fetched struct {
 	url      string
 	kind     string
 	encoded  []byte
 	manifest stremio.Manifest
+	network  Network
 }
 
 // fetch normalizes a manifest URL and downloads the manifest, telling a
 // Stremio addon's from an Eclipse addon's by what it declares. An Eclipse
 // addon may also be given by its base address, without /manifest.json,
-// as Eclipse takes it. confined keeps the request on public addresses (see
-// stremio.Client).
-func (s *Store) fetch(ctx context.Context, rawURL string, confined bool) (fetched, error) {
+// as Eclipse takes it. confined tells a member's addon, whose manifest is
+// read from public addresses only. Any other is read where it is, on the
+// local network or on the internet, which the manifest fetched then
+// tells, known being what was told of it before (see Locate): only an
+// answer that is a manifest tells it.
+func (s *Store) fetch(ctx context.Context, rawURL string, confined bool, known Network) (fetched, error) {
 	manifestURL, err := stremio.NormalizeManifestURL(rawURL)
 	based := false
 	if errors.Is(err, stremio.ErrInvalidManifestURL) {
@@ -769,6 +784,21 @@ func (s *Store) fetch(ctx context.Context, rawURL string, confined bool) (fetche
 	if err != nil {
 		return fetched{}, err
 	}
+	readCtx := ctx
+	if !confined {
+		readCtx = stremio.Locating(ctx)
+	}
+	f, network, err := Locate(ctx, manifestURL, confined, known, func(confined bool) (fetched, error) {
+		return s.read(readCtx, manifestURL, based, confined)
+	})
+	f.network = network
+	return f, err
+}
+
+// read downloads the manifest at manifestURL, confined to public
+// addresses or else from local addresses only (see stremio.Client), based
+// telling an address given as an Eclipse addon's base address.
+func (s *Store) read(ctx context.Context, manifestURL string, based, confined bool) (fetched, error) {
 	body, err := s.client.Fetch(ctx, manifestURL, manifestURL, confined)
 	switch {
 	case errors.Is(err, stremio.ErrNotFound):
@@ -823,7 +853,9 @@ func eclipseManifestURL(raw string) (string, bool) {
 
 // Install adds an addon at the end of the scope and enables some of its
 // catalogs as libraries (see enableDefaults). A server addon is used by
-// everyone.
+// everyone. confined tells a member installs it: its manifest is read
+// from public addresses only. An administrator's is read where it is,
+// which the addon keeps (see Addon.Network).
 func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confined bool) (Addon, error) {
 	return s.InstallFor(ctx, scope, rawURL, confined, UsedBy{})
 }
@@ -835,7 +867,7 @@ func (s *Store) InstallFor(ctx context.Context, scope Scope, rawURL string, conf
 		return Addon{}, ErrInvalidUsedBy
 	}
 	defer s.changed()
-	f, err := s.fetch(ctx, rawURL, confined)
+	f, err := s.fetch(ctx, rawURL, confined, "")
 	if err != nil {
 		return Addon{}, err
 	}
@@ -844,9 +876,9 @@ func (s *Store) InstallFor(ctx context.Context, scope Scope, rawURL string, conf
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position)
-			VALUES ($1, $2, $3, $4, (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1))
-			RETURNING `+addonColumns, scope.Owner, f.kind, f.url, f.encoded))
+		addon, err = scanAddon(tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position, network)
+			VALUES ($1, $2, $3, $4, (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1), $5)
+			RETURNING `+addonColumns, scope.Owner, f.kind, f.url, f.encoded, f.network.stored()))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -984,10 +1016,16 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
 		}
+		// A local folder is on the server itself; any other source tells
+		// where it is with its list (see SetNetwork).
+		var network Network
+		if kind == KindLocal {
+			network = NetworkLocal
+		}
 		var id accounts.ID
-		err := tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position)
-			VALUES ($1, $2, $3, '{}', (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1))
-			RETURNING id`, scope.Owner, kind, address).Scan(&id)
+		err := tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position, network)
+			VALUES ($1, $2, $3, '{}', (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1), $4)
+			RETURNING id`, scope.Owner, kind, address, network.stored()).Scan(&id)
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1313,7 +1351,8 @@ func (s *Store) SetSettings(ctx context.Context, scope Scope, id accounts.ID, va
 // whose catalogs still exist or were renamed (see matchRenames), and tells
 // which libraries followed a new identifier and which were removed. The
 // address must serve the same kind of addon: a Stremio addon stays one,
-// and so does an Eclipse addon.
+// and so does an Eclipse addon. Where the addon is is told anew, by the
+// new address (see Install).
 func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL string, confined bool) (Addon, CatalogChanges, error) {
 	addon, err := s.addon(ctx, s.db, scope, id)
 	if err != nil {
@@ -1321,7 +1360,7 @@ func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL
 	} else if !addon.Stremio() && !addon.Eclipse() {
 		return Addon{}, CatalogChanges{}, ErrNotStremio
 	}
-	f, err := s.fetch(ctx, rawURL, confined)
+	f, err := s.fetch(ctx, rawURL, confined, "")
 	if err != nil {
 		return Addon{}, CatalogChanges{}, err
 	}
@@ -1333,6 +1372,8 @@ func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL
 
 // Refresh downloads an addon's manifest again, and tells which libraries
 // followed a new identifier and which were removed, as Replace does.
+// Where the addon is is told again: one that no longer answers on the
+// network it was on is read from the other (see Locate).
 func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confined bool) (Addon, CatalogChanges, error) {
 	addon, err := s.addon(ctx, s.db, scope, id)
 	if err != nil {
@@ -1341,7 +1382,7 @@ func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confin
 	if !addon.Stremio() && !addon.Eclipse() {
 		return Addon{}, CatalogChanges{}, ErrNotStremio
 	}
-	f, err := s.fetch(ctx, addon.ManifestURL, confined)
+	f, err := s.fetch(ctx, addon.ManifestURL, confined, addon.Network)
 	if err != nil {
 		return Addon{}, CatalogChanges{}, err
 	}
@@ -1375,9 +1416,9 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 		// The manifest downloaded holds the configure hint: no background
 		// read of it is left to make (see HintsUnread).
 		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now(),
-			hints_read = true
+			hints_read = true, network = $6
 			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, manifestURL, encoded,
-			settleKeys(old.LibraryKeys, manifest, moved)))
+			settleKeys(old.LibraryKeys, manifest, moved), f.network.stored()))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1387,6 +1428,12 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 		}
 		if changes, err = followLibraries(ctx, tx, scope, old, manifest, renames); err != nil {
 			return err
+		}
+		// What was kept of the addon follows where it is now.
+		if addon.Network != old.Network {
+			if err := s.reconfined(ctx, tx, &id); err != nil {
+				return err
+			}
 		}
 		if len(renames) == 0 || s.carry == nil {
 			return nil
@@ -1951,15 +1998,20 @@ func recountMapped(ctx context.Context, tx pgx.Tx, key LibraryKey) error {
 	return err
 }
 
-// LiveCatalog is a live TV catalog, and what reaching it needs: Confined is
-// true when it may only reach public addresses, one of a user's own
-// catalogs unless they are an administrator.
+// LiveCatalog is a live TV catalog, and what reaching it needs. Confined
+// is true when its addon's requests, and those for the addresses its
+// answers name, may only reach public addresses (see Addon.Confined).
+// Member is true for one of a user's own catalogs when that user is no
+// administrator (see Member): what its owner gave it themselves, as its
+// guides' addresses, may only be on public addresses then, wherever its
+// addon is.
 type LiveCatalog struct {
 	Scope    Scope
 	Key      LibraryKey
 	Addon    Addon
 	Catalog  stremio.Catalog
 	Confined bool
+	Member   bool
 	Guides   []Guide
 }
 
@@ -1997,7 +2049,7 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 		filter += " AND a.enabled"
 	}
 	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''), a.owner_id,
-		coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id
+		coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id, coalesce(a.network, '')
 		FROM libraries l JOIN addons a ON a.id = l.addon_id LEFT JOIN users u ON u.id = a.owner_id
 		WHERE l.catalog_type = 'tv' AND a.kind <> '`+KindEclipse+`'`+filter, args...)
 	if err != nil {
@@ -2008,7 +2060,7 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 	var manifest []byte
 	var administrator bool
 	if _, err := pgx.ForEachRow(rows, []any{&c.Addon.ID, &c.Addon.Kind, &c.Addon.ManifestURL, &manifest, &c.Addon.Enabled,
-		&c.Addon.RefreshedAt, &c.Addon.ChosenName, &c.Scope.Owner, &administrator, &c.Key.CatalogType, &c.Key.CatalogID}, func() error {
+		&c.Addon.RefreshedAt, &c.Addon.ChosenName, &c.Scope.Owner, &administrator, &c.Key.CatalogType, &c.Key.CatalogID, &c.Addon.Network}, func() error {
 		c.Addon.Manifest = stremio.Manifest{}
 		if err := json.Unmarshal(manifest, &c.Addon.Manifest); err != nil {
 			return err
@@ -2018,9 +2070,8 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 			return nil
 		}
 		c.Key.AddonID, c.Catalog = c.Addon.ID, catalog
-		// The server's addons were installed by an administrator; a user's
-		// own may only reach the local network if that user is one.
-		c.Confined = c.Scope.Owner != nil && !administrator
+		c.Member = Member(c.Scope, administrator)
+		c.Confined = c.Addon.Confined(c.Member)
 		result = append(result, c)
 		return nil
 	}); err != nil {

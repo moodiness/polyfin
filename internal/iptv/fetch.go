@@ -69,6 +69,9 @@ type downloaded struct {
 	timezone string
 	// tuner is what a tuner said of itself, nil for another source.
 	tuner *Tuner
+	// network is where the account was when it was read (see
+	// Service.located); empty when the download does not tell.
+	network addons.Network
 }
 
 // merge adds to d the parts of more that d lacks.
@@ -80,6 +83,9 @@ func (d *downloaded) merge(more downloaded) {
 	d.timezone = cmp.Or(d.timezone, more.timezone)
 	if d.tuner == nil {
 		d.tuner = more.tuner
+	}
+	if d.network == "" {
+		d.network = more.network
 	}
 	if more.got.live && !d.got.live {
 		d.entries, d.got.live = more.entries, true
@@ -181,7 +187,7 @@ func downloadOnce(ctx context.Context, client requester, address string, confine
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	answered := time.AfterFunc(listAnswer, cancel)
-	response, err := client.client.Open(ctx, http.MethodGet, address, client.header(), confined)
+	response, err := client.client.OpenSource(ctx, http.MethodGet, address, client.header(), confined)
 	answered.Stop()
 	if err != nil {
 		return err

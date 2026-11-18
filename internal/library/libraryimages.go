@@ -217,9 +217,11 @@ type LibraryImage struct {
 }
 
 // LibraryImages tells the image each of a scope's catalogs shows as a
-// library (see addons.Store.Libraries), confined when the scope's addons
-// may only reach public addresses. Catalogs that are not enabled
-// libraries have no item and show none; live TV catalogs make no library.
+// library (see addons.Store.Libraries). confined tells a member's scope,
+// whose addons may only reach public addresses; any other addon is
+// confined unless it is on a local network (see addons.Addon.Confined).
+// Catalogs that are not enabled libraries have no item and show none;
+// live TV catalogs make no library.
 // Automatic images are looked up as apps would, and remembered for the
 // libraries' items, so that the image can be loaded at once; generated
 // ones are chosen from what Polyfin keeps of the catalogs.
@@ -236,7 +238,7 @@ func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confine
 	for _, addon := range list {
 		byID[addon.ID] = addon
 		if addon.Enabled {
-			v.addons = append(v.addons, installed{addon: addon, confined: confined, shared: scope.Owner == nil})
+			v.addons = append(v.addons, installed{addon: addon, confined: addon.Confined(confined), shared: scope.Owner == nil})
 		}
 	}
 	// The libraries' names, as apps list them.
@@ -270,7 +272,7 @@ func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confine
 		if !ok || !addon.Enabled {
 			continue
 		}
-		l := library{item: Item{ID: id, Kind: KindLibrary, Name: names[i]}, serverName: names[i], addon: installed{addon: addon, confined: confined, shared: scope.Owner == nil},
+		l := library{item: Item{ID: id, Kind: KindLibrary, Name: names[i]}, serverName: names[i], addon: installed{addon: addon, confined: addon.Confined(confined), shared: scope.Owner == nil},
 			catalog: c.Catalog, genre: c.Genre, maxItems: c.MaxItems, image: c.Image}
 		group.Go(func() error {
 			var image string

@@ -386,6 +386,12 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	// catalogs has what names them follow, in its own.
 	addonStore.SetCleanup(lib.CleanRemoved)
 	addonStore.SetCarry(lib.CarryRenamed)
+	// What is kept of a source follows where the source is, on a local
+	// network or on the internet, as soon as that changes. The sources
+	// installed before Polyfin kept it are told now, without waiting for
+	// an administrator: by their address first, then by reading them.
+	addonStore.SetReconfine(lib.Reconfine)
+	go addonStore.LocateSources(ctx, logger)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
 	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and

@@ -53,11 +53,14 @@ var (
 
 // Client fetches addon resources. Requests made on behalf of untrusted users
 // are confined to public internet addresses, checked when connecting so that
-// DNS answers and redirects cannot point them at the local network.
+// DNS answers and redirects cannot point them at the local network. The
+// requests made to a source that is itself on a local network reach local
+// addresses only, checked the same way (see newLocalClient).
 type Client struct {
 	userAgent string
 	trusted   *http.Client
 	confined  *http.Client
+	local     *http.Client
 	health    healthRecords
 	// timeout and streamTimeout are requestTimeout and StreamTimeout but
 	// in tests (see SetTimeouts).
@@ -70,6 +73,7 @@ func NewClient(version string) *Client {
 		userAgent:     "Polyfin/" + version,
 		trusted:       newHTTPClient(false),
 		confined:      newHTTPClient(true),
+		local:         newLocalClient(),
 		health:        healthRecords{byAddon: map[string]*Health{}},
 		timeout:       requestTimeout,
 		streamTimeout: StreamTimeout,
@@ -213,12 +217,16 @@ func CheckPublic(ctx context.Context, host string) error {
 	return nil
 }
 
-// do sends a request with the client allowed for it. Errors never contain
+// do sends a request with the client allowed for it: the confined one, or
+// else the local one for a request to a source itself (see toSource), and
+// the one that reaches any address for the others. Errors never contain
 // the URL, which usually carries credentials.
 func (c *Client) do(request *http.Request, confined bool) (*http.Response, error) {
 	client := c.trusted
 	if confined {
 		client = c.confined
+	} else if isToSource(request.Context()) {
+		client = c.local
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -235,9 +243,10 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 }
 
 // get downloads a resource of the addon manifestURL installs, within
-// timeout, and records how its answer went (see Health).
+// timeout, and records how its answer went (see Health). The request is
+// one to the source itself: not confined, it reaches local addresses only.
 func (c *Client) get(ctx context.Context, manifestURL, target string, confined bool, timeout time.Duration) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(toSource(ctx), timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
@@ -248,7 +257,9 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	started := time.Now()
 	response, err := c.do(request, confined)
 	if err != nil {
-		c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
+		if !offNetwork(ctx, err) {
+			c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
+		}
 		return nil, err
 	}
 	defer response.Body.Close()

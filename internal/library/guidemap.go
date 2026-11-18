@@ -239,14 +239,14 @@ func (s *Service) CatalogGuides(ctx context.Context, scope addons.Scope, key add
 
 // SetCatalogGuides replaces one of the scope's live TV catalogs' guides
 // (see addons.Store.SetGuides), downloads the new ones and maps the
-// catalog's channels again. A confined catalog's new addresses must not be
-// on a local network.
+// catalog's channels again. A member's new addresses must not be on a
+// local network.
 func (s *Service) SetCatalogGuides(ctx context.Context, scope addons.Scope, key addons.LibraryKey, list []addons.GuideAddress) (CatalogGuides, error) {
 	c, err := s.addons.LiveCatalogOf(ctx, scope, key)
 	if err != nil {
 		return CatalogGuides{}, err
 	}
-	if c.Confined {
+	if c.Member {
 		for _, entry := range list {
 			if parsed, err := url.Parse(strings.TrimSpace(entry.URL)); entry.ID == nil && err == nil {
 				if err := stremio.CheckPublic(ctx, parsed.Hostname()); err != nil {

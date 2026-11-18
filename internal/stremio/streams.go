@@ -53,6 +53,12 @@ type Stream struct {
 	// stream is encrypted, with its ClearKey keys, which never leave
 	// Polyfin; nil when it says nothing.
 	Protection *drm.Protection `json:"-"`
+	// Confined is Polyfin's, never an addon's: set for a stream whose
+	// address the source's owner gave themselves, as an IPTV channel's
+	// custom stream, it tells whether the stream is fetched from public
+	// addresses only, as that owner may, rather than as what the source's
+	// answers name is; nil for a stream the source named.
+	Confined *bool `json:"-"`
 }
 
 // StreamBehavior holds hints about how a stream is played.

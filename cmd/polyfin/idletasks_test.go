@@ -134,8 +134,8 @@ func idleServer(t *testing.T, pool *pgxpool.Pool, sent *statements) []idleTask {
 			}
 			return lib.RefreshGuides(ctx, false)
 		}, []string{
-			"SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''), a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.checked_at, i.next_try_at, i.error FROM iptv_sources i ",
-			"SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''), a.owner_id, coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id FROM libraries l ",
+			"SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''), (a.owner_id IS NOT NULL AND NOT coalesce((SELECT owner.is_administrator FROM users owner WHERE owner.id = a.owner_id), false)), coalesce(a.network, ''), i.checked_at, i.next_try_at, i.error FROM iptv_sources i ",
+			"SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, coalesce(a.name, ''), a.owner_id, coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id, coalesce(a.network, '') FROM libraries l ",
 			"SELECT id, next_try_at FROM live_guides WHERE next_try_at IS NOT NULL",
 			"SELECT EXISTS (SELECT 1 FROM items WHERE kind IN ('program', 'replay'))",
 		}},

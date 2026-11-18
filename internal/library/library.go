@@ -681,9 +681,10 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	var visible []addons.Library
 	var entries []installed
 	for _, scope := range scopes {
-		// The server's addons were installed by an administrator; a user's own
-		// addons may only reach the local network if that user is one.
-		confined := scope.Owner != nil && !user.IsAdministrator
+		// A member's own addons stay on public addresses, and so does any
+		// other that is not on a local network itself (see
+		// addons.Addon.Confined).
+		member := addons.Member(scope, user.IsAdministrator)
 		list, err := s.addons.Addons(ctx, scope)
 		if err != nil {
 			return view{}, err
@@ -695,7 +696,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			case scope.Owner == nil && !addon.UsedBy.Uses(user):
 				v.withheld = append(v.withheld, addon.ID)
 			default:
-				entry := installed{addon: addon, confined: confined, shared: scope.Owner == nil}
+				entry := installed{addon: addon, confined: addon.Confined(member), shared: scope.Owner == nil}
 				v.addons = append(v.addons, entry)
 				byID[addon.ID] = entry
 			}

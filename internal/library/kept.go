@@ -867,8 +867,8 @@ const WarmInterval = time.Hour
 // read saw for long (see arrivals.go).
 func (s *Service) Warm(ctx context.Context) error {
 	scopes := []struct {
-		scope    addons.Scope
-		confined bool
+		scope  addons.Scope
+		member bool
 	}{{addons.Shared(), false}}
 	if s.settings().PersonalAddons {
 		rows, err := s.db.Query(ctx, `SELECT DISTINCT a.owner_id, u.is_administrator FROM addons a JOIN users u ON u.id = a.owner_id`)
@@ -878,12 +878,13 @@ func (s *Service) Warm(ctx context.Context) error {
 		var owner accounts.ID
 		var administrator bool
 		if _, err := pgx.ForEachRow(rows, []any{&owner, &administrator}, func() error {
-			// A user's own addons may reach the local network only if that
-			// user is an administrator (see view).
+			// A member's own addons stay on public addresses, wherever
+			// they are (see addons.Addon.Confined).
+			scope := addons.Personal(owner)
 			scopes = append(scopes, struct {
-				scope    addons.Scope
-				confined bool
-			}{addons.Personal(owner), !administrator})
+				scope  addons.Scope
+				member bool
+			}{scope, addons.Member(scope, administrator)})
 			return nil
 		}); err != nil {
 			return err
@@ -911,7 +912,7 @@ func (s *Service) Warm(ctx context.Context) error {
 			if !ok || !l.Enabled || LiveCatalog(l.Catalog.Type) {
 				continue
 			}
-			entry := installed{addon: addon, confined: scope.confined, shared: scope.scope.Owner == nil}
+			entry := installed{addon: addon, confined: addon.Confined(scope.member), shared: scope.scope.Owner == nil}
 			// The page apps read first: of the library's genre, when it is
 			// narrowed to one.
 			src := source{addon: entry, catalog: l.Catalog, genre: l.Genre}

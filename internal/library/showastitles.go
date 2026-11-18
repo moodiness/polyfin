@@ -100,21 +100,22 @@ func (s *Service) DecideShowAs(ctx context.Context, scope addons.Scope) error {
 	if err != nil {
 		return err
 	}
-	// A user's own addons may reach the local network only if that user
-	// is an administrator (see view).
-	confined := false
+	// A member's own addons stay on public addresses, wherever they are
+	// (see addons.Addon.Confined).
+	administrator := false
 	if scope.Owner != nil {
-		if err := s.db.QueryRow(ctx, "SELECT NOT is_administrator FROM users WHERE id = $1", *scope.Owner).Scan(&confined); err != nil {
+		if err := s.db.QueryRow(ctx, "SELECT is_administrator FROM users WHERE id = $1", *scope.Owner).Scan(&administrator); err != nil {
 			return err
 		}
 	}
+	member := addons.Member(scope, administrator)
 	var errs []error
 	for _, l := range libraries {
 		i := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == l.AddonID })
 		if !undecidedShowAs(l) || i < 0 || !list[i].Enabled || !list[i].Stremio() {
 			continue
 		}
-		entry := installed{addon: list[i], confined: confined, shared: scope.Owner == nil}
+		entry := installed{addon: list[i], confined: list[i].Confined(member), shared: scope.Owner == nil}
 		first, err := s.page(ctx, source{addon: entry, catalog: l.Catalog, genre: l.Genre}, 0)
 		if err != nil {
 			s.logger.Debug("A library's first page could not be read", "addon", list[i].LogName(), "catalog", l.Catalog.ID, "error", err)

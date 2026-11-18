@@ -926,9 +926,9 @@ func (h *handler) checkAddon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "too_soon")
 		return
 	}
-	// The request reaches what the addon's own requests may: a member's
-	// addon only public addresses. The answer is recorded whatever it is.
-	_, _ = h.Health.Addons.Manifest(r.Context(), found.ManifestURL, owner.Confined)
+	// The request reaches what the addon's own requests may (see
+	// addons.Addon.Confined). The answer is recorded whatever it is.
+	_, _ = h.Health.Addons.Manifest(r.Context(), found.ManifestURL, found.Confined(owner.Member))
 	writeJSON(w, http.StatusOK, h.addonHealth(*found, owner.Owner))
 }
 
@@ -939,12 +939,12 @@ type ownerJSON struct {
 }
 
 // ownedScope is a scope of addons with its owner: nil for the server's.
-// Confined is set for a user who is not an administrator, whose addons'
-// requests may only reach public addresses.
+// Member is set for a user who is not an administrator, whose addons'
+// requests may only reach public addresses (see addons.Member).
 type ownedScope struct {
-	Scope    addons.Scope
-	Owner    *ownerJSON
-	Confined bool
+	Scope  addons.Scope
+	Owner  *ownerJSON
+	Member bool
 }
 
 // ownedScopes lists the server's scope, then every user's own, by name:
@@ -957,8 +957,9 @@ func (h *handler) ownedScopes(ctx context.Context) ([]ownedScope, error) {
 	scopes := make([]ownedScope, 0, len(users)+1)
 	scopes = append(scopes, ownedScope{Scope: addons.Shared()})
 	for _, user := range users {
-		scopes = append(scopes, ownedScope{Scope: addons.Personal(user.ID), Owner: &ownerJSON{ID: user.ID.String(), Name: user.Name},
-			Confined: !user.IsAdministrator})
+		scope := addons.Personal(user.ID)
+		scopes = append(scopes, ownedScope{Scope: scope, Owner: &ownerJSON{ID: user.ID.String(), Name: user.Name},
+			Member: addons.Member(scope, user.IsAdministrator)})
 	}
 	return scopes, nil
 }

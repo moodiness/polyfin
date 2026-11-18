@@ -910,6 +910,10 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 			URL: subtitle.URL, Addon: entry.addon.Name(), Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
 			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
 	}
+	// A stream whose address its source's owner gave is theirs to reach.
+	if stream.Confined != nil {
+		version.Confined = *stream.Confined
+	}
 	version.LocalFolder = entry.addon.Local()
 	return version
 }
