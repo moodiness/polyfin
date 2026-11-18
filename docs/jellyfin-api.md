@@ -617,6 +617,7 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 ### Playlists for apps
 
 - `POST /Playlists`, `POST /Playlists/{id}/Items` and an `Ids` update take a series as its aired episodes of regular seasons and a season as its aired episodes, in order; other kinds are added as themselves (see [Playlists](watch-state.md#playlists)).
+- A playlist holds at most 10,000 entries and its `Name` 500 characters, and a user owns at most 200 playlists, their Watchlist aside (see [Playlists](watch-state.md#playlists)). `POST /Playlists`, `POST /Playlists/{id}/Items` and `POST /Playlists/{id}` answer what would pass a limit with 400 and the validation problem body, whose `errors` name `Name`, `Ids` or `UserId`, and keep nothing of the request: entries are never added in part. A playlist that held more entries before the limit is listed whole, and takes an `Ids` update of no more entries than it holds.
 - `GET /Playlists/{id}/Items` lists the entries in the playlist's order, each with its `PlaylistItemId`.
 - `/Items?ParentId=<playlist>` lists them in the playlist's order without `SortBy`, or with `SortBy=None`. With a `SortBy`, they follow it, as a folder's children do: the standard fields, and `Random`, which jellyfin-web's Shuffle asks for, a new order each time.
 - A playlist's `Name` is the viewer's: see [Watchlist for apps](#watchlist-for-apps) for the Watchlist playlist's.

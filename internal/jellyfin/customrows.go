@@ -287,7 +287,7 @@ func (h *Handler) favoritePlaylists(ctx context.Context, user accounts.User, wit
 		return nil, err
 	}
 	visible = slices.DeleteFunc(visible, func(p playlists.Playlist) bool {
-		return !data[p.ID].Favorite || len(p.Entries) == 0 || withoutWatchlist && p.Watchlist && p.Owner == user.ID
+		return !data[p.ID].Favorite || !p.HasEntries || withoutWatchlist && p.Watchlist && p.Owner == user.ID
 	})
 	if err := h.namePlaylists(ctx, user, visible); err != nil {
 		return nil, err

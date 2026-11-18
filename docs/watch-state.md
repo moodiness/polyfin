@@ -148,6 +148,7 @@ Users make playlists of movies and episodes in their apps, with "Add to playlist
 - **A season added:** its aired episodes, in order.
 - **Later episodes:** an episode that airs after its series or season was added is not added.
 - **Other items:** a movie or an episode is added itself.
+- **Limits:** a playlist holds up to 10,000 entries and its name up to 500 characters, and a user owns up to 200 playlists besides their Watchlist. What would pass a limit is refused whole: nothing is added, and the app says the change failed. Remove entries, or delete a playlist, to make room.
 - **Order:** apps listing a playlist get its order. Asked for a sort (`SortBy`), as for its items in a folder view, they get that sort, and **Shuffle** gets a random order, a new one each time.
 - **Image:** each playlist gets a mosaic of its first entries, a series' poster standing for its episodes (see [Generated images](artwork-and-editing.md#generated-images)).
 - **On your home screen:** mark a playlist ♥ (favorite) in any app to put it on the web player's home page, as a row of its own, when your administrator added a **My playlists** row (see [Playlist rows](home-rows.md#playlist-rows)). Your own playlists, those shared with you and public ones count. Remove the ♥ to take the row away.

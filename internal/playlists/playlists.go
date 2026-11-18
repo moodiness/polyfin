@@ -5,10 +5,12 @@
 package playlists
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +20,27 @@ import (
 
 // ErrNotFound reports a playlist that does not exist.
 var ErrNotFound = errors.New("playlist not found")
+
+const (
+	// MaxNameLength bounds a playlist's name, in characters, as a
+	// collection's.
+	MaxNameLength = 500
+	// MaxEntries bounds the entries of a playlist.
+	MaxEntries = 10_000
+	// MaxPerUser bounds the playlists a user owns, their watchlist aside.
+	MaxPerUser = 200
+)
+
+var (
+	// ErrNameTooLong reports a name longer than MaxNameLength.
+	ErrNameTooLong = errors.New("playlist name too long")
+	// ErrTooManyEntries reports a change that would leave a playlist with
+	// more than MaxEntries entries. Nothing of it is kept.
+	ErrTooManyEntries = errors.New("too many entries for a playlist")
+	// ErrTooMany reports a playlist its owner, who has MaxPerUser, cannot
+	// have besides.
+	ErrTooMany = errors.New("too many playlists for a user")
+)
 
 // Playlist is a user's ordered list of titles.
 type Playlist struct {
@@ -32,8 +55,14 @@ type Playlist struct {
 	// OpenAccess lets every user see the playlist; only its owner and the
 	// users shared with to edit change it.
 	OpenAccess bool
-	Shares     []Share
-	Entries    []Entry
+	// Shares are the users the playlist is shared with; in a listing (see
+	// Store.Visible), only the share of the user it was listed for.
+	Shares []Share
+	// Entries are left out of a listing, until Store.LoadEntries reads
+	// them.
+	Entries []Entry
+	// HasEntries tells a playlist with entries, read or not.
+	HasEntries bool
 	Created    time.Time
 	// LastAdded is when titles were last added, nil before any.
 	LastAdded *time.Time
@@ -94,10 +123,21 @@ type Draft struct {
 	Items      []accounts.ID
 }
 
-// Create stores a new playlist and returns its identifier.
+// Create stores a new playlist and returns its identifier. It refuses a
+// name or entries past their bounds, and a playlist past those its owner
+// may have.
 func (s *Store) Create(ctx context.Context, d Draft) (accounts.ID, error) {
+	if utf8.RuneCountInString(d.Name) > MaxNameLength {
+		return accounts.ID{}, ErrNameTooLong
+	}
+	if len(d.Items) > MaxEntries {
+		return accounts.ID{}, ErrTooManyEntries
+	}
 	var id accounts.ID
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if room, err := roomFor(ctx, tx, d.Owner); err != nil || !room {
+			return cmp.Or(err, ErrTooMany)
+		}
 		if err := tx.QueryRow(ctx, "INSERT INTO playlists (owner_id, name, open_access) VALUES ($1, $2, $3) RETURNING id",
 			d.Owner, d.Name, d.OpenAccess).Scan(&id); err != nil {
 			return err
@@ -108,6 +148,18 @@ func (s *Store) Create(ctx context.Context, d Draft) (accounts.ID, error) {
 		return insertEntries(ctx, tx, id, d.Items, 0)
 	})
 	return id, err
+}
+
+// roomFor reports whether owner may have one more playlist. It locks
+// owner's account until tx ends, so that playlists created at the same
+// time count one another.
+func roomFor(ctx context.Context, tx pgx.Tx, owner accounts.ID) (bool, error) {
+	if _, err := tx.Exec(ctx, "SELECT FROM users WHERE id = $1 FOR NO KEY UPDATE", owner); err != nil {
+		return false, err
+	}
+	var owned int
+	err := tx.QueryRow(ctx, "SELECT count(*) FROM playlists WHERE owner_id = $1 AND NOT watchlist", owner).Scan(&owned)
+	return owned < MaxPerUser, err
 }
 
 // Get returns a playlist.
@@ -126,9 +178,67 @@ func (s *Store) Get(ctx context.Context, id accounts.ID) (Playlist, error) {
 const visibleTo = `owner_id = $1 OR open_access
 	OR EXISTS (SELECT 1 FROM playlist_shares WHERE playlist_id = playlists.id AND user_id = $1)`
 
-// Visible lists the playlists user may see, by name.
+// Visible lists the playlists user may see, by name, a row each: without
+// their entries, which LoadEntries reads for those a caller describes
+// (HasEntries tells whether there are any), and with no share but user's
+// own.
 func (s *Store) Visible(ctx context.Context, user accounts.ID) ([]Playlist, error) {
-	return s.load(ctx, "WHERE "+visibleTo, user)
+	rows, _ := s.db.Query(ctx, `SELECT p.id, p.owner_id, coalesce(p.name, ''), p.watchlist, p.open_access, p.created_at, p.last_added_at,
+			s.can_edit, EXISTS (SELECT 1 FROM playlist_entries WHERE playlist_id = p.id)
+		FROM playlists p LEFT JOIN playlist_shares s ON s.playlist_id = p.id AND s.user_id = $1
+		WHERE p.owner_id = $1 OR p.open_access OR s.user_id IS NOT NULL
+		ORDER BY lower(p.name), p.id`, user)
+	var result []Playlist
+	var p Playlist
+	var canEdit *bool
+	_, err := pgx.ForEachRow(rows, []any{&p.ID, &p.Owner, &p.Name, &p.Watchlist, &p.OpenAccess, &p.Created, &p.LastAdded,
+		&canEdit, &p.HasEntries}, func() error {
+		p.Shares = nil
+		if canEdit != nil {
+			p.Shares = []Share{{User: user, CanEdit: *canEdit}}
+		}
+		result = append(result, p)
+		return nil
+	})
+	return result, err
+}
+
+// LoadEntries reads the entries of lists, in order.
+func (s *Store) LoadEntries(ctx context.Context, lists []Playlist) error {
+	if len(lists) == 0 {
+		return nil
+	}
+	index := make(map[accounts.ID]int, len(lists))
+	ids := make([]accounts.ID, len(lists))
+	for i := range lists {
+		index[lists[i].ID], ids[i] = i, lists[i].ID
+		lists[i].Entries, lists[i].HasEntries = nil, false
+	}
+	var playlist accounts.ID
+	var entry Entry
+	rows, _ := s.db.Query(ctx, "SELECT playlist_id, id, item_id FROM playlist_entries WHERE playlist_id = ANY($1) ORDER BY position", ids)
+	_, err := pgx.ForEachRow(rows, []any{&playlist, &entry.ID, &entry.Item}, func() error {
+		p := &lists[index[playlist]]
+		p.Entries, p.HasEntries = append(p.Entries, entry), true
+		return nil
+	})
+	return err
+}
+
+// Titles lists the titles each of the playlists ids holds, each once, in
+// no order: what tells whether a user reaches any of them.
+func (s *Store) Titles(ctx context.Context, ids []accounts.ID) (map[accounts.ID][]accounts.ID, error) {
+	titles := map[accounts.ID][]accounts.ID{}
+	if len(ids) == 0 {
+		return titles, nil
+	}
+	var playlist, item accounts.ID
+	rows, _ := s.db.Query(ctx, "SELECT DISTINCT playlist_id, item_id FROM playlist_entries WHERE playlist_id = ANY($1)", ids)
+	_, err := pgx.ForEachRow(rows, []any{&playlist, &item}, func() error {
+		titles[playlist] = append(titles[playlist], item)
+		return nil
+	})
+	return titles, err
 }
 
 // AnyVisible reports whether user may see at least one playlist.
@@ -183,12 +293,7 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]Playlist
 	}); err != nil {
 		return nil, err
 	}
-	var entry Entry
-	rows, _ = s.db.Query(ctx, "SELECT playlist_id, id, item_id FROM playlist_entries WHERE playlist_id = ANY($1) ORDER BY position", ids)
-	if _, err := pgx.ForEachRow(rows, []any{&playlist, &entry.ID, &entry.Item}, func() error {
-		result[index[playlist]].Entries = append(result[index[playlist]].Entries, entry)
-		return nil
-	}); err != nil {
+	if err := s.LoadEntries(ctx, result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -205,8 +310,13 @@ type Changes struct {
 }
 
 // Update changes a playlist. A watchlist given an empty name takes the
-// default back.
+// default back. It refuses a name past its bound, and more entries than
+// MaxEntries, unless the playlist holds as many already: one that held
+// more before the bound can be given fewer, never more.
 func (s *Store) Update(ctx context.Context, id accounts.ID, c Changes) error {
+	if c.Name != nil && utf8.RuneCountInString(*c.Name) > MaxNameLength {
+		return ErrNameTooLong
+	}
 	return s.change(ctx, id, func(tx pgx.Tx, owner accounts.ID) error {
 		if c.Name != nil {
 			if _, err := tx.Exec(ctx, "UPDATE playlists SET name = CASE WHEN watchlist AND $2 = '' THEN NULL ELSE $2 END WHERE id = $1",
@@ -228,6 +338,15 @@ func (s *Store) Update(ctx context.Context, id accounts.ID, c Changes) error {
 			}
 		}
 		if c.Items != nil {
+			if len(*c.Items) > MaxEntries {
+				var held int
+				if err := tx.QueryRow(ctx, "SELECT count(*) FROM playlist_entries WHERE playlist_id = $1", id).Scan(&held); err != nil {
+					return err
+				}
+				if len(*c.Items) > held {
+					return ErrTooManyEntries
+				}
+			}
 			if _, err := tx.Exec(ctx, "DELETE FROM playlist_entries WHERE playlist_id = $1", id); err != nil {
 				return err
 			}
@@ -238,7 +357,8 @@ func (s *Store) Update(ctx context.Context, id accounts.ID, c Changes) error {
 }
 
 // Add inserts items at position, or after the last entry when position is
-// past it; a negative position counts as the first.
+// past it; a negative position counts as the first. It adds nothing when
+// the playlist would hold more than MaxEntries entries.
 func (s *Store) Add(ctx context.Context, id accounts.ID, items []accounts.ID, position int) error {
 	if len(items) == 0 {
 		return nil
@@ -247,6 +367,9 @@ func (s *Store) Add(ctx context.Context, id accounts.ID, items []accounts.ID, po
 		var count int
 		if err := tx.QueryRow(ctx, "SELECT count(*) FROM playlist_entries WHERE playlist_id = $1", id).Scan(&count); err != nil {
 			return err
+		}
+		if count+len(items) > MaxEntries {
+			return ErrTooManyEntries
 		}
 		position = min(max(position, 0), count)
 		if _, err := tx.Exec(ctx, "UPDATE playlist_entries SET position = position + $3 WHERE playlist_id = $1 AND position >= $2",
@@ -380,7 +503,9 @@ func insertEntries(ctx context.Context, tx pgx.Tx, id accounts.ID, items []accou
 // playlist deleted since is created again. Without items, and none
 // brought before, it creates nothing, and returns the zero identifier. It
 // reports whether it created the playlist, else how many entries it added
-// to the one brought before.
+// to the one brought before. The bounds hold here too: the name is cut to
+// MaxNameLength, the entries stop at MaxEntries, and an owner who has
+// MaxPerUser playlists gets none created.
 func (s *Store) Import(ctx context.Context, server, source string, owner accounts.ID, name string,
 	items []accounts.ID) (id accounts.ID, created bool, added int, err error) {
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -399,6 +524,7 @@ func (s *Store) Import(ctx context.Context, server, source string, owner account
 				holds[item] = true
 			}
 			missing := slices.DeleteFunc(slices.Clone(items), func(item accounts.ID) bool { return holds[item] })
+			missing = missing[:min(len(missing), max(MaxEntries-len(held), 0))]
 			added = len(missing)
 			return insertEntries(ctx, tx, id, missing, len(held))
 		case !errors.Is(err, pgx.ErrNoRows):
@@ -406,7 +532,11 @@ func (s *Store) Import(ctx context.Context, server, source string, owner account
 		case len(items) == 0:
 			return nil
 		}
-		if err := tx.QueryRow(ctx, "INSERT INTO playlists (owner_id, name) VALUES ($1, $2) RETURNING id", owner, name).Scan(&id); err != nil {
+		if room, err := roomFor(ctx, tx, owner); err != nil || !room {
+			return err
+		}
+		if err := tx.QueryRow(ctx, "INSERT INTO playlists (owner_id, name) VALUES ($1, $2) RETURNING id",
+			owner, truncate(name, MaxNameLength)).Scan(&id); err != nil {
 			return err
 		}
 		created = true
@@ -415,10 +545,21 @@ func (s *Store) Import(ctx context.Context, server, source string, owner account
 			server, source, owner, id); err != nil {
 			return err
 		}
-		return insertEntries(ctx, tx, id, items, 0)
+		return insertEntries(ctx, tx, id, items[:min(len(items), MaxEntries)], 0)
 	})
 	if err != nil {
 		return accounts.ID{}, false, 0, err
 	}
 	return id, created, added, nil
+}
+
+// truncate cuts text to its first max characters.
+func truncate(text string, max int) string {
+	for i := range text {
+		if max == 0 {
+			return text[:i]
+		}
+		max--
+	}
+	return text
 }
