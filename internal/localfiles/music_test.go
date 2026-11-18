@@ -355,6 +355,32 @@ func TestArtistsAndLyricsTags(t *testing.T) {
 	}
 }
 
+// A lyrics tag is kept up to the size of the largest lyrics file read;
+// a larger one is left out, as the file is, and the track has no lyrics
+// of its own.
+func TestLyricsTagsLargerThanALyricsFileAreLeftOut(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, tag string
+		size      int
+		kept      bool
+	}{
+		{"a lyrics tag of the most text", "LYRICS", maxText, true},
+		{"a lyrics tag over it", "LYRICS", maxText + 1, false},
+		{"an ID3 lyrics tag over it", "lyrics-eng", maxText + 1, false},
+	} {
+		words := strings.Repeat("a", tc.size)
+		info, err := readProbe([]byte(`{"streams": [{"codec_type": "audio", "codec_name": "flac"}], "format": {"tags": {"title": "T", "` +
+			tc.tag + `": "` + words + `"}}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept := info.lyrics == words; kept != tc.kept || !kept && info.lyrics != "" || info.title != "T" {
+			t.Errorf("%s: kept %v, %d bytes of lyrics, title %q", tc.name, kept, len(info.lyrics), info.title)
+		}
+	}
+}
+
 // A playlist's lines name tracks by paths relative to its folder, or
 // absolute within the folder, as paths or file: addresses, with slashes
 // or backslashes; those leading out of it are left out. Its title is its

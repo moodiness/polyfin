@@ -34,7 +34,8 @@ var searchTracks = []map[string]any{
 }
 
 // answerSearch answers LRCLIB's search, by track name: searchTracks for
-// "Echo Chamber", a truncated answer, one over maxSearchAnswer, one that
+// "Echo Chamber", maxResults tracks of a long line sung many times for
+// "Endless Song", a truncated answer, one over maxSearchAnswer, one that
 // is no list, a failure while failing is set, and an empty list
 // otherwise.
 func (f *fakeLRCLIB) answerSearch(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +47,12 @@ func (f *fakeLRCLIB) answerSearch(w http.ResponseWriter, r *http.Request) {
 	switch name {
 	case "Echo Chamber":
 		_ = json.NewEncoder(w).Encode(searchTracks)
+	case "Endless Song":
+		tracks := make([]map[string]any, maxResults)
+		for i := range tracks {
+			tracks[i] = map[string]any{"id": 100 + i, "trackName": name, "plainLyrics": "Plain words", "syncedLyrics": longLine}
+		}
+		_ = json.NewEncoder(w).Encode(tracks)
 	case "Broken Song":
 		_, _ = w.Write([]byte(`[{"id": 1, "trackName": "Broken`))
 	case "Huge Song":
@@ -64,7 +71,8 @@ func (f *fakeLRCLIB) answerSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // answerID answers a track of searchTracks by its identifier, another
-// track for 77, a truncated answer for 66, and LRCLIB's 404 otherwise.
+// track for 77, a truncated answer for 66, a long line sung many times
+// for 88, and LRCLIB's 404 otherwise.
 func (f *fakeLRCLIB) answerID(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/get/")
 	f.mu.Lock()
@@ -77,6 +85,9 @@ func (f *fakeLRCLIB) answerID(w http.ResponseWriter, r *http.Request) {
 		return
 	case "66":
 		_, _ = w.Write([]byte(`{"id": 66, "plainLyrics": "Cut`))
+		return
+	case "88":
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 88, "plainLyrics": "Plain words", "syncedLyrics": longLine})
 		return
 	}
 	for _, track := range searchTracks {

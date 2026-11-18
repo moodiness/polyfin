@@ -259,6 +259,7 @@ Instrumentals, songs LRCLIB does not know, and audiobooks have no lyrics.
 A song of a [local music folder](#music-folders) has its own lyrics: those of the `.lrc` file of the same name beside it, else those of its lyrics tag.
 
 - They are synced line by line when timed, plain otherwise.
+- A lyrics file or tag over 1 MiB is not read. Lyrics are read up to 5,000 lines, 200 times for a line sung several times, and 1 MiB of text in all: the rest is left out. A long song has a few hundred lines.
 - They come before LRCLIB's. Polyfin never looks up a song with lyrics of its own on LRCLIB.
 - They are served with **Song lyrics from LRCLIB** off too.
 - Lyrics an administrator chooses or uploads replace them, until deleted (see [Choosing lyrics](#choosing-lyrics)). The file and the tag are never changed.

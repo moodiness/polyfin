@@ -2,11 +2,28 @@ package lyrics
 
 import (
 	"cmp"
+	"iter"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	// maxLines bounds the lines lyrics are read into, synced or plain. A
+	// long song has a few hundred: at a line every two seconds, maxLines
+	// are sung for nearly three hours.
+	maxLines = 5000
+	// maxLineTags bounds the time tags read of one line, the times it is
+	// sung. A chorus has a few, and a line repeated all along a track
+	// many: one sung every three seconds for ten minutes has 200.
+	maxLineTags = 200
+	// maxText bounds the text the lines hold in all, in bytes: that of
+	// the largest lyrics file taken. A line holds its text once for each
+	// of its time tags, so that without it the lines of a file could
+	// hold many times the file.
+	maxText = MaxUpload
 )
 
 var (
@@ -21,7 +38,8 @@ var (
 
 // Parse reads a track's own lyrics, those of a lyrics file or tag beside
 // it: synced when they hold a timed line (LRC), else plain. Lyrics without
-// a line of text are none.
+// a line of text are none. They are read within maxLines and maxText,
+// as all lyrics are: what a text holds past them is left out.
 func Parse(text string) (Lyrics, bool) {
 	if lines := parseLRC(text); len(lines) > 0 {
 		return Lyrics{Synced: true, Lines: lines}, true
@@ -29,17 +47,22 @@ func Parse(text string) (Lyrics, bool) {
 	if strings.TrimSpace(text) == "" {
 		return Lyrics{}, false
 	}
-	return Lyrics{Lines: plainLines(text)}, true
+	lines := plainLines(text)
+	return Lyrics{Lines: lines}, len(lines) > 0
 }
 
 // parseLRC reads LRC lyrics into lines, sorted by their start, as Jellyfin
 // reads a track's LRC file: each time tag of a line starts a line of its
 // text, trimmed, empty ones included (they mark pauses). Lines without a
 // time tag, such as the [ar:] or [ti:] tags of the file's description, are
-// left out.
+// left out. A line starts maxLineTags lines at most, at the first of its
+// time tags, and reading stops at the line that would pass maxLines or
+// maxText: the lyrics read until then stay synced.
 func parseLRC(text string) []Line {
 	var lines []Line
-	for _, raw := range splitLines(text) {
+	held := 0
+read:
+	for raw := range splitLines(text) {
 		rest := strings.TrimSpace(raw)
 		var starts []time.Duration
 		for {
@@ -47,11 +70,22 @@ func parseLRC(text string) []Line {
 			if match == nil {
 				break
 			}
-			starts = append(starts, tagTime(match[1], match[2], match[3]))
+			// The tags past the bound are read too: left in the line,
+			// they would show as its words.
+			if len(starts) < maxLineTags {
+				starts = append(starts, tagTime(match[1], match[2], match[3]))
+			}
 			rest = rest[len(match[0]):]
+		}
+		if len(starts) == 0 {
+			continue
 		}
 		words := strings.TrimSpace(wordTag.ReplaceAllString(rest, ""))
 		for _, start := range starts {
+			if !fits(lines, held, words) {
+				break read
+			}
+			held += len(words)
 			lines = append(lines, Line{Text: words, Start: start})
 		}
 	}
@@ -78,16 +112,29 @@ func tagTime(minutes, seconds, fraction string) time.Duration {
 
 // plainLines reads plain lyrics into lines, as Jellyfin reads a text
 // file of lyrics: each line trimmed, empty ones between verses kept.
+// Reading stops at the line that would pass maxLines or maxText.
 func plainLines(text string) []Line {
-	raw := splitLines(strings.TrimSpace(text))
-	lines := make([]Line, len(raw))
-	for i, line := range raw {
-		lines[i] = Line{Text: strings.TrimSpace(line)}
+	var lines []Line
+	held := 0
+	for raw := range splitLines(strings.TrimSpace(text)) {
+		words := strings.TrimSpace(raw)
+		if !fits(lines, held, words) {
+			break
+		}
+		held += len(words)
+		lines = append(lines, Line{Text: words})
 	}
 	return lines
 }
 
-// splitLines splits text at its line breaks, of any system.
-func splitLines(text string) []string {
-	return strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
+// fits reports whether lines, holding held bytes of text, may hold one
+// more line of words within maxLines and maxText.
+func fits(lines []Line, held int, words string) bool {
+	return len(lines) < maxLines && held+len(words) <= maxText
+}
+
+// splitLines splits text at its line breaks, of any system, one line
+// after the other, so that a reader that stops early splits no more.
+func splitLines(text string) iter.Seq[string] {
+	return strings.SplitSeq(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
 }

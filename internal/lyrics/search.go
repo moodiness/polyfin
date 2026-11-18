@@ -115,7 +115,10 @@ func (s *Service) Search(ctx context.Context, track Track) []Result {
 
 // parseSearch reads LRCLIB's search answer into results, ranked by how
 // close the length of their track is to length (unranked when 0), at most
-// maxResults tracks. Tracks without an identifier or lyrics are left out.
+// maxResults tracks. Tracks without an identifier or lyrics are left out,
+// as are the lyrics past those whose lines hold maxSearchAnswer of text
+// in all: a line sung several times holds its text as many times, and
+// the results list no more than their answer may hold.
 func parseSearch(body []byte, length time.Duration) ([]Result, error) {
 	var tracks []listed
 	if err := json.Unmarshal(body, &tracks); err != nil {
@@ -132,13 +135,20 @@ func parseSearch(body []byte, length time.Duration) ([]Result, error) {
 		slices.SortStableFunc(tracks, func(a, b listed) int { return cmp.Compare(distance(a), distance(b)) })
 	}
 	var results []Result
+	held := 0
+	room := func(lyrics Lyrics) bool {
+		for _, line := range lyrics.Lines {
+			held += len(line.Text)
+		}
+		return held <= maxSearchAnswer
+	}
 	for _, track := range tracks[:min(len(tracks), maxResults)] {
 		result := Result{Artist: track.ArtistName, Album: track.AlbumName, Title: track.TrackName, Duration: track.length()}
-		if lyrics, ok := track.lyrics(true); ok {
+		if lyrics, ok := track.lyrics(true); ok && room(lyrics) {
 			result.ID, result.Lyrics = resultID(track.ID, true), lyrics
 			results = append(results, result)
 		}
-		if lyrics, ok := track.lyrics(false); ok {
+		if lyrics, ok := track.lyrics(false); ok && room(lyrics) {
 			result.ID, result.Lyrics = resultID(track.ID, false), lyrics
 			results = append(results, result)
 		}

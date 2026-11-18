@@ -60,7 +60,7 @@ const (
 	searchResults = 30
 	// variousArtists is the album artist of a compilation that names none.
 	variousArtists = "Various Artists"
-	// maxText bounds a lyrics file or a playlist.
+	// maxText bounds a lyrics file, a lyrics tag or a playlist.
 	maxText = 1 << 20
 )
 
@@ -193,6 +193,11 @@ func readProbe(data []byte) (trackInfo, error) {
 				break
 			}
 		}
+	}
+	// A lyrics tag larger than a lyrics file may be is left out, as the
+	// file is.
+	if len(info.lyrics) > maxText {
+		info.lyrics = ""
 	}
 	info.trackGain = tagGain(first("replaygain_track_gain"), first("r128_track_gain"))
 	info.albumGain = tagGain(first("replaygain_album_gain"), first("r128_album_gain"))

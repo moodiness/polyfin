@@ -19,6 +19,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/lyrics"
 )
 
@@ -631,5 +632,51 @@ func TestLyricsUpload(t *testing.T) {
 	}
 	if status, _, lines := l.lyricLines(t, "First Light"); status != http.StatusOK || lines[0]["Text"] != "Uploaded line" {
 		t.Errorf("lyrics uploaded after the removal: %d %v", status, lines)
+	}
+}
+
+// A song's lyrics answer holds no more than a lyrics file may, however
+// often its lines are sung: a long line with thousands of time tags
+// answers the first of its lines, when it is uploaded, when the song's
+// lyrics are asked for, and as a song's own lyrics file or tag.
+func TestLyricsAnswersHoldNoMoreThanALyricsFile(t *testing.T) {
+	t.Parallel()
+	// sung is a line of size bytes sung times times, in LRC.
+	sung := func(times, size int) string { return strings.Repeat("[0:0]", times) + strings.Repeat("a", size) }
+	// most bounds an answer: the text of the largest lyrics file, and as
+	// much again for what describes it and its lines.
+	const most = 2 * lyrics.MaxUpload
+	l := newLyricsServer(t)
+	l.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	admin, first := l.signIn("admin", "web"), l.songs["First Light"]
+	// 16 KiB of LRC, whose lines would hold 13 MiB.
+	status, body := l.uploadLyrics(t, admin, first, "long.lrc", []byte(sung(1638, 8<<10)))
+	if status != http.StatusOK || len(body) > most {
+		t.Errorf("the upload of a long line sung 1638 times: %d, an answer of %d bytes, want %d at most", status, len(body), most)
+	}
+	status, body = l.call(http.MethodGet, "/Audio/"+first+"/Lyrics", app("web", l.token), nil)
+	var dto LyricDto
+	if status != http.StatusOK || len(body) > most || json.Unmarshal(body, &dto) != nil || len(dto.Lyrics) == 0 ||
+		dto.Lyrics[0].Text != strings.Repeat("a", 8<<10) || dto.Lyrics[0].Start == nil {
+		t.Errorf("the lyrics of a long line sung 1638 times: %d, an answer of %d bytes, want %d at most, %d lines", status, len(body), most,
+			len(dto.Lyrics))
+	}
+
+	// A song's own lyrics, of its lyrics file or tag, are answered from
+	// their text: 16 KiB, then the most a lyrics file holds, 1 MiB.
+	for _, text := range []string{sung(1638, 8<<10), sung(104857, 512<<10)} {
+		found, ok := lyrics.Parse(text)
+		held := 0
+		for _, line := range found.Lines {
+			held += len(line.Text)
+		}
+		if !ok || !found.Synced || held > lyrics.MaxUpload {
+			t.Fatalf("lyrics of %d bytes: read %v, synced %v, %d lines holding %d bytes, want %d at most", len(text), ok, found.Synced,
+				len(found.Lines), held, lyrics.MaxUpload)
+		}
+		answer, err := json.Marshal(lyricDto(library.Item{}, lyrics.Track{}, found))
+		if err != nil || len(answer) > most {
+			t.Errorf("lyrics of %d bytes: an answer of %d bytes, want %d at most (%v)", len(text), len(answer), most, err)
+		}
 	}
 }
