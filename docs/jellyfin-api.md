@@ -57,7 +57,7 @@ Apps sign in with a name and password, or with Quick Connect, as on Jellyfin. Th
 
 ### Client addresses for apps
 
-- A session's `RemoteEndPoint`, and `IsLocal` and `IsInNetwork` of `/System/Endpoint`, follow the client's address: the one the proxy names for a request from a known proxy, the connection's otherwise.
+- A session's `RemoteEndPoint`, and `IsLocal` and `IsInNetwork` of `/System/Endpoint`, follow the client's address: the one the proxy names for a request from a known proxy, the connection's otherwise. `IsInNetwork` is false for a request that carries `X-Forwarded-For`, `X-Real-IP` or `Forwarded` without coming from a known proxy (see [Known proxies](reverse-proxy.md#known-proxies)).
 
 ### Remote access for apps
 

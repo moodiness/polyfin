@@ -109,7 +109,7 @@ The PIN resets the password only. An account with [two-step sign-in](sign-in-and
 
 - Wrong PINs count as failed sign-ins.
 - Asked from outside the local network, the answer is the same and no PIN is made, as in Jellyfin.
-- Behind a reverse proxy on the local network, list it under **Known proxies**. Otherwise every request counts as coming from it, and so from the local network (see [Known proxies](reverse-proxy.md#known-proxies)).
+- Behind a reverse proxy, list it under **Known proxies**. Otherwise every request through it counts as coming from outside the local network, and no PIN is made (see [Known proxies](reverse-proxy.md#known-proxies)).
 
 ### Activity log and logs for apps
 

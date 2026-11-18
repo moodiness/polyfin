@@ -261,7 +261,7 @@ const users: typeof en = {
     remoteAccessHelp:
       'Consente a questo utente di accedere, sfogliare e riprodurre da qualsiasi luogo. Se disattivato, può farlo solo dalla rete locale, anche se amministratore, come la definiscono i Proxy conosciuti in Impostazioni › Sicurezza. I link che condivide restano riproducibili ovunque.',
     remoteAccessUnknownProxy:
-      'Stato di salute vede un reverse proxy assente dai Proxy conosciuti: chiunque passi da lì sembra locale, quindi questa limitazione non vale per loro.',
+      'Stato di salute vede un reverse proxy assente dai Proxy conosciuti: chiunque passi da lì viene considerato esterno alla rete locale, quindi questo utente viene rifiutato attraverso di esso, anche dalla rete locale.',
     openKnownProxies: 'Apri Proxy conosciuti',
     shareLinksTitle: 'Link condivisi',
     shareLinksHelp:

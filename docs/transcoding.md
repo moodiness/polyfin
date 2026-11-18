@@ -200,7 +200,7 @@ How large converted video is, the bitrate of its video and audio, and what an ap
 | **Outside the local network** | Apps outside the local network |
 | **Always** | Every app |
 
-The local network is judged as for password reset PINs: loopback, private and link-local addresses. Behind a reverse proxy, add the proxy to [Known proxies](reverse-proxy.md#known-proxies), or every app looks local.
+The local network is judged as for password reset PINs: loopback, private and link-local addresses. Behind a reverse proxy, add the proxy to [Known proxies](reverse-proxy.md#known-proxies), or every app counts as outside the local network.
 
 - **Qualities:** the first is the one Polyfin picks, at about the source's bitrate (see [Bitrate of converted video](conversion-quality.md#bitrate-of-converted-video)).
   - Up to two lower steps of the ladder come after it: 2160p, 1440p, 1080p, 720p, 540p, 480p, 360p.

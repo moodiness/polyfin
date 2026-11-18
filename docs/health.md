@@ -59,7 +59,7 @@ Each problem below shows under **To look at**, most with a link to the setting o
 
 Both are warnings, with a link to the setting (see [Known proxies](reverse-proxy.md#known-proxies)):
 
-- A local network address sends `X-Forwarded-For` or `X-Real-IP` without being one of the **Known proxies**. It is usually a reverse proxy missing from the list. The address is named for an hour after its last such request.
+- A local network address sends `X-Forwarded-For` or `X-Real-IP` without being one of the **Known proxies**. It is usually a reverse proxy missing from the list, and the warning names the address to add. Until then, requests through it count as coming from outside the local network, and its clients share one limit of failed sign-ins. The address is named for an hour after its last such request.
 - A host name of **Known proxies** resolves to nothing, so it trusts nothing.
 
 ### Local network discovery problems

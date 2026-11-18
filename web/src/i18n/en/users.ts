@@ -254,7 +254,7 @@ const users = {
     remoteAccessHelp:
       'Lets this user sign in, browse and play from anywhere. Turned off, they may only from the local network, administrators included, as Known proxies under Settings › Security tells it. The links they share still play anywhere.',
     remoteAccessUnknownProxy:
-      'Health sees a reverse proxy missing from Known proxies: everyone who comes through it looks local, so this limit does not hold for them.',
+      'Health sees a reverse proxy missing from Known proxies: everyone who comes through it counts as outside the local network, so this user is refused through it, from the local network too.',
     openKnownProxies: 'Open Known proxies',
     shareLinksTitle: 'Shared links',
     shareLinksHelp:

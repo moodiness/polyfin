@@ -256,7 +256,7 @@ const users: typeof en = {
     remoteAccessHelp:
       'Permite que este usuário entre, navegue e reproduza de qualquer lugar. Desativado, só pode fazer isso da rede local, mesmo sendo administrador, conforme os Proxies conhecidos em Configurações › Segurança a definem. Os links que ele compartilha continuam sendo reproduzidos em qualquer lugar.',
     remoteAccessUnknownProxy:
-      'Integridade vê um proxy reverso que não está em Proxies conhecidos: todos que passam por ele parecem locais, então esta limitação não vale para eles.',
+      'Integridade vê um proxy reverso que não está em Proxies conhecidos: todos que passam por ele contam como externos à rede local, então este usuário é recusado por meio dele, mesmo da rede local.',
     openKnownProxies: 'Abrir Proxies conhecidos',
     shareLinksTitle: 'Links compartilhados',
     shareLinksHelp:

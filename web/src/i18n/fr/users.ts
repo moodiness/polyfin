@@ -261,7 +261,7 @@ const users: typeof en = {
     remoteAccessHelp:
       'Permet à cet utilisateur de se connecter, de parcourir et de lire depuis n’importe où. Désactivé, il ne le peut que depuis le réseau local, même administrateur, tel que les Proxys connus de Paramètres › Sécurité le définissent. Les liens qu’il partage restent lisibles partout.',
     remoteAccessUnknownProxy:
-      'La page Santé voit un proxy inverse absent des Proxys connus\u202f: tous ceux qui passent par lui semblent locaux, et cette limite ne s’applique donc pas à eux.',
+      'La page Santé voit un proxy inverse absent des Proxys connus\u202f: tous ceux qui passent par lui comptent comme extérieurs au réseau local, et cet utilisateur est donc refusé à travers lui, même depuis le réseau local.',
     openKnownProxies: 'Ouvrir les Proxys connus',
     shareLinksTitle: 'Liens partagés',
     shareLinksHelp:

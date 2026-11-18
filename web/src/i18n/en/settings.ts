@@ -780,7 +780,7 @@ const settings = {
       `Jellyfin apps not used for this many days are signed out and must sign in again. This is checked every hour. Signing in to this admin page is not affected. From ${r.min} to ${r.max}.`,
     knownProxies: 'Known proxies',
     knownProxiesHelp: (r: RangeText) =>
-      `The reverse proxies in front of Polyfin, one a line: an IP address, a network such as 172.18.0.0/16, or a host name such as a container’s name on a Docker network (traefik), up to ${r.max}. A name is looked up every minute and each address it resolves to is trusted, so list only names your own network resolves. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. From any other address, X-Forwarded-For and X-Real-IP are ignored. Leave it empty when nothing stands in front of Polyfin.`,
+      `The reverse proxies in front of Polyfin, one a line: an IP address, a network such as 172.18.0.0/16, or a host name such as a container’s name on a Docker network (traefik), up to ${r.max}. A name is looked up every minute and each address it resolves to is trusted, so list only names your own network resolves. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. From any other address, X-Forwarded-For and X-Real-IP name no client, and a request that carries them counts as outside the local network. Leave it empty when nothing stands in front of Polyfin.`,
     /** Settings › Security › Identity provider: signing in through an OpenID Connect provider. */
     provider: {
       title: 'Identity provider',

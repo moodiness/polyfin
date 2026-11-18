@@ -1098,7 +1098,7 @@ export type Permissions = Pick<
 /**
  * The switches of the permissions in Access, on a user's page and on a group's, each saved as it
  * changes. Remote access off warns when Health sees a reverse proxy missing from Known proxies:
- * everyone coming through it looks local, so the limit does not hold for them.
+ * everyone coming through it counts as outside the local network, so the user is refused through it.
  */
 export function PermissionRows({
   values,

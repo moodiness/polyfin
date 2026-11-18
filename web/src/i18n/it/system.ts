@@ -235,7 +235,7 @@ const system: typeof en = {
         hostErrorFileHint:
           'Spesso significa che l’account presso quel servizio richiede attenzione (un cambio di password, un abbonamento, un limite raggiunto) o che il servizio non funziona: verificalo sul suo sito.',
         unknownProxy: (address: string) =>
-          `${address} inoltra richieste (X-Forwarded-For) ma non è un proxy noto, quindi tutti i suoi client vengono considerati come ${address}. Se è il tuo reverse proxy, aggiungilo a Proxy noti in Impostazioni › Sicurezza.`,
+          `${address} inoltra richieste (X-Forwarded-For) ma non è un proxy noto, quindi le richieste che passano da lì vengono considerate provenienti dall’esterno della rete locale. Gli utenti che possono connettersi solo dalla rete locale vengono rifiutati attraverso di esso, e i suoi client condividono un unico limite di accessi non riusciti. Se è il tuo reverse proxy, aggiungilo a Proxy noti in Impostazioni › Sicurezza.`,
         discoveryPort: (port: number) =>
           `Polyfin non riesce a mettersi in ascolto sulla porta UDP ${port}, quindi le applicazioni Jellyfin sulla rete locale non lo trovano da sole. Probabilmente la usa un altro programma, ad esempio un server Jellyfin sullo stesso host. Salvando le impostazioni si riprova.`,
         torrentRoute: (why: string) =>

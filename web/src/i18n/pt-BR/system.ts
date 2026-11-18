@@ -234,7 +234,7 @@ const system: typeof en = {
         hostErrorFileHint:
           'Isso costuma significar que a conta nesse serviço precisa de atenção (uma troca de senha, uma assinatura, um limite atingido) ou que o serviço está fora do ar: verifique no site dele.',
         unknownProxy: (address: string) =>
-          `${address} encaminha requisições (X-Forwarded-For), mas não é um proxy conhecido, então todos os clientes dele contam como ${address}. Se for o seu proxy reverso, adicione-o em Proxies conhecidos, em Configurações › Segurança.`,
+          `${address} encaminha requisições (X-Forwarded-For), mas não é um proxy conhecido, então as requisições que passam por ele contam como vindas de fora da rede local. Os usuários que só podem se conectar da rede local são recusados por meio dele, e os clientes dele compartilham um único limite de falhas de login. Se for o seu proxy reverso, adicione-o em Proxies conhecidos, em Configurações › Segurança.`,
         discoveryPort: (port: number) =>
           `O Polyfin não consegue escutar na porta UDP ${port}, então os aplicativos Jellyfin na rede local não o encontram sozinhos. Provavelmente outro programa a está usando, como um servidor Jellyfin no mesmo host. Salvar as configurações tenta novamente.`,
         torrentRoute: (why: string) =>

@@ -22,7 +22,7 @@ The proxy passes these headers on to Polyfin:
 | `Host`, or `X-Forwarded-Host` | Starts the stream addresses Polyfin gives apps, so that they use the address the app reached. Keep the original `Host`, or pass it as `X-Forwarded-Host`. |
 | `X-Forwarded-Proto` | `https` makes those stream addresses start with `https://`, and marks the admin app's session cookie secure. |
 | `X-Forwarded-For` | Names the client, when the request comes from a known proxy (see [Known proxies](#known-proxies)). |
-| `X-Real-IP` | Names the client when `X-Forwarded-For` is missing, from a known proxy too. |
+| `X-Real-IP` | Names the client when `X-Forwarded-For` is missing, from a known proxy too. Sent with `X-Forwarded-For`, it must name the same client (see [Known proxies](#known-proxies)). |
 
 By default, Traefik and Caddy keep `Host`, and send `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host`.
 
@@ -70,7 +70,7 @@ If Polyfin's own HTTPS is on behind the proxy anyway, with **Redirect HTTP to HT
 |---|---|
 | From a known proxy that sends `X-Forwarded-Proto: https` | Never: the proxy received it over HTTPS. |
 | From a known proxy without that header, for a client on the internet | Yes, which may send the client where it cannot go (see below). |
-| From a proxy on the local network missing from **Known proxies** | Never: every client looks local. |
+| From a proxy on the local network missing from **Known proxies** | Never: the connection comes from the local network. |
 
 A redirected request goes to `https://` and the host it asked for, at one of these ports:
 
@@ -86,11 +86,11 @@ Then set **Public address**, in **Settings › Notifications**, to the address p
 
 ## Known proxies
 
-Without a known proxy, Polyfin takes each request to come from its connection's address. Behind a proxy, that is the proxy's address for everyone, so:
+Without a known proxy, Polyfin takes each request to come from its connection's address. Behind a proxy, that is the proxy's address for everyone, and nothing tells where each client is, so:
 
 - failed sign-ins count for everyone together. Ten failures in 15 minutes, from anyone, refuse every user's sign-in for up to 15 minutes, in apps, the admin app, invite links and password reset PINs;
 - **Now playing**, on **Home**, and each user's devices show the proxy's address;
-- when the proxy is on the local network, every client counts as on it. `/System/Endpoint` tells apps so, and a forgotten password asked from the internet makes a PIN.
+- every request through the proxy counts as coming from outside the local network, wherever the proxy and the client are. `/System/Endpoint` tells apps so, a user who may not connect from outside the local network is refused through it (see [Connections from outside the local network](user-limits.md#connections-from-outside-the-local-network)), and a forgotten password makes no PIN.
 
 List the proxy under **Known proxies**, in **Settings › Security**, one entry per line, up to 64 entries:
 
@@ -105,7 +105,13 @@ A request from a known proxy is then taken to come from the client the proxy nam
 - in `X-Forwarded-For`, the rightmost address that is not a known proxy, read across every line of the header;
 - without that header, the address in `X-Real-IP`.
 
-Requests from any other address keep their connection's address. Their `X-Forwarded-For` and `X-Real-IP` are ignored, since anyone can send them.
+Have the proxy set the header it names the client in, or both. A proxy passes on a header it does not set as its client wrote it, so Polyfin does not believe headers that cannot both come from the proxy. The request then counts as the proxy's own, from outside the local network:
+
+- when `X-Forwarded-For` and `X-Real-IP` name two clients. An `X-Real-IP` that names a known proxy is fine, as a second proxy behind the first sends it;
+- when `X-Forwarded-For`, or `X-Real-IP` alone, holds something that is not an address. In a chain of known proxies, the request counts as coming from the proxy that added it;
+- when it names its client in `Forwarded` alone, which Polyfin does not read.
+
+Requests from any other address keep their connection's address. Their `X-Forwarded-For`, `X-Real-IP` and `Forwarded` name no client, since anyone can send them, and a request that carries one of them counts as coming from outside the local network.
 
 List only proxies: a client connecting from a known address could name any address it likes.
 
@@ -116,7 +122,7 @@ DLNA's addresses under `/dlna/` serve the local network only (see [DLNA](dlna.md
 
 **System › Health** warns when an address on the local network sends `X-Forwarded-For` or `X-Real-IP` without being a known proxy. That is how a proxy missing from the list shows up.
 
-- The warning names that address, for an hour after its last such request.
+- The warning names that address, the one to add to **Known proxies**, for an hour after its last such request, and says what its requests count as until then.
 - Addresses on the internet are never named, since a client can send the headers itself.
 
 ### Proxies by name

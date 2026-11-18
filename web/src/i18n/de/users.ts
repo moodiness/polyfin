@@ -259,7 +259,7 @@ const users: typeof en = {
     remoteAccessHelp:
       'Erlaubt diesem Benutzer, sich von überall anzumelden, zu stöbern und abzuspielen. Ausgeschaltet geht das nur aus dem lokalen Netzwerk, auch für Administratoren, so wie es die bekannten Proxys unter Einstellungen › Sicherheit bestimmen. Die Links, die er teilt, spielen weiterhin überall.',
     remoteAccessUnknownProxy:
-      'Der Systemzustand sieht einen Reverse-Proxy, der nicht unter den bekannten Proxys steht: Alle, die über ihn kommen, wirken lokal, daher gilt diese Einschränkung für sie nicht.',
+      'Der Systemzustand sieht einen Reverse-Proxy, der nicht unter den bekannten Proxys steht: Alle, die über ihn kommen, zählen als außerhalb des lokalen Netzwerks, daher wird dieser Benutzer über ihn abgewiesen, auch aus dem lokalen Netzwerk.',
     openKnownProxies: 'Bekannte Proxys öffnen',
     shareLinksTitle: 'Freigabelinks',
     shareLinksHelp:

@@ -223,7 +223,7 @@ const system = {
         hostErrorFileHint:
           'This often means the account at that service needs attention (a password change, a subscription, a limit reached), or that the service is down: check it on its site.',
         unknownProxy: (address: string) =>
-          `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
+          `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so requests through it count as coming from outside the local network. Users who may only connect from the local network are refused through it, and its clients share one limit of failed sign-ins. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
         discoveryPort: (port: number) =>
           `Polyfin cannot listen on UDP port ${port}, so Jellyfin apps on the local network do not find it by themselves. Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.`,
         torrentRoute: (why: string) =>

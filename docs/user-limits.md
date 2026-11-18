@@ -125,7 +125,7 @@ Turned off, the user, administrator or not, may use the server only from the loc
 - an admin app session is refused (`outside_local_network`), but can still read and end itself;
 - `/Users/Public` leaves the user off the sign-in screen.
 
-The local network is judged as for a forgotten password's PIN: loopback, private and link-local addresses of the client that [Known proxies](reverse-proxy.md#known-proxies) reports. Behind a proxy missing from **Known proxies**, every client looks like the proxy, often local, so the setting cannot hold. When **System › Health** sees such a proxy, the section warns while the setting is off.
+The local network is judged as for a forgotten password's PIN: loopback, private and link-local addresses of the client that [Known proxies](reverse-proxy.md#known-proxies) reports. Behind a proxy missing from **Known proxies**, nothing tells where a client is, so every request through it counts as coming from outside the local network: the user is refused through it, from the local network too. When **System › Health** sees such a proxy, the section warns while the setting is off.
 
 Still allowed:
 
