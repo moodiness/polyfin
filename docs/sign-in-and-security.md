@@ -27,7 +27,7 @@ Then come ten recovery codes, shown this once, like `7k2m-q9xd-4tbh-z0ce`. Each 
 
 In the admin app, after a right password, the sign-in page asks for the code, or a recovery code in the same field.
 
-- No session exists until it is entered. The step belongs to the browser that entered the password, and ends after 5 minutes: the password is then asked again.
+- No session exists until it is entered. The step belongs to the browser that entered the password, and ends after 5 minutes: the password is then asked again. A password change ends it too, with the account's sessions.
 - The activity log records each sign-in with a recovery code.
 - The app's code changes every 30 seconds. Polyfin also accepts those of the 30 seconds before and after, for a phone clock a little off.
 - Each code is accepted once: entered again, even within its 30 seconds, it is refused.
@@ -42,7 +42,7 @@ Turning it on or off keeps open sessions, in the admin app and Jellyfin apps. Si
 
 Jellyfin apps, the web player included, cannot ask for a code. An account with two-step sign-in signs in to them:
 
-- with Quick Connect, approved on the admin app's **Quick Connect** page, which asked for the code (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect));
+- with Quick Connect, approved on the admin app's **Quick Connect** page, which asked for the code at sign-in and asks for it again, or for the password, at each approval (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect));
 - or through an identity provider in the web player (see [Signing in with an identity provider](#signing-in-with-an-identity-provider)).
 
 The password alone is refused there as a wrong password. Administrators' API keys work as before. For such an account, the web player opens no admin app session unless it signed in through the identity provider: the admin app asks for the password and code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
@@ -53,7 +53,7 @@ The password alone is refused there as a wrong password. Administrators' API key
 
 Silo's apps cannot ask for a code either.
 
-- Silo's TV apps sign in with their own code, also a Quick Connect request. An account with two-step sign-in approves it on the admin app's **Quick Connect** page, which `/activate` leads to (see [Signing a TV in with a code](silo-apps.md#signing-a-tv-in-with-a-code)).
+- Silo's TV apps sign in with their own code, also a Quick Connect request. An account with two-step sign-in approves it on the admin app's **Quick Connect** page, which `/activate` leads to, and confirms the approval there (see [Signing a TV in with a code](silo-apps.md#signing-a-tv-in-with-a-code)).
 - Silo's phone, tablet and Mac apps take a password only, refused for such an account as a wrong password.
 
 ### For administrators

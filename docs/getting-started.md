@@ -149,7 +149,9 @@ To approve a device with Quick Connect:
 
 1. On the device, choose Quick Connect in a Jellyfin app, or open Silo's app on a TV.
 2. In the admin app, open **Quick Connect** and type the code the device shows in **Quick Connect code**. An administrator finds the page in the account panel, under their name at the top right, and other users in the top bar.
-3. Check the device, then choose **Approve and sign in this device**.
+3. Check the device and the address it asks from, then choose **Approve and sign in this device**. An account with two-step sign-in first confirms it with a code or its password.
+
+A link or a QR code that carries the code opens the page on the device, and still asks for the code the device shows (see [Approving a device](jellyfin-compatibility.md#approving-a-device)).
 
 Codes expire after 10 minutes. Quick Connect works while **Allow Quick Connect**, in **Settings › General**, is on, as it is by default.
 

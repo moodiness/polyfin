@@ -390,10 +390,10 @@ API details: [Silo box sets API](jellyfin-api.md#silo-box-sets-api).
 Silo's apps for Apple TV and Android TV show an 8-digit code, such as `4821 7730`, and a QR code, beside their password sign-in. The code is a Quick Connect request, as Jellyfin apps make (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)). A signed-in user approves it in one of two ways:
 
 - **In a browser:** open `/activate` at Polyfin's address, as the TV says, or scan the QR code.
-  1. It leads to the admin app's **Quick Connect** page. The code is filled in when it comes from the QR code.
+  1. It leads to the admin app's **Quick Connect** page. The QR code brings the TV's code along: the page shows the TV that asks and the address it asks from, and approves nothing yet.
   2. Sign in there if asked.
-  3. Check the device, and approve it.
-- **On a phone signed in to Silo's app on the same server:** choose "Sign in a TV", then enter the code.
+  3. Check the device, type the code the TV shows, and approve it (see [Approving a device](jellyfin-compatibility.md#approving-a-device)).
+- **On a phone signed in to Silo's app on the same server:** choose "Sign in a TV", then enter the code. Polyfin gives the app the address the TV asked from, with its name.
   - "Not now" turns it down, and the TV says the sign-in was declined.
 
 The TV then signs in as the user who approved it, with the session a password gives. It becomes one of their devices, named as the TV names itself, and is listed and signed out as the others.
@@ -403,8 +403,9 @@ The TV then signs in as the user who approved it, with the session a password gi
 - **Once:** a code is approved once, by a signed-in user, for themselves.
   - Once approved, turned down or withdrawn, nobody can approve it again.
   - The TV collects its session once.
-- **Disabled or ended accounts:** they get no session, and the TV says the sign-in was declined.
-- **Two-step sign-in:** an account with it signs a TV in this way. The admin app asked for its code when it signed in.
+- **Disabled or ended accounts:** they get no session, and the TV says the sign-in was declined. So does it once the account that approved it changed its password before the TV collected its session.
+- **Two-step sign-in:** an account with it signs a TV in this way. The admin app asked for its code when it signed in, and asks for it again, or for the password, when it approves.
+- **Wrong codes and many requests:** codes no TV waits with count as wrong passwords do, and an address holds a few requests at a time, as for Jellyfin apps (see [Approving a device](jellyfin-compatibility.md#approving-a-device)).
 - **Address:** the QR code and the address the TV shows start with the **Public address**, under **Settings › Notifications**, when it is set. Otherwise they start with the address the TV reached Polyfin at.
 - **Settings:** it needs **Allow Quick Connect**, under **Settings › General**, as well as **Allow Silo's apps**. With Quick Connect off, the TV asks for a password.
 

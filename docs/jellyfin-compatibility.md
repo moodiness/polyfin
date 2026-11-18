@@ -27,15 +27,33 @@ Jellyfin apps ask for a name and a password, never for a code. An account with [
 
 1. In the app, choose Quick Connect on the sign-in screen: it shows a 6-digit code.
 2. Sign in to the admin app, with the password and the code of your authenticator app, and enter the app's code on the **Quick Connect** page: in the top bar for members, in the account panel for administrators.
-3. The app signs in as you.
+3. Check the device the page shows, confirm it is you, and approve it (see [Approving a device](#approving-a-device)).
+4. The app signs in as you.
 
 **Allow Quick Connect**, in **Settings › General**, must stay on. Typing the password in the app is refused as a wrong password is, and counts as one toward the client's failed attempts, so that the answer never tells whether the password was right. The apps signed in before two-step sign-in was turned on stay signed in; sign them out under **My account › Devices** if needed. API keys made by administrators keep working. See also [Jellyfin apps](sign-in-and-security.md#jellyfin-apps) under two-step sign-in.
 
 A code is approved once, as in Jellyfin, which refuses a request already authorized: approved, it waits no more on the **Quick Connect** page, and nobody else can take it. The page also takes the 8-digit codes of Silo's TV apps (see [Signing a TV in with a code](silo-apps.md#signing-a-tv-in-with-a-code)).
 
+### Approving a device
+
+The **Quick Connect** page shows the device that waits with a code before anyone approves it:
+
+- **Names:** **Device** and **App** are what the device says of itself. Anyone who reaches the server can ask for a code under any name.
+- **Address:** where Polyfin saw the device ask from, marked **Your address**, **Your local network** or **Another network**. A device on another network than yours comes with a warning: approve it only if you started the sign-in yourself, on a device in front of you.
+- **Links:** a link or a QR code that carries a code, as the one of Silo's TV apps does, opens the page on that device and approves nothing. **Approve and sign in this device** comes once you typed the code the device shows.
+- **Two-step sign-in:** an account with it confirms each approval with a code of its authenticator app, a recovery code or its password, since the device signs in without the second step. Other accounts are not asked for their password: an account that signs in through an identity provider may have none.
+
+Polyfin bounds what Quick Connect takes:
+
+- **Wrong codes:** a code no device waits with counts as a wrong password does, toward the failed attempts of the user who entered it and of their address (429 once too many). The page, Jellyfin apps and Silo's apps count them together. A device that waits keeps waiting.
+- **Requests:** an address holds 5 requests at a time, an IPv6 address counted by its /64, and a device one. A new request takes the place of the device's last one, or of the address's oldest. Polyfin keeps 1,000 requests in all, and the oldest gives way to a new one: no request is refused because others wait.
+- **Its own device:** an approved request signs in the device that asked for it, and no other device that would hold its secret.
+- **Password change:** a new password signs the account out everywhere, and takes back what the account approved: a device approved before signs in no more with that approval, and asks for a new code. So does disabling the account.
+
 **Compared with Jellyfin**
 
 - Jellyfin has no second step of its own. Polyfin keeps Jellyfin's sign-in as it is for the apps, and asks for the code in the admin app only.
+- The web player's own Quick Connect page, and Jellyfin apps that approve a code, send the code alone, as on Jellyfin: the device's address, the typed confirmation and the two-step confirmation are the admin app's. The bounds above hold for them too.
 
 API details: [Quick Connect for two-step accounts](jellyfin-api.md#quick-connect-for-two-step-accounts).
 

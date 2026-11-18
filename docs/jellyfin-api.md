@@ -13,6 +13,11 @@ Apps sign in with a name and password, or with Quick Connect, as on Jellyfin. Th
 ### Quick Connect for two-step accounts
 
 - `/Users/AuthenticateByName` answers 401 for such an account, as for a wrong password; `/Users/AuthenticateWithQuickConnect` signs it in once a request is approved.
+- `/Users/AuthenticateWithQuickConnect` signs in the `DeviceId` that asked for the request: another one gets 404, as an unknown secret does. So does every secret the account approved, used or not, once a new password, or its being disabled, signed it out everywhere: the request then stands as not approved.
+- `POST /QuickConnect/Initiate` keeps the client address of the request. An address holds 5 requests, an IPv6 address counted by its /64, and a `DeviceId` one, a new request taking the place of the device's last one, or of the address's oldest; of 1,000 requests in all, the oldest gives way to a new one. It no longer answers 503.
+- `POST /QuickConnect/Authorize` counts a code no request waits with as a failed sign-in of its user and of the client address: 429 with `Retry-After` once too many, as `/Users/AuthenticateByName` answers, and a pending request stays pending. The admin app's routes and Silo's count the same codes with it.
+- `GET /admin/api/quick-connect/{code}` answers the pending request: `deviceName`, `appName`, `appVersion`, `requestedAt`, the `address` it was opened from, `network` (`own` for the caller's address, `local` when both are on the local network, else `other`) and `identity`, true when the approval asks who the caller is. 404 `unknown_code` for a code no request waits with, 429 `too_many_attempts` once too many.
+- `POST /admin/api/quick-connect` takes `{"code", "confirmation"}`, the code a second time as the person typed it: 400 `unconfirmed_code` without it, or with another. For an account with two-step sign-in it also takes `"identity": {"code"}` or `{"password"}`: 403 `identity_required` without, 400 `invalid_code` or 403 `wrong_password`. 204 once approved.
 
 ### Two-step sign-in for apps
 
@@ -936,11 +941,11 @@ Silo's apps use their own API, under `/api/v2/`. These notes cover what Polyfin 
 ### Silo TV sign-in with a code
 
 - `GET /api/v2/auth/device/capability` answers the `state` `available` with `cancel` while Quick Connect is on, `disabled` otherwise. `remote_playback_handoff`, `jellyfin_quick_connect`, `opened_signal` and `session_binding` are false.
-- `POST /api/v2/auth/device/start` answers 201 with a `user_code` written `4821-7730`, `verification_uri` ending in `/activate`, `verification_uri_complete` with `?code=48217730`, `expires_in` 600 and `interval` 5. A remote playback's start (`client_purpose` `remote_playback`, or `temporary`) is 501 `capability_unsupported`; while 1,000 Quick Connect requests are pending, a start is 429 `rate_limited`, which the TV retries; with Quick Connect off, every operation below is 404.
+- `POST /api/v2/auth/device/start` answers 201 with a `user_code` written `4821-7730`, `verification_uri` ending in `/activate`, `verification_uri_complete` with `?code=48217730`, `expires_in` 600 and `interval` 5. A remote playback's start (`client_purpose` `remote_playback`, or `temporary`) is 501 `capability_unsupported`; with Quick Connect off, every operation below is 404. A start is not refused for the requests that wait: it takes the place of its device's last request, of its address's oldest past 5, or of the oldest of 1,000 (see [Quick Connect for two-step accounts](#quick-connect-for-two-step-accounts)).
 - `POST /api/v2/auth/device/poll` answers `pending` with `expires_at`, then `approved` with `tokens` once, `consumed` after. `denied` and `canceled` end it too; a request that expired, or never was, is 404.
 - `POST /api/v2/auth/device/cancel` withdraws a request pending or approved but not collected, and answers its state.
-- `GET /api/v2/auth/device?code=`, `POST /api/v2/auth/device/approve` and `POST /api/v2/auth/device/deny` need a signed-in session (401 without). A code no TV waits with is 404 `not_found`; one already decided, 409 `already_decided`.
-- `GET /activate?code=` leads to `/admin/me/quick-connect?code=`.
+- `GET /api/v2/auth/device?code=`, `POST /api/v2/auth/device/approve` and `POST /api/v2/auth/device/deny` need a signed-in session (401 without). A code no TV waits with is 404 `not_found`, and counts as a failed sign-in of its user and of the client address, with the Jellyfin API's and the admin app's: 429 `rate_limited` with `Retry-After` once too many. One already decided is 409 `already_decided`. The lookup's `ip_address_hint` is the address the TV's start came from.
+- `GET /activate?code=` leads to `/admin/me/quick-connect?code=`, which shows the request and approves it once its code is typed.
 - Polyfin's tests check these answers against the rules the apps apply to them, read from their code at the commits named in [The contract followed](silo-apps.md#the-contract-followed).
 
 ## Server administration from Jellyfin apps
