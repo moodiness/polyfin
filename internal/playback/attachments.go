@@ -21,6 +21,22 @@ import (
 // few megabytes.
 const attachedTime = time.Minute
 
+// maxKeptAttached bounds the bytes of the attached files kept in memory:
+// the most the container package reads for one version, so that what was
+// read is always kept, and the fonts of several versions, a few megabytes
+// each as a rule, stay kept together.
+const maxKeptAttached = 128 << 20
+
+// attachedSize is what a version's attached files take in memory: their
+// names, types and data.
+func attachedSize(files []container.Attachment) int {
+	size := 0
+	for _, file := range files {
+		size += len(file.FileName) + len(file.MimeType) + len(file.Data)
+	}
+	return size
+}
+
 // ErrNoAttachment reports a stream that is not a file attached to its
 // version.
 var ErrNoAttachment = errors.New("no such attached file")

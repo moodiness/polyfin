@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 )
@@ -22,7 +23,9 @@ const (
 
 // Attachments reads the files attached to m, through its Reader, with one
 // read; none when it has none. Attachments of more than maxAttachments
-// bytes fail from their header, without being read.
+// bytes fail from their header, without being read. Each file's data is a
+// copy: keeping a file keeps its own bytes, not the span they were read
+// in.
 func (m *Matroska) Attachments(ctx context.Context) ([]Attachment, error) {
 	at, ok := m.positions[idAttachments]
 	if !ok {
@@ -68,6 +71,7 @@ func (m *Matroska) Attachments(ctx context.Context) ([]Attachment, error) {
 		if err != nil {
 			return err
 		}
+		attachment.Data = bytes.Clone(attachment.Data)
 		attachments = append(attachments, attachment)
 		return nil
 	})

@@ -219,7 +219,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		trackShare:  trackRequests,
 		rangeHosts:  cache.New[string, bool](500, 24*time.Hour),
 		trackCues:   cache.New[trackKey, []subtitles.Cue](50, time.Hour),
-		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
+		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute).Sized(maxKeptAttached, attachedSize),
 		speech:      newSpeechState(),
 		switches:    newSwitchState(),
 	}
