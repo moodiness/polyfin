@@ -1314,6 +1314,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
+	// An app that may not be told where the version comes from gets it
+	// through Polyfin, whatever its grant asks (see keptFromSource).
+	kept := h.keptFromSource(r, user, version)
+	grant.Relay = grant.Relay || kept
 	// A player that authenticates with a header might send it to the
 	// source too: relay instead of redirecting it.
 	relay := grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
@@ -1334,6 +1338,9 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if !user.FitsGroup(h.versionHeight(r.Context(), version)) {
 		h.Logger.Info("A version taller than the user's quality group was refused", "addon", version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if kept && h.namesSource(w, r, version, true) {
 		return
 	}
 	contentType := mimeTypes[strings.ToLower(extension)]

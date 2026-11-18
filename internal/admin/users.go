@@ -585,12 +585,13 @@ type settingsJSON struct {
 	ACMEEmail        *string   `json:"acmeEmail"`
 	ACMETerms        *bool     `json:"acmeTerms"`
 	ACMEChallenge    *string   `json:"acmeChallenge"`
-	// AnalysisTimeout, VersionAttempts, PreferDirectPlay,
+	// AnalysisTimeout, VersionAttempts, PreferDirectPlay, SendAppsToSource,
 	// SyncAddonSubtitles, MaxConversions and MaxConversionHeight keep their
 	// current values when a PUT leaves them out.
 	AnalysisTimeout  *int  `json:"analysisTimeout"`
 	VersionAttempts  *int  `json:"versionAttempts"`
 	PreferDirectPlay *bool `json:"preferDirectPlay"`
+	SendAppsToSource *bool `json:"sendAppsToSource"`
 	// The version rules keep their current values when a PUT leaves them
 	// out: VersionOrder holds up to six criteria (see
 	// accounts.VersionCriteria), VersionCodecOrder every video codec once,
@@ -981,6 +982,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		AnalysisTimeout:       &settings.AnalysisTimeout,
 		VersionAttempts:       &settings.VersionAttempts,
 		PreferDirectPlay:      &settings.PreferDirectPlay,
+		SendAppsToSource:      &settings.SendAppsToSource,
 		VersionOrder:          &settings.VersionOrder,
 		VersionCodecOrder:     &settings.VersionCodecOrder,
 		HideVersionsLargerGB:  &settings.HideVersionsLargerGB,
@@ -1892,6 +1894,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
 		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
+		SendAppsToSource:      valueOr(body.SendAppsToSource, current.SendAppsToSource),
 		VersionOrder:          valueOr(body.VersionOrder, current.VersionOrder),
 		VersionCodecOrder:     valueOr(body.VersionCodecOrder, current.VersionCodecOrder),
 		VersionSourceOrder:    sourceOrder,

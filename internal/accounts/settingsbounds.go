@@ -102,6 +102,7 @@ func DefaultSettings() Settings {
 		AnalysisTimeout:     DefaultAnalysisTimeout,
 		VersionAttempts:     DefaultVersionAttempts,
 		PreferDirectPlay:    false,
+		SendAppsToSource:    false,
 		VersionOrder:        []string{},
 		VersionCodecOrder:   slices.Clone(VersionCodecs),
 		VersionSourceOrder:  []ID{},
@@ -348,6 +349,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"analysisTimeout":  between(MinAnalysisTimeout, MaxAnalysisTimeout, d.AnalysisTimeout),
 		"versionAttempts":  between(MinVersionAttempts, MaxVersionAttempts, d.VersionAttempts),
 		"preferDirectPlay": is(d.PreferDirectPlay),
+		"sendAppsToSource": is(d.SendAppsToSource),
 		// Up to MaxVersionCriteria of them, one of each kind.
 		"versionOrder":      choice(d.VersionOrder, anys(VersionCriteria)),
 		"versionCodecOrder": choice(d.VersionCodecOrder, anys(VersionCodecs)),

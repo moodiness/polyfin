@@ -109,11 +109,18 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+	// An app that may not be told where the version comes from gets it
+	// through Polyfin (see keptFromSource), and no playlist to save: its
+	// lines would be its source's addresses.
+	kept := h.keptFromSource(r, user, version)
+	if kept && h.namesSource(w, r, version, false) {
+		return
+	}
 	name := h.downloadName(r, item, version)
 	delivery := playback.Delivery{
 		// A player that authenticates with a header might send it to the
 		// source too: relay instead of redirecting it.
-		Relay:       grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token="),
+		Relay:       kept || grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token="),
 		ContentType: mimeTypes[containerOfName(name)],
 	}
 	if attachment {

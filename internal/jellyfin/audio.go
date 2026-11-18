@@ -453,12 +453,17 @@ func (h *Handler) audioFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // serveTrack serves a track as it is: redirected to its source, or
-// relayed (see playback.Service.Serve).
+// relayed (see playback.Service.Serve), as it always is to an app kept
+// from its source (see keptFromSource).
 func (h *Handler) serveTrack(w http.ResponseWriter, r *http.Request, req audioRequest, extension string) {
-	relay := req.grant.Relay || relayTrack(r, req.version) || strings.Contains(r.Header.Get("Authorization"), "Token=")
+	kept := h.keptFromSource(r, req.user, req.version)
+	relay := kept || req.grant.Relay || relayTrack(r, req.version) || strings.Contains(r.Header.Get("Authorization"), "Token=")
 	if analysis, known := h.Playback.Analyzed(r.Context(), req.version.ID); known && overUserLimit(int64(req.user.MaxBitrate), analysis.Bitrate) {
 		h.Logger.Info("A track above the user's bitrate limit was refused", "addon", req.version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if kept && h.namesSource(w, r, req.version, false) {
 		return
 	}
 	contentType := audioMimeTypes[extension]

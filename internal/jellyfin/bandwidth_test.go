@@ -224,7 +224,9 @@ func directPlayAddon(t *testing.T, file string) (manifest, host string) {
 // session alone. A relayed source shows the play's rate to the app, and
 // its history keeps the bytes; a source the app is sent to shows that
 // the app reads it itself, and its history keeps none. The header makes
-// Polyfin relay even a public source (see stream).
+// Polyfin relay even a public source (see stream). The member plays
+// from a server addon: Send apps to the source is on, without which
+// both sources would be relayed (see keptFromSource).
 func TestDirectPlaysCountForTheirPlayWhateverTheAddress(t *testing.T) {
 	t.Parallel()
 	const file = "\x1a\x45\xdf\xa3 media bytes"
@@ -275,6 +277,7 @@ func TestDirectPlaysCountForTheirPlayWhateverTheAddress(t *testing.T) {
 				settings.SyncAddonSubtitles = false
 				settings.LegacyAuthorization = form.legacy
 				settings.PlaybackHistory = true
+				settings.SendAppsToSource = true
 			})
 			token := s.signIn("member", "tv")
 			var views, page QueryResult

@@ -1665,6 +1665,14 @@ type Settings struct {
 	// it is, or repackaged with its tracks copied) rather than the first
 	// that plays at all.
 	PreferDirectPlay bool
+	// SendAppsToSource lets every app be sent to the source of the version
+	// it plays as it is, when it can reach it: the source's address, with
+	// any key or account in it, is then told to the user who plays. Off,
+	// the default, a version of an IPTV source is always relayed, and one
+	// of a server addon is to users who are not administrators, which
+	// costs the server their bandwidth (see
+	// playback.Service.SendsToSource).
+	SendAppsToSource bool
 	// VersionOrder are the criteria ordering a title's versions, of
 	// VersionCriteria, each grouping them and the next sorting within
 	// them; ties keep the addons' order, as does none, the default.
@@ -2334,7 +2342,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
 	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
-	"analysis_timeout, version_attempts, prefer_direct_play, " +
+	"analysis_timeout, version_attempts, prefer_direct_play, send_apps_to_source, " +
 	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, version_names, " +
 	"hidden_releases, version_edition_order, version_mb_per_minute, version_label_rules, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, subtitle_ocr_download, " +
@@ -2394,7 +2402,7 @@ func (settings *Settings) fields() []any {
 		&settings.TwoStepAdministrators,
 		&settings.HTTPSMode, &settings.HTTPSPort, &settings.HTTPSRedirect, &settings.HTTPSCertificate, &settings.HTTPSPrivateKey,
 		&settings.ACMEHosts, &settings.ACMEEmail, &settings.ACMETerms, &settings.ACMEChallenge, &settings.DetailedLog,
-		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
+		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.SendAppsToSource,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
 		&settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay, &settings.VersionNames,
