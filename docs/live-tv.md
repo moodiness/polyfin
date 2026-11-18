@@ -347,11 +347,14 @@ A guide may be plain XML, compressed with gzip, or a ZIP archive. Polyfin tells 
 |---|---|
 | Download size | 300 MB |
 | Size once uncompressed | Four times the download |
+| One channel or programme, once uncompressed | 1 MB |
+| Names, titles, descriptions, categories, episode numbers or images of one channel or programme | The first 64 of each |
 | Time to answer | 30 seconds |
 | Stall | Never a minute |
 | Whole download | 10 minutes |
 
 - **Plain and gzip guides:** read as they arrive, never whole.
+- **A guide over a size limit:** its fetch fails as too large, and the channels and programmes of the fetch before stay. A comment, or any other part of the file around its channels and programmes, has the same 1 MB.
 - **ZIP archives:** read only once complete. The archive is first written to a temporary file in Polyfin's cache folder (`cache` in `POLYFIN_DATA_DIR`, see [Configuration](configuration.md)), removed as soon as it is read or fails.
 - **Inside a ZIP archive:** its `.xml` file, the largest if it holds several, is read the same way. An archive without one is reported as not a guide.
 

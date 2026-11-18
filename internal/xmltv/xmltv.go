@@ -24,14 +24,21 @@ import (
 
 // MaxSize is how many bytes of a guide are downloaded at most. A
 // compressed guide may expand to maxExpansion times as much XML, which
-// bounds the work a small file can cause.
+// bounds the work a small file can cause. One element of the guide, a
+// channel or a programme, takes maxElement bytes of that XML at most,
+// and so does any comment, text or other markup around them: it is what
+// is held at once. Of what an element repeats, names, titles, categories
+// or icons, the first maxRepeated of each are kept.
 const (
 	MaxSize      = 300 << 20
 	maxExpansion = 4
+	maxElement   = 1 << 20
+	maxRepeated  = 64
 )
 
 var (
-	// ErrTooLarge reports a guide over the size limit.
+	// ErrTooLarge reports a guide over the size limit, or holding an
+	// element over its own.
 	ErrTooLarge = errors.New("the guide is too large")
 	// ErrMalformed reports a document that is not an XMLTV guide.
 	ErrMalformed = errors.New("not an XMLTV guide")
@@ -120,17 +127,28 @@ func Read(r io.Reader, options Options, channel func(Channel) error, programme f
 		defer entry.Close()
 		document = &capped{r: entry, left: limit * maxExpansion}
 	}
-	decoder := xml.NewDecoder(document)
+	// The decoder takes its bytes from the meter one at a time, so the
+	// count is exact and an element over its bound fails before the
+	// decoder holds it.
+	meter := &metered{r: bufio.NewReader(document)}
+	decoder := xml.NewDecoder(meter)
 	decoder.Entity = xml.HTMLEntity
-	decoder.CharsetReader = func(label string, input io.Reader) (io.Reader, error) {
+	decoder.CharsetReader = func(label string, _ io.Reader) (io.Reader, error) {
 		encoding, err := htmlindex.Get(label)
 		if err != nil {
 			return nil, fmt.Errorf("unknown encoding %q", label)
 		}
-		return encoding.NewDecoder().Reader(input), nil
+		// The decoder goes on reading through the meter, which now
+		// counts the bytes of the converted text.
+		meter.r = bufio.NewReader(encoding.NewDecoder().Reader(meter.r))
+		return meter, nil
 	}
 	root := false
 	for {
+		// What comes next has maxElement bytes: a whole child of the
+		// root, whatever its name, or one piece of what stands around
+		// them, a comment, a text, an instruction, the root's tag.
+		meter.left = maxElement
 		token, err := decoder.Token()
 		if errors.Is(err, io.EOF) {
 			if !root {
@@ -243,6 +261,47 @@ func (c *capped) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// metered hands a guide to the decoder byte by byte, left bytes at most,
+// then fails with ErrTooLarge. Read sets left again before each element.
+type metered struct {
+	r    *bufio.Reader
+	left int64
+}
+
+func (m *metered) ReadByte() (byte, error) {
+	if m.left <= 0 {
+		return 0, ErrTooLarge
+	}
+	b, err := m.r.ReadByte()
+	if err == nil {
+		m.left--
+	}
+	return b, err
+}
+
+// Read is what the decoder asks of its reader when it changes encoding;
+// the decoder itself only reads bytes.
+func (m *metered) Read(p []byte) (int, error) {
+	return m.r.Read(p)
+}
+
+// kept is what an element repeats, a child of one name: the first
+// maxRepeated are decoded, the others skipped without being held.
+type kept[T any] []T
+
+// UnmarshalXML decodes one child; the decoder calls it for each.
+func (k *kept[T]) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	if len(*k) >= maxRepeated {
+		return decoder.Skip()
+	}
+	var value T
+	if err := decoder.DecodeElement(&value, &start); err != nil {
+		return err
+	}
+	*k = append(*k, value)
+	return nil
+}
+
 type text struct {
 	Lang  string `xml:"lang,attr"`
 	Value string `xml:",chardata"`
@@ -270,12 +329,19 @@ func primary(tag string) string {
 	return tag
 }
 
+type iconElement struct {
+	Src string `xml:"src,attr"`
+}
+
+type episodeElement struct {
+	System string `xml:"system,attr"`
+	Value  string `xml:",chardata"`
+}
+
 type channelElement struct {
-	ID    string `xml:"id,attr"`
-	Names []text `xml:"display-name"`
-	Icons []struct {
-		Src string `xml:"src,attr"`
-	} `xml:"icon"`
+	ID    string            `xml:"id,attr"`
+	Names kept[text]        `xml:"display-name"`
+	Icons kept[iconElement] `xml:"icon"`
 }
 
 func (e channelElement) channel() (Channel, bool) {
@@ -295,22 +361,17 @@ func (e channelElement) channel() (Channel, bool) {
 }
 
 type programmeElement struct {
-	Channel     string `xml:"channel,attr"`
-	Start       string `xml:"start,attr"`
-	Stop        string `xml:"stop,attr"`
-	Titles      []text `xml:"title"`
-	SubTitles   []text `xml:"sub-title"`
-	Description []text `xml:"desc"`
-	Categories  []text `xml:"category"`
-	Episodes    []struct {
-		System string `xml:"system,attr"`
-		Value  string `xml:",chardata"`
-	} `xml:"episode-num"`
-	Icons []struct {
-		Src string `xml:"src,attr"`
-	} `xml:"icon"`
-	New             *struct{} `xml:"new"`
-	PreviouslyShown *struct{} `xml:"previously-shown"`
+	Channel         string               `xml:"channel,attr"`
+	Start           string               `xml:"start,attr"`
+	Stop            string               `xml:"stop,attr"`
+	Titles          kept[text]           `xml:"title"`
+	SubTitles       kept[text]           `xml:"sub-title"`
+	Description     kept[text]           `xml:"desc"`
+	Categories      kept[text]           `xml:"category"`
+	Episodes        kept[episodeElement] `xml:"episode-num"`
+	Icons           kept[iconElement]    `xml:"icon"`
+	New             *struct{}            `xml:"new"`
+	PreviouslyShown *struct{}            `xml:"previously-shown"`
 }
 
 func (e programmeElement) programme(language string) (Programme, bool) {
