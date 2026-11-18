@@ -1149,6 +1149,11 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
+	// The files of a playlist are its playback's: they keep its device's
+	// place, or ask for one when the address was kept from an earlier one.
+	if !h.admitPlay(w, r, user, grant.Device) {
+		return
+	}
 	if err := h.Playback.ServeLive(w, r, version, string(target), h.liveLink(r, item.ID, token)); err != nil && r.Context().Err() == nil {
 		h.Logger.Debug("A file of a relayed playlist could not be relayed", "addon", version.AddonLog, "error", err)
 	}

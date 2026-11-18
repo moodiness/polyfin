@@ -583,25 +583,27 @@ func guestStart(seconds float64, runtime time.Duration) time.Duration {
 	return time.Duration(seconds * float64(time.Second))
 }
 
-// devicesPlaying counts the devices of user playing, or making a converted
-// download, but except, DLNA devices included. A download whose device is
-// not known counts as one more.
-func (h *Handler) devicesPlaying(ctx context.Context, user accounts.User, except accounts.ID) (int, error) {
+// reportedPlaying lists the devices of user their apps report playing, or
+// that make a converted download, but except; more counts the downloads
+// whose device is not known, each as one more, and the DLNA playbacks.
+// devicesPlaying adds the devices that are sent a playback and report
+// nothing.
+func (h *Handler) reportedPlaying(ctx context.Context, user accounts.User, except accounts.ID) (counted []accounts.ID, more int, err error) {
 	devices, err := h.Accounts.Devices(ctx, user.ID)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
-	playing := 0
+	counted = make([]accounts.ID, 0, len(devices))
 	for _, device := range devices {
 		if device.ID == except {
 			continue
 		}
 		if _, ok := h.sessions.Playing(device.ID); ok || h.downloads.onDevice(device.ID) {
-			playing++
+			counted = append(counted, device.ID)
 		}
 	}
 	h.endStaleDLNA(accounts.ID{}, "")
-	return playing + h.downloads.withoutDevice(user.ID) + h.dlna.ofUser(user.ID), nil
+	return counted, h.downloads.withoutDevice(user.ID) + h.dlna.ofUser(user.ID), nil
 }
 
 // guestPlan is what a guest plays: a version, and the parameters of its

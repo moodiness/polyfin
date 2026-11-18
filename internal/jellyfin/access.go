@@ -10,9 +10,10 @@ import (
 
 // playbackLimitReached reports whether the caller's user already plays on
 // as many of their other devices as they may play on at once: the devices
-// /Sessions shows playing, and the guests playing through their share
-// links. The caller's own device does not count, so that it can go on to
-// another title.
+// /Sessions shows playing, those the media routes send a playback to
+// whether or not their apps report it (see servedPlays), and the guests
+// playing through their share links. The caller's own device does not
+// count, so that it can go on to another title.
 //
 // Jellyfin's MaxActiveSessions counts the user's signed-in sessions and
 // refuses signing in once they are reached; Polyfin counts playbacks

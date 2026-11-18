@@ -68,6 +68,8 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 		h.sessions.Progress(c.Device.ID, c.User.ID, state)
 	case playbackStopped:
 		h.sessions.Stop(c.Device.ID)
+		// Another of the user's devices may go on from it at once.
+		h.served.stopped(c.User.ID, c.Device.ID)
 	}
 	// The report has arrived: it is recorded even when the app hangs up
 	// right after sending it, as when it closes once playback stops.
@@ -1268,6 +1270,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	user, grant, ok := h.streamAccess(r, servedToAnyone)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	// The user's playbacks at once count what is sent, reported or not.
+	if !h.admitPlay(w, r, user, grant.Device) {
 		return
 	}
 	item, err := h.played(r.Context(), user, opened)

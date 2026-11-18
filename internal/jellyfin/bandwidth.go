@@ -88,6 +88,11 @@ type meteredWriter struct {
 	started bool
 	meter   *bandwidth.Meter
 	sent    prometheus.Counter
+	// place, when set, is the place the answer holds among its user's
+	// playbacks at once, given back as it ends (see admitPlay); answered
+	// tells that it went out, as a success or a redirection to the source.
+	place    servedAnswer
+	answered bool
 }
 
 func (w *meteredWriter) WriteHeader(status int) {
@@ -128,6 +133,7 @@ func (w *meteredWriter) start(status int) {
 	if !success && !redirected {
 		return
 	}
+	w.answered = true
 	if w.h.Sent != nil {
 		key := w.key
 		if key == "" {
@@ -153,10 +159,13 @@ func (w *meteredWriter) start(status int) {
 	}
 }
 
-// release ends the hold of the answer's meter.
+// release ends the hold of the answer's meter, and of its place.
 func (w *meteredWriter) release() {
 	if w.meter != nil {
 		w.h.Sent.Release(w.meter)
+	}
+	if w.place.place != nil {
+		w.h.served.leave(w.place, w.answered, w.h.now())
 	}
 }
 

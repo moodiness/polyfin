@@ -167,6 +167,9 @@ func (h *Handler) convertedDownload(w http.ResponseWriter, r *http.Request, exte
 	if remux.ConvertVideo != nil || remux.ConvertAudio != nil {
 		method = "Transcode"
 	}
+	// From here the download counts by itself (see downloadPlays), not as
+	// the place its request took for its play session's device.
+	h.leavePlace(w)
 	done := h.downloads.add(&downloadPlay{session: remux.Session, user: req.user.ID, device: device,
 		item: req.item.ID, version: remux.Version.ID, method: method, started: h.now()})
 	defer done()

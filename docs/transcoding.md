@@ -299,6 +299,7 @@ With it on, an app that asks for a smaller copy gets one, as Streamyfin's downlo
   - It also counts as one of the user's **Playbacks at once** on its device.
   - At either limit, no converted download is planned, as no conversion is for a playback.
   - One that starts past the cap anyway, planned at the same time as another, is refused with a `503`.
+  - One asked while the user's other devices play as many as they may, from an address kept, is refused with a `429`.
 - **Home:** a converted download shows in the admin app's **Now playing** with a "Downloading" label. Its bar tells how far the copy is made.
 
 **Compared with Jellyfin**

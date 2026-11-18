@@ -258,6 +258,9 @@ type Handler struct {
 	downloads *downloadPlays
 	// dlna are the playbacks of DLNA devices (see dlna.go).
 	dlna *dlnaPlays
+	// served are the playbacks the media routes send the devices of users
+	// with a limit of playbacks at once (see servedplays.go).
+	served *servedPlays
 	// torrents are the torrents devices last played (see torrentswitch.go).
 	torrents *torrentPlays
 	// chosen is the version each device's last PlaybackInfo chose.
@@ -306,6 +309,7 @@ func New(options Options) *Handler {
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),
 		dlna:           newDLNAPlays(),
+		served:         newServedPlays(),
 		torrents:       newTorrentPlays(),
 		chosen:         newChosenVersions(),
 		titles:         newTitleSessions(),

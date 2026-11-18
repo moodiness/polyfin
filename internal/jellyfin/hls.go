@@ -212,6 +212,11 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	}
 	req, ok := h.remuxFor(w, r, user, opened, grant.Version, session)
 	req.uris, req.renditions = r.URL.RawQuery, strings.EqualFold(query(r, "subtitleMethod"), "Hls")
+	// The device the play session was given to holds its place among the
+	// user's playbacks at once, or is refused at their limit. Segments ask
+	// too, as a player may ask them without their playlist; those of a
+	// playback under way are never refused (see admitPlay).
+	ok = ok && h.admitPlay(w, r, user, grant.Device)
 	return req, ok
 }
 

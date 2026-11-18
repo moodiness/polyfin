@@ -330,6 +330,9 @@ func (h *Handler) audioOf(w http.ResponseWriter, r *http.Request, converted bool
 		w.WriteHeader(http.StatusUnauthorized)
 		return audioRequest{}, false
 	}
+	if !h.admitPlay(w, r, user, grant.Device) {
+		return audioRequest{}, false
+	}
 	item, err := h.played(r.Context(), user, opened)
 	if err != nil || !audioItem(item.Kind) {
 		processingError(w, http.StatusNotFound)

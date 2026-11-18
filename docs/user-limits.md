@@ -169,11 +169,12 @@ API details: [Local files first per user](jellyfin-api.md#local-files-first-per-
 
 ### Playbacks at once
 
-Once that many of the user's other devices play, no further device can start. Devices count as in **Now playing** on **Home**, DLNA devices showing the user's libraries included.
+Once that many of the user's other devices play, no further device can start. A device counts when its app reports that it plays, as in **Now playing** on **Home**, and while Polyfin sends it a playback, whether or not its app reports it. DLNA devices showing the user's libraries count too.
 
 - jellyfin-web says the media cannot be played at this time. Polyfin's web player script closes the generic error it shows over that (see [Web player](web-client.md#dashboard-links-and-single-sign-on)).
 - A playing device can move on to another title.
 - A device making a [converted download](transcoding.md#converted-downloads) counts as playing meanwhile.
+- Saving a file as it is, with **Can download**, is not a playback: it is neither counted nor refused.
 
 Apps report playback every 10 seconds, paused too. After five minutes without a report, a device stops playing at its last reported position (see [Playbacks](statistics.md#playbacks)): a tab closed mid-play, a phone off the network, a crashed app.
 
@@ -181,9 +182,17 @@ Apps report playback every 10 seconds, paused too. After five minutes without a 
 - It leaves this count and **Now playing**.
 - Its conversions end; its torrent lingers then stops, as after a stop.
 
+The limit counts what Polyfin sends, so a player that reports nothing counts too: a media player given a stream's address, or an app that sends no playback report.
+
+- Such a device holds its place while a playback is being sent to it, and for two minutes after its last request: players read ahead, pause, and ask again.
+- A stop reported by its app frees the place at once, so the user can go on from another device.
+- At the limit, the stream, HLS, audio and Live TV addresses answer one more device `429`, whether or not it asked PlaybackInfo first. A playback under way is never cut: its ranges, seeks and segments go on.
+- A playback sent to its source (see [Playback](playback.md)) does not pass through Polyfin: it holds its place for two minutes, then by its app's reports alone.
+
 **Compared with Jellyfin**
 
 - PlaybackInfo from the extra device answers Jellyfin's `RateLimitExceeded`.
+- Jellyfin serves media addresses to anyone who has them. Polyfin counts them for this limit, and refuses the device over it.
 - Jellyfin also stops a playback silent for five minutes, paused or not, at the last reported position. It checks every five minutes, so stops come five to ten minutes after the last report; Polyfin checks every minute, so five to six, as the playback holds a place here.
 - Jellyfin's `MaxActiveSessions` counts signed-in sessions and refuses sign-in. Polyfin counts playbacks instead, on purpose, so users stay signed in everywhere.
 - Polyfin refuses a policy setting above 20 (400).
