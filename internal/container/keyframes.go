@@ -103,10 +103,17 @@ type held struct {
 	data  []byte
 }
 
+// spanStep is the first step of a span read: what a source fetches as one
+// block.
+const spanStep = 1 << 20
+
 // span returns the n bytes at off, from a span held when one has them,
 // else from a read of at least a window. Near the end of the file the
 // read is the file's last window: indexes written after the media often
-// come in pieces there, a SeekHead after the Cues it points to.
+// come in pieces there, a SeekHead after the Cues it points to. A read
+// longer than spanStep is made in steps, into a buffer that doubles as
+// they arrive: what is held for a file follows what its host sent, a step
+// or twice that, not the length the file declares.
 func (f *file) span(off, n int64) ([]byte, error) {
 	if off < 0 || n < 0 || off > f.size || n > f.size-off {
 		return nil, fmt.Errorf("reading %d bytes at %d of %d: %w", n, off, f.size, io.ErrUnexpectedEOF)
@@ -122,13 +129,21 @@ func (f *file) span(off, n int64) ([]byte, error) {
 		start = max(0, f.size-length)
 		length = f.size - start
 	}
-	p := make([]byte, length)
-	read, err := f.r.ReadAt(f.ctx, p, start)
-	if read < len(p) {
-		if err == nil || errors.Is(err, io.EOF) {
-			err = io.ErrUnexpectedEOF
+	p := make([]byte, min(length, spanStep))
+	for read := int64(0); ; {
+		got, err := f.r.ReadAt(f.ctx, p[read:], start+read)
+		if read += int64(got); read < int64(len(p)) {
+			if err == nil || errors.Is(err, io.EOF) {
+				err = io.ErrUnexpectedEOF
+			}
+			return nil, fmt.Errorf("reading %d bytes at %d: %w", length, start, err)
 		}
-		return nil, fmt.Errorf("reading %d bytes at %d: %w", len(p), start, err)
+		if read == length {
+			break
+		}
+		grown := make([]byte, min(length, 2*read))
+		copy(grown, p)
+		p = grown
 	}
 	f.spans[1], f.spans[0] = f.spans[0], held{start: start, data: p}
 	return p[off-start:][:n], nil
