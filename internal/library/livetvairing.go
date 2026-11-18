@@ -203,7 +203,7 @@ func (s *Service) airingGuidePrograms(ctx context.Context, v view, channels map[
 		if !ok {
 			return nil
 		}
-		rememberProgram(program.ID, programRef{channel: byID[channel].StremioID, guide: guide, xmltvID: xmltvID, start: p.Start})
+		s.rememberProgram(program.ID, programRef{channel: byID[channel].StremioID, guide: guide, xmltvID: xmltvID, start: p.Start})
 		if keep(program) {
 			items = append(items, program)
 		}

@@ -20,8 +20,7 @@ type indexedGuide struct {
 	traced *statements
 	key    addons.LibraryKey
 	guide  *guideServer
-	// channels are the channels' Stremio identifiers, of this test only:
-	// programme identifiers are remembered for the whole process.
+	// channels are the channels' Stremio identifiers.
 	channels [2]string
 	now      time.Time
 }
@@ -38,7 +37,7 @@ func newIndexedGuide(t *testing.T, programmes string) indexedGuide {
 	}
 	t.Cleanup(traced.Close)
 	g.service.db = traced
-	g.channels = [2]string{"tv:index-one-" + t.Name(), "tv:index-two-" + t.Name()}
+	g.channels = [2]string{"tv:index-one", "tv:index-two"}
 	g.key = g.tvCatalog(addons.Shared(), stremio.Meta{ID: g.channels[0], Type: "tv", Name: "Index One"},
 		stremio.Meta{ID: g.channels[1], Type: "tv", Name: "Index Two"})
 	g.guide = newGuideServer(t, g.xmltv(programmes))
@@ -73,7 +72,7 @@ func (g indexedGuide) download(t *testing.T, programmes string) {
 // or 1, as listings give it; it is forgotten, as after a restart.
 func (g indexedGuide) id(channel int, start time.Time) accounts.ID {
 	id := itemID(programKey(g.channels[channel], start.UTC().Format(time.RFC3339)))
-	programRefs.Delete(id)
+	g.service.programRefs.Delete(id)
 	return id
 }
 
@@ -127,7 +126,7 @@ func TestProgrammesAreFoundInTheIndexAfterARestart(t *testing.T) {
 		t.Fatal(listed, err)
 	}
 	for _, p := range listed {
-		programRefs.Delete(p.ID)
+		g.service.programRefs.Delete(p.ID)
 		if found, err, _ := g.item(t, p.ID); err != nil || found.ID != p.ID || found.Name != p.Name || !found.StartDate.Equal(*p.StartDate) {
 			t.Errorf("listed %+v, found %+v %v", p, found, err)
 		}
@@ -237,8 +236,29 @@ func TestTheIndexHashesAsProgrammes(t *testing.T) {
 	if !ok {
 		t.Fatal("no programme")
 	}
-	programRefs.Delete(item.ID)
+	g.service.programRefs.Delete(item.ID)
 	if found, err, _ := g.item(t, item.ID); err != nil || found.Name != "Zoned" || !found.StartDate.Equal(start) {
 		t.Errorf("found %+v %v", found, err)
+	}
+}
+
+// A server opens a programme it listed from its own guide, though another
+// server of the process listed one of the same identifier, of the same
+// channel and start, in its guide since.
+func TestServersOpenTheProgrammesTheyListed(t *testing.T) {
+	t.Parallel()
+	first, second := newIndexedGuide(t, ""), newIndexedGuide(t, "")
+	start := first.now.Add(-time.Hour)
+	first.download(t, programme("one", start, start.Add(2*time.Hour), "First"))
+	second.download(t, programme("one", start, start.Add(2*time.Hour), "Second"))
+	id := itemID(programKey(first.channels[0], start.UTC().Format(time.RFC3339)))
+	for _, listed := range []struct {
+		guide indexedGuide
+		name  string
+	}{{first, "First"}, {second, "Second"}} {
+		item, err, seen := listed.guide.item(t, id)
+		if builds, _, _ := lookups(seen); err != nil || item.Name != listed.name || builds != 0 {
+			t.Errorf("the programme %s listed: %+v %v, %d builds", listed.name, item, err, builds)
+		}
 	}
 }

@@ -121,7 +121,7 @@ func TestGuidePagesReadOnlyWhatTheyShow(t *testing.T) {
 	wanted := programs[1]
 	for _, forget := range []bool{false, true} {
 		if forget {
-			programRefs.Delete(wanted.ID)
+			e.service.programRefs.Delete(wanted.ID)
 		}
 		item, err := e.service.Item(t.Context(), e.member, wanted.ID)
 		if err != nil || item.Name != wanted.Name || item.Kind != KindProgram || item.Channel == nil || item.Channel.ID != wanted.Channel.ID {

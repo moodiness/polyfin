@@ -14,7 +14,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/xmltv"
 )
@@ -543,12 +542,9 @@ type programRef struct {
 	start   time.Time
 }
 
-// programRefs remembers the XMLTV programmes listed lately by their
-// identifier, for apps that open one; past it, or after a restart, they
-// are found in the index of the guides (see unsavedProgram).
-var programRefs = cache.New[accounts.ID, programRef](200_000, 24*time.Hour)
-
-func rememberProgram(id accounts.ID, ref programRef) { programRefs.Put(id, ref) }
+// rememberProgram keeps where the programme id listed is in its guide,
+// for apps that open it (see programRefs).
+func (s *Service) rememberProgram(id accounts.ID, ref programRef) { s.programRefs.Put(id, ref) }
 
 // guideState sums up what an identifier is searched in among the guides'
 // programmes: each guide's current download, and the channels mapped to
@@ -567,7 +563,7 @@ func (s *Service) guideState(ctx context.Context) (string, error) {
 // changed them (see programIndex). An identifier of no programme is
 // ErrNotFound.
 func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (Item, error) {
-	ref, ok := programRefs.Get(id)
+	ref, ok := s.programRefs.Get(id)
 	if !ok {
 		state, err := s.guideState(ctx)
 		if err != nil {
@@ -597,7 +593,7 @@ func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (I
 	if !ok || program.ID != id {
 		return Item{}, ErrNotFound
 	}
-	rememberProgram(id, ref)
+	s.rememberProgram(id, ref)
 	return s.overriddenItem(program), nil
 }
 
@@ -610,7 +606,7 @@ func (s *Service) ProgramArtwork(ctx context.Context, id accounts.ID, imageType 
 	if artwork, ok, err := s.virtualArtwork(ctx, id, imageType); ok {
 		return artwork.URL, artwork.Confined, err
 	}
-	ref, ok := programRefs.Get(id)
+	ref, ok := s.programRefs.Get(id)
 	if !ok || !strings.EqualFold(imageType, "Primary") {
 		return "", false, ErrNotFound
 	}
