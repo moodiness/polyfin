@@ -9,7 +9,6 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
-	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -22,8 +21,8 @@ func decode(r *http.Request, into any) error {
 }
 
 // publicUsers lists the users shown on the sign-in screen of Jellyfin apps.
-// Anyone may read it: users' saved configurations are left out, each
-// showing a new user's. Like Jellyfin's, from outside the local network it
+// Anyone may read it: it tells of each what otherUserDto does, their name
+// and picture, no more. Like Jellyfin's, from outside the local network it
 // leaves out those who may not sign in from there (UserController.cs,
 // lines 626 to 632).
 func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
@@ -33,23 +32,12 @@ func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visible := []UserDto{}
-	var libraries []library.ServerLibrary
 	local := forwarded.InLocalNetwork(r)
 	for _, user := range users {
 		if user.IsHidden || user.Refused(h.now()) || !user.AllowedFrom(local) {
 			continue
 		}
-		dto := newUserDto(user, h.ServerID)
-		if len(user.HiddenLibraries) > 0 {
-			if libraries == nil {
-				if libraries, err = h.Library.ServerLibraries(r.Context()); err != nil {
-					h.internalError(w, r, err)
-					return
-				}
-			}
-			libraryAccess(&dto.Policy, user, libraries)
-		}
-		visible = append(visible, dto)
+		visible = append(visible, otherUserDto(user, h.ServerID))
 	}
 	writeJSON(w, http.StatusOK, visible)
 }
@@ -194,8 +182,9 @@ func (h *Handler) currentUser(w http.ResponseWriter, r *http.Request) {
 	h.writeUser(w, r, c.User)
 }
 
-// users lists every user, optionally filtered by the isHidden and
-// isDisabled query parameters.
+// users lists the users, optionally filtered by the isHidden and
+// isDisabled query parameters: every user, whole, for an administrator;
+// for anyone else, what userDtoFor tells them of each.
 func (h *Handler) users(w http.ResponseWriter, r *http.Request) {
 	hidden, hiddenSet := boolQuery(r, "isHidden")
 	disabled, disabledSet := boolQuery(r, "isDisabled")
@@ -204,21 +193,26 @@ func (h *Handler) users(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	caller := callerFrom(r.Context()).User
 	result := []UserDto{}
 	for _, user := range users {
 		if (hiddenSet && user.IsHidden != hidden) || (disabledSet && user.Refused(h.now()) != disabled) {
 			continue
 		}
-		dto, err := h.userDto(r.Context(), user)
+		dto, shown, err := h.userDtoFor(r.Context(), caller, user)
 		if err != nil {
 			h.internalError(w, r, err)
 			return
 		}
-		result = append(result, dto)
+		if shown {
+			result = append(result, dto)
+		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
 
+// user answers one user as userDtoFor describes them to the caller. A user
+// the caller is not shown is answered as one who does not exist.
 func (h *Handler) user(w http.ResponseWriter, r *http.Request) {
 	id, err := accounts.ParseID(r.PathValue("userId"))
 	if err != nil {
@@ -234,7 +228,16 @@ func (h *Handler) user(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.writeUser(w, r, user)
+	dto, shown, err := h.userDtoFor(r.Context(), callerFrom(r.Context()).User, user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	if !shown {
+		writeJSON(w, http.StatusNotFound, "User not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
 }
 
 // writeUser answers with user's DTO.

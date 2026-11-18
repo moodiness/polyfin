@@ -134,6 +134,18 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 
 - `/UserImage`, and the older `/Users/{id}/Images/{type}`.
 
+### Other users for apps
+
+- `GET /Users` and `GET /Users/{id}` answer an administrator, and an API key, every user in full. Anyone else reads their own user in full, and of another user only `Name`, `Id`, `ServerId` and `PrimaryImageTag`.
+- The rest of such a user is a new account's, the same for everyone: `HasPassword` true, the whole `Policy` and `Configuration` with a new user's values, and neither `LastLoginDate` nor `LastActivityDate`. Every key of a user's JSON is there but the two dates.
+- A user hidden from the sign-in screen, a disabled one and one whose account ended are left out of that list. `GET /Users/{id}` answers 404 for them, as for a user who does not exist. `isHidden` and `isDisabled` filter what is left.
+- `GET /Users/Public`, the sign-in screen's list, describes its users the same way.
+- `GET /Users/Me` and the sign-in answers are the caller's own, in full.
+
+**Compared with Jellyfin**
+
+- Jellyfin answers every user in full to any user signed in, and the users of the sign-in screen in full to anyone ([`UserController.cs`, lines 91 to 142](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/UserController.cs#L91-L142)). Outside its dashboard, which administrators alone open, jellyfin-web shows only their names and pictures.
+
 ### Metadata language for apps
 
 - Jellyfin sets a metadata language per library, and its apps send none per user: Polyfin reads the user's own, and the server configuration's `PreferredMetadataLanguage` stays `en`.

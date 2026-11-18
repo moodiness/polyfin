@@ -8,7 +8,7 @@ Each user has their own account, and signs in with a password or Quick Connect, 
 
 Create a user with **Create a user**, at the top of **Users**. Each user is a row with their last activity and state; open one to set their limits. The "…" at the end of a row does three things without opening the page: **Disable** (**Enable** for a disabled user), **Reset password** and **Sign out of all devices**, which signs out every Jellyfin app the user has. **Disable** and **Sign out of all devices** ask first, and your own row has no **Disable**. A user's page starts with their role, state, last activity and, while they play something, what they watch, then lists its sections on the left.
 
-**Last activity** is the user's last request from a Jellyfin app, a [Silo app](silo-apps.md) or the admin app, to the minute. It reads **Never** for a user not seen yet, such as one imported from another server. A Jellyfin app signs in once and keeps its sign-in for months, so every request counts, not only sign-ins. Share-link guests, API keys and DLNA devices don't count as the user's activity. Jellyfin apps get the same time as the user's last activity date, as on Jellyfin.
+**Last activity** is the user's last request from a Jellyfin app, a [Silo app](silo-apps.md) or the admin app, to the minute. It reads **Never** for a user not seen yet, such as one imported from another server. A Jellyfin app signs in once and keeps its sign-in for months, so every request counts, not only sign-ins. Share-link guests, API keys and DLNA devices don't count as the user's activity. The user's own Jellyfin apps, and administrators', get the same time as the user's last activity date (see [What users see of each other](#what-users-see-of-each-other)).
 
 The app the last activity came from follows the time, as in "Last activity: 3 minutes ago · Jellyfin Android TV": the name a Jellyfin or Silo app gives itself, or **Admin app**. It tells a user who watches every night on the TV from one who opened the admin app once. It changes only with the time, so a request that leaves the time as it was leaves the app too. After the upgrade that brings it, users already active show the app of their most recently active device, or none when they have no device left. The admin API gives it as `lastActivityApp`, `Polyfin admin` for the admin app and empty when unknown; Jellyfin apps don't get it.
 
@@ -40,6 +40,18 @@ Other ways to bring users and their history in, listed under **Imports and downl
 - **Import from an app** brings what users watched in an app built on addons, such as Stremio or Nuvio (see [Importing from an app](moving-to-polyfin.md#importing-from-an-app)).
 - An invite link lets people create their own account, so you need not choose a password for each (see [Invite links](invite-and-share-links.md#invite-links)).
 - Each user can connect their own tracking accounts (see [Tracking services](tracking.md)).
+
+### What users see of each other
+
+Jellyfin apps list the server's users in a few places, such as the sign-in screen and the pictures of a SyncPlay group's members.
+
+- An administrator's apps read every user in full: role, limits, hours and last activity.
+- A member's apps read the member's own user in full. Of the others, they get the name and the profile picture of the users with **Show on the sign-in screen** on. They get nothing of the users without it, of disabled users, or of users whose account ended.
+- The sign-in screen gets the same names and pictures, without signing in.
+
+So a member's app cannot tell who is an administrator, what another user's limits and hours are, or when they last used the server. In the web player's SyncPlay menu, a group shows the pictures of its members who are on the sign-in screen.
+
+API details: [Other users](jellyfin-api.md#other-users-for-apps).
 
 ### Deleting a user
 

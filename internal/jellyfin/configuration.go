@@ -75,7 +75,7 @@ func (h *Handler) userConfiguration(ctx context.Context, user accounts.ID) (User
 
 // userDto describes user with the configuration they saved, and their
 // count of wrong passwords with the server's limit, -1 when there is none.
-// The public list of users, which anyone may read, leaves those out.
+// Only the user and administrators read it (see userDtoFor).
 func (h *Handler) userDto(ctx context.Context, user accounts.User) (UserDto, error) {
 	configuration, err := h.userConfiguration(ctx, user.ID)
 	if err != nil {
@@ -95,6 +95,21 @@ func (h *Handler) userDto(ctx context.Context, user accounts.User) (UserDto, err
 		libraryAccess(&dto.Policy, user, libraries)
 	}
 	return dto, nil
+}
+
+// userDtoFor describes user to caller. The user themselves and an
+// administrator, which an API key is, read the whole of it. Anyone else
+// reads what otherUserDto tells, and is not shown (false) a user kept off
+// the sign-in screen, nor one who is refused, as apps see a disabled one.
+func (h *Handler) userDtoFor(ctx context.Context, caller, user accounts.User) (UserDto, bool, error) {
+	if caller.IsAdministrator || user.ID == caller.ID {
+		dto, err := h.userDto(ctx, user)
+		return dto, err == nil, err
+	}
+	if user.IsHidden || user.Refused(h.now()) {
+		return UserDto{}, false, nil
+	}
+	return otherUserDto(user, h.ServerID), true, nil
 }
 
 // updateUserConfiguration replaces the configuration of the caller, or of

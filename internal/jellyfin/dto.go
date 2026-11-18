@@ -278,6 +278,17 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 	}
 }
 
+// otherUserDto describes user to someone who is neither the user nor an
+// administrator, the sign-in screen included: the name, the identifier and
+// the picture apps show. Apps expect the rest of a user to be there, so it
+// is a new account's: its policy and configuration, and no date. The
+// account's own role, limits, hours and activity are not told.
+func otherUserDto(user accounts.User, serverID string) UserDto {
+	return newUserDto(accounts.User{ID: user.ID, Name: user.Name, ImageTag: user.ImageTag,
+		VideoTranscoding: true, AudioTranscoding: true, ContentDownloading: true, LiveTv: true,
+		SyncPlay: accounts.SyncPlayCreateAndJoin, RemoteAccess: true}, serverID)
+}
+
 type PlayerStateInfo struct {
 	PositionTicks       *int64 `json:",omitempty"`
 	CanSeek             bool
