@@ -721,7 +721,7 @@ func (s *Service) trackPictures(ctx context.Context, job ocrJob, ffmpeg, dir str
 			return err
 		}
 		if track.file.Format == "sup" {
-			return ocr.PGS(data, emit)
+			return ocr.PGS(ctx, data, emit)
 		}
 		// A VobSub pair is named by its .idx file; the same key with the
 		// .sub extension opens its .sub file.
@@ -729,19 +729,19 @@ func (s *Service) trackPictures(ctx context.Context, job ocrJob, ffmpeg, dir str
 		if err != nil {
 			return err
 		}
-		return ocr.VobSub(data, sub, emit)
+		return ocr.VobSub(ctx, data, sub, emit)
 	case track.key.kind == ocrVersion:
 		t, blocks, err := s.pictureBlocks(ctx, job.version, job.analysis, track.key.stream)
 		if err != nil {
 			return err
 		}
-		return decodePictureBlocks(t, blocks, emit)
+		return decodePictureBlocks(ctx, t, blocks, emit)
 	default:
 		t, blocks, err := copyPictures(ctx, ffmpeg, dir, job.input, track.key.stream, job.zeroAt)
 		if err != nil {
 			return err
 		}
-		return decodePictureBlocks(t, blocks, emit)
+		return decodePictureBlocks(ctx, t, blocks, emit)
 	}
 }
 
@@ -766,13 +766,13 @@ func (s *Service) readLocal(ctx context.Context, key string) ([]byte, error) {
 }
 
 // decodePictureBlocks decodes the blocks of a Matroska PGS or VobSub track,
-// handing each picture to emit.
-func decodePictureBlocks(track container.Track, blocks []container.Block, emit func(ocr.Picture) error) error {
+// handing each picture to emit, until ctx ends.
+func decodePictureBlocks(ctx context.Context, track container.Track, blocks []container.Block, emit func(ocr.Picture) error) error {
 	switch track.CodecID {
 	case "S_HDMV/PGS":
-		return ocr.PGSBlocks(blocks, emit)
+		return ocr.PGSBlocks(ctx, blocks, emit)
 	case "S_VOBSUB":
-		return ocr.VobSubBlocks(track.CodecPrivate, blocks, emit)
+		return ocr.VobSubBlocks(ctx, track.CodecPrivate, blocks, emit)
 	}
 	return fmt.Errorf("not a picture subtitle track: %s", track.CodecID)
 }

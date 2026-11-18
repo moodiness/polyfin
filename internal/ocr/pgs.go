@@ -1,10 +1,13 @@
 package ocr
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
+	"iter"
+	"sort"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/container"
@@ -33,64 +36,59 @@ var errInvalid = errors.New("invalid subtitle pictures")
 // ends it.
 const lastShown = 5 * time.Second
 
-// displaySet is a PGS display set: its segments, kind first, and when it
-// shows.
+// displaySet is a PGS display set: when it shows, and its segments as its
+// file or block holds them, not copied: each, behind skip bytes of a
+// header, its kind, the size of its payload and its payload.
 type displaySet struct {
 	at       time.Duration
-	segments [][]byte
+	skip     int
+	segments []byte
 }
 
 // PGS reads the pictures of a SUP file: each segment behind a "PG" header
 // with its presentation time in 90 kHz ticks. It hands each picture to
 // emit, in order, as soon as its end is known (see decodePGS).
-func PGS(sup []byte, emit func(Picture) error) error {
-	var sets []displaySet
-	open := false
-	for len(sup) > 0 {
-		if len(sup) < 13 || sup[0] != 'P' || sup[1] != 'G' {
+//
+// The file's segments are checked first, so that a file cut short hands
+// over nothing. Its display sets are then decoded one at a time, each
+// where the file holds it: none is copied, nor held once decoded.
+func PGS(ctx context.Context, sup []byte, emit func(Picture) error) error {
+	for rest := sup; len(rest) > 0; {
+		if len(rest) < 13 || rest[0] != 'P' || rest[1] != 'G' {
 			return fmt.Errorf("%w: no PG header", errInvalid)
 		}
-		at := ticks(binary.BigEndian.Uint32(sup[2:6]))
-		n := 13 + int(binary.BigEndian.Uint16(sup[11:13]))
-		if n > len(sup) {
+		n := 13 + int(binary.BigEndian.Uint16(rest[11:13]))
+		if n > len(rest) {
 			return fmt.Errorf("%w: segment past the end", errInvalid)
 		}
-		if !open {
-			sets = append(sets, displaySet{at: at})
-			open = true
-		}
-		set := &sets[len(sets)-1]
-		set.segments = append(set.segments, segmentOf(sup[10], sup[13:n]))
-		if sup[10] == segmentEnd {
-			open = false
-		}
-		sup = sup[n:]
+		rest = rest[n:]
 	}
-	return decodePGS(sets, emit)
+	return decodePGS(ctx, func(yield func(displaySet) bool) {
+		for len(sup) > 0 {
+			// A display set runs to its end segment, or to the file's end.
+			n, ended := 0, false
+			for n < len(sup) && !ended {
+				ended = sup[n+10] == segmentEnd
+				n += 13 + int(binary.BigEndian.Uint16(sup[n+11:n+13]))
+			}
+			if !yield(displaySet{at: ticks(binary.BigEndian.Uint32(sup[2:6])), skip: 10, segments: sup[:n]}) {
+				return
+			}
+			sup = sup[n:]
+		}
+	}, emit)
 }
 
 // PGSBlocks reads the pictures of a Matroska PGS track, as PGS does: each
 // block a display set, its segments without a header.
-func PGSBlocks(blocks []container.Block, emit func(Picture) error) error {
-	sets := make([]displaySet, 0, len(blocks))
-	for _, block := range blocks {
-		set := displaySet{at: block.Start}
-		data := block.Data
-		for len(data) >= 3 {
-			n := 3 + int(binary.BigEndian.Uint16(data[1:3]))
-			if n > len(data) {
-				break
+func PGSBlocks(ctx context.Context, blocks []container.Block, emit func(Picture) error) error {
+	return decodePGS(ctx, func(yield func(displaySet) bool) {
+		for _, block := range blocks {
+			if !yield(displaySet{at: block.Start, segments: block.Data}) {
+				return
 			}
-			set.segments = append(set.segments, segmentOf(data[0], data[3:n]))
-			data = data[n:]
 		}
-		sets = append(sets, set)
-	}
-	return decodePGS(sets, emit)
-}
-
-func segmentOf(kind byte, payload []byte) []byte {
-	return append([]byte{kind}, payload...)
+	}, emit)
 }
 
 // ticks converts 90 kHz ticks to a duration.
@@ -98,11 +96,129 @@ func ticks(t uint32) time.Duration {
 	return time.Duration(t) * time.Second / 90000
 }
 
-// pgsObject is an object being defined or defined: its size and its
-// run-length data.
+// pgsObject is an object being defined or defined: its size, and of its
+// run-length data what can show, the runs of each of its lines up to its
+// width. The rest of what it is given is dropped as it is read (see
+// trim): an object holds no more than its size asks for, however long its
+// data, and a part of it is drawn from the runs of that part alone,
+// however often and in however many display sets it is placed.
 type pgsObject struct {
 	width, height int
-	data          []byte
+	// data is the data kept, then what is not read yet: no more than the
+	// start of a run, which the next segment ends.
+	data []byte
+	// kept is how much of data is kept, line the line it has reached and
+	// x how many pixels of that line it holds.
+	kept, line, x int
+	// marks are places in data, pgsMarkGap bytes or more apart: the runs
+	// of a part are found from the mark before them (see seek).
+	marks []pgsMark
+}
+
+// pgsMark is a place in an object's data: the run starting at offset is
+// on line, from pixel x.
+type pgsMark struct {
+	offset  int
+	line, x uint16
+}
+
+const (
+	// pgsMarkGap bounds what is read of an object's data to reach a part
+	// of it, and with it the marks kept: one for 64 bytes of data or
+	// more.
+	pgsMarkGap = 64
+	// pgsWork is how many runs and pixels a composition draws between
+	// two asks of its context: a few milliseconds of them.
+	pgsWork = 1 << 22
+)
+
+// nextRun reads the run at i of run-length data: a byte other than 0 is
+// a pixel of that color, 0 starts a run, 0 0 ends the line. It returns
+// the run's color, its length, below 0 for the end of a line, and where
+// the next run starts: 0 when the data ends within this one.
+func nextRun(data []byte, i int) (color byte, n, next int) {
+	if i >= len(data) {
+		return 0, 0, 0
+	}
+	if c := data[i]; c != 0 {
+		return c, 1, i + 1
+	}
+	if i+1 >= len(data) {
+		return 0, 0, 0
+	}
+	flags := data[i+1]
+	n = int(flags & 0x3f)
+	switch {
+	case flags == 0:
+		return 0, -1, i + 2
+	case flags>>6 == 0:
+		return 0, n, i + 2
+	case i+2 >= len(data):
+		return 0, 0, 0
+	case flags>>6 == 1:
+		return 0, n<<8 | int(data[i+2]), i + 3
+	case flags>>6 == 2:
+		return data[i+2], n, i + 3
+	case i+3 >= len(data):
+		return 0, 0, 0
+	}
+	return data[i+3], n<<8 | int(data[i+2]), i + 4
+}
+
+// trim reads the data the object was given since it last did, and keeps
+// of it what can show: the runs that have pixels, on a line of the
+// object, until that line is full, and the ends of those lines. Each byte
+// is read once, whatever follows it.
+func (o *pgsObject) trim() {
+	i := o.kept
+	for {
+		_, n, next := nextRun(o.data, i)
+		if next == 0 {
+			break
+		}
+		if o.line < o.height && (n < 0 || n > 0 && o.x < o.width) {
+			o.kept += copy(o.data[o.kept:], o.data[i:next])
+			if n >= 0 {
+				o.x = min(o.x+n, o.width)
+			} else {
+				o.line, o.x = o.line+1, 0
+			}
+			last := 0
+			if len(o.marks) > 0 {
+				last = o.marks[len(o.marks)-1].offset
+			}
+			if o.line < o.height && o.kept-last >= pgsMarkGap {
+				o.marks = append(o.marks, pgsMark{offset: o.kept, line: uint16(o.line), x: uint16(o.x)})
+			}
+		}
+		i = next
+	}
+	o.data = o.data[:o.kept+copy(o.data[o.kept:], o.data[i:])]
+}
+
+// seek is where in data to read line y, one the data has reached, for a
+// part whose left edge is pixel x: at a run of that line, which starts
+// at pixel at, x or before it. It is found from the last mark before,
+// less than pgsMarkGap bytes and a run away.
+func (o *pgsObject) seek(y, x int) (i, at int) {
+	line := 0
+	if k := sort.Search(len(o.marks), func(k int) bool {
+		m := o.marks[k]
+		return int(m.line) > y || int(m.line) == y && int(m.x) > x
+	}); k > 0 {
+		m := o.marks[k-1]
+		i, line, at = m.offset, int(m.line), int(m.x)
+	}
+	for line < y {
+		_, n, next := nextRun(o.data, i)
+		if next == 0 {
+			return len(o.data), 0
+		}
+		if i = next; n < 0 {
+			line, at = line+1, 0
+		}
+	}
+	return i, at
 }
 
 // placement is an object a composition shows: where, cropped or not.
@@ -114,22 +230,35 @@ type placement struct {
 	cropW, cropH    int
 }
 
-// decodePGS turns display sets into pictures: each display set that shows
-// objects is a picture, until the next display set, which it hands to
-// emit then. Only the picture showing is held: the caller decides how many
-// it keeps. An error from emit stops the decoding.
-func decodePGS(sets []displaySet, emit func(Picture) error) error {
+// decodePGS turns display sets into pictures as it is given them: each
+// display set that shows objects is a picture, until the next display
+// set, which it hands to emit then. Only the picture showing is held: the
+// caller decides how many it keeps. An error from emit stops the
+// decoding, and so does ctx when it ends: it is asked before each display
+// set, and as one's composition is drawn.
+func decodePGS(ctx context.Context, sets iter.Seq[displaySet], emit func(Picture) error) error {
 	palettes := map[byte]*[256]pixel{}
 	objects := map[uint16]*pgsObject{}
 	var showing Picture
 	shown := false
-	for _, set := range sets {
+	for set := range sets {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		var composed bool
 		var paletteID byte
 		var width, height int
 		var placed []placement
-		for _, segment := range set.segments {
-			kind, data := segment[0], segment[1:]
+		// A segment that says it is longer than what is left ends its
+		// display set.
+		for rest := set.segments; len(rest) >= set.skip+3; {
+			rest = rest[set.skip:]
+			n := 3 + int(binary.BigEndian.Uint16(rest[1:3]))
+			if n > len(rest) {
+				break
+			}
+			kind, data := rest[0], rest[3:n]
+			rest = rest[n:]
 			switch kind {
 			case segmentComposition:
 				if len(data) < 11 {
@@ -191,6 +320,9 @@ func decodePGS(sets []displaySet, emit func(Picture) error) error {
 				} else if object := objects[id]; object != nil {
 					object.data = append(object.data, data[4:]...)
 				}
+				if object := objects[id]; object != nil {
+					object.trim()
+				}
 			}
 		}
 		if !composed {
@@ -207,7 +339,10 @@ func decodePGS(sets []displaySet, emit func(Picture) error) error {
 		if len(placed) == 0 || palette == nil {
 			continue
 		}
-		b, forced := composePGS(placed, objects, palette, width, height)
+		b, forced, err := composePGS(ctx, placed, objects, palette, width, height)
+		if err != nil {
+			return err
+		}
 		if prepared, ok := prepare(b); ok {
 			showing = Picture{Start: set.at, Forced: forced, Image: prepared}
 			shown = true
@@ -224,8 +359,9 @@ func decodePGS(sets []displaySet, emit func(Picture) error) error {
 // the palette, onto a bitmap covering them all within the screen, the
 // composition's video of width by height, at most maxWidth by maxHeight:
 // what lies outside is neither drawn nor allocated, whatever the stream
-// declares.
-func composePGS(placed []placement, objects map[uint16]*pgsObject, palette *[256]pixel, width, height int) (bitmap, bool) {
+// declares. ctx is asked as the objects are drawn, every pgsWork runs and
+// pixels of them.
+func composePGS(ctx context.Context, placed []placement, objects map[uint16]*pgsObject, palette *[256]pixel, width, height int) (bitmap, bool, error) {
 	type drawn struct {
 		object *pgsObject
 		// part is the part of the object shown, by the object's pixels, and
@@ -255,67 +391,48 @@ func composePGS(placed []placement, objects map[uint16]*pgsObject, palette *[256
 		bounds = bounds.Union(at)
 	}
 	if len(parts) == 0 {
-		return bitmap{}, false
+		return bitmap{}, false, nil
 	}
 	canvas := newBitmap(bounds.Dx(), bounds.Dy())
+	work := 0
 	for _, d := range parts {
-		drawPGSObject(canvas, d.object, palette, d.part, d.at.Min.Sub(bounds.Min).Sub(d.part.Min))
+		work += drawPGSObject(canvas, d.object, palette, d.part, d.at.Min.Sub(bounds.Min).Sub(d.part.Min))
+		if work >= pgsWork {
+			if err := ctx.Err(); err != nil {
+				return bitmap{}, false, err
+			}
+			work = 0
+		}
 	}
-	return canvas, forced
+	return canvas, forced, nil
 }
 
-// drawPGSObject decodes an object's run-length data, a byte other than 0
-// a pixel of that color, 0 starting a run, 0 0 ending the line, and draws
-// the opaque pixels of its part shown onto canvas, the object's origin at
-// origin on canvas. The rest of the object is decoded no further than its
-// data, and drawn nowhere.
-func drawPGSObject(canvas bitmap, object *pgsObject, palette *[256]pixel, shown image.Rectangle, origin image.Point) {
-	data := object.data
-	x, y := 0, 0
-	put := func(color byte, n int) {
-		end := min(x+n, object.width)
-		if value := palette[color]; value.alpha > 0 && y >= shown.Min.Y {
-			for col := max(x, shown.Min.X); col < min(end, shown.Max.X); col++ {
-				canvas.set(origin.X+col, origin.Y+y, value)
+// drawPGSObject draws the opaque pixels of the part shown of an object
+// onto canvas, the object's origin at origin on canvas. It reads the
+// runs of that part alone, on each of its lines from a mark before its
+// left edge to its right edge, and the rest of the object not at all. It
+// returns what the drawing cost: the lines and runs read and the pixels
+// drawn.
+func drawPGSObject(canvas bitmap, object *pgsObject, palette *[256]pixel, shown image.Rectangle, origin image.Point) int {
+	work := 0
+	for y := shown.Min.Y; y < shown.Max.Y && y <= object.line; y++ {
+		work++
+		for i, x := object.seek(y, shown.Min.X); x < shown.Max.X; {
+			color, n, next := nextRun(object.data, i)
+			if next == 0 || n < 0 {
+				break
 			}
-		}
-		x = end
-	}
-	for i := 0; i < len(data) && y < shown.Max.Y; {
-		c := data[i]
-		i++
-		if c != 0 {
-			put(c, 1)
-			continue
-		}
-		if i >= len(data) {
-			return
-		}
-		flags := data[i]
-		i++
-		switch {
-		case flags == 0:
-			x, y = 0, y+1
-		case flags>>6 == 0:
-			put(0, int(flags&0x3f))
-		case flags>>6 == 1:
-			if i >= len(data) {
-				return
+			work++
+			end := min(x+n, object.width)
+			if value := palette[color]; value.alpha > 0 {
+				from, to := max(x, shown.Min.X), min(end, shown.Max.X)
+				for col := from; col < to; col++ {
+					canvas.set(origin.X+col, origin.Y+y, value)
+				}
+				work += max(to-from, 0)
 			}
-			put(0, int(flags&0x3f)<<8|int(data[i]))
-			i++
-		case flags>>6 == 2:
-			if i >= len(data) {
-				return
-			}
-			put(data[i], int(flags&0x3f))
-			i++
-		default:
-			if i+1 >= len(data) {
-				return
-			}
-			put(data[i+1], int(flags&0x3f)<<8|int(data[i]))
-			i += 2
+			x, i = end, next
 		}
 	}
+	return work
 }

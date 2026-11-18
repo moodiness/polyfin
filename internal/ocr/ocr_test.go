@@ -35,7 +35,7 @@ func tesseract(t *testing.T) *Tesseract {
 // pgsPictures decodes the pictures of a SUP file, keeping them all.
 func pgsPictures(sup []byte) ([]Picture, error) {
 	var pictures []Picture
-	err := PGS(sup, func(p Picture) error {
+	err := PGS(context.Background(), sup, func(p Picture) error {
 		pictures = append(pictures, p)
 		return nil
 	})
@@ -46,7 +46,7 @@ func pgsPictures(sup []byte) ([]Picture, error) {
 // them all.
 func vobsubPictures(idx, sub []byte) ([]Picture, error) {
 	var pictures []Picture
-	err := VobSub(idx, sub, func(p Picture) error {
+	err := VobSub(context.Background(), idx, sub, func(p Picture) error {
 		pictures = append(pictures, p)
 		return nil
 	})
@@ -57,7 +57,7 @@ func vobsubPictures(idx, sub []byte) ([]Picture, error) {
 // keeping them all.
 func vobsubBlockPictures(private []byte, blocks []container.Block) ([]Picture, error) {
 	var pictures []Picture
-	err := VobSubBlocks(private, blocks, func(p Picture) error {
+	err := VobSubBlocks(context.Background(), private, blocks, func(p Picture) error {
 		pictures = append(pictures, p)
 		return nil
 	})

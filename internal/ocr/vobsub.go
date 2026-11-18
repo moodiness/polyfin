@@ -3,8 +3,11 @@ package ocr
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"iter"
 	"strconv"
 	"strings"
 	"time"
@@ -24,14 +27,12 @@ import (
 const spuTick = 1024 * time.Second / 90000
 
 // vobsubIndex is what a .idx file, or a Matroska track's CodecPrivate,
-// tells: the palette, as luminances, the size of the video, and for a .idx
-// file the subpictures of its first track, by time and position in the
-// .sub file. A track copied from a DVD's program stream, without its IFO
+// tells of every subpicture: the palette, as luminances, and the size of
+// the video. A track copied from a DVD's program stream, without its IFO
 // files, has no palette, and may have no size.
 type vobsubIndex struct {
 	palette       *[16]uint8
 	width, height int
-	entries       []vobsubEntry
 }
 
 // dvdWidth and dvdHeight are the size of a DVD's PAL video, the largest:
@@ -54,8 +55,11 @@ type vobsubEntry struct {
 	position int64
 }
 
-// parseIndex reads a .idx file or a CodecPrivate.
-func parseIndex(data []byte) (vobsubIndex, error) {
+// parseIndex reads a .idx file or a CodecPrivate. It hands the
+// subpictures a .idx file lists for its first track to entry, when there
+// is one, in the file's order, by time and position in the .sub file, and
+// keeps none: an error from entry stops the reading.
+func parseIndex(data []byte, entry func(vobsubEntry) error) (vobsubIndex, error) {
 	var index vobsubIndex
 	tracks := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -94,7 +98,12 @@ func parseIndex(data []byte) (vobsubIndex, error) {
 			if !ok || !okTime || err != nil {
 				return vobsubIndex{}, fmt.Errorf("%w: timestamp %q", errInvalid, value)
 			}
-			index.entries = append(index.entries, vobsubEntry{at: at, position: offset})
+			if entry == nil {
+				continue
+			}
+			if err := entry(vobsubEntry{at: at, position: offset}); err != nil {
+				return vobsubIndex{}, err
+			}
 		}
 	}
 	return index, nil
@@ -132,37 +141,58 @@ func luma(r, g, b uint8) uint8 {
 // VobSub reads the pictures of a .idx and .sub pair: those of the first
 // track the .idx file lists. It hands each picture to emit, in order, as
 // soon as its end is known (see decodeUnits).
-func VobSub(idx, sub []byte, emit func(Picture) error) error {
-	index, err := parseIndex(idx)
-	if err != nil {
-		return err
-	}
-	units := make([]timedUnit, 0, len(index.entries))
-	for _, entry := range index.entries {
+//
+// The .idx file is read twice. Whole first, for its palette and size, and
+// so that a file with a line that cannot be read, or that lists a
+// subpicture past the .sub file, hands over nothing. Then line by line,
+// each subpicture read from the .sub file and decoded before the next
+// line is: one is held at a time, however many the .idx file lists.
+//
+// A line listing a position before the end of the subpicture last read
+// is skipped: its bytes were read already. The subpictures read are then
+// apart from one another in the .sub file, which bounds them all by its
+// size, whatever the lines of the .idx file say.
+func VobSub(ctx context.Context, idx, sub []byte, emit func(Picture) error) error {
+	index, err := parseIndex(idx, func(entry vobsubEntry) error {
 		if entry.position < 0 || entry.position >= int64(len(sub)) {
 			return fmt.Errorf("%w: position past the .sub file", errInvalid)
 		}
-		unit, err := subpictureAt(sub, int(entry.position))
-		if err != nil {
-			return err
-		}
-		units = append(units, timedUnit{at: entry.at, data: unit})
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	return decodeUnits(units, index, emit)
+	return decodeUnits(ctx, func(yield func(timedUnit, error) bool) {
+		stopped := errors.New("stopped")
+		end := 0
+		_, _ = parseIndex(idx, func(entry vobsubEntry) error {
+			if entry.position < int64(end) {
+				return nil
+			}
+			unit, next, err := subpictureAt(sub, int(entry.position))
+			end = next
+			if !yield(timedUnit{at: entry.at, data: unit}, err) {
+				return stopped
+			}
+			return nil
+		})
+	}, index, emit)
 }
 
 // VobSubBlocks reads the pictures of a Matroska VobSub track, from its
 // CodecPrivate and blocks, as VobSub does.
-func VobSubBlocks(private []byte, blocks []container.Block, emit func(Picture) error) error {
-	index, err := parseIndex(private)
+func VobSubBlocks(ctx context.Context, private []byte, blocks []container.Block, emit func(Picture) error) error {
+	index, err := parseIndex(private, nil)
 	if err != nil {
 		return err
 	}
-	units := make([]timedUnit, len(blocks))
-	for i, block := range blocks {
-		units[i] = timedUnit{at: block.Start, duration: block.Duration, data: block.Data}
-	}
-	return decodeUnits(units, index, emit)
+	return decodeUnits(ctx, func(yield func(timedUnit, error) bool) {
+		for _, block := range blocks {
+			if !yield(timedUnit{at: block.Start, duration: block.Duration, data: block.Data}, nil) {
+				return
+			}
+		}
+	}, index, emit)
 }
 
 // timedUnit is a subpicture unit with its time, and its block's duration
@@ -172,15 +202,23 @@ type timedUnit struct {
 	data         []byte
 }
 
-// decodeUnits decodes subpicture units: each shows from its start delay
-// to its stop delay, its block's end, or the next one. It hands each
-// picture to emit once its end is known, holding only one that waits for
-// the next. An error from emit stops the decoding.
-func decodeUnits(units []timedUnit, index vobsubIndex, emit func(Picture) error) error {
+// decodeUnits decodes subpicture units as it is given them, each or the
+// error that kept it from being read: each shows from its start delay to
+// its stop delay, its block's end, or the next one. It hands each picture
+// to emit once its end is known, holding only one that waits for the
+// next. An error from emit stops the decoding, and so does ctx when it
+// ends: it is asked before each unit.
+func decodeUnits(ctx context.Context, units iter.Seq2[timedUnit, error], index vobsubIndex, emit func(Picture) error) error {
 	width, height := index.screen()
 	var waiting Picture
 	open := false
-	for _, unit := range units {
+	for unit, err := range units {
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		spu, err := decodeSubpicture(unit.data, index.palette, width, height)
 		if err != nil {
 			return err
@@ -220,14 +258,15 @@ func decodeUnits(units []timedUnit, index vobsubIndex, emit func(Picture) error)
 
 // subpictureAt reads the subpicture unit starting in the program stream
 // packet at position: its private stream packets' payloads, past their
-// substream number, until the unit's size.
-func subpictureAt(sub []byte, position int) ([]byte, error) {
+// substream number, until the unit's size. It returns the unit, and
+// where the last packet read for it ends.
+func subpictureAt(sub []byte, position int) ([]byte, int, error) {
 	var unit []byte
 	size := -1
 	substream := -1
 	for position+6 <= len(sub) {
 		if sub[position] != 0 || sub[position+1] != 0 || sub[position+2] != 1 {
-			return nil, fmt.Errorf("%w: no packet start at %d", errInvalid, position)
+			return nil, 0, fmt.Errorf("%w: no packet start at %d", errInvalid, position)
 		}
 		code := sub[position+3]
 		switch {
@@ -235,7 +274,7 @@ func subpictureAt(sub []byte, position int) ([]byte, error) {
 			// A pack header: MPEG-2's, with its stuffing, or MPEG-1's.
 			if sub[position+4]&0xc0 == 0x40 {
 				if position+14 > len(sub) {
-					return nil, fmt.Errorf("%w: short pack header", errInvalid)
+					return nil, 0, fmt.Errorf("%w: short pack header", errInvalid)
 				}
 				position += 14 + int(sub[position+13]&7)
 			} else {
@@ -243,17 +282,17 @@ func subpictureAt(sub []byte, position int) ([]byte, error) {
 			}
 			continue
 		case code == 0xb9:
-			return nil, fmt.Errorf("%w: the program stream ends within a subpicture", errInvalid)
+			return nil, 0, fmt.Errorf("%w: the program stream ends within a subpicture", errInvalid)
 		}
 		length := int(binary.BigEndian.Uint16(sub[position+4 : position+6]))
 		end := position + 6 + length
 		if end > len(sub) {
-			return nil, fmt.Errorf("%w: packet past the end", errInvalid)
+			return nil, 0, fmt.Errorf("%w: packet past the end", errInvalid)
 		}
 		if code == 0xbd {
 			payload := sub[position+6 : end]
 			if len(payload) < 3 || 3+int(payload[2]) >= len(payload) {
-				return nil, fmt.Errorf("%w: short packet", errInvalid)
+				return nil, 0, fmt.Errorf("%w: short packet", errInvalid)
 			}
 			data := payload[3+int(payload[2]):]
 			if number := int(data[0]); substream < 0 || number == substream {
@@ -263,13 +302,13 @@ func subpictureAt(sub []byte, position int) ([]byte, error) {
 					size = int(binary.BigEndian.Uint16(unit))
 				}
 				if size >= 0 && len(unit) >= size {
-					return unit[:size], nil
+					return unit[:size], end, nil
 				}
 			}
 		}
 		position = end
 	}
-	return nil, fmt.Errorf("%w: the .sub file ends within a subpicture", errInvalid)
+	return nil, 0, fmt.Errorf("%w: the .sub file ends within a subpicture", errInvalid)
 }
 
 // subpicture is a decoded subpicture unit.
