@@ -10,10 +10,29 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // Capacity is how many bytes of log lines a Ring keeps by default.
 const Capacity = 5 << 20
+
+const (
+	// lineFraction is the part of a ring's capacity one line may take: a
+	// thirty-second, 160 KiB of the default, which holds the longest
+	// lines the server writes, an error with a stack among them, many
+	// times over, while no single record displaces more than a
+	// thirty-second of what the ring keeps.
+	lineFraction = 32
+	// minLine is the least a line may take in a ring too small for the
+	// fraction to hold an ordinary line, up to the ring's capacity.
+	minLine = 1 << 10
+	// lookAhead is how far past the place a long line is cut the ring
+	// reads before it redacts, so that a secret the cut would split is
+	// still hidden whole.
+	lookAhead = 4 << 10
+	// cutMark ends a line that was cut.
+	cutMark = "… (cut)"
+)
 
 // Ring is an io.Writer that keeps the last lines written, redacted, up to
 // a number of bytes; older lines are dropped first.
@@ -29,24 +48,30 @@ type Ring struct {
 	created  time.Time
 	modified time.Time
 	now      func() time.Time
+	// redact is Redact, which tests replace.
+	redact func(string) string
 }
 
 // NewRing returns an empty ring keeping up to capacity bytes.
 func NewRing(capacity int) *Ring {
 	now := time.Now()
-	return &Ring{capacity: capacity, created: now, modified: now, now: time.Now}
+	return &Ring{capacity: capacity, created: now, modified: now, now: time.Now, redact: Redact}
 }
 
-// Write keeps p's lines, redacted. It never fails.
+// Write keeps p's lines, redacted, each cut to a fraction of the ring's
+// capacity (see lineFraction). It never fails.
 func (r *Ring) Write(p []byte) (int, error) {
 	text := strings.TrimSuffix(string(p), "\n")
+	// The lines are redacted before the lock is taken: readers and other
+	// writers do not wait for it.
+	limit := min(r.capacity, max(r.capacity/lineFraction, minLine))
+	var lines [][]byte
+	for line := range strings.SplitSeq(text, "\n") {
+		lines = append(lines, r.bounded(line, limit))
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for line := range strings.SplitSeq(text, "\n") {
-		redacted := []byte(Redact(line) + "\n")
-		if len(redacted) > r.capacity {
-			redacted = append(redacted[:r.capacity-1:r.capacity-1], '\n')
-		}
+	for _, redacted := range lines {
 		r.lines = append(r.lines, redacted)
 		r.size += len(redacted)
 		r.written++
@@ -64,6 +89,44 @@ func (r *Ring) Write(p []byte) (int, error) {
 	}
 	r.modified = r.now()
 	return len(p), nil
+}
+
+// bounded returns line redacted, with its line end, in limit bytes at
+// most: a longer one keeps its start and ends with cutMark, when limit
+// has room for it.
+func (r *Ring) bounded(line string, limit int) []byte {
+	var redacted string
+	cut := len(line) > limit
+	if !cut {
+		redacted = r.redact(line)
+	} else {
+		// A long line is cut before it is redacted, which bounds the
+		// work. What remains of a secret the cut splits may no longer
+		// look like one: the line's start is redacted twice, alone and
+		// with lookAhead bytes more, and only what both give is kept.
+		alone, further := r.redact(line[:limit]), r.redact(line[:min(len(line), limit+lookAhead)])
+		same := 0
+		for same < len(alone) && same < len(further) && alone[same] == further[same] {
+			same++
+		}
+		redacted = alone[:same]
+	}
+	if !cut && len(redacted) < limit {
+		return []byte(redacted + "\n")
+	}
+	keep, mark := limit-1-len(cutMark), cutMark
+	if keep < 0 {
+		keep, mark = limit-1, ""
+	}
+	keep = min(keep, len(redacted))
+	// A character the cut split is dropped.
+	for range utf8.UTFMax - 1 {
+		if last, size := utf8.DecodeLastRuneInString(redacted[:keep]); last != utf8.RuneError || size != 1 {
+			break
+		}
+		keep--
+	}
+	return []byte(redacted[:keep] + mark + "\n")
 }
 
 // Contents returns the lines kept, oldest first.
