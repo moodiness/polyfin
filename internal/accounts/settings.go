@@ -2995,12 +2995,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
-		unblocked, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
-			"WHERE invalid_login_attempts <> 0 OR blocked_until IS NOT NULL")
+		unblocked, err := s.forgetWrongPasswords(ctx)
 		if err != nil {
 			return Settings{}, err
 		}
-		if unblocked.RowsAffected() > 0 {
+		if unblocked {
 			s.forgetSignIns()
 		}
 	}

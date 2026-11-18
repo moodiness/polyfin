@@ -1188,6 +1188,11 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (accounts.ID, b
 	return id, true
 }
 
+// changePassword replaces the signed-in user's password once they gave the
+// current one. Wrong current passwords count as wrong passwords at sign-in
+// do: toward the client's failed attempts and the user's, whichever client
+// sent them (429 once too many), and toward the block of the client for
+// the account, which is told as at sign-in.
 func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		CurrentPassword string `json:"currentPassword"`
@@ -1197,7 +1202,22 @@ func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session := sessionFrom(r.Context())
-	err := h.Accounts.ChangePassword(r.Context(), session.User.ID, body.CurrentPassword, body.NewPassword, session.TokenHash)
+	key := forwarded.Client(r)
+	attempt := h.reserve(w, key, twoStepKey(session.User.ID))
+	if attempt == nil {
+		return
+	}
+	// A right current password takes back only its own attempt, even when
+	// the new one is refused: it signs nobody in.
+	defer attempt.Cancel()
+	err := h.Accounts.ChangePasswordAt(r.Context(), session.User.ID, body.CurrentPassword, body.NewPassword, session.TokenHash, key)
+	if errors.Is(err, accounts.ErrWrongPassword) {
+		attempt.Fail()
+	}
+	var blocked *accounts.BlockError
+	if errors.As(err, &blocked) && h.Notifications != nil {
+		h.Notifications.AccountBlocked(blocked.User, accounts.DeviceInfo{Client: accounts.AdminApp, RemoteAddress: key})
+	}
 	if accountError(w, err) {
 		return
 	}

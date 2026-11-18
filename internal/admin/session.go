@@ -221,7 +221,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer attempt.Cancel()
-	user, err := h.Accounts.Authenticate(r.Context(), body.Name, body.Password)
+	user, err := h.Accounts.AuthenticateFrom(r.Context(), body.Name, body.Password, accounts.DeviceInfo{RemoteAddress: key})
 	if errors.Is(err, accounts.ErrInvalidCredentials) {
 		attempt.Fail()
 	}
@@ -289,14 +289,15 @@ func locksOutCaller(r *http.Request, remote *bool) bool {
 // Jellyfin apps send it (MediaBrowser Token="…"), never in a cookie or the
 // URL. Only a signed-in device's token counts: API keys have no user. The
 // user must be allowed to sign in now, as with a password: not disabled
-// (their devices are then signed out), not blocked after wrong passwords,
-// from the local network unless they have remote access, within their
-// allowed hours. An account that needs two-step sign-in, or
-// to set it up, is refused, as its password is: its devices may have
-// signed in before it was turned on, or through Quick Connect. A device
-// signed in through the identity provider is not refused for either: the
-// provider asked for its own second step, and wrong passwords block
-// passwords only (see providerCallback).
+// (their devices are then signed out), from the local network unless they
+// have remote access, within their allowed hours. An account that needs
+// two-step sign-in, or to set it up, is refused, as its password is: its
+// devices may have signed in before it was turned on, or through Quick
+// Connect. A device signed in through the identity provider is not
+// refused for it: the provider asked for its own second step (see
+// providerCallback). A block after wrong passwords refuses nothing here:
+// it is of a client's passwords, and lets through a device the account
+// signed in from before, as this one is.
 //
 // A token that is no device's counts as a wrong password does toward the
 // client's failed attempts; the token of someone who may not have a session
@@ -331,8 +332,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	}
 	now := h.now()
 	switch {
-	case !device.Provider && h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now),
-		!device.Provider && user.NeedsTwoStep(h.Accounts.Settings()):
+	case !device.Provider && user.NeedsTwoStep(h.Accounts.Settings()):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	case !user.AllowedFrom(forwarded.InLocalNetwork(r)):

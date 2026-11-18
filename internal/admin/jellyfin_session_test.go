@@ -203,9 +203,10 @@ func TestJellyfinSignInCountsUnknownTokensAsFailures(t *testing.T) {
 	}
 }
 
-// A user blocked after wrong passwords gets no session from a token either,
-// until the block ends.
-func TestJellyfinSignInRespectsTheLockout(t *testing.T) {
+// A block after wrong passwords is of a client's passwords: the token of
+// a device the account signed in from still opens a session, from the
+// blocked address too, while the password is refused there.
+func TestJellyfinSignInPassesABlockAfterWrongPasswords(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 100)
 	admin := api.signedIn("admin", true)
@@ -218,9 +219,12 @@ func TestJellyfinSignInRespectsTheLockout(t *testing.T) {
 		for range 3 {
 			api.browser().call(http.MethodPost, "/session", map[string]string{"name": name, "password": "wrong password"})
 		}
+		if status, body, _ := api.browser().call(http.MethodPost, "/session", map[string]string{"name": name, "password": "correct horse"}); status != http.StatusUnauthorized {
+			t.Fatalf("the password of %s from the blocked address: %d %v", name, status, body)
+		}
 		b := api.browser()
-		if status, body := b.exchange(token); status != http.StatusUnauthorized || body["error"] != "invalid_credentials" || b.hasSession() {
-			t.Errorf("blocked %s: %d %v", name, status, body)
+		if status, body := b.exchange(token); status != http.StatusOK || !b.hasSession() {
+			t.Errorf("the token of %s during the block: %d %v", name, status, body)
 		}
 	}
 }

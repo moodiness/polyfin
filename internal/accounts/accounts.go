@@ -76,9 +76,10 @@ type User struct {
 	// before their own, when they may use their own; otherwise they see
 	// the server's alone whatever its value.
 	UseSharedAddons bool
-	// InvalidLoginAttempts counts the user's wrong passwords in a row,
-	// while the server blocks accounts after Settings.LoginAttempts of them;
-	// BlockedUntil is when the last block ends (see Store.BlockedUntil).
+	// InvalidLoginAttempts is the highest count of wrong passwords in a
+	// row among the user's clients, while the server blocks them after
+	// Settings.LoginAttempts; BlockedUntil is when the latest of their
+	// blocks ends (see Store.AuthenticateFrom).
 	InvalidLoginAttempts int
 	BlockedUntil         *time.Time
 	// MaxPlaybacks is how many of the user's other devices may be playing
@@ -310,6 +311,9 @@ type Store struct {
 	signedOut atomic.Pointer[func(devices []ID)]
 	// now is the clock blocks and unused devices are measured by.
 	now func() time.Time
+	// verifying, when a test sets it, is told the hash each sign-in's
+	// password is about to be verified against.
+	verifying func(hash string)
 	// logLevel follows the settings' DetailedLog (see FollowLogLevel).
 	logLevel atomic.Pointer[followedLevel]
 	// changed is closed at the next change of the settings, then made
@@ -635,21 +639,37 @@ func (s *Store) Users(ctx context.Context) ([]User, error) {
 // regard to case. A disabled or ended account is reported only after its
 // password is verified, so the response does not reveal which names exist.
 //
-// While Settings.LoginAttempts is set, that many wrong passwords in a row
-// block the account for LoginBlock: every sign-in is then refused as a
-// wrong password is, the right password included, and a sign-in, a new
-// password or Unblock starts the count again. The wrong password that
-// blocks the account is a *BlockError. Jellyfin disables the account
-// instead, until an administrator enables it again; Polyfin only blocks it
-// for a while, so that the last administrator can never be locked out for
-// good.
+// It is for a caller that names no client: it does what AuthenticateFrom
+// does for one, and the wrong passwords sent this way count together, as
+// one client's.
 func (s *Store) Authenticate(ctx context.Context, name, password string) (User, error) {
+	return s.AuthenticateFrom(ctx, name, password, DeviceInfo{})
+}
+
+// AuthenticateFrom checks a name and password as Authenticate does, sent
+// by from: its RemoteAddress is the client's address and its DeviceID the
+// device's identifier, when the app names one. The time of the answer
+// reveals no more than the answer which names exist: every sign-in
+// verifies one hash, whatever the name and the password's length.
+//
+// While Settings.LoginAttempts is set, that many wrong passwords in a row
+// from one client, an address or the /64 of an IPv6 one, block that
+// client's sign-ins to the account for LoginBlock: each is then refused as
+// a wrong password is, the right password included, unless it comes from a
+// device the account signed in from before. The other clients sign in as
+// before. A sign-in from the client, a new password or Unblock starts the
+// count again. The wrong password that blocks a client is a *BlockError.
+// Jellyfin disables the account instead, until an administrator enables it
+// again; Polyfin only blocks one client for a while, so that nobody keeps
+// an account's owner out with wrong passwords.
+func (s *Store) AuthenticateFrom(ctx context.Context, name, password string, from DeviceInfo) (User, error) {
 	var hash string
 	var user User
 	err := s.db.QueryRow(ctx,
 		"SELECT password_hash, "+userColumns+" FROM users WHERE lower(name) = lower($1)",
 		strings.TrimSpace(name)).Scan(append([]any{&hash}, user.fields()...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
+		s.hashVerified(unknownUserHash)
 		_, _ = verifyPassword(password, unknownUserHash)
 		return User{}, ErrInvalidCredentials
 	}
@@ -658,9 +678,15 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 	}
 	ok := false
 	if len(password) <= maxPasswordLength {
+		s.hashVerified(hash)
 		if ok, err = verifyPassword(password, hash); err != nil {
 			return User{}, fmt.Errorf("user %s: %w", user.ID, err)
 		}
+	} else {
+		// A password over the bound is never right. It costs the hash an
+		// unknown name's does, so that the time tells nothing of the name.
+		s.hashVerified(unknownUserHash)
+		_, _ = verifyPassword(password, unknownUserHash)
 	}
 	// An account that signs in through the provider alone refuses every
 	// password, as a wrong one, which counts toward the client's attempts
@@ -669,31 +695,21 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 	if user.ProviderOnly {
 		return User{}, ErrInvalidCredentials
 	}
-	limit, now := s.Settings().LoginAttempts, s.now()
-	if limit > 0 && user.Blocked(now) {
-		return User{}, ErrInvalidCredentials
+	if user, err = s.passwordChecked(ctx, user, ok, from, ErrInvalidCredentials); err != nil {
+		return User{}, err
 	}
-	if !ok {
-		if limit > 0 {
-			counted, blocked, err := s.countWrongPassword(ctx, user.ID, limit, now)
-			if err != nil {
-				return User{}, err
-			}
-			if blocked {
-				return User{}, &BlockError{User: counted}
-			}
-		}
-		return User{}, ErrInvalidCredentials
-	}
-	if user.InvalidLoginAttempts > 0 || user.BlockedUntil != nil {
-		if user, err = s.Unblock(ctx, user.ID); err != nil {
-			return User{}, err
-		}
-	}
-	if user.Refused(now) {
+	if user.Refused(s.now()) {
 		return User{}, ErrDisabled
 	}
 	return user, nil
+}
+
+// hashVerified tells the test that counts them of a hash a sign-in's
+// password is about to be verified against.
+func (s *Store) hashVerified(hash string) {
+	if s.verifying != nil {
+		s.verifying(hash)
+	}
 }
 
 // UpdateUser applies changes to an account. A new password or disabling the
@@ -863,8 +879,12 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		return User{}, nil, err
 	}
 	if u.hash != nil {
-		// A new password starts the count of wrong ones again.
+		// A new password starts the count of wrong ones again, for every
+		// client.
 		if _, err := tx.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL WHERE id = $1", id); err != nil {
+			return User{}, nil, err
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM wrong_passwords WHERE user_id = $1", id); err != nil {
 			return User{}, nil, err
 		}
 	}
@@ -956,32 +976,58 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 }
 
 // ChangePassword replaces the caller's own password after checking the
-// current one.
+// current one, for a caller that names no client, as ChangePasswordAt
+// does for one.
 func (s *Store) ChangePassword(ctx context.Context, id ID, current, next string, keepSession []byte) error {
-	return s.changePassword(ctx, id, current, next, signIn{adminSession: keepSession})
+	return s.ChangePasswordAt(ctx, id, current, next, keepSession, "")
+}
+
+// ChangePasswordAt replaces the caller's own password after checking the
+// current one, sent from the client at address: a wrong one counts, and a
+// blocked client is refused, as at sign-in (see changePassword).
+func (s *Store) ChangePasswordAt(ctx context.Context, id ID, current, next string, keepSession []byte, address string) error {
+	return s.changePassword(ctx, id, current, next, signIn{adminSession: keepSession}, address)
 }
 
 // ChangePasswordFromDevice replaces the password of the user signed in on a
-// Jellyfin app after checking the current one. The app's device stays
-// signed in; the account's other devices and admin sessions are signed out.
+// Jellyfin app after checking the current one, for a caller that names no
+// client, as ChangePasswordFromDeviceAt does for one.
 func (s *Store) ChangePasswordFromDevice(ctx context.Context, id ID, current, next string, device ID) error {
-	return s.changePassword(ctx, id, current, next, signIn{device: &device})
+	return s.ChangePasswordFromDeviceAt(ctx, id, current, next, device, "")
 }
 
-func (s *Store) changePassword(ctx context.Context, id ID, current, next string, keep signIn) error {
+// ChangePasswordFromDeviceAt replaces the password of the user signed in
+// on a Jellyfin app after checking the current one, sent from the client
+// at address, as ChangePasswordAt does. The app's device stays signed in;
+// the account's other devices and admin sessions are signed out.
+func (s *Store) ChangePasswordFromDeviceAt(ctx context.Context, id ID, current, next string, device ID, address string) error {
+	return s.changePassword(ctx, id, current, next, signIn{device: &device}, address)
+}
+
+// changePassword replaces the password of the user id once current is
+// their password. A wrong current password counts as a wrong password at
+// sign-in does toward the block of the client at address, and is a
+// *BlockError when it blocks it; while that client is blocked, every
+// current password is refused as a wrong one. The device that asks does
+// not pass the block as it does at sign-in: whoever changes a password is
+// signed in, on a device the account used.
+func (s *Store) changePassword(ctx context.Context, id ID, current, next string, keep signIn, address string) error {
 	var hash string
-	if err := s.db.QueryRow(ctx, "SELECT password_hash FROM users WHERE id = $1", id).Scan(&hash); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
+	var user User
+	err := s.db.QueryRow(ctx, "SELECT password_hash, "+userColumns+" FROM users WHERE id = $1", id).
+		Scan(append([]any{&hash}, user.fields()...)...)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
 		return err
 	}
 	ok, err := verifyPassword(current, hash)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return ErrWrongPassword
+	if _, err := s.passwordChecked(ctx, user, ok, DeviceInfo{RemoteAddress: address}, ErrWrongPassword); err != nil {
+		return err
 	}
 	_, err = s.updateUser(ctx, id, UserChanges{Password: &next}, keep)
 	return err

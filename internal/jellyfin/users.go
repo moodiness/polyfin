@@ -82,14 +82,14 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer attempt.Cancel()
-	user, err := h.Accounts.Authenticate(r.Context(), body.Username, body.Pw)
+	user, err := h.Accounts.AuthenticateFrom(r.Context(), body.Username, body.Pw, accounts.DeviceInfo{DeviceID: c.DeviceID, RemoteAddress: key})
 	var blocked *accounts.BlockError
 	if errors.As(err, &blocked) && h.AccountBlocked != nil {
 		h.AccountBlocked(blocked.User, accounts.DeviceInfo{DeviceID: c.DeviceID, DeviceName: c.Device, Client: c.Client,
 			ClientVersion: c.Version, RemoteAddress: key})
 	}
 	switch {
-	// An account blocked for wrong passwords answers as a wrong password
+	// A client blocked for wrong passwords answers as a wrong password
 	// does, the right password included. Jellyfin, which disables such an
 	// account instead, answers 403 to its right password.
 	case errors.Is(err, accounts.ErrInvalidCredentials):

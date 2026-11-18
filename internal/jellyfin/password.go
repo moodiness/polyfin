@@ -91,7 +91,16 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer attempt.Cancel()
-	err = h.Accounts.ChangePasswordFromDevice(r.Context(), id, body.CurrentPw, body.NewPw, caller.Device.ID)
+	err = h.Accounts.ChangePasswordFromDeviceAt(r.Context(), id, body.CurrentPw, body.NewPw, caller.Device.ID, forwarded.Client(r))
+	// A wrong current password counts toward the block of the client for
+	// the account, as one at sign-in does, and the one that blocks it is
+	// told the same way.
+	var blocked *accounts.BlockError
+	if errors.As(err, &blocked) && h.AccountBlocked != nil {
+		from := caller.Device.DeviceInfo
+		from.RemoteAddress = forwarded.Client(r)
+		h.AccountBlocked(blocked.User, from)
+	}
 	if errors.Is(err, accounts.ErrWrongPassword) {
 		attempt.Fail()
 		writeJSON(w, http.StatusForbidden, wrongCurrentPassword)
