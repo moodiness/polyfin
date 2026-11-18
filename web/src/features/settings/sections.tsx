@@ -314,6 +314,15 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
           saved={saved.preferDirectPlay}
         />
         <SettingRow
+          kind="switch"
+          anchor="send-apps-to-source"
+          label={s.sendAppsToSource}
+          help={s.sendAppsToSourceHelp}
+          checked={form.sendAppsToSource}
+          onChange={(sendAppsToSource) => update({ sendAppsToSource })}
+          saved={saved.sendAppsToSource}
+        />
+        <SettingRow
           kind="choice"
           anchor="version-names"
           label={s.versionNames}

@@ -530,6 +530,12 @@ export type Settings = {
   /** Prefers the first version an app plays without conversion over the first that plays at all. */
   preferDirectPlay: boolean
   /**
+   * Sends every app to the source of the version it plays as it is, when it can reach it: users who
+   * play then see the source's address. Off, versions of IPTV sources are relayed, and those of the
+   * server's addons are to users who are not administrators.
+   */
+  sendAppsToSource: boolean
+  /**
    * Up to six criteria ordering a title's versions, each grouping them and the next sorting within
    * them; none keeps the addons' order.
    */

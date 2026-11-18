@@ -265,6 +265,9 @@ const settings = {
     preferDirectPlay: 'Prefer versions the app plays without conversion',
     preferDirectPlayHelp:
       'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. Once an app has played since the server started, its version menus also list those versions first, so that Play starts the version the menu shows. Users given “Play local files first” keep their local files first. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+    sendAppsToSource: 'Send apps to the source',
+    sendAppsToSourceHelp:
+      'When an app plays a version as it is and can reach its source, Polyfin sends the app to the source’s address instead of passing the stream through the server. This applies to every user and every source, IPTV included, and saves the server’s bandwidth. Users who play from a source then see its address, with any key, account name or password in it. When off, the streams of IPTV sources always pass through the server, and so do those of the server’s addons when the user is not an administrator: each of those plays uses the server’s bandwidth, in and out. Administrators playing from the server’s addons, and users playing from their own addons, are sent to the source either way. Off by default.',
     versionNames: 'Version names',
     versionNamesHelp:
       'Short names are written by Polyfin from what it knows of each version, the same in every app, such as “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon”: resolution, HDR, video codec, audio, edition, audio languages, size and addon. Two versions never share a name.',

@@ -178,6 +178,21 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'send-apps-to-source',
+    label: (t) => s(t).sendAppsToSource,
+    help: (t) => s(t).sendAppsToSourceHelp,
+    keywords: [
+      'redirect',
+      'relay',
+      'bandwidth',
+      'direct play',
+      'redirection',
+      'relais',
+      'bande passante',
+    ],
+  },
+  {
+    section: 'playback',
     anchor: 'version-names',
     label: (t) => s(t).versionNames,
     help: (t) => s(t).versionNamesHelp,
