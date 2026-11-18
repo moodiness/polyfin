@@ -278,7 +278,7 @@ const sourceProtocols = "http-get:*:video/mpeg:*,http-get:*:video/mp4:*,http-get
 var mediaFile = regexp.MustCompile(`^([0-9a-fA-F-]{32,36})\.([a-z0-9]{1,5})$`)
 
 // played reads the play a media request is for: its item, signed for the
-// device's user.
+// device's user in DLNA's own domain (see grantDomain).
 func (s *Service) played(w http.ResponseWriter, r *http.Request) (Play, bool) {
 	c := clientFrom(r.Context())
 	match := mediaFile.FindStringSubmatch(r.PathValue("file"))
@@ -417,6 +417,14 @@ func ContentFeatures(resource Resource) string {
 func grantFor(user, item accounts.ID) playback.Grant {
 	return playback.Grant{Version: item, User: user, Relay: true}
 }
+
+// grantDomain is the signer's domain of the addresses given to devices. A
+// device needs no sign-in to be given one, so they open the DLNA routes
+// only, where played checks the item, the device and its user at each
+// request: the Jellyfin API refuses them, and its grants open nothing
+// here. They carry no time, as whoever may use one may browse for
+// another.
+const grantDomain = "dlna"
 
 // xmlEscape writes text escaped for XML.
 func xmlEscape(b *strings.Builder, text string) error {

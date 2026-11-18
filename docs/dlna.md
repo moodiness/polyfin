@@ -75,7 +75,9 @@ Everything a device lists follows the user:
 Each movie or episode offers one file: the version Polyfin would pick for the user, as for a Jellyfin app (see [Choosing a version](versions.md#choosing-a-version)).
 
 - The version rules and quality groups apply.
-- Its address is signed for the user, as apps' addresses are.
+- Its address is signed for the user, and for DLNA only: the Jellyfin API refuses it, and an app's address plays nothing here.
+- The address has no end of its own. It plays as long as the device shows that user's libraries, so a playlist the device saved keeps playing.
+- **Upgrading:** the addresses given by earlier versions were signed as apps' addresses were, and no longer play. The device browses again, and a playlist saved on it is made again.
 
 What the device gets depends on its profile:
 

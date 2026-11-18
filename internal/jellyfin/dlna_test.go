@@ -565,7 +565,8 @@ func TestDLNAArtFollowsTheDevicesUser(t *testing.T) {
 	if response, _ := fetch(t, art, nil); response.StatusCode != http.StatusNotFound {
 		t.Errorf("the PG movie's art for the child's device: %d", response.StatusCode)
 	}
-	grant := s.testServer.handler.Playback.Signer().Sign(playback.Grant{Version: movie, User: child.ID, Relay: true})
+	// An address as the DLNA service signs them, in its own domain.
+	grant := s.testServer.handler.Playback.Signer().Domain("dlna").Sign(playback.Grant{Version: movie, User: child.ID, Relay: true})
 	media := s.site + "/dlna/media/" + movie.String() + ".mkv?g=" + url.QueryEscape(grant)
 	if response, _ := fetch(t, media, nil); response.StatusCode != http.StatusNotFound {
 		t.Errorf("the PG movie's media for the child's device: %d", response.StatusCode)

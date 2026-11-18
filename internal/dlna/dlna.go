@@ -164,6 +164,9 @@ func Start(ctx context.Context, options Options) *Service {
 	if options.now == nil {
 		options.now = time.Now
 	}
+	// The addresses given to devices are signed in a domain of the
+	// server's signer that is DLNA's own (see grantDomain).
+	options.Signer = options.Signer.Domain(grantDomain)
 	s := &Service{options: options, store: newStore(options.DB)}
 	s.ssdp = &ssdp{s: s, port: options.Port, described: map[netip.Addr]*described{}}
 	changed := options.Changed()
