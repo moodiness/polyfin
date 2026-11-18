@@ -164,11 +164,13 @@ func TestRemoteAccess(t *testing.T) {
 		t.Errorf("refused sign-ins: %q", refusedFrom)
 	}
 
-	// Behind a proxy that is not known, the internet looks local: the
-	// limit cannot hold, which the admin app warns of.
+	// Behind a proxy that is not known, nobody counts as local: the member
+	// is refused through it, from the local network too.
 	knowProxies(t, p.testServer)
-	if status, _ := proxied("203.0.113.7", http.MethodGet, "/Users/Me", app("tv", p.token), nil); status != http.StatusOK {
-		t.Errorf("the internet behind an unknown proxy: %d", status)
+	for _, client := range []string{"203.0.113.7", "192.168.1.30"} {
+		if status, _ := proxied(client, http.MethodGet, "/Users/Me", app("tv", p.token), nil); status != http.StatusForbidden {
+			t.Errorf("%s behind an unknown proxy: %d, want 403", client, status)
+		}
 	}
 }
 

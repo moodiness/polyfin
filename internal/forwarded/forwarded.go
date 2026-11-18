@@ -37,9 +37,11 @@ type contextKey struct{}
 
 // resolved is what Proxies.Handler tells the routes of a request that
 // comes from a known proxy: its client, the proxy itself when no header
-// names another.
+// names another, and whether the proxy's headers leave that client in
+// doubt (see behind), which keeps the request out of the local network.
 type resolved struct {
-	client netip.Addr
+	client  netip.Addr
+	doubted bool
 }
 
 // Resolve returns the address of r's client when the proxies in known are
@@ -47,9 +49,11 @@ type resolved struct {
 // of X-Forwarded-For that is not a known proxy, read across every line of
 // the header, or from its leftmost address when all are known proxies;
 // without X-Forwarded-For, from X-Real-IP. An address it cannot read stops
-// the walk: the request is from the proxy that added it. A connection from
-// any other address is from that address, and its forwarded headers are
-// ignored, since its client can write them. The address is invalid when
+// the walk: the request is from the proxy that added it. When X-Real-IP
+// names another client than X-Forwarded-For does, neither is believed:
+// the request is from the proxy of the connection. A connection from any
+// other address is from that address, and its forwarded headers name no
+// client, since its client can write them. The address is invalid when
 // r.RemoteAddr holds none.
 func Resolve(r *http.Request, known []netip.Prefix) netip.Addr {
 	trust := trust{known: known}
@@ -57,7 +61,8 @@ func Resolve(r *http.Request, known []netip.Prefix) netip.Addr {
 	if !trust.contains(peer) {
 		return peer
 	}
-	return behind(r, peer, trust)
+	client, _ := behind(r, peer, trust)
+	return client
 }
 
 // Client returns the address of r's client, as Proxies.Handler resolved
@@ -84,16 +89,34 @@ func ViaProxy(r *http.Request) bool {
 
 // InLocalNetwork reports whether r's client, as Client tells it, is on the
 // local network: a loopback, private or link-local address, as Jellyfin
-// counts its local network by default. A request through a reverse proxy
-// missing from Known proxies is from the proxy, often on the local network
-// itself. An address that cannot be read is not on it.
+// counts its local network by default. An address that cannot be read is
+// not on it, and neither is a request whose forwarded headers tell of a
+// client that cannot be known:
+//   - one that carries X-Forwarded-For, X-Real-IP or Forwarded without
+//     coming from a known proxy: it comes through a reverse proxy missing
+//     from Known proxies, whose own address, often local, would stand for
+//     every client behind it;
+//   - one from a known proxy whose headers leave its client in doubt (see
+//     behind).
 func InLocalNetwork(r *http.Request) bool {
+	if found, ok := r.Context().Value(contextKey{}).(resolved); ok {
+		if found.doubted {
+			return false
+		}
+	} else if carries(r, "X-Forwarded-For") || carries(r, "X-Real-IP") || carries(r, "Forwarded") {
+		return false
+	}
 	address, err := netip.ParseAddr(Client(r))
 	if err != nil {
 		return false
 	}
 	address = address.Unmap()
 	return address.IsLoopback() || address.IsPrivate() || address.IsLinkLocalUnicast()
+}
+
+// carries reports whether r has the header name, even empty.
+func carries(r *http.Request, name string) bool {
+	return len(r.Header.Values(name)) > 0
 }
 
 // Resolver looks up the addresses of a host name, as *net.Resolver does.
@@ -167,7 +190,8 @@ func (p *Proxies) Handler(next http.Handler) http.Handler {
 		}
 		// The request from the proxy itself has the proxy as its client,
 		// which Client reads from the connection as well.
-		r = r.WithContext(context.WithValue(r.Context(), contextKey{}, resolved{client: behind(r, peer, trust)}))
+		client, doubted := behind(r, peer, trust)
+		r = r.WithContext(context.WithValue(r.Context(), contextKey{}, resolved{client: client, doubted: doubted}))
 		next.ServeHTTP(w, r)
 	})
 }
@@ -318,9 +342,41 @@ func (p *Proxies) notice(r *http.Request, peer netip.Addr) {
 }
 
 // behind finds the client of a request from the known proxy at peer (see
-// Resolve).
-func behind(r *http.Request, peer netip.Addr, trust trust) netip.Addr {
-	client, listed := peer, false
+// Resolve), and whether the proxy's headers leave it in doubt. They do
+// when the client they name cannot be the one the proxy saw:
+//   - an entry of X-Forwarded-For, or X-Real-IP alone, is no address;
+//   - X-Real-IP names an address that is not a known proxy and is not the
+//     client X-Forwarded-For names. A proxy that sets one of the two
+//     relays the other as its client sent it, and nothing tells which one
+//     it sets, so the request is the proxy's own;
+//   - neither names a client and the request carries Forwarded, which
+//     is not read.
+func behind(r *http.Request, peer netip.Addr, trust trust) (client netip.Addr, doubted bool) {
+	client, listed, read := chain(r, peer, trust)
+	if !read {
+		return client, true
+	}
+	text := strings.TrimSpace(r.Header.Get("X-Real-IP"))
+	named, ok := parse(text)
+	switch {
+	case listed:
+		if ok && named != client && !trust.contains(named) {
+			return peer, true
+		}
+		return client, false
+	case ok:
+		return named, false
+	}
+	return peer, text != "" || carries(r, "Forwarded")
+}
+
+// chain walks X-Forwarded-For from the known proxy at peer towards the
+// client: it returns the first address that is not a known proxy, the
+// leftmost one when all are known proxies, or peer when the header lists
+// none (listed tells whether it does). An entry that is no address stops
+// the walk at the proxy that added it, and read is false.
+func chain(r *http.Request, peer netip.Addr, trust trust) (client netip.Addr, listed, read bool) {
+	client = peer
 	lines := r.Header.Values("X-Forwarded-For")
 	for i := len(lines) - 1; i >= 0; i-- {
 		rest := lines[i]
@@ -338,21 +394,15 @@ func behind(r *http.Request, peer netip.Addr, trust trust) netip.Addr {
 			listed = true
 			address, ok := parse(entry)
 			if !ok {
-				return client
+				return client, true, false
 			}
 			if !trust.contains(address) {
-				return address
+				return address, true, true
 			}
 			client = address
 		}
 	}
-	if listed {
-		return client
-	}
-	if address, ok := parse(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ok {
-		return address
-	}
-	return peer
+	return client, listed, true
 }
 
 // connection returns the address r's connection comes from, invalid when

@@ -56,8 +56,10 @@ func TestResolve(t *testing.T) {
 		{"an IPv4 client with a port", request("10.0.0.2:4000", "X-Forwarded-For", "203.0.113.9:51000"), proxies, "203.0.113.9"},
 		{"an IPv4-mapped connection", request("[::ffff:10.0.0.2]:4000", "X-Forwarded-For", "203.0.113.9"), proxies, "203.0.113.9"},
 		{"X-Real-IP without X-Forwarded-For", request("10.0.0.2:4000", "X-Real-IP", "203.0.113.9"), proxies, "203.0.113.9"},
-		{"X-Forwarded-For before X-Real-IP", request("10.0.0.2:4000", "X-Forwarded-For", "203.0.113.9", "X-Real-IP", "203.0.113.10"),
+		{"X-Real-IP naming the client of X-Forwarded-For", request("10.0.0.2:4000", "X-Forwarded-For", "203.0.113.9", "X-Real-IP", "203.0.113.9"),
 			proxies, "203.0.113.9"},
+		{"X-Real-IP naming another client: the proxy itself", request("10.0.0.2:4000", "X-Forwarded-For", "203.0.113.9", "X-Real-IP", "203.0.113.10"),
+			proxies, "10.0.0.2"},
 		{"an empty X-Forwarded-For", request("10.0.0.2:4000", "X-Forwarded-For", " , ", "X-Real-IP", "203.0.113.10"), proxies, "203.0.113.10"},
 		{"no header: the proxy itself", request("10.0.0.2:4000"), proxies, "10.0.0.2"},
 		{"a malformed address: the proxy that added it", request("10.0.0.2:4000", "X-Forwarded-For", "203.0.113.9, unknown"), proxies,
@@ -73,6 +75,136 @@ func TestResolve(t *testing.T) {
 	}
 	if got := Resolve(request("pipe"), proxies); got.IsValid() {
 		t.Errorf("no address: %s", got)
+	}
+}
+
+// The client and the local network, by the connection's address and the
+// forwarded headers. Headers from an address that is not a known proxy
+// name no client and take the request out of the local network. Those of
+// a known proxy name the client unless they cannot be read or disagree:
+// the request is then the proxy's own, and outside the local network.
+func TestClientAndLocalNetworkBehindProxies(t *testing.T) {
+	t.Parallel()
+	proxies := networks("10.0.0.0/24", "172.18.0.5/32", "fd00:1::/64")
+	for _, tc := range []struct {
+		name   string
+		r      *http.Request
+		known  []netip.Prefix
+		client string
+		local  bool
+	}{
+		// A connection that is not from a known proxy.
+		{"a local connection", request("192.168.1.5:4000"), proxies, "192.168.1.5", true},
+		{"a local connection, no proxy known", request("172.18.0.1:4000"), nil, "172.18.0.1", true},
+		{"a connection from the internet", request("203.0.113.9:4000"), proxies, "203.0.113.9", false},
+		{"an unlisted proxy sending X-Forwarded-For", request("172.18.0.1:4000", "X-Forwarded-For", "192.168.1.50"), nil, "172.18.0.1", false},
+		{"an unlisted proxy sending X-Real-IP", request("172.18.0.1:4000", "X-Real-IP", "192.168.1.50"), nil, "172.18.0.1", false},
+		{"an unlisted proxy sending Forwarded", request("172.18.0.1:4000", "Forwarded", "for=192.168.1.50"), nil, "172.18.0.1", false},
+		{"an unlisted proxy beside known ones", request("192.168.1.5:4000", "X-Forwarded-For", "192.168.1.50"), proxies, "192.168.1.5", false},
+		{"an unlisted proxy on the server's machine", request("127.0.0.1:4000", "X-Real-IP", "127.0.0.1"), proxies, "127.0.0.1", false},
+		{"an unlisted proxy on IPv6", request("[::1]:4000", "Forwarded", "for=\"[::1]\""), proxies, "::1", false},
+		{"an unlisted proxy, the header empty", request("192.168.1.5:4000", "X-Forwarded-For", ""), proxies, "192.168.1.5", false},
+		{"the internet sending headers", request("203.0.113.9:4000", "X-Forwarded-For", "192.168.1.50", "X-Real-IP", "127.0.0.1"), proxies,
+			"203.0.113.9", false},
+
+		// A known proxy that names its client.
+		{"the proxy itself", request("10.0.0.2:4000"), proxies, "10.0.0.2", true},
+		{"X-Forwarded-For, a local client", request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50"), proxies, "192.168.1.50", true},
+		{"X-Forwarded-For, a client on the internet", request("10.0.0.2:4000", "X-Forwarded-For", "203.0.113.9"), proxies, "203.0.113.9", false},
+		{"X-Forwarded-For after what the client wrote", request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.66, 203.0.113.9"), proxies,
+			"203.0.113.9", false},
+		{"X-Forwarded-For and the same X-Real-IP", request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50", "X-Real-IP", "192.168.1.50"),
+			proxies, "192.168.1.50", true},
+		{"X-Forwarded-For with a port and the same X-Real-IP",
+			request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50:51000", "X-Real-IP", "192.168.1.50"), proxies, "192.168.1.50", true},
+		{"two known proxies", request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50, 172.18.0.5"), proxies, "192.168.1.50", true},
+		{"two known proxies, X-Real-IP naming the client",
+			request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50, 172.18.0.5", "X-Real-IP", "192.168.1.50"), proxies, "192.168.1.50", true},
+		{"two known proxies, X-Real-IP naming the first",
+			request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50, 172.18.0.5", "X-Real-IP", "172.18.0.5"), proxies, "192.168.1.50", true},
+		{"every address a known proxy", request("10.0.0.2:4000", "X-Forwarded-For", "10.0.0.7, 172.18.0.5", "X-Real-IP", "10.0.0.7"), proxies,
+			"10.0.0.7", true},
+		{"X-Real-IP alone, a local client", request("10.0.0.2:4000", "X-Real-IP", "192.168.1.50"), proxies, "192.168.1.50", true},
+		{"X-Real-IP alone, a client on the internet", request("10.0.0.2:4000", "X-Real-IP", "203.0.113.9"), proxies, "203.0.113.9", false},
+		{"an IPv4-mapped connection and client",
+			request("[::ffff:10.0.0.2]:4000", "X-Forwarded-For", "::ffff:192.168.1.50", "X-Real-IP", "192.168.1.50"), proxies, "192.168.1.50", true},
+		{"zoned addresses", request("[fd00:1::2%eth0]:4000", "X-Forwarded-For", "fe80::1%eth0", "X-Real-IP", "fe80::1"), proxies, "fe80::1", true},
+		{"X-Forwarded-For beside Forwarded", request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50", "Forwarded", "for=192.168.1.50"),
+			proxies, "192.168.1.50", true},
+		{"X-Forwarded-For beside an X-Real-IP that is no address",
+			request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50", "X-Real-IP", "unknown"), proxies, "192.168.1.50", true},
+
+		// A known proxy whose headers leave the client in doubt.
+		{"X-Real-IP beside a local X-Forwarded-For", request("10.0.0.2:4000", "X-Real-IP", "203.0.113.9", "X-Forwarded-For", "192.168.1.50"),
+			proxies, "10.0.0.2", false},
+		{"X-Real-IP beside another X-Forwarded-For", request("10.0.0.2:4000", "X-Real-IP", "203.0.113.9", "X-Forwarded-For", "198.51.100.77"),
+			proxies, "10.0.0.2", false},
+		{"two local clients named", request("10.0.0.2:4000", "X-Real-IP", "192.168.1.60", "X-Forwarded-For", "192.168.1.50"), proxies,
+			"10.0.0.2", false},
+		{"X-Real-IP beside an X-Forwarded-For of known proxies",
+			request("10.0.0.2:4000", "X-Real-IP", "192.168.1.60", "X-Forwarded-For", "10.0.0.7, 172.18.0.5"), proxies, "10.0.0.2", false},
+		{"an X-Forwarded-For that is no address", request("10.0.0.2:4000", "X-Forwarded-For", "unknown"), proxies, "10.0.0.2", false},
+		{"an X-Forwarded-For that is no address beside X-Real-IP",
+			request("10.0.0.2:4000", "X-Forwarded-For", "unknown", "X-Real-IP", "192.168.1.50"), proxies, "10.0.0.2", false},
+		{"no address behind a known proxy", request("10.0.0.2:4000", "X-Forwarded-For", "192.168.1.50, garbage, 172.18.0.5"), proxies,
+			"172.18.0.5", false},
+		{"an X-Real-IP that is no address", request("10.0.0.2:4000", "X-Real-IP", "300.1.2.3"), proxies, "10.0.0.2", false},
+		{"Forwarded alone", request("10.0.0.2:4000", "Forwarded", "for=192.168.1.50"), proxies, "10.0.0.2", false},
+	} {
+		var client string
+		var local bool
+		New(func() []netip.Prefix { return tc.known }, nil).Handler(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			client, local = Client(r), InLocalNetwork(r)
+		})).ServeHTTP(httptest.NewRecorder(), tc.r)
+		if client != tc.client || local != tc.local {
+			t.Errorf("%s: client %s, local %v; want %s, %v", tc.name, client, local, tc.client, tc.local)
+		}
+	}
+}
+
+// Without forwarded headers, the connection's address alone tells the
+// local network: loopback, private and link-local addresses, in no IPv6
+// form of a public or translated address. With a header a client adds to
+// look local, no address is on it.
+func TestOnlyLocalConnectionsCountAsLocal(t *testing.T) {
+	t.Parallel()
+	var local bool
+	handler := New(func() []netip.Prefix { return nil }, nil).Handler(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		local = InLocalNetwork(r)
+	}))
+	for remote, want := range map[string]bool{
+		"127.0.0.1:1":              true,
+		"[::1]:1":                  true,
+		"192.168.1.5:1":            true,
+		"10.1.2.3:1":               true,
+		"172.31.255.1:1":           true,
+		"169.254.10.10:1":          true,
+		"[fe80::1%en0]:1":          true,
+		"[fd12:3456::1]:1":         true,
+		"[::ffff:192.168.1.5]:1":   true, // the same IPv4 host on a dual-stack listener
+		"203.0.113.9:1":            false,
+		"[::ffff:203.0.113.9]:1":   false,
+		"172.32.0.1:1":             false,
+		"100.64.0.1:1":             false, // carrier-grade NAT
+		"0.0.0.0:1":                false,
+		"[::]:1":                   false,
+		"[2001:db8::1]:1":          false,
+		"[64:ff9b::c0a8:105]:1":    false, // NAT64 of 192.168.1.5
+		"[2002:c0a8:105::1]:1":     false, // 6to4 of 192.168.1.5
+		"[fec0::1]:1":              false, // deprecated site-local
+		"not an address":           false,
+		"[2001:db8::1%eth0]:65535": false,
+	} {
+		handler.ServeHTTP(httptest.NewRecorder(), request(remote))
+		if local != want {
+			t.Errorf("%s: local %v, want %v", remote, local, want)
+		}
+		for _, header := range [][2]string{{"X-Forwarded-For", "192.168.1.50"}, {"X-Real-IP", "127.0.0.1"}, {"Forwarded", "for=127.0.0.1"}} {
+			handler.ServeHTTP(httptest.NewRecorder(), request(remote, header[0], header[1]))
+			if local {
+				t.Errorf("%s with %s: local", remote, header[0])
+			}
+		}
 	}
 }
 

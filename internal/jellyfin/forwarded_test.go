@@ -114,9 +114,10 @@ func TestSignInsBehindAKnownProxy(t *testing.T) {
 	}
 }
 
-// Behind a proxy in the local network, a client on the internet is outside
-// it once the proxy is known: /System/Endpoint says so, and a forgotten
-// password makes no PIN.
+// Behind a proxy in the local network, a client is in the local network
+// or outside it once the proxy is known: /System/Endpoint says so, and a
+// forgotten password makes a PIN for the first alone. Until then, no
+// client behind the proxy is in the local network.
 func TestLocalNetworkBehindAKnownProxy(t *testing.T) {
 	t.Parallel()
 	s, _, member := administrated(t)
@@ -139,10 +140,16 @@ func TestLocalNetworkBehindAKnownProxy(t *testing.T) {
 		}
 	}
 
-	// The proxy unknown, every client is on the server's machine: the
-	// problem.
-	if got := endpoint("203.0.113.7"); got != `{"IsLocal":true,"IsInNetwork":true}` {
-		t.Errorf("behind an unknown proxy: %s", got)
+	// The proxy unknown, no client behind it is in the local network, and
+	// none gets a PIN.
+	for _, client := range []string{"203.0.113.7", "192.168.1.20"} {
+		if got := endpoint(client); got != `{"IsLocal":true,"IsInNetwork":false}` {
+			t.Errorf("%s behind an unknown proxy: %s", client, got)
+		}
+		forgot(client)
+	}
+	if pins() != 0 {
+		t.Fatal("a PIN was made behind an unknown proxy")
 	}
 	knowProxies(t, s, "127.0.0.0/8")
 	if got := endpoint("203.0.113.7"); got != `{"IsLocal":false,"IsInNetwork":false}` {
