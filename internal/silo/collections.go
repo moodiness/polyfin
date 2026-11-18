@@ -118,7 +118,8 @@ func (s *Server) libraryCollections(w http.ResponseWriter, r *http.Request, v vi
 // collectionCounts are the numbers of titles of collections the user may
 // see: those the Jellyfin API counts, users' collections, and for an
 // addon's collections, which it does not count, the total of their first
-// page of titles, which counts them all unless they are many.
+// page of titles, which counts them all unless they are many. It asks for
+// none once the request's context is done.
 func (s *Server) collectionCounts(r *http.Request, v viewer, collections []item) ([]int, error) {
 	counts := make([]int, len(collections))
 	var group errgroup.Group
@@ -129,6 +130,9 @@ func (s *Server) collectionCounts(r *http.Request, v viewer, collections []item)
 			continue
 		}
 		group.Go(func() error {
+			if err := r.Context().Err(); err != nil {
+				return err
+			}
 			var listed queryResult
 			a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {collection.Id}, "IncludeItemTypes": {titleTypes},
 				"Limit": {strconv.Itoa(sectionLimit)}, "EnableTotalRecordCount": {"true"}}.Encode(), nil, &listed)

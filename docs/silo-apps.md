@@ -88,6 +88,7 @@ A library opens on its titles, page by page.
   - The apps offer no Rotten Tomatoes sort: Polyfin tells them it shows no rating source.
 - **Narrow:** to its favorites or a search.
 - **A library of collections:** it opens on the titles of its collections, each once, in its order.
+  - Polyfin's Collections view gathers these titles from its first 100 collections, of which it reads those that hold a title the user sees.
 - **The first page:** what the user is watching in the library, and its latest titles. A library of collections shows instead a row for each of its first 24 collections.
 - **Shuffle:** a library, a series, a season or a collection. No title plays twice until all have played, and a series plays one of its episodes.
 - **Its count:** the Android app's library bar on phones shows how many titles a library holds when Polyfin knows it whole: always for an IPTV source's movies or series, and for a catalog read to its end, such as one that fits on a page. While an addon's catalog, or a local folder, is known only as far as it was read, the bar shows no count rather than a short one.
@@ -134,6 +135,7 @@ The genres offered depend on where the button is:
 - The content ratings offered are those of the titles among the first 2,000.
 - A decade, a content rating or an unwatched filter keeps the matching titles among a library's first 2,000 titles. That is as many as a catalog lists by default, as addon catalogs narrow their titles by genre only.
 - A genre does the same when any filter may match.
+- Genres picked together are read in turn, 100 titles at a time, each genre once however often a filter names it. A page reads at most 100 such lists, so a filter of many genres that share their titles may keep fewer than the first 2,000.
 - When all filters must match, favorited, watched and in progress keep the titles of the user's own lists, however many the library holds.
 
 Filters keep to the user's limits:

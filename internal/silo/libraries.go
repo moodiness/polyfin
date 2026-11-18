@@ -102,25 +102,37 @@ func (s *Server) gatheredPage(r *http.Request, v viewer, view item, query url.Va
 
 // gatheredTitles are the titles of a library's collections keep keeps, in
 // their order, each once, read collection by collection until more than
-// want of them are read; more reports whether there are.
+// want of them are read; more reports whether there are. A collection the
+// Jellyfin API counts no title of for the user is not read, and the
+// others are read while the listings a page may ask are not spent (see
+// allowance). It asks nothing once the request's context is done.
 func (s *Server) gatheredTitles(r *http.Request, v viewer, view item, query url.Values, want int, keep func(item) bool) (titles []item, more bool, a answer, err error) {
 	var collections queryResult
-	a, err = s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}}.Encode(), nil, &collections)
+	a, err = s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}, "Fields": {"ChildCount"}}.Encode(), nil, &collections)
 	if err != nil || !a.ok() {
 		return nil, false, a, err
 	}
 	seen := map[string]bool{}
+	left := newAllowance()
 	for _, collection := range collections.Items {
-		if collection.Type != "BoxSet" {
+		if collection.Type != "BoxSet" || collection.ChildCount != nil && *collection.ChildCount == 0 {
 			continue
+		}
+		if left.spent() {
+			break
+		}
+		if err := r.Context().Err(); err != nil {
+			return nil, false, a, err
 		}
 		listed := maps.Clone(query)
 		listed.Set("ParentId", collection.Id)
 		var result queryResult
 		// A collection the user may no longer open lists nothing.
-		if _, err := s.call(r, v, http.MethodGet, "/Items?"+listed.Encode(), nil, &result); err != nil {
+		read, err := s.call(r, v, http.MethodGet, "/Items?"+listed.Encode(), nil, &result)
+		if err != nil {
 			return nil, false, a, err
 		}
+		left.take(read)
 		for _, title := range result.Items {
 			if !seen[title.Id] && slices.Contains(browsable, title.Type) && keep(title) {
 				seen[title.Id] = true
