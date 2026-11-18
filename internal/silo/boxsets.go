@@ -233,10 +233,13 @@ func (s *Server) cardOf(r *http.Request, set *boxSet) boxSetCard {
 }
 
 // window reads the first maxScanned titles of the Jellyfin API's listing
-// query, a chunk at a time.
+// query, a chunk at a time, while the request's context is not done.
 func (s *Server) window(r *http.Request, v viewer, query url.Values) (titles []item, a answer, err error) {
 	a = answer{status: http.StatusOK}
 	for start := 0; start < maxScanned; {
+		if err = r.Context().Err(); err != nil {
+			return nil, a, err
+		}
 		listed := maps.Clone(query)
 		listed.Set("StartIndex", strconv.Itoa(start))
 		listed.Set("Limit", strconv.Itoa(min(scanChunk, maxScanned-start)))

@@ -49,6 +49,14 @@ const (
 	maxScanned = 2000
 	// scanChunk is how many titles each read of a listing asks.
 	scanChunk = 100
+	// maxListings and maxListedBytes bound what reading the titles of one
+	// page asks of the Jellyfin API, whatever its filter and the catalogs
+	// behind it (see allowance). Its listings: five times those maxScanned
+	// titles of one listing take, as a title of several genres picked is
+	// listed under each of them. And the bytes they answer: three times
+	// what that many listings of titles of a kilobyte each weigh.
+	maxListings    = 5 * maxScanned / scanChunk
+	maxListedBytes = 32 << 20
 	// maxGroupsLength bounds the groups parameter, as the contract does:
 	// larger filters go in the body of POST /api/v2/catalog/query.
 	maxGroupsLength = 32768
@@ -448,6 +456,22 @@ type scope struct {
 	collections bool
 }
 
+// allowance is what reading the titles of one page may still ask of the
+// Jellyfin API: listings, and the bytes of their answers, which the
+// titles read are held in (see maxListings).
+type allowance struct{ listings, bytes int }
+
+func newAllowance() *allowance { return &allowance{listings: maxListings, bytes: maxListedBytes} }
+
+// spent reports whether no further listing may be asked.
+func (al *allowance) spent() bool { return al.listings <= 0 || al.bytes <= 0 }
+
+// take counts a listing the Jellyfin API answered.
+func (al *allowance) take(a answer) {
+	al.listings--
+	al.bytes -= len(a.body)
+}
+
 // scopeOf is where the titles l lists that f may keep are read from. The
 // Jellyfin API narrows a library's titles, and the catalog's, to a type,
 // to what the user did, or to its catalogs' genre: the first of these
@@ -489,15 +513,19 @@ func (s *Server) scopeOf(r *http.Request, v viewer, l listing, f filter) (scope,
 	}
 	if genres := f.genres(); len(genres) > 0 && !sc.collections {
 		// A genre its catalogs do not offer lists nothing: it is no stream.
+		// One named again, in any letter case, is the stream it already is.
 		offered, a, err := s.offeredGenres(r, v, l)
 		if err != nil || !a.ok() {
 			return scope{}, a, err
 		}
 		j := judge{blocked: v.user.BlockedGenres}
+		taken := map[string]bool{}
 		for _, genre := range genres {
-			if j.blockedGenre(genre) || !offered[strings.ToLower(strings.TrimSpace(genre))] {
+			name := strings.ToLower(strings.TrimSpace(genre))
+			if j.blockedGenre(genre) || !offered[name] || taken[name] {
 				continue
 			}
+			taken[name] = true
 			listed := maps.Clone(base)
 			listed.Set("Genres", genre)
 			sc.streams = append(sc.streams, stream{query: listed, genre: genre})
@@ -519,8 +547,10 @@ func (s *Server) titlesOf(r *http.Request, v viewer, l listing, sc scope, want i
 }
 
 // scan reads the titles of streams, merged one of each in turn, each
-// once, a chunk at a time, until more than want of them are kept or
-// maxScanned are read; done reports whether all were read.
+// once, a chunk at a time, until more than want of them are kept,
+// maxScanned are read, or the listings a page may ask are spent (see
+// allowance); done reports whether all were read. It asks nothing once
+// the request's context is done.
 func (s *Server) scan(r *http.Request, v viewer, streams []stream, want int, keep func(item, string) bool) (kept []item, done bool, a answer, err error) {
 	type reader struct {
 		stream
@@ -535,10 +565,18 @@ func (s *Server) scan(r *http.Request, v viewer, streams []stream, want int, kee
 	a = answer{status: http.StatusOK}
 	seen := map[string]bool{}
 	scanned := 0
+	left, cut := newAllowance(), false
 	for len(kept) <= want && scanned < maxScanned {
 		took := false
 		for _, rd := range readers {
+			if len(rd.pending) == 0 && !rd.ended && left.spent() {
+				// What is left of the stream stays unread.
+				rd.ended, cut = true, true
+			}
 			if len(rd.pending) == 0 && !rd.ended {
+				if err = r.Context().Err(); err != nil {
+					return nil, false, a, err
+				}
 				query := maps.Clone(rd.query)
 				query.Set("StartIndex", strconv.Itoa(rd.next))
 				query.Set("Limit", strconv.Itoa(scanChunk))
@@ -547,6 +585,7 @@ func (s *Server) scan(r *http.Request, v viewer, streams []stream, want int, kee
 				if a, err = s.call(r, v, http.MethodGet, cmp.Or(rd.path, "/Items")+"?"+query.Encode(), nil, &result); err != nil || !a.ok() {
 					return nil, false, a, err
 				}
+				left.take(a)
 				rd.pending, rd.next = result.Items, rd.next+len(result.Items)
 				rd.ended = len(result.Items) == 0 || rd.next >= result.TotalRecordCount
 			}
@@ -569,7 +608,7 @@ func (s *Server) scan(r *http.Request, v viewer, streams []stream, want int, kee
 			}
 		}
 		if !took {
-			return kept, true, a, nil
+			return kept, !cut, a, nil
 		}
 	}
 	return kept, false, a, nil
