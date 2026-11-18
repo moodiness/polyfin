@@ -1003,12 +1003,15 @@ func (t *torrent) announce(ctx context.Context, tracker string) {
 			wait = min(max(answer.interval, time.Minute), 30*time.Minute)
 		}
 		timer := time.NewTimer(wait)
+		// The tracker lists Polyfin once it answered an announce, and may
+		// once ctx ended one under way, which it may have taken.
+		listed := event == "" || ctx.Err() != nil
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			if event == "" && !t.failed() {
+			if listed && !t.failed() {
 				// The tracker forgets Polyfin, over the route still up.
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), t.engine.stoppedWait())
 				_, _ = announceTo(ctx, t.routeTo(tracker), tracker, t.announced("stopped"), t.udp)
 				cancel()
 			}
@@ -1779,12 +1782,14 @@ func (r *Reader) ReadAtProgress(p []byte, off int64, progress func()) (int, erro
 			case <-changed:
 				waiting = false
 			case <-flowing:
-				if progress != nil {
-					progress()
-				}
+				// The next block is waited for before this one is told:
+				// one that arrives while progress runs is told in turn.
 				t.mu.Lock()
 				flowing = t.flowing
 				t.mu.Unlock()
+				if progress != nil {
+					progress()
+				}
 			}
 		}
 	}

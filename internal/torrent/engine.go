@@ -180,6 +180,10 @@ type Engine struct {
 	// DHT is looked up again while a torrent has no peer (see
 	// torrent.lookup); tests shorten them.
 	redialWait, dhtAgainWait time.Duration
+	// stopWait, when set, replaces how long a tracker is given to take
+	// the announce that a torrent stopped (see stoppedWait); tests
+	// lengthen it, as a loopback dial may hang for seconds.
+	stopWait time.Duration
 	// utpOff, set by tests, reaches peers over TCP alone.
 	utpOff bool
 	// left, set by tests, is called once a torrent that stops has left
@@ -554,6 +558,15 @@ func (e *Engine) lookupAgain() time.Duration {
 		return e.dhtAgainWait
 	}
 	return dhtAgain
+}
+
+// stoppedWait is how long a tracker is given to take the announce that a
+// torrent stopped (see torrent.announce).
+func (e *Engine) stoppedWait() time.Duration {
+	if e != nil && e.stopWait > 0 {
+		return e.stopWait
+	}
+	return 5 * time.Second
 }
 
 // fullLocked reports whether the torrent of hash may not start, as many
