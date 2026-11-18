@@ -325,13 +325,17 @@ func (t *torrent) goAnnounce(tracker string) {
 
 // merge adds the trackers and nodes of another listing of the torrent,
 // those on addresses that are not public left out, and extra, the
-// trackers of the settings now.
+// trackers of the settings now. The listings of a torrent name
+// MaxTrackers trackers together, as one stream may, the first named
+// kept, and its nodes stay within maxNodesLearned: a source lists as
+// many listings of a torrent as it likes, and each tracker more would
+// be announced to for as long as the torrent runs.
 func (t *torrent) merge(spec Spec, extra []string) {
 	t.mu.Lock()
 	t.trust(extra)
 	var added []string
 	for _, tracker := range spec.Trackers {
-		if !t.takes(tracker) {
+		if !t.takes(tracker) || t.named() >= MaxTrackers {
 			continue
 		}
 		if t.extra[tracker] {
@@ -346,7 +350,7 @@ func (t *torrent) merge(spec Spec, extra []string) {
 	}
 	added = append(added, t.addExtra(extra)...)
 	for _, node := range spec.Nodes {
-		if t.internet.allowsNode(node) && !slices.Contains(t.nodes, node) {
+		if len(t.nodes) < maxNodesLearned && t.internet.allowsNode(node) && !slices.Contains(t.nodes, node) {
 			t.nodes = append(t.nodes, node)
 		}
 	}
