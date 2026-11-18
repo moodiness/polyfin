@@ -337,6 +337,14 @@ See [Health](health.md) for each check, warning and error.
 
 **System › Logs** follows the in-memory log, redacted as it is for Jellyfin apps (see [Server logs](#server-logs)). It has a **Level** filter, a search box, **Follow** and **Pause**, and **Download**.
 
+What the log hides, on the page and in the downloaded file:
+
+- **Addresses:** an address keeps its host and loses its path and query, with or without a scheme, and inside another address's query.
+- **Secrets:** the value of anything named as a token, a key, a secret, a password or a passphrase is replaced with `<redacted>`, in `name=value`, in a header and in JSON, quoted or not. So are `pw`, `sig`, `signature`, `auth` and `code` values, cookies, and what follows `Authorization` or `Bearer`. A `code` of one to three digits, such as a status, stays.
+- **Requests:** a request that failed is logged with its route, such as `/admin/api/invite/{token}`, not with its path, which can hold an invite, a share link or an API key.
+
+Two values stay readable, because the log is where an administrator reads them: the PIN of a [forgotten password](metrics-and-api-keys.md#forgotten-password) (`pin`) and the setup code (`setup_code`). Remove those lines before sharing a log. The log on standard error, such as `docker logs`, is not redacted.
+
 A listing of a library or a collection that takes more than 5 seconds logs "A listing was slow" (Info). The line holds the folder, whether the app asked for every title, how many it got, and where the time went:
 
 - `checked`: the user and the request;

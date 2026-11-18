@@ -111,28 +111,126 @@ func (r *Ring) Stat() (created, modified time.Time, size int) {
 	return r.created, r.modified, r.size
 }
 
+// The pieces of the patterns below.
+const (
+	// inAddress is a character of an address: a blank, a quote, an angle
+	// bracket or a backslash ends one, as the text log escapes quotes.
+	inAddress = `[^\s"'<>\x60\\]`
+	// hostName is a host of several labels, or an IPv4 address.
+	hostName = `(?:[a-z0-9\-]+\.)+[a-z0-9\-]+`
+	// userInfo is the user and password some addresses start with.
+	userInfo = `(?:[^\s"'<>\x60\\/@=:]+(?::[^\s"'<>\x60\\/@]*)?@)?`
+	// quoted is a value in double quotes, whatever it holds: as it is
+	// written, with its escapes; as the text log writes it inside a quoted
+	// attribute, where the quotes that end it follow one backslash, or
+	// five, and those it holds follow three, or seven; and, quoted more
+	// times than that, up to the next quote.
+	quoted = `(?:"(?:[^"\\]|\\.)*"|\\"(?:[^"\\]|\\+[^"\\]|(?:\\{4})*\\{3}")*(?:\\{4})*\\"|\\{2,}"[^"]*")`
+	// separator is what stands between a name and its value, as in
+	// name=value, name: value, "name":"value" and name%3Dvalue.
+	separator = `\\*["']?\s*(?:[=:]|%3d)\s*`
+	// value is what a name is given: the token of an Authorization header
+	// with its scheme, a quoted value, one whose quotes never close up to
+	// the next blank, or everything up to a blank or the next parameter.
+	value = `(?:\[?(?:bearer|basic)\s+)?(?:` + quoted + `|\\*"[^\s"]*|'[^']*'|[^\s&,;"]+)`
+	// cookie is one name=value of a Cookie or Set-Cookie header.
+	cookie = `[^\s;"\\=]+(?:=(?:` + quoted + `|[^\s;"\\]*))?`
+)
+
 var (
-	// addresses matches URLs of any scheme, up to a blank, a quote or a
-	// backslash, as the text log escapes quotes.
-	addresses = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.\-]*://[^\s"'<>\x60\\]+`)
-	// secrets matches the values of parameters, headers and attributes
-	// that carry credentials, as key=value, key: value or "key":"value".
-	secrets = regexp.MustCompile(`(?i)\b(api_?key|access_?token|token|x-emby-token|x-mediabrowser-token|password|pw|secret|authorization)("?\s*[=:]\s*)("[^"]*"|[^\s&,;"]+)`)
+	// addresses matches, each kind in a group of its own: a URL of any
+	// scheme, whose query runs up to a blank, a double quote or a
+	// backslash; a URL written inside another's query, its :// encoded;
+	// host:port/path without a scheme; and //host/path where a value
+	// starts.
+	addresses = regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.\-]*://(?:[^\s"'<>\x60\\?#]+(?:[?#][^\s"\\]*)?|[?#][^\s"\\]*))` +
+		`|(\b[a-z][a-z0-9+.\-]*%3a%2f%2f[^\s"'<>\x60\\&]+)` +
+		`|(\b` + userInfo + hostName + `:[0-9]{2,5}/` + inAddress + `+)` +
+		`|(?:^|[\s="'(\[,])(//` + userInfo + hostName + `(?::[0-9]{1,5})?/` + inAddress + `+)`)
+	// secrets matches, each kind in a group of its own, the values that
+	// carry credentials: those of parameters, headers and attributes
+	// whose name ends in token, secret, key, password or passphrase,
+	// whatever starts it, and pass in a query or in quotes, as an
+	// attribute of the log tells a pass by that name; those of the short
+	// names for one, as whole words; the value of code; the cookies of a
+	// Cookie header; and a token after Bearer, which has a digit, as no
+	// word has.
+	secrets = regexp.MustCompile(`(?i)(?:token|secret|key|pass(?:word|wd|phrase)|["'?&]pass)` + separator + `(` + value + `)` +
+		`|\b(?:(?:pw|sig|signature|auth|authorization)` + separator + `(` + value + `)` +
+		`|code` + separator + `(` + value + `)` +
+		`|cookie` + separator + `(` + cookie + `(?:;\s*` + cookie + `)*)` +
+		`|bearer\s+([a-z0-9._~+/\-]*[0-9][a-z0-9._~+/\-]*=*))`)
 )
 
 // Redact hides what a log line could carry that must not be read: URLs
 // keep only their scheme and host, as Polyfin shows the addresses of
-// addons, and the values of tokens, keys and passwords are replaced.
+// addons, and the values of tokens, keys, passwords and cookies are
+// replaced. Two values stay, which administrators read in the log: the
+// PIN of a password reset and the setup code, logged as pin and
+// setup_code. Both patterns are matched in a time that grows with the
+// line's length alone, whatever the line holds.
 func Redact(line string) string {
-	line = addresses.ReplaceAllStringFunc(line, func(address string) string {
-		parsed, err := url.Parse(address)
-		if err != nil || parsed.Host == "" {
-			return "…"
+	// Every address has a slash, as it is or encoded.
+	if strings.ContainsAny(line, "/%") {
+		line = rewrite(addresses, line, func(group int, address string) string {
+			switch group {
+			case 2:
+				decoded, err := url.PathUnescape(address)
+				if err != nil {
+					return "…"
+				}
+				return origin(decoded)
+			case 3:
+				return strings.TrimPrefix(origin("//"+address), "//")
+			}
+			return origin(address)
+		})
+	}
+	return rewrite(secrets, line, func(group int, value string) string {
+		// A status or an exit code is no secret: code=404 stays.
+		if group == 3 && len(value) <= 3 && strings.Trim(value, "0123456789") == "" {
+			return value
 		}
-		if parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == "" {
-			return parsed.Scheme + "://" + parsed.Host
-		}
-		return parsed.Scheme + "://" + parsed.Host + "/…"
+		return "<redacted>"
 	})
-	return secrets.ReplaceAllString(line, "$1$2<redacted>")
+}
+
+// origin returns address with its scheme and host alone.
+func origin(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Host == "" {
+		return "…"
+	}
+	host := "//" + parsed.Host
+	if parsed.Scheme != "" {
+		host = parsed.Scheme + ":" + host
+	}
+	if parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == "" {
+		return host
+	}
+	return host + "/…"
+}
+
+// rewrite returns line with, of each match of pattern, the group that
+// matched replaced by what replace returns for it.
+func rewrite(pattern *regexp.Regexp, line string, replace func(group int, text string) string) string {
+	matches := pattern.FindAllStringSubmatchIndex(line, -1)
+	if matches == nil {
+		return line
+	}
+	var rewritten strings.Builder
+	rewritten.Grow(len(line))
+	last := 0
+	for _, match := range matches {
+		for group := 1; 2*group < len(match); group++ {
+			if start, end := match[2*group], match[2*group+1]; start >= 0 {
+				rewritten.WriteString(line[last:start])
+				rewritten.WriteString(replace(group, line[start:end]))
+				last = end
+				break
+			}
+		}
+	}
+	rewritten.WriteString(line[last:])
+	return rewritten.String()
 }
