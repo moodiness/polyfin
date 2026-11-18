@@ -468,6 +468,7 @@ What to check:
 - **UDP:** through a proxy, it needs `UDP ASSOCIATE`, and the proxy must relay the datagrams back. Without UDP, only HTTP trackers find peers, many torrents list UDP trackers alone, and the peers that take uTP alone are not reached.
 - **The trackers' answers:** turn on **Detailed log (to diagnose a problem)** under **Settings › Diagnostics**, and play again. Then read `A tracker could not be reached` in **System › Logs**, with each tracker's own reason for a refusal.
 - **The swarm itself:** a torrent with no seeder does not start anywhere. Try another version.
+- **The torrent's files:** a torrent does not start when its info dictionary lists more than 50,000 files, names the torrent, a folder or a file with more than 765 bytes, gives a file a path of more than 4,096 bytes, or has pieces shorter than 16 KiB. A name on a disk is 255 bytes at most on Linux, and 255 UTF-16 units on Windows, which take 765 bytes at most. The programs that make torrents make pieces of 16 KiB or more. Its peers connect, and it still does not start. Try another version.
 - **No tracker:** a torrent whose addon names no tracker is found through the DHT alone (see [Trackers](#trackers)). Trackers you trust, under **Trackers added to every torrent**, find it more peers.
 
 ## Trackers

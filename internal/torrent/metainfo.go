@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -60,12 +61,45 @@ const (
 	maxPieces      = maxInfoSize / 20
 )
 
+// maxFileName, maxFilePath and maxInfoFiles bound the files an info
+// dictionary names, so that what is read from it stays a small multiple
+// of its bytes, a torrent's name being part of the path of each of its
+// files. Nothing writes these names to a disk: they bound what a
+// dictionary has the server hold, and a torrent made on any system
+// plays. The name and each part of a path are as long as a file's name
+// is anywhere: 255 units of UTF-16 where names count so, which is 765
+// bytes of the UTF-8 torrents write, and 255 bytes elsewhere. A path is
+// as long as the longest path a system takes unless told otherwise,
+// 4,096 bytes; what is read is bounded without it, by the name and the
+// files. The files are no more than several times those of the largest
+// packs of seasons. maxInfoValues bounds the values the dictionary
+// holds, its lists, its dictionaries and their keys counted as what
+// they hold is: decoding keeps up to a hundred bytes and more for each,
+// however short it is written. That is 16 values for each of
+// maxInfoFiles files, where the entry of a file in a folder holds 7.
+const (
+	maxFileName   = 765
+	maxFilePath   = 4096
+	maxInfoFiles  = 50_000
+	maxInfoValues = 16 * maxInfoFiles
+)
+
+// minPieceLength is the least a torrent's pieces are long: a block, as
+// the programs that make torrents make them. A torrent of shorter pieces
+// would have as many pieces as it likes for few bytes, down to one a
+// byte, and Polyfin as many pieces to fetch past a read, to count, and to
+// keep as files, which its bounds in bytes do not see.
+const minPieceLength = blockSize
+
+// fileBytes is what a File takes in memory beside its path.
+const fileBytes = 40
+
 // errInfo reports an info dictionary that does not describe a torrent.
 var errInfo = errors.New("the torrent's info dictionary is invalid")
 
 // parseInfo reads an info dictionary, whose hash it does not check.
 func parseInfo(data []byte) (Info, error) {
-	if len(data) > maxInfoSize {
+	if len(data) > maxInfoSize || !valuesWithin(data, maxInfoValues) {
 		return Info{}, errInfo
 	}
 	d, rest, err := decodeDict(data)
@@ -74,9 +108,12 @@ func parseInfo(data []byte) (Info, error) {
 	}
 	private, _ := num(d, "private")
 	info := Info{Name: str(d, "name"), Private: private == 1}
+	if len(info.Name) > maxFileName {
+		return Info{}, errInfo
+	}
 	pieceLength, _ := num(d, "piece length")
 	pieces := str(d, "pieces")
-	if pieceLength <= 0 || pieceLength > maxPieceLength || len(pieces) == 0 || len(pieces)%20 != 0 {
+	if pieceLength < minPieceLength || pieceLength > maxPieceLength || len(pieces) == 0 || len(pieces)%20 != 0 {
 		return Info{}, errInfo
 	}
 	info.PieceLength = pieceLength
@@ -95,7 +132,12 @@ func parseInfo(data []byte) (Info, error) {
 		info.Files = []File{{Path: info.Name, Length: length}}
 		info.Length = length
 	} else {
-		for _, entry := range list(d, "files") {
+		files := list(d, "files")
+		if len(files) > maxInfoFiles {
+			return Info{}, errInfo
+		}
+		info.Files = make([]File, 0, len(files))
+		for _, entry := range files {
 			f, ok := entry.(map[string]any)
 			if !ok {
 				return Info{}, errInfo
@@ -107,9 +149,16 @@ func parseInfo(data []byte) (Info, error) {
 			parts := []string{info.Name}
 			for _, part := range list(f, "path") {
 				name, _ := part.(string)
+				if len(name) > maxFileName {
+					return Info{}, errInfo
+				}
 				parts = append(parts, name)
 			}
-			info.Files = append(info.Files, File{Path: path.Join(parts...), Offset: info.Length, Length: length,
+			joined := path.Join(parts...)
+			if len(joined) > maxFilePath {
+				return Info{}, errInfo
+			}
+			info.Files = append(info.Files, File{Path: joined, Offset: info.Length, Length: length,
 				Padding: strings.Contains(str(f, "attr"), "p")})
 			info.Length += length
 		}
@@ -121,6 +170,54 @@ func parseInfo(data []byte) (Info, error) {
 		return Info{}, errInfo
 	}
 	return info, nil
+}
+
+// valuesWithin reports whether bencoded data holds limit values at most,
+// which it reads as decode does, keeping none: a list and a dictionary
+// count, and so does each value and each key they hold. It is false too
+// where the bytes stop being values, which decode refuses.
+func valuesWithin(data []byte, limit int) bool {
+	for count := 0; len(data) > 0; {
+		switch c := data[0]; {
+		case c == 'e':
+			data = data[1:]
+			continue
+		case c == 'l' || c == 'd':
+			data = data[1:]
+		case c == 'i':
+			end := bytes.IndexByte(data, 'e')
+			if end < 0 {
+				return false
+			}
+			data = data[end+1:]
+		case c >= '0' && c <= '9':
+			colon := bytes.IndexByte(data, ':')
+			if colon < 0 {
+				return false
+			}
+			n, err := strconv.Atoi(string(data[:colon]))
+			if err != nil || n < 0 || n > len(data)-colon-1 {
+				return false
+			}
+			data = data[colon+1+n:]
+		default:
+			return false
+		}
+		if count++; count > limit {
+			return false
+		}
+	}
+	return true
+}
+
+// size estimates the bytes info takes in memory: its pieces' hashes, and
+// its files with their paths.
+func (info Info) size() int {
+	size := len(info.Name) + len(info.Pieces)*len(Hash{}) + len(info.Files)*fileBytes
+	for _, f := range info.Files {
+		size += len(f.Path)
+	}
+	return size
 }
 
 // checkInfo reads an info dictionary whose SHA-1 must be hash.

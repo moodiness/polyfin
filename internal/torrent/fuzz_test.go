@@ -31,7 +31,7 @@ import (
 // block; large, of two pieces, of two blocks and one. Its bytes are always
 // the same, so that the corpus keeps matching it.
 func fuzzTorrent(large bool) *torrenttest.Torrent {
-	size, pieceLength := 2<<10+300, 1<<10
+	size, pieceLength := 2*blockSize+300, blockSize
 	if large {
 		size, pieceLength = 40<<10+17, 32<<10
 	}
@@ -259,19 +259,65 @@ func checkInfoBounds(t *testing.T, info Info) {
 	}
 }
 
+// infoPathsFactor is how many times a dictionary's bytes the paths read
+// from it hold at most: a file's entry is 13 bytes at least, and its path
+// holds the torrent's name and a slash besides what the entry writes.
+const infoPathsFactor = (maxFileName + 1 + 12) / 13
+
+// checkInfoSize checks that what was read from an info dictionary of size
+// bytes stays a small multiple of it: its paths, which hold the torrent's
+// name once for each file, and all it takes in memory.
+func checkInfoSize(t *testing.T, info Info, size int) {
+	t.Helper()
+	paths := 0
+	for _, file := range info.Files {
+		if len(file.Path) > maxFilePath {
+			t.Fatalf("a path of %d bytes", len(file.Path))
+		}
+		paths += len(file.Path)
+	}
+	if paths > infoPathsFactor*size {
+		t.Fatalf("%d files' paths hold %d bytes, read from %d", len(info.Files), paths, size)
+	}
+	if len(info.Name) > maxFileName || len(info.Files) > maxInfoFiles ||
+		info.size() > size+len(info.Files)*(maxFileName+1+fileBytes) {
+		t.Fatalf("a name of %d bytes and %d files, %d bytes in all, read from %d", len(info.Name), len(info.Files), info.size(), size)
+	}
+	if info.PieceLength < minPieceLength {
+		t.Fatalf("pieces of %d bytes", info.PieceLength)
+	}
+}
+
 func FuzzParseInfo(f *testing.F) {
 	f.Add(fuzzTorrent(false).Info)
 	f.Add(fuzzTorrent(true).Info)
 	f.Add(torrenttest.Build("One", 16<<10, torrenttest.File{Name: "a.mkv", Data: make([]byte, 20<<10)}).Info)
-	f.Add(encode(map[string]any{"name": "Padded", "piece length": 16, "pieces": strings.Repeat("x", 40),
+	f.Add(encode(map[string]any{"name": "Padded", "piece length": blockSize, "pieces": strings.Repeat("x", 20),
 		"files": []any{map[string]any{"length": 10, "path": []any{"a"}}, map[string]any{"length": 6, "path": []any{"pad"}, "attr": "p"},
 			map[string]any{"length": 16, "path": []any{"b", "c"}}}}))
+	// Lengths whose sum overflows, in pieces long enough to be read, and
+	// pieces one byte too short.
+	f.Add(encode(map[string]any{"name": "x", "piece length": blockSize, "pieces": strings.Repeat("x", 20),
+		"files": []any{map[string]any{"length": int64(math.MaxInt64), "path": []any{"a"}}, map[string]any{"length": int64(math.MaxInt64), "path": []any{"b"}},
+			map[string]any{"length": 3, "path": []any{"c"}}}}))
+	f.Add(encode(map[string]any{"name": "x", "piece length": blockSize - 1, "pieces": strings.Repeat("x", 20), "length": 3}))
+	// A name longer than a file's, which each file's path would hold.
+	f.Add(infoOf(strings.Repeat("A", 4<<10), filesNamed(256)...))
+	f.Add(infoOf(strings.Repeat("A", maxFileName), filesNamed(64)...))
 	f.Fuzz(func(t *testing.T, data []byte) {
+		// The values counted before decoding are those decoding reads: no
+		// fewer than it keeps, and as many when no key is written twice.
+		if value, rest, err := decode(data); err == nil && len(rest) == 0 {
+			if n := values(value); valuesWithin(data, n-1) || bytes.Equal(encode(value), data) && !valuesWithin(data, n) {
+				t.Fatalf("%q holds %d values, which is not what was counted", data, n)
+			}
+		}
 		info, err := parseInfo(data)
 		if err != nil {
 			return
 		}
 		checkInfoBounds(t, info)
+		checkInfoSize(t, info, len(data))
 	})
 }
 

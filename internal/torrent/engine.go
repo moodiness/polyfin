@@ -60,7 +60,8 @@ type routeSettings struct {
 // for its next run (see Engine.keepLocked): a replay after a refresh, or
 // the next play of the title within the 15 minutes a failed version is
 // left out. maxKept bounds the torrents kept, and maxKeptInfo the bytes
-// their info dictionaries take.
+// their info dictionaries take in memory, as they came and as they were
+// read (see Info.size).
 const (
 	keptFor     = 15 * time.Minute
 	maxKept     = 64
@@ -90,12 +91,13 @@ type Outage struct {
 
 // keptRun is what a stopped torrent learned, for its next run until
 // until: the peers it connected to, the latest first, its info
-// dictionary, nil when none came, and the DHT nodes nearest it that
-// answered its last lookup.
+// dictionary, nil when none came, with the bytes it takes in memory
+// (infoSize), and the DHT nodes nearest it that answered its last lookup.
 type keptRun struct {
 	peers    []netip.AddrPort
 	info     *Info
 	infoData []byte
+	infoSize int
 	nodes    []string
 	until    time.Time
 }
@@ -529,6 +531,9 @@ func (e *Engine) keepLocked(t *torrent) {
 			run.nodes = before.nodes
 		}
 	}
+	if run.info != nil {
+		run.infoSize = len(run.infoData) + run.info.size()
+	}
 	e.kept[t.hash] = run
 	size := 0
 	for hash, kept := range e.kept {
@@ -536,7 +541,7 @@ func (e *Engine) keepLocked(t *torrent) {
 			delete(e.kept, hash)
 			continue
 		}
-		size += len(kept.infoData)
+		size += kept.infoSize
 	}
 	for len(e.kept) > maxKept || size > maxKeptInfo {
 		var oldest Hash
@@ -546,7 +551,7 @@ func (e *Engine) keepLocked(t *torrent) {
 				oldest, first = hash, false
 			}
 		}
-		size -= len(e.kept[oldest].infoData)
+		size -= e.kept[oldest].infoSize
 		delete(e.kept, oldest)
 	}
 }
