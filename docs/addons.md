@@ -370,6 +370,21 @@ For an Eclipse addon, a setting replaces a parameter of the address with the sam
 - **A play** does not wait that long for an addon once another gave a version to play (see [How Play waits for addons](versions.md#how-play-waits-for-addons)).
 - **Repeated timeouts:** an addon that leaves 3 stream requests in a row unanswered has Polyfin's background requests paused (see [Addons that do not answer in time](#addons-that-do-not-answer-in-time)).
 
+### How much of an answer Polyfin reads
+
+An answer may weigh up to 8 MiB once uncompressed; a larger one is an invalid response. Within an answer, Polyfin reads each list up to a number of entries:
+
+| List | Read |
+|---|---|
+| A title's streams, or its subtitles | The first 5,000 |
+| A catalog page's titles | The first 50,000 |
+| A title's videos: a series' episodes, a channel's programmes | The first 50,000 |
+| Any other list of a title or a stream, such as genres, cast, trailers or trackers | The first 2,000 |
+
+- **Longer lists:** a list is cut at its number, and the answer is not refused. The title keeps its first versions, the series its first episodes, and the next catalog page is asked from where the cut one ended.
+- **Lists within lists:** the lists of one answer together are also bounded by the memory their entries take, 8 MiB for streams or subtitles and 32 MiB for a catalog page or a description. That is more than 8 MiB of real titles decode to, so it only cuts answers made of nearly empty entries.
+- **Empty entries:** a stream that tells nothing, with no link, name or text, is left out. So is a subtitle without a web address. A stream Polyfin cannot play but that says something, such as an addon's notice, is kept (see [Which streams play](#which-streams-play)).
+
 ### What the log and Health say
 
 An addon that answers with an error was reached. The log and **System › Health** tell what it answered:

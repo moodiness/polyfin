@@ -87,15 +87,15 @@ func decodeWhole(data []byte, low, high int64) (int64, error) {
 }
 
 // Names decodes a list of names, such as genres or directors: a JSON
-// array, or a string some addons send instead, its names separated by
-// commas. Elements that are not strings, and any other value, are left
-// out rather than failing the title.
+// array, of which the first maxNested elements are read, or a string some
+// addons send instead, its names separated by commas. Elements that are
+// not strings, and any other value, are left out rather than failing the
+// title.
 type Names []string
 
 func (n *Names) UnmarshalJSON(data []byte) error {
 	*n = nil
-	var elements []json.RawMessage
-	if json.Unmarshal(data, &elements) == nil {
+	if elements, err := decodeList(data, maxNested, nil, whole[json.RawMessage], nil); err == nil {
 		for _, element := range elements {
 			var name string
 			if json.Unmarshal(element, &name) == nil {
@@ -118,12 +118,13 @@ func (n *Names) UnmarshalJSON(data []byte) error {
 // Posters decodes a list of image URLs whose places matter: an element
 // that is not a string, such as null for an image missing, is kept as an
 // empty string. Any other value is left out rather than failing the title.
+// The first maxNested elements are read.
 type Posters []string
 
 func (p *Posters) UnmarshalJSON(data []byte) error {
 	*p = nil
-	var elements []json.RawMessage
-	if json.Unmarshal(data, &elements) != nil {
+	elements, err := decodeList(data, maxNested, nil, whole[json.RawMessage], nil)
+	if err != nil {
 		return nil
 	}
 	*p = make(Posters, len(elements))
@@ -312,23 +313,35 @@ func (c *Certifications) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON reads Extras, whose seasonPosters some addons send as a
-// list in season order and others as an object keyed by season number,
-// such as {"0": …, "1": …}, depending on the database a series came from.
-// The object form names its seasons, so it joins SeasonPosterByNumber,
-// where seasonPosterByNumber itself wins.
-func (e *Extras) UnmarshalJSON(data []byte) error {
+// UnmarshalJSON reads Extras as decode does, as when they are read back
+// from where Polyfin keeps them.
+func (e *Extras) UnmarshalJSON(data []byte) error { return e.decode(data, nil) }
+
+// decode reads Extras, whose seasonPosters some addons send as a list in
+// season order and others as an object keyed by season number, such as
+// {"0": …, "1": …}, depending on the database a series came from. The
+// object form names its seasons, so it joins SeasonPosterByNumber, where
+// seasonPosterByNumber itself wins. The cast is read within the bounds of
+// the answer, of which within is the room left, nil for none.
+func (e *Extras) decode(data []byte, within *room) error {
 	type plain Extras
 	var decoded struct {
 		plain
-		// Shallower than plain's field of the same name, so it takes the
-		// value whatever its form.
+		// Shallower than plain's fields of the same names, so they take
+		// the values: the posters whatever their form, and the cast to
+		// read it apart.
 		SeasonPosters json.RawMessage `json:"seasonPosters"`
+		Cast          json.RawMessage `json:"cast"`
 	}
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
+	cast, err := decodeList(decoded.Cast, maxNested, within, whole[CastMember], nil)
+	if err != nil {
+		return err
+	}
 	*e = Extras(decoded.plain)
+	e.Cast = cast
 	if len(decoded.SeasonPosters) == 0 {
 		return nil
 	}
@@ -386,6 +399,13 @@ type described struct {
 	// addon may give in place of _tmdbId and _tvdbId (see ids).
 	MoviedbID Text `json:"moviedb_id"`
 	TVDBID    Text `json:"tvdb_id"`
+	// Videos, Trailers, Collection and Extras are read apart, within the
+	// bounds of the answer (see decode), into Meta's fields of the same
+	// names: shallower than those, they take the values.
+	Videos     json.RawMessage `json:"videos"`
+	Trailers   json.RawMessage `json:"trailers"`
+	Collection json.RawMessage `json:"collection"`
+	Extras     json.RawMessage `json:"app_extras"`
 }
 
 // meta is the meta described, its cast, directors and writers read from
@@ -454,15 +474,15 @@ type link struct {
 	Category string `json:"category"`
 }
 
-// links decodes a meta's links. An element that is not a link, such as
-// one whose name is not a string, is left out rather than failing the
-// title, as is any other value.
+// links decodes a meta's links, of which the first maxNested are read. An
+// element that is not a link, such as one whose name is not a string, is
+// left out rather than failing the title, as is any other value.
 type links []link
 
 func (l *links) UnmarshalJSON(data []byte) error {
 	*l = nil
-	var elements []json.RawMessage
-	if json.Unmarshal(data, &elements) != nil {
+	elements, err := decodeList(data, maxNested, nil, whole[json.RawMessage], nil)
+	if err != nil {
 		return nil
 	}
 	for _, element := range elements {
@@ -560,22 +580,24 @@ func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogI
 	// Guide pages, those of live TV catalogs asked for a date, list their
 	// channels with their programmes as metasDetailed.
 	var response struct {
-		Metas         []json.RawMessage `json:"metas"`
-		MetasDetailed []json.RawMessage `json:"metasDetailed"`
+		Metas         json.RawMessage `json:"metas"`
+		MetasDetailed json.RawMessage `json:"metasDetailed"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
 	}
-	if response.Metas == nil {
+	if !present(response.Metas) {
 		response.Metas = response.MetasDetailed
 	}
 	// Every title keeps its place in the page, whose length tells where the
-	// next page starts.
-	metas := make([]Meta, len(response.Metas))
-	for i, raw := range response.Metas {
-		if err := decodeMeta(raw, &metas[i]); err != nil {
-			return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
-		}
+	// next page starts: none is left out, and a page past MaxMetas, or the
+	// room of an answer, is cut there.
+	metas, err := decodeList(response.Metas, MaxMetas, &room{left: metaRoom}, pageMeta, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
+	}
+	if metas == nil {
+		metas = []Meta{}
 	}
 	return metas, nil
 }

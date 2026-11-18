@@ -173,24 +173,32 @@ func (m Manifest) ServesType(resource, contentType string) bool {
 }
 
 // Streams lists the streams an addon offers for a title, or for an episode
-// by its video identifier, waiting StreamTimeout for its answer.
+// by its video identifier, waiting StreamTimeout for its answer. Of its
+// list, the first MaxListed elements are read, and those that tell
+// nothing, as an empty object, are left out (see tells).
 func (c *Client) Streams(ctx context.Context, manifestURL, streamType, id string, confined bool) ([]Stream, error) {
 	body, err := c.get(ctx, manifestURL, ResourceURL(manifestURL, "/stream/"+encodeComponent(streamType)+"/"+encodeComponent(id)+".json"), confined, c.streamTimeout)
 	if err != nil {
 		return nil, err
 	}
 	var response struct {
-		Streams []Stream `json:"streams"`
+		Streams json.RawMessage `json:"streams"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("%w: streams: %v", ErrInvalidResponse, err)
 	}
-	return response.Streams, nil
+	streams, err := decodeList(response.Streams, MaxListed, &room{left: listedRoom}, decodeStream, tells)
+	if err != nil {
+		return nil, fmt.Errorf("%w: streams: %v", ErrInvalidResponse, err)
+	}
+	return streams, nil
 }
 
 // Subtitles lists the subtitles an addon offers for a title, or for an
 // episode by its video identifier. extra describes the video they should
-// match (filename, videoSize, videoHash), when known.
+// match (filename, videoSize, videoHash), when known. Of its list, the
+// first MaxListed elements are read, and those that cannot be downloaded
+// are left out.
 func (c *Client) Subtitles(ctx context.Context, manifestURL, subtitlesType, id string, extra []ExtraValue, confined bool) ([]Subtitle, error) {
 	target := ResourceURL(manifestURL, "/subtitles/"+encodeComponent(subtitlesType)+"/"+encodeComponent(id)+extraPath(extra)+".json")
 	body, err := c.get(ctx, manifestURL, target, confined, c.timeout)
@@ -198,10 +206,14 @@ func (c *Client) Subtitles(ctx context.Context, manifestURL, subtitlesType, id s
 		return nil, err
 	}
 	var response struct {
-		Subtitles []Subtitle `json:"subtitles"`
+		Subtitles json.RawMessage `json:"subtitles"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("%w: subtitles: %v", ErrInvalidResponse, err)
 	}
-	return response.Subtitles, nil
+	subtitles, err := decodeList(response.Subtitles, MaxListed, &room{left: listedRoom}, whole[Subtitle], downloadable)
+	if err != nil {
+		return nil, fmt.Errorf("%w: subtitles: %v", ErrInvalidResponse, err)
+	}
+	return subtitles, nil
 }
