@@ -2,6 +2,7 @@ package letterboxd
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"errors"
@@ -17,8 +18,9 @@ import (
 const MaxExportBytes = 20 << 20
 
 // maxFileBytes bounds each file read out of the ZIP: an export's are a
-// few megabytes at most, and a ZIP may unpack to far more than it weighs.
-const maxFileBytes = 64 << 20
+// few megabytes at most, MaxMovies lines of some hundred bytes, and a ZIP
+// may unpack to far more than it weighs.
+const maxFileBytes = 16 << 20
 
 // MaxMovies bounds the movies of an export: far more than a member logs,
 // while a small ZIP may name millions, each held with the import and
@@ -28,6 +30,20 @@ const MaxMovies = 50_000
 // maxFieldBytes bounds each value read of a line: a name, link, year,
 // date or rating. A longer one is no export's, and its line is skipped.
 const maxFieldBytes = 512
+
+// maxLineBytes bounds each line of a file, counted with the lines a
+// quoted value of it spans and the empty lines before it. The files read
+// give a name, a year, a link, dates, a rating and a diary entry's tags
+// on a line, some hundred bytes; reviews are in a file not read. A file
+// with a longer line is not an export's.
+const maxLineBytes = 64 << 10
+
+// maxColumns bounds the columns of a line: the files read have 8 at most.
+// A file with a line of more is not an export's.
+const maxColumns = 64
+
+// lineBlock is how far ahead of the line being read a file is read.
+const lineBlock = 4096
 
 // fieldsRead are the columns whose values are read, of any file.
 var fieldsRead = []string{"Name", "Year", "Letterboxd URI", "Date", "Watched Date", "Rating"}
@@ -179,21 +195,66 @@ func (r row) tooLong() bool {
 	return false
 }
 
+// errLineTooLong ends the reading of a file by lineReader.
+var errLineTooLong = errors.New("a line longer than an export's")
+
+// lineReader reads a file for the CSV reader, which builds each line whole
+// before it is seen, a quoted value over as many lines as it spans. It
+// fails once left bytes were read: readTable sets left before each line,
+// so that a line past maxLineBytes is given up, not held.
+type lineReader struct {
+	r    io.Reader
+	left int
+}
+
+func (l *lineReader) Read(p []byte) (int, error) {
+	if l.left <= 0 {
+		return 0, errLineTooLong
+	}
+	if len(p) > l.left {
+		p = p[:l.left]
+	}
+	n, err := l.r.Read(p)
+	l.left -= n
+	return n, err
+}
+
 // readCSV reads f, a CSV file whose first line names its columns, and
 // hands each line naming a movie to read, stopping at its first error. A
 // line with a value read longer than maxFieldBytes is skipped, and
-// counted in skipped. A file without a Name column is not an export's.
+// counted in skipped. A file without a Name column, or with a line longer
+// than maxLineBytes or of more than maxColumns columns, is not an
+// export's.
 func readCSV(f *zip.File, read func(row) error, skipped *int) error {
 	opened, err := f.Open()
 	if err != nil {
 		return ErrInvalidExport
 	}
 	defer opened.Close()
-	limited := &io.LimitedReader{R: opened, N: maxFileBytes + 1}
-	r := csv.NewReader(limited)
+	return readTable(opened, read, skipped)
+}
+
+// readTable is readCSV, of the file's content.
+func readTable(content io.Reader, read func(row) error, skipped *int) error {
+	limited := &io.LimitedReader{R: content, N: maxFileBytes + 1}
+	bounded := &lineReader{r: limited}
+	// The CSV reader reads through this buffer, as it is as large as its
+	// own would be: a line asks the file for less than its length and
+	// lineBlock, so one of maxLineBytes is always read whole, and a longer
+	// one is refused by its length once read, when not given up before.
+	r := csv.NewReader(bufio.NewReaderSize(bounded, lineBlock))
 	r.FieldsPerRecord = -1
 	r.LazyQuotes = true
-	header, err := r.Read()
+	next := func() ([]string, error) {
+		start := r.InputOffset()
+		bounded.left = maxLineBytes + lineBlock
+		values, err := r.Read()
+		if err == nil && (r.InputOffset()-start > maxLineBytes || len(values) > maxColumns) {
+			return nil, errLineTooLong
+		}
+		return values, err
+	}
+	header, err := next()
 	if err != nil {
 		return ErrInvalidExport
 	}
@@ -208,7 +269,7 @@ func readCSV(f *zip.File, read func(row) error, skipped *int) error {
 		return ErrInvalidExport
 	}
 	for {
-		values, err := r.Read()
+		values, err := next()
 		if err == io.EOF {
 			break
 		}

@@ -553,3 +553,130 @@ func TestParseSkipsLongValues(t *testing.T) {
 		t.Errorf("movies %+v, %d skipped", export.Movies, export.Skipped)
 	}
 }
+
+// Lines of an export file for the tests of the lines' bounds, each naming
+// Quiet Harbour: exportLine is size bytes long, its tags filling it;
+// spanningLine too, its tags quoted and over lines of 80 bytes; wideLine
+// has columns columns.
+const quietHarbour = "2020-01-01,Quiet Harbour,1999,https://boxd.it/aaa2"
+
+func exportLine(size int) string {
+	return quietHarbour + "," + strings.Repeat("x", size-len(quietHarbour)-2) + "\n"
+}
+
+func spanningLine(size int) string {
+	tags := strings.Repeat(strings.Repeat("x", 79)+"\n", size/80+1)
+	return quietHarbour + ",\"" + tags[:size-len(quietHarbour)-4] + "\"\n"
+}
+
+func wideLine(columns int) string {
+	return quietHarbour + strings.Repeat(",", columns-4) + "\n"
+}
+
+// A file with a line longer than maxLineBytes or of more than maxColumns
+// columns is not an export's, whether the line names the columns or a
+// movie, and whether it is one line or a quoted value over many. Lines at
+// the bounds are read, wherever they start in the file.
+func TestParseRefusesLongLines(t *testing.T) {
+	t.Parallel()
+	const header = "Date,Name,Year,Letterboxd URI,Tags\n"
+	for _, before := range []int{0, 60, 61, lineBlock - 1, lineBlock, lineBlock + 1, 3*lineBlock - len(header), maxLineBytes} {
+		watched := header
+		if before > 0 {
+			watched += exportLine(before)
+		}
+		watched += exportLine(maxLineBytes) + spanningLine(maxLineBytes) + wideLine(maxColumns)
+		export, err := Parse(exportZip(t, map[string]string{"watched.csv": watched}))
+		if err != nil || len(export.Movies) != 1 || export.Movies[0].Name != "Quiet Harbour" || export.Skipped != 0 {
+			t.Errorf("lines at the bounds, %d bytes after the first: %+v, %v", before, export, err)
+		}
+	}
+	atBounds := "Name" + strings.Repeat(",", maxColumns-2) + "," + strings.Repeat("x", maxLineBytes-maxColumns-4) + "\nQuiet Harbour\n"
+	if export, err := Parse(exportZip(t, map[string]string{"watched.csv": atBounds})); err != nil || len(export.Movies) != 1 {
+		t.Errorf("a first line at the bounds: %+v, %v", export, err)
+	}
+
+	for name, files := range map[string]map[string]string{
+		"a first line too long":             {"watched.csv": "Name,Year," + strings.Repeat("x", maxLineBytes-10) + "\nQuiet Harbour,1999\n"},
+		"a first line of too many columns":  {"watched.csv": "Name" + strings.Repeat(",", maxColumns) + "\nQuiet Harbour\n"},
+		"a first line of a million columns": {"watched.csv": "Name" + strings.Repeat(",", 1<<20) + "\nQuiet Harbour\n"},
+		"a line too long":                   {"watched.csv": header + exportLine(100) + exportLine(maxLineBytes+1)},
+		"a line of too many columns":        {"watched.csv": header + exportLine(100) + wideLine(maxColumns+1)},
+		"a line of a million columns":       {"watched.csv": header + exportLine(100) + wideLine(1<<20)},
+		"a quoted value over too many lines": {
+			"watched.csv": header + exportLine(100) + spanningLine(maxLineBytes+1),
+		},
+		"a quoted value without an end": {
+			"watched.csv": header + exportLine(100) + quietHarbour + ",\"" + strings.Repeat(strings.Repeat("x", 79)+"\n", 1<<14),
+		},
+		"a line too long of a file read later": {
+			"watched.csv": header + exportLine(100),
+			"diary.csv":   header + exportLine(maxLineBytes+1),
+		},
+	} {
+		if export, err := Parse(exportZip(t, files)); !errors.Is(err, ErrInvalidExport) || export.Movies != nil {
+			t.Errorf("%s: %d movies, %v", name, len(export.Movies), err)
+		}
+	}
+}
+
+// countedReader counts the bytes read through it.
+type countedReader struct {
+	r    io.Reader
+	read int
+}
+
+func (c *countedReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.read += n
+	return n, err
+}
+
+// A line past maxLineBytes is given up before it is read whole: of a file
+// of megabytes, no more is read than the lines before it, maxLineBytes
+// and what is read ahead.
+func TestALineTooLongIsGivenUpBeforeItIsRead(t *testing.T) {
+	t.Parallel()
+	const header = "Date,Name,Year,Letterboxd URI,Tags\n"
+	before := header + exportLine(100)
+	for name, tc := range map[string]struct {
+		before, line string
+		movies       int
+	}{
+		"the first line, of commas":   {"", "Name" + strings.Repeat(",", 4<<20) + "\n", 0},
+		"the first line, of one name": {"", "Name,Year," + strings.Repeat("x", 4<<20) + "\n", 0},
+		"a later line, of commas":     {before, wideLine(4 << 20), 1},
+		"a later line, of one value":  {before, exportLine(4 << 20), 1},
+		"a quoted value over lines":   {before, spanningLine(4 << 20), 1},
+	} {
+		content := &countedReader{r: strings.NewReader(tc.before + tc.line + exportLine(100))}
+		movies, skipped := 0, 0
+		err := readTable(content, func(row) error { movies++; return nil }, &skipped)
+		if !errors.Is(err, ErrInvalidExport) || movies != tc.movies || skipped != 0 {
+			t.Errorf("%s: %v, %d movies, %d skipped", name, err, movies, skipped)
+		}
+		if most := len(tc.before) + maxLineBytes + 2*lineBlock; content.read > most {
+			t.Errorf("%s: %d bytes of the file were read, over %d", name, content.read, most)
+		}
+	}
+}
+
+// A file of the export longer than 16 MiB once unpacked is refused, light
+// as its ZIP is; one of 16 MiB is read.
+func TestParseRefusesAFileTooLarge(t *testing.T) {
+	t.Parallel()
+	const header = "Date,Name,Year,Letterboxd URI,Tags\n"
+	lines := strings.Repeat(exportLine(1<<10), 16<<10)
+	full := header + exportLine(1<<10-len(header)) + lines[1<<10:]
+	export, err := Parse(exportZip(t, map[string]string{"watched.csv": full}))
+	if err != nil || len(export.Movies) != 1 {
+		t.Errorf("a file of %d bytes: %d movies, %v", len(full), len(export.Movies), err)
+	}
+	packed := exportZip(t, map[string]string{"watched.csv": header + lines})
+	if len(packed) > MaxExportBytes/100 {
+		t.Fatalf("the ZIP weighs %d bytes", len(packed))
+	}
+	if export, err := Parse(packed); !errors.Is(err, ErrInvalidExport) || export.Movies != nil {
+		t.Errorf("a file of %d bytes: %d movies, %v", len(header)+len(lines), len(export.Movies), err)
+	}
+}

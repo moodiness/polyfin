@@ -292,6 +292,7 @@ Polyfin reads only those files, `ratings.csv`, `watchlist.csv` and the liked mov
 - No `watched.csv` or `diary.csv` at the ZIP's root or in their folder: refused (`letterboxd_export_invalid`).
 - Over 20 MB, or over 50,000 movies: refused (`letterboxd_export_too_large`).
 - A line whose name, link, year, date or rating exceeds 512 bytes is skipped.
+- A file with a line over 64 KB or of more than 64 columns, or over 16 MB once unzipped, is not an export's: refused (`letterboxd_export_invalid`). Letterboxd's files have short lines of 8 columns at most.
 - The file is read in memory, never written to disk, and dropped once read.
 
 **Matching:** The export gives only name, year and Letterboxd link. Each movie is searched by name in the server's metadata addons, as local files are (see [Matching](naming-and-matching.md#matching)). It matches only if exactly one movie has that name and year. Searches run one at a time, once per name per import, whatever file it is in. Without a metadata addon that searches movies, nothing can match, and the form says so before upload. The result counts unmatched movies, and the list of titles not found keeps them with why (see [Linking titles not found](#linking-titles-not-found)): **Not found** (no movie of that name and year, even one listed under another year or name), **Several movies of that name and year**, or **Search failed**.
