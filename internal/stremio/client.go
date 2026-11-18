@@ -122,13 +122,8 @@ func newHTTPClient(confined bool) *http.Client {
 	}
 	transport.DialContext = dialer.DialContext
 	return &http.Client{
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-			if len(via) >= maxRedirects {
-				return errors.New("too many redirects")
-			}
-			return nil
-		},
+		Transport:     transport,
+		CheckRedirect: followRedirects,
 	}
 }
 

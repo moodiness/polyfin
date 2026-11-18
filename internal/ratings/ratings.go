@@ -40,6 +40,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/redirect"
 )
 
 // MDBList is the address of MDBList's API.
@@ -231,13 +232,14 @@ type limits struct {
 // db, while settings hold a key. version is Polyfin's, which the
 // User-Agent names. Its transport is its own, a clone of the default one:
 // whoever closes the idle connections of http.DefaultTransport cannot
-// break its requests (#958).
+// break its requests (#958). The key goes in the query: a redirect it
+// follows is not told the address it comes from.
 func New(db *pgxpool.Pool, base, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{
 		db:        db,
 		base:      strings.TrimSuffix(base, "/"),
 		settings:  settings,
-		client:    &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		client:    &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), CheckRedirect: redirect.Follow(redirect.Default)},
 		userAgent: "Polyfin/" + version,
 		logger:    logger,
 		now:       time.Now,

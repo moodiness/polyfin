@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/redirect"
 )
 
 // FFmpeg 9.0 drops the end of a subtitle file burned in when it reads the
@@ -202,8 +204,9 @@ func writeCopy(ctx context.Context, original, out string, write func(io.Writer, 
 // sourceClient reads the subtitle files given as an http URL. Its
 // transport is its own, a clone of the default one: whoever closes the
 // idle connections of http.DefaultTransport cannot break its requests
-// (#958).
-var sourceClient = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}
+// (#958). A source's address may hold its key: no redirect tells it on.
+var sourceClient = &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(),
+	CheckRedirect: redirect.Follow(redirect.Default)}
 
 // readSource calls use with the file at name, a path or an http URL.
 func readSource(ctx context.Context, name string, use func(io.Reader) error) error {

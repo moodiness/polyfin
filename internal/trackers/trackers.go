@@ -37,6 +37,7 @@ import (
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/pace"
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -422,6 +423,8 @@ type Service struct {
 // database of options. Run sends what an earlier run left. Its transport
 // is its own, a clone of the default one: whoever closes the idle
 // connections of http.DefaultTransport cannot break its requests (#958).
+// MDBList's key and Last.fm's go in the query: a redirect it follows is
+// not told the address it comes from.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	urls := make(map[string]string, len(publicURLs))
@@ -446,7 +449,7 @@ func New(options Options) *Service {
 		logger:      options.Logger,
 		authURLs:    auth,
 		urls:        urls,
-		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), CheckRedirect: redirect.Follow(redirect.Default)},
 		now:         time.Now,
 		timing:      defaultTiming,
 		ctx:         ctx,
