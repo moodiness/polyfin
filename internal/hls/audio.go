@@ -34,9 +34,11 @@ const (
 	audioKeptBehind = 10
 )
 
-// AudioPlan cuts a track lasting duration into segments of AudioSegment.
+// AudioPlan cuts a track lasting duration into segments of AudioSegment,
+// and no more than media.MaxDuration of it (see planned).
 func AudioPlan(duration time.Duration) Plan {
-	starts := []time.Duration{0}
+	duration = planned(duration)
+	starts := make([]time.Duration, 1, 1+max(duration, 0)/AudioSegment)
 	for at := AudioSegment; at < duration; at += AudioSegment {
 		starts = append(starts, at)
 	}

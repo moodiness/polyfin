@@ -7,6 +7,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/media"
 )
 
 const (
@@ -56,15 +58,26 @@ type Plan struct {
 	fastFrom, fastTo int
 }
 
+// planned is how much of a version lasting duration is cut into
+// segments: all of it, and media.MaxDuration of one said to last longer.
+// A plan's segments, and what its methods count from its duration, then
+// follow no number a caller took from elsewhere than an analysis: it
+// holds one segment per fastLength of media.MaxDuration at most, the
+// shortest a segment aims to be.
+func planned(duration time.Duration) time.Duration {
+	return min(duration, media.MaxDuration)
+}
+
 // NewGridPlan cuts a version lasting duration, whose keyframes are not
 // known, such as an MPEG-TS file, as NewPlan would cut one with a
 // keyframe everywhere: a first segment of firstDuration, then one every
 // targetDuration. Only converted video, whose keyframes the encoder
 // places at each segment's start, can be cut so: FFmpeg starts on an
 // earlier keyframe, and what comes before the segment is left out (see
-// encoding.take).
+// encoding.take). No more than media.MaxDuration is cut (see planned).
 func NewGridPlan(duration time.Duration) Plan {
-	starts := []time.Duration{0}
+	duration = planned(duration)
+	starts := make([]time.Duration, 1, 2+max(duration, 0)/targetDuration)
 	for at := firstDuration; at <= duration-shortestTail; at += segmentLength(len(starts)) {
 		starts = append(starts, at)
 	}
@@ -94,8 +107,9 @@ func (p Plan) IsSearched() bool { return p.searched }
 // keyframes: the first ends on the first keyframe at least firstDuration
 // in, each next one on the first keyframe at least targetDuration after
 // its start. The first segment starts at zero, whatever the first
-// keyframe.
+// keyframe. No more than media.MaxDuration is cut (see planned).
 func NewPlan(keyframes []time.Duration, duration time.Duration) Plan {
+	duration = planned(duration)
 	starts := []time.Duration{0}
 	for i, keyframe := range keyframes {
 		if keyframe <= 0 || keyframe > duration-shortestTail {

@@ -108,7 +108,7 @@ func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, 
 // for it.
 func (s *Service) Segmented(ctx context.Context, version library.Version) bool {
 	analysis, ok := s.Analyzed(ctx, version.ID)
-	if _, video := videoOf(analysis); !ok || !video || analysis.Duration <= 0 {
+	if _, video := videoOf(analysis); !ok || !video || analysis.Duration <= 0 || analysis.Duration > media.MaxDuration {
 		return false
 	}
 	if s.ReadsInput(version) || unindexedFormat(analysis) {
@@ -121,13 +121,14 @@ func (s *Service) Segmented(ctx context.Context, version library.Version) bool {
 	return ok
 }
 
-// plan is Plan, without warming.
+// plan is Plan, without warming. A duration past media.MaxDuration, which
+// no analysis read now tells, is no more a length than a missing one.
 func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	analysis, err := s.Analyze(ctx, version)
 	if err != nil {
 		return hls.Plan{}, err
 	}
-	if _, ok := videoOf(analysis); !ok || analysis.Duration <= 0 {
+	if _, ok := videoOf(analysis); !ok || analysis.Duration <= 0 || analysis.Duration > media.MaxDuration {
 		return hls.Plan{}, ErrNotRemuxable
 	}
 	if s.ReadsInput(version) {
