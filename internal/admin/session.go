@@ -249,8 +249,8 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user.NeedsTwoStep(h.Accounts.Settings()) {
-		// The client's failed attempts are forgotten only once the code is
-		// right: a right password between wrong codes would forget them.
+		// The right password takes back its own attempt, and the client's
+		// wrong codes and passwords stay counted, as after any success.
 		h.askSecondStep(w, r, user)
 		return
 	}
